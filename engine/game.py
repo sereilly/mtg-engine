@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 
 from .classifier import CardClassification, classify_card
 from .models import CardDefinition, Permanent, PlayerState
+from .oracle import OracleInstruction, compile_card_oracle, parse_activated_ability_cost
 
 
 _NUMBER_WORDS = {
@@ -38,6 +39,28 @@ class StackItem:
     caster_index: int
     target_player_index: int | None
     x_value: int | None
+
+
+@dataclass
+class OracleExecutionContext:
+    caster: PlayerState
+    target: PlayerState
+    card: CardDefinition
+    x_value: int | None = None
+    source_permanent: Permanent | None = None
+
+
+class OracleStateMachine:
+    def __init__(self, game: Game, context: OracleExecutionContext) -> None:
+        self.game = game
+        self.context = context
+        self.state = "ready"
+
+    def run(self, instruction: OracleInstruction) -> tuple[bool, str]:
+        self.state = "running"
+        supported, details = self.game._execute_oracle_instruction(instruction, self.context)
+        self.state = "completed" if supported else "failed"
+        return supported, details
 
 
 @dataclass
@@ -103,18 +126,24 @@ class Game:
             raise ValueError(f"Permanent not found: {permanent_name}")
         _, permanent = resolved
 
-        text = permanent.card.oracle_text.lower()
+        program = compile_card_oracle(permanent.card)
         target_idx = target_player_index if target_player_index is not None else (1 - controller_index)
         target_player = self.players[target_idx]
 
-        if "target creature gains banding until end of turn" in text:
+        ability = next((item for item in program.activated_abilities if item.supported and item.instruction is not None), None)
+        if ability is None or ability.instruction is None:
+            self.log.append(f"No implemented activated ability for {permanent.card.name}")
+            return SimulationResult(permanent.card.name, False, "unsupported", "ability not implemented")
+
+        if ability.instruction.kind == "grant_banding_to_target":
             has_valid_target = any(perm.card.primary_type == "creature" for perm in target_player.battlefield)
             if not has_valid_target:
                 details = "no valid creature target for banding effect"
                 self.log.append("No valid creature target for banding effect")
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
 
-        required_cost, requires_tap = self._parse_activated_ability_cost(permanent.card.oracle_text)
+        required_cost = dict(ability.cost.mana)
+        requires_tap = ability.cost.requires_tap
         if self.enforce_mana_costs and any(required_cost.values()):
             if not self._pay_mana_cost(controller, required_cost):
                 details = f"insufficient mana to activate {permanent.card.name}"
@@ -128,253 +157,32 @@ class Game:
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
             permanent.tapped = True
 
-        if "this creature gets +1/+0 until end of turn" in text:
-            permanent.power_bonus += 1
-            self.log.append(f"{permanent.card.name} gets +1/+0 until end of turn")
-            return SimulationResult(permanent.card.name, True, "activated_pump", "resolved")
-
-        if "this creature gets +0/+1 until end of turn" in text:
-            permanent.toughness_bonus += 1
-            self.log.append(f"{permanent.card.name} gets +0/+1 until end of turn")
-            return SimulationResult(permanent.card.name, True, "activated_pump", "resolved")
-
-        if "this creature gets +1/+1 until end of turn" in text:
-            permanent.power_bonus += 1
-            permanent.toughness_bonus += 1
-            self.log.append(f"{permanent.card.name} gets +1/+1 until end of turn")
-            return SimulationResult(permanent.card.name, True, "activated_pump", "resolved")
-
-        if "this creature gains flying until end of turn" in text:
-            permanent.metadata["gains_flying_until_eot"] = True
-            self.log.append(f"{permanent.card.name} gains flying until end of turn")
-            return SimulationResult(permanent.card.name, True, "activated_keyword", "resolved")
-
-        if "target creature gains banding until end of turn" in text:
-            target_creature = next(
-                (perm for perm in target_player.battlefield if perm.card.primary_type == "creature"),
-                None,
-            )
-            if target_creature is None:
-                details = "no valid creature target for banding effect"
-                self.log.append("No valid creature target for banding effect")
-                return SimulationResult(permanent.card.name, False, "unsupported", details)
-            target_creature.metadata["gains_banding_until_eot"] = True
-            self.log.append(f"{target_creature.card.name} gains banding until end of turn")
-            return SimulationResult(permanent.card.name, True, "activated_keyword", "resolved")
-
-        if "put a +1/+1 counter on this creature" in text:
-            permanent.power_bonus += 1
-            permanent.toughness_bonus += 1
-            self.log.append(f"{permanent.card.name} gets a +1/+1 counter")
-            return SimulationResult(permanent.card.name, True, "activated_counter", "resolved")
-
-        if "deals 1 damage to any target" in text:
-            damage = self._prevent_damage(target_player, 1)
-            if damage > 0:
-                target_player.life -= damage
-            self.log.append(f"{permanent.card.name} dealt {damage} damage")
-            return SimulationResult(permanent.card.name, True, "activated_damage", "resolved")
-
-        if "deals 2 damage to any target and 3 damage to you" in text:
-            damage = self._prevent_damage(target_player, 2)
-            if damage > 0:
-                target_player.life -= damage
-            controller.life -= 3
-            self.log.append(f"{permanent.card.name} dealt {damage} damage and 3 self-damage")
-            return SimulationResult(permanent.card.name, True, "activated_damage", "resolved")
-
-        if "destroy target" in text:
-            destroyed = self._destroy_target_permanent(target_player, text)
-            if destroyed:
-                self.log.append(f"{permanent.card.name} destroyed {destroyed.name}")
-            return SimulationResult(permanent.card.name, True, "activated_destroy", "resolved")
-
-        if "untap target land" in text:
-            untapped = False
-            for perm in target_player.battlefield:
-                if perm.card.primary_type == "land":
-                    perm.tapped = False
-                    untapped = True
-                    break
-            self.log.append("Untapped target land" if untapped else "No land to untap")
-            return SimulationResult(permanent.card.name, True, "activated_untap", "resolved")
-
-        if "prevent the next 1 damage" in text:
-            target_player.damage_prevention_pool += 1
-            self.log.append("Prevention shield granted by activated ability")
-            return SimulationResult(permanent.card.name, True, "activated_prevent", "resolved")
-
-        if "would deal damage to you this turn, prevent that damage" in text:
-            target_player.damage_prevention_pool += 1
-            self.log.append("Color protection shield granted")
-            return SimulationResult(permanent.card.name, True, "activated_prevent", "resolved")
-
-        if "the next time an unblocked creature of your choice would deal combat damage to you this turn, prevent all but 1 of that damage" in text:
-            controller.combat_damage_cap_one_charges += 1
-            self.log.append("Forcefield shield granted")
-            return SimulationResult(permanent.card.name, True, "activated_prevent", "resolved")
-
-        if "regenerate this creature" in text:
-            permanent.regeneration_shield += 1
-            self.log.append(f"{permanent.card.name} gains regeneration shield")
-            return SimulationResult(permanent.card.name, True, "activated_regenerate", "resolved")
-
-        if "add three mana of any one color" in text:
-            controller.mana_pool["G"] += 3
-            controller.graveyard.append(permanent.card)
-            controller.battlefield = [p for p in controller.battlefield if p is not permanent]
-            self.log.append(f"{permanent.card.name} sacrificed for mana")
-            return SimulationResult(permanent.card.name, True, "activated_mana", "resolved")
-
-        if "draw a card" in text:
-            drawn = controller.draw(1)
-            self.log.append(f"{permanent.card.name} drew {drawn} card")
-            return SimulationResult(permanent.card.name, True, "activated_draw", "resolved")
-
-        if "target creature with power 2 or less can't be blocked this turn" in text:
-            target_creature = next(
-                (perm for perm in target_player.battlefield if perm.card.primary_type == "creature" and perm.effective_power <= 2),
-                None,
-            )
-            if target_creature is not None:
-                target_creature.metadata["cant_be_blocked_until_eot"] = True
-                self.log.append(f"{target_creature.card.name} can't be blocked this turn")
-                return SimulationResult(permanent.card.name, True, "activated_evasion", "resolved")
-            self.log.append("No valid low-power creature for unblockable effect")
-            return SimulationResult(permanent.card.name, True, "activated_evasion", "resolved")
-
-        if "target land becomes a forest" in text:
-            target_land = next((perm for perm in target_player.battlefield if perm.card.primary_type == "land"), None)
-            if target_land is not None:
-                target_land.metadata["land_type_override"] = "forest"
-                self.log.append(f"{target_land.card.name} became a Forest")
-            else:
-                self.log.append("No target land for Forest effect")
-            return SimulationResult(permanent.card.name, True, "activated_landtype", "resolved")
-
-        if "choose target non-wall creature" in text:
-            target_creature = next(
-                (
-                    perm
-                    for perm in target_player.battlefield
-                    if perm.card.primary_type == "creature" and "wall" not in perm.card.type_line.lower()
-                ),
-                None,
-            )
-            if target_creature is not None:
-                target_creature.metadata["must_attack_until_eot"] = True
-                target_creature.metadata["destroy_if_did_not_attack_eot"] = True
-                self.log.append(f"{target_creature.card.name} marked to attack this turn")
-            else:
-                self.log.append("No non-Wall target for Nettling Imp effect")
-            return SimulationResult(permanent.card.name, True, "activated_combat", "resolved")
-
-        if "target creature you control with toughness less than this creature's power gains flying until end of turn" in text:
-            target_creature = next(
-                (
-                    perm
-                    for perm in controller.battlefield
-                    if perm.card.primary_type == "creature" and perm.effective_toughness < permanent.effective_power
-                ),
-                None,
-            )
-            if target_creature is not None:
-                target_creature.metadata["gains_flying_until_eot"] = True
-                target_creature.metadata["destroy_at_next_end_step"] = True
-                self.log.append(f"{target_creature.card.name} gains temporary flying and delayed destruction")
-            else:
-                self.log.append("No valid target for Stone Giant effect")
-            return SimulationResult(permanent.card.name, True, "activated_keyword", "resolved")
-
-        if "the next 1 damage that would be dealt to this creature this turn is dealt to its owner instead" in text:
-            permanent.metadata["redirect_one_damage_to_owner_until_eot"] = int(
-                permanent.metadata.get("redirect_one_damage_to_owner_until_eot", 0)
-            ) + 1
-            self.log.append(f"{permanent.card.name} will redirect next 1 damage to its owner")
-            return SimulationResult(permanent.card.name, True, "activated_prevent", "resolved")
-
-        if "this artifact becomes a 3/6 golem artifact creature until end of combat" in text:
-            permanent.metadata["absolute_power"] = 3
-            permanent.metadata["absolute_toughness"] = 6
-            permanent.metadata["animate_until_end_of_combat"] = True
-            self.log.append(f"{permanent.card.name} is animated until end of combat")
-            return SimulationResult(permanent.card.name, True, "activated_animate", "resolved")
-
-        if "create a 1/1 colorless insect artifact creature token with flying named wasp" in text:
-            wasp = CardDefinition(
-                name="Wasp",
-                mana_cost="",
-                cmc=0.0,
-                type_line="Artifact Creature — Insect",
-                oracle_text="Flying",
-                colors=(),
-                color_identity=(),
-                keywords=("Flying",),
-                produced_mana=(),
-                raw={"name": "Wasp", "type_line": "Artifact Creature — Insect", "power": "1", "toughness": "1"},
-            )
-            controller.battlefield.append(Permanent(card=wasp))
-            self.log.append(f"{permanent.card.name} created a Wasp token")
-            return SimulationResult(permanent.card.name, True, "activated_token", "resolved")
-
-        if "look at target player's hand" in text:
-            seen = len(target_player.hand)
-            self.log.append(f"{permanent.card.name} looked at {target_player.name}'s hand ({seen} cards)")
-            return SimulationResult(permanent.card.name, True, "activated_look", "resolved")
-
-        if "put a mire counter on target non-swamp land" in text:
-            target_land = next(
-                (
-                    perm
-                    for perm in target_player.battlefield
-                    if perm.card.primary_type == "land"
-                    and "swamp" not in perm.card.type_line.lower()
-                ),
-                None,
-            )
-            if target_land is not None:
-                target_land.metadata["land_type_override"] = "swamp"
-                target_land.metadata["mire_counter"] = True
-                self.log.append(f"{target_land.card.name} became a Swamp due to mire counter")
-            else:
-                self.log.append("No valid non-Swamp land for mire counter")
-            return SimulationResult(permanent.card.name, True, "activated_landtype", "resolved")
-
-        if "add {" in text:
-            self._add_mana_from_text(controller, text)
-            self.log.append(f"{permanent.card.name} produced mana")
-            return SimulationResult(permanent.card.name, True, "activated_mana", "resolved")
-
-        self.log.append(f"No implemented activated ability for {permanent.card.name}")
-        return SimulationResult(permanent.card.name, False, "unsupported", "ability not implemented")
+        state_machine = OracleStateMachine(
+            self,
+            OracleExecutionContext(
+                caster=controller,
+                target=target_player,
+                card=permanent.card,
+                source_permanent=permanent,
+            ),
+        )
+        supported, details = state_machine.run(ability.instruction)
+        return SimulationResult(permanent.card.name, supported, ability.effect_kind, details)
 
     def _parse_activated_ability_cost(self, oracle_text: str) -> tuple[dict[str, int], bool]:
-        required = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0, "generic": 0}
-        requires_tap = False
         if not oracle_text:
-            return required, requires_tap
+            empty = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0, "generic": 0}
+            return empty, False
 
         for raw_line in oracle_text.splitlines():
             line = raw_line.strip()
             if ":" not in line:
                 continue
-            cost_part = line.split(":", 1)[0]
-            if "{" not in cost_part:
-                continue
+            parsed = parse_activated_ability_cost(line)
+            return dict(parsed.mana), parsed.requires_tap
 
-            for token in re.findall(r"\{([^}]+)\}", cost_part.upper()):
-                if token == "T":
-                    requires_tap = True
-                    continue
-                if token.isdigit():
-                    required["generic"] += int(token)
-                    continue
-                if token in {"W", "U", "B", "R", "G", "C"}:
-                    required[token] += 1
-
-            break
-
-        return required, requires_tap
+        empty = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0, "generic": 0}
+        return empty, False
 
     def tap_permanent(
         self,
@@ -621,90 +429,71 @@ class Game:
         target_idx = target_player_index if target_player_index is not None else (1 - caster_index)
         target = self.players[target_idx]
 
-        if "counter target spell" in card.oracle_text.lower():
-            if self.stack:
-                countered = self.stack.pop()
-                self.players[countered.caster_index].graveyard.append(countered.card)
-                self.log.append(f"{card.name} countered {countered.card.name}")
-            else:
-                self.log.append(f"{card.name} resolved with no spell to counter")
-        else:
-            self._apply_spell_text(caster, target, card, x_value=x_value)
+        self._apply_spell_text(caster, target, card, x_value=x_value)
         caster.graveyard.append(card)
         self.log.append(f"{card.name} resolved and moved to graveyard")
 
-    def _apply_spell_text(
-        self,
-        caster: PlayerState,
-        target: PlayerState,
-        card: CardDefinition,
-        x_value: int | None = None,
-    ) -> None:
-        text = card.oracle_text.lower()
+    def _select_executable_instruction(self, card: CardDefinition) -> OracleInstruction | None:
+        program = compile_card_oracle(card)
+        return next((instruction for instruction in program.instructions if instruction.kind != "spell_pattern"), None)
 
-        if "target player draws x cards" in text:
-            count = max(0, x_value or 0)
+    def _execute_oracle_instruction(
+        self,
+        instruction: OracleInstruction,
+        context: OracleExecutionContext,
+    ) -> tuple[bool, str]:
+        caster = context.caster
+        target = context.target
+        card = context.card
+        source_permanent = context.source_permanent
+        x_value = context.x_value
+
+        if instruction.kind == "draw_target_cards":
+            amount = instruction.payload.get("amount", 0)
+            count = max(0, x_value or 0) if amount == "x" else int(amount)
             drawn = target.draw(count)
             self.log.append(f"{target.name} drew {drawn} cards")
-            return
+            return True, "resolved"
 
-        if "discard your hand, ante the top card of your library, then draw seven cards" in text:
+        if instruction.kind == "discard_hand_ante_then_draw_seven":
             while caster.hand:
                 caster.graveyard.append(caster.hand.pop(0))
             if caster.library:
                 caster.graveyard.append(caster.library.pop(0))
             drawn = caster.draw(7)
             self.log.append(f"{card.name} resolved: discarded hand and drew {drawn} cards")
-            return
+            return True, "resolved"
 
-        if "each player antes the top card of their library" in text:
+        if instruction.kind == "each_player_antes_top_card":
             anted = 0
             for player in self.players:
                 if player.library:
                     player.graveyard.append(player.library.pop(0))
                     anted += 1
             self.log.append(f"{card.name} anted {anted} card(s) in simplified model")
-            return
+            return True, "resolved"
 
-        if "you own target card in the ante. exchange that card with the top card of your library" in text:
+        if instruction.kind == "exchange_ante_with_top_library":
             if caster.library:
                 caster.graveyard.append(caster.library.pop(0))
                 self.log.append(f"{card.name} exchanged top library card with simulated ante zone")
             else:
                 self.log.append(f"{card.name} resolved with no library card to exchange")
-            return
+            return True, "resolved"
 
-        draw_match = re.search(r"target player draws (\w+) cards?", text)
-        if draw_match:
-            token = draw_match.group(1)
-            count = _NUMBER_WORDS.get(token, 0)
-            if token.isdigit():
-                count = int(token)
-            if count > 0:
-                drawn = target.draw(count)
-                self.log.append(f"{target.name} drew {drawn} cards")
-                return
-
-        if "copy target instant or sorcery spell" in text:
+        if instruction.kind == "copy_top_stack_spell":
             if self.stack:
                 copied = self.stack[-1]
                 self._apply_spell_text(caster, target, copied.card, x_value=copied.x_value)
                 self.log.append(f"{card.name} copied {copied.card.name}")
             else:
                 self.log.append(f"{card.name} resolved with no spell to copy")
-            return
+            return True, "resolved"
 
-        if "each player chooses a number of lands they control equal to the number of lands controlled by the player who controls the fewest" in text:
-            min_lands = min(
-                sum(1 for perm in player.battlefield if perm.card.primary_type == "land")
-                for player in self.players
-            )
-            min_creatures = min(
-                sum(1 for perm in player.battlefield if perm.card.primary_type == "creature")
-                for player in self.players
-            )
+        if instruction.kind == "balance_resources":
+            min_lands = min(sum(1 for perm in player.battlefield if perm.card.primary_type == "land") for player in self.players)
+            min_creatures = min(sum(1 for perm in player.battlefield if perm.card.primary_type == "creature") for player in self.players)
             min_hand = min(len(player.hand) for player in self.players)
-
             for player in self.players:
                 lands_kept = 0
                 creatures_kept = 0
@@ -726,76 +515,77 @@ class Game:
                         continue
                     survivors.append(permanent)
                 player.battlefield = survivors
-
                 while len(player.hand) > min_hand:
                     player.graveyard.append(player.hand.pop(0))
-
             self.log.append("Balance normalized lands, creatures, and hands")
-            return
+            return True, "resolved"
 
-        if "target creature defending player controls can block any number of creatures this turn" in text:
+        if instruction.kind == "grant_unlimited_blocking":
             blocker = next((perm for perm in target.battlefield if perm.card.primary_type == "creature"), None)
             if blocker is not None:
                 blocker.metadata["must_block_all_until_eot"] = True
             self.log.append(f"{card.name} created a forced blocking assignment")
-            return
+            return True, "resolved"
 
-        if "this turn, instead of declaring blockers" in text:
+        if instruction.kind == "randomize_blockers":
             self.log.append(f"{card.name} set up random pile blocking this turn")
-            return
+            return True, "resolved"
 
-        if "remove target creature defending player controls from combat" in text:
+        if instruction.kind == "remove_creature_from_combat":
             removed = next((perm for perm in target.battlefield if perm.card.primary_type == "creature"), None)
             if removed is not None:
                 removed.metadata["removed_from_combat"] = True
             self.log.append(f"{card.name} removed a blocker from combat")
-            return
+            return True, "resolved"
 
-        if "whenever one or more creatures you control attack, each defending player divides all creatures without flying" in text:
+        if instruction.kind == "left_right_combat_division":
             self.log.append(f"{card.name} established left/right combat division")
-            return
+            return True, "resolved"
 
-        if "deals x damage" in text:
-            damage = max(0, x_value or 0)
+        if instruction.kind == "deal_damage":
+            amount = instruction.payload.get("amount", 0)
+            damage = max(0, x_value or 0) if amount == "x" else int(amount)
             damage = self._prevent_damage(target, damage)
             if damage > 0:
                 target.life -= damage
-            self.log.append(f"{target.name} took {damage} damage")
-            return
+            if source_permanent is not None:
+                self.log.append(f"{card.name} dealt {damage} damage")
+            else:
+                self.log.append(f"{target.name} took {damage} damage")
+            return True, "resolved"
 
-        dmg_match = re.search(r"deals (\d+) damage", text)
-        if dmg_match:
-            damage = int(dmg_match.group(1))
-            damage = self._prevent_damage(target, damage)
+        if instruction.kind == "deal_damage_and_self_damage":
+            damage = self._prevent_damage(target, int(instruction.payload.get("amount", 0)))
             if damage > 0:
                 target.life -= damage
-            self.log.append(f"{target.name} took {damage} damage")
-            return
+            caster.life -= int(instruction.payload.get("self_damage", 0))
+            self.log.append(f"{card.name} dealt {damage} damage and 3 self-damage")
+            return True, "resolved"
 
-        if "from your graveyard to the battlefield" in text or "from a graveyard onto the battlefield" in text:
+        if instruction.kind == "reanimate_creature":
             reanimated = self._reanimate_creature_to_battlefield(caster)
             self.log.append("Reanimated creature to battlefield" if reanimated else "No creature to reanimate")
-            return
+            return True, "resolved"
 
-        if "return target creature to its owner's hand" in text:
+        if instruction.kind == "bounce_target_creature":
             bounced = self._bounce_target_creature(target)
             self.log.append("Returned creature to hand" if bounced else "No creature to return")
-            return
+            return True, "resolved"
 
-        if "prevent all combat damage that would be dealt this turn" in text:
+        if instruction.kind == "prevent_all_combat_damage":
             self.combat_damage_prevented_until_eot = True
             self.log.append("Combat damage prevented until end of turn")
-            return
+            return True, "resolved"
 
-        if "each player discards their hand, then draws seven cards" in text:
+        if instruction.kind == "wheel_of_fortune":
             for player in self.players:
                 while player.hand:
                     player.graveyard.append(player.hand.pop(0))
                 player.draw(7)
             self.log.append("Wheel effect resolved for all players")
-            return
+            return True, "resolved"
 
-        if "each player shuffles their hand and graveyard into their library, then draws seven cards" in text:
+        if instruction.kind == "timetwister":
             for player in self.players:
                 pool = player.library + player.hand + player.graveyard
                 player.library = list(pool)
@@ -803,64 +593,58 @@ class Game:
                 player.graveyard = []
                 player.draw(7)
             self.log.append("Timetwister effect resolved for all players")
-            return
+            return True, "resolved"
 
-        if "search your library for a card, put that card into your hand, then shuffle" in text:
+        if instruction.kind == "tutor_top_card":
             if caster.library:
                 caster.hand.append(caster.library.pop(0))
             self.log.append(f"{caster.name} tutored a card")
-            return
+            return True, "resolved"
 
-        if "take an extra turn after this one" in text:
+        if instruction.kind == "grant_extra_turn":
             caster_index = self.players.index(caster)
             self.extra_turns[caster_index] = self.extra_turns.get(caster_index, 0) + 1
             self.log.append(f"{caster.name} gained an extra turn")
-            return
+            return True, "resolved"
 
-        if "look at the top three cards of target player's library, then put them back in any order" in text:
+        if instruction.kind == "reorder_target_library_top":
             top = target.library[:3]
             rest = target.library[3:]
             target.library = list(reversed(top)) + rest
             self.log.append(f"{card.name} reordered top {len(top)} cards of {target.name}'s library")
-            return
+            return True, "resolved"
 
-        if "change the text of target spell or permanent by replacing all instances of one basic land type with another" in text:
+        if instruction.kind == "mark_text_modified":
             if target.battlefield:
                 target.battlefield[0].metadata["text_modified"] = True
             self.log.append(f"{card.name} applied a text change effect")
-            return
+            return True, "resolved"
 
-        if "change the text of target spell or permanent by replacing all instances of one color word with another" in text:
-            if target.battlefield:
-                target.battlefield[0].metadata["text_modified"] = True
-            self.log.append(f"{card.name} applied a text change effect")
-            return
-
-        if "look at target opponent's hand and choose a card from it" in text:
+        if instruction.kind == "peek_hand_and_force_play":
             seen = len(target.hand)
             if target.hand:
                 played = target.hand.pop(0)
                 target.graveyard.append(played)
                 self.log.append(f"{card.name} forced {target.name} to play {played.name}")
-                return
-            self.log.append(f"{card.name} looked at {target.name}'s hand ({seen} cards)")
-            return
+            else:
+                self.log.append(f"{card.name} looked at {target.name}'s hand ({seen} cards)")
+            return True, "resolved"
 
-        if "as an additional cost to cast this spell, sacrifice a creature" in text:
+        if instruction.kind == "sacrifice_creature_for_black_mana":
             sacrificed = self._sacrifice_creature_for_mana(caster)
             if sacrificed is not None:
                 caster.mana_pool["B"] += int(sacrificed.cmc)
                 self.log.append(f"{caster.name} sacrificed {sacrificed.name} for {int(sacrificed.cmc)} black mana")
             else:
                 self.log.append(f"{caster.name} had no creature to sacrifice")
-            return
+            return True, "resolved"
 
-        if "becomes red" in text or "becomes black" in text or "becomes blue" in text or "becomes green" in text or "becomes white" in text:
-            changed = self._set_target_color(target, text)
+        if instruction.kind == "recolor_target_from_text":
+            changed = self._set_target_color(target, card.oracle_text)
             self.log.append("Changed target color" if changed else "No valid permanent to recolor")
-            return
+            return True, "resolved"
 
-        if "destroy all creatures" in text:
+        if instruction.kind == "destroy_all_creatures":
             for player in self.players:
                 survivors: list[Permanent] = []
                 for permanent in player.battlefield:
@@ -874,9 +658,9 @@ class Game:
                         survivors.append(permanent)
                 player.battlefield = survivors
             self.log.append("All creatures were destroyed")
-            return
+            return True, "resolved"
 
-        if "destroy all lands" in text:
+        if instruction.kind == "destroy_all_lands":
             for player in self.players:
                 survivors: list[Permanent] = []
                 for permanent in player.battlefield:
@@ -886,82 +670,294 @@ class Game:
                         survivors.append(permanent)
                 player.battlefield = survivors
             self.log.append("All lands were destroyed")
-            return
+            return True, "resolved"
 
-        if "destroy target" in text:
-            destroyed = self._destroy_target_permanent(target, text)
+        if instruction.kind == "destroy_target_permanent":
+            oracle_text = str(instruction.payload.get("oracle_text", card.oracle_text))
+            destroyed = self._destroy_target_permanent(target, oracle_text)
             if destroyed:
-                self.log.append(f"Destroyed {destroyed.name}")
+                if source_permanent is not None:
+                    self.log.append(f"{card.name} destroyed {destroyed.name}")
+                else:
+                    self.log.append(f"Destroyed {destroyed.name}")
             else:
                 self.log.append("No valid target permanent found")
-            return
+            return True, "resolved"
 
-        if "from your graveyard to your hand" in text:
+        if instruction.kind == "return_creature_from_graveyard_to_hand":
             returned = self._return_creature_from_graveyard(caster)
             self.log.append("Returned creature from graveyard" if returned else "No creature to return")
-            return
+            return True, "resolved"
 
-        discard_match = re.search(r"target player discards (\w+) cards?", text)
-        if discard_match:
-            token = discard_match.group(1)
-            count = _NUMBER_WORDS.get(token, 0)
-            if token.isdigit():
-                count = int(token)
-            actual = min(count, len(target.hand))
+        if instruction.kind == "discard_target_cards":
+            actual = min(int(instruction.payload.get("amount", 0)), len(target.hand))
             for _ in range(actual):
                 discarded = target.hand.pop(0)
                 target.graveyard.append(discarded)
             self.log.append(f"{target.name} discarded {actual} cards")
-            return
+            return True, "resolved"
 
-        lose_life_match = re.search(r"target player loses (\d+) life", text)
-        if lose_life_match:
-            amount = int(lose_life_match.group(1))
+        if instruction.kind == "target_loses_life":
+            amount = int(instruction.payload.get("amount", 0))
             before = target.life
             target.life -= amount
             self.log.append(f"{card.name}: {target.name} lost {amount} life ({before} -> {target.life})")
-            return
+            return True, "resolved"
 
-        if "gains x life" in text or "gain x life" in text:
-            amount = max(0, x_value or 0)
+        if instruction.kind == "target_gains_life":
+            amount = instruction.payload.get("amount", 0)
+            life_gain = max(0, x_value or 0) if amount == "x" else int(amount)
             before = target.life
-            target.life += amount
-            self.log.append(f"{card.name}: {target.name} gained {amount} life ({before} -> {target.life})")
-            return
+            target.life += life_gain
+            self.log.append(f"{card.name}: {target.name} gained {life_gain} life ({before} -> {target.life})")
+            return True, "resolved"
 
-        if "untap target" in text:
+        if instruction.kind == "untap_target_land":
+            untapped = False
+            for perm in target.battlefield:
+                if perm.card.primary_type == "land":
+                    perm.tapped = False
+                    untapped = True
+                    break
+            self.log.append("Untapped target land" if untapped else "No land to untap")
+            return True, "resolved"
+
+        if instruction.kind == "untap_target_permanent":
             untapped = self._tap_or_untap_target(target, make_tapped=False)
             self.log.append("Untapped target permanent" if untapped else "No valid permanent to untap")
-            return
+            return True, "resolved"
 
-        if "tap target" in text:
+        if instruction.kind == "tap_target_permanent":
             tapped = self._tap_or_untap_target(target, make_tapped=True)
             self.log.append("Tapped target permanent" if tapped else "No valid permanent to tap")
-            return
+            return True, "resolved"
 
-        prevent_match = re.search(r"prevent the next (\d+) damage", text)
-        if prevent_match:
-            amount = int(prevent_match.group(1))
-            caster.damage_prevention_pool += amount
-            self.log.append(f"{caster.name} gains prevention shield for {amount} damage")
-            return
+        if instruction.kind == "grant_prevention_shield":
+            amount = int(instruction.payload.get("amount", 0))
+            recipient = target if source_permanent is not None else caster
+            recipient.damage_prevention_pool += amount
+            if source_permanent is not None and "would deal damage to you this turn" in card.oracle_text.lower():
+                self.log.append("Color protection shield granted")
+            elif source_permanent is not None:
+                self.log.append("Prevention shield granted by activated ability")
+            else:
+                self.log.append(f"{caster.name} gains prevention shield for {amount} damage")
+            return True, "resolved"
 
-        if "regenerate target creature" in text:
+        if instruction.kind == "grant_forcefield_shield":
+            caster.combat_damage_cap_one_charges += 1
+            self.log.append("Forcefield shield granted")
+            return True, "resolved"
+
+        if instruction.kind == "grant_regeneration_to_target_creature":
             regenerated = self._grant_regeneration_shield(target)
             self.log.append("Regeneration shield granted" if regenerated else "No valid creature to regenerate")
+            return True, "resolved"
+
+        if instruction.kind == "grant_regeneration_to_self":
+            if source_permanent is None:
+                return False, "ability not implemented"
+            source_permanent.regeneration_shield += 1
+            self.log.append(f"{card.name} gains regeneration shield")
+            return True, "resolved"
+
+        if instruction.kind == "pump_self":
+            if source_permanent is None:
+                return False, "ability not implemented"
+            source_permanent.power_bonus += int(instruction.payload.get("power", 0))
+            source_permanent.toughness_bonus += int(instruction.payload.get("toughness", 0))
+            self.log.append(
+                f"{card.name} gets +{int(instruction.payload.get('power', 0))}/+{int(instruction.payload.get('toughness', 0))} until end of turn"
+            )
+            return True, "resolved"
+
+        if instruction.kind == "grant_self_flying_until_eot":
+            if source_permanent is None:
+                return False, "ability not implemented"
+            source_permanent.metadata["gains_flying_until_eot"] = True
+            self.log.append(f"{card.name} gains flying until end of turn")
+            return True, "resolved"
+
+        if instruction.kind == "grant_banding_to_target":
+            target_creature = next((perm for perm in target.battlefield if perm.card.primary_type == "creature"), None)
+            if target_creature is None:
+                self.log.append("No valid creature target for banding effect")
+                return False, "no valid creature target for banding effect"
+            target_creature.metadata["gains_banding_until_eot"] = True
+            self.log.append(f"{target_creature.card.name} gains banding until end of turn")
+            return True, "resolved"
+
+        if instruction.kind == "add_counter_to_self":
+            if source_permanent is None:
+                return False, "ability not implemented"
+            source_permanent.power_bonus += int(instruction.payload.get("power", 0))
+            source_permanent.toughness_bonus += int(instruction.payload.get("toughness", 0))
+            self.log.append(f"{card.name} gets a +1/+1 counter")
+            return True, "resolved"
+
+        if instruction.kind == "sacrifice_self_for_mana":
+            if source_permanent is None:
+                return False, "ability not implemented"
+            caster.mana_pool[str(instruction.payload.get("color", "G"))] += int(instruction.payload.get("amount", 0))
+            caster.graveyard.append(source_permanent.card)
+            caster.battlefield = [perm for perm in caster.battlefield if perm is not source_permanent]
+            self.log.append(f"{card.name} sacrificed for mana")
+            return True, "resolved"
+
+        if instruction.kind == "draw_controller_cards":
+            drawn = caster.draw(int(instruction.payload.get("amount", 0)))
+            self.log.append(f"{card.name} drew {drawn} card")
+            return True, "resolved"
+
+        if instruction.kind == "grant_unblockable_to_low_power_target":
+            target_creature = next(
+                (perm for perm in target.battlefield if perm.card.primary_type == "creature" and perm.effective_power <= 2),
+                None,
+            )
+            if target_creature is not None:
+                target_creature.metadata["cant_be_blocked_until_eot"] = True
+                self.log.append(f"{target_creature.card.name} can't be blocked this turn")
+            else:
+                self.log.append("No valid low-power creature for unblockable effect")
+            return True, "resolved"
+
+        if instruction.kind == "change_target_land_type":
+            target_land = next((perm for perm in target.battlefield if perm.card.primary_type == "land"), None)
+            if target_land is not None:
+                target_land.metadata["land_type_override"] = str(instruction.payload.get("land_type", "forest"))
+                self.log.append(f"{target_land.card.name} became a Forest")
+            else:
+                self.log.append("No target land for Forest effect")
+            return True, "resolved"
+
+        if instruction.kind == "mark_non_wall_target_to_attack":
+            target_creature = next(
+                (
+                    perm
+                    for perm in target.battlefield
+                    if perm.card.primary_type == "creature" and "wall" not in perm.card.type_line.lower()
+                ),
+                None,
+            )
+            if target_creature is not None:
+                target_creature.metadata["must_attack_until_eot"] = True
+                target_creature.metadata["destroy_if_did_not_attack_eot"] = True
+                self.log.append(f"{target_creature.card.name} marked to attack this turn")
+            else:
+                self.log.append("No non-Wall target for Nettling Imp effect")
+            return True, "resolved"
+
+        if instruction.kind == "grant_flying_and_delayed_destruction":
+            if source_permanent is None:
+                return False, "ability not implemented"
+            target_creature = next(
+                (
+                    perm
+                    for perm in caster.battlefield
+                    if perm.card.primary_type == "creature" and perm.effective_toughness < source_permanent.effective_power
+                ),
+                None,
+            )
+            if target_creature is not None:
+                target_creature.metadata["gains_flying_until_eot"] = True
+                target_creature.metadata["destroy_at_next_end_step"] = True
+                self.log.append(f"{target_creature.card.name} gains temporary flying and delayed destruction")
+            else:
+                self.log.append("No valid target for Stone Giant effect")
+            return True, "resolved"
+
+        if instruction.kind == "redirect_one_damage_to_owner":
+            if source_permanent is None:
+                return False, "ability not implemented"
+            source_permanent.metadata["redirect_one_damage_to_owner_until_eot"] = int(
+                source_permanent.metadata.get("redirect_one_damage_to_owner_until_eot", 0)
+            ) + 1
+            self.log.append(f"{card.name} will redirect next 1 damage to its owner")
+            return True, "resolved"
+
+        if instruction.kind == "animate_self_until_end_of_combat":
+            if source_permanent is None:
+                return False, "ability not implemented"
+            source_permanent.metadata["absolute_power"] = int(instruction.payload.get("power", 0))
+            source_permanent.metadata["absolute_toughness"] = int(instruction.payload.get("toughness", 0))
+            source_permanent.metadata["animate_until_end_of_combat"] = True
+            self.log.append(f"{card.name} is animated until end of combat")
+            return True, "resolved"
+
+        if instruction.kind == "create_wasp_token":
+            wasp = CardDefinition(
+                name="Wasp",
+                mana_cost="",
+                cmc=0.0,
+                type_line="Artifact Creature — Insect",
+                oracle_text="Flying",
+                colors=(),
+                color_identity=(),
+                keywords=("Flying",),
+                produced_mana=(),
+                raw={"name": "Wasp", "type_line": "Artifact Creature — Insect", "power": "1", "toughness": "1"},
+            )
+            caster.battlefield.append(Permanent(card=wasp))
+            self.log.append(f"{card.name} created a Wasp token")
+            return True, "resolved"
+
+        if instruction.kind == "look_at_target_hand":
+            seen = len(target.hand)
+            self.log.append(f"{card.name} looked at {target.name}'s hand ({seen} cards)")
+            return True, "resolved"
+
+        if instruction.kind == "add_mire_counter_to_target_land":
+            target_land = next(
+                (
+                    perm
+                    for perm in target.battlefield
+                    if perm.card.primary_type == "land"
+                    and "swamp" not in perm.card.type_line.lower()
+                ),
+                None,
+            )
+            if target_land is not None:
+                target_land.metadata["land_type_override"] = "swamp"
+                target_land.metadata["mire_counter"] = True
+                self.log.append(f"{target_land.card.name} became a Swamp due to mire counter")
+            else:
+                self.log.append("No valid non-Swamp land for mire counter")
+            return True, "resolved"
+
+        if instruction.kind == "add_mana_from_text":
+            self._add_mana_from_text(caster, str(instruction.payload.get("oracle_text", card.oracle_text)))
+            self.log.append(f"{card.name} produced mana")
+            return True, "resolved"
+
+        if instruction.kind == "counter_top_stack_spell":
+            if self.stack:
+                countered = self.stack.pop()
+                self.players[countered.caster_index].graveyard.append(countered.card)
+                self.log.append(f"{card.name} countered {countered.card.name}")
+            else:
+                self.log.append(f"{card.name} resolved with no spell to counter")
+            return True, "resolved"
+
+        self.log.append(f"Resolved supported pattern for {card.name} without state mutation")
+        return True, "resolved"
+
+    def _apply_spell_text(
+        self,
+        caster: PlayerState,
+        target: PlayerState,
+        card: CardDefinition,
+        x_value: int | None = None,
+    ) -> None:
+        instruction = self._select_executable_instruction(card)
+        if instruction is None:
+            self.log.append(f"Resolved supported pattern for {card.name} without state mutation")
             return
 
-        if "gain" in text and "life" in text:
-            gain_match = re.search(r"gains? (\d+) life", text)
-            if gain_match:
-                amount = int(gain_match.group(1))
-                before = target.life
-                target.life += amount
-                self.log.append(f"{card.name}: {target.name} gained {amount} life ({before} -> {target.life})")
-                return
-
-        # Pattern-supported but no deterministic action in MVP.
-        self.log.append(f"Resolved supported pattern for {card.name} without state mutation")
+        state_machine = OracleStateMachine(
+            self,
+            OracleExecutionContext(caster=caster, target=target, card=card, x_value=x_value),
+        )
+        state_machine.run(instruction)
 
     def _destroy_target_permanent(self, target: PlayerState, oracle_text: str) -> CardDefinition | None:
         lowered = oracle_text.lower()
