@@ -74,6 +74,7 @@ def _serialize_card_summary(card) -> dict:
         "name": card.name,
         "type": card.type_line,
         "mana_cost": card.mana_cost,
+        "oracle_text": card.oracle_text,
         "image_uri": image_uri,
     }
 
@@ -475,7 +476,13 @@ def do_action(session_id: str, req: GameActionRequest):
                 raise HTTPException(status_code=400, detail="can only cast this card when stack is empty")
 
         target = req.target_seat if req.target_seat is not None else _default_target(req.card_name, req.seat)
-        result = session.game.cast_from_hand(req.seat, req.card_name, target_player_index=target, x_value=req.x_value)
+        result = session.game.cast_from_hand(
+            req.seat,
+            req.card_name,
+            target_player_index=target,
+            target_permanent_index=req.permanent_index,
+            x_value=req.x_value,
+        )
         if not result.supported:
             raise HTTPException(status_code=400, detail=result.details)
 
@@ -612,7 +619,13 @@ def do_action(session_id: str, req: GameActionRequest):
         original_enforce_mana_costs = session.game.enforce_mana_costs
         try:
             session.game.enforce_mana_costs = False
-            result = session.game.cast_from_hand(req.seat, card.name, target_player_index=target, x_value=x_value)
+            result = session.game.cast_from_hand(
+                req.seat,
+                card.name,
+                target_player_index=target,
+                target_permanent_index=req.permanent_index,
+                x_value=x_value,
+            )
         finally:
             session.game.enforce_mana_costs = original_enforce_mana_costs
 

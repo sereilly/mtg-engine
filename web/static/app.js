@@ -336,6 +336,11 @@ function cardRequiresTargetPlayer(card) {
   return (card.oracle_text || "").toLowerCase().includes("target player");
 }
 
+function cardRequiresTargetLand(card) {
+  if (!card || typeof card === "string") return false;
+  return (card.oracle_text || "").toLowerCase().includes("target land");
+}
+
 function cardRequiresManaColorChoice(card) {
   if (!card || typeof card === "string") return false;
   const text = (card.oracle_text || "").toLowerCase();
@@ -405,6 +410,45 @@ function getDefaultTargetSeat(cardName) {
     return seat;
   }
   return 1 - seat;
+}
+
+function getTargetableLandsForPrompt(state = currentState) {
+  if (!state) return [];
+
+  const result = [];
+  for (const targetSeat of [0, 1]) {
+    const player = state.players?.[targetSeat];
+    if (!player || !Array.isArray(player.battlefield)) continue;
+    for (const [permanentIndex, permanent] of player.battlefield.entries()) {
+      if (!permanent || !String(permanent.type || "").toLowerCase().includes("land")) continue;
+      result.push({
+        targetSeat,
+        permanentIndex,
+        cardName: permanent.name || "Land",
+        ownerName: player.name || `Seat ${targetSeat}`,
+      });
+    }
+  }
+  return result;
+}
+
+function isPendingCastTargetValidForCard(card, { targetSeat = null, zoneKind = "", permanentIndex = null } = {}) {
+  if (!pendingCastTarget) return false;
+  if (!Number.isInteger(targetSeat)) return false;
+  if (!zoneKind) return false;
+
+  if (pendingCastTarget.targetKind === "player") {
+    return zoneKind === "hand" || zoneKind === "battlefield";
+  }
+
+  if (pendingCastTarget.targetKind === "land") {
+    if (zoneKind !== "battlefield") return false;
+    if (!Number.isInteger(permanentIndex)) return false;
+    if (!card || typeof card === "string") return false;
+    return String(card.type || "").toLowerCase().includes("land");
+  }
+
+  return false;
 }
 
 function findCardInCurrentHand(cardName) {
@@ -477,14 +521,13 @@ function renderActivationPrompt() {
     okBtn.classList.add("hidden");
     customRow.classList.add("hidden");
     title.textContent = `Choose target for ${pendingCastTarget.cardName}`;
-    body.textContent = "This spell targets a player. Choose who should receive it.";
-    steps.innerHTML = [
-      `<div>Card: ${pendingCastTarget.cardName}</div>`,
-      `<div class="prompt-choice-row">${[
-        `<button type="button" class="prompt-choice-btn" data-target-choice="${seat}">You</button>`,
-        `<button type="button" class="prompt-choice-btn" data-target-choice="${1 - seat}">Opponent</button>`,
-      ].join("")}</div>`,
-    ].join("");
+    if (pendingCastTarget.targetKind === "land") {
+      body.textContent = "Click a valid land on the battlefield to choose the target.";
+      steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
+    } else {
+      body.textContent = "Click a card in hand or on the battlefield of the player you want to target.";
+      steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
+    }
     okBtn.disabled = true;
     cancelBtn.disabled = false;
     customOkBtn.disabled = true;
@@ -664,19 +707,40 @@ function resolvePendingManaColor(manaColor) {
     .catch((e) => updateActionHint(e.message, true));
 }
 
-function startCastTargetPrompt(card) {
+function startCastTargetPrompt(card, castAction = "cast") {
   const cardName = normalizeCardName(card);
   if (!cardName) return;
 
   pendingCastTarget = {
     card,
     cardName,
+    targetKind: "player",
+    castAction,
   };
   renderActivationPrompt();
   updateActionHint(`Choose a target for ${cardName}.`);
 }
 
-function startCastXPrompt(card, targetSeat) {
+function startCastLandTargetPrompt(card, castAction = "cast") {
+  const cardName = normalizeCardName(card);
+  if (!cardName) return;
+
+  if (getTargetableLandsForPrompt().length === 0) {
+    updateActionHint(`No valid land targets in play for ${cardName}.`, true);
+    return;
+  }
+
+  pendingCastTarget = {
+    card,
+    cardName,
+    targetKind: "land",
+    castAction,
+  };
+  renderActivationPrompt();
+  updateActionHint(`Choose a land target for ${cardName}.`);
+}
+
+function startCastXPrompt(card, targetSeat, targetPermanentIndex = null, castAction = "cast") {
   const cardName = normalizeCardName(card);
   if (!cardName) return;
 
@@ -685,6 +749,8 @@ function startCastXPrompt(card, targetSeat) {
     card,
     cardName,
     targetSeat,
+    targetPermanentIndex,
+    castAction,
     manaRequirement: parseManaCostSymbols(card.mana_cost || ""),
     maxX: getMaxAffordableX(getCurrentPlayerState()?.mana_pool, card.mana_cost || ""),
     awaitingCustomValue: false,
@@ -693,26 +759,34 @@ function startCastXPrompt(card, targetSeat) {
   updateActionHint(`Choose X for ${cardName}.`);
 }
 
-function resolvePendingCastTarget(targetSeat) {
+function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
   if (!pendingCastTarget) return;
   const pending = pendingCastTarget;
   const selectedTarget = Number.isInteger(targetSeat) ? targetSeat : seat;
+  const selectedPermanentIndex = Number.isInteger(targetPermanentIndex) ? targetPermanentIndex : null;
+
+  if (pending.targetKind === "land" && selectedPermanentIndex === null) {
+    updateActionHint("Choose a land in play to target.", true);
+    return;
+  }
+
   pendingCastTarget = null;
   renderActivationPrompt();
 
   if (hasXCost(pending.card)) {
-    startCastXPrompt(pending.card, selectedTarget);
+    startCastXPrompt(pending.card, selectedTarget, selectedPermanentIndex, pending.castAction || "cast");
     return;
   }
 
-  updateActionHint(`Casting ${pending.cardName} targeting seat ${selectedTarget}...`);
+  updateActionHint(`Casting ${pending.cardName}...`);
   sendAction({
     seat,
-    action: "cast",
+    action: pending.castAction || "cast",
     card_name: pending.cardName,
     target_seat: selectedTarget,
+    permanent_index: selectedPermanentIndex,
   })
-    .then(() => updateActionHint(`Cast ${pending.cardName} targeting seat ${selectedTarget}.`))
+    .then(() => updateActionHint(`Cast ${pending.cardName}.`))
     .catch((e) => updateActionHint(e.message, true));
 }
 
@@ -740,9 +814,10 @@ function resolvePendingCastX(xValue) {
 
   sendAction({
     seat,
-    action: "cast",
+    action: pending.castAction || "cast",
     card_name: pending.cardName,
     target_seat: pending.targetSeat,
+    permanent_index: pending.targetPermanentIndex,
     x_value: selectedX,
   })
     .then(() => updateActionHint(`Cast ${pending.cardName} with X = ${selectedX}.`))
@@ -870,6 +945,18 @@ async function fetchDebugSuggestions(query = "") {
   renderDebugOptions(payload.cards || []);
 }
 
+async function fetchCardByName(cardName) {
+  const term = (cardName || "").trim();
+  if (!term) return null;
+  const url = `/api/cards/search?query=${encodeURIComponent(term)}&limit=20`;
+  const resp = await fetch(url);
+  if (!resp.ok) return null;
+  const payload = await resp.json();
+  const cards = Array.isArray(payload.cards) ? payload.cards : [];
+  const lowered = term.toLowerCase();
+  return cards.find((card) => String(card.name || "").toLowerCase() === lowered) || null;
+}
+
 async function addDebugCardToHand() {
   if (!sessionId || seat === null) {
     updateDebugStatus("Create or join a session first.", "error");
@@ -901,9 +988,31 @@ async function castDebugCardForFree() {
     return;
   }
 
-  await sendAction({ seat, action: "debug_cast_free", card_name: cardName });
-  updateDebugStatus(`Cast ${cardName} for free.`, "success");
-  updateActionHint(`Debug: cast ${cardName} for free.`);
+  const card = await fetchCardByName(cardName);
+  const resolvedCardName = normalizeCardName(card) || cardName;
+
+  if (card && cardRequiresTargetLand(card)) {
+    startCastLandTargetPrompt(card, "debug_cast_free");
+    updateDebugStatus(`Choose a land target for ${resolvedCardName}.`, "success");
+    return;
+  }
+
+  if (card && cardRequiresTargetPlayer(card)) {
+    startCastTargetPrompt(card, "debug_cast_free");
+    updateDebugStatus(`Choose a target for ${resolvedCardName}.`, "success");
+    return;
+  }
+
+  const targetSeat = getDefaultTargetSeat(resolvedCardName);
+  if (card && hasXCost(card)) {
+    startCastXPrompt(card, targetSeat, null, "debug_cast_free");
+    updateDebugStatus(`Choose X for ${resolvedCardName}.`, "success");
+    return;
+  }
+
+  await sendAction({ seat, action: "debug_cast_free", card_name: resolvedCardName, target_seat: targetSeat });
+  updateDebugStatus(`Cast ${resolvedCardName} for free.`, "success");
+  updateActionHint(`Debug: cast ${resolvedCardName} for free.`);
 }
 
 function clearCardPreview() {
@@ -952,6 +1061,8 @@ function createCardElement(card, options = {}) {
     handIndex = null,
     cleanupSelectable = false,
     selected = false,
+    targetSeat = null,
+    zoneKind = "",
   } = options;
   const cardEl = document.createElement("div");
   cardEl.className = "card";
@@ -997,6 +1108,29 @@ function createCardElement(card, options = {}) {
   if (compact) {
     cardEl.style.width = "54px";
     cardEl.style.minHeight = "74px";
+  }
+
+  if (Number.isInteger(targetSeat) && zoneKind) {
+    cardEl.addEventListener("click", (event) => {
+      if (!pendingCastTarget) return;
+
+      const validTarget = isPendingCastTargetValidForCard(card, {
+        targetSeat,
+        zoneKind,
+        permanentIndex,
+      });
+      if (!validTarget) {
+        updateActionHint("That is not a valid target for the pending spell.", true);
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
+      }
+
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const targetPermanentIndex = zoneKind === "battlefield" ? permanentIndex : null;
+      resolvePendingCastTarget(targetSeat, targetPermanentIndex);
+    });
   }
 
   if (interactive && typeof card === "object") {
@@ -1052,6 +1186,11 @@ function createCardElement(card, options = {}) {
         const cardName = normalizeCardName(card);
         if (!cardName) return;
 
+        if (cardRequiresTargetLand(card)) {
+          startCastLandTargetPrompt(card);
+          return;
+        }
+
         if (cardRequiresTargetPlayer(card)) {
           startCastTargetPrompt(card);
           return;
@@ -1085,7 +1224,7 @@ function renderCardRow(containerId, cards, options = {}) {
       continue;
     }
     const tapped = typeof card === "object" ? !!card.tapped : false;
-    const permanentIndex = options.dragKind === "permanent" ? index : null;
+    const permanentIndex = options.zoneKind === "battlefield" ? index : null;
     const selected = Array.isArray(options.selectedHandIndices) && options.selectedHandIndices.includes(index);
     container.appendChild(
       createCardElement(card, { ...options, tapped, permanentIndex, handIndex: index, selected })
@@ -1209,13 +1348,21 @@ function renderBoard(state) {
   renderCardRow("selfHand", me.hand, {
     draggable: !requiresCleanupSelection,
     dragKind: "hand",
+    zoneKind: "hand",
+    targetSeat: viewerSeat,
     castOnClick: true,
     cleanupSelectable: requiresCleanupSelection,
     selectedHandIndices: cleanupDiscard?.selected_indices || [],
   });
-  renderCardRow("oppHand", opp.hand, { compact: true });
-  renderCardRow("selfBattlefield", me.battlefield, { draggable: true, dragKind: "permanent", interactive: true });
-  renderCardRow("oppBattlefield", opp.battlefield);
+  renderCardRow("oppHand", opp.hand, { compact: true, zoneKind: "hand", targetSeat: oppSeat });
+  renderCardRow("selfBattlefield", me.battlefield, {
+    draggable: true,
+    dragKind: "permanent",
+    zoneKind: "battlefield",
+    targetSeat: viewerSeat,
+    interactive: true,
+  });
+  renderCardRow("oppBattlefield", opp.battlefield, { zoneKind: "battlefield", targetSeat: oppSeat });
 
   q("selfDeckCount").textContent = `Deck: ${me.library_count}`;
   q("selfGraveCount").textContent = `Graveyard: ${me.graveyard.length}`;
@@ -1559,7 +1706,12 @@ q("promptSteps").addEventListener("click", (event) => {
 
   const targetChoice = target.dataset.targetChoice;
   if (targetChoice && pendingCastTarget) {
-    resolvePendingCastTarget(Number(targetChoice));
+    const targetPermanentIndex = target.dataset.targetPermanentIndex;
+    const parsedPermanentIndex =
+      targetPermanentIndex !== undefined && targetPermanentIndex !== ""
+        ? Number(targetPermanentIndex)
+        : null;
+    resolvePendingCastTarget(Number(targetChoice), Number.isInteger(parsedPermanentIndex) ? parsedPermanentIndex : null);
     return;
   }
 

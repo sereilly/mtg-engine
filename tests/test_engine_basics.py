@@ -91,6 +91,31 @@ def test_disenchant_destroys_target_artifact(all_cards):
     assert p2.graveyard[0].name == "Black Lotus"
 
 
+def test_ice_storm_destroys_selected_target_land(all_cards):
+    ice_storm = next(card for card in all_cards if card.name == "Ice Storm")
+    island = next(card for card in all_cards if card.name == "Island")
+    mountain = next(card for card in all_cards if card.name == "Mountain")
+
+    p1 = PlayerState(name="P1", hand=[ice_storm])
+    p2 = PlayerState(name="P2")
+    p2.battlefield.append(Permanent(card=island))
+    p2.battlefield.append(Permanent(card=mountain))
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(
+        0,
+        "Ice Storm",
+        target_player_index=1,
+        target_permanent_index=1,
+    )
+
+    assert result.supported
+    assert len(p2.battlefield) == 1
+    assert p2.battlefield[0].card.name == "Island"
+    assert p2.graveyard
+    assert p2.graveyard[0].name == "Mountain"
+
+
 def test_bad_moon_applies_global_black_creature_buff(all_cards):
     bad_moon = next(card for card in all_cards if card.name == "Bad Moon")
     black_knight = next(card for card in all_cards if card.name == "Black Knight")

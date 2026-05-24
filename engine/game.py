@@ -73,6 +73,7 @@ class StackItem:
     card: CardDefinition
     caster_index: int
     target_player_index: int | None
+    target_permanent_index: int | None
     x_value: int | None
 
 
@@ -81,6 +82,7 @@ class OracleExecutionContext:
     caster: PlayerState
     target: PlayerState
     card: CardDefinition
+    target_permanent_index: int | None = None
     x_value: int | None = None
     source_permanent: Permanent | None = None
 
@@ -389,12 +391,14 @@ class Game:
         caster_index: int,
         card_name: str,
         target_player_index: int | None = None,
+        target_permanent_index: int | None = None,
         x_value: int | None = None,
     ) -> SimulationResult:
         queued = self.queue_from_hand(
             caster_index,
             card_name,
             target_player_index=target_player_index,
+            target_permanent_index=target_permanent_index,
             x_value=x_value,
         )
         if not queued.supported:
@@ -517,6 +521,7 @@ class Game:
         caster_index: int,
         card_name: str,
         target_player_index: int | None = None,
+        target_permanent_index: int | None = None,
         x_value: int | None = None,
     ) -> SimulationResult:
         caster = self.players[caster_index]
@@ -568,6 +573,7 @@ class Game:
                     card=card,
                     caster_index=caster_index,
                     target_player_index=target_player_index,
+                    target_permanent_index=target_permanent_index,
                     x_value=resolved_x_value,
                 )
             )
@@ -579,6 +585,7 @@ class Game:
             card=card,
             classification=classification,
             target_player_index=target_player_index,
+            target_permanent_index=target_permanent_index,
             x_value=resolved_x_value,
         )
         return SimulationResult(card.name, True, classification.effect_kind, "resolved")
@@ -706,6 +713,7 @@ class Game:
                 card=item.card,
                 classification=classification,
                 target_player_index=item.target_player_index,
+                target_permanent_index=item.target_permanent_index,
                 x_value=item.x_value,
             )
 
@@ -715,6 +723,7 @@ class Game:
         card: CardDefinition,
         classification: CardClassification,
         target_player_index: int | None,
+        target_permanent_index: int | None = None,
         x_value: int | None = None,
     ) -> None:
         caster = self.players[caster_index]
@@ -741,7 +750,13 @@ class Game:
         target_idx = target_player_index if target_player_index is not None else (1 - caster_index)
         target = self.players[target_idx]
 
-        self._apply_spell_text(caster, target, card, x_value=x_value)
+        self._apply_spell_text(
+            caster,
+            target,
+            card,
+            target_permanent_index=target_permanent_index,
+            x_value=x_value,
+        )
         caster.graveyard.append(card)
         self.log.append(f"{card.name} resolved and moved to graveyard")
 
@@ -986,7 +1001,11 @@ class Game:
 
         if instruction.kind == "destroy_target_permanent":
             oracle_text = str(instruction.payload.get("oracle_text", card.oracle_text))
-            destroyed = self._destroy_target_permanent(target, oracle_text)
+            destroyed = self._destroy_target_permanent(
+                target,
+                oracle_text,
+                target_permanent_index=context.target_permanent_index,
+            )
             if destroyed:
                 if source_permanent is not None:
                     self.log.append(f"{card.name} destroyed {destroyed.name}")
@@ -1270,6 +1289,7 @@ class Game:
         caster: PlayerState,
         target: PlayerState,
         card: CardDefinition,
+        target_permanent_index: int | None = None,
         x_value: int | None = None,
     ) -> None:
         instruction = self._select_executable_instruction(card)
@@ -1279,11 +1299,22 @@ class Game:
 
         state_machine = OracleStateMachine(
             self,
-            OracleExecutionContext(caster=caster, target=target, card=card, x_value=x_value),
+            OracleExecutionContext(
+                caster=caster,
+                target=target,
+                card=card,
+                target_permanent_index=target_permanent_index,
+                x_value=x_value,
+            ),
         )
         state_machine.run(instruction)
 
-    def _destroy_target_permanent(self, target: PlayerState, oracle_text: str) -> CardDefinition | None:
+    def _destroy_target_permanent(
+        self,
+        target: PlayerState,
+        oracle_text: str,
+        target_permanent_index: int | None = None,
+    ) -> CardDefinition | None:
         lowered = oracle_text.lower()
         type_filter: str | None = None
         if "target creature" in lowered:
@@ -1300,6 +1331,18 @@ class Game:
             if f" {word} " in f" {lowered} ":
                 color_filter = symbol
                 break
+
+        if target_permanent_index is not None:
+            if 0 <= target_permanent_index < len(target.battlefield):
+                permanent = target.battlefield[target_permanent_index]
+                if type_filter and permanent.card.primary_type != type_filter:
+                    return None
+                if color_filter and color_filter not in permanent.card.colors:
+                    return None
+                removed = target.battlefield.pop(target_permanent_index)
+                target.graveyard.append(removed.card)
+                return removed.card
+            return None
 
         for idx, permanent in enumerate(target.battlefield):
             if type_filter and permanent.card.primary_type != type_filter:
