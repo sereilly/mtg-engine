@@ -82,6 +82,19 @@
           </div>
 
           <aside class="side-column">
+            <section id="activationPanel" class="side-panel activation-panel hidden">
+              <div class="prompt-head">
+                <h3>Current Prompt</h3>
+                <div class="prompt-actions">
+                  <button id="promptOkBtn" type="button">OK</button>
+                  <button id="promptCancelBtn" type="button" class="secondary-btn">Cancel</button>
+                </div>
+              </div>
+              <div id="promptTitle" class="prompt-title">No pending activation.</div>
+              <div id="promptBody" class="prompt-body">Select an activated ability to begin paying its cost.</div>
+              <div id="promptSteps" class="prompt-steps"></div>
+            </section>
+
             <section class="side-panel preview-panel">
               <h3>Card Preview</h3>
               <div id="cardPreview" class="card-preview-frame empty-preview">

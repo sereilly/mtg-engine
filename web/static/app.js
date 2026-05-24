@@ -1,6 +1,7 @@
 let sessionId = null;
 let seat = null;
 let currentState = null;
+let pendingActivation = null;
 
 const setupEl = document.getElementById("setup");
 const sessionEl = document.getElementById("session");
@@ -80,6 +81,174 @@ function shouldPromptForActivationCost(costText) {
   const cleaned = (costText || "").replace(/[()\s]/g, "").toUpperCase();
   if (!cleaned) return false;
   return cleaned !== "{T}";
+}
+
+function parseManaCostSymbols(costText) {
+  const required = { W: 0, U: 0, B: 0, R: 0, G: 0, C: 0, generic: 0 };
+  const tokens = (costText || "").toUpperCase().match(/\{([^}]+)\}/g) || [];
+
+  for (const token of tokens) {
+    const symbol = token.slice(1, -1).trim();
+    if (!symbol || symbol === "T") continue;
+    if (/^\d+$/.test(symbol)) {
+      required.generic += Number(symbol);
+      continue;
+    }
+    if (symbol in required) {
+      required[symbol] += 1;
+    }
+  }
+
+  return required;
+}
+
+function manaPoolCanPayCost(manaPool, required) {
+  const pool = manaPool || {};
+  if ((pool.W || 0) < required.W) return false;
+  if ((pool.U || 0) < required.U) return false;
+  if ((pool.B || 0) < required.B) return false;
+  if ((pool.R || 0) < required.R) return false;
+  if ((pool.G || 0) < required.G) return false;
+  if ((pool.C || 0) < required.C) return false;
+
+  const remaining =
+    (pool.W || 0) +
+    (pool.U || 0) +
+    (pool.B || 0) +
+    (pool.R || 0) +
+    (pool.G || 0) +
+    (pool.C || 0) -
+    required.W -
+    required.U -
+    required.B -
+    required.R -
+    required.G -
+    required.C;
+
+  return remaining >= required.generic;
+}
+
+function formatManaSymbols(counts) {
+  const parts = [];
+  for (const symbol of ["W", "U", "B", "R", "G", "C"]) {
+    const count = Number(counts?.[symbol] || 0);
+    if (count > 0) {
+      parts.push(`${symbol}${count > 1 ? ` x${count}` : ""}`);
+    }
+  }
+  if (Number(counts?.generic || 0) > 0) {
+    parts.push(`Generic x${counts.generic}`);
+  }
+  return parts.length > 0 ? parts.join(", ") : "No mana cost";
+}
+
+function getCurrentPlayerState(state = currentState) {
+  if (state === null || seat === null) return null;
+  return state.players?.[seat] || null;
+}
+
+function renderActivationPrompt() {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const me = getCurrentPlayerState();
+
+  if (!pendingActivation) {
+    panel.classList.add("hidden");
+    title.textContent = "No pending activation.";
+    body.textContent = "Select an activated ability to begin paying its cost.";
+    steps.innerHTML = "";
+    okBtn.disabled = true;
+    cancelBtn.disabled = true;
+    return;
+  }
+
+  panel.classList.remove("hidden");
+  const manaRequirement = pendingActivation.manaRequirement || {};
+  const canPay = me ? manaPoolCanPayCost(me.mana_pool, manaRequirement) : false;
+
+  title.textContent = `Pay activation cost for ${pendingActivation.cardName}`;
+  body.textContent = pendingActivation.awaitingApproval
+    ? "Press OK to start paying this activation cost."
+    : canPay
+      ? "Cost is covered. The activation will be submitted automatically."
+      : "Use board actions to generate the missing mana, then this prompt will complete the activation automatically.";
+  steps.innerHTML = [
+    `<div>Cost: ${pendingActivation.activationCost || "none"}</div>`,
+    `<div>Needed: ${formatManaSymbols(manaRequirement)}</div>`,
+    `<div>Current mana: ${me ? formatManaSymbols(me.mana_pool) : "Unknown"}</div>`,
+    `<div>Action: ${pendingActivation.awaitingApproval ? "press OK to start paying, then click lands or other mana sources." : "click lands or other mana sources, then wait for the activation to resolve."}</div>`,
+  ].join("");
+  okBtn.disabled = !pendingActivation.awaitingApproval;
+  cancelBtn.disabled = false;
+}
+
+async function attemptPendingActivation() {
+  if (!pendingActivation || seat === null) return;
+  if (pendingActivation.awaitingApproval) {
+    renderActivationPrompt();
+    return;
+  }
+  const me = getCurrentPlayerState();
+  if (!me) return;
+
+  if (!manaPoolCanPayCost(me.mana_pool, pendingActivation.manaRequirement)) {
+    renderActivationPrompt();
+    return;
+  }
+
+  const pending = pendingActivation;
+  pendingActivation = null;
+  renderActivationPrompt();
+  updateActionHint(`Submitting activation for ${pending.cardName}...`);
+
+  try {
+    await sendAction({
+      seat,
+      action: "activate",
+      permanent_name: pending.cardName,
+      target_seat: pending.targetSeat,
+    });
+    updateActionHint(`Activated ${pending.cardName}.`);
+  } catch (e) {
+    updateActionHint(e.message, true);
+  }
+}
+
+function startActivationPrompt(card, targetSeat) {
+  const cardName = normalizeCardName(card);
+  if (!cardName) return;
+
+  const activationCost = getActivatedAbilityCost(card);
+  if (!shouldPromptForActivationCost(activationCost)) {
+    sendAction({ seat, action: "activate", permanent_name: cardName, target_seat: targetSeat })
+      .then(() => updateActionHint(`Activated ${cardName}.`))
+      .catch((e) => updateActionHint(e.message, true));
+    return;
+  }
+
+  pendingActivation = {
+    cardName,
+    targetSeat,
+    activationCost,
+    manaRequirement: parseManaCostSymbols(activationCost),
+    awaitingApproval: true,
+  };
+  renderActivationPrompt();
+  updateActionHint(
+    `Activation pending for ${cardName}. Press OK to begin paying the cost or cancel to undo it.`,
+  );
+}
+
+function confirmPendingActivation() {
+  if (!pendingActivation || !pendingActivation.awaitingApproval) return;
+  pendingActivation.awaitingApproval = false;
+  renderActivationPrompt();
+  updateActionHint(`Paying activation cost for ${pendingActivation.cardName}.`);
+  attemptPendingActivation();
 }
 
 function normalizeCardName(card) {
@@ -219,17 +388,8 @@ function createCardElement(card, options = {}) {
         }
 
         const activationCost = getActivatedAbilityCost(card);
-        if (shouldPromptForActivationCost(activationCost)) {
-          const accepted = window.confirm(`Pay activation cost ${activationCost} for ${cardName}?`);
-          if (!accepted) {
-            updateActionHint(`Activation canceled for ${cardName}.`);
-            return;
-          }
-        }
-
         const targetSeat = Number(q("activateTarget")?.value ?? String(1 - seat));
-        await sendAction({ seat, action: "activate", permanent_name: cardName, target_seat: targetSeat });
-        updateActionHint(`Activated ${cardName}.`);
+        startActivationPrompt(card, targetSeat);
       } catch (e) {
         updateActionHint(e.message, true);
       }
@@ -417,6 +577,8 @@ function renderState(state) {
   }
   renderBoard(state);
   populateManualControls(state);
+  renderActivationPrompt();
+  attemptPendingActivation();
 }
 
 function parseDragPayload(event) {
@@ -465,8 +627,11 @@ function initDropZones() {
         return;
       }
       if (payload.kind === "permanent") {
-        await sendAction({ seat, action: "activate", permanent_name: payload.name, target_seat: targetSeat });
-        updateActionHint(`Activated ${payload.name} targeting seat ${targetSeat}.`);
+        const me = getCurrentPlayerState();
+        const card = me ? me.battlefield.find((perm) => normalizeCardName(perm) === payload.name) : null;
+        if (card) {
+          startActivationPrompt(card, targetSeat);
+        }
       }
     } catch (e) {
       updateActionHint(e.message, true);
@@ -482,8 +647,11 @@ function initDropZones() {
         return;
       }
       if (payload.kind === "permanent") {
-        await sendAction({ seat, action: "activate", permanent_name: payload.name, target_seat: targetSeat });
-        updateActionHint(`Activated ${payload.name} targeting seat ${targetSeat}.`);
+        const me = getCurrentPlayerState();
+        const card = me ? me.battlefield.find((perm) => normalizeCardName(perm) === payload.name) : null;
+        if (card) {
+          startActivationPrompt(card, targetSeat);
+        }
       }
     } catch (e) {
       updateActionHint(e.message, true);
@@ -628,16 +796,27 @@ q("castBtn").addEventListener("click", async () => {
 
 q("activateBtn").addEventListener("click", async () => {
   try {
-    await sendAction({
-      seat,
-      action: "activate",
-      permanent_name: q("activatePermanent").value,
-      target_seat: Number(q("activateTarget").value),
-    });
-    updateActionHint(`Activated ${q("activatePermanent").value}.`);
+    const me = getCurrentPlayerState();
+    const cardName = q("activatePermanent").value;
+    const card = me ? me.battlefield.find((perm) => normalizeCardName(perm) === cardName) : null;
+    if (!card) {
+      updateActionHint(`Permanent not found: ${cardName}`, true);
+      return;
+    }
+    startActivationPrompt(card, Number(q("activateTarget").value));
   } catch (e) {
     alert(e.message);
   }
+});
+
+q("promptCancelBtn").addEventListener("click", () => {
+  pendingActivation = null;
+  renderActivationPrompt();
+  updateActionHint("Activation canceled.");
+});
+
+q("promptOkBtn").addEventListener("click", () => {
+  confirmPendingActivation();
 });
 
 q("endTurnBtn").addEventListener("click", async () => {
