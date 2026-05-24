@@ -710,6 +710,18 @@ def test_mana_flare_adds_extra_mana(all_cards):
     assert p1.mana_pool["U"] == 2
 
 
+def test_mana_pool_empties_between_steps(all_cards):
+    island = next(card for card in all_cards if card.name == "Island")
+    p1 = PlayerState(name="P1", mana_pool={"W": 0, "U": 2, "B": 0, "R": 0, "G": 0, "C": 1})
+    p2 = PlayerState(name="P2", library=[island])
+    game = Game(players=[p1, p2])
+
+    game.resolve_upkeep(1)
+
+    assert p1.mana_pool["U"] == 0
+    assert p1.mana_pool["C"] == 0
+
+
 def test_jade_statue_animates_until_end_combat(all_cards):
     statue = next(card for card in all_cards if card.name == "Jade Statue")
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=statue)])

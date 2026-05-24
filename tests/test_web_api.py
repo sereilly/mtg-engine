@@ -490,12 +490,26 @@ def test_instant_allowed_on_opponent_turn():
         type_line="Instant",
         oracle_text="Bolt Test deals 3 damage to any target.",
     )
+    mountain = _mk_card(
+        name="Mountain",
+        mana_cost="",
+        type_line="Basic Land - Mountain",
+        oracle_text="{T}: Add {R}.",
+        produced_mana=("R",),
+    )
     session.game.players[0].hand = [instant]
     session.game.players[0].mana_pool = {"W": 0, "U": 0, "B": 0, "R": 1, "G": 0, "C": 0}
+    session.game.players[0].battlefield = [Permanent(card=mountain)]
     session.game.players[1].life = 20
 
     client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "end_turn"})
     assert store.get(sid).current_turn == 1
+
+    tap_mountain = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "activate", "permanent_name": "Mountain", "target_seat": 0},
+    )
+    assert tap_mountain.status_code == 200
 
     off_turn_instant = client.post(
         f"/api/sessions/{sid}/action",

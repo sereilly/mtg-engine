@@ -211,6 +211,7 @@ def _ai_step(session: Session) -> None:
 
 
 def _end_turn(session: Session) -> None:
+    session.game.clear_mana_pools()
     session.current_turn = 1 - session.current_turn
     session.game.turn += 1
     session.game.lands_played_this_turn[session.current_turn] = 0

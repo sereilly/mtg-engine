@@ -24,6 +24,8 @@ _COLOR_WORD_TO_SYMBOL = {
     "green": "G",
 }
 
+_MANA_SYMBOLS = ("W", "U", "B", "R", "G", "C")
+
 
 @dataclass
 class SimulationResult:
@@ -1065,7 +1067,13 @@ class Game:
             return True
         return False
 
+    def clear_mana_pools(self) -> None:
+        for player in self.players:
+            for symbol in _MANA_SYMBOLS:
+                player.mana_pool[symbol] = 0
+
     def resolve_upkeep(self, player_index: int) -> None:
+        self.clear_mana_pools()
         self.current_phase = "upkeep"
         for controller in self.players:
             for permanent in controller.battlefield:
@@ -1295,6 +1303,7 @@ class Game:
         return True
 
     def resolve_draw_step(self, player_index: int) -> int:
+        self.clear_mana_pools()
         self.current_phase = "draw"
         player = self.players[player_index]
         bonus = 0
@@ -1307,6 +1316,7 @@ class Game:
         return drawn
 
     def resolve_untap_step(self, player_index: int) -> int:
+        self.clear_mana_pools()
         self.current_phase = "untap"
         player = self.players[player_index]
         all_permanents = [perm for pl in self.players for perm in pl.battlefield]
@@ -1391,6 +1401,7 @@ class Game:
         return True
 
     def end_combat(self) -> None:
+        self.clear_mana_pools()
         for player in self.players:
             for permanent in player.battlefield:
                 if permanent.metadata.get("animate_until_end_of_combat"):
