@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 
 GameMode = Literal["human_vs_ai", "ai_vs_ai", "human_vs_human"]
-ActionKind = Literal["cast", "activate", "tap", "end_turn", "next_phase", "ai_step"]
+ActionKind = Literal["cast", "activate", "tap", "end_turn", "next_phase", "ai_step", "cleanup_select"]
 
 
 class CreateSessionRequest(BaseModel):
@@ -30,6 +30,7 @@ class GameActionRequest(BaseModel):
     permanent_index: int | None = Field(default=None, ge=0)
     target_seat: int | None = Field(default=None, ge=0, le=1)
     x_value: int | None = Field(default=None, ge=0)
+    hand_index: int | None = Field(default=None, ge=0)
 
 
 class RandomDeckRequest(BaseModel):

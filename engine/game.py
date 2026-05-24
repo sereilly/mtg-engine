@@ -25,6 +25,14 @@ _COLOR_WORD_TO_SYMBOL = {
 }
 
 _MANA_SYMBOLS = ("W", "U", "B", "R", "G", "C")
+_EOT_METADATA_KEYS = (
+    "gains_flying_until_eot",
+    "gains_banding_until_eot",
+    "cant_be_blocked_until_eot",
+    "must_attack_until_eot",
+    "destroy_if_did_not_attack_eot",
+    "redirect_one_damage_to_owner_until_eot",
+)
 
 
 @dataclass
@@ -766,8 +774,16 @@ class Game:
         if instruction.kind == "pump_self":
             if source_permanent is None:
                 return False, "ability not implemented"
-            source_permanent.power_bonus += int(instruction.payload.get("power", 0))
-            source_permanent.toughness_bonus += int(instruction.payload.get("toughness", 0))
+            power_delta = int(instruction.payload.get("power", 0))
+            toughness_delta = int(instruction.payload.get("toughness", 0))
+            source_permanent.power_bonus += power_delta
+            source_permanent.toughness_bonus += toughness_delta
+            source_permanent.metadata["temporary_power_bonus_until_eot"] = int(
+                source_permanent.metadata.get("temporary_power_bonus_until_eot", 0)
+            ) + power_delta
+            source_permanent.metadata["temporary_toughness_bonus_until_eot"] = int(
+                source_permanent.metadata.get("temporary_toughness_bonus_until_eot", 0)
+            ) + toughness_delta
             self.log.append(
                 f"{card.name} gets +{int(instruction.payload.get('power', 0))}/+{int(instruction.payload.get('toughness', 0))} until end of turn"
             )
@@ -1165,6 +1181,70 @@ class Game:
                         controller.graveyard.append(permanent.card)
                         self.log.append(f"{controller.name} sacrificed {permanent.card.name} for lacking an Island")
                         continue
+
+    def resolve_end_step(self, player_index: int) -> None:
+        self.current_phase = "end"
+        destroyed_names: list[str] = []
+        for controller in self.players:
+            survivors: list[Permanent] = []
+            for permanent in controller.battlefield:
+                if permanent.metadata.get("destroy_at_next_end_step"):
+                    controller.graveyard.append(permanent.card)
+                    destroyed_names.append(permanent.card.name)
+                else:
+                    survivors.append(permanent)
+            controller.battlefield = survivors
+
+        for name in destroyed_names:
+            self.log.append(f"{name} was destroyed at end step")
+
+    def resolve_cleanup_step(
+        self,
+        player_index: int,
+        discard_hand_indices: list[int] | None = None,
+        defer_discard_selection: bool = False,
+    ) -> bool:
+        self.current_phase = "cleanup"
+        self.clear_mana_pools()
+
+        active_player = self.players[player_index]
+        cleanup_completed = True
+        if not active_player.has_no_max_hand_size:
+            max_hand_size = 7
+            excess = max(0, len(active_player.hand) - max_hand_size)
+            if excess:
+                if discard_hand_indices is not None:
+                    unique_indices = sorted(set(discard_hand_indices))
+                    if len(unique_indices) != excess:
+                        raise ValueError(f"expected {excess} cleanup discards, got {len(unique_indices)}")
+                    if any(index < 0 or index >= len(active_player.hand) for index in unique_indices):
+                        raise ValueError("cleanup discard index out of range")
+                    for hand_index in sorted(unique_indices, reverse=True):
+                        discarded = active_player.hand.pop(hand_index)
+                        active_player.graveyard.append(discarded)
+                    self.log.append(f"{active_player.name} discarded {excess} card(s) in cleanup")
+                elif defer_discard_selection:
+                    cleanup_completed = False
+                else:
+                    for _ in range(excess):
+                        discarded = active_player.hand.pop(0)
+                        active_player.graveyard.append(discarded)
+                    self.log.append(f"{active_player.name} discarded {excess} card(s) in cleanup")
+
+        self.combat_damage_prevented_until_eot = False
+        for player in self.players:
+            player.damage_prevention_pool = 0
+            player.combat_damage_cap_one_charges = 0
+            for permanent in player.battlefield:
+                temp_power = int(permanent.metadata.pop("temporary_power_bonus_until_eot", 0))
+                temp_toughness = int(permanent.metadata.pop("temporary_toughness_bonus_until_eot", 0))
+                if temp_power:
+                    permanent.power_bonus -= temp_power
+                if temp_toughness:
+                    permanent.toughness_bonus -= temp_toughness
+                for key in _EOT_METADATA_KEYS:
+                    permanent.metadata.pop(key, None)
+        return cleanup_completed
 
     def _initialize_permanent_state(
         self,

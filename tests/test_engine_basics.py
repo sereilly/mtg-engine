@@ -737,6 +737,30 @@ def test_jade_statue_animates_until_end_combat(all_cards):
     assert p1.battlefield[0].metadata.get("absolute_power") is None
 
 
+def test_cleanup_step_discards_and_expires_temporary_effects():
+    creature = _mk_card("Temp Bear", "Creature - Bear")
+    hand_cards = [_mk_card(f"Card {idx}", "Sorcery") for idx in range(9)]
+    permanent = Permanent(card=creature, power_bonus=2, toughness_bonus=3)
+    permanent.metadata["temporary_power_bonus_until_eot"] = 2
+    permanent.metadata["temporary_toughness_bonus_until_eot"] = 3
+    permanent.metadata["gains_flying_until_eot"] = True
+    p1 = PlayerState(name="P1", hand=hand_cards, battlefield=[permanent], damage_prevention_pool=4)
+    p2 = PlayerState(name="P2", combat_damage_cap_one_charges=1)
+    game = Game(players=[p1, p2], combat_damage_prevented_until_eot=True)
+
+    game.resolve_cleanup_step(0)
+
+    assert game.current_phase == "cleanup"
+    assert len(p1.hand) == 7
+    assert len(p1.graveyard) == 2
+    assert permanent.power_bonus == 0
+    assert permanent.toughness_bonus == 0
+    assert permanent.metadata.get("gains_flying_until_eot") is None
+    assert p1.damage_prevention_pool == 0
+    assert p2.combat_damage_cap_one_charges == 0
+    assert game.combat_damage_prevented_until_eot is False
+
+
 def test_the_hive_creates_wasp_token(all_cards):
     hive = next(card for card in all_cards if card.name == "The Hive")
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=hive)])

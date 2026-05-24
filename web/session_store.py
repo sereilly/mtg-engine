@@ -22,6 +22,8 @@ class Session:
     # hvh: seat1 joins later. other modes are immediately joined.
     joined_seats: set[int] = field(default_factory=lambda: {0})
     seat_types: dict[int, str] = field(default_factory=dict)
+    cleanup_required_discards: int = 0
+    cleanup_selected_indices: list[int] = field(default_factory=list)
 
 
 class SessionStore:

@@ -15,6 +15,9 @@ const PHASE_LABELS = {
   upkeep: "Upkeep",
   draw: "Draw",
   main: "Main",
+  combat: "Combat",
+  end: "End",
+  cleanup: "Cleanup",
 };
 const PHASE_RAIL = [
   { key: "untap", label: "UN", title: "Untap" },
@@ -22,7 +25,8 @@ const PHASE_RAIL = [
   { key: "draw", label: "DR", title: "Draw" },
   { key: "main", label: "MA", title: "Main" },
   { key: "combat", label: "CO", title: "Combat" },
-  { key: "end", label: "EN", title: "Ending" },
+  { key: "end", label: "EN", title: "End" },
+  { key: "cleanup", label: "CL", title: "Cleanup" },
 ];
 
 function q(id) {
@@ -188,6 +192,28 @@ function getCurrentPlayerState(state = currentState) {
   return state.players?.[seat] || null;
 }
 
+function getCleanupDiscardInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  if (state.current_phase !== "cleanup") return null;
+  const info = state.cleanup_discard;
+  if (info && Number(info.required_count || 0) > 0) {
+    return info;
+  }
+
+  // Fallback for stale/partial state payloads: infer cleanup requirement locally.
+  const me = state.players?.[seat];
+  const hand = Array.isArray(me?.hand) ? me.hand : [];
+  const requiredCount = Math.max(0, hand.length - 7);
+  if (requiredCount <= 0) return null;
+
+  return {
+    required_count: requiredCount,
+    selected_indices: [],
+    selected_count: 0,
+    inferred: true,
+  };
+}
+
 function getDefaultTargetSeat(cardName) {
   if (seat === null) return 1;
   if (["Ancestral Recall", "Healing Salve", "Stream of Life"].includes(cardName)) {
@@ -213,6 +239,28 @@ function renderActivationPrompt() {
   const customValue = q("promptCustomValue");
   const customOkBtn = q("promptCustomOkBtn");
   const me = getCurrentPlayerState();
+  const cleanupDiscard = getCleanupDiscardInfo();
+
+  if (cleanupDiscard) {
+    const requiredCount = Number(cleanupDiscard.required_count || 0);
+    const selectedCount = Number(cleanupDiscard.selected_count || 0);
+    const remaining = Math.max(0, requiredCount - selectedCount);
+
+    panel.classList.remove("hidden");
+    okBtn.classList.add("hidden");
+    customRow.classList.add("hidden");
+    title.textContent = "Cleanup discard required";
+    body.textContent = "Select cards from your hand to discard. The turn will continue automatically once all required cards are selected.";
+    steps.innerHTML = [
+      `<div>Chosen: ${selectedCount}</div>`,
+      `<div>Total needed: ${requiredCount}</div>`,
+      `<div>Remaining: ${remaining}</div>`,
+      "<div>Action: click cards in your hand to select or unselect them.</div>",
+    ].join("");
+    cancelBtn.disabled = true;
+    customOkBtn.disabled = true;
+    return;
+  }
 
   if (!pendingActivation && !pendingCastTarget && !pendingCastX) {
     panel.classList.add("hidden");
@@ -517,6 +565,9 @@ function createCardElement(card, options = {}) {
     interactive = false,
     castOnClick = false,
     permanentIndex = null,
+    handIndex = null,
+    cleanupSelectable = false,
+    selected = false,
   } = options;
   const cardEl = document.createElement("div");
   cardEl.className = "card";
@@ -530,6 +581,8 @@ function createCardElement(card, options = {}) {
   if (tapped) cardEl.classList.add("tapped");
   if (hidden) cardEl.classList.add("card-hidden");
   if (interactive) cardEl.classList.add("clickable");
+  if (cleanupSelectable) cardEl.classList.add("cleanup-selectable", "clickable");
+  if (selected) cardEl.classList.add("selected-card");
 
   const imageUri = normalizeImageUri(card);
   if (!hidden && imageUri) {
@@ -600,6 +653,18 @@ function createCardElement(card, options = {}) {
       }
 
       try {
+        if (cleanupSelectable) {
+          await sendAction({ seat, action: "cleanup_select", hand_index: handIndex });
+          const nextInfo = getCleanupDiscardInfo(currentState);
+          if (nextInfo) {
+            const remaining = Math.max(0, Number(nextInfo.required_count || 0) - Number(nextInfo.selected_count || 0));
+            updateActionHint(`Cleanup: select ${remaining} more card(s) to discard.`);
+          } else {
+            updateActionHint("Cleanup discard complete.");
+          }
+          return;
+        }
+
         const cardName = normalizeCardName(card);
         if (!cardName) return;
 
@@ -637,7 +702,10 @@ function renderCardRow(containerId, cards, options = {}) {
     }
     const tapped = typeof card === "object" ? !!card.tapped : false;
     const permanentIndex = options.dragKind === "permanent" ? index : null;
-    container.appendChild(createCardElement(card, { ...options, tapped, permanentIndex }));
+    const selected = Array.isArray(options.selectedHandIndices) && options.selectedHandIndices.includes(index);
+    container.appendChild(
+      createCardElement(card, { ...options, tapped, permanentIndex, handIndex: index, selected })
+    );
   }
 }
 
@@ -740,10 +808,18 @@ function renderBoard(state) {
   q("oppLife").textContent = String(opp.life);
 
   const isSelfTurn = state.current_turn === viewerSeat;
+  const cleanupDiscard = getCleanupDiscardInfo(state);
+  const requiresCleanupSelection = !!cleanupDiscard;
   q("selfName").classList.toggle("active-turn-name", isSelfTurn);
   q("oppName").classList.toggle("active-turn-name", !isSelfTurn);
 
-  renderCardRow("selfHand", me.hand, { draggable: true, dragKind: "hand", castOnClick: true });
+  renderCardRow("selfHand", me.hand, {
+    draggable: !requiresCleanupSelection,
+    dragKind: "hand",
+    castOnClick: true,
+    cleanupSelectable: requiresCleanupSelection,
+    selectedHandIndices: cleanupDiscard?.selected_indices || [],
+  });
   renderCardRow("oppHand", opp.hand, { compact: true });
   renderCardRow("selfBattlefield", me.battlefield, { draggable: true, dragKind: "permanent", interactive: true });
   renderCardRow("oppBattlefield", opp.battlefield);
@@ -769,10 +845,20 @@ function renderBoard(state) {
   renderStack(state.stack);
   renderLog(state);
   q("rawState").textContent = JSON.stringify(state, null, 2);
+
+  if (requiresCleanupSelection) {
+    const remaining = Math.max(0, Number(cleanupDiscard.required_count || 0) - Number(cleanupDiscard.selected_count || 0));
+    updateActionHint(`Cleanup: select ${remaining} more card(s) to discard.`);
+  }
 }
 
 function renderState(state) {
   currentState = state;
+  if (getCleanupDiscardInfo(state)) {
+    pendingActivation = null;
+    pendingCastTarget = null;
+    pendingCastX = null;
+  }
   if (sessionId !== null) {
     hideSetupPanel();
   }

@@ -596,7 +596,13 @@ def test_only_one_land_play_per_turn_then_resets_next_turn():
     assert "already played a land" in second_land_same_turn.json()["detail"].lower()
 
     client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "end_turn"})
-    client.post(f"/api/sessions/{sid}/action", json={"seat": 1, "action": "end_turn"})
+    seat1_end = client.post(f"/api/sessions/{sid}/action", json={"seat": 1, "action": "end_turn"})
+    if seat1_end.status_code == 200 and seat1_end.json().get("cleanup_discard"):
+        client.post(
+            f"/api/sessions/{sid}/action",
+            json={"seat": 1, "action": "cleanup_select", "hand_index": 0},
+        )
+        client.post(f"/api/sessions/{sid}/action", json={"seat": 1, "action": "next_phase"})
 
     second_land_next_turn = client.post(
         f"/api/sessions/{sid}/action",
@@ -630,3 +636,118 @@ def test_next_phase_advances_phase_and_clears_mana():
     payload = response.json()
     assert payload["current_phase"] == "combat"
     assert payload["players"][0]["mana_pool"]["R"] == 0
+
+
+def test_next_phase_runs_end_then_cleanup_then_next_turn():
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "guest_name": "Guest",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 99002,
+        },
+    ).json()
+    sid = created["session_id"]
+    client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
+
+    session = store.get(sid)
+    session.game.current_phase = "combat"
+    session.game.players[0].mana_pool = {"W": 0, "U": 0, "B": 0, "R": 1, "G": 0, "C": 0}
+    session.game.players[0].hand = [
+        _mk_card(name=f"Spell {idx}", mana_cost="", type_line="Sorcery", oracle_text="")
+        for idx in range(9)
+    ]
+
+    end_step = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "next_phase"})
+    assert end_step.status_code == 200
+    assert end_step.json()["current_phase"] == "end"
+    assert end_step.json()["current_turn"] == 0
+
+    cleanup_step = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "next_phase"})
+    assert cleanup_step.status_code == 200
+    cleanup_payload = cleanup_step.json()
+    assert cleanup_payload["current_phase"] == "cleanup"
+    assert cleanup_payload["current_turn"] == 0
+    assert cleanup_payload["players"][0]["mana_pool"]["R"] == 0
+    assert len(cleanup_payload["players"][0]["hand"]) == 9
+    assert cleanup_payload["cleanup_discard"]["required_count"] == 2
+    assert cleanup_payload["cleanup_discard"]["selected_indices"] == []
+
+    cannot_advance = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "next_phase"})
+    assert cannot_advance.status_code == 400
+    assert "select cleanup discards" in cannot_advance.json()["detail"].lower()
+
+    pick_first = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "cleanup_select", "hand_index": 0},
+    )
+    assert pick_first.status_code == 200
+    first_payload = pick_first.json()
+    assert first_payload["cleanup_discard"]["selected_count"] == 1
+    assert first_payload["cleanup_discard"]["selected_indices"] == [0]
+
+    pick_second = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "cleanup_select", "hand_index": 8},
+    )
+    assert pick_second.status_code == 200
+    second_payload = pick_second.json()
+    assert second_payload["current_phase"] == "main"
+    assert second_payload["current_turn"] == 1
+    assert second_payload["cleanup_discard"] is None
+    assert len(second_payload["players"][1]["hand"]) == 8
+    assert len(second_payload["players"][0]["graveyard"]) == 2
+
+
+def test_cleanup_cast_action_falls_back_to_discard_selection():
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "guest_name": "Guest",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 99003,
+        },
+    ).json()
+    sid = created["session_id"]
+    client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
+
+    session = store.get(sid)
+    session.game.current_phase = "cleanup"
+    session.current_turn = 0
+    session.cleanup_required_discards = 2
+    session.game.players[0].hand = [
+        _mk_card(name="Spell A", mana_cost="", type_line="Sorcery", oracle_text=""),
+        _mk_card(name="Spell B", mana_cost="", type_line="Sorcery", oracle_text=""),
+        _mk_card(name="Spell C", mana_cost="", type_line="Sorcery", oracle_text=""),
+        _mk_card(name="Spell D", mana_cost="", type_line="Sorcery", oracle_text=""),
+        _mk_card(name="Spell E", mana_cost="", type_line="Sorcery", oracle_text=""),
+        _mk_card(name="Spell F", mana_cost="", type_line="Sorcery", oracle_text=""),
+        _mk_card(name="Spell G", mana_cost="", type_line="Sorcery", oracle_text=""),
+        _mk_card(name="Spell H", mana_cost="", type_line="Sorcery", oracle_text=""),
+        _mk_card(name="Spell I", mana_cost="", type_line="Sorcery", oracle_text=""),
+    ]
+
+    pick_one = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "cast", "card_name": "Spell A", "target_seat": 1},
+    )
+    assert pick_one.status_code == 200
+    first_payload = pick_one.json()
+    assert first_payload["cleanup_discard"]["selected_count"] == 1
+
+    pick_two = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "cast", "card_name": "Spell B", "target_seat": 1},
+    )
+    assert pick_two.status_code == 200
+    second_payload = pick_two.json()
+    assert second_payload["current_phase"] == "main"
+    assert second_payload["current_turn"] == 1
+    assert len(second_payload["players"][1]["hand"]) == 8
+    assert len(second_payload["players"][0]["graveyard"]) == 2

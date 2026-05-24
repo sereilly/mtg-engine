@@ -115,10 +115,54 @@ def _winner(session: Session) -> int | None:
     return None
 
 
+def _cleanup_discard_requirement(session: Session) -> int:
+    if session.game.current_phase != "cleanup":
+        return 0
+    active = session.game.players[session.current_turn]
+    if active.has_no_max_hand_size:
+        return 0
+    return max(0, len(active.hand) - 7)
+
+
+def _clear_cleanup_selection(session: Session) -> None:
+    session.cleanup_required_discards = 0
+    session.cleanup_selected_indices = []
+
+
+def _start_next_turn(session: Session) -> None:
+    _clear_cleanup_selection(session)
+    session.current_turn = 1 - session.current_turn
+    session.game.turn += 1
+    session.game.lands_played_this_turn[session.current_turn] = 0
+    if session.current_turn in session.joined_seats:
+        session.game.resolve_untap_step(session.current_turn)
+        session.game.resolve_upkeep(session.current_turn)
+        session.game.resolve_draw_step(session.current_turn)
+        session.game.current_phase = "main"
+
+
 def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
     win = _winner(session)
     if win is not None:
         session.status = "finished"
+
+    cleanup_info = None
+    cleanup_required = _cleanup_discard_requirement(session)
+    if viewer_seat == session.current_turn and cleanup_required > 0:
+        valid_indices = [
+            idx
+            for idx in sorted(set(session.cleanup_selected_indices))
+            if 0 <= idx < len(session.game.players[viewer_seat].hand)
+        ]
+        session.cleanup_selected_indices = valid_indices
+        session.cleanup_required_discards = cleanup_required
+        cleanup_info = {
+            "required_count": cleanup_required,
+            "selected_indices": valid_indices,
+            "selected_count": len(valid_indices),
+        }
+    else:
+        _clear_cleanup_selection(session)
 
     return {
         "session_id": session.id,
@@ -136,6 +180,7 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "stack": [_serialize_stack_item(item, session.game) for item in reversed(session.game.stack)],
         "log": session.game.log[-80:],
         "winner": win,
+        "cleanup_discard": cleanup_info,
     }
 
 
@@ -200,28 +245,55 @@ def _ai_step(session: Session) -> None:
         )
 
 
-def _end_turn(session: Session) -> None:
-    session.game.clear_mana_pools()
-    session.current_turn = 1 - session.current_turn
-    session.game.turn += 1
-    session.game.lands_played_this_turn[session.current_turn] = 0
-    if session.current_turn in session.joined_seats:
-        session.game.resolve_untap_step(session.current_turn)
-        session.game.resolve_upkeep(session.current_turn)
-        session.game.resolve_draw_step(session.current_turn)
-        session.game.current_phase = "main"
+def _end_turn(session: Session, allow_manual_cleanup_selection: bool = False) -> bool:
+    if session.game.current_phase == "combat":
+        session.game.end_combat()
+    session.game.resolve_end_step(session.current_turn)
+    should_defer_cleanup = allow_manual_cleanup_selection and session.seat_types.get(session.current_turn) == "human"
+    cleanup_completed = session.game.resolve_cleanup_step(
+        session.current_turn,
+        defer_discard_selection=should_defer_cleanup,
+    )
+    if not cleanup_completed:
+        session.cleanup_required_discards = _cleanup_discard_requirement(session)
+        session.cleanup_selected_indices = []
+        return False
+    _start_next_turn(session)
+    return True
 
 
 def _advance_phase(session: Session) -> None:
+    current = session.game.current_phase
+    if current == "combat":
+        session.game.end_combat()
+        session.game.resolve_end_step(session.current_turn)
+        _clear_cleanup_selection(session)
+        return
+    if current == "end":
+        should_defer_cleanup = session.seat_types.get(session.current_turn) == "human"
+        cleanup_completed = session.game.resolve_cleanup_step(
+            session.current_turn,
+            defer_discard_selection=should_defer_cleanup,
+        )
+        if not cleanup_completed:
+            session.cleanup_required_discards = _cleanup_discard_requirement(session)
+            session.cleanup_selected_indices = []
+            return
+        _start_next_turn(session)
+        return
+    if current == "cleanup":
+        if _cleanup_discard_requirement(session) > 0:
+            raise HTTPException(status_code=400, detail="select cleanup discards before advancing")
+        _start_next_turn(session)
+        return
+
     session.game.clear_mana_pools()
     session.game.current_phase = {
         "untap": "upkeep",
         "upkeep": "draw",
         "draw": "main",
         "main": "combat",
-        "combat": "end",
-        "end": "end",
-    }.get(session.game.current_phase, "main")
+    }.get(current, "main")
 
 
 def _require_session(session_id: str) -> Session:
@@ -282,6 +354,26 @@ def do_action(session_id: str, req: GameActionRequest):
         raise HTTPException(status_code=400, detail="seat has not joined")
 
     seat_type = session.seat_types.get(req.seat, "human")
+
+    cleanup_required = _cleanup_discard_requirement(session)
+    if (
+        cleanup_required > 0
+        and req.action == "cast"
+        and req.seat == session.current_turn
+        and session.game.current_phase == "cleanup"
+        and req.card_name
+    ):
+        active_hand = session.game.players[session.current_turn].hand
+        selected = set(session.cleanup_selected_indices)
+        matching_indices = [idx for idx, card in enumerate(active_hand) if card.name == req.card_name]
+        preferred_index = next((idx for idx in matching_indices if idx not in selected), None)
+        if preferred_index is None and matching_indices:
+            preferred_index = matching_indices[0]
+        if preferred_index is not None:
+            req = req.model_copy(update={"action": "cleanup_select", "hand_index": preferred_index})
+
+    if cleanup_required > 0 and req.action != "cleanup_select":
+        raise HTTPException(status_code=400, detail="select cleanup discards before other actions")
 
     if req.action in {"cast", "activate", "end_turn", "next_phase"} and seat_type != "human":
         raise HTTPException(status_code=400, detail="cannot issue human action for AI seat")
@@ -367,12 +459,44 @@ def do_action(session_id: str, req: GameActionRequest):
     elif req.action == "end_turn":
         if req.seat != session.current_turn:
             raise HTTPException(status_code=400, detail="not your turn")
-        _end_turn(session)
+        _end_turn(session, allow_manual_cleanup_selection=True)
 
     elif req.action == "next_phase":
         if req.seat != session.current_turn:
             raise HTTPException(status_code=400, detail="not your turn")
         _advance_phase(session)
+
+    elif req.action == "cleanup_select":
+        if req.seat != session.current_turn:
+            raise HTTPException(status_code=400, detail="not your turn")
+        if session.game.current_phase != "cleanup":
+            raise HTTPException(status_code=400, detail="cleanup selection is only available during cleanup")
+        if req.hand_index is None:
+            raise HTTPException(status_code=400, detail="hand_index is required")
+
+        active_hand = session.game.players[session.current_turn].hand
+        if req.hand_index < 0 or req.hand_index >= len(active_hand):
+            raise HTTPException(status_code=400, detail="hand_index out of range")
+
+        required = _cleanup_discard_requirement(session)
+        if required <= 0:
+            raise HTTPException(status_code=400, detail="no cleanup discard is required")
+
+        selected = sorted(set(session.cleanup_selected_indices))
+        if req.hand_index in selected:
+            selected = [idx for idx in selected if idx != req.hand_index]
+        else:
+            if len(selected) >= required:
+                raise HTTPException(status_code=400, detail="already selected required cleanup discards")
+            selected.append(req.hand_index)
+            selected = sorted(set(selected))
+
+        session.cleanup_selected_indices = selected
+        session.cleanup_required_discards = required
+
+        if len(selected) == required:
+            session.game.resolve_cleanup_step(session.current_turn, discard_hand_indices=selected)
+            _start_next_turn(session)
 
     elif req.action == "ai_step":
         if session.seat_types.get(session.current_turn) != "ai":
