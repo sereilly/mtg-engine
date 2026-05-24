@@ -8,7 +8,7 @@
   </head>
   <body>
     <main>
-      <h1>Magic LEA Web App</h1>
+      <p id="joinUrl" class="top-join-url hidden"></p>
 
       <section id="setup" class="panel">
         <h2>Start Game</h2>
@@ -30,12 +30,6 @@
         <label>Session ID <input id="joinSessionId" placeholder="paste session id" /></label>
         <label>Your name <input id="joinName" value="Player 2" /></label>
         <button id="joinBtn">Join Session</button>
-      </section>
-
-      <section id="session" class="panel hidden">
-        <h2>Session</h2>
-        <p id="sessionMeta"></p>
-        <p id="joinUrl"></p>
       </section>
 
       <section id="boardPanel" class="panel hidden">
@@ -78,6 +72,14 @@
                 </div>
               </div>
             </section>
+
+            <section id="aiControls" class="side-panel ai-controls hidden">
+              <h3>AI Controls</h3>
+              <div class="button-row ai-button-row">
+                <button id="aiStepBtn" type="button">Run One AI Step</button>
+                <button id="aiLoopBtn" type="button">Run AI x10</button>
+              </div>
+            </section>
           </aside>
 
           <div class="board-column center-column">
@@ -104,6 +106,14 @@
 
             <section class="middle-lane">
               <div id="actionHint" class="action-hint">Tip: drag cards from your hand or battlefield.</div>
+            </section>
+
+            <section class="phase-row">
+              <div id="phaseRail" class="phase-rail" aria-label="Turn phases"></div>
+              <div class="phase-controls">
+                <button id="nextPhaseBtn" type="button">Next Phase</button>
+                <button id="endTurnBtn" type="button">End Turn</button>
+              </div>
             </section>
 
             <section class="player-lane self-lane">
@@ -163,13 +173,6 @@
         </div>
       </section>
 
-      <section id="controls" class="panel hidden">
-        <div class="button-row">
-          <button id="endTurnBtn">End Turn</button>
-          <button id="aiStepBtn">Run One AI Step</button>
-          <button id="aiLoopBtn">Run AI x10</button>
-        </div>
-      </section>
     </main>
 
     <script src="/app.js?v=20260524"></script>

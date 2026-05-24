@@ -572,3 +572,30 @@ def test_only_one_land_play_per_turn_then_resets_next_turn():
         json={"seat": 0, "action": "cast", "card_name": "Plains B", "target_seat": 0},
     )
     assert second_land_next_turn.status_code == 200
+
+
+def test_next_phase_advances_phase_and_clears_mana():
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "guest_name": "Guest",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 99001,
+        },
+    ).json()
+    sid = created["session_id"]
+    client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
+
+    session = store.get(sid)
+    session.game.players[0].mana_pool = {"W": 0, "U": 0, "B": 0, "R": 1, "G": 0, "C": 0}
+    session.game.current_phase = "main"
+
+    response = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "next_phase"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["current_phase"] == "combat"
+    assert payload["players"][0]["mana_pool"]["R"] == 0

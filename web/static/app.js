@@ -6,9 +6,8 @@ let pendingCastTarget = null;
 let pendingCastX = null;
 
 const setupEl = document.getElementById("setup");
-const sessionEl = document.getElementById("session");
 const boardEl = document.getElementById("boardPanel");
-const controlsEl = document.getElementById("controls");
+const aiControlsEl = document.getElementById("aiControls");
 
 const MANA_ORDER = ["W", "U", "B", "R", "G", "C"];
 const PHASE_LABELS = {
@@ -17,6 +16,14 @@ const PHASE_LABELS = {
   draw: "Draw",
   main: "Main",
 };
+const PHASE_RAIL = [
+  { key: "untap", label: "UN", title: "Untap" },
+  { key: "upkeep", label: "UP", title: "Upkeep" },
+  { key: "draw", label: "DR", title: "Draw" },
+  { key: "main", label: "MA", title: "Main" },
+  { key: "combat", label: "CO", title: "Combat" },
+  { key: "end", label: "EN", title: "Ending" },
+];
 
 function q(id) {
   return document.getElementById(id);
@@ -40,9 +47,7 @@ function setVisible(active) {
   } else {
     showSetupPanel();
   }
-  for (const el of [sessionEl, boardEl, controlsEl]) {
-    el.classList.toggle("hidden", !active);
-  }
+  boardEl.classList.toggle("hidden", !active);
 }
 
 function resetToSetup(message = "Session not found. Start a new game.") {
@@ -50,10 +55,19 @@ function resetToSetup(message = "Session not found. Start a new game.") {
   seat = null;
   currentState = null;
   showSetupPanel();
-  sessionEl.classList.add("hidden");
   boardEl.classList.add("hidden");
-  controlsEl.classList.add("hidden");
+  aiControlsEl?.classList.add("hidden");
+  q("joinUrl").classList.add("hidden");
+  q("joinUrl").textContent = "";
   updateActionHint(message, true);
+}
+
+function shouldShowAiControls(state) {
+  const seatTypes = state?.seat_types || {};
+  const values = Object.values(seatTypes);
+  const hasAiPlayer = values.includes("ai");
+  const currentTurnIsAi = seatTypes?.[state?.current_turn] === "ai";
+  return hasAiPlayer && currentTurnIsAi;
 }
 
 function hasActivatedAbility(card) {
@@ -649,6 +663,25 @@ function renderMana(containerId, manaPool) {
   }
 }
 
+function renderPhaseRail(state) {
+  const container = q("phaseRail");
+  if (!container) return;
+
+  container.innerHTML = "";
+  for (const phase of PHASE_RAIL) {
+    const item = document.createElement("div");
+    item.className = "phase-chip-item";
+    item.textContent = phase.label;
+    item.title = phase.title;
+    item.dataset.phase = phase.key;
+    if (state?.current_phase === phase.key) {
+      item.classList.add("active");
+      item.setAttribute("aria-current", "step");
+    }
+    container.appendChild(item);
+  }
+}
+
 function renderStack(stack) {
   if (!stack || stack.length === 0) {
     q("stackZone").textContent = "Stack: empty";
@@ -725,6 +758,10 @@ function renderBoard(state) {
 
   renderMana("selfMana", me.mana_pool);
   renderMana("oppMana", opp.mana_pool);
+  renderPhaseRail(state);
+  if (aiControlsEl) {
+    aiControlsEl.classList.toggle("hidden", !shouldShowAiControls(state));
+  }
   renderStack(state.stack);
   renderLog(state);
   q("rawState").textContent = JSON.stringify(state, null, 2);
@@ -924,9 +961,9 @@ async function createSession() {
   const data = await postJson("/api/sessions", req);
   sessionId = data.session_id;
   seat = data.seat;
-  q("sessionMeta").textContent = `Session: ${sessionId} | You are seat ${seat}`;
   const joinAbsolute = `${window.location.origin}/index.html?session=${sessionId}`;
   q("joinUrl").textContent = `Join URL: ${joinAbsolute}`;
+  q("joinUrl").classList.remove("hidden");
   renderState(data.state);
   setVisible(true);
   updateActionHint("Session ready. Drag from your hand to cast.");
@@ -940,8 +977,8 @@ async function joinSession() {
   }
   const data = await postJson(`/api/sessions/${sessionId}/join`, { guest_name: q("joinName").value });
   seat = data.seat;
-  q("sessionMeta").textContent = `Session: ${sessionId} | You are seat ${seat}`;
-  q("joinUrl").textContent = "Joined existing session";
+  q("joinUrl").textContent = `Join URL: ${window.location.origin}/index.html?session=${sessionId}`;
+  q("joinUrl").classList.remove("hidden");
   renderState(data.state);
   setVisible(true);
   updateActionHint("Joined. Drag from your hand or battlefield to play.");
@@ -1011,6 +1048,15 @@ q("endTurnBtn").addEventListener("click", async () => {
   try {
     await sendAction({ seat, action: "end_turn" });
     updateActionHint("Ended turn.");
+  } catch (e) {
+    alert(e.message);
+  }
+});
+
+q("nextPhaseBtn").addEventListener("click", async () => {
+  try {
+    await sendAction({ seat, action: "next_phase" });
+    updateActionHint("Advanced to the next phase.");
   } catch (e) {
     alert(e.message);
   }

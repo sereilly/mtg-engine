@@ -222,6 +222,18 @@ def _end_turn(session: Session) -> None:
         session.game.current_phase = "main"
 
 
+def _advance_phase(session: Session) -> None:
+    session.game.clear_mana_pools()
+    session.game.current_phase = {
+        "untap": "upkeep",
+        "upkeep": "draw",
+        "draw": "main",
+        "main": "combat",
+        "combat": "end",
+        "end": "end",
+    }.get(session.game.current_phase, "main")
+
+
 def _require_session(session_id: str) -> Session:
     try:
         return store.get(session_id)
@@ -281,7 +293,7 @@ def do_action(session_id: str, req: GameActionRequest):
 
     seat_type = session.seat_types.get(req.seat, "human")
 
-    if req.action in {"cast", "activate", "end_turn"} and seat_type != "human":
+    if req.action in {"cast", "activate", "end_turn", "next_phase"} and seat_type != "human":
         raise HTTPException(status_code=400, detail="cannot issue human action for AI seat")
 
     if req.action == "cast":
@@ -366,6 +378,11 @@ def do_action(session_id: str, req: GameActionRequest):
         if req.seat != session.current_turn:
             raise HTTPException(status_code=400, detail="not your turn")
         _end_turn(session)
+
+    elif req.action == "next_phase":
+        if req.seat != session.current_turn:
+            raise HTTPException(status_code=400, detail="not your turn")
+        _advance_phase(session)
 
     elif req.action == "ai_step":
         if session.seat_types.get(session.current_turn) != "ai":
