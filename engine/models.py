@@ -41,10 +41,14 @@ class Permanent:
 
     @property
     def effective_power(self) -> int:
+        if "absolute_power" in self.metadata:
+            return int(self.metadata["absolute_power"])
         return self._base_stat("power") + self.power_bonus
 
     @property
     def effective_toughness(self) -> int:
+        if "absolute_toughness" in self.metadata:
+            return int(self.metadata["absolute_toughness"])
         return self._base_stat("toughness") + self.toughness_bonus
 
 
@@ -60,6 +64,9 @@ class PlayerState:
         default_factory=lambda: {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0}
     )
     damage_prevention_pool: int = 0
+    combat_damage_cap_one_charges: int = 0
+    has_no_max_hand_size: bool = False
+    can_spend_white_as_red: bool = False
 
     def draw(self, count: int = 1) -> int:
         actual = 0
