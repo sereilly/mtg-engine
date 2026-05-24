@@ -44,6 +44,7 @@ class StackItem:
 class Game:
     players: list[PlayerState]
     turn: int = 1
+    current_phase: str = "main"
     stack: list[StackItem] = field(default_factory=list)
     log: list[str] = field(default_factory=list)
     extra_turns: dict[int, int] = field(default_factory=dict)
@@ -838,6 +839,7 @@ class Game:
         return False
 
     def resolve_upkeep(self, player_index: int) -> None:
+        self.current_phase = "upkeep"
         for controller in self.players:
             for permanent in controller.battlefield:
                 text = permanent.card.oracle_text.lower()
@@ -1066,6 +1068,7 @@ class Game:
         return True
 
     def resolve_draw_step(self, player_index: int) -> int:
+        self.current_phase = "draw"
         player = self.players[player_index]
         bonus = 0
         for controller in self.players:
@@ -1077,6 +1080,7 @@ class Game:
         return drawn
 
     def resolve_untap_step(self, player_index: int) -> int:
+        self.current_phase = "untap"
         player = self.players[player_index]
         all_permanents = [perm for pl in self.players for perm in pl.battlefield]
 

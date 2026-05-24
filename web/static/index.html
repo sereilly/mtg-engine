@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Magic LEA Web App</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Magic LEA Web App</h1>
+
+      <section id="setup" class="panel">
+        <h2>Start Game</h2>
+        <label>Mode
+          <select id="mode">
+            <option value="human_vs_ai">Human vs AI</option>
+            <option value="ai_vs_ai">AI vs AI</option>
+            <option value="human_vs_human">Human vs Human (Networked)</option>
+          </select>
+        </label>
+        <label>Host name <input id="hostName" value="Player 1" /></label>
+        <label>Guest name <input id="guestName" value="Player 2" /></label>
+        <label>Host deck colors (1-5) <input id="hostColors" type="number" min="1" max="5" value="2" /></label>
+        <label>Guest deck colors (1-5) <input id="guestColors" type="number" min="1" max="5" value="2" /></label>
+        <label>Seed <input id="seed" type="number" value="1337" /></label>
+        <button id="startBtn">Create Session</button>
+
+        <h3>Join Existing Session</h3>
+        <label>Session ID <input id="joinSessionId" placeholder="paste session id" /></label>
+        <label>Your name <input id="joinName" value="Player 2" /></label>
+        <button id="joinBtn">Join Session</button>
+      </section>
+
+      <section id="session" class="panel hidden">
+        <h2>Session</h2>
+        <p id="sessionMeta"></p>
+        <p id="joinUrl"></p>
+      </section>
+
+      <section id="boardPanel" class="panel hidden">
+        <div class="board-shell">
+          <div class="board-column">
+            <div class="status-row">
+              <div id="statusHeadline" class="status-chip">Status: Waiting</div>
+              <div id="turnBadge" class="status-chip">Turn: -</div>
+              <div id="phaseBadge" class="status-chip phase-chip">Phase: -</div>
+              <div id="winnerBadge" class="status-chip">Winner: -</div>
+            </div>
+
+            <section class="player-lane opponent-lane">
+              <header class="lane-head">
+                <h2 id="oppName">Opponent</h2>
+                <div id="oppLife" class="life-pill">20</div>
+              </header>
+              <div id="oppHand" class="card-row hand-row"></div>
+              <div id="oppBattlefield" class="card-row battlefield-row drop-target" data-target-seat="0"></div>
+              <div class="zone-row">
+                <div id="oppDeckCount" class="zone-box">Deck: 0</div>
+                <div id="oppGraveCount" class="zone-box">Graveyard: 0</div>
+                <div id="oppExileCount" class="zone-box">Exile: 0</div>
+              </div>
+            </section>
+
+            <section class="middle-lane">
+              <div id="castDropZone" class="action-zone drop-target">Drop hand card here to cast</div>
+              <div id="activateDropZone" class="action-zone drop-target">Drop your permanent here to activate ability</div>
+              <div id="stackZone" class="stack-zone">Stack: empty</div>
+              <div id="actionHint" class="action-hint">Tip: drag cards from your hand or battlefield.</div>
+            </section>
+
+            <section class="player-lane self-lane">
+              <header class="lane-head">
+                <h2 id="selfName">You</h2>
+                <div id="selfLife" class="life-pill">20</div>
+              </header>
+              <div id="selfBattlefield" class="card-row battlefield-row drop-target" data-target-seat="0"></div>
+              <div id="selfHand" class="card-row hand-row"></div>
+              <div class="zone-row">
+                <div id="selfDeckCount" class="zone-box">Deck: 0</div>
+                <div id="selfGraveCount" class="zone-box">Graveyard: 0</div>
+                <div id="selfExileCount" class="zone-box">Exile: 0</div>
+              </div>
+            </section>
+          </div>
+
+          <aside class="side-column">
+            <section class="side-panel">
+              <h3>Available Mana</h3>
+              <p class="side-label">You</p>
+              <div id="selfMana" class="mana-row"></div>
+              <p class="side-label">Opponent</p>
+              <div id="oppMana" class="mana-row"></div>
+            </section>
+
+            <section class="side-panel">
+              <h3>Zones</h3>
+              <p class="side-label">Your Graveyard</p>
+              <div id="selfGraveyardCards" class="zone-cards"></div>
+              <p class="side-label">Your Exile</p>
+              <div id="selfExileCards" class="zone-cards"></div>
+              <p class="side-label">Opponent Graveyard</p>
+              <div id="oppGraveyardCards" class="zone-cards"></div>
+              <p class="side-label">Opponent Exile</p>
+              <div id="oppExileCards" class="zone-cards"></div>
+            </section>
+
+            <section class="side-panel">
+              <div class="tab-row">
+                <button id="logTabBtn" class="tab-btn active">Log</button>
+                <button id="rawTabBtn" class="tab-btn">Raw State</button>
+              </div>
+              <div id="logTab" class="tab-body">
+                <div id="logText" class="log-list"></div>
+              </div>
+              <div id="rawTab" class="tab-body hidden">
+                <pre id="rawState"></pre>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </section>
+
+      <section id="controls" class="panel hidden">
+        <h2>Manual Controls (Fallback)</h2>
+        <div class="control-grid">
+          <label>Card to cast
+            <select id="castCard"></select>
+          </label>
+          <label>Cast target seat
+            <select id="castTarget">
+              <option value="0">Seat 0</option>
+              <option value="1">Seat 1</option>
+            </select>
+          </label>
+          <button id="castBtn">Cast</button>
+
+          <label>Permanent ability
+            <select id="activatePermanent"></select>
+          </label>
+          <label>Ability target seat
+            <select id="activateTarget">
+              <option value="0">Seat 0</option>
+              <option value="1">Seat 1</option>
+            </select>
+          </label>
+          <button id="activateBtn">Activate</button>
+        </div>
+        <div class="button-row">
+          <button id="endTurnBtn">End Turn</button>
+          <button id="aiStepBtn">Run One AI Step</button>
+          <button id="aiLoopBtn">Run AI x10</button>
+        </div>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

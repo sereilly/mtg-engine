@@ -60,6 +60,7 @@ class PlayerState:
     library: list[CardDefinition] = field(default_factory=list)
     battlefield: list[Permanent] = field(default_factory=list)
     graveyard: list[CardDefinition] = field(default_factory=list)
+    exile: list[CardDefinition] = field(default_factory=list)
     mana_pool: dict[str, int] = field(
         default_factory=lambda: {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0}
     )
