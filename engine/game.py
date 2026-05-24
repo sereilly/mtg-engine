@@ -52,6 +52,25 @@ class Game:
     extra_turns: dict[int, int] = field(default_factory=dict)
     combat_damage_prevented_until_eot: bool = False
 
+    def _find_controlled_permanent(
+        self,
+        controller: PlayerState,
+        permanent_name: str,
+        permanent_index: int | None = None,
+    ) -> tuple[int, Permanent] | None:
+        if permanent_index is not None:
+            if permanent_index < 0 or permanent_index >= len(controller.battlefield):
+                return None
+            permanent = controller.battlefield[permanent_index]
+            if permanent.card.name != permanent_name:
+                return None
+            return permanent_index, permanent
+
+        for idx, permanent in enumerate(controller.battlefield):
+            if permanent.card.name == permanent_name:
+                return idx, permanent
+        return None
+
     def cast_from_hand(
         self,
         caster_index: int,
@@ -76,15 +95,24 @@ class Game:
         controller_index: int,
         permanent_name: str,
         target_player_index: int | None = None,
+        permanent_index: int | None = None,
     ) -> SimulationResult:
         controller = self.players[controller_index]
-        permanent = next((p for p in controller.battlefield if p.card.name == permanent_name), None)
-        if permanent is None:
+        resolved = self._find_controlled_permanent(controller, permanent_name, permanent_index)
+        if resolved is None:
             raise ValueError(f"Permanent not found: {permanent_name}")
+        _, permanent = resolved
 
         text = permanent.card.oracle_text.lower()
         target_idx = target_player_index if target_player_index is not None else (1 - controller_index)
         target_player = self.players[target_idx]
+
+        if "target creature gains banding until end of turn" in text:
+            has_valid_target = any(perm.card.primary_type == "creature" for perm in target_player.battlefield)
+            if not has_valid_target:
+                details = "no valid creature target for banding effect"
+                self.log.append("No valid creature target for banding effect")
+                return SimulationResult(permanent.card.name, False, "unsupported", details)
 
         required_cost, requires_tap = self._parse_activated_ability_cost(permanent.card.oracle_text)
         if self.enforce_mana_costs and any(required_cost.values()):
@@ -126,11 +154,12 @@ class Game:
                 (perm for perm in target_player.battlefield if perm.card.primary_type == "creature"),
                 None,
             )
-            if target_creature is not None:
-                target_creature.metadata["gains_banding_until_eot"] = True
-                self.log.append(f"{target_creature.card.name} gains banding until end of turn")
-            else:
+            if target_creature is None:
+                details = "no valid creature target for banding effect"
                 self.log.append("No valid creature target for banding effect")
+                return SimulationResult(permanent.card.name, False, "unsupported", details)
+            target_creature.metadata["gains_banding_until_eot"] = True
+            self.log.append(f"{target_creature.card.name} gains banding until end of turn")
             return SimulationResult(permanent.card.name, True, "activated_keyword", "resolved")
 
         if "put a +1/+1 counter on this creature" in text:
@@ -347,9 +376,15 @@ class Game:
 
         return required, requires_tap
 
-    def tap_permanent(self, controller_index: int, permanent_name: str) -> bool:
+    def tap_permanent(
+        self,
+        controller_index: int,
+        permanent_name: str,
+        permanent_index: int | None = None,
+    ) -> bool:
         controller = self.players[controller_index]
-        permanent = next((p for p in controller.battlefield if p.card.name == permanent_name), None)
+        resolved = self._find_controlled_permanent(controller, permanent_name, permanent_index)
+        permanent = resolved[1] if resolved else None
         if permanent is None or permanent.tapped:
             return False
 
@@ -1319,9 +1354,18 @@ class Game:
         self.log.append(f"{player.name} untapped {untapped} permanent(s)")
         return untapped
 
-    def tap_land_for_mana(self, player_index: int, land_name: str, chosen_color: str = "G") -> bool:
+    def tap_land_for_mana(
+        self,
+        player_index: int,
+        land_name: str,
+        chosen_color: str = "G",
+        permanent_index: int | None = None,
+    ) -> bool:
         player = self.players[player_index]
-        land = next((perm for perm in player.battlefield if perm.card.name == land_name and perm.card.primary_type == "land"), None)
+        resolved = self._find_controlled_permanent(player, land_name, permanent_index)
+        land = resolved[1] if resolved else None
+        if land is not None and land.card.primary_type != "land":
+            land = None
         if land is None or land.tapped:
             return False
 

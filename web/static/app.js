@@ -304,6 +304,7 @@ async function attemptPendingActivation() {
       seat,
       action: "activate",
       permanent_name: pending.cardName,
+      permanent_index: pending.permanentIndex,
       target_seat: pending.targetSeat,
     });
     updateActionHint(`Activated ${pending.cardName}.`);
@@ -312,13 +313,19 @@ async function attemptPendingActivation() {
   }
 }
 
-function startActivationPrompt(card, targetSeat) {
+function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   const cardName = normalizeCardName(card);
   if (!cardName) return;
 
   const activationCost = getActivatedAbilityCost(card);
   if (!shouldPromptForActivationCost(activationCost)) {
-    sendAction({ seat, action: "activate", permanent_name: cardName, target_seat: targetSeat })
+    sendAction({
+      seat,
+      action: "activate",
+      permanent_name: cardName,
+      permanent_index: permanentIndex,
+      target_seat: targetSeat,
+    })
       .then(() => updateActionHint(`Activated ${cardName}.`))
       .catch((e) => updateActionHint(e.message, true));
     return;
@@ -326,6 +333,7 @@ function startActivationPrompt(card, targetSeat) {
 
   pendingActivation = {
     cardName,
+    permanentIndex,
     targetSeat,
     activationCost,
     manaRequirement: parseManaCostSymbols(activationCost),
@@ -494,6 +502,7 @@ function createCardElement(card, options = {}) {
     subtitle = "",
     interactive = false,
     castOnClick = false,
+    permanentIndex = null,
   } = options;
   const cardEl = document.createElement("div");
   cardEl.className = "card";
@@ -529,7 +538,7 @@ function createCardElement(card, options = {}) {
       event.dataTransfer.effectAllowed = "move";
       event.dataTransfer.setData(
         "text/plain",
-        JSON.stringify({ kind: dragKind, name: normalizeCardName(card) })
+        JSON.stringify({ kind: dragKind, name: normalizeCardName(card), permanentIndex })
       );
     });
   }
@@ -558,7 +567,7 @@ function createCardElement(card, options = {}) {
           return;
         }
 
-        startActivationPrompt(card, 1 - seat);
+        startActivationPrompt(card, 1 - seat, permanentIndex);
       } catch (e) {
         updateActionHint(e.message, true);
       }
@@ -607,13 +616,14 @@ function renderCardRow(containerId, cards, options = {}) {
   container.innerHTML = "";
   if (!cards || cards.length === 0) return;
 
-  for (const card of cards) {
+  for (const [index, card] of cards.entries()) {
     if (card === "<hidden>") {
       container.appendChild(createCardElement("Hidden", { ...options, hidden: true }));
       continue;
     }
     const tapped = typeof card === "object" ? !!card.tapped : false;
-    container.appendChild(createCardElement(card, { ...options, tapped }));
+    const permanentIndex = options.dragKind === "permanent" ? index : null;
+    container.appendChild(createCardElement(card, { ...options, tapped, permanentIndex }));
   }
 }
 
@@ -787,9 +797,15 @@ function initDropZones() {
       }
       if (payload.kind === "permanent") {
         const me = getCurrentPlayerState();
-        const card = me ? me.battlefield.find((perm) => normalizeCardName(perm) === payload.name) : null;
+        const indexedCard =
+          me && Number.isInteger(payload.permanentIndex) ? me.battlefield[payload.permanentIndex] : null;
+        const card = indexedCard || (me ? me.battlefield.find((perm) => normalizeCardName(perm) === payload.name) : null);
         if (card) {
-          startActivationPrompt(card, targetSeat);
+          const permanentIndex =
+            me && Number.isInteger(payload.permanentIndex) && me.battlefield[payload.permanentIndex] === card
+              ? payload.permanentIndex
+              : me.battlefield.findIndex((perm) => perm === card);
+          startActivationPrompt(card, targetSeat, permanentIndex >= 0 ? permanentIndex : null);
         }
       }
     } catch (e) {
@@ -817,9 +833,15 @@ function initDropZones() {
       }
       if (payload.kind === "permanent") {
         const me = getCurrentPlayerState();
-        const card = me ? me.battlefield.find((perm) => normalizeCardName(perm) === payload.name) : null;
+        const indexedCard =
+          me && Number.isInteger(payload.permanentIndex) ? me.battlefield[payload.permanentIndex] : null;
+        const card = indexedCard || (me ? me.battlefield.find((perm) => normalizeCardName(perm) === payload.name) : null);
         if (card) {
-          startActivationPrompt(card, targetSeat);
+          const permanentIndex =
+            me && Number.isInteger(payload.permanentIndex) && me.battlefield[payload.permanentIndex] === card
+              ? payload.permanentIndex
+              : me.battlefield.findIndex((perm) => perm === card);
+          startActivationPrompt(card, targetSeat, permanentIndex >= 0 ? permanentIndex : null);
         }
       }
     } catch (e) {

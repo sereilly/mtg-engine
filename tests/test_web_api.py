@@ -337,6 +337,51 @@ def test_tap_action_on_land_adds_mana_and_cannot_retap():
     assert second_tap.status_code == 400
 
 
+def test_activate_land_uses_permanent_index_when_duplicate_names_exist():
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "guest_name": "Guest",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 2027,
+        },
+    ).json()
+    sid = created["session_id"]
+
+    session = store.get(sid)
+    forest = _mk_card(
+        name="Forest",
+        mana_cost="",
+        type_line="Basic Land - Forest",
+        oracle_text="{T}: Add {G}.",
+        produced_mana=("G",),
+    )
+
+    first_forest = Permanent(card=forest)
+    second_forest = Permanent(card=forest)
+    session.game.players[0].battlefield = [first_forest, second_forest]
+    session.game.players[0].mana_pool = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0}
+
+    tap_second = client.post(
+        f"/api/sessions/{sid}/action",
+        json={
+            "seat": 0,
+            "action": "activate",
+            "permanent_name": "Forest",
+            "permanent_index": 1,
+            "target_seat": 0,
+        },
+    )
+
+    assert tap_second.status_code == 200
+    assert session.game.players[0].battlefield[0].tapped is False
+    assert session.game.players[0].battlefield[1].tapped is True
+    assert session.game.players[0].mana_pool["G"] == 1
+
+
 def test_activate_with_mana_cost_requires_payment_before_tap():
     created = client.post(
         "/api/sessions",

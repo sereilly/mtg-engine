@@ -1109,7 +1109,22 @@ def test_helm_of_chatzuk_grants_banding_until_eot(all_cards):
     result = game.activate_permanent_ability(0, "Helm of Chatzuk", target_player_index=1)
 
     assert result.supported
+    assert p1.battlefield[0].tapped is True
     assert p2.battlefield[0].metadata.get("gains_banding_until_eot") is True
+
+
+def test_helm_of_chatzuk_requires_valid_creature_target(all_cards):
+    helm = next(card for card in all_cards if card.name == "Helm of Chatzuk")
+    island = next(card for card in all_cards if card.name == "Island")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=helm)])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=island)])
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Helm of Chatzuk", target_player_index=1)
+
+    assert result.supported is False
+    assert result.details == "no valid creature target for banding effect"
+    assert p1.battlefield[0].tapped is False
 
 
 def test_next_wave_creature_cards_classify_supported(all_cards):

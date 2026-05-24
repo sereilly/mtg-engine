@@ -27,6 +27,7 @@ class GameActionRequest(BaseModel):
     action: ActionKind
     card_name: str | None = None
     permanent_name: str | None = None
+    permanent_index: int | None = Field(default=None, ge=0)
     target_seat: int | None = Field(default=None, ge=0, le=1)
     x_value: int | None = Field(default=None, ge=0)
 

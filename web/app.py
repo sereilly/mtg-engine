@@ -157,6 +157,28 @@ def _find_card_in_hand(player: PlayerState, card_name: str):
     return next((card for card in player.hand if card.name == card_name), None)
 
 
+def _find_controlled_permanent(
+    player: PlayerState,
+    permanent_name: str | None,
+    permanent_index: int | None,
+) -> tuple[int, Permanent] | None:
+    if permanent_index is not None:
+        if permanent_index < 0 or permanent_index >= len(player.battlefield):
+            return None
+        permanent = player.battlefield[permanent_index]
+        if permanent_name and permanent.card.name != permanent_name:
+            return None
+        return permanent_index, permanent
+
+    if permanent_name is None:
+        return None
+
+    for idx, permanent in enumerate(player.battlefield):
+        if permanent.card.name == permanent_name:
+            return idx, permanent
+    return None
+
+
 def _ai_step(session: Session) -> None:
     seat = session.current_turn
     player = session.game.players[seat]
@@ -288,35 +310,54 @@ def do_action(session_id: str, req: GameActionRequest):
             raise HTTPException(status_code=400, detail=result.details)
 
     elif req.action == "tap":
-        if not req.permanent_name:
-            raise HTTPException(status_code=400, detail="permanent_name is required")
+        if req.permanent_name is None and req.permanent_index is None:
+            raise HTTPException(status_code=400, detail="permanent_name or permanent_index is required")
         controller = session.game.players[req.seat]
-        permanent = next((perm for perm in controller.battlefield if perm.card.name == req.permanent_name), None)
-        if permanent is None:
+        resolved = _find_controlled_permanent(controller, req.permanent_name, req.permanent_index)
+        if resolved is None:
             raise HTTPException(status_code=400, detail="permanent not found")
+        permanent_index, permanent = resolved
 
         if permanent.card.primary_type == "land":
-            tapped = session.game.tap_land_for_mana(req.seat, req.permanent_name)
+            tapped = session.game.tap_land_for_mana(
+                req.seat,
+                permanent.card.name,
+                permanent_index=permanent_index,
+            )
         else:
-            tapped = session.game.tap_permanent(req.seat, req.permanent_name)
+            tapped = session.game.tap_permanent(
+                req.seat,
+                permanent.card.name,
+                permanent_index=permanent_index,
+            )
         if not tapped:
             raise HTTPException(status_code=400, detail="failed to tap permanent")
 
     elif req.action == "activate":
-        if not req.permanent_name:
-            raise HTTPException(status_code=400, detail="permanent_name is required")
+        if req.permanent_name is None and req.permanent_index is None:
+            raise HTTPException(status_code=400, detail="permanent_name or permanent_index is required")
         controller = session.game.players[req.seat]
-        permanent = next((perm for perm in controller.battlefield if perm.card.name == req.permanent_name), None)
-        if permanent is None:
+        resolved = _find_controlled_permanent(controller, req.permanent_name, req.permanent_index)
+        if resolved is None:
             raise HTTPException(status_code=400, detail="permanent not found")
+        permanent_index, permanent = resolved
 
         if permanent.card.primary_type == "land":
-            tapped = session.game.tap_land_for_mana(req.seat, req.permanent_name)
+            tapped = session.game.tap_land_for_mana(
+                req.seat,
+                permanent.card.name,
+                permanent_index=permanent_index,
+            )
             if not tapped:
                 raise HTTPException(status_code=400, detail="failed to tap land for mana")
         else:
             target = req.target_seat if req.target_seat is not None else 1 - req.seat
-            result = session.game.activate_permanent_ability(req.seat, req.permanent_name, target_player_index=target)
+            result = session.game.activate_permanent_ability(
+                req.seat,
+                permanent.card.name,
+                target_player_index=target,
+                permanent_index=permanent_index,
+            )
             if not result.supported:
                 raise HTTPException(status_code=400, detail=result.details)
 
