@@ -150,6 +150,42 @@ def test_human_vs_ai_keeps_custom_guest_name():
     assert created["state"]["players"][1]["name"] == "Sparky"
 
 
+def test_card_search_endpoint_returns_autocomplete_matches():
+    response = client.get("/api/cards/search?query=air&limit=5")
+    assert response.status_code == 200
+    payload = response.json()
+    assert "cards" in payload
+    assert len(payload["cards"]) <= 5
+    assert any(card["name"] == "Air Elemental" for card in payload["cards"])
+
+
+def test_debug_action_adds_card_to_human_hand_case_insensitive_lookup():
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "guest_name": "Guest",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 9090,
+        },
+    ).json()
+    sid = created["session_id"]
+
+    before_count = len(store.get(sid).game.players[0].hand)
+    response = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "debug_add_to_hand", "card_name": "air elemental"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload["players"][0]["hand"]) == before_count + 1
+    assert payload["players"][0]["hand"][-1]["name"] == "Air Elemental"
+    assert any("[Debug]" in entry and "Air Elemental" in entry for entry in payload["log"])
+
+
 def test_web_session_requires_paid_mana_before_cast():
     created = client.post(
         "/api/sessions",

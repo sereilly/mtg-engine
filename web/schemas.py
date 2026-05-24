@@ -6,7 +6,16 @@ from pydantic import BaseModel, Field
 
 
 GameMode = Literal["human_vs_ai", "ai_vs_ai", "human_vs_human"]
-ActionKind = Literal["cast", "activate", "tap", "end_turn", "next_phase", "ai_step", "cleanup_select"]
+ActionKind = Literal[
+    "cast",
+    "activate",
+    "tap",
+    "end_turn",
+    "next_phase",
+    "ai_step",
+    "cleanup_select",
+    "debug_add_to_hand",
+]
 
 
 class CreateSessionRequest(BaseModel):

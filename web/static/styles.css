@@ -330,6 +330,35 @@ button:hover {
   border-color: rgba(126, 196, 255, 0.55);
 }
 
+.debug-panel {
+  border-color: rgba(242, 184, 75, 0.65);
+  background: linear-gradient(180deg, rgba(35, 30, 20, 0.92), rgba(16, 27, 39, 0.88));
+}
+
+.debug-search-label {
+  margin: 0 0 6px;
+}
+
+.debug-panel input {
+  width: calc(100% - 12px);
+  margin: 0;
+}
+
+.debug-status {
+  margin: 8px 0 0;
+  min-height: 18px;
+  color: var(--ink-soft);
+  font-size: 0.84rem;
+}
+
+.debug-status.error {
+  color: var(--danger);
+}
+
+.debug-status.success {
+  color: var(--ok);
+}
+
 .ai-button-row {
   display: flex;
   flex-wrap: wrap;

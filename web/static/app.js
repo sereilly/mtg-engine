@@ -4,6 +4,7 @@ let currentState = null;
 let pendingActivation = null;
 let pendingCastTarget = null;
 let pendingCastX = null;
+let debugSearchTimer = null;
 
 const setupEl = document.getElementById("setup");
 const boardEl = document.getElementById("boardPanel");
@@ -559,6 +560,68 @@ function updateActionHint(message, isError = false) {
   el.style.color = isError ? "#e16d70" : "#cfd7e4";
 }
 
+function updateDebugStatus(message, status = "") {
+  const el = q("debugStatus");
+  if (!el) return;
+  el.textContent = message;
+  el.classList.remove("error", "success");
+  if (status === "error") {
+    el.classList.add("error");
+  }
+  if (status === "success") {
+    el.classList.add("success");
+  }
+}
+
+function renderDebugOptions(cards) {
+  const list = q("debugCardOptions");
+  if (!list) return;
+  list.innerHTML = "";
+  for (const card of cards || []) {
+    const option = document.createElement("option");
+    option.value = card.name;
+    option.label = `${card.name} - ${card.type || "Unknown"}`;
+    list.appendChild(option);
+  }
+}
+
+function setDebugMenuEnabled(enabled) {
+  q("debugCardSearch").disabled = !enabled;
+  q("debugAddToHandBtn").disabled = !enabled;
+  if (!enabled) {
+    renderDebugOptions([]);
+  }
+}
+
+async function fetchDebugSuggestions(query = "") {
+  const term = (query || "").trim();
+  const url = `/api/cards/search?query=${encodeURIComponent(term)}&limit=20`;
+  const resp = await fetch(url);
+  if (!resp.ok) {
+    throw new Error("failed to fetch card suggestions");
+  }
+  const payload = await resp.json();
+  renderDebugOptions(payload.cards || []);
+}
+
+async function addDebugCardToHand() {
+  if (!sessionId || seat === null) {
+    updateDebugStatus("Create or join a session first.", "error");
+    return;
+  }
+
+  const input = q("debugCardSearch");
+  const cardName = input.value.trim();
+  if (!cardName) {
+    updateDebugStatus("Type a card name before adding.", "error");
+    return;
+  }
+
+  await sendAction({ seat, action: "debug_add_to_hand", card_name: cardName });
+  updateDebugStatus(`Added ${cardName} to your hand.`, "success");
+  updateActionHint(`Debug: added ${cardName} to your hand.`);
+}
+
 function clearCardPreview() {
   q("cardPreview").classList.add("empty-preview");
   q("cardPreviewImage").classList.add("hidden");
@@ -848,6 +911,7 @@ function renderBoard(state) {
   const isSelfTurn = state.current_turn === viewerSeat;
   const cleanupDiscard = getCleanupDiscardInfo(state);
   const requiresCleanupSelection = !!cleanupDiscard;
+  setDebugMenuEnabled(sessionId !== null && seat !== null);
   q("selfName").classList.toggle("active-turn-name", isSelfTurn);
   q("oppName").classList.toggle("active-turn-name", !isSelfTurn);
 
@@ -1239,6 +1303,42 @@ q("aiLoopBtn").addEventListener("click", async () => {
   }
 });
 
+q("debugCardSearch").addEventListener("input", (event) => {
+  const value = event.target.value;
+  if (debugSearchTimer !== null) {
+    clearTimeout(debugSearchTimer);
+  }
+  debugSearchTimer = setTimeout(() => {
+    fetchDebugSuggestions(value).catch((error) => {
+      updateDebugStatus(error.message || "Could not load card suggestions.", "error");
+    });
+  }, 120);
+});
+
+q("debugCardSearch").addEventListener("focus", () => {
+  fetchDebugSuggestions(q("debugCardSearch").value).catch(() => {
+    // Keep this silent on focus to avoid noisy UI warnings.
+  });
+});
+
+q("debugCardSearch").addEventListener("keydown", async (event) => {
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  try {
+    await addDebugCardToHand();
+  } catch (e) {
+    updateDebugStatus(e.message, "error");
+  }
+});
+
+q("debugAddToHandBtn").addEventListener("click", async () => {
+  try {
+    await addDebugCardToHand();
+  } catch (e) {
+    updateDebugStatus(e.message, "error");
+  }
+});
+
 setInterval(() => {
   getState();
 }, 1500);
@@ -1250,6 +1350,10 @@ if (sessionFromUrl) {
 }
 
 syncGuestNameForMode();
+setDebugMenuEnabled(false);
+fetchDebugSuggestions().catch(() => {
+  // Intentionally ignored during startup.
+});
 
 initDropZones();
 initTabs();

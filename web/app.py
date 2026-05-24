@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from engine import Game
 from engine.ai_policy import choose_activation_action, choose_cast_action
+from engine.card_loader import load_cards
 from engine.models import Permanent, PlayerState
 
 from .deck_builder import build_random_deck
@@ -18,6 +19,9 @@ from .session_store import Session, SessionStore
 ROOT = Path(__file__).resolve().parent.parent
 CARDS_PATH = ROOT / "lea_cards.json"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+CARD_CATALOG = load_cards(CARDS_PATH)
+CARD_BY_NAME = {card.name.casefold(): card for card in CARD_CATALOG}
+CARD_SEARCH_ORDER = sorted(CARD_CATALOG, key=lambda card: card.name)
 
 app = FastAPI(title="Magic LEA Web App")
 store = SessionStore(cards_path=CARDS_PATH)
@@ -61,6 +65,35 @@ def _serialize_card(card) -> dict:
         "image_uri": image_uri,
         "large_image_uri": large_image_uri,
     }
+
+
+def _serialize_card_summary(card) -> dict:
+    image_uris = card.raw.get("image_uris") if isinstance(card.raw, dict) else None
+    image_uri = image_uris.get("normal") if isinstance(image_uris, dict) else None
+    return {
+        "name": card.name,
+        "type": card.type_line,
+        "mana_cost": card.mana_cost,
+        "image_uri": image_uri,
+    }
+
+
+def _search_cards(query: str, limit: int) -> list[dict]:
+    term = query.strip().casefold()
+    if not term:
+        return [_serialize_card_summary(card) for card in CARD_SEARCH_ORDER[:limit]]
+
+    starts_with: list = []
+    contains: list = []
+    for card in CARD_SEARCH_ORDER:
+        lowered = card.name.casefold()
+        if lowered.startswith(term):
+            starts_with.append(card)
+        elif term in lowered:
+            contains.append(card)
+
+    ranked = starts_with + contains
+    return [_serialize_card_summary(card) for card in ranked[:limit]]
 
 
 def _serialize_mana_pool(player: PlayerState) -> dict:
@@ -381,6 +414,11 @@ def get_state(session_id: str, seat: int | None = Query(default=None, ge=0, le=1
     return _serialize_state(session, viewer_seat=seat)
 
 
+@app.get("/api/cards/search")
+def search_cards(query: str = Query(default=""), limit: int = Query(default=16, ge=1, le=50)):
+    return {"cards": _search_cards(query, limit)}
+
+
 @app.post("/api/sessions/{session_id}/action")
 def do_action(session_id: str, req: GameActionRequest):
     session = _require_session(session_id)
@@ -409,7 +447,7 @@ def do_action(session_id: str, req: GameActionRequest):
         if preferred_index is not None:
             req = req.model_copy(update={"action": "cleanup_select", "hand_index": preferred_index})
 
-    if cleanup_required > 0 and req.action != "cleanup_select":
+    if cleanup_required > 0 and req.action not in {"cleanup_select", "debug_add_to_hand"}:
         raise HTTPException(status_code=400, detail="select cleanup discards before other actions")
 
     if req.action in {"cast", "activate", "end_turn", "next_phase"} and seat_type != "human":
@@ -540,6 +578,20 @@ def do_action(session_id: str, req: GameActionRequest):
             raise HTTPException(status_code=400, detail="current turn is not AI")
         _ai_step(session)
         _end_turn(session)
+
+    elif req.action == "debug_add_to_hand":
+        if seat_type != "human":
+            raise HTTPException(status_code=400, detail="cannot issue debug action for AI seat")
+        if not req.card_name:
+            raise HTTPException(status_code=400, detail="card_name is required")
+
+        card = CARD_BY_NAME.get(req.card_name.strip().casefold())
+        if card is None:
+            raise HTTPException(status_code=404, detail="card not found")
+
+        player = session.game.players[req.seat]
+        player.hand.append(card)
+        session.game.log.append(f"[Debug] {player.name} added {card.name} to hand.")
 
     else:
         raise HTTPException(status_code=400, detail="unknown action")

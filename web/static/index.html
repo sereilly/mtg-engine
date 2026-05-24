@@ -80,6 +80,23 @@
                 <button id="aiLoopBtn" type="button">Run AI x10</button>
               </div>
             </section>
+
+            <section id="debugPanel" class="side-panel debug-panel">
+              <h3>Debug Menu</h3>
+              <label class="debug-search-label" for="debugCardSearch">Add card to your hand</label>
+              <input
+                id="debugCardSearch"
+                type="text"
+                list="debugCardOptions"
+                placeholder="Type a card name"
+                autocomplete="off"
+              />
+              <datalist id="debugCardOptions"></datalist>
+              <div class="button-row">
+                <button id="debugAddToHandBtn" type="button">Add Selected Card</button>
+              </div>
+              <p id="debugStatus" class="debug-status">Search for any LEA card and add it to your hand.</p>
+            </section>
           </aside>
 
           <div class="board-column center-column">
