@@ -86,7 +86,18 @@ class Game:
         target_idx = target_player_index if target_player_index is not None else (1 - controller_index)
         target_player = self.players[target_idx]
 
-        if "{t}" in text:
+        required_cost, requires_tap = self._parse_activated_ability_cost(permanent.card.oracle_text)
+        if self.enforce_mana_costs and any(required_cost.values()):
+            if not self._pay_mana_cost(controller, required_cost):
+                details = f"insufficient mana to activate {permanent.card.name}"
+                self.log.append(details)
+                return SimulationResult(permanent.card.name, False, "unsupported", details)
+
+        if requires_tap:
+            if permanent.tapped:
+                details = f"{permanent.card.name} is already tapped"
+                self.log.append(details)
+                return SimulationResult(permanent.card.name, False, "unsupported", details)
             permanent.tapped = True
 
         if "this creature gets +1/+0 until end of turn" in text:
@@ -307,6 +318,34 @@ class Game:
 
         self.log.append(f"No implemented activated ability for {permanent.card.name}")
         return SimulationResult(permanent.card.name, False, "unsupported", "ability not implemented")
+
+    def _parse_activated_ability_cost(self, oracle_text: str) -> tuple[dict[str, int], bool]:
+        required = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0, "generic": 0}
+        requires_tap = False
+        if not oracle_text:
+            return required, requires_tap
+
+        for raw_line in oracle_text.splitlines():
+            line = raw_line.strip()
+            if ":" not in line:
+                continue
+            cost_part = line.split(":", 1)[0]
+            if "{" not in cost_part:
+                continue
+
+            for token in re.findall(r"\{([^}]+)\}", cost_part.upper()):
+                if token == "T":
+                    requires_tap = True
+                    continue
+                if token.isdigit():
+                    required["generic"] += int(token)
+                    continue
+                if token in {"W", "U", "B", "R", "G", "C"}:
+                    required[token] += 1
+
+            break
+
+        return required, requires_tap
 
     def tap_permanent(self, controller_index: int, permanent_name: str) -> bool:
         controller = self.players[controller_index]
@@ -1233,6 +1272,18 @@ class Game:
         mana_symbol = chosen_color
         if land.card.produced_mana:
             mana_symbol = land.card.produced_mana[0]
+        else:
+            land_types = [str(land.metadata.get("land_type_override", "")).lower(), land.card.type_line.lower()]
+            if any("plains" in value for value in land_types):
+                mana_symbol = "W"
+            elif any("island" in value for value in land_types):
+                mana_symbol = "U"
+            elif any("swamp" in value for value in land_types):
+                mana_symbol = "B"
+            elif any("mountain" in value for value in land_types):
+                mana_symbol = "R"
+            elif any("forest" in value for value in land_types):
+                mana_symbol = "G"
         player.mana_pool[mana_symbol] = player.mana_pool.get(mana_symbol, 0) + 1
 
         all_permanents = [perm for pl in self.players for perm in pl.battlefield]

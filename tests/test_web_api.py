@@ -191,6 +191,56 @@ def test_tap_action_on_land_adds_mana_and_cannot_retap():
     assert second_tap.status_code == 400
 
 
+def test_activate_with_mana_cost_requires_payment_before_tap():
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "guest_name": "Guest",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 3030,
+        },
+    ).json()
+    sid = created["session_id"]
+
+    session = store.get(sid)
+    tome = _mk_card(
+        name="Jayemdae Tome",
+        mana_cost="{4}",
+        type_line="Artifact",
+        oracle_text="{4}, {T}: Draw a card.",
+    )
+    island = _mk_card(
+        name="Island",
+        mana_cost="",
+        type_line="Basic Land - Island",
+        oracle_text="{T}: Add {U}.",
+        produced_mana=("U",),
+    )
+
+    session.game.players[0].battlefield = [Permanent(card=tome)]
+    session.game.players[0].library = [island]
+    session.game.players[0].mana_pool = {"W": 0, "U": 3, "B": 0, "R": 0, "G": 0, "C": 0}
+
+    unpaid = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "activate", "permanent_name": "Jayemdae Tome", "target_seat": 1},
+    )
+    assert unpaid.status_code == 400
+    assert "insufficient mana" in unpaid.json()["detail"].lower()
+    assert store.get(sid).game.players[0].battlefield[0].tapped is False
+
+    session.game.players[0].mana_pool = {"W": 0, "U": 4, "B": 0, "R": 0, "G": 0, "C": 0}
+    paid = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "activate", "permanent_name": "Jayemdae Tome", "target_seat": 1},
+    )
+    assert paid.status_code == 200
+    assert store.get(sid).game.players[0].battlefield[0].tapped is True
+
+
 def test_non_instant_rejected_on_opponent_turn():
     created = client.post(
         "/api/sessions",

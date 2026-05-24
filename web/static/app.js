@@ -60,6 +60,28 @@ function hasActivatedAbility(card) {
   return /\{t\}|:\s*/i.test(text);
 }
 
+function getActivatedAbilityCost(card) {
+  if (!card || typeof card === "string") return "";
+  const text = (card.oracle_text || "").trim();
+  if (!text) return "";
+
+  for (const rawLine of text.split("\n")) {
+    const line = rawLine.trim();
+    if (!line || !line.includes(":")) continue;
+    const [cost] = line.split(":", 1);
+    if (!cost || !cost.trim()) continue;
+    return cost.trim();
+  }
+
+  return "";
+}
+
+function shouldPromptForActivationCost(costText) {
+  const cleaned = (costText || "").replace(/[()\s]/g, "").toUpperCase();
+  if (!cleaned) return false;
+  return cleaned !== "{T}";
+}
+
 function normalizeCardName(card) {
   if (!card) return "";
   if (typeof card === "string") return card;
@@ -192,22 +214,22 @@ function createCardElement(card, options = {}) {
         if (!cardName) return;
 
         if (!hasActivatedAbility(card)) {
-          await sendAction({ seat, action: "tap", permanent_name: cardName });
-          updateActionHint(`Tapped ${cardName}.`);
+          updateActionHint(`${cardName} has no activated ability to use.`, true);
           return;
         }
 
-        // `window.prompt` is unsupported in some webview hosts; use click semantics instead.
-        // Normal click taps. Shift+click activates the permanent's ability.
-        if (!event.shiftKey) {
-          await sendAction({ seat, action: "tap", permanent_name: cardName });
-          updateActionHint(`Tapped ${cardName}.`);
-          return;
+        const activationCost = getActivatedAbilityCost(card);
+        if (shouldPromptForActivationCost(activationCost)) {
+          const accepted = window.confirm(`Pay activation cost ${activationCost} for ${cardName}?`);
+          if (!accepted) {
+            updateActionHint(`Activation canceled for ${cardName}.`);
+            return;
+          }
         }
 
         const targetSeat = Number(q("activateTarget")?.value ?? String(1 - seat));
         await sendAction({ seat, action: "activate", permanent_name: cardName, target_seat: targetSeat });
-        updateActionHint(`Activated ${cardName}. (Tip: normal click taps, Shift+click activates)`);
+        updateActionHint(`Activated ${cardName}.`);
       } catch (e) {
         updateActionHint(e.message, true);
       }

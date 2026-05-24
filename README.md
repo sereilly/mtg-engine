@@ -39,6 +39,16 @@ With the workspace virtual environment activated:
 pytest
 ```
 
+## Start the Server
+
+From the workspace root, start the web app with the project virtual environment:
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn web.app:app --host 127.0.0.1 --port 8010
+```
+
+Then open `http://127.0.0.1:8010/` in your browser.
+
 ## Run Scripted Duel
 
 ```powershell

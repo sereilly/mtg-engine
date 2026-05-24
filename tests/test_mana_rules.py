@@ -68,3 +68,18 @@ def test_strict_mana_allows_cast_after_tapping_land():
     assert result.supported
     assert p2.life == 17
     assert p1.mana_pool["R"] == 0
+
+
+def test_tapping_basic_land_without_produced_mana_uses_land_type():
+    swamp = _mk_card(
+        name="Swamp",
+        mana_cost="",
+        type_line="Basic Land - Swamp",
+        oracle_text="({T}: Add {B}.)",
+    )
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=swamp)])
+    game = Game(players=[p1], enforce_mana_costs=True)
+
+    assert game.tap_land_for_mana(0, "Swamp")
+    assert p1.mana_pool["B"] == 1
