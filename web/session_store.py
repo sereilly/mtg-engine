@@ -32,11 +32,15 @@ class SessionStore:
     def create(self, request: CreateSessionRequest) -> Session:
         sid = secrets.token_urlsafe(8)
 
+        guest_name = request.guest_name
+        if request.mode in {"human_vs_ai", "ai_vs_ai"} and guest_name.strip() in {"", "Player 2"}:
+            guest_name = "AI"
+
         host_deck, _ = build_random_deck(self.cards_path, request.host_colors, request.seed)
         guest_deck, _ = build_random_deck(self.cards_path, request.guest_colors, request.seed + 1)
 
         p1 = PlayerState(name=request.host_name, library=host_deck)
-        p2 = PlayerState(name=request.guest_name, library=guest_deck)
+        p2 = PlayerState(name=guest_name, library=guest_deck)
         p1.draw(7)
         p2.draw(7)
 
@@ -56,7 +60,7 @@ class SessionStore:
             id=sid,
             mode=request.mode,
             host_name=request.host_name,
-            guest_name=request.guest_name,
+            guest_name=guest_name,
             game=game,
             joined_seats=joined_seats,
             seat_types=seat_types,

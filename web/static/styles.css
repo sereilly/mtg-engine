@@ -171,6 +171,11 @@ button:hover {
   margin-bottom: 8px;
 }
 
+.active-turn-name {
+  color: var(--ok);
+  text-shadow: 0 0 10px rgba(133, 200, 134, 0.5);
+}
+
 .life-pill {
   min-width: 46px;
   text-align: center;

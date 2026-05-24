@@ -97,6 +97,37 @@ def test_human_vs_ai_rejects_human_action_for_ai_seat():
     assert bad.status_code == 400
 
 
+def test_human_vs_ai_defaults_guest_name_to_ai():
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_ai",
+            "host_name": "Host",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 1888,
+        },
+    ).json()
+
+    assert created["state"]["players"][1]["name"] == "AI"
+
+
+def test_human_vs_ai_keeps_custom_guest_name():
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_ai",
+            "host_name": "Host",
+            "guest_name": "Sparky",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 1889,
+        },
+    ).json()
+
+    assert created["state"]["players"][1]["name"] == "Sparky"
+
+
 def test_web_session_requires_paid_mana_before_cast():
     created = client.post(
         "/api/sessions",

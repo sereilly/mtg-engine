@@ -739,6 +739,10 @@ function renderBoard(state) {
   q("oppName").textContent = opp.name;
   q("oppLife").textContent = String(opp.life);
 
+  const isSelfTurn = state.current_turn === viewerSeat;
+  q("selfName").classList.toggle("active-turn-name", isSelfTurn);
+  q("oppName").classList.toggle("active-turn-name", !isSelfTurn);
+
   renderCardRow("selfHand", me.hand, { draggable: true, dragKind: "hand", castOnClick: true });
   renderCardRow("oppHand", opp.hand, { compact: true });
   renderCardRow("selfBattlefield", me.battlefield, { draggable: true, dragKind: "permanent", interactive: true });
@@ -950,6 +954,7 @@ async function postJson(url, body) {
 
 async function createSession() {
   hideSetupPanel();
+  syncGuestNameForMode();
   const req = {
     mode: q("mode").value,
     host_name: q("hostName").value,
@@ -967,6 +972,23 @@ async function createSession() {
   renderState(data.state);
   setVisible(true);
   updateActionHint("Session ready. Drag from your hand to cast.");
+}
+
+function syncGuestNameForMode() {
+  const mode = q("mode").value;
+  const guestNameInput = q("guestName");
+  const guestName = guestNameInput.value.trim();
+
+  if (mode === "human_vs_ai" || mode === "ai_vs_ai") {
+    if (guestName === "" || guestName === "Player 2") {
+      guestNameInput.value = "AI";
+    }
+    return;
+  }
+
+  if (mode === "human_vs_human" && (guestName === "" || guestName === "AI")) {
+    guestNameInput.value = "Player 2";
+  }
 }
 
 async function joinSession() {
@@ -998,6 +1020,10 @@ q("startBtn").addEventListener("click", async () => {
     showSetupPanel();
     alert(e.message);
   }
+});
+
+q("mode").addEventListener("change", () => {
+  syncGuestNameForMode();
 });
 
 q("joinBtn").addEventListener("click", async () => {
@@ -1093,6 +1119,8 @@ const sessionFromUrl = params.get("session");
 if (sessionFromUrl) {
   q("joinSessionId").value = sessionFromUrl;
 }
+
+syncGuestNameForMode();
 
 initDropZones();
 initTabs();
