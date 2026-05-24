@@ -25,7 +25,10 @@ class CreateSessionRequest(BaseModel):
     guest_name: str = Field(default="Player 2")
     host_colors: int = Field(default=2, ge=1, le=5)
     guest_colors: int = Field(default=2, ge=1, le=5)
-    seed: int = Field(default=1337)
+    use_custom_seed: bool = Field(default=False)
+    custom_seed: int | None = Field(default=None)
+    # Backward-compatible field for older clients that still post `seed`.
+    seed: int | None = Field(default=None)
 
 
 class JoinSessionRequest(BaseModel):

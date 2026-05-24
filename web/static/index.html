@@ -11,25 +11,33 @@
       <p id="joinUrl" class="top-join-url hidden"></p>
 
       <section id="setup" class="panel">
-        <h2>Start Game</h2>
-        <label>Mode
-          <select id="mode">
-            <option value="human_vs_ai">Human vs AI</option>
-            <option value="ai_vs_ai">AI vs AI</option>
-            <option value="human_vs_human">Human vs Human (Networked)</option>
-          </select>
-        </label>
-        <label>Host name <input id="hostName" value="Player 1" /></label>
-        <label>Guest name <input id="guestName" value="Player 2" /></label>
-        <label>Host deck colors (1-5) <input id="hostColors" type="number" min="1" max="5" value="2" /></label>
-        <label>Guest deck colors (1-5) <input id="guestColors" type="number" min="1" max="5" value="2" /></label>
-        <label>Seed <input id="seed" type="number" value="1337" /></label>
-        <button id="startBtn">Create Session</button>
+        <div id="startGameSection">
+          <h2>Start Game</h2>
+          <label>Mode
+            <select id="mode">
+              <option value="human_vs_ai">Human vs AI</option>
+              <option value="ai_vs_ai">AI vs AI</option>
+              <option value="human_vs_human">Human vs Human (Networked)</option>
+            </select>
+          </label>
+          <label>Host name <input id="hostName" value="Player 1" /></label>
+          <label>Guest name <input id="guestName" value="Player 2" /></label>
+          <label>Host deck colors (1-5) <input id="hostColors" type="number" min="1" max="5" value="2" /></label>
+          <label>Guest deck colors (1-5) <input id="guestColors" type="number" min="1" max="5" value="2" /></label>
+          <label>
+            <input id="useCustomSeed" type="checkbox" />
+            Use custom seed
+          </label>
+          <label id="customSeedLabel" class="hidden">Custom seed <input id="customSeed" type="number" value="1337" disabled /></label>
+          <button id="startBtn">Create Session</button>
+        </div>
 
-        <h3>Join Existing Session</h3>
-        <label>Session ID <input id="joinSessionId" placeholder="paste session id" /></label>
-        <label>Your name <input id="joinName" value="Player 2" /></label>
-        <button id="joinBtn">Join Session</button>
+        <div id="joinExistingSection">
+          <h3>Join Existing Session</h3>
+          <label>Session ID <input id="joinSessionId" placeholder="paste session id" /></label>
+          <label>Your name <input id="joinName" value="Player 2" /></label>
+          <button id="joinBtn">Join Session</button>
+        </div>
       </section>
 
       <section id="boardPanel" class="panel hidden">

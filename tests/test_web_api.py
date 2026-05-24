@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 import web.app as web_app
+import web.session_store as web_session_store
 
 from engine.models import CardDefinition, Permanent
 from web.app import app, store
@@ -46,6 +47,60 @@ def test_create_human_vs_human_session_returns_join_url():
     assert payload["session_id"]
     assert "join_url" in payload
     assert payload["seat"] == 0
+
+
+def test_create_session_uses_random_seed_by_default(monkeypatch):
+    captured_seeds = []
+    stub_deck = [_mk_card("Island", "", "Basic Land - Island", "") for _ in range(40)]
+
+    def _fake_build_random_deck(_cards_path, _colors, seed):
+        captured_seeds.append(seed)
+        return list(stub_deck), ["U"]
+
+    monkeypatch.setattr(web_session_store, "build_random_deck", _fake_build_random_deck)
+    monkeypatch.setattr(web_session_store.secrets, "randbits", lambda _bits: 424242)
+
+    response = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "guest_name": "Guest",
+            "host_colors": 2,
+            "guest_colors": 3,
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured_seeds == [424242, 424243]
+
+
+def test_create_session_uses_custom_seed_when_enabled(monkeypatch):
+    captured_seeds = []
+    stub_deck = [_mk_card("Island", "", "Basic Land - Island", "") for _ in range(40)]
+
+    def _fake_build_random_deck(_cards_path, _colors, seed):
+        captured_seeds.append(seed)
+        return list(stub_deck), ["U"]
+
+    monkeypatch.setattr(web_session_store, "build_random_deck", _fake_build_random_deck)
+    monkeypatch.setattr(web_session_store.secrets, "randbits", lambda _bits: 111111)
+
+    response = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "guest_name": "Guest",
+            "host_colors": 2,
+            "guest_colors": 3,
+            "use_custom_seed": True,
+            "custom_seed": 9001,
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured_seeds == [9001, 9002]
 
 
 def test_create_session_uses_lan_ip_join_url_for_localhost(monkeypatch):

@@ -34,12 +34,14 @@ class SessionStore:
     def create(self, request: CreateSessionRequest) -> Session:
         sid = secrets.token_urlsafe(8)
 
+        seed = self._resolve_seed(request)
+
         guest_name = request.guest_name
         if request.mode in {"human_vs_ai", "ai_vs_ai"} and guest_name.strip() in {"", "Player 2"}:
             guest_name = "AI"
 
-        host_deck, _ = build_random_deck(self.cards_path, request.host_colors, request.seed)
-        guest_deck, _ = build_random_deck(self.cards_path, request.guest_colors, request.seed + 1)
+        host_deck, _ = build_random_deck(self.cards_path, request.host_colors, seed)
+        guest_deck, _ = build_random_deck(self.cards_path, request.guest_colors, seed + 1)
 
         p1 = PlayerState(name=request.host_name, library=host_deck)
         p2 = PlayerState(name=guest_name, library=guest_deck)
@@ -69,6 +71,18 @@ class SessionStore:
         )
         self._sessions[sid] = session
         return session
+
+    def _resolve_seed(self, request: CreateSessionRequest) -> int:
+        if request.use_custom_seed:
+            if request.custom_seed is not None:
+                return request.custom_seed
+            if request.seed is not None:
+                return request.seed
+
+        if request.seed is not None:
+            return request.seed
+
+        return secrets.randbits(32)
 
     def get(self, session_id: str) -> Session:
         if session_id not in self._sessions:

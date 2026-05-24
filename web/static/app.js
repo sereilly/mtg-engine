@@ -11,6 +11,9 @@ let symbolMap = {};
 const setupEl = document.getElementById("setup");
 const boardEl = document.getElementById("boardPanel");
 const aiControlsEl = document.getElementById("aiControls");
+const joinUrlEl = document.getElementById("joinUrl");
+const startGameSectionEl = document.getElementById("startGameSection");
+const joinExistingSectionEl = document.getElementById("joinExistingSection");
 
 const MANA_ORDER = ["W", "U", "B", "R", "G", "C"];
 const MANA_COLOR_OPTIONS = [
@@ -191,6 +194,22 @@ function showSetupPanel() {
   setupEl.style.display = "";
 }
 
+function syncSeedControls() {
+  const useCustomSeed = q("useCustomSeed").checked;
+  q("customSeedLabel").classList.toggle("hidden", !useCustomSeed);
+  q("customSeed").disabled = !useCustomSeed;
+}
+
+function setSetupModeForUrlSession(hasSessionInUrl) {
+  if (!startGameSectionEl || !joinExistingSectionEl) return;
+
+  startGameSectionEl.classList.toggle("hidden", hasSessionInUrl);
+  startGameSectionEl.hidden = hasSessionInUrl;
+
+  joinExistingSectionEl.classList.remove("hidden");
+  joinExistingSectionEl.hidden = false;
+}
+
 function setVisible(active) {
   if (active) {
     hideSetupPanel();
@@ -207,8 +226,7 @@ function resetToSetup(message = "Session not found. Start a new game.") {
   showSetupPanel();
   boardEl.classList.add("hidden");
   aiControlsEl?.classList.add("hidden");
-  q("joinUrl").classList.add("hidden");
-  q("joinUrl").textContent = "";
+  setJoinUrl("");
   updateActionHint(message, true);
 }
 
@@ -218,6 +236,21 @@ function shouldShowAiControls(state) {
   const hasAiPlayer = values.includes("ai");
   const currentTurnIsAi = seatTypes?.[state?.current_turn] === "ai";
   return hasAiPlayer && currentTurnIsAi;
+}
+
+function hasOpenHumanSlot(state) {
+  if (!state) return false;
+
+  const joinedSeats = new Set((state.joined_seats || []).map((value) => Number(value)));
+  const seatTypes = state.seat_types || {};
+  for (const seat of [0, 1]) {
+    const seatType = seatTypes[seat] ?? seatTypes[String(seat)] ?? "human";
+    if (seatType === "human" && !joinedSeats.has(seat)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function hasActivatedAbility(card) {
@@ -746,6 +779,52 @@ function updateActionHint(message, isError = false) {
   el.style.color = isError ? "#e16d70" : "#cfd7e4";
 }
 
+function setJoinUrl(url = "") {
+  if (!joinUrlEl) return;
+
+  const trimmed = String(url || "").trim();
+  if (!trimmed) {
+    joinUrlEl.dataset.url = "";
+    joinUrlEl.textContent = "";
+    joinUrlEl.classList.add("hidden");
+    return;
+  }
+
+  joinUrlEl.dataset.url = trimmed;
+  joinUrlEl.textContent = `Join URL: ${trimmed}`;
+  joinUrlEl.classList.remove("hidden");
+}
+
+function syncJoinUrlVisibility(state) {
+  if (!joinUrlEl) return;
+  if (!joinUrlEl.dataset.url) {
+    joinUrlEl.classList.add("hidden");
+    return;
+  }
+  joinUrlEl.classList.toggle("hidden", !hasOpenHumanSlot(state));
+}
+
+async function copyTextToClipboard(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const helper = document.createElement("textarea");
+  helper.value = text;
+  helper.setAttribute("readonly", "");
+  helper.style.position = "fixed";
+  helper.style.opacity = "0";
+  document.body.appendChild(helper);
+  helper.select();
+
+  const copied = document.execCommand("copy");
+  document.body.removeChild(helper);
+  if (!copied) {
+    throw new Error("Clipboard copy failed");
+  }
+}
+
 function updateDebugStatus(message, status = "") {
   const el = q("debugStatus");
   if (!el) return;
@@ -1119,9 +1198,11 @@ function renderBoard(state) {
   q("oppLife").textContent = String(opp.life);
 
   const isSelfTurn = state.current_turn === viewerSeat;
+  const canEndTurn = seat !== null && isSelfTurn;
   const cleanupDiscard = getCleanupDiscardInfo(state);
   const requiresCleanupSelection = !!cleanupDiscard;
   setDebugMenuEnabled(sessionId !== null && seat !== null);
+  q("endTurnBtn").disabled = !canEndTurn;
   q("selfName").classList.toggle("active-turn-name", isSelfTurn);
   q("oppName").classList.toggle("active-turn-name", !isSelfTurn);
 
@@ -1166,6 +1247,7 @@ function renderBoard(state) {
 
 function renderState(state) {
   currentState = state;
+  syncJoinUrlVisibility(state);
   const cleanupInfo = getCleanupDiscardInfo(state);
   if (cleanupInfo) {
     pendingActivation = null;
@@ -1360,19 +1442,21 @@ async function postJson(url, body) {
 async function createSession() {
   hideSetupPanel();
   syncGuestNameForMode();
+  syncSeedControls();
+  const useCustomSeed = q("useCustomSeed").checked;
   const req = {
     mode: q("mode").value,
     host_name: q("hostName").value,
     guest_name: q("guestName").value,
     host_colors: Number(q("hostColors").value),
     guest_colors: Number(q("guestColors").value),
-    seed: Number(q("seed").value),
+    use_custom_seed: useCustomSeed,
+    custom_seed: useCustomSeed ? Number(q("customSeed").value) : null,
   };
   const data = await postJson("/api/sessions", req);
   sessionId = data.session_id;
   seat = data.seat;
-  q("joinUrl").textContent = `Join URL: ${data.join_url}`;
-  q("joinUrl").classList.remove("hidden");
+  setJoinUrl(data.join_url);
   renderState(data.state);
   setVisible(true);
   updateActionHint("Session ready. Drag from your hand to cast.");
@@ -1403,8 +1487,7 @@ async function joinSession() {
   }
   const data = await postJson(`/api/sessions/${sessionId}/join`, { guest_name: q("joinName").value });
   seat = data.seat;
-  q("joinUrl").textContent = `Join URL: ${data.join_url}`;
-  q("joinUrl").classList.remove("hidden");
+  setJoinUrl(data.join_url);
   renderState(data.state);
   setVisible(true);
   updateActionHint("Joined. Drag from your hand or battlefield to play.");
@@ -1430,11 +1513,26 @@ q("mode").addEventListener("change", () => {
   syncGuestNameForMode();
 });
 
+q("useCustomSeed").addEventListener("change", () => {
+  syncSeedControls();
+});
+
 q("joinBtn").addEventListener("click", async () => {
   try {
     await joinSession();
   } catch (e) {
     alert(e.message);
+  }
+});
+
+joinUrlEl?.addEventListener("click", async () => {
+  const targetUrl = joinUrlEl.dataset.url;
+  if (!targetUrl) return;
+  try {
+    await copyTextToClipboard(targetUrl);
+    updateActionHint("Join URL copied to clipboard.");
+  } catch {
+    updateActionHint("Could not copy join URL. Copy it manually.", true);
   }
 });
 
@@ -1572,12 +1670,15 @@ setInterval(() => {
 
 const params = new URLSearchParams(window.location.search);
 const sessionFromUrl = params.get("session");
+setSetupModeForUrlSession(Boolean(sessionFromUrl));
 if (sessionFromUrl) {
   q("joinSessionId").value = sessionFromUrl;
 }
 
 syncGuestNameForMode();
+syncSeedControls();
 setDebugMenuEnabled(false);
+q("endTurnBtn").disabled = true;
 fetchDebugSuggestions().catch(() => {
   // Intentionally ignored during startup.
 });
