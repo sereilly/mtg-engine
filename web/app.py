@@ -24,6 +24,7 @@ store = SessionStore(cards_path=CARDS_PATH)
 def _serialize_permanent(perm: Permanent) -> dict:
     image_uris = perm.card.raw.get("image_uris") if isinstance(perm.card.raw, dict) else None
     image_uri = image_uris.get("normal") if isinstance(image_uris, dict) else None
+    large_image_uri = image_uris.get("large") if isinstance(image_uris, dict) else None
     return {
         "name": perm.card.name,
         "type": perm.card.type_line,
@@ -33,18 +34,21 @@ def _serialize_permanent(perm: Permanent) -> dict:
         "mana_cost": perm.card.mana_cost,
         "oracle_text": perm.card.oracle_text,
         "image_uri": image_uri,
+        "large_image_uri": large_image_uri,
     }
 
 
 def _serialize_card(card) -> dict:
     image_uris = card.raw.get("image_uris") if isinstance(card.raw, dict) else None
     image_uri = image_uris.get("normal") if isinstance(image_uris, dict) else None
+    large_image_uri = image_uris.get("large") if isinstance(image_uris, dict) else None
     return {
         "name": card.name,
         "type": card.type_line,
         "mana_cost": card.mana_cost,
         "oracle_text": card.oracle_text,
         "image_uri": image_uri,
+        "large_image_uri": large_image_uri,
     }
 
 
@@ -140,6 +144,10 @@ def _can_cast(game: Game, caster_index: int, card_name: str) -> bool:
     return True
 
 
+def _find_card_in_hand(player: PlayerState, card_name: str):
+    return next((card for card in player.hand if card.name == card_name), None)
+
+
 def _ai_step(session: Session) -> None:
     seat = session.current_turn
     player = session.game.players[seat]
@@ -174,6 +182,7 @@ def _ai_step(session: Session) -> None:
 def _end_turn(session: Session) -> None:
     session.current_turn = 1 - session.current_turn
     session.game.turn += 1
+    session.game.lands_played_this_turn[session.current_turn] = 0
     if session.current_turn in session.joined_seats:
         session.game.resolve_untap_step(session.current_turn)
         session.game.resolve_upkeep(session.current_turn)
@@ -238,9 +247,6 @@ def do_action(session_id: str, req: GameActionRequest):
     if req.seat not in session.joined_seats:
         raise HTTPException(status_code=400, detail="seat has not joined")
 
-    if req.action != "ai_step" and req.seat != session.current_turn:
-        raise HTTPException(status_code=400, detail="not your turn")
-
     seat_type = session.seat_types.get(req.seat, "human")
 
     if req.action in {"cast", "activate", "end_turn"} and seat_type != "human":
@@ -249,20 +255,65 @@ def do_action(session_id: str, req: GameActionRequest):
     if req.action == "cast":
         if not req.card_name:
             raise HTTPException(status_code=400, detail="card_name is required")
+
+        caster = session.game.players[req.seat]
+        card = _find_card_in_hand(caster, req.card_name)
+        if card is None:
+            raise HTTPException(status_code=400, detail="card not in hand")
+
+        is_instant = card.primary_type == "instant"
+        if req.seat != session.current_turn and not is_instant:
+            raise HTTPException(status_code=400, detail="non-instant spells can only be cast on your turn")
+
+        if card.primary_type in {"land", "sorcery", "creature", "artifact", "enchantment"}:
+            if req.seat != session.current_turn:
+                raise HTTPException(status_code=400, detail="can only cast this card on your turn")
+            if session.game.current_phase != "main":
+                raise HTTPException(status_code=400, detail="can only cast this card during main phase")
+            if session.game.stack:
+                raise HTTPException(status_code=400, detail="can only cast this card when stack is empty")
+
         target = req.target_seat if req.target_seat is not None else _default_target(req.card_name, req.seat)
         result = session.game.cast_from_hand(req.seat, req.card_name, target_player_index=target)
         if not result.supported:
             raise HTTPException(status_code=400, detail=result.details)
 
+    elif req.action == "tap":
+        if not req.permanent_name:
+            raise HTTPException(status_code=400, detail="permanent_name is required")
+        controller = session.game.players[req.seat]
+        permanent = next((perm for perm in controller.battlefield if perm.card.name == req.permanent_name), None)
+        if permanent is None:
+            raise HTTPException(status_code=400, detail="permanent not found")
+
+        if permanent.card.primary_type == "land":
+            tapped = session.game.tap_land_for_mana(req.seat, req.permanent_name)
+        else:
+            tapped = session.game.tap_permanent(req.seat, req.permanent_name)
+        if not tapped:
+            raise HTTPException(status_code=400, detail="failed to tap permanent")
+
     elif req.action == "activate":
         if not req.permanent_name:
             raise HTTPException(status_code=400, detail="permanent_name is required")
-        target = req.target_seat if req.target_seat is not None else 1 - req.seat
-        result = session.game.activate_permanent_ability(req.seat, req.permanent_name, target_player_index=target)
-        if not result.supported:
-            raise HTTPException(status_code=400, detail=result.details)
+        controller = session.game.players[req.seat]
+        permanent = next((perm for perm in controller.battlefield if perm.card.name == req.permanent_name), None)
+        if permanent is None:
+            raise HTTPException(status_code=400, detail="permanent not found")
+
+        if permanent.card.primary_type == "land":
+            tapped = session.game.tap_land_for_mana(req.seat, req.permanent_name)
+            if not tapped:
+                raise HTTPException(status_code=400, detail="failed to tap land for mana")
+        else:
+            target = req.target_seat if req.target_seat is not None else 1 - req.seat
+            result = session.game.activate_permanent_ability(req.seat, req.permanent_name, target_player_index=target)
+            if not result.supported:
+                raise HTTPException(status_code=400, detail=result.details)
 
     elif req.action == "end_turn":
+        if req.seat != session.current_turn:
+            raise HTTPException(status_code=400, detail="not your turn")
         _end_turn(session)
 
     elif req.action == "ai_step":

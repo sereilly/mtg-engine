@@ -63,9 +63,6 @@
             </section>
 
             <section class="middle-lane">
-              <div id="castDropZone" class="action-zone drop-target">Drop hand card here to cast</div>
-              <div id="activateDropZone" class="action-zone drop-target">Drop your permanent here to activate ability</div>
-              <div id="stackZone" class="stack-zone">Stack: empty</div>
               <div id="actionHint" class="action-hint">Tip: drag cards from your hand or battlefield.</div>
             </section>
 
@@ -85,12 +82,30 @@
           </div>
 
           <aside class="side-column">
+            <section class="side-panel preview-panel">
+              <h3>Card Preview</h3>
+              <div id="cardPreview" class="card-preview-frame empty-preview">
+                <img id="cardPreviewImage" alt="Hovered card preview" class="hidden" />
+                <div id="cardPreviewEmpty" class="card-preview-empty">Hover a card to inspect the large art.</div>
+              </div>
+              <div id="cardPreviewMeta" class="card-preview-meta">
+                <div id="cardPreviewName" class="card-preview-name">No card selected</div>
+                <div id="cardPreviewType" class="card-preview-type"></div>
+                <div id="cardPreviewText" class="card-preview-text"></div>
+              </div>
+            </section>
+
             <section class="side-panel">
               <h3>Available Mana</h3>
               <p class="side-label">You</p>
               <div id="selfMana" class="mana-row"></div>
               <p class="side-label">Opponent</p>
               <div id="oppMana" class="mana-row"></div>
+            </section>
+
+            <section class="side-panel">
+              <h3>Stack</h3>
+              <div id="stackZone" class="stack-zone">Stack: empty</div>
             </section>
 
             <section class="side-panel">

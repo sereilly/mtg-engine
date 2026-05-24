@@ -2,6 +2,7 @@ let sessionId = null;
 let seat = null;
 let currentState = null;
 
+const setupEl = document.getElementById("setup");
 const sessionEl = document.getElementById("session");
 const boardEl = document.getElementById("boardPanel");
 const controlsEl = document.getElementById("controls");
@@ -18,10 +19,45 @@ function q(id) {
   return document.getElementById(id);
 }
 
+function hideSetupPanel() {
+  setupEl.classList.add("hidden");
+  setupEl.hidden = true;
+  setupEl.style.display = "none";
+}
+
+function showSetupPanel() {
+  setupEl.classList.remove("hidden");
+  setupEl.hidden = false;
+  setupEl.style.display = "";
+}
+
 function setVisible(active) {
+  if (active) {
+    hideSetupPanel();
+  } else {
+    showSetupPanel();
+  }
   for (const el of [sessionEl, boardEl, controlsEl]) {
     el.classList.toggle("hidden", !active);
   }
+}
+
+function resetToSetup(message = "Session not found. Start a new game.") {
+  sessionId = null;
+  seat = null;
+  currentState = null;
+  showSetupPanel();
+  sessionEl.classList.add("hidden");
+  boardEl.classList.add("hidden");
+  controlsEl.classList.add("hidden");
+  updateActionHint(message, true);
+}
+
+function hasActivatedAbility(card) {
+  if (!card || typeof card === "string") return false;
+  const text = (card.oracle_text || "").trim();
+  if (!text) return false;
+  return /\{t\}|:\s*/i.test(text);
 }
 
 function normalizeCardName(card) {
@@ -33,6 +69,11 @@ function normalizeCardName(card) {
 function normalizeImageUri(card) {
   if (!card || typeof card === "string") return null;
   return card.image_uri || null;
+}
+
+function normalizeLargeImageUri(card) {
+  if (!card || typeof card === "string") return null;
+  return card.large_image_uri || card.image_uri || null;
 }
 
 function cardStatsLabel(card) {
@@ -49,6 +90,38 @@ function updateActionHint(message, isError = false) {
   el.style.color = isError ? "#e16d70" : "#cfd7e4";
 }
 
+function clearCardPreview() {
+  q("cardPreview").classList.add("empty-preview");
+  q("cardPreviewImage").classList.add("hidden");
+  q("cardPreviewImage").removeAttribute("src");
+  q("cardPreviewEmpty").classList.remove("hidden");
+  q("cardPreviewName").textContent = "No card selected";
+  q("cardPreviewType").textContent = "";
+  q("cardPreviewText").textContent = "";
+}
+
+function showCardPreview(card) {
+  const largeImageUri = normalizeLargeImageUri(card);
+  q("cardPreviewName").textContent = normalizeCardName(card) || "Card";
+  q("cardPreviewType").textContent = typeof card === "string" ? "" : card.type || "";
+  q("cardPreviewText").textContent = typeof card === "string" ? "" : card.oracle_text || "";
+
+  if (!largeImageUri) {
+    q("cardPreview").classList.add("empty-preview");
+    q("cardPreviewImage").classList.add("hidden");
+    q("cardPreviewImage").removeAttribute("src");
+    q("cardPreviewEmpty").classList.remove("hidden");
+    q("cardPreviewEmpty").textContent = "No large art available for this card.";
+    return;
+  }
+
+  q("cardPreview").classList.remove("empty-preview");
+  q("cardPreviewImage").src = largeImageUri;
+  q("cardPreviewImage").alt = `${normalizeCardName(card)} preview`;
+  q("cardPreviewImage").classList.remove("hidden");
+  q("cardPreviewEmpty").classList.add("hidden");
+}
+
 function createCardElement(card, options = {}) {
   const {
     draggable = false,
@@ -57,15 +130,21 @@ function createCardElement(card, options = {}) {
     hidden = false,
     compact = false,
     subtitle = "",
+    interactive = false,
+    castOnClick = false,
   } = options;
   const cardEl = document.createElement("div");
   cardEl.className = "card";
+  if (!hidden && typeof card === "object") {
+    cardEl.dataset.previewCard = JSON.stringify(card);
+  }
   if (draggable) {
     cardEl.classList.add("draggable");
     cardEl.draggable = true;
   }
   if (tapped) cardEl.classList.add("tapped");
   if (hidden) cardEl.classList.add("card-hidden");
+  if (interactive) cardEl.classList.add("clickable");
 
   const imageUri = normalizeImageUri(card);
   if (!hidden && imageUri) {
@@ -98,6 +177,67 @@ function createCardElement(card, options = {}) {
     cardEl.style.minHeight = "74px";
   }
 
+  if (interactive && typeof card === "object") {
+    cardEl.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (seat === null) {
+        updateActionHint("Join or create a session before interacting.", true);
+        return;
+      }
+
+      try {
+        const cardName = normalizeCardName(card);
+        if (!cardName) return;
+
+        if (!hasActivatedAbility(card)) {
+          await sendAction({ seat, action: "tap", permanent_name: cardName });
+          updateActionHint(`Tapped ${cardName}.`);
+          return;
+        }
+
+        // `window.prompt` is unsupported in some webview hosts; use click semantics instead.
+        // Normal click taps. Shift+click activates the permanent's ability.
+        if (!event.shiftKey) {
+          await sendAction({ seat, action: "tap", permanent_name: cardName });
+          updateActionHint(`Tapped ${cardName}.`);
+          return;
+        }
+
+        const targetSeat = Number(q("activateTarget")?.value ?? String(1 - seat));
+        await sendAction({ seat, action: "activate", permanent_name: cardName, target_seat: targetSeat });
+        updateActionHint(`Activated ${cardName}. (Tip: normal click taps, Shift+click activates)`);
+      } catch (e) {
+        updateActionHint(e.message, true);
+      }
+    });
+  }
+
+  if (castOnClick && typeof card === "object") {
+    cardEl.classList.add("clickable");
+    cardEl.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (seat === null) {
+        updateActionHint("Join or create a session before interacting.", true);
+        return;
+      }
+
+      try {
+        const cardName = normalizeCardName(card);
+        if (!cardName) return;
+
+        const targetSeat = Number(q("castTarget")?.value ?? String(1 - seat));
+        await sendAction({ seat, action: "cast", card_name: cardName, target_seat: targetSeat });
+        updateActionHint(`Cast ${cardName} targeting seat ${targetSeat}.`);
+      } catch (e) {
+        updateActionHint(e.message, true);
+      }
+    });
+  }
+
   return cardEl;
 }
 
@@ -108,7 +248,7 @@ function renderCardRow(containerId, cards, options = {}) {
 
   for (const card of cards) {
     if (card === "<hidden>") {
-      container.appendChild(createCardElement("Hidden", { hidden: true }));
+      container.appendChild(createCardElement("Hidden", { ...options, hidden: true }));
       continue;
     }
     const tapped = typeof card === "object" ? !!card.tapped : false;
@@ -224,9 +364,9 @@ function renderBoard(state) {
   q("oppName").textContent = opp.name;
   q("oppLife").textContent = String(opp.life);
 
-  renderCardRow("selfHand", me.hand, { draggable: true, dragKind: "hand" });
-  renderCardRow("oppHand", opp.hand);
-  renderCardRow("selfBattlefield", me.battlefield, { draggable: true, dragKind: "permanent" });
+  renderCardRow("selfHand", me.hand, { draggable: true, dragKind: "hand", castOnClick: true });
+  renderCardRow("oppHand", opp.hand, { compact: true });
+  renderCardRow("selfBattlefield", me.battlefield, { draggable: true, dragKind: "permanent", interactive: true });
   renderCardRow("oppBattlefield", opp.battlefield);
 
   q("selfDeckCount").textContent = `Deck: ${me.library_count}`;
@@ -250,6 +390,9 @@ function renderBoard(state) {
 
 function renderState(state) {
   currentState = state;
+  if (sessionId !== null) {
+    hideSetupPanel();
+  }
   renderBoard(state);
   populateManualControls(state);
 }
@@ -291,34 +434,6 @@ function bindDropBehavior(element, onDropAction) {
 }
 
 function initDropZones() {
-  bindDropBehavior(q("castDropZone"), async (payload) => {
-    if (payload.kind !== "hand") {
-      updateActionHint("Only hand cards can be dropped to cast.", true);
-      return;
-    }
-    try {
-      const targetSeat = Number(q("castTarget").value);
-      await sendAction({ seat, action: "cast", card_name: payload.name, target_seat: targetSeat });
-      updateActionHint(`Cast ${payload.name}.`);
-    } catch (e) {
-      updateActionHint(e.message, true);
-    }
-  });
-
-  bindDropBehavior(q("activateDropZone"), async (payload) => {
-    if (payload.kind !== "permanent") {
-      updateActionHint("Only permanents can be dropped to activate.", true);
-      return;
-    }
-    try {
-      const targetSeat = Number(q("activateTarget").value);
-      await sendAction({ seat, action: "activate", permanent_name: payload.name, target_seat: targetSeat });
-      updateActionHint(`Activated ${payload.name}.`);
-    } catch (e) {
-      updateActionHint(e.message, true);
-    }
-  });
-
   bindDropBehavior(q("selfBattlefield"), async (payload, element) => {
     const targetSeat = Number(element.dataset.targetSeat || String(seat));
     try {
@@ -370,9 +485,33 @@ function initTabs() {
   });
 }
 
+function initCardPreviewHover() {
+  boardEl.addEventListener("mouseover", (event) => {
+    const cardEl = event.target.closest(".card");
+    if (!cardEl || !boardEl.contains(cardEl)) {
+      return;
+    }
+
+    const previewPayload = cardEl.dataset.previewCard;
+    if (!previewPayload) {
+      return;
+    }
+
+    try {
+      showCardPreview(JSON.parse(previewPayload));
+    } catch {
+      clearCardPreview();
+    }
+  });
+}
+
 async function getState() {
   if (!sessionId) return;
   const resp = await fetch(`/api/sessions/${sessionId}/state?seat=${seat ?? ""}`);
+  if (resp.status === 404) {
+    resetToSetup();
+    return;
+  }
   if (!resp.ok) return;
   const state = await resp.json();
   renderState(state);
@@ -392,6 +531,7 @@ async function postJson(url, body) {
 }
 
 async function createSession() {
+  hideSetupPanel();
   const req = {
     mode: q("mode").value,
     host_name: q("hostName").value,
@@ -434,8 +574,10 @@ async function sendAction(actionBody) {
 
 q("startBtn").addEventListener("click", async () => {
   try {
+    hideSetupPanel();
     await createSession();
   } catch (e) {
+    showSetupPanel();
     alert(e.message);
   }
 });
@@ -519,3 +661,5 @@ if (sessionFromUrl) {
 
 initDropZones();
 initTabs();
+initCardPreviewHover();
+clearCardPreview();

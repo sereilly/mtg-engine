@@ -43,8 +43,10 @@ class StackItem:
 @dataclass
 class Game:
     players: list[PlayerState]
+    enforce_mana_costs: bool = False
     turn: int = 1
     current_phase: str = "main"
+    lands_played_this_turn: dict[int, int] = field(default_factory=lambda: {0: 0, 1: 0})
     stack: list[StackItem] = field(default_factory=list)
     log: list[str] = field(default_factory=list)
     extra_turns: dict[int, int] = field(default_factory=dict)
@@ -306,6 +308,16 @@ class Game:
         self.log.append(f"No implemented activated ability for {permanent.card.name}")
         return SimulationResult(permanent.card.name, False, "unsupported", "ability not implemented")
 
+    def tap_permanent(self, controller_index: int, permanent_name: str) -> bool:
+        controller = self.players[controller_index]
+        permanent = next((p for p in controller.battlefield if p.card.name == permanent_name), None)
+        if permanent is None or permanent.tapped:
+            return False
+
+        permanent.tapped = True
+        self.log.append(f"{controller.name} tapped {permanent_name}")
+        return True
+
     def queue_from_hand(
         self,
         caster_index: int,
@@ -319,8 +331,15 @@ class Game:
         except StopIteration as exc:
             raise ValueError(f"Card not in hand: {card_name}") from exc
 
-        card = caster.hand.pop(hand_index)
+        card = caster.hand[hand_index]
         classification = classify_card(card)
+        extra_generic_tax = 0
+
+        if self.enforce_mana_costs and card.primary_type == "land":
+            if self.lands_played_this_turn.get(caster_index, 0) >= 1:
+                details = "already played a land this turn"
+                self.log.append(details)
+                return SimulationResult(card.name, False, classification.effect_kind, details)
 
         if "W" in card.colors:
             has_gloom = any(
@@ -329,12 +348,21 @@ class Game:
                 for perm in player.battlefield
             )
             if has_gloom:
+                extra_generic_tax = 3
                 self.log.append(f"{card.name} is taxed by Gloom")
 
         if not classification.supported:
-            caster.hand.append(card)
             self.log.append(f"Unsupported card: {card.name} ({classification.reason})")
             return SimulationResult(card.name, False, classification.effect_kind, classification.reason)
+
+        if self.enforce_mana_costs and card.primary_type != "land":
+            cost = self._parse_mana_cost(card.mana_cost, x_value=x_value, extra_generic=extra_generic_tax)
+            if not self._pay_mana_cost(caster, cost):
+                details = f"insufficient mana for {card.name}"
+                self.log.append(details)
+                return SimulationResult(card.name, False, classification.effect_kind, details)
+
+        card = caster.hand.pop(hand_index)
 
         if card.primary_type in {"instant", "sorcery"}:
             self.stack.append(
@@ -356,6 +384,76 @@ class Game:
             x_value=x_value,
         )
         return SimulationResult(card.name, True, classification.effect_kind, "resolved")
+
+    def _parse_mana_cost(self, mana_cost: str, x_value: int | None, extra_generic: int = 0) -> dict[str, int]:
+        required = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0, "generic": max(0, extra_generic)}
+        if not mana_cost:
+            return required
+
+        for token in re.findall(r"\{([^}]+)\}", mana_cost.upper()):
+            if token.isdigit():
+                required["generic"] += int(token)
+                continue
+            if token == "X":
+                required["generic"] += max(0, x_value or 0)
+                continue
+            if token in {"W", "U", "B", "R", "G", "C"}:
+                required[token] += 1
+        return required
+
+    def _pay_mana_cost(self, player: PlayerState, required: dict[str, int]) -> bool:
+        pool = player.mana_pool
+
+        if pool.get("W", 0) < required["W"]:
+            return False
+        if pool.get("U", 0) < required["U"]:
+            return False
+        if pool.get("B", 0) < required["B"]:
+            return False
+        if pool.get("G", 0) < required["G"]:
+            return False
+        if pool.get("C", 0) < required["C"]:
+            return False
+
+        available_red = pool.get("R", 0)
+        if player.can_spend_white_as_red:
+            available_red += pool.get("W", 0)
+        if available_red < required["R"]:
+            return False
+
+        temp = dict(pool)
+        temp["W"] -= required["W"]
+        temp["U"] -= required["U"]
+        temp["B"] -= required["B"]
+        temp["G"] -= required["G"]
+        temp["C"] -= required["C"]
+
+        red_to_pay = required["R"]
+        from_red = min(temp.get("R", 0), red_to_pay)
+        temp["R"] -= from_red
+        red_to_pay -= from_red
+        if red_to_pay > 0:
+            if not player.can_spend_white_as_red:
+                return False
+            if temp.get("W", 0) < red_to_pay:
+                return False
+            temp["W"] -= red_to_pay
+
+        generic = required["generic"]
+        if generic > 0:
+            available_generic = sum(max(0, temp.get(sym, 0)) for sym in ("C", "W", "U", "B", "R", "G"))
+            if available_generic < generic:
+                return False
+
+            for sym in ("C", "W", "U", "B", "R", "G"):
+                spend = min(temp.get(sym, 0), generic)
+                temp[sym] -= spend
+                generic -= spend
+                if generic == 0:
+                    break
+
+        player.mana_pool = temp
+        return True
 
     def resolve_stack(self) -> None:
         while self.stack:
@@ -392,6 +490,8 @@ class Game:
             self._apply_cast_triggers(caster_index, card)
             self._refresh_dynamic_creatures()
             if primary_type == "land":
+                if self.enforce_mana_costs:
+                    self.lands_played_this_turn[caster_index] = self.lands_played_this_turn.get(caster_index, 0) + 1
                 self._process_land_enters(caster_index)
             return
 
@@ -1126,7 +1226,7 @@ class Game:
     def tap_land_for_mana(self, player_index: int, land_name: str, chosen_color: str = "G") -> bool:
         player = self.players[player_index]
         land = next((perm for perm in player.battlefield if perm.card.name == land_name and perm.card.primary_type == "land"), None)
-        if land is None:
+        if land is None or land.tapped:
             return False
 
         land.tapped = True

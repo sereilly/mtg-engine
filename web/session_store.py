@@ -40,7 +40,7 @@ class SessionStore:
         p1.draw(7)
         p2.draw(7)
 
-        game = Game(players=[p1, p2])
+        game = Game(players=[p1, p2], enforce_mana_costs=True)
 
         seat_types = {0: "human", 1: "human"}
         joined_seats: set[int] = {0}
