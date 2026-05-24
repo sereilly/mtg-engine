@@ -15,6 +15,7 @@ ActionKind = Literal[
     "ai_step",
     "cleanup_select",
     "debug_add_to_hand",
+    "debug_cast_free",
 ]
 
 
@@ -40,6 +41,7 @@ class GameActionRequest(BaseModel):
     target_seat: int | None = Field(default=None, ge=0, le=1)
     x_value: int | None = Field(default=None, ge=0)
     hand_index: int | None = Field(default=None, ge=0)
+    mana_color: Literal["W", "U", "B", "R", "G"] | None = None
 
 
 class RandomDeckRequest(BaseModel):

@@ -4,6 +4,7 @@ let currentState = null;
 let pendingActivation = null;
 let pendingCastTarget = null;
 let pendingCastX = null;
+let pendingManaColor = null;
 let debugSearchTimer = null;
 
 const setupEl = document.getElementById("setup");
@@ -11,6 +12,13 @@ const boardEl = document.getElementById("boardPanel");
 const aiControlsEl = document.getElementById("aiControls");
 
 const MANA_ORDER = ["W", "U", "B", "R", "G", "C"];
+const MANA_COLOR_OPTIONS = [
+  { symbol: "W", label: "White" },
+  { symbol: "U", label: "Blue" },
+  { symbol: "B", label: "Black" },
+  { symbol: "R", label: "Red" },
+  { symbol: "G", label: "Green" },
+];
 const PHASE_LABELS = {
   untap: "Untap",
   upkeep: "Upkeep",
@@ -183,6 +191,12 @@ function cardRequiresTargetPlayer(card) {
   return (card.oracle_text || "").toLowerCase().includes("target player");
 }
 
+function cardRequiresManaColorChoice(card) {
+  if (!card || typeof card === "string") return false;
+  const text = (card.oracle_text || "").toLowerCase();
+  return text.includes("any one color") || text.includes("one mana of any color");
+}
+
 function getMaxAffordableX(manaPool, manaCost) {
   const pool = manaPool || {};
   const cost = parseManaCostSymbols(manaCost || "");
@@ -300,7 +314,7 @@ function renderActivationPrompt() {
     return;
   }
 
-  if (!pendingActivation && !pendingCastTarget && !pendingCastX) {
+  if (!pendingActivation && !pendingCastTarget && !pendingCastX && !pendingManaColor) {
     panel.classList.add("hidden");
     title.textContent = "No pending activation.";
     body.textContent = "Select an activated ability to begin paying its cost.";
@@ -354,6 +368,24 @@ function renderActivationPrompt() {
     okBtn.disabled = true;
     cancelBtn.disabled = false;
     customOkBtn.disabled = !pendingCastX.awaitingCustomValue;
+    return;
+  }
+
+  if (pendingManaColor) {
+    panel.classList.remove("hidden");
+    okBtn.classList.add("hidden");
+    customRow.classList.add("hidden");
+    title.textContent = `Choose mana color for ${pendingManaColor.cardName}`;
+    body.textContent = "Select the mana color this ability should generate.";
+    steps.innerHTML = [
+      `<div>Ability: ${pendingManaColor.oracleText || "Activated mana ability"}</div>`,
+      `<div class="prompt-choice-row">${MANA_COLOR_OPTIONS.map(
+        ({ symbol, label }) =>
+          `<button type="button" class="prompt-choice-btn" data-mana-color="${symbol}">${label} (${symbol})</button>`,
+      ).join("")}</div>`,
+    ].join("");
+    cancelBtn.disabled = false;
+    customOkBtn.disabled = true;
     return;
   }
 
@@ -417,6 +449,18 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   const cardName = normalizeCardName(card);
   if (!cardName) return;
 
+  if (cardRequiresManaColorChoice(card)) {
+    pendingManaColor = {
+      cardName,
+      permanentIndex,
+      targetSeat,
+      oracleText: card.oracle_text || "",
+    };
+    renderActivationPrompt();
+    updateActionHint(`Choose a mana color for ${cardName}.`);
+    return;
+  }
+
   const activationCost = getActivatedAbilityCost(card);
   if (!shouldPromptForActivationCost(activationCost)) {
     sendAction({
@@ -443,6 +487,30 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   updateActionHint(
     `Activation pending for ${cardName}. Press OK to begin paying the cost or cancel to undo it.`,
   );
+}
+
+function resolvePendingManaColor(manaColor) {
+  if (!pendingManaColor || seat === null) return;
+  if (!MANA_COLOR_OPTIONS.some((option) => option.symbol === manaColor)) {
+    updateActionHint("Choose one of W, U, B, R, or G.", true);
+    return;
+  }
+
+  const pending = pendingManaColor;
+  pendingManaColor = null;
+  renderActivationPrompt();
+  updateActionHint(`Activating ${pending.cardName} for ${manaColor} mana...`);
+
+  sendAction({
+    seat,
+    action: "activate",
+    permanent_name: pending.cardName,
+    permanent_index: pending.permanentIndex,
+    target_seat: pending.targetSeat,
+    mana_color: manaColor,
+  })
+    .then(() => updateActionHint(`Activated ${pending.cardName} and chose ${manaColor}.`))
+    .catch((e) => updateActionHint(e.message, true));
 }
 
 function startCastTargetPrompt(card) {
@@ -588,6 +656,7 @@ function renderDebugOptions(cards) {
 function setDebugMenuEnabled(enabled) {
   q("debugCardSearch").disabled = !enabled;
   q("debugAddToHandBtn").disabled = !enabled;
+  q("debugCastFreeBtn").disabled = !enabled;
   if (!enabled) {
     renderDebugOptions([]);
   }
@@ -620,6 +689,24 @@ async function addDebugCardToHand() {
   await sendAction({ seat, action: "debug_add_to_hand", card_name: cardName });
   updateDebugStatus(`Added ${cardName} to your hand.`, "success");
   updateActionHint(`Debug: added ${cardName} to your hand.`);
+}
+
+async function castDebugCardForFree() {
+  if (!sessionId || seat === null) {
+    updateDebugStatus("Create or join a session first.", "error");
+    return;
+  }
+
+  const input = q("debugCardSearch");
+  const cardName = input.value.trim();
+  if (!cardName) {
+    updateDebugStatus("Type a card name before casting.", "error");
+    return;
+  }
+
+  await sendAction({ seat, action: "debug_cast_free", card_name: cardName });
+  updateDebugStatus(`Cast ${cardName} for free.`, "success");
+  updateActionHint(`Debug: cast ${cardName} for free.`);
 }
 
 function clearCardPreview() {
@@ -961,6 +1048,7 @@ function renderState(state) {
     pendingActivation = null;
     pendingCastTarget = null;
     pendingCastX = null;
+    pendingManaColor = null;
   }
   if (sessionId !== null) {
     hideSetupPanel();
@@ -1231,6 +1319,7 @@ q("promptCancelBtn").addEventListener("click", () => {
   pendingActivation = null;
   pendingCastTarget = null;
   pendingCastX = null;
+  pendingManaColor = null;
   renderActivationPrompt();
   updateActionHint("Prompt canceled.");
 });
@@ -1254,13 +1343,20 @@ q("promptSteps").addEventListener("click", (event) => {
   }
 
   const choice = target.dataset.xChoice;
-  if (!choice || !pendingCastX) return;
-  if (choice === "custom") {
-    pendingCastX.awaitingCustomValue = true;
-    renderActivationPrompt();
+  if (choice && pendingCastX) {
+    if (choice === "custom") {
+      pendingCastX.awaitingCustomValue = true;
+      renderActivationPrompt();
+      return;
+    }
+    resolvePendingCastX(Number(choice));
     return;
   }
-  resolvePendingCastX(Number(choice));
+
+  const manaColorChoice = target.dataset.manaColor;
+  if (manaColorChoice && pendingManaColor) {
+    resolvePendingManaColor(manaColorChoice);
+  }
 });
 
 q("endTurnBtn").addEventListener("click", async () => {
@@ -1334,6 +1430,14 @@ q("debugCardSearch").addEventListener("keydown", async (event) => {
 q("debugAddToHandBtn").addEventListener("click", async () => {
   try {
     await addDebugCardToHand();
+  } catch (e) {
+    updateDebugStatus(e.message, "error");
+  }
+});
+
+q("debugCastFreeBtn").addEventListener("click", async () => {
+  try {
+    await castDebugCardForFree();
   } catch (e) {
     updateDebugStatus(e.message, "error");
   }

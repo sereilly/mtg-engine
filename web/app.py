@@ -447,7 +447,7 @@ def do_action(session_id: str, req: GameActionRequest):
         if preferred_index is not None:
             req = req.model_copy(update={"action": "cleanup_select", "hand_index": preferred_index})
 
-    if cleanup_required > 0 and req.action not in {"cleanup_select", "debug_add_to_hand"}:
+    if cleanup_required > 0 and req.action not in {"cleanup_select", "debug_add_to_hand", "debug_cast_free"}:
         raise HTTPException(status_code=400, detail="select cleanup discards before other actions")
 
     if req.action in {"cast", "activate", "end_turn", "next_phase"} and seat_type != "human":
@@ -527,6 +527,7 @@ def do_action(session_id: str, req: GameActionRequest):
                 permanent.card.name,
                 target_player_index=target,
                 permanent_index=permanent_index,
+                mana_color=req.mana_color,
             )
             if not result.supported:
                 raise HTTPException(status_code=400, detail=result.details)
@@ -592,6 +593,38 @@ def do_action(session_id: str, req: GameActionRequest):
         player = session.game.players[req.seat]
         player.hand.append(card)
         session.game.log.append(f"[Debug] {player.name} added {card.name} to hand.")
+
+    elif req.action == "debug_cast_free":
+        if seat_type != "human":
+            raise HTTPException(status_code=400, detail="cannot issue debug action for AI seat")
+        if not req.card_name:
+            raise HTTPException(status_code=400, detail="card_name is required")
+
+        card = CARD_BY_NAME.get(req.card_name.strip().casefold())
+        if card is None:
+            raise HTTPException(status_code=404, detail="card not found")
+
+        player = session.game.players[req.seat]
+        player.hand.append(card)
+        target = req.target_seat if req.target_seat is not None else _default_target(card.name, req.seat)
+        x_value = req.x_value if req.x_value is not None else (0 if "{X}" in (card.mana_cost or "") else None)
+
+        original_enforce_mana_costs = session.game.enforce_mana_costs
+        try:
+            session.game.enforce_mana_costs = False
+            result = session.game.cast_from_hand(req.seat, card.name, target_player_index=target, x_value=x_value)
+        finally:
+            session.game.enforce_mana_costs = original_enforce_mana_costs
+
+        if not result.supported:
+            # Roll back the injected card if the cast did not complete.
+            for idx in range(len(player.hand) - 1, -1, -1):
+                if player.hand[idx].name == card.name:
+                    del player.hand[idx]
+                    break
+            raise HTTPException(status_code=400, detail=result.details)
+
+        session.game.log.append(f"[Debug] {player.name} cast {card.name} for free.")
 
     else:
         raise HTTPException(status_code=400, detail="unknown action")

@@ -409,6 +409,7 @@ class Game:
         permanent_name: str,
         target_player_index: int | None = None,
         permanent_index: int | None = None,
+        mana_color: str | None = None,
     ) -> SimulationResult:
         controller = self.players[controller_index]
         resolved = self._find_controlled_permanent(controller, permanent_name, permanent_index)
@@ -447,6 +448,19 @@ class Game:
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
             permanent.tapped = True
 
+        instruction = ability.instruction
+        if (
+            instruction.kind in {"sacrifice_self_for_mana", "add_mana_from_text"}
+            and "any one color" in permanent.card.oracle_text.lower()
+        ):
+            selected_color = self._normalize_mana_color(mana_color)
+            if selected_color is not None:
+                instruction = OracleInstruction(
+                    instruction.kind,
+                    instruction.value,
+                    {**instruction.payload, "color": selected_color},
+                )
+
         state_machine = OracleStateMachine(
             self,
             OracleExecutionContext(
@@ -456,8 +470,16 @@ class Game:
                 source_permanent=permanent,
             ),
         )
-        supported, details = state_machine.run(ability.instruction)
+        supported, details = state_machine.run(instruction)
         return SimulationResult(permanent.card.name, supported, ability.effect_kind, details)
+
+    def _normalize_mana_color(self, mana_color: str | None) -> str | None:
+        if mana_color is None:
+            return None
+        color = mana_color.strip().upper()
+        if color not in {"W", "U", "B", "R", "G"}:
+            raise ValueError(f"Invalid mana color: {mana_color}")
+        return color
 
     def _parse_activated_ability_cost(self, oracle_text: str) -> tuple[dict[str, int], bool]:
         if not oracle_text:
@@ -1223,7 +1245,11 @@ class Game:
             return True, "resolved"
 
         if instruction.kind == "add_mana_from_text":
-            self._add_mana_from_text(caster, str(instruction.payload.get("oracle_text", card.oracle_text)))
+            self._add_mana_from_text(
+                caster,
+                str(instruction.payload.get("oracle_text", card.oracle_text)),
+                preferred_color=str(instruction.payload.get("color", "")) or None,
+            )
             self.log.append(f"{card.name} produced mana")
             return True, "resolved"
 
@@ -1309,7 +1335,7 @@ class Game:
         target.damage_prevention_pool -= prevented
         return damage - prevented
 
-    def _add_mana_from_text(self, controller: PlayerState, text: str) -> None:
+    def _add_mana_from_text(self, controller: PlayerState, text: str, preferred_color: str | None = None) -> None:
         symbols = re.findall(r"\{([WUBRGC])\}", text.upper())
         if symbols:
             for symbol in symbols:
@@ -1317,7 +1343,8 @@ class Game:
             return
 
         if "one mana of any color" in text:
-            controller.mana_pool["G"] += 1
+            selected_color = self._normalize_mana_color(preferred_color) or "G"
+            controller.mana_pool[selected_color] += 1
 
     def _return_creature_from_graveyard(self, caster: PlayerState) -> bool:
         for idx, card in enumerate(caster.graveyard):

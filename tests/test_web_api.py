@@ -186,6 +186,31 @@ def test_debug_action_adds_card_to_human_hand_case_insensitive_lookup():
     assert any("[Debug]" in entry and "Air Elemental" in entry for entry in payload["log"])
 
 
+def test_debug_action_casts_card_for_free():
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "guest_name": "Guest",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 9091,
+        },
+    ).json()
+    sid = created["session_id"]
+
+    response = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "debug_cast_free", "card_name": "lightning bolt"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["players"][1]["life"] == 17
+    assert any("[Debug]" in entry and "Lightning Bolt" in entry for entry in payload["log"])
+
+
 def test_web_session_requires_paid_mana_before_cast():
     created = client.post(
         "/api/sessions",
@@ -275,6 +300,48 @@ def test_web_cast_accepts_explicit_x_value():
     payload = response.json()
     assert payload["players"][0]["life"] == 11
     assert any("Stream of Life" in entry and "10 -> 11" in entry for entry in payload["log"])
+
+
+def test_web_activate_black_lotus_accepts_mana_color_choice():
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "guest_name": "Guest",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 4043,
+        },
+    ).json()
+    sid = created["session_id"]
+
+    session = store.get(sid)
+    lotus = _mk_card(
+        name="Black Lotus",
+        mana_cost="{0}",
+        type_line="Artifact",
+        oracle_text="{T}, Sacrifice Black Lotus: Add three mana of any one color.",
+    )
+    session.game.players[0].battlefield = [Permanent(card=lotus)]
+    session.game.players[0].mana_pool = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0}
+
+    response = client.post(
+        f"/api/sessions/{sid}/action",
+        json={
+            "seat": 0,
+            "action": "activate",
+            "permanent_name": "Black Lotus",
+            "target_seat": 0,
+            "mana_color": "B",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["players"][0]["mana_pool"]["B"] == 3
+    assert payload["players"][0]["mana_pool"]["G"] == 0
+    assert payload["players"][0]["battlefield"] == []
 
 
 def test_stream_of_life_defaults_to_self_target():

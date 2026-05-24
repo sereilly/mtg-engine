@@ -252,6 +252,26 @@ def test_activate_black_lotus_adds_mana_and_sacrifices(all_cards):
     assert p1.graveyard and p1.graveyard[0].name == "Black Lotus"
 
 
+def test_activate_black_lotus_with_selected_color(all_cards):
+    lotus = next(card for card in all_cards if card.name == "Black Lotus")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=lotus)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(
+        0,
+        "Black Lotus",
+        target_player_index=1,
+        mana_color="U",
+    )
+
+    assert result.supported
+    assert p1.mana_pool["U"] == 3
+    assert p1.mana_pool["G"] == 0
+    assert not p1.battlefield
+    assert p1.graveyard and p1.graveyard[0].name == "Black Lotus"
+
+
 def test_raise_dead_style_returns_creature_from_graveyard():
     spell = _mk_card("Raise Test", "Sorcery", "Return target creature card from your graveyard to your hand.")
     creature = _mk_card("Dead Bear", "Creature — Bear")
