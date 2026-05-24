@@ -1,0 +1,2169 @@
+=== Game 1 ===
+G1 T1 AI-A-1 cast Black Lotus -> resolved
+G1 T1 AI-A-1 activate Black Lotus -> resolved
+  AI-A-1 untapped 0 permanent(s)
+  AI-A-1 drew 1 card(s) in draw step
+  AI-A-1 put Black Lotus onto battlefield
+  Black Lotus sacrificed for mana
+G1 T1 AI-B-1 cast Ancestral Recall -> resolved
+  AI-B-1 untapped 0 permanent(s)
+  AI-B-1 drew 1 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-B-1 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+G1 T2 AI-A-1 cast Healing Salve -> resolved
+  AI-A-1 untapped 0 permanent(s)
+  AI-A-1 drew 1 card(s) in draw step
+  Healing Salve added to stack
+  AI-A-1 gains prevention shield for 3 damage
+  Healing Salve resolved and moved to graveyard
+G1 T2 AI-B-1 cast Prodigal Sorcerer -> resolved
+G1 T2 AI-B-1 activate Prodigal Sorcerer -> resolved
+  AI-B-1 untapped 0 permanent(s)
+  AI-B-1 drew 1 card(s) in draw step
+  AI-B-1 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer dealt 0 damage
+G1 T3 AI-A-1 cast Unsummon -> resolved
+  AI-A-1 untapped 0 permanent(s)
+  AI-A-1 drew 1 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+G1 T3 AI-B-1 cast Lightning Bolt -> resolved
+  AI-B-1 untapped 0 permanent(s)
+  AI-B-1 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-1 took 1 damage
+  Lightning Bolt resolved and moved to graveyard
+G1 T4 AI-A-1 cast Howling Mine -> resolved
+  AI-A-1 untapped 0 permanent(s)
+  AI-A-1 drew 1 card(s) in draw step
+  AI-A-1 put Howling Mine onto battlefield
+G1 T4 AI-B-1 cast Disenchant -> resolved
+  AI-B-1 untapped 0 permanent(s)
+  AI-B-1 drew 2 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Howling Mine
+  Disenchant resolved and moved to graveyard
+G1 T5 AI-A-1 cast Lightning Bolt -> resolved
+  AI-A-1 untapped 0 permanent(s)
+  AI-A-1 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-1 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+G1 T5 AI-B-1 cast Lightning Bolt -> resolved
+  AI-B-1 untapped 0 permanent(s)
+  AI-B-1 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-1 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+G1 T6 AI-A-1 cast Grizzly Bears -> resolved
+  AI-A-1 untapped 0 permanent(s)
+  AI-A-1 drew 1 card(s) in draw step
+  AI-A-1 put Grizzly Bears onto battlefield
+G1 T6 AI-B-1 cast Prodigal Sorcerer -> resolved
+G1 T6 AI-B-1 activate Prodigal Sorcerer -> resolved
+  AI-B-1 untapped 0 permanent(s)
+  AI-B-1 drew 1 card(s) in draw step
+  AI-B-1 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G1 T7 AI-A-1 cast Unsummon -> resolved
+  AI-A-1 untapped 0 permanent(s)
+  AI-A-1 drew 1 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+G1 T7 AI-B-1 cast Unsummon -> resolved
+  AI-B-1 untapped 0 permanent(s)
+  AI-B-1 drew 1 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+G1 T8 AI-A-1 cast Grizzly Bears -> resolved
+  AI-A-1 untapped 0 permanent(s)
+  AI-A-1 drew 1 card(s) in draw step
+  AI-A-1 put Grizzly Bears onto battlefield
+G1 T8 AI-B-1 cast Prodigal Sorcerer -> resolved
+G1 T8 AI-B-1 activate Prodigal Sorcerer -> resolved
+  AI-B-1 untapped 0 permanent(s)
+  AI-B-1 drew 1 card(s) in draw step
+  AI-B-1 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G1 T9 AI-A-1 cast Jayemdae Tome -> resolved
+G1 T9 AI-A-1 activate Jayemdae Tome -> resolved
+  AI-A-1 untapped 0 permanent(s)
+  AI-A-1 drew 1 card(s) in draw step
+  AI-A-1 put Jayemdae Tome onto battlefield
+  Jayemdae Tome drew 1 card
+G1 T9 AI-B-1 cast Disenchant -> resolved
+G1 T9 AI-B-1 activate Prodigal Sorcerer -> resolved
+  AI-B-1 untapped 1 permanent(s)
+  AI-B-1 drew 1 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Jayemdae Tome
+  Disenchant resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G1 T10 AI-A-1 cast Jayemdae Tome -> resolved
+G1 T10 AI-A-1 activate Jayemdae Tome -> resolved
+  AI-A-1 untapped 0 permanent(s)
+  AI-A-1 drew 1 card(s) in draw step
+  AI-A-1 put Jayemdae Tome onto battlefield
+  Jayemdae Tome drew 1 card
+G1 T10 AI-B-1 cast Lightning Bolt -> resolved
+G1 T10 AI-B-1 activate Prodigal Sorcerer -> resolved
+  AI-B-1 untapped 1 permanent(s)
+  AI-B-1 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-1 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G1 T11 AI-A-1 cast Lightning Bolt -> resolved
+G1 T11 AI-A-1 activate Jayemdae Tome -> resolved
+  AI-A-1 untapped 1 permanent(s)
+  AI-A-1 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-1 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Jayemdae Tome drew 1 card
+G1 T11 AI-B-1 cast Prodigal Sorcerer -> resolved
+G1 T11 AI-B-1 activate Prodigal Sorcerer -> resolved
+  AI-B-1 untapped 1 permanent(s)
+  AI-B-1 drew 1 card(s) in draw step
+  AI-B-1 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G1 T12 AI-A-1 cast Howling Mine -> resolved
+G1 T12 AI-A-1 activate Jayemdae Tome -> resolved
+  AI-A-1 untapped 1 permanent(s)
+  AI-A-1 drew 1 card(s) in draw step
+  AI-A-1 put Howling Mine onto battlefield
+  Jayemdae Tome drew 1 card
+G1 T12 AI-B-1 cast Howling Mine -> resolved
+G1 T12 AI-B-1 activate Prodigal Sorcerer -> resolved
+  AI-B-1 untapped 1 permanent(s)
+  AI-B-1 drew 2 card(s) in draw step
+  AI-B-1 put Howling Mine onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G1 T13 AI-A-1 cast Disenchant -> resolved
+G1 T13 AI-A-1 activate Jayemdae Tome -> resolved
+  AI-A-1 untapped 1 permanent(s)
+  AI-A-1 drew 3 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Howling Mine
+  Disenchant resolved and moved to graveyard
+  Jayemdae Tome drew 1 card
+G1 T13 AI-B-1 cast Jayemdae Tome -> resolved
+G1 T13 AI-B-1 activate Prodigal Sorcerer -> resolved
+  AI-B-1 untapped 1 permanent(s)
+  AI-B-1 drew 2 card(s) in draw step
+  AI-B-1 put Jayemdae Tome onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G1 T14 AI-A-1 cast Disenchant -> resolved
+G1 T14 AI-A-1 activate Jayemdae Tome -> resolved
+  AI-A-1 untapped 1 permanent(s)
+  AI-A-1 drew 2 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Jayemdae Tome
+  Disenchant resolved and moved to graveyard
+  Jayemdae Tome drew 1 card
+G1 T14 AI-B-1 cast Black Lotus -> resolved
+G1 T14 AI-B-1 activate Prodigal Sorcerer -> resolved
+  AI-B-1 untapped 1 permanent(s)
+  AI-B-1 drew 2 card(s) in draw step
+  AI-B-1 put Black Lotus onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G1 T15 AI-A-1 cast Lightning Bolt -> resolved
+G1 T15 AI-A-1 activate Jayemdae Tome -> resolved
+  AI-A-1 untapped 1 permanent(s)
+  AI-A-1 drew 2 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-1 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Jayemdae Tome drew 1 card
+G1 T15 AI-B-1 cast Healing Salve -> resolved
+G1 T15 AI-B-1 activate Prodigal Sorcerer -> resolved
+  AI-B-1 untapped 1 permanent(s)
+  AI-B-1 drew 2 card(s) in draw step
+  Healing Salve added to stack
+  AI-B-1 gains prevention shield for 3 damage
+  Healing Salve resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G1 T16 AI-A-1 cast Ancestral Recall -> resolved
+  AI-A-1 untapped 1 permanent(s)
+  AI-A-1 drew 2 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-A-1 drew 1 cards
+  Ancestral Recall resolved and moved to graveyard
+G1 T16 AI-B-1 cast Unsummon -> resolved
+G1 T16 AI-B-1 activate Prodigal Sorcerer -> resolved
+  AI-B-1 untapped 1 permanent(s)
+  AI-B-1 drew 2 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G1 T17 AI-A-1 cast Ancestral Recall -> resolved
+  AI-A-1 untapped 0 permanent(s)
+  AI-A-1 drew 0 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-A-1 drew 0 cards
+  Ancestral Recall resolved and moved to graveyard
+G1 T17 AI-B-1 cast Ancestral Recall -> resolved
+G1 T17 AI-B-1 activate Prodigal Sorcerer -> resolved
+  AI-B-1 untapped 1 permanent(s)
+  AI-B-1 drew 2 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-B-1 drew 2 cards
+  Ancestral Recall resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G1 T18 AI-A-1 cast Black Lotus -> resolved
+G1 T18 AI-A-1 activate Black Lotus -> resolved
+  AI-A-1 untapped 0 permanent(s)
+  AI-A-1 drew 0 card(s) in draw step
+  AI-A-1 put Black Lotus onto battlefield
+  Black Lotus sacrificed for mana
+G1 T18 AI-B-1 cast Lightning Bolt -> resolved
+G1 T18 AI-B-1 activate Prodigal Sorcerer -> resolved
+  AI-B-1 untapped 1 permanent(s)
+  AI-B-1 drew 0 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-1 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+RESULT G1: AI-A-1=-2, AI-B-1=11
+
+=== Game 2 ===
+G2 T1 AI-A-2 cast Jayemdae Tome -> resolved
+G2 T1 AI-A-2 activate Jayemdae Tome -> resolved
+  AI-A-2 untapped 0 permanent(s)
+  AI-A-2 drew 1 card(s) in draw step
+  AI-A-2 put Jayemdae Tome onto battlefield
+  Jayemdae Tome drew 1 card
+G2 T1 AI-B-2 cast Healing Salve -> resolved
+  AI-B-2 untapped 0 permanent(s)
+  AI-B-2 drew 1 card(s) in draw step
+  Healing Salve added to stack
+  AI-B-2 gains prevention shield for 3 damage
+  Healing Salve resolved and moved to graveyard
+G2 T2 AI-A-2 cast Prodigal Sorcerer -> resolved
+G2 T2 AI-A-2 activate Jayemdae Tome -> resolved
+  AI-A-2 untapped 1 permanent(s)
+  AI-A-2 drew 1 card(s) in draw step
+  AI-A-2 put Prodigal Sorcerer onto battlefield
+  Jayemdae Tome drew 1 card
+G2 T2 AI-B-2 cast Disenchant -> resolved
+  AI-B-2 untapped 0 permanent(s)
+  AI-B-2 drew 1 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Jayemdae Tome
+  Disenchant resolved and moved to graveyard
+G2 T3 AI-A-2 cast Lightning Bolt -> resolved
+G2 T3 AI-A-2 activate Prodigal Sorcerer -> resolved
+  AI-A-2 untapped 0 permanent(s)
+  AI-A-2 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-2 took 0 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G2 T3 AI-B-2 cast Grizzly Bears -> resolved
+  AI-B-2 untapped 0 permanent(s)
+  AI-B-2 drew 1 card(s) in draw step
+  AI-B-2 put Grizzly Bears onto battlefield
+G2 T4 AI-A-2 cast Black Lotus -> resolved
+G2 T4 AI-A-2 activate Prodigal Sorcerer -> resolved
+  AI-A-2 untapped 1 permanent(s)
+  AI-A-2 drew 1 card(s) in draw step
+  AI-A-2 put Black Lotus onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G2 T4 AI-B-2 cast Disenchant -> resolved
+  AI-B-2 untapped 0 permanent(s)
+  AI-B-2 drew 1 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Black Lotus
+  Disenchant resolved and moved to graveyard
+G2 T5 AI-A-2 cast Howling Mine -> resolved
+G2 T5 AI-A-2 activate Prodigal Sorcerer -> resolved
+  AI-A-2 untapped 1 permanent(s)
+  AI-A-2 drew 1 card(s) in draw step
+  AI-A-2 put Howling Mine onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G2 T5 AI-B-2 cast Howling Mine -> resolved
+  AI-B-2 untapped 0 permanent(s)
+  AI-B-2 drew 2 card(s) in draw step
+  AI-B-2 put Howling Mine onto battlefield
+G2 T6 AI-A-2 cast Unsummon -> resolved
+G2 T6 AI-A-2 activate Prodigal Sorcerer -> resolved
+  AI-A-2 untapped 1 permanent(s)
+  AI-A-2 drew 3 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G2 T6 AI-B-2 cast Jayemdae Tome -> resolved
+G2 T6 AI-B-2 activate Jayemdae Tome -> resolved
+  AI-B-2 untapped 0 permanent(s)
+  AI-B-2 drew 3 card(s) in draw step
+  AI-B-2 put Jayemdae Tome onto battlefield
+  Jayemdae Tome drew 1 card
+G2 T7 AI-A-2 cast Ancestral Recall -> resolved
+G2 T7 AI-A-2 activate Prodigal Sorcerer -> resolved
+  AI-A-2 untapped 1 permanent(s)
+  AI-A-2 drew 3 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-A-2 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G2 T7 AI-B-2 cast Lightning Bolt -> resolved
+G2 T7 AI-B-2 activate Jayemdae Tome -> resolved
+  AI-B-2 untapped 1 permanent(s)
+  AI-B-2 drew 3 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-2 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Jayemdae Tome drew 1 card
+G2 T8 AI-A-2 cast Black Lotus -> resolved
+G2 T8 AI-A-2 activate Prodigal Sorcerer -> resolved
+  AI-A-2 untapped 1 permanent(s)
+  AI-A-2 drew 3 card(s) in draw step
+  AI-A-2 put Black Lotus onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G2 T8 AI-B-2 cast Ancestral Recall -> resolved
+G2 T8 AI-B-2 activate Jayemdae Tome -> resolved
+  AI-B-2 untapped 1 permanent(s)
+  AI-B-2 drew 3 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-B-2 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+  Jayemdae Tome drew 1 card
+G2 T9 AI-A-2 cast Lightning Bolt -> resolved
+G2 T9 AI-A-2 activate Prodigal Sorcerer -> resolved
+  AI-A-2 untapped 1 permanent(s)
+  AI-A-2 drew 3 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-2 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G2 T9 AI-B-2 cast Grizzly Bears -> resolved
+G2 T9 AI-B-2 activate Jayemdae Tome -> resolved
+  AI-B-2 untapped 1 permanent(s)
+  AI-B-2 drew 3 card(s) in draw step
+  AI-B-2 put Grizzly Bears onto battlefield
+  Jayemdae Tome drew 1 card
+G2 T10 AI-A-2 cast Disenchant -> resolved
+G2 T10 AI-A-2 activate Prodigal Sorcerer -> resolved
+  AI-A-2 untapped 1 permanent(s)
+  AI-A-2 drew 3 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Howling Mine
+  Disenchant resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G2 T10 AI-B-2 cast Black Lotus -> resolved
+G2 T10 AI-B-2 activate Jayemdae Tome -> resolved
+  AI-B-2 untapped 1 permanent(s)
+  AI-B-2 drew 2 card(s) in draw step
+  AI-B-2 put Black Lotus onto battlefield
+  Jayemdae Tome drew 1 card
+G2 T11 AI-A-2 cast Grizzly Bears -> resolved
+G2 T11 AI-A-2 activate Prodigal Sorcerer -> resolved
+  AI-A-2 untapped 1 permanent(s)
+  AI-A-2 drew 2 card(s) in draw step
+  AI-A-2 put Grizzly Bears onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G2 T11 AI-B-2 cast Prodigal Sorcerer -> resolved
+G2 T11 AI-B-2 activate Black Lotus -> resolved
+  AI-B-2 untapped 1 permanent(s)
+  AI-B-2 drew 1 card(s) in draw step
+  AI-B-2 put Prodigal Sorcerer onto battlefield
+  Black Lotus sacrificed for mana
+G2 T12 AI-A-2 cast Disenchant -> resolved
+G2 T12 AI-A-2 activate Prodigal Sorcerer -> resolved
+  AI-A-2 untapped 1 permanent(s)
+  AI-A-2 drew 2 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Jayemdae Tome
+  Disenchant resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G2 T12 AI-B-2 cast Prodigal Sorcerer -> resolved
+G2 T12 AI-B-2 activate Prodigal Sorcerer -> resolved
+  AI-B-2 untapped 0 permanent(s)
+  AI-B-2 drew 0 card(s) in draw step
+  AI-B-2 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G2 T13 AI-A-2 cast Lightning Bolt -> resolved
+G2 T13 AI-A-2 activate Prodigal Sorcerer -> resolved
+  AI-A-2 untapped 1 permanent(s)
+  AI-A-2 drew 0 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-2 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G2 T13 AI-B-2 cast Healing Salve -> resolved
+G2 T13 AI-B-2 activate Prodigal Sorcerer -> resolved
+  AI-B-2 untapped 1 permanent(s)
+  AI-B-2 drew 0 card(s) in draw step
+  Healing Salve added to stack
+  AI-B-2 gains prevention shield for 3 damage
+  Healing Salve resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G2 T14 AI-A-2 cast Grizzly Bears -> resolved
+G2 T14 AI-A-2 activate Prodigal Sorcerer -> resolved
+  AI-A-2 untapped 1 permanent(s)
+  AI-A-2 drew 0 card(s) in draw step
+  AI-A-2 put Grizzly Bears onto battlefield
+  Prodigal Sorcerer dealt 0 damage
+G2 T14 AI-B-2 cast Unsummon -> resolved
+G2 T14 AI-B-2 activate Prodigal Sorcerer -> resolved
+  AI-B-2 untapped 1 permanent(s)
+  AI-B-2 drew 0 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G2 T15 AI-A-2 cast Prodigal Sorcerer -> resolved
+G2 T15 AI-A-2 activate Black Lotus -> resolved
+  AI-A-2 untapped 0 permanent(s)
+  AI-A-2 drew 0 card(s) in draw step
+  AI-A-2 put Prodigal Sorcerer onto battlefield
+  Black Lotus sacrificed for mana
+G2 T15 AI-B-2 cast Lightning Bolt -> resolved
+G2 T15 AI-B-2 activate Prodigal Sorcerer -> resolved
+  AI-B-2 untapped 1 permanent(s)
+  AI-B-2 drew 0 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-2 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G2 T16 AI-A-2 cast Howling Mine -> resolved
+G2 T16 AI-A-2 activate Prodigal Sorcerer -> resolved
+  AI-A-2 untapped 0 permanent(s)
+  AI-A-2 drew 0 card(s) in draw step
+  AI-A-2 put Howling Mine onto battlefield
+  Prodigal Sorcerer dealt 0 damage
+G2 T16 AI-B-2 cast Grizzly Bears -> resolved
+G2 T16 AI-B-2 activate Prodigal Sorcerer -> resolved
+  AI-B-2 untapped 1 permanent(s)
+  AI-B-2 drew 0 card(s) in draw step
+  AI-B-2 put Grizzly Bears onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G2 T17 AI-A-2 cast Ancestral Recall -> resolved
+G2 T17 AI-A-2 activate Prodigal Sorcerer -> resolved
+  AI-A-2 untapped 1 permanent(s)
+  AI-A-2 drew 0 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-A-2 drew 0 cards
+  Ancestral Recall resolved and moved to graveyard
+  Prodigal Sorcerer dealt 0 damage
+G2 T17 AI-B-2 cast Lightning Bolt -> resolved
+G2 T17 AI-B-2 activate Prodigal Sorcerer -> resolved
+  AI-B-2 untapped 1 permanent(s)
+  AI-B-2 drew 0 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-2 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G2 T18 AI-A-2 cast Unsummon -> resolved
+G2 T18 AI-A-2 activate Prodigal Sorcerer -> resolved
+  AI-A-2 untapped 1 permanent(s)
+  AI-A-2 drew 0 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G2 T18 AI-B-2 cast Jayemdae Tome -> resolved
+G2 T18 AI-B-2 activate Prodigal Sorcerer -> resolved
+  AI-B-2 untapped 1 permanent(s)
+  AI-B-2 drew 0 card(s) in draw step
+  AI-B-2 put Jayemdae Tome onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+RESULT G2: AI-A-2=4, AI-B-2=2
+
+=== Game 3 ===
+G3 T1 AI-A-3 cast Grizzly Bears -> resolved
+  AI-A-3 untapped 0 permanent(s)
+  AI-A-3 drew 1 card(s) in draw step
+  AI-A-3 put Grizzly Bears onto battlefield
+G3 T1 AI-B-3 cast Lightning Bolt -> resolved
+  AI-B-3 untapped 0 permanent(s)
+  AI-B-3 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-3 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+G3 T2 AI-A-3 cast Healing Salve -> resolved
+  AI-A-3 untapped 0 permanent(s)
+  AI-A-3 drew 1 card(s) in draw step
+  Healing Salve added to stack
+  AI-A-3 gains prevention shield for 3 damage
+  Healing Salve resolved and moved to graveyard
+G3 T2 AI-B-3 cast Healing Salve -> resolved
+  AI-B-3 untapped 0 permanent(s)
+  AI-B-3 drew 1 card(s) in draw step
+  Healing Salve added to stack
+  AI-B-3 gains prevention shield for 3 damage
+  Healing Salve resolved and moved to graveyard
+G3 T3 AI-A-3 cast Lightning Bolt -> resolved
+  AI-A-3 untapped 0 permanent(s)
+  AI-A-3 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-3 took 0 damage
+  Lightning Bolt resolved and moved to graveyard
+G3 T3 AI-B-3 cast Ancestral Recall -> resolved
+  AI-B-3 untapped 0 permanent(s)
+  AI-B-3 drew 1 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-B-3 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+G3 T4 AI-A-3 cast Howling Mine -> resolved
+  AI-A-3 untapped 0 permanent(s)
+  AI-A-3 drew 1 card(s) in draw step
+  AI-A-3 put Howling Mine onto battlefield
+G3 T4 AI-B-3 cast Disenchant -> resolved
+  AI-B-3 untapped 0 permanent(s)
+  AI-B-3 drew 2 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Howling Mine
+  Disenchant resolved and moved to graveyard
+G3 T5 AI-A-3 cast Black Lotus -> resolved
+G3 T5 AI-A-3 activate Black Lotus -> resolved
+  AI-A-3 untapped 0 permanent(s)
+  AI-A-3 drew 1 card(s) in draw step
+  AI-A-3 put Black Lotus onto battlefield
+  Black Lotus sacrificed for mana
+G3 T5 AI-B-3 cast Healing Salve -> resolved
+  AI-B-3 untapped 0 permanent(s)
+  AI-B-3 drew 1 card(s) in draw step
+  Healing Salve added to stack
+  AI-B-3 gains prevention shield for 3 damage
+  Healing Salve resolved and moved to graveyard
+G3 T6 AI-A-3 cast Lightning Bolt -> resolved
+  AI-A-3 untapped 0 permanent(s)
+  AI-A-3 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-3 took 0 damage
+  Lightning Bolt resolved and moved to graveyard
+G3 T6 AI-B-3 cast Black Lotus -> resolved
+G3 T6 AI-B-3 activate Black Lotus -> resolved
+  AI-B-3 untapped 0 permanent(s)
+  AI-B-3 drew 1 card(s) in draw step
+  AI-B-3 put Black Lotus onto battlefield
+  Black Lotus sacrificed for mana
+G3 T7 AI-A-3 cast Mountain -> resolved
+  AI-A-3 untapped 0 permanent(s)
+  AI-A-3 drew 1 card(s) in draw step
+  AI-A-3 put Mountain onto battlefield
+G3 T7 AI-B-3 cast Howling Mine -> resolved
+  AI-B-3 untapped 0 permanent(s)
+  AI-B-3 drew 1 card(s) in draw step
+  AI-B-3 put Howling Mine onto battlefield
+G3 T8 AI-A-3 cast Disenchant -> resolved
+  AI-A-3 untapped 0 permanent(s)
+  AI-A-3 drew 2 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Howling Mine
+  Disenchant resolved and moved to graveyard
+G3 T8 AI-B-3 cast Ancestral Recall -> resolved
+  AI-B-3 untapped 0 permanent(s)
+  AI-B-3 drew 1 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-B-3 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+G3 T9 AI-A-3 cast Jayemdae Tome -> resolved
+G3 T9 AI-A-3 activate Jayemdae Tome -> resolved
+  AI-A-3 untapped 0 permanent(s)
+  AI-A-3 drew 1 card(s) in draw step
+  AI-A-3 put Jayemdae Tome onto battlefield
+  Jayemdae Tome drew 1 card
+G3 T9 AI-B-3 cast Black Lotus -> resolved
+G3 T9 AI-B-3 activate Black Lotus -> resolved
+  AI-B-3 untapped 0 permanent(s)
+  AI-B-3 drew 1 card(s) in draw step
+  AI-B-3 put Black Lotus onto battlefield
+  Black Lotus sacrificed for mana
+G3 T10 AI-A-3 cast Jayemdae Tome -> resolved
+G3 T10 AI-A-3 activate Jayemdae Tome -> resolved
+  AI-A-3 untapped 1 permanent(s)
+  AI-A-3 drew 1 card(s) in draw step
+  AI-A-3 put Jayemdae Tome onto battlefield
+  Jayemdae Tome drew 1 card
+G3 T10 AI-B-3 cast Lightning Bolt -> resolved
+  AI-B-3 untapped 0 permanent(s)
+  AI-B-3 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-3 took 0 damage
+  Lightning Bolt resolved and moved to graveyard
+G3 T11 AI-A-3 cast Prodigal Sorcerer -> resolved
+G3 T11 AI-A-3 activate Jayemdae Tome -> resolved
+  AI-A-3 untapped 1 permanent(s)
+  AI-A-3 drew 1 card(s) in draw step
+  AI-A-3 put Prodigal Sorcerer onto battlefield
+  Jayemdae Tome drew 1 card
+G3 T11 AI-B-3 cast Lightning Bolt -> resolved
+  AI-B-3 untapped 0 permanent(s)
+  AI-B-3 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-3 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+G3 T12 AI-A-3 cast Ancestral Recall -> resolved
+G3 T12 AI-A-3 activate Jayemdae Tome -> resolved
+  AI-A-3 untapped 1 permanent(s)
+  AI-A-3 drew 1 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-A-3 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+  Jayemdae Tome drew 1 card
+G3 T12 AI-B-3 cast Howling Mine -> resolved
+  AI-B-3 untapped 0 permanent(s)
+  AI-B-3 drew 1 card(s) in draw step
+  AI-B-3 put Howling Mine onto battlefield
+G3 T13 AI-A-3 cast Lightning Bolt -> resolved
+G3 T13 AI-A-3 activate Jayemdae Tome -> resolved
+  AI-A-3 untapped 1 permanent(s)
+  AI-A-3 drew 2 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-3 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Jayemdae Tome drew 1 card
+G3 T13 AI-B-3 cast Grizzly Bears -> resolved
+  AI-B-3 untapped 0 permanent(s)
+  AI-B-3 drew 2 card(s) in draw step
+  AI-B-3 put Grizzly Bears onto battlefield
+G3 T14 AI-A-3 cast Unsummon -> resolved
+G3 T14 AI-A-3 activate Jayemdae Tome -> resolved
+  AI-A-3 untapped 1 permanent(s)
+  AI-A-3 drew 2 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+  Jayemdae Tome drew 1 card
+G3 T14 AI-B-3 cast Grizzly Bears -> resolved
+  AI-B-3 untapped 0 permanent(s)
+  AI-B-3 drew 2 card(s) in draw step
+  AI-B-3 put Grizzly Bears onto battlefield
+G3 T15 AI-A-3 cast Disenchant -> resolved
+G3 T15 AI-A-3 activate Jayemdae Tome -> resolved
+  AI-A-3 untapped 1 permanent(s)
+  AI-A-3 drew 2 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Howling Mine
+  Disenchant resolved and moved to graveyard
+  Jayemdae Tome drew 1 card
+G3 T15 AI-B-3 cast Jayemdae Tome -> resolved
+G3 T15 AI-B-3 activate Jayemdae Tome -> resolved
+  AI-B-3 untapped 0 permanent(s)
+  AI-B-3 drew 1 card(s) in draw step
+  AI-B-3 put Jayemdae Tome onto battlefield
+  Jayemdae Tome drew 1 card
+G3 T16 AI-A-3 cast Howling Mine -> resolved
+G3 T16 AI-A-3 activate Prodigal Sorcerer -> resolved
+  AI-A-3 untapped 1 permanent(s)
+  AI-A-3 drew 0 card(s) in draw step
+  AI-A-3 put Howling Mine onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G3 T16 AI-B-3 cast Jayemdae Tome -> resolved
+G3 T16 AI-B-3 activate Jayemdae Tome -> resolved
+  AI-B-3 untapped 1 permanent(s)
+  AI-B-3 drew 2 card(s) in draw step
+  AI-B-3 put Jayemdae Tome onto battlefield
+  Jayemdae Tome drew 1 card
+G3 T17 AI-A-3 cast Ancestral Recall -> resolved
+G3 T17 AI-A-3 activate Prodigal Sorcerer -> resolved
+  AI-A-3 untapped 1 permanent(s)
+  AI-A-3 drew 0 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-A-3 drew 0 cards
+  Ancestral Recall resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G3 T17 AI-B-3 cast Unsummon -> resolved
+  AI-B-3 untapped 1 permanent(s)
+  AI-B-3 drew 1 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+G3 T18 AI-A-3 cast Unsummon -> resolved
+G3 T18 AI-A-3 activate Prodigal Sorcerer -> resolved
+  AI-A-3 untapped 1 permanent(s)
+  AI-A-3 drew 0 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G3 T18 AI-B-3 cast Disenchant -> resolved
+  AI-B-3 untapped 0 permanent(s)
+  AI-B-3 drew 0 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Jayemdae Tome
+  Disenchant resolved and moved to graveyard
+RESULT G3: AI-A-3=14, AI-B-3=14
+
+=== Game 4 ===
+G4 T1 AI-A-4 cast Lightning Bolt -> resolved
+  AI-A-4 untapped 0 permanent(s)
+  AI-A-4 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-4 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+G4 T1 AI-B-4 cast Lightning Bolt -> resolved
+  AI-B-4 untapped 0 permanent(s)
+  AI-B-4 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-4 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+G4 T2 AI-A-4 cast Black Lotus -> resolved
+G4 T2 AI-A-4 activate Black Lotus -> resolved
+  AI-A-4 untapped 0 permanent(s)
+  AI-A-4 drew 1 card(s) in draw step
+  AI-A-4 put Black Lotus onto battlefield
+  Black Lotus sacrificed for mana
+G4 T2 AI-B-4 cast Lightning Bolt -> resolved
+  AI-B-4 untapped 0 permanent(s)
+  AI-B-4 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-4 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+G4 T3 AI-A-4 cast Lightning Bolt -> resolved
+  AI-A-4 untapped 0 permanent(s)
+  AI-A-4 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-4 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+G4 T3 AI-B-4 cast Ancestral Recall -> resolved
+  AI-B-4 untapped 0 permanent(s)
+  AI-B-4 drew 1 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-B-4 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+G4 T4 AI-A-4 cast Ancestral Recall -> resolved
+  AI-A-4 untapped 0 permanent(s)
+  AI-A-4 drew 1 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-A-4 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+G4 T4 AI-B-4 cast Prodigal Sorcerer -> resolved
+G4 T4 AI-B-4 activate Prodigal Sorcerer -> resolved
+  AI-B-4 untapped 0 permanent(s)
+  AI-B-4 drew 1 card(s) in draw step
+  AI-B-4 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G4 T5 AI-A-4 cast Unsummon -> resolved
+  AI-A-4 untapped 0 permanent(s)
+  AI-A-4 drew 1 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+G4 T5 AI-B-4 cast Howling Mine -> resolved
+  AI-B-4 untapped 0 permanent(s)
+  AI-B-4 drew 1 card(s) in draw step
+  AI-B-4 put Howling Mine onto battlefield
+G4 T6 AI-A-4 cast Disenchant -> resolved
+  AI-A-4 untapped 0 permanent(s)
+  AI-A-4 drew 2 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Howling Mine
+  Disenchant resolved and moved to graveyard
+G4 T6 AI-B-4 cast Prodigal Sorcerer -> resolved
+G4 T6 AI-B-4 activate Prodigal Sorcerer -> resolved
+  AI-B-4 untapped 0 permanent(s)
+  AI-B-4 drew 1 card(s) in draw step
+  AI-B-4 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G4 T7 AI-A-4 cast Prodigal Sorcerer -> resolved
+G4 T7 AI-A-4 activate Prodigal Sorcerer -> resolved
+  AI-A-4 untapped 0 permanent(s)
+  AI-A-4 drew 1 card(s) in draw step
+  AI-A-4 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G4 T7 AI-B-4 cast Unsummon -> resolved
+G4 T7 AI-B-4 activate Prodigal Sorcerer -> resolved
+  AI-B-4 untapped 1 permanent(s)
+  AI-B-4 drew 1 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G4 T8 AI-A-4 cast Lightning Bolt -> resolved
+  AI-A-4 untapped 0 permanent(s)
+  AI-A-4 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-4 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+G4 T8 AI-B-4 cast Black Lotus -> resolved
+G4 T8 AI-B-4 activate Prodigal Sorcerer -> resolved
+  AI-B-4 untapped 1 permanent(s)
+  AI-B-4 drew 1 card(s) in draw step
+  AI-B-4 put Black Lotus onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G4 T9 AI-A-4 cast Grizzly Bears -> resolved
+  AI-A-4 untapped 0 permanent(s)
+  AI-A-4 drew 1 card(s) in draw step
+  AI-A-4 put Grizzly Bears onto battlefield
+G4 T9 AI-B-4 cast Jayemdae Tome -> resolved
+G4 T9 AI-B-4 activate Prodigal Sorcerer -> resolved
+  AI-B-4 untapped 1 permanent(s)
+  AI-B-4 drew 1 card(s) in draw step
+  AI-B-4 put Jayemdae Tome onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G4 T10 AI-A-4 cast Prodigal Sorcerer -> resolved
+G4 T10 AI-A-4 activate Prodigal Sorcerer -> resolved
+  AI-A-4 untapped 0 permanent(s)
+  AI-A-4 drew 1 card(s) in draw step
+  AI-A-4 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G4 T10 AI-B-4 cast Grizzly Bears -> resolved
+G4 T10 AI-B-4 activate Prodigal Sorcerer -> resolved
+  AI-B-4 untapped 1 permanent(s)
+  AI-B-4 drew 1 card(s) in draw step
+  AI-B-4 put Grizzly Bears onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G4 T11 AI-A-4 cast Disenchant -> resolved
+G4 T11 AI-A-4 activate Prodigal Sorcerer -> resolved
+  AI-A-4 untapped 1 permanent(s)
+  AI-A-4 drew 1 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Black Lotus
+  Disenchant resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G4 T11 AI-B-4 cast Unsummon -> resolved
+G4 T11 AI-B-4 activate Prodigal Sorcerer -> resolved
+  AI-B-4 untapped 1 permanent(s)
+  AI-B-4 drew 1 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G4 T12 AI-A-4 cast Prodigal Sorcerer -> resolved
+G4 T12 AI-A-4 activate Prodigal Sorcerer -> resolved
+  AI-A-4 untapped 1 permanent(s)
+  AI-A-4 drew 1 card(s) in draw step
+  AI-A-4 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G4 T12 AI-B-4 cast Lightning Bolt -> resolved
+G4 T12 AI-B-4 activate Prodigal Sorcerer -> resolved
+  AI-B-4 untapped 1 permanent(s)
+  AI-B-4 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-4 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G4 T13 AI-A-4 cast Black Lotus -> resolved
+G4 T13 AI-A-4 activate Prodigal Sorcerer -> resolved
+  AI-A-4 untapped 1 permanent(s)
+  AI-A-4 drew 1 card(s) in draw step
+  AI-A-4 put Black Lotus onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G4 T13 AI-B-4 cast Disenchant -> resolved
+G4 T13 AI-B-4 activate Prodigal Sorcerer -> resolved
+  AI-B-4 untapped 1 permanent(s)
+  AI-B-4 drew 1 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Black Lotus
+  Disenchant resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G4 T14 AI-A-4 cast Healing Salve -> resolved
+G4 T14 AI-A-4 activate Prodigal Sorcerer -> resolved
+  AI-A-4 untapped 1 permanent(s)
+  AI-A-4 drew 1 card(s) in draw step
+  Healing Salve added to stack
+  AI-A-4 gains prevention shield for 3 damage
+  Healing Salve resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G4 T14 AI-B-4 cast Lightning Bolt -> resolved
+G4 T14 AI-B-4 activate Prodigal Sorcerer -> resolved
+  AI-B-4 untapped 1 permanent(s)
+  AI-B-4 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-4 took 0 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G4 T15 AI-A-4 cast Grizzly Bears -> resolved
+G4 T15 AI-A-4 activate Prodigal Sorcerer -> resolved
+  AI-A-4 untapped 1 permanent(s)
+  AI-A-4 drew 1 card(s) in draw step
+  AI-A-4 put Grizzly Bears onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G4 T15 AI-B-4 cast Ancestral Recall -> resolved
+G4 T15 AI-B-4 activate Prodigal Sorcerer -> resolved
+  AI-B-4 untapped 1 permanent(s)
+  AI-B-4 drew 1 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-B-4 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+RESULT G4: AI-A-4=0, AI-B-4=4
+
+=== Game 5 ===
+G5 T1 AI-A-5 cast Healing Salve -> resolved
+  AI-A-5 untapped 0 permanent(s)
+  AI-A-5 drew 1 card(s) in draw step
+  Healing Salve added to stack
+  AI-A-5 gains prevention shield for 3 damage
+  Healing Salve resolved and moved to graveyard
+G5 T1 AI-B-5 cast Ancestral Recall -> resolved
+  AI-B-5 untapped 0 permanent(s)
+  AI-B-5 drew 1 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-B-5 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+G5 T2 AI-A-5 cast Ancestral Recall -> resolved
+  AI-A-5 untapped 0 permanent(s)
+  AI-A-5 drew 1 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-A-5 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+G5 T2 AI-B-5 cast Howling Mine -> resolved
+  AI-B-5 untapped 0 permanent(s)
+  AI-B-5 drew 1 card(s) in draw step
+  AI-B-5 put Howling Mine onto battlefield
+G5 T3 AI-A-5 cast Disenchant -> resolved
+  AI-A-5 untapped 0 permanent(s)
+  AI-A-5 drew 2 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Howling Mine
+  Disenchant resolved and moved to graveyard
+G5 T3 AI-B-5 cast Black Lotus -> resolved
+G5 T3 AI-B-5 activate Black Lotus -> resolved
+  AI-B-5 untapped 0 permanent(s)
+  AI-B-5 drew 1 card(s) in draw step
+  AI-B-5 put Black Lotus onto battlefield
+  Black Lotus sacrificed for mana
+G5 T4 AI-A-5 cast Howling Mine -> resolved
+  AI-A-5 untapped 0 permanent(s)
+  AI-A-5 drew 1 card(s) in draw step
+  AI-A-5 put Howling Mine onto battlefield
+G5 T4 AI-B-5 cast Disenchant -> resolved
+  AI-B-5 untapped 0 permanent(s)
+  AI-B-5 drew 2 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Howling Mine
+  Disenchant resolved and moved to graveyard
+G5 T5 AI-A-5 cast Ancestral Recall -> resolved
+  AI-A-5 untapped 0 permanent(s)
+  AI-A-5 drew 1 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-A-5 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+G5 T5 AI-B-5 cast Ancestral Recall -> resolved
+  AI-B-5 untapped 0 permanent(s)
+  AI-B-5 drew 1 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-B-5 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+G5 T6 AI-A-5 cast Jayemdae Tome -> resolved
+G5 T6 AI-A-5 activate Jayemdae Tome -> resolved
+  AI-A-5 untapped 0 permanent(s)
+  AI-A-5 drew 1 card(s) in draw step
+  AI-A-5 put Jayemdae Tome onto battlefield
+  Jayemdae Tome drew 1 card
+G5 T6 AI-B-5 cast Prodigal Sorcerer -> resolved
+G5 T6 AI-B-5 activate Prodigal Sorcerer -> resolved
+  AI-B-5 untapped 0 permanent(s)
+  AI-B-5 drew 1 card(s) in draw step
+  AI-B-5 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer dealt 0 damage
+G5 T7 AI-A-5 cast Lightning Bolt -> resolved
+G5 T7 AI-A-5 activate Jayemdae Tome -> resolved
+  AI-A-5 untapped 1 permanent(s)
+  AI-A-5 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-5 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Jayemdae Tome drew 1 card
+G5 T7 AI-B-5 cast Healing Salve -> resolved
+G5 T7 AI-B-5 activate Prodigal Sorcerer -> resolved
+  AI-B-5 untapped 1 permanent(s)
+  AI-B-5 drew 1 card(s) in draw step
+  Healing Salve added to stack
+  AI-B-5 gains prevention shield for 3 damage
+  Healing Salve resolved and moved to graveyard
+  Prodigal Sorcerer dealt 0 damage
+G5 T8 AI-A-5 cast Grizzly Bears -> resolved
+G5 T8 AI-A-5 activate Jayemdae Tome -> resolved
+  AI-A-5 untapped 1 permanent(s)
+  AI-A-5 drew 1 card(s) in draw step
+  AI-A-5 put Grizzly Bears onto battlefield
+  Jayemdae Tome drew 1 card
+G5 T8 AI-B-5 cast Black Lotus -> resolved
+G5 T8 AI-B-5 activate Prodigal Sorcerer -> resolved
+  AI-B-5 untapped 1 permanent(s)
+  AI-B-5 drew 1 card(s) in draw step
+  AI-B-5 put Black Lotus onto battlefield
+  Prodigal Sorcerer dealt 0 damage
+G5 T9 AI-A-5 cast Disenchant -> resolved
+G5 T9 AI-A-5 activate Jayemdae Tome -> resolved
+  AI-A-5 untapped 1 permanent(s)
+  AI-A-5 drew 1 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Black Lotus
+  Disenchant resolved and moved to graveyard
+  Jayemdae Tome drew 1 card
+G5 T9 AI-B-5 cast Lightning Bolt -> resolved
+G5 T9 AI-B-5 activate Prodigal Sorcerer -> resolved
+  AI-B-5 untapped 1 permanent(s)
+  AI-B-5 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-5 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G5 T10 AI-A-5 cast Prodigal Sorcerer -> resolved
+G5 T10 AI-A-5 activate Jayemdae Tome -> resolved
+  AI-A-5 untapped 1 permanent(s)
+  AI-A-5 drew 1 card(s) in draw step
+  AI-A-5 put Prodigal Sorcerer onto battlefield
+  Jayemdae Tome drew 1 card
+G5 T10 AI-B-5 cast Grizzly Bears -> resolved
+G5 T10 AI-B-5 activate Prodigal Sorcerer -> resolved
+  AI-B-5 untapped 1 permanent(s)
+  AI-B-5 drew 1 card(s) in draw step
+  AI-B-5 put Grizzly Bears onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G5 T11 AI-A-5 cast Lightning Bolt -> resolved
+G5 T11 AI-A-5 activate Jayemdae Tome -> resolved
+  AI-A-5 untapped 1 permanent(s)
+  AI-A-5 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-5 took 0 damage
+  Lightning Bolt resolved and moved to graveyard
+  Jayemdae Tome drew 1 card
+G5 T11 AI-B-5 cast Prodigal Sorcerer -> resolved
+G5 T11 AI-B-5 activate Prodigal Sorcerer -> resolved
+  AI-B-5 untapped 1 permanent(s)
+  AI-B-5 drew 1 card(s) in draw step
+  AI-B-5 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G5 T12 AI-A-5 cast Black Lotus -> resolved
+G5 T12 AI-A-5 activate Jayemdae Tome -> resolved
+  AI-A-5 untapped 1 permanent(s)
+  AI-A-5 drew 1 card(s) in draw step
+  AI-A-5 put Black Lotus onto battlefield
+  Jayemdae Tome drew 1 card
+G5 T12 AI-B-5 cast Disenchant -> resolved
+G5 T12 AI-B-5 activate Prodigal Sorcerer -> resolved
+  AI-B-5 untapped 1 permanent(s)
+  AI-B-5 drew 1 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Jayemdae Tome
+  Disenchant resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G5 T13 AI-A-5 cast Unsummon -> resolved
+G5 T13 AI-A-5 activate Prodigal Sorcerer -> resolved
+  AI-A-5 untapped 0 permanent(s)
+  AI-A-5 drew 1 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G5 T13 AI-B-5 cast Unsummon -> resolved
+G5 T13 AI-B-5 activate Prodigal Sorcerer -> resolved
+  AI-B-5 untapped 0 permanent(s)
+  AI-B-5 drew 1 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G5 T14 AI-A-5 cast Black Lotus -> resolved
+G5 T14 AI-A-5 activate Prodigal Sorcerer -> resolved
+  AI-A-5 untapped 1 permanent(s)
+  AI-A-5 drew 1 card(s) in draw step
+  AI-A-5 put Black Lotus onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G5 T14 AI-B-5 cast Grizzly Bears -> resolved
+G5 T14 AI-B-5 activate Prodigal Sorcerer -> resolved
+  AI-B-5 untapped 1 permanent(s)
+  AI-B-5 drew 1 card(s) in draw step
+  AI-B-5 put Grizzly Bears onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G5 T15 AI-A-5 cast Howling Mine -> resolved
+G5 T15 AI-A-5 activate Prodigal Sorcerer -> resolved
+  AI-A-5 untapped 1 permanent(s)
+  AI-A-5 drew 1 card(s) in draw step
+  AI-A-5 put Howling Mine onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G5 T15 AI-B-5 cast Prodigal Sorcerer -> resolved
+G5 T15 AI-B-5 activate Prodigal Sorcerer -> resolved
+  AI-B-5 untapped 1 permanent(s)
+  AI-B-5 drew 2 card(s) in draw step
+  AI-B-5 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G5 T16 AI-A-5 cast Unsummon -> resolved
+G5 T16 AI-A-5 activate Prodigal Sorcerer -> resolved
+  AI-A-5 untapped 1 permanent(s)
+  AI-A-5 drew 0 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G5 T16 AI-B-5 cast Lightning Bolt -> resolved
+G5 T16 AI-B-5 activate Prodigal Sorcerer -> resolved
+  AI-B-5 untapped 1 permanent(s)
+  AI-B-5 drew 2 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-5 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G5 T17 AI-A-5 cast Prodigal Sorcerer -> resolved
+G5 T17 AI-A-5 activate Prodigal Sorcerer -> resolved
+  AI-A-5 untapped 1 permanent(s)
+  AI-A-5 drew 0 card(s) in draw step
+  AI-A-5 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G5 T17 AI-B-5 cast Howling Mine -> resolved
+G5 T17 AI-B-5 activate Prodigal Sorcerer -> resolved
+  AI-B-5 untapped 1 permanent(s)
+  AI-B-5 drew 2 card(s) in draw step
+  AI-B-5 put Howling Mine onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G5 T18 AI-A-5 cast Jayemdae Tome -> resolved
+G5 T18 AI-A-5 activate Prodigal Sorcerer -> resolved
+  AI-A-5 untapped 1 permanent(s)
+  AI-A-5 drew 0 card(s) in draw step
+  AI-A-5 put Jayemdae Tome onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G5 T18 AI-B-5 cast Grizzly Bears -> resolved
+G5 T18 AI-B-5 activate Prodigal Sorcerer -> resolved
+  AI-B-5 untapped 1 permanent(s)
+  AI-B-5 drew 2 card(s) in draw step
+  AI-B-5 put Grizzly Bears onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+RESULT G5: AI-A-5=4, AI-B-5=11
+
+=== Game 6 ===
+G6 T1 AI-A-6 cast Healing Salve -> resolved
+  AI-A-6 untapped 0 permanent(s)
+  AI-A-6 drew 1 card(s) in draw step
+  Healing Salve added to stack
+  AI-A-6 gains prevention shield for 3 damage
+  Healing Salve resolved and moved to graveyard
+G6 T1 AI-B-6 cast Island -> resolved
+  AI-B-6 untapped 0 permanent(s)
+  AI-B-6 drew 1 card(s) in draw step
+  AI-B-6 put Island onto battlefield
+G6 T2 AI-A-6 cast Black Lotus -> resolved
+G6 T2 AI-A-6 activate Black Lotus -> resolved
+  AI-A-6 untapped 0 permanent(s)
+  AI-A-6 drew 1 card(s) in draw step
+  AI-A-6 put Black Lotus onto battlefield
+  Black Lotus sacrificed for mana
+G6 T2 AI-B-6 cast Island -> resolved
+  AI-B-6 untapped 0 permanent(s)
+  AI-B-6 drew 1 card(s) in draw step
+  AI-B-6 put Island onto battlefield
+G6 T3 AI-A-6 cast Ancestral Recall -> resolved
+  AI-A-6 untapped 0 permanent(s)
+  AI-A-6 drew 1 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-A-6 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+G6 T3 AI-B-6 cast Lightning Bolt -> resolved
+  AI-B-6 untapped 0 permanent(s)
+  AI-B-6 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-6 took 0 damage
+  Lightning Bolt resolved and moved to graveyard
+G6 T4 AI-A-6 cast Lightning Bolt -> resolved
+  AI-A-6 untapped 0 permanent(s)
+  AI-A-6 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-6 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+G6 T4 AI-B-6 cast Black Lotus -> resolved
+G6 T4 AI-B-6 activate Black Lotus -> resolved
+  AI-B-6 untapped 0 permanent(s)
+  AI-B-6 drew 1 card(s) in draw step
+  AI-B-6 put Black Lotus onto battlefield
+  Black Lotus sacrificed for mana
+G6 T5 AI-A-6 cast Healing Salve -> resolved
+  AI-A-6 untapped 0 permanent(s)
+  AI-A-6 drew 1 card(s) in draw step
+  Healing Salve added to stack
+  AI-A-6 gains prevention shield for 3 damage
+  Healing Salve resolved and moved to graveyard
+G6 T5 AI-B-6 cast Howling Mine -> resolved
+  AI-B-6 untapped 0 permanent(s)
+  AI-B-6 drew 1 card(s) in draw step
+  AI-B-6 put Howling Mine onto battlefield
+G6 T6 AI-A-6 cast Disenchant -> resolved
+  AI-A-6 untapped 0 permanent(s)
+  AI-A-6 drew 2 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Howling Mine
+  Disenchant resolved and moved to graveyard
+G6 T6 AI-B-6 cast Island -> resolved
+  AI-B-6 untapped 0 permanent(s)
+  AI-B-6 drew 1 card(s) in draw step
+  AI-B-6 put Island onto battlefield
+G6 T7 AI-A-6 cast Grizzly Bears -> resolved
+  AI-A-6 untapped 0 permanent(s)
+  AI-A-6 drew 1 card(s) in draw step
+  AI-A-6 put Grizzly Bears onto battlefield
+G6 T7 AI-B-6 cast Unsummon -> resolved
+  AI-B-6 untapped 0 permanent(s)
+  AI-B-6 drew 1 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+G6 T8 AI-A-6 cast Prodigal Sorcerer -> resolved
+G6 T8 AI-A-6 activate Prodigal Sorcerer -> resolved
+  AI-A-6 untapped 0 permanent(s)
+  AI-A-6 drew 1 card(s) in draw step
+  AI-A-6 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G6 T8 AI-B-6 cast Ancestral Recall -> resolved
+  AI-B-6 untapped 0 permanent(s)
+  AI-B-6 drew 1 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-B-6 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+G6 T9 AI-A-6 cast Prodigal Sorcerer -> resolved
+G6 T9 AI-A-6 activate Prodigal Sorcerer -> resolved
+  AI-A-6 untapped 1 permanent(s)
+  AI-A-6 drew 1 card(s) in draw step
+  AI-A-6 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G6 T9 AI-B-6 cast Lightning Bolt -> resolved
+  AI-B-6 untapped 0 permanent(s)
+  AI-B-6 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-6 took 0 damage
+  Lightning Bolt resolved and moved to graveyard
+G6 T10 AI-A-6 cast Lightning Bolt -> resolved
+G6 T10 AI-A-6 activate Prodigal Sorcerer -> resolved
+  AI-A-6 untapped 1 permanent(s)
+  AI-A-6 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-6 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G6 T10 AI-B-6 cast Prodigal Sorcerer -> resolved
+G6 T10 AI-B-6 activate Prodigal Sorcerer -> resolved
+  AI-B-6 untapped 0 permanent(s)
+  AI-B-6 drew 1 card(s) in draw step
+  AI-B-6 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G6 T11 AI-A-6 cast Black Lotus -> resolved
+G6 T11 AI-A-6 activate Prodigal Sorcerer -> resolved
+  AI-A-6 untapped 1 permanent(s)
+  AI-A-6 drew 1 card(s) in draw step
+  AI-A-6 put Black Lotus onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G6 T11 AI-B-6 cast Disenchant -> resolved
+G6 T11 AI-B-6 activate Prodigal Sorcerer -> resolved
+  AI-B-6 untapped 1 permanent(s)
+  AI-B-6 drew 1 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Black Lotus
+  Disenchant resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G6 T12 AI-A-6 cast Howling Mine -> resolved
+G6 T12 AI-A-6 activate Prodigal Sorcerer -> resolved
+  AI-A-6 untapped 1 permanent(s)
+  AI-A-6 drew 1 card(s) in draw step
+  AI-A-6 put Howling Mine onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G6 T12 AI-B-6 cast Jayemdae Tome -> resolved
+G6 T12 AI-B-6 activate Prodigal Sorcerer -> resolved
+  AI-B-6 untapped 1 permanent(s)
+  AI-B-6 drew 2 card(s) in draw step
+  AI-B-6 put Jayemdae Tome onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G6 T13 AI-A-6 cast Grizzly Bears -> resolved
+G6 T13 AI-A-6 activate Prodigal Sorcerer -> resolved
+  AI-A-6 untapped 1 permanent(s)
+  AI-A-6 drew 2 card(s) in draw step
+  AI-A-6 put Grizzly Bears onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G6 T13 AI-B-6 cast Lightning Bolt -> resolved
+G6 T13 AI-B-6 activate Prodigal Sorcerer -> resolved
+  AI-B-6 untapped 1 permanent(s)
+  AI-B-6 drew 2 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-6 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G6 T14 AI-A-6 cast Grizzly Bears -> resolved
+G6 T14 AI-A-6 activate Prodigal Sorcerer -> resolved
+  AI-A-6 untapped 1 permanent(s)
+  AI-A-6 drew 2 card(s) in draw step
+  AI-A-6 put Grizzly Bears onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G6 T14 AI-B-6 cast Disenchant -> resolved
+G6 T14 AI-B-6 activate Prodigal Sorcerer -> resolved
+  AI-B-6 untapped 1 permanent(s)
+  AI-B-6 drew 2 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Howling Mine
+  Disenchant resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G6 T15 AI-A-6 cast Disenchant -> resolved
+G6 T15 AI-A-6 activate Prodigal Sorcerer -> resolved
+  AI-A-6 untapped 1 permanent(s)
+  AI-A-6 drew 1 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Jayemdae Tome
+  Disenchant resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G6 T15 AI-B-6 cast Grizzly Bears -> resolved
+G6 T15 AI-B-6 activate Prodigal Sorcerer -> resolved
+  AI-B-6 untapped 1 permanent(s)
+  AI-B-6 drew 1 card(s) in draw step
+  AI-B-6 put Grizzly Bears onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G6 T16 AI-A-6 cast Lightning Bolt -> resolved
+G6 T16 AI-A-6 activate Prodigal Sorcerer -> resolved
+  AI-A-6 untapped 1 permanent(s)
+  AI-A-6 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-6 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G6 T16 AI-B-6 cast Howling Mine -> resolved
+G6 T16 AI-B-6 activate Prodigal Sorcerer -> resolved
+  AI-B-6 untapped 1 permanent(s)
+  AI-B-6 drew 1 card(s) in draw step
+  AI-B-6 put Howling Mine onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G6 T17 AI-A-6 cast Jayemdae Tome -> resolved
+G6 T17 AI-A-6 activate Prodigal Sorcerer -> resolved
+  AI-A-6 untapped 1 permanent(s)
+  AI-A-6 drew 2 card(s) in draw step
+  AI-A-6 put Jayemdae Tome onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G6 T17 AI-B-6 cast Jayemdae Tome -> resolved
+G6 T17 AI-B-6 activate Prodigal Sorcerer -> resolved
+  AI-B-6 untapped 1 permanent(s)
+  AI-B-6 drew 2 card(s) in draw step
+  AI-B-6 put Jayemdae Tome onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G6 T18 AI-A-6 cast Lightning Bolt -> resolved
+G6 T18 AI-A-6 activate Prodigal Sorcerer -> resolved
+  AI-A-6 untapped 1 permanent(s)
+  AI-A-6 drew 2 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-6 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+RESULT G6: AI-A-6=9, AI-B-6=-3
+
+=== Game 7 ===
+G7 T1 AI-A-7 cast Jayemdae Tome -> resolved
+G7 T1 AI-A-7 activate Jayemdae Tome -> resolved
+  AI-A-7 untapped 0 permanent(s)
+  AI-A-7 drew 1 card(s) in draw step
+  AI-A-7 put Jayemdae Tome onto battlefield
+  Jayemdae Tome drew 1 card
+G7 T1 AI-B-7 cast Lightning Bolt -> resolved
+  AI-B-7 untapped 0 permanent(s)
+  AI-B-7 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-7 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+G7 T2 AI-A-7 cast Lightning Bolt -> resolved
+G7 T2 AI-A-7 activate Jayemdae Tome -> resolved
+  AI-A-7 untapped 1 permanent(s)
+  AI-A-7 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-7 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Jayemdae Tome drew 1 card
+G7 T2 AI-B-7 cast Prodigal Sorcerer -> resolved
+G7 T2 AI-B-7 activate Prodigal Sorcerer -> resolved
+  AI-B-7 untapped 0 permanent(s)
+  AI-B-7 drew 1 card(s) in draw step
+  AI-B-7 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G7 T3 AI-A-7 cast Black Lotus -> resolved
+G7 T3 AI-A-7 activate Jayemdae Tome -> resolved
+  AI-A-7 untapped 1 permanent(s)
+  AI-A-7 drew 1 card(s) in draw step
+  AI-A-7 put Black Lotus onto battlefield
+  Jayemdae Tome drew 1 card
+G7 T3 AI-B-7 cast Healing Salve -> resolved
+G7 T3 AI-B-7 activate Prodigal Sorcerer -> resolved
+  AI-B-7 untapped 1 permanent(s)
+  AI-B-7 drew 1 card(s) in draw step
+  Healing Salve added to stack
+  AI-B-7 gains prevention shield for 3 damage
+  Healing Salve resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G7 T4 AI-A-7 cast Healing Salve -> resolved
+G7 T4 AI-A-7 activate Jayemdae Tome -> resolved
+  AI-A-7 untapped 1 permanent(s)
+  AI-A-7 drew 1 card(s) in draw step
+  Healing Salve added to stack
+  AI-A-7 gains prevention shield for 3 damage
+  Healing Salve resolved and moved to graveyard
+  Jayemdae Tome drew 1 card
+G7 T4 AI-B-7 cast Jayemdae Tome -> resolved
+G7 T4 AI-B-7 activate Prodigal Sorcerer -> resolved
+  AI-B-7 untapped 1 permanent(s)
+  AI-B-7 drew 1 card(s) in draw step
+  AI-B-7 put Jayemdae Tome onto battlefield
+  Prodigal Sorcerer dealt 0 damage
+G7 T5 AI-A-7 cast Ancestral Recall -> resolved
+G7 T5 AI-A-7 activate Jayemdae Tome -> resolved
+  AI-A-7 untapped 1 permanent(s)
+  AI-A-7 drew 1 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-A-7 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+  Jayemdae Tome drew 1 card
+G7 T5 AI-B-7 cast Grizzly Bears -> resolved
+G7 T5 AI-B-7 activate Prodigal Sorcerer -> resolved
+  AI-B-7 untapped 1 permanent(s)
+  AI-B-7 drew 1 card(s) in draw step
+  AI-B-7 put Grizzly Bears onto battlefield
+  Prodigal Sorcerer dealt 0 damage
+G7 T6 AI-A-7 cast Jayemdae Tome -> resolved
+G7 T6 AI-A-7 activate Jayemdae Tome -> resolved
+  AI-A-7 untapped 1 permanent(s)
+  AI-A-7 drew 1 card(s) in draw step
+  AI-A-7 put Jayemdae Tome onto battlefield
+  Jayemdae Tome drew 1 card
+G7 T6 AI-B-7 cast Howling Mine -> resolved
+G7 T6 AI-B-7 activate Prodigal Sorcerer -> resolved
+  AI-B-7 untapped 1 permanent(s)
+  AI-B-7 drew 1 card(s) in draw step
+  AI-B-7 put Howling Mine onto battlefield
+  Prodigal Sorcerer dealt 0 damage
+G7 T7 AI-A-7 cast Grizzly Bears -> resolved
+G7 T7 AI-A-7 activate Jayemdae Tome -> resolved
+  AI-A-7 untapped 1 permanent(s)
+  AI-A-7 drew 2 card(s) in draw step
+  AI-A-7 put Grizzly Bears onto battlefield
+  Jayemdae Tome drew 1 card
+G7 T7 AI-B-7 cast Grizzly Bears -> resolved
+G7 T7 AI-B-7 activate Prodigal Sorcerer -> resolved
+  AI-B-7 untapped 1 permanent(s)
+  AI-B-7 drew 2 card(s) in draw step
+  AI-B-7 put Grizzly Bears onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G7 T8 AI-A-7 cast Howling Mine -> resolved
+G7 T8 AI-A-7 activate Jayemdae Tome -> resolved
+  AI-A-7 untapped 1 permanent(s)
+  AI-A-7 drew 2 card(s) in draw step
+  AI-A-7 put Howling Mine onto battlefield
+  Jayemdae Tome drew 1 card
+G7 T8 AI-B-7 cast Disenchant -> resolved
+G7 T8 AI-B-7 activate Prodigal Sorcerer -> resolved
+  AI-B-7 untapped 1 permanent(s)
+  AI-B-7 drew 3 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Jayemdae Tome
+  Disenchant resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G7 T9 AI-A-7 cast Unsummon -> resolved
+G7 T9 AI-A-7 activate Black Lotus -> resolved
+  AI-A-7 untapped 0 permanent(s)
+  AI-A-7 drew 3 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+  Black Lotus sacrificed for mana
+G7 T9 AI-B-7 cast Ancestral Recall -> resolved
+G7 T9 AI-B-7 activate Jayemdae Tome -> resolved
+  AI-B-7 untapped 0 permanent(s)
+  AI-B-7 drew 3 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-B-7 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+  Jayemdae Tome drew 1 card
+G7 T10 AI-A-7 cast Lightning Bolt -> resolved
+G7 T10 AI-A-7 activate Jayemdae Tome -> resolved
+  AI-A-7 untapped 0 permanent(s)
+  AI-A-7 drew 3 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-7 took 0 damage
+  Lightning Bolt resolved and moved to graveyard
+  Jayemdae Tome drew 1 card
+G7 T10 AI-B-7 cast Jayemdae Tome -> resolved
+G7 T10 AI-B-7 activate Jayemdae Tome -> resolved
+  AI-B-7 untapped 1 permanent(s)
+  AI-B-7 drew 3 card(s) in draw step
+  AI-B-7 put Jayemdae Tome onto battlefield
+  Jayemdae Tome drew 1 card
+G7 T11 AI-A-7 cast Healing Salve -> resolved
+  AI-A-7 untapped 1 permanent(s)
+  AI-A-7 drew 1 card(s) in draw step
+  Healing Salve added to stack
+  AI-A-7 gains prevention shield for 3 damage
+  Healing Salve resolved and moved to graveyard
+G7 T11 AI-B-7 cast Lightning Bolt -> resolved
+G7 T11 AI-B-7 activate Jayemdae Tome -> resolved
+  AI-B-7 untapped 1 permanent(s)
+  AI-B-7 drew 3 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-7 took 0 damage
+  Lightning Bolt resolved and moved to graveyard
+  Jayemdae Tome drew 1 card
+G7 T12 AI-A-7 cast Disenchant -> resolved
+  AI-A-7 untapped 0 permanent(s)
+  AI-A-7 drew 0 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Jayemdae Tome
+  Disenchant resolved and moved to graveyard
+G7 T12 AI-B-7 cast Prodigal Sorcerer -> resolved
+G7 T12 AI-B-7 activate Prodigal Sorcerer -> resolved
+  AI-B-7 untapped 0 permanent(s)
+  AI-B-7 drew 3 card(s) in draw step
+  AI-B-7 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G7 T13 AI-A-7 cast Ancestral Recall -> resolved
+  AI-A-7 untapped 0 permanent(s)
+  AI-A-7 drew 0 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-A-7 drew 0 cards
+  Ancestral Recall resolved and moved to graveyard
+G7 T13 AI-B-7 cast Prodigal Sorcerer -> resolved
+G7 T13 AI-B-7 activate Prodigal Sorcerer -> resolved
+  AI-B-7 untapped 1 permanent(s)
+  AI-B-7 drew 0 card(s) in draw step
+  AI-B-7 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G7 T14 AI-A-7 cast Lightning Bolt -> resolved
+  AI-A-7 untapped 0 permanent(s)
+  AI-A-7 drew 0 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-7 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+G7 T14 AI-B-7 cast Black Lotus -> resolved
+G7 T14 AI-B-7 activate Prodigal Sorcerer -> resolved
+  AI-B-7 untapped 1 permanent(s)
+  AI-B-7 drew 0 card(s) in draw step
+  AI-B-7 put Black Lotus onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G7 T15 AI-A-7 cast Grizzly Bears -> resolved
+  AI-A-7 untapped 0 permanent(s)
+  AI-A-7 drew 0 card(s) in draw step
+  AI-A-7 put Grizzly Bears onto battlefield
+G7 T15 AI-B-7 cast Healing Salve -> resolved
+G7 T15 AI-B-7 activate Prodigal Sorcerer -> resolved
+  AI-B-7 untapped 1 permanent(s)
+  AI-B-7 drew 0 card(s) in draw step
+  Healing Salve added to stack
+  AI-B-7 gains prevention shield for 3 damage
+  Healing Salve resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G7 T16 AI-A-7 cast Disenchant -> resolved
+  AI-A-7 untapped 0 permanent(s)
+  AI-A-7 drew 0 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Howling Mine
+  Disenchant resolved and moved to graveyard
+G7 T16 AI-B-7 cast Ancestral Recall -> resolved
+G7 T16 AI-B-7 activate Prodigal Sorcerer -> resolved
+  AI-B-7 untapped 1 permanent(s)
+  AI-B-7 drew 0 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-B-7 drew 0 cards
+  Ancestral Recall resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G7 T17 AI-A-7 cast Lightning Bolt -> resolved
+  AI-A-7 untapped 0 permanent(s)
+  AI-A-7 drew 0 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-7 took 0 damage
+  Lightning Bolt resolved and moved to graveyard
+G7 T17 AI-B-7 cast Unsummon -> resolved
+G7 T17 AI-B-7 activate Prodigal Sorcerer -> resolved
+  AI-B-7 untapped 1 permanent(s)
+  AI-B-7 drew 0 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G7 T18 AI-A-7 cast Howling Mine -> resolved
+  AI-A-7 untapped 0 permanent(s)
+  AI-A-7 drew 0 card(s) in draw step
+  AI-A-7 put Howling Mine onto battlefield
+G7 T18 AI-B-7 cast Black Lotus -> resolved
+G7 T18 AI-B-7 activate Prodigal Sorcerer -> resolved
+  AI-B-7 untapped 1 permanent(s)
+  AI-B-7 drew 0 card(s) in draw step
+  AI-B-7 put Black Lotus onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+RESULT G7: AI-A-7=6, AI-B-7=14
+
+=== Game 8 ===
+G8 T1 AI-A-8 cast Jayemdae Tome -> resolved
+G8 T1 AI-A-8 activate Jayemdae Tome -> resolved
+  AI-A-8 untapped 0 permanent(s)
+  AI-A-8 drew 1 card(s) in draw step
+  AI-A-8 put Jayemdae Tome onto battlefield
+  Jayemdae Tome drew 1 card
+G8 T1 AI-B-8 cast Ancestral Recall -> resolved
+  AI-B-8 untapped 0 permanent(s)
+  AI-B-8 drew 1 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-B-8 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+G8 T2 AI-A-8 cast Lightning Bolt -> resolved
+G8 T2 AI-A-8 activate Jayemdae Tome -> resolved
+  AI-A-8 untapped 1 permanent(s)
+  AI-A-8 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-8 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Jayemdae Tome drew 1 card
+G8 T2 AI-B-8 cast Prodigal Sorcerer -> resolved
+G8 T2 AI-B-8 activate Prodigal Sorcerer -> resolved
+  AI-B-8 untapped 0 permanent(s)
+  AI-B-8 drew 1 card(s) in draw step
+  AI-B-8 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G8 T3 AI-A-8 cast Ancestral Recall -> resolved
+G8 T3 AI-A-8 activate Jayemdae Tome -> resolved
+  AI-A-8 untapped 1 permanent(s)
+  AI-A-8 drew 1 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-A-8 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+  Jayemdae Tome drew 1 card
+G8 T3 AI-B-8 cast Howling Mine -> resolved
+G8 T3 AI-B-8 activate Prodigal Sorcerer -> resolved
+  AI-B-8 untapped 1 permanent(s)
+  AI-B-8 drew 1 card(s) in draw step
+  AI-B-8 put Howling Mine onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G8 T4 AI-A-8 cast Disenchant -> resolved
+G8 T4 AI-A-8 activate Jayemdae Tome -> resolved
+  AI-A-8 untapped 1 permanent(s)
+  AI-A-8 drew 2 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Howling Mine
+  Disenchant resolved and moved to graveyard
+  Jayemdae Tome drew 1 card
+G8 T4 AI-B-8 cast Prodigal Sorcerer -> resolved
+G8 T4 AI-B-8 activate Prodigal Sorcerer -> resolved
+  AI-B-8 untapped 1 permanent(s)
+  AI-B-8 drew 1 card(s) in draw step
+  AI-B-8 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G8 T5 AI-A-8 cast Healing Salve -> resolved
+G8 T5 AI-A-8 activate Jayemdae Tome -> resolved
+  AI-A-8 untapped 1 permanent(s)
+  AI-A-8 drew 1 card(s) in draw step
+  Healing Salve added to stack
+  AI-A-8 gains prevention shield for 3 damage
+  Healing Salve resolved and moved to graveyard
+  Jayemdae Tome drew 1 card
+G8 T5 AI-B-8 cast Grizzly Bears -> resolved
+G8 T5 AI-B-8 activate Prodigal Sorcerer -> resolved
+  AI-B-8 untapped 1 permanent(s)
+  AI-B-8 drew 1 card(s) in draw step
+  AI-B-8 put Grizzly Bears onto battlefield
+  Prodigal Sorcerer dealt 0 damage
+G8 T6 AI-A-8 cast Lightning Bolt -> resolved
+G8 T6 AI-A-8 activate Jayemdae Tome -> resolved
+  AI-A-8 untapped 1 permanent(s)
+  AI-A-8 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-8 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Jayemdae Tome drew 1 card
+G8 T6 AI-B-8 cast Lightning Bolt -> resolved
+G8 T6 AI-B-8 activate Prodigal Sorcerer -> resolved
+  AI-B-8 untapped 1 permanent(s)
+  AI-B-8 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-8 took 1 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G8 T7 AI-A-8 cast Lightning Bolt -> resolved
+G8 T7 AI-A-8 activate Jayemdae Tome -> resolved
+  AI-A-8 untapped 1 permanent(s)
+  AI-A-8 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-8 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Jayemdae Tome drew 1 card
+G8 T7 AI-B-8 cast Ancestral Recall -> resolved
+G8 T7 AI-B-8 activate Prodigal Sorcerer -> resolved
+  AI-B-8 untapped 1 permanent(s)
+  AI-B-8 drew 1 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-B-8 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G8 T8 AI-A-8 cast Lightning Bolt -> resolved
+G8 T8 AI-A-8 activate Jayemdae Tome -> resolved
+  AI-A-8 untapped 1 permanent(s)
+  AI-A-8 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-8 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Jayemdae Tome drew 1 card
+G8 T8 AI-B-8 cast Lightning Bolt -> resolved
+G8 T8 AI-B-8 activate Prodigal Sorcerer -> resolved
+  AI-B-8 untapped 1 permanent(s)
+  AI-B-8 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-8 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G8 T9 AI-A-8 cast Black Lotus -> resolved
+G8 T9 AI-A-8 activate Jayemdae Tome -> resolved
+  AI-A-8 untapped 1 permanent(s)
+  AI-A-8 drew 1 card(s) in draw step
+  AI-A-8 put Black Lotus onto battlefield
+  Jayemdae Tome drew 1 card
+G8 T9 AI-B-8 cast Lightning Bolt -> resolved
+G8 T9 AI-B-8 activate Prodigal Sorcerer -> resolved
+  AI-B-8 untapped 1 permanent(s)
+  AI-B-8 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-8 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G8 T10 AI-A-8 cast Prodigal Sorcerer -> resolved
+G8 T10 AI-A-8 activate Jayemdae Tome -> resolved
+  AI-A-8 untapped 1 permanent(s)
+  AI-A-8 drew 1 card(s) in draw step
+  AI-A-8 put Prodigal Sorcerer onto battlefield
+  Jayemdae Tome drew 1 card
+G8 T10 AI-B-8 cast Unsummon -> resolved
+G8 T10 AI-B-8 activate Prodigal Sorcerer -> resolved
+  AI-B-8 untapped 1 permanent(s)
+  AI-B-8 drew 1 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G8 T11 AI-A-8 cast Grizzly Bears -> resolved
+G8 T11 AI-A-8 activate Jayemdae Tome -> resolved
+  AI-A-8 untapped 1 permanent(s)
+  AI-A-8 drew 1 card(s) in draw step
+  AI-A-8 put Grizzly Bears onto battlefield
+  Jayemdae Tome drew 1 card
+G8 T11 AI-B-8 cast Unsummon -> resolved
+G8 T11 AI-B-8 activate Prodigal Sorcerer -> resolved
+  AI-B-8 untapped 1 permanent(s)
+  AI-B-8 drew 1 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G8 T12 AI-A-8 cast Ancestral Recall -> resolved
+G8 T12 AI-A-8 activate Black Lotus -> resolved
+  AI-A-8 untapped 1 permanent(s)
+  AI-A-8 drew 1 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-A-8 drew 2 cards
+  Ancestral Recall resolved and moved to graveyard
+  Black Lotus sacrificed for mana
+G8 T12 AI-B-8 cast Healing Salve -> resolved
+G8 T12 AI-B-8 activate Prodigal Sorcerer -> resolved
+  AI-B-8 untapped 1 permanent(s)
+  AI-B-8 drew 1 card(s) in draw step
+  Healing Salve added to stack
+  AI-B-8 gains prevention shield for 3 damage
+  Healing Salve resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G8 T13 AI-A-8 cast Jayemdae Tome -> resolved
+  AI-A-8 untapped 0 permanent(s)
+  AI-A-8 drew 0 card(s) in draw step
+  AI-A-8 put Jayemdae Tome onto battlefield
+G8 T13 AI-B-8 cast Black Lotus -> resolved
+G8 T13 AI-B-8 activate Prodigal Sorcerer -> resolved
+  AI-B-8 untapped 1 permanent(s)
+  AI-B-8 drew 1 card(s) in draw step
+  AI-B-8 put Black Lotus onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G8 T14 AI-A-8 cast Howling Mine -> resolved
+  AI-A-8 untapped 0 permanent(s)
+  AI-A-8 drew 0 card(s) in draw step
+  AI-A-8 put Howling Mine onto battlefield
+G8 T14 AI-B-8 cast Black Lotus -> resolved
+G8 T14 AI-B-8 activate Prodigal Sorcerer -> resolved
+  AI-B-8 untapped 1 permanent(s)
+  AI-B-8 drew 2 card(s) in draw step
+  AI-B-8 put Black Lotus onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G8 T15 AI-A-8 cast Black Lotus -> resolved
+G8 T15 AI-A-8 activate Black Lotus -> resolved
+  AI-A-8 untapped 0 permanent(s)
+  AI-A-8 drew 0 card(s) in draw step
+  AI-A-8 put Black Lotus onto battlefield
+  Black Lotus sacrificed for mana
+G8 T15 AI-B-8 cast Jayemdae Tome -> resolved
+G8 T15 AI-B-8 activate Prodigal Sorcerer -> resolved
+  AI-B-8 untapped 1 permanent(s)
+  AI-B-8 drew 2 card(s) in draw step
+  AI-B-8 put Jayemdae Tome onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+RESULT G8: AI-A-8=0, AI-B-8=8
+
+=== Game 9 ===
+G9 T1 AI-A-9 cast Prodigal Sorcerer -> resolved
+G9 T1 AI-A-9 activate Prodigal Sorcerer -> resolved
+  AI-A-9 untapped 0 permanent(s)
+  AI-A-9 drew 1 card(s) in draw step
+  AI-A-9 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G9 T1 AI-B-9 cast Lightning Bolt -> resolved
+  AI-B-9 untapped 0 permanent(s)
+  AI-B-9 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-9 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+G9 T2 AI-A-9 cast Prodigal Sorcerer -> resolved
+G9 T2 AI-A-9 activate Prodigal Sorcerer -> resolved
+  AI-A-9 untapped 1 permanent(s)
+  AI-A-9 drew 1 card(s) in draw step
+  AI-A-9 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G9 T2 AI-B-9 cast Ancestral Recall -> resolved
+  AI-B-9 untapped 0 permanent(s)
+  AI-B-9 drew 1 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-B-9 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+G9 T3 AI-A-9 cast Jayemdae Tome -> resolved
+G9 T3 AI-A-9 activate Prodigal Sorcerer -> resolved
+  AI-A-9 untapped 1 permanent(s)
+  AI-A-9 drew 1 card(s) in draw step
+  AI-A-9 put Jayemdae Tome onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G9 T3 AI-B-9 cast Unsummon -> resolved
+  AI-B-9 untapped 0 permanent(s)
+  AI-B-9 drew 1 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+G9 T4 AI-A-9 cast Grizzly Bears -> resolved
+G9 T4 AI-A-9 activate Prodigal Sorcerer -> resolved
+  AI-A-9 untapped 0 permanent(s)
+  AI-A-9 drew 1 card(s) in draw step
+  AI-A-9 put Grizzly Bears onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G9 T4 AI-B-9 cast Black Lotus -> resolved
+G9 T4 AI-B-9 activate Black Lotus -> resolved
+  AI-B-9 untapped 0 permanent(s)
+  AI-B-9 drew 1 card(s) in draw step
+  AI-B-9 put Black Lotus onto battlefield
+  Black Lotus sacrificed for mana
+G9 T5 AI-A-9 cast Prodigal Sorcerer -> resolved
+G9 T5 AI-A-9 activate Prodigal Sorcerer -> resolved
+  AI-A-9 untapped 1 permanent(s)
+  AI-A-9 drew 1 card(s) in draw step
+  AI-A-9 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G9 T5 AI-B-9 cast Healing Salve -> resolved
+  AI-B-9 untapped 0 permanent(s)
+  AI-B-9 drew 1 card(s) in draw step
+  Healing Salve added to stack
+  AI-B-9 gains prevention shield for 3 damage
+  Healing Salve resolved and moved to graveyard
+G9 T6 AI-A-9 cast Ancestral Recall -> resolved
+G9 T6 AI-A-9 activate Prodigal Sorcerer -> resolved
+  AI-A-9 untapped 1 permanent(s)
+  AI-A-9 drew 1 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-A-9 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+  Prodigal Sorcerer dealt 0 damage
+G9 T6 AI-B-9 cast Grizzly Bears -> resolved
+  AI-B-9 untapped 0 permanent(s)
+  AI-B-9 drew 1 card(s) in draw step
+  AI-B-9 put Grizzly Bears onto battlefield
+G9 T7 AI-A-9 cast Unsummon -> resolved
+G9 T7 AI-A-9 activate Prodigal Sorcerer -> resolved
+  AI-A-9 untapped 1 permanent(s)
+  AI-A-9 drew 1 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+  Prodigal Sorcerer dealt 0 damage
+G9 T7 AI-B-9 cast Disenchant -> resolved
+  AI-B-9 untapped 0 permanent(s)
+  AI-B-9 drew 1 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Jayemdae Tome
+  Disenchant resolved and moved to graveyard
+G9 T8 AI-A-9 cast Grizzly Bears -> resolved
+G9 T8 AI-A-9 activate Prodigal Sorcerer -> resolved
+  AI-A-9 untapped 1 permanent(s)
+  AI-A-9 drew 1 card(s) in draw step
+  AI-A-9 put Grizzly Bears onto battlefield
+  Prodigal Sorcerer dealt 0 damage
+G9 T8 AI-B-9 cast Unsummon -> resolved
+  AI-B-9 untapped 0 permanent(s)
+  AI-B-9 drew 1 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+G9 T9 AI-A-9 cast Black Lotus -> resolved
+G9 T9 AI-A-9 activate Prodigal Sorcerer -> resolved
+  AI-A-9 untapped 0 permanent(s)
+  AI-A-9 drew 1 card(s) in draw step
+  AI-A-9 put Black Lotus onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G9 T9 AI-B-9 cast Howling Mine -> resolved
+  AI-B-9 untapped 0 permanent(s)
+  AI-B-9 drew 1 card(s) in draw step
+  AI-B-9 put Howling Mine onto battlefield
+G9 T10 AI-A-9 cast Disenchant -> resolved
+G9 T10 AI-A-9 activate Prodigal Sorcerer -> resolved
+  AI-A-9 untapped 1 permanent(s)
+  AI-A-9 drew 2 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Howling Mine
+  Disenchant resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G9 T10 AI-B-9 cast Ancestral Recall -> resolved
+  AI-B-9 untapped 0 permanent(s)
+  AI-B-9 drew 1 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-B-9 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+G9 T11 AI-A-9 cast Lightning Bolt -> resolved
+G9 T11 AI-A-9 activate Prodigal Sorcerer -> resolved
+  AI-A-9 untapped 1 permanent(s)
+  AI-A-9 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-9 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G9 T11 AI-B-9 cast Grizzly Bears -> resolved
+  AI-B-9 untapped 0 permanent(s)
+  AI-B-9 drew 1 card(s) in draw step
+  AI-B-9 put Grizzly Bears onto battlefield
+G9 T12 AI-A-9 cast Lightning Bolt -> resolved
+G9 T12 AI-A-9 activate Prodigal Sorcerer -> resolved
+  AI-A-9 untapped 1 permanent(s)
+  AI-A-9 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-9 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G9 T12 AI-B-9 cast Grizzly Bears -> resolved
+  AI-B-9 untapped 0 permanent(s)
+  AI-B-9 drew 1 card(s) in draw step
+  AI-B-9 put Grizzly Bears onto battlefield
+G9 T13 AI-A-9 cast Ancestral Recall -> resolved
+G9 T13 AI-A-9 activate Prodigal Sorcerer -> resolved
+  AI-A-9 untapped 1 permanent(s)
+  AI-A-9 drew 1 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-A-9 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G9 T13 AI-B-9 cast Lightning Bolt -> resolved
+  AI-B-9 untapped 0 permanent(s)
+  AI-B-9 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-9 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+G9 T14 AI-A-9 cast Prodigal Sorcerer -> resolved
+G9 T14 AI-A-9 activate Prodigal Sorcerer -> resolved
+  AI-A-9 untapped 1 permanent(s)
+  AI-A-9 drew 1 card(s) in draw step
+  AI-A-9 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G9 T14 AI-B-9 cast Howling Mine -> resolved
+  AI-B-9 untapped 0 permanent(s)
+  AI-B-9 drew 1 card(s) in draw step
+  AI-B-9 put Howling Mine onto battlefield
+G9 T15 AI-A-9 cast Disenchant -> resolved
+G9 T15 AI-A-9 activate Prodigal Sorcerer -> resolved
+  AI-A-9 untapped 1 permanent(s)
+  AI-A-9 drew 2 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Howling Mine
+  Disenchant resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G9 T15 AI-B-9 cast Jayemdae Tome -> resolved
+G9 T15 AI-B-9 activate Jayemdae Tome -> resolved
+  AI-B-9 untapped 0 permanent(s)
+  AI-B-9 drew 1 card(s) in draw step
+  AI-B-9 put Jayemdae Tome onto battlefield
+  Jayemdae Tome drew 1 card
+G9 T16 AI-A-9 cast Healing Salve -> resolved
+G9 T16 AI-A-9 activate Prodigal Sorcerer -> resolved
+  AI-A-9 untapped 1 permanent(s)
+  AI-A-9 drew 1 card(s) in draw step
+  Healing Salve added to stack
+  AI-A-9 gains prevention shield for 3 damage
+  Healing Salve resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G9 T16 AI-B-9 cast Lightning Bolt -> resolved
+G9 T16 AI-B-9 activate Jayemdae Tome -> resolved
+  AI-B-9 untapped 1 permanent(s)
+  AI-B-9 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-9 took 0 damage
+  Lightning Bolt resolved and moved to graveyard
+  Jayemdae Tome drew 1 card
+G9 T17 AI-A-9 cast Lightning Bolt -> resolved
+G9 T17 AI-A-9 activate Prodigal Sorcerer -> resolved
+  AI-A-9 untapped 1 permanent(s)
+  AI-A-9 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-9 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+RESULT G9: AI-A-9=14, AI-B-9=-3
+
+=== Game 10 ===
+G10 T1 AI-A-10 cast Ancestral Recall -> resolved
+  AI-A-10 untapped 0 permanent(s)
+  AI-A-10 drew 1 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-A-10 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+G10 T1 AI-B-10 cast Ancestral Recall -> resolved
+  AI-B-10 untapped 0 permanent(s)
+  AI-B-10 drew 1 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-B-10 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+G10 T2 AI-A-10 cast Prodigal Sorcerer -> resolved
+G10 T2 AI-A-10 activate Prodigal Sorcerer -> resolved
+  AI-A-10 untapped 0 permanent(s)
+  AI-A-10 drew 1 card(s) in draw step
+  AI-A-10 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G10 T2 AI-B-10 cast Ancestral Recall -> resolved
+  AI-B-10 untapped 0 permanent(s)
+  AI-B-10 drew 1 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-B-10 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+G10 T3 AI-A-10 cast Lightning Bolt -> resolved
+G10 T3 AI-A-10 activate Prodigal Sorcerer -> resolved
+  AI-A-10 untapped 1 permanent(s)
+  AI-A-10 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-10 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G10 T3 AI-B-10 cast Howling Mine -> resolved
+  AI-B-10 untapped 0 permanent(s)
+  AI-B-10 drew 1 card(s) in draw step
+  AI-B-10 put Howling Mine onto battlefield
+G10 T4 AI-A-10 cast Prodigal Sorcerer -> resolved
+G10 T4 AI-A-10 activate Prodigal Sorcerer -> resolved
+  AI-A-10 untapped 1 permanent(s)
+  AI-A-10 drew 2 card(s) in draw step
+  AI-A-10 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G10 T4 AI-B-10 cast Lightning Bolt -> resolved
+  AI-B-10 untapped 0 permanent(s)
+  AI-B-10 drew 2 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-10 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+G10 T5 AI-A-10 cast Howling Mine -> resolved
+G10 T5 AI-A-10 activate Prodigal Sorcerer -> resolved
+  AI-A-10 untapped 1 permanent(s)
+  AI-A-10 drew 2 card(s) in draw step
+  AI-A-10 put Howling Mine onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G10 T5 AI-B-10 cast Disenchant -> resolved
+  AI-B-10 untapped 0 permanent(s)
+  AI-B-10 drew 3 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Howling Mine
+  Disenchant resolved and moved to graveyard
+G10 T6 AI-A-10 cast Howling Mine -> resolved
+G10 T6 AI-A-10 activate Prodigal Sorcerer -> resolved
+  AI-A-10 untapped 1 permanent(s)
+  AI-A-10 drew 2 card(s) in draw step
+  AI-A-10 put Howling Mine onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G10 T6 AI-B-10 cast Disenchant -> resolved
+  AI-B-10 untapped 0 permanent(s)
+  AI-B-10 drew 3 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Howling Mine
+  Disenchant resolved and moved to graveyard
+G10 T7 AI-A-10 cast Jayemdae Tome -> resolved
+G10 T7 AI-A-10 activate Prodigal Sorcerer -> resolved
+  AI-A-10 untapped 1 permanent(s)
+  AI-A-10 drew 2 card(s) in draw step
+  AI-A-10 put Jayemdae Tome onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G10 T7 AI-B-10 cast Grizzly Bears -> resolved
+  AI-B-10 untapped 0 permanent(s)
+  AI-B-10 drew 2 card(s) in draw step
+  AI-B-10 put Grizzly Bears onto battlefield
+G10 T8 AI-A-10 cast Black Lotus -> resolved
+G10 T8 AI-A-10 activate Prodigal Sorcerer -> resolved
+  AI-A-10 untapped 1 permanent(s)
+  AI-A-10 drew 2 card(s) in draw step
+  AI-A-10 put Black Lotus onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G10 T8 AI-B-10 cast Lightning Bolt -> resolved
+  AI-B-10 untapped 0 permanent(s)
+  AI-B-10 drew 2 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-10 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+G10 T9 AI-A-10 cast Grizzly Bears -> resolved
+G10 T9 AI-A-10 activate Prodigal Sorcerer -> resolved
+  AI-A-10 untapped 1 permanent(s)
+  AI-A-10 drew 2 card(s) in draw step
+  AI-A-10 put Grizzly Bears onto battlefield
+  Prodigal Sorcerer dealt 1 damage
+G10 T9 AI-B-10 cast Unsummon -> resolved
+  AI-B-10 untapped 0 permanent(s)
+  AI-B-10 drew 2 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+G10 T10 AI-A-10 cast Unsummon -> resolved
+G10 T10 AI-A-10 activate Prodigal Sorcerer -> resolved
+  AI-A-10 untapped 0 permanent(s)
+  AI-A-10 drew 2 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G10 T10 AI-B-10 cast Grizzly Bears -> resolved
+  AI-B-10 untapped 0 permanent(s)
+  AI-B-10 drew 2 card(s) in draw step
+  AI-B-10 put Grizzly Bears onto battlefield
+G10 T11 AI-A-10 cast Lightning Bolt -> resolved
+G10 T11 AI-A-10 activate Prodigal Sorcerer -> resolved
+  AI-A-10 untapped 1 permanent(s)
+  AI-A-10 drew 2 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-10 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G10 T11 AI-B-10 cast Jayemdae Tome -> resolved
+G10 T11 AI-B-10 activate Jayemdae Tome -> resolved
+  AI-B-10 untapped 0 permanent(s)
+  AI-B-10 drew 2 card(s) in draw step
+  AI-B-10 put Jayemdae Tome onto battlefield
+  Jayemdae Tome drew 1 card
+G10 T12 AI-A-10 cast Disenchant -> resolved
+G10 T12 AI-A-10 activate Prodigal Sorcerer -> resolved
+  AI-A-10 untapped 1 permanent(s)
+  AI-A-10 drew 2 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Howling Mine
+  Disenchant resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G10 T12 AI-B-10 cast Jayemdae Tome -> resolved
+  AI-B-10 untapped 1 permanent(s)
+  AI-B-10 drew 1 card(s) in draw step
+  AI-B-10 put Jayemdae Tome onto battlefield
+G10 T13 AI-A-10 cast Unsummon -> resolved
+G10 T13 AI-A-10 activate Prodigal Sorcerer -> resolved
+  AI-A-10 untapped 1 permanent(s)
+  AI-A-10 drew 1 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+  Prodigal Sorcerer dealt 1 damage
+G10 T13 AI-B-10 cast Unsummon -> resolved
+  AI-B-10 untapped 0 permanent(s)
+  AI-B-10 drew 0 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+G10 T14 AI-A-10 cast Lightning Bolt -> resolved
+G10 T14 AI-A-10 activate Jayemdae Tome -> resolved
+  AI-A-10 untapped 0 permanent(s)
+  AI-A-10 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-10 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Jayemdae Tome drew 1 card
+RESULT G10: AI-A-10=14, AI-B-10=-1
