@@ -6,6 +6,7 @@ let pendingCastTarget = null;
 let pendingCastX = null;
 let pendingManaColor = null;
 let debugSearchTimer = null;
+let symbolMap = {};
 
 const setupEl = document.getElementById("setup");
 const boardEl = document.getElementById("boardPanel");
@@ -65,6 +66,117 @@ function getPhaseDisplayLabel(state) {
 
 function q(id) {
   return document.getElementById(id);
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function normalizeSymbolToken(token) {
+  if (!token || typeof token !== "string" || token.length < 3) {
+    return token;
+  }
+
+  const open = token[0];
+  const close = token[token.length - 1];
+  const isCurly = open === "{" && close === "}";
+  const isParen = open === "(" && close === ")";
+  if (!isCurly && !isParen) {
+    return token;
+  }
+
+  const body = token.slice(1, -1).trim().toUpperCase();
+  return `{${body}}`;
+}
+
+function isLikelyParenManaToken(token) {
+  if (!token || typeof token !== "string" || token.length < 3) return false;
+  if (token[0] !== "(" || token[token.length - 1] !== ")") return false;
+  const body = token.slice(1, -1).trim().toUpperCase();
+  // Restrict parenthesis parsing to mana-like symbols so normal prose is untouched.
+  return /^[0-9WUBRGCXPQST/]+$/.test(body);
+}
+
+function symbolSrc(token) {
+  if (!token || typeof token !== "string") return null;
+  return symbolMap[token] || symbolMap[normalizeSymbolToken(token)] || null;
+}
+
+function renderSymbolsInline(text, symbolClass = "mtg-symbol-inline") {
+  const input = String(text || "");
+  let html = "";
+  let lastIndex = 0;
+  const matches = input.matchAll(/\{[^}]+\}|\([^)]*\)/g);
+
+  for (const match of matches) {
+    const token = match[0];
+    const index = match.index || 0;
+    const isCurlyToken = token[0] === "{" && token[token.length - 1] === "}";
+    const isManaParenToken = isLikelyParenManaToken(token);
+
+    if (!isCurlyToken && !isManaParenToken) {
+      continue;
+    }
+
+    html += escapeHtml(input.slice(lastIndex, index));
+    const src = symbolSrc(token);
+    if (src) {
+      const normalizedToken = normalizeSymbolToken(token);
+      html += `<img class="mtg-symbol ${symbolClass}" src="${escapeHtml(src)}" alt="${escapeHtml(normalizedToken)}" title="${escapeHtml(normalizedToken)}" />`;
+    } else {
+      html += escapeHtml(token);
+    }
+    lastIndex = index + token.length;
+  }
+
+  html += escapeHtml(input.slice(lastIndex));
+  return html.replace(/\n/g, "<br>");
+}
+
+function setSymbolsHtml(element, text, symbolClass = "mtg-symbol-inline") {
+  if (!element) return;
+  element.innerHTML = renderSymbolsInline(text, symbolClass);
+}
+
+function formatManaSymbolsHtml(counts) {
+  const parts = [];
+  for (const symbol of ["W", "U", "B", "R", "G", "C"]) {
+    const count = Number(counts?.[symbol] || 0);
+    if (count > 0) {
+      const src = symbolSrc(`{${symbol}}`);
+      const icon = src
+        ? `<img class="mtg-symbol mtg-symbol-inline" src="${escapeHtml(src)}" alt="{${symbol}}" title="{${symbol}}" />`
+        : symbol;
+      parts.push(`${icon} x${count}`);
+    }
+  }
+  const generic = Number(counts?.generic || 0);
+  if (generic > 0) {
+    const src = symbolSrc(`{${generic}}`);
+    const icon = src
+      ? `<img class="mtg-symbol mtg-symbol-inline" src="${escapeHtml(src)}" alt="{${generic}}" title="{${generic}}" />`
+      : `Generic ${generic}`;
+    parts.push(src ? icon : `${icon} x1`);
+  }
+  return parts.length > 0 ? parts.join(", ") : "No mana cost";
+}
+
+async function loadSymbolMap() {
+  try {
+    const resp = await fetch("/symbols/symbol-map.json", { cache: "no-store" });
+    if (!resp.ok) return;
+    symbolMap = await resp.json();
+    if (currentState) {
+      renderState(currentState);
+    }
+  } catch {
+    symbolMap = {};
+  }
 }
 
 function hideSetupPanel() {
@@ -357,9 +469,9 @@ function renderActivationPrompt() {
     }
     choiceButtons.push('<button type="button" class="prompt-choice-btn" data-x-choice="custom">Custom...</button>');
     steps.innerHTML = [
-      `<div>Cost: ${pendingCastX.card.mana_cost || "none"}</div>`,
-      `<div>Needed: ${formatManaSymbols(pendingCastX.manaRequirement || {})}</div>`,
-      `<div>Current mana: ${me ? formatManaSymbols(me.mana_pool) : "Unknown"}</div>`,
+      `<div>Cost: ${renderSymbolsInline(pendingCastX.card.mana_cost || "none")}</div>`,
+      `<div>Needed: ${formatManaSymbolsHtml(pendingCastX.manaRequirement || {})}</div>`,
+      `<div>Current mana: ${me ? formatManaSymbolsHtml(me.mana_pool) : "Unknown"}</div>`,
       `<div class="prompt-choice-row">${choiceButtons.join("")}</div>`,
     ].join("");
     customRow.classList.toggle("hidden", !pendingCastX.awaitingCustomValue);
@@ -378,10 +490,16 @@ function renderActivationPrompt() {
     title.textContent = `Choose mana color for ${pendingManaColor.cardName}`;
     body.textContent = "Select the mana color this ability should generate.";
     steps.innerHTML = [
-      `<div>Ability: ${pendingManaColor.oracleText || "Activated mana ability"}</div>`,
+      `<div>Ability: ${renderSymbolsInline(pendingManaColor.oracleText || "Activated mana ability")}</div>`,
       `<div class="prompt-choice-row">${MANA_COLOR_OPTIONS.map(
-        ({ symbol, label }) =>
-          `<button type="button" class="prompt-choice-btn" data-mana-color="${symbol}">${label} (${symbol})</button>`,
+        ({ symbol, label }) => {
+          const token = `{${symbol}}`;
+          const src = symbolSrc(token);
+          const symbolHtml = src
+            ? `<img class="mtg-symbol mtg-symbol-inline" src="${escapeHtml(src)}" alt="${escapeHtml(token)}" title="${escapeHtml(token)}" />`
+            : escapeHtml(`(${symbol})`);
+          return `<button type="button" class="prompt-choice-btn" data-mana-color="${symbol}">${escapeHtml(label)} ${symbolHtml}</button>`;
+        },
       ).join("")}</div>`,
     ].join("");
     cancelBtn.disabled = false;
@@ -401,9 +519,9 @@ function renderActivationPrompt() {
       ? "Cost is covered. The activation will be submitted automatically."
       : "Use board actions to generate the missing mana, then this prompt will complete the activation automatically.";
   steps.innerHTML = [
-    `<div>Cost: ${pendingActivation.activationCost || "none"}</div>`,
-    `<div>Needed: ${formatManaSymbols(manaRequirement)}</div>`,
-    `<div>Current mana: ${me ? formatManaSymbols(me.mana_pool) : "Unknown"}</div>`,
+    `<div>Cost: ${renderSymbolsInline(pendingActivation.activationCost || "none")}</div>`,
+    `<div>Needed: ${formatManaSymbolsHtml(manaRequirement)}</div>`,
+    `<div>Current mana: ${me ? formatManaSymbolsHtml(me.mana_pool) : "Unknown"}</div>`,
     `<div>Action: ${pendingActivation.awaitingApproval ? "press OK to start paying, then click lands or other mana sources." : "click lands or other mana sources, then wait for the activation to resolve."}</div>`,
   ].join("");
   customRow.classList.add("hidden");
@@ -723,7 +841,7 @@ function showCardPreview(card) {
   const largeImageUri = normalizeLargeImageUri(card);
   q("cardPreviewName").textContent = normalizeCardName(card) || "Card";
   q("cardPreviewType").textContent = typeof card === "string" ? "" : card.type || "";
-  q("cardPreviewText").textContent = typeof card === "string" ? "" : card.oracle_text || "";
+  setSymbolsHtml(q("cardPreviewText"), typeof card === "string" ? "" : card.oracle_text || "");
 
   if (!largeImageUri) {
     q("cardPreview").classList.add("empty-preview");
@@ -913,7 +1031,12 @@ function renderMana(containerId, manaPool) {
     const chip = document.createElement("div");
     chip.className = `mana-symbol mana-${symbol}`;
     const count = Number(pool[symbol] || 0);
-    chip.innerHTML = `<span>${symbol === "C" ? "GEN" : symbol} ${count}</span>`;
+    const src = symbolSrc(`{${symbol}}`);
+    if (src) {
+      chip.innerHTML = `<span><img class="mtg-symbol mtg-symbol-mana" src="${escapeHtml(src)}" alt="{${symbol}}" title="{${symbol}}" /> ${count}</span>`;
+    } else {
+      chip.innerHTML = `<span>${symbol === "C" ? "GEN" : symbol} ${count}</span>`;
+    }
     container.appendChild(chip);
   }
 }
@@ -951,7 +1074,7 @@ function renderStack(stack) {
     }
     return `${cardName} by ${caster}`;
   });
-  q("stackZone").textContent = `Stack: ${lines.join(" | ")}`;
+  q("stackZone").innerHTML = `Stack:<br>${lines.map((line) => renderSymbolsInline(line)).join("<br>")}`;
 }
 
 function renderLog(state) {
@@ -965,13 +1088,13 @@ function renderLog(state) {
 
   const header = document.createElement("div");
   header.className = "log-item";
-  header.textContent = `Turn ${state.turn_number || "-"} | Phase ${getPhaseDisplayLabel(state)}`;
+  header.innerHTML = renderSymbolsInline(`Turn ${state.turn_number || "-"} | Phase ${getPhaseDisplayLabel(state)}`);
   logRoot.appendChild(header);
 
   entries.forEach((entry, idx) => {
     const item = document.createElement("div");
     item.className = "log-item";
-    item.textContent = `${idx + 1}. ${entry}`;
+    item.innerHTML = renderSymbolsInline(`${idx + 1}. ${entry}`);
     logRoot.appendChild(item);
   });
 }
@@ -1458,6 +1581,8 @@ setDebugMenuEnabled(false);
 fetchDebugSuggestions().catch(() => {
   // Intentionally ignored during startup.
 });
+
+loadSymbolMap();
 
 initDropZones();
 initTabs();

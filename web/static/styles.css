@@ -511,8 +511,25 @@ button:hover {
 .card-preview-text {
   font-size: 0.84rem;
   color: var(--ink-soft);
-  white-space: pre-wrap;
   line-height: 1.45;
+}
+
+.mtg-symbol {
+  display: inline-block;
+  object-fit: contain;
+  vertical-align: text-bottom;
+}
+
+.mtg-symbol-inline {
+  width: 0.95em;
+  height: 0.95em;
+  margin: 0 0.08em;
+}
+
+.mtg-symbol-mana {
+  width: 1.05em;
+  height: 1.05em;
+  margin-right: 0.15em;
 }
 
 .side-label {
@@ -541,6 +558,8 @@ button:hover {
 
 .mana-symbol span {
   font-size: 0.82rem;
+  display: inline-flex;
+  align-items: center;
 }
 
 .mana-W { background: #f9f6df; }
