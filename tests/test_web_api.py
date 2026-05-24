@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+import web.app as web_app
 
 from engine.models import CardDefinition, Permanent
 from web.app import app, store
@@ -45,6 +46,27 @@ def test_create_human_vs_human_session_returns_join_url():
     assert payload["session_id"]
     assert "join_url" in payload
     assert payload["seat"] == 0
+
+
+def test_create_session_uses_lan_ip_join_url_for_localhost(monkeypatch):
+    monkeypatch.setattr(web_app, "_detect_local_ip", lambda: "192.168.1.77")
+
+    response = client.post(
+        "/api/sessions",
+        headers={"host": "localhost:8010"},
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "guest_name": "Guest",
+            "host_colors": 2,
+            "guest_colors": 3,
+            "seed": 124,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["join_url"].startswith("http://192.168.1.77:8010/index.html?session=")
 
 
 def test_join_hvh_session_and_get_redacted_state():

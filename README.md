@@ -44,10 +44,13 @@ pytest
 From the workspace root, start the web app with the project virtual environment:
 
 ```powershell
-.\.venv\Scripts\python.exe -m uvicorn web.app:app --host 127.0.0.1 --port 8010
+.\.venv\Scripts\python.exe -m uvicorn web.app:app --host 0.0.0.0 --port 8010
 ```
 
-Then open `http://127.0.0.1:8010/` in your browser.
+Then open `http://127.0.0.1:8010/` on the host machine.
+
+To join from another computer on the same network, open `http://<your-local-ip>:8010/`.
+The app's generated Join URL now uses your local IP when accessed via localhost.
 
 ## Run Scripted Duel
 

@@ -1096,8 +1096,7 @@ async function createSession() {
   const data = await postJson("/api/sessions", req);
   sessionId = data.session_id;
   seat = data.seat;
-  const joinAbsolute = `${window.location.origin}/index.html?session=${sessionId}`;
-  q("joinUrl").textContent = `Join URL: ${joinAbsolute}`;
+  q("joinUrl").textContent = `Join URL: ${data.join_url}`;
   q("joinUrl").classList.remove("hidden");
   renderState(data.state);
   setVisible(true);
@@ -1129,7 +1128,7 @@ async function joinSession() {
   }
   const data = await postJson(`/api/sessions/${sessionId}/join`, { guest_name: q("joinName").value });
   seat = data.seat;
-  q("joinUrl").textContent = `Join URL: ${window.location.origin}/index.html?session=${sessionId}`;
+  q("joinUrl").textContent = `Join URL: ${data.join_url}`;
   q("joinUrl").classList.remove("hidden");
   renderState(data.state);
   setVisible(true);

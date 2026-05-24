@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import socket
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -214,6 +215,37 @@ def _find_controlled_permanent(
     return None
 
 
+def _detect_local_ip() -> str:
+    # Prefer the routed interface address so other devices on LAN can reach us.
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.connect(("8.8.8.8", 80))
+            ip = sock.getsockname()[0]
+        if ip and not ip.startswith("127."):
+            return ip
+    except OSError:
+        pass
+
+    try:
+        ip = socket.gethostbyname(socket.gethostname())
+        if ip:
+            return ip
+    except OSError:
+        pass
+
+    return "127.0.0.1"
+
+
+def _build_join_url(request: Request, session_id: str) -> str:
+    base_url = request.base_url
+    if request.url.hostname in {"localhost", "127.0.0.1", "0.0.0.0"}:
+        local_ip = _detect_local_ip()
+        if local_ip and local_ip != "127.0.0.1":
+            base_url = base_url.replace(hostname=local_ip)
+
+    return f"{str(base_url).rstrip('/')}/index.html?session={session_id}"
+
+
 def _ai_step(session: Session) -> None:
     seat = session.current_turn
 
@@ -320,9 +352,9 @@ def random_deck(req: RandomDeckRequest):
 
 
 @app.post("/api/sessions")
-def create_session(req: CreateSessionRequest):
+def create_session(req: CreateSessionRequest, request: Request):
     session = store.create(req)
-    join_url = f"/index.html?session={session.id}"
+    join_url = _build_join_url(request, session.id)
     return {
         "session_id": session.id,
         "join_url": join_url,
@@ -332,11 +364,12 @@ def create_session(req: CreateSessionRequest):
 
 
 @app.post("/api/sessions/{session_id}/join")
-def join_session(session_id: str, req: JoinSessionRequest):
+def join_session(session_id: str, req: JoinSessionRequest, request: Request):
     session = _require_session(session_id)
     session = store.join(session_id, req.guest_name)
     return {
         "session_id": session.id,
+        "join_url": _build_join_url(request, session.id),
         "seat": 1,
         "state": _serialize_state(session, viewer_seat=1),
     }
