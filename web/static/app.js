@@ -1340,10 +1340,14 @@ function renderBoard(state) {
   const canEndTurn = seat !== null && isSelfTurn;
   const cleanupDiscard = getCleanupDiscardInfo(state);
   const requiresCleanupSelection = !!cleanupDiscard;
+  const selfLane = document.querySelector(".self-lane");
+  const oppLane = document.querySelector(".opponent-lane");
   setDebugMenuEnabled(sessionId !== null && seat !== null);
   q("endTurnBtn").disabled = !canEndTurn;
+  selfLane?.classList.toggle("turn-zone-self", isSelfTurn);
+  oppLane?.classList.toggle("turn-zone-opponent", !isSelfTurn);
   q("selfName").classList.toggle("active-turn-name", isSelfTurn);
-  q("oppName").classList.toggle("active-turn-name", !isSelfTurn);
+  q("oppName").classList.toggle("opponent-turn-name", !isSelfTurn);
 
   renderCardRow("selfHand", me.hand, {
     draggable: !requiresCleanupSelection,
