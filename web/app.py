@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.staticfiles import StaticFiles
 
 from engine import Game
@@ -19,6 +19,15 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 app = FastAPI(title="Magic LEA Web App")
 store = SessionStore(cards_path=CARDS_PATH)
+
+
+@app.middleware("http")
+async def _no_cache_assets(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path in {"/", "/index.html", "/app.js", "/styles.css"} or request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+    return response
 
 
 def _serialize_permanent(perm: Permanent) -> dict:
@@ -130,7 +139,7 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
 
 
 def _default_target(card_name: str, caster_index: int) -> int:
-    if card_name in {"Ancestral Recall", "Healing Salve"}:
+    if card_name in {"Ancestral Recall", "Healing Salve", "Stream of Life"}:
         return caster_index
     return 1 - caster_index
 
@@ -274,7 +283,7 @@ def do_action(session_id: str, req: GameActionRequest):
                 raise HTTPException(status_code=400, detail="can only cast this card when stack is empty")
 
         target = req.target_seat if req.target_seat is not None else _default_target(req.card_name, req.seat)
-        result = session.game.cast_from_hand(req.seat, req.card_name, target_player_index=target)
+        result = session.game.cast_from_hand(req.seat, req.card_name, target_player_index=target, x_value=req.x_value)
         if not result.supported:
             raise HTTPException(status_code=400, detail=result.details)
 

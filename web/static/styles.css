@@ -82,13 +82,25 @@ button:hover {
 
 .board-shell {
   display: grid;
-  grid-template-columns: 2.1fr 1fr;
+  grid-template-columns: 0.95fr 2.1fr 1fr;
   gap: 12px;
 }
 
 .board-column,
 .side-column {
   min-width: 0;
+}
+
+.center-column {
+  display: flex;
+  flex-direction: column;
+}
+
+.left-column,
+.right-column {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .status-row {
@@ -265,7 +277,6 @@ button:hover {
 .side-column {
   display: flex;
   flex-direction: column;
-  gap: 10px;
 }
 
 .side-panel {
@@ -326,6 +337,33 @@ button:hover {
   gap: 6px;
   color: var(--ink-soft);
   font-size: 0.88rem;
+}
+
+.prompt-choice-row,
+.prompt-custom-input-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.prompt-choice-btn {
+  min-width: 40px;
+}
+
+.prompt-custom-row {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.prompt-custom-label {
+  display: block;
+  margin: 0 0 6px;
+}
+
+.prompt-custom-input-row input {
+  width: 100px;
 }
 
 .preview-panel {
@@ -480,13 +518,6 @@ pre {
   color: var(--ink-soft);
 }
 
-.control-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr auto;
-  gap: 8px;
-  align-items: center;
-}
-
 .button-row {
   margin-top: 10px;
   display: flex;
@@ -494,15 +525,24 @@ pre {
   flex-wrap: wrap;
 }
 
+.button-row button {
+  flex: 1 1 180px;
+}
+
 @media (max-width: 1200px) {
   .board-shell {
     grid-template-columns: 1fr;
   }
 
-  .side-column {
+  .left-column,
+  .right-column {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 10px;
+  }
+
+  .center-column {
+    display: block;
   }
 
   .activation-panel {
@@ -538,10 +578,6 @@ pre {
   }
 
   .side-column {
-    grid-template-columns: 1fr;
-  }
-
-  .control-grid {
     grid-template-columns: 1fr;
   }
 }

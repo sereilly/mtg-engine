@@ -28,6 +28,7 @@ class GameActionRequest(BaseModel):
     card_name: str | None = None
     permanent_name: str | None = None
     target_seat: int | None = Field(default=None, ge=0, le=1)
+    x_value: int | None = Field(default=None, ge=0)
 
 
 class RandomDeckRequest(BaseModel):

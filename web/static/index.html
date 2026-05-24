@@ -40,7 +40,47 @@
 
       <section id="boardPanel" class="panel hidden">
         <div class="board-shell">
-          <div class="board-column">
+          <aside class="side-column left-column">
+            <section class="side-panel">
+              <div class="tab-row">
+                <button id="logTabBtn" class="tab-btn active">Log</button>
+                <button id="rawTabBtn" class="tab-btn">Raw State</button>
+              </div>
+              <div id="logTab" class="tab-body">
+                <div id="logText" class="log-list"></div>
+              </div>
+              <div id="rawTab" class="tab-body hidden">
+                <pre id="rawState"></pre>
+              </div>
+            </section>
+
+            <section class="side-panel">
+              <h3>Stack</h3>
+              <div id="stackZone" class="stack-zone">Stack: empty</div>
+            </section>
+
+            <section id="activationPanel" class="side-panel activation-panel hidden">
+              <div class="prompt-head">
+                <h3>Current Prompt</h3>
+                <div class="prompt-actions">
+                  <button id="promptOkBtn" type="button">OK</button>
+                  <button id="promptCancelBtn" type="button" class="secondary-btn">Cancel</button>
+                </div>
+              </div>
+              <div id="promptTitle" class="prompt-title">No pending activation.</div>
+              <div id="promptBody" class="prompt-body">Select an activated ability to begin paying its cost.</div>
+              <div id="promptSteps" class="prompt-steps"></div>
+              <div id="promptCustomRow" class="prompt-custom-row hidden">
+                <label class="prompt-custom-label" for="promptCustomValue">Choose X</label>
+                <div class="prompt-custom-input-row">
+                  <input id="promptCustomValue" type="number" min="0" value="0" />
+                  <button id="promptCustomOkBtn" type="button">Use Value</button>
+                </div>
+              </div>
+            </section>
+          </aside>
+
+          <div class="board-column center-column">
             <div class="status-row">
               <div id="statusHeadline" class="status-chip">Status: Waiting</div>
               <div id="turnBadge" class="status-chip">Turn: -</div>
@@ -81,20 +121,7 @@
             </section>
           </div>
 
-          <aside class="side-column">
-            <section id="activationPanel" class="side-panel activation-panel hidden">
-              <div class="prompt-head">
-                <h3>Current Prompt</h3>
-                <div class="prompt-actions">
-                  <button id="promptOkBtn" type="button">OK</button>
-                  <button id="promptCancelBtn" type="button" class="secondary-btn">Cancel</button>
-                </div>
-              </div>
-              <div id="promptTitle" class="prompt-title">No pending activation.</div>
-              <div id="promptBody" class="prompt-body">Select an activated ability to begin paying its cost.</div>
-              <div id="promptSteps" class="prompt-steps"></div>
-            </section>
-
+          <aside class="side-column right-column">
             <section class="side-panel preview-panel">
               <h3>Card Preview</h3>
               <div id="cardPreview" class="card-preview-frame empty-preview">
@@ -132,48 +159,11 @@
               <p class="side-label">Opponent Exile</p>
               <div id="oppExileCards" class="zone-cards"></div>
             </section>
-
-            <section class="side-panel">
-              <div class="tab-row">
-                <button id="logTabBtn" class="tab-btn active">Log</button>
-                <button id="rawTabBtn" class="tab-btn">Raw State</button>
-              </div>
-              <div id="logTab" class="tab-body">
-                <div id="logText" class="log-list"></div>
-              </div>
-              <div id="rawTab" class="tab-body hidden">
-                <pre id="rawState"></pre>
-              </div>
-            </section>
           </aside>
         </div>
       </section>
 
       <section id="controls" class="panel hidden">
-        <h2>Manual Controls (Fallback)</h2>
-        <div class="control-grid">
-          <label>Card to cast
-            <select id="castCard"></select>
-          </label>
-          <label>Cast target seat
-            <select id="castTarget">
-              <option value="0">Seat 0</option>
-              <option value="1">Seat 1</option>
-            </select>
-          </label>
-          <button id="castBtn">Cast</button>
-
-          <label>Permanent ability
-            <select id="activatePermanent"></select>
-          </label>
-          <label>Ability target seat
-            <select id="activateTarget">
-              <option value="0">Seat 0</option>
-              <option value="1">Seat 1</option>
-            </select>
-          </label>
-          <button id="activateBtn">Activate</button>
-        </div>
         <div class="button-row">
           <button id="endTurnBtn">End Turn</button>
           <button id="aiStepBtn">Run One AI Step</button>
@@ -182,6 +172,6 @@
       </section>
     </main>
 
-    <script src="/app.js"></script>
+    <script src="/app.js?v=20260524"></script>
   </body>
 </html>

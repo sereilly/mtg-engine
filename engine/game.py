@@ -394,8 +394,12 @@ class Game:
             self.log.append(f"Unsupported card: {card.name} ({classification.reason})")
             return SimulationResult(card.name, False, classification.effect_kind, classification.reason)
 
+        resolved_x_value = x_value
+        if resolved_x_value is None and "{X}" in card.mana_cost.upper():
+            resolved_x_value = self._infer_x_value(caster, card.mana_cost, extra_generic_tax)
+
         if self.enforce_mana_costs and card.primary_type != "land":
-            cost = self._parse_mana_cost(card.mana_cost, x_value=x_value, extra_generic=extra_generic_tax)
+            cost = self._parse_mana_cost(card.mana_cost, x_value=resolved_x_value, extra_generic=extra_generic_tax)
             if not self._pay_mana_cost(caster, cost):
                 details = f"insufficient mana for {card.name}"
                 self.log.append(details)
@@ -409,7 +413,7 @@ class Game:
                     card=card,
                     caster_index=caster_index,
                     target_player_index=target_player_index,
-                    x_value=x_value,
+                    x_value=resolved_x_value,
                 )
             )
             self.log.append(f"{card.name} added to stack")
@@ -420,9 +424,53 @@ class Game:
             card=card,
             classification=classification,
             target_player_index=target_player_index,
-            x_value=x_value,
+            x_value=resolved_x_value,
         )
         return SimulationResult(card.name, True, classification.effect_kind, "resolved")
+
+    def _infer_x_value(self, player: PlayerState, mana_cost: str, extra_generic: int = 0) -> int:
+        required = self._parse_mana_cost(mana_cost, x_value=0, extra_generic=extra_generic)
+        temp = {symbol: player.mana_pool.get(symbol, 0) for symbol in ("W", "U", "B", "R", "G", "C")}
+
+        if temp.get("W", 0) < required["W"]:
+            return 0
+        if temp.get("U", 0) < required["U"]:
+            return 0
+        if temp.get("B", 0) < required["B"]:
+            return 0
+        if temp.get("G", 0) < required["G"]:
+            return 0
+        if temp.get("C", 0) < required["C"]:
+            return 0
+
+        available_red = temp.get("R", 0)
+        if player.can_spend_white_as_red:
+            available_red += temp.get("W", 0)
+        if available_red < required["R"]:
+            return 0
+
+        temp["W"] -= required["W"]
+        temp["U"] -= required["U"]
+        temp["B"] -= required["B"]
+        temp["G"] -= required["G"]
+        temp["C"] -= required["C"]
+
+        red_to_pay = required["R"]
+        from_red = min(temp.get("R", 0), red_to_pay)
+        temp["R"] -= from_red
+        red_to_pay -= from_red
+        if red_to_pay > 0:
+            if not player.can_spend_white_as_red:
+                return 0
+            if temp.get("W", 0) < red_to_pay:
+                return 0
+            temp["W"] -= red_to_pay
+
+        available_generic = sum(max(0, temp.get(sym, 0)) for sym in ("C", "W", "U", "B", "R", "G"))
+        if available_generic < required["generic"]:
+            return 0
+
+        return available_generic - required["generic"]
 
     def _parse_mana_cost(self, mana_cost: str, x_value: int | None, extra_generic: int = 0) -> dict[str, int]:
         required = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0, "generic": max(0, extra_generic)}
@@ -460,7 +508,7 @@ class Game:
         if available_red < required["R"]:
             return False
 
-        temp = dict(pool)
+        temp = {symbol: pool.get(symbol, 0) for symbol in ("W", "U", "B", "R", "G", "C")}
         temp["W"] -= required["W"]
         temp["U"] -= required["U"]
         temp["B"] -= required["B"]
@@ -834,8 +882,16 @@ class Game:
         lose_life_match = re.search(r"target player loses (\d+) life", text)
         if lose_life_match:
             amount = int(lose_life_match.group(1))
+            before = target.life
             target.life -= amount
-            self.log.append(f"{target.name} lost {amount} life")
+            self.log.append(f"{card.name}: {target.name} lost {amount} life ({before} -> {target.life})")
+            return
+
+        if "gains x life" in text or "gain x life" in text:
+            amount = max(0, x_value or 0)
+            before = target.life
+            target.life += amount
+            self.log.append(f"{card.name}: {target.name} gained {amount} life ({before} -> {target.life})")
             return
 
         if "untap target" in text:
@@ -861,11 +917,12 @@ class Game:
             return
 
         if "gain" in text and "life" in text:
-            gain_match = re.search(r"gain (\d+) life", text)
+            gain_match = re.search(r"gains? (\d+) life", text)
             if gain_match:
                 amount = int(gain_match.group(1))
-                caster.life += amount
-                self.log.append(f"{caster.name} gained {amount} life")
+                before = target.life
+                target.life += amount
+                self.log.append(f"{card.name}: {target.name} gained {amount} life ({before} -> {target.life})")
                 return
 
         # Pattern-supported but no deterministic action in MVP.

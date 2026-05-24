@@ -2,6 +2,8 @@ let sessionId = null;
 let seat = null;
 let currentState = null;
 let pendingActivation = null;
+let pendingCastTarget = null;
+let pendingCastX = null;
 
 const setupEl = document.getElementById("setup");
 const sessionEl = document.getElementById("session");
@@ -128,6 +130,31 @@ function manaPoolCanPayCost(manaPool, required) {
   return remaining >= required.generic;
 }
 
+function hasXCost(card) {
+  return !!card && typeof card !== "string" && (card.mana_cost || "").toUpperCase().includes("{X}");
+}
+
+function cardRequiresTargetPlayer(card) {
+  if (!card || typeof card === "string") return false;
+  return (card.oracle_text || "").toLowerCase().includes("target player");
+}
+
+function getMaxAffordableX(manaPool, manaCost) {
+  const pool = manaPool || {};
+  const cost = parseManaCostSymbols(manaCost || "");
+  const totalMana = MANA_ORDER.reduce((sum, symbol) => sum + Number(pool[symbol] || 0), 0);
+  const fixedCost = cost.W + cost.U + cost.B + cost.R + cost.G + cost.C + cost.generic;
+  const maxPossible = Math.max(0, totalMana - fixedCost);
+
+  for (let candidate = maxPossible; candidate >= 0; candidate -= 1) {
+    if (manaPoolCanPayCost(pool, { ...cost, generic: cost.generic + candidate })) {
+      return candidate;
+    }
+  }
+
+  return 0;
+}
+
 function formatManaSymbols(counts) {
   const parts = [];
   for (const symbol of ["W", "U", "B", "R", "G", "C"]) {
@@ -147,6 +174,20 @@ function getCurrentPlayerState(state = currentState) {
   return state.players?.[seat] || null;
 }
 
+function getDefaultTargetSeat(cardName) {
+  if (seat === null) return 1;
+  if (["Ancestral Recall", "Healing Salve", "Stream of Life"].includes(cardName)) {
+    return seat;
+  }
+  return 1 - seat;
+}
+
+function findCardInCurrentHand(cardName) {
+  const me = getCurrentPlayerState();
+  if (!me || !Array.isArray(me.hand)) return null;
+  return me.hand.find((card) => normalizeCardName(card) === cardName) || null;
+}
+
 function renderActivationPrompt() {
   const panel = q("activationPanel");
   const title = q("promptTitle");
@@ -154,19 +195,70 @@ function renderActivationPrompt() {
   const steps = q("promptSteps");
   const cancelBtn = q("promptCancelBtn");
   const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customValue = q("promptCustomValue");
+  const customOkBtn = q("promptCustomOkBtn");
   const me = getCurrentPlayerState();
 
-  if (!pendingActivation) {
+  if (!pendingActivation && !pendingCastTarget && !pendingCastX) {
     panel.classList.add("hidden");
     title.textContent = "No pending activation.";
     body.textContent = "Select an activated ability to begin paying its cost.";
     steps.innerHTML = "";
+    customRow.classList.add("hidden");
+    okBtn.classList.remove("hidden");
     okBtn.disabled = true;
     cancelBtn.disabled = true;
+    customOkBtn.disabled = true;
+    return;
+  }
+
+  if (pendingCastTarget) {
+    panel.classList.remove("hidden");
+    okBtn.classList.add("hidden");
+    customRow.classList.add("hidden");
+    title.textContent = `Choose target for ${pendingCastTarget.cardName}`;
+    body.textContent = "This spell targets a player. Choose who should receive it.";
+    steps.innerHTML = [
+      `<div>Card: ${pendingCastTarget.cardName}</div>`,
+      `<div class="prompt-choice-row">${[
+        `<button type="button" class="prompt-choice-btn" data-target-choice="${seat}">You</button>`,
+        `<button type="button" class="prompt-choice-btn" data-target-choice="${1 - seat}">Opponent</button>`,
+      ].join("")}</div>`,
+    ].join("");
+    okBtn.disabled = true;
+    cancelBtn.disabled = false;
+    customOkBtn.disabled = true;
+    return;
+  }
+
+  if (pendingCastX) {
+    panel.classList.remove("hidden");
+    okBtn.classList.add("hidden");
+    title.textContent = `Choose X for ${pendingCastX.cardName}`;
+    body.textContent = `You have ${pendingCastX.maxX} mana available for X after paying the colored cost.`;
+    const choiceButtons = [];
+    for (let value = 0; value <= pendingCastX.maxX; value += 1) {
+      choiceButtons.push(`<button type="button" class="prompt-choice-btn" data-x-choice="${value}">${value}</button>`);
+    }
+    choiceButtons.push('<button type="button" class="prompt-choice-btn" data-x-choice="custom">Custom...</button>');
+    steps.innerHTML = [
+      `<div>Cost: ${pendingCastX.card.mana_cost || "none"}</div>`,
+      `<div>Needed: ${formatManaSymbols(pendingCastX.manaRequirement || {})}</div>`,
+      `<div>Current mana: ${me ? formatManaSymbols(me.mana_pool) : "Unknown"}</div>`,
+      `<div class="prompt-choice-row">${choiceButtons.join("")}</div>`,
+    ].join("");
+    customRow.classList.toggle("hidden", !pendingCastX.awaitingCustomValue);
+    customValue.max = String(pendingCastX.maxX);
+    customValue.value = String(Math.min(Number(customValue.value || 0), pendingCastX.maxX));
+    okBtn.disabled = true;
+    cancelBtn.disabled = false;
+    customOkBtn.disabled = !pendingCastX.awaitingCustomValue;
     return;
   }
 
   panel.classList.remove("hidden");
+  okBtn.classList.remove("hidden");
   const manaRequirement = pendingActivation.manaRequirement || {};
   const canPay = me ? manaPoolCanPayCost(me.mana_pool, manaRequirement) : false;
 
@@ -182,8 +274,10 @@ function renderActivationPrompt() {
     `<div>Current mana: ${me ? formatManaSymbols(me.mana_pool) : "Unknown"}</div>`,
     `<div>Action: ${pendingActivation.awaitingApproval ? "press OK to start paying, then click lands or other mana sources." : "click lands or other mana sources, then wait for the activation to resolve."}</div>`,
   ].join("");
+  customRow.classList.add("hidden");
   okBtn.disabled = !pendingActivation.awaitingApproval;
   cancelBtn.disabled = false;
+  customOkBtn.disabled = true;
 }
 
 async function attemptPendingActivation() {
@@ -243,12 +337,89 @@ function startActivationPrompt(card, targetSeat) {
   );
 }
 
+function startCastTargetPrompt(card) {
+  const cardName = normalizeCardName(card);
+  if (!cardName) return;
+
+  pendingCastTarget = {
+    card,
+    cardName,
+  };
+  renderActivationPrompt();
+  updateActionHint(`Choose a target for ${cardName}.`);
+}
+
+function startCastXPrompt(card, targetSeat) {
+  const cardName = normalizeCardName(card);
+  if (!cardName) return;
+
+  pendingCastX = {
+    kind: "cast_x",
+    card,
+    cardName,
+    targetSeat,
+    manaRequirement: parseManaCostSymbols(card.mana_cost || ""),
+    maxX: getMaxAffordableX(getCurrentPlayerState()?.mana_pool, card.mana_cost || ""),
+    awaitingCustomValue: false,
+  };
+  renderActivationPrompt();
+  updateActionHint(`Choose X for ${cardName}.`);
+}
+
+function resolvePendingCastTarget(targetSeat) {
+  if (!pendingCastTarget) return;
+  const pending = pendingCastTarget;
+  const selectedTarget = Number.isInteger(targetSeat) ? targetSeat : seat;
+  pendingCastTarget = null;
+  renderActivationPrompt();
+
+  if (hasXCost(pending.card)) {
+    startCastXPrompt(pending.card, selectedTarget);
+    return;
+  }
+
+  updateActionHint(`Casting ${pending.cardName} targeting seat ${selectedTarget}...`);
+  sendAction({
+    seat,
+    action: "cast",
+    card_name: pending.cardName,
+    target_seat: selectedTarget,
+  })
+    .then(() => updateActionHint(`Cast ${pending.cardName} targeting seat ${selectedTarget}.`))
+    .catch((e) => updateActionHint(e.message, true));
+}
+
 function confirmPendingActivation() {
   if (!pendingActivation || !pendingActivation.awaitingApproval) return;
   pendingActivation.awaitingApproval = false;
   renderActivationPrompt();
   updateActionHint(`Paying activation cost for ${pendingActivation.cardName}.`);
   attemptPendingActivation();
+}
+
+function resolvePendingCastX(xValue) {
+  if (!pendingCastX) return;
+  const maxX = Number(pendingCastX.maxX || 0);
+  const selectedX = Number.isInteger(xValue) ? xValue : Number(q("promptCustomValue").value);
+  if (!Number.isInteger(selectedX) || selectedX < 0 || selectedX > maxX) {
+    updateActionHint(`Choose an X value between 0 and ${maxX}.`, true);
+    return;
+  }
+
+  const pending = pendingCastX;
+  pendingCastX = null;
+  renderActivationPrompt();
+  updateActionHint(`Casting ${pending.cardName} with X = ${selectedX}...`);
+
+  sendAction({
+    seat,
+    action: "cast",
+    card_name: pending.cardName,
+    target_seat: pending.targetSeat,
+    x_value: selectedX,
+  })
+    .then(() => updateActionHint(`Cast ${pending.cardName} with X = ${selectedX}.`))
+    .catch((e) => updateActionHint(e.message, true));
 }
 
 function normalizeCardName(card) {
@@ -387,9 +558,7 @@ function createCardElement(card, options = {}) {
           return;
         }
 
-        const activationCost = getActivatedAbilityCost(card);
-        const targetSeat = Number(q("activateTarget")?.value ?? String(1 - seat));
-        startActivationPrompt(card, targetSeat);
+        startActivationPrompt(card, 1 - seat);
       } catch (e) {
         updateActionHint(e.message, true);
       }
@@ -411,7 +580,17 @@ function createCardElement(card, options = {}) {
         const cardName = normalizeCardName(card);
         if (!cardName) return;
 
-        const targetSeat = Number(q("castTarget")?.value ?? String(1 - seat));
+        if (cardRequiresTargetPlayer(card)) {
+          startCastTargetPrompt(card);
+          return;
+        }
+
+        const targetSeat = getDefaultTargetSeat(cardName);
+        if (hasXCost(card)) {
+          startCastXPrompt(card, targetSeat);
+          return;
+        }
+
         await sendAction({ seat, action: "cast", card_name: cardName, target_seat: targetSeat });
         updateActionHint(`Cast ${cardName} targeting seat ${targetSeat}.`);
       } catch (e) {
@@ -498,35 +677,6 @@ function renderLog(state) {
   });
 }
 
-function populateManualControls(state) {
-  const me = seat !== null ? state.players[seat] : null;
-  const castSelect = q("castCard");
-  const activateSelect = q("activatePermanent");
-  castSelect.innerHTML = "";
-  activateSelect.innerHTML = "";
-
-  if (!me) return;
-
-  for (const card of me.hand) {
-    if (card === "<hidden>") continue;
-    const name = normalizeCardName(card);
-    if (!name) continue;
-    const opt = document.createElement("option");
-    opt.value = name;
-    opt.textContent = name;
-    castSelect.appendChild(opt);
-  }
-
-  for (const perm of me.battlefield) {
-    const name = normalizeCardName(perm);
-    if (!name) continue;
-    const opt = document.createElement("option");
-    opt.value = name;
-    opt.textContent = name;
-    activateSelect.appendChild(opt);
-  }
-}
-
 function renderBoard(state) {
   const viewerSeat = seat ?? 0;
   const oppSeat = viewerSeat === 0 ? 1 : 0;
@@ -576,7 +726,6 @@ function renderState(state) {
     hideSetupPanel();
   }
   renderBoard(state);
-  populateManualControls(state);
   renderActivationPrompt();
   attemptPendingActivation();
 }
@@ -622,8 +771,18 @@ function initDropZones() {
     const targetSeat = Number(element.dataset.targetSeat || String(seat));
     try {
       if (payload.kind === "hand") {
-        await sendAction({ seat, action: "cast", card_name: payload.name, target_seat: targetSeat });
-        updateActionHint(`Cast ${payload.name} targeting seat ${targetSeat}.`);
+        const card = findCardInCurrentHand(payload.name);
+        if (card && cardRequiresTargetPlayer(card)) {
+          startCastTargetPrompt(card);
+          return;
+        }
+        const castTargetSeat = card ? getDefaultTargetSeat(payload.name) : targetSeat;
+        if (card && hasXCost(card)) {
+          startCastXPrompt(card, castTargetSeat);
+          return;
+        }
+        await sendAction({ seat, action: "cast", card_name: payload.name, target_seat: castTargetSeat });
+        updateActionHint(`Cast ${payload.name} targeting seat ${castTargetSeat}.`);
         return;
       }
       if (payload.kind === "permanent") {
@@ -642,8 +801,18 @@ function initDropZones() {
     const targetSeat = Number(element.dataset.targetSeat || "1");
     try {
       if (payload.kind === "hand") {
-        await sendAction({ seat, action: "cast", card_name: payload.name, target_seat: targetSeat });
-        updateActionHint(`Cast ${payload.name} targeting seat ${targetSeat}.`);
+        const card = findCardInCurrentHand(payload.name);
+        if (card && cardRequiresTargetPlayer(card)) {
+          startCastTargetPrompt(card);
+          return;
+        }
+        const castTargetSeat = card ? getDefaultTargetSeat(payload.name) : targetSeat;
+        if (card && hasXCost(card)) {
+          startCastXPrompt(card, castTargetSeat);
+          return;
+        }
+        await sendAction({ seat, action: "cast", card_name: payload.name, target_seat: castTargetSeat });
+        updateActionHint(`Cast ${payload.name} targeting seat ${castTargetSeat}.`);
         return;
       }
       if (payload.kind === "permanent") {
@@ -780,43 +949,40 @@ q("joinBtn").addEventListener("click", async () => {
   }
 });
 
-q("castBtn").addEventListener("click", async () => {
-  try {
-    await sendAction({
-      seat,
-      action: "cast",
-      card_name: q("castCard").value,
-      target_seat: Number(q("castTarget").value),
-    });
-    updateActionHint(`Cast ${q("castCard").value}.`);
-  } catch (e) {
-    alert(e.message);
-  }
-});
-
-q("activateBtn").addEventListener("click", async () => {
-  try {
-    const me = getCurrentPlayerState();
-    const cardName = q("activatePermanent").value;
-    const card = me ? me.battlefield.find((perm) => normalizeCardName(perm) === cardName) : null;
-    if (!card) {
-      updateActionHint(`Permanent not found: ${cardName}`, true);
-      return;
-    }
-    startActivationPrompt(card, Number(q("activateTarget").value));
-  } catch (e) {
-    alert(e.message);
-  }
-});
-
 q("promptCancelBtn").addEventListener("click", () => {
   pendingActivation = null;
+  pendingCastTarget = null;
+  pendingCastX = null;
   renderActivationPrompt();
-  updateActionHint("Activation canceled.");
+  updateActionHint("Prompt canceled.");
 });
 
 q("promptOkBtn").addEventListener("click", () => {
   confirmPendingActivation();
+});
+
+q("promptCustomOkBtn").addEventListener("click", () => {
+  resolvePendingCastX();
+});
+
+q("promptSteps").addEventListener("click", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+
+  const targetChoice = target.dataset.targetChoice;
+  if (targetChoice && pendingCastTarget) {
+    resolvePendingCastTarget(Number(targetChoice));
+    return;
+  }
+
+  const choice = target.dataset.xChoice;
+  if (!choice || !pendingCastX) return;
+  if (choice === "custom") {
+    pendingCastX.awaitingCustomValue = true;
+    renderActivationPrompt();
+    return;
+  }
+  resolvePendingCastX(Number(choice));
 });
 
 q("endTurnBtn").addEventListener("click", async () => {

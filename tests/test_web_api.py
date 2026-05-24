@@ -152,6 +152,152 @@ def test_web_session_requires_paid_mana_before_cast():
     assert store.get(sid).game.players[1].life == 17
 
 
+def test_web_cast_accepts_explicit_x_value():
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "guest_name": "Guest",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 4041,
+        },
+    ).json()
+    sid = created["session_id"]
+
+    session = store.get(sid)
+    stream = _mk_card(
+        name="Stream of Life",
+        mana_cost="{X}{G}",
+        type_line="Sorcery",
+        oracle_text="Target player gains X life.",
+    )
+    session.game.players[0].hand = [stream]
+    session.game.players[0].mana_pool = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 1, "C": 1}
+    session.game.players[0].life = 10
+
+    response = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "cast", "card_name": "Stream of Life", "target_seat": 0, "x_value": 1},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["players"][0]["life"] == 11
+    assert any("Stream of Life" in entry and "10 -> 11" in entry for entry in payload["log"])
+
+
+def test_stream_of_life_defaults_to_self_target():
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "guest_name": "Guest",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 4042,
+        },
+    ).json()
+    sid = created["session_id"]
+
+    session = store.get(sid)
+    stream = _mk_card(
+        name="Stream of Life",
+        mana_cost="{X}{G}",
+        type_line="Sorcery",
+        oracle_text="Target player gains X life.",
+    )
+    session.game.players[0].hand = [stream]
+    session.game.players[0].mana_pool = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 1, "C": 1}
+    session.game.players[0].life = 10
+
+    response = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "cast", "card_name": "Stream of Life", "x_value": 1},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["players"][0]["life"] == 11
+    assert payload["players"][1]["life"] == 20
+    assert any("Stream of Life" in entry and "10 -> 11" in entry for entry in payload["log"])
+
+
+def test_stream_of_life_x_spends_generic_mana_from_pool():
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "guest_name": "Guest",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 4043,
+        },
+    ).json()
+    sid = created["session_id"]
+
+    session = store.get(sid)
+    stream = _mk_card(
+        name="Stream of Life",
+        mana_cost="{X}{G}",
+        type_line="Sorcery",
+        oracle_text="Target player gains X life.",
+    )
+    session.game.players[0].hand = [stream]
+    session.game.players[0].mana_pool = {"W": 0, "U": 0, "B": 1, "R": 0, "G": 1, "C": 0}
+    session.game.players[0].life = 10
+
+    response = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "cast", "card_name": "Stream of Life", "target_seat": 0, "x_value": 1},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["players"][0]["life"] == 11
+    assert payload["players"][0]["mana_pool"]["G"] == 0
+    assert payload["players"][0]["mana_pool"]["B"] == 0
+
+
+def test_stream_of_life_updates_life_total_and_log_in_response():
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "guest_name": "Guest",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 4040,
+        },
+    ).json()
+    sid = created["session_id"]
+
+    session = store.get(sid)
+    stream = _mk_card(
+        name="Stream of Life",
+        mana_cost="{X}{G}",
+        type_line="Sorcery",
+        oracle_text="Target player gains X life.",
+    )
+    session.game.players[0].hand = [stream]
+    session.game.players[0].mana_pool = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 1, "C": 1}
+    session.game.players[0].life = 10
+
+    response = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "cast", "card_name": "Stream of Life", "target_seat": 0},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["players"][0]["life"] == 11
+    assert any("Stream of Life" in entry and "10 -> 11" in entry for entry in payload["log"])
+
+
 def test_tap_action_on_land_adds_mana_and_cannot_retap():
     created = client.post(
         "/api/sessions",

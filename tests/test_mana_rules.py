@@ -83,3 +83,23 @@ def test_tapping_basic_land_without_produced_mana_uses_land_type():
 
     assert game.tap_land_for_mana(0, "Swamp")
     assert p1.mana_pool["B"] == 1
+
+
+def test_x_spell_infers_x_from_paid_mana():
+    spell = _mk_card(
+        name="Stream of Life",
+        mana_cost="{X}{G}",
+        type_line="Sorcery",
+        oracle_text="Target player gains X life.",
+    )
+
+    p1 = PlayerState(name="P1", hand=[spell], mana_pool={"G": 1, "C": 1}, life=10)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2], enforce_mana_costs=True)
+
+    result = game.cast_from_hand(0, "Stream of Life", target_player_index=0)
+
+    assert result.supported
+    assert p1.life == 11
+    assert p1.mana_pool["G"] == 0
+    assert p1.mana_pool["C"] == 0
