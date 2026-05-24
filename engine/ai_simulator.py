@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 import random
 
+from .ai_policy import choose_activation_action, choose_cast_action
 from .card_loader import load_cards
 from .game import Game
 from .models import CardDefinition, Permanent, PlayerState
@@ -94,55 +95,6 @@ def _zone_counter(player: PlayerState) -> Counter[str]:
             continue
         counter[permanent.card.name] += 1
     return counter
-
-
-def _choose_target_index(card_name: str, caster_index: int) -> int:
-    if card_name in {"Ancestral Recall", "Healing Salve"}:
-        return caster_index
-    return 1 - caster_index
-
-
-def _can_cast(game: Game, caster_index: int, card: CardDefinition) -> bool:
-    opponent = game.players[1 - caster_index]
-    if card.name == "Unsummon":
-        return any(perm.card.primary_type == "creature" for perm in opponent.battlefield)
-    if card.name == "Disenchant":
-        return any(perm.card.primary_type in {"artifact", "enchantment"} for perm in opponent.battlefield)
-    return True
-
-
-def _pick_castable(game: Game, player_index: int) -> CardDefinition | None:
-    player = game.players[player_index]
-    nonlands = [card for card in player.hand if card.primary_type != "land"]
-    lands = [card for card in player.hand if card.primary_type == "land"]
-
-    for card in nonlands:
-        if _can_cast(game, player_index, card):
-            return card
-    if lands:
-        return lands[0]
-    return None
-
-
-def _activate_if_available(game: Game, player_index: int, turn_log: list[str]) -> int:
-    player = game.players[player_index]
-    activated = 0
-    for permanent in player.battlefield:
-        if permanent.tapped:
-            continue
-        if permanent.card.name == "Prodigal Sorcerer":
-            result = game.activate_permanent_ability(player_index, permanent.card.name, target_player_index=1 - player_index)
-            turn_log.append(f"activate {permanent.card.name} -> {result.details}")
-            return 1
-        if permanent.card.name == "Jayemdae Tome" and player.library:
-            result = game.activate_permanent_ability(player_index, permanent.card.name, target_player_index=player_index)
-            turn_log.append(f"activate {permanent.card.name} -> {result.details}")
-            return 1
-        if permanent.card.name == "Black Lotus":
-            result = game.activate_permanent_ability(player_index, permanent.card.name, target_player_index=player_index)
-            turn_log.append(f"activate {permanent.card.name} -> {result.details}")
-            return 1
-    return activated
 
 
 def _assert_expected(
@@ -247,11 +199,21 @@ def run_ai_simulation(cards_path: Path, games: int = 10, seed: int = 1337, max_t
                 game.resolve_upkeep(active)
                 game.resolve_draw_step(active)
 
-                card_to_cast = _pick_castable(game, active)
-                if card_to_cast is not None:
-                    target_index = _choose_target_index(card_to_cast.name, active)
+                cast_action = choose_cast_action(game, active)
+                if cast_action is not None:
+                    card_to_cast = game.players[active].hand[cast_action.hand_index]
+
+                    for permanent_index in cast_action.land_tap_indices:
+                        permanent = game.players[active].battlefield[permanent_index]
+                        game.tap_land_for_mana(active, permanent.card.name, permanent_index=permanent_index)
+
                     before = _snap(game)
-                    result = game.cast_from_hand(active, card_to_cast.name, target_player_index=target_index)
+                    result = game.cast_from_hand(
+                        active,
+                        card_to_cast.name,
+                        target_player_index=cast_action.target_player_index,
+                        x_value=cast_action.x_value,
+                    )
                     after = _snap(game)
                     report.interaction_count += 1
                     report.log_lines.append(
@@ -261,15 +223,33 @@ def run_ai_simulation(cards_path: Path, games: int = 10, seed: int = 1337, max_t
                         report.issues.append(
                             InteractionIssue(game_index, turn, f"Unsupported card cast in simulation: {card_to_cast.name}")
                         )
-                    expectation_error = _assert_expected(card_to_cast, before, after, active, target_index)
+                    expectation_error = _assert_expected(
+                        card_to_cast,
+                        before,
+                        after,
+                        active,
+                        cast_action.target_player_index,
+                    )
                     if expectation_error:
                         report.issues.append(InteractionIssue(game_index, turn, expectation_error))
 
-                turn_log: list[str] = []
-                _activate_if_available(game, active, turn_log)
-                for entry in turn_log:
+                activation_action = choose_activation_action(game, active)
+                if activation_action is not None:
+                    for permanent_index in activation_action.land_tap_indices:
+                        permanent = game.players[active].battlefield[permanent_index]
+                        game.tap_land_for_mana(active, permanent.card.name, permanent_index=permanent_index)
+
+                    result = game.activate_permanent_ability(
+                        active,
+                        activation_action.permanent_name,
+                        target_player_index=activation_action.target_player_index,
+                        permanent_index=activation_action.permanent_index,
+                    )
                     report.interaction_count += 1
-                    report.log_lines.append(f"G{game_index} T{turn} {active_player.name} {entry}")
+                    report.log_lines.append(
+                        f"G{game_index} T{turn} {active_player.name} "
+                        f"activate {activation_action.permanent_name} -> {result.details}"
+                    )
 
                 new_logs = game.log[log_cursor:]
                 report.log_lines.extend(f"  {line}" for line in new_logs)

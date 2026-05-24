@@ -1,0 +1,427 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+import re
+
+from .game import Game
+from .models import CardDefinition, Permanent, PlayerState
+from .oracle import OracleInstruction, compile_card_oracle
+
+_MANA_SYMBOLS = ("W", "U", "B", "R", "G", "C")
+
+
+@dataclass(frozen=True)
+class CastAction:
+    card_name: str
+    target_player_index: int
+    x_value: int | None
+    land_tap_indices: tuple[int, ...]
+    score: float
+    hand_index: int
+
+
+@dataclass(frozen=True)
+class ActivationAction:
+    permanent_name: str
+    permanent_index: int
+    target_player_index: int
+    land_tap_indices: tuple[int, ...]
+    score: float
+
+
+def choose_cast_action(game: Game, player_index: int) -> CastAction | None:
+    player = game.players[player_index]
+    opponent = game.players[1 - player_index]
+
+    best: CastAction | None = None
+    for hand_index, card in enumerate(player.hand):
+        if card.primary_type == "land" and game.enforce_mana_costs and game.lands_played_this_turn.get(player_index, 0) >= 1:
+            continue
+        if not _can_cast_with_targets(game, player_index, card):
+            continue
+
+        target = _choose_target_for_spell(card, player_index, game)
+        x_value = _pick_x_value(game, player, card)
+        tap_indices: tuple[int, ...] = ()
+
+        if game.enforce_mana_costs and card.primary_type != "land":
+            required = game._parse_mana_cost(card.mana_cost, x_value=x_value, extra_generic=_extra_generic_tax(game, card))
+            plan = _plan_taps_for_cost(player, required)
+            if plan is None:
+                continue
+            tap_indices = tuple(plan)
+
+        score = _score_cast(game, player_index, card, target, x_value)
+        candidate = CastAction(
+            card_name=card.name,
+            target_player_index=target,
+            x_value=x_value,
+            land_tap_indices=tap_indices,
+            score=score,
+            hand_index=hand_index,
+        )
+        if _is_better_cast(candidate, best):
+            best = candidate
+
+    return best
+
+
+def choose_activation_action(game: Game, player_index: int) -> ActivationAction | None:
+    player = game.players[player_index]
+
+    best: ActivationAction | None = None
+    for permanent_index, permanent in enumerate(player.battlefield):
+        if permanent.tapped or permanent.card.primary_type == "land":
+            continue
+
+        program = compile_card_oracle(permanent.card)
+        ability = next((item for item in program.activated_abilities if item.supported and item.instruction is not None), None)
+        if ability is None or ability.instruction is None:
+            continue
+
+        target = _choose_target_for_instruction(ability.instruction, player_index, game)
+        if ability.instruction.kind == "grant_banding_to_target":
+            target_creatures = [perm for perm in game.players[target].battlefield if perm.card.primary_type == "creature"]
+            if not target_creatures:
+                continue
+
+        land_taps: tuple[int, ...] = ()
+        required = dict(ability.cost.mana)
+        if game.enforce_mana_costs and any(required.values()):
+            plan = _plan_taps_for_cost(player, required)
+            if plan is None:
+                continue
+            land_taps = tuple(plan)
+
+        score = _score_activation(game, player_index, permanent, ability.instruction, target)
+        candidate = ActivationAction(
+            permanent_name=permanent.card.name,
+            permanent_index=permanent_index,
+            target_player_index=target,
+            land_tap_indices=land_taps,
+            score=score,
+        )
+        if best is None or candidate.score > best.score:
+            best = candidate
+
+    return best
+
+
+def _is_better_cast(candidate: CastAction, current: CastAction | None) -> bool:
+    if current is None:
+        return True
+    if candidate.score > current.score:
+        return True
+    if candidate.score < current.score:
+        return False
+    return candidate.hand_index < current.hand_index
+
+
+def _can_cast_with_targets(game: Game, caster_index: int, card: CardDefinition) -> bool:
+    opponent = game.players[1 - caster_index]
+    if card.name == "Unsummon":
+        return any(perm.card.primary_type == "creature" for perm in opponent.battlefield)
+    if card.name == "Disenchant":
+        return any(perm.card.primary_type in {"artifact", "enchantment"} for perm in opponent.battlefield)
+    return True
+
+
+def _choose_target_for_spell(card: CardDefinition, caster_index: int, game: Game) -> int:
+    self_score = _score_spell_target(card, caster_index, caster_index, game)
+    opponent_index = 1 - caster_index
+    opp_score = _score_spell_target(card, caster_index, opponent_index, game)
+    if self_score >= opp_score:
+        return caster_index
+    return opponent_index
+
+
+def _score_spell_target(card: CardDefinition, caster_index: int, target_index: int, game: Game) -> float:
+    caster = game.players[caster_index]
+    target = game.players[target_index]
+    other = game.players[1 - target_index]
+    text = card.oracle_text.lower()
+
+    score = 0.0
+    if "draw" in text:
+        score += 5.0 if target_index == caster_index else 0.5
+    if "gain" in text and "life" in text:
+        life_pressure = max(0, 12 - caster.life)
+        score += (2.0 + life_pressure * 0.2) if target_index == caster_index else -2.0
+
+    damage = _extract_damage(card)
+    if damage > 0:
+        if target_index != caster_index:
+            score += 4.0
+            if target.life <= damage:
+                score += 10.0
+            score += (20 - target.life) * 0.05
+        else:
+            score -= 6.0
+
+    if card.name == "Unsummon":
+        if target_index == caster_index:
+            return -50.0
+        creatures = [perm for perm in target.battlefield if perm.card.primary_type == "creature"]
+        return 2.0 + max((perm.effective_power for perm in creatures), default=0)
+
+    if card.name == "Disenchant":
+        if target_index == caster_index:
+            return -50.0
+        artifacts_or_enchantments = [
+            perm
+            for perm in target.battlefield
+            if perm.card.primary_type in {"artifact", "enchantment"}
+        ]
+        return 2.0 + len(artifacts_or_enchantments) * 1.5
+
+    if "target opponent" in text:
+        score += 3.0 if target_index != caster_index else -10.0
+    if "target player" in text and "draw" not in text and damage == 0 and "gain" not in text:
+        score += 0.5 if target_index != caster_index else 0.0
+
+    if card.primary_type == "creature" and target_index == caster_index:
+        score += 1.0
+
+    if other.life <= 0:
+        score -= 1.0
+
+    return score
+
+
+def _score_cast(game: Game, caster_index: int, card: CardDefinition, target_index: int, x_value: int | None) -> float:
+    caster = game.players[caster_index]
+    opponent = game.players[1 - caster_index]
+
+    if card.primary_type == "land":
+        untapped_lands = sum(1 for perm in caster.battlefield if perm.card.primary_type == "land" and not perm.tapped)
+        return 1.0 if untapped_lands < 4 else 0.2
+
+    score = 1.5
+    if card.primary_type in {"instant", "sorcery"}:
+        score += 2.0
+    if card.primary_type == "creature":
+        score += 1.2
+        score += _creature_stat(card, "power") * 0.7
+        score += _creature_stat(card, "toughness") * 0.4
+    if card.primary_type in {"artifact", "enchantment"}:
+        score += 0.8
+
+    score += _score_spell_target(card, caster_index, target_index, game)
+
+    if x_value is not None:
+        score += min(4.0, x_value * 0.6)
+
+    if card.name == "Ancestral Recall":
+        score += 8.0
+    elif card.name == "Lightning Bolt" and target_index == 1 - caster_index and opponent.life <= 3:
+        score += 12.0
+    elif card.name == "Black Lotus":
+        hand_nonlands = sum(1 for hand_card in caster.hand if hand_card.primary_type != "land")
+        score += 2.0 if hand_nonlands >= 2 else 0.5
+
+    return score
+
+
+def _score_activation(
+    game: Game,
+    player_index: int,
+    permanent: Permanent,
+    instruction: OracleInstruction,
+    target_index: int,
+) -> float:
+    score = 1.0
+    opponent = game.players[1 - player_index]
+
+    if instruction.kind == "deal_damage":
+        amount = int(instruction.payload.get("amount", 1) or 1)
+        score += 5.0 + amount
+        if target_index == 1 - player_index and opponent.life <= amount:
+            score += 10.0
+    elif instruction.kind == "draw_target_cards":
+        score += 5.0 if target_index == player_index else 0.0
+    elif instruction.kind in {"add_mana", "black_lotus_add_mana"}:
+        score += 2.5
+    elif instruction.kind == "grant_banding_to_target":
+        score += 0.5
+    else:
+        score += 1.5
+
+    if permanent.card.name == "Jayemdae Tome" and not game.players[player_index].library:
+        return -100.0
+
+    return score
+
+
+def _choose_target_for_instruction(instruction: OracleInstruction, caster_index: int, game: Game) -> int:
+    if instruction.kind in {"draw_target_cards", "gain_life", "prevent_damage", "black_lotus_add_mana"}:
+        return caster_index
+    if instruction.kind in {"deal_damage", "destroy_target", "bounce_target", "target_player_loses_life"}:
+        return 1 - caster_index
+
+    # Fallback: prefer opponent for proactive effects.
+    return 1 - caster_index
+
+
+def _extract_damage(card: CardDefinition) -> int:
+    program = compile_card_oracle(card)
+    for instruction in program.instructions:
+        if instruction.kind == "deal_damage":
+            amount = instruction.payload.get("amount")
+            if isinstance(amount, int):
+                return amount
+    match = re.search(r"deals? (\d+) damage", card.oracle_text.lower())
+    if match:
+        return int(match.group(1))
+    return 0
+
+
+def _creature_stat(card: CardDefinition, key: str) -> int:
+    raw_value = str(card.raw.get(key, "0"))
+    return int(raw_value) if raw_value.isdigit() else 0
+
+
+def _extra_generic_tax(game: Game, card: CardDefinition) -> int:
+    if "W" not in card.colors:
+        return 0
+    has_gloom = any(
+        perm.card.name == "Gloom"
+        for player in game.players
+        for perm in player.battlefield
+    )
+    return 3 if has_gloom else 0
+
+
+def _pick_x_value(game: Game, player: PlayerState, card: CardDefinition) -> int | None:
+    if "{X}" not in card.mana_cost.upper():
+        return None
+
+    max_x = _max_affordable_x(game, player, card)
+    return max_x
+
+
+def _max_affordable_x(game: Game, player: PlayerState, card: CardDefinition) -> int:
+    pool = _preview_pool_with_all_untapped_lands(player)
+    extra_tax = _extra_generic_tax(game, card)
+
+    for x_value in range(15, -1, -1):
+        required = game._parse_mana_cost(card.mana_cost, x_value=x_value, extra_generic=extra_tax)
+        if _can_pay_cost(pool, required, player.can_spend_white_as_red):
+            return x_value
+    return 0
+
+
+def _preview_pool_with_all_untapped_lands(player: PlayerState) -> dict[str, int]:
+    pool = {symbol: player.mana_pool.get(symbol, 0) for symbol in _MANA_SYMBOLS}
+    for permanent in player.battlefield:
+        if permanent.card.primary_type != "land" or permanent.tapped:
+            continue
+        symbol = _land_symbol(permanent)
+        pool[symbol] = pool.get(symbol, 0) + 1
+    return pool
+
+
+def _plan_taps_for_cost(player: PlayerState, required: dict[str, int]) -> list[int] | None:
+    pool = {symbol: player.mana_pool.get(symbol, 0) for symbol in _MANA_SYMBOLS}
+    untapped_lands = [
+        (index, _land_symbol(permanent))
+        for index, permanent in enumerate(player.battlefield)
+        if permanent.card.primary_type == "land" and not permanent.tapped
+    ]
+
+    if _can_pay_cost(pool, required, player.can_spend_white_as_red):
+        return []
+
+    chosen: list[int] = []
+    remaining = list(untapped_lands)
+
+    for symbol in _MANA_SYMBOLS:
+        need = max(0, required.get(symbol, 0) - pool.get(symbol, 0))
+        while need > 0:
+            match_idx = next((idx for idx, (_, produced) in enumerate(remaining) if produced == symbol), None)
+            if match_idx is None:
+                break
+            land_index, produced = remaining.pop(match_idx)
+            chosen.append(land_index)
+            pool[produced] = pool.get(produced, 0) + 1
+            need -= 1
+
+    while remaining and not _can_pay_cost(pool, required, player.can_spend_white_as_red):
+        best_idx = 0
+        best_benefit = -1
+        for idx, (_, produced) in enumerate(remaining):
+            benefit = 2 if pool.get(produced, 0) < required.get(produced, 0) else 1
+            if produced == "C" and required.get("generic", 0) == 0:
+                benefit = 0
+            if benefit > best_benefit:
+                best_benefit = benefit
+                best_idx = idx
+        land_index, produced = remaining.pop(best_idx)
+        chosen.append(land_index)
+        pool[produced] = pool.get(produced, 0) + 1
+
+    if not _can_pay_cost(pool, required, player.can_spend_white_as_red):
+        return None
+
+    return chosen
+
+
+def _can_pay_cost(pool: dict[str, int], required: dict[str, int], can_spend_white_as_red: bool) -> bool:
+    if pool.get("W", 0) < required.get("W", 0):
+        return False
+    if pool.get("U", 0) < required.get("U", 0):
+        return False
+    if pool.get("B", 0) < required.get("B", 0):
+        return False
+    if pool.get("G", 0) < required.get("G", 0):
+        return False
+    if pool.get("C", 0) < required.get("C", 0):
+        return False
+
+    available_red = pool.get("R", 0)
+    if can_spend_white_as_red:
+        available_red += pool.get("W", 0)
+    if available_red < required.get("R", 0):
+        return False
+
+    temp = {symbol: pool.get(symbol, 0) for symbol in _MANA_SYMBOLS}
+    temp["W"] -= required.get("W", 0)
+    temp["U"] -= required.get("U", 0)
+    temp["B"] -= required.get("B", 0)
+    temp["G"] -= required.get("G", 0)
+    temp["C"] -= required.get("C", 0)
+
+    red_to_pay = required.get("R", 0)
+    from_red = min(temp.get("R", 0), red_to_pay)
+    temp["R"] -= from_red
+    red_to_pay -= from_red
+    if red_to_pay > 0:
+        if not can_spend_white_as_red:
+            return False
+        if temp.get("W", 0) < red_to_pay:
+            return False
+        temp["W"] -= red_to_pay
+
+    generic = required.get("generic", 0)
+    if generic <= 0:
+        return True
+
+    available_generic = sum(max(0, temp.get(symbol, 0)) for symbol in ("C", "W", "U", "B", "R", "G"))
+    return available_generic >= generic
+
+
+def _land_symbol(permanent: Permanent) -> str:
+    if permanent.card.produced_mana:
+        return permanent.card.produced_mana[0]
+
+    land_types = [str(permanent.metadata.get("land_type_override", "")).lower(), permanent.card.type_line.lower()]
+    if any("plains" in value for value in land_types):
+        return "W"
+    if any("island" in value for value in land_types):
+        return "U"
+    if any("swamp" in value for value in land_types):
+        return "B"
+    if any("mountain" in value for value in land_types):
+        return "R"
+    if any("forest" in value for value in land_types):
+        return "G"
+    return "C"

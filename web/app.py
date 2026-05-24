@@ -6,6 +6,7 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.staticfiles import StaticFiles
 
 from engine import Game
+from engine.ai_policy import choose_activation_action, choose_cast_action
 from engine.models import Permanent, PlayerState
 
 from .deck_builder import build_random_deck
@@ -144,15 +145,6 @@ def _default_target(card_name: str, caster_index: int) -> int:
     return 1 - caster_index
 
 
-def _can_cast(game: Game, caster_index: int, card_name: str) -> bool:
-    opponent = game.players[1 - caster_index]
-    if card_name == "Unsummon":
-        return any(perm.card.primary_type == "creature" for perm in opponent.battlefield)
-    if card_name == "Disenchant":
-        return any(perm.card.primary_type in {"artifact", "enchantment"} for perm in opponent.battlefield)
-    return True
-
-
 def _find_card_in_hand(player: PlayerState, card_name: str):
     return next((card for card in player.hand if card.name == card_name), None)
 
@@ -181,33 +173,31 @@ def _find_controlled_permanent(
 
 def _ai_step(session: Session) -> None:
     seat = session.current_turn
-    player = session.game.players[seat]
 
-    castable = None
-    for card in player.hand:
-        if card.primary_type == "land":
-            castable = card
-            break
-        if _can_cast(session.game, seat, card.name):
-            castable = card
-            break
+    cast_action = choose_cast_action(session.game, seat)
+    if cast_action is not None:
+        card_to_cast = session.game.players[seat].hand[cast_action.hand_index]
+        for permanent_index in cast_action.land_tap_indices:
+            permanent = session.game.players[seat].battlefield[permanent_index]
+            session.game.tap_land_for_mana(seat, permanent.card.name, permanent_index=permanent_index)
+        session.game.cast_from_hand(
+            seat,
+            card_to_cast.name,
+            target_player_index=cast_action.target_player_index,
+            x_value=cast_action.x_value,
+        )
 
-    if castable is not None:
-        target = _default_target(castable.name, seat)
-        session.game.cast_from_hand(seat, castable.name, target_player_index=target)
-
-    for perm in player.battlefield:
-        if perm.tapped:
-            continue
-        if perm.card.name == "Prodigal Sorcerer":
-            session.game.activate_permanent_ability(seat, "Prodigal Sorcerer", target_player_index=1 - seat)
-            break
-        if perm.card.name == "Jayemdae Tome" and player.library:
-            session.game.activate_permanent_ability(seat, "Jayemdae Tome", target_player_index=seat)
-            break
-        if perm.card.name == "Black Lotus":
-            session.game.activate_permanent_ability(seat, "Black Lotus", target_player_index=seat)
-            break
+    activation_action = choose_activation_action(session.game, seat)
+    if activation_action is not None:
+        for permanent_index in activation_action.land_tap_indices:
+            permanent = session.game.players[seat].battlefield[permanent_index]
+            session.game.tap_land_for_mana(seat, permanent.card.name, permanent_index=permanent_index)
+        session.game.activate_permanent_ability(
+            seat,
+            activation_action.permanent_name,
+            target_player_index=activation_action.target_player_index,
+            permanent_index=activation_action.permanent_index,
+        )
 
 
 def _end_turn(session: Session) -> None:
