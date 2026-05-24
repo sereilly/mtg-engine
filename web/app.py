@@ -131,14 +131,10 @@ def _clear_cleanup_selection(session: Session) -> None:
 
 def _start_next_turn(session: Session) -> None:
     _clear_cleanup_selection(session)
-    session.current_turn = 1 - session.current_turn
-    session.game.turn += 1
-    session.game.lands_played_this_turn[session.current_turn] = 0
+    session.game.active_player_index = session.current_turn
+    session.current_turn = session.game.start_next_turn()
     if session.current_turn in session.joined_seats:
-        session.game.resolve_untap_step(session.current_turn)
-        session.game.resolve_upkeep(session.current_turn)
-        session.game.resolve_draw_step(session.current_turn)
-        session.game.current_phase = "main"
+        return
 
 
 def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
@@ -169,6 +165,8 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "mode": session.mode,
         "status": session.status,
         "current_phase": session.game.current_phase,
+        "current_turn_phase": session.game.current_turn_phase,
+        "current_step": session.game.current_step,
         "current_turn": session.current_turn,
         "turn_number": session.game.turn,
         "joined_seats": sorted(session.joined_seats),
@@ -246,9 +244,12 @@ def _ai_step(session: Session) -> None:
 
 
 def _end_turn(session: Session, allow_manual_cleanup_selection: bool = False) -> bool:
-    if session.game.current_phase == "combat":
+    if session.game.current_turn_phase in {"precombat_main", "postcombat_main"}:
+        session.game._close_current_priority_step()
+    if session.game.current_turn_phase == "combat":
         session.game.end_combat()
-    session.game.resolve_end_step(session.current_turn)
+    if session.game.current_step != "end":
+        session.game.resolve_end_step(session.current_turn)
     should_defer_cleanup = allow_manual_cleanup_selection and session.seat_types.get(session.current_turn) == "human"
     cleanup_completed = session.game.resolve_cleanup_step(
         session.current_turn,
@@ -263,15 +264,26 @@ def _end_turn(session: Session, allow_manual_cleanup_selection: bool = False) ->
 
 
 def _advance_phase(session: Session) -> None:
-    current = session.game.current_phase
-    if current == "combat":
-        session.game.end_combat()
-        session.game.resolve_end_step(session.current_turn)
+    game = session.game
+    phase = game.current_turn_phase
+    step = game.current_step
+
+    if phase == "precombat_main":
+        game._close_current_priority_step()
+        game.advance_combat_phase()
         _clear_cleanup_selection(session)
         return
-    if current == "end":
+    if phase == "combat":
+        game.advance_combat_phase()
+        return
+    if phase == "postcombat_main":
+        game._close_current_priority_step()
+        game.resolve_end_step(session.current_turn)
+        _clear_cleanup_selection(session)
+        return
+    if step == "end":
         should_defer_cleanup = session.seat_types.get(session.current_turn) == "human"
-        cleanup_completed = session.game.resolve_cleanup_step(
+        cleanup_completed = game.resolve_cleanup_step(
             session.current_turn,
             defer_discard_selection=should_defer_cleanup,
         )
@@ -281,19 +293,11 @@ def _advance_phase(session: Session) -> None:
             return
         _start_next_turn(session)
         return
-    if current == "cleanup":
+    if step == "cleanup":
         if _cleanup_discard_requirement(session) > 0:
             raise HTTPException(status_code=400, detail="select cleanup discards before advancing")
         _start_next_turn(session)
         return
-
-    session.game.clear_mana_pools()
-    session.game.current_phase = {
-        "untap": "upkeep",
-        "upkeep": "draw",
-        "draw": "main",
-        "main": "combat",
-    }.get(current, "main")
 
 
 def _require_session(session_id: str) -> Session:

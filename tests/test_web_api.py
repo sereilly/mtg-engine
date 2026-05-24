@@ -628,6 +628,8 @@ def test_next_phase_advances_phase_and_clears_mana():
 
     session = store.get(sid)
     session.game.players[0].mana_pool = {"W": 0, "U": 0, "B": 0, "R": 1, "G": 0, "C": 0}
+    session.game.current_turn_phase = "precombat_main"
+    session.game.current_step = "precombat_main"
     session.game.current_phase = "main"
 
     response = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "next_phase"})
@@ -635,7 +637,49 @@ def test_next_phase_advances_phase_and_clears_mana():
     assert response.status_code == 200
     payload = response.json()
     assert payload["current_phase"] == "combat"
+    assert payload["current_step"] == "beginning_of_combat"
     assert payload["players"][0]["mana_pool"]["R"] == 0
+
+
+def test_next_phase_advances_through_combat_substeps_then_second_main():
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "guest_name": "Guest",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 99011,
+        },
+    ).json()
+    sid = created["session_id"]
+    client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
+
+    session = store.get(sid)
+    session.game.current_turn_phase = "combat"
+    session.game.current_step = "beginning_of_combat"
+    session.game.current_phase = "combat"
+
+    steps = [
+        "declare_attackers",
+        "declare_blockers",
+        "combat_damage",
+        "end_of_combat",
+    ]
+    for expected in steps:
+        response = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "next_phase"})
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["current_phase"] == "combat"
+        assert payload["current_step"] == expected
+
+    response = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "next_phase"})
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["current_phase"] == "main"
+    assert payload["current_turn_phase"] == "postcombat_main"
+    assert payload["current_step"] == "postcombat_main"
 
 
 def test_next_phase_runs_end_then_cleanup_then_next_turn():
@@ -654,7 +698,9 @@ def test_next_phase_runs_end_then_cleanup_then_next_turn():
     client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
 
     session = store.get(sid)
-    session.game.current_phase = "combat"
+    session.game.current_turn_phase = "postcombat_main"
+    session.game.current_step = "postcombat_main"
+    session.game.current_phase = "main"
     session.game.players[0].mana_pool = {"W": 0, "U": 0, "B": 0, "R": 1, "G": 0, "C": 0}
     session.game.players[0].hand = [
         _mk_card(name=f"Spell {idx}", mana_cost="", type_line="Sorcery", oracle_text="")
@@ -718,6 +764,8 @@ def test_cleanup_cast_action_falls_back_to_discard_selection():
     client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
 
     session = store.get(sid)
+    session.game.current_turn_phase = "ending"
+    session.game.current_step = "cleanup"
     session.game.current_phase = "cleanup"
     session.current_turn = 0
     session.cleanup_required_discards = 2

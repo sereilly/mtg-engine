@@ -14,8 +14,15 @@ const PHASE_LABELS = {
   untap: "Untap",
   upkeep: "Upkeep",
   draw: "Draw",
+  precombat_main: "Precombat Main",
   main: "Main",
   combat: "Combat",
+  beginning_of_combat: "Beginning of Combat",
+  declare_attackers: "Declare Attackers",
+  declare_blockers: "Declare Blockers",
+  combat_damage: "Combat Damage",
+  end_of_combat: "End of Combat",
+  postcombat_main: "Postcombat Main",
   end: "End",
   cleanup: "Cleanup",
 };
@@ -23,11 +30,29 @@ const PHASE_RAIL = [
   { key: "untap", label: "UN", title: "Untap" },
   { key: "upkeep", label: "UP", title: "Upkeep" },
   { key: "draw", label: "DR", title: "Draw" },
-  { key: "main", label: "MA", title: "Main" },
-  { key: "combat", label: "CO", title: "Combat" },
+  { key: "precombat_main", label: "M1", title: "Precombat Main" },
+  { key: "beginning_of_combat", label: "BC", title: "Beginning of Combat" },
+  { key: "declare_attackers", label: "AT", title: "Declare Attackers" },
+  { key: "declare_blockers", label: "BL", title: "Declare Blockers" },
+  { key: "combat_damage", label: "DM", title: "Combat Damage" },
+  { key: "end_of_combat", label: "EC", title: "End of Combat" },
+  { key: "postcombat_main", label: "M2", title: "Postcombat Main" },
   { key: "end", label: "EN", title: "End" },
   { key: "cleanup", label: "CL", title: "Cleanup" },
 ];
+
+function getActiveStepKey(state) {
+  if (!state) return "";
+  if (state.current_step) return state.current_step;
+  if (state.current_turn_phase === "precombat_main") return "precombat_main";
+  if (state.current_turn_phase === "postcombat_main") return "postcombat_main";
+  return state.current_phase || "";
+}
+
+function getPhaseDisplayLabel(state) {
+  const key = getActiveStepKey(state);
+  return PHASE_LABELS[key] || PHASE_LABELS[state?.current_phase] || state?.current_phase || "-";
+}
 
 function q(id) {
   return document.getElementById(id);
@@ -228,6 +253,34 @@ function findCardInCurrentHand(cardName) {
   return me.hand.find((card) => normalizeCardName(card) === cardName) || null;
 }
 
+function applyCleanupPrompt(cleanupDiscard) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+  const requiredCount = Number(cleanupDiscard.required_count || 0);
+  const selectedCount = Number(cleanupDiscard.selected_count || 0);
+  const remaining = Math.max(0, requiredCount - selectedCount);
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  title.textContent = "Cleanup discard required";
+  body.textContent = "Select cards from your hand to discard. The turn will continue automatically once all required cards are selected.";
+  steps.innerHTML = [
+    `<div>Chosen: ${selectedCount}</div>`,
+    `<div>Total needed: ${requiredCount}</div>`,
+    `<div>Remaining: ${remaining}</div>`,
+    "<div>Action: click cards in your hand to select or unselect them.</div>",
+  ].join("");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+}
+
 function renderActivationPrompt() {
   const panel = q("activationPanel");
   const title = q("promptTitle");
@@ -242,23 +295,7 @@ function renderActivationPrompt() {
   const cleanupDiscard = getCleanupDiscardInfo();
 
   if (cleanupDiscard) {
-    const requiredCount = Number(cleanupDiscard.required_count || 0);
-    const selectedCount = Number(cleanupDiscard.selected_count || 0);
-    const remaining = Math.max(0, requiredCount - selectedCount);
-
-    panel.classList.remove("hidden");
-    okBtn.classList.add("hidden");
-    customRow.classList.add("hidden");
-    title.textContent = "Cleanup discard required";
-    body.textContent = "Select cards from your hand to discard. The turn will continue automatically once all required cards are selected.";
-    steps.innerHTML = [
-      `<div>Chosen: ${selectedCount}</div>`,
-      `<div>Total needed: ${requiredCount}</div>`,
-      `<div>Remaining: ${remaining}</div>`,
-      "<div>Action: click cards in your hand to select or unselect them.</div>",
-    ].join("");
-    cancelBtn.disabled = true;
-    customOkBtn.disabled = true;
+    applyCleanupPrompt(cleanupDiscard);
     return;
   }
 
@@ -736,13 +773,14 @@ function renderPhaseRail(state) {
   if (!container) return;
 
   container.innerHTML = "";
+  const activeKey = getActiveStepKey(state);
   for (const phase of PHASE_RAIL) {
     const item = document.createElement("div");
     item.className = "phase-chip-item";
     item.textContent = phase.label;
     item.title = phase.title;
     item.dataset.phase = phase.key;
-    if (state?.current_phase === phase.key) {
+    if (activeKey === phase.key) {
       item.classList.add("active");
       item.setAttribute("aria-current", "step");
     }
@@ -777,7 +815,7 @@ function renderLog(state) {
 
   const header = document.createElement("div");
   header.className = "log-item";
-  header.textContent = `Turn ${state.turn_number || "-"} | Phase ${PHASE_LABELS[state.current_phase] || state.current_phase}`;
+  header.textContent = `Turn ${state.turn_number || "-"} | Phase ${getPhaseDisplayLabel(state)}`;
   logRoot.appendChild(header);
 
   entries.forEach((entry, idx) => {
@@ -799,7 +837,7 @@ function renderBoard(state) {
 
   q("statusHeadline").textContent = `Status: ${state.status}`;
   q("turnBadge").textContent = `Turn: Seat ${state.current_turn} (No. ${state.turn_number || "-"})`;
-  q("phaseBadge").textContent = `Phase: ${PHASE_LABELS[state.current_phase] || state.current_phase}`;
+  q("phaseBadge").textContent = `Phase: ${getPhaseDisplayLabel(state)}`;
   q("winnerBadge").textContent = `Winner: ${state.winner === null ? "-" : state.winner}`;
 
   q("selfName").textContent = me.name;
@@ -854,7 +892,8 @@ function renderBoard(state) {
 
 function renderState(state) {
   currentState = state;
-  if (getCleanupDiscardInfo(state)) {
+  const cleanupInfo = getCleanupDiscardInfo(state);
+  if (cleanupInfo) {
     pendingActivation = null;
     pendingCastTarget = null;
     pendingCastX = null;
@@ -865,6 +904,11 @@ function renderState(state) {
   renderBoard(state);
   renderActivationPrompt();
   attemptPendingActivation();
+
+  // Final-pass override so cleanup prompt always wins against other prompt updates.
+  if (cleanupInfo) {
+    applyCleanupPrompt(cleanupInfo);
+  }
 }
 
 function parseDragPayload(event) {
