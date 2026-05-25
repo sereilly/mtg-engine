@@ -1112,6 +1112,23 @@ class Game:
             self.log.append("All creatures were destroyed")
             return True, "resolved"
 
+        if instruction.kind == "destroy_all_artifacts_creatures_enchantments":
+            for player in self.players:
+                survivors: list[Permanent] = []
+                for permanent in player.battlefield:
+                    primary_type = permanent.card.primary_type
+                    if primary_type == "creature" and permanent.regeneration_shield > 0:
+                        permanent.regeneration_shield -= 1
+                        permanent.tapped = True
+                        survivors.append(permanent)
+                    elif primary_type in {"artifact", "creature", "enchantment"}:
+                        player.graveyard.append(permanent.card)
+                    else:
+                        survivors.append(permanent)
+                player.battlefield = survivors
+            self.log.append("All artifacts, creatures, and enchantments were destroyed")
+            return True, "resolved"
+
         if instruction.kind == "destroy_all_lands":
             for player in self.players:
                 survivors: list[Permanent] = []
@@ -1744,6 +1761,20 @@ class Game:
         target_player_index: int | None,
     ) -> None:
         text = permanent.card.oracle_text.lower()
+        for raw_line in text.splitlines():
+            line = raw_line.strip()
+            if line.startswith(
+                (
+                    "this artifact enters tapped",
+                    "this creature enters tapped",
+                    "this enchantment enters tapped",
+                    "this land enters tapped",
+                    "this permanent enters tapped",
+                )
+            ) and "unless" not in line:
+                permanent.tapped = True
+                break
+
         if "as this artifact enters, choose an opponent" in text:
             chosen = target_player_index if target_player_index is not None else (1 - caster_index)
             permanent.metadata["chosen_player_index"] = chosen

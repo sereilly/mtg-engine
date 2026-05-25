@@ -257,10 +257,61 @@ def test_activate_prodigal_sorcerer_ability(all_cards):
     game = Game(players=[p1, p2])
 
     result = game.activate_permanent_ability(0, "Prodigal Sorcerer", target_player_index=1)
-
     assert result.supported
     assert p2.life == 19
     assert p1.battlefield[0].tapped is True
+
+
+def test_nevinyrrals_disk_enters_tapped(all_cards):
+    disk = next(card for card in all_cards if card.name == "Nevinyrral's Disk")
+    p1 = PlayerState(name="P1", hand=[disk])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    cast_result = game.cast_from_hand(0, "Nevinyrral's Disk")
+    assert cast_result.supported
+    assert len(p1.battlefield) == 1
+    assert p1.battlefield[0].card.name == "Nevinyrral's Disk"
+    assert p1.battlefield[0].tapped is True
+
+    assert game.tap_permanent(0, "Nevinyrral's Disk") is False
+
+
+def test_activate_nevinyrrals_disk_destroys_artifacts_creatures_and_enchantments(all_cards):
+    disk = next(card for card in all_cards if card.name == "Nevinyrral's Disk")
+    land = _mk_card("Test Plains", "Land")
+    artifact = _mk_card("Test Relic", "Artifact")
+    creature = _mk_card("Test Bear", "Creature — Bear")
+    enchantment = _mk_card("Test Aura", "Enchantment")
+
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[
+            Permanent(card=disk, tapped=False),
+            Permanent(card=artifact),
+            Permanent(card=creature),
+            Permanent(card=land),
+        ],
+    )
+    p2 = PlayerState(
+        name="P2",
+        battlefield=[
+            Permanent(card=enchantment),
+            Permanent(card=creature),
+            Permanent(card=land),
+        ],
+    )
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Nevinyrral's Disk", target_player_index=1)
+
+    assert result.supported
+    assert [perm.card.primary_type for perm in p1.battlefield] == ["land"]
+    assert [perm.card.primary_type for perm in p2.battlefield] == ["land"]
+    assert any(card.name == "Nevinyrral's Disk" for card in p1.graveyard)
+    assert any(card.name == "Test Relic" for card in p1.graveyard)
+    assert any(card.name == "Test Bear" for card in p1.graveyard)
+    assert any(card.name == "Test Aura" for card in p2.graveyard)
 
 
 def test_activate_black_lotus_adds_mana_and_sacrifices(all_cards):

@@ -344,6 +344,9 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
     if any(f"becomes {color}" in text for color in ("red", "black", "blue", "green", "white")):
         return _instruction("recolor_target_from_text"), "spell_pattern"
 
+    if "destroy all artifacts, creatures, and enchantments" in text:
+        return _instruction("destroy_all_artifacts_creatures_enchantments"), "spell_pattern"
+
     if "destroy all creatures" in text:
         return _instruction("destroy_all_creatures"), "spell_pattern"
 
