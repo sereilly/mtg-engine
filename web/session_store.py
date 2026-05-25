@@ -24,6 +24,9 @@ class Session:
     seat_types: dict[int, str] = field(default_factory=dict)
     cleanup_required_discards: int = 0
     cleanup_selected_indices: list[int] = field(default_factory=list)
+    untap_required_lands: int = 0
+    untap_candidate_indices: list[int] = field(default_factory=list)
+    untap_selected_indices: list[int] = field(default_factory=list)
 
 
 class SessionStore:

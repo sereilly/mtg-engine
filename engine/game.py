@@ -652,7 +652,8 @@ class Game:
         extra_generic_tax = 0
 
         if self.enforce_mana_costs and card.primary_type == "land":
-            if self.lands_played_this_turn.get(caster_index, 0) >= 1:
+            lands_played = self.lands_played_this_turn.get(caster_index, 0)
+            if lands_played >= 1 and self._fastbond_count(caster_index) <= 0:
                 details = "already played a land this turn"
                 self.log.append(details)
                 return SimulationResult(card.name, False, classification.effect_kind, details)
@@ -860,6 +861,13 @@ class Game:
             if primary_type == "land":
                 if self.enforce_mana_costs:
                     self.lands_played_this_turn[caster_index] = self.lands_played_this_turn.get(caster_index, 0) + 1
+                    if self.lands_played_this_turn.get(caster_index, 0) > 1:
+                        fastbond_count = self._fastbond_count(caster_index)
+                        if fastbond_count > 0:
+                            damage = self._prevent_damage(caster, fastbond_count)
+                            if damage > 0:
+                                caster.life -= damage
+                            self.log.append(f"Fastbond dealt {damage} damage to {caster.name}")
                 self._process_land_enters(caster_index)
             return
 
@@ -2289,7 +2297,34 @@ class Game:
         self._on_step_or_phase_end(phase, step)
         return drawn
 
-    def resolve_untap_step(self, player_index: int) -> int:
+    def get_untap_land_selection_options(self, player_index: int) -> dict[str, object] | None:
+        player = self.players[player_index]
+        all_permanents = [perm for pl in self.players for perm in pl.battlefield]
+
+        if any(perm.card.name == "Stasis" for perm in all_permanents):
+            return None
+
+        max_untap_lands = 999
+        if any(perm.card.name == "Winter Orb" and not perm.tapped for perm in all_permanents):
+            max_untap_lands = 1
+
+        if max_untap_lands >= 999:
+            return None
+
+        candidate_indices = [
+            idx
+            for idx, permanent in enumerate(player.battlefield)
+            if permanent.card.primary_type == "land" and permanent.tapped
+        ]
+        if len(candidate_indices) <= max_untap_lands:
+            return None
+
+        return {
+            "max_count": max_untap_lands,
+            "candidate_indices": candidate_indices,
+        }
+
+    def resolve_untap_step(self, player_index: int, selected_land_indices: list[int] | None = None) -> int:
         phase = "beginning"
         step = "untap"
         self._set_phase_and_step(phase, step)
@@ -2309,12 +2344,28 @@ class Game:
         if any(perm.card.name == "Winter Orb" and not perm.tapped for perm in all_permanents):
             max_untap_lands = 1
 
+        selected_lands: set[int] | None = None
+        if selected_land_indices is not None:
+            selected_lands = set()
+            for idx in selected_land_indices:
+                if idx < 0 or idx >= len(player.battlefield):
+                    raise ValueError("selected land index out of range")
+                permanent = player.battlefield[idx]
+                if permanent.card.primary_type != "land":
+                    raise ValueError("selected permanent is not a land")
+                if not permanent.tapped:
+                    continue
+                selected_lands.add(idx)
+
+            if max_untap_lands < 999 and len(selected_lands) > max_untap_lands:
+                raise ValueError(f"cannot untap more than {max_untap_lands} land(s)")
+
         meekstone_active = any(perm.card.name == "Meekstone" for perm in all_permanents)
 
         untapped = 0
         creatures_untapped = 0
         lands_untapped = 0
-        for permanent in player.battlefield:
+        for idx, permanent in enumerate(player.battlefield):
             if not permanent.tapped:
                 continue
 
@@ -2326,6 +2377,8 @@ class Game:
                 creatures_untapped += 1
 
             if permanent.card.primary_type == "land":
+                if selected_lands is not None and idx not in selected_lands:
+                    continue
                 if lands_untapped >= max_untap_lands:
                     continue
                 lands_untapped += 1
@@ -2408,6 +2461,11 @@ class Game:
                 if damage > 0:
                     victim.life -= damage
                 self.log.append(f"{permanent.card.name} triggered for {damage} damage")
+
+    def _fastbond_count(self, player_index: int) -> int:
+        if player_index < 0 or player_index >= len(self.players):
+            return 0
+        return sum(1 for permanent in self.players[player_index].battlefield if permanent.card.name == "Fastbond")
 
     def _apply_global_buff(self, caster: PlayerState, source: CardDefinition) -> None:
         text = source.oracle_text.lower().strip()

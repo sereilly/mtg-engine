@@ -175,12 +175,54 @@ def _clear_cleanup_selection(session: Session) -> None:
     session.cleanup_selected_indices = []
 
 
+def _clear_untap_selection(session: Session) -> None:
+    session.untap_required_lands = 0
+    session.untap_candidate_indices = []
+    session.untap_selected_indices = []
+
+
+def _untap_land_selection_requirement(session: Session) -> int:
+    if session.game.current_step != "untap":
+        return 0
+    if session.current_turn < 0 or session.current_turn >= len(session.game.players):
+        return 0
+    options = session.game.get_untap_land_selection_options(session.current_turn)
+    if not options:
+        return 0
+    max_count = int(options.get("max_count", 0))
+    return max(0, max_count)
+
+
+def _begin_turn(session: Session, player_index: int, defer_untap_selection: bool) -> bool:
+    game = session.game
+    game.active_player_index = player_index
+    game.lands_played_this_turn[player_index] = 0
+
+    if defer_untap_selection:
+        options = game.get_untap_land_selection_options(player_index)
+        if options:
+            game._set_phase_and_step("beginning", "untap")
+            session.untap_required_lands = int(options["max_count"])
+            session.untap_candidate_indices = [int(idx) for idx in options["candidate_indices"]]
+            session.untap_selected_indices = []
+            return False
+
+    _clear_untap_selection(session)
+    game.resolve_untap_step(player_index)
+    game.resolve_upkeep(player_index)
+    game.resolve_draw_step(player_index)
+    game._enter_main_phase(precombat=True)
+    return True
+
+
 def _start_next_turn(session: Session) -> None:
     _clear_cleanup_selection(session)
+    _clear_untap_selection(session)
     session.game.active_player_index = session.current_turn
-    session.current_turn = session.game.start_next_turn()
-    if session.current_turn in session.joined_seats:
-        return
+    session.game.turn += 1
+    session.current_turn = session.game._compute_next_active_player()
+    should_defer_untap = _seat_type(session, session.current_turn) == "human"
+    _begin_turn(session, session.current_turn, defer_untap_selection=should_defer_untap)
 
 
 def _seat_type(session: Session, seat: int) -> str:
@@ -194,6 +236,7 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
 
     cleanup_info = None
     cleanup_required = _cleanup_discard_requirement(session)
+    untap_required = _untap_land_selection_requirement(session)
     if viewer_seat == session.current_turn and cleanup_required > 0:
         valid_indices = [
             idx
@@ -209,6 +252,30 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         }
     else:
         _clear_cleanup_selection(session)
+
+    untap_info = None
+    untap_required = _untap_land_selection_requirement(session)
+    if viewer_seat == session.current_turn and untap_required > 0:
+        valid_candidates = [
+            idx
+            for idx in sorted(set(session.untap_candidate_indices))
+            if 0 <= idx < len(session.game.players[viewer_seat].battlefield)
+            and session.game.players[viewer_seat].battlefield[idx].card.primary_type == "land"
+            and session.game.players[viewer_seat].battlefield[idx].tapped
+        ]
+        session.untap_candidate_indices = valid_candidates
+
+        valid_selected = [idx for idx in sorted(set(session.untap_selected_indices)) if idx in set(valid_candidates)]
+        if len(valid_selected) > untap_required:
+            valid_selected = valid_selected[:untap_required]
+        session.untap_selected_indices = valid_selected
+        session.untap_required_lands = untap_required
+        untap_info = {
+            "max_count": untap_required,
+            "candidate_indices": valid_candidates,
+            "selected_indices": valid_selected,
+            "selected_count": len(valid_selected),
+        }
 
     return {
         "session_id": session.id,
@@ -230,6 +297,7 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "log": session.game.log[-80:],
         "winner": win,
         "cleanup_discard": cleanup_info,
+        "untap_land_selection": untap_info,
     }
 
 
@@ -475,6 +543,7 @@ def do_action(session_id: str, req: GameActionRequest):
     seat_type = _seat_type(session, req.seat)
 
     cleanup_required = _cleanup_discard_requirement(session)
+    untap_required = _untap_land_selection_requirement(session)
     if (
         cleanup_required > 0
         and req.action == "cast"
@@ -494,6 +563,9 @@ def do_action(session_id: str, req: GameActionRequest):
     if cleanup_required > 0 and req.action not in {"cleanup_select", "debug_add_to_hand", "debug_cast_free"}:
         raise HTTPException(status_code=400, detail="select cleanup discards before other actions")
 
+    if untap_required > 0 and req.action not in {"untap_select", "untap_confirm", "debug_add_to_hand", "debug_cast_free"}:
+        raise HTTPException(status_code=400, detail="select untap lands before other actions")
+
     if req.action in {
         "cast",
         "activate",
@@ -502,6 +574,8 @@ def do_action(session_id: str, req: GameActionRequest):
         "declare_attackers",
         "declare_blockers",
         "assign_combat_damage",
+        "untap_select",
+        "untap_confirm",
     } and seat_type != "human":
         raise HTTPException(status_code=400, detail="cannot issue human action for AI seat")
 
@@ -666,6 +740,58 @@ def do_action(session_id: str, req: GameActionRequest):
         if len(selected) == required:
             session.game.resolve_cleanup_step(session.current_turn, discard_hand_indices=selected)
             _start_next_turn(session)
+
+    elif req.action == "untap_select":
+        if req.seat != session.current_turn:
+            raise HTTPException(status_code=400, detail="not your turn")
+        if session.game.current_step != "untap":
+            raise HTTPException(status_code=400, detail="untap selection is only available during untap")
+        if req.permanent_index is None:
+            raise HTTPException(status_code=400, detail="permanent_index is required")
+
+        required = _untap_land_selection_requirement(session)
+        if required <= 0:
+            raise HTTPException(status_code=400, detail="no untap land selection is required")
+
+        candidates = set(session.untap_candidate_indices)
+        if req.permanent_index not in candidates:
+            raise HTTPException(status_code=400, detail="permanent is not a valid untap land choice")
+
+        selected = sorted(set(session.untap_selected_indices))
+        if req.permanent_index in selected:
+            selected = [idx for idx in selected if idx != req.permanent_index]
+        else:
+            if len(selected) >= required:
+                raise HTTPException(status_code=400, detail="already selected maximum untap lands")
+            selected.append(req.permanent_index)
+            selected = sorted(set(selected))
+
+        session.untap_selected_indices = selected
+        session.untap_required_lands = required
+
+    elif req.action == "untap_confirm":
+        if req.seat != session.current_turn:
+            raise HTTPException(status_code=400, detail="not your turn")
+        if session.game.current_step != "untap":
+            raise HTTPException(status_code=400, detail="untap confirmation is only available during untap")
+
+        required = _untap_land_selection_requirement(session)
+        if required <= 0:
+            raise HTTPException(status_code=400, detail="no untap land selection is required")
+
+        selected = sorted(set(session.untap_selected_indices))
+        if len(selected) > required:
+            raise HTTPException(status_code=400, detail="selected too many lands to untap")
+
+        try:
+            session.game.resolve_untap_step(session.current_turn, selected_land_indices=selected)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        _clear_untap_selection(session)
+        session.game.resolve_upkeep(session.current_turn)
+        session.game.resolve_draw_step(session.current_turn)
+        session.game._enter_main_phase(precombat=True)
 
     elif req.action == "ai_step":
         if _seat_type(session, session.current_turn) != "ai":

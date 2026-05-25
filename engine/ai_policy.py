@@ -35,7 +35,12 @@ def choose_cast_action(game: Game, player_index: int) -> CastAction | None:
 
     best: CastAction | None = None
     for hand_index, card in enumerate(player.hand):
-        if card.primary_type == "land" and game.enforce_mana_costs and game.lands_played_this_turn.get(player_index, 0) >= 1:
+        if (
+            card.primary_type == "land"
+            and game.enforce_mana_costs
+            and game.lands_played_this_turn.get(player_index, 0) >= 1
+            and game._fastbond_count(player_index) <= 0
+        ):
             continue
         if not _can_cast_with_targets(game, player_index, card):
             continue

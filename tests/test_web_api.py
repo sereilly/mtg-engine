@@ -806,6 +806,70 @@ def test_only_one_land_play_per_turn_then_resets_next_turn():
     assert second_land_next_turn.status_code == 200
 
 
+def test_fastbond_allows_extra_land_and_deals_damage():
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "guest_name": "Guest",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 92334,
+        },
+    ).json()
+    sid = created["session_id"]
+    client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
+
+    session = store.get(sid)
+    fastbond = _mk_card(
+        name="Fastbond",
+        mana_cost="{G}",
+        type_line="Enchantment",
+        oracle_text=(
+            "You may play any number of lands on each of your turns.\n"
+            "Whenever you play a land, if it wasn't the first land you played this turn, "
+            "this enchantment deals 1 damage to you."
+        ),
+    )
+    plains_a = _mk_card(
+        name="Plains A",
+        mana_cost="",
+        type_line="Basic Land - Plains",
+        oracle_text="{T}: Add {W}.",
+        produced_mana=("W",),
+    )
+    plains_b = _mk_card(
+        name="Plains B",
+        mana_cost="",
+        type_line="Basic Land - Plains",
+        oracle_text="{T}: Add {W}.",
+        produced_mana=("W",),
+    )
+    session.game.players[0].hand = [fastbond, plains_a, plains_b]
+    session.game.players[0].mana_pool = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 1, "C": 0}
+    session.game.players[0].life = 20
+
+    cast_fastbond = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "cast", "card_name": "Fastbond", "target_seat": 0},
+    )
+    assert cast_fastbond.status_code == 200
+
+    first_land = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "cast", "card_name": "Plains A", "target_seat": 0},
+    )
+    assert first_land.status_code == 200
+
+    second_land_same_turn = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "cast", "card_name": "Plains B", "target_seat": 0},
+    )
+    assert second_land_same_turn.status_code == 200
+    assert store.get(sid).game.players[0].life == 19
+
+
 def test_next_phase_advances_phase_and_clears_mana():
     created = client.post(
         "/api/sessions",
@@ -1226,6 +1290,80 @@ def test_next_phase_runs_end_then_cleanup_then_next_turn():
     assert second_payload["cleanup_discard"] is None
     assert len(second_payload["players"][1]["hand"]) == 8
     assert len(second_payload["players"][0]["graveyard"]) == 2
+
+
+def test_winter_orb_turn_start_requires_untap_land_selection_for_human_player():
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "guest_name": "Guest",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 99110,
+        },
+    ).json()
+    sid = created["session_id"]
+    client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
+
+    session = store.get(sid)
+    forest = _mk_card(
+        name="Forest",
+        mana_cost="",
+        type_line="Basic Land - Forest",
+        oracle_text="{T}: Add {G}.",
+        produced_mana=("G",),
+    )
+    winter_orb = _mk_card(
+        name="Winter Orb",
+        mana_cost="{2}",
+        type_line="Artifact",
+        oracle_text="As long as this artifact is untapped, players can't untap more than one land during their untap steps.",
+    )
+
+    session.current_turn = 0
+    session.game.active_player_index = 0
+    session.game.players[0].battlefield = [Permanent(card=winter_orb, tapped=False)]
+    session.game.players[1].battlefield = [
+        Permanent(card=forest, tapped=True),
+        Permanent(card=forest, tapped=True),
+    ]
+    session.game.current_turn_phase = "postcombat_main"
+    session.game.current_step = "postcombat_main"
+    session.game.current_phase = "main"
+
+    end_turn = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "end_turn"})
+    assert end_turn.status_code == 200
+
+    seat1_state = client.get(f"/api/sessions/{sid}/state?seat=1")
+    assert seat1_state.status_code == 200
+    state_payload = seat1_state.json()
+    assert state_payload["current_turn"] == 1
+    assert state_payload["current_step"] == "untap"
+    assert state_payload["untap_land_selection"]["max_count"] == 1
+    assert state_payload["untap_land_selection"]["selected_indices"] == []
+
+    blocked = client.post(f"/api/sessions/{sid}/action", json={"seat": 1, "action": "next_phase"})
+    assert blocked.status_code == 400
+    assert "select untap lands" in blocked.json()["detail"].lower()
+
+    pick_land = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 1, "action": "untap_select", "permanent_index": 0},
+    )
+    assert pick_land.status_code == 200
+    pick_payload = pick_land.json()
+    assert pick_payload["untap_land_selection"]["selected_indices"] == [0]
+
+    confirm = client.post(f"/api/sessions/{sid}/action", json={"seat": 1, "action": "untap_confirm"})
+    assert confirm.status_code == 200
+    confirm_payload = confirm.json()
+    assert confirm_payload["current_phase"] == "main"
+    assert confirm_payload["current_step"] == "precombat_main"
+    assert confirm_payload["untap_land_selection"] is None
+    assert confirm_payload["players"][1]["battlefield"][0]["tapped"] is False
+    assert confirm_payload["players"][1]["battlefield"][1]["tapped"] is True
 
 
 def test_cleanup_cast_action_falls_back_to_discard_selection():

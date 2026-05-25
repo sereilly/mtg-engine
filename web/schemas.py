@@ -17,6 +17,8 @@ ActionKind = Literal[
     "assign_combat_damage",
     "ai_step",
     "cleanup_select",
+    "untap_select",
+    "untap_confirm",
     "debug_add_to_hand",
     "debug_cast_free",
 ]

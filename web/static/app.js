@@ -764,6 +764,19 @@ function getCleanupDiscardInfo(state = currentState) {
   };
 }
 
+function getUntapLandSelectionInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  if (state.current_step !== "untap") return null;
+  if (state.current_turn !== seat) return null;
+
+  const info = state.untap_land_selection;
+  if (info && Number(info.max_count || 0) > 0) {
+    return info;
+  }
+
+  return null;
+}
+
 function getDefaultTargetSeat(cardName) {
   if (seat === null) return 1;
   if (["Ancestral Recall", "Healing Salve", "Stream of Life"].includes(cardName)) {
@@ -819,6 +832,7 @@ function findCardInCurrentHand(cardName) {
 
 function isAnyPromptActive(state = currentState) {
   if (getCleanupDiscardInfo(state)) return true;
+  if (getUntapLandSelectionInfo(state)) return true;
   if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor) return true;
 
   const hasValidAttackers = getValidAttackerIndices(state).length > 0;
@@ -859,6 +873,15 @@ function combatPromptNeedsConfirmation(state = currentState) {
     return !combat.blockers_locked;
   }
   return false;
+}
+
+async function handleUntapPromptOk() {
+  if (!currentState || seat === null) return false;
+  const untapInfo = getUntapLandSelectionInfo(currentState);
+  if (!untapInfo) return false;
+  await sendAction({ seat, action: "untap_confirm" });
+  updateActionHint("Untap choices confirmed.");
+  return true;
 }
 
 async function handleCombatPromptOk() {
@@ -928,6 +951,33 @@ function applyCleanupPrompt(cleanupDiscard) {
   customOkBtn.disabled = true;
 }
 
+function applyUntapPrompt(untapInfo) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+  const maxCount = Number(untapInfo.max_count || 0);
+  const selectedCount = Number(untapInfo.selected_count || 0);
+
+  panel.classList.remove("hidden");
+  okBtn.classList.remove("hidden");
+  customRow.classList.add("hidden");
+  title.textContent = "Choose Lands to Untap";
+  body.textContent = "Select tapped lands to untap, then press OK.";
+  steps.innerHTML = [
+    `<div>Maximum lands: ${maxCount}</div>`,
+    `<div>Selected: ${selectedCount}</div>`,
+    "<div>Action: click your tapped lands to toggle selection.</div>",
+  ].join("");
+  cancelBtn.disabled = true;
+  okBtn.disabled = false;
+  customOkBtn.disabled = true;
+}
+
 function renderActivationPrompt() {
   const panel = q("activationPanel");
   const title = q("promptTitle");
@@ -940,6 +990,7 @@ function renderActivationPrompt() {
   const customOkBtn = q("promptCustomOkBtn");
   const me = getCurrentPlayerState();
   const cleanupDiscard = getCleanupDiscardInfo();
+  const untapInfo = getUntapLandSelectionInfo();
   const inCombat = currentState?.current_turn_phase === "combat";
   const hasValidAttackers = getValidAttackerIndices(currentState).length > 0;
   const hasValidBlockers = getValidBlockerAssignments(currentState).length > 0;
@@ -949,6 +1000,11 @@ function renderActivationPrompt() {
 
   if (cleanupDiscard) {
     applyCleanupPrompt(cleanupDiscard);
+    return;
+  }
+
+  if (untapInfo) {
+    applyUntapPrompt(untapInfo);
     return;
   }
 
@@ -1631,6 +1687,26 @@ function createCardElement(card, options = {}) {
         const cardName = normalizeCardName(card);
         if (!cardName) return;
 
+        const untapInfo = getUntapLandSelectionInfo(currentState);
+        if (
+          untapInfo &&
+          zoneKind === "battlefield" &&
+          Number.isInteger(permanentIndex) &&
+          targetSeat === seat
+        ) {
+          const candidateIndices = Array.isArray(untapInfo.candidate_indices) ? untapInfo.candidate_indices : [];
+          if (!candidateIndices.includes(permanentIndex)) {
+            updateActionHint(`${cardName} is not a valid untap choice.`, true);
+            return;
+          }
+          await sendAction({ seat, action: "untap_select", permanent_index: permanentIndex });
+          const nextInfo = getUntapLandSelectionInfo(currentState);
+          const selectedCount = Number(nextInfo?.selected_count || 0);
+          const maxCount = Number(nextInfo?.max_count || 0);
+          updateActionHint(`Untap selection: ${selectedCount}/${maxCount} land(s) selected.`);
+          return;
+        }
+
         if (
           zoneKind === "battlefield" &&
           Number.isInteger(permanentIndex) &&
@@ -2018,6 +2094,7 @@ function renderBoard(state) {
   const cleanupDiscard = getCleanupDiscardInfo(state);
   const requiresCleanupSelection = !!cleanupDiscard;
   const hasPrompt = isAnyPromptActive(state);
+  const untapInfo = getUntapLandSelectionInfo(state);
   const selfLane = document.querySelector(".self-lane");
   const oppLane = document.querySelector(".opponent-lane");
   setDebugMenuEnabled(sessionId !== null && seat !== null);
@@ -2045,11 +2122,13 @@ function renderBoard(state) {
     targetSeat: viewerSeat,
     interactive: true,
     selectedPermanentIndices:
-      isCombatStep(state, "declare_attackers") && seat === state.current_turn && seat === viewerSeat
-        ? combatAttackerDraft
-        : isCombatStep(state, "declare_blockers") && seat === combat?.defending_player_index && seat === viewerSeat
-          ? Object.keys(combatBlockerDraft).map((value) => Number(value))
-          : [],
+      untapInfo && seat === viewerSeat
+        ? untapInfo.selected_indices || []
+        : isCombatStep(state, "declare_attackers") && seat === state.current_turn && seat === viewerSeat
+          ? combatAttackerDraft
+          : isCombatStep(state, "declare_blockers") && seat === combat?.defending_player_index && seat === viewerSeat
+            ? Object.keys(combatBlockerDraft).map((value) => Number(value))
+            : [],
   });
   renderCardRow("oppBattlefield", opp.battlefield, {
     zoneKind: "battlefield",
@@ -2098,7 +2177,8 @@ function renderState(state) {
     combatDamageDraft = {};
   }
   const cleanupInfo = getCleanupDiscardInfo(state);
-  if (cleanupInfo) {
+  const untapInfo = getUntapLandSelectionInfo(state);
+  if (cleanupInfo || untapInfo) {
     pendingActivation = null;
     pendingCastTarget = null;
     pendingCastX = null;
@@ -2115,7 +2195,9 @@ function renderState(state) {
   const promptStateKey = `${getCombatDraftStepKey(state)}:${combat?.attackers_locked ? 1 : 0}:${combat?.blockers_locked ? 1 : 0}`;
   if (promptStateKey !== combatPromptKey) {
     combatPromptKey = promptStateKey;
-    if (isCombatStep(state, "declare_attackers") && seat === state.current_turn && !combat?.attackers_locked) {
+    if (untapInfo) {
+      updateActionHint("Choose which lands untap, then press OK.");
+    } else if (isCombatStep(state, "declare_attackers") && seat === state.current_turn && !combat?.attackers_locked) {
       updateActionHint("Declare attackers by clicking creatures, or use Alpha Strike to toggle all valid attackers, then press OK.");
     } else if (isCombatStep(state, "declare_blockers") && seat === combat?.defending_player_index && !combat?.blockers_locked) {
       updateActionHint("Declare blockers by dragging to attacking creatures, then press OK.");
@@ -2125,6 +2207,8 @@ function renderState(state) {
   // Final-pass override so cleanup prompt always wins against other prompt updates.
   if (cleanupInfo) {
     applyCleanupPrompt(cleanupInfo);
+  } else if (untapInfo) {
+    applyUntapPrompt(untapInfo);
   }
 
   maybeAutoStepAi(state);
@@ -2514,6 +2598,10 @@ q("promptCancelBtn").addEventListener("click", () => {
 
 q("promptOkBtn").addEventListener("click", async () => {
   try {
+    const handledUntap = await handleUntapPromptOk();
+    if (handledUntap) {
+      return;
+    }
     const handledCombat = await handleCombatPromptOk();
     if (handledCombat) {
       return;
