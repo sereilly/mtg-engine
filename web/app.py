@@ -508,6 +508,7 @@ def _end_turn(session: Session, allow_manual_cleanup_selection: bool = False) ->
         session.game.end_combat()
     if session.game.current_step != "end":
         session.game.resolve_end_step(session.current_turn)
+    session.game.close_end_step()
     should_defer_cleanup = allow_manual_cleanup_selection and _seat_type(session, session.current_turn) == "human"
     cleanup_completed = session.game.resolve_cleanup_step(
         session.current_turn,
@@ -567,6 +568,7 @@ def _advance_phase(session: Session) -> None:
         _clear_cleanup_selection(session)
         return
     if step == "end":
+        game.close_end_step()
         should_defer_cleanup = _seat_type(session, session.current_turn) == "human"
         cleanup_completed = game.resolve_cleanup_step(
             session.current_turn,

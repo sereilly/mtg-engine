@@ -642,6 +642,47 @@ def test_both_players_passing_empty_stack_auto_advances_phase():
     assert payload["current_phase"] == "combat"
 
 
+def test_both_players_passing_end_step_advances_to_cleanup():
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "guest_name": "Guest",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 404351,
+        },
+    ).json()
+    sid = created["session_id"]
+    client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
+
+    session = store.get(sid)
+    session.current_turn = 0
+    session.game.active_player_index = 0
+    session.game.players[0].hand = [
+        _mk_card(name=f"Spell {idx}", mana_cost="", type_line="Sorcery", oracle_text="") for idx in range(9)
+    ]
+    session.game.current_turn_phase = "ending"
+    session.game.current_step = "end"
+    session.game.current_phase = "end"
+    session.game.start_priority_window(0)
+
+    first = _pass_priority(sid, 0)
+    assert first.status_code == 200
+    second = _pass_priority(sid, 1)
+    assert second.status_code == 200
+
+    payload = second.json()
+    assert payload["current_turn_phase"] == "ending"
+    assert payload["current_step"] == "cleanup"
+    assert payload["current_phase"] == "cleanup"
+
+    active_state = client.get(f"/api/sessions/{sid}/state?seat=0").json()
+    assert active_state["cleanup_discard"]["required_count"] == 2
+    assert active_state["cleanup_discard"]["selected_indices"] == []
+
+
 def test_playing_land_is_special_action_and_keeps_priority():
     created = client.post(
         "/api/sessions",

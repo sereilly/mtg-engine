@@ -1859,8 +1859,14 @@ class Game:
         for name in destroyed_names:
             self.log.append(f"{name} was destroyed at end step")
         if self._receives_priority(step):
-            self._resolve_priority_window()
-        self._on_step_or_phase_end(phase, step)
+            self.start_priority_window(self.active_player_index)
+
+    def close_end_step(self) -> None:
+        if self.current_turn_phase != "ending" or self.current_step != "end":
+            return
+        if self._receives_priority(self.current_step):
+            self.clear_priority_window()
+        self._on_step_or_phase_end("ending", "end")
 
     def resolve_cleanup_step(
         self,

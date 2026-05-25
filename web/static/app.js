@@ -5,6 +5,7 @@ let stateSyncSource = null;
 let pendingActivation = null;
 let pendingCastTarget = null;
 let pendingCastX = null;
+let pendingCastHandCard = null;
 let pendingManaColor = null;
 let debugSearchTimer = null;
 let symbolMap = {};
@@ -20,6 +21,7 @@ let aiAutoStepRequestedStateKey = "";
 let autoPassTurnEndEnabled = false;
 let autoPassTurnEndInFlight = false;
 let autoPassTurnEndRequestedStateKey = "";
+let autoPassMode = null;
 
 const setupEl = document.getElementById("setup");
 const boardEl = document.getElementById("boardPanel");
@@ -615,7 +617,13 @@ function hasBlockingPromptForAutoPass(state = currentState) {
 function shouldAutoPassUntilTurnEnd(state = currentState) {
   if (!state || seat === null) return false;
   if (!autoPassTurnEndEnabled) return false;
-  return state.current_turn === seat;
+  if (autoPassMode === "self") {
+    return state.current_turn === seat;
+  }
+  if (autoPassMode === "opponent") {
+    return state.current_turn !== seat;
+  }
+  return false;
 }
 
 async function maybeAutoPassUntilTurnEnd(state = currentState) {
@@ -625,6 +633,7 @@ async function maybeAutoPassUntilTurnEnd(state = currentState) {
 
   if (hasBlockingPromptForAutoPass(state)) {
     autoPassTurnEndEnabled = false;
+    autoPassMode = null;
     updateActionHint("Auto-pass paused: turn requires a manual selection.", true);
     return;
   }
@@ -660,6 +669,7 @@ async function maybeAutoPassUntilTurnEnd(state = currentState) {
     await sendAction({ seat, action: "pass_priority" });
   } catch (error) {
     autoPassTurnEndEnabled = false;
+    autoPassMode = null;
     const message = error instanceof Error ? error.message : "Auto-pass failed";
     updateActionHint(`Auto-pass paused: ${message}`, true);
   } finally {
@@ -928,6 +938,31 @@ function findCardInCurrentHand(cardName) {
   return me.hand.find((card) => normalizeCardName(card) === cardName) || null;
 }
 
+function beginPendingHandCast(card, handIndex = null) {
+  const cardName = normalizeCardName(card);
+  if (!cardName) return;
+  pendingCastHandCard = {
+    cardName,
+    handIndex: Number.isInteger(handIndex) && handIndex >= 0 ? handIndex : null,
+  };
+}
+
+function clearPendingHandCast() {
+  pendingCastHandCard = null;
+}
+
+function isPendingHandCastCard(card, handIndex = null) {
+  if (!pendingCastHandCard) return false;
+  const cardName = normalizeCardName(card);
+  if (!cardName || cardName !== pendingCastHandCard.cardName) {
+    return false;
+  }
+  if (Number.isInteger(pendingCastHandCard.handIndex)) {
+    return pendingCastHandCard.handIndex === handIndex;
+  }
+  return true;
+}
+
 function isAnyPromptActive(state = currentState) {
   if (getCleanupDiscardInfo(state)) return true;
   if (getUntapLandSelectionInfo(state)) return true;
@@ -1097,6 +1132,27 @@ function applyUntapPrompt(untapInfo) {
   customOkBtn.disabled = true;
 }
 
+function getOpponentName(state = currentState) {
+  if (!state || !Array.isArray(state.players) || state.players.length < 2) {
+    return "Opponent";
+  }
+  const viewerSeat = Number.isInteger(seat) ? seat : 0;
+  const oppSeat = viewerSeat === 0 ? 1 : 0;
+  return state.players?.[oppSeat]?.name || "Opponent";
+}
+
+function applyPriorityPromptStyle(panel, state = currentState) {
+  if (!panel) return;
+  panel.classList.remove("priority-self", "priority-opponent");
+  if (!state || seat === null || !Number.isInteger(state.priority_player)) return;
+
+  if (state.priority_player === seat) {
+    panel.classList.add("priority-self");
+  } else {
+    panel.classList.add("priority-opponent");
+  }
+}
+
 function renderActivationPrompt() {
   const panel = q("activationPanel");
   const title = q("promptTitle");
@@ -1117,6 +1173,8 @@ function renderActivationPrompt() {
   const isDeclareBlockersStep = isCombatStep(currentState, "declare_blockers") && hasValidBlockers;
   const isCombatDeclarePromptStep = isDeclareAttackersStep || isDeclareBlockersStep;
 
+  applyPriorityPromptStyle(panel, currentState);
+
   if (cleanupDiscard) {
     applyCleanupPrompt(cleanupDiscard);
     return;
@@ -1129,7 +1187,14 @@ function renderActivationPrompt() {
 
   if (!pendingActivation && !pendingCastTarget && !pendingCastX && !pendingManaColor) {
     const shouldShowPriority = shouldShowPriorityPrompt(currentState);
-    panel.classList.toggle("hidden", !isCombatDeclarePromptStep && !shouldShowPriority);
+    const opponentHasPriority =
+      !!currentState &&
+      seat !== null &&
+      Number.isInteger(currentState.priority_player) &&
+      currentState.priority_player !== seat;
+    const shouldShowWaitingPriority = !isCombatDeclarePromptStep && !shouldShowPriority && opponentHasPriority;
+
+    panel.classList.toggle("hidden", !isCombatDeclarePromptStep && !shouldShowPriority && !shouldShowWaitingPriority);
     if (isCombatDeclarePromptStep) {
       if (isDeclareAttackersStep) {
         title.textContent = "Declare Attackers";
@@ -1141,14 +1206,17 @@ function renderActivationPrompt() {
     } else if (shouldShowPriority) {
       title.textContent = "Priority";
       body.textContent = "Take an action (cast a spell, activate an ability, or play a land for turn), or press OK to pass priority.";
+    } else if (shouldShowWaitingPriority) {
+      title.textContent = `Waiting for ${getOpponentName(currentState)}...`;
+      body.textContent = "Opponent has priority.";
     } else {
       title.textContent = "No pending activation.";
       body.textContent = "Select an activated ability to begin paying its cost.";
     }
     steps.innerHTML = "";
     customRow.classList.add("hidden");
-    okBtn.classList.remove("hidden");
-    okBtn.disabled = !combatPromptNeedsConfirmation(currentState) && !shouldShowPriority;
+    okBtn.classList.toggle("hidden", shouldShowWaitingPriority);
+    okBtn.disabled = shouldShowWaitingPriority || (!combatPromptNeedsConfirmation(currentState) && !shouldShowPriority);
     cancelBtn.disabled = true;
     customOkBtn.disabled = true;
     return;
@@ -1435,7 +1503,8 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
     permanent_index: selectedPermanentIndex,
   })
     .then(() => updateActionHint(`Cast ${pending.cardName}.`))
-    .catch((e) => updateActionHint(e.message, true));
+    .catch((e) => updateActionHint(e.message, true))
+    .finally(() => clearPendingHandCast());
 }
 
 function handlePlayerTargetClick(targetSeat) {
@@ -1476,7 +1545,8 @@ function resolvePendingCastX(xValue) {
     x_value: selectedX,
   })
     .then(() => updateActionHint(`Cast ${pending.cardName} with X = ${selectedX}.`))
-    .catch((e) => updateActionHint(e.message, true));
+    .catch((e) => updateActionHint(e.message, true))
+    .finally(() => clearPendingHandCast());
 }
 
 function normalizeCardName(card) {
@@ -1765,6 +1835,7 @@ function createCardElement(card, options = {}) {
   if (interactive) cardEl.classList.add("clickable");
   if (cleanupSelectable) cardEl.classList.add("cleanup-selectable", "clickable");
   if (selected) cardEl.classList.add("selected-card");
+  if (zoneKind === "hand" && isPendingHandCastCard(card, handIndex)) cardEl.classList.add("casting-card");
 
   const imageUri = normalizeImageUri(card);
   if (!hidden && imageUri) {
@@ -1794,7 +1865,7 @@ function createCardElement(card, options = {}) {
       event.dataTransfer.effectAllowed = "move";
       event.dataTransfer.setData(
         "text/plain",
-        JSON.stringify({ kind: dragKind, name: normalizeCardName(card), permanentIndex })
+        JSON.stringify({ kind: dragKind, name: normalizeCardName(card), permanentIndex, handIndex })
       );
     });
     cardEl.addEventListener("dragend", () => {
@@ -1923,6 +1994,8 @@ function createCardElement(card, options = {}) {
 
         const cardName = normalizeCardName(card);
         if (!cardName) return;
+        beginPendingHandCast(card, handIndex);
+        cardEl.classList.add("casting-card");
 
         if (cardRequiresTargetLand(card)) {
           startCastLandTargetPrompt(card);
@@ -1940,9 +2013,14 @@ function createCardElement(card, options = {}) {
           return;
         }
 
-        await sendAction({ seat, action: "cast", card_name: cardName, target_seat: targetSeat });
-        updateActionHint(`Cast ${cardName} targeting seat ${targetSeat}.`);
+        try {
+          await sendAction({ seat, action: "cast", card_name: cardName, target_seat: targetSeat });
+          updateActionHint(`Cast ${cardName} targeting seat ${targetSeat}.`);
+        } finally {
+          clearPendingHandCast();
+        }
       } catch (e) {
+        clearPendingHandCast();
         updateActionHint(e.message, true);
       }
     });
@@ -2214,6 +2292,7 @@ function renderBoard(state) {
   const oppSeat = viewerSeat === 0 ? 1 : 0;
   const me = state.players[viewerSeat];
   const opp = state.players[oppSeat];
+  const combat = getCombatState(state);
 
   q("selfBattlefield").dataset.targetSeat = String(viewerSeat);
   q("oppBattlefield").dataset.targetSeat = String(oppSeat);
@@ -2247,7 +2326,10 @@ function renderBoard(state) {
   const selfLane = document.querySelector(".self-lane");
   const oppLane = document.querySelector(".opponent-lane");
   setDebugMenuEnabled(sessionId !== null && seat !== null);
-  q("endTurnBtn").disabled = !canEndTurn || hasBlockingPrompt;
+  q("endTurnBtn").textContent = autoPassTurnEndEnabled ? "Cancel Auto-Pass" : (isSelfTurn ? "End Turn" : "Auto-Pass");
+  q("endTurnBtn").disabled = autoPassTurnEndEnabled
+    ? false
+    : (isSelfTurn ? (!canEndTurn || hasBlockingPrompt) : (seat === null || hasBlockingPrompt));
   q("nextPhaseBtn").disabled = !hasPriority || hasBlockingPrompt;
   selfLane?.classList.toggle("turn-zone-self", isSelfTurn);
   oppLane?.classList.toggle("turn-zone-opponent", !isSelfTurn);
@@ -2319,9 +2401,22 @@ function renderBoard(state) {
 }
 
 function renderState(state) {
-  if (autoPassTurnEndEnabled && (seat === null || state.current_turn !== seat)) {
+  if (autoPassTurnEndEnabled && seat === null) {
     autoPassTurnEndEnabled = false;
     autoPassTurnEndRequestedStateKey = "";
+    autoPassMode = null;
+  }
+
+  if (autoPassTurnEndEnabled && autoPassMode === "self" && state.current_turn !== seat) {
+    autoPassTurnEndEnabled = false;
+    autoPassTurnEndRequestedStateKey = "";
+    autoPassMode = null;
+  }
+
+  if (autoPassTurnEndEnabled && autoPassMode === "opponent" && state.current_turn === seat) {
+    autoPassTurnEndEnabled = false;
+    autoPassTurnEndRequestedStateKey = "";
+    autoPassMode = null;
   }
 
   currentState = state;
@@ -2336,6 +2431,7 @@ function renderState(state) {
     pendingActivation = null;
     pendingCastTarget = null;
     pendingCastX = null;
+    clearPendingHandCast();
     pendingManaColor = null;
   }
   if (sessionId !== null) {
@@ -2495,6 +2591,7 @@ function initDropZones() {
 
       if (payload.kind === "hand") {
         const card = findCardInCurrentHand(payload.name);
+        beginPendingHandCast(card || payload.name, Number.isInteger(payload.handIndex) ? payload.handIndex : null);
         if (card && cardRequiresTargetPlayer(card)) {
           startCastTargetPrompt(card);
           return;
@@ -2504,8 +2601,12 @@ function initDropZones() {
           startCastXPrompt(card, castTargetSeat);
           return;
         }
-        await sendAction({ seat, action: "cast", card_name: payload.name, target_seat: castTargetSeat });
-        updateActionHint(`Cast ${payload.name} targeting seat ${castTargetSeat}.`);
+        try {
+          await sendAction({ seat, action: "cast", card_name: payload.name, target_seat: castTargetSeat });
+          updateActionHint(`Cast ${payload.name} targeting seat ${castTargetSeat}.`);
+        } finally {
+          clearPendingHandCast();
+        }
         return;
       }
       if (payload.kind === "permanent") {
@@ -2552,6 +2653,7 @@ function initDropZones() {
 
       if (payload.kind === "hand") {
         const card = findCardInCurrentHand(payload.name);
+        beginPendingHandCast(card || payload.name, Number.isInteger(payload.handIndex) ? payload.handIndex : null);
         if (card && cardRequiresTargetPlayer(card)) {
           startCastTargetPrompt(card);
           return;
@@ -2561,8 +2663,12 @@ function initDropZones() {
           startCastXPrompt(card, castTargetSeat);
           return;
         }
-        await sendAction({ seat, action: "cast", card_name: payload.name, target_seat: castTargetSeat });
-        updateActionHint(`Cast ${payload.name} targeting seat ${castTargetSeat}.`);
+        try {
+          await sendAction({ seat, action: "cast", card_name: payload.name, target_seat: castTargetSeat });
+          updateActionHint(`Cast ${payload.name} targeting seat ${castTargetSeat}.`);
+        } finally {
+          clearPendingHandCast();
+        }
         return;
       }
       if (payload.kind === "permanent") {
@@ -2768,6 +2874,7 @@ q("promptCancelBtn").addEventListener("click", () => {
   pendingActivation = null;
   pendingCastTarget = null;
   pendingCastX = null;
+  clearPendingHandCast();
   pendingManaColor = null;
   renderActivationPrompt();
   updateActionHint("Prompt canceled.");
@@ -2831,15 +2938,31 @@ q("promptSteps").addEventListener("click", (event) => {
 
 q("endTurnBtn").addEventListener("click", async () => {
   try {
+    if (autoPassTurnEndEnabled) {
+      autoPassTurnEndEnabled = false;
+      autoPassTurnEndRequestedStateKey = "";
+      autoPassMode = null;
+      renderBoard(currentState);
+      updateActionHint("Auto-pass canceled.");
+      return;
+    }
+
     pendingActivation = null;
     pendingCastTarget = null;
     pendingCastX = null;
     pendingManaColor = null;
+    const isSelfTurn = !!currentState && seat !== null && currentState.current_turn === seat;
     autoPassTurnEndEnabled = true;
+    autoPassMode = isSelfTurn ? "self" : "opponent";
     autoPassTurnEndRequestedStateKey = "";
+    renderBoard(currentState);
     renderActivationPrompt();
     await maybeAutoPassUntilTurnEnd(currentState);
-    updateActionHint("Auto-passing priority until your turn ends.");
+    updateActionHint(
+      autoPassMode === "self"
+        ? "Auto-passing priority until your turn ends."
+        : "Auto-pass enabled for opponent turn priority."
+    );
   } catch (e) {
     alert(e.message);
   }
@@ -2939,6 +3062,7 @@ syncGuestNameForMode();
 syncSeedControls();
 setDebugMenuEnabled(false);
 q("endTurnBtn").disabled = true;
+q("endTurnBtn").textContent = "End Turn";
 q("nextPhaseBtn").disabled = true;
 fetchDebugSuggestions().catch(() => {
   // Intentionally ignored during startup.
