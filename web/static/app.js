@@ -21,6 +21,7 @@ const setupEl = document.getElementById("setup");
 const boardEl = document.getElementById("boardPanel");
 const aiControlsEl = document.getElementById("aiControls");
 const joinUrlEl = document.getElementById("joinUrl");
+const lanJoinUrlEl = document.getElementById("lanJoinUrl");
 const startGameSectionEl = document.getElementById("startGameSection");
 const joinExistingSectionEl = document.getElementById("joinExistingSection");
 
@@ -550,7 +551,7 @@ function resetToSetup(message = "Session not found. Start a new game.") {
   showSetupPanel();
   boardEl.classList.add("hidden");
   aiControlsEl?.classList.add("hidden");
-  setJoinUrl("");
+  setJoinUrls("", "");
   updateActionHint(message, true);
 }
 
@@ -1373,29 +1374,36 @@ function updateActionHint(message, isError = false) {
   el.style.color = isError ? "#e16d70" : "#cfd7e4";
 }
 
-function setJoinUrl(url = "") {
-  if (!joinUrlEl) return;
-
+function setSingleJoinUrl(element, label, url = "") {
+  if (!element) return;
   const trimmed = String(url || "").trim();
   if (!trimmed) {
-    joinUrlEl.dataset.url = "";
-    joinUrlEl.textContent = "";
-    joinUrlEl.classList.add("hidden");
+    element.dataset.url = "";
+    element.textContent = "";
+    element.classList.add("hidden");
     return;
   }
 
-  joinUrlEl.dataset.url = trimmed;
-  joinUrlEl.textContent = `Join URL: ${trimmed}`;
-  joinUrlEl.classList.remove("hidden");
+  element.dataset.url = trimmed;
+  element.textContent = `${label}: ${trimmed}`;
+  element.classList.remove("hidden");
+}
+
+function setJoinUrls(url = "", lanUrl = "") {
+  setSingleJoinUrl(joinUrlEl, "Join URL", url);
+  setSingleJoinUrl(lanJoinUrlEl, "LAN Join URL", lanUrl);
 }
 
 function syncJoinUrlVisibility(state) {
-  if (!joinUrlEl) return;
-  if (!joinUrlEl.dataset.url) {
-    joinUrlEl.classList.add("hidden");
-    return;
+  const visible = hasOpenHumanSlot(state);
+  for (const element of [joinUrlEl, lanJoinUrlEl]) {
+    if (!element) continue;
+    if (!element.dataset.url) {
+      element.classList.add("hidden");
+      continue;
+    }
+    element.classList.toggle("hidden", !visible);
   }
-  joinUrlEl.classList.toggle("hidden", !hasOpenHumanSlot(state));
 }
 
 async function copyTextToClipboard(text) {
@@ -2467,7 +2475,13 @@ function initCardPreviewHover() {
 
 async function getState() {
   if (!sessionId) return;
-  const resp = await fetch(`/api/sessions/${sessionId}/state?seat=${seat ?? ""}`);
+  const params = new URLSearchParams();
+  if (Number.isInteger(seat)) {
+    params.set("seat", String(seat));
+  }
+  const query = params.toString();
+  const url = query ? `/api/sessions/${sessionId}/state?${query}` : `/api/sessions/${sessionId}/state`;
+  const resp = await fetch(url);
   if (resp.status === 404) {
     resetToSetup();
     return;
@@ -2507,7 +2521,7 @@ async function createSession() {
   const data = await postJson("/api/sessions", req);
   sessionId = data.session_id;
   seat = data.seat;
-  setJoinUrl(data.join_url);
+  setJoinUrls(data.join_url, data.lan_join_url);
   renderState(data.state);
   setVisible(true);
   updateActionHint("Session ready. Drag from your hand to cast.");
@@ -2538,7 +2552,7 @@ async function joinSession() {
   }
   const data = await postJson(`/api/sessions/${sessionId}/join`, { guest_name: q("joinName").value });
   seat = data.seat;
-  setJoinUrl(data.join_url);
+  setJoinUrls(data.join_url, data.lan_join_url);
   renderState(data.state);
   setVisible(true);
   updateActionHint("Joined. Drag from your hand or battlefield to play.");
@@ -2576,16 +2590,18 @@ q("joinBtn").addEventListener("click", async () => {
   }
 });
 
-joinUrlEl?.addEventListener("click", async () => {
-  const targetUrl = joinUrlEl.dataset.url;
-  if (!targetUrl) return;
-  try {
-    await copyTextToClipboard(targetUrl);
-    updateActionHint("Join URL copied to clipboard.");
-  } catch {
-    updateActionHint("Could not copy join URL. Copy it manually.", true);
-  }
-});
+for (const [element, label] of [[joinUrlEl, "Join URL"], [lanJoinUrlEl, "LAN join URL"]]) {
+  element?.addEventListener("click", async () => {
+    const targetUrl = element.dataset.url;
+    if (!targetUrl) return;
+    try {
+      await copyTextToClipboard(targetUrl);
+      updateActionHint(`${label} copied to clipboard.`);
+    } catch {
+      updateActionHint(`Could not copy ${label.toLowerCase()}. Copy it manually.`, true);
+    }
+  });
+}
 
 q("promptCancelBtn").addEventListener("click", () => {
   pendingActivation = null;

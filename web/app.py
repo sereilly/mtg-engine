@@ -333,8 +333,11 @@ def _find_controlled_permanent(
     return None
 
 
-def _detect_local_ip() -> str:
-    # Prefer the routed interface address so other devices on LAN can reach us.
+def _build_join_url(request: Request, session_id: str) -> str:
+    return f"{str(request.base_url).rstrip('/')}/index.html?session={session_id}"
+
+
+def _detect_local_ip() -> str | None:
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             sock.connect(("8.8.8.8", 80))
@@ -346,22 +349,24 @@ def _detect_local_ip() -> str:
 
     try:
         ip = socket.gethostbyname(socket.gethostname())
-        if ip:
+        if ip and not ip.startswith("127."):
             return ip
     except OSError:
         pass
 
-    return "127.0.0.1"
+    return None
 
 
-def _build_join_url(request: Request, session_id: str) -> str:
-    base_url = request.base_url
-    if request.url.hostname in {"localhost", "127.0.0.1", "0.0.0.0"}:
-        local_ip = _detect_local_ip()
-        if local_ip and local_ip != "127.0.0.1":
-            base_url = base_url.replace(hostname=local_ip)
+def _build_lan_join_url(request: Request, session_id: str) -> str | None:
+    local_ip = _detect_local_ip()
+    if not local_ip:
+        return None
 
-    return f"{str(base_url).rstrip('/')}/index.html?session={session_id}"
+    if (request.url.hostname or "") == local_ip:
+        return None
+
+    lan_base_url = request.base_url.replace(hostname=local_ip)
+    return f"{str(lan_base_url).rstrip('/')}/index.html?session={session_id}"
 
 
 def _ai_step(session: Session) -> None:
@@ -500,9 +505,11 @@ def random_deck(req: RandomDeckRequest):
 def create_session(req: CreateSessionRequest, request: Request):
     session = store.create(req)
     join_url = _build_join_url(request, session.id)
+    lan_join_url = _build_lan_join_url(request, session.id)
     return {
         "session_id": session.id,
         "join_url": join_url,
+        "lan_join_url": lan_join_url,
         "seat": 0,
         "state": _serialize_state(session, viewer_seat=0),
     }
@@ -512,9 +519,12 @@ def create_session(req: CreateSessionRequest, request: Request):
 def join_session(session_id: str, req: JoinSessionRequest, request: Request):
     session = _require_session(session_id)
     session = store.join(session_id, req.guest_name)
+    join_url = _build_join_url(request, session.id)
+    lan_join_url = _build_lan_join_url(request, session.id)
     return {
         "session_id": session.id,
-        "join_url": _build_join_url(request, session.id),
+        "join_url": join_url,
+        "lan_join_url": lan_join_url,
         "seat": 1,
         "state": _serialize_state(session, viewer_seat=1),
     }

@@ -61,6 +61,7 @@ def test_create_human_vs_human_session_returns_join_url():
     payload = response.json()
     assert payload["session_id"]
     assert "join_url" in payload
+    assert "lan_join_url" in payload
     assert payload["seat"] == 0
 
 
@@ -118,9 +119,7 @@ def test_create_session_uses_custom_seed_when_enabled(monkeypatch):
     assert captured_seeds == [9001, 9002]
 
 
-def test_create_session_uses_lan_ip_join_url_for_localhost(monkeypatch):
-    monkeypatch.setattr(web_app, "_detect_local_ip", lambda: "192.168.1.77")
-
+def test_create_session_keeps_request_host_in_join_url():
     response = client.post(
         "/api/sessions",
         headers={"host": "localhost:8010"},
@@ -136,7 +135,28 @@ def test_create_session_uses_lan_ip_join_url_for_localhost(monkeypatch):
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["join_url"].startswith("http://192.168.1.77:8010/index.html?session=")
+    assert payload["join_url"].startswith("http://localhost:8010/index.html?session=")
+
+
+def test_create_session_returns_lan_join_url_when_local_ip_is_available(monkeypatch):
+    monkeypatch.setattr(web_app, "_detect_local_ip", lambda: "192.168.1.77")
+
+    response = client.post(
+        "/api/sessions",
+        headers={"host": "localhost:8010"},
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "guest_name": "Guest",
+            "host_colors": 2,
+            "guest_colors": 3,
+            "seed": 125,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["lan_join_url"].startswith("http://192.168.1.77:8010/index.html?session=")
 
 
 def test_join_hvh_session_and_get_redacted_state():
