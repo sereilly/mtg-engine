@@ -1,3 +1,4 @@
+import asyncio
 from fastapi.testclient import TestClient
 import json
 import web.app as web_app
@@ -213,12 +214,21 @@ def test_session_events_stream_join_notification():
     ).json()
     sid = created["session_id"]
 
-    with client.stream("GET", f"/api/sessions/{sid}/events") as response:
-        assert response.status_code == 200
-        joined = client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
-        assert joined.status_code == 200
+    async def _collect_join_event() -> str:
+        stream = web_app._stream_session_events(sid)
+        try:
+            first_chunk = await asyncio.wait_for(stream.__anext__(), timeout=1)
+            assert first_chunk == ": connected\n\n"
 
-        event_lines = _read_sse_event_lines(response)
+            joined = await asyncio.to_thread(client.post, f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
+            assert joined.status_code == 200
+
+            return await asyncio.wait_for(stream.__anext__(), timeout=1)
+        finally:
+            await stream.aclose()
+
+    event_chunk = asyncio.run(_collect_join_event())
+    event_lines = [line for line in event_chunk.splitlines() if line]
 
     assert "event: state" in event_lines
     data_line = next(line for line in event_lines if line.startswith("data: "))
@@ -240,12 +250,21 @@ def test_session_events_stream_action_notification():
     sid = created["session_id"]
     client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
 
-    with client.stream("GET", f"/api/sessions/{sid}/events") as response:
-        assert response.status_code == 200
-        action = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "end_turn"})
-        assert action.status_code == 200
+    async def _collect_action_event() -> str:
+        stream = web_app._stream_session_events(sid)
+        try:
+            first_chunk = await asyncio.wait_for(stream.__anext__(), timeout=1)
+            assert first_chunk == ": connected\n\n"
 
-        event_lines = _read_sse_event_lines(response)
+            action = await asyncio.to_thread(client.post, f"/api/sessions/{sid}/action", json={"seat": 0, "action": "end_turn"})
+            assert action.status_code == 200
+
+            return await asyncio.wait_for(stream.__anext__(), timeout=1)
+        finally:
+            await stream.aclose()
+
+    event_chunk = asyncio.run(_collect_action_event())
+    event_lines = [line for line in event_chunk.splitlines() if line]
 
     assert "event: state" in event_lines
     data_line = next(line for line in event_lines if line.startswith("data: "))
@@ -367,6 +386,32 @@ def test_debug_action_casts_card_for_free():
     payload = response.json()
     assert payload["players"][1]["life"] == 17
     assert any("[Debug]" in entry and "Lightning Bolt" in entry for entry in payload["log"])
+
+
+def test_debug_action_casts_creature_with_summoning_sickness_flag():
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "guest_name": "Guest",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 9092,
+        },
+    ).json()
+    sid = created["session_id"]
+
+    response = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "debug_cast_free", "card_name": "Llanowar Elves"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    battlefield = payload["players"][0]["battlefield"]
+    assert battlefield[0]["name"] == "Llanowar Elves"
+    assert battlefield[0]["summoning_sick"] is True
 
 
 def test_web_session_requires_paid_mana_before_cast():

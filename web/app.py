@@ -46,7 +46,7 @@ async def _no_cache_assets(request: Request, call_next):
     return response
 
 
-def _serialize_permanent(perm: Permanent) -> dict:
+def _serialize_permanent(perm: Permanent, game: Game) -> dict:
     image_uris = perm.card.raw.get("image_uris") if isinstance(perm.card.raw, dict) else None
     image_uri = image_uris.get("normal") if isinstance(image_uris, dict) else None
     large_image_uri = image_uris.get("large") if isinstance(image_uris, dict) else None
@@ -66,6 +66,7 @@ def _serialize_permanent(perm: Permanent) -> dict:
         "blocking_attacker_controller": perm.blocking_attacker_controller,
         "blocking_attacker_index": perm.blocking_attacker_index,
         "damage_marked": perm.damage_marked,
+        "summoning_sick": game._is_summoning_sick(perm),
     }
 
 
@@ -142,6 +143,7 @@ async def _stream_session_events(session_id: str):
     queue: asyncio.Queue[dict[str, str]] = asyncio.Queue(maxsize=1)
     _session_event_queues[session_id].add(queue)
     try:
+        yield ": connected\n\n"
         while True:
             try:
                 event = await asyncio.wait_for(queue.get(), timeout=30)
@@ -172,7 +174,7 @@ def _serialize_stack_item(item, game: Game) -> dict:
     }
 
 
-def _serialize_player(player: PlayerState, viewer_seat: int | None, seat: int) -> dict:
+def _serialize_player(player: PlayerState, viewer_seat: int | None, seat: int, game: Game) -> dict:
     if viewer_seat == seat:
         hand = [_serialize_card(card) for card in player.hand]
     else:
@@ -187,7 +189,7 @@ def _serialize_player(player: PlayerState, viewer_seat: int | None, seat: int) -
         "library_count": len(player.library),
         "graveyard": [_serialize_card(card) for card in player.graveyard],
         "exile": [_serialize_card(card) for card in player.exile],
-        "battlefield": [_serialize_permanent(perm) for perm in player.battlefield],
+        "battlefield": [_serialize_permanent(perm, game) for perm in player.battlefield],
         "mana_pool": _serialize_mana_pool(player),
     }
 
@@ -332,8 +334,8 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "joined_seats": sorted(session.joined_seats),
         "seat_types": session.seat_types,
         "players": [
-            _serialize_player(session.game.players[0], viewer_seat, 0),
-            _serialize_player(session.game.players[1], viewer_seat, 1),
+            _serialize_player(session.game.players[0], viewer_seat, 0, session.game),
+            _serialize_player(session.game.players[1], viewer_seat, 1, session.game),
         ],
         "stack": [_serialize_stack_item(item, session.game) for item in reversed(session.game.stack)],
         "combat": session.game.get_combat_state(),

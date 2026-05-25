@@ -207,6 +207,9 @@ def _run_card(card: CardDefinition, all_cards: list[CardDefinition]) -> tuple[Ga
     should_activate = ":" in text and any(fragment in text for fragment in activatable_fragments)
 
     if result.supported and should_activate and card.primary_type in {"artifact", "creature", "enchantment"}:
+        permanent = next((perm for perm in p1.battlefield if perm.card.name == card.name), None)
+        if permanent is not None:
+            permanent.metadata["summoning_sickness_turn"] = game.turn - 1
         activation_result = game.activate_permanent_ability(0, card.name, target_player_index=1)
         return game, p1, p2, before, activation_result
 

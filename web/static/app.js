@@ -1582,7 +1582,9 @@ function showCardPreview(card) {
   const largeImageUri = normalizeLargeImageUri(card);
   q("cardPreviewName").textContent = normalizeCardName(card) || "Card";
   q("cardPreviewType").textContent = typeof card === "string" ? "" : card.type || "";
-  setSymbolsHtml(q("cardPreviewText"), typeof card === "string" ? "" : card.oracle_text || "");
+  const previewText = typeof card === "string" ? "" : card.oracle_text || "";
+  const sicknessLabel = typeof card === "object" && card?.summoning_sick ? "Summoning Sickness" : "";
+  setSymbolsHtml(q("cardPreviewText"), [previewText, sicknessLabel].filter(Boolean).join("\n"));
 
   if (!largeImageUri) {
     q("cardPreview").classList.add("empty-preview");
@@ -1630,6 +1632,15 @@ function createCardElement(card, options = {}) {
   }
   if (!hidden && typeof card === "object") {
     cardEl.dataset.previewCard = JSON.stringify(card);
+  }
+  if (!hidden && typeof card === "object" && card.summoning_sick) {
+    cardEl.classList.add("summoning-sick");
+    const badge = document.createElement("img");
+    badge.className = "card-overlay-badge";
+    badge.src = "/symbols/summoning_sickness.png";
+    badge.alt = "Summoning Sickness";
+    badge.title = "Summoning Sickness";
+    cardEl.appendChild(badge);
   }
   if (draggable) {
     cardEl.classList.add("draggable");

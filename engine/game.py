@@ -152,6 +152,22 @@ class Game:
                 return idx, permanent
         return None
 
+    def _is_summoning_sick(self, permanent: Permanent) -> bool:
+        if permanent.card.primary_type != "creature":
+            return False
+        if self._has_keyword(permanent, "Haste"):
+            return False
+        return permanent.metadata.get("summoning_sickness_turn") == self.turn
+
+    def _put_permanent_onto_battlefield(
+        self,
+        controller_index: int,
+        permanent: Permanent,
+        target_player_index: int | None,
+    ) -> None:
+        self.players[controller_index].battlefield.append(permanent)
+        self._initialize_permanent_state(permanent, controller_index, target_player_index)
+
     def _public_phase_name(self, phase: str, step: str) -> str:
         if phase in {"precombat_main", "postcombat_main"}:
             return "main"
@@ -563,6 +579,10 @@ class Game:
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
 
         if requires_tap:
+            if self._is_summoning_sick(permanent):
+                details = f"{permanent.card.name} has summoning sickness"
+                self.log.append(details)
+                return SimulationResult(permanent.card.name, False, "unsupported", details)
             if permanent.tapped:
                 details = f"{permanent.card.name} is already tapped"
                 self.log.append(details)
@@ -851,8 +871,7 @@ class Game:
             permanent = Permanent(card=card)
             if x_value is not None:
                 permanent.metadata["cast_x_value"] = x_value
-            caster.battlefield.append(permanent)
-            self._initialize_permanent_state(permanent, caster_index, target_player_index)
+            self._put_permanent_onto_battlefield(caster_index, permanent, target_player_index)
             self.log.append(f"{caster.name} put {card.name} onto battlefield")
             self._apply_global_buff(caster, card)
             self._apply_aura_effect(caster_index, permanent, target_player_index)
@@ -1366,6 +1385,7 @@ class Game:
             return True, "resolved"
 
         if instruction.kind == "create_wasp_token":
+            controller_index = self.players.index(caster)
             wasp = CardDefinition(
                 name="Wasp",
                 mana_cost="",
@@ -1378,7 +1398,7 @@ class Game:
                 produced_mana=(),
                 raw={"name": "Wasp", "type_line": "Artifact Creature — Insect", "power": "1", "toughness": "1"},
             )
-            caster.battlefield.append(Permanent(card=wasp))
+            self._put_permanent_onto_battlefield(controller_index, Permanent(card=wasp), None)
             self.log.append(f"{card.name} created a Wasp token")
             return True, "resolved"
 
@@ -1542,7 +1562,8 @@ class Game:
         for idx, card in enumerate(caster.graveyard):
             if card.primary_type == "creature":
                 revived = caster.graveyard.pop(idx)
-                caster.battlefield.append(Permanent(card=revived))
+                controller_index = self.players.index(caster)
+                self._put_permanent_onto_battlefield(controller_index, Permanent(card=revived), None)
                 return True
         return False
 
@@ -1760,6 +1781,9 @@ class Game:
         caster_index: int,
         target_player_index: int | None,
     ) -> None:
+        if permanent.card.primary_type == "creature":
+            permanent.metadata["summoning_sickness_turn"] = self.turn
+
         text = permanent.card.oracle_text.lower()
         for raw_line in text.splitlines():
             line = raw_line.strip()
@@ -2314,6 +2338,9 @@ class Game:
         }
 
     def can_attack(self, attacker: Permanent, defending_player_index: int) -> bool:
+        if self._is_summoning_sick(attacker):
+            return False
+
         text = attacker.card.oracle_text.lower()
         if "can't attack unless defending player controls an island" in text:
             defending = self.players[defending_player_index]

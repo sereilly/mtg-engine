@@ -676,6 +676,25 @@ def test_sea_serpent_attack_restriction(all_cards):
     assert game.can_attack(p1.battlefield[0], defending_player_index=1) is True
 
 
+def test_summoning_sickness_blocks_attacks_and_tap_abilities(all_cards):
+    creature = _mk_card("Test Bear", "Creature — Bear")
+    llanowar_elves = next(card for card in all_cards if card.name == "Llanowar Elves")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=creature), Permanent(card=llanowar_elves)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.turn = 4
+
+    p1.battlefield[0].metadata["summoning_sickness_turn"] = game.turn
+    assert game.can_attack(p1.battlefield[0], defending_player_index=1) is False
+
+    p1.battlefield[1].metadata["summoning_sickness_turn"] = game.turn
+    result = game.activate_permanent_ability(0, "Llanowar Elves", target_player_index=0)
+
+    assert result.supported is False
+    assert "summoning sickness" in result.details.lower()
+
+
 def test_keldon_warlord_dynamic_pt(all_cards):
     warlord = next(card for card in all_cards if card.name == "Keldon Warlord")
     creature = _mk_card("Helper", "Creature — Bear")
