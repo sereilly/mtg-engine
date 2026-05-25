@@ -13,6 +13,7 @@ let combatAttackerDraft = [];
 let combatBlockerDraft = {};
 let combatDraftStepKey = "";
 let combatPromptKey = "";
+let previousLifeBySeat = {};
 
 const setupEl = document.getElementById("setup");
 const boardEl = document.getElementById("boardPanel");
@@ -75,6 +76,33 @@ function getPhaseDisplayLabel(state) {
 
 function q(id) {
   return document.getElementById(id);
+}
+
+function triggerLifeFlash(element, changeType) {
+  if (!element || !changeType) return;
+  element.classList.remove("life-flash-gain", "life-flash-loss");
+  // Force a reflow so repeated changes retrigger animation reliably.
+  void element.offsetWidth;
+  element.classList.add(changeType === "gain" ? "life-flash-gain" : "life-flash-loss");
+}
+
+function renderLifePill(elementId, seatIndex, nextLife) {
+  const lifeEl = q(elementId);
+  if (!lifeEl) return;
+
+  const numericSeat = Number(seatIndex);
+  const numericLife = Number(nextLife);
+  const previousLife = previousLifeBySeat[numericSeat];
+
+  lifeEl.textContent = String(nextLife);
+
+  if (Number.isFinite(previousLife) && Number.isFinite(numericLife) && numericLife !== previousLife) {
+    triggerLifeFlash(lifeEl, numericLife > previousLife ? "gain" : "loss");
+  }
+
+  if (Number.isFinite(numericSeat) && Number.isFinite(numericLife)) {
+    previousLifeBySeat[numericSeat] = numericLife;
+  }
 }
 
 function getCombatState(state = currentState) {
@@ -425,6 +453,7 @@ function resetToSetup(message = "Session not found. Start a new game.") {
   sessionId = null;
   seat = null;
   currentState = null;
+  previousLifeBySeat = {};
   showSetupPanel();
   boardEl.classList.add("hidden");
   aiControlsEl?.classList.add("hidden");
@@ -1044,6 +1073,10 @@ function normalizeLargeImageUri(card) {
 
 function cardStatsLabel(card) {
   if (!card || typeof card === "string") return "";
+  const typeLine = String(card.type || "").toLowerCase();
+  if (!typeLine.includes("creature")) {
+    return "";
+  }
   if (typeof card.power !== "number" || typeof card.toughness !== "number") {
     return "";
   }
@@ -1726,9 +1759,9 @@ function renderBoard(state) {
   q("winnerBadge").textContent = `Winner: ${state.winner === null ? "-" : state.winner}`;
 
   q("selfName").textContent = me.name;
-  q("selfLife").textContent = String(me.life);
+  renderLifePill("selfLife", viewerSeat, me.life);
   q("oppName").textContent = opp.name;
-  q("oppLife").textContent = String(opp.life);
+  renderLifePill("oppLife", oppSeat, opp.life);
 
   const isSelfTurn = state.current_turn === viewerSeat;
   const canEndTurn = seat !== null && isSelfTurn && !isOpponentMidAction(state, viewerSeat);
