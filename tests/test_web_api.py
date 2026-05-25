@@ -47,6 +47,24 @@ def _mk_creature_card(name: str, power: int, toughness: int, oracle_text: str = 
     )
 
 
+def _pass_priority(session_id: str, seat: int):
+    session = store.get(session_id)
+    if seat == 1 and seat not in session.joined_seats and session.mode == "human_vs_human":
+        client.post(f"/api/sessions/{session_id}/join", json={"guest_name": "Joiner"})
+    return client.post(
+        f"/api/sessions/{session_id}/action",
+        json={"seat": seat, "action": "pass_priority"},
+    )
+
+
+def _resolve_top_stack(session_id: str, first_pass_seat: int):
+    first = _pass_priority(session_id, first_pass_seat)
+    assert first.status_code == 200
+    second = _pass_priority(session_id, 1 - first_pass_seat)
+    assert second.status_code == 200
+    return second
+
+
 def test_create_human_vs_human_session_returns_join_url():
     response = client.post(
         "/api/sessions",
@@ -466,6 +484,7 @@ def test_web_session_requires_paid_mana_before_cast():
         json={"seat": 0, "action": "cast", "card_name": "Bolt Test", "target_seat": 1},
     )
     assert paid_cast.status_code == 200
+    _resolve_top_stack(sid, 0)
     assert store.get(sid).game.players[1].life == 17
 
 
@@ -500,9 +519,11 @@ def test_web_cast_accepts_explicit_x_value():
     )
 
     assert response.status_code == 200
+    _resolve_top_stack(sid, 0)
     payload = response.json()
-    assert payload["players"][0]["life"] == 11
-    assert any("Stream of Life" in entry and "10 -> 11" in entry for entry in payload["log"])
+    refreshed = client.get(f"/api/sessions/{sid}/state?seat=0").json()
+    assert refreshed["players"][0]["life"] == 11
+    assert any("Stream of Life" in entry and "10 -> 11" in entry for entry in refreshed["log"])
 
 
 def test_web_activate_black_lotus_accepts_mana_color_choice():
@@ -547,6 +568,241 @@ def test_web_activate_black_lotus_accepts_mana_color_choice():
     assert payload["players"][0]["battlefield"] == []
 
 
+def test_spell_stays_on_stack_until_both_players_pass_priority():
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "guest_name": "Guest",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 40431,
+        },
+    ).json()
+    sid = created["session_id"]
+
+    session = store.get(sid)
+    bolt = _mk_card(
+        name="Bolt Test",
+        mana_cost="{R}",
+        type_line="Instant",
+        oracle_text="Bolt Test deals 3 damage to any target.",
+    )
+    session.game.players[0].hand = [bolt]
+    session.game.players[0].mana_pool = {"W": 0, "U": 0, "B": 0, "R": 1, "G": 0, "C": 0}
+    session.game.players[1].life = 20
+
+    cast = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "cast", "card_name": "Bolt Test", "target_seat": 1},
+    )
+    assert cast.status_code == 200
+    cast_payload = cast.json()
+    assert len(cast_payload["stack"]) == 1
+    assert cast_payload["players"][1]["life"] == 20
+
+    _resolve_top_stack(sid, 0)
+    resolved = client.get(f"/api/sessions/{sid}/state?seat=0").json()
+    assert resolved["players"][1]["life"] == 17
+    assert resolved["stack"] == []
+
+
+def test_both_players_passing_empty_stack_auto_advances_phase():
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "guest_name": "Guest",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 40435,
+        },
+    ).json()
+    sid = created["session_id"]
+    client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
+
+    session = store.get(sid)
+    session.game.current_turn_phase = "precombat_main"
+    session.game.current_step = "precombat_main"
+    session.game.current_phase = "main"
+    session.current_turn = 0
+    session.game.active_player_index = 0
+    session.game.start_priority_window(0)
+
+    first = _pass_priority(sid, 0)
+    assert first.status_code == 200
+    second = _pass_priority(sid, 1)
+    assert second.status_code == 200
+
+    payload = second.json()
+    assert payload["current_turn_phase"] == "combat"
+    assert payload["current_step"] == "beginning_of_combat"
+    assert payload["current_phase"] == "combat"
+
+
+def test_playing_land_is_special_action_and_keeps_priority():
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "guest_name": "Guest",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 40436,
+        },
+    ).json()
+    sid = created["session_id"]
+    client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
+
+    session = store.get(sid)
+    island = _mk_card(
+        name="Island",
+        mana_cost="",
+        type_line="Basic Land - Island",
+        oracle_text="{T}: Add {U}.",
+        produced_mana=("U",),
+    )
+    session.game.players[0].hand = [island]
+    session.game.players[0].battlefield = []
+    session.game.current_turn_phase = "precombat_main"
+    session.game.current_step = "precombat_main"
+    session.game.current_phase = "main"
+    session.current_turn = 0
+    session.game.active_player_index = 0
+    session.game.start_priority_window(0)
+
+    play_land = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "cast", "card_name": "Island", "target_seat": 0},
+    )
+    assert play_land.status_code == 200
+
+    payload = play_land.json()
+    assert payload["priority_player"] == 0
+    assert payload["priority_pass_count"] == 0
+    assert payload["stack"] == []
+    assert len(payload["players"][0]["battlefield"]) == 1
+    assert payload["players"][0]["battlefield"][0]["name"] == "Island"
+
+
+def test_pass_priority_triggers_ai_instant_response_on_opponent_turn():
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_ai",
+            "host_name": "Host",
+            "guest_name": "AI",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 40433,
+        },
+    ).json()
+    sid = created["session_id"]
+
+    session = store.get(sid)
+    bolt = _mk_card(
+        name="Bolt Test",
+        mana_cost="{R}",
+        type_line="Instant",
+        oracle_text="Bolt Test deals 3 damage to any target.",
+    )
+    mountain = _mk_card(
+        name="Mountain",
+        mana_cost="",
+        type_line="Basic Land - Mountain",
+        oracle_text="{T}: Add {R}.",
+        produced_mana=("R",),
+    )
+    session.game.players[1].hand = [bolt]
+    session.game.players[1].battlefield = [Permanent(card=mountain)]
+    session.game.players[1].mana_pool = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0}
+    session.game.players[0].life = 20
+    session.game.players[1].life = 20
+
+    passed = _pass_priority(sid, 0)
+    assert passed.status_code == 200
+    payload = passed.json()
+    assert payload["priority_player"] == 0
+    assert payload["priority_pass_count"] == 1
+    assert len(payload["stack"]) == 1
+    assert payload["stack"][0]["card"]["name"] == "Bolt Test"
+    assert payload["players"][0]["life"] == 20
+
+    resolve = _pass_priority(sid, 0)
+    assert resolve.status_code == 200
+    resolved_payload = resolve.json()
+    assert resolved_payload["stack"] == []
+    assert resolved_payload["players"][0]["life"] == 17
+
+
+def test_pass_priority_triggers_ai_auto_pass_when_no_response():
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_ai",
+            "host_name": "Host",
+            "guest_name": "AI",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 40434,
+        },
+    ).json()
+    sid = created["session_id"]
+
+    session = store.get(sid)
+    session.game.players[1].hand = []
+
+    passed = _pass_priority(sid, 0)
+    assert passed.status_code == 200
+    payload = passed.json()
+    assert payload["stack"] == []
+    assert payload["priority_player"] == 0
+    assert payload["priority_pass_count"] == 0
+
+
+def test_activated_ability_stays_on_stack_until_priority_passes():
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "guest_name": "Guest",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 40432,
+        },
+    ).json()
+    sid = created["session_id"]
+
+    session = store.get(sid)
+    sorcerer = _mk_card(
+        name="Prodigal Sorcerer",
+        mana_cost="{2}{U}",
+        type_line="Creature - Human Wizard",
+        oracle_text="{T}: Prodigal Sorcerer deals 1 damage to any target.",
+    )
+    session.game.players[0].battlefield = [Permanent(card=sorcerer)]
+    session.game.players[1].life = 20
+
+    activate = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "activate", "permanent_name": "Prodigal Sorcerer", "target_seat": 1},
+    )
+    assert activate.status_code == 200
+    activate_payload = activate.json()
+    assert len(activate_payload["stack"]) == 1
+    assert activate_payload["stack"][0]["type"] == "ability"
+    assert activate_payload["players"][1]["life"] == 20
+
+    _resolve_top_stack(sid, 0)
+    resolved = client.get(f"/api/sessions/{sid}/state?seat=0").json()
+    assert resolved["players"][1]["life"] == 19
+    assert resolved["stack"] == []
+
+
 def test_stream_of_life_defaults_to_self_target():
     created = client.post(
         "/api/sessions",
@@ -578,7 +834,8 @@ def test_stream_of_life_defaults_to_self_target():
     )
 
     assert response.status_code == 200
-    payload = response.json()
+    _resolve_top_stack(sid, 0)
+    payload = client.get(f"/api/sessions/{sid}/state?seat=0").json()
     assert payload["players"][0]["life"] == 11
     assert payload["players"][1]["life"] == 20
     assert any("Stream of Life" in entry and "10 -> 11" in entry for entry in payload["log"])
@@ -615,7 +872,8 @@ def test_stream_of_life_x_spends_generic_mana_from_pool():
     )
 
     assert response.status_code == 200
-    payload = response.json()
+    _resolve_top_stack(sid, 0)
+    payload = client.get(f"/api/sessions/{sid}/state?seat=0").json()
     assert payload["players"][0]["life"] == 11
     assert payload["players"][0]["mana_pool"]["G"] == 0
     assert payload["players"][0]["mana_pool"]["B"] == 0
@@ -652,7 +910,8 @@ def test_stream_of_life_updates_life_total_and_log_in_response():
     )
 
     assert response.status_code == 200
-    payload = response.json()
+    _resolve_top_stack(sid, 0)
+    payload = client.get(f"/api/sessions/{sid}/state?seat=0").json()
     assert payload["players"][0]["life"] == 11
     assert any("Stream of Life" in entry and "10 -> 11" in entry for entry in payload["log"])
 
@@ -819,12 +1078,16 @@ def test_non_instant_rejected_on_opponent_turn():
     client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "end_turn"})
     assert store.get(sid).current_turn == 1
 
+    # Active player passes so the nonactive player can try to cast in response.
+    passed = _pass_priority(sid, 1)
+    assert passed.status_code == 200
+
     off_turn_cast = client.post(
         f"/api/sessions/{sid}/action",
         json={"seat": 0, "action": "cast", "card_name": "Sorcery Test", "target_seat": 1},
     )
     assert off_turn_cast.status_code == 400
-    assert "non-instant" in off_turn_cast.json()["detail"].lower()
+    assert "on your turn" in off_turn_cast.json()["detail"].lower() or "non-instant" in off_turn_cast.json()["detail"].lower()
 
 
 def test_instant_allowed_on_opponent_turn():
@@ -864,6 +1127,9 @@ def test_instant_allowed_on_opponent_turn():
     client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "end_turn"})
     assert store.get(sid).current_turn == 1
 
+    passed = _pass_priority(sid, 1)
+    assert passed.status_code == 200
+
     tap_mountain = client.post(
         f"/api/sessions/{sid}/action",
         json={"seat": 0, "action": "activate", "permanent_name": "Mountain", "target_seat": 0},
@@ -875,6 +1141,7 @@ def test_instant_allowed_on_opponent_turn():
         json={"seat": 0, "action": "cast", "card_name": "Bolt Test", "target_seat": 1},
     )
     assert off_turn_instant.status_code == 200
+    _resolve_top_stack(sid, 0)
     assert store.get(sid).game.players[1].life == 17
 
 
@@ -988,6 +1255,7 @@ def test_fastbond_allows_extra_land_and_deals_damage():
         json={"seat": 0, "action": "cast", "card_name": "Fastbond", "target_seat": 0},
     )
     assert cast_fastbond.status_code == 200
+    _resolve_top_stack(sid, 0)
 
     first_land = client.post(
         f"/api/sessions/{sid}/action",
@@ -1049,9 +1317,14 @@ def test_next_phase_advances_through_combat_substeps_then_second_main():
     client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
 
     session = store.get(sid)
-    session.game.current_turn_phase = "combat"
-    session.game.current_step = "beginning_of_combat"
-    session.game.current_phase = "combat"
+    session.game.current_turn_phase = "precombat_main"
+    session.game.current_step = "precombat_main"
+    session.game.current_phase = "main"
+    session.game.start_priority_window(0)
+
+    to_combat = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "next_phase"})
+    assert to_combat.status_code == 200
+    assert to_combat.json()["current_step"] == "beginning_of_combat"
 
     steps = [
         "declare_attackers",
@@ -1059,6 +1332,7 @@ def test_next_phase_advances_through_combat_substeps_then_second_main():
         "end_of_combat",
     ]
     for expected in steps:
+        session.game.start_priority_window(0)
         response = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "next_phase"})
         assert response.status_code == 200
         payload = response.json()
@@ -1071,6 +1345,7 @@ def test_next_phase_advances_through_combat_substeps_then_second_main():
             )
             assert declare.status_code == 200
         if expected == "declare_blockers":
+            session.game.priority_player_index = 1
             declare = client.post(
                 f"/api/sessions/{sid}/action",
                 json={"seat": 1, "action": "declare_blockers", "blocker_pairs": {}},
@@ -1150,6 +1425,7 @@ def test_next_phase_from_attackers_step_auto_advances_when_no_legal_attackers():
     session.game.current_step = "declare_attackers"
     session.game.current_phase = "combat"
     session.current_turn = 0
+    session.game.start_priority_window(0)
 
     response = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "next_phase"})
     assert response.status_code == 200
@@ -1193,6 +1469,7 @@ def test_combat_actions_declare_attackers_and_blockers():
     assert declare_attack.json()["combat"]["attackers"] == [{"attacker_index": 0, "defending_player_index": 1}]
 
     session.game.current_step = "declare_blockers"
+    session.game.priority_player_index = 1
     declare_block = client.post(
         f"/api/sessions/{sid}/action",
         json={"seat": 1, "action": "declare_blockers", "blocker_pairs": {"0": 0}},
@@ -1224,6 +1501,7 @@ def test_assign_combat_damage_endpoint_changes_life():
     session.game.current_turn_phase = "combat"
     session.game.current_phase = "combat"
     session.current_turn = 0
+    session.game.start_priority_window(0)
 
     session.game.current_step = "declare_attackers"
     client.post(
@@ -1231,12 +1509,14 @@ def test_assign_combat_damage_endpoint_changes_life():
         json={"seat": 0, "action": "declare_attackers", "attacker_indices": [0], "target_seat": 1},
     )
     session.game.current_step = "declare_blockers"
+    session.game.priority_player_index = 1
     client.post(
         f"/api/sessions/{sid}/action",
         json={"seat": 1, "action": "declare_blockers", "blocker_pairs": {"0": 0}},
     )
 
     session.game.current_step = "combat_damage"
+    session.game.priority_player_index = 0
     assign = client.post(
         f"/api/sessions/{sid}/action",
         json={"seat": 0, "action": "assign_combat_damage", "attacker_damage": {"0": {"0": 2}}},

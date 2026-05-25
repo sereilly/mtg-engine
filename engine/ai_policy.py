@@ -207,6 +207,7 @@ def choose_combat_instant_cast_action(game: Game, player_index: int) -> CastActi
             lowered = card.oracle_text.lower()
             if "damage" in lowered or "destroy" in lowered or "prevent" in lowered or "tap" in lowered:
                 score += 2.0
+        score += _stack_response_bonus(game, player_index, card, target)
         if score < 2.0:
             continue
 
@@ -222,6 +223,36 @@ def choose_combat_instant_cast_action(game: Game, player_index: int) -> CastActi
             best = candidate
 
     return best
+
+
+def _stack_response_bonus(game: Game, caster_index: int, card: CardDefinition, target_index: int) -> float:
+    if not game.stack:
+        return 0.0
+
+    top = game.stack[-1]
+    if top.caster_index == caster_index:
+        # Avoid spending reaction cards while responding to our own stack item.
+        return -0.5
+
+    lowered = card.oracle_text.lower()
+    bonus = 0.0
+
+    if "counter target spell" in lowered or card.name == "Counterspell":
+        bonus += 6.0
+
+    if top.target_player_index == caster_index:
+        if "prevent" in lowered and "damage" in lowered:
+            bonus += 2.5
+        if "gain" in lowered and "life" in lowered:
+            bonus += 1.5
+
+    if _extract_damage(card) > 0 and target_index == 1 - caster_index:
+        bonus += 1.0
+
+    if "destroy" in lowered or "disenchant" in lowered or "unsummon" in lowered:
+        bonus += 0.75
+
+    return bonus
 
 
 def _is_better_cast(candidate: CastAction, current: CastAction | None) -> bool:

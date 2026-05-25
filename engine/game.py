@@ -75,6 +75,9 @@ class StackItem:
     target_player_index: int | None
     target_permanent_index: int | None
     x_value: int | None
+    ability_instruction: OracleInstruction | None = None
+    ability_effect_kind: str | None = None
+    source_permanent: Permanent | None = None
 
 
 @dataclass
@@ -128,10 +131,14 @@ class Game:
     combat_first_strike_done: bool = False
     combat_attackers_locked: bool = False
     combat_blockers_locked: bool = False
+    priority_player_index: int | None = None
+    priority_pass_count: int = 0
 
     def __post_init__(self) -> None:
         # Preserve legacy external phase naming while internally tracking phase/step.
         self._set_phase_and_step(self.current_turn_phase, self.current_step)
+        if self._receives_priority(self.current_step):
+            self.start_priority_window(self.active_player_index)
 
     def _find_controlled_permanent(
         self,
@@ -221,6 +228,60 @@ class Game:
             self.resolve_stack()
             if not self.stack:
                 return
+
+    def start_priority_window(self, starting_player_index: int | None = None) -> None:
+        player_index = self.active_player_index if starting_player_index is None else starting_player_index
+        if player_index < 0 or player_index >= len(self.players):
+            self.priority_player_index = None
+            self.priority_pass_count = 0
+            return
+        self.priority_player_index = player_index
+        self.priority_pass_count = 0
+
+    def clear_priority_window(self) -> None:
+        self.priority_player_index = None
+        self.priority_pass_count = 0
+
+    def has_priority(self, player_index: int) -> bool:
+        return self.priority_player_index == player_index
+
+    def note_priority_action_taken(self, player_index: int) -> None:
+        if self.priority_player_index is None:
+            self.start_priority_window(player_index)
+            return
+        if self.priority_player_index != player_index:
+            raise ValueError("player does not have priority")
+        # 117.3c: after casting/activating, that player gets priority again.
+        self.priority_pass_count = 0
+
+    def _next_player_index(self, player_index: int) -> int:
+        if len(self.players) <= 1:
+            return player_index
+        return (player_index + 1) % len(self.players)
+
+    def pass_priority(self, player_index: int) -> str:
+        if self.priority_player_index is None:
+            raise ValueError("no active priority window")
+        if self.priority_player_index != player_index:
+            raise ValueError("player does not have priority")
+
+        self.priority_pass_count += 1
+        self.log.append(f"{self.players[player_index].name} passed priority")
+
+        if self.priority_pass_count < len(self.players):
+            self.priority_player_index = self._next_player_index(player_index)
+            return "passed"
+
+        # All players have passed in succession.
+        self.priority_pass_count = 0
+        if self.stack:
+            self.resolve_top_of_stack()
+            # 117.3b: active player gets priority after a spell/ability resolves.
+            self.priority_player_index = self.active_player_index
+            return "resolved_top"
+
+        self.priority_player_index = self.active_player_index
+        return "all_passed_empty"
 
     def add_extra_turn(self, player_index: int) -> None:
         # 500.7 most recently created turn occurs first.
@@ -355,12 +416,15 @@ class Game:
         step = phase
         self._set_phase_and_step(phase, step)
         self._on_step_or_phase_begin(phase, step)
+        if self._receives_priority(step):
+            self.start_priority_window(self.active_player_index)
 
     def _close_current_priority_step(self) -> None:
         phase = self.current_turn_phase
         step = self.current_step
         if self._receives_priority(step):
             self._resolve_priority_window()
+            self.clear_priority_window()
         self._on_step_or_phase_end(phase, step)
 
     def _enter_combat_step(self, step: str) -> None:
@@ -375,6 +439,8 @@ class Game:
             self.combat_blockers_locked = not bool(self.combat_attackers)
         self._set_phase_and_step("combat", step)
         self._on_step_or_phase_begin("combat", step)
+        if self._receives_priority(step):
+            self.start_priority_window(self.active_player_index)
 
     def _has_any_legal_attacker(self, attacker_index: int, defender_index: int) -> bool:
         if attacker_index < 0 or attacker_index >= len(self.players):
@@ -538,9 +604,33 @@ class Game:
             return queued
 
         self.resolve_stack()
+        self.clear_priority_window()
         return SimulationResult(queued.card_name, True, queued.effect_kind, "resolved")
 
     def activate_permanent_ability(
+        self,
+        controller_index: int,
+        permanent_name: str,
+        target_player_index: int | None = None,
+        permanent_index: int | None = None,
+        mana_color: str | None = None,
+    ) -> SimulationResult:
+        queued = self.queue_permanent_ability(
+            controller_index,
+            permanent_name,
+            target_player_index=target_player_index,
+            permanent_index=permanent_index,
+            mana_color=mana_color,
+        )
+        if not queued.supported:
+            return queued
+        if queued.details == "queued":
+            self.resolve_stack()
+            self.clear_priority_window()
+            return SimulationResult(queued.card_name, True, queued.effect_kind, "resolved")
+        return queued
+
+    def queue_permanent_ability(
         self,
         controller_index: int,
         permanent_name: str,
@@ -602,17 +692,38 @@ class Game:
                     {**instruction.payload, "color": selected_color},
                 )
 
-        state_machine = OracleStateMachine(
-            self,
-            OracleExecutionContext(
-                caster=controller,
-                target=target_player,
+        mana_like_kinds = {
+            "add_mana_from_text",
+            "sacrifice_self_for_mana",
+            "sacrifice_creature_for_black_mana",
+        }
+        if instruction.kind in mana_like_kinds:
+            state_machine = OracleStateMachine(
+                self,
+                OracleExecutionContext(
+                    caster=controller,
+                    target=target_player,
+                    card=permanent.card,
+                    source_permanent=permanent,
+                ),
+            )
+            supported, details = state_machine.run(instruction)
+            return SimulationResult(permanent.card.name, supported, ability.effect_kind, details)
+
+        self.stack.append(
+            StackItem(
                 card=permanent.card,
+                caster_index=controller_index,
+                target_player_index=target_idx,
+                target_permanent_index=None,
+                x_value=None,
+                ability_instruction=instruction,
+                ability_effect_kind=ability.effect_kind,
                 source_permanent=permanent,
-            ),
+            )
         )
-        supported, details = state_machine.run(instruction)
-        return SimulationResult(permanent.card.name, supported, ability.effect_kind, details)
+        self.log.append(f"{permanent.card.name} ability added to stack")
+        return SimulationResult(permanent.card.name, True, ability.effect_kind, "queued")
 
     def _normalize_mana_color(self, mana_color: str | None) -> str | None:
         if mana_color is None:
@@ -705,7 +816,7 @@ class Game:
 
         card = caster.hand.pop(hand_index)
 
-        if card.primary_type in {"instant", "sorcery"}:
+        if card.primary_type != "land":
             self.stack.append(
                 StackItem(
                     card=card,
@@ -844,16 +955,45 @@ class Game:
 
     def resolve_stack(self) -> None:
         while self.stack:
-            item = self.stack.pop()
-            classification = classify_card(item.card)
-            self._resolve_card(
-                caster_index=item.caster_index,
-                card=item.card,
-                classification=classification,
-                target_player_index=item.target_player_index,
-                target_permanent_index=item.target_permanent_index,
-                x_value=item.x_value,
+            self.resolve_top_of_stack()
+
+    def resolve_top_of_stack(self) -> bool:
+        if not self.stack:
+            return False
+
+        item = self.stack.pop()
+        if item.ability_instruction is not None:
+            caster = self.players[item.caster_index]
+            target_idx = item.target_player_index if item.target_player_index is not None else (1 - item.caster_index)
+            target = self.players[target_idx]
+            state_machine = OracleStateMachine(
+                self,
+                OracleExecutionContext(
+                    caster=caster,
+                    target=target,
+                    card=item.card,
+                    target_permanent_index=item.target_permanent_index,
+                    x_value=item.x_value,
+                    source_permanent=item.source_permanent,
+                ),
             )
+            supported, details = state_machine.run(item.ability_instruction)
+            if supported:
+                self.log.append(f"{item.card.name} ability resolved")
+            else:
+                self.log.append(f"{item.card.name} ability fizzled: {details}")
+            return True
+
+        classification = classify_card(item.card)
+        self._resolve_card(
+            caster_index=item.caster_index,
+            card=item.card,
+            classification=classification,
+            target_player_index=item.target_player_index,
+            target_permanent_index=item.target_permanent_index,
+            x_value=item.x_value,
+        )
+        return True
 
     def _resolve_card(
         self,

@@ -164,7 +164,11 @@ def _serialize_stack_item(item, game: Game) -> dict:
     target_name = None
     if item.target_player_index is not None and 0 <= item.target_player_index < len(game.players):
         target_name = game.players[item.target_player_index].name
+    item_type = "ability" if item.ability_instruction is not None else "spell"
+    label = item.card.name if item_type == "spell" else f"{item.card.name} ability"
     return {
+        "type": item_type,
+        "label": label,
         "card": _serialize_card(item.card),
         "caster_index": item.caster_index,
         "caster_name": game.players[item.caster_index].name,
@@ -331,6 +335,8 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "current_step": session.game.current_step,
         "current_turn": session.current_turn,
         "turn_number": session.game.turn,
+        "priority_player": session.game.priority_player_index,
+        "priority_pass_count": session.game.priority_pass_count,
         "joined_seats": sorted(session.joined_seats),
         "seat_types": session.seat_types,
         "players": [
@@ -441,6 +447,58 @@ def _ai_step(session: Session) -> None:
             target_player_index=activation_action.target_player_index,
             permanent_index=activation_action.permanent_index,
         )
+
+
+def _ai_respond_to_priority(session: Session, seat: int) -> str | None:
+    game = session.game
+    if not game.has_priority(seat):
+        return None
+
+    instant_action = choose_combat_instant_cast_action(game, seat)
+    if instant_action is not None:
+        card_to_cast = game.players[seat].hand[instant_action.hand_index]
+        for permanent_index in instant_action.land_tap_indices:
+            permanent = game.players[seat].battlefield[permanent_index]
+            game.tap_land_for_mana(seat, permanent.card.name, permanent_index=permanent_index)
+        result = game.queue_from_hand(
+            seat,
+            card_to_cast.name,
+            target_player_index=instant_action.target_player_index,
+            x_value=instant_action.x_value,
+        )
+        if result.supported:
+            game.note_priority_action_taken(seat)
+
+    if game.has_priority(seat):
+        return game.pass_priority(seat)
+    return None
+
+
+def _auto_advance_after_all_passed(session: Session, pass_result: str | None) -> None:
+    if pass_result != "all_passed_empty":
+        return
+
+    # Advance turn structure automatically after both players pass with an empty stack.
+    _advance_phase(session)
+
+
+def _run_priority_exchange(session: Session, acting_seat: int) -> None:
+    result = session.game.pass_priority(acting_seat)
+
+    while True:
+        _auto_advance_after_all_passed(session, result)
+
+        ai_priority_seat = session.game.priority_player_index
+        if (
+            result == "passed"
+            and ai_priority_seat is not None
+            and _seat_type(session, ai_priority_seat) == "ai"
+            and ai_priority_seat != session.current_turn
+        ):
+            result = _ai_respond_to_priority(session, ai_priority_seat)
+            continue
+
+        break
 
 
 def _end_turn(session: Session, allow_manual_cleanup_selection: bool = False) -> bool:
@@ -638,6 +696,7 @@ def do_action(session_id: str, req: GameActionRequest):
     if req.action in {
         "cast",
         "activate",
+        "pass_priority",
         "end_turn",
         "next_phase",
         "declare_attackers",
@@ -651,6 +710,8 @@ def do_action(session_id: str, req: GameActionRequest):
     if req.action == "cast":
         if not req.card_name:
             raise HTTPException(status_code=400, detail="card_name is required")
+        if not session.game.has_priority(req.seat):
+            raise HTTPException(status_code=400, detail="you do not currently have priority")
 
         caster = session.game.players[req.seat]
         card = _find_card_in_hand(caster, req.card_name)
@@ -670,7 +731,7 @@ def do_action(session_id: str, req: GameActionRequest):
                 raise HTTPException(status_code=400, detail="can only cast this card when stack is empty")
 
         target = req.target_seat if req.target_seat is not None else _default_target(req.card_name, req.seat)
-        result = session.game.cast_from_hand(
+        result = session.game.queue_from_hand(
             req.seat,
             req.card_name,
             target_player_index=target,
@@ -679,6 +740,7 @@ def do_action(session_id: str, req: GameActionRequest):
         )
         if not result.supported:
             raise HTTPException(status_code=400, detail=result.details)
+        session.game.note_priority_action_taken(req.seat)
 
     elif req.action == "tap":
         if req.permanent_name is None and req.permanent_index is None:
@@ -722,8 +784,10 @@ def do_action(session_id: str, req: GameActionRequest):
             if not tapped:
                 raise HTTPException(status_code=400, detail="failed to tap land for mana")
         else:
+            if not session.game.has_priority(req.seat):
+                raise HTTPException(status_code=400, detail="you do not currently have priority")
             target = req.target_seat if req.target_seat is not None else 1 - req.seat
-            result = session.game.activate_permanent_ability(
+            result = session.game.queue_permanent_ability(
                 req.seat,
                 permanent.card.name,
                 target_player_index=target,
@@ -732,20 +796,38 @@ def do_action(session_id: str, req: GameActionRequest):
             )
             if not result.supported:
                 raise HTTPException(status_code=400, detail=result.details)
+            session.game.note_priority_action_taken(req.seat)
+
+    elif req.action == "pass_priority":
+        try:
+            _run_priority_exchange(session, req.seat)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     elif req.action == "end_turn":
         if req.seat != session.current_turn:
             raise HTTPException(status_code=400, detail="not your turn")
+        if not session.game.has_priority(req.seat):
+            raise HTTPException(status_code=400, detail="you do not currently have priority")
+        if session.game.stack:
+            raise HTTPException(status_code=400, detail="cannot end turn while stack is not empty")
         _end_turn(session, allow_manual_cleanup_selection=True)
 
     elif req.action == "next_phase":
         if req.seat != session.current_turn:
             raise HTTPException(status_code=400, detail="not your turn")
+        if session.game.current_turn_phase in {"precombat_main", "combat", "postcombat_main"}:
+            if not session.game.has_priority(req.seat):
+                raise HTTPException(status_code=400, detail="you do not currently have priority")
+            if session.game.stack:
+                raise HTTPException(status_code=400, detail="cannot advance phase while stack is not empty")
         _advance_phase(session)
 
     elif req.action == "declare_attackers":
         if req.seat != session.current_turn:
             raise HTTPException(status_code=400, detail="not your turn")
+        if not session.game.has_priority(req.seat):
+            raise HTTPException(status_code=400, detail="you do not currently have priority")
         ok, details = session.game.declare_attackers(
             req.seat,
             req.attacker_indices or [],
@@ -753,6 +835,7 @@ def do_action(session_id: str, req: GameActionRequest):
         )
         if not ok:
             raise HTTPException(status_code=400, detail=details)
+        session.game.note_priority_action_taken(req.seat)
 
     elif req.action == "declare_blockers":
         defender_seat = session.game.combat_defending_player_index
@@ -760,15 +843,20 @@ def do_action(session_id: str, req: GameActionRequest):
             raise HTTPException(status_code=400, detail="no combat attackers declared")
         if req.seat != defender_seat:
             raise HTTPException(status_code=400, detail="only defending player may declare blockers")
+        if not session.game.has_priority(req.seat):
+            raise HTTPException(status_code=400, detail="you do not currently have priority")
         raw_pairs = req.blocker_pairs or {}
         blocker_pairs = {int(k): int(v) for k, v in raw_pairs.items()}
         ok, details = session.game.declare_blockers(req.seat, blocker_pairs)
         if not ok:
             raise HTTPException(status_code=400, detail=details)
+        session.game.note_priority_action_taken(req.seat)
 
     elif req.action == "assign_combat_damage":
         if req.seat != session.current_turn:
             raise HTTPException(status_code=400, detail="not your turn")
+        if not session.game.has_priority(req.seat):
+            raise HTTPException(status_code=400, detail="you do not currently have priority")
         attacker_damage_raw = req.attacker_damage or {}
         attacker_damage = {
             int(attacker_idx): {int(blocker_idx): int(value) for blocker_idx, value in blockers.items()}
@@ -777,6 +865,7 @@ def do_action(session_id: str, req: GameActionRequest):
         ok, details = session.game.resolve_combat_damage(req.seat, attacker_damage=attacker_damage)
         if not ok:
             raise HTTPException(status_code=400, detail=details)
+        session.game.note_priority_action_taken(req.seat)
 
     elif req.action == "cleanup_select":
         if req.seat != session.current_turn:

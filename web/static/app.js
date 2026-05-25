@@ -17,6 +17,9 @@ let combatPromptKey = "";
 let previousLifeBySeat = {};
 let aiAutoStepInFlight = false;
 let aiAutoStepRequestedStateKey = "";
+let autoPassTurnEndEnabled = false;
+let autoPassTurnEndInFlight = false;
+let autoPassTurnEndRequestedStateKey = "";
 
 const setupEl = document.getElementById("setup");
 const boardEl = document.getElementById("boardPanel");
@@ -596,6 +599,74 @@ function getAiStepStateKey(state) {
   return `${state.turn_number || 0}:${state.current_turn}:${state.current_turn_phase}:${state.current_step}:${stackSize}:${logSize}`;
 }
 
+function getAutoPassStateKey(state) {
+  if (!state) return "";
+  const stackSize = Array.isArray(state.stack) ? state.stack.length : 0;
+  const logSize = Array.isArray(state.log) ? state.log.length : 0;
+  const combat = getCombatState(state);
+  return `${state.turn_number || 0}:${state.current_turn}:${state.current_turn_phase}:${state.current_step}:${state.priority_player}:${stackSize}:${logSize}:${combat?.attackers_locked ? 1 : 0}:${combat?.blockers_locked ? 1 : 0}`;
+}
+
+function hasBlockingPromptForAutoPass(state = currentState) {
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state)) return true;
+  return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor);
+}
+
+function shouldAutoPassUntilTurnEnd(state = currentState) {
+  if (!state || seat === null) return false;
+  if (!autoPassTurnEndEnabled) return false;
+  return state.current_turn === seat;
+}
+
+async function maybeAutoPassUntilTurnEnd(state = currentState) {
+  if (!shouldAutoPassUntilTurnEnd(state) || autoPassTurnEndInFlight) {
+    return;
+  }
+
+  if (hasBlockingPromptForAutoPass(state)) {
+    autoPassTurnEndEnabled = false;
+    updateActionHint("Auto-pass paused: turn requires a manual selection.", true);
+    return;
+  }
+
+  if (state.priority_player !== seat) {
+    return;
+  }
+
+  const stateKey = getAutoPassStateKey(state);
+  if (!stateKey || stateKey === autoPassTurnEndRequestedStateKey) {
+    return;
+  }
+
+  autoPassTurnEndRequestedStateKey = stateKey;
+  autoPassTurnEndInFlight = true;
+  try {
+    const combat = getCombatState(state);
+    if (isCombatStep(state, "declare_attackers") && seat === state.current_turn && !combat?.attackers_locked) {
+      await sendAction({
+        seat,
+        action: "declare_attackers",
+        attacker_indices: [],
+        target_seat: Number.isInteger(combat?.defending_player_index) ? combat.defending_player_index : 1 - seat,
+      });
+      return;
+    }
+
+    if (isCombatStep(state, "declare_blockers") && seat === combat?.defending_player_index && !combat?.blockers_locked) {
+      await sendAction({ seat, action: "declare_blockers", blocker_pairs: {} });
+      return;
+    }
+
+    await sendAction({ seat, action: "pass_priority" });
+  } catch (error) {
+    autoPassTurnEndEnabled = false;
+    const message = error instanceof Error ? error.message : "Auto-pass failed";
+    updateActionHint(`Auto-pass paused: ${message}`, true);
+  } finally {
+    autoPassTurnEndInFlight = false;
+  }
+}
+
 function shouldAutoStepAi(state = currentState) {
   if (!state || !sessionId) return false;
   if (!shouldShowAiControls(state)) return false;
@@ -860,6 +931,7 @@ function findCardInCurrentHand(cardName) {
 function isAnyPromptActive(state = currentState) {
   if (getCleanupDiscardInfo(state)) return true;
   if (getUntapLandSelectionInfo(state)) return true;
+  if (shouldShowPriorityPrompt(state)) return true;
   if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor) return true;
 
   const hasValidAttackers = getValidAttackerIndices(state).length > 0;
@@ -867,6 +939,18 @@ function isAnyPromptActive(state = currentState) {
   const isDeclareAttackersPrompt = isCombatStep(state, "declare_attackers") && hasValidAttackers;
   const isDeclareBlockersPrompt = isCombatStep(state, "declare_blockers") && hasValidBlockers;
   return isDeclareAttackersPrompt || isDeclareBlockersPrompt;
+}
+
+function shouldShowPriorityPrompt(state = currentState) {
+  if (!state || seat === null) return false;
+  if (state.priority_player !== seat) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state)) return false;
+
+  // Combat declaration prompts own the prompt panel while declarations are pending.
+  if (combatPromptNeedsConfirmation(state)) return false;
+
+  const phase = state.current_turn_phase;
+  return phase === "precombat_main" || phase === "combat" || phase === "postcombat_main" || state.current_step === "end";
 }
 
 function combatNeedsManualDamageAssignment(state = currentState) {
@@ -948,6 +1032,14 @@ async function handleCombatPromptOk() {
   }
 
   return false;
+}
+
+async function handlePriorityPromptOk() {
+  if (!currentState || seat === null) return false;
+  if (!shouldShowPriorityPrompt(currentState)) return false;
+  await sendAction({ seat, action: "pass_priority" });
+  updateActionHint("Passed priority.");
+  return true;
 }
 
 function applyCleanupPrompt(cleanupDiscard) {
@@ -1036,7 +1128,8 @@ function renderActivationPrompt() {
   }
 
   if (!pendingActivation && !pendingCastTarget && !pendingCastX && !pendingManaColor) {
-    panel.classList.toggle("hidden", !isCombatDeclarePromptStep);
+    const shouldShowPriority = shouldShowPriorityPrompt(currentState);
+    panel.classList.toggle("hidden", !isCombatDeclarePromptStep && !shouldShowPriority);
     if (isCombatDeclarePromptStep) {
       if (isDeclareAttackersStep) {
         title.textContent = "Declare Attackers";
@@ -1045,6 +1138,9 @@ function renderActivationPrompt() {
         title.textContent = "Declare Blockers";
         body.textContent = "Assign your blockers and press OK to declare them.";
       }
+    } else if (shouldShowPriority) {
+      title.textContent = "Priority";
+      body.textContent = "Take an action (cast a spell, activate an ability, or play a land for turn), or press OK to pass priority.";
     } else {
       title.textContent = "No pending activation.";
       body.textContent = "Select an activated ability to begin paying its cost.";
@@ -1052,7 +1148,7 @@ function renderActivationPrompt() {
     steps.innerHTML = "";
     customRow.classList.add("hidden");
     okBtn.classList.remove("hidden");
-    okBtn.disabled = !combatPromptNeedsConfirmation(currentState);
+    okBtn.disabled = !combatPromptNeedsConfirmation(currentState) && !shouldShowPriority;
     cancelBtn.disabled = true;
     customOkBtn.disabled = true;
     return;
@@ -1929,7 +2025,7 @@ function renderStack(stack) {
     return;
   }
   const lines = stack.map((item) => {
-    const cardName = item.card?.name || "Unknown";
+    const cardName = item.label || item.card?.name || "Unknown";
     const caster = item.caster_name || `Seat ${item.caster_index}`;
     if (item.target_player_name) {
       return `${cardName} by ${caster} targeting ${item.target_player_name}`;
@@ -2122,7 +2218,12 @@ function renderBoard(state) {
   q("selfBattlefield").dataset.targetSeat = String(viewerSeat);
   q("oppBattlefield").dataset.targetSeat = String(oppSeat);
 
-  q("statusHeadline").textContent = `Status: ${state.status}`;
+  const prioritySeat = Number.isInteger(state.priority_player) ? state.priority_player : null;
+  if (prioritySeat === null) {
+    q("statusHeadline").textContent = `Status: ${state.status} | Priority: none`;
+  } else {
+    q("statusHeadline").textContent = `Status: ${state.status} | Priority: Seat ${prioritySeat}`;
+  }
   q("turnBadge").textContent = `Turn: Seat ${state.current_turn} (No. ${state.turn_number || "-"})`;
   q("phaseBadge").textContent = `Phase: ${getPhaseDisplayLabel(state)}`;
   q("winnerBadge").textContent = `Winner: ${state.winner === null ? "-" : state.winner}`;
@@ -2137,36 +2238,17 @@ function renderBoard(state) {
   q("oppLife").dataset.targetSeat = String(oppSeat);
 
   const isSelfTurn = state.current_turn === viewerSeat;
+  const hasPriority = seat !== null && state.priority_player === seat;
   const canEndTurn = seat !== null && isSelfTurn && !isOpponentMidAction(state, viewerSeat);
-  const combat = getCombatState(state);
-  const likelyAttackersAvailable = Array.isArray(me?.battlefield) && me.battlefield.some((card) => isCardLikelyAttacker(card));
-  const defenderSeat = combat?.defending_player_index;
-  const defenderPlayer = Number.isInteger(defenderSeat) ? state.players[defenderSeat] : null;
-  const likelyBlockersAvailable =
-    Array.isArray(defenderPlayer?.battlefield) && defenderPlayer.battlefield.some((card) => isCardLikelyBlocker(card));
-  let canAdvancePhase = seat !== null && seat === state.current_turn;
-  if (isCombatStep(state, "declare_attackers") && canAdvancePhase && !(combat?.attackers_locked)) {
-    canAdvancePhase = !likelyAttackersAvailable;
-  }
-  if (isCombatStep(state, "declare_blockers") && canAdvancePhase && !(combat?.blockers_locked)) {
-    const seatTypes = state.seat_types || {};
-    const defenderType = seatTypes[defenderSeat] ?? seatTypes[String(defenderSeat)] ?? "human";
-    if (defenderType !== "ai" && likelyBlockersAvailable) {
-      canAdvancePhase = false;
-    }
-  }
-  if (isCombatStep(state, "combat_damage") && canAdvancePhase && !(combat?.damage_resolved)) {
-    canAdvancePhase = false;
-  }
   const cleanupDiscard = getCleanupDiscardInfo(state);
   const requiresCleanupSelection = !!cleanupDiscard;
-  const hasPrompt = isAnyPromptActive(state);
+  const hasBlockingPrompt = hasBlockingPromptForAutoPass(state);
   const untapInfo = getUntapLandSelectionInfo(state);
   const selfLane = document.querySelector(".self-lane");
   const oppLane = document.querySelector(".opponent-lane");
   setDebugMenuEnabled(sessionId !== null && seat !== null);
-  q("endTurnBtn").disabled = !canEndTurn || hasPrompt;
-  q("nextPhaseBtn").disabled = !canAdvancePhase || hasPrompt;
+  q("endTurnBtn").disabled = !canEndTurn || hasBlockingPrompt;
+  q("nextPhaseBtn").disabled = !hasPriority || hasBlockingPrompt;
   selfLane?.classList.toggle("turn-zone-self", isSelfTurn);
   oppLane?.classList.toggle("turn-zone-opponent", !isSelfTurn);
   q("selfName").classList.toggle("active-turn-name", isSelfTurn);
@@ -2237,6 +2319,11 @@ function renderBoard(state) {
 }
 
 function renderState(state) {
+  if (autoPassTurnEndEnabled && (seat === null || state.current_turn !== seat)) {
+    autoPassTurnEndEnabled = false;
+    autoPassTurnEndRequestedStateKey = "";
+  }
+
   currentState = state;
   syncJoinUrlVisibility(state);
   syncCombatDrafts(state);
@@ -2279,6 +2366,7 @@ function renderState(state) {
   }
 
   maybeAutoStepAi(state);
+  maybeAutoPassUntilTurnEnd(state);
 }
 
 function initCombatContextMenu() {
@@ -2695,6 +2783,10 @@ q("promptOkBtn").addEventListener("click", async () => {
     if (handledCombat) {
       return;
     }
+    const handledPriority = await handlePriorityPromptOk();
+    if (handledPriority) {
+      return;
+    }
     confirmPendingActivation();
   } catch (e) {
     updateActionHint(e.message, true);
@@ -2739,8 +2831,15 @@ q("promptSteps").addEventListener("click", (event) => {
 
 q("endTurnBtn").addEventListener("click", async () => {
   try {
-    await sendAction({ seat, action: "end_turn" });
-    updateActionHint("Ended turn.");
+    pendingActivation = null;
+    pendingCastTarget = null;
+    pendingCastX = null;
+    pendingManaColor = null;
+    autoPassTurnEndEnabled = true;
+    autoPassTurnEndRequestedStateKey = "";
+    renderActivationPrompt();
+    await maybeAutoPassUntilTurnEnd(currentState);
+    updateActionHint("Auto-passing priority until your turn ends.");
   } catch (e) {
     alert(e.message);
   }
@@ -2748,8 +2847,8 @@ q("endTurnBtn").addEventListener("click", async () => {
 
 q("nextPhaseBtn").addEventListener("click", async () => {
   try {
-    await sendAction({ seat, action: "next_phase" });
-    updateActionHint("Advanced to the next phase.");
+    await sendAction({ seat, action: "pass_priority" });
+    updateActionHint("Passed priority.");
   } catch (e) {
     alert(e.message);
   }
@@ -2840,6 +2939,7 @@ syncGuestNameForMode();
 syncSeedControls();
 setDebugMenuEnabled(false);
 q("endTurnBtn").disabled = true;
+q("nextPhaseBtn").disabled = true;
 fetchDebugSuggestions().catch(() => {
   // Intentionally ignored during startup.
 });

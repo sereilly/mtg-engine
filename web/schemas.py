@@ -9,6 +9,7 @@ GameMode = Literal["human_vs_ai", "ai_vs_ai", "human_vs_human"]
 ActionKind = Literal[
     "cast",
     "activate",
+    "pass_priority",
     "tap",
     "end_turn",
     "next_phase",

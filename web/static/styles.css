@@ -169,6 +169,14 @@ button:hover {
   flex-shrink: 0;
 }
 
+#nextPhaseBtn:disabled {
+  background: rgba(128, 128, 128, 0.4);
+  border-color: rgba(180, 180, 180, 0.5);
+  color: rgba(242, 233, 204, 0.75);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
 .lane-head {
   display: flex;
   align-items: center;
