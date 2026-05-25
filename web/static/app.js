@@ -1587,9 +1587,10 @@ async function castDebugCardForFree() {
 
 function clearCardPreview() {
   q("cardPreview").classList.add("empty-preview");
-  q("cardPreviewImage").classList.add("hidden");
-  q("cardPreviewImage").removeAttribute("src");
-  q("cardPreviewEmpty").classList.remove("hidden");
+  q("cardPreviewImage").src = "/images/card_back.webp";
+  q("cardPreviewImage").alt = "Card back";
+  q("cardPreviewImage").classList.remove("hidden");
+  q("cardPreviewEmpty").classList.add("hidden");
   q("cardPreviewName").textContent = "No card selected";
   q("cardPreviewType").textContent = "";
   q("cardPreviewText").textContent = "";
@@ -1605,10 +1606,10 @@ function showCardPreview(card) {
 
   if (!largeImageUri) {
     q("cardPreview").classList.add("empty-preview");
-    q("cardPreviewImage").classList.add("hidden");
-    q("cardPreviewImage").removeAttribute("src");
-    q("cardPreviewEmpty").classList.remove("hidden");
-    q("cardPreviewEmpty").textContent = "No large art available for this card.";
+    q("cardPreviewImage").src = "/images/card_back.webp";
+    q("cardPreviewImage").alt = "Card back";
+    q("cardPreviewImage").classList.remove("hidden");
+    q("cardPreviewEmpty").classList.add("hidden");
     return;
   }
 
