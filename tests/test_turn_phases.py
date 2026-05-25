@@ -184,6 +184,32 @@ def test_declare_attackers_requires_confirmation_before_phase_advance():
     assert game.current_step == "declare_blockers"
 
 
+def test_juggernaut_must_attack_and_cannot_be_blocked_by_walls(all_cards):
+    juggernaut = next(card for card in all_cards if card.name == "Juggernaut")
+    wall = next(card for card in all_cards if card.name == "Wall of Stone")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=juggernaut)])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=wall)])
+    game = Game(players=[p1, p2])
+
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+
+    ok, details = game.declare_attackers(0, [])
+    assert ok is False
+    assert "Juggernaut must attack if able" in details
+
+    ok, _ = game.declare_attackers(0, [0])
+    assert ok
+
+    game.advance_combat_phase()
+    ok, details = game.declare_blockers(1, {0: 0})
+    assert ok is False
+    assert "cannot block" in details
+
+
 def test_declare_attackers_auto_skips_when_no_legal_attackers_exist():
     noncreature = CardDefinition(
         name="Test Relic",

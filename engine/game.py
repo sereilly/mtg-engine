@@ -2045,6 +2045,20 @@ class Game:
 
         controller = self.players[controller_index]
         unique_indices = sorted(set(attacker_indices))
+        required_attackers: list[str] = []
+        for idx, attacker in enumerate(controller.battlefield):
+            if attacker.card.primary_type != "creature" or attacker.tapped:
+                continue
+            if idx in unique_indices:
+                continue
+            if self.can_attack(attacker, defender_idx) and self._must_attack_if_able(attacker):
+                required_attackers.append(attacker.card.name)
+        if required_attackers:
+            if len(required_attackers) == 1:
+                return False, f"{required_attackers[0]} must attack if able"
+            names = ", ".join(required_attackers)
+            return False, f"{names} must attack if able"
+
         for idx in unique_indices:
             if idx < 0 or idx >= len(controller.battlefield):
                 return False, "attacker index out of range"
@@ -2309,6 +2323,10 @@ class Game:
         if "defender" in text and not attacker.metadata.get("can_attack_as_though_no_defender"):
             return False
         return True
+
+    def _must_attack_if_able(self, attacker: Permanent) -> bool:
+        text = attacker.card.oracle_text.lower()
+        return "this creature attacks each combat if able" in text or bool(attacker.metadata.get("must_attack_until_eot"))
 
     def resolve_draw_step(self, player_index: int) -> int:
         phase = "beginning"
