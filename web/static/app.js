@@ -7,6 +7,8 @@ let pendingCastX = null;
 let pendingManaColor = null;
 let debugSearchTimer = null;
 let symbolMap = {};
+let combatDragSource = null;
+let combatDamageDraft = {};
 
 const setupEl = document.getElementById("setup");
 const boardEl = document.getElementById("boardPanel");
@@ -69,6 +71,108 @@ function getPhaseDisplayLabel(state) {
 
 function q(id) {
   return document.getElementById(id);
+}
+
+function getCombatState(state = currentState) {
+  return state?.combat || null;
+}
+
+function isCombatStep(state = currentState, step = "") {
+  if (!state) return false;
+  return state.current_turn_phase === "combat" && state.current_step === step;
+}
+
+function isCombatAttackerDrag(payload, state = currentState) {
+  if (!payload || payload.kind !== "permanent" || !Number.isInteger(payload.permanentIndex)) return false;
+  return isCombatStep(state, "declare_attackers") && seat === state?.current_turn;
+}
+
+function isCombatBlockerDrag(payload, state = currentState) {
+  if (!payload || payload.kind !== "permanent" || !Number.isInteger(payload.permanentIndex)) return false;
+  const combat = getCombatState(state);
+  if (!combat) return false;
+  return isCombatStep(state, "declare_blockers") && seat === combat.defending_player_index;
+}
+
+function getCardCenter(cardEl) {
+  if (!cardEl) return null;
+  const rect = cardEl.getBoundingClientRect();
+  return {
+    x: rect.left + rect.width / 2,
+    y: rect.top + rect.height / 2,
+  };
+}
+
+function getZoneCenter(zoneEl) {
+  if (!zoneEl) return null;
+  const rect = zoneEl.getBoundingClientRect();
+  return {
+    x: rect.left + rect.width / 2,
+    y: rect.top + rect.height / 2,
+  };
+}
+
+function clearCombatOverlay() {
+  const overlay = q("combatOverlay");
+  if (!overlay) return;
+  const lines = overlay.querySelectorAll("line");
+  lines.forEach((line) => line.remove());
+}
+
+function drawCombatArrow(fromPoint, toPoint, kind = "attacker") {
+  const overlay = q("combatOverlay");
+  if (!overlay || !fromPoint || !toPoint) return;
+  const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+  line.setAttribute("x1", String(fromPoint.x));
+  line.setAttribute("y1", String(fromPoint.y));
+  line.setAttribute("x2", String(toPoint.x));
+  line.setAttribute("y2", String(toPoint.y));
+  line.setAttribute("class", kind === "blocker" ? "combat-link-line blocker" : "combat-link-line");
+  overlay.appendChild(line);
+}
+
+function renderCombatOverlay(state = currentState) {
+  clearCombatOverlay();
+  if (!state) return;
+  const combat = getCombatState(state);
+  if (!combat) return;
+
+  const activeSeat = state.current_turn;
+  const defenderSeat = combat.defending_player_index;
+  if (!Number.isInteger(activeSeat) || !Number.isInteger(defenderSeat)) return;
+
+  for (const link of combat.attackers || []) {
+    const attackerEl = document.querySelector(
+      `.card[data-zone-kind="battlefield"][data-target-seat="${activeSeat}"][data-permanent-index="${link.attacker_index}"]`,
+    );
+    const from = getCardCenter(attackerEl);
+    const to = getZoneCenter(defenderSeat === 0 ? q("selfBattlefield") : q("oppBattlefield"));
+    if (from && to) {
+      drawCombatArrow(from, to, "attacker");
+    }
+  }
+
+  for (const link of combat.blockers || []) {
+    const blockerEl = document.querySelector(
+      `.card[data-zone-kind="battlefield"][data-target-seat="${defenderSeat}"][data-permanent-index="${link.blocker_index}"]`,
+    );
+    const attackerEl = document.querySelector(
+      `.card[data-zone-kind="battlefield"][data-target-seat="${activeSeat}"][data-permanent-index="${link.attacker_index}"]`,
+    );
+    const from = getCardCenter(blockerEl);
+    const to = getCardCenter(attackerEl);
+    if (from && to) {
+      drawCombatArrow(from, to, "blocker");
+    }
+  }
+
+  if (combatDragSource && combatDragSource.sourceEl) {
+    const from = getCardCenter(combatDragSource.sourceEl);
+    const to = combatDragSource.pointer;
+    if (from && to) {
+      drawCombatArrow(from, to, "attacker");
+    }
+  }
 }
 
 function escapeHtml(value) {
@@ -1066,6 +1170,15 @@ function createCardElement(card, options = {}) {
   } = options;
   const cardEl = document.createElement("div");
   cardEl.className = "card";
+  if (zoneKind) {
+    cardEl.dataset.zoneKind = zoneKind;
+  }
+  if (Number.isInteger(targetSeat)) {
+    cardEl.dataset.targetSeat = String(targetSeat);
+  }
+  if (Number.isInteger(permanentIndex)) {
+    cardEl.dataset.permanentIndex = String(permanentIndex);
+  }
   if (!hidden && typeof card === "object") {
     cardEl.dataset.previewCard = JSON.stringify(card);
   }
@@ -1097,11 +1210,23 @@ function createCardElement(card, options = {}) {
 
   if (draggable && dragKind) {
     cardEl.addEventListener("dragstart", (event) => {
+      cardEl.classList.add("combat-source");
+      combatDragSource = {
+        sourceEl: cardEl,
+        payload: { kind: dragKind, permanentIndex },
+        pointer: { x: event.clientX || 0, y: event.clientY || 0 },
+      };
+      renderCombatOverlay();
       event.dataTransfer.effectAllowed = "move";
       event.dataTransfer.setData(
         "text/plain",
         JSON.stringify({ kind: dragKind, name: normalizeCardName(card), permanentIndex })
       );
+    });
+    cardEl.addEventListener("dragend", () => {
+      cardEl.classList.remove("combat-source");
+      combatDragSource = null;
+      renderCombatOverlay();
     });
   }
 
@@ -1295,6 +1420,123 @@ function renderStack(stack) {
   q("stackZone").innerHTML = `Stack:<br>${lines.map((line) => renderSymbolsInline(line)).join("<br>")}`;
 }
 
+function renderCombatControls(state) {
+  const controls = q("combatControls");
+  const summary = q("combatSummary");
+  const actions = q("combatActions");
+  const damagePanel = q("combatDamagePanel");
+  if (!controls || !summary || !actions || !damagePanel) return;
+
+  actions.innerHTML = "";
+  damagePanel.innerHTML = "";
+  const combat = getCombatState(state);
+  const inCombat = state?.current_turn_phase === "combat";
+  controls.classList.toggle("hidden", !inCombat);
+  if (!inCombat) {
+    return;
+  }
+
+  const attackers = combat?.attackers || [];
+  const blockers = combat?.blockers || [];
+  summary.textContent = `Attackers: ${attackers.length} | Blockers: ${blockers.length}`;
+
+  if (isCombatStep(state, "declare_attackers") && seat === state.current_turn) {
+    const submitBtn = document.createElement("button");
+    submitBtn.type = "button";
+    submitBtn.id = "confirmAttackersBtn";
+    submitBtn.textContent = "Confirm Attackers";
+    submitBtn.addEventListener("click", async () => {
+      try {
+        const declared = (getCombatState(currentState)?.attackers || []).map((item) => Number(item.attacker_index));
+        await sendAction({ seat, action: "declare_attackers", attacker_indices: declared });
+        updateActionHint(`Attackers confirmed (${declared.length}).`);
+      } catch (e) {
+        updateActionHint(e.message, true);
+      }
+    });
+    actions.appendChild(submitBtn);
+  }
+
+  if (isCombatStep(state, "declare_blockers") && seat === combat?.defending_player_index) {
+    const submitBtn = document.createElement("button");
+    submitBtn.type = "button";
+    submitBtn.id = "confirmBlockersBtn";
+    submitBtn.textContent = "Confirm Blockers";
+    submitBtn.addEventListener("click", async () => {
+      try {
+        const blockerPairs = {};
+        for (const pair of getCombatState(currentState)?.blockers || []) {
+          blockerPairs[Number(pair.blocker_index)] = Number(pair.attacker_index);
+        }
+        await sendAction({ seat, action: "declare_blockers", blocker_pairs: blockerPairs });
+        updateActionHint(`Blockers confirmed (${Object.keys(blockerPairs).length}).`);
+      } catch (e) {
+        updateActionHint(e.message, true);
+      }
+    });
+    actions.appendChild(submitBtn);
+  }
+
+  if (isCombatStep(state, "combat_damage") && seat === state.current_turn) {
+    const byAttacker = {};
+    for (const pair of blockers) {
+      const attackerIndex = Number(pair.attacker_index);
+      if (!byAttacker[attackerIndex]) {
+        byAttacker[attackerIndex] = [];
+      }
+      byAttacker[attackerIndex].push(Number(pair.blocker_index));
+    }
+
+    for (const [attackerIndexRaw, blockerIndices] of Object.entries(byAttacker)) {
+      const attackerIndex = Number(attackerIndexRaw);
+      const row = document.createElement("div");
+      row.className = "combat-damage-row";
+      const label = document.createElement("div");
+      label.textContent = `Attacker ${attackerIndex} assigns damage`;
+      const inputs = document.createElement("div");
+      inputs.className = "combat-damage-inputs";
+      for (const blockerIndex of blockerIndices) {
+        const wrapper = document.createElement("label");
+        wrapper.textContent = `B${blockerIndex}`;
+        const input = document.createElement("input");
+        input.type = "number";
+        input.min = "0";
+        input.value = String(
+          Number(combatDamageDraft?.[attackerIndex]?.[blockerIndex] ?? 0),
+        );
+        input.dataset.attackerIndex = String(attackerIndex);
+        input.dataset.blockerIndex = String(blockerIndex);
+        input.addEventListener("change", () => {
+          const a = Number(input.dataset.attackerIndex);
+          const b = Number(input.dataset.blockerIndex);
+          if (!combatDamageDraft[a]) {
+            combatDamageDraft[a] = {};
+          }
+          combatDamageDraft[a][b] = Math.max(0, Number(input.value || 0));
+        });
+        wrapper.appendChild(input);
+        inputs.appendChild(wrapper);
+      }
+      row.appendChild(label);
+      row.appendChild(inputs);
+      damagePanel.appendChild(row);
+    }
+
+    const submitBtn = document.createElement("button");
+    submitBtn.type = "button";
+    submitBtn.textContent = "Assign Combat Damage";
+    submitBtn.addEventListener("click", async () => {
+      try {
+        await sendAction({ seat, action: "assign_combat_damage", attacker_damage: combatDamageDraft });
+        updateActionHint("Combat damage resolved.");
+      } catch (e) {
+        updateActionHint(e.message, true);
+      }
+    });
+    actions.appendChild(submitBtn);
+  }
+}
+
 function renderLog(state) {
   const logRoot = q("logText");
   logRoot.innerHTML = "";
@@ -1386,8 +1628,10 @@ function renderBoard(state) {
   if (aiControlsEl) {
     aiControlsEl.classList.toggle("hidden", !shouldShowAiControls(state));
   }
+  renderCombatControls(state);
   renderStack(state.stack);
   renderLog(state);
+  renderCombatOverlay(state);
   q("rawState").textContent = JSON.stringify(state, null, 2);
 
   if (requiresCleanupSelection) {
@@ -1399,6 +1643,9 @@ function renderBoard(state) {
 function renderState(state) {
   currentState = state;
   syncJoinUrlVisibility(state);
+  if (!isCombatStep(state, "combat_damage")) {
+    combatDamageDraft = {};
+  }
   const cleanupInfo = getCleanupDiscardInfo(state);
   if (cleanupInfo) {
     pendingActivation = null;
@@ -1419,6 +1666,58 @@ function renderState(state) {
   }
 }
 
+function initCombatContextMenu() {
+  boardEl.addEventListener("contextmenu", async (event) => {
+    const cardEl = event.target.closest(".card");
+    if (!cardEl || !currentState) return;
+    const zoneKind = cardEl.dataset.zoneKind;
+    const targetSeat = Number(cardEl.dataset.targetSeat || -1);
+    const permanentIndex = Number(cardEl.dataset.permanentIndex || -1);
+    if (zoneKind !== "battlefield" || !Number.isInteger(permanentIndex) || permanentIndex < 0) {
+      return;
+    }
+
+    const combat = getCombatState(currentState);
+    if (!combat) return;
+
+    try {
+      if (isCombatStep(currentState, "declare_attackers") && seat === currentState.current_turn && targetSeat === seat) {
+        event.preventDefault();
+        const updated = (combat.attackers || [])
+          .map((item) => Number(item.attacker_index))
+          .filter((idx) => idx !== permanentIndex)
+          .sort((a, b) => a - b);
+        await sendAction({ seat, action: "declare_attackers", attacker_indices: updated, target_seat: combat.defending_player_index });
+        updateActionHint("Removed attacker target link.");
+        return;
+      }
+
+      if (isCombatStep(currentState, "declare_blockers") && seat === combat.defending_player_index) {
+        event.preventDefault();
+        const blockerPairs = {};
+        for (const pair of combat.blockers || []) {
+          const blockerIdx = Number(pair.blocker_index);
+          const attackerIdx = Number(pair.attacker_index);
+          if (targetSeat === combat.defending_player_index && blockerIdx === permanentIndex) {
+            continue;
+          }
+          if (targetSeat === currentState.current_turn && attackerIdx === permanentIndex) {
+            continue;
+          }
+          blockerPairs[blockerIdx] = attackerIdx;
+        }
+        await sendAction({ seat, action: "declare_blockers", blocker_pairs: blockerPairs });
+        updateActionHint("Removed blocker target link.");
+      }
+    } catch (e) {
+      updateActionHint(e.message, true);
+    }
+  });
+
+  window.addEventListener("resize", () => renderCombatOverlay());
+  window.addEventListener("scroll", () => renderCombatOverlay(), true);
+}
+
 function parseDragPayload(event) {
   try {
     const raw = event.dataTransfer.getData("text/plain");
@@ -1435,9 +1734,14 @@ function bindDropBehavior(element, onDropAction) {
   element.addEventListener("dragover", (event) => {
     event.preventDefault();
     element.classList.add("active-drop");
+    if (combatDragSource) {
+      combatDragSource.pointer = { x: event.clientX, y: event.clientY };
+      renderCombatOverlay();
+    }
   });
   element.addEventListener("dragleave", () => {
     element.classList.remove("active-drop");
+    renderCombatOverlay();
   });
   element.addEventListener("drop", async (event) => {
     event.preventDefault();
@@ -1451,14 +1755,46 @@ function bindDropBehavior(element, onDropAction) {
       updateActionHint("Could not read dropped card data.", true);
       return;
     }
-    await onDropAction(payload, element);
+    await onDropAction(payload, element, event);
+    combatDragSource = null;
+    renderCombatOverlay();
   });
 }
 
 function initDropZones() {
-  bindDropBehavior(q("selfBattlefield"), async (payload, element) => {
+  bindDropBehavior(q("selfBattlefield"), async (payload, element, event) => {
     const targetSeat = Number(element.dataset.targetSeat || String(seat));
     try {
+      if (isCombatAttackerDrag(payload) && targetSeat !== seat) {
+        const combat = getCombatState();
+        const existing = (combat?.attackers || []).map((item) => Number(item.attacker_index));
+        const updated = Array.from(new Set([...existing, Number(payload.permanentIndex)])).sort((a, b) => a - b);
+        await sendAction({ seat, action: "declare_attackers", attacker_indices: updated, target_seat: targetSeat });
+        updateActionHint("Declared attacker link.");
+        return;
+      }
+
+      if (isCombatBlockerDrag(payload)) {
+        const combat = getCombatState();
+        const activeSeat = currentState?.current_turn;
+        const targetCardEl = event.target.closest(".card");
+        const targetIndexRaw = targetCardEl?.dataset?.permanentIndex;
+        const targetCardSeat = Number(targetCardEl?.dataset?.targetSeat || -1);
+        const attackerIndex = Number(targetIndexRaw);
+        if (!Number.isInteger(attackerIndex) || targetCardSeat !== activeSeat) {
+          updateActionHint("Drop blocker onto an attacking creature.", true);
+          return;
+        }
+        const blockerPairs = {};
+        for (const pair of combat?.blockers || []) {
+          blockerPairs[Number(pair.blocker_index)] = Number(pair.attacker_index);
+        }
+        blockerPairs[Number(payload.permanentIndex)] = attackerIndex;
+        await sendAction({ seat, action: "declare_blockers", blocker_pairs: blockerPairs });
+        updateActionHint("Declared blocker link.");
+        return;
+      }
+
       if (payload.kind === "hand") {
         const card = findCardInCurrentHand(payload.name);
         if (card && cardRequiresTargetPlayer(card)) {
@@ -1492,9 +1828,39 @@ function initDropZones() {
     }
   });
 
-  bindDropBehavior(q("oppBattlefield"), async (payload, element) => {
+  bindDropBehavior(q("oppBattlefield"), async (payload, element, event) => {
     const targetSeat = Number(element.dataset.targetSeat || "1");
     try {
+      if (isCombatAttackerDrag(payload) && targetSeat !== seat) {
+        const combat = getCombatState();
+        const existing = (combat?.attackers || []).map((item) => Number(item.attacker_index));
+        const updated = Array.from(new Set([...existing, Number(payload.permanentIndex)])).sort((a, b) => a - b);
+        await sendAction({ seat, action: "declare_attackers", attacker_indices: updated, target_seat: targetSeat });
+        updateActionHint("Declared attacker link.");
+        return;
+      }
+
+      if (isCombatBlockerDrag(payload)) {
+        const combat = getCombatState();
+        const activeSeat = currentState?.current_turn;
+        const targetCardEl = event.target.closest(".card");
+        const targetIndexRaw = targetCardEl?.dataset?.permanentIndex;
+        const targetCardSeat = Number(targetCardEl?.dataset?.targetSeat || -1);
+        const attackerIndex = Number(targetIndexRaw);
+        if (!Number.isInteger(attackerIndex) || targetCardSeat !== activeSeat) {
+          updateActionHint("Drop blocker onto an attacking creature.", true);
+          return;
+        }
+        const blockerPairs = {};
+        for (const pair of combat?.blockers || []) {
+          blockerPairs[Number(pair.blocker_index)] = Number(pair.attacker_index);
+        }
+        blockerPairs[Number(payload.permanentIndex)] = attackerIndex;
+        await sendAction({ seat, action: "declare_blockers", blocker_pairs: blockerPairs });
+        updateActionHint("Declared blocker link.");
+        return;
+      }
+
       if (payload.kind === "hand") {
         const card = findCardInCurrentHand(payload.name);
         if (card && cardRequiresTargetPlayer(card)) {
@@ -1844,4 +2210,5 @@ loadSymbolMap();
 initDropZones();
 initTabs();
 initCardPreviewHover();
+initCombatContextMenu();
 clearCardPreview();

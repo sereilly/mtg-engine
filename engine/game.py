@@ -121,6 +121,11 @@ class Game:
     skip_phase_counts: dict[str, int] = field(default_factory=dict)
     skip_step_counts: dict[str, int] = field(default_factory=dict)
     combat_damage_prevented_until_eot: bool = False
+    combat_attackers: dict[int, int] = field(default_factory=dict)
+    combat_blockers: dict[int, int] = field(default_factory=dict)
+    combat_defending_player_index: int | None = None
+    combat_damage_resolved: bool = False
+    combat_first_strike_done: bool = False
 
     def __post_init__(self) -> None:
         # Preserve legacy external phase naming while internally tracking phase/step.
@@ -341,6 +346,8 @@ class Game:
         self._on_step_or_phase_end(phase, step)
 
     def _enter_combat_step(self, step: str) -> None:
+        if step == "beginning_of_combat":
+            self._reset_combat_state(clear_damage_marked=False)
         self._set_phase_and_step("combat", step)
         self._on_step_or_phase_begin("combat", step)
 
@@ -360,6 +367,11 @@ class Game:
             self.end_combat(step_already_started=True)
             self._enter_main_phase(precombat=False)
             return
+        if self.current_step == "combat_damage" and not self.combat_damage_resolved:
+            if not self.combat_attackers:
+                self.combat_damage_resolved = True
+            else:
+                return
 
         # Close current combat step, then enter the next one.
         if self._receives_priority(self.current_step):
@@ -370,6 +382,9 @@ class Game:
         if next_idx >= len(combat_steps):
             self._enter_main_phase(precombat=False)
             return
+        if combat_steps[next_idx] == "combat_damage":
+            self.combat_damage_resolved = False
+            self.combat_first_strike_done = False
         self._enter_combat_step(combat_steps[next_idx])
 
     def start_turn(self, player_index: int) -> None:
@@ -1599,6 +1614,7 @@ class Game:
             player.damage_prevention_pool = 0
             player.combat_damage_cap_one_charges = 0
             for permanent in player.battlefield:
+                permanent.damage_marked = 0
                 temp_power = int(permanent.metadata.pop("temporary_power_bonus_until_eot", 0))
                 temp_toughness = int(permanent.metadata.pop("temporary_toughness_bonus_until_eot", 0))
                 if temp_power:
@@ -1607,7 +1623,8 @@ class Game:
                     permanent.toughness_bonus -= temp_toughness
                 for key in _EOT_METADATA_KEYS:
                     permanent.metadata.pop(key, None)
-            self._on_step_or_phase_end(phase, step)
+        self._reset_combat_state(clear_damage_marked=False)
+        self._on_step_or_phase_end(phase, step)
         return cleanup_completed
 
     def _initialize_permanent_state(
@@ -1734,6 +1751,366 @@ class Game:
                     permanent.metadata["land_animated"] = True
                     permanent.metadata["absolute_power"] = 1
                     permanent.metadata["absolute_toughness"] = 1
+
+    def _has_keyword(self, permanent: Permanent, keyword: str) -> bool:
+        lower_keyword = keyword.lower()
+        if any(item.lower() == lower_keyword for item in permanent.card.keywords):
+            return True
+        text = permanent.card.oracle_text.lower()
+        if lower_keyword == "flying":
+            return "flying" in text or permanent.metadata.get("gains_flying_until_eot", False)
+        if lower_keyword == "reach":
+            return "reach" in text
+        if lower_keyword == "first strike":
+            return "first strike" in text
+        if lower_keyword == "double strike":
+            return "double strike" in text
+        if lower_keyword == "trample":
+            return "trample" in text
+        return lower_keyword in text
+
+    def _reset_combat_state(self, clear_damage_marked: bool) -> None:
+        self.combat_attackers = {}
+        self.combat_blockers = {}
+        self.combat_defending_player_index = None
+        self.combat_damage_resolved = False
+        self.combat_first_strike_done = False
+        for player in self.players:
+            for permanent in player.battlefield:
+                permanent.attacking = False
+                permanent.defending_player_index = None
+                permanent.blocked = False
+                permanent.blocking_attacker_controller = None
+                permanent.blocking_attacker_index = None
+                if clear_damage_marked:
+                    permanent.damage_marked = 0
+
+    def _prune_combat_state(self) -> None:
+        if self.active_player_index < 0 or self.active_player_index >= len(self.players):
+            self._reset_combat_state(clear_damage_marked=False)
+            return
+        active = self.players[self.active_player_index]
+        if self.combat_defending_player_index is None:
+            if self.combat_attackers or self.combat_blockers:
+                self._reset_combat_state(clear_damage_marked=False)
+            return
+        if self.combat_defending_player_index < 0 or self.combat_defending_player_index >= len(self.players):
+            self._reset_combat_state(clear_damage_marked=False)
+            return
+        defender = self.players[self.combat_defending_player_index]
+
+        valid_attackers: dict[int, int] = {}
+        for attacker_idx, defending_idx in self.combat_attackers.items():
+            if defending_idx != self.combat_defending_player_index:
+                continue
+            if attacker_idx < 0 or attacker_idx >= len(active.battlefield):
+                continue
+            attacker = active.battlefield[attacker_idx]
+            if attacker.card.primary_type != "creature":
+                continue
+            valid_attackers[attacker_idx] = defending_idx
+        self.combat_attackers = valid_attackers
+
+        valid_blockers: dict[int, int] = {}
+        for blocker_idx, attacker_idx in self.combat_blockers.items():
+            if blocker_idx < 0 or blocker_idx >= len(defender.battlefield):
+                continue
+            blocker = defender.battlefield[blocker_idx]
+            if blocker.card.primary_type != "creature":
+                continue
+            if attacker_idx not in self.combat_attackers:
+                continue
+            valid_blockers[blocker_idx] = attacker_idx
+        self.combat_blockers = valid_blockers
+
+        for player in self.players:
+            for permanent in player.battlefield:
+                permanent.attacking = False
+                permanent.defending_player_index = None
+                permanent.blocked = False
+                permanent.blocking_attacker_controller = None
+                permanent.blocking_attacker_index = None
+
+        for attacker_idx, defending_idx in self.combat_attackers.items():
+            attacker = active.battlefield[attacker_idx]
+            attacker.attacking = True
+            attacker.defending_player_index = defending_idx
+            attacker.blocked = any(value == attacker_idx for value in self.combat_blockers.values())
+
+        for blocker_idx, attacker_idx in self.combat_blockers.items():
+            blocker = defender.battlefield[blocker_idx]
+            blocker.blocking_attacker_controller = self.active_player_index
+            blocker.blocking_attacker_index = attacker_idx
+
+    def _can_block_attacker(self, blocker: Permanent, attacker: Permanent) -> bool:
+        attacker_text = attacker.card.oracle_text.lower()
+        blocker_text = blocker.card.oracle_text.lower()
+
+        if attacker.metadata.get("cant_be_blocked_until_eot"):
+            return False
+        if "can't be blocked" in attacker_text and "except" not in attacker_text:
+            return False
+
+        attacker_has_flying = self._has_keyword(attacker, "flying")
+        blocker_has_flying = self._has_keyword(blocker, "flying")
+        blocker_has_reach = self._has_keyword(blocker, "reach")
+        if attacker_has_flying and not (blocker_has_flying or blocker_has_reach):
+            return False
+
+        if "can't be blocked by walls" in attacker_text and "wall" in blocker.card.type_line.lower():
+            return False
+        if "wall" in blocker.card.type_line.lower() and "can block as though it didn't have defender" not in blocker_text:
+            if not blocker.metadata.get("can_attack_as_though_no_defender"):
+                # Walls still block normally unless explicit text says they can't.
+                pass
+        return True
+
+    def _destroy_marked_creatures(self) -> None:
+        for player in self.players:
+            survivors: list[Permanent] = []
+            for permanent in player.battlefield:
+                if permanent.card.primary_type != "creature":
+                    survivors.append(permanent)
+                    continue
+                if permanent.damage_marked < permanent.effective_toughness:
+                    survivors.append(permanent)
+                    continue
+                if permanent.regeneration_shield > 0:
+                    permanent.regeneration_shield -= 1
+                    permanent.damage_marked = 0
+                    permanent.tapped = True
+                    survivors.append(permanent)
+                    continue
+                player.graveyard.append(permanent.card)
+                self.log.append(f"{permanent.card.name} died from combat damage")
+            player.battlefield = survivors
+
+    def declare_attackers(
+        self,
+        controller_index: int,
+        attacker_indices: list[int],
+        defending_player_index: int | None = None,
+    ) -> tuple[bool, str]:
+        if self.current_turn_phase != "combat" or self.current_step != "declare_attackers":
+            return False, "attackers can only be declared during declare_attackers"
+        if controller_index != self.active_player_index:
+            return False, "only the active player may declare attackers"
+
+        defender_idx = defending_player_index if defending_player_index is not None else 1 - controller_index
+        if defender_idx < 0 or defender_idx >= len(self.players) or defender_idx == controller_index:
+            return False, "invalid defending player"
+
+        controller = self.players[controller_index]
+        unique_indices = sorted(set(attacker_indices))
+        for idx in unique_indices:
+            if idx < 0 or idx >= len(controller.battlefield):
+                return False, "attacker index out of range"
+            attacker = controller.battlefield[idx]
+            if attacker.card.primary_type != "creature":
+                return False, "only creatures can attack"
+            if attacker.tapped:
+                return False, f"{attacker.card.name} is tapped"
+            if not self.can_attack(attacker, defender_idx):
+                return False, f"{attacker.card.name} cannot attack"
+
+        self.combat_defending_player_index = defender_idx
+        self.combat_attackers = {idx: defender_idx for idx in unique_indices}
+        self.combat_blockers = {}
+        self.combat_damage_resolved = False
+        self.combat_first_strike_done = False
+        self._prune_combat_state()
+
+        for idx in unique_indices:
+            attacker = controller.battlefield[idx]
+            attacker.tapped = True
+
+        self._prune_combat_state()
+        self.log.append(f"{controller.name} declared {len(unique_indices)} attacker(s)")
+        return True, "declared attackers"
+
+    def declare_blockers(self, controller_index: int, blocker_to_attacker: dict[int, int]) -> tuple[bool, str]:
+        if self.current_turn_phase != "combat" or self.current_step != "declare_blockers":
+            return False, "blockers can only be declared during declare_blockers"
+        if self.combat_defending_player_index is None:
+            return False, "no defending player set"
+        if controller_index != self.combat_defending_player_index:
+            return False, "only defending player may declare blockers"
+
+        self._prune_combat_state()
+        defender = self.players[controller_index]
+        attacker_controller = self.players[self.active_player_index]
+        assignments: dict[int, int] = {}
+
+        for blocker_idx, attacker_idx in blocker_to_attacker.items():
+            if blocker_idx < 0 or blocker_idx >= len(defender.battlefield):
+                return False, "blocker index out of range"
+            if attacker_idx not in self.combat_attackers:
+                return False, "blocker assigned to non-attacker"
+            blocker = defender.battlefield[blocker_idx]
+            attacker = attacker_controller.battlefield[attacker_idx]
+            if blocker.card.primary_type != "creature":
+                return False, "only creatures can block"
+            if blocker.tapped:
+                return False, f"{blocker.card.name} is tapped"
+            if not self._can_block_attacker(blocker, attacker):
+                return False, f"{blocker.card.name} cannot block {attacker.card.name}"
+            assignments[blocker_idx] = attacker_idx
+
+        self.combat_blockers = assignments
+        self._prune_combat_state()
+        self.log.append(f"{defender.name} declared {len(assignments)} blocker(s)")
+        return True, "declared blockers"
+
+    def _combat_blockers_for_attacker(self, attacker_idx: int) -> list[int]:
+        return [blocker_idx for blocker_idx, a_idx in self.combat_blockers.items() if a_idx == attacker_idx]
+
+    def resolve_combat_damage(self, controller_index: int, attacker_damage: dict[int, dict[int, int]] | None = None) -> tuple[bool, str]:
+        if self.current_turn_phase != "combat" or self.current_step != "combat_damage":
+            return False, "combat damage can only be resolved during combat_damage"
+        if controller_index != self.active_player_index:
+            return False, "only active player may assign combat damage"
+        if self.combat_damage_resolved:
+            return False, "combat damage already resolved"
+
+        self._prune_combat_state()
+        if not self.combat_attackers:
+            self.combat_damage_resolved = True
+            return True, "no attackers"
+
+        attacker_controller = self.players[self.active_player_index]
+        defending_index = self.combat_defending_player_index
+        if defending_index is None:
+            return False, "no defending player"
+        defender = self.players[defending_index]
+
+        def participates_in_first_strike(perm: Permanent) -> bool:
+            return self._has_keyword(perm, "first strike") or self._has_keyword(perm, "double strike")
+
+        def participates_in_second_strike(perm: Permanent) -> bool:
+            return self._has_keyword(perm, "double strike") or (
+                not self._has_keyword(perm, "first strike") and not self._has_keyword(perm, "double strike")
+            )
+
+        if attacker_damage is None:
+            attacker_damage = {}
+
+        attacker_passes: list[int] = []
+        blocker_passes: list[int] = []
+        for attacker_idx in self.combat_attackers:
+            if attacker_idx >= len(attacker_controller.battlefield):
+                continue
+            attacker = attacker_controller.battlefield[attacker_idx]
+            blockers = self._combat_blockers_for_attacker(attacker_idx)
+            if blockers:
+                for blocker_idx in blockers:
+                    if blocker_idx < len(defender.battlefield):
+                        blocker = defender.battlefield[blocker_idx]
+                        if participates_in_first_strike(attacker) or participates_in_first_strike(blocker):
+                            attacker_passes.append(attacker_idx)
+                            blocker_passes.append(blocker_idx)
+                            break
+
+        has_first_strike_pass = bool(attacker_passes)
+        run_first_pass = has_first_strike_pass and not self.combat_first_strike_done
+
+        attacker_damage_events: list[tuple[int, int, int]] = []
+        defender_damage_events: list[tuple[int, int]] = []
+
+        for attacker_idx in sorted(self.combat_attackers):
+            if attacker_idx < 0 or attacker_idx >= len(attacker_controller.battlefield):
+                continue
+            attacker = attacker_controller.battlefield[attacker_idx]
+            if attacker.effective_power <= 0:
+                continue
+            if run_first_pass and not participates_in_first_strike(attacker):
+                continue
+            if not run_first_pass and has_first_strike_pass and not participates_in_second_strike(attacker):
+                continue
+
+            blockers = self._combat_blockers_for_attacker(attacker_idx)
+            power_left = attacker.effective_power
+            if not blockers:
+                if self.combat_damage_prevented_until_eot:
+                    continue
+                damage = self._prevent_damage(defender, power_left)
+                if damage > 0:
+                    defender_damage_events.append((defending_index, damage))
+                continue
+
+            requested = attacker_damage.get(attacker_idx, {})
+            assigned_total = 0
+            block_order = sorted(blockers)
+            for blocker_idx in block_order:
+                if blocker_idx >= len(defender.battlefield):
+                    continue
+                blocker = defender.battlefield[blocker_idx]
+                lethal = max(0, blocker.effective_toughness - blocker.damage_marked)
+                requested_damage = int(requested.get(blocker_idx, 0))
+                if requested_damage < 0:
+                    return False, "combat damage assignment cannot be negative"
+                if requested_damage > power_left:
+                    return False, "assigned combat damage exceeds attacker power"
+                if not self._has_keyword(attacker, "trample") and requested_damage > 0 and requested_damage < lethal:
+                    return False, "must assign lethal to each blocker in order"
+                assigned_total += requested_damage
+                power_left -= requested_damage
+                if requested_damage > 0:
+                    attacker_damage_events.append((defending_index, blocker_idx, requested_damage))
+
+            if assigned_total > attacker.effective_power:
+                return False, "assigned combat damage exceeds attacker power"
+            if self._has_keyword(attacker, "trample") and power_left > 0 and not self.combat_damage_prevented_until_eot:
+                trample_damage = self._prevent_damage(defender, power_left)
+                if trample_damage > 0:
+                    defender_damage_events.append((defending_index, trample_damage))
+
+        for blocker_idx, attacker_idx in sorted(self.combat_blockers.items()):
+            if blocker_idx < 0 or blocker_idx >= len(defender.battlefield):
+                continue
+            if attacker_idx < 0 or attacker_idx >= len(attacker_controller.battlefield):
+                continue
+            blocker = defender.battlefield[blocker_idx]
+            attacker = attacker_controller.battlefield[attacker_idx]
+            if blocker.effective_power <= 0:
+                continue
+            if run_first_pass and not participates_in_first_strike(blocker):
+                continue
+            if not run_first_pass and has_first_strike_pass and not participates_in_second_strike(blocker):
+                continue
+            attacker.damage_marked += blocker.effective_power
+
+        for defending_idx, blocker_idx, damage in attacker_damage_events:
+            if defending_idx >= len(self.players):
+                continue
+            defending_player = self.players[defending_idx]
+            if blocker_idx < 0 or blocker_idx >= len(defending_player.battlefield):
+                continue
+            defending_player.battlefield[blocker_idx].damage_marked += damage
+
+        for _, damage in defender_damage_events:
+            defender.life -= damage
+
+        self._destroy_marked_creatures()
+        self._prune_combat_state()
+
+        if run_first_pass:
+            self.combat_first_strike_done = True
+            self.log.append("Resolved first strike combat damage")
+            return True, "resolved first strike combat damage"
+
+        self.combat_damage_resolved = True
+        self.log.append("Resolved combat damage")
+        return True, "resolved combat damage"
+
+    def get_combat_state(self) -> dict[str, object]:
+        self._prune_combat_state()
+        return {
+            "defending_player_index": self.combat_defending_player_index,
+            "attackers": [{"attacker_index": k, "defending_player_index": v} for k, v in sorted(self.combat_attackers.items())],
+            "blockers": [{"blocker_index": k, "attacker_index": v} for k, v in sorted(self.combat_blockers.items())],
+            "damage_resolved": self.combat_damage_resolved,
+            "first_strike_done": self.combat_first_strike_done,
+        }
 
     def can_attack(self, attacker: Permanent, defending_player_index: int) -> bool:
         text = attacker.card.oracle_text.lower()
@@ -1867,6 +2244,7 @@ class Game:
         self.combat_damage_prevented_until_eot = False
         for player in self.players:
             player.combat_damage_cap_one_charges = 0
+        self._reset_combat_state(clear_damage_marked=False)
         if self._receives_priority(step):
             self._resolve_priority_window()
         self._on_step_or_phase_end(phase, step)

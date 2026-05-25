@@ -12,6 +12,9 @@ ActionKind = Literal[
     "tap",
     "end_turn",
     "next_phase",
+    "declare_attackers",
+    "declare_blockers",
+    "assign_combat_damage",
     "ai_step",
     "cleanup_select",
     "debug_add_to_hand",
@@ -45,6 +48,9 @@ class GameActionRequest(BaseModel):
     x_value: int | None = Field(default=None, ge=0)
     hand_index: int | None = Field(default=None, ge=0)
     mana_color: Literal["W", "U", "B", "R", "G"] | None = None
+    attacker_indices: list[int] | None = None
+    blocker_pairs: dict[int, int] | None = None
+    attacker_damage: dict[int, dict[int, int]] | None = None
 
 
 class RandomDeckRequest(BaseModel):

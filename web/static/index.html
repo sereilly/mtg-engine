@@ -132,6 +132,11 @@
 
             <section class="middle-lane">
               <div id="actionHint" class="action-hint">Tip: drag cards from your hand or battlefield.</div>
+              <div id="combatControls" class="combat-controls hidden">
+                <div id="combatSummary" class="combat-summary">Combat state: none</div>
+                <div id="combatActions" class="button-row"></div>
+                <div id="combatDamagePanel" class="combat-damage-panel"></div>
+              </div>
             </section>
 
             <section class="phase-row">
@@ -200,6 +205,14 @@
       </section>
 
     </main>
+
+    <svg id="combatOverlay" class="combat-overlay" aria-hidden="true">
+      <defs>
+        <marker id="combatArrowHead" markerWidth="9" markerHeight="6" refX="8" refY="3" orient="auto">
+          <polygon points="0 0, 9 3, 0 6" fill="#7ec4ff"></polygon>
+        </marker>
+      </defs>
+    </svg>
 
     <script src="/app.js?v=20260524"></script>
   </body>

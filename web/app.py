@@ -50,6 +50,12 @@ def _serialize_permanent(perm: Permanent) -> dict:
         "oracle_text": perm.card.oracle_text,
         "image_uri": image_uri,
         "large_image_uri": large_image_uri,
+        "attacking": perm.attacking,
+        "defending_player_index": perm.defending_player_index,
+        "blocked": perm.blocked,
+        "blocking_attacker_controller": perm.blocking_attacker_controller,
+        "blocking_attacker_index": perm.blocking_attacker_index,
+        "damage_marked": perm.damage_marked,
     }
 
 
@@ -211,6 +217,7 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
             _serialize_player(session.game.players[1], viewer_seat, 1),
         ],
         "stack": [_serialize_stack_item(item, session.game) for item in reversed(session.game.stack)],
+        "combat": session.game.get_combat_state(),
         "log": session.game.log[-80:],
         "winner": win,
         "cleanup_discard": cleanup_info,
@@ -451,7 +458,15 @@ def do_action(session_id: str, req: GameActionRequest):
     if cleanup_required > 0 and req.action not in {"cleanup_select", "debug_add_to_hand", "debug_cast_free"}:
         raise HTTPException(status_code=400, detail="select cleanup discards before other actions")
 
-    if req.action in {"cast", "activate", "end_turn", "next_phase"} and seat_type != "human":
+    if req.action in {
+        "cast",
+        "activate",
+        "end_turn",
+        "next_phase",
+        "declare_attackers",
+        "declare_blockers",
+        "assign_combat_damage",
+    } and seat_type != "human":
         raise HTTPException(status_code=400, detail="cannot issue human action for AI seat")
 
     if req.action == "cast":
@@ -548,6 +563,41 @@ def do_action(session_id: str, req: GameActionRequest):
         if req.seat != session.current_turn:
             raise HTTPException(status_code=400, detail="not your turn")
         _advance_phase(session)
+
+    elif req.action == "declare_attackers":
+        if req.seat != session.current_turn:
+            raise HTTPException(status_code=400, detail="not your turn")
+        ok, details = session.game.declare_attackers(
+            req.seat,
+            req.attacker_indices or [],
+            defending_player_index=req.target_seat,
+        )
+        if not ok:
+            raise HTTPException(status_code=400, detail=details)
+
+    elif req.action == "declare_blockers":
+        defender_seat = session.game.combat_defending_player_index
+        if defender_seat is None:
+            raise HTTPException(status_code=400, detail="no combat attackers declared")
+        if req.seat != defender_seat:
+            raise HTTPException(status_code=400, detail="only defending player may declare blockers")
+        raw_pairs = req.blocker_pairs or {}
+        blocker_pairs = {int(k): int(v) for k, v in raw_pairs.items()}
+        ok, details = session.game.declare_blockers(req.seat, blocker_pairs)
+        if not ok:
+            raise HTTPException(status_code=400, detail=details)
+
+    elif req.action == "assign_combat_damage":
+        if req.seat != session.current_turn:
+            raise HTTPException(status_code=400, detail="not your turn")
+        attacker_damage_raw = req.attacker_damage or {}
+        attacker_damage = {
+            int(attacker_idx): {int(blocker_idx): int(value) for blocker_idx, value in blockers.items()}
+            for attacker_idx, blockers in attacker_damage_raw.items()
+        }
+        ok, details = session.game.resolve_combat_damage(req.seat, attacker_damage=attacker_damage)
+        if not ok:
+            raise HTTPException(status_code=400, detail=details)
 
     elif req.action == "cleanup_select":
         if req.seat != session.current_turn:

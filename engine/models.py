@@ -34,6 +34,12 @@ class Permanent:
     toughness_bonus: int = 0
     regeneration_shield: int = 0
     metadata: dict[str, Any] = field(default_factory=dict)
+    attacking: bool = False
+    defending_player_index: int | None = None
+    blocked: bool = False
+    blocking_attacker_controller: int | None = None
+    blocking_attacker_index: int | None = None
+    damage_marked: int = 0
 
     def _base_stat(self, key: str) -> int:
         raw_value = str(self.card.raw.get(key, "0"))

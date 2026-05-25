@@ -30,6 +30,21 @@ def _mk_card(
     )
 
 
+def _mk_creature_card(name: str, power: int, toughness: int, oracle_text: str = ""):
+    return CardDefinition(
+        name=name,
+        mana_cost="",
+        cmc=0.0,
+        type_line="Creature - Test",
+        oracle_text=oracle_text,
+        colors=(),
+        color_identity=(),
+        keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Test", "power": str(power), "toughness": str(toughness)},
+    )
+
+
 def test_create_human_vs_human_session_returns_join_url():
     response = client.post(
         "/api/sessions",
@@ -860,6 +875,91 @@ def test_next_phase_advances_through_combat_substeps_then_second_main():
     assert payload["current_phase"] == "main"
     assert payload["current_turn_phase"] == "postcombat_main"
     assert payload["current_step"] == "postcombat_main"
+
+
+def test_combat_actions_declare_attackers_and_blockers():
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "guest_name": "Guest",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 99031,
+        },
+    ).json()
+    sid = created["session_id"]
+    client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
+
+    session = store.get(sid)
+    attacker = _mk_creature_card("Attacker", 3, 3)
+    blocker = _mk_creature_card("Blocker", 2, 2)
+    session.game.players[0].battlefield = [Permanent(card=attacker)]
+    session.game.players[1].battlefield = [Permanent(card=blocker)]
+    session.game.current_turn_phase = "combat"
+    session.game.current_step = "declare_attackers"
+    session.game.current_phase = "combat"
+    session.current_turn = 0
+
+    declare_attack = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "declare_attackers", "attacker_indices": [0], "target_seat": 1},
+    )
+    assert declare_attack.status_code == 200
+    assert declare_attack.json()["combat"]["attackers"] == [{"attacker_index": 0, "defending_player_index": 1}]
+
+    session.game.current_step = "declare_blockers"
+    declare_block = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 1, "action": "declare_blockers", "blocker_pairs": {"0": 0}},
+    )
+    assert declare_block.status_code == 200
+    assert declare_block.json()["combat"]["blockers"] == [{"blocker_index": 0, "attacker_index": 0}]
+
+
+def test_assign_combat_damage_endpoint_changes_life():
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "guest_name": "Guest",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 99032,
+        },
+    ).json()
+    sid = created["session_id"]
+    client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
+
+    session = store.get(sid)
+    attacker = _mk_creature_card("Trampler", 5, 5, "Trample")
+    blocker = _mk_creature_card("Blocker", 2, 2)
+    session.game.players[0].battlefield = [Permanent(card=attacker)]
+    session.game.players[1].battlefield = [Permanent(card=blocker)]
+    session.game.current_turn_phase = "combat"
+    session.game.current_phase = "combat"
+    session.current_turn = 0
+
+    session.game.current_step = "declare_attackers"
+    client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "declare_attackers", "attacker_indices": [0], "target_seat": 1},
+    )
+    session.game.current_step = "declare_blockers"
+    client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 1, "action": "declare_blockers", "blocker_pairs": {"0": 0}},
+    )
+
+    session.game.current_step = "combat_damage"
+    assign = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "assign_combat_damage", "attacker_damage": {"0": {"0": 2}}},
+    )
+    assert assign.status_code == 200
+    assert assign.json()["players"][1]["life"] == 17
 
 
 def test_next_phase_runs_end_then_cleanup_then_next_turn():
