@@ -14,6 +14,8 @@ let combatBlockerDraft = {};
 let combatDraftStepKey = "";
 let combatPromptKey = "";
 let previousLifeBySeat = {};
+let aiAutoStepInFlight = false;
+let aiAutoStepRequestedStateKey = "";
 
 const setupEl = document.getElementById("setup");
 const boardEl = document.getElementById("boardPanel");
@@ -169,6 +171,49 @@ function isCardLikelyAttacker(card) {
   return String(card.type || "").toLowerCase().includes("creature") && !card.tapped;
 }
 
+function canCardAttackDefenderFromPublicState(card, defenderBattlefield) {
+  if (!isCardLikelyAttacker(card)) return false;
+
+  const text = String(card.oracle_text || "").toLowerCase();
+  const hasDefender = text.includes("defender");
+  const canIgnoreDefender = text.includes("can attack as though it didn't have defender");
+  if (hasDefender && !canIgnoreDefender) return false;
+
+  if (text.includes("can't attack unless defending player controls an island")) {
+    const defenderControlsIsland = Array.isArray(defenderBattlefield)
+      ? defenderBattlefield.some((perm) => String(perm?.type || "").toLowerCase().includes("island"))
+      : false;
+    if (!defenderControlsIsland) return false;
+  }
+
+  return true;
+}
+
+function getValidAttackerIndices(state = currentState) {
+  if (!state || !isCombatStep(state, "declare_attackers") || seat !== state.current_turn) return [];
+
+  const combat = getCombatState(state);
+  const attackerSeat = state.current_turn;
+  const defenderSeat = Number.isInteger(combat?.defending_player_index)
+    ? combat.defending_player_index
+    : 1 - attackerSeat;
+
+  const attackerPlayer = state.players?.[attackerSeat];
+  const defenderPlayer = state.players?.[defenderSeat];
+  const attackerBattlefield = Array.isArray(attackerPlayer?.battlefield) ? attackerPlayer.battlefield : [];
+  const defenderBattlefield = Array.isArray(defenderPlayer?.battlefield) ? defenderPlayer.battlefield : [];
+
+  return attackerBattlefield
+    .map((card, index) => ({ card, index }))
+    .filter(({ card }) => canCardAttackDefenderFromPublicState(card, defenderBattlefield))
+    .map(({ index }) => index);
+}
+
+function isCardLikelyBlocker(card) {
+  if (!card || typeof card === "string") return false;
+  return String(card.type || "").toLowerCase().includes("creature") && !card.tapped;
+}
+
 function getDisplayedAttackerLinks(state = currentState) {
   const combat = getCombatState(state);
   if (!combat) return [];
@@ -318,21 +363,12 @@ function normalizeSymbolToken(token) {
   const open = token[0];
   const close = token[token.length - 1];
   const isCurly = open === "{" && close === "}";
-  const isParen = open === "(" && close === ")";
-  if (!isCurly && !isParen) {
+  if (!isCurly) {
     return token;
   }
 
   const body = token.slice(1, -1).trim().toUpperCase();
   return `{${body}}`;
-}
-
-function isLikelyParenManaToken(token) {
-  if (!token || typeof token !== "string" || token.length < 3) return false;
-  if (token[0] !== "(" || token[token.length - 1] !== ")") return false;
-  const body = token.slice(1, -1).trim().toUpperCase();
-  // Restrict parenthesis parsing to mana-like symbols so normal prose is untouched.
-  return /^[0-9WUBRGCXPQST/]+$/.test(body);
 }
 
 function symbolSrc(token) {
@@ -344,15 +380,14 @@ function renderSymbolsInline(text, symbolClass = "mtg-symbol-inline") {
   const input = String(text || "");
   let html = "";
   let lastIndex = 0;
-  const matches = input.matchAll(/\{[^}]+\}|\([^)]*\)/g);
+  const matches = input.matchAll(/\{[^}]+\}/g);
 
   for (const match of matches) {
     const token = match[0];
     const index = match.index || 0;
     const isCurlyToken = token[0] === "{" && token[token.length - 1] === "}";
-    const isManaParenToken = isLikelyParenManaToken(token);
 
-    if (!isCurlyToken && !isManaParenToken) {
+    if (!isCurlyToken) {
       continue;
     }
 
@@ -454,6 +489,8 @@ function resetToSetup(message = "Session not found. Start a new game.") {
   seat = null;
   currentState = null;
   previousLifeBySeat = {};
+  aiAutoStepInFlight = false;
+  aiAutoStepRequestedStateKey = "";
   showSetupPanel();
   boardEl.classList.add("hidden");
   aiControlsEl?.classList.add("hidden");
@@ -467,6 +504,42 @@ function shouldShowAiControls(state) {
   const hasAiPlayer = values.includes("ai");
   const currentTurnIsAi = seatTypes?.[state?.current_turn] === "ai";
   return hasAiPlayer && currentTurnIsAi;
+}
+
+function getAiStepStateKey(state) {
+  if (!state) return "";
+  const stackSize = Array.isArray(state.stack) ? state.stack.length : 0;
+  const logSize = Array.isArray(state.log) ? state.log.length : 0;
+  return `${state.turn_number || 0}:${state.current_turn}:${state.current_turn_phase}:${state.current_step}:${stackSize}:${logSize}`;
+}
+
+function shouldAutoStepAi(state = currentState) {
+  if (!state || !sessionId) return false;
+  if (!shouldShowAiControls(state)) return false;
+  const toggle = q("aiAutoStepToggle");
+  return toggle ? toggle.checked : false;
+}
+
+async function maybeAutoStepAi(state = currentState) {
+  if (!shouldAutoStepAi(state) || aiAutoStepInFlight) {
+    return;
+  }
+
+  const stateKey = getAiStepStateKey(state);
+  if (!stateKey || stateKey === aiAutoStepRequestedStateKey) {
+    return;
+  }
+
+  aiAutoStepRequestedStateKey = stateKey;
+  aiAutoStepInFlight = true;
+  try {
+    await sendAction({ seat: seat ?? 0, action: "ai_step" });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "AI step failed";
+    updateActionHint(`Auto AI step paused: ${message}`, true);
+  } finally {
+    aiAutoStepInFlight = false;
+  }
 }
 
 function hasOpenHumanSlot(state) {
@@ -688,6 +761,78 @@ function findCardInCurrentHand(cardName) {
   return me.hand.find((card) => normalizeCardName(card) === cardName) || null;
 }
 
+function combatNeedsManualDamageAssignment(state = currentState) {
+  const blockers = getDisplayedBlockerLinks(state);
+  const byAttacker = {};
+  for (const pair of blockers) {
+    const attackerIndex = Number(pair.attacker_index);
+    if (!byAttacker[attackerIndex]) {
+      byAttacker[attackerIndex] = [];
+    }
+    byAttacker[attackerIndex].push(Number(pair.blocker_index));
+  }
+  return Object.values(byAttacker).some((blockerIndices) => blockerIndices.length >= 2);
+}
+
+function combatPromptNeedsConfirmation(state = currentState) {
+  if (!state || seat === null) return false;
+  const combat = getCombatState(state);
+  if (!combat || state.current_turn_phase !== "combat") return false;
+
+  if (isCombatStep(state, "declare_attackers") && seat === state.current_turn) {
+    return !combat.attackers_locked;
+  }
+  if (isCombatStep(state, "declare_blockers") && seat === combat.defending_player_index) {
+    return !combat.blockers_locked;
+  }
+  if (isCombatStep(state, "combat_damage") && seat === state.current_turn && !combat.damage_resolved) {
+    return combatNeedsManualDamageAssignment(state);
+  }
+  return false;
+}
+
+async function handleCombatPromptOk() {
+  if (!currentState || seat === null) return false;
+  const state = currentState;
+  const combat = getCombatState(state);
+  if (!combat || state.current_turn_phase !== "combat") return false;
+
+  if (isCombatStep(state, "declare_attackers") && seat === state.current_turn && !combat.attackers_locked) {
+    const declared = [...combatAttackerDraft];
+    const defendingSeat = Number.isInteger(combat.defending_player_index) ? combat.defending_player_index : 1 - seat;
+    await sendAction({
+      seat,
+      action: "declare_attackers",
+      attacker_indices: declared,
+      target_seat: defendingSeat,
+    });
+    updateActionHint(
+      `Attackers declared (${declared.length}). Players may now cast spells/activate abilities before blockers.`,
+    );
+    return true;
+  }
+
+  if (isCombatStep(state, "declare_blockers") && seat === combat.defending_player_index && !combat.blockers_locked) {
+    const blockerPairs = { ...combatBlockerDraft };
+    await sendAction({ seat, action: "declare_blockers", blocker_pairs: blockerPairs });
+    updateActionHint(
+      `Blockers declared (${Object.keys(blockerPairs).length}). Players may now cast spells/activate abilities before damage.`,
+    );
+    return true;
+  }
+
+  if (isCombatStep(state, "combat_damage") && seat === state.current_turn && !combat.damage_resolved) {
+    if (!combatNeedsManualDamageAssignment(state)) {
+      return false;
+    }
+    await sendAction({ seat, action: "assign_combat_damage", attacker_damage: combatDamageDraft });
+    updateActionHint("Combat damage resolved.");
+    return true;
+  }
+
+  return false;
+}
+
 function applyCleanupPrompt(cleanupDiscard) {
   const panel = q("activationPanel");
   const title = q("promptTitle");
@@ -728,6 +873,7 @@ function renderActivationPrompt() {
   const customOkBtn = q("promptCustomOkBtn");
   const me = getCurrentPlayerState();
   const cleanupDiscard = getCleanupDiscardInfo();
+  const inCombat = currentState?.current_turn_phase === "combat";
 
   if (cleanupDiscard) {
     applyCleanupPrompt(cleanupDiscard);
@@ -735,13 +881,18 @@ function renderActivationPrompt() {
   }
 
   if (!pendingActivation && !pendingCastTarget && !pendingCastX && !pendingManaColor) {
-    panel.classList.add("hidden");
-    title.textContent = "No pending activation.";
-    body.textContent = "Select an activated ability to begin paying its cost.";
+    panel.classList.toggle("hidden", !inCombat);
+    if (inCombat) {
+      title.textContent = "Combat Prompt";
+      body.textContent = "Use the combat controls below to confirm attackers, blockers, and damage assignments.";
+    } else {
+      title.textContent = "No pending activation.";
+      body.textContent = "Select an activated ability to begin paying its cost.";
+    }
     steps.innerHTML = "";
     customRow.classList.add("hidden");
     okBtn.classList.remove("hidden");
-    okBtn.disabled = true;
+    okBtn.disabled = !combatPromptNeedsConfirmation(currentState);
     cancelBtn.disabled = true;
     customOkBtn.disabled = true;
     return;
@@ -804,7 +955,7 @@ function renderActivationPrompt() {
           const src = symbolSrc(token);
           const symbolHtml = src
             ? `<img class="mtg-symbol mtg-symbol-inline" src="${escapeHtml(src)}" alt="${escapeHtml(token)}" title="${escapeHtml(token)}" />`
-            : escapeHtml(`(${symbol})`);
+            : escapeHtml(`{${symbol}}`);
           return `<button type="button" class="prompt-choice-btn" data-mana-color="${symbol}">${escapeHtml(label)} ${symbolHtml}</button>`;
         },
       ).join("")}</div>`,
@@ -1417,7 +1568,7 @@ function createCardElement(card, options = {}) {
           toggleCombatAttackerDraft(permanentIndex);
           renderBoard(currentState);
           updateActionHint(
-            `Attackers selected: ${combatAttackerDraft.length}. Click OK to declare attackers.`,
+            `Attackers selected: ${combatAttackerDraft.length}. Use Alpha Strike to toggle all valid attackers, then press OK.`,
           );
           return;
         }
@@ -1573,20 +1724,25 @@ function renderStack(stack) {
 }
 
 function renderCombatControls(state) {
-  const controls = q("combatControls");
   const summary = q("combatSummary");
   const actions = q("combatActions");
   const damagePanel = q("combatDamagePanel");
-  if (!controls || !summary || !actions || !damagePanel) return;
+  if (!summary || !actions || !damagePanel) return;
 
+  summary.classList.add("hidden");
+  actions.classList.add("hidden");
+  damagePanel.classList.add("hidden");
   actions.innerHTML = "";
   damagePanel.innerHTML = "";
   const combat = getCombatState(state);
   const inCombat = state?.current_turn_phase === "combat";
-  controls.classList.toggle("hidden", !inCombat);
   if (!inCombat) {
     return;
   }
+
+  summary.classList.remove("hidden");
+  actions.classList.remove("hidden");
+  damagePanel.classList.remove("hidden");
 
   const attackers = getDisplayedAttackerLinks(state);
   const blockers = getDisplayedBlockerLinks(state);
@@ -1598,35 +1754,34 @@ function renderCombatControls(state) {
     if (combat?.attackers_locked) {
       prompt.textContent = "Attackers are declared. Both players may cast spells or activate abilities before Next Phase.";
     } else {
-      prompt.textContent = "Declare attackers: click each creature able to attack, then press OK.";
+      prompt.textContent = "Declare attackers: click creatures, or use Alpha Strike to toggle all valid attackers, then press OK.";
     }
     damagePanel.appendChild(prompt);
 
     if (combat?.attackers_locked) return;
-    const submitBtn = document.createElement("button");
-    submitBtn.type = "button";
-    submitBtn.id = "confirmAttackersBtn";
-    submitBtn.textContent = "OK - Declare Attackers";
-    submitBtn.addEventListener("click", async () => {
-      try {
-        const declared = [...combatAttackerDraft];
-        const defendingSeat = Number.isInteger(combat?.defending_player_index)
-          ? combat.defending_player_index
-          : 1 - seat;
-        await sendAction({
-          seat,
-          action: "declare_attackers",
-          attacker_indices: declared,
-          target_seat: defendingSeat,
-        });
-        updateActionHint(
-          `Attackers declared (${declared.length}). Players may now cast spells/activate abilities before blockers.`,
-        );
-      } catch (e) {
-        updateActionHint(e.message, true);
+    const alphaStrikeBtn = document.createElement("button");
+    alphaStrikeBtn.type = "button";
+    alphaStrikeBtn.id = "alphaStrikeBtn";
+    alphaStrikeBtn.textContent = "Alpha Strike";
+    alphaStrikeBtn.addEventListener("click", () => {
+      const validAttackerIndices = getValidAttackerIndices(currentState);
+      if (!validAttackerIndices.length) {
+        updateActionHint("No valid attackers available for Alpha Strike.", true);
+        return;
       }
+
+      const allValidAlreadySelected = validAttackerIndices.every((idx) => combatAttackerDraft.includes(idx));
+      if (allValidAlreadySelected) {
+        combatAttackerDraft = combatAttackerDraft.filter((idx) => !validAttackerIndices.includes(idx));
+        updateActionHint("Alpha Strike cleared all valid attackers.");
+      } else {
+        combatAttackerDraft = [...new Set([...combatAttackerDraft, ...validAttackerIndices])].sort((a, b) => a - b);
+        updateActionHint(`Alpha Strike selected ${validAttackerIndices.length} valid attacker(s).`);
+      }
+
+      renderBoard(currentState);
     });
-    actions.appendChild(submitBtn);
+    actions.appendChild(alphaStrikeBtn);
   }
 
   if (isCombatStep(state, "declare_blockers") && seat === combat?.defending_player_index) {
@@ -1639,23 +1794,6 @@ function renderCombatControls(state) {
     }
     damagePanel.appendChild(prompt);
 
-    const submitBtn = document.createElement("button");
-    submitBtn.type = "button";
-    submitBtn.id = "confirmBlockersBtn";
-    submitBtn.textContent = "OK - Declare Blockers";
-    submitBtn.disabled = !!combat?.blockers_locked;
-    submitBtn.addEventListener("click", async () => {
-      try {
-        const blockerPairs = { ...combatBlockerDraft };
-        await sendAction({ seat, action: "declare_blockers", blocker_pairs: blockerPairs });
-        updateActionHint(
-          `Blockers declared (${Object.keys(blockerPairs).length}). Players may now cast spells/activate abilities before damage.`,
-        );
-      } catch (e) {
-        updateActionHint(e.message, true);
-      }
-    });
-    actions.appendChild(submitBtn);
   }
 
   if (isCombatStep(state, "combat_damage") && seat === state.current_turn && !combat?.damage_resolved) {
@@ -1707,18 +1845,6 @@ function renderCombatControls(state) {
       damagePanel.appendChild(row);
     }
 
-    const submitBtn = document.createElement("button");
-    submitBtn.type = "button";
-    submitBtn.textContent = "Assign Combat Damage";
-    submitBtn.addEventListener("click", async () => {
-      try {
-        await sendAction({ seat, action: "assign_combat_damage", attacker_damage: combatDamageDraft });
-        updateActionHint("Combat damage resolved.");
-      } catch (e) {
-        updateActionHint(e.message, true);
-      }
-    });
-    actions.appendChild(submitBtn);
   }
 }
 
@@ -1766,15 +1892,19 @@ function renderBoard(state) {
   const isSelfTurn = state.current_turn === viewerSeat;
   const canEndTurn = seat !== null && isSelfTurn && !isOpponentMidAction(state, viewerSeat);
   const combat = getCombatState(state);
+  const likelyAttackersAvailable = Array.isArray(me?.battlefield) && me.battlefield.some((card) => isCardLikelyAttacker(card));
+  const defenderSeat = combat?.defending_player_index;
+  const defenderPlayer = Number.isInteger(defenderSeat) ? state.players[defenderSeat] : null;
+  const likelyBlockersAvailable =
+    Array.isArray(defenderPlayer?.battlefield) && defenderPlayer.battlefield.some((card) => isCardLikelyBlocker(card));
   let canAdvancePhase = seat !== null && seat === state.current_turn;
   if (isCombatStep(state, "declare_attackers") && canAdvancePhase && !(combat?.attackers_locked)) {
-    canAdvancePhase = false;
+    canAdvancePhase = !likelyAttackersAvailable;
   }
   if (isCombatStep(state, "declare_blockers") && canAdvancePhase && !(combat?.blockers_locked)) {
-    const defenderSeat = combat?.defending_player_index;
     const seatTypes = state.seat_types || {};
     const defenderType = seatTypes[defenderSeat] ?? seatTypes[String(defenderSeat)] ?? "human";
-    if (defenderType !== "ai") {
+    if (defenderType !== "ai" && likelyBlockersAvailable) {
       canAdvancePhase = false;
     }
   }
@@ -1881,7 +2011,7 @@ function renderState(state) {
   if (promptStateKey !== combatPromptKey) {
     combatPromptKey = promptStateKey;
     if (isCombatStep(state, "declare_attackers") && seat === state.current_turn && !combat?.attackers_locked) {
-      updateActionHint("Declare attackers by clicking creatures that can attack, then press OK.");
+      updateActionHint("Declare attackers by clicking creatures, or use Alpha Strike to toggle all valid attackers, then press OK.");
     } else if (isCombatStep(state, "declare_blockers") && seat === combat?.defending_player_index && !combat?.blockers_locked) {
       updateActionHint("Declare blockers by dragging to attacking creatures, then press OK.");
     }
@@ -1891,6 +2021,8 @@ function renderState(state) {
   if (cleanupInfo) {
     applyCleanupPrompt(cleanupInfo);
   }
+
+  maybeAutoStepAi(state);
 }
 
 function initCombatContextMenu() {
@@ -2275,8 +2407,16 @@ q("promptCancelBtn").addEventListener("click", () => {
   updateActionHint("Prompt canceled.");
 });
 
-q("promptOkBtn").addEventListener("click", () => {
-  confirmPendingActivation();
+q("promptOkBtn").addEventListener("click", async () => {
+  try {
+    const handledCombat = await handleCombatPromptOk();
+    if (handledCombat) {
+      return;
+    }
+    confirmPendingActivation();
+  } catch (e) {
+    updateActionHint(e.message, true);
+  }
 });
 
 q("promptCustomOkBtn").addEventListener("click", () => {
@@ -2353,6 +2493,14 @@ q("aiLoopBtn").addEventListener("click", async () => {
   } catch (e) {
     alert(e.message);
   }
+});
+
+q("aiAutoStepToggle")?.addEventListener("change", () => {
+  if (!q("aiAutoStepToggle")?.checked) {
+    return;
+  }
+  aiAutoStepRequestedStateKey = "";
+  maybeAutoStepAi(currentState);
 });
 
 q("debugCardSearch").addEventListener("input", (event) => {

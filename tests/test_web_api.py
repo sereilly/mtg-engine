@@ -931,6 +931,38 @@ def test_next_phase_in_blockers_step_auto_advances_after_ai_declares_none():
     assert response.json()["current_step"] == "end_of_combat"
 
 
+def test_next_phase_from_attackers_step_auto_advances_when_no_legal_attackers():
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "guest_name": "Guest",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 99062,
+        },
+    ).json()
+    sid = created["session_id"]
+    client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
+
+    session = store.get(sid)
+    session.game.players[0].battlefield = []
+    session.game.players[1].battlefield = []
+    session.game.current_turn_phase = "combat"
+    session.game.current_step = "declare_attackers"
+    session.game.current_phase = "combat"
+    session.current_turn = 0
+
+    response = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "next_phase"})
+    assert response.status_code == 200
+    assert response.json()["current_step"] == "declare_blockers"
+
+    response = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "next_phase"})
+    assert response.status_code == 200
+    assert response.json()["current_step"] == "end_of_combat"
+
+
 def test_combat_actions_declare_attackers_and_blockers():
     created = client.post(
         "/api/sessions",

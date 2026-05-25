@@ -184,6 +184,40 @@ def test_declare_attackers_requires_confirmation_before_phase_advance():
     assert game.current_step == "declare_blockers"
 
 
+def test_declare_attackers_auto_skips_when_no_legal_attackers_exist():
+    noncreature = CardDefinition(
+        name="Test Relic",
+        mana_cost="",
+        cmc=0.0,
+        type_line="Artifact",
+        oracle_text="",
+        colors=(),
+        color_identity=(),
+        keywords=(),
+        produced_mana=(),
+        raw={"name": "Test Relic", "type_line": "Artifact"},
+    )
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=noncreature)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.current_step == "declare_attackers"
+    assert game.combat_attackers_locked is False
+
+    game.advance_combat_phase()
+    assert game.current_step == "declare_blockers"
+
+    game.advance_combat_phase()
+    assert game.current_step == "end_of_combat"
+    assert game.combat_attackers_locked is True
+    assert any("has no valid attackers; declare attackers step skipped" in entry for entry in game.log)
+    assert any("has no valid blockers; declare blockers step skipped" in entry for entry in game.log)
+
+
 def test_declare_blockers_requires_confirmation_before_phase_advance():
     attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
     blocker = Permanent(card=_mk_creature("Blocker", 2, 2))
@@ -229,6 +263,7 @@ def test_declare_blockers_auto_advances_when_no_legal_blocks_exist():
     game.advance_combat_phase()
     assert game.current_step == "end_of_combat"
     assert game.combat_blockers_locked is True
+    assert any("has no valid blockers; declare blockers step skipped" in entry for entry in game.log)
 
 
 def test_combat_step_advancement_logs_attacker_and_blocker_counts():

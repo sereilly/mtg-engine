@@ -460,6 +460,17 @@ button:hover {
   border-color: rgba(126, 196, 255, 0.55);
 }
 
+.ai-auto-step-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+
+.ai-auto-step-label input {
+  margin: 0;
+}
+
 .debug-panel {
   border-color: rgba(242, 184, 75, 0.65);
   background: linear-gradient(180deg, rgba(35, 30, 20, 0.92), rgba(16, 27, 39, 0.88));

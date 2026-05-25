@@ -360,6 +360,24 @@ class Game:
         self._set_phase_and_step("combat", step)
         self._on_step_or_phase_begin("combat", step)
 
+    def _has_any_legal_attacker(self, attacker_index: int, defender_index: int) -> bool:
+        if attacker_index < 0 or attacker_index >= len(self.players):
+            return False
+        if defender_index < 0 or defender_index >= len(self.players):
+            return False
+        if attacker_index == defender_index:
+            return False
+
+        attacker_player = self.players[attacker_index]
+        for attacker in attacker_player.battlefield:
+            if attacker.card.primary_type != "creature":
+                continue
+            if attacker.tapped:
+                continue
+            if self.can_attack(attacker, defender_index):
+                return True
+        return False
+
     def _has_any_legal_block(self, defender_index: int) -> bool:
         if defender_index < 0 or defender_index >= len(self.players):
             return False
@@ -400,7 +418,21 @@ class Game:
             self._enter_main_phase(precombat=False)
             return
         if self.current_step == "declare_attackers" and not self.combat_attackers_locked:
-            return
+            defender_index = self.combat_defending_player_index
+            if not isinstance(defender_index, int):
+                defender_index = 1 - self.active_player_index
+                self.combat_defending_player_index = defender_index
+
+            if self._has_any_legal_attacker(self.active_player_index, defender_index):
+                return
+
+            self.combat_attackers = {}
+            self.combat_blockers = {}
+            self.combat_attackers_locked = True
+            self.combat_blockers_locked = True
+            self._prune_combat_state()
+            attacker_name = self.players[self.active_player_index].name
+            self.log.append(f"{attacker_name} has no valid attackers; declare attackers step skipped")
         if self.current_step == "declare_blockers" and not self.combat_blockers_locked:
             defender_index = self.combat_defending_player_index
             if isinstance(defender_index, int) and not self._has_any_legal_block(defender_index):
@@ -408,9 +440,14 @@ class Game:
                 self.combat_blockers_locked = True
                 self._prune_combat_state()
                 defender_name = self.players[defender_index].name
-                self.log.append(f"{defender_name} declared 0 blocker(s)")
+                self.log.append(f"{defender_name} has no valid blockers; declare blockers step skipped")
             else:
                 return
+        if self.current_step == "declare_blockers" and self.combat_blockers_locked and not self.combat_attackers:
+            defender_index = self.combat_defending_player_index
+            if isinstance(defender_index, int):
+                defender_name = self.players[defender_index].name
+                self.log.append(f"{defender_name} has no valid blockers; declare blockers step skipped")
         if self.current_step == "combat_damage" and not self.combat_damage_resolved:
             return  # Awaiting manual damage assignment
 

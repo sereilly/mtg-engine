@@ -79,10 +79,17 @@
                   <button id="promptCustomOkBtn" type="button">Use Value</button>
                 </div>
               </div>
+              <div id="combatSummary" class="combat-summary hidden">Combat state: none</div>
+              <div id="combatActions" class="button-row hidden"></div>
+              <div id="combatDamagePanel" class="combat-damage-panel hidden"></div>
             </section>
 
             <section id="aiControls" class="side-panel ai-controls hidden">
               <h3>AI Controls</h3>
+              <label class="ai-auto-step-label">
+                <input id="aiAutoStepToggle" type="checkbox" checked />
+                Step automically
+              </label>
               <div class="button-row ai-button-row">
                 <button id="aiStepBtn" type="button">Run One AI Step</button>
                 <button id="aiLoopBtn" type="button">Run AI x10</button>
@@ -132,11 +139,6 @@
 
             <section class="middle-lane">
               <div id="actionHint" class="action-hint">Tip: drag cards from your hand or battlefield.</div>
-              <div id="combatControls" class="combat-controls hidden">
-                <div id="combatSummary" class="combat-summary">Combat state: none</div>
-                <div id="combatActions" class="button-row"></div>
-                <div id="combatDamagePanel" class="combat-damage-panel"></div>
-              </div>
             </section>
 
             <section class="phase-row">
