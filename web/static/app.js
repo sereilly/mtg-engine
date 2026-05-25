@@ -1067,8 +1067,18 @@ function renderActivationPrompt() {
       body.textContent = "Click a valid land on the battlefield to choose the target.";
       steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
     } else {
-      body.textContent = "Click a card in hand or on the battlefield of the player you want to target.";
-      steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
+      const players = Array.isArray(currentState?.players) ? currentState.players : [];
+      const targetButtons = players
+        .map((player, index) => {
+          const label = player?.name || `Seat ${index}`;
+          return `<button type="button" class="prompt-choice-btn" data-target-choice="${index}">${escapeHtml(label)}</button>`;
+        })
+        .join("");
+      body.textContent = "Select a player to target.";
+      steps.innerHTML = [
+        `<div>Card: ${pendingCastTarget.cardName}</div>`,
+        `<div class="prompt-choice-row">${targetButtons}</div>`,
+      ].join("");
     }
     okBtn.disabled = true;
     cancelBtn.disabled = false;
@@ -1330,6 +1340,13 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
   })
     .then(() => updateActionHint(`Cast ${pending.cardName}.`))
     .catch((e) => updateActionHint(e.message, true));
+}
+
+function handlePlayerTargetClick(targetSeat) {
+  if (!pendingCastTarget) return;
+  if (pendingCastTarget.targetKind !== "player") return;
+  if (!Number.isInteger(targetSeat)) return;
+  resolvePendingCastTarget(targetSeat);
 }
 
 function confirmPendingActivation() {
@@ -2110,9 +2127,13 @@ function renderBoard(state) {
   q("winnerBadge").textContent = `Winner: ${state.winner === null ? "-" : state.winner}`;
 
   q("selfName").textContent = me.name;
+  q("selfName").dataset.targetSeat = String(viewerSeat);
   renderLifePill("selfLife", viewerSeat, me.life);
+  q("selfLife").dataset.targetSeat = String(viewerSeat);
   q("oppName").textContent = opp.name;
+  q("oppName").dataset.targetSeat = String(oppSeat);
   renderLifePill("oppLife", oppSeat, opp.life);
+  q("oppLife").dataset.targetSeat = String(oppSeat);
 
   const isSelfTurn = state.current_turn === viewerSeat;
   const canEndTurn = seat !== null && isSelfTurn && !isOpponentMidAction(state, viewerSeat);
@@ -2628,6 +2649,18 @@ q("joinBtn").addEventListener("click", async () => {
     alert(e.message);
   }
 });
+
+for (const elementId of ["selfName", "oppName", "selfLife", "oppLife"]) {
+  q(elementId)?.addEventListener("click", (event) => {
+    if (!pendingCastTarget || pendingCastTarget.targetKind !== "player") return;
+    const source = event.currentTarget;
+    if (!(source instanceof HTMLElement)) return;
+    const targetSeat = Number(source.dataset.targetSeat);
+    if (!Number.isInteger(targetSeat)) return;
+    event.preventDefault();
+    handlePlayerTargetClick(targetSeat);
+  });
+}
 
 for (const [element, label] of [[joinUrlEl, "Join URL"], [lanJoinUrlEl, "LAN join URL"]]) {
   element?.addEventListener("click", async () => {
