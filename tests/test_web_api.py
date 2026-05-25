@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+import json
 import web.app as web_app
 import web.session_store as web_session_store
 
@@ -182,6 +183,73 @@ def test_join_hvh_session_and_get_redacted_state():
     payload = state_for_host.json()
     assert payload["players"][1]["hand_count"] == len(payload["players"][1]["hand"])
     assert all(card == "<hidden>" for card in payload["players"][1]["hand"])
+
+
+def _read_sse_event_lines(response):
+    lines = []
+    for raw_line in response.iter_lines():
+        line = raw_line.decode("utf-8") if isinstance(raw_line, bytes) else raw_line
+        if line == "":
+            if lines:
+                return lines
+            continue
+        if line.startswith(":"):
+            continue
+        lines.append(line)
+    return lines
+
+
+def test_session_events_stream_join_notification():
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "guest_name": "Guest",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 556,
+        },
+    ).json()
+    sid = created["session_id"]
+
+    with client.stream("GET", f"/api/sessions/{sid}/events") as response:
+        assert response.status_code == 200
+        joined = client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
+        assert joined.status_code == 200
+
+        event_lines = _read_sse_event_lines(response)
+
+    assert "event: state" in event_lines
+    data_line = next(line for line in event_lines if line.startswith("data: "))
+    assert json.loads(data_line.removeprefix("data: ")) == {"reason": "join"}
+
+
+def test_session_events_stream_action_notification():
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "guest_name": "Guest",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 557,
+        },
+    ).json()
+    sid = created["session_id"]
+    client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
+
+    with client.stream("GET", f"/api/sessions/{sid}/events") as response:
+        assert response.status_code == 200
+        action = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "end_turn"})
+        assert action.status_code == 200
+
+        event_lines = _read_sse_event_lines(response)
+
+    assert "event: state" in event_lines
+    data_line = next(line for line in event_lines if line.startswith("data: "))
+    assert json.loads(data_line.removeprefix("data: ")) == {"reason": "action"}
 
 
 def test_human_vs_ai_rejects_human_action_for_ai_seat():

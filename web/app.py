@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import asyncio
+import json
 import socket
+from collections import defaultdict
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.staticfiles import StaticFiles
+from starlette.responses import StreamingResponse
 
 from engine import Game
 from engine.ai_policy import (
@@ -30,6 +34,7 @@ CARD_SEARCH_ORDER = sorted(CARD_CATALOG, key=lambda card: card.name)
 
 app = FastAPI(title="Magic LEA Web App")
 store = SessionStore(cards_path=CARDS_PATH)
+_session_event_queues: dict[str, set[asyncio.Queue[dict[str, str]]]] = defaultdict(set)
 
 
 @app.middleware("http")
@@ -113,6 +118,44 @@ def _serialize_mana_pool(player: PlayerState) -> dict:
     for symbol in ("W", "U", "B", "R", "G", "C"):
         mana.setdefault(symbol, 0)
     return mana
+
+
+def _notify_session_change(session_id: str, reason: str) -> None:
+    queues = _session_event_queues.get(session_id)
+    if not queues:
+        return
+
+    event = {"reason": reason}
+    for queue in tuple(queues):
+        if queue.full():
+            try:
+                queue.get_nowait()
+            except asyncio.QueueEmpty:
+                pass
+        try:
+            queue.put_nowait(event)
+        except asyncio.QueueFull:
+            continue
+
+
+async def _stream_session_events(session_id: str):
+    queue: asyncio.Queue[dict[str, str]] = asyncio.Queue(maxsize=1)
+    _session_event_queues[session_id].add(queue)
+    try:
+        while True:
+            try:
+                event = await asyncio.wait_for(queue.get(), timeout=30)
+            except asyncio.TimeoutError:
+                yield ": keepalive\n\n"
+                continue
+            yield f"event: state\ndata: {json.dumps(event)}\n\n"
+    finally:
+        queues = _session_event_queues.get(session_id)
+        if queues is None:
+            return
+        queues.discard(queue)
+        if not queues:
+            _session_event_queues.pop(session_id, None)
 
 
 def _serialize_stack_item(item, game: Game) -> dict:
@@ -519,6 +562,7 @@ def create_session(req: CreateSessionRequest, request: Request):
 def join_session(session_id: str, req: JoinSessionRequest, request: Request):
     session = _require_session(session_id)
     session = store.join(session_id, req.guest_name)
+    _notify_session_change(session.id, "join")
     join_url = _build_join_url(request, session.id)
     lan_join_url = _build_lan_join_url(request, session.id)
     return {
@@ -528,6 +572,19 @@ def join_session(session_id: str, req: JoinSessionRequest, request: Request):
         "seat": 1,
         "state": _serialize_state(session, viewer_seat=1),
     }
+
+
+@app.get("/api/sessions/{session_id}/events")
+async def stream_session_events(session_id: str):
+    _require_session(session_id)
+    return StreamingResponse(
+        _stream_session_events(session_id),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-store, max-age=0",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @app.get("/api/sessions/{session_id}/state")
@@ -864,6 +921,7 @@ def do_action(session_id: str, req: GameActionRequest):
     else:
         raise HTTPException(status_code=400, detail="unknown action")
 
+    _notify_session_change(session.id, "action")
     return _serialize_state(session, viewer_seat=req.seat)
 
 
@@ -880,6 +938,7 @@ def run_ai(session_id: str, steps: int = Query(default=1, ge=1, le=200)):
         if _winner(session) is not None:
             session.status = "finished"
             break
+    _notify_session_change(session.id, "action")
     return _serialize_state(session, viewer_seat=None)
 
 

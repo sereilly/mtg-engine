@@ -1,6 +1,7 @@
 let sessionId = null;
 let seat = null;
 let currentState = null;
+let stateSyncSource = null;
 let pendingActivation = null;
 let pendingCastTarget = null;
 let pendingCastX = null;
@@ -541,7 +542,32 @@ function setVisible(active) {
   boardEl.classList.toggle("hidden", !active);
 }
 
+function closeStateSyncStream() {
+  if (!stateSyncSource) return;
+  stateSyncSource.close();
+  stateSyncSource = null;
+}
+
+function openStateSyncStream() {
+  closeStateSyncStream();
+  if (!sessionId) return;
+
+  const source = new EventSource(`/api/sessions/${sessionId}/events`);
+  source.addEventListener("state", () => {
+    getState().catch(() => {
+      // Ignore transient refresh failures; the stream will keep delivering future updates.
+    });
+  });
+  source.onerror = () => {
+    if (source.readyState === EventSource.CLOSED && stateSyncSource === source) {
+      stateSyncSource = null;
+    }
+  };
+  stateSyncSource = source;
+}
+
 function resetToSetup(message = "Session not found. Start a new game.") {
+  closeStateSyncStream();
   sessionId = null;
   seat = null;
   currentState = null;
@@ -2521,6 +2547,7 @@ async function createSession() {
   const data = await postJson("/api/sessions", req);
   sessionId = data.session_id;
   seat = data.seat;
+  openStateSyncStream();
   setJoinUrls(data.join_url, data.lan_join_url);
   renderState(data.state);
   setVisible(true);
@@ -2552,6 +2579,7 @@ async function joinSession() {
   }
   const data = await postJson(`/api/sessions/${sessionId}/join`, { guest_name: q("joinName").value });
   seat = data.seat;
+  openStateSyncStream();
   setJoinUrls(data.join_url, data.lan_join_url);
   renderState(data.state);
   setVisible(true);
@@ -2755,10 +2783,6 @@ q("debugCastFreeBtn").addEventListener("click", async () => {
     updateDebugStatus(e.message, "error");
   }
 });
-
-setInterval(() => {
-  getState();
-}, 1500);
 
 const params = new URLSearchParams(window.location.search);
 const sessionFromUrl = params.get("session");
