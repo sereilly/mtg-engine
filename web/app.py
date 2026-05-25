@@ -7,7 +7,12 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.staticfiles import StaticFiles
 
 from engine import Game
-from engine.ai_policy import choose_activation_action, choose_cast_action
+from engine.ai_policy import (
+    choose_activation_action,
+    choose_cast_action,
+    choose_combat_blockers,
+    choose_combat_instant_cast_action,
+)
 from engine.card_loader import load_cards
 from engine.models import Permanent, PlayerState
 
@@ -178,6 +183,10 @@ def _start_next_turn(session: Session) -> None:
         return
 
 
+def _seat_type(session: Session, seat: int) -> str:
+    return session.seat_types.get(seat) or session.seat_types.get(str(seat), "human")
+
+
 def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
     win = _winner(session)
     if win is not None:
@@ -323,7 +332,7 @@ def _end_turn(session: Session, allow_manual_cleanup_selection: bool = False) ->
         session.game.end_combat()
     if session.game.current_step != "end":
         session.game.resolve_end_step(session.current_turn)
-    should_defer_cleanup = allow_manual_cleanup_selection and session.seat_types.get(session.current_turn) == "human"
+    should_defer_cleanup = allow_manual_cleanup_selection and _seat_type(session, session.current_turn) == "human"
     cleanup_completed = session.game.resolve_cleanup_step(
         session.current_turn,
         defer_discard_selection=should_defer_cleanup,
@@ -347,6 +356,33 @@ def _advance_phase(session: Session) -> None:
         _clear_cleanup_selection(session)
         return
     if phase == "combat":
+        if step == "declare_blockers":
+            combat_state = game.get_combat_state()
+            defender_index = combat_state.get("defending_player_index")
+            if isinstance(defender_index, int) and _seat_type(session, defender_index) == "ai":
+                if not combat_state.get("blockers_locked", False):
+                    blocker_pairs = choose_combat_blockers(game, defender_index)
+                    ok, _ = game.declare_blockers(defender_index, blocker_pairs)
+                    if not ok and blocker_pairs:
+                        ok, _ = game.declare_blockers(defender_index, {})
+                    if not ok:
+                        # Safety valve: never let AI declaration failures deadlock combat progression.
+                        game.combat_blockers = {}
+                        game.combat_blockers_locked = True
+                        game._prune_combat_state()
+                    instant_action = choose_combat_instant_cast_action(game, defender_index)
+                    if instant_action is not None:
+                        card_to_cast = game.players[defender_index].hand[instant_action.hand_index]
+                        for permanent_index in instant_action.land_tap_indices:
+                            permanent = game.players[defender_index].battlefield[permanent_index]
+                            game.tap_land_for_mana(defender_index, permanent.card.name, permanent_index=permanent_index)
+                        game.cast_from_hand(
+                            defender_index,
+                            card_to_cast.name,
+                            target_player_index=instant_action.target_player_index,
+                            x_value=instant_action.x_value,
+                        )
+                        return
         game.advance_combat_phase()
         return
     if phase == "postcombat_main":
@@ -355,7 +391,7 @@ def _advance_phase(session: Session) -> None:
         _clear_cleanup_selection(session)
         return
     if step == "end":
-        should_defer_cleanup = session.seat_types.get(session.current_turn) == "human"
+        should_defer_cleanup = _seat_type(session, session.current_turn) == "human"
         cleanup_completed = game.resolve_cleanup_step(
             session.current_turn,
             defer_discard_selection=should_defer_cleanup,
@@ -436,7 +472,7 @@ def do_action(session_id: str, req: GameActionRequest):
     if req.seat not in session.joined_seats:
         raise HTTPException(status_code=400, detail="seat has not joined")
 
-    seat_type = session.seat_types.get(req.seat, "human")
+    seat_type = _seat_type(session, req.seat)
 
     cleanup_required = _cleanup_discard_requirement(session)
     if (
@@ -632,7 +668,7 @@ def do_action(session_id: str, req: GameActionRequest):
             _start_next_turn(session)
 
     elif req.action == "ai_step":
-        if session.seat_types.get(session.current_turn) != "ai":
+        if _seat_type(session, session.current_turn) != "ai":
             raise HTTPException(status_code=400, detail="current turn is not AI")
         _ai_step(session)
         _end_turn(session)
@@ -701,7 +737,7 @@ def run_ai(session_id: str, steps: int = Query(default=1, ge=1, le=200)):
     for _ in range(steps):
         if session.status == "finished":
             break
-        if session.seat_types.get(session.current_turn) != "ai":
+        if _seat_type(session, session.current_turn) != "ai":
             break
         _ai_step(session)
         _end_turn(session)

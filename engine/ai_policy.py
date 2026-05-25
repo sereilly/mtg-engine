@@ -107,6 +107,118 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
     return best
 
 
+def choose_combat_blockers(game: Game, defending_player_index: int) -> dict[int, int]:
+    combat = game.get_combat_state()
+    if game.current_turn_phase != "combat" or game.current_step != "declare_blockers":
+        return {}
+    if combat.get("defending_player_index") != defending_player_index:
+        return {}
+
+    active_index = game.active_player_index
+    attackers = [int(item["attacker_index"]) for item in combat.get("attackers", [])]
+    if not attackers:
+        return {}
+
+    defender = game.players[defending_player_index]
+    attacker_player = game.players[active_index]
+
+    available_blockers = [
+        idx
+        for idx, blocker in enumerate(defender.battlefield)
+        if blocker.card.primary_type == "creature" and not blocker.tapped
+    ]
+    if not available_blockers:
+        return {}
+
+    legal_pairs: list[tuple[int, int, float]] = []
+    for blocker_idx in available_blockers:
+        blocker = defender.battlefield[blocker_idx]
+        for attacker_idx in attackers:
+            if attacker_idx < 0 or attacker_idx >= len(attacker_player.battlefield):
+                continue
+            attacker = attacker_player.battlefield[attacker_idx]
+            if not game._can_block_attacker(blocker, attacker):
+                continue
+            legal_pairs.append((blocker_idx, attacker_idx, _score_block_pair(blocker, attacker)))
+
+    if not legal_pairs:
+        return {}
+
+    assignments: dict[int, int] = {}
+    used_blockers: set[int] = set()
+
+    # Priority 1: prevent lethal where possible.
+    incoming = _estimated_incoming_player_damage(game, defending_player_index)
+    life = defender.life
+    if incoming >= life:
+        for blocker_idx, attacker_idx, _ in sorted(legal_pairs, key=lambda item: _estimated_damage_prevented(game, defending_player_index, item[1], item[0]), reverse=True):
+            if blocker_idx in used_blockers:
+                continue
+            prevented = _estimated_damage_prevented(game, defending_player_index, attacker_idx, blocker_idx)
+            if prevented <= 0:
+                continue
+            assignments[blocker_idx] = attacker_idx
+            used_blockers.add(blocker_idx)
+            incoming -= prevented
+            if incoming < life:
+                break
+
+    # Priority 2: maximize favorable trades.
+    for blocker_idx, attacker_idx, _ in sorted(legal_pairs, key=lambda item: item[2], reverse=True):
+        if blocker_idx in used_blockers:
+            continue
+        if blocker_idx in assignments:
+            continue
+        assignments[blocker_idx] = attacker_idx
+        used_blockers.add(blocker_idx)
+
+    return assignments
+
+
+def choose_combat_instant_cast_action(game: Game, player_index: int) -> CastAction | None:
+    player = game.players[player_index]
+
+    best: CastAction | None = None
+    for hand_index, card in enumerate(player.hand):
+        if card.primary_type != "instant":
+            continue
+        if not _can_cast_with_targets(game, player_index, card):
+            continue
+
+        target = _choose_target_for_spell(card, player_index, game)
+        x_value = _pick_x_value(game, player, card)
+        tap_indices: tuple[int, ...] = ()
+
+        if game.enforce_mana_costs:
+            required = game._parse_mana_cost(card.mana_cost, x_value=x_value, extra_generic=_extra_generic_tax(game, card))
+            plan = _plan_taps_for_cost(player, required)
+            if plan is None:
+                continue
+            tap_indices = tuple(plan)
+
+        score = _score_cast(game, player_index, card, target, x_value)
+        # During declare blockers, prefer combat-relevant instants.
+        if game.current_turn_phase == "combat" and game.current_step == "declare_blockers":
+            lowered = card.oracle_text.lower()
+            if "damage" in lowered or "destroy" in lowered or "prevent" in lowered or "tap" in lowered:
+                score += 2.0
+        if score < 2.0:
+            continue
+
+        candidate = CastAction(
+            card_name=card.name,
+            target_player_index=target,
+            x_value=x_value,
+            land_tap_indices=tap_indices,
+            score=score,
+            hand_index=hand_index,
+        )
+        if _is_better_cast(candidate, best):
+            best = candidate
+
+    return best
+
+
 def _is_better_cast(candidate: CastAction, current: CastAction | None) -> bool:
     if current is None:
         return True
@@ -115,6 +227,55 @@ def _is_better_cast(candidate: CastAction, current: CastAction | None) -> bool:
     if candidate.score < current.score:
         return False
     return candidate.hand_index < current.hand_index
+
+
+def _permanent_value(permanent: Permanent) -> float:
+    return permanent.effective_power * 1.4 + permanent.effective_toughness * 1.1 + float(permanent.card.cmc)
+
+
+def _score_block_pair(blocker: Permanent, attacker: Permanent) -> float:
+    blocker_kills = blocker.effective_power >= attacker.effective_toughness
+    attacker_kills = attacker.effective_power >= blocker.effective_toughness
+
+    attacker_value = _permanent_value(attacker)
+    blocker_value = _permanent_value(blocker)
+
+    score = 0.0
+    if blocker_kills and not attacker_kills:
+        score += attacker_value + 4.0
+    elif blocker_kills and attacker_kills:
+        score += attacker_value - blocker_value * 0.6 + 2.0
+    elif not blocker_kills and attacker_kills:
+        score -= blocker_value + 2.0
+    else:
+        score += min(attacker.effective_power, blocker.effective_toughness) * 0.5
+
+    # Prefer blocking higher impact attackers.
+    score += attacker.effective_power * 0.3 + attacker.effective_toughness * 0.2
+    return score
+
+
+def _estimated_damage_prevented(game: Game, defending_player_index: int, attacker_idx: int, blocker_idx: int) -> int:
+    attacker = game.players[game.active_player_index].battlefield[attacker_idx]
+    blocker = game.players[defending_player_index].battlefield[blocker_idx]
+    power = max(0, attacker.effective_power)
+    if game._has_keyword(attacker, "trample"):
+        return min(power, max(0, blocker.effective_toughness - blocker.damage_marked))
+    return power
+
+
+def _estimated_incoming_player_damage(game: Game, defending_player_index: int) -> int:
+    combat = game.get_combat_state()
+    total = 0
+    for item in combat.get("attackers", []):
+        if item.get("defending_player_index") != defending_player_index:
+            continue
+        attacker_idx = int(item.get("attacker_index", -1))
+        if attacker_idx < 0 or attacker_idx >= len(game.players[game.active_player_index].battlefield):
+            continue
+        attacker = game.players[game.active_player_index].battlefield[attacker_idx]
+        total += max(0, attacker.effective_power)
+    return total
 
 
 def _can_cast_with_targets(game: Game, caster_index: int, card: CardDefinition) -> bool:

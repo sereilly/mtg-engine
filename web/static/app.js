@@ -9,6 +9,10 @@ let debugSearchTimer = null;
 let symbolMap = {};
 let combatDragSource = null;
 let combatDamageDraft = {};
+let combatAttackerDraft = [];
+let combatBlockerDraft = {};
+let combatDraftStepKey = "";
+let combatPromptKey = "";
 
 const setupEl = document.getElementById("setup");
 const boardEl = document.getElementById("boardPanel");
@@ -94,6 +98,101 @@ function isCombatBlockerDrag(payload, state = currentState) {
   return isCombatStep(state, "declare_blockers") && seat === combat.defending_player_index;
 }
 
+function getCombatDraftStepKey(state = currentState) {
+  if (!state) return "";
+  return `${state.turn_number || 0}:${state.current_turn}:${state.current_turn_phase}:${state.current_step}`;
+}
+
+function syncCombatDrafts(state = currentState) {
+  if (!state) return;
+  const nextKey = getCombatDraftStepKey(state);
+  if (nextKey === combatDraftStepKey) return;
+  combatDraftStepKey = nextKey;
+
+  const combat = getCombatState(state);
+  if (isCombatStep(state, "declare_attackers") && seat === state.current_turn) {
+    combatAttackerDraft = (combat?.attackers || []).map((item) => Number(item.attacker_index)).sort((a, b) => a - b);
+  } else {
+    combatAttackerDraft = [];
+  }
+
+  if (isCombatStep(state, "declare_blockers") && seat === combat?.defending_player_index) {
+    combatBlockerDraft = {};
+    for (const pair of combat?.blockers || []) {
+      combatBlockerDraft[Number(pair.blocker_index)] = Number(pair.attacker_index);
+    }
+  } else {
+    combatBlockerDraft = {};
+  }
+}
+
+function toggleCombatAttackerDraft(permanentIndex) {
+  const idx = Number(permanentIndex);
+  if (!Number.isInteger(idx) || idx < 0) return;
+  if (combatAttackerDraft.includes(idx)) {
+    combatAttackerDraft = combatAttackerDraft.filter((value) => value !== idx);
+  } else {
+    combatAttackerDraft = [...combatAttackerDraft, idx].sort((a, b) => a - b);
+  }
+}
+
+function isCardLikelyAttacker(card) {
+  if (!card || typeof card === "string") return false;
+  return String(card.type || "").toLowerCase().includes("creature") && !card.tapped;
+}
+
+function getDisplayedAttackerLinks(state = currentState) {
+  const combat = getCombatState(state);
+  if (!combat) return [];
+  if (isCombatStep(state, "declare_attackers") && seat === state.current_turn && !combat.attackers_locked) {
+    const defendingPlayerIndex = Number.isInteger(combat.defending_player_index)
+      ? combat.defending_player_index
+      : 1 - state.current_turn;
+    return combatAttackerDraft.map((attackerIndex) => ({
+      attacker_index: attackerIndex,
+      defending_player_index: defendingPlayerIndex,
+    }));
+  }
+  return combat.attackers || [];
+}
+
+function getDisplayedBlockerLinks(state = currentState) {
+  const combat = getCombatState(state);
+  if (!combat) return [];
+  if (isCombatStep(state, "declare_blockers") && seat === combat.defending_player_index && !combat.blockers_locked) {
+    return Object.entries(combatBlockerDraft).map(([blockerIndex, attackerIndex]) => ({
+      blocker_index: Number(blockerIndex),
+      attacker_index: Number(attackerIndex),
+    }));
+  }
+  return combat.blockers || [];
+}
+
+function isOpponentMidAction(state, viewerSeat) {
+  if (!state || !Number.isInteger(viewerSeat)) return false;
+  if (state.current_turn !== viewerSeat) return false;
+
+  const combat = getCombatState(state);
+  const defenderSeat = combat?.defending_player_index;
+
+  // During declare blockers, the defending player must confirm blockers before turn owner can continue.
+  if (
+    isCombatStep(state, "declare_blockers") &&
+    Number.isInteger(defenderSeat) &&
+    defenderSeat !== viewerSeat &&
+    !combat?.blockers_locked
+  ) {
+    return true;
+  }
+
+  // If the stack contains an opponent action, treat that as opponent action in progress.
+  if (Array.isArray(state.stack) && state.stack.some((item) => item?.caster_index !== viewerSeat)) {
+    return true;
+  }
+
+  return false;
+}
+
 function getCardCenter(cardEl) {
   if (!cardEl) return null;
   const rect = cardEl.getBoundingClientRect();
@@ -117,6 +216,7 @@ function clearCombatOverlay() {
   if (!overlay) return;
   const lines = overlay.querySelectorAll("line");
   lines.forEach((line) => line.remove());
+  document.querySelectorAll(".card.attacking").forEach((el) => el.classList.remove("attacking"));
 }
 
 function drawCombatArrow(fromPoint, toPoint, kind = "attacker") {
@@ -141,18 +241,16 @@ function renderCombatOverlay(state = currentState) {
   const defenderSeat = combat.defending_player_index;
   if (!Number.isInteger(activeSeat) || !Number.isInteger(defenderSeat)) return;
 
-  for (const link of combat.attackers || []) {
+  for (const link of getDisplayedAttackerLinks(state)) {
     const attackerEl = document.querySelector(
       `.card[data-zone-kind="battlefield"][data-target-seat="${activeSeat}"][data-permanent-index="${link.attacker_index}"]`,
     );
-    const from = getCardCenter(attackerEl);
-    const to = getZoneCenter(defenderSeat === 0 ? q("selfBattlefield") : q("oppBattlefield"));
-    if (from && to) {
-      drawCombatArrow(from, to, "attacker");
+    if (attackerEl) {
+      attackerEl.classList.add("attacking");
     }
   }
 
-  for (const link of combat.blockers || []) {
+  for (const link of getDisplayedBlockerLinks(state)) {
     const blockerEl = document.querySelector(
       `.card[data-zone-kind="battlefield"][data-target-seat="${defenderSeat}"][data-permanent-index="${link.blocker_index}"]`,
     );
@@ -1272,6 +1370,25 @@ function createCardElement(card, options = {}) {
         const cardName = normalizeCardName(card);
         if (!cardName) return;
 
+        if (
+          zoneKind === "battlefield" &&
+          Number.isInteger(permanentIndex) &&
+          isCombatStep(currentState, "declare_attackers") &&
+          seat === currentState?.current_turn &&
+          targetSeat === seat
+        ) {
+          if (!isCardLikelyAttacker(card)) {
+            updateActionHint(`${cardName} is not able to attack right now.`, true);
+            return;
+          }
+          toggleCombatAttackerDraft(permanentIndex);
+          renderBoard(currentState);
+          updateActionHint(
+            `Attackers selected: ${combatAttackerDraft.length}. Click OK to declare attackers.`,
+          );
+          return;
+        }
+
         if (!hasActivatedAbility(card)) {
           updateActionHint(`${cardName} has no activated ability to use.`, true);
           return;
@@ -1350,7 +1467,9 @@ function renderCardRow(containerId, cards, options = {}) {
     }
     const tapped = typeof card === "object" ? !!card.tapped : false;
     const permanentIndex = options.zoneKind === "battlefield" ? index : null;
-    const selected = Array.isArray(options.selectedHandIndices) && options.selectedHandIndices.includes(index);
+    const selected =
+      (Array.isArray(options.selectedHandIndices) && options.selectedHandIndices.includes(index)) ||
+      (Array.isArray(options.selectedPermanentIndices) && options.selectedPermanentIndices.includes(index));
     container.appendChild(
       createCardElement(card, { ...options, tapped, permanentIndex, handIndex: index, selected })
     );
@@ -1436,20 +1555,40 @@ function renderCombatControls(state) {
     return;
   }
 
-  const attackers = combat?.attackers || [];
-  const blockers = combat?.blockers || [];
+  const attackers = getDisplayedAttackerLinks(state);
+  const blockers = getDisplayedBlockerLinks(state);
   summary.textContent = `Attackers: ${attackers.length} | Blockers: ${blockers.length}`;
 
   if (isCombatStep(state, "declare_attackers") && seat === state.current_turn) {
+    const prompt = document.createElement("div");
+    prompt.className = "combat-summary";
+    if (combat?.attackers_locked) {
+      prompt.textContent = "Attackers are declared. Both players may cast spells or activate abilities before Next Phase.";
+    } else {
+      prompt.textContent = "Declare attackers: click each creature able to attack, then press OK.";
+    }
+    damagePanel.appendChild(prompt);
+
+    if (combat?.attackers_locked) return;
     const submitBtn = document.createElement("button");
     submitBtn.type = "button";
     submitBtn.id = "confirmAttackersBtn";
-    submitBtn.textContent = "Confirm Attackers";
+    submitBtn.textContent = "OK - Declare Attackers";
     submitBtn.addEventListener("click", async () => {
       try {
-        const declared = (getCombatState(currentState)?.attackers || []).map((item) => Number(item.attacker_index));
-        await sendAction({ seat, action: "declare_attackers", attacker_indices: declared });
-        updateActionHint(`Attackers confirmed (${declared.length}).`);
+        const declared = [...combatAttackerDraft];
+        const defendingSeat = Number.isInteger(combat?.defending_player_index)
+          ? combat.defending_player_index
+          : 1 - seat;
+        await sendAction({
+          seat,
+          action: "declare_attackers",
+          attacker_indices: declared,
+          target_seat: defendingSeat,
+        });
+        updateActionHint(
+          `Attackers declared (${declared.length}). Players may now cast spells/activate abilities before blockers.`,
+        );
       } catch (e) {
         updateActionHint(e.message, true);
       }
@@ -1458,18 +1597,27 @@ function renderCombatControls(state) {
   }
 
   if (isCombatStep(state, "declare_blockers") && seat === combat?.defending_player_index) {
+    const prompt = document.createElement("div");
+    prompt.className = "combat-summary";
+    if (combat?.blockers_locked) {
+      prompt.textContent = "Blockers are declared. Both players may cast spells or activate abilities before combat damage.";
+    } else {
+      prompt.textContent = "Declare blockers: drag from each blocker to an attacking creature, then press OK.";
+    }
+    damagePanel.appendChild(prompt);
+
     const submitBtn = document.createElement("button");
     submitBtn.type = "button";
     submitBtn.id = "confirmBlockersBtn";
-    submitBtn.textContent = "Confirm Blockers";
+    submitBtn.textContent = "OK - Declare Blockers";
+    submitBtn.disabled = !!combat?.blockers_locked;
     submitBtn.addEventListener("click", async () => {
       try {
-        const blockerPairs = {};
-        for (const pair of getCombatState(currentState)?.blockers || []) {
-          blockerPairs[Number(pair.blocker_index)] = Number(pair.attacker_index);
-        }
+        const blockerPairs = { ...combatBlockerDraft };
         await sendAction({ seat, action: "declare_blockers", blocker_pairs: blockerPairs });
-        updateActionHint(`Blockers confirmed (${Object.keys(blockerPairs).length}).`);
+        updateActionHint(
+          `Blockers declared (${Object.keys(blockerPairs).length}). Players may now cast spells/activate abilities before damage.`,
+        );
       } catch (e) {
         updateActionHint(e.message, true);
       }
@@ -1477,7 +1625,7 @@ function renderCombatControls(state) {
     actions.appendChild(submitBtn);
   }
 
-  if (isCombatStep(state, "combat_damage") && seat === state.current_turn) {
+  if (isCombatStep(state, "combat_damage") && seat === state.current_turn && !combat?.damage_resolved) {
     const byAttacker = {};
     for (const pair of blockers) {
       const attackerIndex = Number(pair.attacker_index);
@@ -1487,7 +1635,11 @@ function renderCombatControls(state) {
       byAttacker[attackerIndex].push(Number(pair.blocker_index));
     }
 
-    for (const [attackerIndexRaw, blockerIndices] of Object.entries(byAttacker)) {
+    // Only show manual assignment UI when an attacker is blocked by 2+ creatures.
+    const multiBlockedEntries = Object.entries(byAttacker).filter(([, bl]) => bl.length >= 2);
+    if (multiBlockedEntries.length === 0) return;
+
+    for (const [attackerIndexRaw, blockerIndices] of multiBlockedEntries) {
       const attackerIndex = Number(attackerIndexRaw);
       const row = document.createElement("div");
       row.className = "combat-damage-row";
@@ -1579,13 +1731,30 @@ function renderBoard(state) {
   q("oppLife").textContent = String(opp.life);
 
   const isSelfTurn = state.current_turn === viewerSeat;
-  const canEndTurn = seat !== null && isSelfTurn;
+  const canEndTurn = seat !== null && isSelfTurn && !isOpponentMidAction(state, viewerSeat);
+  const combat = getCombatState(state);
+  let canAdvancePhase = seat !== null && seat === state.current_turn;
+  if (isCombatStep(state, "declare_attackers") && canAdvancePhase && !(combat?.attackers_locked)) {
+    canAdvancePhase = false;
+  }
+  if (isCombatStep(state, "declare_blockers") && canAdvancePhase && !(combat?.blockers_locked)) {
+    const defenderSeat = combat?.defending_player_index;
+    const seatTypes = state.seat_types || {};
+    const defenderType = seatTypes[defenderSeat] ?? seatTypes[String(defenderSeat)] ?? "human";
+    if (defenderType !== "ai") {
+      canAdvancePhase = false;
+    }
+  }
+  if (isCombatStep(state, "combat_damage") && canAdvancePhase && !(combat?.damage_resolved)) {
+    canAdvancePhase = false;
+  }
   const cleanupDiscard = getCleanupDiscardInfo(state);
   const requiresCleanupSelection = !!cleanupDiscard;
   const selfLane = document.querySelector(".self-lane");
   const oppLane = document.querySelector(".opponent-lane");
   setDebugMenuEnabled(sessionId !== null && seat !== null);
   q("endTurnBtn").disabled = !canEndTurn;
+  q("nextPhaseBtn").disabled = !canAdvancePhase;
   selfLane?.classList.toggle("turn-zone-self", isSelfTurn);
   oppLane?.classList.toggle("turn-zone-opponent", !isSelfTurn);
   q("selfName").classList.toggle("active-turn-name", isSelfTurn);
@@ -1607,8 +1776,21 @@ function renderBoard(state) {
     zoneKind: "battlefield",
     targetSeat: viewerSeat,
     interactive: true,
+    selectedPermanentIndices:
+      isCombatStep(state, "declare_attackers") && seat === state.current_turn && seat === viewerSeat
+        ? combatAttackerDraft
+        : isCombatStep(state, "declare_blockers") && seat === combat?.defending_player_index && seat === viewerSeat
+          ? Object.keys(combatBlockerDraft).map((value) => Number(value))
+          : [],
   });
-  renderCardRow("oppBattlefield", opp.battlefield, { zoneKind: "battlefield", targetSeat: oppSeat });
+  renderCardRow("oppBattlefield", opp.battlefield, {
+    zoneKind: "battlefield",
+    targetSeat: oppSeat,
+    selectedPermanentIndices:
+      isCombatStep(state, "declare_blockers") && seat === combat?.defending_player_index && seat !== oppSeat
+        ? Object.values(combatBlockerDraft).map((value) => Number(value))
+        : [],
+  });
 
   q("selfDeckCount").textContent = `Deck: ${me.library_count}`;
   q("selfGraveCount").textContent = `Graveyard: ${me.graveyard.length}`;
@@ -1643,6 +1825,7 @@ function renderBoard(state) {
 function renderState(state) {
   currentState = state;
   syncJoinUrlVisibility(state);
+  syncCombatDrafts(state);
   if (!isCombatStep(state, "combat_damage")) {
     combatDamageDraft = {};
   }
@@ -1659,6 +1842,17 @@ function renderState(state) {
   renderBoard(state);
   renderActivationPrompt();
   attemptPendingActivation();
+
+  const combat = getCombatState(state);
+  const promptStateKey = `${getCombatDraftStepKey(state)}:${combat?.attackers_locked ? 1 : 0}:${combat?.blockers_locked ? 1 : 0}`;
+  if (promptStateKey !== combatPromptKey) {
+    combatPromptKey = promptStateKey;
+    if (isCombatStep(state, "declare_attackers") && seat === state.current_turn && !combat?.attackers_locked) {
+      updateActionHint("Declare attackers by clicking creatures that can attack, then press OK.");
+    } else if (isCombatStep(state, "declare_blockers") && seat === combat?.defending_player_index && !combat?.blockers_locked) {
+      updateActionHint("Declare blockers by dragging to attacking creatures, then press OK.");
+    }
+  }
 
   // Final-pass override so cleanup prompt always wins against other prompt updates.
   if (cleanupInfo) {
@@ -1681,33 +1875,37 @@ function initCombatContextMenu() {
     if (!combat) return;
 
     try {
-      if (isCombatStep(currentState, "declare_attackers") && seat === currentState.current_turn && targetSeat === seat) {
+      if (
+        isCombatStep(currentState, "declare_attackers") &&
+        seat === currentState.current_turn &&
+        targetSeat === seat &&
+        !combat?.attackers_locked
+      ) {
         event.preventDefault();
-        const updated = (combat.attackers || [])
-          .map((item) => Number(item.attacker_index))
-          .filter((idx) => idx !== permanentIndex)
-          .sort((a, b) => a - b);
-        await sendAction({ seat, action: "declare_attackers", attacker_indices: updated, target_seat: combat.defending_player_index });
-        updateActionHint("Removed attacker target link.");
+        combatAttackerDraft = combatAttackerDraft.filter((idx) => idx !== permanentIndex);
+        renderBoard(currentState);
+        updateActionHint("Removed attacker from draft selection.");
         return;
       }
 
-      if (isCombatStep(currentState, "declare_blockers") && seat === combat.defending_player_index) {
+      if (
+        isCombatStep(currentState, "declare_blockers") &&
+        seat === combat.defending_player_index &&
+        !combat?.blockers_locked
+      ) {
         event.preventDefault();
-        const blockerPairs = {};
-        for (const pair of combat.blockers || []) {
-          const blockerIdx = Number(pair.blocker_index);
-          const attackerIdx = Number(pair.attacker_index);
-          if (targetSeat === combat.defending_player_index && blockerIdx === permanentIndex) {
-            continue;
-          }
-          if (targetSeat === currentState.current_turn && attackerIdx === permanentIndex) {
-            continue;
-          }
-          blockerPairs[blockerIdx] = attackerIdx;
+        if (targetSeat === combat.defending_player_index) {
+          delete combatBlockerDraft[permanentIndex];
         }
-        await sendAction({ seat, action: "declare_blockers", blocker_pairs: blockerPairs });
-        updateActionHint("Removed blocker target link.");
+        if (targetSeat === currentState.current_turn) {
+          for (const [blockerIdx, attackerIdx] of Object.entries(combatBlockerDraft)) {
+            if (Number(attackerIdx) === permanentIndex) {
+              delete combatBlockerDraft[Number(blockerIdx)];
+            }
+          }
+        }
+        renderBoard(currentState);
+        updateActionHint("Removed blocker target link from draft.");
       }
     } catch (e) {
       updateActionHint(e.message, true);
@@ -1765,15 +1963,6 @@ function initDropZones() {
   bindDropBehavior(q("selfBattlefield"), async (payload, element, event) => {
     const targetSeat = Number(element.dataset.targetSeat || String(seat));
     try {
-      if (isCombatAttackerDrag(payload) && targetSeat !== seat) {
-        const combat = getCombatState();
-        const existing = (combat?.attackers || []).map((item) => Number(item.attacker_index));
-        const updated = Array.from(new Set([...existing, Number(payload.permanentIndex)])).sort((a, b) => a - b);
-        await sendAction({ seat, action: "declare_attackers", attacker_indices: updated, target_seat: targetSeat });
-        updateActionHint("Declared attacker link.");
-        return;
-      }
-
       if (isCombatBlockerDrag(payload)) {
         const combat = getCombatState();
         const activeSeat = currentState?.current_turn;
@@ -1785,13 +1974,13 @@ function initDropZones() {
           updateActionHint("Drop blocker onto an attacking creature.", true);
           return;
         }
-        const blockerPairs = {};
-        for (const pair of combat?.blockers || []) {
-          blockerPairs[Number(pair.blocker_index)] = Number(pair.attacker_index);
+        if (combat?.blockers_locked) {
+          updateActionHint("Blockers are already confirmed for this step.", true);
+          return;
         }
-        blockerPairs[Number(payload.permanentIndex)] = attackerIndex;
-        await sendAction({ seat, action: "declare_blockers", blocker_pairs: blockerPairs });
-        updateActionHint("Declared blocker link.");
+        combatBlockerDraft[Number(payload.permanentIndex)] = attackerIndex;
+        renderBoard(currentState);
+        updateActionHint("Blocker link added. Press OK when done declaring blockers.");
         return;
       }
 
@@ -1831,15 +2020,6 @@ function initDropZones() {
   bindDropBehavior(q("oppBattlefield"), async (payload, element, event) => {
     const targetSeat = Number(element.dataset.targetSeat || "1");
     try {
-      if (isCombatAttackerDrag(payload) && targetSeat !== seat) {
-        const combat = getCombatState();
-        const existing = (combat?.attackers || []).map((item) => Number(item.attacker_index));
-        const updated = Array.from(new Set([...existing, Number(payload.permanentIndex)])).sort((a, b) => a - b);
-        await sendAction({ seat, action: "declare_attackers", attacker_indices: updated, target_seat: targetSeat });
-        updateActionHint("Declared attacker link.");
-        return;
-      }
-
       if (isCombatBlockerDrag(payload)) {
         const combat = getCombatState();
         const activeSeat = currentState?.current_turn;
@@ -1851,13 +2031,13 @@ function initDropZones() {
           updateActionHint("Drop blocker onto an attacking creature.", true);
           return;
         }
-        const blockerPairs = {};
-        for (const pair of combat?.blockers || []) {
-          blockerPairs[Number(pair.blocker_index)] = Number(pair.attacker_index);
+        if (combat?.blockers_locked) {
+          updateActionHint("Blockers are already confirmed for this step.", true);
+          return;
         }
-        blockerPairs[Number(payload.permanentIndex)] = attackerIndex;
-        await sendAction({ seat, action: "declare_blockers", blocker_pairs: blockerPairs });
-        updateActionHint("Declared blocker link.");
+        combatBlockerDraft[Number(payload.permanentIndex)] = attackerIndex;
+        renderBoard(currentState);
+        updateActionHint("Blocker link added. Press OK when done declaring blockers.");
         return;
       }
 

@@ -859,7 +859,6 @@ def test_next_phase_advances_through_combat_substeps_then_second_main():
     steps = [
         "declare_attackers",
         "declare_blockers",
-        "combat_damage",
         "end_of_combat",
     ]
     for expected in steps:
@@ -868,6 +867,18 @@ def test_next_phase_advances_through_combat_substeps_then_second_main():
         payload = response.json()
         assert payload["current_phase"] == "combat"
         assert payload["current_step"] == expected
+        if expected == "declare_attackers":
+            declare = client.post(
+                f"/api/sessions/{sid}/action",
+                json={"seat": 0, "action": "declare_attackers", "attacker_indices": []},
+            )
+            assert declare.status_code == 200
+        if expected == "declare_blockers":
+            declare = client.post(
+                f"/api/sessions/{sid}/action",
+                json={"seat": 1, "action": "declare_blockers", "blocker_pairs": {}},
+            )
+            assert declare.status_code == 200
 
     response = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "next_phase"})
     assert response.status_code == 200
@@ -875,6 +886,49 @@ def test_next_phase_advances_through_combat_substeps_then_second_main():
     assert payload["current_phase"] == "main"
     assert payload["current_turn_phase"] == "postcombat_main"
     assert payload["current_step"] == "postcombat_main"
+
+
+def test_next_phase_in_blockers_step_auto_advances_after_ai_declares_none():
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_ai",
+            "host_name": "Host",
+            "guest_name": "Bot",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 99061,
+        },
+    ).json()
+    sid = created["session_id"]
+    session = store.get(sid)
+
+    attacker = _mk_creature_card("Attacker", 3, 3)
+    session.game.players[0].battlefield = [Permanent(card=attacker)]
+    session.game.players[1].battlefield = []
+    session.game.players[1].hand = []
+
+    response = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "next_phase"})
+    assert response.status_code == 200
+    assert response.json()["current_step"] == "beginning_of_combat"
+
+    response = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "next_phase"})
+    assert response.status_code == 200
+    assert response.json()["current_step"] == "declare_attackers"
+
+    declare = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "declare_attackers", "attacker_indices": [0]},
+    )
+    assert declare.status_code == 200
+
+    response = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "next_phase"})
+    assert response.status_code == 200
+    assert response.json()["current_step"] == "declare_blockers"
+
+    response = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "next_phase"})
+    assert response.status_code == 200
+    assert response.json()["current_step"] == "end_of_combat"
 
 
 def test_combat_actions_declare_attackers_and_blockers():
@@ -960,6 +1014,120 @@ def test_assign_combat_damage_endpoint_changes_life():
     )
     assert assign.status_code == 200
     assert assign.json()["players"][1]["life"] == 17
+
+
+def test_next_phase_ai_defender_auto_declares_blockers_and_advances_when_no_instant():
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_ai",
+            "host_name": "Host",
+            "guest_name": "AI",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 99201,
+        },
+    ).json()
+    sid = created["session_id"]
+
+    session = store.get(sid)
+    attacker = _mk_creature_card("Attacker", 3, 3)
+    blocker = _mk_creature_card("Blocker", 2, 2)
+    session.game.players[0].battlefield = [Permanent(card=attacker)]
+    session.game.players[1].battlefield = [Permanent(card=blocker)]
+    session.current_turn = 0
+    session.game.active_player_index = 0
+    session.game.current_turn_phase = "combat"
+    session.game.current_step = "declare_attackers"
+    session.game.current_phase = "combat"
+
+    declared = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "declare_attackers", "attacker_indices": [0], "target_seat": 1},
+    )
+    assert declared.status_code == 200
+
+    to_blockers = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "next_phase"},
+    )
+    assert to_blockers.status_code == 200
+    assert to_blockers.json()["current_step"] == "declare_blockers"
+
+    ai_block = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "next_phase"},
+    )
+    assert ai_block.status_code == 200
+    payload = ai_block.json()
+    assert payload["current_step"] == "end_of_combat"
+    assert payload["combat"]["blockers_locked"] is True
+
+
+def test_next_phase_ai_defender_casts_instant_after_declaring_blockers():
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_ai",
+            "host_name": "Host",
+            "guest_name": "AI",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 99202,
+        },
+    ).json()
+    sid = created["session_id"]
+
+    session = store.get(sid)
+    attacker = _mk_creature_card("Attacker", 3, 3)
+    blocker = _mk_creature_card("Blocker", 2, 2)
+    bolt = _mk_card(
+        name="Lightning Bolt",
+        mana_cost="{R}",
+        type_line="Instant",
+        oracle_text="Lightning Bolt deals 3 damage to any target.",
+    )
+    mountain = _mk_card(
+        name="Mountain",
+        mana_cost="",
+        type_line="Basic Land - Mountain",
+        oracle_text="{T}: Add {R}.",
+        produced_mana=("R",),
+    )
+
+    session.game.players[0].battlefield = [Permanent(card=attacker)]
+    session.game.players[0].life = 20
+    session.game.players[1].battlefield = [Permanent(card=blocker), Permanent(card=mountain)]
+    session.game.players[1].hand = [bolt]
+    session.game.players[1].mana_pool = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0}
+    session.current_turn = 0
+    session.game.active_player_index = 0
+    session.game.current_turn_phase = "combat"
+    session.game.current_step = "declare_attackers"
+    session.game.current_phase = "combat"
+
+    declared = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "declare_attackers", "attacker_indices": [0], "target_seat": 1},
+    )
+    assert declared.status_code == 200
+
+    to_blockers = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "next_phase"},
+    )
+    assert to_blockers.status_code == 200
+    assert to_blockers.json()["current_step"] == "declare_blockers"
+
+    ai_block_and_cast = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "next_phase"},
+    )
+    assert ai_block_and_cast.status_code == 200
+    payload = ai_block_and_cast.json()
+    assert payload["current_step"] == "declare_blockers"
+    assert payload["combat"]["blockers_locked"] is True
+    assert payload["players"][0]["life"] == 17
 
 
 def test_next_phase_runs_end_then_cleanup_then_next_turn():

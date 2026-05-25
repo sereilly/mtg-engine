@@ -347,6 +347,11 @@ button:hover {
   border-color: rgba(242, 184, 75, 0.95);
 }
 
+.card.attacking {
+  box-shadow: 0 0 0 3px rgba(220, 50, 50, 0.95), 0 0 18px rgba(220, 50, 50, 0.6);
+  border-color: rgba(220, 50, 50, 0.95);
+}
+
 .card.tapped {
   transform: rotate(90deg);
 }

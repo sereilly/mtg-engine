@@ -43,11 +43,14 @@ def test_advance_combat_moves_to_postcombat_main():
     game.advance_combat_phase()
     assert game.current_step == "declare_attackers"
 
+    ok, _ = game.declare_attackers(0, [])
+    assert ok
+
     game.advance_combat_phase()
     assert game.current_step == "declare_blockers"
 
-    game.advance_combat_phase()
-    assert game.current_step == "combat_damage"
+    ok, _ = game.declare_blockers(1, {})
+    assert ok
 
     game.advance_combat_phase()
     assert game.current_step == "end_of_combat"
@@ -114,8 +117,6 @@ def test_combat_declare_and_damage_resolution():
     assert ok
 
     game.advance_combat_phase()  # combat_damage
-    ok, _ = game.resolve_combat_damage(0, {0: {0: 3}})
-    assert ok
     assert len(p2.battlefield) == 0
     assert len(p1.battlefield) == 1
 
@@ -136,13 +137,9 @@ def test_first_strike_combat_damage_two_passes():
     game.declare_blockers(1, {0: 0})
     game.advance_combat_phase()
 
-    ok, _ = game.resolve_combat_damage(0, {0: {0: 2}})
-    assert ok
     assert game.combat_first_strike_done is True
     assert len(p2.battlefield) == 0
 
-    ok, _ = game.resolve_combat_damage(0, {0: {0: 0}})
-    assert ok
     assert game.combat_damage_resolved is True
     assert len(p1.battlefield) == 1
 
@@ -163,6 +160,95 @@ def test_trample_overflow_hits_defender():
     game.declare_blockers(1, {0: 0})
     game.advance_combat_phase()
 
-    ok, _ = game.resolve_combat_damage(0, {0: {0: 2}})
-    assert ok
     assert p2.life == 17
+
+
+def test_declare_attackers_requires_confirmation_before_phase_advance():
+    attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
+    p1 = PlayerState(name="P1", battlefield=[attacker])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # beginning_of_combat
+    game.advance_combat_phase()  # declare_attackers
+    assert game.current_step == "declare_attackers"
+
+    game.advance_combat_phase()
+    assert game.current_step == "declare_attackers"
+
+    ok, _ = game.declare_attackers(0, [0])
+    assert ok
+    game.advance_combat_phase()
+    assert game.current_step == "declare_blockers"
+
+
+def test_declare_blockers_requires_confirmation_before_phase_advance():
+    attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
+    blocker = Permanent(card=_mk_creature("Blocker", 2, 2))
+    p1 = PlayerState(name="P1", battlefield=[attacker])
+    p2 = PlayerState(name="P2", battlefield=[blocker])
+    game = Game(players=[p1, p2])
+
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    game.declare_attackers(0, [0])
+    game.advance_combat_phase()  # declare_blockers
+    assert game.current_step == "declare_blockers"
+
+    game.advance_combat_phase()
+    assert game.current_step == "declare_blockers"
+
+    ok, _ = game.declare_blockers(1, {0: 0})
+    assert ok
+    game.advance_combat_phase()
+    assert game.current_step == "end_of_combat"
+
+
+def test_declare_blockers_auto_advances_when_no_legal_blocks_exist():
+    attacker = Permanent(card=_mk_creature("Attacker", 3, 3))
+    tapped_blocker = Permanent(card=_mk_creature("Tired Blocker", 2, 2), tapped=True)
+    p1 = PlayerState(name="P1", battlefield=[attacker])
+    p2 = PlayerState(name="P2", battlefield=[tapped_blocker])
+    game = Game(players=[p1, p2])
+
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    ok, _ = game.declare_attackers(0, [0])
+    assert ok
+
+    game.advance_combat_phase()  # declare_blockers
+    assert game.current_step == "declare_blockers"
+    assert game.combat_blockers_locked is False
+
+    game.advance_combat_phase()
+    assert game.current_step == "end_of_combat"
+    assert game.combat_blockers_locked is True
+
+
+def test_combat_step_advancement_logs_attacker_and_blocker_counts():
+    attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
+    blocker = Permanent(card=_mk_creature("Blocker", 2, 2))
+    p1 = PlayerState(name="P1", battlefield=[attacker])
+    p2 = PlayerState(name="P2", battlefield=[blocker])
+    game = Game(players=[p1, p2])
+
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+
+    ok, _ = game.declare_attackers(0, [0])
+    assert ok
+    game.advance_combat_phase()
+    assert any("Declare attackers step complete: 1 attacker(s) declared" in entry for entry in game.log)
+
+    ok, _ = game.declare_blockers(1, {0: 0})
+    assert ok
+    game.advance_combat_phase()
+    assert any("Declare blockers step complete: 1 blocker(s) declared" in entry for entry in game.log)

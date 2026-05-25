@@ -126,6 +126,8 @@ class Game:
     combat_defending_player_index: int | None = None
     combat_damage_resolved: bool = False
     combat_first_strike_done: bool = False
+    combat_attackers_locked: bool = False
+    combat_blockers_locked: bool = False
 
     def __post_init__(self) -> None:
         # Preserve legacy external phase naming while internally tracking phase/step.
@@ -348,8 +350,38 @@ class Game:
     def _enter_combat_step(self, step: str) -> None:
         if step == "beginning_of_combat":
             self._reset_combat_state(clear_damage_marked=False)
+        if step == "declare_attackers":
+            self.combat_attackers_locked = False
+            self.combat_blockers_locked = False
+            if self.combat_defending_player_index is None:
+                self.combat_defending_player_index = 1 - self.active_player_index
+        if step == "declare_blockers":
+            self.combat_blockers_locked = not bool(self.combat_attackers)
         self._set_phase_and_step("combat", step)
         self._on_step_or_phase_begin("combat", step)
+
+    def _has_any_legal_block(self, defender_index: int) -> bool:
+        if defender_index < 0 or defender_index >= len(self.players):
+            return False
+        if self.active_player_index < 0 or self.active_player_index >= len(self.players):
+            return False
+
+        self._prune_combat_state()
+        if not self.combat_attackers:
+            return False
+
+        defender = self.players[defender_index]
+        attacker_controller = self.players[self.active_player_index]
+        for blocker in defender.battlefield:
+            if blocker.card.primary_type != "creature" or blocker.tapped:
+                continue
+            for attacker_idx in self.combat_attackers:
+                if attacker_idx < 0 or attacker_idx >= len(attacker_controller.battlefield):
+                    continue
+                attacker = attacker_controller.battlefield[attacker_idx]
+                if self._can_block_attacker(blocker, attacker):
+                    return True
+        return False
 
     def advance_combat_phase(self) -> None:
         combat_steps = list(self._phase_steps("combat"))
@@ -367,11 +399,29 @@ class Game:
             self.end_combat(step_already_started=True)
             self._enter_main_phase(precombat=False)
             return
-        if self.current_step == "combat_damage" and not self.combat_damage_resolved:
-            if not self.combat_attackers:
-                self.combat_damage_resolved = True
+        if self.current_step == "declare_attackers" and not self.combat_attackers_locked:
+            return
+        if self.current_step == "declare_blockers" and not self.combat_blockers_locked:
+            defender_index = self.combat_defending_player_index
+            if isinstance(defender_index, int) and not self._has_any_legal_block(defender_index):
+                self.combat_blockers = {}
+                self.combat_blockers_locked = True
+                self._prune_combat_state()
+                defender_name = self.players[defender_index].name
+                self.log.append(f"{defender_name} declared 0 blocker(s)")
             else:
                 return
+        if self.current_step == "combat_damage" and not self.combat_damage_resolved:
+            return  # Awaiting manual damage assignment
+
+        if self.current_step == "declare_attackers":
+            self.log.append(
+                f"Declare attackers step complete: {len(self.combat_attackers)} attacker(s) declared"
+            )
+        if self.current_step == "declare_blockers":
+            self.log.append(
+                f"Declare blockers step complete: {len(self.combat_blockers)} blocker(s) declared"
+            )
 
         # Close current combat step, then enter the next one.
         if self._receives_priority(self.current_step):
@@ -386,6 +436,21 @@ class Game:
             self.combat_damage_resolved = False
             self.combat_first_strike_done = False
         self._enter_combat_step(combat_steps[next_idx])
+
+        # Auto-resolve and skip combat_damage when no manual assignment is needed.
+        if combat_steps[next_idx] == "combat_damage" and not self._needs_manual_damage_assignment():
+            auto = self._build_auto_damage_assignment()
+            self.resolve_combat_damage(self.active_player_index, attacker_damage=auto)
+            if not self.combat_damage_resolved:  # first-strike pass; do second
+                self.resolve_combat_damage(self.active_player_index, attacker_damage=auto)
+            if self._receives_priority("combat_damage"):
+                self._resolve_priority_window()
+            self._on_step_or_phase_end("combat", "combat_damage")
+            eoc_idx = next_idx + 1
+            if eoc_idx >= len(combat_steps):
+                self._enter_main_phase(precombat=False)
+                return
+            self._enter_combat_step(combat_steps[eoc_idx])
 
     def start_turn(self, player_index: int) -> None:
         self.active_player_index = player_index
@@ -1775,6 +1840,8 @@ class Game:
         self.combat_defending_player_index = None
         self.combat_damage_resolved = False
         self.combat_first_strike_done = False
+        self.combat_attackers_locked = False
+        self.combat_blockers_locked = False
         for player in self.players:
             for permanent in player.battlefield:
                 permanent.attacking = False
@@ -1918,6 +1985,8 @@ class Game:
         self.combat_blockers = {}
         self.combat_damage_resolved = False
         self.combat_first_strike_done = False
+        self.combat_attackers_locked = True
+        self.combat_blockers_locked = False
         self._prune_combat_state()
 
         for idx in unique_indices:
@@ -1957,12 +2026,46 @@ class Game:
             assignments[blocker_idx] = attacker_idx
 
         self.combat_blockers = assignments
+        self.combat_blockers_locked = True
         self._prune_combat_state()
         self.log.append(f"{defender.name} declared {len(assignments)} blocker(s)")
         return True, "declared blockers"
 
     def _combat_blockers_for_attacker(self, attacker_idx: int) -> list[int]:
         return [blocker_idx for blocker_idx, a_idx in self.combat_blockers.items() if a_idx == attacker_idx]
+
+    def _needs_manual_damage_assignment(self) -> bool:
+        """Return True when any blocked attacker has 2+ blockers, requiring player input."""
+        for attacker_idx in self.combat_attackers:
+            if len(self._combat_blockers_for_attacker(attacker_idx)) >= 2:
+                return True
+        return False
+
+    def _build_auto_damage_assignment(self) -> dict[int, dict[int, int]]:
+        """Build a damage assignment dict for simple cases (each attacker has at most 1 blocker)."""
+        if not self.combat_attackers:
+            return {}
+        attacker_controller = self.players[self.active_player_index]
+        assignment: dict[int, dict[int, int]] = {}
+        for attacker_idx in self.combat_attackers:
+            if attacker_idx >= len(attacker_controller.battlefield):
+                continue
+            attacker = attacker_controller.battlefield[attacker_idx]
+            blockers = self._combat_blockers_for_attacker(attacker_idx)
+            if len(blockers) == 1:
+                blocker_idx = blockers[0]
+                assign = max(0, attacker.effective_power)
+                # For trample assign only lethal to the blocker; the remainder
+                # flows to the defending player via the existing trample logic.
+                defending_index = self.combat_defending_player_index
+                if self._has_keyword(attacker, "trample") and defending_index is not None:
+                    defending_player = self.players[defending_index]
+                    if blocker_idx < len(defending_player.battlefield):
+                        blocker = defending_player.battlefield[blocker_idx]
+                        lethal = max(0, blocker.effective_toughness - blocker.damage_marked)
+                        assign = min(assign, lethal)
+                assignment[attacker_idx] = {blocker_idx: assign}
+        return assignment
 
     def resolve_combat_damage(self, controller_index: int, attacker_damage: dict[int, dict[int, int]] | None = None) -> tuple[bool, str]:
         if self.current_turn_phase != "combat" or self.current_step != "combat_damage":
@@ -2087,11 +2190,17 @@ class Game:
                 continue
             defending_player.battlefield[blocker_idx].damage_marked += damage
 
+        total_player_damage = sum(dmg for _, dmg in defender_damage_events)
         for _, damage in defender_damage_events:
             defender.life -= damage
 
         self._destroy_marked_creatures()
         self._prune_combat_state()
+
+        if total_player_damage > 0:
+            self.log.append(
+                f"{defender.name} took {total_player_damage} combat damage (life: {defender.life + total_player_damage} → {defender.life})"
+            )
 
         if run_first_pass:
             self.combat_first_strike_done = True
@@ -2110,6 +2219,8 @@ class Game:
             "blockers": [{"blocker_index": k, "attacker_index": v} for k, v in sorted(self.combat_blockers.items())],
             "damage_resolved": self.combat_damage_resolved,
             "first_strike_done": self.combat_first_strike_done,
+            "attackers_locked": self.combat_attackers_locked,
+            "blockers_locked": self.combat_blockers_locked,
         }
 
     def can_attack(self, attacker: Permanent, defending_player_index: int) -> bool:
