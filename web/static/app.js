@@ -214,6 +214,62 @@ function isCardLikelyBlocker(card) {
   return String(card.type || "").toLowerCase().includes("creature") && !card.tapped;
 }
 
+function canCardBlockAttackerFromPublicState(blockerCard, attackerCard) {
+  if (!isCardLikelyBlocker(blockerCard)) return false;
+  if (!attackerCard || typeof attackerCard === "string") return false;
+
+  const attackerText = String(attackerCard.oracle_text || "").toLowerCase();
+  const blockerText = String(blockerCard.oracle_text || "").toLowerCase();
+  const blockerType = String(blockerCard.type || "").toLowerCase();
+
+  if (attackerText.includes("can't be blocked") && !attackerText.includes("except")) {
+    return false;
+  }
+
+  const attackerHasFlying = attackerText.includes("flying");
+  const blockerHasFlying = blockerText.includes("flying");
+  const blockerHasReach = blockerText.includes("reach");
+  if (attackerHasFlying && !(blockerHasFlying || blockerHasReach)) {
+    return false;
+  }
+
+  if (attackerText.includes("can't be blocked by walls") && blockerType.includes("wall")) {
+    return false;
+  }
+
+  return true;
+}
+
+function getValidBlockerAssignments(state = currentState) {
+  if (!state || !isCombatStep(state, "declare_blockers")) return [];
+  const combat = getCombatState(state);
+  if (!combat || seat !== combat.defending_player_index) return [];
+
+  const attackerSeat = state.current_turn;
+  const defenderSeat = combat.defending_player_index;
+  const attackerPlayer = state.players?.[attackerSeat];
+  const defenderPlayer = state.players?.[defenderSeat];
+  const attackerBattlefield = Array.isArray(attackerPlayer?.battlefield) ? attackerPlayer.battlefield : [];
+  const defenderBattlefield = Array.isArray(defenderPlayer?.battlefield) ? defenderPlayer.battlefield : [];
+  const attackerIndices = Array.isArray(combat.attackers)
+    ? combat.attackers.map((item) => Number(item.attacker_index)).filter((idx) => Number.isInteger(idx) && idx >= 0)
+    : [];
+
+  const assignments = [];
+  for (let blockerIndex = 0; blockerIndex < defenderBattlefield.length; blockerIndex += 1) {
+    const blockerCard = defenderBattlefield[blockerIndex];
+    if (!isCardLikelyBlocker(blockerCard)) continue;
+    for (const attackerIndex of attackerIndices) {
+      const attackerCard = attackerBattlefield[attackerIndex];
+      if (!attackerCard) continue;
+      if (!canCardBlockAttackerFromPublicState(blockerCard, attackerCard)) continue;
+      assignments.push({ blocker_index: blockerIndex, attacker_index: attackerIndex });
+    }
+  }
+
+  return assignments;
+}
+
 function getDisplayedAttackerLinks(state = currentState) {
   const combat = getCombatState(state);
   if (!combat) return [];
@@ -761,6 +817,17 @@ function findCardInCurrentHand(cardName) {
   return me.hand.find((card) => normalizeCardName(card) === cardName) || null;
 }
 
+function isAnyPromptActive(state = currentState) {
+  if (getCleanupDiscardInfo(state)) return true;
+  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor) return true;
+
+  const hasValidAttackers = getValidAttackerIndices(state).length > 0;
+  const hasValidBlockers = getValidBlockerAssignments(state).length > 0;
+  const isDeclareAttackersPrompt = isCombatStep(state, "declare_attackers") && hasValidAttackers;
+  const isDeclareBlockersPrompt = isCombatStep(state, "declare_blockers") && hasValidBlockers;
+  return isDeclareAttackersPrompt || isDeclareBlockersPrompt;
+}
+
 function combatNeedsManualDamageAssignment(state = currentState) {
   const blockers = getDisplayedBlockerLinks(state);
   const byAttacker = {};
@@ -780,13 +847,16 @@ function combatPromptNeedsConfirmation(state = currentState) {
   if (!combat || state.current_turn_phase !== "combat") return false;
 
   if (isCombatStep(state, "declare_attackers") && seat === state.current_turn) {
+    if (getValidAttackerIndices(state).length === 0) {
+      return false;
+    }
     return !combat.attackers_locked;
   }
   if (isCombatStep(state, "declare_blockers") && seat === combat.defending_player_index) {
+    if (getValidBlockerAssignments(state).length === 0) {
+      return false;
+    }
     return !combat.blockers_locked;
-  }
-  if (isCombatStep(state, "combat_damage") && seat === state.current_turn && !combat.damage_resolved) {
-    return combatNeedsManualDamageAssignment(state);
   }
   return false;
 }
@@ -798,6 +868,9 @@ async function handleCombatPromptOk() {
   if (!combat || state.current_turn_phase !== "combat") return false;
 
   if (isCombatStep(state, "declare_attackers") && seat === state.current_turn && !combat.attackers_locked) {
+    if (getValidAttackerIndices(state).length === 0) {
+      return false;
+    }
     const declared = [...combatAttackerDraft];
     const defendingSeat = Number.isInteger(combat.defending_player_index) ? combat.defending_player_index : 1 - seat;
     await sendAction({
@@ -813,20 +886,14 @@ async function handleCombatPromptOk() {
   }
 
   if (isCombatStep(state, "declare_blockers") && seat === combat.defending_player_index && !combat.blockers_locked) {
+    if (getValidBlockerAssignments(state).length === 0) {
+      return false;
+    }
     const blockerPairs = { ...combatBlockerDraft };
     await sendAction({ seat, action: "declare_blockers", blocker_pairs: blockerPairs });
     updateActionHint(
       `Blockers declared (${Object.keys(blockerPairs).length}). Players may now cast spells/activate abilities before damage.`,
     );
-    return true;
-  }
-
-  if (isCombatStep(state, "combat_damage") && seat === state.current_turn && !combat.damage_resolved) {
-    if (!combatNeedsManualDamageAssignment(state)) {
-      return false;
-    }
-    await sendAction({ seat, action: "assign_combat_damage", attacker_damage: combatDamageDraft });
-    updateActionHint("Combat damage resolved.");
     return true;
   }
 
@@ -874,6 +941,11 @@ function renderActivationPrompt() {
   const me = getCurrentPlayerState();
   const cleanupDiscard = getCleanupDiscardInfo();
   const inCombat = currentState?.current_turn_phase === "combat";
+  const hasValidAttackers = getValidAttackerIndices(currentState).length > 0;
+  const hasValidBlockers = getValidBlockerAssignments(currentState).length > 0;
+  const isDeclareAttackersStep = isCombatStep(currentState, "declare_attackers") && hasValidAttackers;
+  const isDeclareBlockersStep = isCombatStep(currentState, "declare_blockers") && hasValidBlockers;
+  const isCombatDeclarePromptStep = isDeclareAttackersStep || isDeclareBlockersStep;
 
   if (cleanupDiscard) {
     applyCleanupPrompt(cleanupDiscard);
@@ -881,10 +953,15 @@ function renderActivationPrompt() {
   }
 
   if (!pendingActivation && !pendingCastTarget && !pendingCastX && !pendingManaColor) {
-    panel.classList.toggle("hidden", !inCombat);
-    if (inCombat) {
-      title.textContent = "Combat Prompt";
-      body.textContent = "Use the combat controls below to confirm attackers, blockers, and damage assignments.";
+    panel.classList.toggle("hidden", !isCombatDeclarePromptStep);
+    if (isCombatDeclarePromptStep) {
+      if (isDeclareAttackersStep) {
+        title.textContent = "Declare Attackers";
+        body.textContent = "Choose your attackers and press OK to declare them.";
+      } else {
+        title.textContent = "Declare Blockers";
+        body.textContent = "Assign your blockers and press OK to declare them.";
+      }
     } else {
       title.textContent = "No pending activation.";
       body.textContent = "Select an activated ability to begin paying its cost.";
@@ -1746,9 +1823,19 @@ function renderCombatControls(state) {
 
   const attackers = getDisplayedAttackerLinks(state);
   const blockers = getDisplayedBlockerLinks(state);
-  summary.textContent = `Attackers: ${attackers.length} | Blockers: ${blockers.length}`;
+  if (isCombatStep(state, "declare_attackers")) {
+    summary.textContent = `Attackers: ${attackers.length}`;
+  } else if (isCombatStep(state, "declare_blockers")) {
+    summary.textContent = `Blockers: ${blockers.length}`;
+  } else {
+    summary.textContent = `Attackers: ${attackers.length} | Blockers: ${blockers.length}`;
+  }
 
   if (isCombatStep(state, "declare_attackers") && seat === state.current_turn) {
+    const validAttackerIndices = getValidAttackerIndices(state);
+    if (validAttackerIndices.length === 0) {
+      return;
+    }
     const prompt = document.createElement("div");
     prompt.className = "combat-summary";
     if (combat?.attackers_locked) {
@@ -1785,6 +1872,10 @@ function renderCombatControls(state) {
   }
 
   if (isCombatStep(state, "declare_blockers") && seat === combat?.defending_player_index) {
+    const validBlockerAssignments = getValidBlockerAssignments(state);
+    if (validBlockerAssignments.length === 0) {
+      return;
+    }
     const prompt = document.createElement("div");
     prompt.className = "combat-summary";
     if (combat?.blockers_locked) {
@@ -1844,6 +1935,19 @@ function renderCombatControls(state) {
       row.appendChild(inputs);
       damagePanel.appendChild(row);
     }
+
+    const submitBtn = document.createElement("button");
+    submitBtn.type = "button";
+    submitBtn.textContent = "Assign Combat Damage";
+    submitBtn.addEventListener("click", async () => {
+      try {
+        await sendAction({ seat, action: "assign_combat_damage", attacker_damage: combatDamageDraft });
+        updateActionHint("Combat damage resolved.");
+      } catch (e) {
+        updateActionHint(e.message, true);
+      }
+    });
+    actions.appendChild(submitBtn);
 
   }
 }
@@ -1913,11 +2017,12 @@ function renderBoard(state) {
   }
   const cleanupDiscard = getCleanupDiscardInfo(state);
   const requiresCleanupSelection = !!cleanupDiscard;
+  const hasPrompt = isAnyPromptActive(state);
   const selfLane = document.querySelector(".self-lane");
   const oppLane = document.querySelector(".opponent-lane");
   setDebugMenuEnabled(sessionId !== null && seat !== null);
-  q("endTurnBtn").disabled = !canEndTurn;
-  q("nextPhaseBtn").disabled = !canAdvancePhase;
+  q("endTurnBtn").disabled = !canEndTurn || hasPrompt;
+  q("nextPhaseBtn").disabled = !canAdvancePhase || hasPrompt;
   selfLane?.classList.toggle("turn-zone-self", isSelfTurn);
   oppLane?.classList.toggle("turn-zone-opponent", !isSelfTurn);
   q("selfName").classList.toggle("active-turn-name", isSelfTurn);
