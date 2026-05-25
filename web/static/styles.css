@@ -116,26 +116,6 @@ button:hover {
   gap: 10px;
 }
 
-.status-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.status-chip {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 999px;
-  padding: 6px 10px;
-  font-size: 0.92rem;
-}
-
-.phase-chip {
-  border-color: rgba(242, 184, 75, 0.8);
-  color: var(--accent);
-}
-
 .player-lane,
 .middle-lane {
   background: var(--panel-soft);
@@ -264,7 +244,18 @@ button:hover {
 }
 
 .battlefield-row {
-  min-height: 132px;
+  display: grid;
+  grid-template-rows: repeat(2, minmax(52px, auto));
+  gap: 8px;
+  min-height: 148px;
+}
+
+.battlefield-subrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 52px;
+  align-content: flex-start;
 }
 
 .zone-row {
@@ -869,15 +860,6 @@ pre {
 @media (max-width: 760px) {
   main {
     padding: 12px;
-  }
-
-  .status-row {
-    gap: 6px;
-  }
-
-  .status-chip {
-    font-size: 0.82rem;
-    padding: 5px 8px;
   }
 
   .card {

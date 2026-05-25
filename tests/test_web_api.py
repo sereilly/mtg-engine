@@ -402,7 +402,8 @@ def test_debug_action_casts_card_for_free():
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["players"][1]["life"] == 17
+    assert payload["players"][1]["life"] == 20
+    assert payload["stack"][0]["card"]["name"] == "Lightning Bolt"
     assert any("[Debug]" in entry and "Lightning Bolt" in entry for entry in payload["log"])
 
 
@@ -427,6 +428,20 @@ def test_debug_action_casts_creature_with_summoning_sickness_flag():
 
     assert response.status_code == 200
     payload = response.json()
+    assert payload["stack"][0]["card"]["name"] == "Llanowar Elves"
+    client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
+
+    resolved = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "pass_priority"},
+    )
+    assert resolved.status_code == 200
+    resolved = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 1, "action": "pass_priority"},
+    )
+    assert resolved.status_code == 200
+    payload = resolved.json()
     battlefield = payload["players"][0]["battlefield"]
     assert battlefield[0]["name"] == "Llanowar Elves"
     assert battlefield[0]["summoning_sick"] is True

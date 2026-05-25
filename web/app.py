@@ -978,6 +978,8 @@ def do_action(session_id: str, req: GameActionRequest):
             raise HTTPException(status_code=400, detail="cannot issue debug action for AI seat")
         if not req.card_name:
             raise HTTPException(status_code=400, detail="card_name is required")
+        if not session.game.has_priority(req.seat):
+            raise HTTPException(status_code=400, detail="you do not currently have priority")
 
         card = CARD_BY_NAME.get(req.card_name.strip().casefold())
         if card is None:
@@ -991,7 +993,7 @@ def do_action(session_id: str, req: GameActionRequest):
         original_enforce_mana_costs = session.game.enforce_mana_costs
         try:
             session.game.enforce_mana_costs = False
-            result = session.game.cast_from_hand(
+            result = session.game.queue_from_hand(
                 req.seat,
                 card.name,
                 target_player_index=target,
@@ -1009,6 +1011,7 @@ def do_action(session_id: str, req: GameActionRequest):
                     break
             raise HTTPException(status_code=400, detail=result.details)
 
+        session.game.note_priority_action_taken(req.seat)
         session.game.log.append(f"[Debug] {player.name} cast {card.name} for free.")
 
     else:

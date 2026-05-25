@@ -1661,10 +1661,10 @@ function renderDebugOptions(cards) {
   }
 }
 
-function setDebugMenuEnabled(enabled) {
+function setDebugMenuEnabled(enabled, canCastFree = false) {
   q("debugCardSearch").disabled = !enabled;
   q("debugAddToHandBtn").disabled = !enabled;
-  q("debugCastFreeBtn").disabled = !enabled;
+  q("debugCastFreeBtn").disabled = !enabled || !canCastFree;
   if (!enabled) {
     renderDebugOptions([]);
   }
@@ -1714,6 +1714,10 @@ async function addDebugCardToHand() {
 async function castDebugCardForFree() {
   if (!sessionId || seat === null) {
     updateDebugStatus("Create or join a session first.", "error");
+    return;
+  }
+  if (!currentState || currentState.priority_player !== seat) {
+    updateDebugStatus("You can only cast for free when you have priority.", "error");
     return;
   }
 
@@ -2032,22 +2036,49 @@ function createCardElement(card, options = {}) {
 function renderCardRow(containerId, cards, options = {}) {
   const container = q(containerId);
   container.innerHTML = "";
-  if (!cards || cards.length === 0) return;
+  const entries = Array.isArray(cards) ? cards.map((card, index) => ({ card, index })) : [];
 
-  for (const [index, card] of cards.entries()) {
-    if (card === "<hidden>") {
-      container.appendChild(createCardElement("Hidden", { ...options, hidden: true }));
-      continue;
+  const appendEntries = (targetContainer, rowEntries) => {
+    for (const { card, index } of rowEntries) {
+      if (card === "<hidden>") {
+        targetContainer.appendChild(createCardElement("Hidden", { ...options, hidden: true }));
+        continue;
+      }
+      const tapped = typeof card === "object" ? !!card.tapped : false;
+      const permanentIndex = options.zoneKind === "battlefield" ? index : null;
+      const selected =
+        (Array.isArray(options.selectedHandIndices) && options.selectedHandIndices.includes(index)) ||
+        (Array.isArray(options.selectedPermanentIndices) && options.selectedPermanentIndices.includes(index));
+      targetContainer.appendChild(
+        createCardElement(card, { ...options, tapped, permanentIndex, handIndex: index, selected })
+      );
     }
-    const tapped = typeof card === "object" ? !!card.tapped : false;
-    const permanentIndex = options.zoneKind === "battlefield" ? index : null;
-    const selected =
-      (Array.isArray(options.selectedHandIndices) && options.selectedHandIndices.includes(index)) ||
-      (Array.isArray(options.selectedPermanentIndices) && options.selectedPermanentIndices.includes(index));
-    container.appendChild(
-      createCardElement(card, { ...options, tapped, permanentIndex, handIndex: index, selected })
-    );
+  };
+
+  if (options.zoneKind === "battlefield") {
+    const isLandPermanent = (card) => {
+      if (!card || typeof card === "string") return false;
+      return String(card.type || "").toLowerCase().includes("land");
+    };
+
+    const landEntries = entries.filter(({ card }) => isLandPermanent(card));
+    const nonLandEntries = entries.filter(({ card }) => !isLandPermanent(card));
+    const backRowIndex = containerId === "oppBattlefield" ? 0 : 1;
+
+    const rowElements = [0, 1].map((rowIndex) => {
+      const row = document.createElement("div");
+      row.className = "battlefield-subrow";
+      row.dataset.rowIndex = String(rowIndex);
+      container.appendChild(row);
+      return row;
+    });
+
+    appendEntries(rowElements[1 - backRowIndex], nonLandEntries);
+    appendEntries(rowElements[backRowIndex], landEntries);
+    return;
   }
+
+  appendEntries(container, entries);
 }
 
 function renderZoneCards(containerId, cards) {
@@ -2297,16 +2328,6 @@ function renderBoard(state) {
   q("selfBattlefield").dataset.targetSeat = String(viewerSeat);
   q("oppBattlefield").dataset.targetSeat = String(oppSeat);
 
-  const prioritySeat = Number.isInteger(state.priority_player) ? state.priority_player : null;
-  if (prioritySeat === null) {
-    q("statusHeadline").textContent = `Status: ${state.status} | Priority: none`;
-  } else {
-    q("statusHeadline").textContent = `Status: ${state.status} | Priority: Seat ${prioritySeat}`;
-  }
-  q("turnBadge").textContent = `Turn: Seat ${state.current_turn} (No. ${state.turn_number || "-"})`;
-  q("phaseBadge").textContent = `Phase: ${getPhaseDisplayLabel(state)}`;
-  q("winnerBadge").textContent = `Winner: ${state.winner === null ? "-" : state.winner}`;
-
   q("selfName").textContent = me.name;
   q("selfName").dataset.targetSeat = String(viewerSeat);
   renderLifePill("selfLife", viewerSeat, me.life);
@@ -2322,15 +2343,16 @@ function renderBoard(state) {
   const cleanupDiscard = getCleanupDiscardInfo(state);
   const requiresCleanupSelection = !!cleanupDiscard;
   const hasBlockingPrompt = hasBlockingPromptForAutoPass(state);
+  const hasCombatDeclarationPrompt = combatPromptNeedsConfirmation(state);
   const untapInfo = getUntapLandSelectionInfo(state);
   const selfLane = document.querySelector(".self-lane");
   const oppLane = document.querySelector(".opponent-lane");
-  setDebugMenuEnabled(sessionId !== null && seat !== null);
+  setDebugMenuEnabled(sessionId !== null && seat !== null, hasPriority);
   q("endTurnBtn").textContent = autoPassTurnEndEnabled ? "Cancel Auto-Pass" : (isSelfTurn ? "End Turn" : "Auto-Pass");
   q("endTurnBtn").disabled = autoPassTurnEndEnabled
     ? false
     : (isSelfTurn ? (!canEndTurn || hasBlockingPrompt) : (seat === null || hasBlockingPrompt));
-  q("nextPhaseBtn").disabled = !hasPriority || hasBlockingPrompt;
+  q("nextPhaseBtn").disabled = !hasPriority || hasBlockingPrompt || hasCombatDeclarationPrompt;
   selfLane?.classList.toggle("turn-zone-self", isSelfTurn);
   oppLane?.classList.toggle("turn-zone-opponent", !isSelfTurn);
   q("selfName").classList.toggle("active-turn-name", isSelfTurn);
