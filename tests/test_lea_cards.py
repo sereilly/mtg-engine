@@ -18,7 +18,6 @@ def _make_test(name, idx):
 
 # List of LEA cards that lacked tests when this file was generated
 _UNTESTED = [
-"Animate Artifact",
 "Aspect of Wolf",
 "Badlands",
 "Basalt Monolith",
@@ -596,6 +595,40 @@ def test_animate_dead_reanimates_creature(all_cards):
     assert any(perm.card.name == "Dead Bear" for perm in p1.battlefield)
     # The Animate Dead aura itself should be on the battlefield
     assert any(perm.card.name == "Animate Dead" for perm in p1.battlefield)
+
+def test_animate_artifact_makes_artifact_into_creature(all_cards):
+    animate = next(card for card in all_cards if card.name == "Animate Artifact")
+    # Create a test artifact with mana value 3
+    relic = _mk_card("Test Relic", "Artifact")
+    relic_def = CardDefinition(
+        name=relic.name,
+        mana_cost="{3}",
+        cmc=3.0,
+        type_line=relic.type_line,
+        oracle_text=relic.oracle_text,
+        colors=relic.colors,
+        color_identity=relic.color_identity,
+        keywords=relic.keywords,
+        produced_mana=relic.produced_mana,
+        raw={**relic.raw},
+    )
+
+    p1 = PlayerState(name="P1", hand=[animate])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=relic_def)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Animate Artifact", target_player_index=1, target_permanent_index=0)
+
+    assert result.supported
+    # Target artifact should become an artifact creature with power/toughness equal to its mana value
+    perm = p2.battlefield[0]
+    assert perm.card.primary_type == "creature"
+    assert perm.effective_power == 3
+    assert perm.effective_toughness == 3
+    # The Aura should be on the caster's battlefield and attached
+    assert any(a.card.name == "Animate Artifact" for a in p1.battlefield)
+    aura = next(a for a in p1.battlefield if a.card.name == "Animate Artifact")
+    assert aura.metadata.get("attached_to") is perm
 
 def test_braingeyser_draws_x_cards(all_cards):
     braingeyser = next(card for card in all_cards if card.name == "Braingeyser")

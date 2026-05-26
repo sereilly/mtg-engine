@@ -1014,7 +1014,7 @@ class Game:
             self._put_permanent_onto_battlefield(caster_index, permanent, target_player_index)
             self.log.append(f"{caster.name} put {card.name} onto battlefield")
             self._apply_global_buff(caster, card)
-            self._apply_aura_effect(caster_index, permanent, target_player_index)
+            self._apply_aura_effect(caster_index, permanent, target_player_index, target_permanent_index)
             self._apply_cast_triggers(caster_index, card)
             self._refresh_dynamic_creatures()
             if primary_type == "land":
@@ -2738,6 +2738,7 @@ class Game:
         caster_index: int,
         aura_permanent: Permanent,
         target_player_index: int | None,
+        target_permanent_index: int | None = None,
     ) -> None:
         text = aura_permanent.card.oracle_text.lower()
         if not text.startswith("enchant "):
@@ -2805,5 +2806,50 @@ class Game:
                 target_wall.metadata["can_attack_as_though_no_defender"] = True
                 self.log.append(f"{target_wall.card.name} can attack as though it didn't have defender")
         elif text.startswith("enchant artifact"):
-            self.log.append(f"{aura_permanent.card.name} enchants an artifact (complex behavior simplified)")
+            # Attach this Aura to the specified artifact (or first artifact found)
+            target_idx = target_player_index if target_player_index is not None else (1 - caster_index)
+            target_player = self.players[target_idx]
+
+            target_artifact = None
+            if target_permanent_index is not None:
+                if 0 <= target_permanent_index < len(target_player.battlefield):
+                    candidate = target_player.battlefield[target_permanent_index]
+                    if candidate.card.primary_type == "artifact":
+                        target_artifact = candidate
+            if target_artifact is None:
+                target_artifact = next((perm for perm in target_player.battlefield if perm.card.primary_type == "artifact"), None)
+
+            if target_artifact is None:
+                return
+
+            # Attach metadata links
+            aura_permanent.metadata["attached_to"] = target_artifact
+            target_artifact.metadata["attached_aura"] = aura_permanent
+
+            # If the artifact isn't already a creature, make it an artifact creature
+            if target_artifact.card.primary_type != "creature":
+                new_type_line = target_artifact.card.type_line
+                if "creature" not in new_type_line.lower():
+                    new_type_line = (new_type_line + " Creature").strip()
+
+                new_raw = dict(target_artifact.card.raw)
+                power = toughness = int(target_artifact.card.cmc)
+                new_raw["power"] = str(power)
+                new_raw["toughness"] = str(toughness)
+
+                new_card = CardDefinition(
+                    name=target_artifact.card.name,
+                    mana_cost=target_artifact.card.mana_cost,
+                    cmc=target_artifact.card.cmc,
+                    type_line=new_type_line,
+                    oracle_text=target_artifact.card.oracle_text,
+                    colors=target_artifact.card.colors,
+                    color_identity=target_artifact.card.color_identity,
+                    keywords=target_artifact.card.keywords,
+                    produced_mana=target_artifact.card.produced_mana,
+                    raw=new_raw,
+                )
+
+                target_artifact.card = new_card
+                self.log.append(f"{aura_permanent.card.name} animated {target_artifact.card.name} into an artifact creature")
 
