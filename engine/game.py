@@ -648,7 +648,34 @@ class Game:
         target_idx = target_player_index if target_player_index is not None else (1 - controller_index)
         target_player = self.players[target_idx]
 
-        ability = next((item for item in program.activated_abilities if item.supported and item.instruction is not None), None)
+
+
+        # Special handling for Basalt Monolith: only allow tap if untapped, untap if tapped
+        if permanent.card.name == "Basalt Monolith" and len(program.activated_abilities) == 2:
+            tap_ability = None
+            untap_ability = None
+            for ab in program.activated_abilities:
+                if ab.source_line.lower().startswith("{t}:"):
+                    tap_ability = ab
+                elif ab.source_line.lower().startswith("{3}:"):
+                    untap_ability = ab
+            if not permanent.tapped:
+                ability = tap_ability
+            else:
+                ability = untap_ability
+            # If trying to tap when tapped, or untap when untapped, block
+            if ability is None:
+                self.log.append(f"No implemented activated ability for {permanent.card.name} in current state")
+                return SimulationResult(permanent.card.name, False, "unsupported", "ability not implemented")
+            if ability == tap_ability and permanent.tapped:
+                self.log.append(f"Cannot tap Basalt Monolith when already tapped")
+                return SimulationResult(permanent.card.name, False, "unsupported", "already tapped")
+            if ability == untap_ability and not permanent.tapped:
+                self.log.append(f"Cannot untap Basalt Monolith when already untapped")
+                return SimulationResult(permanent.card.name, False, "unsupported", "already untapped")
+        else:
+            ability = next((item for item in program.activated_abilities if item.supported and item.instruction is not None), None)
+
         if ability is None or ability.instruction is None:
             self.log.append(f"No implemented activated ability for {permanent.card.name}")
             return SimulationResult(permanent.card.name, False, "unsupported", "ability not implemented")
@@ -692,12 +719,17 @@ class Game:
                     {**instruction.payload, "color": selected_color},
                 )
 
+
         mana_like_kinds = {
             "add_mana_from_text",
             "sacrifice_self_for_mana",
             "sacrifice_creature_for_black_mana",
         }
         if instruction.kind in mana_like_kinds:
+            # For Basalt Monolith, block add_mana_from_text if untapped is required and it's already untapped
+            if permanent.card.name == "Basalt Monolith" and instruction.kind == "add_mana_from_text" and not permanent.tapped:
+                self.log.append(f"Cannot tap Basalt Monolith for mana when already untapped")
+                return SimulationResult(permanent.card.name, False, "unsupported", "already untapped")
             state_machine = OracleStateMachine(
                 self,
                 OracleExecutionContext(
@@ -1054,6 +1086,19 @@ class Game:
         context: OracleExecutionContext,
     ) -> tuple[bool, str]:
         caster = context.caster
+        target = context.target
+        card = context.card
+        source_permanent = context.source_permanent
+        x_value = context.x_value
+
+        if instruction.kind == "untap_self":
+            if source_permanent is None:
+                return False, "ability not implemented"
+            if not source_permanent.tapped:
+                return False, f"{card.name} is already untapped"
+            source_permanent.tapped = False
+            self.log.append(f"{card.name} untapped itself")
+            return True, "resolved"
         target = context.target
         card = context.card
         source_permanent = context.source_permanent

@@ -253,6 +253,8 @@ def _parse_number_token(token: str) -> int:
 
 
 def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleInstruction | None, str]:
+    if activated and ("untap this artifact" in text or "untap this permanent" in text):
+        return _instruction("untap_self"), "activated_untap"
     if "target player draws x cards" in text:
         effect_kind = "activated_draw" if activated else "spell_pattern"
         return _instruction("draw_target_cards", amount="x"), effect_kind

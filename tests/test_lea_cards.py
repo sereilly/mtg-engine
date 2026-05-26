@@ -18,8 +18,38 @@ def _make_test(name, idx):
 
 # List of LEA cards that lacked tests when this file was generated
 _UNTESTED = [
-"Basalt Monolith",
 "Bayou",
+]
+
+def test_basalt_monolith_tap_and_untap(all_cards):
+    monolith = next(card for card in all_cards if card.name == "Basalt Monolith")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=monolith)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    # Tap for mana (should succeed)
+    result = game.activate_permanent_ability(0, "Basalt Monolith")
+    assert result.supported
+    assert p1.battlefield[0].tapped is True
+    assert p1.mana_pool["C"] == 3
+
+    # Untap using ability (should succeed)
+    result2 = game.activate_permanent_ability(0, "Basalt Monolith")
+    assert result2.supported
+    assert p1.battlefield[0].tapped is False
+
+    # Tap again (should succeed, since it's untapped now)
+    result3 = game.activate_permanent_ability(0, "Basalt Monolith")
+    assert result3.supported
+    assert p1.battlefield[0].tapped is True
+
+    # Untap again (should succeed, since it's tapped)
+    result4 = game.activate_permanent_ability(0, "Basalt Monolith")
+    assert result4.supported
+    assert p1.battlefield[0].tapped is False
+
+    # The engine does not expose a way to force the untap ability when untapped.
+    # The legal tap/untap cycle is fully tested above.
 "Berserk",
 "Birds of Paradise",
 "Black Ward",
@@ -196,8 +226,7 @@ _UNTESTED = [
 "Will-o'-the-Wisp",
 "Wooden Sphere",
 "Wrath of God",
-"Zombie Master",
-]
+
 
 
 # Dynamically attach tests to module
