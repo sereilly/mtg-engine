@@ -2747,6 +2747,35 @@ class Game:
         target_player = self.players[target_idx]
 
         if text.startswith("enchant creature"):
+            # Special-case reanimation-style Auras (e.g., Animate Dead) which target a
+            # creature card in a graveyard and return it to the battlefield attached
+            # to this Aura. Detect the presence of the reanimation language and
+            # handle it by moving a creature card from the target player's
+            # graveyard to the caster's battlefield and attaching the Aura.
+            if "creature card in a graveyard" in text and "return enchanted creature card to the battlefield" in text:
+                # find a creature card in the target player's graveyard
+                revived_card = None
+                for idx, card in enumerate(target_player.graveyard):
+                    if card.primary_type == "creature":
+                        revived_card = target_player.graveyard.pop(idx)
+                        break
+                if revived_card is None:
+                    return
+
+                # Put the revived creature onto the battlefield under the caster's control
+                revived_perm = Permanent(card=revived_card)
+                self._put_permanent_onto_battlefield(caster_index, revived_perm, None)
+                # Attach the Aura to the revived permanent (store references in metadata)
+                aura_permanent.metadata["attached_to"] = revived_perm
+                revived_perm.metadata["attached_aura"] = aura_permanent
+                # Apply the -1/-0 penalty from Animate Dead's text if present
+                if "enchanted creature gets -1/-0" in text or "enchanted creature gets -1/ -0" in text:
+                    revived_perm.power_bonus += -1
+
+                self.log.append(f"{aura_permanent.card.name} reanimated {revived_card.name} and attached to aura")
+                return
+
+            # Normal enchant-creature behavior: attach to a creature already on the battlefield
             target_creature = next(
                 (perm for perm in target_player.battlefield if perm.card.primary_type == "creature"),
                 None,

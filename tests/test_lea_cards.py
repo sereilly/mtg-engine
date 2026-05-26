@@ -19,7 +19,6 @@ def _make_test(name, idx):
 # List of LEA cards that lacked tests when this file was generated
 _UNTESTED = [
 "Animate Artifact",
-"Animate Dead",
 "Aspect of Wolf",
 "Badlands",
 "Basalt Monolith",
@@ -581,6 +580,22 @@ def test_activate_black_lotus_with_selected_color(all_cards):
     assert p1.mana_pool["G"] == 0
     assert not p1.battlefield
     assert p1.graveyard and p1.graveyard[0].name == "Black Lotus"
+
+def test_animate_dead_reanimates_creature(all_cards):
+    animate_dead = next(card for card in all_cards if card.name == "Animate Dead")
+    dead_creature = _mk_card("Dead Bear", "Creature — Bear")
+
+    p1 = PlayerState(name="P1", hand=[animate_dead], graveyard=[dead_creature])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Animate Dead", target_player_index=0)
+
+    assert result.supported
+    # Creature should be returned to the battlefield under caster's control
+    assert any(perm.card.name == "Dead Bear" for perm in p1.battlefield)
+    # The Animate Dead aura itself should be on the battlefield
+    assert any(perm.card.name == "Animate Dead" for perm in p1.battlefield)
 
 def test_braingeyser_draws_x_cards(all_cards):
     braingeyser = next(card for card in all_cards if card.name == "Braingeyser")
