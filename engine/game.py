@@ -2784,10 +2784,30 @@ class Game:
             if not target_creature:
                 return
 
+            # Handle numeric static buffs like "gets +1/+1"
             buff_match = re.search(r"gets \+(-?\d+)/\+(-?\d+)", text)
             if buff_match:
                 target_creature.power_bonus += int(buff_match.group(1))
                 target_creature.toughness_bonus += int(buff_match.group(2))
+
+            # Handle Aspect of Wolf style dynamic buff text:
+            # "Enchanted creature gets +X/+Y, where X is half the number of Forests you control, rounded down, and Y is half the number of Forests you control, rounded up."
+            # Compute forest count controlled by the aura's controller (caster_index)
+            if "half the number of forests you control" in text:
+                caster_controller = self.players[caster_index]
+                forests = sum(
+                    1
+                    for perm in caster_controller.battlefield
+                    if perm.card.primary_type == "land"
+                    and (
+                        "forest" in perm.card.type_line.lower()
+                        or perm.metadata.get("land_type_override") == "forest"
+                    )
+                )
+                x = forests // 2
+                y = (forests + 1) // 2
+                target_creature.power_bonus += int(x)
+                target_creature.toughness_bonus += int(y)
 
             if "has " in text and "walk" in text:
                 self.log.append(f"{target_creature.card.name} gains landwalk from {aura_permanent.card.name}")

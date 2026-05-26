@@ -18,7 +18,6 @@ def _make_test(name, idx):
 
 # List of LEA cards that lacked tests when this file was generated
 _UNTESTED = [
-"Aspect of Wolf",
 "Badlands",
 "Basalt Monolith",
 "Bayou",
@@ -779,6 +778,27 @@ def test_orcish_oriflamme_applies_power_bonus(all_cards):
 
     assert result.supported
     assert p1.battlefield[0].effective_power == 3
+
+def test_aspect_of_wolf_applies_half_forest_buff(all_cards):
+    aspect = next(card for card in all_cards if card.name == "Aspect of Wolf")
+    forest = next(card for card in all_cards if card.name == "Forest")
+    creature = _mk_card("Test Bear", "Creature — Bear")
+
+    # Set up controller with 3 Forests -> floor(3/2)=1, ceil(3/2)=2 -> +1/+2
+    p1 = PlayerState(
+        name="P1",
+        hand=[aspect],
+        battlefield=[Permanent(card=creature), Permanent(card=forest), Permanent(card=forest), Permanent(card=forest)],
+    )
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Aspect of Wolf", target_player_index=0)
+
+    assert result.supported
+    # Creature is the first permanent on battlefield
+    assert p1.battlefield[0].effective_power == 3
+    assert p1.battlefield[0].effective_toughness == 4
 
 def test_jayemdae_tome_activated_draw(all_cards):
     tome = next(card for card in all_cards if card.name == "Jayemdae Tome")
