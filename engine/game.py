@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 
 from .classifier import CardClassification, classify_card
 from .models import CardDefinition, Permanent, PlayerState
-from .oracle import OracleInstruction, compile_card_oracle, parse_activated_ability_cost
+from .oracle import OracleInstruction, compile_card_oracle, parse_activated_ability_cost, lex_oracle_text
 
 
 _NUMBER_WORDS = {
@@ -1681,13 +1681,22 @@ class Game:
         return damage - prevented
 
     def _add_mana_from_text(self, controller: PlayerState, text: str, preferred_color: str | None = None) -> None:
-        symbols = re.findall(r"\{([WUBRGC])\}", text.upper())
-        if symbols:
-            for symbol in symbols:
-                controller.mana_pool[symbol] += 1
+        # Prefer lexing the oracle text for mana symbols
+        try:
+            tokens = lex_oracle_text(text)
+        except Exception:
+            tokens = ()
+
+        mana_tokens = [t.value for t in tokens if t.kind == "mana"]
+        if mana_tokens:
+            for raw in mana_tokens:
+                sym = raw.strip("{}")
+                if sym in {"W", "U", "B", "R", "G", "C"}:
+                    controller.mana_pool[sym] += 1
             return
 
-        if "one mana of any color" in text:
+        normalized = re.sub(r"\s+", " ", str(text or "").strip().lower())
+        if "one mana of any color" in normalized:
             selected_color = self._normalize_mana_color(preferred_color) or "G"
             controller.mana_pool[selected_color] += 1
 
@@ -1929,37 +1938,33 @@ class Game:
     ) -> None:
         if permanent.card.primary_type == "creature":
             permanent.metadata["summoning_sickness_turn"] = self.turn
+        program = compile_card_oracle(permanent.card)
+        text = program.normalized_text
 
-        text = permanent.card.oracle_text.lower()
-        for raw_line in text.splitlines():
-            line = raw_line.strip()
-            if line.startswith(
-                (
-                    "this artifact enters tapped",
-                    "this creature enters tapped",
-                    "this enchantment enters tapped",
-                    "this land enters tapped",
-                    "this permanent enters tapped",
-                )
-            ) and "unless" not in line:
-                permanent.tapped = True
-                break
+        # enters tapped (static creature/permanent lines or normalized text)
+        if any(line for line in program.static_lines if "enters tapped" in line) or (
+            "enters tapped" in text and "unless" not in text
+        ):
+            permanent.tapped = True
 
+        # choose opponent on enter
         if "as this artifact enters, choose an opponent" in text:
             chosen = target_player_index if target_player_index is not None else (1 - caster_index)
             permanent.metadata["chosen_player_index"] = chosen
 
-        if "enters with seven +1/+0 counters on it" in text:
+        # enters with fixed counters
+        if any("enters with seven +1/+0 counters on it" == line for line in program.static_lines) or "enters with seven +1/+0 counters on it" in text:
             permanent.power_bonus += 7
 
-        if "enters with x +1/+1 counters on it" in text:
-            # For X-cost creatures, use provided cast x_value when available.
+        # enters with X +1/+1 counters
+        if any("enters with x +1/+1 counters on it" == line for line in program.static_lines) or "enters with x +1/+1 counters on it" in text:
             x_value = permanent.metadata.get("cast_x_value")
             if isinstance(x_value, int) and x_value > 0:
                 permanent.power_bonus += x_value
                 permanent.toughness_bonus += x_value
 
-        if "you may have this creature enter as a copy of any creature on the battlefield" in text:
+        # copy-as-enter creature
+        if any("you may have this creature enter as a copy of any creature on the battlefield" == line for line in program.static_lines) or "you may have this creature enter as a copy of any creature on the battlefield" in text:
             source = next(
                 (
                     perm
@@ -1974,6 +1979,7 @@ class Game:
                 permanent.metadata["absolute_power"] = source.effective_power
                 permanent.metadata["absolute_toughness"] = source.effective_toughness
 
+        # copy-as-enter enchantment
         if "you may have this enchantment enter as a copy of any artifact on the battlefield" in text:
             source = next(
                 (
@@ -1991,7 +1997,7 @@ class Game:
                 if "toughness" in source.card.raw and str(source.card.raw.get("toughness", "")).isdigit():
                     permanent.metadata["absolute_toughness"] = source.effective_toughness
 
-        if "you have no maximum hand size" in text:
+        if any(instr.kind == "spell_pattern" and instr.value == "you have no maximum hand size" for instr in program.instructions) or "you have no maximum hand size" in text:
             self.players[caster_index].has_no_max_hand_size = True
 
         if "you may spend white mana as though it were red mana" in text:
@@ -2740,8 +2746,9 @@ class Game:
         target_player_index: int | None,
         target_permanent_index: int | None = None,
     ) -> None:
-        text = aura_permanent.card.oracle_text.lower()
-        if not text.startswith("enchant "):
+        program = compile_card_oracle(aura_permanent.card)
+        text = program.normalized_text
+        if not any(instr.kind == "spell_pattern" and instr.value.startswith("enchant") for instr in program.instructions):
             return
 
         target_idx = target_player_index if target_player_index is not None else (1 - caster_index)
@@ -2753,7 +2760,9 @@ class Game:
             # to this Aura. Detect the presence of the reanimation language and
             # handle it by moving a creature card from the target player's
             # graveyard to the caster's battlefield and attaching the Aura.
-            if "creature card in a graveyard" in text and "return enchanted creature card to the battlefield" in text:
+            # Prefer the parsed instruction if available
+            has_reanimate = any(instr.kind == "reanimate_creature" for instr in program.instructions)
+            if has_reanimate or ("creature card in a graveyard" in text and "return enchanted creature card to the battlefield" in text):
                 # find a creature card in the target player's graveyard
                 revived_card = None
                 for idx, card in enumerate(target_player.graveyard):
@@ -2784,7 +2793,7 @@ class Game:
             if not target_creature:
                 return
 
-            # Handle numeric static buffs like "gets +1/+1"
+            # Handle numeric static buffs like "gets +1/+1" using normalized text
             buff_match = re.search(r"gets \+(-?\d+)/\+(-?\d+)", text)
             if buff_match:
                 target_creature.power_bonus += int(buff_match.group(1))
@@ -2809,10 +2818,12 @@ class Game:
                 target_creature.power_bonus += int(x)
                 target_creature.toughness_bonus += int(y)
 
-            if "has " in text and "walk" in text:
+            # Landwalk/protection patterns are recognized in the compiled program;
+            # fall back to normalized-text checks for logging when necessary.
+            if any(instr.kind == "spell_pattern" and instr.value.startswith("has ") and "walk" in instr.value for instr in program.instructions) or ("has " in text and "walk" in text):
                 self.log.append(f"{target_creature.card.name} gains landwalk from {aura_permanent.card.name}")
 
-            if "has protection from" in text:
+            if any("protection from" in instr.value for instr in program.instructions if instr.kind == "spell_pattern") or ("has protection from" in text):
                 self.log.append(f"{target_creature.card.name} gains protection from aura")
 
         elif text.startswith("enchant land"):
