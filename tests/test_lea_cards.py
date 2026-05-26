@@ -18,7 +18,6 @@ def _make_test(name, idx):
 
 # List of LEA cards that lacked tests when this file was generated
 _UNTESTED = [
-"Badlands",
 "Basalt Monolith",
 "Bayou",
 "Berserk",
@@ -2668,3 +2667,25 @@ def test_winter_orb_turn_start_requires_untap_land_selection_for_human_player():
     assert confirm_payload["untap_land_selection"] is None
     assert confirm_payload["players"][1]["battlefield"][0]["tapped"] is False
     assert confirm_payload["players"][1]["battlefield"][1]["tapped"] is True
+
+def test_badlands_produces_black_or_red_mana(all_cards):
+    # Badlands oracle text: ({T}: Add {B} or {R}.)
+    # It is a dual land — Swamp Mountain that can produce either B or R.
+    badlands = next(card for card in all_cards if card.name == "Badlands")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=badlands)])
+    game = Game(players=[p1])
+
+    ok = game.tap_land_for_mana(0, "Badlands", chosen_color="B")
+    assert ok
+    assert p1.mana_pool["B"] == 1
+    assert p1.mana_pool["R"] == 0
+
+    # Reset for second tap test
+    p1.battlefield[0].tapped = False
+    p1.mana_pool["B"] = 0
+
+    ok = game.tap_land_for_mana(0, "Badlands", chosen_color="R")
+    assert ok
+    assert p1.mana_pool["R"] == 1
+    assert p1.mana_pool["B"] == 0

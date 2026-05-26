@@ -2636,7 +2636,10 @@ class Game:
         land.tapped = True
         mana_symbol = chosen_color
         if land.card.produced_mana:
-            mana_symbol = land.card.produced_mana[0]
+            if chosen_color in land.card.produced_mana:
+                mana_symbol = chosen_color
+            else:
+                mana_symbol = land.card.produced_mana[0]
         else:
             land_types = [str(land.metadata.get("land_type_override", "")).lower(), land.card.type_line.lower()]
             if any("plains" in value for value in land_types):
