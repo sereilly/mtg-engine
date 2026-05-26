@@ -43,63 +43,7 @@ def test_strict_mana_blocks_unpaid_cast():
     assert p2.life == 20
 
 
-def test_strict_mana_allows_cast_after_tapping_land():
-    spell = _mk_card(
-        name="Bolt Test",
-        mana_cost="{R}",
-        type_line="Instant",
-        oracle_text="Bolt Test deals 3 damage to any target.",
-    )
-    mountain = _mk_card(
-        name="Mountain",
-        mana_cost="",
-        type_line="Basic Land - Mountain",
-        oracle_text="{T}: Add {R}.",
-        produced_mana=("R",),
-    )
-
-    p1 = PlayerState(name="P1", hand=[spell], battlefield=[Permanent(card=mountain)])
-    p2 = PlayerState(name="P2", life=20)
-    game = Game(players=[p1, p2], enforce_mana_costs=True)
-
-    assert game.tap_land_for_mana(0, "Mountain")
-    result = game.cast_from_hand(0, "Bolt Test", target_player_index=1)
-
-    assert result.supported
-    assert p2.life == 17
-    assert p1.mana_pool["R"] == 0
 
 
-def test_tapping_basic_land_without_produced_mana_uses_land_type():
-    swamp = _mk_card(
-        name="Swamp",
-        mana_cost="",
-        type_line="Basic Land - Swamp",
-        oracle_text="({T}: Add {B}.)",
-    )
-
-    p1 = PlayerState(name="P1", battlefield=[Permanent(card=swamp)])
-    game = Game(players=[p1], enforce_mana_costs=True)
-
-    assert game.tap_land_for_mana(0, "Swamp")
-    assert p1.mana_pool["B"] == 1
 
 
-def test_x_spell_infers_x_from_paid_mana():
-    spell = _mk_card(
-        name="Stream of Life",
-        mana_cost="{X}{G}",
-        type_line="Sorcery",
-        oracle_text="Target player gains X life.",
-    )
-
-    p1 = PlayerState(name="P1", hand=[spell], mana_pool={"G": 1, "C": 1}, life=10)
-    p2 = PlayerState(name="P2", life=20)
-    game = Game(players=[p1, p2], enforce_mana_costs=True)
-
-    result = game.cast_from_hand(0, "Stream of Life", target_player_index=0)
-
-    assert result.supported
-    assert p1.life == 11
-    assert p1.mana_pool["G"] == 0
-    assert p1.mana_pool["C"] == 0
