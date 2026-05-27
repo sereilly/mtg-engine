@@ -1,3 +1,5 @@
+# New additions to oracle_compiler.py
+
 from __future__ import annotations
 
 from typing import Any
@@ -126,6 +128,67 @@ SUPPORTED_SPELL_PATTERNS = (
 )
 
 
+# ---------------------------------------------------------------------------
+# Supported trigger condition patterns
+# Each entry: (kind, regex_or_substring)
+# Checked in order; first match wins.
+# ---------------------------------------------------------------------------
+
+# "whenever" triggers
+WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
+    ("creature_dies",               r"whenever a creature dies"),
+    ("creature_you_control_dies",   r"whenever a creature you control dies"),
+    ("creature_deals_damage",       r"whenever this creature deals damage"),
+    ("creature_deals_combat_damage",r"whenever this creature deals combat damage to a player"),
+    ("creature_attacks",            r"whenever this creature attacks"),
+    ("creature_blocks",             r"whenever this creature blocks"),
+    ("creature_becomes_blocked",    r"whenever this creature becomes blocked"),
+    ("creature_attacks_or_blocks",  r"whenever this creature attacks or blocks"),
+    ("land_tapped_for_mana",        r"whenever a player taps a land for mana"),
+    ("spell_cast",                  r"whenever a player casts a spell"),
+    ("opponent_casts_spell",        r"whenever an opponent casts a spell"),
+    ("you_cast_spell",              r"whenever you cast a spell"),
+    ("enchantment_cast",            r"whenever you cast an enchantment spell"),
+    ("creature_enters",             r"whenever a creature enters(?: the battlefield)?"),
+    ("land_enters",                 r"whenever a land enters(?: the battlefield)?"),
+    ("artifact_enters",             r"whenever an artifact enters(?: the battlefield)?"),
+    ("one_or_more_attack",          r"whenever one or more creatures you control attack"),
+    ("draws_card",                  r"whenever you draw a card"),
+    ("deals_damage_to_player",      r"whenever .+ deals damage to a player"),
+)
+
+# "when" triggers (enter/leave events)
+WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
+    ("enters_battlefield",          r"when (?:this|.+) enters(?: the battlefield)?"),
+    ("leaves_battlefield",          r"when (?:this|.+) leaves(?: the battlefield)?"),
+    ("dies",                        r"when (?:this creature|.+) dies"),
+    ("you_gain_life",               r"when you gain life"),
+    ("becomes_target",              r"when (?:this|.+) becomes the target"),
+)
+
+# "at the beginning of" triggers
+AT_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
+    ("upkeep_self",         r"at the beginning of your upkeep"),
+    ("upkeep_each",         r"at the beginning of each (?:player's )?upkeep"),
+    ("upkeep_chosen",       r"at the beginning of the chosen player's upkeep"),
+    ("draw_step_each",      r"at the beginning of each player's draw step"),
+    ("end_step",            r"at the beginning of (?:each )?end(?: step)?"),
+    ("combat",              r"at the beginning of combat"),
+)
+
+# "if" conditions that can appear mid-effect
+IF_CONDITION_PATTERNS: tuple[tuple[str, str], ...] = (
+    ("artifact_untapped",       r"if this artifact is untapped"),
+    ("creature_died_this_turn", r"if a creature died this turn"),
+    ("no_creatures_in_hand",    r"if you have no creatures in hand"),
+    ("paid_mana",               r"if you paid? .+"),
+    ("controls_island",         r"if (?:you |defending player )?controls? an? island"),
+    ("controls_swamp",          r"if (?:you |defending player )?controls? an? swamp"),
+    ("is_untapped",             r"if (?:this|it) is untapped"),
+    ("not_playing_for_ante",    r"if you're not playing for ante"),
+)
+
+
 @dataclass(frozen=True)
 class OracleToken:
     kind: str
@@ -146,6 +209,21 @@ class OracleInstruction:
 
 
 @dataclass(frozen=True)
+class TriggerCondition:
+    """Represents the condition half of a triggered ability.
+
+    kind     -- semantic label, e.g. "creature_dies", "upkeep_self"
+    trigger  -- the raw trigger word: "when", "whenever", or "at"
+    raw_text -- the normalized condition clause as it appeared in oracle text
+    payload  -- optional structured data extracted from the condition
+    """
+    kind: str
+    trigger: str          # "when" | "whenever" | "at"
+    raw_text: str
+    payload: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class ParsedActivatedAbility:
     source_line: str
     normalized_effect: str
@@ -153,6 +231,23 @@ class ParsedActivatedAbility:
     cost: ActivatedAbilityCost
     effect_kind: str = "unsupported"
     instruction: OracleInstruction | None = None
+
+
+@dataclass(frozen=True)
+class ParsedTriggeredAbility:
+    """A fully parsed triggered ability: condition + effect instruction.
+
+    source_line  -- original oracle text line
+    condition    -- the parsed trigger condition
+    instruction  -- the parsed effect, or None if unsupported
+    supported    -- True only if both condition and effect are recognized
+    effect_kind  -- mirrors the effect_kind convention used elsewhere
+    """
+    source_line: str
+    condition: TriggerCondition
+    instruction: OracleInstruction | None
+    supported: bool
+    effect_kind: str = "unsupported"
 
 
 @dataclass(frozen=True)
@@ -164,6 +259,7 @@ class OracleProgram:
     tokens: tuple[OracleToken, ...]
     instructions: tuple[OracleInstruction, ...] = ()
     activated_abilities: tuple[ParsedActivatedAbility, ...] = ()
+    triggered_abilities: tuple[ParsedTriggeredAbility, ...] = ()
     static_lines: tuple[str, ...] = ()
 
 
@@ -251,6 +347,113 @@ def _parse_number_token(token: str) -> int:
         return int(token)
     return number_words.get(token, 0)
 
+
+# ---------------------------------------------------------------------------
+# Trigger condition parsing
+# ---------------------------------------------------------------------------
+
+def _match_trigger_patterns(
+    text: str,
+    patterns: tuple[tuple[str, str], ...],
+    trigger_word: str,
+) -> TriggerCondition | None:
+    for kind, pattern in patterns:
+        m = re.match(pattern, text)
+        if m:
+            return TriggerCondition(kind=kind, trigger=trigger_word, raw_text=m.group(0))
+    return None
+
+
+def _parse_trigger_condition(normalized_line: str) -> tuple[TriggerCondition | None, str]:
+    """Try to parse a trigger condition from the start of a normalized line.
+
+    Returns (TriggerCondition, remainder_effect_text) or (None, original_line).
+    The remainder is the effect clause after the condition, with leading
+    punctuation and whitespace stripped.
+    """
+    if normalized_line.startswith("whenever "):
+        cond = _match_trigger_patterns(normalized_line, WHENEVER_TRIGGER_PATTERNS, "whenever")
+        if cond:
+            remainder = normalized_line[len(cond.raw_text):].lstrip(" ,")
+            return cond, remainder
+
+    if normalized_line.startswith("when "):
+        cond = _match_trigger_patterns(normalized_line, WHEN_TRIGGER_PATTERNS, "when")
+        if cond:
+            remainder = normalized_line[len(cond.raw_text):].lstrip(" ,")
+            return cond, remainder
+
+    if normalized_line.startswith("at "):
+        cond = _match_trigger_patterns(normalized_line, AT_TRIGGER_PATTERNS, "at")
+        if cond:
+            remainder = normalized_line[len(cond.raw_text):].lstrip(" ,")
+            return cond, remainder
+
+    return None, normalized_line
+
+
+def _extract_if_condition(effect_text: str) -> tuple[str | None, str]:
+    """Strip a trailing 'if ...' clause from an effect and return (if_kind, clean_effect).
+
+    Returns (None, original_text) if no recognized 'if' condition is present.
+    """
+    # Look for ", if ..." near the end of the effect text
+    if_match = re.search(r",\s*(if .+)$", effect_text)
+    if not if_match:
+        return None, effect_text
+
+    if_clause = if_match.group(1)
+    for kind, pattern in IF_CONDITION_PATTERNS:
+        if re.match(pattern, if_clause):
+            clean = effect_text[: if_match.start()].strip()
+            return kind, clean
+
+    return None, effect_text
+
+
+def _parse_triggered_ability(line: str) -> ParsedTriggeredAbility | None:
+    """Parse a single oracle text line as a triggered ability.
+
+    Returns None if the line doesn't start with a trigger word at all,
+    so the caller can try other parsers. Returns a ParsedTriggeredAbility
+    with supported=False if the trigger prefix is recognized but the
+    condition or effect is not.
+    """
+    normalized = normalize_creature_line(line)
+
+    condition, remainder = _parse_trigger_condition(normalized)
+    if condition is None:
+        return None  # not a triggered ability line
+
+    # Strip leading colon/comma that sometimes follows the condition clause
+    remainder = remainder.lstrip(": ")
+
+    # Extract any trailing "if ..." guard on the effect
+    if_kind, clean_effect = _extract_if_condition(remainder)
+
+    instruction, effect_kind = _parse_primary_instruction(clean_effect, activated=False)
+
+    if instruction is not None and if_kind is not None:
+        # Attach the if-condition into the instruction payload
+        instruction = OracleInstruction(
+            instruction.kind,
+            instruction.value,
+            {**instruction.payload, "if_condition": if_kind},
+        )
+
+    supported = instruction is not None
+    return ParsedTriggeredAbility(
+        source_line=line,
+        condition=condition,
+        instruction=instruction,
+        supported=supported,
+        effect_kind=effect_kind if supported else "unsupported",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Effect instruction parsing (unchanged from original, reproduced in full)
+# ---------------------------------------------------------------------------
 
 def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleInstruction | None, str]:
     if activated and ("untap this artifact" in text or "untap this permanent" in text):
@@ -469,8 +672,31 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
     if "counter target spell" in text:
         return _instruction("counter_top_stack_spell"), "spell_pattern"
 
+    # Triggered-ability effect shorthands (no "activated" guard needed)
+    if "draw a card" in text:
+        return _instruction("draw_controller_cards", amount=1), "triggered_draw"
+
+    if "put a +1/+1 counter on this creature" in text:
+        return _instruction("add_counter_to_self", power=1, toughness=1), "triggered_counter"
+
+    if "put a +1/+1 counter on target creature" in text:
+        return _instruction("add_counter_to_target", power=1, toughness=1), "triggered_counter"
+
+    if "you lose the game" in text:
+        return _instruction("player_loses_game"), "triggered_loss"
+
+    if "you win the game" in text:
+        return _instruction("player_wins_game"), "triggered_win"
+
+    if "sacrifice this permanent" in text or "sacrifice this creature" in text:
+        return _instruction("sacrifice_self"), "triggered_sacrifice"
+
     return None, "unsupported"
 
+
+# ---------------------------------------------------------------------------
+# Creature-line helpers (unchanged)
+# ---------------------------------------------------------------------------
 
 def _is_supported_keyword_line(line: str) -> bool:
     normalized = normalize_creature_line(line)
@@ -545,21 +771,45 @@ def _is_supported_static_creature_line(line: str) -> bool:
     return any(normalized.startswith(pattern) for pattern in static_patterns)
 
 
-def _parse_creature_program(oracle_text: str) -> tuple[bool, str, str, tuple[OracleInstruction, ...], tuple[ParsedActivatedAbility, ...], tuple[str, ...]]:
+# ---------------------------------------------------------------------------
+# Creature program parser — updated to handle triggered abilities per line
+# ---------------------------------------------------------------------------
+
+def _parse_creature_program(
+    oracle_text: str,
+) -> tuple[bool, str, str, tuple[OracleInstruction, ...], tuple[ParsedActivatedAbility, ...], tuple[ParsedTriggeredAbility, ...], tuple[str, ...]]:
     text = oracle_text.strip()
     if not text:
-        return True, "creature_simple", "simple creature support", (), (), ()
+        return True, "creature_simple", "simple creature support", (), (), (), ()
 
     instructions: list[OracleInstruction] = []
     activated: list[ParsedActivatedAbility] = []
+    triggered: list[ParsedTriggeredAbility] = []
     static_lines: list[str] = []
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
-    for line in lines:
-        if _is_supported_keyword_line(line):
-            instructions.append(OracleInstruction("keyword_line", normalize_creature_line(line)))
-            static_lines.append(normalize_creature_line(line))
+
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
             continue
 
+        # 1. Plain keyword line (e.g. "Flying, Trample")
+        if _is_supported_keyword_line(line):
+            normalized = normalize_creature_line(line)
+            instructions.append(OracleInstruction("keyword_line", normalized))
+            static_lines.append(normalized)
+            continue
+
+        # 2. Triggered ability
+        trig = _parse_triggered_ability(line)
+        if trig is not None:
+            if not trig.supported:
+                return False, "unsupported", "unsupported triggered ability", (), (), (), ()
+            triggered.append(trig)
+            if trig.instruction is not None:
+                instructions.append(trig.instruction)
+            continue
+
+        # 3. Activated ability
         ability = _parse_activated_ability(line)
         if ability is not None and ability.supported:
             activated.append(ability)
@@ -567,15 +817,24 @@ def _parse_creature_program(oracle_text: str) -> tuple[bool, str, str, tuple[Ora
                 instructions.append(ability.instruction)
             continue
 
+        # 4. Static text
         if _is_supported_static_creature_line(line):
             normalized = normalize_creature_line(line)
             instructions.append(OracleInstruction("static_line", normalized))
             static_lines.append(normalized)
             continue
 
-        return False, "unsupported", "creature text too complex", (), (), ()
+        return False, "unsupported", "creature text too complex", (), (), (), ()
 
-    return True, "creature_simple", "simple creature support", tuple(instructions), tuple(activated), tuple(static_lines)
+    return (
+        True,
+        "creature_simple",
+        "simple creature support",
+        tuple(instructions),
+        tuple(activated),
+        tuple(triggered),
+        tuple(static_lines),
+    )
 
 
 def _parse_noncreature_abilities(oracle_text: str) -> tuple[ParsedActivatedAbility, ...]:
@@ -589,6 +848,23 @@ def _parse_noncreature_abilities(oracle_text: str) -> tuple[ParsedActivatedAbili
             abilities.append(ability)
     return tuple(abilities)
 
+
+def _parse_noncreature_triggered(oracle_text: str) -> tuple[ParsedTriggeredAbility, ...]:
+    """Extract triggered abilities from non-creature oracle text."""
+    abilities: list[ParsedTriggeredAbility] = []
+    for raw_line in oracle_text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        trig = _parse_triggered_ability(line)
+        if trig is not None:
+            abilities.append(trig)
+    return tuple(abilities)
+
+
+# ---------------------------------------------------------------------------
+# Top-level compiler
+# ---------------------------------------------------------------------------
 
 @lru_cache(maxsize=2048)
 def _compile_card_oracle(
@@ -613,8 +889,8 @@ def _compile_card_oracle(
         return OracleProgram(True, "land_mana", "basic land support", normalized_text, tokens)
 
     if primary_type == "creature":
-        supported, effect_kind, reason, instructions, activated, static_lines = _parse_creature_program(oracle_text)
-        return OracleProgram(supported, effect_kind, reason, normalized_text, tokens, instructions, activated, static_lines)
+        supported, effect_kind, reason, instructions, activated, triggered, static_lines = _parse_creature_program(oracle_text)
+        return OracleProgram(supported, effect_kind, reason, normalized_text, tokens, instructions, activated, triggered, static_lines)
 
     if primary_type in {"artifact", "enchantment", "instant", "sorcery"}:
         if not normalized_text:
@@ -630,8 +906,15 @@ def _compile_card_oracle(
             for pattern in SUPPORTED_SPELL_PATTERNS
             if pattern in normalized_text
         )
-        abilities = _parse_noncreature_abilities(oracle_text)
-        if instructions or any(ability.supported for ability in abilities):
+
+        activated_abilities = _parse_noncreature_abilities(oracle_text)
+        triggered_abilities = _parse_noncreature_triggered(oracle_text)
+
+        # An unsupported triggered ability on a non-creature marks the card unsupported
+        if any(not t.supported for t in triggered_abilities):
+            return OracleProgram(False, "unsupported", "unsupported triggered ability", normalized_text, tokens)
+
+        if instructions or any(a.supported for a in activated_abilities) or triggered_abilities:
             return OracleProgram(
                 True,
                 "spell_pattern",
@@ -639,7 +922,8 @@ def _compile_card_oracle(
                 normalized_text,
                 tokens,
                 tuple(instructions),
-                abilities,
+                activated_abilities,
+                triggered_abilities,
             )
 
         return OracleProgram(False, "unsupported", "effect not in basic pattern set", normalized_text, tokens)
