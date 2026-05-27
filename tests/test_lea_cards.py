@@ -22,7 +22,7 @@ _UNTESTED = [
 ]
 
 def test_basalt_monolith_tap_and_untap(all_cards):
-    monolith = next(card for card in all_cards if card.name == "Basalt Monolith")
+    monolith = _get(all_cards, "Basalt Monolith")
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=monolith)])
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
@@ -389,8 +389,8 @@ def test_choose_combat_instant_cast_action_prefers_interaction_in_block_step(all
     assert action.target_player_index == 0
 
 def test_destroy_all_lands_spell(all_cards):
-    armageddon = next(card for card in all_cards if card.name == "Armageddon")
-    plains = next(card for card in all_cards if card.name == "Plains")
+    armageddon = _get(all_cards, "Armageddon")
+    plains = _get(all_cards, "Plains")
 
     p1 = PlayerState(name="P1", hand=[armageddon])
     p2 = PlayerState(name="P2")
@@ -405,8 +405,8 @@ def test_destroy_all_lands_spell(all_cards):
     assert len(p2.battlefield) == 0
 
 def test_ancestral_recall_draws_three(all_cards):
-    recall = next(card for card in all_cards if card.name == "Ancestral Recall")
-    island = next(card for card in all_cards if card.name == "Island")
+    recall = _get(all_cards, "Ancestral Recall")
+    island = _get(all_cards, "Island")
 
     p1 = PlayerState(name="P1", hand=[recall])
     p2 = PlayerState(name="P2", library=[island, island, island, island])
@@ -418,9 +418,9 @@ def test_ancestral_recall_draws_three(all_cards):
     assert len(p2.hand) == 3
 
 def test_counterspell_counters_spell_on_stack(all_cards):
-    recall = next(card for card in all_cards if card.name == "Ancestral Recall")
-    counterspell = next(card for card in all_cards if card.name == "Counterspell")
-    island = next(card for card in all_cards if card.name == "Island")
+    recall = _get(all_cards, "Ancestral Recall")
+    counterspell = _get(all_cards, "Counterspell")
+    island = _get(all_cards, "Island")
 
     p1 = PlayerState(name="P1", hand=[recall])
     p2 = PlayerState(name="P2", hand=[counterspell], library=[island, island, island, island])
@@ -437,8 +437,8 @@ def test_counterspell_counters_spell_on_stack(all_cards):
     assert p1.graveyard[0].name == "Ancestral Recall"
 
 def test_disenchant_destroys_target_artifact(all_cards):
-    disenchant = next(card for card in all_cards if card.name == "Disenchant")
-    lotus = next(card for card in all_cards if card.name == "Black Lotus")
+    disenchant = _get(all_cards, "Disenchant")
+    lotus = _get(all_cards, "Black Lotus")
 
     p1 = PlayerState(name="P1", hand=[disenchant])
     p2 = PlayerState(name="P2")
@@ -453,9 +453,9 @@ def test_disenchant_destroys_target_artifact(all_cards):
     assert p2.graveyard[0].name == "Black Lotus"
 
 def test_ice_storm_destroys_selected_target_land(all_cards):
-    ice_storm = next(card for card in all_cards if card.name == "Ice Storm")
-    island = next(card for card in all_cards if card.name == "Island")
-    mountain = next(card for card in all_cards if card.name == "Mountain")
+    ice_storm = _get(all_cards, "Ice Storm")
+    island = _get(all_cards, "Island")
+    mountain = _get(all_cards, "Mountain")
 
     p1 = PlayerState(name="P1", hand=[ice_storm])
     p2 = PlayerState(name="P2")
@@ -477,8 +477,8 @@ def test_ice_storm_destroys_selected_target_land(all_cards):
     assert p2.graveyard[0].name == "Mountain"
 
 def test_bad_moon_applies_global_black_creature_buff(all_cards):
-    bad_moon = next(card for card in all_cards if card.name == "Bad Moon")
-    black_knight = next(card for card in all_cards if card.name == "Black Knight")
+    bad_moon = _get(all_cards, "Bad Moon")
+    black_knight = _get(all_cards, "Black Knight")
 
     p1 = PlayerState(name="P1", hand=[bad_moon])
     p2 = PlayerState(name="P2")
@@ -505,17 +505,17 @@ def test_discard_effect():
     assert len(p2.graveyard) == 2
 
 def test_creature_with_keyword_reminder_is_supported(all_cards):
-    serra_angel = next(card for card in all_cards if card.name == "Serra Angel")
+    serra_angel = _get(all_cards, "Serra Angel")
     classification = classify_card(serra_angel)
     assert classification.supported
 
 def test_creature_with_activated_damage_is_supported(all_cards):
-    prodigal = next(card for card in all_cards if card.name == "Prodigal Sorcerer")
+    prodigal = _get(all_cards, "Prodigal Sorcerer")
     classification = classify_card(prodigal)
     assert classification.supported
 
 def test_activate_prodigal_sorcerer_ability(all_cards):
-    prodigal = next(card for card in all_cards if card.name == "Prodigal Sorcerer")
+    prodigal = _get(all_cards, "Prodigal Sorcerer")
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=prodigal)])
     p2 = PlayerState(name="P2", life=20)
     game = Game(players=[p1, p2])
@@ -526,7 +526,7 @@ def test_activate_prodigal_sorcerer_ability(all_cards):
     assert p1.battlefield[0].tapped is True
 
 def test_nevinyrrals_disk_enters_tapped(all_cards):
-    disk = next(card for card in all_cards if card.name == "Nevinyrral's Disk")
+    disk = _get(all_cards, "Nevinyrral's Disk")
     p1 = PlayerState(name="P1", hand=[disk])
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
@@ -540,7 +540,7 @@ def test_nevinyrrals_disk_enters_tapped(all_cards):
     assert game.tap_permanent(0, "Nevinyrral's Disk") is False
 
 def test_activate_nevinyrrals_disk_destroys_artifacts_creatures_and_enchantments(all_cards):
-    disk = next(card for card in all_cards if card.name == "Nevinyrral's Disk")
+    disk = _get(all_cards, "Nevinyrral's Disk")
     land = _mk_card("Test Plains", "Land")
     artifact = _mk_card("Test Relic", "Artifact")
     creature = _mk_card("Test Bear", "Creature — Bear")
@@ -576,7 +576,7 @@ def test_activate_nevinyrrals_disk_destroys_artifacts_creatures_and_enchantments
     assert any(card.name == "Test Aura" for card in p2.graveyard)
 
 def test_activate_black_lotus_adds_mana_and_sacrifices(all_cards):
-    lotus = next(card for card in all_cards if card.name == "Black Lotus")
+    lotus = _get(all_cards, "Black Lotus")
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=lotus)])
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
@@ -589,7 +589,7 @@ def test_activate_black_lotus_adds_mana_and_sacrifices(all_cards):
     assert p1.graveyard and p1.graveyard[0].name == "Black Lotus"
 
 def test_activate_black_lotus_with_selected_color(all_cards):
-    lotus = next(card for card in all_cards if card.name == "Black Lotus")
+    lotus = _get(all_cards, "Black Lotus")
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=lotus)])
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
@@ -608,7 +608,7 @@ def test_activate_black_lotus_with_selected_color(all_cards):
     assert p1.graveyard and p1.graveyard[0].name == "Black Lotus"
 
 def test_animate_dead_reanimates_creature(all_cards):
-    animate_dead = next(card for card in all_cards if card.name == "Animate Dead")
+    animate_dead = _get(all_cards, "Animate Dead")
     dead_creature = _mk_card("Dead Bear", "Creature — Bear")
 
     p1 = PlayerState(name="P1", hand=[animate_dead], graveyard=[dead_creature])
@@ -624,7 +624,7 @@ def test_animate_dead_reanimates_creature(all_cards):
     assert any(perm.card.name == "Animate Dead" for perm in p1.battlefield)
 
 def test_animate_artifact_makes_artifact_into_creature(all_cards):
-    animate = next(card for card in all_cards if card.name == "Animate Artifact")
+    animate = _get(all_cards, "Animate Artifact")
     # Create a test artifact with mana value 3
     relic = _mk_card("Test Relic", "Artifact")
     relic_def = CardDefinition(
@@ -658,8 +658,8 @@ def test_animate_artifact_makes_artifact_into_creature(all_cards):
     assert aura.metadata.get("attached_to") is perm
 
 def test_braingeyser_draws_x_cards(all_cards):
-    braingeyser = next(card for card in all_cards if card.name == "Braingeyser")
-    island = next(card for card in all_cards if card.name == "Island")
+    braingeyser = _get(all_cards, "Braingeyser")
+    island = _get(all_cards, "Island")
     p1 = PlayerState(name="P1", hand=[braingeyser])
     p2 = PlayerState(name="P2", library=[island, island, island, island, island])
     game = Game(players=[p1, p2])
@@ -670,8 +670,8 @@ def test_braingeyser_draws_x_cards(all_cards):
     assert len(p2.hand) == 4
 
 def test_ankh_of_mishra_triggers_on_land_entry(all_cards):
-    ankh = next(card for card in all_cards if card.name == "Ankh of Mishra")
-    plains = next(card for card in all_cards if card.name == "Plains")
+    ankh = _get(all_cards, "Ankh of Mishra")
+    plains = _get(all_cards, "Plains")
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=ankh)])
     p2 = PlayerState(name="P2", hand=[plains], life=20)
     game = Game(players=[p1, p2])
@@ -682,8 +682,8 @@ def test_ankh_of_mishra_triggers_on_land_entry(all_cards):
     assert p2.life == 18
 
 def test_black_vise_upkeep_trigger(all_cards):
-    vise = next(card for card in all_cards if card.name == "Black Vise")
-    island = next(card for card in all_cards if card.name == "Island")
+    vise = _get(all_cards, "Black Vise")
+    island = _get(all_cards, "Island")
     p1 = PlayerState(name="P1", hand=[vise])
     p2 = PlayerState(name="P2", hand=[island, island, island, island, island, island], life=20)
     game = Game(players=[p1, p2])
@@ -696,7 +696,7 @@ def test_black_vise_upkeep_trigger(all_cards):
     assert p2.life == 18
 
 def test_unsummon_returns_target_creature(all_cards):
-    unsummon = next(card for card in all_cards if card.name == "Unsummon")
+    unsummon = _get(all_cards, "Unsummon")
     creature = _mk_card("Bear", "Creature — Bear")
     p1 = PlayerState(name="P1", hand=[unsummon])
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=creature)])
@@ -709,8 +709,8 @@ def test_unsummon_returns_target_creature(all_cards):
     assert any(card.name == "Bear" for card in p2.hand)
 
 def test_wheel_of_fortune_discards_then_draws(all_cards):
-    wheel = next(card for card in all_cards if card.name == "Wheel of Fortune")
-    island = next(card for card in all_cards if card.name == "Island")
+    wheel = _get(all_cards, "Wheel of Fortune")
+    island = _get(all_cards, "Island")
     p1 = PlayerState(name="P1", hand=[wheel, island], library=[island] * 10)
     p2 = PlayerState(name="P2", hand=[island, island], library=[island] * 10)
     game = Game(players=[p1, p2])
@@ -722,8 +722,8 @@ def test_wheel_of_fortune_discards_then_draws(all_cards):
     assert len(p2.hand) == 7
 
 def test_timetwister_resets_and_draws_seven(all_cards):
-    twister = next(card for card in all_cards if card.name == "Timetwister")
-    island = next(card for card in all_cards if card.name == "Island")
+    twister = _get(all_cards, "Timetwister")
+    island = _get(all_cards, "Island")
     bear = _mk_card("Dead Bear", "Creature — Bear")
     p1 = PlayerState(name="P1", hand=[twister, island], graveyard=[bear], library=[island] * 10)
     p2 = PlayerState(name="P2", hand=[island], graveyard=[bear], library=[island] * 10)
@@ -736,8 +736,8 @@ def test_timetwister_resets_and_draws_seven(all_cards):
     assert len(p2.hand) == 7
 
 def test_demonic_tutor_puts_library_card_into_hand(all_cards):
-    tutor = next(card for card in all_cards if card.name == "Demonic Tutor")
-    island = next(card for card in all_cards if card.name == "Island")
+    tutor = _get(all_cards, "Demonic Tutor")
+    island = _get(all_cards, "Island")
     p1 = PlayerState(name="P1", hand=[tutor], library=[island])
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
@@ -748,7 +748,7 @@ def test_demonic_tutor_puts_library_card_into_hand(all_cards):
     assert any(card.name == "Island" for card in p1.hand)
 
 def test_time_walk_grants_extra_turn(all_cards):
-    time_walk = next(card for card in all_cards if card.name == "Time Walk")
+    time_walk = _get(all_cards, "Time Walk")
     p1 = PlayerState(name="P1", hand=[time_walk])
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
@@ -759,7 +759,7 @@ def test_time_walk_grants_extra_turn(all_cards):
     assert game.extra_turns.get(0, 0) == 1
 
 def test_sacrifice_spell_adds_black_mana(all_cards):
-    sacrifice = next(card for card in all_cards if card.name == "Sacrifice")
+    sacrifice = _get(all_cards, "Sacrifice")
     creature = _mk_card("Mana Bear", "Creature — Bear")
     creature = CardDefinition(
         name=creature.name,
@@ -784,7 +784,7 @@ def test_sacrifice_spell_adds_black_mana(all_cards):
     assert not p1.battlefield
 
 def test_lace_spell_changes_target_color(all_cards):
-    deathlace = next(card for card in all_cards if card.name == "Deathlace")
+    deathlace = _get(all_cards, "Deathlace")
     creature = _mk_card("Bear", "Creature — Bear")
     p1 = PlayerState(name="P1", hand=[deathlace])
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=creature)])
@@ -796,7 +796,7 @@ def test_lace_spell_changes_target_color(all_cards):
     assert p2.battlefield[0].metadata.get("color_override") == "B"
 
 def test_orcish_oriflamme_applies_power_bonus(all_cards):
-    oriflamme = next(card for card in all_cards if card.name == "Orcish Oriflamme")
+    oriflamme = _get(all_cards, "Orcish Oriflamme")
     creature = _mk_card("Attacker", "Creature — Bear")
     p1 = PlayerState(name="P1", hand=[oriflamme], battlefield=[Permanent(card=creature)])
     p2 = PlayerState(name="P2")
@@ -808,8 +808,8 @@ def test_orcish_oriflamme_applies_power_bonus(all_cards):
     assert p1.battlefield[0].effective_power == 3
 
 def test_aspect_of_wolf_applies_half_forest_buff(all_cards):
-    aspect = next(card for card in all_cards if card.name == "Aspect of Wolf")
-    forest = next(card for card in all_cards if card.name == "Forest")
+    aspect = _get(all_cards, "Aspect of Wolf")
+    forest = _get(all_cards, "Forest")
     creature = _mk_card("Test Bear", "Creature — Bear")
 
     # Set up controller with 3 Forests -> floor(3/2)=1, ceil(3/2)=2 -> +1/+2
@@ -829,8 +829,8 @@ def test_aspect_of_wolf_applies_half_forest_buff(all_cards):
     assert p1.battlefield[0].effective_toughness == 4
 
 def test_jayemdae_tome_activated_draw(all_cards):
-    tome = next(card for card in all_cards if card.name == "Jayemdae Tome")
-    island = next(card for card in all_cards if card.name == "Island")
+    tome = _get(all_cards, "Jayemdae Tome")
+    island = _get(all_cards, "Island")
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=tome)], library=[island])
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
@@ -841,8 +841,8 @@ def test_jayemdae_tome_activated_draw(all_cards):
     assert len(p1.hand) == 1
 
 def test_glasses_of_urza_look_at_hand(all_cards):
-    glasses = next(card for card in all_cards if card.name == "Glasses of Urza")
-    island = next(card for card in all_cards if card.name == "Island")
+    glasses = _get(all_cards, "Glasses of Urza")
+    island = _get(all_cards, "Island")
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=glasses)])
     p2 = PlayerState(name="P2", hand=[island, island])
     game = Game(players=[p1, p2])
@@ -853,12 +853,12 @@ def test_glasses_of_urza_look_at_hand(all_cards):
     assert any("looked at" in line.lower() for line in game.log)
 
 def test_black_knight_classifies_supported(all_cards):
-    knight = next(card for card in all_cards if card.name == "Black Knight")
+    knight = _get(all_cards, "Black Knight")
     result = classify_card(knight)
     assert result.supported
 
 def test_shivan_dragon_activated_plus_one_power(all_cards):
-    dragon = next(card for card in all_cards if card.name == "Shivan Dragon")
+    dragon = _get(all_cards, "Shivan Dragon")
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=dragon)])
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
@@ -870,7 +870,7 @@ def test_shivan_dragon_activated_plus_one_power(all_cards):
     assert p1.battlefield[0].effective_power == before + 1
 
 def test_granite_gargoyle_activated_plus_one_toughness(all_cards):
-    gargoyle = next(card for card in all_cards if card.name == "Granite Gargoyle")
+    gargoyle = _get(all_cards, "Granite Gargoyle")
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=gargoyle)])
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
@@ -882,7 +882,7 @@ def test_granite_gargoyle_activated_plus_one_toughness(all_cards):
     assert p1.battlefield[0].effective_toughness == before + 1
 
 def test_frozen_shade_activated_plus_one_plus_one(all_cards):
-    shade = next(card for card in all_cards if card.name == "Frozen Shade")
+    shade = _get(all_cards, "Frozen Shade")
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=shade)])
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
@@ -896,7 +896,7 @@ def test_frozen_shade_activated_plus_one_plus_one(all_cards):
     assert p1.battlefield[0].effective_toughness == before_toughness + 1
 
 def test_goblin_balloon_brigade_gains_flying_flag(all_cards):
-    goblin = next(card for card in all_cards if card.name == "Goblin Balloon Brigade")
+    goblin = _get(all_cards, "Goblin Balloon Brigade")
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=goblin)])
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
@@ -907,7 +907,7 @@ def test_goblin_balloon_brigade_gains_flying_flag(all_cards):
     assert p1.battlefield[0].metadata.get("gains_flying_until_eot") is True
 
 def test_clockwork_beast_enters_with_seven_plus_zero(all_cards):
-    beast = next(card for card in all_cards if card.name == "Clockwork Beast")
+    beast = _get(all_cards, "Clockwork Beast")
     p1 = PlayerState(name="P1", hand=[beast])
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
@@ -919,7 +919,7 @@ def test_clockwork_beast_enters_with_seven_plus_zero(all_cards):
     assert perm.power_bonus >= 7
 
 def test_rock_hydra_x_counters_on_entry(all_cards):
-    hydra = next(card for card in all_cards if card.name == "Rock Hydra")
+    hydra = _get(all_cards, "Rock Hydra")
     p1 = PlayerState(name="P1", hand=[hydra])
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
@@ -932,8 +932,8 @@ def test_rock_hydra_x_counters_on_entry(all_cards):
     assert perm.toughness_bonus >= 3
 
 def test_sea_serpent_attack_restriction(all_cards):
-    serpent = next(card for card in all_cards if card.name == "Sea Serpent")
-    island = next(card for card in all_cards if card.name == "Island")
+    serpent = _get(all_cards, "Sea Serpent")
+    island = _get(all_cards, "Island")
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=serpent)])
     p2 = PlayerState(name="P2", battlefield=[])
     game = Game(players=[p1, p2])
@@ -944,7 +944,7 @@ def test_sea_serpent_attack_restriction(all_cards):
 
 def test_summoning_sickness_blocks_attacks_and_tap_abilities(all_cards):
     creature = _mk_card("Test Bear", "Creature — Bear")
-    llanowar_elves = next(card for card in all_cards if card.name == "Llanowar Elves")
+    llanowar_elves = _get(all_cards, "Llanowar Elves")
 
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=creature), Permanent(card=llanowar_elves)])
     p2 = PlayerState(name="P2")
@@ -961,7 +961,7 @@ def test_summoning_sickness_blocks_attacks_and_tap_abilities(all_cards):
     assert "summoning sickness" in result.details.lower()
 
 def test_keldon_warlord_dynamic_pt(all_cards):
-    warlord = next(card for card in all_cards if card.name == "Keldon Warlord")
+    warlord = _get(all_cards, "Keldon Warlord")
     creature = _mk_card("Helper", "Creature — Bear")
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=warlord), Permanent(card=creature)])
     p2 = PlayerState(name="P2")
@@ -973,9 +973,9 @@ def test_keldon_warlord_dynamic_pt(all_cards):
     assert warlord_perm.effective_toughness == 2
 
 def test_verduran_enchantress_draw_trigger(all_cards):
-    enchantress = next(card for card in all_cards if card.name == "Verduran Enchantress")
-    blessing = next(card for card in all_cards if card.name == "Blessing")
-    island = next(card for card in all_cards if card.name == "Island")
+    enchantress = _get(all_cards, "Verduran Enchantress")
+    blessing = _get(all_cards, "Blessing")
+    island = _get(all_cards, "Island")
     p1 = PlayerState(name="P1", hand=[blessing], library=[island], battlefield=[Permanent(card=enchantress)])
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
@@ -986,7 +986,7 @@ def test_verduran_enchantress_draw_trigger(all_cards):
     assert len(p1.hand) == 1
 
 def test_fog_sets_combat_damage_prevention(all_cards):
-    fog = next(card for card in all_cards if card.name == "Fog")
+    fog = _get(all_cards, "Fog")
     p1 = PlayerState(name="P1", hand=[fog])
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
@@ -997,8 +997,8 @@ def test_fog_sets_combat_damage_prevention(all_cards):
     assert game.combat_damage_prevented_until_eot is True
 
 def test_howling_mine_draw_step_bonus(all_cards):
-    mine = next(card for card in all_cards if card.name == "Howling Mine")
-    island = next(card for card in all_cards if card.name == "Island")
+    mine = _get(all_cards, "Howling Mine")
+    island = _get(all_cards, "Island")
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=mine)])
     p2 = PlayerState(name="P2", library=[island, island, island])
     game = Game(players=[p1, p2])
@@ -1009,8 +1009,8 @@ def test_howling_mine_draw_step_bonus(all_cards):
     assert len(p2.hand) == 2
 
 def test_stasis_skips_untap_step(all_cards):
-    stasis = next(card for card in all_cards if card.name == "Stasis")
-    island = next(card for card in all_cards if card.name == "Island")
+    stasis = _get(all_cards, "Stasis")
+    island = _get(all_cards, "Island")
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=stasis)])
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=island, tapped=True)])
     game = Game(players=[p1, p2])
@@ -1021,7 +1021,7 @@ def test_stasis_skips_untap_step(all_cards):
     assert p2.battlefield[0].tapped is True
 
 def test_smoke_limits_creature_untap(all_cards):
-    smoke = next(card for card in all_cards if card.name == "Smoke")
+    smoke = _get(all_cards, "Smoke")
     c1 = _mk_card("Bear A", "Creature — Bear")
     c2 = _mk_card("Bear B", "Creature — Bear")
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=smoke)])
@@ -1037,8 +1037,8 @@ def test_smoke_limits_creature_untap(all_cards):
     assert sum(1 for perm in p2.battlefield if not perm.tapped) == 1
 
 def test_winter_orb_limits_land_untap(all_cards):
-    orb = next(card for card in all_cards if card.name == "Winter Orb")
-    island = next(card for card in all_cards if card.name == "Island")
+    orb = _get(all_cards, "Winter Orb")
+    island = _get(all_cards, "Island")
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=orb, tapped=False)])
     p2 = PlayerState(
         name="P2",
@@ -1051,7 +1051,7 @@ def test_winter_orb_limits_land_untap(all_cards):
     assert untapped == 1
 
 def test_meekstone_prevents_big_creature_untap(all_cards):
-    meekstone = next(card for card in all_cards if card.name == "Meekstone")
+    meekstone = _get(all_cards, "Meekstone")
     big = _mk_card("Big", "Creature — Giant")
     small = _mk_card("Small", "Creature — Bear")
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=meekstone)])
@@ -1070,8 +1070,8 @@ def test_meekstone_prevents_big_creature_untap(all_cards):
     assert p2.battlefield[1].tapped is False
 
 def test_mana_flare_adds_extra_mana(all_cards):
-    mana_flare = next(card for card in all_cards if card.name == "Mana Flare")
-    island = next(card for card in all_cards if card.name == "Island")
+    mana_flare = _get(all_cards, "Mana Flare")
+    island = _get(all_cards, "Island")
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=mana_flare), Permanent(card=island)])
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
@@ -1082,7 +1082,7 @@ def test_mana_flare_adds_extra_mana(all_cards):
     assert p1.mana_pool["U"] == 2
 
 def test_mana_pool_empties_between_steps(all_cards):
-    island = next(card for card in all_cards if card.name == "Island")
+    island = _get(all_cards, "Island")
     p1 = PlayerState(name="P1", mana_pool={"W": 0, "U": 2, "B": 0, "R": 0, "G": 0, "C": 1})
     p2 = PlayerState(name="P2", library=[island])
     game = Game(players=[p1, p2])
@@ -1093,7 +1093,7 @@ def test_mana_pool_empties_between_steps(all_cards):
     assert p1.mana_pool["C"] == 0
 
 def test_jade_statue_animates_until_end_combat(all_cards):
-    statue = next(card for card in all_cards if card.name == "Jade Statue")
+    statue = _get(all_cards, "Jade Statue")
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=statue)])
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
@@ -1107,7 +1107,7 @@ def test_jade_statue_animates_until_end_combat(all_cards):
     assert p1.battlefield[0].metadata.get("absolute_power") is None
 
 def test_the_hive_creates_wasp_token(all_cards):
-    hive = next(card for card in all_cards if card.name == "The Hive")
+    hive = _get(all_cards, "The Hive")
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=hive)])
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
@@ -1118,8 +1118,8 @@ def test_the_hive_creates_wasp_token(all_cards):
     assert any(perm.card.name == "Wasp" for perm in p1.battlefield)
 
 def test_animate_wall_allows_wall_to_attack(all_cards):
-    animate_wall = next(card for card in all_cards if card.name == "Animate Wall")
-    wall = next(card for card in all_cards if card.name == "Wall of Stone")
+    animate_wall = _get(all_cards, "Animate Wall")
+    wall = _get(all_cards, "Wall of Stone")
     p1 = PlayerState(name="P1", hand=[animate_wall])
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=wall)])
     game = Game(players=[p1, p2])
@@ -1131,12 +1131,12 @@ def test_animate_wall_allows_wall_to_attack(all_cards):
     assert game.can_attack(wall_perm, defending_player_index=0) is True
 
 def test_black_lotus_is_classified_supported(all_cards):
-    lotus = next(card for card in all_cards if card.name == "Black Lotus")
+    lotus = _get(all_cards, "Black Lotus")
     classification = classify_card(lotus)
     assert classification.supported
 
 def test_castle_buffs_untapped_creatures_toughness(all_cards):
-    castle = next(card for card in all_cards if card.name == "Castle")
+    castle = _get(all_cards, "Castle")
     bear = _mk_card("Guard", "Creature — Bear")
     p1 = PlayerState(name="P1", hand=[castle], battlefield=[Permanent(card=bear, tapped=False)])
     p2 = PlayerState(name="P2")
@@ -1148,7 +1148,7 @@ def test_castle_buffs_untapped_creatures_toughness(all_cards):
     assert p1.battlefield[0].effective_toughness >= 4
 
 def test_circle_of_protection_activation_sets_prevention(all_cards):
-    cop = next(card for card in all_cards if card.name == "Circle of Protection: Blue")
+    cop = _get(all_cards, "Circle of Protection: Blue")
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=cop)])
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
@@ -1159,7 +1159,7 @@ def test_circle_of_protection_activation_sets_prevention(all_cards):
     assert p1.damage_prevention_pool == 1
 
 def test_conversion_sacrifices_on_upkeep_without_white_mana(all_cards):
-    conversion = next(card for card in all_cards if card.name == "Conversion")
+    conversion = _get(all_cards, "Conversion")
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=conversion)])
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
@@ -1170,7 +1170,7 @@ def test_conversion_sacrifices_on_upkeep_without_white_mana(all_cards):
     assert any(card.name == "Conversion" for card in p1.graveyard)
 
 def test_dwarven_warriors_can_grant_unblockable(all_cards):
-    warriors = next(card for card in all_cards if card.name == "Dwarven Warriors")
+    warriors = _get(all_cards, "Dwarven Warriors")
     bear = _mk_card("Small Bear", "Creature — Bear")
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=warriors)])
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
@@ -1182,8 +1182,8 @@ def test_dwarven_warriors_can_grant_unblockable(all_cards):
     assert p2.battlefield[0].metadata.get("cant_be_blocked_until_eot") is True
 
 def test_nightmare_dynamic_power_toughness_by_swamps(all_cards):
-    nightmare = next(card for card in all_cards if card.name == "Nightmare")
-    swamp = next(card for card in all_cards if card.name == "Swamp")
+    nightmare = _get(all_cards, "Nightmare")
+    swamp = _get(all_cards, "Swamp")
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=nightmare), Permanent(card=swamp), Permanent(card=swamp)])
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
@@ -1194,8 +1194,8 @@ def test_nightmare_dynamic_power_toughness_by_swamps(all_cards):
     assert nm.effective_toughness == 2
 
 def test_sedge_troll_gets_bonus_with_swamp(all_cards):
-    troll = next(card for card in all_cards if card.name == "Sedge Troll")
-    swamp = next(card for card in all_cards if card.name == "Swamp")
+    troll = _get(all_cards, "Sedge Troll")
+    swamp = _get(all_cards, "Swamp")
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=troll), Permanent(card=swamp)])
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
@@ -1206,8 +1206,8 @@ def test_sedge_troll_gets_bonus_with_swamp(all_cards):
     assert tr.effective_toughness >= 3
 
 def test_balance_equalizes_lands_creatures_and_hand(all_cards):
-    balance = next(card for card in all_cards if card.name == "Balance")
-    plains = next(card for card in all_cards if card.name == "Plains")
+    balance = _get(all_cards, "Balance")
+    plains = _get(all_cards, "Plains")
     bear = _mk_card("Bear", "Creature — Bear")
     elf = _mk_card("Elf", "Creature — Elf")
 
@@ -1233,7 +1233,7 @@ def test_balance_equalizes_lands_creatures_and_hand(all_cards):
     assert len(p1.hand) == len(p2.hand)
 
 def test_forcefield_caps_next_damage_to_one(all_cards):
-    forcefield = next(card for card in all_cards if card.name == "Forcefield")
+    forcefield = _get(all_cards, "Forcefield")
     bolt = _mk_card("Bolt Test", "Instant", "Bolt Test deals 3 damage to any target.")
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=forcefield)], life=20)
     p2 = PlayerState(name="P2", hand=[bolt], life=20)
@@ -1247,7 +1247,7 @@ def test_forcefield_caps_next_damage_to_one(all_cards):
     assert p1.life == 19
 
 def test_gloom_tax_log_on_white_spell(all_cards):
-    gloom = next(card for card in all_cards if card.name == "Gloom")
+    gloom = _get(all_cards, "Gloom")
     white_spell = _mk_card("White Test", "Sorcery", "Target player loses 3 life.", colors=("W",))
     p1 = PlayerState(name="P1", hand=[gloom])
     p2 = PlayerState(name="P2", hand=[white_spell], life=20)
@@ -1260,8 +1260,8 @@ def test_gloom_tax_log_on_white_spell(all_cards):
     assert any("taxed by gloom" in line.lower() for line in game.log)
 
 def test_kormus_bell_animates_swamps(all_cards):
-    bell = next(card for card in all_cards if card.name == "Kormus Bell")
-    swamp = next(card for card in all_cards if card.name == "Swamp")
+    bell = _get(all_cards, "Kormus Bell")
+    swamp = _get(all_cards, "Swamp")
     p1 = PlayerState(name="P1", hand=[bell], battlefield=[Permanent(card=swamp)])
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
@@ -1275,8 +1275,8 @@ def test_kormus_bell_animates_swamps(all_cards):
     assert p1.battlefield[0].effective_toughness == 1
 
 def test_living_lands_animates_forests(all_cards):
-    living = next(card for card in all_cards if card.name == "Living Lands")
-    forest = next(card for card in all_cards if card.name == "Forest")
+    living = _get(all_cards, "Living Lands")
+    forest = _get(all_cards, "Forest")
     p1 = PlayerState(name="P1", hand=[living], battlefield=[Permanent(card=forest)])
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
@@ -1290,7 +1290,7 @@ def test_living_lands_animates_forests(all_cards):
     assert p1.battlefield[0].effective_toughness == 1
 
 def test_library_of_leng_sets_no_max_hand_size(all_cards):
-    library = next(card for card in all_cards if card.name == "Library of Leng")
+    library = _get(all_cards, "Library of Leng")
     p1 = PlayerState(name="P1", hand=[library])
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
@@ -1301,7 +1301,7 @@ def test_library_of_leng_sets_no_max_hand_size(all_cards):
     assert p1.has_no_max_hand_size is True
 
 def test_natural_selection_reorders_top_three(all_cards):
-    natural = next(card for card in all_cards if card.name == "Natural Selection")
+    natural = _get(all_cards, "Natural Selection")
     a = _mk_card("A", "Sorcery")
     b = _mk_card("B", "Sorcery")
     c = _mk_card("C", "Sorcery")
@@ -1316,7 +1316,7 @@ def test_natural_selection_reorders_top_three(all_cards):
     assert [card.name for card in p2.library[:3]] == ["C", "B", "A"]
 
 def test_word_of_command_forces_play_from_hand(all_cards):
-    word = next(card for card in all_cards if card.name == "Word of Command")
+    word = _get(all_cards, "Word of Command")
     card_in_hand = _mk_card("Victim Spell", "Sorcery")
     p1 = PlayerState(name="P1", hand=[word])
     p2 = PlayerState(name="P2", hand=[card_in_hand])
@@ -1329,7 +1329,7 @@ def test_word_of_command_forces_play_from_hand(all_cards):
     assert any(card.name == "Victim Spell" for card in p2.graveyard)
 
 def test_magical_hack_marks_target_text_modified(all_cards):
-    hack = next(card for card in all_cards if card.name == "Magical Hack")
+    hack = _get(all_cards, "Magical Hack")
     bear = _mk_card("Bear", "Creature — Bear")
     p1 = PlayerState(name="P1", hand=[hack])
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
@@ -1341,7 +1341,7 @@ def test_magical_hack_marks_target_text_modified(all_cards):
     assert p2.battlefield[0].metadata.get("text_modified") is True
 
 def test_sleight_of_mind_marks_target_text_modified(all_cards):
-    sleight = next(card for card in all_cards if card.name == "Sleight of Mind")
+    sleight = _get(all_cards, "Sleight of Mind")
     bear = _mk_card("Bear", "Creature — Bear")
     p1 = PlayerState(name="P1", hand=[sleight])
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
@@ -1353,7 +1353,7 @@ def test_sleight_of_mind_marks_target_text_modified(all_cards):
     assert p2.battlefield[0].metadata.get("text_modified") is True
 
 def test_blaze_of_glory_sets_forced_blocking_marker(all_cards):
-    blaze = next(card for card in all_cards if card.name == "Blaze of Glory")
+    blaze = _get(all_cards, "Blaze of Glory")
     bear = _mk_card("Bear", "Creature — Bear")
     p1 = PlayerState(name="P1", hand=[blaze])
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
@@ -1365,7 +1365,7 @@ def test_blaze_of_glory_sets_forced_blocking_marker(all_cards):
     assert p2.battlefield[0].metadata.get("must_block_all_until_eot") is True
 
 def test_camouflage_resolves_supported(all_cards):
-    camouflage = next(card for card in all_cards if card.name == "Camouflage")
+    camouflage = _get(all_cards, "Camouflage")
     p1 = PlayerState(name="P1", hand=[camouflage])
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
@@ -1376,8 +1376,8 @@ def test_camouflage_resolves_supported(all_cards):
     assert any("pile blocking" in line.lower() for line in game.log)
 
 def test_cyclopean_tomb_marks_land_as_swamp(all_cards):
-    tomb = next(card for card in all_cards if card.name == "Cyclopean Tomb")
-    plains = next(card for card in all_cards if card.name == "Plains")
+    tomb = _get(all_cards, "Cyclopean Tomb")
+    plains = _get(all_cards, "Plains")
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=tomb)])
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=plains)])
     game = Game(players=[p1, p2])
@@ -1388,7 +1388,7 @@ def test_cyclopean_tomb_marks_land_as_swamp(all_cards):
     assert p2.battlefield[0].metadata.get("land_type_override") == "swamp"
 
 def test_false_orders_marks_creature_removed_from_combat(all_cards):
-    false_orders = next(card for card in all_cards if card.name == "False Orders")
+    false_orders = _get(all_cards, "False Orders")
     bear = _mk_card("Bear", "Creature — Bear")
     p1 = PlayerState(name="P1", hand=[false_orders])
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
@@ -1400,7 +1400,7 @@ def test_false_orders_marks_creature_removed_from_combat(all_cards):
     assert p2.battlefield[0].metadata.get("removed_from_combat") is True
 
 def test_raging_river_casts_as_supported_permanent(all_cards):
-    river = next(card for card in all_cards if card.name == "Raging River")
+    river = _get(all_cards, "Raging River")
     p1 = PlayerState(name="P1", hand=[river])
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
@@ -1411,7 +1411,7 @@ def test_raging_river_casts_as_supported_permanent(all_cards):
     assert any(perm.card.name == "Raging River" for perm in p1.battlefield)
 
 def test_sunglasses_of_urza_sets_white_as_red_flag(all_cards):
-    sunglasses = next(card for card in all_cards if card.name == "Sunglasses of Urza")
+    sunglasses = _get(all_cards, "Sunglasses of Urza")
     p1 = PlayerState(name="P1", hand=[sunglasses])
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
@@ -1422,36 +1422,36 @@ def test_sunglasses_of_urza_sets_white_as_red_flag(all_cards):
     assert p1.can_spend_white_as_red is True
 
 def test_cockatrice_classifies_supported(all_cards):
-    cockatrice = next(card for card in all_cards if card.name == "Cockatrice")
+    cockatrice = _get(all_cards, "Cockatrice")
     classification = classify_card(cockatrice)
     assert classification.supported
 
 def test_force_of_nature_classifies_supported(all_cards):
-    force = next(card for card in all_cards if card.name == "Force of Nature")
+    force = _get(all_cards, "Force of Nature")
     classification = classify_card(force)
     assert classification.supported
 
 def test_hypnotic_specter_classifies_supported(all_cards):
-    specter = next(card for card in all_cards if card.name == "Hypnotic Specter")
+    specter = _get(all_cards, "Hypnotic Specter")
     classification = classify_card(specter)
     assert classification.supported
 
 def test_juggernaut_classifies_supported(all_cards):
-    juggernaut = next(card for card in all_cards if card.name == "Juggernaut")
+    juggernaut = _get(all_cards, "Juggernaut")
     classification = classify_card(juggernaut)
     assert classification.supported
 
 def test_banding_keyword_cards_classify_supported(all_cards):
-    benalish_hero = next(card for card in all_cards if card.name == "Benalish Hero")
-    mesa_pegasus = next(card for card in all_cards if card.name == "Mesa Pegasus")
-    timber_wolves = next(card for card in all_cards if card.name == "Timber Wolves")
+    benalish_hero = _get(all_cards, "Benalish Hero")
+    mesa_pegasus = _get(all_cards, "Mesa Pegasus")
+    timber_wolves = _get(all_cards, "Timber Wolves")
 
     assert classify_card(benalish_hero).supported
     assert classify_card(mesa_pegasus).supported
     assert classify_card(timber_wolves).supported
 
 def test_helm_of_chatzuk_grants_banding_until_eot(all_cards):
-    helm = next(card for card in all_cards if card.name == "Helm of Chatzuk")
+    helm = _get(all_cards, "Helm of Chatzuk")
     bear = _mk_card("Band Target", "Creature — Bear")
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=helm)])
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
@@ -1464,8 +1464,8 @@ def test_helm_of_chatzuk_grants_banding_until_eot(all_cards):
     assert p2.battlefield[0].metadata.get("gains_banding_until_eot") is True
 
 def test_helm_of_chatzuk_requires_valid_creature_target(all_cards):
-    helm = next(card for card in all_cards if card.name == "Helm of Chatzuk")
-    island = next(card for card in all_cards if card.name == "Island")
+    helm = _get(all_cards, "Helm of Chatzuk")
+    island = _get(all_cards, "Island")
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=helm)])
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=island)])
     game = Game(players=[p1, p2])
@@ -1492,15 +1492,15 @@ def test_next_wave_creature_cards_classify_supported(all_cards):
         assert classify_card(card).supported
 
 def test_clone_and_fork_classify_supported(all_cards):
-    clone = next(card for card in all_cards if card.name == "Clone")
-    fork = next(card for card in all_cards if card.name == "Fork")
+    clone = _get(all_cards, "Clone")
+    fork = _get(all_cards, "Fork")
 
     assert classify_card(clone).supported
     assert classify_card(fork).supported
 
 def test_gaeas_liege_activation_turns_land_into_forest(all_cards):
-    liege = next(card for card in all_cards if card.name == "Gaea's Liege")
-    plains = next(card for card in all_cards if card.name == "Plains")
+    liege = _get(all_cards, "Gaea's Liege")
+    plains = _get(all_cards, "Plains")
 
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=liege)])
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=plains)])
@@ -1512,7 +1512,7 @@ def test_gaeas_liege_activation_turns_land_into_forest(all_cards):
     assert p2.battlefield[0].metadata.get("land_type_override") == "forest"
 
 def test_nettling_imp_marks_target_for_attack(all_cards):
-    imp = next(card for card in all_cards if card.name == "Nettling Imp")
+    imp = _get(all_cards, "Nettling Imp")
     bear = _mk_card("Bear", "Creature — Bear")
 
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=imp)])
@@ -1525,7 +1525,7 @@ def test_nettling_imp_marks_target_for_attack(all_cards):
     assert p2.battlefield[0].metadata.get("must_attack_until_eot") is True
 
 def test_stone_giant_grants_temp_flying_and_delayed_destroy(all_cards):
-    giant = next(card for card in all_cards if card.name == "Stone Giant")
+    giant = _get(all_cards, "Stone Giant")
     small = _mk_card("Small Ally", "Creature — Bear")
 
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=giant), Permanent(card=small)])
@@ -1540,7 +1540,7 @@ def test_stone_giant_grants_temp_flying_and_delayed_destroy(all_cards):
     assert target.metadata.get("destroy_at_next_end_step") is True
 
 def test_clone_copies_existing_creature_stats_on_entry(all_cards):
-    clone = next(card for card in all_cards if card.name == "Clone")
+    clone = _get(all_cards, "Clone")
     bear = _mk_card("Big Bear", "Creature — Bear")
     p1 = PlayerState(name="P1", hand=[clone], battlefield=[Permanent(card=bear)])
     p2 = PlayerState(name="P2")
@@ -1555,7 +1555,7 @@ def test_clone_copies_existing_creature_stats_on_entry(all_cards):
     assert clone_perm.effective_toughness == 2
 
 def test_fork_copies_top_spell_effect(all_cards):
-    fork = next(card for card in all_cards if card.name == "Fork")
+    fork = _get(all_cards, "Fork")
     bolt = _mk_card("Bolt Test", "Instant", "Bolt Test deals 3 damage to any target.")
 
     p1 = PlayerState(name="P1", hand=[bolt], life=20)
@@ -1575,8 +1575,8 @@ def test_remaining_cards_classify_supported(all_cards):
         assert classify_card(card).supported
 
 def test_contract_from_below_discards_hand_then_draws_seven(all_cards):
-    contract = next(card for card in all_cards if card.name == "Contract from Below")
-    island = next(card for card in all_cards if card.name == "Island")
+    contract = _get(all_cards, "Contract from Below")
+    island = _get(all_cards, "Island")
 
     p1 = PlayerState(name="P1", hand=[contract, island], library=[island] * 10)
     p2 = PlayerState(name="P2")
@@ -1588,8 +1588,8 @@ def test_contract_from_below_discards_hand_then_draws_seven(all_cards):
     assert len(p1.hand) == 7
 
 def test_demonic_attorney_antes_top_card_for_each_player(all_cards):
-    attorney = next(card for card in all_cards if card.name == "Demonic Attorney")
-    island = next(card for card in all_cards if card.name == "Island")
+    attorney = _get(all_cards, "Demonic Attorney")
+    island = _get(all_cards, "Island")
 
     p1 = PlayerState(name="P1", hand=[attorney], library=[island, island])
     p2 = PlayerState(name="P2", library=[island, island])
@@ -1602,8 +1602,8 @@ def test_demonic_attorney_antes_top_card_for_each_player(all_cards):
     assert len(p2.library) == 1
 
 def test_copy_artifact_copies_artifact_on_entry(all_cards):
-    copy_artifact = next(card for card in all_cards if card.name == "Copy Artifact")
-    lotus = next(card for card in all_cards if card.name == "Black Lotus")
+    copy_artifact = _get(all_cards, "Copy Artifact")
+    lotus = _get(all_cards, "Black Lotus")
 
     p1 = PlayerState(name="P1", hand=[copy_artifact], battlefield=[Permanent(card=lotus)])
     p2 = PlayerState(name="P2")
@@ -1700,8 +1700,8 @@ def test_compile_creature_program_keeps_clockwork_beast_supported():
     assert any(ability.supported for ability in program.activated_abilities)
 
 def test_juggernaut_must_attack_and_cannot_be_blocked_by_walls(all_cards):
-    juggernaut = next(card for card in all_cards if card.name == "Juggernaut")
-    wall = next(card for card in all_cards if card.name == "Wall of Stone")
+    juggernaut = _get(all_cards, "Juggernaut")
+    wall = _get(all_cards, "Wall of Stone")
 
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=juggernaut)])
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=wall)])
@@ -2700,7 +2700,7 @@ def test_winter_orb_turn_start_requires_untap_land_selection_for_human_player():
 def test_badlands_produces_black_or_red_mana(all_cards):
     # Badlands oracle text: ({T}: Add {B} or {R}.)
     # It is a dual land — Swamp Mountain that can produce either B or R.
-    badlands = next(card for card in all_cards if card.name == "Badlands")
+    badlands = _get(all_cards, "Badlands")
 
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=badlands)])
     game = Game(players=[p1])

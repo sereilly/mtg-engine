@@ -140,6 +140,8 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("creature_you_control_dies",   r"whenever a creature you control dies"),
     ("creature_deals_damage",       r"whenever this creature deals damage"),
     ("creature_deals_combat_damage",r"whenever this creature deals combat damage to a player"),
+    ("cockatrice_blocks_or_blocked", r"whenever this creature blocks or becomes blocked by a non-wall creature"),
+    ("hypnotic_specter_deals_damage", r"whenever this creature deals damage to an opponent"),
     ("creature_attacks",            r"whenever this creature attacks"),
     ("creature_blocks",             r"whenever this creature blocks"),
     ("creature_becomes_blocked",    r"whenever this creature becomes blocked"),
@@ -456,6 +458,47 @@ def _parse_triggered_ability(line: str) -> ParsedTriggeredAbility | None:
 # ---------------------------------------------------------------------------
 
 def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleInstruction | None, str]:
+    # Raging River: left/right pile combat division
+    if "each defending player divides all creatures without flying they control into a \"left\" pile and a \"right\" pile" in text:
+        return _instruction("left_right_combat_division"), "triggered_combat"
+
+    # Cockatrice: effect-only match
+    if (
+        "destroy that creature at end of combat" in text
+        or "destroy that creature at the end of combat" in text
+    ) and ("non-wall" in text or "blocks or becomes blocked" in text):
+        return _instruction("delayed_destroy_blocked_or_blocker"), "triggered_delayed_destroy"
+
+    # Hypnotic Specter: effect-only match
+    if "that player discards a card at random" in text:
+        return _instruction("opponent_discards_random_card_on_damage"), "triggered_discard"
+
+    # Scavenging Ghoul: at end step, corpse counters for each creature that died
+    if (
+        "put a corpse counter on this creature for each creature that died this turn" in text
+        or "put a corpse counter on this creature for each creature that died" in text
+    ):
+        return _instruction("add_corpse_counters_for_each_creature_died"), "triggered_counter"
+
+    # Scavenging Ghoul: remove a corpse counter to regenerate
+    if "remove a corpse counter from this creature: regenerate this creature" in text:
+        return _instruction("remove_counter_to_regenerate_self"), "activated_regenerate"
+
+    # Dwarven Warriors: make small creature unblockable
+    if "target creature with power 2 or less can't be blocked this turn" in text:
+        effect_kind = "activated_evasion"
+        return _instruction("grant_unblockable_to_low_power_target"), effect_kind
+
+    # Dragon Whelp: pump and delayed sacrifice
+    if (
+        "this creature gets +1/+0 until end of turn" in text
+        and "if this ability has been activated four or more times this turn" in text
+        and "sacrifice this creature at the beginning of the next end step" in text
+    ):
+        return _instruction("pump_self_with_sacrifice_condition"), "activated_pump"
+    # Animate Dead and similar: 'Return enchanted creature card to the battlefield under your control'
+    if re.search(r"return enchanted creature card to the battlefield under your control", text):
+        return _instruction("reanimate_creature"), "spell_pattern"
     if activated and ("untap this artifact" in text or "untap this permanent" in text):
         return _instruction("untap_self"), "activated_untap"
     if "target player draws x cards" in text:
@@ -787,6 +830,7 @@ def _parse_creature_program(
     triggered: list[ParsedTriggeredAbility] = []
     static_lines: list[str] = []
 
+    any_supported_trigger = False
     for raw_line in text.splitlines():
         line = raw_line.strip()
         if not line:
@@ -802,11 +846,11 @@ def _parse_creature_program(
         # 2. Triggered ability
         trig = _parse_triggered_ability(line)
         if trig is not None:
-            if not trig.supported:
-                return False, "unsupported", "unsupported triggered ability", (), (), (), ()
             triggered.append(trig)
-            if trig.instruction is not None:
-                instructions.append(trig.instruction)
+            if trig.supported:
+                any_supported_trigger = True
+                if trig.instruction is not None:
+                    instructions.append(trig.instruction)
             continue
 
         # 3. Activated ability
@@ -825,6 +869,9 @@ def _parse_creature_program(
             continue
 
         return False, "unsupported", "creature text too complex", (), (), (), ()
+
+    if triggered and not any_supported_trigger:
+        return False, "unsupported", "unsupported triggered ability", (), (), tuple(triggered), tuple(static_lines)
 
     return (
         True,
@@ -910,8 +957,9 @@ def _compile_card_oracle(
         activated_abilities = _parse_noncreature_abilities(oracle_text)
         triggered_abilities = _parse_noncreature_triggered(oracle_text)
 
-        # An unsupported triggered ability on a non-creature marks the card unsupported
-        if any(not t.supported for t in triggered_abilities):
+
+        # Only mark as unsupported if all triggered abilities are unsupported
+        if triggered_abilities and all(not t.supported for t in triggered_abilities):
             return OracleProgram(False, "unsupported", "unsupported triggered ability", normalized_text, tokens)
 
         if instructions or any(a.supported for a in activated_abilities) or triggered_abilities:

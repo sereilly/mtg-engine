@@ -78,7 +78,6 @@ def _mk_creature_card(name: str, power: int, toughness: int, oracle_text: str = 
 def _get(all_cards, name: str):
     return next(card for card in all_cards if card.name == name)
 
-
 def _pass_priority(session_id: str, seat: int):
     session = store.get(session_id)
     if seat == 1 and seat not in session.joined_seats and session.mode == "human_vs_human":

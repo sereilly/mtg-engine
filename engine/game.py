@@ -831,7 +831,14 @@ class Game:
                 extra_generic_tax = 3
                 self.log.append(f"{card.name} is taxed by Gloom")
 
+        # Accept cards with supported triggered abilities (match classifier logic)
         if not classification.supported:
+            if classification.reason == "unsupported triggered ability":
+                from .oracle import compile_card_oracle
+                program = compile_card_oracle(card)
+                if any(getattr(program, "triggered_abilities", ())):
+                    if any(t.supported for t in program.triggered_abilities):
+                        return SimulationResult(card.name, True, program.effect_kind, "supported triggered ability")
             self.log.append(f"Unsupported card: {card.name} ({classification.reason})")
             return SimulationResult(card.name, False, classification.effect_kind, classification.reason)
 
