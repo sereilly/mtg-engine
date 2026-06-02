@@ -18,19 +18,7 @@ def _make_test(name, idx):
 
 # List of LEA cards that lacked tests when this file was generated
 _UNTESTED = [
-"Bog Wraith",
-"Burrowing",
-"Celestial Prism",
-"Channel",
 "Chaos Orb",
-"Chaoslace",
-"Circle of Protection: Green",
-"Circle of Protection: Red",
-"Circle of Protection: White",
-"Consecrate Land",
-"Conservator",
-"Control Magic",
-"Copper Tablet",
 "Creature Bond",
 "Crusade",
 "Crystal Rod",
@@ -3021,3 +3009,110 @@ def test_chaoslace_makes_target_permanent_red(all_cards):
 
     assert result.supported
     assert p2.battlefield[0].metadata.get("color_override") == "R"
+
+
+def test_circle_of_protection_green_activation_sets_prevention(all_cards):
+    cop = _get(all_cards, "Circle of Protection: Green")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=cop)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Circle of Protection: Green", target_player_index=0)
+
+    assert result.supported
+    assert p1.damage_prevention_pool == 1
+
+
+def test_circle_of_protection_red_activation_sets_prevention(all_cards):
+    cop = _get(all_cards, "Circle of Protection: Red")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=cop)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Circle of Protection: Red", target_player_index=0)
+
+    assert result.supported
+    assert p1.damage_prevention_pool == 1
+
+
+def test_circle_of_protection_white_activation_sets_prevention(all_cards):
+    cop = _get(all_cards, "Circle of Protection: White")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=cop)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Circle of Protection: White", target_player_index=0)
+
+    assert result.supported
+    assert p1.damage_prevention_pool == 1
+
+
+def test_consecrate_land_grants_indestructible_to_enchanted_land(all_cards):
+    consecrate = _get(all_cards, "Consecrate Land")
+    plains = _get(all_cards, "Plains")
+
+    p1 = PlayerState(name="P1", hand=[consecrate], battlefield=[Permanent(card=plains)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Consecrate Land", target_player_index=0)
+
+    assert result.supported
+    land_perm = p1.battlefield[0]
+    assert land_perm.metadata.get("is_indestructible") is True
+    aura_perm = next(p for p in p1.battlefield if p.card.name == "Consecrate Land")
+    assert aura_perm.metadata.get("attached_to") is land_perm
+
+
+def test_conservator_activated_prevents_two_damage(all_cards):
+    conservator = _get(all_cards, "Conservator")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=conservator)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Conservator", target_player_index=0)
+
+    assert result.supported
+    assert p1.damage_prevention_pool == 2
+    assert p1.battlefield[0].tapped is True
+
+
+def test_control_magic_steals_opponent_creature(all_cards):
+    control_magic = _get(all_cards, "Control Magic")
+    creature = _mk_card("Target Bear", "Creature - Bear")
+
+    p1 = PlayerState(name="P1", hand=[control_magic])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=creature)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Control Magic", target_player_index=1)
+
+    assert result.supported
+    assert any(p.card.name == "Target Bear" for p in p1.battlefield)
+    assert not any(p.card.name == "Target Bear" for p in p2.battlefield)
+    aura_perm = next((p for p in p1.battlefield if p.card.name == "Control Magic"), None)
+    assert aura_perm is not None
+    stolen = next(p for p in p1.battlefield if p.card.name == "Target Bear")
+    assert aura_perm.metadata.get("attached_to") is stolen
+
+
+def test_copper_tablet_upkeep_deals_one_damage_to_active_player(all_cards):
+    tablet = _get(all_cards, "Copper Tablet")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=tablet)], life=20)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+
+    game.resolve_upkeep(0)
+
+    assert p1.life == 19
+
+
+def test_copper_tablet_upkeep_also_damages_opponent_on_their_upkeep(all_cards):
+    tablet = _get(all_cards, "Copper Tablet")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=tablet)], life=20)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+
+    game.resolve_upkeep(1)
+
+    assert p2.life == 19

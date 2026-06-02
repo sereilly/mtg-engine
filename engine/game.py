@@ -1838,6 +1838,15 @@ class Game:
                             self.log.append(f"{controller.name} sacrificed {permanent.card.name} on upkeep")
                         break
 
+                    if cond == "upkeep_each" and kind == "deal_damage":
+                        amount = int(trig.instruction.payload.get("amount", 1))
+                        victim = self.players[player_index]
+                        damage = self._prevent_damage(victim, amount)
+                        if damage > 0:
+                            victim.life -= damage
+                        self.log.append(f"{permanent.card.name} dealt {damage} upkeep damage to {victim.name}")
+                        break
+
                     if cond == "upkeep_chosen" and kind == "upkeep_chosen_player_hand_overflow_damage":
                         chosen = permanent.metadata.get("chosen_player_index")
                         if chosen != player_index:
@@ -2959,8 +2968,29 @@ class Game:
             aura_permanent.metadata["attached_to"] = target_creature
             target_creature.metadata["attached_aura"] = aura_permanent
 
+            # Control effect: steal creature to caster's battlefield (e.g. Control Magic)
+            if "you control enchanted creature" in text:
+                if target_creature in target_player.battlefield:
+                    target_player.battlefield.remove(target_creature)
+                    self.players[caster_index].battlefield.append(target_creature)
+                    self.log.append(f"{aura_permanent.card.name} took control of {target_creature.card.name}")
+
         elif text.startswith("enchant land"):
-            self.log.append(f"{aura_permanent.card.name} enchants a land (mana bonus handling is simplified)")
+            target_land = None
+            if target_permanent_index is not None and 0 <= target_permanent_index < len(target_player.battlefield):
+                candidate = target_player.battlefield[target_permanent_index]
+                if candidate.card.primary_type == "land":
+                    target_land = candidate
+            if target_land is None:
+                target_land = next((p for p in target_player.battlefield if p.card.primary_type == "land"), None)
+            if target_land is None:
+                self.log.append(f"{aura_permanent.card.name} found no land target")
+                return
+            aura_permanent.metadata["attached_to"] = target_land
+            target_land.metadata["attached_aura"] = aura_permanent
+            if "indestructible" in text:
+                target_land.metadata["is_indestructible"] = True
+            self.log.append(f"{aura_permanent.card.name} enchants {target_land.card.name}")
         elif text.startswith("enchant wall"):
             target_wall = next(
                 (perm for perm in target_player.battlefield if "wall" in perm.card.type_line.lower()),
