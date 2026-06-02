@@ -40,6 +40,26 @@ UNSUPPORTED_PATTERNS = (
 
 UNSUPPORTED_REGEX_PATTERNS = ()
 
+_COLOR_WORD_TO_SYMBOL: dict[str, str] = {
+    "white": "W",
+    "blue": "U",
+    "black": "B",
+    "red": "R",
+    "green": "G",
+}
+
+
+def _extract_mana_cost_from_text(text: str) -> dict[str, int]:
+    """Extract the first mana cost symbols found in *text* and return counts."""
+    cost: dict[str, int] = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0, "generic": 0}
+    for token in re.findall(r"\{([^}]+)\}", text.upper()):
+        if token.isdigit():
+            cost["generic"] += int(token)
+        elif token in {"W", "U", "B", "R", "G", "C"}:
+            cost[token] += 1
+    return cost
+
+
 SUPPORTED_SPELL_PATTERNS = (
     "target player draws",
     "draws x cards",
@@ -166,6 +186,7 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("dies",                        r"when (?:this creature|.+) dies"),
     ("you_gain_life",               r"when you gain life"),
     ("becomes_target",              r"when (?:this|.+) becomes the target"),
+    ("no_islands",                  r"when you control no islands"),
 )
 
 # "at the beginning of" triggers
@@ -458,6 +479,42 @@ def _parse_triggered_ability(line: str) -> ParsedTriggeredAbility | None:
 # ---------------------------------------------------------------------------
 
 def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleInstruction | None, str]:
+    # ---------------------------------------------------------------------------
+    # Upkeep triggered-ability effects (condition already stripped by caller)
+    # ---------------------------------------------------------------------------
+
+    # "sacrifice this enchantment unless you pay {X}..." (Conversion, Stasis)
+    if "sacrifice this enchantment unless you pay" in text:
+        mana = _extract_mana_cost_from_text(text)
+        return _instruction("upkeep_pay_or_sacrifice_enchantment", mana=mana), "upkeep_effect"
+
+    # "sacrifice this creature unless you pay {X}" (Seasinger, Sea Serpent variants)
+    if "sacrifice this creature unless you pay" in text:
+        mana = _extract_mana_cost_from_text(text)
+        return _instruction("upkeep_pay_or_sacrifice_self", mana=mana), "upkeep_effect"
+
+    # "this creature/artifact deals N damage to you unless you pay {X}..." (Force of Nature)
+    _damage_unless_pay = re.search(r"this \w+ deals (\d+) damage to you unless you pay", text)
+    if _damage_unless_pay:
+        damage = int(_damage_unless_pay.group(1))
+        mana = _extract_mana_cost_from_text(text)
+        return _instruction("upkeep_pay_or_deal_damage_to_controller", damage=damage, mana=mana), "upkeep_effect"
+
+    # "unless you pay {...}, tap this creature and sacrifice a land of an opponent's choice" (Demonic Hordes)
+    if "unless you pay" in text and "sacrifice a land of an opponent" in text:
+        mana = _extract_mana_cost_from_text(text)
+        return _instruction("upkeep_pay_or_tap_and_sacrifice_opponent_land", mana=mana), "upkeep_effect"
+
+    # "sacrifice a creature other than this creature. if you can't, this creature deals N damage to you"
+    if "sacrifice a creature other than this creature" in text:
+        _alt_damage = re.search(r"this creature deals (\d+) damage to you", text)
+        alt_damage = int(_alt_damage.group(1)) if _alt_damage else 0
+        return _instruction("upkeep_sacrifice_other_creature_or_deal_damage", damage=alt_damage), "upkeep_effect"
+
+    # Black Vise: "this artifact deals x damage to that player, where x is the number of cards in their hand minus 4"
+    if "number of cards in their hand minus 4" in text:
+        return _instruction("upkeep_chosen_player_hand_overflow_damage"), "upkeep_effect"
+
     # Raging River: left/right pile combat division
     if "each defending player divides all creatures without flying they control into a \"left\" pile and a \"right\" pile" in text:
         return _instruction("left_right_combat_division"), "triggered_combat"
@@ -590,7 +647,12 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
         return _instruction("sacrifice_creature_for_black_mana"), "spell_pattern"
 
     if any(f"becomes {color}" in text for color in ("red", "black", "blue", "green", "white")):
-        return _instruction("recolor_target_from_text"), "spell_pattern"
+        target_color = next(
+            (sym for word, sym in _COLOR_WORD_TO_SYMBOL.items() if f"becomes {word}" in text),
+            None,
+        )
+        payload: dict[str, Any] = {"target_color": target_color} if target_color else {}
+        return OracleInstruction("recolor_target_from_text", "", payload), "spell_pattern"
 
     if "destroy all artifacts, creatures, and enchantments" in text:
         return _instruction("destroy_all_artifacts_creatures_enchantments"), "spell_pattern"
@@ -603,7 +665,25 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
 
     if "destroy target" in text:
         effect_kind = "activated_destroy" if activated else "spell_pattern"
-        return _instruction("destroy_target_permanent", oracle_text=text), effect_kind
+        type_filter: str | None = None
+        if "target creature" in text:
+            type_filter = "creature"
+        elif "target artifact" in text:
+            type_filter = "artifact"
+        elif "target enchantment" in text:
+            type_filter = "enchantment"
+        elif "target land" in text:
+            type_filter = "land"
+        color_filter: str | None = next(
+            (sym for word, sym in _COLOR_WORD_TO_SYMBOL.items() if f" {word} " in f" {text} "),
+            None,
+        )
+        _destroy_payload: dict[str, Any] = {}
+        if type_filter:
+            _destroy_payload["type_filter"] = type_filter
+        if color_filter:
+            _destroy_payload["color_filter"] = color_filter
+        return OracleInstruction("destroy_target_permanent", "", _destroy_payload), effect_kind
 
     if "from your graveyard to your hand" in text:
         return _instruction("return_creature_from_graveyard_to_hand"), "spell_pattern"
@@ -637,7 +717,7 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
         return _instruction("grant_prevention_shield", amount=amount), effect_kind
 
     if "would deal damage to you this turn, prevent that damage" in text and activated:
-        return _instruction("grant_prevention_shield", amount=1), "activated_prevent"
+        return _instruction("grant_prevention_shield", amount=1, protection_kind="color"), "activated_prevent"
 
     if "the next time an unblocked creature of your choice would deal combat damage to you this turn, prevent all but 1 of that damage" in text and activated:
         return _instruction("grant_forcefield_shield"), "activated_prevent"
@@ -677,7 +757,7 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
         return _instruction("add_variable_power_counters_to_self"), "activated_counter"
 
     if activated and "add three mana of any one color" in text:
-        return _instruction("sacrifice_self_for_mana", amount=3, color="G"), "activated_mana"
+        return _instruction("sacrifice_self_for_mana", amount=3, color="G", any_color=True), "activated_mana"
 
     if activated and "draw a card" in text:
         return _instruction("draw_controller_cards", amount=1), "activated_draw"
@@ -710,7 +790,8 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
         return _instruction("add_mire_counter_to_target_land"), "activated_landtype"
 
     if activated and "add {" in text:
-        return _instruction("add_mana_from_text", oracle_text=text), "activated_mana"
+        any_color = "any one color" in text or "any color" in text
+        return _instruction("add_mana_from_text", oracle_text=text, any_color=any_color), "activated_mana"
 
     if "counter target spell" in text:
         return _instruction("counter_top_stack_spell"), "spell_pattern"
@@ -733,6 +814,29 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
 
     if "sacrifice this permanent" in text or "sacrifice this creature" in text:
         return _instruction("sacrifice_self"), "triggered_sacrifice"
+
+    # Global buff / animate-land effects (e.g. Kormus Bell, Living Lands)
+    if "all swamps are 1/1 black creatures that are still lands" in text:
+        return _instruction("animate_all_swamps"), "spell_pattern"
+
+    if "all forests are 1/1 creatures that are still lands" in text:
+        return _instruction("animate_all_forests"), "spell_pattern"
+
+    if "attacking creatures you control get +1/+0" in text:
+        return _instruction("buff_attacking_creatures", power=1, toughness=0), "spell_pattern"
+
+    if "untapped creatures you control get +0/+2" in text:
+        return _instruction("buff_untapped_creatures", power=0, toughness=2), "spell_pattern"
+
+    # Generic creatures-get pump (e.g. "white creatures get +1/+1")
+    _global_match = re.search(r"(white|blue|black|red|green)?\s*creatures(?: you control)? get \+(\d+)/\+(\d+)", text)
+    if _global_match:
+        color_word, power_s, toughness_s = _global_match.groups()
+        _payload: dict[str, Any] = {"power": int(power_s), "toughness": int(toughness_s)}
+        if color_word:
+            _payload["color"] = _COLOR_WORD_TO_SYMBOL.get(color_word)
+        _payload["all"] = "you control" not in text
+        return OracleInstruction("buff_creatures_global", "", _payload), "spell_pattern"
 
     return None, "unsupported"
 
@@ -876,7 +980,31 @@ def _parse_creature_program(
         # 4. Static text
         if _is_supported_static_creature_line(line):
             normalized = normalize_creature_line(line)
-            instructions.append(OracleInstruction("static_line", normalized))
+            # Emit specific instruction kinds for dynamic P/T patterns so game.py
+            # never needs to parse oracle text to identify these behaviours.
+            if "power and toughness are each equal to the number of non-wall creatures" in normalized:
+                instructions.append(OracleInstruction("dynamic_pt_non_wall_creatures"))
+            elif "power and toughness are each equal to the number of creatures named plague rats" in normalized:
+                instructions.append(OracleInstruction("dynamic_pt_plague_rats"))
+            elif "power and toughness are each equal to the number of swamps" in normalized:
+                instructions.append(OracleInstruction("dynamic_pt_swamps"))
+            elif (
+                "gets +1/+1 as long as you control a swamp" in normalized
+                or "this creature gets +1/+1 as long as you control a swamp" in normalized
+            ):
+                instructions.append(OracleInstruction("conditional_swamp_bonus"))
+            elif normalized == "this creature attacks each combat if able":
+                instructions.append(OracleInstruction("must_attack_each_combat"))
+            elif normalized == "this creature can't be blocked by walls":
+                instructions.append(OracleInstruction("cant_be_blocked_by_walls"))
+            elif normalized == "this creature can't attack unless defending player controls an island":
+                instructions.append(OracleInstruction("cant_attack_without_island"))
+            elif normalized == "this creature can't attack":
+                instructions.append(OracleInstruction("cant_attack"))
+            elif normalized == "this creature can't block":
+                instructions.append(OracleInstruction("cant_block"))
+            else:
+                instructions.append(OracleInstruction("static_line", normalized))
             static_lines.append(normalized)
             continue
 

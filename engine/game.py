@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 
 from .classifier import CardClassification, classify_card
 from .models import CardDefinition, Permanent, PlayerState
-from .oracle import OracleInstruction, compile_card_oracle, parse_activated_ability_cost, lex_oracle_text
+from .oracle import OracleInstruction, compile_card_oracle, lex_oracle_text
 
 
 _NUMBER_WORDS = {
@@ -16,13 +16,6 @@ _NUMBER_WORDS = {
     "five": 5,
 }
 
-_COLOR_WORD_TO_SYMBOL = {
-    "white": "W",
-    "blue": "U",
-    "black": "B",
-    "red": "R",
-    "green": "G",
-}
 
 _MANA_SYMBOLS = ("W", "U", "B", "R", "G", "C")
 _EOT_METADATA_KEYS = (
@@ -655,9 +648,9 @@ class Game:
             tap_ability = None
             untap_ability = None
             for ab in program.activated_abilities:
-                if ab.source_line.lower().startswith("{t}:"):
+                if ab.cost.requires_tap:
                     tap_ability = ab
-                elif ab.source_line.lower().startswith("{3}:"):
+                elif ab.cost.mana.get("generic", 0) == 3 and not ab.cost.requires_tap:
                     untap_ability = ab
             if not permanent.tapped:
                 ability = tap_ability
@@ -709,7 +702,7 @@ class Game:
         instruction = ability.instruction
         if (
             instruction.kind in {"sacrifice_self_for_mana", "add_mana_from_text"}
-            and "any one color" in permanent.card.oracle_text.lower()
+            and instruction.payload.get("any_color", False)
         ):
             selected_color = self._normalize_mana_color(mana_color)
             if selected_color is not None:
@@ -764,21 +757,6 @@ class Game:
         if color not in {"W", "U", "B", "R", "G"}:
             raise ValueError(f"Invalid mana color: {mana_color}")
         return color
-
-    def _parse_activated_ability_cost(self, oracle_text: str) -> tuple[dict[str, int], bool]:
-        if not oracle_text:
-            empty = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0, "generic": 0}
-            return empty, False
-
-        for raw_line in oracle_text.splitlines():
-            line = raw_line.strip()
-            if ":" not in line:
-                continue
-            parsed = parse_activated_ability_cost(line)
-            return dict(parsed.mana), parsed.requires_tap
-
-        empty = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0, "generic": 0}
-        return empty, False
 
     def tap_permanent(
         self,
@@ -1303,7 +1281,8 @@ class Game:
             return True, "resolved"
 
         if instruction.kind == "recolor_target_from_text":
-            changed = self._set_target_color(target, card.oracle_text)
+            symbol = str(instruction.payload.get("target_color", ""))
+            changed = self._apply_color_override(target, symbol) if symbol else False
             self.log.append("Changed target color" if changed else "No valid permanent to recolor")
             return True, "resolved"
 
@@ -1353,10 +1332,10 @@ class Game:
             return True, "resolved"
 
         if instruction.kind == "destroy_target_permanent":
-            oracle_text = str(instruction.payload.get("oracle_text", card.oracle_text))
             destroyed = self._destroy_target_permanent(
                 target,
-                oracle_text,
+                type_filter=instruction.payload.get("type_filter"),
+                color_filter=instruction.payload.get("color_filter"),
                 target_permanent_index=context.target_permanent_index,
             )
             if destroyed:
@@ -1420,7 +1399,7 @@ class Game:
             amount = int(instruction.payload.get("amount", 0))
             recipient = target if source_permanent is not None else caster
             recipient.damage_prevention_pool += amount
-            if source_permanent is not None and "would deal damage to you this turn" in card.oracle_text.lower():
+            if source_permanent is not None and instruction.payload.get("protection_kind") == "color":
                 self.log.append("Color protection shield granted")
             elif source_permanent is not None:
                 self.log.append("Prevention shield granted by activated ability")
@@ -1666,26 +1645,10 @@ class Game:
     def _destroy_target_permanent(
         self,
         target: PlayerState,
-        oracle_text: str,
+        type_filter: str | None = None,
+        color_filter: str | None = None,
         target_permanent_index: int | None = None,
     ) -> CardDefinition | None:
-        lowered = oracle_text.lower()
-        type_filter: str | None = None
-        if "target creature" in lowered:
-            type_filter = "creature"
-        elif "target artifact" in lowered:
-            type_filter = "artifact"
-        elif "target enchantment" in lowered:
-            type_filter = "enchantment"
-        elif "target land" in lowered:
-            type_filter = "land"
-
-        color_filter: str | None = None
-        for word, symbol in _COLOR_WORD_TO_SYMBOL.items():
-            if f" {word} " in f" {lowered} ":
-                color_filter = symbol
-                break
-
         if target_permanent_index is not None:
             if 0 <= target_permanent_index < len(target.battlefield):
                 permanent = target.battlefield[target_permanent_index]
@@ -1784,13 +1747,9 @@ class Game:
                 return removed.card
         return None
 
-    def _set_target_color(self, target: PlayerState, text: str) -> bool:
-        symbol = None
-        for word, mapped in _COLOR_WORD_TO_SYMBOL.items():
-            if f"becomes {word}" in text:
-                symbol = mapped
-                break
-        if symbol is None:
+    def _apply_color_override(self, target: PlayerState, symbol: str) -> bool:
+        """Apply a colour override to the first permanent on *target*'s battlefield."""
+        if not symbol:
             return False
         if target.battlefield:
             target.battlefield[0].metadata["color_override"] = symbol
@@ -1809,94 +1768,140 @@ class Game:
         self._on_step_or_phase_begin(phase, step)
         for controller in self.players:
             for permanent in controller.battlefield:
-                text = permanent.card.oracle_text.lower()
-                if "at the beginning of your upkeep, sacrifice this enchantment unless you pay" in text:
-                    # Simplified upkeep payment: pay from white mana pool if possible, otherwise sacrifice.
-                    if controller.mana_pool.get("W", 0) >= 2:
-                        controller.mana_pool["W"] -= 2
-                        self.log.append(f"{controller.name} paid upkeep for {permanent.card.name}")
-                    else:
-                        controller.battlefield = [p for p in controller.battlefield if p is not permanent]
-                        controller.graveyard.append(permanent.card)
-                        self.log.append(f"{controller.name} sacrificed {permanent.card.name} on upkeep")
+                program = compile_card_oracle(permanent.card)
+                for trig in program.triggered_abilities:
+                    if trig.instruction is None:
                         continue
+                    kind = trig.instruction.kind
+                    cond = trig.condition.kind
 
-                if "at the beginning of the chosen player's upkeep" in text:
-                    chosen = permanent.metadata.get("chosen_player_index")
-                    if chosen != player_index:
-                        continue
-                    victim = self.players[player_index]
-                    damage = max(0, len(victim.hand) - 4)
-                    if damage > 0:
-                        damage = self._prevent_damage(victim, damage)
+                    if cond == "upkeep_self" and kind == "upkeep_pay_or_sacrifice_enchantment":
+                        mana: dict[str, int] = trig.instruction.payload.get("mana", {})
+                        paid = True
+                        for sym, count in mana.items():
+                            if sym == "generic":
+                                continue
+                            if controller.mana_pool.get(sym, 0) < count:
+                                paid = False
+                                break
+                        if paid:
+                            for sym, count in mana.items():
+                                if sym != "generic":
+                                    controller.mana_pool[sym] = controller.mana_pool.get(sym, 0) - count
+                            self.log.append(f"{controller.name} paid upkeep for {permanent.card.name}")
+                        else:
+                            controller.battlefield = [p for p in controller.battlefield if p is not permanent]
+                            controller.graveyard.append(permanent.card)
+                            self.log.append(f"{controller.name} sacrificed {permanent.card.name} on upkeep")
+                        break
+
+                    if cond == "upkeep_chosen" and kind == "upkeep_chosen_player_hand_overflow_damage":
+                        chosen = permanent.metadata.get("chosen_player_index")
+                        if chosen != player_index:
+                            break
+                        victim = self.players[player_index]
+                        damage = max(0, len(victim.hand) - 4)
                         if damage > 0:
-                            victim.life -= damage
-                    self.log.append(f"{permanent.card.name} dealt {damage} upkeep damage")
+                            damage = self._prevent_damage(victim, damage)
+                            if damage > 0:
+                                victim.life -= damage
+                        self.log.append(f"{permanent.card.name} dealt {damage} upkeep damage")
+                        break
 
-                if "at the beginning of your upkeep, this creature deals 8 damage to you unless you pay" in text:
-                    if controller.mana_pool.get("G", 0) >= 4:
-                        controller.mana_pool["G"] -= 4
-                        self.log.append(f"{controller.name} paid upkeep for {permanent.card.name}")
-                    else:
-                        controller.life -= 8
-                        self.log.append(f"{permanent.card.name} dealt 8 upkeep damage to {controller.name}")
-
-                if "at the beginning of your upkeep, unless you pay {b}{b}{b}, tap this creature and sacrifice a land of an opponent's choice" in text:
-                    if controller.mana_pool.get("B", 0) >= 3:
-                        controller.mana_pool["B"] -= 3
-                        self.log.append(f"{controller.name} paid upkeep for {permanent.card.name}")
-                    else:
-                        permanent.tapped = True
-                        opponent = next((p for p in self.players if p is not controller), None)
-                        if opponent is not None:
-                            for idx, land in enumerate(opponent.battlefield):
-                                if land.card.primary_type == "land":
-                                    removed = opponent.battlefield.pop(idx)
-                                    opponent.graveyard.append(removed.card)
-                                    self.log.append(f"{permanent.card.name} forced sacrifice of {removed.card.name}")
-                                    break
-
-                if "at the beginning of your upkeep, sacrifice a creature other than this creature" in text:
-                    other_idx = next(
-                        (
-                            i
-                            for i, perm in enumerate(controller.battlefield)
-                            if perm is not permanent and perm.card.primary_type == "creature"
-                        ),
-                        None,
-                    )
-                    if other_idx is not None:
-                        sacrificed = controller.battlefield.pop(other_idx)
-                        controller.graveyard.append(sacrificed.card)
-                        self.log.append(f"{controller.name} sacrificed {sacrificed.card.name} for {permanent.card.name}")
-                    else:
-                        controller.life -= 7
-                        self.log.append(f"{permanent.card.name} dealt 7 upkeep damage to {controller.name}")
-
-                if "at the beginning of your upkeep, sacrifice this creature unless you pay {u}" in text:
-                    if controller.mana_pool.get("U", 0) >= 1:
-                        controller.mana_pool["U"] -= 1
-                        self.log.append(f"{controller.name} paid upkeep for {permanent.card.name}")
-                    else:
-                        controller.battlefield = [p for p in controller.battlefield if p is not permanent]
-                        controller.graveyard.append(permanent.card)
-                        self.log.append(f"{controller.name} sacrificed {permanent.card.name} on upkeep")
-                        continue
-
-                if "when you control no islands, sacrifice this creature" in text:
-                    has_island = any(
-                        perm.card.primary_type == "land"
-                        and (
-                            "island" in perm.card.type_line.lower()
-                            or perm.metadata.get("land_type_override") == "island"
+                    if cond == "upkeep_self" and kind == "upkeep_pay_or_deal_damage_to_controller":
+                        mana = trig.instruction.payload.get("mana", {})
+                        damage_amt = int(trig.instruction.payload.get("damage", 0))
+                        paid = all(
+                            controller.mana_pool.get(sym, 0) >= count
+                            for sym, count in mana.items()
+                            if sym != "generic"
                         )
-                        for perm in controller.battlefield
-                    )
-                    if not has_island:
-                        controller.battlefield = [p for p in controller.battlefield if p is not permanent]
-                        controller.graveyard.append(permanent.card)
-                        self.log.append(f"{controller.name} sacrificed {permanent.card.name} for lacking an Island")
-                        continue
+                        if paid:
+                            for sym, count in mana.items():
+                                if sym != "generic":
+                                    controller.mana_pool[sym] = controller.mana_pool.get(sym, 0) - count
+                            self.log.append(f"{controller.name} paid upkeep for {permanent.card.name}")
+                        else:
+                            controller.life -= damage_amt
+                            self.log.append(f"{permanent.card.name} dealt {damage_amt} upkeep damage to {controller.name}")
+                        break
+
+                    if cond == "upkeep_self" and kind == "upkeep_pay_or_tap_and_sacrifice_opponent_land":
+                        mana = trig.instruction.payload.get("mana", {})
+                        paid = all(
+                            controller.mana_pool.get(sym, 0) >= count
+                            for sym, count in mana.items()
+                            if sym != "generic"
+                        )
+                        if paid:
+                            for sym, count in mana.items():
+                                if sym != "generic":
+                                    controller.mana_pool[sym] = controller.mana_pool.get(sym, 0) - count
+                            self.log.append(f"{controller.name} paid upkeep for {permanent.card.name}")
+                        else:
+                            permanent.tapped = True
+                            opponent = next((p for p in self.players if p is not controller), None)
+                            if opponent is not None:
+                                for idx, land in enumerate(opponent.battlefield):
+                                    if land.card.primary_type == "land":
+                                        removed = opponent.battlefield.pop(idx)
+                                        opponent.graveyard.append(removed.card)
+                                        self.log.append(f"{permanent.card.name} forced sacrifice of {removed.card.name}")
+                                        break
+                        break
+
+                    if cond == "upkeep_self" and kind == "upkeep_sacrifice_other_creature_or_deal_damage":
+                        other_idx = next(
+                            (
+                                i
+                                for i, perm in enumerate(controller.battlefield)
+                                if perm is not permanent and perm.card.primary_type == "creature"
+                            ),
+                            None,
+                        )
+                        if other_idx is not None:
+                            sacrificed = controller.battlefield.pop(other_idx)
+                            controller.graveyard.append(sacrificed.card)
+                            self.log.append(f"{controller.name} sacrificed {sacrificed.card.name} for {permanent.card.name}")
+                        else:
+                            alt_damage = int(trig.instruction.payload.get("damage", 0))
+                            controller.life -= alt_damage
+                            self.log.append(f"{permanent.card.name} dealt {alt_damage} upkeep damage to {controller.name}")
+                        break
+
+                    if cond == "upkeep_self" and kind == "upkeep_pay_or_sacrifice_self":
+                        mana = trig.instruction.payload.get("mana", {})
+                        paid = all(
+                            controller.mana_pool.get(sym, 0) >= count
+                            for sym, count in mana.items()
+                            if sym != "generic"
+                        )
+                        if paid:
+                            for sym, count in mana.items():
+                                if sym != "generic":
+                                    controller.mana_pool[sym] = controller.mana_pool.get(sym, 0) - count
+                            self.log.append(f"{controller.name} paid upkeep for {permanent.card.name}")
+                        else:
+                            controller.battlefield = [p for p in controller.battlefield if p is not permanent]
+                            controller.graveyard.append(permanent.card)
+                            self.log.append(f"{controller.name} sacrificed {permanent.card.name} on upkeep")
+                        break
+
+                    if cond == "no_islands" and kind == "sacrifice_self":
+                        has_island = any(
+                            perm.card.primary_type == "land"
+                            and (
+                                "island" in perm.card.type_line.lower()
+                                or perm.metadata.get("land_type_override") == "island"
+                            )
+                            for perm in controller.battlefield
+                        )
+                        if not has_island:
+                            controller.battlefield = [p for p in controller.battlefield if p is not permanent]
+                            controller.graveyard.append(permanent.card)
+                            self.log.append(f"{controller.name} sacrificed {permanent.card.name} for lacking an Island")
+                        break
+
         if self._receives_priority(step):
             self._resolve_priority_window()
         self._on_step_or_phase_end(phase, step)
@@ -2086,20 +2091,22 @@ class Game:
             )
 
             for permanent in player.battlefield:
-                text = permanent.card.oracle_text.lower()
-                if "keldon warlord's power and toughness are each equal to the number of non-wall creatures you control" in text:
+                prog = compile_card_oracle(permanent.card)
+                instr_kinds = {instr.kind for instr in prog.instructions}
+
+                if "dynamic_pt_non_wall_creatures" in instr_kinds:
                     permanent.metadata["absolute_power"] = non_wall_creatures
                     permanent.metadata["absolute_toughness"] = non_wall_creatures
 
-                if "plague rats's power and toughness are each equal to the number of creatures named plague rats on the battlefield" in text:
+                if "dynamic_pt_plague_rats" in instr_kinds:
                     permanent.metadata["absolute_power"] = plague_rats_total
                     permanent.metadata["absolute_toughness"] = plague_rats_total
 
-                if "nightmare's power and toughness are each equal to the number of swamps you control" in text:
+                if "dynamic_pt_swamps" in instr_kinds:
                     permanent.metadata["absolute_power"] = swamp_count
                     permanent.metadata["absolute_toughness"] = swamp_count
 
-                if "gets +1/+1 as long as you control a swamp" in text:
+                if "conditional_swamp_bonus" in instr_kinds:
                     previous = int(permanent.metadata.get("conditional_swamp_bonus", 0))
                     if previous:
                         permanent.power_bonus -= previous
@@ -2125,18 +2132,14 @@ class Game:
         lower_keyword = keyword.lower()
         if any(item.lower() == lower_keyword for item in permanent.card.keywords):
             return True
-        text = permanent.card.oracle_text.lower()
-        if lower_keyword == "flying":
-            return "flying" in text or permanent.metadata.get("gains_flying_until_eot", False)
-        if lower_keyword == "reach":
-            return "reach" in text
-        if lower_keyword == "first strike":
-            return "first strike" in text
-        if lower_keyword == "double strike":
-            return "double strike" in text
-        if lower_keyword == "trample":
-            return "trample" in text
-        return lower_keyword in text
+        if lower_keyword == "flying" and permanent.metadata.get("gains_flying_until_eot", False):
+            return True
+        # Fall back to oracle program static lines (e.g. test cards that put keyword in oracle_text)
+        program = compile_card_oracle(permanent.card)
+        return any(
+            i.kind in ("keyword_line", "static_line") and lower_keyword in i.value
+            for i in program.instructions
+        )
 
     def _reset_combat_state(self, clear_damage_marked: bool) -> None:
         self.combat_attackers = {}
@@ -2214,12 +2217,13 @@ class Game:
             blocker.blocking_attacker_index = attacker_idx
 
     def _can_block_attacker(self, blocker: Permanent, attacker: Permanent) -> bool:
-        attacker_text = attacker.card.oracle_text.lower()
-        blocker_text = blocker.card.oracle_text.lower()
-
         if attacker.metadata.get("cant_be_blocked_until_eot"):
             return False
-        if "can't be blocked" in attacker_text and "except" not in attacker_text:
+
+        attacker_program = compile_card_oracle(attacker.card)
+        attacker_kinds = {i.kind for i in attacker_program.instructions}
+
+        if "cant_be_blocked" in attacker_kinds:
             return False
 
         attacker_has_flying = self._has_keyword(attacker, "flying")
@@ -2228,12 +2232,8 @@ class Game:
         if attacker_has_flying and not (blocker_has_flying or blocker_has_reach):
             return False
 
-        if "can't be blocked by walls" in attacker_text and "wall" in blocker.card.type_line.lower():
+        if "cant_be_blocked_by_walls" in attacker_kinds and "wall" in blocker.card.type_line.lower():
             return False
-        if "wall" in blocker.card.type_line.lower() and "can block as though it didn't have defender" not in blocker_text:
-            if not blocker.metadata.get("can_attack_as_though_no_defender"):
-                # Walls still block normally unless explicit text says they can't.
-                pass
         return True
 
     def _destroy_marked_creatures(self) -> None:
@@ -2545,19 +2545,26 @@ class Game:
         if self._is_summoning_sick(attacker):
             return False
 
-        text = attacker.card.oracle_text.lower()
-        if "can't attack unless defending player controls an island" in text:
+        program = compile_card_oracle(attacker.card)
+        instr_kinds = {i.kind for i in program.instructions}
+
+        if "cant_attack_without_island" in instr_kinds:
             defending = self.players[defending_player_index]
             has_island = any("island" in perm.card.type_line.lower() for perm in defending.battlefield)
             return has_island
 
-        if "defender" in text and not attacker.metadata.get("can_attack_as_though_no_defender"):
+        if "cant_attack" in instr_kinds:
+            return False
+
+        if "Defender" in attacker.card.keywords and not attacker.metadata.get("can_attack_as_though_no_defender"):
             return False
         return True
 
     def _must_attack_if_able(self, attacker: Permanent) -> bool:
-        text = attacker.card.oracle_text.lower()
-        return "this creature attacks each combat if able" in text or bool(attacker.metadata.get("must_attack_until_eot"))
+        if attacker.metadata.get("must_attack_until_eot"):
+            return True
+        program = compile_card_oracle(attacker.card)
+        return any(i.kind == "must_attack_each_combat" for i in program.instructions)
 
     def resolve_draw_step(self, player_index: int) -> int:
         phase = "beginning"
@@ -2736,8 +2743,8 @@ class Game:
     def _process_land_enters(self, land_controller_index: int) -> None:
         for controller in self.players:
             for permanent in controller.battlefield:
-                text = permanent.card.oracle_text.lower()
-                if "whenever a land enters" not in text:
+                program = compile_card_oracle(permanent.card)
+                if not any(t.condition.kind == "land_enters" for t in program.triggered_abilities):
                     continue
                 victim = self.players[land_controller_index]
                 damage = self._prevent_damage(victim, 2)
@@ -2751,48 +2758,38 @@ class Game:
         return sum(1 for permanent in self.players[player_index].battlefield if permanent.card.name == "Fastbond")
 
     def _apply_global_buff(self, caster: PlayerState, source: CardDefinition) -> None:
-        text = source.oracle_text.lower().strip()
-        if "all swamps are 1/1 black creatures that are still lands" in text:
-            self._refresh_dynamic_creatures()
-            return
-
-        if "all forests are 1/1 creatures that are still lands" in text:
-            self._refresh_dynamic_creatures()
-            return
-
-        if "attacking creatures you control get +1/+0" in text:
-            for permanent in caster.battlefield:
-                if permanent.card.primary_type == "creature":
-                    permanent.power_bonus += 1
-            return
-
-        if "untapped creatures you control get +0/+2" in text:
-            for permanent in caster.battlefield:
-                if permanent.card.primary_type == "creature" and not permanent.tapped:
-                    permanent.toughness_bonus += 2
-            return
-
-        match = re.search(r"(white|blue|black|red|green)?\s*creatures(?: you control)? get \+(\d+)/\+(\d+)", text)
-        if not match:
-            return
-
-        color_word, power_inc, toughness_inc = match.groups()
-        color_symbol = _COLOR_WORD_TO_SYMBOL.get(color_word) if color_word else None
-        power_bonus = int(power_inc)
-        toughness_bonus = int(toughness_inc)
-
-        target_players = [caster]
-        if "you control" not in text:
-            target_players = self.players
-
-        for player in target_players:
-            for permanent in player.battlefield:
-                if permanent.card.primary_type != "creature":
-                    continue
-                if color_symbol and color_symbol not in permanent.card.colors:
-                    continue
-                permanent.power_bonus += power_bonus
-                permanent.toughness_bonus += toughness_bonus
+        program = compile_card_oracle(source)
+        for instr in program.instructions:
+            if instr.kind == "animate_all_swamps":
+                self._refresh_dynamic_creatures()
+                return
+            if instr.kind == "animate_all_forests":
+                self._refresh_dynamic_creatures()
+                return
+            if instr.kind == "buff_attacking_creatures":
+                for permanent in caster.battlefield:
+                    if permanent.card.primary_type == "creature":
+                        permanent.power_bonus += int(instr.payload.get("power", 0))
+                return
+            if instr.kind == "buff_untapped_creatures":
+                for permanent in caster.battlefield:
+                    if permanent.card.primary_type == "creature" and not permanent.tapped:
+                        permanent.toughness_bonus += int(instr.payload.get("toughness", 0))
+                return
+            if instr.kind == "buff_creatures_global":
+                color_sym = instr.payload.get("color")
+                power_bonus = int(instr.payload.get("power", 0))
+                toughness_bonus = int(instr.payload.get("toughness", 0))
+                target_players = self.players if instr.payload.get("all") else [caster]
+                for player in target_players:
+                    for permanent in player.battlefield:
+                        if permanent.card.primary_type != "creature":
+                            continue
+                        if color_sym and color_sym not in permanent.card.colors:
+                            continue
+                        permanent.power_bonus += power_bonus
+                        permanent.toughness_bonus += toughness_bonus
+                return
 
     def _apply_aura_effect(
         self,
