@@ -18,16 +18,6 @@ def _make_test(name, idx):
 
 # List of LEA cards that lacked tests when this file was generated
 _UNTESTED = [
-"Drain Life",
-"Drain Power",
-"Drudge Skeletons",
-"Dwarven Demolition Team",
-"Earth Elemental",
-"Earthbind",
-"Earthquake",
-"Elvish Archers",
-"Evil Presence",
-"Farmstead",
 "Fear",
 "Feedback",
 "Fire Elemental",
@@ -3294,3 +3284,309 @@ def test_dragon_whelp_activated_pumps_power(all_cards):
 
     assert result.supported
     assert p1.battlefield[0].effective_power == before + 1
+
+
+def test_drain_life_deals_damage_and_caster_gains_life(all_cards):
+    # Drain Life: "{X}{1}{B} — Drain Life deals X damage to any target.
+    # You gain life equal to the damage dealt."
+    drain_life = _get(all_cards, "Drain Life")
+
+    p1 = PlayerState(name="P1", hand=[drain_life], life=15)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Drain Life", target_player_index=1, x_value=3)
+
+    assert result.supported
+    assert p2.life == 17  # took 3 damage
+    assert p1.life == 18  # gained 3 life
+
+
+def test_drain_life_is_supported(all_cards):
+    from engine import classify_card
+    drain_life = _get(all_cards, "Drain Life")
+    assert classify_card(drain_life).supported
+
+
+def test_drain_power_steals_mana_from_opponent_lands(all_cards):
+    # Drain Power: "{U}{U} — Target player activates a mana ability of each land
+    # they control. Then that player loses all unspent mana and you add the mana
+    # lost this way."
+    drain_power = _get(all_cards, "Drain Power")
+    island = _get(all_cards, "Island")
+
+    p1 = PlayerState(name="P1", hand=[drain_power])
+    p2 = PlayerState(
+        name="P2",
+        battlefield=[Permanent(card=island), Permanent(card=island)],
+    )
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Drain Power", target_player_index=1)
+
+    assert result.supported
+    # Both islands are tapped
+    assert all(perm.tapped for perm in p2.battlefield)
+    # Opponent lost all mana
+    assert sum(p2.mana_pool.values()) == 0
+    # Caster received 2 blue mana (one per Island)
+    assert p1.mana_pool.get("U", 0) == 2
+
+
+def test_drain_power_is_supported(all_cards):
+    from engine import classify_card
+    drain_power = _get(all_cards, "Drain Power")
+    assert classify_card(drain_power).supported
+
+
+def test_drudge_skeletons_regeneration_activation(all_cards):
+    # Drudge Skeletons: "{1}{B} — {B}: Regenerate this creature."
+    drudge = _get(all_cards, "Drudge Skeletons")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=drudge)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Drudge Skeletons")
+
+    assert result.supported
+    assert p1.battlefield[0].regeneration_shield == 1
+
+
+def test_drudge_skeletons_regeneration_shield_prevents_wrath(all_cards):
+    # After activating regeneration, Drudge Skeletons survives Wrath of God.
+    drudge = _get(all_cards, "Drudge Skeletons")
+    wrath = _get(all_cards, "Wrath of God")
+
+    p1 = PlayerState(name="P1", hand=[wrath], battlefield=[Permanent(card=drudge)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    game.activate_permanent_ability(0, "Drudge Skeletons")
+    assert p1.battlefield[0].regeneration_shield == 1
+
+    result = game.cast_from_hand(0, "Wrath of God")
+
+    assert result.supported
+    # Drudge Skeletons survived (regeneration shield consumed)
+    assert len(p1.battlefield) == 1
+    assert p1.battlefield[0].card.name == "Drudge Skeletons"
+    assert p1.battlefield[0].regeneration_shield == 0
+
+
+def test_dwarven_demolition_team_destroys_wall(all_cards):
+    # Dwarven Demolition Team: "{2}{R} — {T}: Destroy target Wall."
+    team = _get(all_cards, "Dwarven Demolition Team")
+    wall = _get(all_cards, "Wall of Stone")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=team)])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=wall)])
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Dwarven Demolition Team", target_player_index=1)
+
+    assert result.supported
+    # The team tapped to use its ability
+    assert p1.battlefield[0].tapped is True
+    # The wall was destroyed
+    assert len(p2.battlefield) == 0
+    assert p2.graveyard[0].name == "Wall of Stone"
+
+
+def test_dwarven_demolition_team_is_supported(all_cards):
+    from engine import classify_card
+    team = _get(all_cards, "Dwarven Demolition Team")
+    assert classify_card(team).supported
+
+
+def test_earth_elemental_enters_battlefield(all_cards):
+    # Earth Elemental: "{3}{R}{R}" — vanilla 4/5 Creature — Elemental
+    earth_elemental = _get(all_cards, "Earth Elemental")
+
+    p1 = PlayerState(name="P1", hand=[earth_elemental])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Earth Elemental")
+
+    assert result.supported
+    assert len(p1.battlefield) == 1
+    assert p1.battlefield[0].card.name == "Earth Elemental"
+
+
+def test_earth_elemental_is_supported(all_cards):
+    from engine import classify_card
+    earth_elemental = _get(all_cards, "Earth Elemental")
+    assert classify_card(earth_elemental).supported
+
+
+# ---------------------------------------------------------------------------
+# Earthbind
+# ---------------------------------------------------------------------------
+
+def test_earthbind_damages_flying_creature_and_strips_flying(all_cards):
+    earthbind = _get(all_cards, "Earthbind")
+    serra = _get(all_cards, "Serra Angel")
+    p1 = PlayerState(name="P1", hand=[earthbind])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=serra)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Earthbind", target_player_index=1, target_permanent_index=0)
+
+    assert result.supported
+    creature_perm = p2.battlefield[0]
+    assert creature_perm.damage_marked == 2
+    assert creature_perm.metadata.get("loses_flying") is True
+
+
+def test_earthbind_no_damage_on_non_flying_creature(all_cards):
+    earthbind = _get(all_cards, "Earthbind")
+    bear = _get(all_cards, "Grizzly Bears")
+    p1 = PlayerState(name="P1", hand=[earthbind])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Earthbind", target_player_index=1, target_permanent_index=0)
+
+    assert result.supported
+    creature_perm = p2.battlefield[0]
+    assert creature_perm.damage_marked == 0
+    assert not creature_perm.metadata.get("loses_flying")
+
+
+def test_earthbind_is_supported(all_cards):
+    from engine import classify_card
+    earthbind = _get(all_cards, "Earthbind")
+    assert classify_card(earthbind).supported
+
+
+# ---------------------------------------------------------------------------
+# Earthquake
+# ---------------------------------------------------------------------------
+
+def test_earthquake_damages_all_players_and_non_flying_creatures(all_cards):
+    earthquake = _get(all_cards, "Earthquake")
+    grizzly = _get(all_cards, "Grizzly Bears")
+    serra = _get(all_cards, "Serra Angel")
+    # P1 has Earthquake in hand + a non-flying creature
+    p1 = PlayerState(name="P1", life=20, hand=[earthquake],
+                     battlefield=[Permanent(card=grizzly)])
+    # P2 has a flying creature
+    p2 = PlayerState(name="P2", life=20, battlefield=[Permanent(card=serra)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Earthquake", target_player_index=1, x_value=3)
+
+    assert result.supported
+    # Both players take 3 damage
+    assert p1.life == 17
+    assert p2.life == 17
+    # Non-flying Grizzly Bears on p1's side takes 3 damage and dies (toughness=2)
+    assert all(perm.card.name != "Grizzly Bears" for perm in p1.battlefield)
+    assert any(c.name == "Grizzly Bears" for c in p1.graveyard)
+    # Flying Serra Angel is unaffected
+    assert any(perm.card.name == "Serra Angel" for perm in p2.battlefield)
+    assert p2.battlefield[0].damage_marked == 0
+
+
+def test_earthquake_is_supported(all_cards):
+    from engine import classify_card
+    earthquake = _get(all_cards, "Earthquake")
+    assert classify_card(earthquake).supported
+
+
+# ---------------------------------------------------------------------------
+# Elvish Archers
+# ---------------------------------------------------------------------------
+
+def test_elvish_archers_enters_battlefield(all_cards):
+    archers = _get(all_cards, "Elvish Archers")
+    p1 = PlayerState(name="P1", hand=[archers])
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Elvish Archers")
+
+    assert result.supported
+    assert len(p1.battlefield) == 1
+    perm = p1.battlefield[0]
+    assert perm.card.name == "Elvish Archers"
+    assert perm.effective_power == 2
+    assert perm.effective_toughness == 1
+
+
+def test_elvish_archers_is_supported(all_cards):
+    from engine import classify_card
+    archers = _get(all_cards, "Elvish Archers")
+    assert classify_card(archers).supported
+
+
+# ---------------------------------------------------------------------------
+# Evil Presence
+# ---------------------------------------------------------------------------
+
+def test_evil_presence_makes_land_a_swamp(all_cards):
+    evil_presence = _get(all_cards, "Evil Presence")
+    mountain = _get(all_cards, "Mountain")
+    p1 = PlayerState(name="P1", hand=[evil_presence])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=mountain)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Evil Presence", target_player_index=1, target_permanent_index=0)
+
+    assert result.supported
+    land_perm = p2.battlefield[0]
+    assert land_perm.metadata.get("land_type_override") == "swamp"
+
+
+def test_evil_presence_is_supported(all_cards):
+    from engine import classify_card
+    evil_presence = _get(all_cards, "Evil Presence")
+    assert classify_card(evil_presence).supported
+
+
+# ---------------------------------------------------------------------------
+# Farmstead
+# ---------------------------------------------------------------------------
+
+def test_farmstead_grants_life_at_upkeep_when_paid(all_cards):
+    farmstead = _get(all_cards, "Farmstead")
+    plains = _get(all_cards, "Plains")
+    farm_perm = Permanent(card=farmstead)
+    plains_perm = Permanent(card=plains)
+    # Attach Farmstead to Plains manually (simulating resolved cast)
+    farm_perm.metadata["attached_to"] = plains_perm
+    plains_perm.metadata["attached_aura"] = farm_perm
+    p1 = PlayerState(name="P1", life=20, mana_pool={"W": 2},
+                     battlefield=[plains_perm, farm_perm])
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+
+    game.resolve_upkeep(0)
+
+    # Player paid {W}{W} and gained 1 life
+    assert p1.life == 21
+    assert p1.mana_pool.get("W", 0) == 0
+
+
+def test_farmstead_no_life_gain_without_mana(all_cards):
+    farmstead = _get(all_cards, "Farmstead")
+    plains = _get(all_cards, "Plains")
+    farm_perm = Permanent(card=farmstead)
+    plains_perm = Permanent(card=plains)
+    farm_perm.metadata["attached_to"] = plains_perm
+    plains_perm.metadata["attached_aura"] = farm_perm
+    p1 = PlayerState(name="P1", life=20, battlefield=[plains_perm, farm_perm])
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+
+    game.resolve_upkeep(0)
+
+    # No mana to pay → no life gain
+    assert p1.life == 20
+
+
+def test_farmstead_is_supported(all_cards):
+    from engine import classify_card
+    farmstead = _get(all_cards, "Farmstead")
+    assert classify_card(farmstead).supported

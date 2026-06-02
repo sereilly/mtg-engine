@@ -1217,6 +1217,78 @@ class Game:
             self.log.append(f"{card.name} dealt {damage} damage and 3 self-damage")
             return True, "resolved"
 
+        if instruction.kind == "deal_damage_and_gain_life":
+            amount = instruction.payload.get("amount", 0)
+            damage = max(0, x_value or 0) if amount == "x" else int(amount)
+            damage = self._prevent_damage(target, damage)
+            if damage > 0:
+                target.life -= damage
+            caster.life += damage
+            self.log.append(f"{card.name} dealt {damage} damage and {caster.name} gained {damage} life")
+            return True, "resolved"
+
+        if instruction.kind == "earthquake_damage":
+            amount = instruction.payload.get("amount", 0)
+            damage = max(0, x_value or 0) if amount == "x" else int(amount)
+            # Deal damage to each player
+            for player in self.players:
+                d = self._prevent_damage(player, damage)
+                if d > 0:
+                    player.life -= d
+            # Deal damage to each creature without flying on every battlefield
+            for player in self.players:
+                for perm in list(player.battlefield):
+                    if perm.card.primary_type != "creature":
+                        continue
+                    has_flying = (
+                        "Flying" in perm.card.keywords
+                        or perm.metadata.get("gains_flying")
+                        or perm.metadata.get("gains_flying_until_eot")
+                    )
+                    if has_flying:
+                        continue
+                    perm.damage_marked += damage
+            self._destroy_marked_creatures()
+            self.log.append(f"{card.name} dealt {damage} earthquake damage to each non-flying creature and each player")
+            return True, "resolved"
+
+        if instruction.kind == "drain_target_lands_mana":
+            # Tap each of target's untapped lands and collect the mana they would produce
+            mana_gained: dict[str, int] = {}
+            for perm in target.battlefield:
+                if perm.card.primary_type != "land" or perm.tapped:
+                    continue
+                perm.tapped = True
+                if perm.card.produced_mana:
+                    sym = perm.card.produced_mana[0].upper()
+                else:
+                    land_type = str(perm.metadata.get("land_type_override", "")).lower() or perm.card.type_line.lower()
+                    if "plains" in land_type:
+                        sym = "W"
+                    elif "island" in land_type:
+                        sym = "U"
+                    elif "swamp" in land_type:
+                        sym = "B"
+                    elif "mountain" in land_type:
+                        sym = "R"
+                    elif "forest" in land_type:
+                        sym = "G"
+                    else:
+                        sym = "C"
+                mana_gained[sym] = mana_gained.get(sym, 0) + 1
+            # Drain any existing unspent mana from target's pool too
+            for sym in ("W", "U", "B", "R", "G", "C"):
+                pool_amount = target.mana_pool.get(sym, 0)
+                if pool_amount > 0:
+                    mana_gained[sym] = mana_gained.get(sym, 0) + pool_amount
+                    target.mana_pool[sym] = 0
+            # Add all drained mana to caster
+            for sym, amount_gained in mana_gained.items():
+                caster.mana_pool[sym] = caster.mana_pool.get(sym, 0) + amount_gained
+            total = sum(mana_gained.values())
+            self.log.append(f"{card.name} drained {total} mana from {target.name}")
+            return True, "resolved"
+
         if instruction.kind == "reanimate_creature":
             reanimated = self._reanimate_creature_to_battlefield(caster)
             self.log.append("Reanimated creature to battlefield" if reanimated else "No creature to reanimate")
@@ -2067,6 +2139,49 @@ class Game:
                 if damage > 0:
                     victim.life -= damage
                 self.log.append(f"{permanent.card.name} dealt {damage} upkeep damage to {victim.name}")
+
+        # Handle enchant-land auras with optional upkeep life gain (e.g. Farmstead)
+        for controller in self.players:
+            for permanent in controller.battlefield:
+                if permanent.card.primary_type != "enchantment":
+                    continue
+                prog = compile_card_oracle(permanent.card)
+                text = prog.normalized_text
+                if not text.startswith("enchant land"):
+                    continue
+                attached_land = permanent.metadata.get("attached_to")
+                if attached_land is None:
+                    continue
+                land_controller_idx = next(
+                    (i for i, p in enumerate(self.players) if attached_land in p.battlefield),
+                    None,
+                )
+                if land_controller_idx != player_index:
+                    continue
+                instr = next((i for i in prog.instructions if i.kind == "target_gains_life"), None)
+                if instr is None:
+                    continue
+                # Parse the optional mana payment from text (e.g. "you may pay {w}{w}")
+                pay_match = re.search(r"you may pay ((?:\{[wubrgcWUBRGC]\})+)", text)
+                gainer = self.players[player_index]
+                paid = False
+                if pay_match:
+                    cost_str = pay_match.group(1).upper()
+                    cost: dict[str, int] = {}
+                    for sym in re.findall(r"\{([WUBRG])\}", cost_str):
+                        cost[sym] = cost.get(sym, 0) + 1
+                    # Auto-pay if controller has enough
+                    can_pay = all(gainer.mana_pool.get(sym, 0) >= cnt for sym, cnt in cost.items())
+                    if can_pay:
+                        for sym, cnt in cost.items():
+                            gainer.mana_pool[sym] -= cnt
+                        paid = True
+                else:
+                    paid = True  # No payment required
+                if paid:
+                    amount = int(instr.payload.get("amount", 1))
+                    gainer.life += amount
+                    self.log.append(f"{gainer.name} gained {amount} life from {permanent.card.name}")
 
         if self._receives_priority(step):
             self._resolve_priority_window()
@@ -3112,6 +3227,18 @@ class Game:
             aura_permanent.metadata["attached_to"] = target_creature
             target_creature.metadata["attached_aura"] = aura_permanent
 
+            # Earthbind: on enter, if creature has flying, deal 2 damage and strip flying
+            if "if enchanted creature has flying" in text and "deals 2 damage" in text:
+                has_flying = (
+                    "Flying" in target_creature.card.keywords
+                    or target_creature.metadata.get("gains_flying")
+                    or target_creature.metadata.get("gains_flying_until_eot")
+                )
+                if has_flying:
+                    target_creature.damage_marked += 2
+                    target_creature.metadata["loses_flying"] = True
+                    self.log.append(f"{aura_permanent.card.name} dealt 2 damage to {target_creature.card.name} and stripped flying")
+
             # Control effect: steal creature to caster's battlefield (e.g. Control Magic)
             if "you control enchanted creature" in text:
                 if target_creature in target_player.battlefield:
@@ -3134,6 +3261,8 @@ class Game:
             target_land.metadata["attached_aura"] = aura_permanent
             if "indestructible" in text:
                 target_land.metadata["is_indestructible"] = True
+            if "enchanted land is a swamp" in text:
+                target_land.metadata["land_type_override"] = "swamp"
             self.log.append(f"{aura_permanent.card.name} enchants {target_land.card.name}")
         elif text.startswith("enchant wall"):
             target_wall = next(

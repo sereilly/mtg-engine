@@ -1,51 +1,52 @@
-# SKILL: Retrieve Oracle Text
+---
+name: retrieve-oracle
+description: 'Retrieve oracle text for a Magic: The Gathering card from the local engine card data. Use for lookups by exact name, case-insensitive name, substring, or fuzzy match.'
+argument-hint: 'Provide the card name or partial name to look up.'
+user-invocable: true
+---
 
-Purpose
-- Provide a concise, repeatable workflow to retrieve the oracle text for a given Magic: The Gathering card from this repository.
+# Retrieve Oracle Text
 
-Scope
-- Workspace-scoped skill for `c:\Users\qwv48_66yef5i\Desktop\Magic` projects that use the local `engine` card data.
+## Outcome
+Return the `oracle_text` and metadata for a named Magic: The Gathering card using the local repository card data (`engine.card_loader`).
 
-Inputs
+## Inputs
 - `card_name` (string): user-supplied card name or partial name.
 - Optional `match_mode`: one of `exact`, `case_insensitive`, `substring`, or `fuzzy`.
 
-Outputs
-- On success: returns the card's `oracle_text` string and the matching card metadata.
-- On ambiguity: returns a short list of candidate card names and prompts for disambiguation.
-- On not found: returns a helpful message and the top N closest matches.
+## When To Use
+- User asks for the oracle text, rules text, or card text of a specific card.
+- User wants to look up card metadata (type, cost, power/toughness) from the local data set.
+- A rules question requires confirming exact card wording before issuing a ruling.
 
-Step-by-step Workflow
-1. Normalize input
-   - Trim whitespace; preserve punctuation used in official names (apostrophes, colons).
-2. Load repository card data
-   - Use the repository loader, e.g. `from engine import load_cards` or the appropriate loader in `engine.card_loader`.
-   - `all_cards = load_cards()`
-3. Exact match attempts (in this order)
-   a. `exact` match against `card.name`
-   b. case-insensitive exact
-   c. substring match (card name contains input)
-   d. optional fuzzy match (Levenshtein or difflib.get_close_matches)
-4. Handle results
-   - Single match: return `match.oracle_text` and `match` metadata.
-   - Multiple matches: return candidate list (name, set, type) and ask user to choose.
-   - No matches: return helpful failure and include top 5 close matches by similarity.
-5. Error and edge cases
-   - If input matches multiple printings (same name, different sets), prefer the most complete record or return all printings and ask user to pick.
-   - For names with punctuation (e.g., `Nevinyrral's Disk`) prefer exact or case-insensitive exact to avoid false positives.
+## Procedure
+1. **Normalize input** — trim whitespace; preserve punctuation used in official names (apostrophes, colons).
+2. **Load card data** — `from engine.card_loader import load_cards; all_cards = load_cards()`.
+3. **Match in priority order** (stop at first hit):
+   a. Exact match against `card.name`.
+   b. Case-insensitive exact match.
+   c. Substring match (card name contains input).
+   d. Fuzzy match via `difflib.get_close_matches` (threshold 0.6) — only if `match_mode` is `fuzzy` or no earlier match found.
+4. **Handle results**:
+   - Single match → return `match.oracle_text` and `match` metadata.
+   - Multiple matches → return candidate list (name, set, type) and ask user to choose.
+   - No match → return a helpful failure message and the top 5 closest names by similarity.
+5. **Multiple-printing edge case** — if the same name appears in multiple sets, prefer the most complete record or return all printings and ask the user to pick.
 
-Decision Points and Branching Logic
-- If `match_mode` is provided use it to force strategy; otherwise iterate modes from strict → loose.
-- If fuzzy matching is enabled, ensure a similarity threshold (default 0.6). If below threshold, treat as not found.
+## Decision Points
+- If `match_mode` is provided, use it to force the matching strategy; otherwise iterate modes from strict → loose.
+- For names with punctuation (e.g., `Nevinyrral's Disk`), prefer exact or case-insensitive exact to avoid false positives from substring/fuzzy.
+- If fuzzy similarity is below 0.6, treat the result as not found.
 
-Quality Criteria / Completion Checks
-- Returned oracle text is non-empty and contains at least one sentence punctuated correctly.
-- If ambiguous, user can select a numbered candidate and the skill returns that candidate's oracle text.
-- Unit test: given input `Black Lotus` the skill returns the known oracle text and not an error.
+## Quality Checks
+- Returned oracle text is non-empty and punctuated correctly.
+- If ambiguous, the user can select a numbered candidate and the skill returns that card's oracle text.
+- Given input `Black Lotus`, the skill returns the known oracle text without error.
 
-Example Implementation Snippet
+## Example Implementation
+
 ```python
-from engine import load_cards
+from engine.card_loader import load_cards
 import difflib
 
 def retrieve_oracle_text(card_name, match_mode=None, max_candidates=5):
@@ -72,28 +73,7 @@ def retrieve_oracle_text(card_name, match_mode=None, max_candidates=5):
     return None, close
 ```
 
-Testing Guidance
-- Add a small pytest in `tests/` that calls `retrieve_oracle_text('Black Lotus')` and asserts the returned oracle text matches the known string from `lea_cards.json` or `load_cards()`.
-
-Prompts & Usage Examples
+## Usage Examples
 - "Retrieve oracle text for Black Lotus"
 - "Get oracle text for `Nevinyrral's Disk`"
 - "Find oracle text for 'Lotus' (show candidates)"
-
-Ambiguities to Clarify (questions for user)
-- Should fuzzy matching be enabled by default, or opt-in?
-- When multiple printings exist, prefer one printing or return all variants?
-- Preferred format for returned text (raw string, JSON with metadata, or markdown-wrapped)?
-
-Next Steps
-- I can add a small helper function file (e.g., `.agents/skills/retrieve-oracle/retrieve.py`) and a pytest if you want.
-- I can also wire a short CLI command or web endpoint in `web/` to expose this.
-
-Examples of follow-up customizations
-- Add language/localization support.
-- Add a short-circuit cache for repeated lookups.
-- Add fuzzy-match tuning settings in `pyproject.toml` or a small `settings.yaml`.
-
-Created-by
-- Skill author: agent-customization-guided template
-- Date: 2026-05-25

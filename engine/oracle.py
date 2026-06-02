@@ -598,6 +598,17 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
     if "whenever one or more creatures you control attack, each defending player divides all creatures without flying" in text:
         return _instruction("left_right_combat_division"), "spell_pattern"
 
+    if "activates a mana ability of each land they control" in text and "loses all unspent mana" in text:
+        return _instruction("drain_target_lands_mana"), "spell_pattern"
+
+    if "deals x damage" in text and "each creature without flying" in text:
+        effect_kind = "activated_damage" if activated else "spell_pattern"
+        return _instruction("earthquake_damage", amount="x"), effect_kind
+
+    if "deals x damage" in text and "you gain life equal to the damage dealt" in text:
+        effect_kind = "activated_damage" if activated else "spell_pattern"
+        return _instruction("deal_damage_and_gain_life", amount="x"), effect_kind
+
     if "deals x damage" in text:
         effect_kind = "activated_damage" if activated else "spell_pattern"
         return _instruction("deal_damage", amount="x"), effect_kind
