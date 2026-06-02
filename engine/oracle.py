@@ -462,11 +462,11 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
     if "each defending player divides all creatures without flying they control into a \"left\" pile and a \"right\" pile" in text:
         return _instruction("left_right_combat_division"), "triggered_combat"
 
-    # Cockatrice: effect-only match
+    # Cockatrice: effect-only match (trigger condition is already stripped by caller)
     if (
         "destroy that creature at end of combat" in text
         or "destroy that creature at the end of combat" in text
-    ) and ("non-wall" in text or "blocks or becomes blocked" in text):
+    ):
         return _instruction("delayed_destroy_blocked_or_blocker"), "triggered_delayed_destroy"
 
     # Hypnotic Specter: effect-only match
@@ -846,11 +846,23 @@ def _parse_creature_program(
         # 2. Triggered ability
         trig = _parse_triggered_ability(line)
         if trig is not None:
-            triggered.append(trig)
             if trig.supported:
+                triggered.append(trig)
                 any_supported_trigger = True
                 if trig.instruction is not None:
                     instructions.append(trig.instruction)
+                continue
+            # Trigger condition recognized but effect is unsupported.
+            # Before giving up, check if the full line is listed as a supported
+            # static pattern (e.g. "at the beginning of your upkeep, unless you
+            # pay …" for Demonic Hordes, or "when this creature dies …" for
+            # Personal Incarnation).
+            if _is_supported_static_creature_line(line):
+                normalized = normalize_creature_line(line)
+                instructions.append(OracleInstruction("static_line", normalized))
+                static_lines.append(normalized)
+                continue
+            triggered.append(trig)
             continue
 
         # 3. Activated ability
@@ -959,7 +971,8 @@ def _compile_card_oracle(
 
 
         # Only mark as unsupported if all triggered abilities are unsupported
-        if triggered_abilities and all(not t.supported for t in triggered_abilities):
+        # and no spell-pattern instructions were already matched (e.g. Howling Mine).
+        if triggered_abilities and all(not t.supported for t in triggered_abilities) and not instructions:
             return OracleProgram(False, "unsupported", "unsupported triggered ability", normalized_text, tokens)
 
         if instructions or any(a.supported for a in activated_abilities) or triggered_abilities:
