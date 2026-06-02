@@ -19,37 +19,6 @@ def _make_test(name, idx):
 # List of LEA cards that lacked tests when this file was generated
 _UNTESTED = [
 "Bayou",
-]
-
-def test_basalt_monolith_tap_and_untap(all_cards):
-    monolith = _get(all_cards, "Basalt Monolith")
-    p1 = PlayerState(name="P1", battlefield=[Permanent(card=monolith)])
-    p2 = PlayerState(name="P2")
-    game = Game(players=[p1, p2])
-
-    # Tap for mana (should succeed)
-    result = game.activate_permanent_ability(0, "Basalt Monolith")
-    assert result.supported
-    assert p1.battlefield[0].tapped is True
-    assert p1.mana_pool["C"] == 3
-
-    # Untap using ability (should succeed)
-    result2 = game.activate_permanent_ability(0, "Basalt Monolith")
-    assert result2.supported
-    assert p1.battlefield[0].tapped is False
-
-    # Tap again (should succeed, since it's untapped now)
-    result3 = game.activate_permanent_ability(0, "Basalt Monolith")
-    assert result3.supported
-    assert p1.battlefield[0].tapped is True
-
-    # Untap again (should succeed, since it's tapped)
-    result4 = game.activate_permanent_ability(0, "Basalt Monolith")
-    assert result4.supported
-    assert p1.battlefield[0].tapped is False
-
-    # The engine does not expose a way to force the untap ability when untapped.
-    # The legal tap/untap cycle is fully tested above.
 "Berserk",
 "Birds of Paradise",
 "Black Ward",
@@ -226,6 +195,7 @@ def test_basalt_monolith_tap_and_untap(all_cards):
 "Will-o'-the-Wisp",
 "Wooden Sphere",
 "Wrath of God",
+]
 
 
 
@@ -259,6 +229,36 @@ from tests.test_utils import (
     client,
     _get,
 )
+
+def test_basalt_monolith_tap_and_untap(all_cards):
+    monolith = _get(all_cards, "Basalt Monolith")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=monolith)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    # Tap for mana (should succeed)
+    result = game.activate_permanent_ability(0, "Basalt Monolith")
+    assert result.supported
+    assert p1.battlefield[0].tapped is True
+    assert p1.mana_pool["C"] == 3
+
+    # Untap using ability (should succeed)
+    result2 = game.activate_permanent_ability(0, "Basalt Monolith")
+    assert result2.supported
+    assert p1.battlefield[0].tapped is False
+
+    # Tap again (should succeed, since it's untapped now)
+    result3 = game.activate_permanent_ability(0, "Basalt Monolith")
+    assert result3.supported
+    assert p1.battlefield[0].tapped is True
+
+    # Untap again (should succeed, since it's tapped)
+    result4 = game.activate_permanent_ability(0, "Basalt Monolith")
+    assert result4.supported
+    assert p1.battlefield[0].tapped is False
+
+    # The engine does not expose a way to force the untap ability when untapped.
+    # The legal tap/untap cycle is fully tested above.
 
 def test_choose_cast_action_targets_self_for_ancestral_recall(all_cards):
     recall = _get(all_cards, "Ancestral Recall")
@@ -2718,3 +2718,152 @@ def test_badlands_produces_black_or_red_mana(all_cards):
     assert ok
     assert p1.mana_pool["R"] == 1
     assert p1.mana_pool["B"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Air Elemental
+# ---------------------------------------------------------------------------
+
+def test_air_elemental_cannot_be_blocked_by_ground_creature(all_cards):
+    """Air Elemental has flying; a creature without flying or reach cannot block it."""
+    air_elemental = _get(all_cards, "Air Elemental")
+    grizzly_bears = _get(all_cards, "Grizzly Bears")
+
+    air_perm = Permanent(card=air_elemental)
+    bear_perm = Permanent(card=grizzly_bears)
+
+    p1 = PlayerState(name="P1", battlefield=[air_perm])
+    p2 = PlayerState(name="P2", battlefield=[bear_perm])
+    game = Game(players=[p1, p2])
+
+    # bear_perm (blocker) cannot block air_perm (attacker with flying)
+    assert game._can_block_attacker(bear_perm, air_perm) is False
+
+
+# ---------------------------------------------------------------------------
+# Disintegrate
+# ---------------------------------------------------------------------------
+
+def test_disintegrate_deals_damage_to_targeted_creature(all_cards):
+    """Disintegrate with X=3 targeting a creature should deal 3 damage to that creature."""
+    disintegrate = _get(all_cards, "Disintegrate")
+    bear = _mk_creature_card("Test Bear", power=2, toughness=2)
+
+    bear_perm = Permanent(card=bear)
+    p1 = PlayerState(name="P1", hand=[disintegrate])
+    p2 = PlayerState(name="P2", battlefield=[bear_perm])
+    game = Game(players=[p1, p2])
+
+    initial_life = p2.life
+    result = game.cast_from_hand(
+        0, "Disintegrate",
+        target_player_index=1,
+        target_permanent_index=0,
+        x_value=3,
+    )
+    assert result.supported
+    # Creature should be gone (dead or exiled after taking 3 damage)
+    assert not p2.battlefield, "2/2 creature should be removed after taking 3 damage from Disintegrate"
+    # Player life should be unchanged (damage went to creature, not player)
+    assert p2.life == initial_life
+
+
+# ---------------------------------------------------------------------------
+# Lance
+# ---------------------------------------------------------------------------
+
+def test_lance_grants_first_strike_to_enchanted_creature(all_cards):
+    """Lance aura gives enchanted creature first strike."""
+    lance = _get(all_cards, "Lance")
+    bear = _mk_creature_card("Test Bear", power=2, toughness=2)
+
+    bear_perm = Permanent(card=bear)
+    p1 = PlayerState(name="P1", hand=[lance], battlefield=[bear_perm])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(
+        0, "Lance",
+        target_player_index=0,
+        target_permanent_index=0,
+    )
+    assert result.supported
+    enchanted = p1.battlefield[0]
+    assert enchanted.metadata.get("gains_first_strike") is True, \
+        "Enchanted creature should have gains_first_strike=True in metadata"
+
+
+# ---------------------------------------------------------------------------
+# Power Sink
+# ---------------------------------------------------------------------------
+
+def test_power_sink_counters_spell_and_taps_controller_lands(all_cards):
+    """Power Sink counters the target spell and taps all of the controller's lands."""
+    power_sink = _get(all_cards, "Power Sink")
+    ancestral_recall = _get(all_cards, "Ancestral Recall")
+    island = _mk_card("Island", type_line="Basic Land - Island", mana_cost="")
+
+    island1 = Permanent(card=island, tapped=False)
+    island2 = Permanent(card=island, tapped=False)
+    p1 = PlayerState(name="P1", hand=[power_sink])
+    p2 = PlayerState(
+        name="P2",
+        hand=[ancestral_recall],
+        battlefield=[island1, island2],
+    )
+    game = Game(players=[p1, p2])
+
+    # p2 queues Ancestral Recall targeting themselves (don't auto-resolve)
+    game.queue_from_hand(1, "Ancestral Recall", target_player_index=1)
+    assert len(game.stack) == 1
+
+    # p1 counters with Power Sink, X=5 (more than p2 can pay)
+    # cast_from_hand will queue Power Sink then resolve the entire stack
+    result = game.cast_from_hand(0, "Power Sink", target_player_index=1, x_value=5)
+    assert result.supported
+
+    # Ancestral Recall should have been countered (removed from stack)
+    assert len(game.stack) == 0
+    # All of p2's lands should be tapped
+    land_perms = [perm for perm in p2.battlefield if perm.card.primary_type == "land"]
+    assert land_perms, "P2 should still have lands on battlefield"
+    assert all(perm.tapped for perm in land_perms), \
+        "Power Sink should tap all of the countered spell controller's lands"
+    # p2's mana pool should be empty
+    assert all(v == 0 for v in p2.mana_pool.values()), \
+        "Power Sink should drain all mana from countered spell controller's mana pool"
+
+
+# ---------------------------------------------------------------------------
+# Regeneration
+# ---------------------------------------------------------------------------
+
+def test_regeneration_aura_activated_ability_grants_regen_shield(all_cards):
+    """Regeneration enchants a creature; its activated ability grants the enchanted creature a regeneration shield."""
+    regeneration = _get(all_cards, "Regeneration")
+    bear = _mk_creature_card("Test Bear", power=2, toughness=2)
+
+    bear_perm = Permanent(card=bear)
+    p1 = PlayerState(name="P1", hand=[regeneration], battlefield=[bear_perm])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    # Cast Regeneration enchanting the bear
+    cast_result = game.cast_from_hand(
+        0, "Regeneration",
+        target_player_index=0,
+        target_permanent_index=0,
+    )
+    assert cast_result.supported
+
+    # Activate Regeneration's ability to grant the bear a regeneration shield
+    activate_result = game.activate_permanent_ability(
+        0, "Regeneration",
+        target_player_index=0,
+    )
+    assert activate_result.supported, \
+        "Regeneration's activated ability should be supported"
+
+    # The enchanted bear should now have a regeneration shield
+    assert bear_perm.regeneration_shield >= 1, \
+        "Enchanted creature should have regeneration_shield >= 1 after activating Regeneration"

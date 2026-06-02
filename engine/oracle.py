@@ -724,6 +724,9 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
     if activated and "regenerate this creature" in text:
         return _instruction("grant_regeneration_to_self"), "activated_regenerate"
 
+    if activated and "regenerate enchanted creature" in text:
+        return _instruction("grant_regeneration_to_enchanted_creature"), "activated_regenerate"
+
     if "gain" in text and "life" in text:
         gain_match = re.search(r"gains? (\d+) life", text)
         if gain_match:

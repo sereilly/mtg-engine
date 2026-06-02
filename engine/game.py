@@ -1176,13 +1176,26 @@ class Game:
         if instruction.kind == "deal_damage":
             amount = instruction.payload.get("amount", 0)
             damage = max(0, x_value or 0) if amount == "x" else int(amount)
-            damage = self._prevent_damage(target, damage)
-            if damage > 0:
-                target.life -= damage
-            if source_permanent is not None:
-                self.log.append(f"{card.name} dealt {damage} damage")
+            target_perm_idx = context.target_permanent_index
+            if target_perm_idx is not None and 0 <= target_perm_idx < len(target.battlefield):
+                # Damage targets a creature permanent, not the player
+                target_perm = target.battlefield[target_perm_idx]
+                target_perm.damage_marked += damage
+                effective_toughness = target_perm.effective_toughness
+                self.log.append(f"{card.name} dealt {damage} damage to {target_perm.card.name}")
+                if target_perm.damage_marked >= effective_toughness:
+                    # Disintegrate exiles the creature (can't regenerate)
+                    target_perm.metadata["no_regenerate"] = True
+                    target.battlefield.pop(target_perm_idx)
+                    self.log.append(f"{target_perm.card.name} was exiled by {card.name}")
             else:
-                self.log.append(f"{target.name} took {damage} damage")
+                damage = self._prevent_damage(target, damage)
+                if damage > 0:
+                    target.life -= damage
+                if source_permanent is not None:
+                    self.log.append(f"{card.name} dealt {damage} damage")
+                else:
+                    self.log.append(f"{target.name} took {damage} damage")
             return True, "resolved"
 
         if instruction.kind == "deal_damage_and_self_damage":
@@ -1414,6 +1427,16 @@ class Game:
             self.log.append(f"{card.name} gains regeneration shield")
             return True, "resolved"
 
+        if instruction.kind == "grant_regeneration_to_enchanted_creature":
+            if source_permanent is None:
+                return False, "ability not implemented"
+            enchanted = source_permanent.metadata.get("attached_to")
+            if enchanted is None:
+                return False, "aura not attached to a creature"
+            enchanted.regeneration_shield += 1
+            self.log.append(f"{card.name} grants regeneration shield to {enchanted.card.name}")
+            return True, "resolved"
+
         if instruction.kind == "pump_self":
             if source_permanent is None:
                 return False, "ability not implemented"
@@ -1600,6 +1623,14 @@ class Game:
                 countered = self.stack.pop()
                 self.players[countered.caster_index].graveyard.append(countered.card)
                 self.log.append(f"{card.name} countered {countered.card.name}")
+                # Power Sink effect: tap all lands controlled by the countered spell's controller
+                # and drain their mana pool (they couldn't pay X to prevent this)
+                ctrl = self.players[countered.caster_index]
+                for perm in ctrl.battlefield:
+                    if perm.card.primary_type == "land":
+                        perm.tapped = True
+                ctrl.mana_pool = {k: 0 for k in ctrl.mana_pool}
+                self.log.append(f"{card.name} tapped all lands and drained mana from {ctrl.name}")
             else:
                 self.log.append(f"{card.name} resolved with no spell to counter")
             return True, "resolved"
@@ -2123,6 +2154,8 @@ class Game:
         if any(item.lower() == lower_keyword for item in permanent.card.keywords):
             return True
         if lower_keyword == "flying" and permanent.metadata.get("gains_flying_until_eot", False):
+            return True
+        if lower_keyword == "first strike" and permanent.metadata.get("gains_first_strike", False):
             return True
         # Fall back to oracle program static lines (e.g. test cards that put keyword in oracle_text)
         program = compile_card_oracle(permanent.card)
@@ -2867,6 +2900,14 @@ class Game:
 
             if any("protection from" in instr.value for instr in program.instructions if instr.kind == "spell_pattern") or ("has protection from" in text):
                 self.log.append(f"{target_creature.card.name} gains protection from aura")
+
+            if "has first strike" in text or "enchanted creature has first strike" in text or "gains first strike" in text:
+                target_creature.metadata["gains_first_strike"] = True
+                self.log.append(f"{target_creature.card.name} gains first strike from {aura_permanent.card.name}")
+
+            # Attach the aura to the creature
+            aura_permanent.metadata["attached_to"] = target_creature
+            target_creature.metadata["attached_aura"] = aura_permanent
 
         elif text.startswith("enchant land"):
             self.log.append(f"{aura_permanent.card.name} enchants a land (mana bonus handling is simplified)")
