@@ -787,6 +787,9 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
     if activated and "put a mire counter on target non-swamp land" in text:
         return _instruction("add_mire_counter_to_target_land"), "activated_landtype"
 
+    if "you may pay 1 life" in text and "add {c}" in text:
+        return _instruction("channel_life_for_mana"), "spell_pattern"
+
     if activated and "add one mana of any color" in text:
         return _instruction("add_mana_from_text", oracle_text=text, any_color=True), "activated_mana"
 

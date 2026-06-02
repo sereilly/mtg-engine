@@ -2953,3 +2953,71 @@ def test_blue_elemental_blast_destroys_red_permanent(all_cards):
     assert result.supported
     assert not p2.battlefield
     assert p2.graveyard and p2.graveyard[0].name == "Shivan Dragon"
+
+
+def test_bog_wraith_classifies_supported_with_swampwalk(all_cards):
+    bog = _get(all_cards, "Bog Wraith")
+    result = classify_card(bog)
+    assert result.supported
+    assert any(k.lower() == "swampwalk" for k in bog.keywords)
+
+
+def test_burrowing_grants_mountainwalk_to_enchanted_creature(all_cards):
+    burrowing = _get(all_cards, "Burrowing")
+    creature = _mk_card("Test Bear", "Creature — Bear")
+
+    p1 = PlayerState(name="P1", hand=[burrowing])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=creature)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Burrowing", target_player_index=1)
+
+    assert result.supported
+    bear_perm = p2.battlefield[0]
+    assert bear_perm.metadata.get("attached_aura") is not None
+    assert bear_perm.metadata.get("has_mountainwalk") is True
+    assert any("landwalk" in line.lower() for line in game.log)
+
+
+def test_celestial_prism_adds_mana_of_chosen_color(all_cards):
+    prism = _get(all_cards, "Celestial Prism")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=prism)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Celestial Prism", mana_color="G")
+
+    assert result.supported
+    assert p1.mana_pool["G"] == 1
+    assert p1.battlefield[0].tapped is True
+
+
+def test_channel_sets_active_flag_and_use_channel_mana_pays_life(all_cards):
+    channel = _get(all_cards, "Channel")
+    p1 = PlayerState(name="P1", hand=[channel], life=20)
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Channel", target_player_index=0)
+
+    assert result.supported
+    assert p1.channel_active_until_eot is True
+
+    use_result = game.use_channel_mana(0, 7)
+    assert use_result.supported
+    assert p1.life == 13
+    assert p1.mana_pool["C"] == 7
+
+
+def test_chaoslace_makes_target_permanent_red(all_cards):
+    chaoslace = _get(all_cards, "Chaoslace")
+    creature = _mk_card("Forest Bear", "Creature — Bear")
+
+    p1 = PlayerState(name="P1", hand=[chaoslace])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=creature)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Chaoslace", target_player_index=1)
+
+    assert result.supported
+    assert p2.battlefield[0].metadata.get("color_override") == "R"

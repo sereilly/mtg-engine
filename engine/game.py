@@ -1652,6 +1652,11 @@ class Game:
                 self.log.append(f"{card.name} resolved with no spell to counter")
             return True, "resolved"
 
+        if instruction.kind == "channel_life_for_mana":
+            caster.channel_active_until_eot = True
+            self.log.append(f"{caster.name} may pay life for {{C}} mana until end of turn (Channel)")
+            return True, "resolved"
+
         self.log.append(f"Resolved supported pattern for {card.name} without state mutation")
         return True, "resolved"
 
@@ -2011,6 +2016,7 @@ class Game:
         for player in self.players:
             player.damage_prevention_pool = 0
             player.combat_damage_cap_one_charges = 0
+            player.channel_active_until_eot = False
             for permanent in player.battlefield:
                 permanent.damage_marked = 0
                 temp_power = int(permanent.metadata.pop("temporary_power_bonus_until_eot", 0))
@@ -2717,6 +2723,18 @@ class Game:
         self._on_step_or_phase_end(phase, step)
         return untapped
 
+    def use_channel_mana(self, player_index: int, amount: int) -> SimulationResult:
+        """Pay `amount` life via an active Channel effect to add that many {C} mana."""
+        player = self.players[player_index]
+        if not player.channel_active_until_eot:
+            return SimulationResult("Channel", False, "spell_pattern", "Channel is not active")
+        if amount <= 0:
+            return SimulationResult("Channel", False, "spell_pattern", "Amount must be positive")
+        player.life -= amount
+        player.mana_pool["C"] = player.mana_pool.get("C", 0) + amount
+        self.log.append(f"{player.name} paid {amount} life via Channel for {amount} {{C}}")
+        return SimulationResult("Channel", True, "spell_pattern", f"added {amount} C")
+
     def tap_land_for_mana(
         self,
         player_index: int,
@@ -2912,8 +2930,17 @@ class Game:
 
             # Landwalk/protection patterns are recognized in the compiled program;
             # fall back to normalized-text checks for logging when necessary.
-            if any(instr.kind == "spell_pattern" and instr.value.startswith("has ") and "walk" in instr.value for instr in program.instructions) or ("has " in text and "walk" in text):
+            _walk_instrs = [instr for instr in program.instructions if instr.kind == "spell_pattern" and instr.value.startswith("has ") and "walk" in instr.value]
+            if _walk_instrs or ("has " in text and "walk" in text):
                 self.log.append(f"{target_creature.card.name} gains landwalk from {aura_permanent.card.name}")
+                for _wi in _walk_instrs:
+                    # e.g. "has mountainwalk" -> metadata key "has_mountainwalk"
+                    _meta_key = _wi.value.replace(" ", "_")
+                    target_creature.metadata[_meta_key] = True
+                if not _walk_instrs:
+                    for _walk_word in ("swampwalk", "mountainwalk", "islandwalk", "forestwalk", "plainswalk"):
+                        if f"has {_walk_word}" in text:
+                            target_creature.metadata[f"has_{_walk_word}"] = True
 
             if any("protection from" in instr.value for instr in program.instructions if instr.kind == "spell_pattern") or ("has protection from" in text):
                 # Parse the specific color and stamp metadata on the creature
