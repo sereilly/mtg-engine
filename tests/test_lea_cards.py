@@ -18,17 +18,6 @@ def _make_test(name, idx):
 
 # List of LEA cards that lacked tests when this file was generated
 _UNTESTED = [
-"Chaos Orb",
-"Creature Bond",
-"Crusade",
-"Crystal Rod",
-"Cursed Land",
-"Dark Ritual",
-"Death Ward",
-"Deathgrip",
-"Dingus Egg",
-"Disrupting Scepter",
-"Dragon Whelp",
 "Drain Life",
 "Drain Power",
 "Drudge Skeletons",
@@ -3116,3 +3105,192 @@ def test_copper_tablet_upkeep_also_damages_opponent_on_their_upkeep(all_cards):
     game.resolve_upkeep(1)
 
     assert p2.life == 19
+
+
+def test_dark_ritual_adds_three_black_mana(all_cards):
+    dark_ritual = _get(all_cards, "Dark Ritual")
+
+    p1 = PlayerState(name="P1", hand=[dark_ritual])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Dark Ritual")
+
+    assert result.supported
+    assert p1.mana_pool.get("B", 0) == 3
+
+
+def test_crusade_buffs_white_creatures(all_cards):
+    crusade = _get(all_cards, "Crusade")
+    white_knight = _get(all_cards, "White Knight")
+
+    p1 = PlayerState(name="P1", hand=[crusade])
+    p2 = PlayerState(name="P2")
+    p1.battlefield.append(Permanent(card=white_knight))
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Crusade")
+
+    assert result.supported
+    knight_perm = p1.battlefield[0]
+    assert knight_perm.effective_power == 3
+    assert knight_perm.effective_toughness == 3
+
+
+def test_crystal_rod_gains_life_when_controller_casts_blue_spell(all_cards):
+    crystal_rod = _get(all_cards, "Crystal Rod")
+    blue_spell = _mk_card("Blue Bolt", "Instant", "", mana_cost="{U}", colors=("U",))
+
+    p1 = PlayerState(name="P1", hand=[blue_spell], life=20)
+    p1.battlefield.append(Permanent(card=crystal_rod))
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    game.cast_from_hand(0, "Blue Bolt")
+
+    assert p1.life == 21
+
+
+def test_cursed_land_deals_upkeep_damage_to_land_controller(all_cards):
+    cursed_land = _get(all_cards, "Cursed Land")
+    forest = _mk_card("Forest", "Basic Land - Forest")
+
+    p1 = PlayerState(name="P1", hand=[cursed_land], life=20)
+    p2 = PlayerState(name="P2", life=20)
+    p2.battlefield.append(Permanent(card=forest))
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Cursed Land", target_player_index=1)
+    assert result.supported
+
+    game.resolve_upkeep(1)
+
+    assert p2.life == 19
+
+
+def test_creature_bond_deals_damage_when_enchanted_creature_dies(all_cards):
+    creature_bond = _get(all_cards, "Creature Bond")
+    bear = _mk_card("Test Bear", "Creature - Bear")
+
+    p1 = PlayerState(name="P1", hand=[creature_bond], life=20)
+    p2 = PlayerState(name="P2", life=20)
+    p2.battlefield.append(Permanent(card=bear))
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Creature Bond", target_player_index=1)
+    assert result.supported
+
+    # Destroy the enchanted creature; P2 (controller) should take damage equal to toughness (2)
+    game._destroy_target_permanent(p2, type_filter="creature")
+
+    assert p2.life == 18
+
+
+def test_chaos_orb_flip_destroys_random_permanents_and_self(all_cards):
+    import random as _random
+    chaos_orb = _get(all_cards, "Chaos Orb")
+    bear = _mk_card("Test Bear", "Creature - Bear")
+    plains = _mk_card("Plains", "Basic Land - Plains")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=chaos_orb, tapped=False)])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear), Permanent(card=plains)])
+    game = Game(players=[p1, p2])
+
+    total_before = len(p1.battlefield) + len(p2.battlefield)  # 3 (orb + bear + plains)
+
+    _random.seed(0)
+    result = game.activate_permanent_ability(0, "Chaos Orb")
+
+    assert result.supported
+    # Chaos Orb always destroys itself
+    assert not any(perm.card.name == "Chaos Orb" for perm in p1.battlefield)
+    assert any(card.name == "Chaos Orb" for card in p1.graveyard)
+    # Total permanents remaining is between 0 and 2 (0-2 random + orb self-destroy)
+    total_after = len(p1.battlefield) + len(p2.battlefield)
+    assert total_after <= total_before - 1  # at least Chaos Orb destroyed
+    assert total_before - total_after <= 3   # at most Chaos Orb + 2 random destroyed
+
+
+def test_death_ward_grants_regeneration_shield(all_cards):
+    # Death Ward: "Regenerate target creature." — grants a regeneration shield to a target creature
+    death_ward = _get(all_cards, "Death Ward")
+    bear = _mk_card("Test Bear", "Creature — Bear")
+
+    p1 = PlayerState(name="P1", hand=[death_ward])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Death Ward", target_player_index=1)
+
+    assert result.supported
+    assert p2.battlefield[0].regeneration_shield >= 1
+
+
+def test_deathgrip_counters_green_spell_on_stack(all_cards):
+    # Deathgrip: "{B}{B}: Counter target green spell."
+    deathgrip = _get(all_cards, "Deathgrip")
+    regrowth = _get(all_cards, "Regrowth")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=deathgrip)])
+    p2 = PlayerState(name="P2", hand=[regrowth], graveyard=[_mk_card("Island", "Basic Land - Island")])
+    game = Game(players=[p1, p2])
+
+    # Queue green spell on stack
+    game.queue_from_hand(1, "Regrowth", target_player_index=1)
+    assert game.stack
+
+    # Activate Deathgrip to counter it
+    result = game.activate_permanent_ability(0, "Deathgrip")
+
+    assert result.supported
+    assert not game.stack
+    assert any(card.name == "Regrowth" for card in p2.graveyard)
+
+
+def test_dingus_egg_deals_damage_when_land_destroyed(all_cards):
+    # Dingus Egg: "Whenever a land is put into a graveyard from the battlefield,
+    # this artifact deals 2 damage to that land's controller."
+    dingus_egg = _get(all_cards, "Dingus Egg")
+    stone_rain = _get(all_cards, "Stone Rain")
+    mountain = _get(all_cards, "Mountain")
+
+    p1 = PlayerState(name="P1", hand=[stone_rain], battlefield=[Permanent(card=dingus_egg)])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=mountain)], life=20)
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Stone Rain", target_player_index=1)
+
+    assert result.supported
+    assert not any(perm.card.name == "Mountain" for perm in p2.battlefield)
+    assert p2.life == 18  # 2 damage from Dingus Egg
+
+
+def test_disrupting_scepter_discards_card(all_cards):
+    # Disrupting Scepter: "{3}, {T}: Target player discards a card."
+    scepter = _get(all_cards, "Disrupting Scepter")
+    island = _mk_card("Island", "Basic Land - Island")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=scepter)])
+    p2 = PlayerState(name="P2", hand=[island, island, island])
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Disrupting Scepter", target_player_index=1)
+
+    assert result.supported
+    assert len(p2.hand) == 2
+    assert len(p2.graveyard) == 1
+
+
+def test_dragon_whelp_activated_pumps_power(all_cards):
+    # Dragon Whelp: "{R}: This creature gets +1/+0 until end of turn."
+    dragon_whelp = _get(all_cards, "Dragon Whelp")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=dragon_whelp)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    before = p1.battlefield[0].effective_power
+    result = game.activate_permanent_ability(0, "Dragon Whelp")
+
+    assert result.supported
+    assert p1.battlefield[0].effective_power == before + 1

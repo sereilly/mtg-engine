@@ -154,6 +154,7 @@ SUPPORTED_SPELL_PATTERNS = (
 
 # "whenever" triggers
 WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
+    ("land_dies",                   r"whenever a land is put into a graveyard from the battlefield"),
     ("creature_dies",               r"whenever a creature dies"),
     ("creature_you_control_dies",   r"whenever a creature you control dies"),
     ("creature_deals_damage",       r"whenever this creature deals damage"),
@@ -357,6 +358,7 @@ def _instruction(kind: str, value: str = "", **payload: Any) -> OracleInstructio
 
 def _parse_number_token(token: str) -> int:
     number_words = {
+        "a": 1,
         "one": 1,
         "two": 2,
         "three": 3,
@@ -649,6 +651,9 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
         payload: dict[str, Any] = {"target_color": target_color} if target_color else {}
         return OracleInstruction("recolor_target_from_text", "", payload), "spell_pattern"
 
+    if "flip it onto the battlefield" in text:
+        return _instruction("chaos_orb_flip"), "activated_chaos_orb"
+
     if "destroy all artifacts, creatures, and enchantments" in text:
         return _instruction("destroy_all_artifacts_creatures_enchantments"), "spell_pattern"
 
@@ -793,9 +798,15 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
     if activated and "add one mana of any color" in text:
         return _instruction("add_mana_from_text", oracle_text=text, any_color=True), "activated_mana"
 
-    if activated and "add {" in text:
+    if "add {" in text:
         any_color = "any one color" in text or "any color" in text
-        return _instruction("add_mana_from_text", oracle_text=text, any_color=any_color), "activated_mana"
+        effect_kind = "activated_mana" if activated else "spell_pattern"
+        return _instruction("add_mana_from_text", oracle_text=text, any_color=any_color), effect_kind
+
+    # Color-specific counterspells (Deathgrip, Lifeforce, etc.)
+    for _cword, _csym in _COLOR_WORD_TO_SYMBOL.items():
+        if f"counter target {_cword} spell" in text:
+            return _instruction("counter_top_stack_spell", color_filter=_csym), "spell_pattern"
 
     if "counter target spell" in text:
         return _instruction("counter_top_stack_spell"), "spell_pattern"

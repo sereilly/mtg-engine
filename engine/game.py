@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 import re
 from dataclasses import dataclass, field
 
@@ -16,6 +17,15 @@ _EOT_METADATA_KEYS = (
     "destroy_if_did_not_attack_eot",
     "redirect_one_damage_to_owner_until_eot",
 )
+
+# Map: artifact name → (color that triggers it, life gained)
+_COLOR_ROD_TRIGGERS: dict[str, tuple[str, int]] = {
+    "Crystal Rod": ("U", 1),
+    "Iron Star": ("W", 1),
+    "Ivory Cup": ("W", 1),
+    "Throne of Bone": ("B", 1),
+    "Wooden Sphere": ("G", 1),
+}
 
 _TURN_PHASES: tuple[str, ...] = (
     "beginning",
@@ -1048,6 +1058,7 @@ class Game:
             target_permanent_index=target_permanent_index,
             x_value=x_value,
         )
+        self._apply_spell_resolved_triggers(caster_index, card)
         caster.graveyard.append(card)
         self.log.append(f"{card.name} resolved and moved to graveyard")
 
@@ -1334,6 +1345,30 @@ class Game:
             self.log.append("All lands were destroyed")
             return True, "resolved"
 
+        if instruction.kind == "chaos_orb_flip":
+            # Collect all permanents from all players except Chaos Orb itself
+            candidates: list[tuple[PlayerState, Permanent]] = [
+                (player, perm)
+                for player in self.players
+                for perm in player.battlefield
+                if perm is not source_permanent
+            ]
+            num_to_destroy = random.randint(0, min(2, len(candidates)))
+            chosen = random.sample(candidates, num_to_destroy) if num_to_destroy > 0 else []
+            for victim_player, victim_perm in chosen:
+                victim_player.graveyard.append(victim_perm.card)
+                victim_player.battlefield = [p for p in victim_player.battlefield if p is not victim_perm]
+                self.log.append(f"Chaos Orb flip destroyed {victim_perm.card.name}")
+            # Always destroy Chaos Orb itself
+            if source_permanent is not None:
+                for player in self.players:
+                    if source_permanent in player.battlefield:
+                        player.graveyard.append(source_permanent.card)
+                        player.battlefield = [p for p in player.battlefield if p is not source_permanent]
+                        break
+            self.log.append("Chaos Orb was destroyed after flip")
+            return True, "resolved"
+
         if instruction.kind == "destroy_target_permanent":
             destroyed = self._destroy_target_permanent(
                 target,
@@ -1469,6 +1504,22 @@ class Game:
             ) + toughness_delta
             self.log.append(
                 f"{card.name} gets +{int(instruction.payload.get('power', 0))}/+{int(instruction.payload.get('toughness', 0))} until end of turn"
+            )
+            return True, "resolved"
+
+        if instruction.kind == "pump_self_with_sacrifice_condition":
+            if source_permanent is None:
+                return False, "ability not implemented"
+            source_permanent.power_bonus += 1
+            source_permanent.metadata["temporary_power_bonus_until_eot"] = int(
+                source_permanent.metadata.get("temporary_power_bonus_until_eot", 0)
+            ) + 1
+            activation_count = int(source_permanent.metadata.get("pump_activation_count", 0)) + 1
+            source_permanent.metadata["pump_activation_count"] = activation_count
+            if activation_count >= 4:
+                source_permanent.metadata["sacrifice_at_next_end_step"] = True
+            self.log.append(
+                f"{card.name} gets +1/+0 until end of turn (activation {activation_count})"
             )
             return True, "resolved"
 
@@ -1636,7 +1687,12 @@ class Game:
             return True, "resolved"
 
         if instruction.kind == "counter_top_stack_spell":
+            color_filter = instruction.payload.get("color_filter")
             if self.stack:
+                top = self.stack[-1]
+                if color_filter and color_filter not in (top.card.colors or ()):
+                    self.log.append(f"{card.name}: top spell is not color {color_filter}, cannot counter")
+                    return True, "resolved"
                 countered = self.stack.pop()
                 self.players[countered.caster_index].graveyard.append(countered.card)
                 self.log.append(f"{card.name} countered {countered.card.name}")
@@ -1685,6 +1741,26 @@ class Game:
         )
         state_machine.run(instruction)
 
+    def _trigger_aura_death_effects(self, dead_permanent: Permanent, controller: PlayerState) -> None:
+        """Fire death-trigger aura effects for a creature that just left the battlefield."""
+        aura = dead_permanent.metadata.get("attached_aura")
+        if aura is None:
+            return
+        prog = compile_card_oracle(aura.card)
+        text = prog.normalized_text
+        if not text.startswith("enchant creature"):
+            return
+        for trig in prog.triggered_abilities:
+            if trig.condition.kind == "dies" and trig.condition.trigger == "when":
+                toughness = dead_permanent.effective_toughness
+                damage = self._prevent_damage(controller, toughness)
+                if damage > 0:
+                    controller.life -= damage
+                self.log.append(
+                    f"{aura.card.name} dealt {damage} damage to {controller.name} (death of {dead_permanent.card.name})"
+                )
+                break
+
     def _destroy_target_permanent(
         self,
         target: PlayerState,
@@ -1692,6 +1768,9 @@ class Game:
         color_filter: str | None = None,
         target_permanent_index: int | None = None,
     ) -> CardDefinition | None:
+        target_player_index = next(
+            (i for i, p in enumerate(self.players) if p is target), None
+        )
         if target_permanent_index is not None:
             if 0 <= target_permanent_index < len(target.battlefield):
                 permanent = target.battlefield[target_permanent_index]
@@ -1701,6 +1780,9 @@ class Game:
                     return None
                 removed = target.battlefield.pop(target_permanent_index)
                 target.graveyard.append(removed.card)
+                self._trigger_aura_death_effects(removed, target)
+                if removed.card.primary_type == "land" and target_player_index is not None:
+                    self._process_land_dies(target_player_index)
                 return removed.card
             return None
 
@@ -1711,6 +1793,9 @@ class Game:
                 continue
             removed = target.battlefield.pop(idx)
             target.graveyard.append(removed.card)
+            self._trigger_aura_death_effects(removed, target)
+            if removed.card.primary_type == "land" and target_player_index is not None:
+                self._process_land_dies(target_player_index)
             return removed.card
 
         return None
@@ -1954,6 +2039,35 @@ class Game:
                             self.log.append(f"{controller.name} sacrificed {permanent.card.name} for lacking an Island")
                         break
 
+        # Handle enchant-land auras with upkeep damage (e.g. Cursed Land)
+        for controller in self.players:
+            for permanent in controller.battlefield:
+                if permanent.card.primary_type != "enchantment":
+                    continue
+                prog = compile_card_oracle(permanent.card)
+                text = prog.normalized_text
+                if not text.startswith("enchant land"):
+                    continue
+                attached_land = permanent.metadata.get("attached_to")
+                if attached_land is None:
+                    continue
+                # Find which player controls the enchanted land
+                land_controller_idx = next(
+                    (i for i, p in enumerate(self.players) if attached_land in p.battlefield),
+                    None,
+                )
+                if land_controller_idx != player_index:
+                    continue
+                instr = next((i for i in prog.instructions if i.kind == "deal_damage"), None)
+                if instr is None:
+                    continue
+                amount = int(instr.payload.get("amount", 1))
+                victim = self.players[player_index]
+                damage = self._prevent_damage(victim, amount)
+                if damage > 0:
+                    victim.life -= damage
+                self.log.append(f"{permanent.card.name} dealt {damage} upkeep damage to {victim.name}")
+
         if self._receives_priority(step):
             self._resolve_priority_window()
         self._on_step_or_phase_end(phase, step)
@@ -2122,6 +2236,20 @@ class Game:
             if permanent.card.name == "Verduran Enchantress":
                 drawn = caster.draw(1)
                 self.log.append(f"Verduran Enchantress trigger: {caster.name} drew {drawn} card")
+
+    def _apply_spell_resolved_triggers(self, caster_index: int, card: CardDefinition) -> None:
+        """Fire permanent triggers that respond to a spell resolving (e.g. Crystal Rod)."""
+        for controller in self.players:
+            for permanent in controller.battlefield:
+                entry = _COLOR_ROD_TRIGGERS.get(permanent.card.name)
+                if entry is None:
+                    continue
+                trigger_color, life_amount = entry
+                if trigger_color in card.colors:
+                    controller.life += life_amount
+                    self.log.append(
+                        f"{permanent.card.name} trigger: {controller.name} gained {life_amount} life"
+                    )
 
     def _refresh_dynamic_creatures(self) -> None:
         all_permanents = [perm for player in self.players for perm in player.battlefield]
@@ -2309,6 +2437,7 @@ class Game:
                     continue
                 player.graveyard.append(permanent.card)
                 self.log.append(f"{permanent.card.name} died from combat damage")
+                self._trigger_aura_death_effects(permanent, player)
             player.battlefield = survivors
 
     def declare_attackers(
@@ -2818,6 +2947,21 @@ class Game:
                 if damage > 0:
                     victim.life -= damage
                 self.log.append(f"{permanent.card.name} triggered for {damage} damage")
+
+    def _process_land_dies(self, land_controller_index: int) -> None:
+        """Fire land_dies triggered abilities (e.g. Dingus Egg) when a land is put into a graveyard."""
+        for controller in self.players:
+            for permanent in list(controller.battlefield):
+                program = compile_card_oracle(permanent.card)
+                for trig in program.triggered_abilities:
+                    if trig.condition.kind != "land_dies" or trig.instruction is None:
+                        continue
+                    victim = self.players[land_controller_index]
+                    amount = int(trig.instruction.payload.get("amount", 2))
+                    damage = self._prevent_damage(victim, amount)
+                    if damage > 0:
+                        victim.life -= damage
+                    self.log.append(f"{permanent.card.name} triggered for {damage} damage")
 
     def _fastbond_count(self, player_index: int) -> int:
         if player_index < 0 or player_index >= len(self.players):
