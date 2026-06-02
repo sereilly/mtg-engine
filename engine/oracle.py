@@ -166,6 +166,8 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("creature_blocks",             r"whenever this creature blocks"),
     ("creature_becomes_blocked",    r"whenever this creature becomes blocked"),
     ("creature_attacks_or_blocks",  r"whenever this creature attacks or blocks"),
+    ("creature_dealt_damage",               r"whenever this creature is dealt damage"),
+    ("creature_dealt_damage_by_self_dies",  r"whenever a creature dealt damage by this creature this turn dies"),
     ("land_tapped_for_mana",        r"whenever a player taps a land for mana"),
     ("spell_cast",                  r"whenever a player casts a spell"),
     ("opponent_casts_spell",        r"whenever an opponent casts a spell"),
@@ -800,7 +802,7 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
     if "draw a card" in text:
         return _instruction("draw_controller_cards", amount=1), "triggered_draw"
 
-    if "put a +1/+1 counter on this creature" in text:
+    if "put a +1/+1 counter on this creature" in text or "put a +1/+1 counter on it" in text:
         return _instruction("add_counter_to_self", power=1, toughness=1), "triggered_counter"
 
     if "put a +1/+1 counter on target creature" in text:
@@ -814,6 +816,9 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
 
     if "sacrifice this permanent" in text or "sacrifice this creature" in text:
         return _instruction("sacrifice_self"), "triggered_sacrifice"
+
+    if "its owner loses half their life, rounded up" in text:
+        return _instruction("owner_loses_half_life"), "triggered_loss"
 
     # Global buff / animate-land effects (e.g. Kormus Bell, Living Lands)
     if "all swamps are 1/1 black creatures that are still lands" in text:
@@ -893,23 +898,10 @@ def _is_supported_static_creature_line(line: str) -> bool:
         "nightmare's power and toughness are each equal to the number of swamps you control",
         "gets +1/+1 as long as you control a swamp",
         "this creature gets +1/+1 as long as you control a swamp",
-        "whenever this creature casts an enchantment spell",
-        "whenever you cast an enchantment spell, you may draw a card",
-        "whenever this creature blocks or becomes blocked by a non-wall creature, destroy that creature at end of combat",
-        "whenever this creature deals damage to an opponent, that player discards a card at random",
-        "whenever this creature is dealt damage, put a +1/+1 counter on it",
-        "whenever a creature dealt damage by this creature this turn dies, put a +1/+1 counter on this creature",
         "this creature can't be blocked by walls",
-        "when you control no islands, sacrifice this creature",
         "as long as this creature is untapped, all damage that would be dealt to you by unblocked creatures is dealt to this creature instead",
-        "at the beginning of your upkeep, unless you pay {b}{b}{b}, tap this creature and sacrifice a land of an opponent's choice",
-        "at the beginning of your upkeep, this creature deals 8 damage to you unless you pay",
-        "at the beginning of your upkeep, sacrifice a creature other than this creature",
-        "at the beginning of your upkeep, sacrifice this creature unless you pay",
         "at the beginning of your upkeep, if this card is in your graveyard with three or more creature cards above it, you may put this card onto the battlefield",
-        "at the beginning of each end step, put a corpse counter on this creature for each creature that died this turn",
         "remove a corpse counter from this creature: regenerate this creature",
-        "when this creature dies, its owner loses half their life, rounded up",
         "you may have this creature enter as a copy of any creature on the battlefield",
         "other ",
     )
