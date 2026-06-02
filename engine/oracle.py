@@ -38,8 +38,6 @@ UNSUPPORTED_PATTERNS = (
     "exchange control",
 )
 
-UNSUPPORTED_REGEX_PATTERNS = ()
-
 _COLOR_WORD_TO_SYMBOL: dict[str, str] = {
     "white": "W",
     "blue": "U",
@@ -281,7 +279,6 @@ class OracleProgram:
     effect_kind: str
     reason: str
     normalized_text: str
-    tokens: tuple[OracleToken, ...]
     instructions: tuple[OracleInstruction, ...] = ()
     activated_abilities: tuple[ParsedActivatedAbility, ...] = ()
     triggered_abilities: tuple[ParsedTriggeredAbility, ...] = ()
@@ -477,7 +474,7 @@ def _parse_triggered_ability(line: str) -> ParsedTriggeredAbility | None:
 
 
 # ---------------------------------------------------------------------------
-# Effect instruction parsing (unchanged from original, reproduced in full)
+# Effect instruction parsing
 # ---------------------------------------------------------------------------
 
 def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleInstruction | None, str]:
@@ -545,8 +542,7 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
 
     # Dwarven Warriors: make small creature unblockable
     if "target creature with power 2 or less can't be blocked this turn" in text:
-        effect_kind = "activated_evasion"
-        return _instruction("grant_unblockable_to_low_power_target"), effect_kind
+        return _instruction("grant_unblockable_to_low_power_target"), "activated_evasion" if activated else "spell_pattern"
 
     # Dragon Whelp: pump and delayed sacrifice
     if (
@@ -636,10 +632,7 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
     if "look at the top three cards of target player's library, then put them back in any order" in text:
         return _instruction("reorder_target_library_top"), "spell_pattern"
 
-    if "change the text of target spell or permanent by replacing all instances of one basic land type with another" in text:
-        return _instruction("mark_text_modified"), "spell_pattern"
-
-    if "change the text of target spell or permanent by replacing all instances of one color word with another" in text:
+    if "change the text of target spell or permanent by replacing all instances of one" in text:
         return _instruction("mark_text_modified"), "spell_pattern"
 
     if "look at target opponent's hand and choose a card from it" in text:
@@ -764,9 +757,6 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
     if activated and "draw a card" in text:
         return _instruction("draw_controller_cards", amount=1), "activated_draw"
 
-    if activated and "target creature with power 2 or less can't be blocked this turn" in text:
-        return _instruction("grant_unblockable_to_low_power_target"), "activated_evasion"
-
     if activated and "target land becomes a forest" in text:
         return _instruction("change_target_land_type", land_type="forest"), "activated_landtype"
 
@@ -847,7 +837,7 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
 
 
 # ---------------------------------------------------------------------------
-# Creature-line helpers (unchanged)
+# Creature-line helpers
 # ---------------------------------------------------------------------------
 
 def _is_supported_keyword_line(line: str) -> bool:
@@ -1052,28 +1042,24 @@ def _compile_card_oracle(
     oracle_text: str,
     keywords: tuple[str, ...],
 ) -> OracleProgram:
-    tokens = lex_oracle_text(oracle_text)
     normalized_text = _normalize_text(oracle_text)
 
     if any(keyword in keywords for keyword in UNSUPPORTED_KEYWORDS):
-        return OracleProgram(False, "unsupported", "unsupported keyword", normalized_text, tokens)
-
-    if any(re.search(pattern, normalized_text) for pattern in UNSUPPORTED_REGEX_PATTERNS):
-        return OracleProgram(False, "unsupported", "complex oracle pattern", normalized_text, tokens)
+        return OracleProgram(False, "unsupported", "unsupported keyword", normalized_text)
 
     if any(pattern in normalized_text for pattern in UNSUPPORTED_PATTERNS):
-        return OracleProgram(False, "unsupported", "complex oracle pattern", normalized_text, tokens)
+        return OracleProgram(False, "unsupported", "complex oracle pattern", normalized_text)
 
     if primary_type == "land":
-        return OracleProgram(True, "land_mana", "basic land support", normalized_text, tokens)
+        return OracleProgram(True, "land_mana", "basic land support", normalized_text)
 
     if primary_type == "creature":
         supported, effect_kind, reason, instructions, activated, triggered, static_lines = _parse_creature_program(oracle_text)
-        return OracleProgram(supported, effect_kind, reason, normalized_text, tokens, instructions, activated, triggered, static_lines)
+        return OracleProgram(supported, effect_kind, reason, normalized_text, instructions, activated, triggered, static_lines)
 
     if primary_type in {"artifact", "enchantment", "instant", "sorcery"}:
         if not normalized_text:
-            return OracleProgram(True, "permanent_vanilla", "no oracle text", normalized_text, tokens)
+            return OracleProgram(True, "permanent_vanilla", "no oracle text", normalized_text)
 
         instructions: list[OracleInstruction] = []
         primary_instruction, _ = _parse_primary_instruction(normalized_text, activated=False)
@@ -1089,11 +1075,10 @@ def _compile_card_oracle(
         activated_abilities = _parse_noncreature_abilities(oracle_text)
         triggered_abilities = _parse_noncreature_triggered(oracle_text)
 
-
         # Only mark as unsupported if all triggered abilities are unsupported
         # and no spell-pattern instructions were already matched (e.g. Howling Mine).
         if triggered_abilities and all(not t.supported for t in triggered_abilities) and not instructions:
-            return OracleProgram(False, "unsupported", "unsupported triggered ability", normalized_text, tokens)
+            return OracleProgram(False, "unsupported", "unsupported triggered ability", normalized_text)
 
         if instructions or any(a.supported for a in activated_abilities) or triggered_abilities:
             return OracleProgram(
@@ -1101,15 +1086,14 @@ def _compile_card_oracle(
                 "spell_pattern",
                 "pattern-supported effect",
                 normalized_text,
-                tokens,
                 tuple(instructions),
                 activated_abilities,
                 triggered_abilities,
             )
 
-        return OracleProgram(False, "unsupported", "effect not in basic pattern set", normalized_text, tokens)
+        return OracleProgram(False, "unsupported", "effect not in basic pattern set", normalized_text)
 
-    return OracleProgram(False, "unsupported", "unknown card type", normalized_text, tokens)
+    return OracleProgram(False, "unsupported", "unknown card type", normalized_text)
 
 
 def compile_card_oracle(card: CardDefinition) -> OracleProgram:
