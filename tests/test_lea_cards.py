@@ -18,12 +18,6 @@ def _make_test(name, idx):
 
 # List of LEA cards that lacked tests when this file was generated
 _UNTESTED = [
-"Bayou",
-"Berserk",
-"Birds of Paradise",
-"Black Ward",
-"Blue Elemental Blast",
-"Blue Ward",
 "Bog Wraith",
 "Burrowing",
 "Celestial Prism",
@@ -2867,3 +2861,95 @@ def test_regeneration_aura_activated_ability_grants_regen_shield(all_cards):
     # The enchanted bear should now have a regeneration shield
     assert bear_perm.regeneration_shield >= 1, \
         "Enchanted creature should have regeneration_shield >= 1 after activating Regeneration"
+
+
+# ---------------------------------------------------------------------------
+# Tests for Bayou, Berserk, Birds of Paradise, Black Ward, Blue Elemental Blast
+# ---------------------------------------------------------------------------
+
+def test_bayou_taps_for_black_mana(all_cards):
+    bayou = _get(all_cards, "Bayou")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=bayou)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    ok = game.tap_land_for_mana(0, "Bayou", chosen_color="B")
+
+    assert ok
+    assert p1.mana_pool["B"] == 1
+    assert p1.battlefield[0].tapped is True
+
+
+def test_bayou_taps_for_green_mana(all_cards):
+    bayou = _get(all_cards, "Bayou")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=bayou)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    ok = game.tap_land_for_mana(0, "Bayou", chosen_color="G")
+
+    assert ok
+    assert p1.mana_pool["G"] == 1
+
+
+def test_berserk_doubles_power_and_grants_trample(all_cards):
+    berserk = _get(all_cards, "Berserk")
+    bear = _mk_creature_card("Test Bear", power=2, toughness=2)
+    p1 = PlayerState(name="P1", hand=[berserk])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Berserk", target_player_index=1, target_permanent_index=0)
+
+    assert result.supported
+    target_perm = p2.battlefield[0]
+    # power doubles: base 2 + bonus 2 = 4
+    assert target_perm.effective_power == 4
+    assert target_perm.metadata.get("gains_trample_until_eot") is True
+
+
+def test_birds_of_paradise_classifies_supported(all_cards):
+    bop = _get(all_cards, "Birds of Paradise")
+    result = classify_card(bop)
+    assert result.supported
+
+
+def test_birds_of_paradise_taps_for_any_color_mana(all_cards):
+    bop = _get(all_cards, "Birds of Paradise")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=bop)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Birds of Paradise", target_player_index=1, mana_color="U")
+
+    assert result.supported
+    assert p1.mana_pool["U"] == 1
+    assert p1.battlefield[0].tapped is True
+
+
+def test_black_ward_grants_protection_from_black(all_cards):
+    ward = _get(all_cards, "Black Ward")
+    creature = _mk_creature_card("Test Knight", power=2, toughness=2)
+    p1 = PlayerState(name="P1", hand=[ward])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=creature)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Black Ward", target_player_index=1, target_permanent_index=0)
+
+    assert result.supported
+    creature_perm = p2.battlefield[0]
+    assert creature_perm.metadata.get("protection_from_black") is True
+
+
+def test_blue_elemental_blast_destroys_red_permanent(all_cards):
+    beb = _get(all_cards, "Blue Elemental Blast")
+    shivan = _get(all_cards, "Shivan Dragon")
+    p1 = PlayerState(name="P1", hand=[beb])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=shivan)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Blue Elemental Blast", target_player_index=1)
+
+    assert result.supported
+    assert not p2.battlefield
+    assert p2.graveyard and p2.graveyard[0].name == "Shivan Dragon"

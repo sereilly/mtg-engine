@@ -658,6 +658,9 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
     if "destroy all lands" in text:
         return _instruction("destroy_all_lands"), "spell_pattern"
 
+    if "target creature gains trample and gets +x/+0 until end of turn" in text:
+        return _instruction("berserk_pump"), "spell_pattern"
+
     if "destroy target" in text:
         effect_kind = "activated_destroy" if activated else "spell_pattern"
         type_filter: str | None = None
@@ -783,6 +786,9 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
 
     if activated and "put a mire counter on target non-swamp land" in text:
         return _instruction("add_mire_counter_to_target_land"), "activated_landtype"
+
+    if activated and "add one mana of any color" in text:
+        return _instruction("add_mana_from_text", oracle_text=text, any_color=True), "activated_mana"
 
     if activated and "add {" in text:
         any_color = "any one color" in text or "any color" in text

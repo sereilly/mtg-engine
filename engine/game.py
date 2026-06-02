@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 
 from .classifier import CardClassification, classify_card
 from .models import CardDefinition, Permanent, PlayerState
-from .oracle import OracleInstruction, compile_card_oracle, lex_oracle_text
+from .oracle import OracleInstruction, _COLOR_WORD_TO_SYMBOL, compile_card_oracle, lex_oracle_text
 
 _MANA_SYMBOLS = ("W", "U", "B", "R", "G", "C")
 _EOT_METADATA_KEYS = (
@@ -1413,6 +1413,23 @@ class Game:
         if instruction.kind == "grant_forcefield_shield":
             caster.combat_damage_cap_one_charges += 1
             self.log.append("Forcefield shield granted")
+            return True, "resolved"
+
+        if instruction.kind == "berserk_pump":
+            target_perm: Permanent | None = None
+            if context.target_permanent_index is not None and 0 <= context.target_permanent_index < len(target.battlefield):
+                candidate = target.battlefield[context.target_permanent_index]
+                if candidate.card.primary_type == "creature":
+                    target_perm = candidate
+            if target_perm is None:
+                target_perm = next((p for p in target.battlefield if p.card.primary_type == "creature"), None)
+            if target_perm is not None:
+                boost = target_perm.effective_power
+                target_perm.power_bonus += boost
+                target_perm.metadata["gains_trample_until_eot"] = True
+                self.log.append(f"{card.name} pumped {target_perm.card.name} by +{boost}/+0 and granted trample")
+            else:
+                self.log.append(f"{card.name}: no valid creature target")
             return True, "resolved"
 
         if instruction.kind == "grant_regeneration_to_target_creature":
@@ -2899,6 +2916,12 @@ class Game:
                 self.log.append(f"{target_creature.card.name} gains landwalk from {aura_permanent.card.name}")
 
             if any("protection from" in instr.value for instr in program.instructions if instr.kind == "spell_pattern") or ("has protection from" in text):
+                # Parse the specific color and stamp metadata on the creature
+                _prot_match = re.search(r"protection from (\w+)", text)
+                if _prot_match:
+                    _prot_color = _COLOR_WORD_TO_SYMBOL.get(_prot_match.group(1).lower())
+                    if _prot_color:
+                        target_creature.metadata[f"protection_from_{_prot_match.group(1).lower()}"] = True
                 self.log.append(f"{target_creature.card.name} gains protection from aura")
 
             if "has first strike" in text or "enchanted creature has first strike" in text or "gains first strike" in text:
