@@ -2004,6 +2004,26 @@ class Game:
                         self.log.append(f"{permanent.card.name} dealt {damage} upkeep damage to {victim.name}")
                         break
 
+                    if cond == "upkeep_enchanted_controller" and kind == "deal_damage":
+                        # This covers Auras that read "At the beginning of the upkeep of
+                        # enchanted enchantment's controller, this Aura deals N damage to that player."
+                        attached = permanent.metadata.get("attached_to")
+                        if attached is None:
+                            break
+                        attached_controller_idx = next(
+                            (i for i, p in enumerate(self.players) if attached in p.battlefield),
+                            None,
+                        )
+                        if attached_controller_idx != player_index:
+                            break
+                        amount = int(trig.instruction.payload.get("amount", 1))
+                        victim = self.players[player_index]
+                        damage = self._prevent_damage(victim, amount)
+                        if damage > 0:
+                            victim.life -= damage
+                        self.log.append(f"{permanent.card.name} dealt {damage} upkeep damage to {victim.name}")
+                        break
+
                     if cond == "upkeep_chosen" and kind == "upkeep_chosen_player_hand_overflow_damage":
                         chosen = permanent.metadata.get("chosen_player_index")
                         if chosen != player_index:
@@ -3138,7 +3158,7 @@ class Game:
     ) -> None:
         program = compile_card_oracle(aura_permanent.card)
         text = program.normalized_text
-        if not any(instr.kind == "spell_pattern" and instr.value.startswith("enchant") for instr in program.instructions):
+        if not any(instr.kind == "spell_pattern" and instr.value.startswith("enchant") for instr in program.instructions) and not text.startswith("enchant enchantment"):
             return
 
         target_idx = target_player_index if target_player_index is not None else (1 - caster_index)
@@ -3336,4 +3356,25 @@ class Game:
 
                 target_artifact.card = new_card
                 self.log.append(f"{aura_permanent.card.name} animated {target_artifact.card.name} into an artifact creature")
+        elif text.startswith("enchant enchantment"):
+            # Attach this Aura to the specified enchantment (or first enchantment found)
+            target_idx = target_player_index if target_player_index is not None else (1 - caster_index)
+            target_player = self.players[target_idx]
+
+            target_enchantment = None
+            if target_permanent_index is not None:
+                if 0 <= target_permanent_index < len(target_player.battlefield):
+                    candidate = target_player.battlefield[target_permanent_index]
+                    if candidate.card.primary_type == "enchantment":
+                        target_enchantment = candidate
+            if target_enchantment is None:
+                target_enchantment = next((perm for perm in target_player.battlefield if perm.card.primary_type == "enchantment"), None)
+
+            if target_enchantment is None:
+                self.log.append(f"{aura_permanent.card.name} found no enchantment target")
+                return
+
+            aura_permanent.metadata["attached_to"] = target_enchantment
+            target_enchantment.metadata["attached_aura"] = aura_permanent
+            self.log.append(f"{aura_permanent.card.name} enchants {target_enchantment.card.name}")
 

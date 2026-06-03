@@ -18,7 +18,6 @@ def _make_test(name, idx):
 
 # List of LEA cards that lacked tests when this file was generated
 _UNTESTED = [
-"Fear",
 "Feedback",
 "Fire Elemental",
 "Fireball",
@@ -190,6 +189,34 @@ from tests.test_utils import (
     client,
     _get,
 )
+
+
+def test_feedback_oracle_supported(all_cards):
+    feedback = _get(all_cards, "Feedback")
+    program = compile_card_oracle(feedback)
+    assert program.supported
+    # Should expose an "at the beginning" triggered ability
+    assert any(t.condition.trigger == "at" for t in program.triggered_abilities)
+
+
+def test_feedback_deals_damage_at_enchanted_enchantment_upkeep(all_cards):
+    feedback = _get(all_cards, "Feedback")
+    bad_moon = _get(all_cards, "Bad Moon")
+
+    # P1 will cast Feedback enchanting P2's Bad Moon
+    p1 = PlayerState(name="P1", hand=[feedback])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=bad_moon)], life=20)
+    game = Game(players=[p1, p2])
+
+    # Cast Feedback targeting the enchantment on P2's battlefield
+    result = game.cast_from_hand(0, "Feedback", target_player_index=1, target_permanent_index=0)
+    assert result.supported
+
+    # Resolve upkeep for P2 (controller of the enchanted enchantment)
+    game.resolve_upkeep(1)
+
+    # Feedback should have dealt 1 damage to P2
+    assert p2.life == 19
 
 def test_basalt_monolith_tap_and_untap(all_cards):
     monolith = _get(all_cards, "Basalt Monolith")

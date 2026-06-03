@@ -194,6 +194,7 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
 AT_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("upkeep_self",         r"at the beginning of your upkeep"),
     ("upkeep_each",         r"at the beginning of each (?:player's )?upkeep"),
+    ("upkeep_enchanted_controller", r"at the beginning of the upkeep of enchanted enchantment's controller"),
     ("upkeep_chosen",       r"at the beginning of the chosen player's upkeep"),
     ("draw_step_each",      r"at the beginning of each player's draw step"),
     ("end_step",            r"at the beginning of (?:each )?end(?: step)?"),
