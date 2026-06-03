@@ -326,6 +326,34 @@ def test_choose_combat_blockers_returns_empty_when_no_legal_blockers(all_cards):
     blockers = choose_combat_blockers(game, 1)
     assert blockers == {}
 
+
+def test_fear_enchanted_creature_unblockable_by_non_artifact_non_black(all_cards):
+    fear = _get(all_cards, "Fear")
+    grizzly = _get(all_cards, "Grizzly Bears")
+
+    # Controller casts Fear on their creature
+    p1 = PlayerState(name="P1", hand=[fear], battlefield=[Permanent(card=grizzly)])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=grizzly)], life=20)
+    game = Game(players=[p1, p2])
+
+    cast_result = game.cast_from_hand(0, "Fear", target_player_index=0)
+    assert cast_result.supported
+
+    # Attack with the enchanted creature
+    game.active_player_index = 0
+    game.current_turn_phase = "combat"
+    game.current_step = "declare_attackers"
+    game.current_phase = "combat"
+
+    ok, _ = game.declare_attackers(0, [0], defending_player_index=1)
+    assert ok
+    game.current_step = "declare_blockers"
+
+    blockers = choose_combat_blockers(game, 1)
+
+    # Non-artifact non-black Grizzly should not be able to block creature with fear
+    assert blockers == {}
+
 def test_choose_combat_instant_cast_action_prefers_interaction_in_block_step(all_cards):
     bolt = _get(all_cards, "Lightning Bolt")
     mountain = _get(all_cards, "Mountain")

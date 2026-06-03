@@ -2432,6 +2432,8 @@ class Game:
             return True
         if lower_keyword == "first strike" and permanent.metadata.get("gains_first_strike", False):
             return True
+        if lower_keyword == "fear" and permanent.metadata.get("gains_fear", False):
+            return True
         # Fall back to oracle program static lines (e.g. test cards that put keyword in oracle_text)
         program = compile_card_oracle(permanent.card)
         return any(
@@ -2529,6 +2531,16 @@ class Game:
         blocker_has_reach = self._has_keyword(blocker, "reach")
         if attacker_has_flying and not (blocker_has_flying or blocker_has_reach):
             return False
+
+        # Fear: attacker can't be blocked except by artifact creatures and/or black creatures
+        attacker_has_fear = self._has_keyword(attacker, "fear")
+        if attacker_has_fear:
+            # artifact creatures can block (type_line contains 'artifact' and primary_type is creature)
+            is_artifact_creature = blocker.card.primary_type == "creature" and "artifact" in blocker.card.type_line.lower()
+            # black creatures can block (color contains 'B')
+            is_black_creature = "B" in blocker.card.colors
+            if not (is_artifact_creature or is_black_creature):
+                return False
 
         if "cant_be_blocked_by_walls" in attacker_kinds and "wall" in blocker.card.type_line.lower():
             return False
@@ -3222,6 +3234,11 @@ class Game:
             if "has first strike" in text or "enchanted creature has first strike" in text or "gains first strike" in text:
                 target_creature.metadata["gains_first_strike"] = True
                 self.log.append(f"{target_creature.card.name} gains first strike from {aura_permanent.card.name}")
+
+                # Fear: enchanted creature can't be blocked except by artifact creatures and/or black creatures
+            if "has fear" in text or "enchanted creature has fear" in text or "gains fear" in text:
+                target_creature.metadata["gains_fear"] = True
+                self.log.append(f"{target_creature.card.name} gains fear from {aura_permanent.card.name}")
 
             # Attach the aura to the creature
             aura_permanent.metadata["attached_to"] = target_creature
