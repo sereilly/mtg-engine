@@ -675,6 +675,12 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
     if "destroy all lands" in text:
         return _instruction("destroy_all_lands"), "spell_pattern"
 
+    # Destroy all of a specific land type (e.g., "Destroy all Plains.")
+    m = re.search(r"destroy all (plains|islands|swamps|mountains|forests)", text)
+    if m:
+        land = m.group(1)
+        return _instruction("destroy_all_lands_of_type", land_type=land), "spell_pattern"
+
     if "target creature gains trample and gets +x/+0 until end of turn" in text:
         return _instruction("berserk_pump"), "spell_pattern"
 
@@ -761,6 +767,15 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
 
     if activated and "this creature gets +1/+1 until end of turn" in text:
         return _instruction("pump_self", power=1, toughness=1), "activated_pump"
+
+    # Activated pump that applies to the enchanted creature (e.g. Firebreathing)
+    if activated and re.search(r"enchanted creature gets \+(-?\d+)/\+(-?\d+)", text):
+        m = re.search(r"enchanted creature gets \+(-?\d+)/\+(-?\d+)", text)
+        return _instruction(
+            "pump_enchanted_creature",
+            power=int(m.group(1)),
+            toughness=int(m.group(2)),
+        ), "activated_pump"
 
     if activated and "this creature gains flying until end of turn" in text:
         return _instruction("grant_self_flying_until_eot"), "activated_keyword"

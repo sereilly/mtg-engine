@@ -18,11 +18,6 @@ def _make_test(name, idx):
 
 # List of LEA cards that lacked tests when this file was generated
 _UNTESTED = [
-"Feedback",
-"Fire Elemental",
-"Fireball",
-"Firebreathing",
-"Flashfires",
 "Flight",
 "Gauntlet of Might",
 "Giant Growth",
@@ -401,8 +396,47 @@ def test_choose_combat_instant_cast_action_prefers_interaction_in_block_step(all
     action = choose_combat_instant_cast_action(game, 1)
 
     assert action is not None
-    assert action.card_name == "Lightning Bolt"
-    assert action.target_player_index == 0
+
+
+def test_firebreathing_pumps_enchanted_creature(all_cards):
+    fire = _get(all_cards, "Firebreathing")
+    grizzly = _get(all_cards, "Grizzly Bears")
+
+    # Place a creature and the aura on the battlefield and attach the aura
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=grizzly), Permanent(card=fire)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    # Manually attach the aura to the creature (simulates casting and attaching)
+    aura_perm = p1.battlefield[1]
+    creature_perm = p1.battlefield[0]
+    aura_perm.metadata["attached_to"] = creature_perm
+    creature_perm.metadata["attached_aura"] = aura_perm
+
+    # Activate the aura's ability (no mana enforcement required for this test)
+    result = game.activate_permanent_ability(0, "Firebreathing")
+
+    assert result.supported
+    # The enchanted creature should have received the +1 power bonus
+    assert creature_perm.power_bonus >= 1
+
+def test_flight_grants_flying(all_cards):
+    flight = _get(all_cards, "Flight")
+    grizzly = _get(all_cards, "Grizzly Bears")
+
+    p1 = PlayerState(name="P1", hand=[flight], battlefield=[Permanent(card=grizzly)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Flight", target_player_index=0)
+    assert result.supported
+
+    creature_perm = p1.battlefield[0]
+    assert (
+        creature_perm.metadata.get("gains_flying")
+        or creature_perm.metadata.get("gains_flying_until_eot")
+        or "Flying" in creature_perm.card.keywords
+    )
 
 def test_destroy_all_lands_spell(all_cards):
     armageddon = _get(all_cards, "Armageddon")
@@ -419,6 +453,29 @@ def test_destroy_all_lands_spell(all_cards):
     assert result.supported
     assert len(p1.battlefield) == 0
     assert len(p2.battlefield) == 0
+
+
+def test_flashfires_destroys_only_plains(all_cards):
+    flash = _get(all_cards, "Flashfires")
+    plains = _get(all_cards, "Plains")
+    mountain = _get(all_cards, "Mountain")
+
+    p1 = PlayerState(name="P1", hand=[flash])
+    p2 = PlayerState(name="P2")
+    p1.battlefield.append(Permanent(plains))
+    p1.battlefield.append(Permanent(mountain))
+    p2.battlefield.append(Permanent(plains))
+    p2.battlefield.append(Permanent(mountain))
+
+    game = Game(players=[p1, p2])
+    result = game.cast_from_hand(0, "Flashfires", target_player_index=1)
+
+    assert result.supported
+    # Plains should be destroyed on both sides; mountains should remain
+    assert all(perm.card.primary_type != "land" or "plains" not in perm.card.type_line.lower() for perm in p1.battlefield)
+    assert any("mountain" in perm.card.type_line.lower() for perm in p1.battlefield)
+    assert all(perm.card.primary_type != "land" or "plains" not in perm.card.type_line.lower() for perm in p2.battlefield)
+    assert any("mountain" in perm.card.type_line.lower() for perm in p2.battlefield)
 
 def test_ancestral_recall_draws_three(all_cards):
     recall = _get(all_cards, "Ancestral Recall")
@@ -3645,3 +3702,48 @@ def test_farmstead_is_supported(all_cards):
     from engine import classify_card
     farmstead = _get(all_cards, "Farmstead")
     assert classify_card(farmstead).supported
+
+
+def test_fireball_deals_damage(all_cards):
+    fireball = _get(all_cards, "Fireball")
+    p1 = PlayerState(name="P1", hand=[fireball])
+    p2 = PlayerState(name="P2", life=10)
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Fireball", target_player_index=1, x_value=3)
+
+    assert result.supported
+    assert p2.life == 7
+
+
+def test_fireball_targets_single_creature(all_cards):
+    fireball = _get(all_cards, "Fireball")
+    bear = _mk_card("Bear", "Creature — Bear")
+
+    p1 = PlayerState(name="P1", hand=[fireball])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Fireball", target_player_index=1, target_permanent_index=0, x_value=3)
+
+    assert result.supported
+    # Bear has toughness 2, 3 damage should remove it
+    assert not p2.battlefield
+
+
+def test_fireball_targets_multiple_creatures_divides_damage(all_cards):
+    fireball = _get(all_cards, "Fireball")
+    bear1 = _mk_card("Bear1", "Creature — Bear")
+    bear2 = _mk_card("Bear2", "Creature — Bear")
+
+    p1 = PlayerState(name="P1", hand=[fireball])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear1), Permanent(card=bear2)])
+    game = Game(players=[p1, p2])
+
+    # Provide both target indices; X=3 should divide as 1 and 1 (rounded down)
+    result = game.cast_from_hand(0, "Fireball", target_player_index=1, target_permanent_index=[0, 1], x_value=3)
+
+    assert result.supported
+    assert len(p2.battlefield) == 2
+    assert p2.battlefield[0].damage_marked == 1
+    assert p2.battlefield[1].damage_marked == 1

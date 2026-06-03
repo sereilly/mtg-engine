@@ -66,7 +66,8 @@ class StackItem:
     card: CardDefinition
     caster_index: int
     target_player_index: int | None
-    target_permanent_index: int | None
+    # target_permanent_index may be a single int or a list of ints for multi-target spells
+    target_permanent_index: int | list[int] | None
     x_value: int | None
     ability_instruction: OracleInstruction | None = None
     ability_effect_kind: str | None = None
@@ -78,7 +79,8 @@ class OracleExecutionContext:
     caster: PlayerState
     target: PlayerState
     card: CardDefinition
-    target_permanent_index: int | None = None
+    # target_permanent_index may be a single int or a list of ints for multi-target spells
+    target_permanent_index: int | list[int] | None = None
     x_value: int | None = None
     source_permanent: Permanent | None = None
 
@@ -1188,7 +1190,29 @@ class Game:
             amount = instruction.payload.get("amount", 0)
             damage = max(0, x_value or 0) if amount == "x" else int(amount)
             target_perm_idx = context.target_permanent_index
-            if target_perm_idx is not None and 0 <= target_perm_idx < len(target.battlefield):
+            # Support multiple target indices for spells like Fireball
+            if isinstance(target_perm_idx, list):
+                indices = [i for i in target_perm_idx if isinstance(i, int) and 0 <= i < len(target.battlefield)]
+                n = len(indices)
+                if n == 0:
+                    # No valid creature targets; treat as player damage
+                    damage = self._prevent_damage(target, damage)
+                    if damage > 0:
+                        target.life -= damage
+                    self.log.append(f"{target.name} took {damage} damage")
+                    return True, "resolved"
+                per_target = damage // n if n > 0 else 0
+                for idx in sorted(indices, reverse=True):
+                    target_perm = target.battlefield[idx]
+                    target_perm.damage_marked += per_target
+                    effective_toughness = target_perm.effective_toughness
+                    self.log.append(f"{card.name} dealt {per_target} damage to {target_perm.card.name}")
+                    if target_perm.damage_marked >= effective_toughness:
+                        target_perm.metadata["no_regenerate"] = True
+                        target.battlefield.pop(idx)
+                        self.log.append(f"{target_perm.card.name} was exiled by {card.name}")
+                return True, "resolved"
+            if target_perm_idx is not None and isinstance(target_perm_idx, int) and 0 <= target_perm_idx < len(target.battlefield):
                 # Damage targets a creature permanent, not the player
                 target_perm = target.battlefield[target_perm_idx]
                 target_perm.damage_marked += damage
@@ -1417,6 +1441,22 @@ class Game:
             self.log.append("All lands were destroyed")
             return True, "resolved"
 
+        if instruction.kind == "destroy_all_lands_of_type":
+            land_type = str(instruction.payload.get("land_type", "")).lower()
+            for player in self.players:
+                survivors: list[Permanent] = []
+                for permanent in player.battlefield:
+                    if permanent.card.primary_type == "land":
+                        # Determine printed or overridden land type
+                        perm_type_line = (permanent.metadata.get("land_type_override") or permanent.card.type_line or "").lower()
+                        if land_type in perm_type_line:
+                            player.graveyard.append(permanent.card)
+                            continue
+                    survivors.append(permanent)
+                player.battlefield = survivors
+            self.log.append(f"All {land_type} lands were destroyed")
+            return True, "resolved"
+
         if instruction.kind == "chaos_orb_flip":
             # Collect all permanents from all players except Chaos Orb itself
             candidates: list[tuple[PlayerState, Permanent]] = [
@@ -1559,6 +1599,25 @@ class Game:
                 return False, "aura not attached to a creature"
             enchanted.regeneration_shield += 1
             self.log.append(f"{card.name} grants regeneration shield to {enchanted.card.name}")
+            return True, "resolved"
+
+        if instruction.kind == "pump_enchanted_creature":
+            if source_permanent is None:
+                return False, "ability not implemented"
+            enchanted = source_permanent.metadata.get("attached_to")
+            if enchanted is None:
+                return False, "aura not attached to a creature"
+            power_delta = int(instruction.payload.get("power", 0))
+            toughness_delta = int(instruction.payload.get("toughness", 0))
+            enchanted.power_bonus += power_delta
+            enchanted.toughness_bonus += toughness_delta
+            enchanted.metadata["temporary_power_bonus_until_eot"] = int(
+                enchanted.metadata.get("temporary_power_bonus_until_eot", 0)
+            ) + power_delta
+            enchanted.metadata["temporary_toughness_bonus_until_eot"] = int(
+                enchanted.metadata.get("temporary_toughness_bonus_until_eot", 0)
+            ) + toughness_delta
+            self.log.append(f"{card.name} grants {enchanted.card.name} +{power_delta}/+{toughness_delta} until end of turn")
             return True, "resolved"
 
         if instruction.kind == "pump_self":
@@ -3259,6 +3318,11 @@ class Game:
             if "has fear" in text or "enchanted creature has fear" in text or "gains fear" in text:
                 target_creature.metadata["gains_fear"] = True
                 self.log.append(f"{target_creature.card.name} gains fear from {aura_permanent.card.name}")
+
+            # Flying: some Auras grant flying to the enchanted creature
+            if "has flying" in text or "enchanted creature has flying" in text or "gains flying" in text:
+                target_creature.metadata["gains_flying"] = True
+                self.log.append(f"{target_creature.card.name} gains flying from {aura_permanent.card.name}")
 
             # Attach the aura to the creature
             aura_permanent.metadata["attached_to"] = target_creature
