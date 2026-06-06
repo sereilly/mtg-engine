@@ -18,17 +18,6 @@ def _make_test(name, idx):
 
 # List of LEA cards that lacked tests when this file was generated
 _UNTESTED = [
-"Red Elemental Blast",
-"Red Ward",
-"Regrowth",
-"Resurrection",
-"Reverse Damage",
-"Righteousness",
-"Roc of Kher Ridges",
-"Rod of Ruin",
-"Royal Assassin",
-"Samite Healer",
-"Savannah",
 "Savannah Lions",
 "Scathe Zombies",
 "Scrubland",
@@ -4796,3 +4785,144 @@ def test_raise_dead_returns_creature_from_graveyard_to_hand(all_cards):
     assert result.supported
     assert any(card.name == "Bear" for card in p1.hand)
     assert not any(card.name == "Bear" for card in p1.graveyard)
+
+
+def test_red_elemental_blast_destroys_blue_permanent(all_cards):
+    reb = _get(all_cards, "Red Elemental Blast")
+    air_elemental = _get(all_cards, "Air Elemental")
+
+    p1 = PlayerState(name="P1", hand=[reb])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=air_elemental)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Red Elemental Blast", target_player_index=1)
+
+    assert result.supported
+    assert not p2.battlefield
+    assert p2.graveyard and p2.graveyard[0].name == "Air Elemental"
+
+
+def test_red_ward_grants_protection_from_red(all_cards):
+    red_ward = _get(all_cards, "Red Ward")
+    grizzly = _get(all_cards, "Grizzly Bears")
+
+    p1 = PlayerState(name="P1", hand=[red_ward], battlefield=[Permanent(card=grizzly)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Red Ward", target_player_index=0)
+
+    assert result.supported
+    assert p1.battlefield[0].metadata.get("protection_from_red") is True
+
+
+def test_regrowth_returns_creature_from_graveyard_to_hand(all_cards):
+    regrowth = _get(all_cards, "Regrowth")
+    bear = _mk_card("Dead Bear", "Creature — Bear")
+
+    p1 = PlayerState(name="P1", hand=[regrowth], graveyard=[bear])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Regrowth", target_player_index=0)
+
+    assert result.supported
+    assert any(card.name == "Dead Bear" for card in p1.hand)
+    assert not any(card.name == "Dead Bear" for card in p1.graveyard)
+
+
+def test_resurrection_returns_creature_from_graveyard_to_battlefield(all_cards):
+    resurrection = _get(all_cards, "Resurrection")
+    bear = _mk_card("Dead Bear", "Creature — Bear")
+
+    p1 = PlayerState(name="P1", hand=[resurrection], graveyard=[bear])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Resurrection", target_player_index=0)
+
+    assert result.supported
+    assert any(perm.card.name == "Dead Bear" for perm in p1.battlefield)
+    assert not any(card.name == "Dead Bear" for card in p1.graveyard)
+
+
+def test_reverse_damage_classifies_supported(all_cards):
+    reverse_damage = _get(all_cards, "Reverse Damage")
+    assert classify_card(reverse_damage).supported
+
+
+def test_righteousness_pumps_blocking_creature_plus_seven(all_cards):
+    righteousness = _get(all_cards, "Righteousness")
+    bear = _mk_card("Blocker", "Creature — Bear")
+
+    p1 = PlayerState(name="P1", hand=[righteousness])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Righteousness", target_player_index=1)
+
+    assert result.supported
+    assert p2.battlefield[0].effective_power == 9
+    assert p2.battlefield[0].effective_toughness == 9
+
+
+def test_roc_of_kher_ridges_classifies_supported_with_flying(all_cards):
+    roc = _get(all_cards, "Roc of Kher Ridges")
+    assert classify_card(roc).supported
+    assert "Flying" in roc.keywords
+
+
+def test_rod_of_ruin_deals_one_damage_to_target(all_cards):
+    rod = _get(all_cards, "Rod of Ruin")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=rod)])
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Rod of Ruin", target_player_index=1)
+
+    assert result.supported
+    assert p2.life == 19
+    assert p1.battlefield[0].tapped is True
+
+
+def test_royal_assassin_destroys_tapped_creature(all_cards):
+    assassin = _get(all_cards, "Royal Assassin")
+    bear = _mk_card("Tapped Bear", "Creature — Bear")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=assassin)])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear, tapped=True)])
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Royal Assassin", target_player_index=1)
+
+    assert result.supported
+    assert not p2.battlefield
+    assert p2.graveyard and p2.graveyard[0].name == "Tapped Bear"
+    assert p1.battlefield[0].tapped is True
+
+
+def test_samite_healer_prevents_one_damage(all_cards):
+    healer = _get(all_cards, "Samite Healer")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=healer)])
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Samite Healer", target_player_index=1)
+
+    assert result.supported
+    assert p2.damage_prevention_pool == 1
+    assert p1.battlefield[0].tapped is True
+
+
+def test_savannah_taps_for_green_mana(all_cards):
+    savannah = _get(all_cards, "Savannah")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=savannah)])
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    ok = game.tap_land_for_mana(0, "Savannah")
+
+    assert ok
+    assert p1.mana_pool["G"] == 1

@@ -709,7 +709,7 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
         ek = "activated_keyword" if activated else "spell_pattern"
         return _instruction("grant_target_flying_until_eot"), ek
 
-    _pump_target_x_match = re.search(r"target creature gets \+(x|\d+)/\+(x|\d+) until end of turn", text)
+    _pump_target_x_match = re.search(r"target (?:blocking )?creature gets \+(x|\d+)/\+(x|\d+) until end of turn", text)
     if _pump_target_x_match:
         p_str, t_str = _pump_target_x_match.group(1), _pump_target_x_match.group(2)
         return _instruction(
