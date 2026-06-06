@@ -18,11 +18,6 @@ def _make_test(name, idx):
 
 # List of LEA cards that lacked tests when this file was generated
 _UNTESTED = [
-"Gauntlet of Might",
-"Giant Growth",
-"Giant Spider",
-"Goblin King",
-"Green Ward",
 "Guardian Angel",
 "Hill Giant",
 "Holy Armor",
@@ -3727,6 +3722,95 @@ def test_fireball_targets_single_creature(all_cards):
     assert result.supported
     # Bear has toughness 2, 3 damage should remove it
     assert not p2.battlefield
+
+
+def test_gauntlet_of_might_buffs_red_creatures(all_cards):
+    gauntlet = _get(all_cards, "Gauntlet of Might")
+    red_creature = _mk_card("Red Goblin", "Creature — Goblin", colors=("R",))
+
+    p1 = PlayerState(name="P1", hand=[gauntlet], battlefield=[Permanent(card=red_creature)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Gauntlet of Might")
+
+    assert result.supported
+    assert p1.battlefield[0].effective_power == 3
+    assert p1.battlefield[0].effective_toughness == 3
+
+
+def test_gauntlet_of_might_mountain_tap_grants_extra_red(all_cards):
+    gauntlet = _get(all_cards, "Gauntlet of Might")
+    mountain = _get(all_cards, "Mountain")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=gauntlet), Permanent(card=mountain)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    game.tap_land_for_mana(0, "Mountain")
+
+    assert p1.mana_pool.get("R", 0) == 2
+
+
+def test_giant_growth_gives_target_creature_plus_three_three(all_cards):
+    growth = _get(all_cards, "Giant Growth")
+    bear = _mk_card("Test Bear", "Creature — Bear")
+
+    p1 = PlayerState(name="P1", hand=[growth], battlefield=[Permanent(card=bear)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Giant Growth", target_player_index=0)
+
+    assert result.supported
+    assert p1.battlefield[0].effective_power == 5
+    assert p1.battlefield[0].effective_toughness == 5
+
+
+def test_giant_spider_can_block_flying_attacker(all_cards):
+    spider = _get(all_cards, "Giant Spider")
+    air_elem = _get(all_cards, "Air Elemental")
+
+    spider_perm = Permanent(card=spider)
+    air_perm = Permanent(card=air_elem)
+
+    p1 = PlayerState(name="P1", battlefield=[spider_perm])
+    p2 = PlayerState(name="P2", battlefield=[air_perm])
+    game = Game(players=[p1, p2])
+
+    assert game._can_block_attacker(spider_perm, air_perm) is True
+
+
+def test_goblin_king_buffs_other_goblins_with_mountainwalk(all_cards):
+    king = _get(all_cards, "Goblin King")
+    goblin = _mk_card("Test Goblin", "Creature — Goblin")
+
+    p1 = PlayerState(name="P1", hand=[king], battlefield=[Permanent(card=goblin)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Goblin King")
+
+    assert result.supported
+    goblin_perm = p1.battlefield[0]
+    assert goblin_perm.effective_power == 3
+    assert goblin_perm.effective_toughness == 3
+    assert goblin_perm.metadata.get("has_mountainwalk") is True
+
+
+def test_green_ward_grants_protection_from_green(all_cards):
+    ward = _get(all_cards, "Green Ward")
+    creature = _mk_creature_card("Test Knight", power=2, toughness=2)
+
+    p1 = PlayerState(name="P1", hand=[ward], battlefield=[Permanent(card=creature)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Green Ward", target_player_index=0, target_permanent_index=0)
+
+    assert result.supported
+    creature_perm = p1.battlefield[0]
+    assert creature_perm.metadata.get("protection_from_green") is True
 
 
 def test_fireball_targets_multiple_creatures_divides_damage(all_cards):

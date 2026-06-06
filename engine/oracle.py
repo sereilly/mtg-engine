@@ -684,6 +684,14 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
     if "target creature gains trample and gets +x/+0 until end of turn" in text:
         return _instruction("berserk_pump"), "spell_pattern"
 
+    _pump_target_match = re.search(r"target creature gets \+(\d+)/\+(\d+) until end of turn", text)
+    if _pump_target_match:
+        return _instruction(
+            "pump_target_creature_until_eot",
+            power=int(_pump_target_match.group(1)),
+            toughness=int(_pump_target_match.group(2)),
+        ), "spell_pattern"
+
     if "destroy target" in text:
         effect_kind = "activated_destroy" if activated else "spell_pattern"
         type_filter: str | None = None

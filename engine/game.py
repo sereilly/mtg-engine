@@ -1844,6 +1844,30 @@ class Game:
             self.log.append(f"{caster.name} may pay life for {{C}} mana until end of turn (Channel)")
             return True, "resolved"
 
+        if instruction.kind == "pump_target_creature_until_eot":
+            power_delta = int(instruction.payload.get("power", 0))
+            toughness_delta = int(instruction.payload.get("toughness", 0))
+            target_perm: Permanent | None = None
+            if context.target_permanent_index is not None and 0 <= context.target_permanent_index < len(target.battlefield):
+                candidate = target.battlefield[context.target_permanent_index]
+                if candidate.card.primary_type == "creature":
+                    target_perm = candidate
+            if target_perm is None:
+                target_perm = next((p for p in target.battlefield if p.card.primary_type == "creature"), None)
+            if target_perm is None:
+                target_perm = next((p for p in caster.battlefield if p.card.primary_type == "creature"), None)
+            if target_perm is not None:
+                target_perm.power_bonus += power_delta
+                target_perm.toughness_bonus += toughness_delta
+                target_perm.metadata["temporary_power_bonus_until_eot"] = int(
+                    target_perm.metadata.get("temporary_power_bonus_until_eot", 0)
+                ) + power_delta
+                target_perm.metadata["temporary_toughness_bonus_until_eot"] = int(
+                    target_perm.metadata.get("temporary_toughness_bonus_until_eot", 0)
+                ) + toughness_delta
+                self.log.append(f"{card.name} gives {target_perm.card.name} +{power_delta}/+{toughness_delta} until end of turn")
+            return True, "resolved"
+
         self.log.append(f"Resolved supported pattern for {card.name} without state mutation")
         return True, "resolved"
 
@@ -3119,6 +3143,12 @@ class Game:
         if any(perm.card.name == "Mana Flare" for perm in all_permanents):
             player.mana_pool[mana_symbol] = player.mana_pool.get(mana_symbol, 0) + 1
 
+        land_type_line = land.card.type_line.lower()
+        land_type_override = str(land.metadata.get("land_type_override", "")).lower()
+        is_mountain = "mountain" in land_type_line or "mountain" in land_type_override
+        if is_mountain and any(perm.card.name == "Gauntlet of Might" for perm in all_permanents):
+            player.mana_pool["R"] = player.mana_pool.get("R", 0) + 1
+
         self.log.append(f"{player.name} tapped {land_name} for mana")
         return True
 
@@ -3206,6 +3236,28 @@ class Game:
                             continue
                         permanent.power_bonus += power_bonus
                         permanent.toughness_bonus += toughness_bonus
+                return
+
+            if instr.kind == "static_line" and instr.value.startswith("other ") and " get +" in instr.value:
+                lord_match = re.search(r"other (\w+)s? get \+(\d+)/\+(\d+)(.*)", instr.value)
+                if lord_match:
+                    subtype_raw = lord_match.group(1).lower()
+                    subtype = subtype_raw[:-1] if subtype_raw.endswith("s") else subtype_raw
+                    power_bonus = int(lord_match.group(2))
+                    toughness_bonus = int(lord_match.group(3))
+                    rest = lord_match.group(4).lower()
+                    for player in self.players:
+                        for permanent in player.battlefield:
+                            if permanent.card.primary_type != "creature":
+                                continue
+                            if subtype not in permanent.card.type_line.lower():
+                                continue
+                            if permanent.card is source:
+                                continue
+                            permanent.power_bonus += power_bonus
+                            permanent.toughness_bonus += toughness_bonus
+                            if "mountainwalk" in rest:
+                                permanent.metadata["has_mountainwalk"] = True
                 return
 
     def _apply_aura_effect(
@@ -3319,8 +3371,15 @@ class Game:
                 target_creature.metadata["gains_fear"] = True
                 self.log.append(f"{target_creature.card.name} gains fear from {aura_permanent.card.name}")
 
-            # Flying: some Auras grant flying to the enchanted creature
-            if "has flying" in text or "enchanted creature has flying" in text or "gains flying" in text:
+            # Flying: some Auras grant flying to the enchanted creature.
+            # Exclude "if enchanted creature has flying" which is a conditional check, not a grant.
+            _flying_conditional = "if enchanted creature has flying" in text or "if this creature has flying" in text
+            _grants_flying = (
+                ("has flying" in text and not _flying_conditional)
+                or ("enchanted creature has flying" in text and not _flying_conditional)
+                or "gains flying" in text
+            )
+            if _grants_flying:
                 target_creature.metadata["gains_flying"] = True
                 self.log.append(f"{target_creature.card.name} gains flying from {aura_permanent.card.name}")
 
