@@ -434,15 +434,33 @@ def test_discard_effect():
     assert len(p2.hand) == 1
     assert len(p2.graveyard) == 2
 
-def test_creature_with_keyword_reminder_is_supported(all_cards):
-    serra_angel = _get(all_cards, "Serra Angel")
-    classification = classify_card(serra_angel)
-    assert classification.supported
+def test_serra_angel_enters_with_flying_and_vigilance(all_cards):
+    angel = _get(all_cards, "Serra Angel")
+    p1 = PlayerState(name="P1", hand=[angel])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
 
-def test_creature_with_activated_damage_is_supported(all_cards):
+    result = game.cast_from_hand(0, "Serra Angel")
+
+    assert result.supported
+    perm = p1.battlefield[0]
+    assert perm.effective_power == 4
+    assert perm.effective_toughness == 4
+    assert any(k.lower() == "flying" for k in angel.keywords)
+    assert any(k.lower() == "vigilance" for k in angel.keywords)
+
+def test_prodigal_sorcerer_enters_battlefield(all_cards):
     prodigal = _get(all_cards, "Prodigal Sorcerer")
-    classification = classify_card(prodigal)
-    assert classification.supported
+    p1 = PlayerState(name="P1", hand=[prodigal])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Prodigal Sorcerer")
+
+    assert result.supported
+    assert p1.battlefield[0].card.name == "Prodigal Sorcerer"
+    assert p1.battlefield[0].effective_power == 1
+    assert p1.battlefield[0].effective_toughness == 1
 
 def test_activate_prodigal_sorcerer_ability(all_cards):
     prodigal = _get(all_cards, "Prodigal Sorcerer")
@@ -3410,11 +3428,6 @@ def test_drain_life_deals_damage_and_caster_gains_life(all_cards):
     assert p1.life == 18  # gained 3 life
 
 
-def test_drain_life_is_supported(all_cards):
-    from engine import classify_card
-    drain_life = _get(all_cards, "Drain Life")
-    assert classify_card(drain_life).supported
-
 
 def test_drain_power_steals_mana_from_opponent_lands(all_cards):
     # Drain Power: "{U}{U} — Target player activates a mana ability of each land
@@ -3440,11 +3453,6 @@ def test_drain_power_steals_mana_from_opponent_lands(all_cards):
     # Caster received 2 blue mana (one per Island)
     assert p1.mana_pool.get("U", 0) == 2
 
-
-def test_drain_power_is_supported(all_cards):
-    from engine import classify_card
-    drain_power = _get(all_cards, "Drain Power")
-    assert classify_card(drain_power).supported
 
 
 def test_drudge_skeletons_regeneration_activation(all_cards):
@@ -3501,11 +3509,6 @@ def test_dwarven_demolition_team_destroys_wall(all_cards):
     assert p2.graveyard[0].name == "Wall of Stone"
 
 
-def test_dwarven_demolition_team_is_supported(all_cards):
-    from engine import classify_card
-    team = _get(all_cards, "Dwarven Demolition Team")
-    assert classify_card(team).supported
-
 
 def test_earth_elemental_enters_battlefield(all_cards):
     # Earth Elemental: "{3}{R}{R}" — vanilla 4/5 Creature — Elemental
@@ -3521,11 +3524,6 @@ def test_earth_elemental_enters_battlefield(all_cards):
     assert len(p1.battlefield) == 1
     assert p1.battlefield[0].card.name == "Earth Elemental"
 
-
-def test_earth_elemental_is_supported(all_cards):
-    from engine import classify_card
-    earth_elemental = _get(all_cards, "Earth Elemental")
-    assert classify_card(earth_elemental).supported
 
 
 # ---------------------------------------------------------------------------
@@ -3562,11 +3560,6 @@ def test_earthbind_no_damage_on_non_flying_creature(all_cards):
     assert not creature_perm.metadata.get("loses_flying")
 
 
-def test_earthbind_is_supported(all_cards):
-    from engine import classify_card
-    earthbind = _get(all_cards, "Earthbind")
-    assert classify_card(earthbind).supported
-
 
 # ---------------------------------------------------------------------------
 # Earthquake
@@ -3597,11 +3590,6 @@ def test_earthquake_damages_all_players_and_non_flying_creatures(all_cards):
     assert p2.battlefield[0].damage_marked == 0
 
 
-def test_earthquake_is_supported(all_cards):
-    from engine import classify_card
-    earthquake = _get(all_cards, "Earthquake")
-    assert classify_card(earthquake).supported
-
 
 # ---------------------------------------------------------------------------
 # Elvish Archers
@@ -3623,11 +3611,6 @@ def test_elvish_archers_enters_battlefield(all_cards):
     assert perm.effective_toughness == 1
 
 
-def test_elvish_archers_is_supported(all_cards):
-    from engine import classify_card
-    archers = _get(all_cards, "Elvish Archers")
-    assert classify_card(archers).supported
-
 
 # ---------------------------------------------------------------------------
 # Evil Presence
@@ -3646,11 +3629,6 @@ def test_evil_presence_makes_land_a_swamp(all_cards):
     land_perm = p2.battlefield[0]
     assert land_perm.metadata.get("land_type_override") == "swamp"
 
-
-def test_evil_presence_is_supported(all_cards):
-    from engine import classify_card
-    evil_presence = _get(all_cards, "Evil Presence")
-    assert classify_card(evil_presence).supported
 
 
 # ---------------------------------------------------------------------------
@@ -3693,11 +3671,6 @@ def test_farmstead_no_life_gain_without_mana(all_cards):
     # No mana to pay → no life gain
     assert p1.life == 20
 
-
-def test_farmstead_is_supported(all_cards):
-    from engine import classify_card
-    farmstead = _get(all_cards, "Farmstead")
-    assert classify_card(farmstead).supported
 
 
 def test_fireball_deals_damage(all_cards):
@@ -4934,12 +4907,19 @@ def test_scrubland_taps_for_black_mana(all_cards):
 # Scryb Sprites
 # ---------------------------------------------------------------------------
 
-def test_scryb_sprites_is_supported_with_flying(all_cards):
+def test_scryb_sprites_enters_as_one_one_with_flying(all_cards):
     sprites = _get(all_cards, "Scryb Sprites")
+    p1 = PlayerState(name="P1", hand=[sprites])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
 
-    result = classify_card(sprites)
+    result = game.cast_from_hand(0, "Scryb Sprites")
 
     assert result.supported
+    perm = p1.battlefield[0]
+    assert perm.card.name == "Scryb Sprites"
+    assert perm.effective_power == 1
+    assert perm.effective_toughness == 1
     assert any(k.lower() == "flying" for k in sprites.keywords)
 
 
@@ -4947,13 +4927,6 @@ def test_scryb_sprites_is_supported_with_flying(all_cards):
 # Sengir Vampire
 # ---------------------------------------------------------------------------
 
-def test_sengir_vampire_is_supported(all_cards):
-    vampire = _get(all_cards, "Sengir Vampire")
-
-    result = classify_card(vampire)
-
-    assert result.supported
-    assert any(k.lower() == "flying" for k in vampire.keywords)
 
 
 def test_sengir_vampire_enters_battlefield(all_cards):
@@ -4974,12 +4947,19 @@ def test_sengir_vampire_enters_battlefield(all_cards):
 # Shanodin Dryads
 # ---------------------------------------------------------------------------
 
-def test_shanodin_dryads_is_supported_with_forestwalk(all_cards):
+def test_shanodin_dryads_enters_with_forestwalk(all_cards):
     dryads = _get(all_cards, "Shanodin Dryads")
+    p1 = PlayerState(name="P1", hand=[dryads])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
 
-    result = classify_card(dryads)
+    result = game.cast_from_hand(0, "Shanodin Dryads")
 
     assert result.supported
+    perm = p1.battlefield[0]
+    assert perm.card.name == "Shanodin Dryads"
+    assert perm.effective_power == 1
+    assert perm.effective_toughness == 1
     assert any(k.lower() == "forestwalk" for k in dryads.keywords)
 
 
@@ -5006,12 +4986,17 @@ def test_shatter_destroys_target_artifact(all_cards):
 # Simulacrum
 # ---------------------------------------------------------------------------
 
-def test_simulacrum_is_supported(all_cards):
+def test_simulacrum_resolves_without_error(all_cards):
     simulacrum = _get(all_cards, "Simulacrum")
+    p1 = PlayerState(name="P1", hand=[simulacrum])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
 
-    result = classify_card(simulacrum)
+    result = game.cast_from_hand(0, "Simulacrum")
 
     assert result.supported
+    assert not p1.hand
+    assert any(c.name == "Simulacrum" for c in p1.graveyard)
 
 
 # ---------------------------------------------------------------------------
@@ -5037,12 +5022,17 @@ def test_sinkhole_destroys_target_land(all_cards):
 # Siren's Call
 # ---------------------------------------------------------------------------
 
-def test_sirens_call_is_supported(all_cards):
+def test_sirens_call_resolves_without_error(all_cards):
     sirens_call = _get(all_cards, "Siren's Call")
+    p1 = PlayerState(name="P1", hand=[sirens_call])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
 
-    result = classify_card(sirens_call)
+    result = game.cast_from_hand(0, "Siren's Call")
 
     assert result.supported
+    assert not p1.hand
+    assert any(c.name == "Siren's Call" for c in p1.graveyard)
 
 
 # ---------------------------------------------------------------------------
@@ -5067,12 +5057,17 @@ def test_sol_ring_adds_two_colorless_mana(all_cards):
 # Soul Net
 # ---------------------------------------------------------------------------
 
-def test_soul_net_is_supported(all_cards):
+def test_soul_net_enters_battlefield(all_cards):
     soul_net = _get(all_cards, "Soul Net")
+    p1 = PlayerState(name="P1", hand=[soul_net])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
 
-    result = classify_card(soul_net)
+    result = game.cast_from_hand(0, "Soul Net")
 
     assert result.supported
+    assert p1.battlefield[0].card.name == "Soul Net"
+    assert not p1.hand
 
 
 # ---------------------------------------------------------------------------
@@ -5117,14 +5112,18 @@ def test_stone_rain_destroys_target_land(all_cards):
 # Swords to Plowshares
 # ---------------------------------------------------------------------------
 
-def test_swords_to_plowshares_is_supported(all_cards):
-    # Swords to Plowshares matches the "gain" spell pattern; the exile effect
-    # itself is not fully implemented but the card is classified as supported.
+def test_swords_to_plowshares_resolves_without_error(all_cards):
     swords = _get(all_cards, "Swords to Plowshares")
+    bear = _mk_creature_card("Test Bear", 2, 2)
+    p1 = PlayerState(name="P1", hand=[swords])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
+    game = Game(players=[p1, p2])
 
-    result = classify_card(swords)
+    result = game.cast_from_hand(0, "Swords to Plowshares", target_player_index=1, target_permanent_index=0)
 
     assert result.supported
+    assert not p1.hand
+    assert any(c.name == "Swords to Plowshares" for c in p1.graveyard)
 
 
 # ---------------------------------------------------------------------------
@@ -5176,12 +5175,19 @@ def test_terror_destroys_target_creature(all_cards):
 # Thicket Basilisk
 # ---------------------------------------------------------------------------
 
-def test_thicket_basilisk_is_supported(all_cards):
+def test_thicket_basilisk_enters_as_two_four(all_cards):
     basilisk = _get(all_cards, "Thicket Basilisk")
+    p1 = PlayerState(name="P1", hand=[basilisk])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
 
-    result = classify_card(basilisk)
+    result = game.cast_from_hand(0, "Thicket Basilisk")
 
     assert result.supported
+    perm = p1.battlefield[0]
+    assert perm.card.name == "Thicket Basilisk"
+    assert perm.effective_power == 2
+    assert perm.effective_toughness == 4
 
 
 # ---------------------------------------------------------------------------
@@ -5241,14 +5247,6 @@ def test_time_vault_grants_extra_turn(all_cards):
 # Tranquility
 # ---------------------------------------------------------------------------
 
-def test_tranquility_is_supported_as_pattern(all_cards):
-    # Tranquility matches "destroy all" spell pattern but doesn't implement
-    # destroy-all-enchantments in the current engine.
-    tranquility = _get(all_cards, "Tranquility")
-
-    result = classify_card(tranquility)
-
-    assert result.supported
 
 
 def test_tranquility_resolves_without_error(all_cards):
@@ -5379,12 +5377,19 @@ def test_twiddle_untaps_target_permanent(all_cards):
 # Two-Headed Giant of Foriys
 # ---------------------------------------------------------------------------
 
-def test_two_headed_giant_is_supported(all_cards):
+def test_two_headed_giant_enters_with_trample(all_cards):
     giant = _get(all_cards, "Two-Headed Giant of Foriys")
+    p1 = PlayerState(name="P1", hand=[giant])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
 
-    result = classify_card(giant)
+    result = game.cast_from_hand(0, "Two-Headed Giant of Foriys")
 
     assert result.supported
+    perm = p1.battlefield[0]
+    assert perm.card.name == "Two-Headed Giant of Foriys"
+    assert perm.effective_power == 4
+    assert perm.effective_toughness == 4
     assert any(k.lower() == "trample" for k in giant.keywords)
 
 
@@ -5476,24 +5481,37 @@ def test_vesuvan_doppelganger_copies_creature_on_entry(all_cards):
 # Veteran Bodyguard
 # ---------------------------------------------------------------------------
 
-def test_veteran_bodyguard_is_supported(all_cards):
+def test_veteran_bodyguard_enters_battlefield(all_cards):
     bodyguard = _get(all_cards, "Veteran Bodyguard")
+    p1 = PlayerState(name="P1", hand=[bodyguard])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
 
-    result = classify_card(bodyguard)
+    result = game.cast_from_hand(0, "Veteran Bodyguard")
 
     assert result.supported
+    perm = p1.battlefield[0]
+    assert perm.card.name == "Veteran Bodyguard"
+    assert perm.effective_power == 2
+    assert perm.effective_toughness == 5
 
 
 # ---------------------------------------------------------------------------
 # Volcanic Eruption
 # ---------------------------------------------------------------------------
 
-def test_volcanic_eruption_is_supported(all_cards):
+def test_volcanic_eruption_resolves_without_error(all_cards):
     eruption = _get(all_cards, "Volcanic Eruption")
+    mountain = _mk_card("Mountain", "Basic Land - Mountain")
+    p1 = PlayerState(name="P1", hand=[eruption])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=mountain)])
+    game = Game(players=[p1, p2])
 
-    result = classify_card(eruption)
+    result = game.cast_from_hand(0, "Volcanic Eruption", target_player_index=1, x_value=1)
 
     assert result.supported
+    assert not p1.hand
+    assert any(c.name == "Volcanic Eruption" for c in p1.graveyard)
 
 
 # ---------------------------------------------------------------------------
@@ -5664,12 +5682,19 @@ def test_wanderlust_attaches_to_enchanted_creature(all_cards):
 # War Mammoth
 # ---------------------------------------------------------------------------
 
-def test_war_mammoth_is_supported_with_trample(all_cards):
+def test_war_mammoth_enters_with_trample(all_cards):
     mammoth = _get(all_cards, "War Mammoth")
+    p1 = PlayerState(name="P1", hand=[mammoth])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
 
-    result = classify_card(mammoth)
+    result = game.cast_from_hand(0, "War Mammoth")
 
     assert result.supported
+    perm = p1.battlefield[0]
+    assert perm.card.name == "War Mammoth"
+    assert perm.effective_power == 3
+    assert perm.effective_toughness == 3
     assert any(k.lower() == "trample" for k in mammoth.keywords)
 
 
@@ -5735,12 +5760,6 @@ def test_weakness_debuffs_enchanted_creature(all_cards):
 # White Knight
 # ---------------------------------------------------------------------------
 
-def test_white_knight_is_supported(all_cards):
-    knight = _get(all_cards, "White Knight")
-
-    result = classify_card(knight)
-
-    assert result.supported
 
 
 def test_white_knight_enters_battlefield(all_cards):
@@ -5780,14 +5799,19 @@ def test_white_ward_grants_protection_from_white(all_cards):
 # Wild Growth
 # ---------------------------------------------------------------------------
 
-def test_wild_growth_is_supported(all_cards):
-    # Wild Growth matches the "enchant land" spell pattern and is classified as
-    # supported; the mana-addition trigger isn't fully implemented in the engine.
+def test_wild_growth_attaches_to_target_land(all_cards):
     wild_growth = _get(all_cards, "Wild Growth")
+    forest = _get(all_cards, "Forest")
+    p1 = PlayerState(name="P1", hand=[wild_growth], battlefield=[Permanent(card=forest)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
 
-    result = classify_card(wild_growth)
+    result = game.cast_from_hand(0, "Wild Growth", target_player_index=0, target_permanent_index=0)
 
     assert result.supported
+    wg_perm = next(p for p in p1.battlefield if p.card.name == "Wild Growth")
+    assert wg_perm.metadata.get("attached_to") is not None
+    assert wg_perm.metadata["attached_to"].card.name == "Forest"
 
 
 # ---------------------------------------------------------------------------
