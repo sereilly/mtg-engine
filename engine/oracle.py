@@ -603,6 +603,9 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
     if "activates a mana ability of each land they control" in text and "loses all unspent mana" in text:
         return _instruction("drain_target_lands_mana"), "spell_pattern"
 
+    if "tap all lands target player controls" in text and "loses all unspent mana" in text:
+        return _instruction("tap_target_player_lands_and_drain_mana"), "spell_pattern"
+
     if "deals x damage" in text and "each creature without flying" in text:
         effect_kind = "activated_damage" if activated else "spell_pattern"
         return _instruction("earthquake_damage", amount="x"), effect_kind
@@ -732,7 +735,10 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
 
     discard_match = re.search(r"target player discards (\w+) cards?", text)
     if discard_match:
-        count = _parse_number_token(discard_match.group(1))
+        token = discard_match.group(1).lower()
+        if token == "x":
+            return _instruction("discard_x_target_cards"), "spell_pattern"
+        count = _parse_number_token(token)
         if count > 0:
             return _instruction("discard_target_cards", amount=count), "spell_pattern"
 

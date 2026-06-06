@@ -18,28 +18,6 @@ def _make_test(name, idx):
 
 # List of LEA cards that lacked tests when this file was generated
 _UNTESTED = [
-"Ley Druid",
-"Lich",
-"Lifeforce",
-"Lifelace",
-"Lifetap",
-"Living Artifact",
-"Living Wall",
-"Lord of Atlantis",
-"Lord of the Pit",
-"Lure",
-"Mahamoti Djinn",
-"Mana Short",
-"Mana Vault",
-"Manabarbs",
-"Merfolk of the Pearl Trident",
-"Mind Twist",
-"Mons's Goblin Raiders",
-"Mox Emerald",
-"Mox Jet",
-"Mox Pearl",
-"Mox Ruby",
-"Mox Sapphire",
 "Nether Shadow",
 "Northern Paladin",
 "Obsianus Golem",
@@ -4189,3 +4167,331 @@ def test_island_sanctuary_grants_protection_after_skipping_draw(all_cards):
 
     # Non-flying, non-islandwalk Grizzly Bears cannot attack P1
     assert game.can_attack(p2.battlefield[0], defending_player_index=0) is False
+
+
+def test_ley_druid_untaps_target_land(all_cards):
+    druid = _get(all_cards, "Ley Druid")
+    forest = _get(all_cards, "Forest")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=druid), Permanent(card=forest, tapped=True)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Ley Druid", target_player_index=0)
+
+    assert result.supported
+    assert p1.battlefield[1].tapped is False
+
+
+def test_lich_loses_life_equal_to_life_total_on_entry(all_cards):
+    lich = _get(all_cards, "Lich")
+    p1 = PlayerState(name="P1", hand=[lich], life=20)
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Lich")
+
+    assert result.supported
+    assert any(perm.card.name == "Lich" for perm in p1.battlefield)
+    assert p1.life == 0
+
+
+def test_lifeforce_counters_black_spell(all_cards):
+    lifeforce = _get(all_cards, "Lifeforce")
+    black_knight = _get(all_cards, "Black Knight")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=lifeforce)])
+    p2 = PlayerState(name="P2", hand=[black_knight])
+    game = Game(players=[p1, p2])
+
+    game.queue_from_hand(1, "Black Knight")
+    result = game.activate_permanent_ability(0, "Lifeforce", target_player_index=0)
+
+    assert result.supported
+    assert not game.stack
+    assert any(card.name == "Black Knight" for card in p2.graveyard)
+
+
+def test_lifelace_changes_target_permanent_to_green(all_cards):
+    lifelace = _get(all_cards, "Lifelace")
+    creature = _mk_card("Bear", "Creature — Bear")
+
+    p1 = PlayerState(name="P1", hand=[lifelace])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=creature)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Lifelace", target_player_index=1)
+
+    assert result.supported
+    assert p2.battlefield[0].metadata.get("color_override") == "G"
+
+
+def test_lifetap_gains_life_when_opponent_forest_tapped(all_cards):
+    lifetap = _get(all_cards, "Lifetap")
+    forest = _get(all_cards, "Forest")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=lifetap)], life=20)
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=forest)])
+    game = Game(players=[p1, p2])
+
+    ok = game.tap_land_for_mana(1, "Forest")
+
+    assert ok
+    assert p1.life == 21
+
+
+def test_living_artifact_upkeep_removes_counter_and_gains_life(all_cards):
+    living = _get(all_cards, "Living Artifact")
+    lotus = _get(all_cards, "Black Lotus")
+
+    aura_perm = Permanent(card=living)
+    artifact_perm = Permanent(card=lotus)
+    aura_perm.metadata["attached_to"] = artifact_perm
+    aura_perm.metadata["vitality_counters"] = 2
+
+    p1 = PlayerState(name="P1", battlefield=[artifact_perm, aura_perm], life=20)
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    game.resolve_upkeep(0)
+
+    assert p1.life == 21
+    assert aura_perm.metadata.get("vitality_counters") == 1
+
+
+def test_living_wall_gains_regeneration_shield(all_cards):
+    wall = _get(all_cards, "Living Wall")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=wall)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Living Wall", target_player_index=0)
+
+    assert result.supported
+    assert p1.battlefield[0].regeneration_shield == 1
+
+
+def test_lord_of_atlantis_buffs_other_merfolk_with_islandwalk(all_cards):
+    lord = _get(all_cards, "Lord of Atlantis")
+    merfolk = _get(all_cards, "Merfolk of the Pearl Trident")
+
+    p1 = PlayerState(name="P1", hand=[lord], battlefield=[Permanent(card=merfolk)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Lord of Atlantis")
+
+    assert result.supported
+    merfolk_perm = p1.battlefield[0]
+    assert merfolk_perm.effective_power == 2
+    assert merfolk_perm.effective_toughness == 2
+    assert merfolk_perm.metadata.get("has_islandwalk") is True
+
+
+def test_lord_of_the_pit_upkeep_sacrifices_creature(all_cards):
+    pit = _get(all_cards, "Lord of the Pit")
+    creature = _mk_card("Fodder", "Creature — Bear")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=pit), Permanent(card=creature)], life=20)
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    game.resolve_upkeep(0)
+
+    assert p1.life == 20
+    assert any(c.name == "Fodder" for c in p1.graveyard)
+    assert len(p1.battlefield) == 1
+
+
+def test_lord_of_the_pit_upkeep_deals_damage_without_creature(all_cards):
+    pit = _get(all_cards, "Lord of the Pit")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=pit)], life=20)
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    game.resolve_upkeep(0)
+
+    assert p1.life == 13
+
+
+def test_lure_forces_all_creatures_to_block(all_cards):
+    lure = _get(all_cards, "Lure")
+    attacker = _mk_card("Bait", "Creature — Bear")
+    blocker1 = _mk_card("Guard1", "Creature — Bear")
+    blocker2 = _mk_card("Guard2", "Creature — Bear")
+
+    p1 = PlayerState(name="P1", hand=[lure], battlefield=[Permanent(card=attacker)])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=blocker1), Permanent(card=blocker2)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Lure", target_player_index=0)
+    assert result.supported
+
+    game.active_player_index = 0
+    game.current_turn_phase = "combat"
+    game.current_step = "declare_attackers"
+    game.current_phase = "combat"
+    game.declare_attackers(0, [0], defending_player_index=1)
+    game.current_step = "declare_blockers"
+
+    # Assigning only one blocker when two can block a Lure creature should fail
+    ok, _ = game.declare_blockers(1, {0: 0})
+    assert not ok
+
+    # Assigning all capable blockers should succeed
+    ok2, _ = game.declare_blockers(1, {0: 0, 1: 0})
+    assert ok2
+
+
+def test_mahamoti_djinn_classifies_supported(all_cards):
+    djinn = _get(all_cards, "Mahamoti Djinn")
+    result = classify_card(djinn)
+    assert result.supported
+    perm = Permanent(card=djinn)
+    assert perm.effective_power == 5
+    assert perm.effective_toughness == 6
+
+
+def test_mana_short_taps_target_lands_and_drains_mana(all_cards):
+    mana_short = _get(all_cards, "Mana Short")
+    island = _get(all_cards, "Island")
+
+    p1 = PlayerState(name="P1", hand=[mana_short])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=island), Permanent(card=island)], mana_pool={"U": 3})
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Mana Short", target_player_index=1)
+
+    assert result.supported
+    assert all(perm.tapped for perm in p2.battlefield)
+    assert p2.mana_pool["U"] == 0
+
+
+def test_mana_vault_taps_for_three_colorless_mana(all_cards):
+    vault = _get(all_cards, "Mana Vault")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=vault)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Mana Vault")
+
+    assert result.supported
+    assert p1.mana_pool["C"] == 3
+    assert p1.battlefield[0].tapped is True
+
+
+def test_manabarbs_deals_damage_when_land_tapped(all_cards):
+    manabarbs = _get(all_cards, "Manabarbs")
+    island = _get(all_cards, "Island")
+
+    p1 = PlayerState(name="P1", hand=[manabarbs])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=island)], life=20)
+    game = Game(players=[p1, p2])
+
+    cast_result = game.cast_from_hand(0, "Manabarbs")
+    assert cast_result.supported
+
+    game.tap_land_for_mana(1, "Island")
+
+    assert p2.life == 19
+
+
+def test_merfolk_of_the_pearl_trident_classifies_supported(all_cards):
+    merfolk = _get(all_cards, "Merfolk of the Pearl Trident")
+    result = classify_card(merfolk)
+    assert result.supported
+    perm = Permanent(card=merfolk)
+    assert perm.effective_power == 1
+    assert perm.effective_toughness == 1
+
+
+def test_mind_twist_discards_x_cards_at_random(all_cards):
+    mind_twist = _get(all_cards, "Mind Twist")
+    island = _get(all_cards, "Island")
+
+    p1 = PlayerState(name="P1", hand=[mind_twist])
+    p2 = PlayerState(name="P2", hand=[island, island, island])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Mind Twist", target_player_index=1, x_value=2)
+
+    assert result.supported
+    assert len(p2.hand) == 1
+    assert len(p2.graveyard) == 2
+
+
+def test_mons_goblin_raiders_classifies_supported(all_cards):
+    raiders = _get(all_cards, "Mons's Goblin Raiders")
+    result = classify_card(raiders)
+    assert result.supported
+    perm = Permanent(card=raiders)
+    assert perm.effective_power == 1
+    assert perm.effective_toughness == 1
+
+
+def test_mox_emerald_taps_for_green_mana(all_cards):
+    mox = _get(all_cards, "Mox Emerald")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=mox)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Mox Emerald")
+
+    assert result.supported
+    assert p1.mana_pool["G"] == 1
+    assert p1.battlefield[0].tapped is True
+
+
+def test_mox_jet_taps_for_black_mana(all_cards):
+    mox = _get(all_cards, "Mox Jet")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=mox)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Mox Jet")
+
+    assert result.supported
+    assert p1.mana_pool["B"] == 1
+    assert p1.battlefield[0].tapped is True
+
+
+def test_mox_pearl_taps_for_white_mana(all_cards):
+    mox = _get(all_cards, "Mox Pearl")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=mox)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Mox Pearl")
+
+    assert result.supported
+    assert p1.mana_pool["W"] == 1
+    assert p1.battlefield[0].tapped is True
+
+
+def test_mox_ruby_taps_for_red_mana(all_cards):
+    mox = _get(all_cards, "Mox Ruby")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=mox)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Mox Ruby")
+
+    assert result.supported
+    assert p1.mana_pool["R"] == 1
+    assert p1.battlefield[0].tapped is True
+
+
+def test_mox_sapphire_taps_for_blue_mana(all_cards):
+    mox = _get(all_cards, "Mox Sapphire")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=mox)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Mox Sapphire")
+
+    assert result.supported
+    assert p1.mana_pool["U"] == 1
+    assert p1.battlefield[0].tapped is True

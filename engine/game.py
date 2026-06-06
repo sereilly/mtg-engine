@@ -1541,6 +1541,25 @@ class Game:
             self.log.append(f"{target.name} discarded {actual} cards")
             return True, "resolved"
 
+        if instruction.kind == "discard_x_target_cards":
+            x = max(0, x_value or 0)
+            actual = min(x, len(target.hand))
+            indices = random.sample(range(len(target.hand)), actual)
+            for i in sorted(indices, reverse=True):
+                discarded = target.hand.pop(i)
+                target.graveyard.append(discarded)
+            self.log.append(f"{target.name} discarded {actual} cards at random")
+            return True, "resolved"
+
+        if instruction.kind == "tap_target_player_lands_and_drain_mana":
+            for perm in target.battlefield:
+                if perm.card.primary_type == "land":
+                    perm.tapped = True
+            for sym in ("W", "U", "B", "R", "G", "C"):
+                target.mana_pool[sym] = 0
+            self.log.append(f"{card.name} tapped all lands and drained mana from {target.name}")
+            return True, "resolved"
+
         if instruction.kind == "target_loses_life":
             amount = int(instruction.payload.get("amount", 0))
             before = target.life
@@ -2305,6 +2324,14 @@ class Game:
                             self.log.append(f"{controller.name} sacrificed {permanent.card.name} on upkeep")
                         break
 
+                    if cond == "upkeep_self" and kind == "target_gains_life":
+                        counters = int(permanent.metadata.get("vitality_counters", 0))
+                        if counters > 0:
+                            permanent.metadata["vitality_counters"] = counters - 1
+                            controller.life += 1
+                            self.log.append(f"{permanent.card.name}: {controller.name} removed a vitality counter and gained 1 life")
+                        break
+
                     if cond == "no_islands" and kind == "sacrifice_self":
                         has_island = any(
                             perm.card.primary_type == "land"
@@ -2550,6 +2577,12 @@ class Game:
 
         if "you may spend white mana as though it were red mana" in text:
             self.players[caster_index].can_spend_white_as_red = True
+
+        if "as this enchantment enters, you lose life equal to your life total" in text:
+            controller = self.players[caster_index]
+            life_loss = controller.life
+            controller.life -= life_loss
+            self.log.append(f"{permanent.card.name}: {controller.name} lost {life_loss} life on entry")
 
     def _apply_cast_triggers(self, caster_index: int, card: CardDefinition) -> None:
         if card.primary_type != "enchantment":
@@ -2875,6 +2908,21 @@ class Game:
             if not self._can_block_attacker(blocker, attacker):
                 return False, f"{blocker.card.name} cannot block {attacker.card.name}"
             assignments[blocker_idx] = attacker_idx
+
+        # Lure enforcement: every creature that can block a Lure attacker must do so
+        for attacker_idx in self.combat_attackers:
+            if attacker_idx >= len(attacker_controller.battlefield):
+                continue
+            attacker = attacker_controller.battlefield[attacker_idx]
+            if not attacker.metadata.get("lure_active"):
+                continue
+            for blocker_idx, blocker in enumerate(defender.battlefield):
+                if blocker.card.primary_type != "creature" or blocker.tapped:
+                    continue
+                if not self._can_block_attacker(blocker, attacker):
+                    continue
+                if blocker_idx not in assignments:
+                    return False, f"{blocker.card.name} must block {attacker.card.name} due to Lure"
 
         self.combat_blockers = assignments
         self.combat_blockers_locked = True
@@ -3290,6 +3338,15 @@ class Game:
         if is_mountain and any(perm.card.name == "Gauntlet of Might" for perm in all_permanents):
             player.mana_pool["R"] = player.mana_pool.get("R", 0) + 1
 
+        is_forest = "forest" in land_type_line or "forest" in land_type_override
+        if is_forest:
+            for i, controller in enumerate(self.players):
+                if i != player_index:
+                    for perm in controller.battlefield:
+                        if perm.card.name == "Lifetap":
+                            controller.life += 1
+                            self.log.append(f"Lifetap: {controller.name} gained 1 life")
+
         self.log.append(f"{player.name} tapped {land_name} for mana")
 
         # Kudzu: destroy enchanted land when tapped, then re-attach to another land
@@ -3306,6 +3363,17 @@ class Game:
                 aura.metadata["attached_to"] = next_land
                 next_land.metadata["attached_aura"] = aura
                 self.log.append(f"Kudzu attached to {next_land.card.name}")
+
+        for controller in self.players:
+            for perm in controller.battlefield:
+                prog = compile_card_oracle(perm.card)
+                for trig in prog.triggered_abilities:
+                    if trig.condition.kind == "land_tapped_for_mana" and trig.instruction is not None:
+                        amount = int(trig.instruction.payload.get("amount", 1))
+                        damage = self._prevent_damage(player, amount)
+                        if damage > 0:
+                            player.life -= damage
+                        self.log.append(f"{perm.card.name} triggered: {player.name} took {damage} damage")
 
         return True
 
@@ -3415,6 +3483,8 @@ class Game:
                             permanent.toughness_bonus += toughness_bonus
                             if "mountainwalk" in rest:
                                 permanent.metadata["has_mountainwalk"] = True
+                            if "islandwalk" in rest:
+                                permanent.metadata["has_islandwalk"] = True
                 return
 
     def _apply_aura_effect(
@@ -3553,6 +3623,11 @@ class Game:
             # Attach the aura to the creature
             aura_permanent.metadata["attached_to"] = target_creature
             target_creature.metadata["attached_aura"] = aura_permanent
+
+            # Lure: all creatures able to block this creature must do so
+            if "all creatures able to block enchanted creature do so" in text:
+                target_creature.metadata["lure_active"] = True
+                self.log.append(f"{target_creature.card.name} must be blocked by all able creatures (Lure)")
 
             # Earthbind: on enter, if creature has flying, deal 2 damage and strip flying
             if "if enchanted creature has flying" in text and "deals 2 damage" in text:
