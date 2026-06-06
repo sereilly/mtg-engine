@@ -1276,6 +1276,29 @@ class Game:
             self.log.append(f"{card.name} dealt {damage} earthquake damage to each non-flying creature and each player")
             return True, "resolved"
 
+        if instruction.kind == "hurricane_damage":
+            amount = instruction.payload.get("amount", 0)
+            damage = max(0, x_value or 0) if amount == "x" else int(amount)
+            for player in self.players:
+                d = self._prevent_damage(player, damage)
+                if d > 0:
+                    player.life -= d
+            for player in self.players:
+                for perm in list(player.battlefield):
+                    if perm.card.primary_type != "creature":
+                        continue
+                    has_flying = (
+                        "Flying" in perm.card.keywords
+                        or perm.metadata.get("gains_flying")
+                        or perm.metadata.get("gains_flying_until_eot")
+                    )
+                    if not has_flying:
+                        continue
+                    perm.damage_marked += damage
+            self._destroy_marked_creatures()
+            self.log.append(f"{card.name} dealt {damage} hurricane damage to each flying creature and each player")
+            return True, "resolved"
+
         if instruction.kind == "drain_target_lands_mana":
             # Tap each of target's untapped lands and collect the mana they would produce
             mana_gained: dict[str, int] = {}
@@ -1540,13 +1563,23 @@ class Game:
             self.log.append("Untapped target permanent" if untapped else "No valid permanent to untap")
             return True, "resolved"
 
+        if instruction.kind == "untap_enchanted_creature":
+            if source_permanent is None:
+                return False, "ability not implemented"
+            attached_to = source_permanent.metadata.get("attached_to")
+            if attached_to is not None:
+                attached_to.tapped = False
+                self.log.append(f"Untapped {attached_to.card.name} via {card.name}")
+            return True, "resolved"
+
         if instruction.kind == "tap_target_permanent":
             tapped = self._tap_or_untap_target(target, make_tapped=True)
             self.log.append("Tapped target permanent" if tapped else "No valid permanent to tap")
             return True, "resolved"
 
         if instruction.kind == "grant_prevention_shield":
-            amount = int(instruction.payload.get("amount", 0))
+            raw_amount = instruction.payload.get("amount", 0)
+            amount = max(0, x_value or 0) if raw_amount == "x" else int(raw_amount)
             recipient = target if source_permanent is not None else caster
             recipient.damage_prevention_pool += amount
             if source_permanent is not None and instruction.payload.get("protection_kind") == "color":
@@ -1785,6 +1818,34 @@ class Game:
             self.log.append(f"{card.name} created a Wasp token")
             return True, "resolved"
 
+        if instruction.kind == "cast_face_down_creature":
+            controller_index = self.players.index(caster)
+            creature_card = next(
+                (c for c in caster.hand if c.primary_type == "creature"),
+                None,
+            )
+            if creature_card is None:
+                self.log.append(f"{card.name}: no creature in hand to cast face-down")
+                return True, "resolved"
+            caster.hand.remove(creature_card)
+            face_down = CardDefinition(
+                name=creature_card.name,
+                mana_cost="",
+                cmc=0.0,
+                type_line="Creature",
+                oracle_text="",
+                colors=(),
+                color_identity=(),
+                keywords=(),
+                produced_mana=(),
+                raw={"name": creature_card.name, "type_line": "Creature", "power": "2", "toughness": "2"},
+            )
+            perm = Permanent(card=face_down)
+            perm.metadata["face_down"] = True
+            self._put_permanent_onto_battlefield(controller_index, perm, None)
+            self.log.append(f"{card.name} cast {creature_card.name} face-down as a 2/2 creature")
+            return True, "resolved"
+
         if instruction.kind == "look_at_target_hand":
             seen = len(target.hand)
             self.log.append(f"{card.name} looked at {target.name}'s hand ({seen} cards)")
@@ -1845,8 +1906,10 @@ class Game:
             return True, "resolved"
 
         if instruction.kind == "pump_target_creature_until_eot":
-            power_delta = int(instruction.payload.get("power", 0))
-            toughness_delta = int(instruction.payload.get("toughness", 0))
+            raw_power = instruction.payload.get("power", 0)
+            raw_toughness = instruction.payload.get("toughness", 0)
+            power_delta = max(0, x_value or 0) if raw_power == "x" else int(raw_power)
+            toughness_delta = max(0, x_value or 0) if raw_toughness == "x" else int(raw_toughness)
             target_perm: Permanent | None = None
             if context.target_permanent_index is not None and 0 <= context.target_permanent_index < len(target.battlefield):
                 candidate = target.battlefield[context.target_permanent_index]
@@ -2536,6 +2599,8 @@ class Game:
         if lower_keyword == "first strike" and permanent.metadata.get("gains_first_strike", False):
             return True
         if lower_keyword == "fear" and permanent.metadata.get("gains_fear", False):
+            return True
+        if lower_keyword == "haste" and permanent.metadata.get("gains_haste", False):
             return True
         # Fall back to oracle program static lines (e.g. test cards that put keyword in oracle_text)
         program = compile_card_oracle(permanent.card)
@@ -3382,6 +3447,11 @@ class Game:
             if _grants_flying:
                 target_creature.metadata["gains_flying"] = True
                 self.log.append(f"{target_creature.card.name} gains flying from {aura_permanent.card.name}")
+
+            # Haste: enchanted creature can attack as though it had haste
+            if "can attack as though it had haste" in text:
+                target_creature.metadata["gains_haste"] = True
+                self.log.append(f"{target_creature.card.name} gains haste from {aura_permanent.card.name}")
 
             # Attach the aura to the creature
             aura_permanent.metadata["attached_to"] = target_creature

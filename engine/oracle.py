@@ -606,6 +606,10 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
         effect_kind = "activated_damage" if activated else "spell_pattern"
         return _instruction("earthquake_damage", amount="x"), effect_kind
 
+    if "deals x damage" in text and "each creature with flying" in text:
+        effect_kind = "activated_damage" if activated else "spell_pattern"
+        return _instruction("hurricane_damage", amount="x"), effect_kind
+
     if "deals x damage" in text and "you gain life equal to the damage dealt" in text:
         effect_kind = "activated_damage" if activated else "spell_pattern"
         return _instruction("deal_damage_and_gain_life", amount="x"), effect_kind
@@ -684,12 +688,13 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
     if "target creature gains trample and gets +x/+0 until end of turn" in text:
         return _instruction("berserk_pump"), "spell_pattern"
 
-    _pump_target_match = re.search(r"target creature gets \+(\d+)/\+(\d+) until end of turn", text)
-    if _pump_target_match:
+    _pump_target_x_match = re.search(r"target creature gets \+(x|\d+)/\+(x|\d+) until end of turn", text)
+    if _pump_target_x_match:
+        p_str, t_str = _pump_target_x_match.group(1), _pump_target_x_match.group(2)
         return _instruction(
             "pump_target_creature_until_eot",
-            power=int(_pump_target_match.group(1)),
-            toughness=int(_pump_target_match.group(2)),
+            power=p_str if p_str == "x" else int(p_str),
+            toughness=t_str if t_str == "x" else int(t_str),
         ), "spell_pattern"
 
     if "destroy target" in text:
@@ -730,6 +735,9 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
     if "gains x life" in text or "gain x life" in text:
         return _instruction("target_gains_life", amount="x"), "spell_pattern"
 
+    if activated and "untap enchanted creature" in text:
+        return _instruction("untap_enchanted_creature"), "activated_untap"
+
     if "untap target land" in text and activated:
         return _instruction("untap_target_land"), "activated_untap"
 
@@ -738,6 +746,10 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
 
     if "tap target" in text:
         return _instruction("tap_target_permanent"), "spell_pattern"
+
+    if "prevent the next x damage" in text:
+        effect_kind = "activated_prevent" if activated else "spell_pattern"
+        return _instruction("grant_prevention_shield", amount="x"), effect_kind
 
     prevent_match = re.search(r"prevent the next (\d+) damage", text)
     if prevent_match:
@@ -820,6 +832,9 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
 
     if activated and "create a 1/1 colorless insect artifact creature token with flying named wasp" in text:
         return _instruction("create_wasp_token"), "activated_token"
+
+    if activated and "you may cast that card face down as a 2/2 creature spell" in text:
+        return _instruction("cast_face_down_creature"), "activated_cast"
 
     if activated and "look at target player's hand" in text:
         return _instruction("look_at_target_hand"), "activated_look"

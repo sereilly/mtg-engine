@@ -18,11 +18,6 @@ def _make_test(name, idx):
 
 # List of LEA cards that lacked tests when this file was generated
 _UNTESTED = [
-"Guardian Angel",
-"Hill Giant",
-"Holy Armor",
-"Holy Strength",
-"Howl from Beyond",
 "Hurloon Minotaur",
 "Hurricane",
 "Icy Manipulator",
@@ -1841,6 +1836,84 @@ def test_create_session_uses_custom_seed_when_enabled(monkeypatch):
 
     assert response.status_code == 200
     assert captured_seeds == [9001, 9002]
+
+
+def test_hill_giant_classifies_supported(all_cards):
+    giant = _get(all_cards, "Hill Giant")
+    assert classify_card(giant).supported
+    perm = Permanent(card=giant)
+    assert perm.effective_power == 3
+    assert perm.effective_toughness == 3
+
+
+def test_holy_strength_gives_static_buff_to_enchanted_creature(all_cards):
+    holy_strength = _get(all_cards, "Holy Strength")
+    grizzly = _get(all_cards, "Grizzly Bears")
+
+    p1 = PlayerState(name="P1", hand=[holy_strength])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=grizzly)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Holy Strength", target_player_index=1)
+
+    assert result.supported
+    perm = p2.battlefield[0]
+    assert perm.effective_power == 3
+    assert perm.effective_toughness == 4
+
+
+def test_holy_armor_gives_static_toughness_and_activates_for_more(all_cards):
+    holy_armor = _get(all_cards, "Holy Armor")
+    grizzly = _get(all_cards, "Grizzly Bears")
+
+    p1 = PlayerState(name="P1", hand=[holy_armor], battlefield=[Permanent(card=grizzly)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Holy Armor", target_player_index=0)
+
+    assert result.supported
+    creature_perm = p1.battlefield[0]
+    assert creature_perm.effective_toughness == 4
+
+    aura_perm = next(p for p in p1.battlefield if p.card.name == "Holy Armor")
+    aura_perm.metadata["attached_to"] = creature_perm
+    creature_perm.metadata["attached_aura"] = aura_perm
+
+    before_t = creature_perm.effective_toughness
+    activate_result = game.activate_permanent_ability(0, "Holy Armor", target_player_index=0)
+
+    assert activate_result.supported
+    assert creature_perm.effective_toughness == before_t + 1
+
+
+def test_howl_from_beyond_pumps_target_creature_by_x(all_cards):
+    howl = _get(all_cards, "Howl from Beyond")
+    grizzly = _get(all_cards, "Grizzly Bears")
+
+    p1 = PlayerState(name="P1", hand=[howl])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=grizzly)])
+    game = Game(players=[p1, p2])
+
+    before_power = p2.battlefield[0].effective_power
+    result = game.cast_from_hand(0, "Howl from Beyond", target_player_index=1, x_value=4)
+
+    assert result.supported
+    assert p2.battlefield[0].effective_power == before_power + 4
+    assert p2.battlefield[0].effective_toughness == 2
+
+
+def test_guardian_angel_prevents_x_damage(all_cards):
+    angel = _get(all_cards, "Guardian Angel")
+
+    p1 = PlayerState(name="P1", hand=[angel], life=20)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Guardian Angel", target_player_index=0, x_value=3)
+
+    assert result.supported
+    assert p1.damage_prevention_pool == 3
 
 def test_card_search_endpoint_returns_autocomplete_matches():
     response = client.get("/api/cards/search?query=air&limit=5")
@@ -3829,3 +3902,140 @@ def test_fireball_targets_multiple_creatures_divides_damage(all_cards):
     assert len(p2.battlefield) == 2
     assert p2.battlefield[0].damage_marked == 1
     assert p2.battlefield[1].damage_marked == 1
+
+
+def test_hurloon_minotaur_classifies_supported(all_cards):
+    minotaur = _get(all_cards, "Hurloon Minotaur")
+    classification = classify_card(minotaur)
+    assert classification.supported
+    perm = Permanent(card=minotaur)
+    assert perm.effective_power == 2
+    assert perm.effective_toughness == 3
+
+
+def test_hurricane_deals_x_damage_to_flying_creatures_and_players(all_cards):
+    hurricane = _get(all_cards, "Hurricane")
+    serra_angel = _get(all_cards, "Serra Angel")
+    grizzly = _get(all_cards, "Grizzly Bears")
+
+    p1 = PlayerState(name="P1", hand=[hurricane], life=20)
+    p2 = PlayerState(
+        name="P2",
+        battlefield=[Permanent(card=serra_angel), Permanent(card=grizzly)],
+        life=20,
+    )
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Hurricane", target_player_index=1, x_value=3)
+
+    assert result.supported
+    assert p1.life == 17  # hurricane hits all players including the caster
+    assert p2.life == 17
+    angel_perm = p2.battlefield[0]
+    bear_perm = p2.battlefield[1]
+    assert angel_perm.damage_marked == 3  # Serra Angel has flying — takes damage
+    assert bear_perm.damage_marked == 0   # Grizzly Bears has no flying — unaffected
+
+
+def test_hurricane_kills_small_flying_creature(all_cards):
+    hurricane = _get(all_cards, "Hurricane")
+    tiny_flyer = CardDefinition(
+        name="Tiny Flyer",
+        mana_cost="{1}",
+        cmc=1.0,
+        type_line="Creature — Bird",
+        oracle_text="Flying",
+        colors=(),
+        color_identity=(),
+        keywords=("Flying",),
+        produced_mana=(),
+        raw={"name": "Tiny Flyer", "type_line": "Creature — Bird", "power": "1", "toughness": "1"},
+    )
+
+    p1 = PlayerState(name="P1", hand=[hurricane], life=20)
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=tiny_flyer)], life=20)
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Hurricane", target_player_index=1, x_value=2)
+
+    assert result.supported
+    assert p1.life == 18
+    assert p2.life == 18
+    assert len(p2.battlefield) == 0  # 1/1 flyer killed by 2 damage
+
+
+def test_icy_manipulator_taps_target_creature(all_cards):
+    icy = _get(all_cards, "Icy Manipulator")
+    bear = _mk_card("Bear", "Creature — Bear")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=icy)])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Icy Manipulator", target_player_index=1)
+
+    assert result.supported
+    assert p2.battlefield[0].tapped is True
+
+
+def test_illusionary_mask_classifies_supported(all_cards):
+    mask = _get(all_cards, "Illusionary Mask")
+    classification = classify_card(mask)
+    assert classification.supported
+
+
+def test_illusionary_mask_activation_creates_face_down_creature(all_cards):
+    mask = _get(all_cards, "Illusionary Mask")
+    grizzly = _get(all_cards, "Grizzly Bears")
+
+    p1 = PlayerState(name="P1", hand=[grizzly], battlefield=[Permanent(card=mask)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Illusionary Mask", target_player_index=1)
+
+    assert result.supported
+    face_down = next(
+        (perm for perm in p1.battlefield if perm.metadata.get("face_down")),
+        None,
+    )
+    assert face_down is not None
+    assert face_down.effective_power == 2
+    assert face_down.effective_toughness == 2
+
+
+def test_instill_energy_grants_haste_to_enchanted_creature(all_cards):
+    instill = _get(all_cards, "Instill Energy")
+    grizzly = _get(all_cards, "Grizzly Bears")
+
+    p1 = PlayerState(name="P1", hand=[instill], battlefield=[Permanent(card=grizzly)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    grizzly_perm = p1.battlefield[0]
+    grizzly_perm.metadata["summoning_sickness_turn"] = game.turn
+
+    result = game.cast_from_hand(0, "Instill Energy", target_player_index=0)
+    assert result.supported
+
+    # The creature should be able to attack despite summoning sickness due to Instill Energy's haste grant
+    assert game.can_attack(grizzly_perm, defending_player_index=1) is True
+
+
+def test_instill_energy_untap_ability(all_cards):
+    instill = _get(all_cards, "Instill Energy")
+    grizzly = _get(all_cards, "Grizzly Bears")
+
+    p1 = PlayerState(name="P1", hand=[instill], battlefield=[Permanent(card=grizzly, tapped=True)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Instill Energy", target_player_index=0)
+    assert result.supported
+
+    grizzly_perm = p1.battlefield[0]
+    assert grizzly_perm.tapped is True
+
+    activate_result = game.activate_permanent_ability(0, "Instill Energy", target_player_index=0)
+    assert activate_result.supported
+    assert grizzly_perm.tapped is False
