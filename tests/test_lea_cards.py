@@ -18,21 +18,6 @@ def _make_test(name, idx):
 
 # List of LEA cards that lacked tests when this file was generated
 _UNTESTED = [
-"Hurloon Minotaur",
-"Hurricane",
-"Icy Manipulator",
-"Illusionary Mask",
-"Instill Energy",
-"Invisibility",
-"Iron Star",
-"Ironclaw Orcs",
-"Ironroot Treefolk",
-"Island Sanctuary",
-"Ivory Cup",
-"Jade Monolith",
-"Jump",
-"Karma",
-"Kudzu",
 "Ley Druid",
 "Lich",
 "Lifeforce",
@@ -4039,3 +4024,168 @@ def test_instill_energy_untap_ability(all_cards):
     activate_result = game.activate_permanent_ability(0, "Instill Energy", target_player_index=0)
     assert activate_result.supported
     assert grizzly_perm.tapped is False
+
+
+def test_invisibility_only_blockable_by_walls(all_cards):
+    invis = _get(all_cards, "Invisibility")
+    grizzly = _get(all_cards, "Grizzly Bears")
+
+    p1 = PlayerState(name="P1", hand=[invis], battlefield=[Permanent(card=grizzly)])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=grizzly)], life=20)
+    game = Game(players=[p1, p2])
+
+    cast_result = game.cast_from_hand(0, "Invisibility", target_player_index=0)
+    assert cast_result.supported
+
+    game.active_player_index = 0
+    game.current_turn_phase = "combat"
+    game.current_step = "declare_attackers"
+    game.current_phase = "combat"
+
+    ok, _ = game.declare_attackers(0, [0], defending_player_index=1)
+    assert ok
+    game.current_step = "declare_blockers"
+
+    blockers = choose_combat_blockers(game, 1)
+    # Non-wall Grizzly Bears should not be able to block a creature with Invisibility
+    assert blockers == {}
+
+
+def test_iron_star_gains_life_on_red_spell(all_cards):
+    star = _get(all_cards, "Iron Star")
+    lightning_bolt = _get(all_cards, "Lightning Bolt")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=star)], life=20)
+    p2 = PlayerState(name="P2", hand=[lightning_bolt], life=20)
+    game = Game(players=[p1, p2])
+
+    game.cast_from_hand(1, "Lightning Bolt", target_player_index=1)
+
+    # Iron Star should have triggered: P1 gains 1 life
+    assert p1.life == 21
+
+
+def test_ironclaw_orcs_cannot_block_power_2_or_greater(all_cards):
+    orcs = _get(all_cards, "Ironclaw Orcs")
+    grizzly = _get(all_cards, "Grizzly Bears")  # 2/2
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=grizzly)])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=orcs)], life=20)
+    game = Game(players=[p1, p2])
+
+    game.active_player_index = 0
+    game.current_turn_phase = "combat"
+    game.current_step = "declare_attackers"
+    game.current_phase = "combat"
+
+    ok, _ = game.declare_attackers(0, [0], defending_player_index=1)
+    assert ok
+    game.current_step = "declare_blockers"
+
+    # Ironclaw Orcs cannot block a creature with power 2 or greater
+    assert game._can_block_attacker(p2.battlefield[0], p1.battlefield[0]) is False
+
+
+def test_ironroot_treefolk_classifies_supported(all_cards):
+    treefolk = _get(all_cards, "Ironroot Treefolk")
+    assert classify_card(treefolk).supported
+
+
+def test_ivory_cup_triggers_on_white_spell(all_cards):
+    cup = _get(all_cards, "Ivory Cup")
+    salve = _get(all_cards, "Healing Salve")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=cup)], life=20)
+    p2 = PlayerState(name="P2", hand=[salve])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(1, "Healing Salve", target_player_index=1)
+
+    assert result.supported
+    assert p1.life == 21
+
+
+def test_jade_monolith_redirects_damage_to_controller(all_cards):
+    monolith = _get(all_cards, "Jade Monolith")
+    bear = _mk_card("Bear", "Creature — Bear")
+    bolt = _mk_card("Bolt Test", "Instant", "Bolt Test deals 3 damage to any target.")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=monolith)], life=20)
+    p2 = PlayerState(name="P2", hand=[bolt], battlefield=[Permanent(card=bear)], life=20)
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Jade Monolith", target_player_index=1)
+    assert result.supported
+
+    result2 = game.cast_from_hand(1, "Bolt Test", target_player_index=1, target_permanent_index=0)
+    assert result2.supported
+    assert len(p2.battlefield) == 1  # bear survives (damage redirected)
+    assert p1.life == 17             # monolith controller took 3 damage
+    assert p2.life == 20
+
+
+def test_jump_grants_flying_until_eot(all_cards):
+    jump = _get(all_cards, "Jump")
+    bear = _mk_card("Bear", "Creature — Bear")
+
+    p1 = PlayerState(name="P1", hand=[jump])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Jump", target_player_index=1)
+
+    assert result.supported
+    assert p2.battlefield[0].metadata.get("gains_flying_until_eot") is True
+
+
+def test_karma_deals_damage_based_on_swamps(all_cards):
+    karma = _get(all_cards, "Karma")
+    swamp = _get(all_cards, "Swamp")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=karma)])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=swamp), Permanent(card=swamp)], life=20)
+    game = Game(players=[p1, p2])
+
+    game.resolve_upkeep(1)
+
+    assert p2.life == 18
+
+
+def test_kudzu_destroys_land_when_tapped(all_cards):
+    kudzu = _get(all_cards, "Kudzu")
+    plains = _get(all_cards, "Plains")
+    forest = _get(all_cards, "Forest")
+
+    p1 = PlayerState(name="P1", hand=[kudzu])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=plains), Permanent(card=forest)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Kudzu", target_player_index=1, target_permanent_index=0)
+    assert result.supported
+
+    game.tap_land_for_mana(1, "Plains")
+
+    assert not any(perm.card.name == "Plains" for perm in p2.battlefield)
+    kudzu_perm = next((perm for perm in p1.battlefield if perm.card.name == "Kudzu"), None)
+    assert kudzu_perm is not None
+    assert kudzu_perm.metadata.get("attached_to") is not None
+
+
+def test_island_sanctuary_grants_protection_after_skipping_draw(all_cards):
+    sanctuary = _get(all_cards, "Island Sanctuary")
+    grizzly = _get(all_cards, "Grizzly Bears")
+    island = _get(all_cards, "Island")
+
+    p1 = PlayerState(name="P1", hand=[sanctuary], library=[island])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=grizzly)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Island Sanctuary", target_player_index=0)
+    assert result.supported
+
+    # Resolve draw step — Island Sanctuary causes P1 to skip draw for protection
+    drawn = game.resolve_draw_step(0)
+    assert drawn == 0
+
+    # Non-flying, non-islandwalk Grizzly Bears cannot attack P1
+    assert game.can_attack(p2.battlefield[0], defending_player_index=0) is False

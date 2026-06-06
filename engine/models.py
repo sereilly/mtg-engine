@@ -75,6 +75,7 @@ class PlayerState:
     has_no_max_hand_size: bool = False
     can_spend_white_as_red: bool = False
     channel_active_until_eot: bool = False
+    island_sanctuary_protected: bool = False
 
     def draw(self, count: int = 1) -> int:
         actual = 0

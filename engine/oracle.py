@@ -110,6 +110,7 @@ SUPPORTED_SPELL_PATTERNS = (
     "at the beginning of the chosen player's upkeep",
     "enchant creature",
     "enchant land",
+    "target creature gains flying until end of turn",
     "enchant artifact",
     "has swampwalk",
     "has forestwalk",
@@ -621,6 +622,9 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
     if activated and "deals 2 damage to any target and 3 damage to you" in text:
         return _instruction("deal_damage_and_self_damage", amount=2, self_damage=3), "activated_damage"
 
+    if "deals damage" in text and "equal to the number of swamps" in text:
+        return _instruction("deal_damage_equal_to_swamps"), "upkeep_effect"
+
     dmg_match = re.search(r"deals (\d+) damage", text)
     if dmg_match:
         effect_kind = "activated_damage" if activated else "spell_pattern"
@@ -687,6 +691,10 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
 
     if "target creature gains trample and gets +x/+0 until end of turn" in text:
         return _instruction("berserk_pump"), "spell_pattern"
+
+    if "target creature gains flying until end of turn" in text:
+        ek = "activated_keyword" if activated else "spell_pattern"
+        return _instruction("grant_target_flying_until_eot"), ek
 
     _pump_target_x_match = re.search(r"target creature gets \+(x|\d+)/\+(x|\d+) until end of turn", text)
     if _pump_target_x_match:
@@ -826,6 +834,9 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
 
     if activated and "the next 1 damage that would be dealt to this creature this turn is dealt to its owner instead" in text:
         return _instruction("redirect_one_damage_to_owner"), "activated_prevent"
+
+    if activated and "next time a source of your choice would deal damage to target creature this turn" in text:
+        return _instruction("jade_monolith_redirect"), "activated_prevent"
 
     if activated and "this artifact becomes a 3/6 golem artifact creature until end of combat" in text:
         return _instruction("animate_self_until_end_of_combat", power=3, toughness=6), "activated_animate"
@@ -1058,6 +1069,8 @@ def _parse_creature_program(
                 instructions.append(OracleInstruction("cant_attack"))
             elif normalized == "this creature can't block":
                 instructions.append(OracleInstruction("cant_block"))
+            elif normalized == "this creature can't block creatures with power 2 or greater":
+                instructions.append(OracleInstruction("cant_block_power_2_or_greater"))
             else:
                 instructions.append(OracleInstruction("static_line", normalized))
             static_lines.append(normalized)

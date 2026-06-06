@@ -21,7 +21,7 @@ _EOT_METADATA_KEYS = (
 # Map: artifact name → (color that triggers it, life gained)
 _COLOR_ROD_TRIGGERS: dict[str, tuple[str, int]] = {
     "Crystal Rod": ("U", 1),
-    "Iron Star": ("W", 1),
+    "Iron Star": ("R", 1),
     "Ivory Cup": ("W", 1),
     "Throne of Bone": ("B", 1),
     "Wooden Sphere": ("G", 1),
@@ -1215,6 +1215,14 @@ class Game:
             if target_perm_idx is not None and isinstance(target_perm_idx, int) and 0 <= target_perm_idx < len(target.battlefield):
                 # Damage targets a creature permanent, not the player
                 target_perm = target.battlefield[target_perm_idx]
+                redirect_idx = target_perm.metadata.pop("redirect_damage_to_player", None)
+                if redirect_idx is not None and 0 <= redirect_idx < len(self.players):
+                    redirect_player = self.players[redirect_idx]
+                    d = self._prevent_damage(redirect_player, damage)
+                    if d > 0:
+                        redirect_player.life -= d
+                    self.log.append(f"Jade Monolith redirected {d} damage to {redirect_player.name}")
+                    return True, "resolved"
                 target_perm.damage_marked += damage
                 effective_toughness = target_perm.effective_toughness
                 self.log.append(f"{card.name} dealt {damage} damage to {target_perm.card.name}")
@@ -1694,6 +1702,28 @@ class Game:
             self.log.append(f"{card.name} gains flying until end of turn")
             return True, "resolved"
 
+        if instruction.kind == "grant_target_flying_until_eot":
+            target_perm_idx = context.target_permanent_index
+            target_creature = None
+            if target_perm_idx is not None and 0 <= target_perm_idx < len(target.battlefield):
+                candidate = target.battlefield[target_perm_idx]
+                if candidate.card.primary_type == "creature":
+                    target_creature = candidate
+            if target_creature is None:
+                target_creature = next((p for p in target.battlefield if p.card.primary_type == "creature"), None)
+            if target_creature is not None:
+                target_creature.metadata["gains_flying_until_eot"] = True
+                self.log.append(f"{target_creature.card.name} gains flying until end of turn from {card.name}")
+            return True, "resolved"
+
+        if instruction.kind == "jade_monolith_redirect":
+            target_creature = next((p for p in target.battlefield if p.card.primary_type == "creature"), None)
+            if target_creature is not None:
+                caster_idx = self.players.index(caster)
+                target_creature.metadata["redirect_damage_to_player"] = caster_idx
+                self.log.append(f"Jade Monolith marks {target_creature.card.name} for damage redirect to {caster.name}")
+            return True, "resolved"
+
         if instruction.kind == "grant_banding_to_target":
             target_creature = next((perm for perm in target.battlefield if perm.card.primary_type == "creature"), None)
             if target_creature is None:
@@ -2148,6 +2178,19 @@ class Game:
                         if damage > 0:
                             victim.life -= damage
                         self.log.append(f"{permanent.card.name} dealt {damage} upkeep damage to {victim.name}")
+                        break
+
+                    if cond == "upkeep_each" and kind == "deal_damage_equal_to_swamps":
+                        victim = self.players[player_index]
+                        swamp_count = sum(
+                            1 for perm in victim.battlefield
+                            if "swamp" in perm.card.type_line.lower()
+                            or perm.metadata.get("land_type_override") == "swamp"
+                        )
+                        damage = self._prevent_damage(victim, swamp_count)
+                        if damage > 0:
+                            victim.life -= damage
+                        self.log.append(f"{permanent.card.name} dealt {damage} damage to {victim.name} ({swamp_count} swamps)")
                         break
 
                     if cond == "upkeep_enchanted_controller" and kind == "deal_damage":
@@ -2712,6 +2755,17 @@ class Game:
 
         if "cant_be_blocked_by_walls" in attacker_kinds and "wall" in blocker.card.type_line.lower():
             return False
+
+        # Invisibility: attacker can only be blocked by Walls
+        if attacker.metadata.get("only_blockable_by_walls") and "wall" not in blocker.card.type_line.lower():
+            return False
+
+        # Ironclaw Orcs: blocker can't block creatures with power 2 or greater
+        blocker_program = compile_card_oracle(blocker.card)
+        if any(i.kind == "cant_block_power_2_or_greater" for i in blocker_program.instructions):
+            if attacker.effective_power >= 2:
+                return False
+
         return True
 
     def _destroy_marked_creatures(self) -> None:
@@ -3037,6 +3091,15 @@ class Game:
 
         if "Defender" in attacker.card.keywords and not attacker.metadata.get("can_attack_as_though_no_defender"):
             return False
+
+        # Island Sanctuary: defending player is protected from non-flying, non-islandwalk attackers
+        defending = self.players[defending_player_index]
+        if defending.island_sanctuary_protected:
+            has_flying = self._has_keyword(attacker, "flying")
+            has_islandwalk = attacker.metadata.get("has_islandwalk") or "Islandwalk" in attacker.card.keywords
+            if not (has_flying or has_islandwalk):
+                return False
+
         return True
 
     def _must_attack_if_able(self, attacker: Permanent) -> bool:
@@ -3051,6 +3114,17 @@ class Game:
         self._set_phase_and_step(phase, step)
         self._on_step_or_phase_begin(phase, step)
         player = self.players[player_index]
+
+        # Island Sanctuary: AI always skips the draw to gain protection from non-flying/non-islandwalk attackers
+        has_sanctuary = any(perm.card.name == "Island Sanctuary" for perm in player.battlefield)
+        if has_sanctuary:
+            player.island_sanctuary_protected = True
+            self.log.append(f"{player.name} skipped draw (Island Sanctuary active)")
+            if self._receives_priority(step):
+                self._resolve_priority_window()
+            self._on_step_or_phase_end(phase, step)
+            return 0
+
         bonus = 0
         for controller in self.players:
             for permanent in controller.battlefield:
@@ -3096,6 +3170,8 @@ class Game:
         self._set_phase_and_step(phase, step)
         self._on_step_or_phase_begin(phase, step)
         player = self.players[player_index]
+        # Island Sanctuary protection lasts until the player's next turn begins
+        player.island_sanctuary_protected = False
         all_permanents = [perm for pl in self.players for perm in pl.battlefield]
 
         if any(perm.card.name == "Stasis" for perm in all_permanents):
@@ -3215,6 +3291,22 @@ class Game:
             player.mana_pool["R"] = player.mana_pool.get("R", 0) + 1
 
         self.log.append(f"{player.name} tapped {land_name} for mana")
+
+        # Kudzu: destroy enchanted land when tapped, then re-attach to another land
+        aura = land.metadata.get("attached_aura")
+        if aura is not None and aura.card.name == "Kudzu":
+            land_idx = resolved[0]
+            player.battlefield.pop(land_idx)
+            player.graveyard.append(land.card)
+            aura.metadata.pop("attached_to", None)
+            land.metadata.pop("attached_aura", None)
+            self.log.append(f"Kudzu destroyed {land_name}")
+            next_land = next((p for p in player.battlefield if p.card.primary_type == "land"), None)
+            if next_land is not None:
+                aura.metadata["attached_to"] = next_land
+                next_land.metadata["attached_aura"] = aura
+                self.log.append(f"Kudzu attached to {next_land.card.name}")
+
         return True
 
     def end_combat(self, step_already_started: bool = False) -> None:
@@ -3452,6 +3544,11 @@ class Game:
             if "can attack as though it had haste" in text:
                 target_creature.metadata["gains_haste"] = True
                 self.log.append(f"{target_creature.card.name} gains haste from {aura_permanent.card.name}")
+
+            # Invisibility: enchanted creature can't be blocked except by Walls
+            if "can't be blocked except by walls" in text:
+                target_creature.metadata["only_blockable_by_walls"] = True
+                self.log.append(f"{target_creature.card.name} can only be blocked by Walls")
 
             # Attach the aura to the creature
             aura_permanent.metadata["attached_to"] = target_creature
