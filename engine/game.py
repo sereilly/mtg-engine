@@ -2786,6 +2786,15 @@ class Game:
             valid_blockers[blocker_idx] = attacker_idx
         self.combat_blockers = valid_blockers
 
+        # Preserve "was ever blocked" state: once a creature is blocked it stays
+        # blocked through the entire combat damage phase even if its blocker dies
+        # (e.g. killed by first-strike damage in the first pass).
+        was_blocked = {
+            idx: perm.blocked
+            for idx, perm in enumerate(active.battlefield)
+            if perm.blocked
+        }
+
         for player in self.players:
             for permanent in player.battlefield:
                 permanent.attacking = False
@@ -2798,7 +2807,9 @@ class Game:
             attacker = active.battlefield[attacker_idx]
             attacker.attacking = True
             attacker.defending_player_index = defending_idx
-            attacker.blocked = any(value == attacker_idx for value in self.combat_blockers.values())
+            attacker.blocked = was_blocked.get(attacker_idx, False) or any(
+                value == attacker_idx for value in self.combat_blockers.values()
+            )
 
         for blocker_idx, attacker_idx in self.combat_blockers.items():
             blocker = defender.battlefield[blocker_idx]
@@ -3078,6 +3089,11 @@ class Game:
             power_left = attacker.effective_power
             if not blockers:
                 if self.combat_damage_prevented_until_eot:
+                    continue
+                # A creature that was declared blocked (e.g. its blocker died to
+                # first-strike damage) is still "blocked" — it cannot deal damage
+                # to the defending player unless it has trample.
+                if attacker.blocked and not self._has_keyword(attacker, "trample"):
                     continue
                 damage = self._prevent_damage(defender, power_left)
                 if damage > 0:

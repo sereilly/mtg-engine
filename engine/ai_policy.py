@@ -47,6 +47,8 @@ def choose_cast_action(game: Game, player_index: int) -> CastAction | None:
 
         target = _choose_target_for_spell(card, player_index, game)
         x_value = _pick_x_value(game, player, card)
+        if x_value == 0:
+            continue
         tap_indices: tuple[int, ...] = ()
 
         if game.enforce_mana_costs and card.primary_type != "land":
@@ -192,6 +194,8 @@ def choose_combat_instant_cast_action(game: Game, player_index: int) -> CastActi
 
         target = _choose_target_for_spell(card, player_index, game)
         x_value = _pick_x_value(game, player, card)
+        if x_value == 0:
+            continue
         tap_indices: tuple[int, ...] = ()
 
         if game.enforce_mana_costs:
@@ -316,10 +320,32 @@ def _estimated_incoming_player_damage(game: Game, defending_player_index: int) -
 
 def _can_cast_with_targets(game: Game, caster_index: int, card: CardDefinition) -> bool:
     opponent = game.players[1 - caster_index]
-    if card.name == "Unsummon":
-        return any(perm.card.primary_type == "creature" for perm in opponent.battlefield)
-    if card.name == "Disenchant":
-        return any(perm.card.primary_type in {"artifact", "enchantment"} for perm in opponent.battlefield)
+    caster = game.players[caster_index]
+
+    program = compile_card_oracle(card)
+    for instruction in program.instructions:
+        kind = instruction.kind
+
+        if kind == "bounce_target_creature":
+            return any(perm.card.primary_type == "creature" for perm in opponent.battlefield)
+
+        if kind == "destroy_target_permanent":
+            type_filter = instruction.payload.get("type_filter")
+            color_filter = instruction.payload.get("color_filter")
+            if type_filter or color_filter:
+                text = card.oracle_text.lower()
+                if "target artifact or enchantment" in text:
+                    return any(perm.card.primary_type in {"artifact", "enchantment"} for perm in opponent.battlefield)
+                return any(
+                    (not type_filter or perm.card.primary_type == type_filter)
+                    and (not color_filter or color_filter in perm.card.colors)
+                    for perm in opponent.battlefield
+                )
+
+        if kind in {"pump_target_creature_until_eot", "grant_regeneration_to_target_creature",
+                    "grant_target_flying_until_eot", "berserk_pump"}:
+            return any(perm.card.primary_type == "creature" for perm in caster.battlefield)
+
     return True
 
 
