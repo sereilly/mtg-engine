@@ -18,12 +18,10 @@ def _make_test(name, idx):
 
 # List of LEA cards that lacked tests when this file was generated
 _UNTESTED = [
-"Flight",
 "Gauntlet of Might",
 "Giant Growth",
 "Giant Spider",
 "Goblin King",
-"Gray Ogre",
 "Green Ward",
 "Guardian Angel",
 "Hill Giant",
