@@ -76,11 +76,16 @@ class PlayerState:
     can_spend_white_as_red: bool = False
     channel_active_until_eot: bool = False
     island_sanctuary_protected: bool = False
+    lost: bool = False
+    drew_from_empty: bool = False
 
     def draw(self, count: int = 1) -> int:
         actual = 0
         for _ in range(count):
             if not self.library:
+                # 704.5b: track attempt to draw from empty library
+                if count > actual:
+                    self.drew_from_empty = True
                 break
             self.hand.append(self.library.pop(0))
             actual += 1

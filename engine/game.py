@@ -135,6 +135,7 @@ class Game:
         self._set_phase_and_step(self.current_turn_phase, self.current_step)
         if self._receives_priority(self.current_step):
             self.start_priority_window(self.active_player_index)
+        self.check_state_based_actions()
 
     def _find_controlled_permanent(
         self,
@@ -600,6 +601,7 @@ class Game:
             return queued
 
         self.resolve_stack()
+        self.check_state_based_actions()
         self.clear_priority_window()
         return SimulationResult(queued.card_name, True, queued.effect_kind, "resolved")
 
@@ -1458,7 +1460,7 @@ class Game:
                         permanent.tapped = True
                         survivors.append(permanent)
                     elif permanent.card.primary_type == "creature":
-                        player.graveyard.append(permanent.card)
+                        self._permanent_to_graveyard(player, permanent)
                     else:
                         survivors.append(permanent)
                 player.battlefield = survivors
@@ -2723,6 +2725,8 @@ class Game:
             return True
         if lower_keyword == "haste" and permanent.metadata.get("gains_haste", False):
             return True
+        if lower_keyword == "deathtouch" and permanent.metadata.get("has_deathtouch", False):
+            return True
         # Fall back to oracle program static lines (e.g. test cards that put keyword in oracle_text)
         program = compile_card_oracle(permanent.card)
         return any(
@@ -2857,6 +2861,11 @@ class Game:
 
         return True
 
+    def _permanent_to_graveyard(self, player: PlayerState, permanent: Permanent) -> None:
+        """Move a permanent to the graveyard. Tokens (704.5d) cease to exist instead."""
+        if not permanent.metadata.get("is_token", False):
+            player.graveyard.append(permanent.card)
+
     def _destroy_marked_creatures(self) -> None:
         for player in self.players:
             survivors: list[Permanent] = []
@@ -2864,19 +2873,242 @@ class Game:
                 if permanent.card.primary_type != "creature":
                     survivors.append(permanent)
                     continue
-                if permanent.damage_marked < permanent.effective_toughness:
+                # 704.5g: lethal damage; 704.5h: any damage from deathtouch source
+                has_lethal = permanent.damage_marked >= permanent.effective_toughness
+                has_deathtouch_hit = (
+                    permanent.metadata.get("received_deathtouch", False)
+                    and permanent.damage_marked > 0
+                    and permanent.effective_toughness > 0
+                )
+                if not has_lethal and not has_deathtouch_hit:
                     survivors.append(permanent)
                     continue
                 if permanent.regeneration_shield > 0:
                     permanent.regeneration_shield -= 1
                     permanent.damage_marked = 0
                     permanent.tapped = True
+                    permanent.metadata.pop("received_deathtouch", None)
                     survivors.append(permanent)
                     continue
-                player.graveyard.append(permanent.card)
+                self._permanent_to_graveyard(player, permanent)
                 self.log.append(f"{permanent.card.name} died from combat damage")
                 self._trigger_aura_death_effects(permanent, player)
             player.battlefield = survivors
+        # Clear deathtouch flags from surviving creatures
+        for player in self.players:
+            for perm in player.battlefield:
+                perm.metadata.pop("received_deathtouch", None)
+
+    def check_state_based_actions(self) -> bool:
+        """Check and apply all state-based actions per CR 704. Returns True if any action fired."""
+        any_changed = False
+        changed = True
+        while changed:
+            changed = False
+
+            # 704.5a: player with 0 or less life loses the game
+            for player in self.players:
+                if not player.lost and player.life <= 0:
+                    player.lost = True
+                    self.log.append(f"{player.name} lost the game (704.5a: 0 or less life)")
+                    changed = True
+
+            # 704.5b: player who attempted to draw from empty library loses
+            for player in self.players:
+                if player.drew_from_empty:
+                    player.drew_from_empty = False
+                    if not player.lost:
+                        player.lost = True
+                        self.log.append(f"{player.name} lost the game (704.5b: drew from empty library)")
+                    changed = True
+
+            # 704.5d: tokens in non-battlefield zones cease to exist
+            for player in self.players:
+                # Tokens that somehow ended up in graveyard/hand/exile cease to exist
+                player.graveyard = [c for c in player.graveyard if not getattr(c, "_is_token", False)]
+
+            # 704.5f: creature with toughness 0 or less → graveyard (regeneration cannot replace)
+            for player in self.players:
+                survivors: list[Permanent] = []
+                for perm in player.battlefield:
+                    raw_t = str(perm.card.raw.get("toughness", "0"))
+                    has_fixed_toughness = raw_t.lstrip("-").isdigit()
+                    has_dynamic_toughness = not has_fixed_toughness and "absolute_toughness" not in perm.metadata
+                    if perm.card.primary_type == "creature" and not has_dynamic_toughness and perm.effective_toughness < 0:
+                        self._permanent_to_graveyard(player, perm)
+                        self.log.append(f"{perm.card.name} died (704.5f: toughness {perm.effective_toughness})")
+                        self._trigger_aura_death_effects(perm, player)
+                        changed = True
+                    else:
+                        survivors.append(perm)
+                player.battlefield = survivors
+
+            # 704.5i: planeswalker with 0 loyalty → graveyard
+            for player in self.players:
+                survivors = []
+                for perm in player.battlefield:
+                    if "Planeswalker" in perm.card.type_line:
+                        loyalty = perm.metadata.get("loyalty")
+                        if loyalty is not None and loyalty <= 0:
+                            self._permanent_to_graveyard(player, perm)
+                            self.log.append(f"{perm.card.name} went to graveyard (704.5i: 0 loyalty)")
+                            changed = True
+                            continue
+                    survivors.append(perm)
+                player.battlefield = survivors
+
+            # 704.5j: legend rule — same player controlling two legendaries with same name
+            for player in self.players:
+                legendary_by_name: dict[str, list[int]] = {}
+                for idx, perm in enumerate(player.battlefield):
+                    if "Legendary" in perm.card.type_line:
+                        legendary_by_name.setdefault(perm.card.name, []).append(idx)
+                for name, indices in legendary_by_name.items():
+                    if len(indices) > 1:
+                        # Keep first; put the rest in graveyard
+                        for idx in sorted(indices[1:], reverse=True):
+                            removed = player.battlefield.pop(idx)
+                            self._permanent_to_graveyard(player, removed)
+                            self.log.append(f"{name} put into graveyard (704.5j: legend rule)")
+                        changed = True
+
+            # 704.5k: world rule — keep only the most recently timestamped world permanent
+            world_perms: list[tuple[PlayerState, int, Permanent]] = []
+            for player in self.players:
+                for idx, perm in enumerate(player.battlefield):
+                    if "World" in perm.card.type_line:
+                        world_perms.append((player, idx, perm))
+            if len(world_perms) > 1:
+                # Keep last (most recent timestamp = highest position), remove rest
+                for player, idx, perm in world_perms[:-1]:
+                    if perm in player.battlefield:
+                        player.battlefield.remove(perm)
+                        self._permanent_to_graveyard(player, perm)
+                        self.log.append(f"{perm.card.name} put into graveyard (704.5k: world rule)")
+                changed = True
+
+            # 704.5m: Aura/Role not attached to a legal object → graveyard
+            for player in self.players:
+                survivors = []
+                for perm in player.battlefield:
+                    if "Aura" not in perm.card.type_line and "Role" not in perm.card.type_line:
+                        survivors.append(perm)
+                        continue
+                    if "attached_to" not in perm.metadata:
+                        # Manually placed without tracking — skip 704.5m
+                        survivors.append(perm)
+                        continue
+                    attached_to = perm.metadata.get("attached_to")
+                    if attached_to is None:
+                        self._permanent_to_graveyard(player, perm)
+                        self.log.append(f"{perm.card.name} put into graveyard (704.5m: unattached aura)")
+                        changed = True
+                        continue
+                    on_bf = any(attached_to in p.battlefield for p in self.players)
+                    if not on_bf:
+                        self._permanent_to_graveyard(player, perm)
+                        self.log.append(f"{perm.card.name} put into graveyard (704.5m: enchanted object left battlefield)")
+                        changed = True
+                        continue
+                    survivors.append(perm)
+                player.battlefield = survivors
+
+            # 704.5n: Equipment attached to illegal permanent → becomes unattached (stays on battlefield)
+            for player in self.players:
+                for perm in player.battlefield:
+                    if "Equipment" not in perm.card.type_line:
+                        continue
+                    attached_to = perm.metadata.get("attached_to")
+                    if attached_to is None:
+                        continue
+                    on_bf = any(attached_to in p.battlefield for p in self.players)
+                    if not on_bf:
+                        perm.metadata["attached_to"] = None
+                        self.log.append(f"{perm.card.name} became unattached (704.5n: equipped creature left battlefield)")
+                        changed = True
+
+            # 704.5p: non-Aura, non-Equipment, non-Role permanent in attached state → unattach
+            for player in self.players:
+                for perm in player.battlefield:
+                    if "Aura" in perm.card.type_line or "Equipment" in perm.card.type_line or "Role" in perm.card.type_line:
+                        continue
+                    if perm.metadata.get("attached_to") is not None:
+                        perm.metadata["attached_to"] = None
+                        self.log.append(f"{perm.card.name} became unattached (704.5p: illegal attached state)")
+                        changed = True
+
+            # 704.5q: +1/+1 and -1/-1 counter cancellation
+            for player in self.players:
+                for perm in player.battlefield:
+                    plus = perm.metadata.get("plus_counters", 0)
+                    minus = perm.metadata.get("minus_counters", 0)
+                    if plus > 0 and minus > 0:
+                        cancel = min(plus, minus)
+                        perm.metadata["plus_counters"] = plus - cancel
+                        perm.metadata["minus_counters"] = minus - cancel
+                        self.log.append(f"{perm.card.name}: cancelled {cancel} +1/+1 and -1/-1 counters (704.5q)")
+                        changed = True
+
+            # 704.5r: counter cap enforcement
+            for player in self.players:
+                for perm in player.battlefield:
+                    text = perm.card.oracle_text.lower()
+                    cap_match = re.search(r"can't have more than (\d+) (\w+) counters", text)
+                    if cap_match:
+                        cap = int(cap_match.group(1))
+                        counter_type = cap_match.group(2)
+                        counter_key = f"{counter_type}_counters"
+                        current = perm.metadata.get(counter_key, 0)
+                        if current > cap:
+                            perm.metadata[counter_key] = cap
+                            self.log.append(f"{perm.card.name}: trimmed {counter_type} counters to {cap} (704.5r)")
+                            changed = True
+
+            # 704.5s: Saga at or past final chapter → sacrifice
+            for player in self.players:
+                survivors = []
+                for perm in player.battlefield:
+                    if "Saga" in perm.card.type_line:
+                        lore = perm.metadata.get("lore_counters", 0)
+                        final = perm.metadata.get("final_chapter", 0)
+                        if final > 0 and lore >= final:
+                            self._permanent_to_graveyard(player, perm)
+                            self.log.append(f"{perm.card.name} sacrificed (704.5s: Saga reached final chapter)")
+                            changed = True
+                            continue
+                    survivors.append(perm)
+                player.battlefield = survivors
+
+            # 704.5y: Role rule — per creature per controller, keep only the most recent Role
+            for player in self.players:
+                for perm in player.battlefield:
+                    if perm.card.primary_type != "creature":
+                        continue
+                    # Find all Roles attached to this creature, grouped by controller
+                    roles_by_ctrl: dict[int, list[tuple[int, Permanent]]] = {}
+                    for ctrl_idx, ctrl_player in enumerate(self.players):
+                        for role_idx, role_perm in enumerate(ctrl_player.battlefield):
+                            if "Role" not in role_perm.card.type_line:
+                                continue
+                            if role_perm.metadata.get("attached_to") is not perm:
+                                continue
+                            roles_by_ctrl.setdefault(ctrl_idx, []).append((role_idx, role_perm))
+                    for ctrl_idx, roles in roles_by_ctrl.items():
+                        if len(roles) <= 1:
+                            continue
+                        ctrl_player = self.players[ctrl_idx]
+                        # Keep the last (most recent), remove the rest
+                        for _, role_perm in roles[:-1]:
+                            if role_perm in ctrl_player.battlefield:
+                                ctrl_player.battlefield.remove(role_perm)
+                                self._permanent_to_graveyard(ctrl_player, role_perm)
+                                self.log.append(f"{role_perm.card.name} put into graveyard (704.5y: role rule)")
+                        changed = True
+
+            if changed:
+                any_changed = True
+
+        return any_changed
 
     def declare_attackers(
         self,
@@ -3018,6 +3250,8 @@ class Game:
                     if blocker_idx < len(defending_player.battlefield):
                         blocker = defending_player.battlefield[blocker_idx]
                         lethal = max(0, blocker.effective_toughness - blocker.damage_marked)
+                        if self._has_keyword(attacker, "deathtouch") and lethal > 0:
+                            lethal = 1
                         assign = min(assign, lethal)
                 assignment[attacker_idx] = {blocker_idx: assign}
         return assignment
@@ -3071,7 +3305,8 @@ class Game:
         has_first_strike_pass = bool(attacker_passes)
         run_first_pass = has_first_strike_pass and not self.combat_first_strike_done
 
-        attacker_damage_events: list[tuple[int, int, int]] = []
+        # (defending_idx, blocker_idx, damage, attacker_idx)
+        attacker_damage_events: list[tuple[int, int, int, int]] = []
         defender_damage_events: list[tuple[int, int]] = []
 
         for attacker_idx in sorted(self.combat_attackers):
@@ -3108,6 +3343,8 @@ class Game:
                     continue
                 blocker = defender.battlefield[blocker_idx]
                 lethal = max(0, blocker.effective_toughness - blocker.damage_marked)
+                if self._has_keyword(attacker, "deathtouch") and lethal > 0:
+                    lethal = 1
                 requested_damage = int(requested.get(blocker_idx, 0))
                 if requested_damage < 0:
                     return False, "combat damage assignment cannot be negative"
@@ -3118,7 +3355,7 @@ class Game:
                 assigned_total += requested_damage
                 power_left -= requested_damage
                 if requested_damage > 0:
-                    attacker_damage_events.append((defending_index, blocker_idx, requested_damage))
+                    attacker_damage_events.append((defending_index, blocker_idx, requested_damage, attacker_idx))
 
             if assigned_total > attacker.effective_power:
                 return False, "assigned combat damage exceeds attacker power"
@@ -3141,20 +3378,29 @@ class Game:
             if not run_first_pass and has_first_strike_pass and not participates_in_second_strike(blocker):
                 continue
             attacker.damage_marked += blocker.effective_power
+            # 704.5h: mark attacker if blocker has deathtouch
+            if self._has_keyword(blocker, "deathtouch") and blocker.effective_power > 0:
+                attacker.metadata["received_deathtouch"] = True
 
-        for defending_idx, blocker_idx, damage in attacker_damage_events:
+        for defending_idx, blocker_idx, damage, a_idx in attacker_damage_events:
             if defending_idx >= len(self.players):
                 continue
             defending_player = self.players[defending_idx]
             if blocker_idx < 0 or blocker_idx >= len(defending_player.battlefield):
                 continue
             defending_player.battlefield[blocker_idx].damage_marked += damage
+            # 704.5h: mark blocker if attacker has deathtouch
+            if a_idx < len(attacker_controller.battlefield) and damage > 0:
+                atk = attacker_controller.battlefield[a_idx]
+                if self._has_keyword(atk, "deathtouch"):
+                    defending_player.battlefield[blocker_idx].metadata["received_deathtouch"] = True
 
         total_player_damage = sum(dmg for _, dmg in defender_damage_events)
         for _, damage in defender_damage_events:
             defender.life -= damage
 
         self._destroy_marked_creatures()
+        self.check_state_based_actions()
         self._prune_combat_state()
 
         if total_player_damage > 0:
@@ -3761,6 +4007,8 @@ class Game:
                 None,
             )
             if target_wall:
+                aura_permanent.metadata["attached_to"] = target_wall
+                target_wall.metadata["attached_aura"] = aura_permanent
                 target_wall.metadata["can_attack_as_though_no_defender"] = True
                 self.log.append(f"{target_wall.card.name} can attack as though it didn't have defender")
         elif text.startswith("enchant artifact"):
@@ -3784,14 +4032,14 @@ class Game:
             aura_permanent.metadata["attached_to"] = target_artifact
             target_artifact.metadata["attached_aura"] = aura_permanent
 
-            # If the artifact isn't already a creature, make it an artifact creature
-            if target_artifact.card.primary_type != "creature":
+            # Only animate if this Aura explicitly makes the artifact a creature (e.g. Animate Artifact)
+            if ("it's an artifact creature" in text or "becomes an artifact creature" in text) and target_artifact.card.primary_type != "creature":
                 new_type_line = target_artifact.card.type_line
                 if "creature" not in new_type_line.lower():
                     new_type_line = (new_type_line + " Creature").strip()
 
                 new_raw = dict(target_artifact.card.raw)
-                power = toughness = int(target_artifact.card.cmc)
+                power = toughness = max(1, int(target_artifact.card.cmc))
                 new_raw["power"] = str(power)
                 new_raw["toughness"] = str(toughness)
 
