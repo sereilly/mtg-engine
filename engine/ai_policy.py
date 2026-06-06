@@ -86,6 +86,9 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
         if ability is None or ability.instruction is None:
             continue
 
+        if ability.instruction.kind in {"add_mana", "black_lotus_add_mana"}:
+            continue
+
         target = _choose_target_for_instruction(ability.instruction, player_index, game)
         if ability.instruction.kind == "grant_banding_to_target":
             target_creatures = [perm for perm in game.players[target].battlefield if perm.card.primary_type == "creature"]

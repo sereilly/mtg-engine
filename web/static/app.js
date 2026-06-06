@@ -806,7 +806,13 @@ function cardRequiresTargetPlayer(card) {
 
 function cardRequiresTargetLand(card) {
   if (!card || typeof card === "string") return false;
-  return (card.oracle_text || "").toLowerCase().includes("target land");
+  const text = (card.oracle_text || "").toLowerCase();
+  return text.includes("target land") || text.includes("enchant land");
+}
+
+function cardRequiresTargetCreature(card) {
+  if (!card || typeof card === "string") return false;
+  return (card.oracle_text || "").toLowerCase().includes("enchant creature");
 }
 
 function cardRequiresManaColorChoice(card) {
@@ -913,6 +919,20 @@ function getTargetableLandsForPrompt(state = currentState) {
   return result;
 }
 
+function getTargetableCreaturesForPrompt(state = currentState) {
+  if (!state) return [];
+  const result = [];
+  for (const targetSeat of [0, 1]) {
+    const player = state.players?.[targetSeat];
+    if (!player || !Array.isArray(player.battlefield)) continue;
+    for (const [permanentIndex, permanent] of player.battlefield.entries()) {
+      if (!permanent || !String(permanent.type || "").toLowerCase().includes("creature")) continue;
+      result.push({ targetSeat, permanentIndex, cardName: permanent.name || "Creature", ownerName: player.name || `Seat ${targetSeat}` });
+    }
+  }
+  return result;
+}
+
 function isPendingCastTargetValidForCard(card, { targetSeat = null, zoneKind = "", permanentIndex = null } = {}) {
   if (!pendingCastTarget) return false;
   if (!Number.isInteger(targetSeat)) return false;
@@ -927,6 +947,13 @@ function isPendingCastTargetValidForCard(card, { targetSeat = null, zoneKind = "
     if (!Number.isInteger(permanentIndex)) return false;
     if (!card || typeof card === "string") return false;
     return String(card.type || "").toLowerCase().includes("land");
+  }
+
+  if (pendingCastTarget.targetKind === "creature") {
+    if (zoneKind !== "battlefield") return false;
+    if (!Number.isInteger(permanentIndex)) return false;
+    if (!card || typeof card === "string") return false;
+    return String(card.type || "").toLowerCase().includes("creature");
   }
 
   return false;
@@ -1230,6 +1257,9 @@ function renderActivationPrompt() {
     if (pendingCastTarget.targetKind === "land") {
       body.textContent = "Click a valid land on the battlefield to choose the target.";
       steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
+    } else if (pendingCastTarget.targetKind === "creature") {
+      body.textContent = "Click a valid creature on the battlefield to choose the target.";
+      steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
     } else {
       const players = Array.isArray(currentState?.players) ? currentState.players : [];
       const targetButtons = players
@@ -1456,6 +1486,25 @@ function startCastLandTargetPrompt(card, castAction = "cast") {
   updateActionHint(`Choose a land target for ${cardName}.`);
 }
 
+function startCastCreatureTargetPrompt(card, castAction = "cast") {
+  const cardName = normalizeCardName(card);
+  if (!cardName) return;
+
+  if (getTargetableCreaturesForPrompt().length === 0) {
+    updateActionHint(`No valid creature targets in play for ${cardName}.`, true);
+    return;
+  }
+
+  pendingCastTarget = {
+    card,
+    cardName,
+    targetKind: "creature",
+    castAction,
+  };
+  renderActivationPrompt();
+  updateActionHint(`Choose a creature target for ${cardName}.`);
+}
+
 function startCastXPrompt(card, targetSeat, targetPermanentIndex = null, castAction = "cast") {
   const cardName = normalizeCardName(card);
   if (!cardName) return;
@@ -1483,6 +1532,10 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
 
   if (pending.targetKind === "land" && selectedPermanentIndex === null) {
     updateActionHint("Choose a land in play to target.", true);
+    return;
+  }
+  if (pending.targetKind === "creature" && selectedPermanentIndex === null) {
+    updateActionHint("Choose a creature in play to target.", true);
     return;
   }
 
@@ -2003,6 +2056,11 @@ function createCardElement(card, options = {}) {
 
         if (cardRequiresTargetLand(card)) {
           startCastLandTargetPrompt(card);
+          return;
+        }
+
+        if (cardRequiresTargetCreature(card)) {
+          startCastCreatureTargetPrompt(card);
           return;
         }
 
@@ -2614,6 +2672,14 @@ function initDropZones() {
       if (payload.kind === "hand") {
         const card = findCardInCurrentHand(payload.name);
         beginPendingHandCast(card || payload.name, Number.isInteger(payload.handIndex) ? payload.handIndex : null);
+        if (card && cardRequiresTargetLand(card)) {
+          startCastLandTargetPrompt(card);
+          return;
+        }
+        if (card && cardRequiresTargetCreature(card)) {
+          startCastCreatureTargetPrompt(card);
+          return;
+        }
         if (card && cardRequiresTargetPlayer(card)) {
           startCastTargetPrompt(card);
           return;
@@ -2676,6 +2742,14 @@ function initDropZones() {
       if (payload.kind === "hand") {
         const card = findCardInCurrentHand(payload.name);
         beginPendingHandCast(card || payload.name, Number.isInteger(payload.handIndex) ? payload.handIndex : null);
+        if (card && cardRequiresTargetLand(card)) {
+          startCastLandTargetPrompt(card);
+          return;
+        }
+        if (card && cardRequiresTargetCreature(card)) {
+          startCastCreatureTargetPrompt(card);
+          return;
+        }
         if (card && cardRequiresTargetPlayer(card)) {
           startCastTargetPrompt(card);
           return;
