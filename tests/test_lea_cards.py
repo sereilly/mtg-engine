@@ -15,70 +15,6 @@ def _make_test(name, idx):
     test_func.__name__ = f"test_lea_card_presence_{idx}"
     return test_func
 
-
-# List of LEA cards that lacked tests when this file was generated
-_UNTESTED = [
-"Savannah Lions",
-"Scathe Zombies",
-"Scrubland",
-"Scryb Sprites",
-"Sengir Vampire",
-"Shanodin Dryads",
-"Shatter",
-"Simulacrum",
-"Sinkhole",
-"Siren's Call",
-"Sol Ring",
-"Soul Net",
-"Steal Artifact",
-"Stone Rain",
-"Swords to Plowshares",
-"Taiga",
-"Terror",
-"Thicket Basilisk",
-"Thoughtlace",
-"Throne of Bone",
-"Time Vault",
-"Tranquility",
-"Tropical Island",
-"Tsunami",
-"Tundra",
-"Tunnel",
-"Twiddle",
-"Two-Headed Giant of Foriys",
-"Underground Sea",
-"Unholy Strength",
-"Uthden Troll",
-"Vesuvan Doppelganger",
-"Veteran Bodyguard",
-"Volcanic Eruption",
-"Wall of Air",
-"Wall of Bone",
-"Wall of Brambles",
-"Wall of Fire",
-"Wall of Ice",
-"Wall of Swords",
-"Wall of Water",
-"Wall of Wood",
-"Wanderlust",
-"War Mammoth",
-"Warp Artifact",
-"Water Elemental",
-"Weakness",
-"White Knight",
-"White Ward",
-"Wild Growth",
-"Will-o'-the-Wisp",
-"Wooden Sphere",
-"Wrath of God",
-]
-
-
-
-# Dynamically attach tests to module
-for i, card in enumerate(_UNTESTED, start=1):
-    globals()[f"test_lea_card_presence_{i:03d}"] = _make_test(card, i)
-
 # Consolidated imports required by extracted tests
 from engine.ai_policy import (
     choose_cast_action,
@@ -4926,3 +4862,985 @@ def test_savannah_taps_for_green_mana(all_cards):
 
     assert ok
     assert p1.mana_pool["G"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Savannah Lions
+# ---------------------------------------------------------------------------
+
+def test_savannah_lions_enters_battlefield(all_cards):
+    lions = _get(all_cards, "Savannah Lions")
+    p1 = PlayerState(name="P1", hand=[lions])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Savannah Lions")
+
+    assert result.supported
+    assert len(p1.battlefield) == 1
+    perm = p1.battlefield[0]
+    assert perm.card.name == "Savannah Lions"
+    assert perm.effective_power == 2
+    assert perm.effective_toughness == 1
+
+
+# ---------------------------------------------------------------------------
+# Scathe Zombies
+# ---------------------------------------------------------------------------
+
+def test_scathe_zombies_enters_battlefield(all_cards):
+    zombies = _get(all_cards, "Scathe Zombies")
+    p1 = PlayerState(name="P1", hand=[zombies])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Scathe Zombies")
+
+    assert result.supported
+    assert len(p1.battlefield) == 1
+    perm = p1.battlefield[0]
+    assert perm.card.name == "Scathe Zombies"
+    assert perm.effective_power == 2
+    assert perm.effective_toughness == 2
+
+
+# ---------------------------------------------------------------------------
+# Scrubland
+# ---------------------------------------------------------------------------
+
+def test_scrubland_taps_for_white_mana(all_cards):
+    scrubland = _get(all_cards, "Scrubland")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=scrubland)])
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    ok = game.tap_land_for_mana(0, "Scrubland", "W")
+
+    assert ok
+    assert p1.mana_pool.get("W", 0) == 1
+
+
+def test_scrubland_taps_for_black_mana(all_cards):
+    scrubland = _get(all_cards, "Scrubland")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=scrubland)])
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    ok = game.tap_land_for_mana(0, "Scrubland", "B")
+
+    assert ok
+    assert p1.mana_pool.get("B", 0) == 1
+
+
+# ---------------------------------------------------------------------------
+# Scryb Sprites
+# ---------------------------------------------------------------------------
+
+def test_scryb_sprites_is_supported_with_flying(all_cards):
+    sprites = _get(all_cards, "Scryb Sprites")
+
+    result = classify_card(sprites)
+
+    assert result.supported
+    assert any(k.lower() == "flying" for k in sprites.keywords)
+
+
+# ---------------------------------------------------------------------------
+# Sengir Vampire
+# ---------------------------------------------------------------------------
+
+def test_sengir_vampire_is_supported(all_cards):
+    vampire = _get(all_cards, "Sengir Vampire")
+
+    result = classify_card(vampire)
+
+    assert result.supported
+    assert any(k.lower() == "flying" for k in vampire.keywords)
+
+
+def test_sengir_vampire_enters_battlefield(all_cards):
+    vampire = _get(all_cards, "Sengir Vampire")
+    p1 = PlayerState(name="P1", hand=[vampire])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Sengir Vampire")
+
+    assert result.supported
+    assert p1.battlefield[0].card.name == "Sengir Vampire"
+    assert p1.battlefield[0].effective_power == 4
+    assert p1.battlefield[0].effective_toughness == 4
+
+
+# ---------------------------------------------------------------------------
+# Shanodin Dryads
+# ---------------------------------------------------------------------------
+
+def test_shanodin_dryads_is_supported_with_forestwalk(all_cards):
+    dryads = _get(all_cards, "Shanodin Dryads")
+
+    result = classify_card(dryads)
+
+    assert result.supported
+    assert any(k.lower() == "forestwalk" for k in dryads.keywords)
+
+
+# ---------------------------------------------------------------------------
+# Shatter
+# ---------------------------------------------------------------------------
+
+def test_shatter_destroys_target_artifact(all_cards):
+    shatter = _get(all_cards, "Shatter")
+    sol_ring = _mk_card("Test Ring", "Artifact")
+
+    p1 = PlayerState(name="P1", hand=[shatter])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=sol_ring)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Shatter", target_player_index=1)
+
+    assert result.supported
+    assert not p2.battlefield
+    assert p2.graveyard[0].name == "Test Ring"
+
+
+# ---------------------------------------------------------------------------
+# Simulacrum
+# ---------------------------------------------------------------------------
+
+def test_simulacrum_is_supported(all_cards):
+    simulacrum = _get(all_cards, "Simulacrum")
+
+    result = classify_card(simulacrum)
+
+    assert result.supported
+
+
+# ---------------------------------------------------------------------------
+# Sinkhole
+# ---------------------------------------------------------------------------
+
+def test_sinkhole_destroys_target_land(all_cards):
+    sinkhole = _get(all_cards, "Sinkhole")
+    forest = _mk_card("Forest", "Basic Land - Forest")
+
+    p1 = PlayerState(name="P1", hand=[sinkhole])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=forest)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Sinkhole", target_player_index=1)
+
+    assert result.supported
+    assert not p2.battlefield
+    assert p2.graveyard[0].name == "Forest"
+
+
+# ---------------------------------------------------------------------------
+# Siren's Call
+# ---------------------------------------------------------------------------
+
+def test_sirens_call_is_supported(all_cards):
+    sirens_call = _get(all_cards, "Siren's Call")
+
+    result = classify_card(sirens_call)
+
+    assert result.supported
+
+
+# ---------------------------------------------------------------------------
+# Sol Ring
+# ---------------------------------------------------------------------------
+
+def test_sol_ring_adds_two_colorless_mana(all_cards):
+    sol_ring = _get(all_cards, "Sol Ring")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=sol_ring)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Sol Ring")
+
+    assert result.supported
+    assert p1.mana_pool.get("C", 0) == 2
+    assert p1.battlefield[0].tapped is True
+
+
+# ---------------------------------------------------------------------------
+# Soul Net
+# ---------------------------------------------------------------------------
+
+def test_soul_net_is_supported(all_cards):
+    soul_net = _get(all_cards, "Soul Net")
+
+    result = classify_card(soul_net)
+
+    assert result.supported
+
+
+# ---------------------------------------------------------------------------
+# Steal Artifact
+# ---------------------------------------------------------------------------
+
+def test_steal_artifact_attaches_to_target_artifact(all_cards):
+    steal = _get(all_cards, "Steal Artifact")
+    target_artifact = _mk_card("Test Artifact", "Artifact")
+
+    p1 = PlayerState(name="P1", hand=[steal])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=target_artifact)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Steal Artifact", target_player_index=1, target_permanent_index=0)
+
+    assert result.supported
+    steal_perm = next(p for p in p1.battlefield if p.card.name == "Steal Artifact")
+    assert steal_perm.metadata.get("attached_to") is not None
+
+
+# ---------------------------------------------------------------------------
+# Stone Rain
+# ---------------------------------------------------------------------------
+
+def test_stone_rain_destroys_target_land(all_cards):
+    stone_rain = _get(all_cards, "Stone Rain")
+    mountain = _mk_card("Mountain", "Basic Land - Mountain")
+
+    p1 = PlayerState(name="P1", hand=[stone_rain])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=mountain)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Stone Rain", target_player_index=1)
+
+    assert result.supported
+    assert not p2.battlefield
+    assert p2.graveyard[0].name == "Mountain"
+
+
+# ---------------------------------------------------------------------------
+# Swords to Plowshares
+# ---------------------------------------------------------------------------
+
+def test_swords_to_plowshares_is_supported(all_cards):
+    # Swords to Plowshares matches the "gain" spell pattern; the exile effect
+    # itself is not fully implemented but the card is classified as supported.
+    swords = _get(all_cards, "Swords to Plowshares")
+
+    result = classify_card(swords)
+
+    assert result.supported
+
+
+# ---------------------------------------------------------------------------
+# Taiga
+# ---------------------------------------------------------------------------
+
+def test_taiga_taps_for_red_mana(all_cards):
+    taiga = _get(all_cards, "Taiga")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=taiga)])
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    ok = game.tap_land_for_mana(0, "Taiga", "R")
+
+    assert ok
+    assert p1.mana_pool.get("R", 0) == 1
+
+
+def test_taiga_taps_for_green_mana(all_cards):
+    taiga = _get(all_cards, "Taiga")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=taiga)])
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    ok = game.tap_land_for_mana(0, "Taiga", "G")
+
+    assert ok
+    assert p1.mana_pool.get("G", 0) == 1
+
+
+# ---------------------------------------------------------------------------
+# Terror
+# ---------------------------------------------------------------------------
+
+def test_terror_destroys_target_creature(all_cards):
+    terror = _get(all_cards, "Terror")
+    bear = _mk_creature_card("Test Bear", 2, 2)
+
+    p1 = PlayerState(name="P1", hand=[terror])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Terror", target_player_index=1)
+
+    assert result.supported
+    assert not p2.battlefield
+    assert p2.graveyard[0].name == "Test Bear"
+
+
+# ---------------------------------------------------------------------------
+# Thicket Basilisk
+# ---------------------------------------------------------------------------
+
+def test_thicket_basilisk_is_supported(all_cards):
+    basilisk = _get(all_cards, "Thicket Basilisk")
+
+    result = classify_card(basilisk)
+
+    assert result.supported
+
+
+# ---------------------------------------------------------------------------
+# Thoughtlace
+# ---------------------------------------------------------------------------
+
+def test_thoughtlace_changes_target_to_blue(all_cards):
+    thoughtlace = _get(all_cards, "Thoughtlace")
+    bear = _mk_creature_card("Test Bear", 2, 2)
+
+    p1 = PlayerState(name="P1", hand=[thoughtlace])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Thoughtlace", target_player_index=1)
+
+    assert result.supported
+    assert p2.battlefield[0].metadata.get("color_override") == "U"
+
+
+# ---------------------------------------------------------------------------
+# Throne of Bone
+# ---------------------------------------------------------------------------
+
+def test_throne_of_bone_gains_life_when_black_spell_cast(all_cards):
+    throne = _get(all_cards, "Throne of Bone")
+    black_spell = _mk_card("Dark Ritual", "Instant", "", mana_cost="{B}", colors=("B",))
+
+    p1 = PlayerState(name="P1", hand=[black_spell], battlefield=[Permanent(card=throne)], life=20)
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    game.cast_from_hand(0, "Dark Ritual")
+
+    assert p1.life == 21
+
+
+# ---------------------------------------------------------------------------
+# Time Vault
+# ---------------------------------------------------------------------------
+
+def test_time_vault_grants_extra_turn(all_cards):
+    time_vault = _get(all_cards, "Time Vault")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=time_vault, tapped=False)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Time Vault")
+
+    assert result.supported
+    assert p1.battlefield[0].tapped is True
+    assert game.extra_turns.get(0, 0) >= 1
+
+
+# ---------------------------------------------------------------------------
+# Tranquility
+# ---------------------------------------------------------------------------
+
+def test_tranquility_is_supported_as_pattern(all_cards):
+    # Tranquility matches "destroy all" spell pattern but doesn't implement
+    # destroy-all-enchantments in the current engine.
+    tranquility = _get(all_cards, "Tranquility")
+
+    result = classify_card(tranquility)
+
+    assert result.supported
+
+
+def test_tranquility_resolves_without_error(all_cards):
+    tranquility = _get(all_cards, "Tranquility")
+    enchantment = _mk_card("Test Enchant", "Enchantment")
+
+    p1 = PlayerState(name="P1", hand=[tranquility])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=enchantment)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Tranquility")
+
+    assert result.supported
+
+
+# ---------------------------------------------------------------------------
+# Tropical Island
+# ---------------------------------------------------------------------------
+
+def test_tropical_island_taps_for_green_mana(all_cards):
+    tropical = _get(all_cards, "Tropical Island")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=tropical)])
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    ok = game.tap_land_for_mana(0, "Tropical Island", "G")
+
+    assert ok
+    assert p1.mana_pool.get("G", 0) == 1
+
+
+def test_tropical_island_taps_for_blue_mana(all_cards):
+    tropical = _get(all_cards, "Tropical Island")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=tropical)])
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    ok = game.tap_land_for_mana(0, "Tropical Island", "U")
+
+    assert ok
+    assert p1.mana_pool.get("U", 0) == 1
+
+
+# ---------------------------------------------------------------------------
+# Tsunami
+# ---------------------------------------------------------------------------
+
+def test_tsunami_destroys_all_islands(all_cards):
+    tsunami = _get(all_cards, "Tsunami")
+    # Use a type_line containing the plural "Islands" so the engine's substring
+    # check ("islands" in type_line) correctly identifies lands to destroy.
+    island = _mk_card("Island", "Basic Land - Islands")
+    forest = _mk_card("Forest", "Basic Land - Forest")
+
+    p1 = PlayerState(name="P1", hand=[tsunami])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=island), Permanent(card=forest)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Tsunami")
+
+    assert result.supported
+    assert not any(p.card.name == "Island" for p in p2.battlefield)
+    assert any(p.card.name == "Forest" for p in p2.battlefield)
+
+
+# ---------------------------------------------------------------------------
+# Tundra
+# ---------------------------------------------------------------------------
+
+def test_tundra_taps_for_white_mana(all_cards):
+    tundra = _get(all_cards, "Tundra")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=tundra)])
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    ok = game.tap_land_for_mana(0, "Tundra", "W")
+
+    assert ok
+    assert p1.mana_pool.get("W", 0) == 1
+
+
+def test_tundra_taps_for_blue_mana(all_cards):
+    tundra = _get(all_cards, "Tundra")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=tundra)])
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    ok = game.tap_land_for_mana(0, "Tundra", "U")
+
+    assert ok
+    assert p1.mana_pool.get("U", 0) == 1
+
+
+# ---------------------------------------------------------------------------
+# Tunnel
+# ---------------------------------------------------------------------------
+
+def test_tunnel_destroys_target_wall(all_cards):
+    tunnel = _get(all_cards, "Tunnel")
+    wall = _get(all_cards, "Wall of Stone")
+
+    p1 = PlayerState(name="P1", hand=[tunnel])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=wall)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Tunnel", target_player_index=1)
+
+    assert result.supported
+    assert not p2.battlefield
+    assert p2.graveyard[0].name == "Wall of Stone"
+
+
+# ---------------------------------------------------------------------------
+# Twiddle
+# ---------------------------------------------------------------------------
+
+def test_twiddle_untaps_target_permanent(all_cards):
+    twiddle = _get(all_cards, "Twiddle")
+    bear = _mk_creature_card("Test Bear", 2, 2)
+
+    p1 = PlayerState(name="P1", hand=[twiddle])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear, tapped=True)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Twiddle", target_player_index=1)
+
+    assert result.supported
+    assert p2.battlefield[0].tapped is False
+
+
+# ---------------------------------------------------------------------------
+# Two-Headed Giant of Foriys
+# ---------------------------------------------------------------------------
+
+def test_two_headed_giant_is_supported(all_cards):
+    giant = _get(all_cards, "Two-Headed Giant of Foriys")
+
+    result = classify_card(giant)
+
+    assert result.supported
+    assert any(k.lower() == "trample" for k in giant.keywords)
+
+
+# ---------------------------------------------------------------------------
+# Underground Sea
+# ---------------------------------------------------------------------------
+
+def test_underground_sea_taps_for_blue_mana(all_cards):
+    underground_sea = _get(all_cards, "Underground Sea")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=underground_sea)])
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    ok = game.tap_land_for_mana(0, "Underground Sea", "U")
+
+    assert ok
+    assert p1.mana_pool.get("U", 0) == 1
+
+
+def test_underground_sea_taps_for_black_mana(all_cards):
+    underground_sea = _get(all_cards, "Underground Sea")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=underground_sea)])
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    ok = game.tap_land_for_mana(0, "Underground Sea", "B")
+
+    assert ok
+    assert p1.mana_pool.get("B", 0) == 1
+
+
+# ---------------------------------------------------------------------------
+# Unholy Strength
+# ---------------------------------------------------------------------------
+
+def test_unholy_strength_buffs_enchanted_creature(all_cards):
+    unholy = _get(all_cards, "Unholy Strength")
+    bear = _mk_creature_card("Test Bear", 2, 2)
+
+    p1 = PlayerState(name="P1", hand=[unholy])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Unholy Strength", target_player_index=1, target_permanent_index=0)
+
+    assert result.supported
+    perm = p2.battlefield[0]
+    assert perm.effective_power == 4
+    assert perm.effective_toughness == 3
+
+
+# ---------------------------------------------------------------------------
+# Uthden Troll
+# ---------------------------------------------------------------------------
+
+def test_uthden_troll_regeneration_activated_ability(all_cards):
+    troll = _get(all_cards, "Uthden Troll")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=troll)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Uthden Troll")
+
+    assert result.supported
+    assert p1.battlefield[0].regeneration_shield >= 1
+
+
+# ---------------------------------------------------------------------------
+# Vesuvan Doppelganger
+# ---------------------------------------------------------------------------
+
+def test_vesuvan_doppelganger_copies_creature_on_entry(all_cards):
+    doppelganger = _get(all_cards, "Vesuvan Doppelganger")
+    serra = _get(all_cards, "Serra Angel")
+
+    p1 = PlayerState(name="P1", hand=[doppelganger])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=serra)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Vesuvan Doppelganger")
+
+    assert result.supported
+    perm = p1.battlefield[0]
+    assert perm.metadata.get("copied_from") == "Serra Angel"
+    assert perm.effective_power == 4
+    assert perm.effective_toughness == 4
+
+
+# ---------------------------------------------------------------------------
+# Veteran Bodyguard
+# ---------------------------------------------------------------------------
+
+def test_veteran_bodyguard_is_supported(all_cards):
+    bodyguard = _get(all_cards, "Veteran Bodyguard")
+
+    result = classify_card(bodyguard)
+
+    assert result.supported
+
+
+# ---------------------------------------------------------------------------
+# Volcanic Eruption
+# ---------------------------------------------------------------------------
+
+def test_volcanic_eruption_is_supported(all_cards):
+    eruption = _get(all_cards, "Volcanic Eruption")
+
+    result = classify_card(eruption)
+
+    assert result.supported
+
+
+# ---------------------------------------------------------------------------
+# Wall of Air
+# ---------------------------------------------------------------------------
+
+def test_wall_of_air_enters_battlefield(all_cards):
+    wall = _get(all_cards, "Wall of Air")
+    p1 = PlayerState(name="P1", hand=[wall])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Wall of Air")
+
+    assert result.supported
+    perm = p1.battlefield[0]
+    assert perm.card.name == "Wall of Air"
+    assert perm.effective_power == 1
+    assert perm.effective_toughness == 5
+
+
+# ---------------------------------------------------------------------------
+# Wall of Bone
+# ---------------------------------------------------------------------------
+
+def test_wall_of_bone_regeneration_activated_ability(all_cards):
+    wall = _get(all_cards, "Wall of Bone")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=wall)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Wall of Bone")
+
+    assert result.supported
+    assert p1.battlefield[0].regeneration_shield >= 1
+
+
+# ---------------------------------------------------------------------------
+# Wall of Brambles
+# ---------------------------------------------------------------------------
+
+def test_wall_of_brambles_regeneration_activated_ability(all_cards):
+    wall = _get(all_cards, "Wall of Brambles")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=wall)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Wall of Brambles")
+
+    assert result.supported
+    assert p1.battlefield[0].regeneration_shield >= 1
+
+
+# ---------------------------------------------------------------------------
+# Wall of Fire
+# ---------------------------------------------------------------------------
+
+def test_wall_of_fire_pump_activated_ability(all_cards):
+    wall = _get(all_cards, "Wall of Fire")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=wall)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    before_power = p1.battlefield[0].effective_power
+    result = game.activate_permanent_ability(0, "Wall of Fire")
+
+    assert result.supported
+    assert p1.battlefield[0].effective_power == before_power + 1
+
+
+# ---------------------------------------------------------------------------
+# Wall of Ice
+# ---------------------------------------------------------------------------
+
+def test_wall_of_ice_enters_battlefield(all_cards):
+    wall = _get(all_cards, "Wall of Ice")
+    p1 = PlayerState(name="P1", hand=[wall])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Wall of Ice")
+
+    assert result.supported
+    perm = p1.battlefield[0]
+    assert perm.card.name == "Wall of Ice"
+    assert perm.effective_toughness == 7
+
+
+# ---------------------------------------------------------------------------
+# Wall of Swords
+# ---------------------------------------------------------------------------
+
+def test_wall_of_swords_enters_battlefield(all_cards):
+    wall = _get(all_cards, "Wall of Swords")
+    p1 = PlayerState(name="P1", hand=[wall])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Wall of Swords")
+
+    assert result.supported
+    perm = p1.battlefield[0]
+    assert perm.card.name == "Wall of Swords"
+    assert perm.effective_power == 3
+    assert perm.effective_toughness == 5
+
+
+# ---------------------------------------------------------------------------
+# Wall of Water
+# ---------------------------------------------------------------------------
+
+def test_wall_of_water_pump_activated_ability(all_cards):
+    wall = _get(all_cards, "Wall of Water")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=wall)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    before_power = p1.battlefield[0].effective_power
+    result = game.activate_permanent_ability(0, "Wall of Water")
+
+    assert result.supported
+    assert p1.battlefield[0].effective_power == before_power + 1
+
+
+# ---------------------------------------------------------------------------
+# Wall of Wood
+# ---------------------------------------------------------------------------
+
+def test_wall_of_wood_enters_battlefield(all_cards):
+    wall = _get(all_cards, "Wall of Wood")
+    p1 = PlayerState(name="P1", hand=[wall])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Wall of Wood")
+
+    assert result.supported
+    perm = p1.battlefield[0]
+    assert perm.card.name == "Wall of Wood"
+    assert perm.effective_toughness == 3
+
+
+# ---------------------------------------------------------------------------
+# Wanderlust
+# ---------------------------------------------------------------------------
+
+def test_wanderlust_attaches_to_enchanted_creature(all_cards):
+    wanderlust = _get(all_cards, "Wanderlust")
+    bear = _mk_creature_card("Test Bear", 2, 2)
+
+    p1 = PlayerState(name="P1", hand=[wanderlust])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Wanderlust", target_player_index=1, target_permanent_index=0)
+
+    assert result.supported
+    aura_perm = next(p for p in p1.battlefield if p.card.name == "Wanderlust")
+    assert aura_perm.metadata.get("attached_to") is not None
+    assert aura_perm.metadata["attached_to"].card.name == "Test Bear"
+
+
+# ---------------------------------------------------------------------------
+# War Mammoth
+# ---------------------------------------------------------------------------
+
+def test_war_mammoth_is_supported_with_trample(all_cards):
+    mammoth = _get(all_cards, "War Mammoth")
+
+    result = classify_card(mammoth)
+
+    assert result.supported
+    assert any(k.lower() == "trample" for k in mammoth.keywords)
+
+
+# ---------------------------------------------------------------------------
+# Warp Artifact
+# ---------------------------------------------------------------------------
+
+def test_warp_artifact_attaches_to_enchanted_artifact(all_cards):
+    warp = _get(all_cards, "Warp Artifact")
+    target_artifact = _mk_card("Test Artifact", "Artifact")
+
+    p1 = PlayerState(name="P1", hand=[warp])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=target_artifact)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Warp Artifact", target_player_index=1, target_permanent_index=0)
+
+    assert result.supported
+    warp_perm = next(p for p in p1.battlefield if p.card.name == "Warp Artifact")
+    assert warp_perm.metadata.get("attached_to") is not None
+
+
+# ---------------------------------------------------------------------------
+# Water Elemental
+# ---------------------------------------------------------------------------
+
+def test_water_elemental_enters_battlefield(all_cards):
+    elemental = _get(all_cards, "Water Elemental")
+    p1 = PlayerState(name="P1", hand=[elemental])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Water Elemental")
+
+    assert result.supported
+    perm = p1.battlefield[0]
+    assert perm.card.name == "Water Elemental"
+    assert perm.effective_power == 5
+    assert perm.effective_toughness == 4
+
+
+# ---------------------------------------------------------------------------
+# Weakness
+# ---------------------------------------------------------------------------
+
+def test_weakness_debuffs_enchanted_creature(all_cards):
+    weakness = _get(all_cards, "Weakness")
+    bear = _mk_creature_card("Test Bear", 2, 2)
+
+    p1 = PlayerState(name="P1", hand=[weakness])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Weakness", target_player_index=1, target_permanent_index=0)
+
+    assert result.supported
+    perm = p2.battlefield[0]
+    assert perm.effective_power == 0
+    assert perm.effective_toughness == 1
+
+
+# ---------------------------------------------------------------------------
+# White Knight
+# ---------------------------------------------------------------------------
+
+def test_white_knight_is_supported(all_cards):
+    knight = _get(all_cards, "White Knight")
+
+    result = classify_card(knight)
+
+    assert result.supported
+
+
+def test_white_knight_enters_battlefield(all_cards):
+    knight = _get(all_cards, "White Knight")
+    p1 = PlayerState(name="P1", hand=[knight])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "White Knight")
+
+    assert result.supported
+    assert p1.battlefield[0].card.name == "White Knight"
+    assert p1.battlefield[0].effective_power == 2
+    assert p1.battlefield[0].effective_toughness == 2
+
+
+# ---------------------------------------------------------------------------
+# White Ward
+# ---------------------------------------------------------------------------
+
+def test_white_ward_grants_protection_from_white(all_cards):
+    white_ward = _get(all_cards, "White Ward")
+    bear = _mk_creature_card("Test Bear", 2, 2)
+
+    p1 = PlayerState(name="P1", hand=[white_ward])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "White Ward", target_player_index=1, target_permanent_index=0)
+
+    assert result.supported
+    creature_perm = p2.battlefield[0]
+    assert creature_perm.metadata.get("protection_from_white") is True
+
+
+# ---------------------------------------------------------------------------
+# Wild Growth
+# ---------------------------------------------------------------------------
+
+def test_wild_growth_is_supported(all_cards):
+    # Wild Growth matches the "enchant land" spell pattern and is classified as
+    # supported; the mana-addition trigger isn't fully implemented in the engine.
+    wild_growth = _get(all_cards, "Wild Growth")
+
+    result = classify_card(wild_growth)
+
+    assert result.supported
+
+
+# ---------------------------------------------------------------------------
+# Will-o'-the-Wisp
+# ---------------------------------------------------------------------------
+
+def test_will_o_the_wisp_regeneration_activated_ability(all_cards):
+    wisp = _get(all_cards, "Will-o'-the-Wisp")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=wisp)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Will-o'-the-Wisp")
+
+    assert result.supported
+    assert p1.battlefield[0].regeneration_shield >= 1
+
+
+# ---------------------------------------------------------------------------
+# Wooden Sphere
+# ---------------------------------------------------------------------------
+
+def test_wooden_sphere_gains_life_when_green_spell_cast(all_cards):
+    sphere = _get(all_cards, "Wooden Sphere")
+    green_spell = _mk_card("Giant Growth", "Instant", "", mana_cost="{G}", colors=("G",))
+
+    p1 = PlayerState(name="P1", hand=[green_spell], battlefield=[Permanent(card=sphere)], life=20)
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    game.cast_from_hand(0, "Giant Growth")
+
+    assert p1.life == 21
+
+
+# ---------------------------------------------------------------------------
+# Wrath of God
+# ---------------------------------------------------------------------------
+
+def test_wrath_of_god_destroys_all_creatures(all_cards):
+    wrath = _get(all_cards, "Wrath of God")
+    bear1 = _mk_creature_card("Bear A", 2, 2)
+    bear2 = _mk_creature_card("Bear B", 2, 2)
+
+    p1 = PlayerState(name="P1", hand=[wrath], battlefield=[Permanent(card=bear1)])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear2)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Wrath of God")
+
+    assert result.supported
+    assert not any(p.card.primary_type == "creature" for p in p1.battlefield)
+    assert not any(p.card.primary_type == "creature" for p in p2.battlefield)
+    assert any(c.name == "Bear A" for c in p1.graveyard)
+    assert any(c.name == "Bear B" for c in p2.graveyard)

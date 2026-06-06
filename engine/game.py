@@ -3605,8 +3605,8 @@ class Game:
             if not target_creature:
                 return
 
-            # Handle numeric static buffs like "gets +1/+1" using normalized text
-            buff_match = re.search(r"gets \+(-?\d+)/\+(-?\d+)", text)
+            # Handle numeric static buffs/debuffs like "gets +2/+1" or "gets -2/-1"
+            buff_match = re.search(r"gets ([+-]\d+)/([+-]\d+)", text)
             if buff_match:
                 target_creature.power_bonus += int(buff_match.group(1))
                 target_creature.toughness_bonus += int(buff_match.group(2))
