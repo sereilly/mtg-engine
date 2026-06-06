@@ -50,6 +50,18 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
     image_uris = perm.card.raw.get("image_uris") if isinstance(perm.card.raw, dict) else None
     image_uri = image_uris.get("normal") if isinstance(image_uris, dict) else None
     large_image_uri = image_uris.get("large") if isinstance(image_uris, dict) else None
+
+    # Resolve aura attachment: find the battlefield index and seat of the attached target
+    attached_to = perm.metadata.get("attached_to")
+    attached_to_index: int | None = None
+    attached_to_seat: int | None = None
+    if attached_to is not None:
+        for seat_idx, player in enumerate(game.players):
+            if attached_to in player.battlefield:
+                attached_to_index = player.battlefield.index(attached_to)
+                attached_to_seat = seat_idx
+                break
+
     return {
         "name": perm.card.name,
         "type": perm.card.type_line,
@@ -67,6 +79,9 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         "blocking_attacker_index": perm.blocking_attacker_index,
         "damage_marked": perm.damage_marked,
         "summoning_sick": game._is_summoning_sick(perm),
+        "is_aura": "aura" in perm.card.type_line.lower(),
+        "attached_to_index": attached_to_index,
+        "attached_to_seat": attached_to_seat,
     }
 
 

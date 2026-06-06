@@ -22,6 +22,8 @@ let autoPassTurnEndEnabled = false;
 let autoPassTurnEndInFlight = false;
 let autoPassTurnEndRequestedStateKey = "";
 let autoPassMode = null;
+/** @type {BattlefieldCanvas|null} */
+let battlefieldCanvas = null;
 
 const setupEl = document.getElementById("setup");
 const boardEl = document.getElementById("boardPanel");
@@ -329,84 +331,35 @@ function isOpponentMidAction(state, viewerSeat) {
   return false;
 }
 
-function getCardCenter(cardEl) {
-  if (!cardEl) return null;
-  const rect = cardEl.getBoundingClientRect();
-  return {
-    x: rect.left + rect.width / 2,
-    y: rect.top + rect.height / 2,
-  };
-}
-
-function getZoneCenter(zoneEl) {
-  if (!zoneEl) return null;
-  const rect = zoneEl.getBoundingClientRect();
-  return {
-    x: rect.left + rect.width / 2,
-    y: rect.top + rect.height / 2,
-  };
-}
-
-function clearCombatOverlay() {
-  const overlay = q("combatOverlay");
-  if (!overlay) return;
-  const lines = overlay.querySelectorAll("line");
-  lines.forEach((line) => line.remove());
-  document.querySelectorAll(".card.attacking").forEach((el) => el.classList.remove("attacking"));
-}
-
-function drawCombatArrow(fromPoint, toPoint, kind = "attacker") {
-  const overlay = q("combatOverlay");
-  if (!overlay || !fromPoint || !toPoint) return;
-  const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-  line.setAttribute("x1", String(fromPoint.x));
-  line.setAttribute("y1", String(fromPoint.y));
-  line.setAttribute("x2", String(toPoint.x));
-  line.setAttribute("y2", String(toPoint.y));
-  line.setAttribute("class", kind === "blocker" ? "combat-link-line blocker" : "combat-link-line");
-  overlay.appendChild(line);
-}
-
 function renderCombatOverlay(state = currentState) {
-  clearCombatOverlay();
-  if (!state) return;
+  if (!battlefieldCanvas || !state) return;
   const combat = getCombatState(state);
-  if (!combat) return;
+  const arrows = [];
+  const attackingKeys = new Set();
 
-  const activeSeat = state.current_turn;
-  const defenderSeat = combat.defending_player_index;
-  if (!Number.isInteger(activeSeat) || !Number.isInteger(defenderSeat)) return;
+  if (combat) {
+    const activeSeat = state.current_turn;
+    const defenderSeat = combat.defending_player_index;
 
-  for (const link of getDisplayedAttackerLinks(state)) {
-    const attackerEl = document.querySelector(
-      `.card[data-zone-kind="battlefield"][data-target-seat="${activeSeat}"][data-permanent-index="${link.attacker_index}"]`,
-    );
-    if (attackerEl) {
-      attackerEl.classList.add("attacking");
+    for (const link of getDisplayedAttackerLinks(state)) {
+      attackingKeys.add(`${activeSeat}-${link.attacker_index}`);
+    }
+
+    if (Number.isInteger(defenderSeat)) {
+      for (const link of getDisplayedBlockerLinks(state)) {
+        arrows.push({
+          fromSeat: defenderSeat,
+          fromIdx: link.blocker_index,
+          toSeat: activeSeat,
+          toIdx: link.attacker_index,
+          kind: "blocker",
+        });
+      }
     }
   }
 
-  for (const link of getDisplayedBlockerLinks(state)) {
-    const blockerEl = document.querySelector(
-      `.card[data-zone-kind="battlefield"][data-target-seat="${defenderSeat}"][data-permanent-index="${link.blocker_index}"]`,
-    );
-    const attackerEl = document.querySelector(
-      `.card[data-zone-kind="battlefield"][data-target-seat="${activeSeat}"][data-permanent-index="${link.attacker_index}"]`,
-    );
-    const from = getCardCenter(blockerEl);
-    const to = getCardCenter(attackerEl);
-    if (from && to) {
-      drawCombatArrow(from, to, "blocker");
-    }
-  }
-
-  if (combatDragSource && combatDragSource.sourceEl) {
-    const from = getCardCenter(combatDragSource.sourceEl);
-    const to = combatDragSource.pointer;
-    if (from && to) {
-      drawCombatArrow(from, to, "attacker");
-    }
-  }
+  battlefieldCanvas.setCombatArrows(arrows);
+  battlefieldCanvas.setAttackingKeys(attackingKeys);
 }
 
 function escapeHtml(value) {
@@ -579,6 +532,10 @@ function resetToSetup(message = "Session not found. Start a new game.") {
   previousLifeBySeat = {};
   aiAutoStepInFlight = false;
   aiAutoStepRequestedStateKey = "";
+  if (battlefieldCanvas) {
+    battlefieldCanvas.destroy();
+    battlefieldCanvas = null;
+  }
   showSetupPanel();
   boardEl.classList.add("hidden");
   aiControlsEl?.classList.add("hidden");
@@ -1894,21 +1851,28 @@ function createCardElement(card, options = {}) {
   if (selected) cardEl.classList.add("selected-card");
   if (zoneKind === "hand" && isPendingHandCastCard(card, handIndex)) cardEl.classList.add("casting-card");
 
-  const imageUri = normalizeImageUri(card);
-  if (!hidden && imageUri) {
+  if (hidden) {
     const img = document.createElement("img");
-    img.src = imageUri;
-    img.alt = normalizeCardName(card);
+    img.src = "/images/card_back.webp";
+    img.alt = "Card back";
     cardEl.appendChild(img);
-  }
+  } else {
+    const imageUri = normalizeImageUri(card);
+    if (imageUri) {
+      const img = document.createElement("img");
+      img.src = imageUri;
+      img.alt = normalizeCardName(card);
+      cardEl.appendChild(img);
+    }
 
-  const label = document.createElement("div");
-  label.className = "card-label";
-  const name = normalizeCardName(card) || "Card";
-  const stats = cardStatsLabel(card);
-  const suffix = [stats, subtitle].filter(Boolean).join(" ");
-  label.textContent = suffix ? `${name} ${suffix}` : name;
-  cardEl.appendChild(label);
+    const label = document.createElement("div");
+    label.className = "card-label";
+    const name = normalizeCardName(card) || "Card";
+    const stats = cardStatsLabel(card);
+    const suffix = [stats, subtitle].filter(Boolean).join(" ");
+    label.textContent = suffix ? `${name} ${suffix}` : name;
+    cardEl.appendChild(label);
+  }
 
   if (draggable && dragKind) {
     cardEl.addEventListener("dragstart", (event) => {
@@ -2383,9 +2347,6 @@ function renderBoard(state) {
   const opp = state.players[oppSeat];
   const combat = getCombatState(state);
 
-  q("selfBattlefield").dataset.targetSeat = String(viewerSeat);
-  q("oppBattlefield").dataset.targetSeat = String(oppSeat);
-
   q("selfName").textContent = me.name;
   q("selfName").dataset.targetSeat = String(viewerSeat);
   renderLifePill("selfLife", viewerSeat, me.life);
@@ -2403,16 +2364,16 @@ function renderBoard(state) {
   const hasBlockingPrompt = hasBlockingPromptForAutoPass(state);
   const hasCombatDeclarationPrompt = combatPromptNeedsConfirmation(state);
   const untapInfo = getUntapLandSelectionInfo(state);
-  const selfLane = document.querySelector(".self-lane");
-  const oppLane = document.querySelector(".opponent-lane");
+  const selfHeader = document.querySelector(".self-header");
+  const oppHeader = document.querySelector(".opponent-header");
   setDebugMenuEnabled(sessionId !== null && seat !== null, hasPriority);
   q("endTurnBtn").textContent = autoPassTurnEndEnabled ? "Cancel Auto-Pass" : (isSelfTurn ? "End Turn" : "Auto-Pass");
   q("endTurnBtn").disabled = autoPassTurnEndEnabled
     ? false
     : (isSelfTurn ? (!canEndTurn || hasBlockingPrompt) : (seat === null || hasBlockingPrompt));
   q("nextPhaseBtn").disabled = !hasPriority || hasBlockingPrompt || hasCombatDeclarationPrompt;
-  selfLane?.classList.toggle("turn-zone-self", isSelfTurn);
-  oppLane?.classList.toggle("turn-zone-opponent", !isSelfTurn);
+  selfHeader?.classList.toggle("turn-zone-self", isSelfTurn);
+  oppHeader?.classList.toggle("turn-zone-opponent", !isSelfTurn);
   q("selfName").classList.toggle("active-turn-name", isSelfTurn);
   q("oppName").classList.toggle("opponent-turn-name", !isSelfTurn);
 
@@ -2426,29 +2387,27 @@ function renderBoard(state) {
     selectedHandIndices: cleanupDiscard?.selected_indices || [],
   });
   renderCardRow("oppHand", opp.hand, { compact: true, zoneKind: "hand", targetSeat: oppSeat });
-  renderCardRow("selfBattlefield", me.battlefield, {
-    draggable: true,
-    dragKind: "permanent",
-    zoneKind: "battlefield",
-    targetSeat: viewerSeat,
-    interactive: true,
-    selectedPermanentIndices:
-      untapInfo && seat === viewerSeat
-        ? untapInfo.selected_indices || []
-        : isCombatStep(state, "declare_attackers") && seat === state.current_turn && seat === viewerSeat
-          ? combatAttackerDraft
-          : isCombatStep(state, "declare_blockers") && seat === combat?.defending_player_index && seat === viewerSeat
-            ? Object.keys(combatBlockerDraft).map((value) => Number(value))
-            : [],
-  });
-  renderCardRow("oppBattlefield", opp.battlefield, {
-    zoneKind: "battlefield",
-    targetSeat: oppSeat,
-    selectedPermanentIndices:
-      isCombatStep(state, "declare_blockers") && seat === combat?.defending_player_index && seat !== oppSeat
-        ? Object.values(combatBlockerDraft).map((value) => Number(value))
-        : [],
-  });
+
+  // Canvas battlefield update
+  if (battlefieldCanvas) {
+    battlefieldCanvas.updateState(state, viewerSeat);
+
+    // Compute selected permanent keys for the canvas
+    const selfSelectedKeys = [];
+    const allSelectedKeys = [];
+    if (untapInfo && seat === viewerSeat) {
+      for (const idx of (untapInfo.selected_indices || [])) selfSelectedKeys.push(`${viewerSeat}-${idx}`);
+    } else if (isCombatStep(state, "declare_attackers") && seat === state.current_turn && seat === viewerSeat) {
+      for (const idx of combatAttackerDraft) selfSelectedKeys.push(`${viewerSeat}-${idx}`);
+    } else if (isCombatStep(state, "declare_blockers") && seat === combat?.defending_player_index && seat === viewerSeat) {
+      for (const idx of Object.keys(combatBlockerDraft)) selfSelectedKeys.push(`${viewerSeat}-${Number(idx)}`);
+      // Highlight targeted attackers on opponent side
+      if (seat !== oppSeat) {
+        for (const idx of Object.values(combatBlockerDraft)) allSelectedKeys.push(`${oppSeat}-${Number(idx)}`);
+      }
+    }
+    battlefieldCanvas.setSelectedKeys([...selfSelectedKeys, ...allSelectedKeys]);
+  }
 
   q("selfDeckCount").textContent = `Deck: ${me.library_count}`;
   q("selfGraveCount").textContent = `Graveyard: ${me.graveyard.length}`;
@@ -2545,60 +2504,56 @@ function renderState(state) {
   maybeAutoPassUntilTurnEnd(state);
 }
 
-function initCombatContextMenu() {
-  boardEl.addEventListener("contextmenu", async (event) => {
-    const cardEl = event.target.closest(".card");
-    if (!cardEl || !currentState) return;
-    const zoneKind = cardEl.dataset.zoneKind;
-    const targetSeat = Number(cardEl.dataset.targetSeat || -1);
-    const permanentIndex = Number(cardEl.dataset.permanentIndex || -1);
-    if (zoneKind !== "battlefield" || !Number.isInteger(permanentIndex) || permanentIndex < 0) {
+function handleCanvasCardContextMenu({ seat: targetSeat, idx: permanentIndex, card, event }) {
+  if (!currentState) return;
+  const combat = getCombatState(currentState);
+  if (!combat) return;
+
+  try {
+    if (
+      isCombatStep(currentState, "declare_attackers") &&
+      seat === currentState.current_turn &&
+      targetSeat === seat &&
+      !combat?.attackers_locked
+    ) {
+      combatAttackerDraft = combatAttackerDraft.filter((idx) => idx !== permanentIndex);
+      renderBoard(currentState);
+      updateActionHint("Removed attacker from draft selection.");
       return;
     }
 
-    const combat = getCombatState(currentState);
-    if (!combat) return;
-
-    try {
-      if (
-        isCombatStep(currentState, "declare_attackers") &&
-        seat === currentState.current_turn &&
-        targetSeat === seat &&
-        !combat?.attackers_locked
-      ) {
-        event.preventDefault();
-        combatAttackerDraft = combatAttackerDraft.filter((idx) => idx !== permanentIndex);
-        renderBoard(currentState);
-        updateActionHint("Removed attacker from draft selection.");
-        return;
+    if (
+      isCombatStep(currentState, "declare_blockers") &&
+      seat === combat.defending_player_index &&
+      !combat?.blockers_locked
+    ) {
+      if (targetSeat === combat.defending_player_index) {
+        delete combatBlockerDraft[permanentIndex];
       }
-
-      if (
-        isCombatStep(currentState, "declare_blockers") &&
-        seat === combat.defending_player_index &&
-        !combat?.blockers_locked
-      ) {
-        event.preventDefault();
-        if (targetSeat === combat.defending_player_index) {
-          delete combatBlockerDraft[permanentIndex];
-        }
-        if (targetSeat === currentState.current_turn) {
-          for (const [blockerIdx, attackerIdx] of Object.entries(combatBlockerDraft)) {
-            if (Number(attackerIdx) === permanentIndex) {
-              delete combatBlockerDraft[Number(blockerIdx)];
-            }
+      if (targetSeat === currentState.current_turn) {
+        for (const [blockerIdx, attackerIdx] of Object.entries(combatBlockerDraft)) {
+          if (Number(attackerIdx) === permanentIndex) {
+            delete combatBlockerDraft[Number(blockerIdx)];
           }
         }
-        renderBoard(currentState);
-        updateActionHint("Removed blocker target link from draft.");
       }
-    } catch (e) {
-      updateActionHint(e.message, true);
+      renderBoard(currentState);
+      updateActionHint("Removed blocker target link from draft.");
     }
-  });
+  } catch (e) {
+    updateActionHint(e.message, true);
+  }
+}
 
-  window.addEventListener("resize", () => renderCombatOverlay());
-  window.addEventListener("scroll", () => renderCombatOverlay(), true);
+function initCombatContextMenu() {
+  // Context menu for non-battlefield cards (hand etc.) via DOM
+  boardEl.addEventListener("contextmenu", (event) => {
+    const cardEl = event.target.closest(".card");
+    if (!cardEl) return;
+    const zoneKind = cardEl.dataset.zoneKind;
+    if (zoneKind === "battlefield") return; // handled by canvas
+    event.preventDefault();
+  });
 }
 
 function parseDragPayload(event) {
@@ -2613,176 +2568,183 @@ function parseDragPayload(event) {
   }
 }
 
-function bindDropBehavior(element, onDropAction) {
-  element.addEventListener("dragover", (event) => {
-    event.preventDefault();
-    element.classList.add("active-drop");
-    if (combatDragSource) {
-      combatDragSource.pointer = { x: event.clientX, y: event.clientY };
-      renderCombatOverlay();
-    }
-  });
-  element.addEventListener("dragleave", () => {
-    element.classList.remove("active-drop");
-    renderCombatOverlay();
-  });
-  element.addEventListener("drop", async (event) => {
-    event.preventDefault();
-    element.classList.remove("active-drop");
-    if (seat === null) {
-      updateActionHint("Join or create a session before interacting.", true);
+async function handleHandCardDropOnBattlefield({ event, targetSeat, targetItem }) {
+  if (seat === null) {
+    updateActionHint("Join or create a session before interacting.", true);
+    return;
+  }
+  const payload = parseDragPayload(event);
+  if (!payload) {
+    updateActionHint("Could not read dropped card data.", true);
+    return;
+  }
+
+  try {
+    if (payload.kind === "hand") {
+      const card = findCardInCurrentHand(payload.name);
+      beginPendingHandCast(card || payload.name, Number.isInteger(payload.handIndex) ? payload.handIndex : null);
+      if (card && cardRequiresTargetLand(card)) { startCastLandTargetPrompt(card); return; }
+      if (card && cardRequiresTargetCreature(card)) { startCastCreatureTargetPrompt(card); return; }
+      if (card && cardRequiresTargetPlayer(card)) { startCastTargetPrompt(card); return; }
+      const castTargetSeat = card ? getDefaultTargetSeat(payload.name) : targetSeat;
+      if (card && hasXCost(card)) { startCastXPrompt(card, castTargetSeat); return; }
+      try {
+        await sendAction({ seat, action: "cast", card_name: payload.name, target_seat: castTargetSeat });
+        updateActionHint(`Cast ${payload.name} targeting seat ${castTargetSeat}.`);
+      } finally {
+        clearPendingHandCast();
+      }
       return;
     }
-    const payload = parseDragPayload(event);
-    if (!payload) {
-      updateActionHint("Could not read dropped card data.", true);
-      return;
+
+    // Dragging a battlefield permanent onto the canvas (activate, or blocker)
+    if (payload.kind === "permanent") {
+      // If the drop landed on an opponent card during declare_blockers, assign block
+      if (
+        targetItem &&
+        isCombatStep(currentState, "declare_blockers") &&
+        seat === getCombatState(currentState)?.defending_player_index &&
+        targetItem.seat !== seat &&
+        !getCombatState(currentState)?.blockers_locked
+      ) {
+        combatBlockerDraft[Number(payload.permanentIndex)] = targetItem.idx;
+        renderBoard(currentState);
+        updateActionHint("Blocker link added. Press OK when done declaring blockers.");
+        return;
+      }
+
+      const me = getCurrentPlayerState();
+      const indexedCard = me && Number.isInteger(payload.permanentIndex) ? me.battlefield[payload.permanentIndex] : null;
+      const card = indexedCard || (me ? me.battlefield.find((perm) => normalizeCardName(perm) === payload.name) : null);
+      if (card) {
+        const permanentIndex = me && Number.isInteger(payload.permanentIndex) && me.battlefield[payload.permanentIndex] === card
+          ? payload.permanentIndex
+          : me.battlefield.findIndex((perm) => perm === card);
+        startActivationPrompt(card, targetSeat, permanentIndex >= 0 ? permanentIndex : null);
+      }
     }
-    await onDropAction(payload, element, event);
-    combatDragSource = null;
-    renderCombatOverlay();
-  });
+  } catch (e) {
+    updateActionHint(e.message, true);
+  }
 }
 
 function initDropZones() {
-  bindDropBehavior(q("selfBattlefield"), async (payload, element, event) => {
-    const targetSeat = Number(element.dataset.targetSeat || String(seat));
-    try {
-      if (isCombatBlockerDrag(payload)) {
-        const combat = getCombatState();
-        const activeSeat = currentState?.current_turn;
-        const targetCardEl = event.target.closest(".card");
-        const targetIndexRaw = targetCardEl?.dataset?.permanentIndex;
-        const targetCardSeat = Number(targetCardEl?.dataset?.targetSeat || -1);
-        const attackerIndex = Number(targetIndexRaw);
-        if (!Number.isInteger(attackerIndex) || targetCardSeat !== activeSeat) {
-          updateActionHint("Drop blocker onto an attacking creature.", true);
-          return;
-        }
-        if (combat?.blockers_locked) {
-          updateActionHint("Blockers are already confirmed for this step.", true);
-          return;
-        }
-        combatBlockerDraft[Number(payload.permanentIndex)] = attackerIndex;
-        renderBoard(currentState);
-        updateActionHint("Blocker link added. Press OK when done declaring blockers.");
-        return;
-      }
+  // Battlefield drop handling is managed entirely by BattlefieldCanvas.
+  // This function is kept as a no-op; the canvas callbacks wire up the behavior.
+}
 
-      if (payload.kind === "hand") {
-        const card = findCardInCurrentHand(payload.name);
-        beginPendingHandCast(card || payload.name, Number.isInteger(payload.handIndex) ? payload.handIndex : null);
-        if (card && cardRequiresTargetLand(card)) {
-          startCastLandTargetPrompt(card);
-          return;
-        }
-        if (card && cardRequiresTargetCreature(card)) {
-          startCastCreatureTargetPrompt(card);
-          return;
-        }
-        if (card && cardRequiresTargetPlayer(card)) {
-          startCastTargetPrompt(card);
-          return;
-        }
-        const castTargetSeat = card ? getDefaultTargetSeat(payload.name) : targetSeat;
-        if (card && hasXCost(card)) {
-          startCastXPrompt(card, castTargetSeat);
-          return;
-        }
-        try {
-          await sendAction({ seat, action: "cast", card_name: payload.name, target_seat: castTargetSeat });
-          updateActionHint(`Cast ${payload.name} targeting seat ${castTargetSeat}.`);
-        } finally {
-          clearPendingHandCast();
-        }
-        return;
-      }
-      if (payload.kind === "permanent") {
-        const me = getCurrentPlayerState();
-        const indexedCard =
-          me && Number.isInteger(payload.permanentIndex) ? me.battlefield[payload.permanentIndex] : null;
-        const card = indexedCard || (me ? me.battlefield.find((perm) => normalizeCardName(perm) === payload.name) : null);
-        if (card) {
-          const permanentIndex =
-            me && Number.isInteger(payload.permanentIndex) && me.battlefield[payload.permanentIndex] === card
-              ? payload.permanentIndex
-              : me.battlefield.findIndex((perm) => perm === card);
-          startActivationPrompt(card, targetSeat, permanentIndex >= 0 ? permanentIndex : null);
-        }
-      }
-    } catch (e) {
-      updateActionHint(e.message, true);
-    }
-  });
+function initBattlefieldCanvas() {
+  if (battlefieldCanvas) {
+    battlefieldCanvas.destroy();
+    battlefieldCanvas = null;
+  }
 
-  bindDropBehavior(q("oppBattlefield"), async (payload, element, event) => {
-    const targetSeat = Number(element.dataset.targetSeat || "1");
-    try {
-      if (isCombatBlockerDrag(payload)) {
-        const combat = getCombatState();
-        const activeSeat = currentState?.current_turn;
-        const targetCardEl = event.target.closest(".card");
-        const targetIndexRaw = targetCardEl?.dataset?.permanentIndex;
-        const targetCardSeat = Number(targetCardEl?.dataset?.targetSeat || -1);
-        const attackerIndex = Number(targetIndexRaw);
-        if (!Number.isInteger(attackerIndex) || targetCardSeat !== activeSeat) {
-          updateActionHint("Drop blocker onto an attacking creature.", true);
-          return;
-        }
-        if (combat?.blockers_locked) {
-          updateActionHint("Blockers are already confirmed for this step.", true);
-          return;
-        }
-        combatBlockerDraft[Number(payload.permanentIndex)] = attackerIndex;
-        renderBoard(currentState);
-        updateActionHint("Blocker link added. Press OK when done declaring blockers.");
-        return;
-      }
+  const canvasEl = q("battlefieldCanvas");
+  if (!canvasEl) return;
 
-      if (payload.kind === "hand") {
-        const card = findCardInCurrentHand(payload.name);
-        beginPendingHandCast(card || payload.name, Number.isInteger(payload.handIndex) ? payload.handIndex : null);
-        if (card && cardRequiresTargetLand(card)) {
-          startCastLandTargetPrompt(card);
+  battlefieldCanvas = new BattlefieldCanvas(canvasEl, {
+    onCardClick({ seat: cardSeat, idx: permanentIndex, card }) {
+      if (!currentState || seat === null) return;
+      try {
+        const untapInfo = getUntapLandSelectionInfo(currentState);
+        if (untapInfo && cardSeat === seat) {
+          const candidates = Array.isArray(untapInfo.candidate_indices) ? untapInfo.candidate_indices : [];
+          if (!candidates.includes(permanentIndex)) {
+            updateActionHint(`${card.name} is not a valid untap choice.`, true);
+            return;
+          }
+          sendAction({ seat, action: "untap_select", permanent_index: permanentIndex })
+            .then(() => {
+              const nextInfo = getUntapLandSelectionInfo(currentState);
+              updateActionHint(`Untap selection: ${nextInfo?.selected_count ?? "?"}/${nextInfo?.max_count ?? "?"} land(s) selected.`);
+            })
+            .catch((e) => updateActionHint(e.message, true));
           return;
         }
-        if (card && cardRequiresTargetCreature(card)) {
-          startCastCreatureTargetPrompt(card);
+
+        if (
+          isCombatStep(currentState, "declare_attackers") &&
+          seat === currentState.current_turn &&
+          cardSeat === seat
+        ) {
+          if (!isCardLikelyAttacker(card)) {
+            updateActionHint(`${card.name} is not able to attack right now.`, true);
+            return;
+          }
+          toggleCombatAttackerDraft(permanentIndex);
+          renderBoard(currentState);
+          updateActionHint(`Attackers selected: ${combatAttackerDraft.length}. Use Alpha Strike to toggle all valid attackers, then press OK.`);
           return;
         }
-        if (card && cardRequiresTargetPlayer(card)) {
-          startCastTargetPrompt(card);
+
+        if (pendingCastTarget) {
+          const valid = isPendingCastTargetValidForCard(card, {
+            targetSeat: cardSeat,
+            zoneKind: "battlefield",
+            permanentIndex,
+          });
+          if (!valid) { updateActionHint("That is not a valid target.", true); return; }
+          resolvePendingCastTarget(cardSeat, permanentIndex);
           return;
         }
-        const castTargetSeat = card ? getDefaultTargetSeat(payload.name) : targetSeat;
-        if (card && hasXCost(card)) {
-          startCastXPrompt(card, castTargetSeat);
+
+        if (!hasActivatedAbility(card)) {
+          updateActionHint(`${card.name} has no activated ability to use.`, true);
           return;
         }
-        try {
-          await sendAction({ seat, action: "cast", card_name: payload.name, target_seat: castTargetSeat });
-          updateActionHint(`Cast ${payload.name} targeting seat ${castTargetSeat}.`);
-        } finally {
-          clearPendingHandCast();
+
+        // Tap entire stack: if card is in a multi-card stack and has a simple
+        // auto-activating ability (no interactive cost prompt), also activate all
+        // other stack members with tap abilities.
+        if (
+          battlefieldCanvas &&
+          !cardRequiresManaColorChoice(card) &&
+          !shouldPromptForActivationCost(getActivatedAbilityCost(card))
+        ) {
+          const stackMembers = battlefieldCanvas.getStackMembers(cardSeat, permanentIndex);
+          if (stackMembers.length > 1) {
+            for (const member of stackMembers) {
+              const memberCard = currentState.players?.[member.seat]?.battlefield?.[member.idx];
+              if (!memberCard) continue;
+              startActivationPrompt(memberCard, 1 - seat, member.idx);
+            }
+            return;
+          }
         }
+
+        startActivationPrompt(card, 1 - seat, permanentIndex);
+      } catch (e) {
+        updateActionHint(e.message, true);
+      }
+    },
+
+    onCardContextMenu(info) {
+      handleCanvasCardContextMenu(info);
+    },
+
+    onCardHover(info) {
+      if (!info) return;
+      showCardPreview(info.card);
+    },
+
+    onHandCardDrop(info) {
+      handleHandCardDropOnBattlefield(info).catch((e) => updateActionHint(e.message, true));
+    },
+
+    onBlockerAssign({ blockerIdx, attackerIdx }) {
+      const combat = getCombatState(currentState);
+      if (!combat || combat.blockers_locked) {
+        updateActionHint("Blockers are already confirmed.", true);
         return;
       }
-      if (payload.kind === "permanent") {
-        const me = getCurrentPlayerState();
-        const indexedCard =
-          me && Number.isInteger(payload.permanentIndex) ? me.battlefield[payload.permanentIndex] : null;
-        const card = indexedCard || (me ? me.battlefield.find((perm) => normalizeCardName(perm) === payload.name) : null);
-        if (card) {
-          const permanentIndex =
-            me && Number.isInteger(payload.permanentIndex) && me.battlefield[payload.permanentIndex] === card
-              ? payload.permanentIndex
-              : me.battlefield.findIndex((perm) => perm === card);
-          startActivationPrompt(card, targetSeat, permanentIndex >= 0 ? permanentIndex : null);
-        }
-      }
-    } catch (e) {
-      updateActionHint(e.message, true);
-    }
+      combatBlockerDraft[blockerIdx] = attackerIdx;
+      renderBoard(currentState);
+      updateActionHint("Blocker assigned. Press OK when done.");
+    },
+
+    onPermanentDrop() {
+      // Positions are stored in the canvas object itself; no server call needed for repositioning.
+    },
   });
 }
 
@@ -2872,9 +2834,10 @@ async function createSession() {
   seat = data.seat;
   openStateSyncStream();
   setJoinUrls(data.join_url, data.lan_join_url);
-  renderState(data.state);
   setVisible(true);
-  updateActionHint("Session ready. Drag from your hand to cast.");
+  initBattlefieldCanvas();
+  renderState(data.state);
+  updateActionHint("Session ready. Drag from your hand to cast, or drag cards on the battlefield to reposition.");
 }
 
 function syncGuestNameForMode() {
@@ -2904,9 +2867,10 @@ async function joinSession() {
   seat = data.seat;
   openStateSyncStream();
   setJoinUrls(data.join_url, data.lan_join_url);
-  renderState(data.state);
   setVisible(true);
-  updateActionHint("Joined. Drag from your hand or battlefield to play.");
+  initBattlefieldCanvas();
+  renderState(data.state);
+  updateActionHint("Joined. Drag from your hand to play, or drag cards on the battlefield to reposition.");
 }
 
 async function sendAction(actionBody) {
@@ -3166,7 +3130,7 @@ fetchDebugSuggestions().catch(() => {
 
 loadSymbolMap();
 
-initDropZones();
+initDropZones(); // no-op; canvas handles battlefield drop
 initTabs();
 initCardPreviewHover();
 initCombatContextMenu();

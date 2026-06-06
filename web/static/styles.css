@@ -28,7 +28,7 @@ body {
 }
 
 main {
-  max-width: 1500px;
+  max-width: 2400px;
   margin: 0 auto;
   padding: 20px;
 }
@@ -95,8 +95,10 @@ button:hover {
 
 .board-shell {
   display: grid;
-  grid-template-columns: 0.95fr 2.1fr 1fr;
+  grid-template-columns: 0.95fr 3.15fr 1fr;
   gap: 12px;
+  min-height: calc(100vh - 60px);
+  align-items: stretch;
 }
 
 .board-column,
@@ -107,6 +109,52 @@ button:hover {
 .center-column {
   display: flex;
   flex-direction: column;
+  min-height: 0;
+}
+
+/* ---- Canvas battlefield ---- */
+.center-top-bar,
+.center-bottom-bar {
+  flex-shrink: 0;
+}
+
+.player-header {
+  background: var(--panel-soft);
+  border: 1px solid rgba(126, 196, 255, 0.22);
+  border-radius: 10px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+}
+
+.player-header .lane-head {
+  margin-bottom: 4px;
+}
+
+.hand-row-opponent {
+  margin-bottom: 4px;
+}
+
+.battlefield-canvas-wrap {
+  flex: 1 1 0;
+  min-height: 260px;
+  position: relative;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 6px;
+  border: 1px solid rgba(126, 196, 255, 0.12);
+  background: #0d1117;
+}
+
+#battlefieldCanvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+}
+
+#battlefieldCanvas.active-drop {
+  outline: 2px dashed rgba(126, 196, 255, 0.6);
+  outline-offset: -2px;
 }
 
 .left-column,
@@ -174,12 +222,14 @@ button:hover {
   text-shadow: 0 0 10px rgba(225, 109, 112, 0.5);
 }
 
-.player-lane.turn-zone-self {
+.player-lane.turn-zone-self,
+.player-header.turn-zone-self {
   border-color: rgba(133, 200, 134, 0.9);
   box-shadow: inset 0 0 0 1px rgba(133, 200, 134, 0.35);
 }
 
-.player-lane.turn-zone-opponent {
+.player-lane.turn-zone-opponent,
+.player-header.turn-zone-opponent {
   border-color: rgba(225, 109, 112, 0.9);
   box-shadow: inset 0 0 0 1px rgba(225, 109, 112, 0.35);
 }
@@ -241,6 +291,14 @@ button:hover {
   border-radius: 10px;
   padding: 8px;
   margin-bottom: 8px;
+}
+
+.hand-row {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  justify-content: center;
+  min-height: unset;
+  align-items: center;
 }
 
 .battlefield-row {
@@ -460,15 +518,7 @@ button:hover {
 }
 
 .card-hidden {
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(145deg, #9d2f39, #522126);
-}
-
-.card-hidden .card-label {
-  position: static;
-  background: transparent;
-  font-size: 0.92rem;
+  background: #1a1a2e;
 }
 
 .side-column {
@@ -630,6 +680,8 @@ button:hover {
 
 .preview-panel {
   position: static;
+  max-height: 480px;
+  overflow-y: scroll;
 }
 
 .card-preview-frame {

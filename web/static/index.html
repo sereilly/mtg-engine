@@ -117,22 +117,42 @@
           </aside>
 
           <div class="board-column center-column">
-            <section class="player-lane opponent-lane">
-              <header class="lane-head">
-                <h2 id="oppName">Opponent</h2>
-                <div id="oppLife" class="life-pill">20</div>
-              </header>
-              <div id="oppHand" class="card-row hand-row"></div>
-              <div id="oppBattlefield" class="card-row battlefield-row drop-target" data-target-seat="0"></div>
-              <div class="zone-row">
-                <div id="oppDeckCount" class="zone-box">Deck: 0</div>
-                <div id="oppGraveCount" class="zone-box">Graveyard: 0</div>
-                <div id="oppExileCount" class="zone-box">Exile: 0</div>
+            <div class="center-top-bar">
+              <div class="player-header opponent-header">
+                <div class="lane-head">
+                  <h2 id="oppName">Opponent</h2>
+                  <div id="oppLife" class="life-pill">20</div>
+                </div>
+                <div id="oppHand" class="card-row hand-row hand-row-opponent"></div>
+                <div class="zone-row">
+                  <div id="oppDeckCount" class="zone-box">Deck: 0</div>
+                  <div id="oppGraveCount" class="zone-box">Graveyard: 0</div>
+                  <div id="oppExileCount" class="zone-box">Exile: 0</div>
+                </div>
               </div>
-            </section>
+            </div>
+
+            <div id="battlefieldCanvasWrap" class="battlefield-canvas-wrap">
+              <canvas id="battlefieldCanvas"></canvas>
+            </div>
+
+            <div class="center-bottom-bar">
+              <div class="player-header self-header">
+                <div class="zone-row">
+                  <div id="selfDeckCount" class="zone-box">Deck: 0</div>
+                  <div id="selfGraveCount" class="zone-box">Graveyard: 0</div>
+                  <div id="selfExileCount" class="zone-box">Exile: 0</div>
+                </div>
+                <div id="selfHand" class="card-row hand-row"></div>
+                <div class="lane-head">
+                  <h2 id="selfName">You</h2>
+                  <div id="selfLife" class="life-pill">20</div>
+                </div>
+              </div>
+            </div>
 
             <section class="middle-lane">
-              <div id="actionHint" class="action-hint">Tip: drag cards from your hand or battlefield.</div>
+              <div id="actionHint" class="action-hint">Tip: drag cards from your hand to cast, or drag battlefield cards to reposition.</div>
             </section>
 
             <section class="phase-row">
@@ -142,25 +162,10 @@
                 <button id="endTurnBtn" type="button">End Turn</button>
               </div>
             </section>
-
-            <section class="player-lane self-lane">
-              <header class="lane-head">
-                <h2 id="selfName">You</h2>
-                <div id="selfLife" class="life-pill">20</div>
-              </header>
-              <div id="selfBattlefield" class="card-row battlefield-row drop-target" data-target-seat="0"></div>
-              <div id="selfHand" class="card-row hand-row"></div>
-              <div class="zone-row">
-                <div id="selfDeckCount" class="zone-box">Deck: 0</div>
-                <div id="selfGraveCount" class="zone-box">Graveyard: 0</div>
-                <div id="selfExileCount" class="zone-box">Exile: 0</div>
-              </div>
-            </section>
           </div>
 
           <aside class="side-column right-column">
             <section class="side-panel preview-panel">
-              <h3>Card Preview</h3>
               <div id="cardPreview" class="card-preview-frame empty-preview">
                 <img id="cardPreviewImage" alt="Hovered card preview" class="hidden" />
                 <div id="cardPreviewEmpty" class="card-preview-empty">Hover a card to inspect the large art.</div>
@@ -173,16 +178,11 @@
             </section>
 
             <section class="side-panel">
-              <h3>Available Mana</h3>
+              <h3>Mana Pool</h3>
               <p class="side-label">You</p>
               <div id="selfMana" class="mana-row"></div>
               <p class="side-label">Opponent</p>
               <div id="oppMana" class="mana-row"></div>
-            </section>
-
-            <section class="side-panel">
-              <h3>Stack</h3>
-              <div id="stackZone" class="stack-zone">Stack: empty</div>
             </section>
 
             <section class="side-panel">
@@ -202,14 +202,7 @@
 
     </main>
 
-    <svg id="combatOverlay" class="combat-overlay" aria-hidden="true">
-      <defs>
-        <marker id="combatArrowHead" markerWidth="9" markerHeight="6" refX="8" refY="3" orient="auto">
-          <polygon points="0 0, 9 3, 0 6" fill="#7ec4ff"></polygon>
-        </marker>
-      </defs>
-    </svg>
-
-    <script src="/app.js?v=20260524"></script>
+    <script src="/battlefield-canvas.js?v=20260606"></script>
+    <script src="/app.js?v=20260606"></script>
   </body>
 </html>
