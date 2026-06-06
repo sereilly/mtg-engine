@@ -1218,6 +1218,16 @@ class Game:
             if target_perm_idx is not None and isinstance(target_perm_idx, int) and 0 <= target_perm_idx < len(target.battlefield):
                 # Damage targets a creature permanent, not the player
                 target_perm = target.battlefield[target_perm_idx]
+                # 115.4: "any target" is limited to creatures, players, planeswalkers, and battles.
+                # Noncreature artifacts (and other noncreature non-planeswalker permanents) are not
+                # valid "any target" targets — the spell fizzles against them.
+                if "any target" in card.oracle_text.lower():
+                    type_line = target_perm.card.type_line.lower()
+                    if "creature" not in type_line and "planeswalker" not in type_line:
+                        self.log.append(
+                            f"{card.name}: '{target_perm.card.name}' is not a valid 'any target' target (115.4)"
+                        )
+                        return True, "resolved"
                 redirect_idx = target_perm.metadata.pop("redirect_damage_to_player", None)
                 if redirect_idx is not None and 0 <= redirect_idx < len(self.players):
                     redirect_player = self.players[redirect_idx]
