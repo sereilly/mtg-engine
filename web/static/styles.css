@@ -631,6 +631,12 @@ button:hover {
   cursor: not-allowed;
 }
 
+.toggle-btn-active {
+  background: rgba(82, 196, 113, 0.25);
+  border-color: rgba(82, 196, 113, 0.65);
+  color: #9eedb7;
+}
+
 .prompt-title {
   font-weight: 700;
   color: var(--accent);

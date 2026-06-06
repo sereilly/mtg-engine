@@ -82,6 +82,7 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         "is_aura": "aura" in perm.card.type_line.lower(),
         "attached_to_index": attached_to_index,
         "attached_to_seat": attached_to_seat,
+        "produced_mana": list(perm.card.produced_mana),
     }
 
 

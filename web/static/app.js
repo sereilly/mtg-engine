@@ -7,6 +7,7 @@ let pendingCastTarget = null;
 let pendingCastX = null;
 let pendingCastHandCard = null;
 let pendingManaColor = null;
+let pendingAutoTap = null;
 let debugSearchTimer = null;
 let symbolMap = {};
 let combatDragSource = null;
@@ -22,6 +23,9 @@ let autoPassTurnEndEnabled = false;
 let autoPassTurnEndInFlight = false;
 let autoPassTurnEndRequestedStateKey = "";
 let autoPassMode = null;
+let holdPriorityActive = false;
+let autoPassPriorityInFlight = false;
+let autoPassPriorityRequestedStateKey = "";
 /** @type {BattlefieldCanvas|null} */
 let battlefieldCanvas = null;
 
@@ -634,6 +638,33 @@ async function maybeAutoPassUntilTurnEnd(state = currentState) {
   }
 }
 
+async function maybeAutoPassPriority(state = currentState) {
+  if (holdPriorityActive) return;
+  if (autoPassTurnEndEnabled) return;
+  if (!state || seat === null) return;
+  if (autoPassPriorityInFlight) return;
+  if (state.priority_player !== seat) return;
+  if (hasBlockingPromptForAutoPass(state)) return;
+  if (combatPromptNeedsConfirmation(state)) return;
+
+  // Only auto-pass after a spell or ability was cast — not during empty-stack priority windows.
+  const stackSize = Array.isArray(state.stack) ? state.stack.length : 0;
+  if (stackSize === 0) return;
+
+  const stateKey = getAutoPassStateKey(state);
+  if (!stateKey || stateKey === autoPassPriorityRequestedStateKey) return;
+
+  autoPassPriorityRequestedStateKey = stateKey;
+  autoPassPriorityInFlight = true;
+  try {
+    await sendAction({ seat, action: "pass_priority" });
+  } catch {
+    // Silently absorb; next state update will retry if needed.
+  } finally {
+    autoPassPriorityInFlight = false;
+  }
+}
+
 function shouldAutoStepAi(state = currentState) {
   if (!state || !sessionId) return false;
   if (!shouldShowAiControls(state)) return false;
@@ -794,6 +825,89 @@ function getMaxAffordableX(manaPool, manaCost) {
   return 0;
 }
 
+function inferLandProducedMana(perm) {
+  if (Array.isArray(perm.produced_mana) && perm.produced_mana.length > 0) {
+    return perm.produced_mana.map((s) => s.toUpperCase());
+  }
+  const type = (perm.type || "").toLowerCase();
+  const symbols = [];
+  if (type.includes("plains")) symbols.push("W");
+  if (type.includes("island")) symbols.push("U");
+  if (type.includes("swamp")) symbols.push("B");
+  if (type.includes("mountain")) symbols.push("R");
+  if (type.includes("forest")) symbols.push("G");
+  return symbols;
+}
+
+function computeAutoTapLands(manaCost, currentManaPool, battlefield) {
+  const required = parseManaCostSymbols(manaCost || "");
+  const pool = { W: 0, U: 0, B: 0, R: 0, G: 0, C: 0, ...currentManaPool };
+  const toTap = [];
+
+  const untapped = [];
+  for (let i = 0; i < (battlefield || []).length; i++) {
+    const perm = battlefield[i];
+    if (!(perm.type || "").toLowerCase().includes("land")) continue;
+    if (perm.tapped) continue;
+    const produces = inferLandProducedMana(perm);
+    if (produces.length > 0) untapped.push({ index: i, produces, used: false });
+  }
+
+  // Satisfy specific color requirements first
+  for (const color of ["W", "U", "B", "R", "G", "C"]) {
+    let deficit = Math.max(0, (required[color] || 0) - (pool[color] || 0));
+    for (const land of untapped) {
+      if (deficit <= 0) break;
+      if (land.used || !land.produces.includes(color)) continue;
+      land.used = true;
+      toTap.push(land.index);
+      pool[color] = (pool[color] || 0) + 1;
+      deficit--;
+    }
+  }
+
+  // Satisfy generic mana with remaining untapped lands
+  const totalPool = MANA_ORDER.reduce((sum, c) => sum + (pool[c] || 0), 0);
+  const totalRequired = MANA_ORDER.reduce((sum, c) => sum + (required[c] || 0), 0) + (required.generic || 0);
+  let genericDeficit = Math.max(0, totalRequired - totalPool);
+  for (const land of untapped) {
+    if (genericDeficit <= 0) break;
+    if (land.used) continue;
+    land.used = true;
+    toTap.push(land.index);
+    genericDeficit--;
+  }
+
+  return toTap;
+}
+
+async function performAutoTap() {
+  if (!pendingAutoTap) return;
+  const pending = pendingAutoTap;
+  pendingAutoTap = null;
+  renderActivationPrompt();
+
+  try {
+    const me = getCurrentPlayerState();
+    if (!me) throw new Error("Cannot read player state.");
+
+    const landIndices = computeAutoTapLands(pending.card.mana_cost || "", me.mana_pool, me.battlefield);
+    if (landIndices.length > 0) {
+      updateActionHint(`Auto-tapping ${landIndices.length} land(s)...`);
+      for (const permanentIndex of landIndices) {
+        await sendAction({ seat, action: "tap", permanent_index: permanentIndex });
+      }
+    }
+
+    await sendAction(pending.actionBody);
+    updateActionHint(`Cast ${pending.cardName}.`);
+  } catch (e) {
+    updateActionHint(e.message, true);
+  } finally {
+    clearPendingHandCast();
+  }
+}
+
 function formatManaSymbols(counts) {
   const parts = [];
   for (const symbol of ["W", "U", "B", "R", "G", "C"]) {
@@ -933,6 +1047,7 @@ function beginPendingHandCast(card, handIndex = null) {
 
 function clearPendingHandCast() {
   pendingCastHandCard = null;
+  document.querySelectorAll(".casting-card").forEach((el) => el.classList.remove("casting-card"));
 }
 
 function isPendingHandCastCard(card, handIndex = null) {
@@ -951,7 +1066,7 @@ function isAnyPromptActive(state = currentState) {
   if (getCleanupDiscardInfo(state)) return true;
   if (getUntapLandSelectionInfo(state)) return true;
   if (shouldShowPriorityPrompt(state)) return true;
-  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor) return true;
+  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingAutoTap) return true;
 
   const hasValidAttackers = getValidAttackerIndices(state).length > 0;
   const hasValidBlockers = getValidBlockerAssignments(state).length > 0;
@@ -1144,9 +1259,11 @@ function renderActivationPrompt() {
   const steps = q("promptSteps");
   const cancelBtn = q("promptCancelBtn");
   const okBtn = q("promptOkBtn");
+  const autoTapBtn = q("promptAutoTapBtn");
   const customRow = q("promptCustomRow");
   const customValue = q("promptCustomValue");
   const customOkBtn = q("promptCustomOkBtn");
+  if (autoTapBtn) autoTapBtn.classList.add("hidden");
   const me = getCurrentPlayerState();
   const cleanupDiscard = getCleanupDiscardInfo();
   const untapInfo = getUntapLandSelectionInfo();
@@ -1166,6 +1283,24 @@ function renderActivationPrompt() {
 
   if (untapInfo) {
     applyUntapPrompt(untapInfo);
+    return;
+  }
+
+  if (pendingAutoTap) {
+    panel.classList.remove("hidden");
+    if (autoTapBtn) autoTapBtn.classList.remove("hidden");
+    okBtn.classList.add("hidden");
+    customRow.classList.add("hidden");
+    title.textContent = `Insufficient mana`;
+    body.textContent = `You don't have enough mana to cast ${pendingAutoTap.cardName}. Auto-tap lands to pay the cost, or cancel.`;
+    steps.innerHTML = [
+      `<div>Card: ${escapeHtml(pendingAutoTap.cardName)}</div>`,
+      `<div>Cost: ${renderSymbolsInline(pendingAutoTap.card.mana_cost || "none")}</div>`,
+      `<div>Current mana: ${me ? formatManaSymbolsHtml(me.mana_pool) : "Unknown"}</div>`,
+    ].join("");
+    cancelBtn.disabled = false;
+    okBtn.disabled = true;
+    customOkBtn.disabled = true;
     return;
   }
 
@@ -2039,11 +2174,19 @@ function createCardElement(card, options = {}) {
           return;
         }
 
+        const actionBody = { seat, action: "cast", card_name: cardName, target_seat: targetSeat };
         try {
-          await sendAction({ seat, action: "cast", card_name: cardName, target_seat: targetSeat });
+          await sendAction(actionBody);
           updateActionHint(`Cast ${cardName} targeting seat ${targetSeat}.`);
-        } finally {
           clearPendingHandCast();
+        } catch (e) {
+          if (e.message && e.message.toLowerCase().startsWith("insufficient mana")) {
+            pendingAutoTap = { card, cardName, actionBody };
+            renderActivationPrompt();
+            return;
+          }
+          clearPendingHandCast();
+          throw e;
         }
       } catch (e) {
         clearPendingHandCast();
@@ -2372,6 +2515,7 @@ function renderBoard(state) {
     ? false
     : (isSelfTurn ? (!canEndTurn || hasBlockingPrompt) : (seat === null || hasBlockingPrompt));
   q("nextPhaseBtn").disabled = !hasPriority || hasBlockingPrompt || hasCombatDeclarationPrompt;
+  q("holdPriorityBtn").classList.toggle("toggle-btn-active", holdPriorityActive);
   selfHeader?.classList.toggle("turn-zone-self", isSelfTurn);
   oppHeader?.classList.toggle("turn-zone-opponent", !isSelfTurn);
   q("selfName").classList.toggle("active-turn-name", isSelfTurn);
@@ -2502,6 +2646,7 @@ function renderState(state) {
 
   maybeAutoStepAi(state);
   maybeAutoPassUntilTurnEnd(state);
+  maybeAutoPassPriority(state);
 }
 
 function handleCanvasCardContextMenu({ seat: targetSeat, idx: permanentIndex, card, event }) {
@@ -2934,10 +3079,19 @@ q("promptCancelBtn").addEventListener("click", () => {
   pendingActivation = null;
   pendingCastTarget = null;
   pendingCastX = null;
-  clearPendingHandCast();
   pendingManaColor = null;
+  pendingAutoTap = null;
+  clearPendingHandCast();
   renderActivationPrompt();
   updateActionHint("Prompt canceled.");
+});
+
+q("promptAutoTapBtn")?.addEventListener("click", async () => {
+  try {
+    await performAutoTap();
+  } catch (e) {
+    updateActionHint(e.message, true);
+  }
 });
 
 q("promptOkBtn").addEventListener("click", async () => {
@@ -3026,6 +3180,16 @@ q("endTurnBtn").addEventListener("click", async () => {
   } catch (e) {
     alert(e.message);
   }
+});
+
+q("holdPriorityBtn").addEventListener("click", () => {
+  holdPriorityActive = !holdPriorityActive;
+  q("holdPriorityBtn").classList.toggle("toggle-btn-active", holdPriorityActive);
+  if (!holdPriorityActive) {
+    autoPassPriorityRequestedStateKey = "";
+    maybeAutoPassPriority(currentState);
+  }
+  updateActionHint(holdPriorityActive ? "Hold Priority on: priority will not auto-pass." : "Hold Priority off: priority will pass automatically.");
 });
 
 q("nextPhaseBtn").addEventListener("click", async () => {
