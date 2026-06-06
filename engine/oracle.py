@@ -168,6 +168,7 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("creature_attacks_or_blocks",  r"whenever this creature attacks or blocks"),
     ("creature_dealt_damage",               r"whenever this creature is dealt damage"),
     ("creature_dealt_damage_by_self_dies",  r"whenever a creature dealt damage by this creature this turn dies"),
+    ("enchanted_land_tapped",       r"whenever enchanted land becomes tapped"),
     ("land_tapped_for_mana",        r"whenever a player taps a land for mana"),
     ("spell_cast",                  r"whenever a player casts a spell"),
     ("opponent_casts_spell",        r"whenever an opponent casts a spell"),
@@ -198,7 +199,7 @@ AT_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("upkeep_enchanted_controller", r"at the beginning of the upkeep of enchanted enchantment's controller"),
     ("upkeep_chosen",       r"at the beginning of the chosen player's upkeep"),
     ("draw_step_each",      r"at the beginning of each player's draw step"),
-    ("end_step",            r"at the beginning of (?:each )?end(?: step)?"),
+    ("end_step",            r"at the beginning of (?:the |each )?end(?: step)?"),
     ("combat",              r"at the beginning of combat"),
 )
 
@@ -622,11 +623,20 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
         effect_kind = "activated_damage" if activated else "spell_pattern"
         return _instruction("deal_damage", amount="x"), effect_kind
 
-    if activated and "deals 2 damage to any target and 3 damage to you" in text:
-        return _instruction("deal_damage_and_self_damage", amount=2, self_damage=3), "activated_damage"
+    _self_dmg_match = re.search(r"deals (\d+) damage to any target and (\d+) damage to you", text)
+    if _self_dmg_match:
+        effect_kind = "activated_damage" if activated else "spell_pattern"
+        return _instruction("deal_damage_and_self_damage", amount=int(_self_dmg_match.group(1)), self_damage=int(_self_dmg_match.group(2))), effect_kind
 
     if "deals damage" in text and "equal to the number of swamps" in text:
         return _instruction("deal_damage_equal_to_swamps"), "upkeep_effect"
+
+    if "deals 1 damage to each creature and each player" in text:
+        effect_kind = "activated_damage" if activated else "spell_pattern"
+        return _instruction("deal_damage_each_creature_and_player", amount=1), effect_kind
+
+    if "no creatures are on the battlefield" in text and "sacrifice this" in text:
+        return _instruction("sacrifice_if_no_creatures"), "triggered_sacrifice"
 
     dmg_match = re.search(r"deals (\d+) damage", text)
     if dmg_match:
@@ -894,7 +904,7 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
     if "you win the game" in text:
         return _instruction("player_wins_game"), "triggered_win"
 
-    if "sacrifice this permanent" in text or "sacrifice this creature" in text:
+    if "sacrifice this permanent" in text or "sacrifice this creature" in text or "sacrifice this enchantment" in text:
         return _instruction("sacrifice_self"), "triggered_sacrifice"
 
     if "its owner loses half their life, rounded up" in text:

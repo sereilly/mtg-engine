@@ -128,6 +128,7 @@ class Game:
     combat_blockers_locked: bool = False
     priority_player_index: int | None = None
     priority_pass_count: int = 0
+    untapped_lands_at_turn_start: dict[int, int] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         # Preserve legacy external phase naming while internally tracking phase/step.
@@ -1241,6 +1242,27 @@ class Game:
                     self.log.append(f"{target.name} took {damage} damage")
             return True, "resolved"
 
+        if instruction.kind == "deal_damage_each_creature_and_player":
+            amount = int(instruction.payload.get("amount", 1))
+            for player in self.players:
+                d = self._prevent_damage(player, amount)
+                if d > 0:
+                    player.life -= d
+            dead: list[tuple[PlayerState, Permanent]] = []
+            for player in self.players:
+                for perm in player.battlefield:
+                    if perm.card.primary_type == "creature":
+                        perm.damage_marked += amount
+                        if perm.damage_marked >= perm.effective_toughness:
+                            dead.append((player, perm))
+            for player, perm in dead:
+                if perm in player.battlefield:
+                    player.battlefield.remove(perm)
+                    player.graveyard.append(perm.card)
+                    self.log.append(f"{perm.card.name} died from {card.name}")
+            self.log.append(f"{card.name} dealt {amount} damage to each creature and each player")
+            return True, "resolved"
+
         if instruction.kind == "deal_damage_and_self_damage":
             damage = self._prevent_damage(target, int(instruction.payload.get("amount", 0)))
             if damage > 0:
@@ -2191,7 +2213,11 @@ class Game:
                         break
 
                     if cond == "upkeep_each" and kind == "deal_damage":
-                        amount = int(trig.instruction.payload.get("amount", 1))
+                        raw_amount = trig.instruction.payload.get("amount", 1)
+                        if raw_amount == "x":
+                            amount = self.untapped_lands_at_turn_start.get(player_index, 0)
+                        else:
+                            amount = int(raw_amount)
                         victim = self.players[player_index]
                         damage = self._prevent_damage(victim, amount)
                         if damage > 0:
@@ -2441,6 +2467,25 @@ class Game:
 
         for name in destroyed_names:
             self.log.append(f"{name} was destroyed at end step")
+
+        # Pestilence-style: "At the beginning of the end step, if no creatures on the battlefield, sacrifice"
+        all_perms = [p for pl in self.players for p in pl.battlefield]
+        has_creatures = any(p.card.primary_type == "creature" for p in all_perms)
+        if not has_creatures:
+            for controller in self.players:
+                to_sacrifice: list[Permanent] = []
+                for permanent in controller.battlefield:
+                    prog = compile_card_oracle(permanent.card)
+                    if any(
+                        t.condition.kind == "end_step" and t.instruction is not None and t.instruction.kind == "sacrifice_if_no_creatures"
+                        for t in prog.triggered_abilities
+                    ):
+                        to_sacrifice.append(permanent)
+                for permanent in to_sacrifice:
+                    controller.battlefield.remove(permanent)
+                    controller.graveyard.append(permanent.card)
+                    self.log.append(f"{permanent.card.name} sacrificed at end step (no creatures)")
+
         if self._receives_priority(step):
             self.start_priority_window(self.active_player_index)
 
@@ -3218,6 +3263,11 @@ class Game:
         self._set_phase_and_step(phase, step)
         self._on_step_or_phase_begin(phase, step)
         player = self.players[player_index]
+        # Record untapped lands before untap step (used by Power Surge upkeep trigger)
+        self.untapped_lands_at_turn_start[player_index] = sum(
+            1 for perm in player.battlefield
+            if perm.card.primary_type == "land" and not perm.tapped
+        )
         # Island Sanctuary protection lasts until the player's next turn begins
         player.island_sanctuary_protected = False
         all_permanents = [perm for pl in self.players for perm in pl.battlefield]
@@ -3263,6 +3313,8 @@ class Game:
                 if meekstone_active and permanent.effective_power >= 3:
                     continue
                 if creatures_untapped >= max_untap_creatures:
+                    continue
+                if permanent.metadata.get("aura_prevents_untap"):
                     continue
                 creatures_untapped += 1
 
@@ -3363,6 +3415,18 @@ class Game:
                 aura.metadata["attached_to"] = next_land
                 next_land.metadata["attached_aura"] = aura
                 self.log.append(f"Kudzu attached to {next_land.card.name}")
+
+        # Aura attached to this land: fire enchanted_land_tapped triggers (e.g. Psychic Venom)
+        attached_aura = land.metadata.get("attached_aura")
+        if attached_aura is not None and attached_aura.card.name != "Kudzu":
+            aura_prog = compile_card_oracle(attached_aura.card)
+            for trig in aura_prog.triggered_abilities:
+                if trig.condition.kind == "enchanted_land_tapped" and trig.instruction is not None:
+                    amount = int(trig.instruction.payload.get("amount", 0))
+                    damage = self._prevent_damage(player, amount)
+                    if damage > 0:
+                        player.life -= damage
+                    self.log.append(f"{attached_aura.card.name} dealt {damage} damage to {player.name}")
 
         for controller in self.players:
             for perm in controller.battlefield:
@@ -3641,6 +3705,12 @@ class Game:
                     target_creature.metadata["loses_flying"] = True
                     self.log.append(f"{aura_permanent.card.name} dealt 2 damage to {target_creature.card.name} and stripped flying")
 
+            # Paralyze: tap enchanted creature on enter and mark it as prevented from untapping
+            if "tap enchanted creature" in text and "doesn't untap during its controller's untap step" in text:
+                target_creature.tapped = True
+                target_creature.metadata["aura_prevents_untap"] = True
+                self.log.append(f"{aura_permanent.card.name} tapped {target_creature.card.name} and prevents it from untapping")
+
             # Control effect: steal creature to caster's battlefield (e.g. Control Magic)
             if "you control enchanted creature" in text:
                 if target_creature in target_player.battlefield:
@@ -3665,6 +3735,9 @@ class Game:
                 target_land.metadata["is_indestructible"] = True
             if "enchanted land is a swamp" in text:
                 target_land.metadata["land_type_override"] = "swamp"
+            elif "enchanted land is the chosen type" in text:
+                # Phantasmal Terrain: simulation defaults to island (blue enchantment)
+                target_land.metadata["land_type_override"] = "island"
             self.log.append(f"{aura_permanent.card.name} enchants {target_land.card.name}")
         elif text.startswith("enchant wall"):
             target_wall = next(

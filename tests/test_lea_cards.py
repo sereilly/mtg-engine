@@ -18,25 +18,6 @@ def _make_test(name, idx):
 
 # List of LEA cards that lacked tests when this file was generated
 _UNTESTED = [
-"Nether Shadow",
-"Northern Paladin",
-"Obsianus Golem",
-"Orcish Artillery",
-"Paralyze",
-"Pearled Unicorn",
-"Pestilence",
-"Phantasmal Forces",
-"Phantasmal Terrain",
-"Phantom Monster",
-"Pirate Ship",
-"Plague Rats",
-"Plateau",
-"Power Leak",
-"Power Surge",
-"Psionic Blast",
-"Psychic Venom",
-"Purelace",
-"Raise Dead",
 "Red Elemental Blast",
 "Red Ward",
 "Regrowth",
@@ -1936,6 +1917,67 @@ def test_debug_action_casts_card_for_free():
     assert payload["players"][1]["life"] == 20
     assert payload["stack"][0]["card"]["name"] == "Lightning Bolt"
     assert any("[Debug]" in entry and "Lightning Bolt" in entry for entry in payload["log"])
+
+
+def test_nether_shadow_classifies_supported(all_cards):
+    shadow = _get(all_cards, "Nether Shadow")
+    assert classify_card(shadow).supported
+
+
+def test_northern_paladin_destroys_black_permanent(all_cards):
+    paladin = _get(all_cards, "Northern Paladin")
+    black_knight = _get(all_cards, "Black Knight")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=paladin)])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=black_knight)])
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Northern Paladin", target_player_index=1)
+
+    assert result.supported
+    assert not p2.battlefield
+    assert any(card.name == "Black Knight" for card in p2.graveyard)
+    assert p1.battlefield[0].tapped is True
+
+
+def test_obsianus_golem_classifies_supported(all_cards):
+    golem = _get(all_cards, "Obsianus Golem")
+    assert classify_card(golem).supported
+
+
+def test_orcish_artillery_deals_damage_and_self_damage(all_cards):
+    artillery = _get(all_cards, "Orcish Artillery")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=artillery)], life=20)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Orcish Artillery", target_player_index=1)
+
+    assert result.supported
+    assert p2.life == 18
+    assert p1.life == 17
+
+
+def test_paralyze_taps_creature_on_enter_and_prevents_untap(all_cards):
+    paralyze = _get(all_cards, "Paralyze")
+    grizzly = _get(all_cards, "Grizzly Bears")
+
+    p1 = PlayerState(name="P1", hand=[paralyze])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=grizzly)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Paralyze", target_player_index=1)
+
+    assert result.supported
+    creature_perm = p2.battlefield[0]
+    assert creature_perm.tapped is True
+    game.resolve_untap_step(1)
+    assert creature_perm.tapped is True
+
+
+def test_pearled_unicorn_classifies_supported(all_cards):
+    unicorn = _get(all_cards, "Pearled Unicorn")
+    assert classify_card(unicorn).supported
 
 def test_debug_action_casts_creature_with_summoning_sickness_flag():
     created = client.post(
@@ -4495,3 +4537,262 @@ def test_mox_sapphire_taps_for_blue_mana(all_cards):
     assert result.supported
     assert p1.mana_pool["U"] == 1
     assert p1.battlefield[0].tapped is True
+
+
+def test_pestilence_activation_deals_1_damage_to_all_creatures_and_players(all_cards):
+    pestilence = _get(all_cards, "Pestilence")
+    grizzly = _get(all_cards, "Grizzly Bears")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=pestilence), Permanent(card=grizzly)], life=20)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Pestilence")
+
+    assert result.supported
+    assert p1.life == 19
+    assert p2.life == 19
+    creature_perm = next(p for p in p1.battlefield if p.card.name == "Grizzly Bears")
+    assert creature_perm.damage_marked >= 1
+
+
+def test_pestilence_sacrificed_at_end_step_when_no_creatures(all_cards):
+    pestilence = _get(all_cards, "Pestilence")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=pestilence)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    game.resolve_end_step(0)
+
+    assert not any(p.card.name == "Pestilence" for p in p1.battlefield)
+    assert any(card.name == "Pestilence" for card in p1.graveyard)
+
+
+def test_pestilence_not_sacrificed_at_end_step_when_creatures_present(all_cards):
+    pestilence = _get(all_cards, "Pestilence")
+    grizzly = _get(all_cards, "Grizzly Bears")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=pestilence), Permanent(card=grizzly)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    game.resolve_end_step(0)
+
+    assert any(p.card.name == "Pestilence" for p in p1.battlefield)
+
+
+def test_phantasmal_forces_sacrifices_at_upkeep_without_blue_mana(all_cards):
+    forces = _get(all_cards, "Phantasmal Forces")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=forces)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    game.resolve_upkeep(0)
+
+    assert not p1.battlefield
+    assert any(card.name == "Phantasmal Forces" for card in p1.graveyard)
+
+
+def test_phantasmal_forces_survives_upkeep_when_blue_mana_paid(all_cards):
+    forces = _get(all_cards, "Phantasmal Forces")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=forces)], mana_pool={"W": 0, "U": 1, "B": 0, "R": 0, "G": 0, "C": 0})
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    game.resolve_upkeep(0)
+
+    assert any(p.card.name == "Phantasmal Forces" for p in p1.battlefield)
+
+
+def test_phantasmal_terrain_overrides_enchanted_land_type(all_cards):
+    terrain = _get(all_cards, "Phantasmal Terrain")
+    plains = _get(all_cards, "Plains")
+
+    p1 = PlayerState(name="P1", hand=[terrain])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=plains)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Phantasmal Terrain", target_player_index=1, target_permanent_index=0)
+
+    assert result.supported
+    assert p2.battlefield[0].metadata.get("land_type_override") is not None
+
+
+def test_phantom_monster_classifies_supported(all_cards):
+    monster = _get(all_cards, "Phantom Monster")
+    assert classify_card(monster).supported
+
+
+def test_pirate_ship_cannot_attack_without_defending_island(all_cards):
+    ship = _get(all_cards, "Pirate Ship")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=ship)])
+    p2 = PlayerState(name="P2", battlefield=[])
+    game = Game(players=[p1, p2])
+
+    assert game.can_attack(p1.battlefield[0], defending_player_index=1) is False
+
+
+def test_pirate_ship_can_attack_with_defending_island(all_cards):
+    ship = _get(all_cards, "Pirate Ship")
+    island = _get(all_cards, "Island")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=ship)])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=island)])
+    game = Game(players=[p1, p2])
+
+    assert game.can_attack(p1.battlefield[0], defending_player_index=1) is True
+
+
+def test_pirate_ship_tap_deals_1_damage(all_cards):
+    ship = _get(all_cards, "Pirate Ship")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=ship)])
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Pirate Ship", target_player_index=1)
+
+    assert result.supported
+    assert p2.life == 19
+    assert p1.battlefield[0].tapped is True
+
+
+def test_pirate_ship_sacrifices_at_upkeep_without_islands(all_cards):
+    ship = _get(all_cards, "Pirate Ship")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=ship)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    game.resolve_upkeep(0)
+
+    assert not any(p.card.name == "Pirate Ship" for p in p1.battlefield)
+    assert any(card.name == "Pirate Ship" for card in p1.graveyard)
+
+
+def test_plague_rats_power_toughness_equals_rat_count(all_cards):
+    rat = _get(all_cards, "Plague Rats")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=rat), Permanent(card=rat)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    game._refresh_dynamic_creatures()
+
+    assert p1.battlefield[0].effective_power == 2
+    assert p1.battlefield[0].effective_toughness == 2
+    assert p1.battlefield[1].effective_power == 2
+    assert p1.battlefield[1].effective_toughness == 2
+
+
+def test_plateau_taps_for_red_or_white(all_cards):
+    plateau = _get(all_cards, "Plateau")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=plateau)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    ok_r = game.tap_land_for_mana(0, "Plateau", "R")
+    assert ok_r
+    assert p1.mana_pool["R"] == 1
+
+    p1.battlefield[0].tapped = False
+    ok_w = game.tap_land_for_mana(0, "Plateau", "W")
+    assert ok_w
+    assert p1.mana_pool["W"] == 1
+
+
+def test_power_leak_deals_upkeep_damage_to_enchanted_enchantment_controller(all_cards):
+    power_leak = _get(all_cards, "Power Leak")
+    bad_moon = _get(all_cards, "Bad Moon")
+
+    p1 = PlayerState(name="P1", hand=[power_leak])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=bad_moon)], life=20)
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Power Leak", target_player_index=1, target_permanent_index=0)
+    assert result.supported
+
+    game.resolve_upkeep(1)
+
+    assert p2.life == 18
+
+
+def test_power_surge_upkeep_deals_damage_equal_to_untapped_lands_at_turn_start(all_cards):
+    surge = _get(all_cards, "Power Surge")
+    island = _get(all_cards, "Island")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=surge)])
+    p2 = PlayerState(
+        name="P2",
+        battlefield=[Permanent(card=island), Permanent(card=island)],
+        life=20,
+    )
+    game = Game(players=[p1, p2])
+
+    game.resolve_untap_step(1)
+    game.resolve_upkeep(1)
+
+    assert p2.life == 18
+
+
+def test_psionic_blast_deals_four_to_target_and_two_to_caster(all_cards):
+    blast = _get(all_cards, "Psionic Blast")
+
+    p1 = PlayerState(name="P1", hand=[blast], life=20)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Psionic Blast", target_player_index=1)
+
+    assert result.supported
+    assert p2.life == 16
+    assert p1.life == 18
+
+
+def test_psychic_venom_deals_damage_when_enchanted_land_tapped(all_cards):
+    psychic_venom = _get(all_cards, "Psychic Venom")
+    island = _get(all_cards, "Island")
+
+    p1 = PlayerState(name="P1", hand=[psychic_venom])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=island)], life=20)
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Psychic Venom", target_player_index=1, target_permanent_index=0)
+    assert result.supported
+
+    game.tap_land_for_mana(1, "Island", "U")
+
+    assert p2.life == 18
+
+
+def test_purelace_changes_target_to_white(all_cards):
+    purelace = _get(all_cards, "Purelace")
+    bear = _mk_card("Bear", "Creature — Bear")
+
+    p1 = PlayerState(name="P1", hand=[purelace])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Purelace", target_player_index=1)
+
+    assert result.supported
+    assert p2.battlefield[0].metadata.get("color_override") == "W"
+
+
+def test_raise_dead_returns_creature_from_graveyard_to_hand(all_cards):
+    raise_dead = _get(all_cards, "Raise Dead")
+    bear = _mk_card("Bear", "Creature — Bear")
+
+    p1 = PlayerState(name="P1", hand=[raise_dead], graveyard=[bear])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Raise Dead", target_player_index=0)
+
+    assert result.supported
+    assert any(card.name == "Bear" for card in p1.hand)
+    assert not any(card.name == "Bear" for card in p1.graveyard)
