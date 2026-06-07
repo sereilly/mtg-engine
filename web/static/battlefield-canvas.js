@@ -761,6 +761,8 @@ class BattlefieldCanvas {
 
       if (!this.dragState.dragging && (Math.abs(pixDx) > 4 || Math.abs(pixDy) > 4)) {
         if (this.dragState.seat !== this.viewerSeat) return;
+        // Auras attached to permanents cannot be manually detached
+        if (this.dragState.card?.attached_to_index != null) return;
         // Start dragging
         this.dragState.dragging = true;
 
