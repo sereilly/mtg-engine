@@ -871,6 +871,11 @@ function cardRequiresTargetPermanent(card) {
   return text.includes("target spell or permanent") || (text.includes("target permanent") && !text.includes("target land") && !text.includes("target creature"));
 }
 
+function cardRequiresTargetArtifact(card) {
+  if (!card || typeof card === "string") return false;
+  return (card.oracle_text || "").toLowerCase().includes("enchant artifact");
+}
+
 function cardRequiresManaColorChoice(card) {
   if (!card || typeof card === "string") return false;
   const text = (card.oracle_text || "").toLowerCase();
@@ -1143,6 +1148,20 @@ function getTargetablePermanentsForPrompt(state = currentState) {
   return result;
 }
 
+function getTargetableArtifactsForPrompt(state = currentState) {
+  if (!state) return [];
+  const result = [];
+  for (const targetSeat of [0, 1]) {
+    const player = state.players?.[targetSeat];
+    if (!player || !Array.isArray(player.battlefield)) continue;
+    for (const [permanentIndex, permanent] of player.battlefield.entries()) {
+      if (!permanent || !String(permanent.type || "").toLowerCase().includes("artifact")) continue;
+      result.push({ targetSeat, permanentIndex, cardName: permanent.name || "Artifact", ownerName: player.name || `Seat ${targetSeat}` });
+    }
+  }
+  return result;
+}
+
 function isPendingCastTargetValidForCard(card, { targetSeat = null, zoneKind = "", permanentIndex = null } = {}) {
   if (!pendingCastTarget) return false;
   if (!Number.isInteger(targetSeat)) return false;
@@ -1164,6 +1183,13 @@ function isPendingCastTargetValidForCard(card, { targetSeat = null, zoneKind = "
     if (!Number.isInteger(permanentIndex)) return false;
     if (!card || typeof card === "string") return false;
     return String(card.type || "").toLowerCase().includes("creature");
+  }
+
+  if (pendingCastTarget.targetKind === "artifact") {
+    if (zoneKind !== "battlefield") return false;
+    if (!Number.isInteger(permanentIndex)) return false;
+    if (!card || typeof card === "string") return false;
+    return String(card.type || "").toLowerCase().includes("artifact");
   }
 
   if (pendingCastTarget.targetKind === "permanent") {
@@ -1750,6 +1776,9 @@ function renderActivationPrompt() {
     } else if (pendingCastTarget.targetKind === "creature") {
       body.textContent = "Click a valid creature on the battlefield to choose the target.";
       steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
+    } else if (pendingCastTarget.targetKind === "artifact") {
+      body.textContent = "Click a valid artifact on the battlefield to choose the target.";
+      steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
     } else if (pendingCastTarget.targetKind === "permanent") {
       body.textContent = "Click any permanent on the battlefield to choose the target.";
       steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
@@ -2017,6 +2046,25 @@ function startCastPermanentTargetPrompt(card, castAction = "cast") {
   updateActionHint(`Choose a target permanent for ${cardName}.`);
 }
 
+function startCastArtifactTargetPrompt(card, castAction = "cast") {
+  const cardName = normalizeCardName(card);
+  if (!cardName) return;
+
+  if (getTargetableArtifactsForPrompt().length === 0) {
+    updateActionHint(`No valid artifact targets in play for ${cardName}.`, true);
+    return;
+  }
+
+  pendingCastTarget = {
+    card,
+    cardName,
+    targetKind: "artifact",
+    castAction,
+  };
+  renderActivationPrompt();
+  updateActionHint(`Choose an artifact target for ${cardName}.`);
+}
+
 function startCastXPrompt(card, targetSeat, targetPermanentIndex = null, castAction = "cast") {
   const cardName = normalizeCardName(card);
   if (!cardName) return;
@@ -2044,6 +2092,10 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
 
   if (pending.targetKind === "land" && selectedPermanentIndex === null) {
     updateActionHint("Choose a land in play to target.", true);
+    return;
+  }
+  if (pending.targetKind === "artifact" && selectedPermanentIndex === null) {
+    updateActionHint("Choose an artifact in play to target.", true);
     return;
   }
   if (pending.targetKind === "creature" && selectedPermanentIndex === null) {
@@ -2322,6 +2374,12 @@ async function castDebugCardForFree() {
   if (card && cardRequiresTargetLand(card)) {
     startCastLandTargetPrompt(card, "debug_cast_free");
     updateDebugStatus(`Choose a land target for ${resolvedCardName}.`, "success");
+    return;
+  }
+
+  if (card && cardRequiresTargetArtifact(card)) {
+    startCastArtifactTargetPrompt(card, "debug_cast_free");
+    updateDebugStatus(`Choose an artifact target for ${resolvedCardName}.`, "success");
     return;
   }
 
@@ -2604,6 +2662,11 @@ function createCardElement(card, options = {}) {
 
         if (cardRequiresTargetLand(card)) {
           startCastLandTargetPrompt(card);
+          return;
+        }
+
+        if (cardRequiresTargetArtifact(card)) {
+          startCastArtifactTargetPrompt(card);
           return;
         }
 
@@ -3283,6 +3346,7 @@ async function handleHandCardDropOnBattlefield({ event, targetSeat, targetItem }
       const card = findCardInCurrentHand(payload.name);
       beginPendingHandCast(card || payload.name, Number.isInteger(payload.handIndex) ? payload.handIndex : null);
       if (card && cardRequiresTargetLand(card)) { startCastLandTargetPrompt(card); return; }
+      if (card && cardRequiresTargetArtifact(card)) { startCastArtifactTargetPrompt(card); return; }
       if (card && cardRequiresTargetCreature(card)) { startCastCreatureTargetPrompt(card); return; }
       if (card && cardRequiresTargetPermanent(card)) { startCastPermanentTargetPrompt(card); return; }
       if (card && cardRequiresTargetPlayer(card)) { startCastTargetPrompt(card); return; }

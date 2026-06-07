@@ -150,6 +150,66 @@ def test_115_1a_triggered_ability_target_does_not_make_card_targeted():
 # ---------------------------------------------------------------------------
 
 
+def test_115_1b_enchant_artifact_aura_stores_target_permanent_index():
+    """An 'enchant artifact' Aura spell stores the chosen permanent index on the stack (115.1b).
+
+    Regression: Animate Artifact previously cast without prompting for or storing
+    a target permanent index, so the target_permanent_index on the StackItem was None.
+    """
+    animate = _mk_card(
+        "Animate Artifact",
+        "Enchantment — Aura",
+        "Enchant artifact\nAs long as enchanted artifact isn't a creature, it's an artifact creature with power and toughness each equal to its mana value.",
+    )
+    artifact = _mk_card("Black Lotus", "Artifact", "{T}, Sacrifice Black Lotus: Add three mana of any one color.")
+    p1 = PlayerState(name="P1", hand=[animate])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=artifact)])
+    game = Game(players=[p1, p2])
+
+    result = game.queue_from_hand(0, "Animate Artifact", target_player_index=1, target_permanent_index=0)
+
+    assert result.supported
+    item = game.stack[0]
+    assert item.target_player_index == 1
+    assert item.target_permanent_index == 0
+
+
+def test_115_1b_enchant_artifact_attaches_to_chosen_artifact_not_first():
+    """When multiple artifacts exist, an 'enchant artifact' Aura attaches to the chosen one (115.1b).
+
+    Regression: without target selection the aura always attached to the first artifact found,
+    ignoring the player's choice expressed via target_permanent_index.
+    """
+    animate = _mk_card(
+        "Animate Artifact",
+        "Enchantment — Aura",
+        "Enchant artifact\nAs long as enchanted artifact isn't a creature, it's an artifact creature with power and toughness each equal to its mana value.",
+        cmc=4,
+    )
+    artifact_a = _mk_card("Black Lotus", "Artifact", "{T}, Sacrifice Black Lotus: Add three mana of any one color.", cmc=0)
+    artifact_b = _mk_card("Sol Ring", "Artifact", "{T}: Add {C}{C}.", cmc=1)
+    p1 = PlayerState(name="P1", hand=[animate])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=artifact_a), Permanent(card=artifact_b)])
+    game = Game(players=[p1, p2])
+
+    # Target the second artifact (index 1 = Sol Ring)
+    result = game.cast_from_hand(0, "Animate Artifact", target_player_index=1, target_permanent_index=1)
+
+    assert result.supported
+    aura_perm = next((p for p in p1.battlefield if p.card.name == "Animate Artifact"), None)
+    assert aura_perm is not None, "Animate Artifact should be on P1's battlefield"
+    attached = aura_perm.metadata.get("attached_to")
+    assert attached is not None, "Aura must have an attached_to reference"
+    assert attached.card.name == "Sol Ring", (
+        f"Aura should attach to Sol Ring (index 1), not {attached.card.name}"
+    )
+    # The first artifact must not have received the aura
+    black_lotus = p2.battlefield[0]
+    assert black_lotus.metadata.get("attached_aura") is None, (
+        "Black Lotus (index 0) should not have the aura attached"
+    )
+
+
 def test_115_1b_aura_spell_stores_enchant_target():
     """An Aura spell's enchant target is declared when the spell is cast (115.1b).
 
