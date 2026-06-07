@@ -3512,14 +3512,14 @@ def test_death_ward_grants_regeneration_shield(all_cards):
 def test_deathgrip_counters_green_spell_on_stack(all_cards):
     # Deathgrip: "{B}{B}: Counter target green spell."
     deathgrip = _get(all_cards, "Deathgrip")
-    regrowth = _get(all_cards, "Regrowth")
+    giant_growth = _get(all_cards, "Giant Growth")
 
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=deathgrip)])
-    p2 = PlayerState(name="P2", hand=[regrowth], graveyard=[_mk_card("Island", "Basic Land - Island")])
+    p2 = PlayerState(name="P2", hand=[giant_growth], battlefield=[Permanent(card=_get(all_cards, "Llanowar Elves"))])
     game = Game(players=[p1, p2])
 
     # Queue green spell on stack
-    game.queue_from_hand(1, "Regrowth", target_player_index=1)
+    game.queue_from_hand(1, "Giant Growth", target_player_index=1)
     assert game.stack
 
     # Activate Deathgrip to counter it
@@ -3527,7 +3527,7 @@ def test_deathgrip_counters_green_spell_on_stack(all_cards):
 
     assert result.supported
     assert not game.stack
-    assert any(card.name == "Regrowth" for card in p2.graveyard)
+    assert any(card.name == "Giant Growth" for card in p2.graveyard)
 
 
 def test_dingus_egg_deals_damage_when_land_destroyed(all_cards):
@@ -4317,6 +4317,20 @@ def test_lifeforce_counters_black_spell(all_cards):
     assert result.supported
     assert not game.stack
     assert any(card.name == "Black Knight" for card in p2.graveyard)
+
+
+def test_lifeforce_requires_black_spell_on_stack(all_cards):
+    lifeforce = _get(all_cards, "Lifeforce")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=lifeforce)])
+    p1.mana_pool["G"] = 2
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    # No black spell on stack — activation should be rejected
+    result = game.queue_permanent_ability(0, "Lifeforce")
+    assert not result.supported
+    assert p1.mana_pool.get("G", 0) == 2  # mana not spent
 
 
 def test_lifelace_changes_target_permanent_to_green(all_cards):

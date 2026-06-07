@@ -1307,6 +1307,7 @@ async function handleCombatPromptOk() {
 
 async function handlePriorityPromptOk() {
   if (!currentState || seat === null) return false;
+  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor) return false;
   if (!shouldShowPriorityPrompt(currentState)) return false;
   await sendAction({ seat, action: "pass_priority" });
   updateActionHint("Passed priority.");

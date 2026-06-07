@@ -616,7 +616,7 @@ def _run_priority_exchange(session: Session, acting_seat: int) -> None:
             result == "passed"
             and ai_priority_seat is not None
             and _seat_type(session, ai_priority_seat) == "ai"
-            and ai_priority_seat != session.current_turn
+            and (ai_priority_seat != session.current_turn or bool(session.game.stack))
         ):
             result = _ai_respond_to_priority(session, ai_priority_seat)
             continue

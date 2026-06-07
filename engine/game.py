@@ -709,6 +709,17 @@ class Game:
                 self.log.append("No valid creature target for banding effect")
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
 
+        if ability.instruction.kind == "counter_top_stack_spell":
+            color_filter = ability.instruction.payload.get("color_filter")
+            has_valid_target = any(
+                not color_filter or color_filter in (item.card.colors or [])
+                for item in self.stack
+            )
+            if not has_valid_target:
+                details = f"no valid target for {permanent.card.name}"
+                self.log.append(details)
+                return SimulationResult(permanent.card.name, False, "unsupported", details)
+
         required_cost = dict(ability.cost.mana)
         requires_tap = ability.cost.requires_tap
         if self.enforce_mana_costs and any(required_cost.values()):
@@ -2108,14 +2119,13 @@ class Game:
                 countered = self.stack.pop()
                 self.players[countered.caster_index].graveyard.append(countered.card)
                 self.log.append(f"{card.name} countered {countered.card.name}")
-                # Power Sink effect: tap all lands controlled by the countered spell's controller
-                # and drain their mana pool (they couldn't pay X to prevent this)
-                ctrl = self.players[countered.caster_index]
-                for perm in ctrl.battlefield:
-                    if perm.card.primary_type == "land":
-                        perm.tapped = True
-                ctrl.mana_pool = {k: 0 for k in ctrl.mana_pool}
-                self.log.append(f"{card.name} tapped all lands and drained mana from {ctrl.name}")
+                if card.name == "Power Sink":
+                    ctrl = self.players[countered.caster_index]
+                    for perm in ctrl.battlefield:
+                        if perm.card.primary_type == "land":
+                            perm.tapped = True
+                    ctrl.mana_pool = {k: 0 for k in ctrl.mana_pool}
+                    self.log.append(f"{card.name} tapped all lands and drained mana from {ctrl.name}")
             else:
                 self.log.append(f"{card.name} resolved with no spell to counter")
             return True, "resolved"
