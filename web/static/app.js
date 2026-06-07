@@ -677,6 +677,12 @@ async function maybeAutoStepAi(state = currentState) {
     return;
   }
 
+  // Don't auto-step while another player holds priority (AI must wait its turn).
+  const priorityPlayer = state.priority_player;
+  if (Number.isInteger(priorityPlayer) && priorityPlayer !== state.current_turn) {
+    return;
+  }
+
   const stateKey = getAiStepStateKey(state);
   if (!stateKey || stateKey === aiAutoStepRequestedStateKey) {
     return;

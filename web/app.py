@@ -452,6 +452,9 @@ def _ai_step(session: Session) -> bool:
         if s != seat
     )
 
+    if game.priority_player_index is not None and game.priority_player_index != seat:
+        return False
+
     cast_action = choose_cast_action(game, seat)
     if cast_action is not None:
         card_to_cast = game.players[seat].hand[cast_action.hand_index]

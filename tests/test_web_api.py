@@ -1135,3 +1135,32 @@ def test_human_passing_priority_resolves_ai_spell():
     assert payload["stack"] == []
     # The spell resolved and dealt 3 damage to the human (default target = opponent).
     assert payload["players"][0]["life"] == 17
+
+
+def test_ai_step_while_human_has_priority_does_not_crash():
+    """Regression: calling ai_step a second time while the human holds priority must
+    not raise 'player does not have priority'.  The server should return 200 with the
+    game still paused (spell on stack, human still has priority)."""
+    bolt = _mk_card(
+        name="AI Bolt 2",
+        mana_cost="{R}",
+        type_line="Instant",
+        oracle_text="AI Bolt 2 deals 3 damage to any target.",
+    )
+    sid = _make_ai_turn_session(80003)
+    session = store.get(sid)
+    session.game.players[1].hand = [bolt]
+
+    # First ai_step: AI queues the spell and passes priority to the human.
+    first = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "ai_step"})
+    assert first.status_code == 200
+    assert first.json()["priority_player"] == 0  # human has priority
+
+    # Second ai_step while human still has priority — was crashing before the fix.
+    second = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "ai_step"})
+    assert second.status_code == 200
+    payload = second.json()
+    # State must be unchanged: spell still on stack, human still has priority.
+    assert len(payload["stack"]) == 1
+    assert payload["priority_player"] == 0
+    assert payload["current_turn"] == 1
