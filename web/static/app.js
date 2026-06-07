@@ -37,8 +37,15 @@ const disabledPhases = new Set([
   "beginning_of_combat", "declare_blockers", "combat_damage", "end_of_combat",
   "end", "cleanup",
 ]);
+const opponentDisabledPhases = new Set([
+  "untap", "upkeep", "draw",
+  "precombat_main", "beginning_of_combat", "declare_attackers",
+  "declare_blockers", "combat_damage", "end_of_combat",
+  "postcombat_main", "end", "cleanup",
+]);
 /** @type {BattlefieldCanvas|null} */
 let battlefieldCanvas = null;
+let lastAnnouncedTurn = null;
 
 const setupEl = document.getElementById("setup");
 const boardEl = document.getElementById("boardPanel");
@@ -683,7 +690,9 @@ async function maybeAutoPassDisabledPhase(state = currentState) {
   if (hasBlockingPromptForAutoPass(state)) return;
 
   const activeKey = getActiveStepKey(state);
-  if (!disabledPhases.has(activeKey)) return;
+  const isMyTurn = state.current_turn === seat;
+  const shouldAutoPass = isMyTurn ? disabledPhases.has(activeKey) : opponentDisabledPhases.has(activeKey);
+  if (!shouldAutoPass) return;
 
   const stackSize = Array.isArray(state.stack) ? state.stack.length : 0;
   if (stackSize > 0) return;
@@ -2799,16 +2808,21 @@ function renderPhaseRail(state) {
   for (const phase of PHASE_RAIL) {
     const item = document.createElement("div");
     item.className = "phase-chip-item";
-    item.textContent = phase.label;
     item.dataset.phase = phase.key;
-    const isDisabled = disabledPhases.has(phase.key);
-    item.title = isDisabled ? `${phase.title} (auto-pass — click to enable)` : `${phase.title} (click to disable)`;
-    item.classList.toggle("phase-disabled", isDisabled);
     if (activeKey === phase.key) {
       item.classList.add("active");
       item.setAttribute("aria-current", "step");
     }
-    item.addEventListener("click", () => {
+
+    const playerEnabled = !disabledPhases.has(phase.key);
+    const oppEnabled = !opponentDisabledPhases.has(phase.key);
+
+    const leftHalf = document.createElement("div");
+    leftHalf.className = "phase-half phase-half-player" + (playerEnabled ? " phase-half-enabled" : "");
+    leftHalf.title = playerEnabled
+      ? `${phase.title}: hold priority (your turn) — click to auto-pass`
+      : `${phase.title}: auto-pass (your turn) — click to hold priority`;
+    leftHalf.addEventListener("click", () => {
       if (disabledPhases.has(phase.key)) {
         disabledPhases.delete(phase.key);
       } else {
@@ -2818,6 +2832,30 @@ function renderPhaseRail(state) {
       }
       renderPhaseRail(currentState);
     });
+
+    const rightHalf = document.createElement("div");
+    rightHalf.className = "phase-half phase-half-opp" + (oppEnabled ? " phase-half-enabled" : "");
+    rightHalf.title = oppEnabled
+      ? `${phase.title}: hold priority (opponent's turn) — click to auto-pass`
+      : `${phase.title}: auto-pass (opponent's turn) — click to hold priority`;
+    rightHalf.addEventListener("click", () => {
+      if (opponentDisabledPhases.has(phase.key)) {
+        opponentDisabledPhases.delete(phase.key);
+      } else {
+        opponentDisabledPhases.add(phase.key);
+        autoPassDisabledPhaseRequestedStateKey = "";
+        maybeAutoPassDisabledPhase();
+      }
+      renderPhaseRail(currentState);
+    });
+
+    const label = document.createElement("span");
+    label.className = "phase-chip-label";
+    label.textContent = phase.label;
+
+    item.appendChild(leftHalf);
+    item.appendChild(rightHalf);
+    item.appendChild(label);
     container.appendChild(item);
   }
 }
@@ -3091,6 +3129,19 @@ function renderLog(state) {
   });
 }
 
+function showTurnAnnouncement(isSelfTurn) {
+  const el = document.getElementById("turnAnnouncement");
+  if (!el) return;
+  el.classList.remove("announcing");
+  // Force reflow so removing+adding the class restarts the animation
+  void el.offsetWidth;
+  el.innerHTML = isSelfTurn
+    ? '<span style="color:#5dde6a;">Your Turn</span>'
+    : '<span style="color:#e16d70;">Opponent\'s Turn</span>';
+  el.classList.add("announcing");
+  el.addEventListener("animationend", () => el.classList.remove("announcing"), { once: true });
+}
+
 function renderBoard(state) {
   const viewerSeat = seat ?? 0;
   const oppSeat = viewerSeat === 0 ? 1 : 0;
@@ -3231,6 +3282,12 @@ function renderState(state) {
   }
   if (sessionId !== null) {
     hideSetupPanel();
+  }
+  const viewerSeat = seat ?? 0;
+  const isSelfTurn = state.current_turn === viewerSeat;
+  if (lastAnnouncedTurn !== state.current_turn) {
+    lastAnnouncedTurn = state.current_turn;
+    showTurnAnnouncement(isSelfTurn);
   }
   renderBoard(state);
   renderActivationPrompt();

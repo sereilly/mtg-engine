@@ -872,32 +872,86 @@ button:hover {
   min-height: 42px;
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.06);
   color: var(--ink-soft);
   font-weight: 700;
   letter-spacing: 0.08em;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: stretch;
   text-transform: uppercase;
-  cursor: pointer;
   user-select: none;
-  transition: opacity 0.15s, background 0.15s;
+  position: relative;
+  overflow: hidden;
+  transition: opacity 0.15s;
 }
 
-.phase-chip-item:hover {
+.phase-half {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.phase-half + .phase-half {
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.phase-half:hover {
   background: rgba(255, 255, 255, 0.12);
 }
 
-.phase-chip-item.phase-disabled {
-  opacity: 0.3;
+.phase-half-player.phase-half-enabled {
+  background: rgba(50, 190, 80, 0.32);
+}
+
+.phase-half-player.phase-half-enabled:hover {
+  background: rgba(50, 190, 80, 0.48);
+}
+
+.phase-half-opp.phase-half-enabled {
+  background: rgba(210, 60, 60, 0.32);
+}
+
+.phase-half-opp.phase-half-enabled:hover {
+  background: rgba(210, 60, 60, 0.48);
+}
+
+.phase-chip-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
 }
 
 .phase-chip-item.active {
-  color: #15120a;
-  background: linear-gradient(135deg, var(--accent), #f7d56d);
+  color: var(--ink);
   border-color: rgba(242, 184, 75, 0.95);
   box-shadow: 0 0 0 1px rgba(242, 184, 75, 0.35), 0 0 18px rgba(242, 184, 75, 0.25);
+}
+
+.phase-chip-item.active .phase-half {
+  background: rgba(242, 184, 75, 0.2);
+}
+
+.phase-chip-item.active .phase-half:hover {
+  background: rgba(242, 184, 75, 0.32);
+}
+
+.phase-chip-item.active .phase-half-player.phase-half-enabled {
+  background: rgba(50, 190, 80, 0.45);
+}
+
+.phase-chip-item.active .phase-half-player.phase-half-enabled:hover {
+  background: rgba(50, 190, 80, 0.6);
+}
+
+.phase-chip-item.active .phase-half-opp.phase-half-enabled {
+  background: rgba(210, 60, 60, 0.45);
+}
+
+.phase-chip-item.active .phase-half-opp.phase-half-enabled:hover {
+  background: rgba(210, 60, 60, 0.6);
 }
 
 .zone-cards {
@@ -1222,4 +1276,36 @@ pre {
   color: var(--ink-soft);
   background: rgba(255, 255, 255, 0.06);
   border-radius: 6px 6px 0 0;
+}
+
+.turn-announcement {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 20;
+  opacity: 0;
+}
+
+.turn-announcement span {
+  font-size: 3rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-shadow: 0 0 30px currentColor, 0 2px 8px rgba(0,0,0,0.8);
+  filter: drop-shadow(0 0 12px currentColor);
+}
+
+@keyframes turnAnnounceFade {
+  0%   { opacity: 0; transform: scale(0.75); }
+  18%  { opacity: 1; transform: scale(1.05); }
+  35%  { opacity: 1; transform: scale(1);    }
+  80%  { opacity: 1; transform: scale(1);    }
+  100% { opacity: 0; transform: scale(1.1);  }
+}
+
+.turn-announcement.announcing {
+  animation: turnAnnounceFade 2s ease-out forwards;
 }
