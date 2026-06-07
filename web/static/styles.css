@@ -282,6 +282,25 @@ button:hover {
   }
 }
 
+.middle-lane.error-flash {
+  animation: middle-lane-error-flash 600ms ease-out;
+}
+
+@keyframes middle-lane-error-flash {
+  0% {
+    border-color: rgba(225, 73, 73, 0.9);
+    box-shadow: 0 0 0 0 rgba(225, 73, 73, 0.5);
+  }
+  60% {
+    border-color: rgba(225, 73, 73, 0.4);
+    box-shadow: 0 0 0 5px rgba(225, 73, 73, 0);
+  }
+  100% {
+    border-color: rgba(126, 196, 255, 0.28);
+    box-shadow: none;
+  }
+}
+
 .card-row {
   display: flex;
   gap: 8px;

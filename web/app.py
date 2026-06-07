@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.responses import StreamingResponse
 
 from engine import Game
+from engine.game_history import GameHistory
 from engine.ai_policy import (
     choose_activation_action,
     choose_cast_action,
@@ -635,6 +636,10 @@ def _advance_phase(session: Session) -> None:
         return
 
 
+def _save_snapshot(session: Session) -> None:
+    session.history.save(session)
+
+
 def _require_session(session_id: str) -> Session:
     try:
         return store.get(session_id)
@@ -716,6 +721,8 @@ def do_action(session_id: str, req: GameActionRequest):
 
     if req.seat not in session.joined_seats:
         raise HTTPException(status_code=400, detail="seat has not joined")
+
+    _save_snapshot(session)
 
     seat_type = _seat_type(session, req.seat)
 
@@ -1072,6 +1079,7 @@ def do_action(session_id: str, req: GameActionRequest):
 @app.post("/api/sessions/{session_id}/run-ai")
 def run_ai(session_id: str, steps: int = Query(default=1, ge=1, le=200)):
     session = _require_session(session_id)
+    _save_snapshot(session)
     for _ in range(steps):
         if session.status == "finished":
             break
@@ -1085,6 +1093,26 @@ def run_ai(session_id: str, steps: int = Query(default=1, ge=1, le=200)):
             break
     _notify_session_change(session.id, "action")
     return _serialize_state(session, viewer_seat=None)
+
+
+@app.post("/api/sessions/{session_id}/undo")
+def undo_action(session_id: str, seat: int | None = Query(default=None, ge=0, le=1)):
+    session = _require_session(session_id)
+    if not session.history.can_undo():
+        raise HTTPException(status_code=400, detail="nothing to undo")
+
+    snapshot = session.history.undo()
+    session.game = snapshot.game
+    session.current_turn = snapshot.current_turn
+    session.status = snapshot.status
+    session.cleanup_required_discards = snapshot.cleanup_required_discards
+    session.cleanup_selected_indices = snapshot.cleanup_selected_indices
+    session.untap_required_lands = snapshot.untap_required_lands
+    session.untap_candidate_indices = snapshot.untap_candidate_indices
+    session.untap_selected_indices = snapshot.untap_selected_indices
+
+    _notify_session_change(session.id, "undo")
+    return _serialize_state(session, viewer_seat=seat)
 
 
 app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")

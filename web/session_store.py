@@ -5,6 +5,7 @@ from pathlib import Path
 import secrets
 
 from engine import Game, PlayerState
+from engine.game_history import GameHistory
 
 from .deck_builder import build_random_deck
 from .schemas import CreateSessionRequest
@@ -27,6 +28,7 @@ class Session:
     untap_required_lands: int = 0
     untap_candidate_indices: list[int] = field(default_factory=list)
     untap_selected_indices: list[int] = field(default_factory=list)
+    history: GameHistory = field(default_factory=GameHistory)
 
 
 class SessionStore:

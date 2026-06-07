@@ -1795,6 +1795,14 @@ function updateActionHint(message, isError = false) {
   const el = q("actionHint");
   el.textContent = message;
   el.style.color = isError ? "#e16d70" : "#cfd7e4";
+  if (isError) {
+    const middleLane = document.querySelector(".middle-lane");
+    if (middleLane) {
+      middleLane.classList.remove("error-flash");
+      void middleLane.offsetWidth;
+      middleLane.classList.add("error-flash");
+    }
+  }
 }
 
 function setSingleJoinUrl(element, label, url = "") {
@@ -2595,6 +2603,7 @@ function renderBoard(state) {
     ? false
     : (isSelfTurn ? (!canEndTurn || hasBlockingPrompt) : (seat === null || hasBlockingPrompt));
   q("nextPhaseBtn").disabled = !hasPriority || hasBlockingPrompt || hasCombatDeclarationPrompt;
+  q("undoBtn").disabled = sessionId === null;
   q("holdPriorityBtn").classList.toggle("toggle-btn-active", holdPriorityActive);
   selfHeader?.classList.toggle("turn-zone-self", isSelfTurn);
   oppHeader?.classList.toggle("turn-zone-opponent", !isSelfTurn);
@@ -3271,6 +3280,22 @@ q("endTurnBtn").addEventListener("click", async () => {
   }
 });
 
+q("undoBtn").addEventListener("click", async () => {
+  if (!sessionId) return;
+  try {
+    const url = seat !== null
+      ? `/api/sessions/${sessionId}/undo?seat=${seat}`
+      : `/api/sessions/${sessionId}/undo`;
+    const resp = await fetch(url, { method: "POST" });
+    const payload = await resp.json();
+    if (!resp.ok) throw new Error(payload.detail || "undo failed");
+    renderState(payload);
+    updateActionHint("Undone.");
+  } catch (e) {
+    alert(e.message);
+  }
+});
+
 q("holdPriorityBtn").addEventListener("click", () => {
   holdPriorityActive = !holdPriorityActive;
   q("holdPriorityBtn").classList.toggle("toggle-btn-active", holdPriorityActive);
@@ -3374,6 +3399,7 @@ if (sessionFromUrl) {
 syncGuestNameForMode();
 syncSeedControls();
 setDebugMenuEnabled(false);
+q("undoBtn").disabled = true;
 q("endTurnBtn").disabled = true;
 q("endTurnBtn").textContent = "End Turn";
 q("nextPhaseBtn").disabled = true;
