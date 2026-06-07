@@ -47,6 +47,12 @@ From the workspace root, start the web app with the project virtual environment:
 .\.venv\Scripts\python.exe -m uvicorn web.app:app --host 0.0.0.0 --port 8010
 ```
 
+Or to host on ipv6 run:
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn web.app:app --host :: --port 8010
+```
+
 Then open `http://127.0.0.1:8010/` on the host machine.
 
 To join from another computer on the same network, open `http://<your-local-ip>:8010/`.

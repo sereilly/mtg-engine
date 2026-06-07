@@ -59,6 +59,16 @@ class GameActionRequest(BaseModel):
     attacker_damage: dict[int, dict[int, int]] | None = None
 
 
+class CardPosition(BaseModel):
+    x: float
+    y: float
+
+
+class CardPositionsRequest(BaseModel):
+    seat: int = Field(ge=0, le=1)
+    positions: dict[str, CardPosition]
+
+
 class RandomDeckRequest(BaseModel):
     colors: int = Field(ge=1, le=5)
     seed: int = 1337

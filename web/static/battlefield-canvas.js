@@ -232,14 +232,25 @@ class BattlefieldCanvas {
       .map((s) => ({ ...s, keys: s.keys.filter((k) => newKeys.has(k)) }))
       .filter((s) => s.keys.length >= 2);
 
+    const serverPositions = state.card_positions || {};
+    const draggingKeys = new Set(this.dragState?.movedKeys || []);
+
     // Update existing cards / add new ones
     for (const [key, data] of incoming) {
       const existing = this.cardItems.find((c) => c.key === key);
       if (existing) {
         existing.card = data.card;
+        const serverPos = serverPositions[key];
+        if (serverPos && !draggingKeys.has(key)) {
+          existing.x = serverPos.x;
+          existing.y = serverPos.y;
+        }
       } else {
         let pos;
-        if (data.seat === this.viewerSeat && this._pendingDropX !== undefined) {
+        const serverPos = serverPositions[key];
+        if (serverPos) {
+          pos = serverPos;
+        } else if (data.seat === this.viewerSeat && this._pendingDropX !== undefined) {
           pos = { x: this._pendingDropX - BF_CARD_W / 2, y: this._pendingDropY - BF_CARD_H / 2 };
           this._pendingDropX = undefined;
           this._pendingDropY = undefined;
@@ -749,6 +760,7 @@ class BattlefieldCanvas {
       const pixDy = cy - this.dragState.startCY;
 
       if (!this.dragState.dragging && (Math.abs(pixDx) > 4 || Math.abs(pixDy) > 4)) {
+        if (this.dragState.seat !== this.viewerSeat) return;
         // Start dragging
         this.dragState.dragging = true;
 

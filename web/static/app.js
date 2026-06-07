@@ -3253,7 +3253,14 @@ function initBattlefieldCanvas() {
     },
 
     onPermanentDrop() {
-      // Positions are stored in the canvas object itself; no server call needed for repositioning.
+      if (!battlefieldCanvas || !Number.isInteger(seat)) return;
+      const positions = {};
+      for (const item of battlefieldCanvas.cardItems) {
+        if (item.seat === seat) {
+          positions[item.key] = { x: item.x, y: item.y };
+        }
+      }
+      postJson(`/api/sessions/${sessionId}/card-positions`, { seat, positions }).catch(() => {});
     },
   });
 }

@@ -22,7 +22,7 @@ from engine.card_loader import load_cards
 from engine.models import Permanent, PlayerState
 
 from .deck_builder import build_random_deck
-from .schemas import CreateSessionRequest, GameActionRequest, JoinSessionRequest, RandomDeckRequest
+from .schemas import CardPositionsRequest, CreateSessionRequest, GameActionRequest, JoinSessionRequest, RandomDeckRequest
 from .session_store import Session, SessionStore
 
 
@@ -430,6 +430,7 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "untap_land_selection": untap_info,
         "upkeep_pay": _build_upkeep_pay_info(session, viewer_seat),
         "search_library": search_library_info,
+        "card_positions": _live_card_positions(session),
     }
 
 
@@ -463,6 +464,15 @@ def _find_controlled_permanent(
         if permanent.card.name == permanent_name:
             return idx, permanent
     return None
+
+
+def _live_card_positions(session: Session) -> dict[str, dict[str, float]]:
+    """Return stored positions filtered to only keys still on the battlefield."""
+    current_keys: set[str] = set()
+    for seat_idx, player in enumerate(session.game.players):
+        for idx in range(len(player.battlefield)):
+            current_keys.add(f"{seat_idx}-{idx}")
+    return {k: v for k, v in session.card_positions.items() if k in current_keys}
 
 
 def _build_join_url(request: Request, session_id: str) -> str:
@@ -770,6 +780,22 @@ async def stream_session_events(session_id: str):
 def get_state(session_id: str, seat: int | None = Query(default=None, ge=0, le=1)):
     session = _require_session(session_id)
     return _serialize_state(session, viewer_seat=seat)
+
+
+@app.post("/api/sessions/{session_id}/card-positions")
+def update_card_positions(session_id: str, req: CardPositionsRequest):
+    session = _require_session(session_id)
+    for key in req.positions:
+        try:
+            key_seat = int(key.split("-")[0])
+        except (ValueError, IndexError):
+            raise HTTPException(status_code=400, detail=f"Invalid position key: {key}")
+        if key_seat != req.seat:
+            raise HTTPException(status_code=403, detail="Cannot move cards controlled by the opponent")
+    for key, pos in req.positions.items():
+        session.card_positions[key] = {"x": pos.x, "y": pos.y}
+    _notify_session_change(session_id, "card_positions")
+    return {"ok": True}
 
 
 @app.get("/api/cards/search")
