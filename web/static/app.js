@@ -946,6 +946,37 @@ function computeAutoTapLands(manaCost, currentManaPool, battlefield) {
   return toTap;
 }
 
+function canAutoTapSatisfyCost(manaCost, currentManaPool, battlefield) {
+  const required = parseManaCostSymbols(manaCost || "");
+  const pool = { W: 0, U: 0, B: 0, R: 0, G: 0, C: 0, ...currentManaPool };
+
+  const untapped = [];
+  for (const perm of (battlefield || [])) {
+    if (!(perm.type || "").toLowerCase().includes("land")) continue;
+    if (perm.tapped) continue;
+    const produces = inferLandProducedMana(perm);
+    if (produces.length > 0) untapped.push({ produces, used: false });
+  }
+
+  for (const color of ["W", "U", "B", "R", "G", "C"]) {
+    let deficit = Math.max(0, (required[color] || 0) - (pool[color] || 0));
+    for (const land of untapped) {
+      if (deficit <= 0) break;
+      if (land.used || !land.produces.includes(color)) continue;
+      land.used = true;
+      pool[color] = (pool[color] || 0) + 1;
+      deficit--;
+    }
+    if (deficit > 0) return false;
+  }
+
+  const totalPool = MANA_ORDER.reduce((sum, c) => sum + (pool[c] || 0), 0);
+  const totalRequired = MANA_ORDER.reduce((sum, c) => sum + (required[c] || 0), 0) + (required.generic || 0);
+  const genericDeficit = Math.max(0, totalRequired - totalPool);
+  const unusedLands = untapped.filter(l => !l.used).length;
+  return genericDeficit <= unusedLands;
+}
+
 async function performAutoTap() {
   if (!pendingAutoTap) return;
   const pending = pendingAutoTap;
@@ -1445,7 +1476,15 @@ function renderActivationPrompt() {
 
   if (pendingAutoTap) {
     panel.classList.remove("hidden");
-    if (autoTapBtn) autoTapBtn.classList.remove("hidden");
+    if (autoTapBtn) {
+      autoTapBtn.classList.remove("hidden");
+      const canSatisfy = !!me && canAutoTapSatisfyCost(
+        pendingAutoTap.card.mana_cost || "",
+        me.mana_pool,
+        me.battlefield
+      );
+      autoTapBtn.disabled = !canSatisfy;
+    }
     okBtn.classList.add("hidden");
     customRow.classList.add("hidden");
     title.textContent = `Insufficient mana`;

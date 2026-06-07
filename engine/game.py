@@ -893,6 +893,32 @@ class Game:
         the battlefield regardless of whether their activated abilities have targets.
         """
         if card.primary_type not in ("instant", "sorcery"):
+            # Auras require a legal enchant target on the battlefield (MTG Rule 601.2c)
+            if "Aura" in card.type_line:
+                oracle_lower = card.oracle_text.lower()
+                first_line = oracle_lower.split("\n")[0].strip()
+                if first_line.startswith("enchant "):
+                    enchant_noun = first_line[len("enchant "):].strip()
+                    all_perms = [p for player in self.players for p in player.battlefield]
+                    if enchant_noun == "artifact":
+                        has_target = any("artifact" in p.card.type_line.lower() for p in all_perms)
+                    elif enchant_noun == "creature":
+                        has_target = any(p.card.primary_type == "creature" for p in all_perms)
+                    elif enchant_noun == "land":
+                        has_target = any(p.card.primary_type == "land" for p in all_perms)
+                    elif enchant_noun == "enchantment":
+                        has_target = any("enchantment" in p.card.type_line.lower() for p in all_perms)
+                    elif "graveyard" in enchant_noun:
+                        # e.g. "enchant creature card in a graveyard" (Animate Dead)
+                        has_target = any(
+                            c.primary_type == "creature"
+                            for player in self.players
+                            for c in player.graveyard
+                        )
+                    else:
+                        has_target = True  # unknown enchant type — allow cast
+                    if not has_target:
+                        return False, f"no valid target for {card.name}"
             return True, "valid"
 
         program = compile_card_oracle(card)

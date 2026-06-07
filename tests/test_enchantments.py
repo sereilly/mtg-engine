@@ -508,6 +508,49 @@ def test_303_4j_enchant_land_aura_attaches_to_land_not_creature():
 
 
 # ---------------------------------------------------------------------------
+# Rule 601.2c – Casting an Aura requires choosing a legal target; if no legal
+# target exists on the battlefield, the cast is illegal.
+# Regression test: Animate Artifact could previously be cast with no targets.
+# ---------------------------------------------------------------------------
+
+def test_601_2c_animate_artifact_cannot_be_cast_without_artifact_target():
+    """601.2c: Animate Artifact (enchant artifact) cannot be cast when no artifacts are present."""
+    aura = _mk_card(
+        "Animate Artifact",
+        "Enchantment — Aura",
+        "Enchant artifact\nAs long as enchanted artifact isn't a creature, it's an artifact creature with power and toughness each equal to its mana value.",
+    )
+    p1 = PlayerState(name="P1", hand=[aura])
+    p2 = PlayerState(name="P2")  # No artifacts on either side
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Animate Artifact", target_player_index=1)
+
+    assert not result.supported
+    assert any(c.name == "Animate Artifact" for c in p1.hand)
+    assert not any(perm.card.name == "Animate Artifact" for perm in p1.battlefield)
+
+
+def test_601_2c_animate_artifact_can_be_cast_with_artifact_target():
+    """601.2c: Animate Artifact can be cast when a valid artifact target exists."""
+    aura = _mk_card(
+        "Animate Artifact",
+        "Enchantment — Aura",
+        "Enchant artifact\nAs long as enchanted artifact isn't a creature, it's an artifact creature with power and toughness each equal to its mana value.",
+    )
+    artifact = _mk_card("Black Lotus", "Artifact", "{T}, Sacrifice Black Lotus: Add three mana of any one color.")
+    p1 = PlayerState(name="P1", hand=[aura])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=artifact)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Animate Artifact", target_player_index=1)
+
+    assert result.supported
+    assert not any(c.name == "Animate Artifact" for c in p1.hand)
+    assert any(perm.card.name == "Animate Artifact" for perm in p1.battlefield)
+
+
+# ---------------------------------------------------------------------------
 # Rule 303.4m – An ability of a permanent that refers to the "enchanted [object
 # or player]" refers to whatever object or player that permanent is attached to,
 # even if the permanent with the ability isn't an Aura.
