@@ -2363,6 +2363,13 @@ class Game:
                     return None
                 if color_filter and color_filter not in permanent.card.colors:
                     return None
+                # 614.8: regeneration is a destruction-replacement effect
+                if permanent.regeneration_shield > 0:
+                    permanent.regeneration_shield -= 1
+                    permanent.tapped = True
+                    permanent.damage_marked = 0
+                    self.log.append(f"{permanent.card.name} regenerated")
+                    return None
                 removed = target.battlefield.pop(target_permanent_index)
                 target.graveyard.append(removed.card)
                 self._trigger_aura_death_effects(removed, target)
@@ -2376,6 +2383,13 @@ class Game:
                 continue
             if color_filter and color_filter not in permanent.card.colors:
                 continue
+            # 614.8: regeneration is a destruction-replacement effect
+            if permanent.regeneration_shield > 0:
+                permanent.regeneration_shield -= 1
+                permanent.tapped = True
+                permanent.damage_marked = 0
+                self.log.append(f"{permanent.card.name} regenerated")
+                return None
             removed = target.battlefield.pop(idx)
             target.graveyard.append(removed.card)
             self._trigger_aura_death_effects(removed, target)
@@ -3825,6 +3839,14 @@ class Game:
         self._set_phase_and_step(phase, step)
         self._on_step_or_phase_begin(phase, step)
         player = self.players[player_index]
+
+        # 614.1b/614.10: skip step is a replacement effect
+        if self._consume_skip(self.skip_step_counts, step):
+            self.log.append(f"{player.name} skipped draw step")
+            if self._receives_priority(step):
+                self._resolve_priority_window()
+            self._on_step_or_phase_end(phase, step)
+            return 0
 
         # Island Sanctuary: AI always skips the draw to gain protection from non-flying/non-islandwalk attackers
         has_sanctuary = any(perm.card.name == "Island Sanctuary" for perm in player.battlefield)

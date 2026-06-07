@@ -977,6 +977,7 @@ def _is_supported_static_creature_line(line: str) -> bool:
     static_patterns = (
         "this creature enters with seven +1/+0 counters on it",
         "this creature enters with x +1/+1 counters on it",
+        "this creature enters tapped",
         "at end of combat, if this creature attacked or blocked this combat, remove a +1/+0 counter from it",
         "for each 1 damage that would be dealt to this creature, if it has a +1/+1 counter on it, remove a +1/+1 counter from it and prevent that 1 damage",
         "this creature can't block",
