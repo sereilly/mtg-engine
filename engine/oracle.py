@@ -649,6 +649,9 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
     if "return target creature to its owner's hand" in text:
         return _instruction("bounce_target_creature"), "spell_pattern"
 
+    if "exile target creature until end of turn" in text:
+        return _instruction("exile_target_creature_until_eot"), "spell_pattern"
+
     if "prevent all combat damage that would be dealt this turn" in text:
         return _instruction("prevent_all_combat_damage"), "spell_pattern"
 

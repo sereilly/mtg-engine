@@ -47,15 +47,45 @@ class Permanent:
 
     @property
     def effective_power(self) -> int:
-        if "absolute_power" in self.metadata:
-            return int(self.metadata["absolute_power"])
-        return self._base_stat("power") + self.power_bonus
+        # Layer 7d: power/toughness switch — return pre-switch toughness as power
+        if self.metadata.get("pt_switched"):
+            if "absolute_toughness_until_eot" in self.metadata:
+                t_base = int(self.metadata["absolute_toughness_until_eot"])
+            elif "absolute_toughness" in self.metadata:
+                t_base = int(self.metadata["absolute_toughness"])
+            else:
+                t_base = self._base_stat("toughness")
+            return t_base + self.toughness_bonus + int(self.metadata.get("static_buff_toughness", 0))
+        # Layer 7b: temporary set effect takes priority over permanent set
+        if "absolute_power_until_eot" in self.metadata:
+            base = int(self.metadata["absolute_power_until_eot"])
+        elif "absolute_power" in self.metadata:
+            base = int(self.metadata["absolute_power"])
+        else:
+            base = self._base_stat("power")
+        # Layer 7c: modifications on top of 7b base
+        return base + self.power_bonus + int(self.metadata.get("static_buff_power", 0))
 
     @property
     def effective_toughness(self) -> int:
-        if "absolute_toughness" in self.metadata:
-            return int(self.metadata["absolute_toughness"])
-        return self._base_stat("toughness") + self.toughness_bonus
+        # Layer 7d: power/toughness switch — return pre-switch power as toughness
+        if self.metadata.get("pt_switched"):
+            if "absolute_power_until_eot" in self.metadata:
+                p_base = int(self.metadata["absolute_power_until_eot"])
+            elif "absolute_power" in self.metadata:
+                p_base = int(self.metadata["absolute_power"])
+            else:
+                p_base = self._base_stat("power")
+            return p_base + self.power_bonus + int(self.metadata.get("static_buff_power", 0))
+        # Layer 7b: temporary set effect takes priority over permanent set
+        if "absolute_toughness_until_eot" in self.metadata:
+            base = int(self.metadata["absolute_toughness_until_eot"])
+        elif "absolute_toughness" in self.metadata:
+            base = int(self.metadata["absolute_toughness"])
+        else:
+            base = self._base_stat("toughness")
+        # Layer 7c: modifications on top of 7b base
+        return base + self.toughness_bonus + int(self.metadata.get("static_buff_toughness", 0))
 
 
 @dataclass

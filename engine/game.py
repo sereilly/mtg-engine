@@ -16,6 +16,13 @@ _EOT_METADATA_KEYS = (
     "must_attack_until_eot",
     "destroy_if_did_not_attack_eot",
     "redirect_one_damage_to_owner_until_eot",
+    # Layer 7b temporary set effects (613.4b)
+    "absolute_power_until_eot",
+    "absolute_toughness_until_eot",
+    # Layer 7d power/toughness switch (613.4d)
+    "pt_switched",
+    # Layer 6 "loses flying" effect
+    "loses_flying_until_eot",
 )
 
 # Map: artifact name → (color that triggers it, life gained)
@@ -142,6 +149,8 @@ class Game:
     untapped_lands_at_turn_start: dict[int, int] = field(default_factory=dict)
     pending_search_library: dict | None = None
     pending_reorder_library: dict | None = None
+    # 610.3: tracks creatures exiled "until end of turn" — (owner_player_index, card)
+    exile_until_eot: list[tuple[int, CardDefinition]] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         # Preserve legacy external phase naming while internally tracking phase/step.
@@ -184,6 +193,10 @@ class Game:
     ) -> None:
         self.players[controller_index].battlefield.append(permanent)
         self._initialize_permanent_state(permanent, controller_index, target_player_index)
+        # 611.3a/611.3c: static abilities apply as permanents enter. Recalculate
+        # lord buffs so the new permanent immediately receives applicable bonuses,
+        # and so any new lord immediately buffs existing matching permanents.
+        self._recalculate_lord_buffs()
 
     def _public_phase_name(self, phase: str, step: str) -> str:
         if phase in {"precombat_main", "postcombat_main"}:
@@ -1013,6 +1026,8 @@ class Game:
             "grant_regeneration_to_target_creature",
             "berserk_pump",
             "grant_unlimited_blocking",
+            "bounce_target_creature",
+            "exile_target_creature_until_eot",
         ):
             if not any(p.card.primary_type == "creature" for p in target.battlefield):
                 return False, f"no valid target for {card.name}"
@@ -1385,7 +1400,8 @@ class Game:
                     if target_perm.damage_marked >= effective_toughness:
                         target_perm.metadata["no_regenerate"] = True
                         target.battlefield.pop(idx)
-                        self.log.append(f"{target_perm.card.name} was exiled by {card.name}")
+                        self._permanent_to_graveyard(target, target_perm)
+                        self.log.append(f"{target_perm.card.name} died from damage dealt by {card.name}")
                 return True, "resolved"
             if target_perm_idx is not None and isinstance(target_perm_idx, int) and 0 <= target_perm_idx < len(target.battlefield):
                 # Damage targets a creature permanent, not the player
@@ -1412,10 +1428,10 @@ class Game:
                 effective_toughness = target_perm.effective_toughness
                 self.log.append(f"{card.name} dealt {damage} damage to {target_perm.card.name}")
                 if target_perm.damage_marked >= effective_toughness:
-                    # Disintegrate exiles the creature (can't regenerate)
                     target_perm.metadata["no_regenerate"] = True
                     target.battlefield.pop(target_perm_idx)
-                    self.log.append(f"{target_perm.card.name} was exiled by {card.name}")
+                    self._permanent_to_graveyard(target, target_perm)
+                    self.log.append(f"{target_perm.card.name} died from damage dealt by {card.name}")
             else:
                 damage = self._prevent_damage(target, damage)
                 if damage > 0:
@@ -1558,6 +1574,30 @@ class Game:
         if instruction.kind == "bounce_target_creature":
             bounced = self._bounce_target_creature(target)
             self.log.append("Returned creature to hand" if bounced else "No creature to return")
+            return True, "resolved"
+
+        if instruction.kind == "exile_target_creature_until_eot":
+            # 610.3: zone-change one-shot "until" EOT; second one-shot returns at cleanup
+            target_perm_idx = context.target_permanent_index
+            exiled_perm: Permanent | None = None
+            if isinstance(target_perm_idx, int) and 0 <= target_perm_idx < len(target.battlefield):
+                candidate = target.battlefield[target_perm_idx]
+                if candidate.card.primary_type == "creature":
+                    exiled_perm = candidate
+                    target.battlefield.pop(target_perm_idx)
+            if exiled_perm is None:
+                for idx, perm in enumerate(target.battlefield):
+                    if perm.card.primary_type == "creature":
+                        exiled_perm = perm
+                        target.battlefield.pop(idx)
+                        break
+            if exiled_perm is not None:
+                target.exile.append(exiled_perm.card)
+                owner_idx = self.players.index(target)
+                self.exile_until_eot.append((owner_idx, exiled_perm.card))
+                self.log.append(f"{exiled_perm.card.name} exiled until end of turn by {card.name}")
+            else:
+                self.log.append(f"{card.name}: no valid creature to exile")
             return True, "resolved"
 
         if instruction.kind == "prevent_all_combat_damage":
@@ -1823,7 +1863,7 @@ class Game:
         if instruction.kind == "grant_prevention_shield":
             raw_amount = instruction.payload.get("amount", 0)
             amount = max(0, x_value or 0) if raw_amount == "x" else int(raw_amount)
-            recipient = target if source_permanent is not None else caster
+            recipient = target
             recipient.damage_prevention_pool += amount
             if source_permanent is not None and instruction.payload.get("protection_kind") == "color":
                 self.log.append("Color protection shield granted")
@@ -2193,6 +2233,69 @@ class Game:
                     target_perm.metadata.get("temporary_toughness_bonus_until_eot", 0)
                 ) + toughness_delta
                 self.log.append(f"{card.name} gives {target_perm.card.name} +{power_delta}/+{toughness_delta} until end of turn")
+            return True, "resolved"
+
+        # buff_creatures_global from a SPELL (sorcery/instant): locks in the set of
+        # affected creatures at resolution (611.2c). Uses power_bonus so it is NOT
+        # recalculated dynamically (unlike static abilities which use static_buff_*).
+        if instruction.kind == "buff_creatures_global":
+            color_sym = instruction.payload.get("color")
+            power_delta = int(instruction.payload.get("power", 0))
+            toughness_delta = int(instruction.payload.get("toughness", 0))
+            target_players = self.players if instruction.payload.get("all") else [caster]
+            for player in target_players:
+                for perm in list(player.battlefield):
+                    if perm.card.primary_type != "creature":
+                        continue
+                    actual_colors = set(perm.card.colors)
+                    if "color_override" in perm.metadata:
+                        actual_colors = {perm.metadata["color_override"]}
+                    if color_sym and color_sym not in actual_colors:
+                        continue
+                    perm.power_bonus += power_delta
+                    perm.toughness_bonus += toughness_delta
+                    perm.metadata["temporary_power_bonus_until_eot"] = (
+                        int(perm.metadata.get("temporary_power_bonus_until_eot", 0)) + power_delta
+                    )
+                    perm.metadata["temporary_toughness_bonus_until_eot"] = (
+                        int(perm.metadata.get("temporary_toughness_bonus_until_eot", 0)) + toughness_delta
+                    )
+            self.log.append(f"{card.name} buffed matching creatures")
+            return True, "resolved"
+
+        # switch_pt: switches a target creature's power and toughness (613.4d)
+        if instruction.kind == "switch_pt":
+            target_perm: Permanent | None = None
+            if context.target_permanent_index is not None and 0 <= context.target_permanent_index < len(target.battlefield):
+                candidate = target.battlefield[context.target_permanent_index]
+                if candidate.card.primary_type == "creature":
+                    target_perm = candidate
+            if target_perm is None:
+                target_perm = next((p for p in target.battlefield if p.card.primary_type == "creature"), None)
+            if target_perm is None:
+                target_perm = next((p for p in caster.battlefield if p.card.primary_type == "creature"), None)
+            if target_perm is not None:
+                target_perm.metadata["pt_switched"] = not target_perm.metadata.get("pt_switched", False)
+                self.log.append(f"{card.name} switched power/toughness of {target_perm.card.name}")
+            return True, "resolved"
+
+        # become_pt_until_eot: sets absolute power/toughness (layer 7b) until EOT
+        if instruction.kind == "become_pt_until_eot":
+            new_power = int(instruction.payload.get("power", 0))
+            new_toughness = int(instruction.payload.get("toughness", 0))
+            target_perm = None
+            if context.target_permanent_index is not None and 0 <= context.target_permanent_index < len(target.battlefield):
+                candidate = target.battlefield[context.target_permanent_index]
+                if candidate.card.primary_type == "creature":
+                    target_perm = candidate
+            if target_perm is None:
+                target_perm = next((p for p in target.battlefield if p.card.primary_type == "creature"), None)
+            if target_perm is None:
+                target_perm = next((p for p in caster.battlefield if p.card.primary_type == "creature"), None)
+            if target_perm is not None:
+                target_perm.metadata["absolute_power_until_eot"] = new_power
+                target_perm.metadata["absolute_toughness_until_eot"] = new_toughness
+                self.log.append(f"{card.name} set {target_perm.card.name} to {new_power}/{new_toughness} until EOT")
             return True, "resolved"
 
         self.log.append(f"Resolved supported pattern for {card.name} without state mutation")
@@ -2786,6 +2889,16 @@ class Game:
                     permanent.toughness_bonus -= temp_toughness
                 for key in _EOT_METADATA_KEYS:
                     permanent.metadata.pop(key, None)
+        # 610.3: return all creatures exiled "until end of turn" to their owners' battlefields
+        returned_from_exile = list(self.exile_until_eot)
+        self.exile_until_eot.clear()
+        for owner_idx, card_def in returned_from_exile:
+            owner = self.players[owner_idx]
+            if card_def in owner.exile:
+                owner.exile.remove(card_def)
+                new_perm = Permanent(card=card_def)
+                self._put_permanent_onto_battlefield(owner_idx, new_perm, None)
+                self.log.append(f"{card_def.name} returned from exile to {owner.name}'s battlefield")
         self._reset_combat_state(clear_damage_marked=False)
         self._on_step_or_phase_end(phase, step)
         return cleanup_completed
@@ -3105,6 +3218,7 @@ class Game:
             player.graveyard.append(permanent.card)
 
     def _destroy_marked_creatures(self) -> None:
+        any_died = False
         for player in self.players:
             survivors: list[Permanent] = []
             for permanent in player.battlefield:
@@ -3131,11 +3245,15 @@ class Game:
                 self._permanent_to_graveyard(player, permanent)
                 self.log.append(f"{permanent.card.name} died from combat damage")
                 self._trigger_aura_death_effects(permanent, player)
+                any_died = True
             player.battlefield = survivors
         # Clear deathtouch flags from surviving creatures
         for player in self.players:
             for perm in player.battlefield:
                 perm.metadata.pop("received_deathtouch", None)
+        # 611.3b: recalculate lord buffs in case a lord died
+        if any_died:
+            self._recalculate_lord_buffs()
 
     def check_state_based_actions(self) -> bool:
         """Check and apply all state-based actions per CR 704. Returns True if any action fired."""
@@ -3993,6 +4111,47 @@ class Game:
             return 0
         return sum(1 for permanent in self.players[player_index].battlefield if permanent.card.name == "Fastbond")
 
+    def _recalculate_lord_buffs(self) -> None:
+        """Recalculate static-ability buffs from all lords on the battlefield.
+
+        Per rule 611.3a, static abilities are not 'locked in' — they apply
+        dynamically whenever their criteria are met. This method resets and
+        recomputes all static_buff_power / static_buff_toughness values so that
+        newly-entered creatures immediately receive relevant lord buffs, and
+        creatures whose lords have left the battlefield lose those buffs.
+        """
+        # Step 1: Clear all existing static-ability-derived bonuses
+        for player in self.players:
+            for perm in player.battlefield:
+                perm.metadata.pop("static_buff_power", None)
+                perm.metadata.pop("static_buff_toughness", None)
+
+        # Step 2: Re-apply static buffs from every permanent currently on battlefield
+        for ctrl_player in self.players:
+            for source_perm in ctrl_player.battlefield:
+                prog = compile_card_oracle(source_perm.card)
+                for instr in prog.instructions:
+                    if instr.kind == "buff_creatures_global":
+                        color_sym = instr.payload.get("color")
+                        power = int(instr.payload.get("power", 0))
+                        toughness = int(instr.payload.get("toughness", 0))
+                        target_players = self.players if instr.payload.get("all") else [ctrl_player]
+                        for tp in target_players:
+                            for target_perm in tp.battlefield:
+                                if target_perm.card.primary_type != "creature":
+                                    continue
+                                actual_colors = set(target_perm.card.colors)
+                                if "color_override" in target_perm.metadata:
+                                    actual_colors = {target_perm.metadata["color_override"]}
+                                if color_sym and color_sym not in actual_colors:
+                                    continue
+                                target_perm.metadata["static_buff_power"] = (
+                                    int(target_perm.metadata.get("static_buff_power", 0)) + power
+                                )
+                                target_perm.metadata["static_buff_toughness"] = (
+                                    int(target_perm.metadata.get("static_buff_toughness", 0)) + toughness
+                                )
+
     def _apply_global_buff(self, caster: PlayerState, source: CardDefinition) -> None:
         program = compile_card_oracle(source)
         for instr in program.instructions:
@@ -4013,18 +4172,11 @@ class Game:
                         permanent.toughness_bonus += int(instr.payload.get("toughness", 0))
                 return
             if instr.kind == "buff_creatures_global":
-                color_sym = instr.payload.get("color")
-                power_bonus = int(instr.payload.get("power", 0))
-                toughness_bonus = int(instr.payload.get("toughness", 0))
-                target_players = self.players if instr.payload.get("all") else [caster]
-                for player in target_players:
-                    for permanent in player.battlefield:
-                        if permanent.card.primary_type != "creature":
-                            continue
-                        if color_sym and color_sym not in permanent.card.colors:
-                            continue
-                        permanent.power_bonus += power_bonus
-                        permanent.toughness_bonus += toughness_bonus
+                # Static ability: dynamically recalculated (611.3a). Use
+                # static_buff_power / static_buff_toughness so the buff can
+                # be removed when the lord leaves (611.3b) and applied to new
+                # creatures as they enter (611.3c).
+                self._recalculate_lord_buffs()
                 return
 
             if instr.kind == "static_line" and instr.value.startswith("other ") and " get +" in instr.value:
