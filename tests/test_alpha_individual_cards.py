@@ -173,6 +173,26 @@ def _run_card(card: CardDefinition, all_cards: list[CardDefinition]) -> tuple[Ga
         result = game.cast_from_hand(0, "Fork", target_player_index=1)
         return game, p1, p2, before, result
 
+    if card.name == "Blue Elemental Blast":
+        dragon_whelp = next(c for c in all_cards if c.name == "Dragon Whelp")
+        p2.battlefield.append(Permanent(card=dragon_whelp))
+        result = game.cast_from_hand(0, card.name, target_player_index=1)
+        return game, p1, p2, before, result
+
+    if card.name == "Red Elemental Blast":
+        air_elemental = next(c for c in all_cards if c.name == "Air Elemental")
+        p2.battlefield.append(Permanent(card=air_elemental))
+        result = game.cast_from_hand(0, card.name, target_player_index=1)
+        return game, p1, p2, before, result
+
+    if card.name == "Camouflage":
+        game.start_turn(0)
+        game._close_current_priority_step()
+        game.advance_combat_phase()  # → beginning_of_combat
+        game.advance_combat_phase()  # → declare_attackers
+        result = game.cast_from_hand(0, card.name, target_player_index=1)
+        return game, p1, p2, before, result
+
     result = game.cast_from_hand(0, card.name, target_player_index=1)
 
     activatable_fragments = (

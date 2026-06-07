@@ -825,6 +825,17 @@ class Game:
             self.log.append(f"Unsupported card: {card.name} ({classification.reason})")
             return SimulationResult(card.name, False, classification.effect_kind, classification.reason)
 
+        if "cast this spell only during your declare attackers step" in card.oracle_text.lower():
+            if self.current_step != "declare_attackers" or self.active_player_index != caster_index:
+                details = "can only be cast during your declare attackers step"
+                self.log.append(details)
+                return SimulationResult(card.name, False, classification.effect_kind, details)
+
+        target_ok, target_reason = self._validate_cast_targets(card, caster_index, target_player_index)
+        if not target_ok:
+            self.log.append(target_reason)
+            return SimulationResult(card.name, False, classification.effect_kind, target_reason)
+
         resolved_x_value = x_value
         if resolved_x_value is None and "{X}" in card.mana_cost.upper():
             resolved_x_value = self._infer_x_value(caster, card.mana_cost, extra_generic_tax)
@@ -860,6 +871,67 @@ class Game:
             x_value=resolved_x_value,
         )
         return SimulationResult(card.name, True, classification.effect_kind, "resolved")
+
+    def _validate_cast_targets(
+        self,
+        card: CardDefinition,
+        caster_index: int,
+        target_player_index: int | None,
+    ) -> tuple[bool, str]:
+        """Return (True, 'valid') if all required targets exist, else (False, reason).
+
+        Only instants and sorceries execute effects at cast time; permanents enter
+        the battlefield regardless of whether their activated abilities have targets.
+        """
+        if card.primary_type not in ("instant", "sorcery"):
+            return True, "valid"
+
+        program = compile_card_oracle(card)
+        primary = next(
+            (instr for instr in program.instructions if instr.kind != "spell_pattern"),
+            None,
+        )
+        if primary is None:
+            return True, "valid"
+
+        target_idx = target_player_index if target_player_index is not None else (1 - caster_index)
+        if target_idx < 0 or target_idx >= len(self.players):
+            target_idx = 1 - caster_index
+        target = self.players[target_idx]
+
+        if primary.kind == "destroy_target_permanent":
+            type_filter = primary.payload.get("type_filter")
+            color_filter = primary.payload.get("color_filter")
+            has_target = any(
+                (not type_filter or type_filter in p.card.type_line.lower())
+                and (not color_filter or color_filter in p.card.colors)
+                for p in target.battlefield
+            )
+            if not has_target:
+                return False, f"no valid target for {card.name}"
+
+        elif primary.kind == "counter_top_stack_spell":
+            color_filter = primary.payload.get("color_filter")
+            if not self.stack:
+                return False, f"no valid target for {card.name}"
+            if color_filter and not any(color_filter in item.card.colors for item in self.stack):
+                return False, f"no valid target for {card.name}"
+
+        elif primary.kind in (
+            "pump_target_creature_until_eot",
+            "grant_target_flying_until_eot",
+            "grant_regeneration_to_target_creature",
+            "berserk_pump",
+            "grant_unlimited_blocking",
+        ):
+            if not any(p.card.primary_type == "creature" for p in target.battlefield):
+                return False, f"no valid target for {card.name}"
+
+        elif primary.kind in ("tap_target_permanent", "untap_target_permanent"):
+            if not target.battlefield:
+                return False, f"no valid target for {card.name}"
+
+        return True, "valid"
 
     def _infer_x_value(self, player: PlayerState, mana_cost: str, extra_generic: int = 0) -> int:
         required = self._parse_mana_cost(mana_cost, x_value=0, extra_generic=extra_generic)

@@ -489,18 +489,20 @@ def test_115_5_spell_cannot_target_itself_on_stack():
     spells target players or battlefield permanents, never the StackItem representing themselves.
     """
     counter = _mk_card("Counterspell", "Instant", "Counter target spell.")
+    some_spell = _mk_card("Recall", "Instant", "Target player draws 3 cards.")
     p1 = PlayerState(name="P1", hand=[counter])
-    p2 = PlayerState(name="P2")
+    p2 = PlayerState(name="P2", hand=[some_spell])
     game = Game(players=[p1, p2])
+
+    # A spell must exist on the stack for Counterspell to have a legal target (Rule 601.2c).
+    game.queue_from_hand(1, "Recall", target_player_index=0)
 
     result = game.queue_from_hand(0, "Counterspell", target_player_index=1)
 
     assert result.supported
-    item = game.stack[0]
+    item = game.stack[-1]  # Counterspell is on top
     # The stack item does not list itself as its target permanent
     assert item.target_permanent_index is None or item.target_permanent_index != id(item)
-    # Attempting to resolve a counter that references no valid spell target leaves it without effect
-    # (no second spell on stack for it to counter)
 
 
 # ---------------------------------------------------------------------------

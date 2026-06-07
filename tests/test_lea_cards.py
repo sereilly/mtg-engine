@@ -1317,11 +1317,29 @@ def test_camouflage_resolves_supported(all_cards):
     p1 = PlayerState(name="P1", hand=[camouflage])
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # → beginning_of_combat
+    game.advance_combat_phase()  # → declare_attackers
 
     result = game.cast_from_hand(0, "Camouflage", target_player_index=1)
 
     assert result.supported
     assert any("pile blocking" in line.lower() for line in game.log)
+
+def test_camouflage_requires_declare_attackers_step(all_cards):
+    """Camouflage cannot be cast outside the declare attackers step."""
+    camouflage = _get(all_cards, "Camouflage")
+    p1 = PlayerState(name="P1", hand=[camouflage])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    # Default step is precombat_main, not declare_attackers
+    assert game.current_step != "declare_attackers"
+
+    result = game.cast_from_hand(0, "Camouflage", target_player_index=1)
+
+    assert not result.supported
+    assert p1.hand and p1.hand[0].name == "Camouflage"
 
 def test_cyclopean_tomb_marks_land_as_swamp(all_cards):
     tomb = _get(all_cards, "Cyclopean Tomb")
@@ -3046,6 +3064,33 @@ def test_blue_elemental_blast_destroys_red_permanent(all_cards):
     assert result.supported
     assert not p2.battlefield
     assert p2.graveyard and p2.graveyard[0].name == "Shivan Dragon"
+
+
+def test_blue_elemental_blast_cannot_be_cast_without_valid_target(all_cards):
+    """Blue Elemental Blast cannot be cast if there are no valid red targets."""
+    beb = _get(all_cards, "Blue Elemental Blast")
+    forest = _get(all_cards, "Forest")
+    p1 = PlayerState(name="P1", hand=[beb])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=forest)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Blue Elemental Blast", target_player_index=1)
+
+    assert not result.supported
+    assert p1.hand and p1.hand[0].name == "Blue Elemental Blast"
+
+
+def test_blue_elemental_blast_cannot_be_cast_with_empty_battlefield(all_cards):
+    """Blue Elemental Blast cannot be cast if target player has no permanents."""
+    beb = _get(all_cards, "Blue Elemental Blast")
+    p1 = PlayerState(name="P1", hand=[beb])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Blue Elemental Blast", target_player_index=1)
+
+    assert not result.supported
+    assert p1.hand and p1.hand[0].name == "Blue Elemental Blast"
 
 
 def test_bog_wraith_classifies_supported_with_swampwalk(all_cards):
