@@ -125,11 +125,6 @@
                   <div id="oppLife" class="life-pill">20</div>
                 </div>
                 <div id="oppHand" class="card-row hand-row hand-row-opponent"></div>
-                <div class="zone-row">
-                  <div id="oppDeckCount" class="zone-box">Deck: 0</div>
-                  <div id="oppGraveCount" class="zone-box">Graveyard: 0</div>
-                  <div id="oppExileCount" class="zone-box">Exile: 0</div>
-                </div>
               </div>
             </div>
 
@@ -139,11 +134,6 @@
 
             <div class="center-bottom-bar">
               <div class="player-header self-header">
-                <div class="zone-row">
-                  <div id="selfDeckCount" class="zone-box">Deck: 0</div>
-                  <div id="selfGraveCount" class="zone-box">Graveyard: 0</div>
-                  <div id="selfExileCount" class="zone-box">Exile: 0</div>
-                </div>
                 <div id="selfHand" class="card-row hand-row"></div>
                 <div class="lane-head">
                   <h2 id="selfName">You</h2>
@@ -190,13 +180,15 @@
 
             <section class="side-panel">
               <h3>Zones</h3>
-              <p class="side-label">Your Graveyard</p>
+              <p class="side-label">Your Deck (<span id="selfDeckCount">0</span>)</p>
+              <p class="side-label">Your Graveyard (<span id="selfGraveCount">0</span>)</p>
               <div id="selfGraveyardCards" class="zone-cards"></div>
-              <p class="side-label">Your Exile</p>
+              <p class="side-label">Your Exile (<span id="selfExileCount">0</span>)</p>
               <div id="selfExileCards" class="zone-cards"></div>
-              <p class="side-label">Opponent Graveyard</p>
+              <p class="side-label">Opponent Deck (<span id="oppDeckCount">0</span>)</p>
+              <p class="side-label">Opponent Graveyard (<span id="oppGraveCount">0</span>)</p>
               <div id="oppGraveyardCards" class="zone-cards"></div>
-              <p class="side-label">Opponent Exile</p>
+              <p class="side-label">Opponent Exile (<span id="oppExileCount">0</span>)</p>
               <div id="oppExileCards" class="zone-cards"></div>
             </section>
           </aside>

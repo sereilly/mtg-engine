@@ -2983,12 +2983,12 @@ function renderBoard(state) {
     battlefieldCanvas.setSelectedKeys([...selfSelectedKeys, ...allSelectedKeys]);
   }
 
-  q("selfDeckCount").textContent = `Deck: ${me.library_count}`;
-  q("selfGraveCount").textContent = `Graveyard: ${me.graveyard.length}`;
-  q("selfExileCount").textContent = `Exile: ${(me.exile || []).length}`;
-  q("oppDeckCount").textContent = `Deck: ${opp.library_count}`;
-  q("oppGraveCount").textContent = `Graveyard: ${opp.graveyard.length}`;
-  q("oppExileCount").textContent = `Exile: ${(opp.exile || []).length}`;
+  q("selfDeckCount").textContent = me.library_count;
+  q("selfGraveCount").textContent = me.graveyard.length;
+  q("selfExileCount").textContent = (me.exile || []).length;
+  q("oppDeckCount").textContent = opp.library_count;
+  q("oppGraveCount").textContent = opp.graveyard.length;
+  q("oppExileCount").textContent = (opp.exile || []).length;
 
   renderZoneCards("selfGraveyardCards", me.graveyard);
   renderZoneCards("selfExileCards", me.exile || []);
