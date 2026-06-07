@@ -4772,6 +4772,31 @@ def test_raise_dead_returns_creature_from_graveyard_to_hand(all_cards):
     assert not any(card.name == "Bear" for card in p1.graveyard)
 
 
+def test_raise_dead_cannot_cast_with_empty_graveyard(all_cards):
+    raise_dead = _get(all_cards, "Raise Dead")
+
+    p1 = PlayerState(name="P1", hand=[raise_dead], graveyard=[])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Raise Dead", target_player_index=0)
+
+    assert not result.supported
+
+
+def test_raise_dead_cannot_cast_with_only_non_creatures_in_graveyard(all_cards):
+    raise_dead = _get(all_cards, "Raise Dead")
+    sorcery = _mk_card("Lightning Bolt", "Sorcery")
+
+    p1 = PlayerState(name="P1", hand=[raise_dead], graveyard=[sorcery])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Raise Dead", target_player_index=0)
+
+    assert not result.supported
+
+
 def test_red_elemental_blast_destroys_blue_permanent(all_cards):
     reb = _get(all_cards, "Red Elemental Blast")
     air_elemental = _get(all_cards, "Air Elemental")

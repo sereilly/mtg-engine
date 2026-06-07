@@ -936,6 +936,11 @@ class Game:
             if not any_permanent:
                 return False, f"no valid target for {card.name}"
 
+        elif primary.kind in ("return_creature_from_graveyard_to_hand", "reanimate_creature_to_battlefield"):
+            caster = self.players[caster_index]
+            if not any(c.primary_type == "creature" for c in caster.graveyard):
+                return False, f"no valid target for {card.name}"
+
         return True, "valid"
 
     def _infer_x_value(self, player: PlayerState, mana_cost: str, extra_generic: int = 0) -> int:
