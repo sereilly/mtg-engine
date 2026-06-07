@@ -558,9 +558,7 @@ function resetToSetup(message = "Session not found. Start a new game.") {
 function shouldShowAiControls(state) {
   const seatTypes = state?.seat_types || {};
   const values = Object.values(seatTypes);
-  const hasAiPlayer = values.includes("ai");
-  const currentTurnIsAi = seatTypes?.[state?.current_turn] === "ai";
-  return hasAiPlayer && currentTurnIsAi;
+  return values.length > 0 && values.every((t) => t === "ai");
 }
 
 function getAiStepStateKey(state) {
@@ -717,9 +715,14 @@ async function maybeAutoPassDisabledPhase(state = currentState) {
 
 function shouldAutoStepAi(state = currentState) {
   if (!state || !sessionId) return false;
-  if (!shouldShowAiControls(state)) return false;
-  const toggle = q("aiAutoStepToggle");
-  return toggle ? toggle.checked : false;
+  const seatTypes = state?.seat_types || {};
+  if (seatTypes?.[state?.current_turn] !== "ai") return false;
+  // In AI vs AI, respect the manual toggle; in human vs AI always auto-step.
+  if (shouldShowAiControls(state)) {
+    const toggle = q("aiAutoStepToggle");
+    return toggle ? toggle.checked : false;
+  }
+  return true;
 }
 
 async function maybeAutoStepAi(state = currentState) {
