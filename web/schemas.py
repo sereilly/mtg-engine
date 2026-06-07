@@ -25,6 +25,7 @@ ActionKind = Literal[
     "debug_add_to_hand",
     "debug_cast_free",
     "search_library_confirm",
+    "reorder_library_confirm",
 ]
 
 
@@ -57,6 +58,7 @@ class GameActionRequest(BaseModel):
     attacker_indices: list[int] | None = None
     blocker_pairs: dict[int, int] | None = None
     attacker_damage: dict[int, dict[int, int]] | None = None
+    card_order: list[int] | None = None
 
 
 class CardPosition(BaseModel):

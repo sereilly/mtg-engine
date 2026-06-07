@@ -26,6 +26,7 @@ let autoPassMode = null;
 let holdPriorityActive = false;
 let searchLibrarySelectedIndex = null;
 let searchLibraryFilter = "";
+let reorderLibraryCurrentOrder = null;
 let autoPassPriorityInFlight = false;
 let autoPassPriorityRequestedStateKey = "";
 let autoPassDisabledPhaseInFlight = false;
@@ -1078,6 +1079,14 @@ function getSearchLibraryInfo(state = currentState) {
   return info;
 }
 
+function getReorderLibraryInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.reorder_library;
+  if (!info) return null;
+  if (info.caster_seat !== seat) return null;
+  return info;
+}
+
 function getDefaultTargetSeat(cardName) {
   if (seat === null) return 1;
   if (["Ancestral Recall", "Healing Salve", "Stream of Life"].includes(cardName)) {
@@ -1497,6 +1506,113 @@ function renderSearchLibraryModal(info) {
 
   buildGrid();
   if (confirmBtn) confirmBtn.disabled = searchLibrarySelectedIndex === null;
+}
+
+function renderReorderLibraryModal(info) {
+  const modal = document.getElementById("reorderLibraryModal");
+  if (!modal) return;
+
+  if (!info) {
+    modal.classList.add("hidden");
+    return;
+  }
+
+  modal.classList.remove("hidden");
+
+  const cards = info.cards || [];
+  if (reorderLibraryCurrentOrder === null || reorderLibraryCurrentOrder.length !== cards.length) {
+    reorderLibraryCurrentOrder = cards.map((_, i) => i);
+  }
+
+  const container = document.getElementById("reorderLibraryCards");
+  const confirmBtn = document.getElementById("reorderLibraryConfirmBtn");
+
+  let dragSrcSlot = null;
+
+  function buildCards() {
+    if (!container) return;
+    container.innerHTML = "";
+    reorderLibraryCurrentOrder.forEach((cardIdx, slotPos) => {
+      const card = cards[cardIdx];
+      const slot = document.createElement("div");
+      slot.className = "reorder-card-slot";
+      slot.dataset.slotPos = slotPos;
+
+      const item = document.createElement("div");
+      item.className = "reorder-card-item";
+      item.draggable = true;
+      item.dataset.slotPos = slotPos;
+
+      if (card.image_uri) {
+        const img = document.createElement("img");
+        img.src = card.image_uri;
+        img.alt = card.name;
+        img.loading = "lazy";
+        item.appendChild(img);
+      } else {
+        const ph = document.createElement("div");
+        ph.className = "reorder-card-text-placeholder";
+        ph.textContent = card.name;
+        item.appendChild(ph);
+      }
+
+      const nameEl = document.createElement("div");
+      nameEl.className = "reorder-card-item-name";
+      nameEl.textContent = card.name;
+      item.appendChild(nameEl);
+
+      item.addEventListener("dragstart", (e) => {
+        dragSrcSlot = slotPos;
+        item.classList.add("dragging");
+        e.dataTransfer.effectAllowed = "move";
+      });
+
+      item.addEventListener("dragend", () => {
+        item.classList.remove("dragging");
+        container.querySelectorAll(".reorder-card-slot").forEach((s) => s.classList.remove("drag-over"));
+      });
+
+      slot.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        slot.classList.add("drag-over");
+      });
+
+      slot.addEventListener("dragleave", () => {
+        slot.classList.remove("drag-over");
+      });
+
+      slot.addEventListener("drop", (e) => {
+        e.preventDefault();
+        slot.classList.remove("drag-over");
+        const destSlot = Number(slot.dataset.slotPos);
+        if (dragSrcSlot === null || dragSrcSlot === destSlot) return;
+        const newOrder = [...reorderLibraryCurrentOrder];
+        const tmp = newOrder[dragSrcSlot];
+        newOrder[dragSrcSlot] = newOrder[destSlot];
+        newOrder[destSlot] = tmp;
+        reorderLibraryCurrentOrder = newOrder;
+        dragSrcSlot = null;
+        buildCards();
+      });
+
+      slot.appendChild(item);
+      container.appendChild(slot);
+    });
+  }
+
+  if (confirmBtn && !confirmBtn.dataset.bound) {
+    confirmBtn.dataset.bound = "1";
+    confirmBtn.addEventListener("click", async () => {
+      const order = [...reorderLibraryCurrentOrder];
+      reorderLibraryCurrentOrder = null;
+      delete confirmBtn.dataset.bound;
+      modal.classList.add("hidden");
+      await sendAction({ seat, action: "reorder_library_confirm", card_order: order });
+    });
+  }
+
+  buildCards();
 }
 
 function getOpponentName(state = currentState) {
@@ -3042,6 +3158,7 @@ function renderState(state) {
   const untapInfo = getUntapLandSelectionInfo(state);
   const upkeepPayInfo = getUpkeepPayInfo(state);
   const searchLibraryInfo = getSearchLibraryInfo(state);
+  const reorderLibraryInfo = getReorderLibraryInfo(state);
   if (cleanupInfo || untapInfo || upkeepPayInfo) {
     pendingActivation = null;
     pendingCastTarget = null;
@@ -3055,6 +3172,7 @@ function renderState(state) {
   renderBoard(state);
   renderActivationPrompt();
   renderSearchLibraryModal(searchLibraryInfo);
+  renderReorderLibraryModal(reorderLibraryInfo);
   attemptPendingActivation();
 
   const combat = getCombatState(state);

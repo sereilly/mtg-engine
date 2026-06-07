@@ -437,6 +437,20 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
                 "cards": [_serialize_card_summary(card) for card in caster.library],
             }
 
+    reorder_library_info = None
+    pending_reorder = session.game.pending_reorder_library
+    if pending_reorder is not None:
+        caster_seat = pending_reorder["caster_index"]
+        if viewer_seat is None or viewer_seat == caster_seat:
+            target = session.game.players[pending_reorder["target_index"]]
+            top_count = pending_reorder["top_count"]
+            reorder_library_info = {
+                "caster_seat": caster_seat,
+                "target_seat": pending_reorder["target_index"],
+                "top_count": top_count,
+                "cards": [_serialize_card_summary(card) for card in target.library[:top_count]],
+            }
+
     return {
         "session_id": session.id,
         "mode": session.mode,
@@ -462,6 +476,7 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "untap_land_selection": untap_info,
         "upkeep_pay": _build_upkeep_pay_info(session, viewer_seat),
         "search_library": search_library_info,
+        "reorder_library": reorder_library_info,
         "card_positions": _live_card_positions(session),
     }
 
@@ -1195,6 +1210,18 @@ def do_action(session_id: str, req: GameActionRequest):
         ok = session.game.confirm_search_library(req.seat, req.hand_index)
         if not ok:
             raise HTTPException(status_code=400, detail="invalid library card index")
+
+    elif req.action == "reorder_library_confirm":
+        pending = session.game.pending_reorder_library
+        if pending is None:
+            raise HTTPException(status_code=400, detail="no library reorder pending")
+        if req.seat != pending["caster_index"]:
+            raise HTTPException(status_code=400, detail="not your library reorder")
+        if req.card_order is None:
+            raise HTTPException(status_code=400, detail="card_order is required")
+        ok = session.game.confirm_reorder_library(req.seat, req.card_order)
+        if not ok:
+            raise HTTPException(status_code=400, detail="invalid card order")
 
     elif req.action == "ai_step":
         if _seat_type(session, session.current_turn) != "ai":

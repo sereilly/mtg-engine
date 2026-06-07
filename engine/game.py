@@ -141,6 +141,7 @@ class Game:
     priority_pass_count: int = 0
     untapped_lands_at_turn_start: dict[int, int] = field(default_factory=dict)
     pending_search_library: dict | None = None
+    pending_reorder_library: dict | None = None
 
     def __post_init__(self) -> None:
         # Preserve legacy external phase naming while internally tracking phase/step.
@@ -652,6 +653,21 @@ class Game:
         random.shuffle(caster.library)
         self.pending_search_library = None
         self.log.append(f"{caster.name} searched library and put {card.name} into hand")
+        return True
+
+    def confirm_reorder_library(self, caster_index: int, new_order: list) -> bool:
+        pending = self.pending_reorder_library
+        if pending is None or pending["caster_index"] != caster_index:
+            return False
+        target = self.players[pending["target_index"]]
+        top_count = pending["top_count"]
+        top = target.library[:top_count]
+        rest = target.library[top_count:]
+        if len(new_order) != top_count or sorted(new_order) != list(range(top_count)):
+            return False
+        target.library = [top[i] for i in new_order] + rest
+        self.pending_reorder_library = None
+        self.log.append(f"Top {top_count} cards of {target.name}'s library reordered")
         return True
 
     def queue_permanent_ability(
@@ -1584,11 +1600,16 @@ class Game:
             return True, "resolved"
 
         if instruction.kind == "reorder_target_library_top":
-            top = target.library[:3]
-            rest = target.library[3:]
-            target.library = list(reversed(top)) + rest
-            self.log.append(f"{card.name} reordered top {len(top)} cards of {target.name}'s library")
-            return True, "resolved"
+            caster_index = self.players.index(caster)
+            target_index = self.players.index(target)
+            top_count = min(3, len(target.library))
+            self.pending_reorder_library = {
+                "caster_index": caster_index,
+                "target_index": target_index,
+                "top_count": top_count,
+            }
+            self.log.append(f"{caster.name} is looking at the top {top_count} cards of {target.name}'s library")
+            return True, "pending_reorder_library"
 
         if instruction.kind == "mark_text_modified":
             if target.battlefield:

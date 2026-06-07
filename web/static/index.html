@@ -197,6 +197,21 @@
 
     </main>
 
+    <div id="reorderLibraryModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="reorderLibraryTitle">
+      <div class="modal-box reorder-library-box">
+        <h2 id="reorderLibraryTitle" class="modal-title">Reorder Top of Library</h2>
+        <p id="reorderLibrarySubtitle" class="modal-subtitle">Drag cards to rearrange. The leftmost card will be on top of the library.</p>
+        <div class="reorder-library-axis-labels">
+          <span class="reorder-axis-top">← Top of library</span>
+          <span class="reorder-axis-bottom">Bottom →</span>
+        </div>
+        <div id="reorderLibraryCards" class="reorder-library-cards"></div>
+        <div class="modal-footer">
+          <button id="reorderLibraryConfirmBtn" type="button">Confirm Order</button>
+        </div>
+      </div>
+    </div>
+
     <div id="searchLibraryModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="searchLibraryTitle">
       <div class="modal-box">
         <h2 id="searchLibraryTitle" class="modal-title">Search Library</h2>

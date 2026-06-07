@@ -1383,7 +1383,31 @@ def test_natural_selection_reorders_top_three(all_cards):
     result = game.cast_from_hand(0, "Natural Selection", target_player_index=1)
 
     assert result.supported
-    assert [card.name for card in p2.library[:3]] == ["C", "B", "A"]
+    pending = game.pending_reorder_library
+    assert pending is not None
+    assert pending["caster_index"] == 0
+    assert pending["target_index"] == 1
+    assert pending["top_count"] == 3
+
+    # Confirm with order [2, 1, 0] -> C, B, A on top
+    ok = game.confirm_reorder_library(0, [2, 1, 0])
+    assert ok
+    assert [card.name for card in p2.library] == ["C", "B", "A", "D"]
+    assert game.pending_reorder_library is None
+
+
+def test_natural_selection_preserves_rest_of_library(all_cards):
+    natural = _get(all_cards, "Natural Selection")
+    cards = [_mk_card(name, "Sorcery") for name in ["A", "B", "C", "D", "E"]]
+    p1 = PlayerState(name="P1", hand=[natural])
+    p2 = PlayerState(name="P2", library=cards)
+    game = Game(players=[p1, p2])
+
+    game.cast_from_hand(0, "Natural Selection", target_player_index=1)
+    # Keep original order [0, 1, 2] -> no change to top 3
+    game.confirm_reorder_library(0, [0, 1, 2])
+
+    assert [card.name for card in p2.library] == ["A", "B", "C", "D", "E"]
 
 def test_word_of_command_forces_play_from_hand(all_cards):
     word = _get(all_cards, "Word of Command")
