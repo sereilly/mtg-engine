@@ -963,3 +963,116 @@ pre {
     grid-template-columns: 1fr;
   }
 }
+
+/* Library search modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(2px);
+}
+
+.modal-overlay.hidden {
+  display: none;
+}
+
+.modal-box {
+  background: var(--panel-soft);
+  border: 1px solid rgba(242, 184, 75, 0.5);
+  border-radius: 14px;
+  padding: 20px 24px;
+  width: min(900px, 94vw);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+}
+
+.modal-title {
+  margin: 0;
+  color: var(--accent);
+  font-size: 1.25rem;
+}
+
+.modal-subtitle {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.modal-search-row input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.library-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 10px;
+  overflow-y: auto;
+  max-height: 52vh;
+  padding: 4px 2px;
+}
+
+.library-card-choice {
+  cursor: pointer;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.04);
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.library-card-choice:hover {
+  border-color: rgba(242, 184, 75, 0.55);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.library-card-choice.selected {
+  border-color: rgba(133, 200, 134, 0.95);
+  background: rgba(133, 200, 134, 0.12);
+  box-shadow: 0 0 0 1px rgba(133, 200, 134, 0.4);
+}
+
+.library-card-choice img {
+  width: 100%;
+  display: block;
+  border-radius: 6px 6px 0 0;
+}
+
+.library-card-choice-name {
+  font-size: 0.75rem;
+  padding: 4px 6px;
+  text-align: center;
+  color: var(--ink-soft);
+  word-break: break-word;
+}
+
+.library-card-text-placeholder {
+  width: 100%;
+  aspect-ratio: 5 / 7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  font-size: 0.78rem;
+  text-align: center;
+  color: var(--ink-soft);
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 6px 6px 0 0;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 12px;
+}

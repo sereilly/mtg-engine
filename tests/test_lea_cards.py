@@ -685,15 +685,25 @@ def test_timetwister_resets_and_draws_seven(all_cards):
 
 def test_demonic_tutor_puts_library_card_into_hand(all_cards):
     tutor = _get(all_cards, "Demonic Tutor")
+    mountain = _get(all_cards, "Mountain")
+    forest = _get(all_cards, "Forest")
     island = _get(all_cards, "Island")
-    p1 = PlayerState(name="P1", hand=[tutor], library=[island])
+    p1 = PlayerState(name="P1", hand=[tutor], library=[mountain, forest, island])
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
 
     result = game.cast_from_hand(0, "Demonic Tutor", target_player_index=0)
 
     assert result.supported
+    assert game.pending_search_library is not None
+    assert game.pending_search_library["count"] == 1
+    assert game.pending_search_library["card_type"] == "any"
+
+    # Player searches and picks Island (originally at library index 2)
+    confirmed = game.confirm_search_library(0, 2)
+    assert confirmed
     assert any(card.name == "Island" for card in p1.hand)
+    assert game.pending_search_library is None
 
 def test_time_walk_grants_extra_turn(all_cards):
     time_walk = _get(all_cards, "Time Walk")

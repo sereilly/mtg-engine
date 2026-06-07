@@ -392,6 +392,19 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
             "selected_count": len(valid_selected),
         }
 
+    search_library_info = None
+    pending_search = session.game.pending_search_library
+    if pending_search is not None:
+        caster_seat = pending_search["caster_index"]
+        if viewer_seat is None or viewer_seat == caster_seat:
+            caster = session.game.players[caster_seat]
+            search_library_info = {
+                "caster_seat": caster_seat,
+                "count": pending_search["count"],
+                "card_type": pending_search["card_type"],
+                "cards": [_serialize_card_summary(card) for card in caster.library],
+            }
+
     return {
         "session_id": session.id,
         "mode": session.mode,
@@ -416,6 +429,7 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "cleanup_discard": cleanup_info,
         "untap_land_selection": untap_info,
         "upkeep_pay": _build_upkeep_pay_info(session, viewer_seat),
+        "search_library": search_library_info,
     }
 
 
@@ -803,6 +817,9 @@ def do_action(session_id: str, req: GameActionRequest):
     if _upkeep_pay_pending(session) and req.action not in {"pay_upkeep", "sacrifice_upkeep", "tap", "activate", "debug_add_to_hand", "debug_cast_free"}:
         raise HTTPException(status_code=400, detail="resolve upkeep payment before other actions")
 
+    if session.game.pending_search_library is not None and req.action not in {"search_library_confirm", "debug_add_to_hand", "debug_cast_free"}:
+        raise HTTPException(status_code=400, detail="complete library search before other actions")
+
     if req.action in {
         "cast",
         "activate",
@@ -1108,6 +1125,18 @@ def do_action(session_id: str, req: GameActionRequest):
 
         if not _upkeep_pay_pending(session):
             _advance_after_upkeep_choices(session)
+
+    elif req.action == "search_library_confirm":
+        pending = session.game.pending_search_library
+        if pending is None:
+            raise HTTPException(status_code=400, detail="no library search pending")
+        if req.seat != pending["caster_index"]:
+            raise HTTPException(status_code=400, detail="not your library search")
+        if req.hand_index is None:
+            raise HTTPException(status_code=400, detail="hand_index (library card index) is required")
+        ok = session.game.confirm_search_library(req.seat, req.hand_index)
+        if not ok:
+            raise HTTPException(status_code=400, detail="invalid library card index")
 
     elif req.action == "ai_step":
         if _seat_type(session, session.current_turn) != "ai":

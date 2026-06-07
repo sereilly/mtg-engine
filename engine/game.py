@@ -138,6 +138,7 @@ class Game:
     priority_player_index: int | None = None
     priority_pass_count: int = 0
     untapped_lands_at_turn_start: dict[int, int] = field(default_factory=dict)
+    pending_search_library: dict | None = None
 
     def __post_init__(self) -> None:
         # Preserve legacy external phase naming while internally tracking phase/step.
@@ -636,6 +637,20 @@ class Game:
             self.clear_priority_window()
             return SimulationResult(queued.card_name, True, queued.effect_kind, "resolved")
         return queued
+
+    def confirm_search_library(self, caster_index: int, library_index: int) -> bool:
+        pending = self.pending_search_library
+        if pending is None or pending["caster_index"] != caster_index:
+            return False
+        caster = self.players[caster_index]
+        if library_index < 0 or library_index >= len(caster.library):
+            return False
+        card = caster.library.pop(library_index)
+        caster.hand.append(card)
+        random.shuffle(caster.library)
+        self.pending_search_library = None
+        self.log.append(f"{caster.name} searched library and put {card.name} into hand")
+        return True
 
     def queue_permanent_ability(
         self,
@@ -1528,11 +1543,15 @@ class Game:
             self.log.append("Timetwister effect resolved for all players")
             return True, "resolved"
 
-        if instruction.kind == "tutor_top_card":
-            if caster.library:
-                caster.hand.append(caster.library.pop(0))
-            self.log.append(f"{caster.name} tutored a card")
-            return True, "resolved"
+        if instruction.kind == "search_library":
+            caster_index = self.players.index(caster)
+            self.pending_search_library = {
+                "caster_index": caster_index,
+                "count": instruction.payload.get("count", 1),
+                "card_type": instruction.payload.get("card_type", "any"),
+            }
+            self.log.append(f"{caster.name} is searching their library")
+            return True, "pending_search_library"
 
         if instruction.kind == "grant_extra_turn":
             caster_index = self.players.index(caster)

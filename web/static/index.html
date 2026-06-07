@@ -205,6 +205,20 @@
 
     </main>
 
+    <div id="searchLibraryModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="searchLibraryTitle">
+      <div class="modal-box">
+        <h2 id="searchLibraryTitle" class="modal-title">Search Library</h2>
+        <p id="searchLibrarySubtitle" class="modal-subtitle">Choose a card to put into your hand.</p>
+        <div class="modal-search-row">
+          <input id="searchLibraryFilter" type="text" placeholder="Filter by name or type…" autocomplete="off" />
+        </div>
+        <div id="searchLibraryGrid" class="library-card-grid"></div>
+        <div class="modal-footer">
+          <button id="searchLibraryConfirmBtn" type="button" disabled>Add to Hand</button>
+        </div>
+      </div>
+    </div>
+
     <script src="/battlefield-canvas.js?v=20260606"></script>
     <script src="/app.js?v=20260606"></script>
   </body>

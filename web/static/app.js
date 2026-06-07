@@ -24,6 +24,8 @@ let autoPassTurnEndInFlight = false;
 let autoPassTurnEndRequestedStateKey = "";
 let autoPassMode = null;
 let holdPriorityActive = false;
+let searchLibrarySelectedIndex = null;
+let searchLibraryFilter = "";
 let autoPassPriorityInFlight = false;
 let autoPassPriorityRequestedStateKey = "";
 let autoPassDisabledPhaseInFlight = false;
@@ -1068,6 +1070,14 @@ function getUpkeepPayInfo(state = currentState) {
   return info;
 }
 
+function getSearchLibraryInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.search_library;
+  if (!info) return null;
+  if (info.caster_seat !== seat) return null;
+  return info;
+}
+
 function getDefaultTargetSeat(cardName) {
   if (seat === null) return 1;
   if (["Ancestral Recall", "Healing Salve", "Stream of Life"].includes(cardName)) {
@@ -1411,6 +1421,81 @@ function applyUpkeepPayPrompt(upkeepInfo) {
       await sendAction({ seat, action: "sacrifice_upkeep", card_name: cardName });
     });
   }
+}
+
+function renderSearchLibraryModal(info) {
+  const modal = document.getElementById("searchLibraryModal");
+  if (!modal) return;
+
+  if (!info) {
+    modal.classList.add("hidden");
+    return;
+  }
+
+  const cards = info.cards || [];
+  const count = info.count || 1;
+  const subtitle = document.getElementById("searchLibrarySubtitle");
+  if (subtitle) {
+    subtitle.textContent = `Choose ${count === 1 ? "a card" : `${count} cards`} to put into your hand.`;
+  }
+
+  modal.classList.remove("hidden");
+
+  const grid = document.getElementById("searchLibraryGrid");
+  const filterInput = document.getElementById("searchLibraryFilter");
+  const confirmBtn = document.getElementById("searchLibraryConfirmBtn");
+
+  function buildGrid() {
+    if (!grid) return;
+    const term = searchLibraryFilter.toLowerCase();
+    const items = cards
+      .map((card, idx) => {
+        if (term && !card.name.toLowerCase().includes(term) && !(card.type || "").toLowerCase().includes(term)) {
+          return "";
+        }
+        const selectedClass = searchLibrarySelectedIndex === idx ? " selected" : "";
+        const inner = card.image_uri
+          ? `<img src="${escapeHtml(card.image_uri)}" alt="${escapeHtml(card.name)}" loading="lazy" />`
+          : `<div class="library-card-text-placeholder">${escapeHtml(card.name)}</div>`;
+        return `<div class="library-card-choice${selectedClass}" data-idx="${idx}">${inner}<div class="library-card-choice-name">${escapeHtml(card.name)}</div></div>`;
+      })
+      .join("");
+    grid.innerHTML = items;
+
+    grid.querySelectorAll(".library-card-choice").forEach((el) => {
+      el.addEventListener("click", () => {
+        searchLibrarySelectedIndex = Number(el.dataset.idx);
+        if (confirmBtn) confirmBtn.disabled = false;
+        buildGrid();
+      });
+    });
+  }
+
+  if (filterInput && !filterInput.dataset.bound) {
+    filterInput.dataset.bound = "1";
+    filterInput.value = searchLibraryFilter;
+    filterInput.addEventListener("input", () => {
+      searchLibraryFilter = filterInput.value;
+      buildGrid();
+    });
+  }
+
+  if (confirmBtn && !confirmBtn.dataset.bound) {
+    confirmBtn.dataset.bound = "1";
+    confirmBtn.addEventListener("click", async () => {
+      if (searchLibrarySelectedIndex === null) return;
+      const idx = searchLibrarySelectedIndex;
+      searchLibrarySelectedIndex = null;
+      searchLibraryFilter = "";
+      if (filterInput) { filterInput.value = ""; delete filterInput.dataset.bound; }
+      delete confirmBtn.dataset.bound;
+      modal.classList.add("hidden");
+      await sendAction({ seat, action: "search_library_confirm", hand_index: idx });
+    });
+  }
+
+  buildGrid();
+  if (confirmBtn) confirmBtn.disabled = searchLibrarySelectedIndex === null;
 }
 
 function getOpponentName(state = currentState) {
@@ -2876,6 +2961,7 @@ function renderState(state) {
   const cleanupInfo = getCleanupDiscardInfo(state);
   const untapInfo = getUntapLandSelectionInfo(state);
   const upkeepPayInfo = getUpkeepPayInfo(state);
+  const searchLibraryInfo = getSearchLibraryInfo(state);
   if (cleanupInfo || untapInfo || upkeepPayInfo) {
     pendingActivation = null;
     pendingCastTarget = null;
@@ -2888,6 +2974,7 @@ function renderState(state) {
   }
   renderBoard(state);
   renderActivationPrompt();
+  renderSearchLibraryModal(searchLibraryInfo);
   attemptPendingActivation();
 
   const combat = getCombatState(state);

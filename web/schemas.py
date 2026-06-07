@@ -24,6 +24,7 @@ ActionKind = Literal[
     "sacrifice_upkeep",
     "debug_add_to_hand",
     "debug_cast_free",
+    "search_library_confirm",
 ]
 
 

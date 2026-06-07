@@ -352,6 +352,8 @@ def _assert_supported_effect(card: CardDefinition, game: Game, p1: PlayerState, 
         return
 
     if "search your library for a card, put that card into your hand, then shuffle" in text:
+        assert game.pending_search_library is not None
+        game.confirm_search_library(0, 0)
         assert len(p1.hand) == before.p1_hand
         return
 

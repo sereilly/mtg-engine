@@ -659,7 +659,7 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
         return _instruction("timetwister"), "spell_pattern"
 
     if "search your library for a card, put that card into your hand, then shuffle" in text:
-        return _instruction("tutor_top_card"), "spell_pattern"
+        return _instruction("search_library", count=1, card_type="any"), "spell_pattern"
 
     if "take an extra turn after this one" in text:
         return _instruction("grant_extra_turn"), "spell_pattern"
