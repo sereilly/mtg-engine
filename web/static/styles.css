@@ -368,6 +368,56 @@ button:hover {
   align-items: flex-start;
   justify-content: flex-start;
   text-align: left;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.stack-empty-label {
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.stack-item {
+  width: 100%;
+  background: rgba(242, 184, 75, 0.12);
+  border: 1px solid rgba(242, 184, 75, 0.3);
+  border-radius: 7px;
+  padding: 7px 9px;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  box-sizing: border-box;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.stack-item.stack-hl {
+  border-color: rgba(126, 196, 255, 0.8);
+  background: rgba(126, 196, 255, 0.15);
+  box-shadow: 0 0 8px rgba(126, 196, 255, 0.35);
+}
+
+.stack-pos {
+  font-weight: 600;
+  color: rgba(242, 184, 75, 0.9);
+  margin-right: 2px;
+}
+
+.stack-card-link {
+  text-decoration: underline;
+  text-decoration-style: solid;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  color: #e8d9a8;
+  transition: color 0.12s;
+}
+
+.stack-card-link:hover {
+  color: #fff;
+}
+
+.card.stack-target-hl {
+  outline: 2px solid rgba(126, 196, 255, 0.9) !important;
+  box-shadow: 0 0 14px rgba(126, 196, 255, 0.55) !important;
+  z-index: 2;
 }
 
 .action-hint {

@@ -182,15 +182,47 @@ def _serialize_stack_item(item, game: Game) -> dict:
     if item.target_player_index is not None and 0 <= item.target_player_index < len(game.players):
         target_name = game.players[item.target_player_index].name
     item_type = "ability" if item.ability_instruction is not None else "spell"
+    is_triggered = bool(item.ability_effect_kind and item.ability_effect_kind.startswith("triggered_"))
     label = item.card.name if item_type == "spell" else f"{item.card.name} ability"
+
+    target_permanent_name = None
+    target_permanent_seat = None
+    if isinstance(item.target_permanent_index, int) and item.target_player_index is not None:
+        p_idx = item.target_player_index
+        if 0 <= p_idx < len(game.players):
+            bf = game.players[p_idx].battlefield
+            if 0 <= item.target_permanent_index < len(bf):
+                target_permanent_name = bf[item.target_permanent_index].card.name
+                target_permanent_seat = p_idx
+
+    source_permanent_seat = None
+    source_permanent_index = None
+    if item.source_permanent is not None:
+        for seat_idx, player in enumerate(game.players):
+            for perm_idx, perm in enumerate(player.battlefield):
+                if perm is item.source_permanent:
+                    source_permanent_seat = seat_idx
+                    source_permanent_index = perm_idx
+                    break
+            if source_permanent_index is not None:
+                break
+
     return {
         "type": item_type,
+        "is_triggered": is_triggered,
         "label": label,
         "card": _serialize_card(item.card),
         "caster_index": item.caster_index,
         "caster_name": game.players[item.caster_index].name,
         "target_player_index": item.target_player_index,
         "target_player_name": target_name,
+        "target_stack_name": item.target_stack_name,
+        "target_permanent_index": item.target_permanent_index,
+        "target_permanent_name": target_permanent_name,
+        "target_permanent_seat": target_permanent_seat,
+        "source_permanent_seat": source_permanent_seat,
+        "source_permanent_index": source_permanent_index,
+        "ability_text": item.ability_text,
         "x_value": item.x_value,
     }
 

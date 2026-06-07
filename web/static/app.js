@@ -2643,20 +2643,99 @@ function renderPhaseRail(state) {
   }
 }
 
+function _stackCardLinkHtml(displayName, cardData, highlightKind, highlightSeat, highlightIdx) {
+  const preview = cardData ? ` data-stack-preview='${JSON.stringify(cardData).replace(/'/g, "&#39;")}'` : "";
+  const hl = highlightKind ? ` data-hl-kind="${highlightKind}" data-hl-seat="${highlightSeat ?? ""}" data-hl-idx="${highlightIdx ?? ""}"` : "";
+  return `<span class="stack-card-link"${preview}${hl}>${escapeHtml(displayName)}</span>`;
+}
+
+function _buildStackItemHtml(item, position) {
+  const caster = item.caster_name || `Seat ${item.caster_index}`;
+  const cardName = item.card?.name || item.label || "Unknown";
+  const isAbility = item.type === "ability";
+  const isTriggered = item.is_triggered;
+  const pos = `<span class="stack-pos">${position})</span> `;
+
+  if (isAbility && isTriggered) {
+    const srcLink = _stackCardLinkHtml(cardName, item.card, "permanent", item.source_permanent_seat, item.source_permanent_index);
+    const abilityPart = item.ability_text ? `&ldquo;${renderSymbolsInline(item.ability_text)}&rdquo;` : "";
+    return `${pos}${srcLink} triggered ability ${abilityPart}`;
+  }
+
+  if (isAbility) {
+    const srcLink = _stackCardLinkHtml(cardName, item.card, "permanent", item.source_permanent_seat, item.source_permanent_index);
+    const abilityPart = item.ability_text ? `&ldquo;${renderSymbolsInline(item.ability_text)}&rdquo;` : "";
+    return `${pos}${caster} activates ${srcLink} ability ${abilityPart}`;
+  }
+
+  // Spell
+  const spellLink = _stackCardLinkHtml(cardName, item.card, null, null, null);
+  let targetHtml = "";
+  if (item.target_stack_name) {
+    const stackIdx = _findStackItemIndexByName(item.target_stack_name);
+    targetHtml = `, targeting ${_stackCardLinkHtml(item.target_stack_name, null, "stack", null, stackIdx)}`;
+  } else if (item.target_permanent_name) {
+    targetHtml = `, targeting ${_stackCardLinkHtml(item.target_permanent_name, null, "permanent", item.target_permanent_seat, item.target_permanent_index)}`;
+  } else if (item.target_player_name) {
+    targetHtml = `, targeting <span class="stack-card-link">${escapeHtml(item.target_player_name)}</span>`;
+  }
+  return `${pos}${caster} casting ${spellLink}${targetHtml}.`;
+}
+
+let _currentStack = [];
+
+function _findStackItemIndexByName(name) {
+  return _currentStack.findIndex((item) => (item.card?.name || item.label) === name);
+}
+
+function _clearStackHighlights() {
+  document.querySelectorAll(".stack-item.stack-hl").forEach((el) => el.classList.remove("stack-hl"));
+  document.querySelectorAll(".card.stack-target-hl").forEach((el) => el.classList.remove("stack-target-hl"));
+}
+
+function _applyStackHoverHighlight(linkEl) {
+  _clearStackHighlights();
+  const kind = linkEl.dataset.hlKind;
+  const seat = linkEl.dataset.hlSeat;
+  const idx = linkEl.dataset.hlIdx;
+  if (kind === "stack" && idx !== "" && idx !== "undefined") {
+    const stackIdx = parseInt(idx, 10);
+    const itemEl = document.querySelector(`.stack-item[data-stack-index="${stackIdx}"]`);
+    if (itemEl) itemEl.classList.add("stack-hl");
+  } else if (kind === "permanent" && seat !== "" && idx !== "" && seat !== "undefined" && idx !== "undefined") {
+    const cardEl = document.querySelector(`.card[data-zone-kind="battlefield"][data-target-seat="${seat}"][data-permanent-index="${idx}"]`);
+    if (cardEl) cardEl.classList.add("stack-target-hl");
+  }
+}
+
 function renderStack(stack) {
+  _currentStack = stack || [];
+  const zone = q("stackZone");
   if (!stack || stack.length === 0) {
-    q("stackZone").textContent = "Stack: empty";
+    zone.innerHTML = '<span class="stack-empty-label">Stack: empty</span>';
     return;
   }
-  const lines = stack.map((item) => {
-    const cardName = item.label || item.card?.name || "Unknown";
-    const caster = item.caster_name || `Seat ${item.caster_index}`;
-    if (item.target_player_name) {
-      return `${cardName} by ${caster} targeting ${item.target_player_name}`;
-    }
-    return `${cardName} by ${caster}`;
+
+  zone.innerHTML = "";
+  stack.forEach((item, arrayIndex) => {
+    const position = stack.length - arrayIndex;
+    const box = document.createElement("div");
+    box.className = "stack-item";
+    box.dataset.stackIndex = String(arrayIndex);
+    box.innerHTML = _buildStackItemHtml(item, position);
+    zone.appendChild(box);
   });
-  q("stackZone").innerHTML = `Stack:<br>${lines.map((line) => renderSymbolsInline(line)).join("<br>")}`;
+
+  zone.querySelectorAll(".stack-card-link").forEach((link) => {
+    link.addEventListener("mouseenter", () => {
+      const previewRaw = link.dataset.stackPreview;
+      if (previewRaw) {
+        try { showCardPreview(JSON.parse(previewRaw)); } catch { /* ignore */ }
+      }
+      _applyStackHoverHighlight(link);
+    });
+    link.addEventListener("mouseleave", _clearStackHighlights);
+  });
 }
 
 function renderCombatControls(state) {

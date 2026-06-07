@@ -81,6 +81,8 @@ class StackItem:
     ability_instruction: OracleInstruction | None = None
     ability_effect_kind: str | None = None
     source_permanent: Permanent | None = None
+    target_stack_name: str | None = None
+    ability_text: str | None = None
 
 
 @dataclass
@@ -785,6 +787,7 @@ class Game:
                 ability_instruction=instruction,
                 ability_effect_kind=ability.effect_kind,
                 source_permanent=permanent,
+                ability_text=ability.source_line,
             )
         )
         self.log.append(f"{permanent.card.name} ability added to stack")
@@ -885,6 +888,15 @@ class Game:
         card = caster.hand.pop(hand_index)
 
         if card.primary_type != "land":
+            target_stack_name_val: str | None = None
+            if self.stack and "counter target" in card.oracle_text.lower():
+                color_match = re.search(r"counter target (\w+) spell", card.oracle_text.lower())
+                color_filter: str | None = None
+                if color_match:
+                    color_filter = _COLOR_WORD_TO_SYMBOL.get(color_match.group(1))
+                matching = [it for it in self.stack if not color_filter or color_filter in it.card.colors]
+                if matching:
+                    target_stack_name_val = matching[-1].card.name
             self.stack.append(
                 StackItem(
                     card=card,
@@ -892,6 +904,7 @@ class Game:
                     target_player_index=target_player_index,
                     target_permanent_index=target_permanent_index,
                     x_value=resolved_x_value,
+                    target_stack_name=target_stack_name_val,
                 )
             )
             self.log.append(f"{card.name} added to stack")
