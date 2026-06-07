@@ -803,6 +803,12 @@ function cardRequiresTargetCreature(card) {
   return (card.oracle_text || "").toLowerCase().includes("enchant creature");
 }
 
+function cardRequiresTargetPermanent(card) {
+  if (!card || typeof card === "string") return false;
+  const text = (card.oracle_text || "").toLowerCase();
+  return text.includes("target spell or permanent") || (text.includes("target permanent") && !text.includes("target land") && !text.includes("target creature"));
+}
+
 function cardRequiresManaColorChoice(card) {
   if (!card || typeof card === "string") return false;
   const text = (card.oracle_text || "").toLowerCase();
@@ -1004,6 +1010,20 @@ function getTargetableCreaturesForPrompt(state = currentState) {
   return result;
 }
 
+function getTargetablePermanentsForPrompt(state = currentState) {
+  if (!state) return [];
+  const result = [];
+  for (const targetSeat of [0, 1]) {
+    const player = state.players?.[targetSeat];
+    if (!player || !Array.isArray(player.battlefield)) continue;
+    for (const [permanentIndex, permanent] of player.battlefield.entries()) {
+      if (!permanent) continue;
+      result.push({ targetSeat, permanentIndex, cardName: permanent.name || "Permanent", ownerName: player.name || `Seat ${targetSeat}` });
+    }
+  }
+  return result;
+}
+
 function isPendingCastTargetValidForCard(card, { targetSeat = null, zoneKind = "", permanentIndex = null } = {}) {
   if (!pendingCastTarget) return false;
   if (!Number.isInteger(targetSeat)) return false;
@@ -1025,6 +1045,12 @@ function isPendingCastTargetValidForCard(card, { targetSeat = null, zoneKind = "
     if (!Number.isInteger(permanentIndex)) return false;
     if (!card || typeof card === "string") return false;
     return String(card.type || "").toLowerCase().includes("creature");
+  }
+
+  if (pendingCastTarget.targetKind === "permanent") {
+    if (zoneKind !== "battlefield") return false;
+    if (!Number.isInteger(permanentIndex)) return false;
+    return true;
   }
 
   return false;
@@ -1352,6 +1378,9 @@ function renderActivationPrompt() {
     } else if (pendingCastTarget.targetKind === "creature") {
       body.textContent = "Click a valid creature on the battlefield to choose the target.";
       steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
+    } else if (pendingCastTarget.targetKind === "permanent") {
+      body.textContent = "Click any permanent on the battlefield to choose the target.";
+      steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
     } else {
       const players = Array.isArray(currentState?.players) ? currentState.players : [];
       const targetButtons = players
@@ -1597,6 +1626,25 @@ function startCastCreatureTargetPrompt(card, castAction = "cast") {
   updateActionHint(`Choose a creature target for ${cardName}.`);
 }
 
+function startCastPermanentTargetPrompt(card, castAction = "cast") {
+  const cardName = normalizeCardName(card);
+  if (!cardName) return;
+
+  if (getTargetablePermanentsForPrompt().length === 0) {
+    updateActionHint(`No valid permanent targets in play for ${cardName}.`, true);
+    return;
+  }
+
+  pendingCastTarget = {
+    card,
+    cardName,
+    targetKind: "permanent",
+    castAction,
+  };
+  renderActivationPrompt();
+  updateActionHint(`Choose a target permanent for ${cardName}.`);
+}
+
 function startCastXPrompt(card, targetSeat, targetPermanentIndex = null, castAction = "cast") {
   const cardName = normalizeCardName(card);
   if (!cardName) return;
@@ -1628,6 +1676,10 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
   }
   if (pending.targetKind === "creature" && selectedPermanentIndex === null) {
     updateActionHint("Choose a creature in play to target.", true);
+    return;
+  }
+  if (pending.targetKind === "permanent" && selectedPermanentIndex === null) {
+    updateActionHint("Choose a permanent in play to target.", true);
     return;
   }
 
@@ -1890,6 +1942,12 @@ async function castDebugCardForFree() {
   if (card && cardRequiresTargetLand(card)) {
     startCastLandTargetPrompt(card, "debug_cast_free");
     updateDebugStatus(`Choose a land target for ${resolvedCardName}.`, "success");
+    return;
+  }
+
+  if (card && cardRequiresTargetPermanent(card)) {
+    startCastPermanentTargetPrompt(card, "debug_cast_free");
+    updateDebugStatus(`Choose a permanent target for ${resolvedCardName}.`, "success");
     return;
   }
 
@@ -2171,6 +2229,11 @@ function createCardElement(card, options = {}) {
 
         if (cardRequiresTargetCreature(card)) {
           startCastCreatureTargetPrompt(card);
+          return;
+        }
+
+        if (cardRequiresTargetPermanent(card)) {
+          startCastPermanentTargetPrompt(card);
           return;
         }
 
@@ -2741,6 +2804,7 @@ async function handleHandCardDropOnBattlefield({ event, targetSeat, targetItem }
       beginPendingHandCast(card || payload.name, Number.isInteger(payload.handIndex) ? payload.handIndex : null);
       if (card && cardRequiresTargetLand(card)) { startCastLandTargetPrompt(card); return; }
       if (card && cardRequiresTargetCreature(card)) { startCastCreatureTargetPrompt(card); return; }
+      if (card && cardRequiresTargetPermanent(card)) { startCastPermanentTargetPrompt(card); return; }
       if (card && cardRequiresTargetPlayer(card)) { startCastTargetPrompt(card); return; }
       const castTargetSeat = card ? getDefaultTargetSeat(payload.name) : targetSeat;
       if (card && hasXCost(card)) { startCastXPrompt(card, castTargetSeat); return; }

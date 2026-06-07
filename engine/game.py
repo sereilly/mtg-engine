@@ -931,6 +931,11 @@ class Game:
             if not target.battlefield:
                 return False, f"no valid target for {card.name}"
 
+        elif primary.kind == "recolor_target_from_text":
+            any_permanent = any(p.battlefield for p in self.players)
+            if not any_permanent:
+                return False, f"no valid target for {card.name}"
+
         return True, "valid"
 
     def _infer_x_value(self, player: PlayerState, mana_cost: str, extra_generic: int = 0) -> int:
@@ -1529,7 +1534,8 @@ class Game:
 
         if instruction.kind == "recolor_target_from_text":
             symbol = str(instruction.payload.get("target_color", ""))
-            changed = self._apply_color_override(target, symbol) if symbol else False
+            perm_idx = context.target_permanent_index if isinstance(context.target_permanent_index, int) else None
+            changed = self._apply_color_override(target, symbol, target_permanent_index=perm_idx) if symbol else False
             self.log.append("Changed target color" if changed else "No valid permanent to recolor")
             return True, "resolved"
 
@@ -2248,10 +2254,17 @@ class Game:
                 return removed.card
         return None
 
-    def _apply_color_override(self, target: PlayerState, symbol: str) -> bool:
-        """Apply a colour override to the first permanent on *target*'s battlefield."""
+    def _apply_color_override(
+        self,
+        target: PlayerState,
+        symbol: str,
+        target_permanent_index: int | None = None,
+    ) -> bool:
         if not symbol:
             return False
+        if target_permanent_index is not None and 0 <= target_permanent_index < len(target.battlefield):
+            target.battlefield[target_permanent_index].metadata["color_override"] = symbol
+            return True
         if target.battlefield:
             target.battlefield[0].metadata["color_override"] = symbol
             return True

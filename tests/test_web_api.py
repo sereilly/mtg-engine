@@ -1048,3 +1048,90 @@ def test_cast_targeted_spell_succeeds_after_mana_tapped():
     )
     assert cast.status_code == 200
     assert len(cast.json()["stack"]) == 1
+
+
+# ---------------------------------------------------------------------------
+# Bug regression: hold priority during opponent's (AI) turn
+# ---------------------------------------------------------------------------
+
+
+def _make_ai_turn_session(seed: int):
+    """Create a human_vs_ai session and advance to the AI's (seat 1) main phase."""
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_ai",
+            "host_name": "Host",
+            "guest_name": "AI",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": seed,
+        },
+    ).json()
+    sid = created["session_id"]
+    session = store.get(sid)
+    # Advance to AI's turn by directly updating session and game state.
+    session.current_turn = 1
+    session.game.active_player_index = 1
+    session.game.priority_player_index = 1
+    session.game.priority_pass_count = 0
+    session.game.enforce_mana_costs = False
+    return sid
+
+
+def test_ai_step_queues_spell_and_gives_human_priority():
+    """When the AI casts a spell on its turn, the human opponent should receive priority
+    before the spell resolves (hold-priority regression)."""
+    bolt = _mk_card(
+        name="AI Bolt",
+        mana_cost="{R}",
+        type_line="Instant",
+        oracle_text="AI Bolt deals 3 damage to any target.",
+    )
+    sid = _make_ai_turn_session(80001)
+    session = store.get(sid)
+    session.game.players[1].hand = [bolt]
+
+    resp = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "ai_step"},
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+
+    # Spell must be on the stack — not yet resolved.
+    assert len(payload["stack"]) == 1
+    assert payload["stack"][0]["card"]["name"] == "AI Bolt"
+    # Human (seat 0) must have priority so hold-priority can work.
+    assert payload["priority_player"] == 0
+    # Turn must still belong to the AI — not ended yet.
+    assert payload["current_turn"] == 1
+
+
+def test_human_passing_priority_resolves_ai_spell():
+    """After the AI queues a spell and passes priority to the human, the human
+    passing priority should resolve the spell and complete the AI's turn."""
+    bolt = _mk_card(
+        name="AI Bolt Resolve",
+        mana_cost="{R}",
+        type_line="Instant",
+        oracle_text="AI Bolt Resolve deals 3 damage to any target.",
+    )
+    sid = _make_ai_turn_session(80002)
+    session = store.get(sid)
+    session.game.players[1].hand = [bolt]
+    session.game.players[0].life = 20
+
+    # AI casts its spell and pauses for priority.
+    client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "ai_step"})
+
+    # Human passes priority — spell resolves, then the AI continues its turn.
+    resp = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "pass_priority"},
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["stack"] == []
+    # The spell resolved and dealt 3 damage to the human (default target = opponent).
+    assert payload["players"][0]["life"] == 17

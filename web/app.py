@@ -436,33 +436,62 @@ def _build_lan_join_url(request: Request, session_id: str) -> str | None:
     return f"{str(lan_base_url).rstrip('/')}/index.html?session={session_id}"
 
 
-def _ai_step(session: Session) -> None:
+def _ai_step(session: Session) -> bool:
+    """Run one AI action for the current turn.
+
+    Returns True when the AI has nothing more to do this turn (caller should end
+    the turn).  Returns False when the AI queued a spell and passed priority to a
+    human opponent — the turn must NOT be ended yet; the human must act first.
+    """
     seat = session.current_turn
+    game = session.game
 
-    cast_action = choose_cast_action(session.game, seat)
+    has_human_opponent = any(
+        _seat_type(session, s) == "human"
+        for s in range(len(game.players))
+        if s != seat
+    )
+
+    cast_action = choose_cast_action(game, seat)
     if cast_action is not None:
-        card_to_cast = session.game.players[seat].hand[cast_action.hand_index]
+        card_to_cast = game.players[seat].hand[cast_action.hand_index]
         for permanent_index in cast_action.land_tap_indices:
-            permanent = session.game.players[seat].battlefield[permanent_index]
-            session.game.tap_land_for_mana(seat, permanent.card.name, permanent_index=permanent_index)
-        session.game.cast_from_hand(
-            seat,
-            card_to_cast.name,
-            target_player_index=cast_action.target_player_index,
-            x_value=cast_action.x_value,
-        )
+            permanent = game.players[seat].battlefield[permanent_index]
+            game.tap_land_for_mana(seat, permanent.card.name, permanent_index=permanent_index)
 
-    activation_action = choose_activation_action(session.game, seat)
+        if has_human_opponent:
+            result = game.queue_from_hand(
+                seat,
+                card_to_cast.name,
+                target_player_index=cast_action.target_player_index,
+                x_value=cast_action.x_value,
+            )
+            if result.supported:
+                game.note_priority_action_taken(seat)
+                game.pass_priority(seat)
+                return False  # paused — human has priority over the spell on the stack
+        else:
+            game.cast_from_hand(
+                seat,
+                card_to_cast.name,
+                target_player_index=cast_action.target_player_index,
+                x_value=cast_action.x_value,
+            )
+
+    activation_action = choose_activation_action(game, seat)
     if activation_action is not None:
         for permanent_index in activation_action.land_tap_indices:
-            permanent = session.game.players[seat].battlefield[permanent_index]
-            session.game.tap_land_for_mana(seat, permanent.card.name, permanent_index=permanent_index)
-        session.game.activate_permanent_ability(
+            permanent = game.players[seat].battlefield[permanent_index]
+            game.tap_land_for_mana(seat, permanent.card.name, permanent_index=permanent_index)
+        game.activate_permanent_ability(
             seat,
             activation_action.permanent_name,
             target_player_index=activation_action.target_player_index,
             permanent_index=activation_action.permanent_index,
         )
+
+    return True
+
 
 
 def _ai_respond_to_priority(session: Session, seat: int) -> str | None:
@@ -972,8 +1001,8 @@ def do_action(session_id: str, req: GameActionRequest):
     elif req.action == "ai_step":
         if _seat_type(session, session.current_turn) != "ai":
             raise HTTPException(status_code=400, detail="current turn is not AI")
-        _ai_step(session)
-        _end_turn(session)
+        if _ai_step(session):
+            _end_turn(session)
 
     elif req.action == "debug_add_to_hand":
         if seat_type != "human":
@@ -1045,7 +1074,8 @@ def run_ai(session_id: str, steps: int = Query(default=1, ge=1, le=200)):
             break
         if _seat_type(session, session.current_turn) != "ai":
             break
-        _ai_step(session)
+        if not _ai_step(session):
+            break
         _end_turn(session)
         if _winner(session) is not None:
             session.status = "finished"

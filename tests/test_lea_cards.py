@@ -4726,6 +4726,37 @@ def test_purelace_changes_target_to_white(all_cards):
     assert p2.battlefield[0].metadata.get("color_override") == "W"
 
 
+def test_purelace_targets_specific_permanent_by_index(all_cards):
+    """Purelace with a target_permanent_index must recolor that specific permanent,
+    not always the first one (targeting regression)."""
+    purelace = _get(all_cards, "Purelace")
+    bear1 = _mk_card("Bear Alpha", "Creature — Bear")
+    bear2 = _mk_card("Bear Beta", "Creature — Bear")
+
+    p1 = PlayerState(name="P1", hand=[purelace])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear1), Permanent(card=bear2)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Purelace", target_player_index=1, target_permanent_index=1)
+
+    assert result.supported
+    assert p2.battlefield[0].metadata.get("color_override") is None, "first permanent must not be recolored"
+    assert p2.battlefield[1].metadata.get("color_override") == "W", "second permanent must be recolored"
+
+
+def test_purelace_fails_when_no_permanents_in_play(all_cards):
+    """Purelace must fail validation when there are no valid targets on the battlefield."""
+    purelace = _get(all_cards, "Purelace")
+
+    p1 = PlayerState(name="P1", hand=[purelace])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.queue_from_hand(0, "Purelace", target_player_index=1)
+
+    assert not result.supported
+
+
 def test_raise_dead_returns_creature_from_graveyard_to_hand(all_cards):
     raise_dead = _get(all_cards, "Raise Dead")
     bear = _mk_card("Bear", "Creature — Bear")
