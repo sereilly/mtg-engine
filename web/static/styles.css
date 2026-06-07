@@ -830,6 +830,17 @@ button:hover {
   align-items: center;
   justify-content: center;
   text-transform: uppercase;
+  cursor: pointer;
+  user-select: none;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.phase-chip-item:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.phase-chip-item.phase-disabled {
+  opacity: 0.3;
 }
 
 .phase-chip-item.active {

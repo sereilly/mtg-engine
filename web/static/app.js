@@ -26,6 +26,14 @@ let autoPassMode = null;
 let holdPriorityActive = false;
 let autoPassPriorityInFlight = false;
 let autoPassPriorityRequestedStateKey = "";
+let autoPassDisabledPhaseInFlight = false;
+let autoPassDisabledPhaseRequestedStateKey = "";
+// Phases toggled OFF will be auto-passed. Default: only M1, AT, M2 are ON.
+const disabledPhases = new Set([
+  "untap", "upkeep", "draw",
+  "beginning_of_combat", "declare_blockers", "combat_damage", "end_of_combat",
+  "end", "cleanup",
+]);
 /** @type {BattlefieldCanvas|null} */
 let battlefieldCanvas = null;
 
@@ -662,6 +670,48 @@ async function maybeAutoPassPriority(state = currentState) {
     // Silently absorb; next state update will retry if needed.
   } finally {
     autoPassPriorityInFlight = false;
+  }
+}
+
+async function maybeAutoPassDisabledPhase(state = currentState) {
+  if (holdPriorityActive) return;
+  if (autoPassTurnEndEnabled) return;
+  if (!state || seat === null) return;
+  if (autoPassDisabledPhaseInFlight) return;
+  if (state.priority_player !== seat) return;
+  if (hasBlockingPromptForAutoPass(state)) return;
+
+  const activeKey = getActiveStepKey(state);
+  if (!disabledPhases.has(activeKey)) return;
+
+  const stackSize = Array.isArray(state.stack) ? state.stack.length : 0;
+  if (stackSize > 0) return;
+
+  const stateKey = getAutoPassStateKey(state);
+  if (!stateKey || stateKey === autoPassDisabledPhaseRequestedStateKey) return;
+
+  autoPassDisabledPhaseRequestedStateKey = stateKey;
+  autoPassDisabledPhaseInFlight = true;
+  try {
+    const combat = getCombatState(state);
+    if (isCombatStep(state, "declare_attackers") && seat === state.current_turn && !combat?.attackers_locked) {
+      await sendAction({
+        seat,
+        action: "declare_attackers",
+        attacker_indices: [],
+        target_seat: Number.isInteger(combat?.defending_player_index) ? combat.defending_player_index : 1 - seat,
+      });
+      return;
+    }
+    if (isCombatStep(state, "declare_blockers") && seat === combat?.defending_player_index && !combat?.blockers_locked) {
+      await sendAction({ seat, action: "declare_blockers", blocker_pairs: {} });
+      return;
+    }
+    await sendAction({ seat, action: "pass_priority" });
+  } catch {
+    // Silently absorb
+  } finally {
+    autoPassDisabledPhaseInFlight = false;
   }
 }
 
@@ -2443,12 +2493,24 @@ function renderPhaseRail(state) {
     const item = document.createElement("div");
     item.className = "phase-chip-item";
     item.textContent = phase.label;
-    item.title = phase.title;
     item.dataset.phase = phase.key;
+    const isDisabled = disabledPhases.has(phase.key);
+    item.title = isDisabled ? `${phase.title} (auto-pass — click to enable)` : `${phase.title} (click to disable)`;
+    item.classList.toggle("phase-disabled", isDisabled);
     if (activeKey === phase.key) {
       item.classList.add("active");
       item.setAttribute("aria-current", "step");
     }
+    item.addEventListener("click", () => {
+      if (disabledPhases.has(phase.key)) {
+        disabledPhases.delete(phase.key);
+      } else {
+        disabledPhases.add(phase.key);
+        autoPassDisabledPhaseRequestedStateKey = "";
+        maybeAutoPassDisabledPhase();
+      }
+      renderPhaseRail(currentState);
+    });
     container.appendChild(item);
   }
 }
@@ -2810,6 +2872,7 @@ function renderState(state) {
 
   maybeAutoStepAi(state);
   maybeAutoPassUntilTurnEnd(state);
+  maybeAutoPassDisabledPhase(state);
   maybeAutoPassPriority(state);
 }
 
@@ -3376,7 +3439,9 @@ q("holdPriorityBtn").addEventListener("click", () => {
   q("holdPriorityBtn").classList.toggle("toggle-btn-active", holdPriorityActive);
   if (!holdPriorityActive) {
     autoPassPriorityRequestedStateKey = "";
+    autoPassDisabledPhaseRequestedStateKey = "";
     maybeAutoPassPriority(currentState);
+    maybeAutoPassDisabledPhase(currentState);
   }
   updateActionHint(holdPriorityActive ? "Hold Priority on: priority will not auto-pass." : "Hold Priority off: priority will pass automatically.");
 });
