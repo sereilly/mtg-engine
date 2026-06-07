@@ -2,10 +2,10 @@
 
 const BF_CARD_W = 80;
 const BF_CARD_H = 112;
-// Stack: each successive card is offset up (negative Y) so cards fan upward.
-// Target (bottom of stack) is at base Y; auras layer above it.
+// Stack: each successive card is offset down (positive Y) so cards fan downward.
+// Target (bottom of stack) is at base Y; auras layer below it.
 const BF_STACK_OFFSET_X = 0;
-const BF_STACK_OFFSET_Y = -22;
+const BF_STACK_OFFSET_Y = 22;
 // World Y value of the dividing line between the two player halves
 const BF_WORLD_SPLIT_Y = 310;
 // How close (in world px) the center of a dragged card must be to snap-stack
