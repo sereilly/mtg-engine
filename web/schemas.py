@@ -20,6 +20,8 @@ ActionKind = Literal[
     "cleanup_select",
     "untap_select",
     "untap_confirm",
+    "pay_upkeep",
+    "sacrifice_upkeep",
     "debug_add_to_hand",
     "debug_cast_free",
 ]

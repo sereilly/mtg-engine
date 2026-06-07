@@ -968,6 +968,118 @@ def test_stasis_skips_untap_step(all_cards):
     assert untapped == 0
     assert p2.battlefield[0].tapped is True
 
+
+def test_stasis_upkeep_prompts_human_player(all_cards):
+    """Regression: Stasis must pause for a pay/sacrifice choice via real turn-end flow."""
+    from web.app import _end_turn
+
+    stasis = _get(all_cards, "Stasis")
+    island = _get(all_cards, "Island")
+
+    created = client.post(
+        "/api/sessions",
+        json={"mode": "human_vs_human", "host_name": "P1", "guest_name": "P2", "seed": 77},
+    ).json()
+    sid = created["session_id"]
+    client.post(f"/api/sessions/{sid}/join", json={"guest_name": "P2"})
+
+    session = store.get(sid)
+    p1 = session.game.players[0]
+    p1.battlefield = [Permanent(card=stasis), Permanent(card=island)]
+    p1.mana_pool = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0}
+    p1.hand = []
+
+    # End P0's first turn → starts P1's turn.
+    _end_turn(session, allow_manual_cleanup_selection=False)
+    # Stasis must NOT have fired on the opponent's upkeep.
+    assert any(p.card.name == "Stasis" for p in p1.battlefield), \
+        "Stasis must survive opponent's upkeep (upkeep_self should not fire on opponent's turn)"
+
+    # End P1's turn → starts P0's second turn, which should defer at upkeep.
+    _end_turn(session, allow_manual_cleanup_selection=False)
+
+    assert session.game.current_step == "upkeep", "game must be paused at upkeep step"
+    assert session.upkeep_pay_choices, "upkeep_pay_choices must be populated"
+    assert any(c["card_name"] == "Stasis" for c in session.upkeep_pay_choices)
+    assert any(p.card.name == "Stasis" for p in p1.battlefield), \
+        "Stasis must not be auto-sacrificed before player decides"
+
+    state = client.get(f"/api/sessions/{sid}/state?seat=0").json()
+    upkeep_pay = state["upkeep_pay"]
+    assert upkeep_pay is not None, "upkeep_pay info must be present for the human player"
+    assert any(c["card_name"] == "Stasis" for c in upkeep_pay["choices"])
+
+    # Tap Island to add {U}, then pay.
+    tap_resp = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "tap", "permanent_name": "Island"},
+    )
+    assert tap_resp.status_code == 200
+
+    pay_resp = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "pay_upkeep", "card_name": "Stasis"},
+    )
+    assert pay_resp.status_code == 200
+    assert any(p.card.name == "Stasis" for p in p1.battlefield), \
+        "Stasis must remain on battlefield after paying"
+    assert session.game.current_turn_phase == "precombat_main", \
+        "game should have advanced to main phase after paying"
+
+
+def test_stasis_upkeep_sacrifice_removes_stasis(all_cards):
+    """Player choosing to sacrifice Stasis at upkeep removes it correctly."""
+    from web.app import _end_turn
+
+    stasis = _get(all_cards, "Stasis")
+    island = _get(all_cards, "Island")
+
+    created = client.post(
+        "/api/sessions",
+        json={"mode": "human_vs_human", "host_name": "P1", "guest_name": "P2", "seed": 78},
+    ).json()
+    sid = created["session_id"]
+    client.post(f"/api/sessions/{sid}/join", json={"guest_name": "P2"})
+
+    session = store.get(sid)
+    p1 = session.game.players[0]
+    p1.battlefield = [Permanent(card=stasis), Permanent(card=island)]
+    p1.mana_pool = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0}
+    p1.hand = []
+
+    _end_turn(session, allow_manual_cleanup_selection=False)  # P1's turn
+    _end_turn(session, allow_manual_cleanup_selection=False)  # P0 turn 2, deferred at upkeep
+
+    assert session.game.current_step == "upkeep"
+
+    sacrifice_resp = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "sacrifice_upkeep", "card_name": "Stasis"},
+    )
+    assert sacrifice_resp.status_code == 200
+    assert not any(p.card.name == "Stasis" for p in p1.battlefield), \
+        "Stasis must be gone after sacrifice"
+    assert any(c.name == "Stasis" for c in p1.graveyard), \
+        "Stasis must be in graveyard after sacrifice"
+    assert session.game.current_turn_phase == "precombat_main", \
+        "game should have advanced to main phase after sacrifice"
+
+
+def test_stasis_upkeep_engine_get_triggers(all_cards):
+    """get_upkeep_pay_triggers returns Stasis as a pending choice."""
+    stasis = _get(all_cards, "Stasis")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=stasis)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    triggers = game.get_upkeep_pay_triggers(0)
+
+    assert len(triggers) == 1
+    assert triggers[0]["card_name"] == "Stasis"
+    assert "U" in triggers[0]["mana"] or triggers[0]["mana"]  # has a mana cost
+    assert triggers[0]["kind"] == "upkeep_pay_or_sacrifice_enchantment"
+
+
 def test_smoke_limits_creature_untap(all_cards):
     smoke = _get(all_cards, "Smoke")
     c1 = _mk_card("Bear A", "Creature — Bear")

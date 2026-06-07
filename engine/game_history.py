@@ -15,6 +15,8 @@ class GameSnapshot:
     untap_required_lands: int
     untap_candidate_indices: list[int]
     untap_selected_indices: list[int]
+    upkeep_pay_choices: list[dict]
+    upkeep_resolved_choices: dict[str, bool]
 
 
 class GameHistory:
@@ -32,6 +34,8 @@ class GameHistory:
                 untap_required_lands=session.untap_required_lands,
                 untap_candidate_indices=list(session.untap_candidate_indices),
                 untap_selected_indices=list(session.untap_selected_indices),
+                upkeep_pay_choices=list(session.upkeep_pay_choices),
+                upkeep_resolved_choices=dict(session.upkeep_resolved_choices),
             )
         )
 

@@ -247,6 +247,44 @@ def _clear_untap_selection(session: Session) -> None:
     session.untap_selected_indices = []
 
 
+def _clear_upkeep_pay_choices(session: Session) -> None:
+    session.upkeep_pay_choices = []
+    session.upkeep_resolved_choices = {}
+
+
+def _upkeep_pay_pending(session: Session) -> list[dict]:
+    """Return pay-or-sacrifice choices that still need a player decision."""
+    if session.game.current_step != "upkeep":
+        return []
+    return [
+        c for c in session.upkeep_pay_choices
+        if c["card_name"] not in session.upkeep_resolved_choices
+    ]
+
+
+def _advance_after_upkeep_choices(session: Session) -> None:
+    """Called once all upkeep pay-or-sacrifice choices are resolved."""
+    choices = dict(session.upkeep_resolved_choices)
+    _clear_upkeep_pay_choices(session)
+    session.game.resolve_upkeep(session.current_turn, human_choices=choices)
+    session.game.resolve_draw_step(session.current_turn)
+    session.game._enter_main_phase(precombat=True)
+
+
+def _build_upkeep_pay_info(session: Session, viewer_seat: int | None) -> dict | None:
+    """Serialize pending upkeep pay state for the game-state response."""
+    if not session.upkeep_pay_choices:
+        return None
+    if viewer_seat != session.current_turn:
+        return None
+    pending = _upkeep_pay_pending(session)
+    return {
+        "choices": session.upkeep_pay_choices,
+        "resolved": session.upkeep_resolved_choices,
+        "pending": pending,
+    }
+
+
 def _untap_land_selection_requirement(session: Session) -> int:
     if session.game.current_step != "untap":
         return 0
@@ -275,6 +313,16 @@ def _begin_turn(session: Session, player_index: int, defer_untap_selection: bool
 
     _clear_untap_selection(session)
     game.resolve_untap_step(player_index)
+
+    if _seat_type(session, player_index) == "human":
+        choices = game.get_upkeep_pay_triggers(player_index)
+        if choices:
+            session.upkeep_pay_choices = choices
+            session.upkeep_resolved_choices = {}
+            game._set_phase_and_step("beginning", "upkeep")
+            return False
+
+    _clear_upkeep_pay_choices(session)
     game.resolve_upkeep(player_index)
     game.resolve_draw_step(player_index)
     game._enter_main_phase(precombat=True)
@@ -284,6 +332,7 @@ def _begin_turn(session: Session, player_index: int, defer_untap_selection: bool
 def _start_next_turn(session: Session) -> None:
     _clear_cleanup_selection(session)
     _clear_untap_selection(session)
+    _clear_upkeep_pay_choices(session)
     session.game.active_player_index = session.current_turn
     session.game.turn += 1
     session.current_turn = session.game._compute_next_active_player()
@@ -366,6 +415,7 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "winner": win,
         "cleanup_discard": cleanup_info,
         "untap_land_selection": untap_info,
+        "upkeep_pay": _build_upkeep_pay_info(session, viewer_seat),
     }
 
 
@@ -750,6 +800,9 @@ def do_action(session_id: str, req: GameActionRequest):
     if untap_required > 0 and req.action not in {"untap_select", "untap_confirm", "debug_add_to_hand", "debug_cast_free"}:
         raise HTTPException(status_code=400, detail="select untap lands before other actions")
 
+    if _upkeep_pay_pending(session) and req.action not in {"pay_upkeep", "sacrifice_upkeep", "tap", "activate", "debug_add_to_hand", "debug_cast_free"}:
+        raise HTTPException(status_code=400, detail="resolve upkeep payment before other actions")
+
     if req.action in {
         "cast",
         "activate",
@@ -1004,9 +1057,57 @@ def do_action(session_id: str, req: GameActionRequest):
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
         _clear_untap_selection(session)
-        session.game.resolve_upkeep(session.current_turn)
-        session.game.resolve_draw_step(session.current_turn)
-        session.game._enter_main_phase(precombat=True)
+
+        choices = session.game.get_upkeep_pay_triggers(session.current_turn)
+        if choices and _seat_type(session, session.current_turn) == "human":
+            session.upkeep_pay_choices = choices
+            session.upkeep_resolved_choices = {}
+            session.game._set_phase_and_step("beginning", "upkeep")
+        else:
+            _clear_upkeep_pay_choices(session)
+            session.game.resolve_upkeep(session.current_turn)
+            session.game.resolve_draw_step(session.current_turn)
+            session.game._enter_main_phase(precombat=True)
+
+    elif req.action == "pay_upkeep":
+        if req.seat != session.current_turn:
+            raise HTTPException(status_code=400, detail="not your turn")
+        if not _upkeep_pay_pending(session):
+            raise HTTPException(status_code=400, detail="no upkeep payment required")
+        if not req.card_name:
+            raise HTTPException(status_code=400, detail="card_name is required")
+
+        pending = {c["card_name"]: c for c in _upkeep_pay_pending(session)}
+        if req.card_name not in pending:
+            raise HTTPException(status_code=400, detail="card not awaiting upkeep payment")
+
+        choice = pending[req.card_name]
+        controller = session.game.players[req.seat]
+        for sym, count in choice["mana"].items():
+            if sym != "generic" and controller.mana_pool.get(sym, 0) < count:
+                raise HTTPException(status_code=400, detail=f"not enough {sym} mana to pay upkeep for {req.card_name}")
+
+        session.upkeep_resolved_choices[req.card_name] = True
+
+        if not _upkeep_pay_pending(session):
+            _advance_after_upkeep_choices(session)
+
+    elif req.action == "sacrifice_upkeep":
+        if req.seat != session.current_turn:
+            raise HTTPException(status_code=400, detail="not your turn")
+        if not _upkeep_pay_pending(session):
+            raise HTTPException(status_code=400, detail="no upkeep payment required")
+        if not req.card_name:
+            raise HTTPException(status_code=400, detail="card_name is required")
+
+        pending = {c["card_name"]: c for c in _upkeep_pay_pending(session)}
+        if req.card_name not in pending:
+            raise HTTPException(status_code=400, detail="card not awaiting upkeep payment")
+
+        session.upkeep_resolved_choices[req.card_name] = False
+
+        if not _upkeep_pay_pending(session):
+            _advance_after_upkeep_choices(session)
 
     elif req.action == "ai_step":
         if _seat_type(session, session.current_turn) != "ai":
@@ -1110,6 +1211,8 @@ def undo_action(session_id: str, seat: int | None = Query(default=None, ge=0, le
     session.untap_required_lands = snapshot.untap_required_lands
     session.untap_candidate_indices = snapshot.untap_candidate_indices
     session.untap_selected_indices = snapshot.untap_selected_indices
+    session.upkeep_pay_choices = snapshot.upkeep_pay_choices
+    session.upkeep_resolved_choices = snapshot.upkeep_resolved_choices
 
     _notify_session_change(session.id, "undo")
     return _serialize_state(session, viewer_seat=seat)

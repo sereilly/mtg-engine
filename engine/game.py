@@ -52,6 +52,15 @@ _PHASE_STEPS: dict[str, tuple[str, ...]] = {
 # Untap and cleanup are the regular no-priority steps in this simplified engine.
 _NO_PRIORITY_STEPS = {"untap", "cleanup"}
 
+# Instruction kinds where the controller must pay mana or face a consequence.
+# These require an interactive choice from a human player.
+_UPKEEP_PAY_KINDS = {
+    "upkeep_pay_or_sacrifice_enchantment",
+    "upkeep_pay_or_sacrifice_self",
+    "upkeep_pay_or_deal_damage_to_controller",
+    "upkeep_pay_or_tap_and_sacrifice_opponent_land",
+}
+
 
 @dataclass
 class SimulationResult:
@@ -2280,7 +2289,33 @@ class Game:
             for symbol in _MANA_SYMBOLS:
                 player.mana_pool[symbol] = 0
 
-    def resolve_upkeep(self, player_index: int) -> None:
+    def get_upkeep_pay_triggers(self, player_index: int) -> list[dict]:
+        """Return pay-or-consequence upkeep triggers that the player must decide on.
+
+        Only returns triggers where the permanent's controller is ``player_index``
+        and the condition is ``upkeep_self`` (i.e. fires on *their* upkeep).
+        """
+        controller = self.players[player_index]
+        choices: list[dict] = []
+        for permanent in controller.battlefield:
+            program = compile_card_oracle(permanent.card)
+            for trig in program.triggered_abilities:
+                if trig.instruction is None:
+                    continue
+                if trig.condition.kind != "upkeep_self":
+                    continue
+                if trig.instruction.kind not in _UPKEEP_PAY_KINDS:
+                    continue
+                mana: dict[str, int] = trig.instruction.payload.get("mana", {})
+                choices.append({
+                    "card_name": permanent.card.name,
+                    "mana": mana,
+                    "kind": trig.instruction.kind,
+                })
+                break
+        return choices
+
+    def resolve_upkeep(self, player_index: int, human_choices: dict[str, bool] | None = None) -> None:
         phase = "beginning"
         step = "upkeep"
         self._set_phase_and_step(phase, step)
@@ -2294,15 +2329,20 @@ class Game:
                     kind = trig.instruction.kind
                     cond = trig.condition.kind
 
+                    # "at the beginning of YOUR upkeep" only fires during the controller's own upkeep.
+                    if cond == "upkeep_self" and controller is not self.players[player_index]:
+                        break
+
                     if cond == "upkeep_self" and kind == "upkeep_pay_or_sacrifice_enchantment":
                         mana: dict[str, int] = trig.instruction.payload.get("mana", {})
-                        paid = True
-                        for sym, count in mana.items():
-                            if sym == "generic":
-                                continue
-                            if controller.mana_pool.get(sym, 0) < count:
-                                paid = False
-                                break
+                        if human_choices is not None and permanent.card.name in human_choices:
+                            paid = human_choices[permanent.card.name]
+                        else:
+                            paid = all(
+                                controller.mana_pool.get(sym, 0) >= count
+                                for sym, count in mana.items()
+                                if sym != "generic"
+                            )
                         if paid:
                             for sym, count in mana.items():
                                 if sym != "generic":
@@ -2376,11 +2416,14 @@ class Game:
                     if cond == "upkeep_self" and kind == "upkeep_pay_or_deal_damage_to_controller":
                         mana = trig.instruction.payload.get("mana", {})
                         damage_amt = int(trig.instruction.payload.get("damage", 0))
-                        paid = all(
-                            controller.mana_pool.get(sym, 0) >= count
-                            for sym, count in mana.items()
-                            if sym != "generic"
-                        )
+                        if human_choices is not None and permanent.card.name in human_choices:
+                            paid = human_choices[permanent.card.name]
+                        else:
+                            paid = all(
+                                controller.mana_pool.get(sym, 0) >= count
+                                for sym, count in mana.items()
+                                if sym != "generic"
+                            )
                         if paid:
                             for sym, count in mana.items():
                                 if sym != "generic":
@@ -2393,11 +2436,14 @@ class Game:
 
                     if cond == "upkeep_self" and kind == "upkeep_pay_or_tap_and_sacrifice_opponent_land":
                         mana = trig.instruction.payload.get("mana", {})
-                        paid = all(
-                            controller.mana_pool.get(sym, 0) >= count
-                            for sym, count in mana.items()
-                            if sym != "generic"
-                        )
+                        if human_choices is not None and permanent.card.name in human_choices:
+                            paid = human_choices[permanent.card.name]
+                        else:
+                            paid = all(
+                                controller.mana_pool.get(sym, 0) >= count
+                                for sym, count in mana.items()
+                                if sym != "generic"
+                            )
                         if paid:
                             for sym, count in mana.items():
                                 if sym != "generic":
@@ -2436,11 +2482,14 @@ class Game:
 
                     if cond == "upkeep_self" and kind == "upkeep_pay_or_sacrifice_self":
                         mana = trig.instruction.payload.get("mana", {})
-                        paid = all(
-                            controller.mana_pool.get(sym, 0) >= count
-                            for sym, count in mana.items()
-                            if sym != "generic"
-                        )
+                        if human_choices is not None and permanent.card.name in human_choices:
+                            paid = human_choices[permanent.card.name]
+                        else:
+                            paid = all(
+                                controller.mana_pool.get(sym, 0) >= count
+                                for sym, count in mana.items()
+                                if sym != "generic"
+                            )
                         if paid:
                             for sym, count in mana.items():
                                 if sym != "generic":

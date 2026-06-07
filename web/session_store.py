@@ -28,6 +28,8 @@ class Session:
     untap_required_lands: int = 0
     untap_candidate_indices: list[int] = field(default_factory=list)
     untap_selected_indices: list[int] = field(default_factory=list)
+    upkeep_pay_choices: list[dict] = field(default_factory=list)
+    upkeep_resolved_choices: dict[str, bool] = field(default_factory=dict)
     history: GameHistory = field(default_factory=GameHistory)
 
 

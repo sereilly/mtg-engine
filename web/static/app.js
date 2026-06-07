@@ -571,7 +571,7 @@ function getAutoPassStateKey(state) {
 }
 
 function hasBlockingPromptForAutoPass(state = currentState) {
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state)) return true;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state)) return true;
   return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor);
 }
 
@@ -974,6 +974,16 @@ function getUntapLandSelectionInfo(state = currentState) {
   return null;
 }
 
+function getUpkeepPayInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  if (state.current_step !== "upkeep") return null;
+  if (state.current_turn !== seat) return null;
+
+  const info = state.upkeep_pay;
+  if (!info || !Array.isArray(info.pending) || info.pending.length === 0) return null;
+  return info;
+}
+
 function getDefaultTargetSeat(cardName) {
   if (seat === null) return 1;
   if (["Ancestral Recall", "Healing Salve", "Stream of Life"].includes(cardName)) {
@@ -1097,6 +1107,7 @@ function isPendingHandCastCard(card, handIndex = null) {
 function isAnyPromptActive(state = currentState) {
   if (getCleanupDiscardInfo(state)) return true;
   if (getUntapLandSelectionInfo(state)) return true;
+  if (getUpkeepPayInfo(state)) return true;
   if (shouldShowPriorityPrompt(state)) return true;
   if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingAutoTap) return true;
 
@@ -1110,7 +1121,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -1263,6 +1274,61 @@ function applyUntapPrompt(untapInfo) {
   customOkBtn.disabled = true;
 }
 
+function manaObjectToSymbolString(mana) {
+  if (!mana || typeof mana !== "object") return "?";
+  return Object.entries(mana)
+    .flatMap(([sym, count]) => Array(Number(count)).fill(`{${sym}}`))
+    .join("");
+}
+
+function applyUpkeepPayPrompt(upkeepInfo) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  const pending = upkeepInfo.pending || [];
+  const current = pending[0];
+  const cardName = current?.card_name || "Unknown";
+  const manaStr = manaObjectToSymbolString(current?.mana);
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  title.textContent = "Upkeep Payment Required";
+  body.textContent = `${cardName} requires a payment at the beginning of your upkeep. Tap lands to generate mana, then pay or sacrifice.`;
+
+  const payBtn = `<button type="button" class="prompt-choice-btn" id="upkeepPayBtn">Pay ${renderSymbolsInline(manaStr)}</button>`;
+  const sacBtn = `<button type="button" class="prompt-choice-btn" id="upkeepSacBtn">Sacrifice ${escapeHtml(cardName)}</button>`;
+  const remaining = pending.length;
+  steps.innerHTML = [
+    `<div>Card: ${escapeHtml(cardName)}</div>`,
+    `<div>Cost: ${renderSymbolsInline(manaStr)}</div>`,
+    `<div>Remaining decisions: ${remaining}</div>`,
+    `<div class="prompt-choice-row">${payBtn}${sacBtn}</div>`,
+  ].join("");
+
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  const payBtnEl = document.getElementById("upkeepPayBtn");
+  const sacBtnEl = document.getElementById("upkeepSacBtn");
+  if (payBtnEl) {
+    payBtnEl.addEventListener("click", async () => {
+      await sendAction({ seat, action: "pay_upkeep", card_name: cardName });
+    });
+  }
+  if (sacBtnEl) {
+    sacBtnEl.addEventListener("click", async () => {
+      await sendAction({ seat, action: "sacrifice_upkeep", card_name: cardName });
+    });
+  }
+}
+
 function getOpponentName(state = currentState) {
   if (!state || !Array.isArray(state.players) || state.players.length < 2) {
     return "Opponent";
@@ -1299,6 +1365,7 @@ function renderActivationPrompt() {
   const me = getCurrentPlayerState();
   const cleanupDiscard = getCleanupDiscardInfo();
   const untapInfo = getUntapLandSelectionInfo();
+  const upkeepPayInfo = getUpkeepPayInfo();
   const inCombat = currentState?.current_turn_phase === "combat";
   const hasValidAttackers = getValidAttackerIndices(currentState).length > 0;
   const hasValidBlockers = getValidBlockerAssignments(currentState).length > 0;
@@ -1315,6 +1382,11 @@ function renderActivationPrompt() {
 
   if (untapInfo) {
     applyUntapPrompt(untapInfo);
+    return;
+  }
+
+  if (upkeepPayInfo) {
+    applyUpkeepPayPrompt(upkeepPayInfo);
     return;
   }
 
@@ -2699,7 +2771,8 @@ function renderState(state) {
   }
   const cleanupInfo = getCleanupDiscardInfo(state);
   const untapInfo = getUntapLandSelectionInfo(state);
-  if (cleanupInfo || untapInfo) {
+  const upkeepPayInfo = getUpkeepPayInfo(state);
+  if (cleanupInfo || untapInfo || upkeepPayInfo) {
     pendingActivation = null;
     pendingCastTarget = null;
     pendingCastX = null;
@@ -2726,11 +2799,13 @@ function renderState(state) {
     }
   }
 
-  // Final-pass override so cleanup prompt always wins against other prompt updates.
+  // Final-pass override so these prompts always win against other prompt updates.
   if (cleanupInfo) {
     applyCleanupPrompt(cleanupInfo);
   } else if (untapInfo) {
     applyUntapPrompt(untapInfo);
+  } else if (upkeepPayInfo) {
+    applyUpkeepPayPrompt(upkeepPayInfo);
   }
 
   maybeAutoStepAi(state);
