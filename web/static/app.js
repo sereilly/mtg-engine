@@ -1639,17 +1639,28 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
     return;
   }
 
-  updateActionHint(`Casting ${pending.cardName}...`);
-  sendAction({
+  const actionBody = {
     seat,
     action: pending.castAction || "cast",
     card_name: pending.cardName,
     target_seat: selectedTarget,
     permanent_index: selectedPermanentIndex,
-  })
-    .then(() => updateActionHint(`Cast ${pending.cardName}.`))
-    .catch((e) => updateActionHint(e.message, true))
-    .finally(() => clearPendingHandCast());
+  };
+  updateActionHint(`Casting ${pending.cardName}...`);
+  sendAction(actionBody)
+    .then(() => {
+      updateActionHint(`Cast ${pending.cardName}.`);
+      clearPendingHandCast();
+    })
+    .catch((e) => {
+      if (e.message && e.message.toLowerCase().startsWith("insufficient mana")) {
+        pendingAutoTap = { card: pending.card, cardName: pending.cardName, actionBody };
+        renderActivationPrompt();
+        return;
+      }
+      clearPendingHandCast();
+      updateActionHint(e.message, true);
+    });
 }
 
 function handlePlayerTargetClick(targetSeat) {
@@ -2733,11 +2744,19 @@ async function handleHandCardDropOnBattlefield({ event, targetSeat, targetItem }
       if (card && cardRequiresTargetPlayer(card)) { startCastTargetPrompt(card); return; }
       const castTargetSeat = card ? getDefaultTargetSeat(payload.name) : targetSeat;
       if (card && hasXCost(card)) { startCastXPrompt(card, castTargetSeat); return; }
+      const actionBody = { seat, action: "cast", card_name: payload.name, target_seat: castTargetSeat };
       try {
-        await sendAction({ seat, action: "cast", card_name: payload.name, target_seat: castTargetSeat });
+        await sendAction(actionBody);
         updateActionHint(`Cast ${payload.name} targeting seat ${castTargetSeat}.`);
-      } finally {
         clearPendingHandCast();
+      } catch (e) {
+        if (card && e.message && e.message.toLowerCase().startsWith("insufficient mana")) {
+          pendingAutoTap = { card, cardName: payload.name, actionBody };
+          renderActivationPrompt();
+          return;
+        }
+        clearPendingHandCast();
+        throw e;
       }
       return;
     }

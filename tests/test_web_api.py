@@ -936,3 +936,115 @@ def test_cleanup_cast_action_falls_back_to_discard_selection():
     assert second_payload["current_turn"] == 1
     assert len(second_payload["players"][1]["hand"]) == 8
     assert len(second_payload["players"][0]["graveyard"]) == 2
+
+
+# ---------------------------------------------------------------------------
+# Regression: drag-to-battlefield and target+mana prompt flow
+# ---------------------------------------------------------------------------
+
+
+def _make_session_with_card_in_hand(seed: int, card, mana_pool: dict | None = None):
+    """Create a session and inject *card* into seat-0's hand with optional mana."""
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "guest_name": "Guest",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": seed,
+        },
+    ).json()
+    sid = created["session_id"]
+    client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
+    session = store.get(sid)
+    session.game.players[0].hand = [card]
+    if mana_pool is not None:
+        session.game.players[0].mana_pool = mana_pool
+    return sid
+
+
+def test_cast_without_mana_returns_insufficient_mana_error():
+    """Backend returns 'insufficient mana' when cast is attempted with empty mana pool.
+
+    Regression: the frontend drag path and target-resolve path both check for an
+    error message starting with 'insufficient mana' to decide whether to show the
+    auto-tap prompt instead of swallowing the failure silently.
+    """
+    bolt = _mk_card(
+        name="Bolt Rg",
+        mana_cost="{R}",
+        type_line="Instant",
+        oracle_text="Bolt Rg deals 3 damage to any target.",
+    )
+    sid = _make_session_with_card_in_hand(70001, bolt, mana_pool={"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0})
+
+    resp = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "cast", "card_name": "Bolt Rg", "target_seat": 1},
+    )
+    assert resp.status_code == 400
+    assert resp.json()["detail"].lower().startswith("insufficient mana")
+
+
+def test_cast_targeted_spell_without_mana_returns_insufficient_mana_error():
+    """Backend returns 'insufficient mana' for a targeted spell with no mana tapped.
+
+    Regression: resolvePendingCastTarget (click/drag path after target selection)
+    must receive this error to trigger the auto-tap prompt rather than silently
+    failing.
+    """
+    bolt = _mk_card(
+        name="Target Bolt",
+        mana_cost="{R}",
+        type_line="Instant",
+        oracle_text="Target Bolt deals 3 damage to any target.",
+    )
+    sid = _make_session_with_card_in_hand(70002, bolt, mana_pool={"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0})
+
+    resp = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "cast", "card_name": "Target Bolt", "target_seat": 1},
+    )
+    assert resp.status_code == 400
+    assert resp.json()["detail"].lower().startswith("insufficient mana")
+
+
+def test_cast_targeted_spell_succeeds_after_mana_tapped():
+    """Casting a targeted spell succeeds once sufficient mana is in the pool.
+
+    Regression: this is the successful end-state of the auto-tap + cast flow that
+    both the drag path and the target-resolve path lead to.
+    """
+    from engine.models import Permanent
+
+    bolt = _mk_card(
+        name="Target Bolt 2",
+        mana_cost="{R}",
+        type_line="Instant",
+        oracle_text="Target Bolt 2 deals 3 damage to any target.",
+    )
+    land = _mk_card(
+        name="Mountain",
+        mana_cost="",
+        type_line="Basic Land — Mountain",
+        oracle_text="",
+        produced_mana=("R",),
+    )
+    sid = _make_session_with_card_in_hand(70003, bolt)
+    session = store.get(sid)
+    session.game.players[0].battlefield = [Permanent(card=land, tapped=False)]
+
+    tap = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "tap", "permanent_index": 0},
+    )
+    assert tap.status_code == 200
+
+    cast = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "cast", "card_name": "Target Bolt 2", "target_seat": 1},
+    )
+    assert cast.status_code == 200
+    assert len(cast.json()["stack"]) == 1
