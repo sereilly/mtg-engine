@@ -305,12 +305,13 @@ class BattlefieldCanvas {
           this.stacks.push(stack);
         }
         if (!stack.keys.includes(auraKey)) {
-          // Remove auraKey from any other stack before adding
+          // Push first so the stack has >= 2 keys and survives the filter below.
+          stack.keys.push(auraKey);
+          // Remove auraKey from any other stack.
           this.stacks = this.stacks.map((s) => {
             if (s === stack) return s;
             return { ...s, keys: s.keys.filter((k) => k !== auraKey) };
           }).filter((s) => s.keys.length >= 2);
-          stack.keys.push(auraKey);
         }
 
         // Snap aura position to target's position
