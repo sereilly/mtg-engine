@@ -19,6 +19,7 @@ from engine.ai_policy import (
     choose_combat_instant_cast_action,
 )
 from engine.card_loader import load_cards
+from engine.classifier import classify_card
 from engine.models import Permanent, PlayerState
 
 from .deck_builder import build_random_deck
@@ -227,7 +228,13 @@ def _serialize_stack_item(item, game: Game) -> dict:
     }
 
 
-def _serialize_player(player: PlayerState, viewer_seat: int | None, seat: int, game: Game) -> dict:
+def _serialize_player(
+    player: PlayerState,
+    viewer_seat: int | None,
+    seat: int,
+    game: Game,
+    playable_hand_indices: list[int] | None = None,
+) -> dict:
     if viewer_seat == seat:
         hand = [_serialize_card(card) for card in player.hand]
     else:
@@ -244,6 +251,7 @@ def _serialize_player(player: PlayerState, viewer_seat: int | None, seat: int, g
         "exile": [_serialize_card(card) for card in player.exile],
         "battlefield": [_serialize_permanent(perm, game) for perm in player.battlefield],
         "mana_pool": _serialize_mana_pool(player),
+        "playable_hand_indices": playable_hand_indices if viewer_seat == seat else [],
     }
 
 
@@ -376,6 +384,126 @@ def _seat_type(session: Session, seat: int) -> str:
     return session.seat_types.get(seat) or session.seat_types.get(str(seat), "human")
 
 
+def _can_afford_with_pool(pool: dict, cost: dict, player: PlayerState) -> bool:
+    """Check whether `pool` can pay `cost` without mutating either."""
+    temp = dict(pool)
+    for sym in ("W", "U", "B", "G", "C"):
+        if temp.get(sym, 0) < cost.get(sym, 0):
+            return False
+
+    available_red = temp.get("R", 0)
+    if player.can_spend_white_as_red:
+        available_red += temp.get("W", 0)
+    if available_red < cost.get("R", 0):
+        return False
+
+    temp["W"] -= cost.get("W", 0)
+    temp["U"] -= cost.get("U", 0)
+    temp["B"] -= cost.get("B", 0)
+    temp["G"] -= cost.get("G", 0)
+    temp["C"] -= cost.get("C", 0)
+
+    red_to_pay = cost.get("R", 0)
+    from_red = min(temp.get("R", 0), red_to_pay)
+    temp["R"] = temp.get("R", 0) - from_red
+    red_to_pay -= from_red
+    if red_to_pay > 0:
+        if not player.can_spend_white_as_red or temp.get("W", 0) < red_to_pay:
+            return False
+        temp["W"] -= red_to_pay
+
+    generic = cost.get("generic", 0)
+    if generic > 0:
+        available = sum(max(0, temp.get(s, 0)) for s in ("C", "W", "U", "B", "R", "G"))
+        if available < generic:
+            return False
+
+    return True
+
+
+def _compute_playable_hand_indices(session: Session, player_index: int) -> list[int]:
+    """Return hand indices the player can legally cast right now (considering timing,
+    mana already in pool plus potential mana from untapped lands, and restrictions)."""
+    game = session.game
+    player = game.players[player_index]
+
+    # Bail under blocking UI states where casting is not possible
+    if _cleanup_discard_requirement(session) > 0:
+        return []
+    if _untap_land_selection_requirement(session) > 0:
+        return []
+    if _upkeep_pay_pending(session):
+        return []
+    if game.pending_search_library is not None:
+        return []
+
+    if not game.has_priority(player_index):
+        return []
+
+    # Potential mana = current pool + what each untapped land could produce
+    potential_pool: dict[str, int] = dict(player.mana_pool)
+    for perm in player.battlefield:
+        if not perm.tapped and perm.card.primary_type == "land":
+            for color in perm.card.produced_mana:
+                sym = color.upper()
+                potential_pool[sym] = potential_pool.get(sym, 0) + 1
+
+    has_gloom = any(
+        perm.card.name == "Gloom"
+        for p in game.players
+        for perm in p.battlefield
+    )
+    fastbond_count = game._fastbond_count(player_index)
+    lands_played = game.lands_played_this_turn.get(player_index, 0)
+    current_turn = session.current_turn
+    is_main_phase = game.current_phase == "main"
+    stack_empty = not game.stack
+
+    playable = []
+    for i, card in enumerate(player.hand):
+        classification = classify_card(card)
+        if not classification.supported:
+            continue
+
+        is_instant = card.primary_type == "instant"
+
+        # Non-instant spells require it to be your turn
+        if player_index != current_turn and not is_instant:
+            continue
+
+        # Sorcery-speed: must be main phase with empty stack on your turn
+        if card.primary_type in {"land", "sorcery", "creature", "artifact", "enchantment"}:
+            if player_index != current_turn or not is_main_phase or not stack_empty:
+                continue
+
+        # Card-specific timing restriction
+        if "cast this spell only during your declare attackers step" in card.oracle_text.lower():
+            if game.current_step != "declare_attackers" or game.active_player_index != player_index:
+                continue
+
+        # Target validation (aura enchant targets, removal targets, counter targets, etc.)
+        target_ok, _ = game._validate_cast_targets(card, player_index, None)
+        if not target_ok:
+            continue
+
+        # Land play restriction (1 per turn unless Fastbond)
+        if card.primary_type == "land":
+            if lands_played >= 1 and fastbond_count <= 0:
+                continue
+
+        # Mana affordability for non-land cards
+        if card.primary_type != "land" and game.enforce_mana_costs:
+            extra_tax = 3 if (has_gloom and "W" in card.colors) else 0
+            # Use x_value=0 so X spells are shown as playable (castable at X=0)
+            cost = game._parse_mana_cost(card.mana_cost, x_value=0, extra_generic=extra_tax)
+            if not _can_afford_with_pool(potential_pool, cost, player):
+                continue
+
+        playable.append(i)
+
+    return playable
+
+
 def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
     win = _winner(session)
     if win is not None:
@@ -465,8 +593,14 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "joined_seats": sorted(session.joined_seats),
         "seat_types": session.seat_types,
         "players": [
-            _serialize_player(session.game.players[0], viewer_seat, 0, session.game),
-            _serialize_player(session.game.players[1], viewer_seat, 1, session.game),
+            _serialize_player(
+                session.game.players[0], viewer_seat, 0, session.game,
+                _compute_playable_hand_indices(session, 0) if viewer_seat == 0 else [],
+            ),
+            _serialize_player(
+                session.game.players[1], viewer_seat, 1, session.game,
+                _compute_playable_hand_indices(session, 1) if viewer_seat == 1 else [],
+            ),
         ],
         "stack": [_serialize_stack_item(item, session.game) for item in reversed(session.game.stack)],
         "combat": session.game.get_combat_state(),

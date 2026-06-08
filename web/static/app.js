@@ -2471,6 +2471,7 @@ function createCardElement(card, options = {}) {
     selected = false,
     targetSeat = null,
     zoneKind = "",
+    playable = false,
   } = options;
   const cardEl = document.createElement("div");
   cardEl.className = "card";
@@ -2504,6 +2505,7 @@ function createCardElement(card, options = {}) {
   if (interactive) cardEl.classList.add("clickable");
   if (cleanupSelectable) cardEl.classList.add("cleanup-selectable", "clickable");
   if (selected) cardEl.classList.add("selected-card");
+  if (playable && !selected) cardEl.classList.add("playable");
   if (zoneKind === "hand" && isPendingHandCastCard(card, handIndex)) cardEl.classList.add("casting-card");
 
   if (hidden) {
@@ -2797,6 +2799,7 @@ function renderHandFan(containerId, cards, options = {}) {
   const MAX_ANGLE = 15;
   const MAX_RISE = isOpponent ? 22 : 44;
   const PUSH_X = isOpponent ? 7 : 14;
+  const { playableHandIndices = [], ...fanOptions } = options;
 
   const slots = [];
 
@@ -2808,10 +2811,11 @@ function renderHandFan(containerId, cards, options = {}) {
 
     const isHidden = card === "<hidden>";
     const cardEl = createCardElement(isHidden ? "Hidden" : card, {
-      ...options,
+      ...fanOptions,
       compact: false,
       hidden: isHidden,
       handIndex: index,
+      playable: !isHidden && playableHandIndices.includes(index),
     });
 
     const slot = document.createElement("div");
@@ -3262,6 +3266,7 @@ function renderBoard(state) {
     castOnClick: true,
     cleanupSelectable: requiresCleanupSelection,
     selectedHandIndices: cleanupDiscard?.selected_indices || [],
+    playableHandIndices: me.playable_hand_indices || [],
   });
   renderHandFan("oppHand", opp.hand, { zoneKind: "hand", targetSeat: oppSeat });
 
