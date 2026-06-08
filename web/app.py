@@ -1234,6 +1234,7 @@ def do_action(session_id: str, req: GameActionRequest):
             tapped = session.game.tap_land_for_mana(
                 req.seat,
                 permanent.card.name,
+                chosen_color=req.mana_color or "G",
                 permanent_index=permanent_index,
             )
         else:
@@ -1258,6 +1259,7 @@ def do_action(session_id: str, req: GameActionRequest):
             tapped = session.game.tap_land_for_mana(
                 req.seat,
                 permanent.card.name,
+                chosen_color=req.mana_color or "G",
                 permanent_index=permanent_index,
             )
             if not tapped:

@@ -919,6 +919,12 @@ function cardRequiresManaColorChoice(card) {
   return text.includes("any one color") || text.includes("one mana of any color");
 }
 
+function getDualLandColors(card) {
+  if (!card || typeof card === "string") return null;
+  const produced = Array.isArray(card.produced_mana) ? card.produced_mana.map((s) => s.toUpperCase()) : [];
+  return produced.length >= 2 ? produced : null;
+}
+
 function getMaxAffordableX(manaPool, manaCost) {
   const pool = manaPool || {};
   const cost = parseManaCostSymbols(manaCost || "");
@@ -2057,7 +2063,7 @@ function renderActivationPrompt() {
     body.textContent = "Select the mana color this ability should generate.";
     steps.innerHTML = [
       `<div>Ability: ${renderSymbolsInline(pendingManaColor.oracleText || "Activated mana ability")}</div>`,
-      `<div class="prompt-choice-row">${MANA_COLOR_OPTIONS.map(
+      `<div class="prompt-choice-row">${(pendingManaColor.colorOptions || MANA_COLOR_OPTIONS).map(
         ({ symbol, label }) => {
           const token = `{${symbol}}`;
           const src = symbolSrc(token);
@@ -2147,6 +2153,20 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     return;
   }
 
+  const dualColors = getDualLandColors(card);
+  if (dualColors) {
+    pendingManaColor = {
+      cardName,
+      permanentIndex,
+      targetSeat,
+      oracleText: card.oracle_text || "",
+      colorOptions: MANA_COLOR_OPTIONS.filter((o) => dualColors.includes(o.symbol)),
+    };
+    renderActivationPrompt();
+    updateActionHint(`Choose a mana color for ${cardName}.`);
+    return;
+  }
+
   const activationCost = getActivatedAbilityCost(card);
   if (!shouldPromptForActivationCost(activationCost)) {
     sendAction({
@@ -2177,8 +2197,9 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
 
 function resolvePendingManaColor(manaColor) {
   if (!pendingManaColor || seat === null) return;
-  if (!MANA_COLOR_OPTIONS.some((option) => option.symbol === manaColor)) {
-    updateActionHint("Choose one of W, U, B, R, or G.", true);
+  const validOptions = pendingManaColor.colorOptions || MANA_COLOR_OPTIONS;
+  if (!validOptions.some((option) => option.symbol === manaColor)) {
+    updateActionHint("Invalid mana color choice.", true);
     return;
   }
 
