@@ -2725,7 +2725,18 @@ function createCardElement(card, options = {}) {
     });
   }
 
-  return cardEl;
+  const wrapper = document.createElement("div");
+  wrapper.className = "card-wrapper";
+  wrapper.appendChild(cardEl);
+
+  if (!hidden && typeof card === "object" && card.mana_cost) {
+    const costEl = document.createElement("div");
+    costEl.className = "card-mana-cost";
+    costEl.innerHTML = renderSymbolsInline(card.mana_cost);
+    wrapper.appendChild(costEl);
+  }
+
+  return wrapper;
 }
 
 function renderCardRow(containerId, cards, options = {}) {
