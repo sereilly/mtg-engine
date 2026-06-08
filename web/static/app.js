@@ -1924,6 +1924,7 @@ function renderActivationPrompt() {
       `<div>Cost: ${renderSymbolsInline(pendingAutoTap.card.mana_cost || "none")}</div>`,
       `<div>Current mana: ${me ? formatManaSymbolsHtml(me.mana_pool) : "Unknown"}</div>`,
     ].join("");
+    cancelBtn.classList.remove("hidden");
     cancelBtn.disabled = false;
     okBtn.disabled = true;
     customOkBtn.disabled = true;
@@ -1962,6 +1963,7 @@ function renderActivationPrompt() {
     customRow.classList.add("hidden");
     okBtn.classList.toggle("hidden", shouldShowWaitingPriority);
     okBtn.disabled = shouldShowWaitingPriority || (!combatPromptNeedsConfirmation(currentState) && !shouldShowPriority);
+    cancelBtn.classList.add("hidden");
     cancelBtn.disabled = true;
     customOkBtn.disabled = true;
     return;
@@ -2012,6 +2014,7 @@ function renderActivationPrompt() {
       ].join("");
     }
     okBtn.disabled = true;
+    cancelBtn.classList.remove("hidden");
     cancelBtn.disabled = false;
     customOkBtn.disabled = true;
     return;
@@ -2037,6 +2040,7 @@ function renderActivationPrompt() {
     customValue.max = String(pendingCastX.maxX);
     customValue.value = String(Math.min(Number(customValue.value || 0), pendingCastX.maxX));
     okBtn.disabled = true;
+    cancelBtn.classList.remove("hidden");
     cancelBtn.disabled = false;
     customOkBtn.disabled = !pendingCastX.awaitingCustomValue;
     return;
@@ -2061,6 +2065,7 @@ function renderActivationPrompt() {
         },
       ).join("")}</div>`,
     ].join("");
+    cancelBtn.classList.remove("hidden");
     cancelBtn.disabled = false;
     customOkBtn.disabled = true;
     return;
@@ -2085,6 +2090,7 @@ function renderActivationPrompt() {
   ].join("");
   customRow.classList.add("hidden");
   okBtn.disabled = !pendingActivation.awaitingApproval;
+  cancelBtn.classList.remove("hidden");
   cancelBtn.disabled = false;
   customOkBtn.disabled = true;
 }
@@ -2878,6 +2884,11 @@ function createCardElement(card, options = {}) {
         return;
       }
 
+      if (pendingCastHandCard && !isPendingHandCastCard(card, handIndex)) {
+        updateActionHint("Finish the current cast before starting another.", true);
+        return;
+      }
+
       try {
         if (cleanupSelectable) {
           await sendAction({ seat, action: "cleanup_select", hand_index: handIndex });
@@ -3196,7 +3207,7 @@ function _buildStackItemHtml(item, position) {
   } else if (item.target_player_name) {
     targetHtml = `, targeting <span class="stack-card-link">${escapeHtml(item.target_player_name)}</span>`;
   }
-  return `${pos}${caster} casting ${spellLink}${targetHtml}.`;
+  return `${pos}${caster} casts ${spellLink}${targetHtml}.`;
 }
 
 let _currentStack = [];
@@ -3464,6 +3475,8 @@ function renderBoard(state) {
   const isSelfTurn = state.current_turn === viewerSeat;
   const hasPriority = seat !== null && state.priority_player === seat;
   const canEndTurn = seat !== null && isSelfTurn && !isOpponentMidAction(state, viewerSeat);
+  const pregameInfo = getPregameInfo(state);
+  const isPregame = !!pregameInfo;
   const cleanupDiscard = getCleanupDiscardInfo(state);
   const requiresCleanupSelection = !!cleanupDiscard;
   const hasBlockingPrompt = hasBlockingPromptForAutoPass(state);
@@ -3485,11 +3498,11 @@ function renderBoard(state) {
   q("oppName").classList.toggle("opponent-turn-name", !isSelfTurn);
 
   renderHandFan("selfHand", me.hand, {
-    draggable: !requiresCleanupSelection,
+    draggable: !requiresCleanupSelection && !isPregame,
     dragKind: "hand",
     zoneKind: "hand",
     targetSeat: viewerSeat,
-    castOnClick: true,
+    castOnClick: !isPregame,
     cleanupSelectable: requiresCleanupSelection,
     selectedHandIndices: cleanupDiscard?.selected_indices || [],
     playableHandIndices: me.playable_hand_indices || [],
@@ -3566,6 +3579,7 @@ function renderState(state) {
   const incomingLogLen = Array.isArray(state?.log) ? state.log.length : -1;
   const currentLogLen = Array.isArray(currentState?.log) ? currentState.log.length : -1;
   if (incomingLogLen < currentLogLen) return;
+  const wasInPregame = !!currentState?.pregame;
 
   if (autoPassTurnEndEnabled && seat === null) {
     autoPassTurnEndEnabled = false;
@@ -3613,6 +3627,9 @@ function renderState(state) {
     showTurnAnnouncement(isSelfTurn);
   }
   renderBoard(state);
+  if (wasInPregame && !state?.pregame) {
+    updateActionHint("Drag from your hand to cast, or drag cards on the battlefield to reposition.");
+  }
   renderActivationPrompt();
   renderSearchLibraryModal(searchLibraryInfo);
   renderReorderLibraryModal(reorderLibraryInfo);
@@ -3713,6 +3730,10 @@ function parseDragPayload(event) {
 async function handleHandCardDropOnBattlefield({ event, targetSeat, targetItem }) {
   if (seat === null) {
     updateActionHint("Join or create a session before interacting.", true);
+    return;
+  }
+  if (pendingCastHandCard) {
+    updateActionHint("Finish the current cast before starting another.", true);
     return;
   }
   const payload = parseDragPayload(event);
@@ -3998,7 +4019,9 @@ async function createSession() {
   setVisible(true);
   initBattlefieldCanvas();
   renderState(data.state);
-  updateActionHint("Session ready. Drag from your hand to cast, or drag cards on the battlefield to reposition.");
+  if (!data.state?.pregame) {
+    updateActionHint("Session ready. Drag from your hand to cast, or drag cards on the battlefield to reposition.");
+  }
 }
 
 function syncGuestNameForMode() {
@@ -4031,7 +4054,9 @@ async function joinSession() {
   setVisible(true);
   initBattlefieldCanvas();
   renderState(data.state);
-  updateActionHint("Joined. Drag from your hand to play, or drag cards on the battlefield to reposition.");
+  if (!data.state?.pregame) {
+    updateActionHint("Joined. Drag from your hand to play, or drag cards on the battlefield to reposition.");
+  }
 }
 
 async function sendAction(actionBody) {
@@ -4092,6 +4117,7 @@ for (const [element, label] of [[joinUrlEl, "Join URL"], [lanJoinUrlEl, "LAN joi
 }
 
 q("promptCancelBtn").addEventListener("click", () => {
+  const wasCasting = !!(pendingCastTarget || pendingCastX || pendingAutoTap);
   pendingActivation = null;
   pendingCastTarget = null;
   pendingCastX = null;
@@ -4103,7 +4129,7 @@ q("promptCancelBtn").addEventListener("click", () => {
     q(elementId)?.classList.remove("targeting-valid");
   }
   renderActivationPrompt();
-  updateActionHint("Prompt canceled.");
+  updateActionHint(wasCasting ? "Cast canceled. Any mana in your pool is retained." : "Prompt canceled.");
 });
 
 q("promptAutoTapBtn")?.addEventListener("click", async () => {

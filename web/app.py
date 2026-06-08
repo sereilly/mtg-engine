@@ -181,7 +181,8 @@ async def _stream_session_events(session_id: str):
 def _serialize_stack_item(item, game: Game) -> dict:
     target_name = None
     if item.target_player_index is not None and 0 <= item.target_player_index < len(game.players):
-        target_name = game.players[item.target_player_index].name
+        if item.card.primary_type in ("instant", "sorcery"):
+            target_name = game.players[item.target_player_index].name
     item_type = "ability" if item.ability_instruction is not None else "spell"
     is_triggered = bool(item.ability_effect_kind and item.ability_effect_kind.startswith("triggered_"))
     label = item.card.name if item_type == "spell" else f"{item.card.name} ability"
