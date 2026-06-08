@@ -174,14 +174,18 @@ def _run_card(card: CardDefinition, all_cards: list[CardDefinition]) -> tuple[Ga
         return game, p1, p2, before, result
 
     if card.name == "Blue Elemental Blast":
-        dragon_whelp = next(c for c in all_cards if c.name == "Dragon Whelp")
-        p2.battlefield.append(Permanent(card=dragon_whelp))
+        # First mode is "counter target red spell": queue a red spell to counter.
+        lightning_bolt = next(c for c in all_cards if c.name == "Lightning Bolt")
+        p2.hand.append(lightning_bolt)
+        game.queue_from_hand(1, "Lightning Bolt", target_player_index=0)
         result = game.cast_from_hand(0, card.name, target_player_index=1)
         return game, p1, p2, before, result
 
     if card.name == "Red Elemental Blast":
-        air_elemental = next(c for c in all_cards if c.name == "Air Elemental")
-        p2.battlefield.append(Permanent(card=air_elemental))
+        # First mode is "counter target blue spell": queue a blue spell to counter.
+        recall = next(c for c in all_cards if c.name == "Ancestral Recall")
+        p2.hand.append(recall)
+        game.queue_from_hand(1, "Ancestral Recall", target_player_index=1)
         result = game.cast_from_hand(0, card.name, target_player_index=1)
         return game, p1, p2, before, result
 
@@ -374,7 +378,7 @@ def _assert_supported_effect(card: CardDefinition, game: Game, p1: PlayerState, 
         assert len(p2.hand) >= before.p2_hand + 3
         return
 
-    if "counter target spell" in text:
+    if "counter target spell" in text or (card.name in {"Blue Elemental Blast", "Red Elemental Blast"}):
         assert any("countered" in line.lower() or "no spell to counter" in line.lower() for line in game.log)
         return
 

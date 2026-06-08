@@ -106,6 +106,8 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
             land_taps = tuple(plan)
 
         score = _score_activation(game, player_index, permanent, ability.instruction, target)
+        if score <= 0.0:
+            continue
         candidate = ActivationAction(
             permanent_name=permanent.card.name,
             permanent_index=permanent_index,
@@ -462,8 +464,12 @@ def _score_activation(
 
     if instruction.kind == "deal_damage":
         amount = int(instruction.payload.get("amount", 1) or 1)
-        score += 5.0 + amount
-        if target_index == 1 - player_index and opponent.life <= amount:
+        target_player = game.players[target_index]
+        effective_damage = max(0, amount - target_player.damage_prevention_pool)
+        if effective_damage == 0:
+            return -10.0
+        score += 5.0 + effective_damage
+        if target_index == 1 - player_index and target_player.life <= effective_damage:
             score += 10.0
     elif instruction.kind == "draw_target_cards":
         score += 5.0 if target_index == player_index else 0.0

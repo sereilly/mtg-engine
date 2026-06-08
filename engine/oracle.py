@@ -483,6 +483,17 @@ def _parse_triggered_ability(line: str) -> ParsedTriggeredAbility | None:
 # ---------------------------------------------------------------------------
 
 def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleInstruction | None, str]:
+    # "Choose one" modal spells: parse only the first bullet so the primary
+    # instruction matches the card's first mode (e.g. Healing Salve gains life,
+    # Blue/Red Elemental Blast counters a spell).
+    if "choose one" in text and "•" in text:
+        parts = re.split(r"\s*•\s*", text, maxsplit=2)
+        if len(parts) >= 2:
+            first_mode = parts[1].strip()
+            instr, kind = _parse_primary_instruction(first_mode, activated=activated)
+            if instr is not None:
+                return instr, kind
+
     # ---------------------------------------------------------------------------
     # Upkeep triggered-ability effects (condition already stripped by caller)
     # ---------------------------------------------------------------------------

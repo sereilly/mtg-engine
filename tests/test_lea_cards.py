@@ -3198,18 +3198,20 @@ def test_black_ward_grants_protection_from_black(all_cards):
     assert creature_perm.metadata.get("protection_from_black") is True
 
 
-def test_blue_elemental_blast_destroys_red_permanent(all_cards):
+def test_blue_elemental_blast_counters_red_spell(all_cards):
+    """Blue Elemental Blast's first mode counters a red spell on the stack."""
     beb = _get(all_cards, "Blue Elemental Blast")
-    shivan = _get(all_cards, "Shivan Dragon")
+    bolt = _get(all_cards, "Lightning Bolt")
     p1 = PlayerState(name="P1", hand=[beb])
-    p2 = PlayerState(name="P2", battlefield=[Permanent(card=shivan)])
+    p2 = PlayerState(name="P2", hand=[bolt])
     game = Game(players=[p1, p2])
 
+    game.queue_from_hand(1, "Lightning Bolt", target_player_index=0)
     result = game.cast_from_hand(0, "Blue Elemental Blast", target_player_index=1)
 
     assert result.supported
-    assert not p2.battlefield
-    assert p2.graveyard and p2.graveyard[0].name == "Shivan Dragon"
+    assert any("Blue Elemental Blast countered Lightning Bolt" in line for line in game.log)
+    assert not game.stack, "Stack should be empty after counterspell resolves"
 
 
 def test_blue_elemental_blast_cannot_be_cast_without_valid_target(all_cards):
@@ -4603,6 +4605,107 @@ def test_mox_jet_taps_for_black_mana(all_cards):
     assert p1.battlefield[0].tapped is True
 
 
+# ---------------------------------------------------------------------------
+# Regression tests for "Choose one" modal card oracle parsing (bug fix)
+# ---------------------------------------------------------------------------
+
+def test_healing_salve_choose_one_gains_life(all_cards):
+    """Regression: real LEA Healing Salve should gain 3 life (first mode), not
+    apply a prevention shield. The oracle parser previously matched the second
+    bullet 'prevent the next 3 damage' before 'gains 3 life'."""
+    salve = _get(all_cards, "Healing Salve")
+    p1 = PlayerState(name="P1", hand=[salve], life=17)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Healing Salve", target_player_index=0)
+
+    assert result.supported
+    assert p1.life == 20, "Healing Salve should gain 3 life (first mode), not apply prevention"
+    assert p1.damage_prevention_pool == 0, "Prevention shield should not be applied when gaining life"
+
+
+def test_healing_salve_choose_one_compiles_to_life_gain(all_cards):
+    """Regression: the primary oracle instruction for real LEA Healing Salve must
+    be target_gains_life, not grant_prevention_shield."""
+    salve = _get(all_cards, "Healing Salve")
+    program = compile_card_oracle(salve)
+    primary = next(
+        (instr for instr in program.instructions if instr.kind != "spell_pattern"), None
+    )
+    assert primary is not None
+    assert primary.kind == "target_gains_life", (
+        f"Expected target_gains_life but got {primary.kind}; "
+        "choose-one parsing should use the first bullet"
+    )
+
+
+def test_blue_elemental_blast_choose_one_compiles_to_counter(all_cards):
+    """Regression: Blue Elemental Blast's first mode is 'counter target red spell'.
+    The oracle previously matched the second mode 'destroy target red permanent' first."""
+    beb = _get(all_cards, "Blue Elemental Blast")
+    program = compile_card_oracle(beb)
+    primary = next(
+        (instr for instr in program.instructions if instr.kind != "spell_pattern"), None
+    )
+    assert primary is not None
+    assert primary.kind == "counter_top_stack_spell", (
+        f"Expected counter_top_stack_spell but got {primary.kind}"
+    )
+    assert primary.payload.get("color_filter") == "R"
+
+
+def test_red_elemental_blast_choose_one_compiles_to_counter(all_cards):
+    """Regression: Red Elemental Blast's first mode is 'counter target blue spell'.
+    The oracle previously matched the second mode 'destroy target blue permanent' first."""
+    reb = _get(all_cards, "Red Elemental Blast")
+    program = compile_card_oracle(reb)
+    primary = next(
+        (instr for instr in program.instructions if instr.kind != "spell_pattern"), None
+    )
+    assert primary is not None
+    assert primary.kind == "counter_top_stack_spell", (
+        f"Expected counter_top_stack_spell but got {primary.kind}"
+    )
+    assert primary.payload.get("color_filter") == "U"
+
+
+# ---------------------------------------------------------------------------
+# Regression tests for AI prevention-shield awareness (bug fix)
+# ---------------------------------------------------------------------------
+
+def test_ai_skips_prodigal_sorcerer_when_opponent_fully_shielded(all_cards):
+    """Regression: choose_activation_action must return None (or prefer another
+    action) when the only damage ability would deal 0 effective damage because
+    the target's damage_prevention_pool covers the full amount."""
+    prodigal = _get(all_cards, "Prodigal Sorcerer")
+    # Opponent has a 3-point prevention shield; Prodigal deals 1 → fully prevented
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=prodigal)])
+    p2 = PlayerState(name="P2", life=20, damage_prevention_pool=3)
+    game = Game(players=[p1, p2])
+
+    action = choose_activation_action(game, 0)
+
+    assert action is None, (
+        "AI should not waste Prodigal Sorcerer's activation when the opponent's "
+        "prevention shield would absorb all damage"
+    )
+
+
+def test_ai_still_activates_prodigal_sorcerer_without_full_shield(all_cards):
+    """Companion to the shield test: AI should still activate Prodigal Sorcerer
+    when the opponent has no (or partial) prevention shielding."""
+    prodigal = _get(all_cards, "Prodigal Sorcerer")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=prodigal)])
+    p2 = PlayerState(name="P2", life=20, damage_prevention_pool=0)
+    game = Game(players=[p1, p2])
+
+    action = choose_activation_action(game, 0)
+
+    assert action is not None
+    assert action.permanent_name == "Prodigal Sorcerer"
+
+
 def test_mox_pearl_taps_for_white_mana(all_cards):
     mox = _get(all_cards, "Mox Pearl")
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=mox)])
@@ -4957,19 +5060,20 @@ def test_raise_dead_cannot_cast_with_only_non_creatures_in_graveyard(all_cards):
     assert not result.supported
 
 
-def test_red_elemental_blast_destroys_blue_permanent(all_cards):
+def test_red_elemental_blast_counters_blue_spell(all_cards):
+    """Red Elemental Blast's first mode counters a blue spell on the stack."""
     reb = _get(all_cards, "Red Elemental Blast")
-    air_elemental = _get(all_cards, "Air Elemental")
-
+    recall = _get(all_cards, "Ancestral Recall")
     p1 = PlayerState(name="P1", hand=[reb])
-    p2 = PlayerState(name="P2", battlefield=[Permanent(card=air_elemental)])
+    p2 = PlayerState(name="P2", hand=[recall])
     game = Game(players=[p1, p2])
 
+    game.queue_from_hand(1, "Ancestral Recall", target_player_index=1)
     result = game.cast_from_hand(0, "Red Elemental Blast", target_player_index=1)
 
     assert result.supported
-    assert not p2.battlefield
-    assert p2.graveyard and p2.graveyard[0].name == "Air Elemental"
+    assert any("Red Elemental Blast countered Ancestral Recall" in line for line in game.log)
+    assert not game.stack, "Stack should be empty after counterspell resolves"
 
 
 def test_red_ward_grants_protection_from_red(all_cards):
