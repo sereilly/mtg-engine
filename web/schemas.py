@@ -26,6 +26,11 @@ ActionKind = Literal[
     "debug_cast_free",
     "search_library_confirm",
     "reorder_library_confirm",
+    "coin_flip_choose",
+    "mulligan_take",
+    "mulligan_keep",
+    "mulligan_bottom_select",
+    "mulligan_bottom_confirm",
 ]
 
 
@@ -39,6 +44,8 @@ class CreateSessionRequest(BaseModel):
     custom_seed: int | None = Field(default=None)
     # Backward-compatible field for older clients that still post `seed`.
     seed: int | None = Field(default=None)
+    # When True, show interactive coin-flip and mulligan prompts before the game starts.
+    enable_pregame: bool = Field(default=False)
 
 
 class JoinSessionRequest(BaseModel):

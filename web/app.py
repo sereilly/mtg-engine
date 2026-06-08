@@ -325,6 +325,135 @@ def _build_upkeep_pay_info(session: Session, viewer_seat: int | None) -> dict | 
     }
 
 
+def _build_pregame_info(session: Session, viewer_seat: int | None) -> dict | None:
+    phase = session.pregame_phase
+    if phase is None:
+        return None
+
+    info: dict = {"phase": phase}
+
+    if phase == "coin_flip":
+        winner = session.coin_flip_winner
+        winner_name = session.game.players[winner].name if winner is not None else None
+        info["winner_seat"] = winner
+        info["winner_name"] = winner_name
+        info["is_my_turn"] = viewer_seat is not None and viewer_seat == winner
+        if not info["is_my_turn"]:
+            info["waiting_for"] = winner_name
+
+    elif phase == "mulligan":
+        offer = session.mulligan_offer_seat
+        offer_name = session.game.players[offer].name if offer is not None else None
+        info["offer_seat"] = offer
+        info["offer_name"] = offer_name
+        info["is_my_turn"] = viewer_seat is not None and viewer_seat == offer
+        info["mulligans_taken"] = session.game.players[offer].mulligans_taken if offer is not None else 0
+        if not info["is_my_turn"]:
+            info["waiting_for"] = offer_name
+
+    elif phase == "bottom_select":
+        bottom = session.mulligan_bottom_seat
+        bottom_name = session.game.players[bottom].name if bottom is not None else None
+        info["bottom_seat"] = bottom
+        info["bottom_name"] = bottom_name
+        info["is_my_turn"] = viewer_seat is not None and viewer_seat == bottom
+        info["required_count"] = session.mulligan_bottom_required
+        info["selected_indices"] = list(session.mulligan_bottom_selected)
+        info["selected_count"] = len(session.mulligan_bottom_selected)
+        if not info["is_my_turn"]:
+            info["waiting_for"] = bottom_name
+
+    return info
+
+
+def _pregame_enter_mulligan(session: Session, starting_player: int) -> None:
+    session.pregame_starting_player = starting_player
+    session.game.deal_opening_hands(starting_player)
+    session.pregame_phase = "mulligan"
+    session.mulligan_offer_seat = starting_player
+    session.mulligan_kept_seats = set()
+
+
+def _pregame_advance_mulligan_offer(session: Session) -> None:
+    n = len(session.game.players)
+    current = session.mulligan_offer_seat or 0
+    for _ in range(n):
+        current = (current + 1) % n
+        if current not in session.mulligan_kept_seats:
+            session.mulligan_offer_seat = current
+            session.pregame_phase = "mulligan"
+            return
+    _pregame_start_game(session)
+
+
+def _pregame_keep_player(session: Session, seat: int) -> None:
+    player = session.game.players[seat]
+    session.mulligan_kept_seats.add(seat)
+    if player.mulligans_taken > 0:
+        session.pregame_phase = "bottom_select"
+        session.mulligan_bottom_seat = seat
+        session.mulligan_bottom_required = player.mulligans_taken
+        session.mulligan_bottom_selected = []
+    else:
+        session.game.keep_hand(seat)
+        _pregame_advance_mulligan_offer(session)
+
+
+def _pregame_confirm_bottom(session: Session) -> None:
+    seat = session.mulligan_bottom_seat
+    player = session.game.players[seat]
+    required = session.mulligan_bottom_required
+    indices = sorted(set(session.mulligan_bottom_selected), reverse=True)
+    # Safety: if somehow fewer cards are selected, auto-fill from end of hand
+    if len(indices) < required:
+        extras = [i for i in range(len(player.hand) - 1, -1, -1) if i not in set(indices)]
+        indices = sorted(set(indices) | set(extras[: required - len(indices)]), reverse=True)
+    cards_to_bottom = [player.hand.pop(i) for i in indices]
+    player.library.extend(cards_to_bottom)
+    session.game.keep_hand(seat)
+    session.mulligan_bottom_seat = None
+    session.mulligan_bottom_required = 0
+    session.mulligan_bottom_selected = []
+    _pregame_advance_mulligan_offer(session)
+
+
+def _pregame_start_game(session: Session) -> None:
+    starting_player = session.pregame_starting_player or 0
+    session.pregame_phase = None
+    session.current_turn = starting_player
+    session.game.active_player_index = starting_player
+    session.game.start_priority_window(starting_player)
+
+
+def _pregame_auto_advance(session: Session) -> None:
+    for _ in range(20):
+        if session.pregame_phase == "coin_flip":
+            winner = session.coin_flip_winner
+            if winner is None or _seat_type(session, winner) != "ai":
+                break
+            _pregame_enter_mulligan(session, winner)
+
+        elif session.pregame_phase == "mulligan":
+            offer = session.mulligan_offer_seat
+            if offer is None or _seat_type(session, offer) != "ai":
+                break
+            _pregame_keep_player(session, offer)
+
+        elif session.pregame_phase == "bottom_select":
+            bottom = session.mulligan_bottom_seat
+            if bottom is None or _seat_type(session, bottom) != "ai":
+                break
+            n = session.mulligan_bottom_required
+            player = session.game.players[bottom]
+            session.mulligan_bottom_selected = list(
+                range(max(0, len(player.hand) - n), len(player.hand))
+            )
+            _pregame_confirm_bottom(session)
+
+        else:
+            break
+
+
 def _untap_land_selection_requirement(session: Session) -> int:
     if session.game.current_step != "untap":
         return 0
@@ -428,6 +557,8 @@ def _compute_playable_hand_indices(session: Session, player_index: int) -> list[
     player = game.players[player_index]
 
     # Bail under blocking UI states where casting is not possible
+    if session.pregame_phase is not None:
+        return []
     if _cleanup_discard_requirement(session) > 0:
         return []
     if _untap_land_selection_requirement(session) > 0:
@@ -612,6 +743,7 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "search_library": search_library_info,
         "reorder_library": reorder_library_info,
         "card_positions": _live_card_positions(session),
+        "pregame": _build_pregame_info(session, viewer_seat),
     }
 
 
@@ -917,6 +1049,7 @@ def random_deck(req: RandomDeckRequest):
 @app.post("/api/sessions")
 def create_session(req: CreateSessionRequest, request: Request):
     session = store.create(req)
+    _pregame_auto_advance(session)
     join_url = _build_join_url(request, session.id)
     lan_join_url = _build_lan_join_url(request, session.id)
     return {
@@ -993,7 +1126,18 @@ def do_action(session_id: str, req: GameActionRequest):
     if req.seat not in session.joined_seats:
         raise HTTPException(status_code=400, detail="seat has not joined")
 
-    _save_snapshot(session)
+    _pregame_actions = {
+        "coin_flip_choose",
+        "mulligan_take",
+        "mulligan_keep",
+        "mulligan_bottom_select",
+        "mulligan_bottom_confirm",
+    }
+    if session.pregame_phase is not None and req.action not in _pregame_actions | {"debug_add_to_hand", "debug_cast_free"}:
+        raise HTTPException(status_code=400, detail="pregame not complete")
+
+    if session.pregame_phase is None:
+        _save_snapshot(session)
 
     seat_type = _seat_type(session, req.seat)
 
@@ -1417,6 +1561,76 @@ def do_action(session_id: str, req: GameActionRequest):
 
         session.game.note_priority_action_taken(req.seat)
         session.game.log.append(f"[Debug] {player.name} cast {card.name} for free.")
+
+    elif req.action == "coin_flip_choose":
+        if session.pregame_phase != "coin_flip":
+            raise HTTPException(status_code=400, detail="not in coin flip phase")
+        if req.seat != session.coin_flip_winner:
+            raise HTTPException(status_code=400, detail="only the coin flip winner can choose")
+        if seat_type != "human":
+            raise HTTPException(status_code=400, detail="cannot issue human action for AI seat")
+        choice = req.hand_index  # 0 = go first, 1 = go second
+        if choice not in (0, 1):
+            raise HTTPException(status_code=400, detail="hand_index must be 0 (go first) or 1 (go second)")
+        starting_player = req.seat if choice == 0 else (1 - req.seat)
+        session.game.log.append(
+            f"{session.game.players[req.seat].name} chooses to go {'first' if choice == 0 else 'second'}"
+        )
+        _pregame_enter_mulligan(session, starting_player)
+        _pregame_auto_advance(session)
+
+    elif req.action == "mulligan_take":
+        if session.pregame_phase != "mulligan":
+            raise HTTPException(status_code=400, detail="not in mulligan phase")
+        if req.seat != session.mulligan_offer_seat:
+            raise HTTPException(status_code=400, detail="not your turn to decide on mulligan")
+        if seat_type != "human":
+            raise HTTPException(status_code=400, detail="cannot issue human action for AI seat")
+        if not session.game.pregame_mulligan_draw(req.seat):
+            raise HTTPException(status_code=400, detail="cannot take another mulligan (7 mulligans taken)")
+
+    elif req.action == "mulligan_keep":
+        if session.pregame_phase != "mulligan":
+            raise HTTPException(status_code=400, detail="not in mulligan phase")
+        if req.seat != session.mulligan_offer_seat:
+            raise HTTPException(status_code=400, detail="not your turn to decide on mulligan")
+        if seat_type != "human":
+            raise HTTPException(status_code=400, detail="cannot issue human action for AI seat")
+        _pregame_keep_player(session, req.seat)
+        _pregame_auto_advance(session)
+
+    elif req.action == "mulligan_bottom_select":
+        if session.pregame_phase != "bottom_select":
+            raise HTTPException(status_code=400, detail="not in bottom card selection phase")
+        if req.seat != session.mulligan_bottom_seat:
+            raise HTTPException(status_code=400, detail="not your turn to select bottom cards")
+        if seat_type != "human":
+            raise HTTPException(status_code=400, detail="cannot issue human action for AI seat")
+        if req.hand_index is None:
+            raise HTTPException(status_code=400, detail="hand_index is required")
+        player = session.game.players[req.seat]
+        if req.hand_index >= len(player.hand):
+            raise HTTPException(status_code=400, detail="invalid hand index")
+        selected = session.mulligan_bottom_selected
+        if req.hand_index in selected:
+            selected.remove(req.hand_index)
+        else:
+            selected.append(req.hand_index)
+
+    elif req.action == "mulligan_bottom_confirm":
+        if session.pregame_phase != "bottom_select":
+            raise HTTPException(status_code=400, detail="not in bottom card selection phase")
+        if req.seat != session.mulligan_bottom_seat:
+            raise HTTPException(status_code=400, detail="not your turn to select bottom cards")
+        if seat_type != "human":
+            raise HTTPException(status_code=400, detail="cannot issue human action for AI seat")
+        if len(session.mulligan_bottom_selected) != session.mulligan_bottom_required:
+            raise HTTPException(
+                status_code=400,
+                detail=f"must select exactly {session.mulligan_bottom_required} card(s)",
+            )
+        _pregame_confirm_bottom(session)
+        _pregame_auto_advance(session)
 
     else:
         raise HTTPException(status_code=400, detail="unknown action")

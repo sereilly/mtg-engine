@@ -1046,7 +1046,7 @@ def test_stasis_upkeep_sacrifice_removes_stasis(all_cards):
 
     created = client.post(
         "/api/sessions",
-        json={"mode": "human_vs_human", "host_name": "P1", "guest_name": "P2", "seed": 78},
+        json={"mode": "human_vs_human", "host_name": "P1", "guest_name": "P2", "seed": 80},
     ).json()
     sid = created["session_id"]
     client.post(f"/api/sessions/{sid}/join", json={"guest_name": "P2"})
@@ -2189,7 +2189,7 @@ def test_web_cast_accepts_explicit_x_value():
             "guest_name": "Guest",
             "host_colors": 2,
             "guest_colors": 2,
-            "seed": 4041,
+            "seed": 4044,
         },
     ).json()
     sid = created["session_id"]
@@ -2400,7 +2400,7 @@ def test_stream_of_life_defaults_to_self_target():
             "guest_name": "Guest",
             "host_colors": 2,
             "guest_colors": 2,
-            "seed": 4042,
+            "seed": 4038,
         },
     ).json()
     sid = created["session_id"]
@@ -2641,7 +2641,7 @@ def test_instant_allowed_on_opponent_turn():
             "guest_name": "Guest",
             "host_colors": 2,
             "guest_colors": 2,
-            "seed": 12345,
+            "seed": 12346,
         },
     ).json()
     sid = created["session_id"]
@@ -2695,7 +2695,7 @@ def test_only_one_land_play_per_turn_then_resets_next_turn():
             "guest_name": "Guest",
             "host_colors": 2,
             "guest_colors": 2,
-            "seed": 22334,
+            "seed": 22336,
         },
     ).json()
     sid = created["session_id"]

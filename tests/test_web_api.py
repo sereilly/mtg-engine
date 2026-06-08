@@ -476,7 +476,7 @@ def test_non_instant_rejected_on_opponent_turn():
             "guest_name": "Guest",
             "host_colors": 2,
             "guest_colors": 2,
-            "seed": 1234,
+            "seed": 1235,
         },
     ).json()
     sid = created["session_id"]
@@ -522,7 +522,7 @@ def test_next_phase_advances_phase_and_clears_mana():
             "guest_name": "Guest",
             "host_colors": 2,
             "guest_colors": 2,
-            "seed": 99001,
+            "seed": 98999,
         },
     ).json()
     sid = created["session_id"]
@@ -611,7 +611,7 @@ def test_next_phase_in_blockers_step_auto_advances_after_ai_declares_none():
             "guest_name": "Bot",
             "host_colors": 2,
             "guest_colors": 2,
-            "seed": 99061,
+            "seed": 99060,
         },
     ).json()
     sid = created["session_id"]

@@ -1110,6 +1110,12 @@ function getUpkeepPayInfo(state = currentState) {
   return info;
 }
 
+function getPregameInfo(state = currentState) {
+  const info = state?.pregame;
+  if (!info || !info.phase) return null;
+  return info;
+}
+
 function getSearchLibraryInfo(state = currentState) {
   if (!state || seat === null) return null;
   const info = state.search_library;
@@ -1501,6 +1507,144 @@ function applyUpkeepPayPrompt(upkeepInfo) {
   }
 }
 
+function applyCoinFlipPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  cancelBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  okBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  if (info.is_my_turn) {
+    title.textContent = "You won the coin flip!";
+    body.textContent = `${escapeHtml(info.winner_name || "You")} won the coin flip. Do you want to go first or second?`;
+    steps.innerHTML = `
+      <div class="prompt-choice-row">
+        <button type="button" class="prompt-choice-btn" id="coinFlipFirstBtn">Go First</button>
+        <button type="button" class="prompt-choice-btn" id="coinFlipSecondBtn">Go Second</button>
+      </div>`;
+    document.getElementById("coinFlipFirstBtn").addEventListener("click", () =>
+      sendAction({ seat, action: "coin_flip_choose", hand_index: 0 })
+    );
+    document.getElementById("coinFlipSecondBtn").addEventListener("click", () =>
+      sendAction({ seat, action: "coin_flip_choose", hand_index: 1 })
+    );
+  } else {
+    title.textContent = "Coin Flip";
+    body.textContent = `${escapeHtml(info.winner_name || "Opponent")} won the coin flip and is choosing who goes first.`;
+    steps.innerHTML = `<div>Waiting for ${escapeHtml(info.waiting_for || "opponent")} to choose...</div>`;
+  }
+}
+
+function applyMulliganPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  cancelBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  okBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  if (info.is_my_turn) {
+    const taken = Number(info.mulligans_taken || 0);
+    const keepSize = 7 - taken;
+    title.textContent = taken > 0 ? `Mulligan (×${taken})` : "Keep or Mulligan?";
+    body.textContent = taken > 0
+      ? `You have taken ${taken} mulligan${taken > 1 ? "s" : ""}. Keep this hand (you'll put ${taken} card${taken > 1 ? "s" : ""} on the bottom), or take another mulligan?`
+      : "Do you want to keep your opening hand or take a mulligan?";
+    steps.innerHTML = `
+      <div>Your hand has 7 cards. If you keep, you will put ${taken} card${taken !== 1 ? "s" : ""} on the bottom.</div>
+      <div class="prompt-choice-row" style="margin-top:6px">
+        <button type="button" class="prompt-choice-btn" id="mulliganKeepBtn">Keep Hand</button>
+        ${taken < 7 ? '<button type="button" class="prompt-choice-btn" id="mulliganTakeBtn">Take Mulligan</button>' : ""}
+      </div>`;
+    document.getElementById("mulliganKeepBtn").addEventListener("click", () =>
+      sendAction({ seat, action: "mulligan_keep" })
+    );
+    const takeBtn = document.getElementById("mulliganTakeBtn");
+    if (takeBtn) {
+      takeBtn.addEventListener("click", () =>
+        sendAction({ seat, action: "mulligan_take" })
+      );
+    }
+  } else {
+    title.textContent = "Waiting for Mulligan Decision";
+    body.textContent = `${escapeHtml(info.waiting_for || "Opponent")} is deciding whether to mulligan.`;
+    steps.innerHTML = `<div>Waiting for ${escapeHtml(info.waiting_for || "opponent")}...</div>`;
+  }
+}
+
+function applyMulliganBottomPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  cancelBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  if (info.is_my_turn) {
+    const required = Number(info.required_count || 0);
+    const selectedCount = Number(info.selected_count || 0);
+    const selectedSet = new Set(info.selected_indices || []);
+    const hand = getCurrentPlayerState()?.hand || [];
+
+    title.textContent = `Put ${required} Card${required !== 1 ? "s" : ""} on the Bottom`;
+    body.textContent = `You took ${required} mulligan${required !== 1 ? "s" : ""}. Select ${required} card${required !== 1 ? "s" : ""} to put on the bottom of your library, then click Confirm.`;
+
+    const cardRows = hand.map((card, idx) => {
+      const name = typeof card === "string" ? card : (card?.name || "Unknown");
+      const isSelected = selectedSet.has(idx);
+      return `<div>
+        <button type="button" class="prompt-choice-btn${isSelected ? " active" : ""}"
+          onclick="sendAction({ seat, action: 'mulligan_bottom_select', hand_index: ${idx} })">
+          ${escapeHtml(name)}${isSelected ? " ✓" : ""}
+        </button>
+      </div>`;
+    }).join("");
+    steps.innerHTML = `<div style="margin-bottom:4px">Selected: ${selectedCount} / ${required}</div>${cardRows}`;
+
+    const ready = selectedCount === required;
+    okBtn.classList.remove("hidden");
+    okBtn.textContent = `Confirm (${selectedCount}/${required})`;
+    okBtn.disabled = !ready;
+    if (ready) {
+      okBtn.onclick = () => sendAction({ seat, action: "mulligan_bottom_confirm" });
+    } else {
+      okBtn.onclick = null;
+    }
+  } else {
+    title.textContent = "Opponent Selecting Bottom Cards";
+    body.textContent = `${escapeHtml(info.waiting_for || "Opponent")} is choosing ${info.required_count} card${info.required_count !== 1 ? "s" : ""} to put on the bottom.`;
+    steps.innerHTML = `<div>Waiting for ${escapeHtml(info.waiting_for || "opponent")}...</div>`;
+    okBtn.classList.add("hidden");
+  }
+}
+
 function renderSearchLibraryModal(info) {
   const modal = document.getElementById("searchLibraryModal");
   if (!modal) return;
@@ -1728,6 +1872,22 @@ function renderActivationPrompt() {
   const isCombatDeclarePromptStep = isDeclareAttackersStep || isDeclareBlockersStep;
 
   applyPriorityPromptStyle(panel, currentState);
+
+  const pregameInfo = getPregameInfo();
+  if (pregameInfo) {
+    if (pregameInfo.phase === "coin_flip") {
+      applyCoinFlipPrompt(pregameInfo);
+      return;
+    }
+    if (pregameInfo.phase === "mulligan") {
+      applyMulliganPrompt(pregameInfo);
+      return;
+    }
+    if (pregameInfo.phase === "bottom_select") {
+      applyMulliganBottomPrompt(pregameInfo);
+      return;
+    }
+  }
 
   if (cleanupDiscard) {
     applyCleanupPrompt(cleanupDiscard);
@@ -3828,6 +3988,7 @@ async function createSession() {
     guest_colors: Number(q("guestColors").value),
     use_custom_seed: useCustomSeed,
     custom_seed: useCustomSeed ? Number(q("customSeed").value) : null,
+    enable_pregame: true,
   };
   const data = await postJson("/api/sessions", req);
   sessionId = data.session_id;

@@ -41,10 +41,11 @@ def main() -> int:
     p1 = PlayerState(name="Alice", library=_sample_library(lookup, args.seed))
     p2 = PlayerState(name="Bob", library=_sample_library(lookup, args.seed + 1))
 
-    p1.draw(5)
-    p2.draw(5)
-
     game = Game(players=[p1, p2])
+    starting_player = game.select_starting_player()
+    game.deal_opening_hands(starting_player)
+    game.keep_hand(0)
+    game.keep_hand(1)
 
     if any(card.name == "Ancestral Recall" for card in p1.hand):
         game.queue_from_hand(0, "Ancestral Recall", target_player_index=0)

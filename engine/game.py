@@ -594,6 +594,125 @@ class Game:
                 return
             self._enter_combat_step(combat_steps[eoc_idx])
 
+    # ------------------------------------------------------------------
+    # Rule 103 — Starting the Game
+    # ------------------------------------------------------------------
+
+    def select_starting_player(
+        self, rng: random.Random | None = None
+    ) -> int:
+        """Rule 103.1: Simulate a coin flip to choose who takes the first turn.
+
+        *rng* – optional seeded :class:`random.Random` instance.  Pass one to
+        make the flip deterministic (e.g. derived from a session seed).  Omit
+        to use the module-level global RNG.
+
+        Returns the index of the player who wins the flip and chooses to go
+        first.  In this simulator the flip winner always chooses themselves.
+        """
+        source: random.Random = rng if rng is not None else random  # type: ignore[assignment]
+        winner = source.randrange(len(self.players))
+        self.log.append(
+            f"Coin flip: {self.players[winner].name} wins and chooses to go first"
+        )
+        return winner
+
+    def deal_opening_hands(self, starting_player_index: int) -> None:
+        """Rule 103.5: Shuffle each player's library and draw opening hands of 7 cards.
+
+        Hands are dealt starting with *starting_player_index* and proceeding
+        in turn order.
+        """
+        order = list(range(starting_player_index, len(self.players))) + list(
+            range(0, starting_player_index)
+        )
+        for i in order:
+            player = self.players[i]
+            random.shuffle(player.library)
+            drawn = player.draw(7)
+            self.log.append(f"{player.name} drew opening hand of {drawn} card(s)")
+
+    def take_mulligan(
+        self,
+        player_index: int,
+        bottom_card_indices: list[int] | None = None,
+    ) -> bool:
+        """Rule 103.5: Player takes a mulligan.
+
+        The player shuffles their hand into their library, draws 7 cards, then
+        puts a number of cards equal to their new mulligan count on the bottom
+        of their library.
+
+        *bottom_card_indices* – indices into the freshly drawn hand of the
+        cards to place on the bottom.  Defaults to the last N cards drawn.
+
+        Returns True if the mulligan was taken, False if the player cannot
+        take further mulligans (they already have 0 cards).
+        """
+        player = self.players[player_index]
+        if player.mulligans_taken >= 7:
+            self.log.append(
+                f"{player.name} cannot take further mulligans (hand would be 0 cards)"
+            )
+            return False
+
+        # Shuffle hand back into library.
+        player.library.extend(player.hand)
+        player.hand.clear()
+        random.shuffle(player.library)
+
+        player.mulligans_taken += 1
+        n = player.mulligans_taken
+
+        # Draw a new hand of starting hand size (7).
+        player.draw(7)
+
+        # Put n cards on the bottom.
+        if bottom_card_indices is None:
+            cards_to_bottom = [player.hand.pop() for _ in range(min(n, len(player.hand)))]
+        else:
+            indices_sorted = sorted(set(bottom_card_indices), reverse=True)
+            cards_to_bottom = [player.hand.pop(i) for i in indices_sorted]
+
+        player.library.extend(cards_to_bottom)
+
+        self.log.append(
+            f"{player.name} took mulligan #{n}, drew 7, put {len(cards_to_bottom)}"
+            f" card(s) on the bottom, keeping {len(player.hand)}"
+        )
+        return True
+
+    def keep_hand(self, player_index: int) -> None:
+        """Rule 103.5: Player declares to keep their current hand."""
+        player = self.players[player_index]
+        suffix = (
+            f" ({player.mulligans_taken} mulligan(s) taken)"
+            if player.mulligans_taken > 0
+            else ""
+        )
+        self.log.append(
+            f"{player.name} keeps opening hand of {len(player.hand)} card(s){suffix}"
+        )
+
+    def pregame_mulligan_draw(self, player_index: int) -> bool:
+        """Pregame mulligan: shuffle hand back into library and draw 7 fresh cards.
+
+        Bottom selection is deferred until the player keeps (web pregame flow only).
+        Returns False if the player cannot take another mulligan (already at 7).
+        """
+        player = self.players[player_index]
+        if player.mulligans_taken >= 7:
+            return False
+        player.library.extend(player.hand)
+        player.hand.clear()
+        random.shuffle(player.library)
+        player.mulligans_taken += 1
+        player.draw(7)
+        self.log.append(
+            f"{player.name} took mulligan #{player.mulligans_taken}, redrew 7 cards"
+        )
+        return True
+
     def start_turn(self, player_index: int) -> None:
         self.active_player_index = player_index
         self.lands_played_this_turn[player_index] = 0

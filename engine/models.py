@@ -108,6 +108,7 @@ class PlayerState:
     island_sanctuary_protected: bool = False
     lost: bool = False
     drew_from_empty: bool = False
+    mulligans_taken: int = 0
 
     def draw(self, count: int = 1) -> int:
         actual = 0

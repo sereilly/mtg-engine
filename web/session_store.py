@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+import random
 import secrets
 
 from engine import Game, PlayerState
@@ -32,6 +33,15 @@ class Session:
     upkeep_resolved_choices: dict[str, bool] = field(default_factory=dict)
     history: GameHistory = field(default_factory=GameHistory)
     card_positions: dict[str, dict[str, float]] = field(default_factory=dict)
+    # Pregame state (used when enable_pregame=True).  None once the game starts.
+    pregame_phase: str | None = None  # "coin_flip", "mulligan", "bottom_select"
+    coin_flip_winner: int | None = None
+    pregame_starting_player: int | None = None
+    mulligan_offer_seat: int | None = None
+    mulligan_kept_seats: set[int] = field(default_factory=set)
+    mulligan_bottom_seat: int | None = None
+    mulligan_bottom_required: int = 0
+    mulligan_bottom_selected: list[int] = field(default_factory=list)
 
 
 class SessionStore:
@@ -53,8 +63,6 @@ class SessionStore:
 
         p1 = PlayerState(name=request.host_name, library=host_deck)
         p2 = PlayerState(name=guest_name, library=guest_deck)
-        p1.draw(7)
-        p2.draw(7)
 
         game = Game(players=[p1, p2], enforce_mana_costs=True)
 
@@ -68,15 +76,45 @@ class SessionStore:
             seat_types[1] = "ai"
             joined_seats = {0, 1}
 
-        session = Session(
-            id=sid,
-            mode=request.mode,
-            host_name=request.host_name,
-            guest_name=guest_name,
-            game=game,
-            joined_seats=joined_seats,
-            seat_types=seat_types,
-        )
+        use_pregame = request.enable_pregame and request.mode != "ai_vs_ai"
+
+        if use_pregame:
+            # Rule 103.1: flip coin and record the winner; hand dealing is deferred
+            # until the winner chooses to go first or second.
+            flip_rng = random.Random(seed + 2)
+            coin_flip_winner = flip_rng.randrange(len(game.players))
+            game.log.append(
+                f"Coin flip: {game.players[coin_flip_winner].name} wins the coin flip!"
+            )
+            session = Session(
+                id=sid,
+                mode=request.mode,
+                host_name=request.host_name,
+                guest_name=guest_name,
+                game=game,
+                current_turn=0,
+                joined_seats=joined_seats,
+                seat_types=seat_types,
+                pregame_phase="coin_flip",
+                coin_flip_winner=coin_flip_winner,
+            )
+        else:
+            # Skip interactive pregame (ai_vs_ai or legacy clients).
+            starting_player = game.select_starting_player(rng=random.Random(seed + 2))
+            game.deal_opening_hands(starting_player)
+            for i in range(len(game.players)):
+                game.keep_hand(i)
+            session = Session(
+                id=sid,
+                mode=request.mode,
+                host_name=request.host_name,
+                guest_name=guest_name,
+                game=game,
+                current_turn=starting_player,
+                joined_seats=joined_seats,
+                seat_types=seat_types,
+            )
+
         self._sessions[sid] = session
         return session
 

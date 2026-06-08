@@ -182,9 +182,11 @@ def run_ai_simulation(cards_path: Path, games: int = 10, seed: int = 1337, max_t
     for game_index in range(1, games + 1):
         p1 = PlayerState(name=f"AI-A-{game_index}", library=_build_deck(cards, rng.randint(1, 1_000_000)))
         p2 = PlayerState(name=f"AI-B-{game_index}", library=_build_deck(cards, rng.randint(1, 1_000_000)))
-        p1.draw(7)
-        p2.draw(7)
         game = Game(players=[p1, p2])
+        starting_player = game.select_starting_player()
+        game.deal_opening_hands(starting_player)
+        for i in range(len(game.players)):
+            game.keep_hand(i)
 
         initial_counters = [_zone_counter(p1), _zone_counter(p2)]
         log_cursor = 0
