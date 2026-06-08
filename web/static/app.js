@@ -891,7 +891,10 @@ function cardRequiresTargetArtifact(card) {
 
 function cardRequiresTargetAny(card) {
   if (!card || typeof card === "string") return false;
-  return (card.oracle_text || "").toLowerCase().includes("any target");
+  const lines = (card.oracle_text || "").split("\n");
+  // Exclude activated ability lines (format: "{cost}: effect") — those trigger on activation, not cast
+  const nonActivatedLines = lines.filter((line) => !/^\s*(\{[^}]+\})+\s*:/.test(line));
+  return nonActivatedLines.some((line) => line.toLowerCase().includes("any target"));
 }
 
 function getTargetableAnyPermanentsForPrompt(state = currentState) {
