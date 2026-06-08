@@ -398,7 +398,7 @@ class BattlefieldCanvas {
     ctx.closePath();
   }
 
-  _drawCardFace(ctx, x, y, w, h, card, flags) {
+  _drawCardFace(ctx, x, y, w, h, card, flags, creatureCard) {
     const { selected, attacking, hovered, isDragGhost, targeting } = flags || {};
     const img = card?.image_uri ? this._loadImage(card.image_uri) : null;
     const R = 4;
@@ -445,8 +445,10 @@ class BattlefieldCanvas {
     ctx.restore();
 
     // ---- P/T badge ----
-    if (card && typeof card.power === "number" && typeof card.toughness === "number" && String(card.type || "").toLowerCase().includes("creature")) {
-      const label = `${card.power}/${card.toughness}`;
+    // If creatureCard is provided, show its P/T on this card (enchantment on top of creature).
+    const ptCard = creatureCard || card;
+    if (ptCard && typeof ptCard.power === "number" && typeof ptCard.toughness === "number" && String(ptCard.type || "").toLowerCase().includes("creature")) {
+      const label = `${ptCard.power}/${ptCard.toughness}`;
       const bw = 26, bh = 13;
       ctx.fillStyle = "rgba(0,0,0,0.78)";
       ctx.fillRect(x + w - bw - 2, y + h - bh - 2, bw, bh);
@@ -458,7 +460,8 @@ class BattlefieldCanvas {
     }
 
     // ---- Damage badge ----
-    if (card && Number(card.damage_marked) > 0) {
+    const dmgCard = creatureCard || card;
+    if (dmgCard && Number(dmgCard.damage_marked) > 0) {
       const bw = 20, bh = 13;
       ctx.fillStyle = "rgba(200,30,30,0.88)";
       ctx.fillRect(x + 2, y + h - bh - 2, bw, bh);
@@ -466,7 +469,7 @@ class BattlefieldCanvas {
       ctx.font = `bold ${Math.max(8, bh * 0.75)}px sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(String(card.damage_marked), x + 2 + bw / 2, y + h - bh / 2 - 2);
+      ctx.fillText(String(dmgCard.damage_marked), x + 2 + bw / 2, y + h - bh / 2 - 2);
     }
 
     ctx.globalAlpha = 1;
@@ -486,6 +489,16 @@ class BattlefieldCanvas {
       ...overrideFlags,
     };
 
+    // If this is the topmost card in a stack, show the bottom creature's P/T and damage on it.
+    let creatureCard = null;
+    const stack = this.stacks.find((s) => s.keys.length >= 2 && s.keys[s.keys.length - 1] === item.key);
+    if (stack) {
+      const bottomItem = this.cardItems.find((c) => c.key === stack.keys[0]);
+      if (bottomItem?.card && typeof bottomItem.card.power === "number" && String(bottomItem.card.type || "").toLowerCase().includes("creature")) {
+        creatureCard = bottomItem.card;
+      }
+    }
+
     ctx.save();
     if (tapped) {
       const cx = pos.x + BF_CARD_W / 2;
@@ -493,9 +506,9 @@ class BattlefieldCanvas {
       ctx.translate(cx, cy);
       ctx.rotate(Math.PI / 2);
       ctx.translate(-BF_CARD_W / 2, -BF_CARD_H / 2);
-      this._drawCardFace(ctx, 0, 0, BF_CARD_W, BF_CARD_H, card, flags);
+      this._drawCardFace(ctx, 0, 0, BF_CARD_W, BF_CARD_H, card, flags, creatureCard);
     } else {
-      this._drawCardFace(ctx, pos.x, pos.y, BF_CARD_W, BF_CARD_H, card, flags);
+      this._drawCardFace(ctx, pos.x, pos.y, BF_CARD_W, BF_CARD_H, card, flags, creatureCard);
     }
     ctx.restore();
   }
