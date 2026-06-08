@@ -762,6 +762,10 @@ async function maybeAutoStepAi(state = currentState) {
     updateActionHint(`Auto AI step paused: ${message}`, true);
   } finally {
     aiAutoStepInFlight = false;
+    // Re-check after the flag clears: if renderState was called while in-flight (e.g. due
+    // to an SSE event arriving before the HTTP response), maybeAutoStepAi was blocked.
+    // This ensures the AI continues acting on the most recent currentState.
+    maybeAutoStepAi();
   }
 }
 
@@ -3127,6 +3131,9 @@ function renderLog(state) {
     item.innerHTML = renderSymbolsInline(`${idx + 1}. ${entry}`);
     logRoot.appendChild(item);
   });
+
+  const logTab = q("logTab");
+  if (logTab) logTab.scrollTop = logTab.scrollHeight;
 }
 
 function showTurnAnnouncement(isSelfTurn) {
@@ -3244,6 +3251,13 @@ function renderBoard(state) {
 }
 
 function renderState(state) {
+  // Discard stale responses: when a slow HTTP response arrives after a faster SSE+getState
+  // has already applied newer state, log length is monotonically increasing so we can use
+  // it as a version guard to avoid regressing currentState.
+  const incomingLogLen = Array.isArray(state?.log) ? state.log.length : -1;
+  const currentLogLen = Array.isArray(currentState?.log) ? currentState.log.length : -1;
+  if (incomingLogLen < currentLogLen) return;
+
   if (autoPassTurnEndEnabled && seat === null) {
     autoPassTurnEndEnabled = false;
     autoPassTurnEndRequestedStateKey = "";

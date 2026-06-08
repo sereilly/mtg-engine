@@ -470,7 +470,7 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         ],
         "stack": [_serialize_stack_item(item, session.game) for item in reversed(session.game.stack)],
         "combat": session.game.get_combat_state(),
-        "log": session.game.log[-80:],
+        "log": session.game.log,
         "winner": win,
         "cleanup_discard": cleanup_info,
         "untap_land_selection": untap_info,
