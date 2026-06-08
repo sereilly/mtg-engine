@@ -80,6 +80,8 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
     for permanent_index, permanent in enumerate(player.battlefield):
         if permanent.tapped or permanent.card.primary_type == "land":
             continue
+        if game._is_summoning_sick(permanent):
+            continue
 
         program = compile_card_oracle(permanent.card)
         ability = next((item for item in program.activated_abilities if item.supported and item.instruction is not None), None)

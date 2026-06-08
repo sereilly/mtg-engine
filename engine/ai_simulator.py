@@ -192,8 +192,15 @@ def run_ai_simulation(cards_path: Path, games: int = 10, seed: int = 1337, max_t
         log_cursor = 0
         report.log_lines.append(f"=== Game {game_index} ===")
 
+        # game.turn starts at 1 but is never incremented by the manual step calls
+        # below. Reset to 0 so the pre-loop increment lands on 1 for the very
+        # first half-turn and advances correctly for every subsequent half-turn,
+        # allowing summoning-sickness to clear after a creature's first full turn.
+        game.turn = 0
+
         for turn in range(1, max_turns + 1):
             for active in (0, 1):
+                game.turn += 1
                 active_player = game.players[active]
                 opponent = game.players[1 - active]
 
@@ -263,10 +270,10 @@ def run_ai_simulation(cards_path: Path, games: int = 10, seed: int = 1337, max_t
                             InteractionIssue(game_index, turn, f"Zone conservation failed for {player.name}")
                         )
 
-                if active_player.life <= 0 or opponent.life <= 0:
+                if active_player.life <= 0 or opponent.life <= 0 or active_player.lost or opponent.lost:
                     break
 
-            if game.players[0].life <= 0 or game.players[1].life <= 0:
+            if game.players[0].life <= 0 or game.players[1].life <= 0 or game.players[0].lost or game.players[1].lost:
                 break
 
         report.games_completed += 1

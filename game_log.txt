@@ -1,0 +1,1361 @@
+=== Game 1 ===
+G1 T1 AI-A-1 cast Ancestral Recall -> resolved
+  Coin flip: AI-B-1 wins and chooses to go first
+  AI-B-1 drew opening hand of 7 card(s)
+  AI-A-1 drew opening hand of 7 card(s)
+  AI-A-1 keeps opening hand of 7 card(s)
+  AI-B-1 keeps opening hand of 7 card(s)
+  AI-A-1 untapped 0 permanent(s)
+  AI-A-1 drew 1 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-A-1 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+G1 T1 AI-B-1 cast Prodigal Sorcerer -> resolved
+G1 T1 AI-B-1 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-1 untapped 0 permanent(s)
+  AI-B-1 drew 1 card(s) in draw step
+  Prodigal Sorcerer added to stack
+  AI-B-1 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G1 T2 AI-A-1 cast Ancestral Recall -> resolved
+  AI-A-1 untapped 0 permanent(s)
+  AI-A-1 drew 1 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-A-1 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+G1 T2 AI-B-1 cast Jayemdae Tome -> resolved
+G1 T2 AI-B-1 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-1 untapped 0 permanent(s)
+  AI-B-1 drew 1 card(s) in draw step
+  Jayemdae Tome added to stack
+  AI-B-1 put Jayemdae Tome onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G1 T3 AI-A-1 cast Lightning Bolt -> resolved
+  AI-A-1 untapped 0 permanent(s)
+  AI-A-1 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-1 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+G1 T3 AI-B-1 cast Howling Mine -> resolved
+G1 T3 AI-B-1 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-1 untapped 0 permanent(s)
+  AI-B-1 drew 1 card(s) in draw step
+  Howling Mine added to stack
+  AI-B-1 put Howling Mine onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G1 T4 AI-A-1 cast Disenchant -> resolved
+  AI-A-1 untapped 0 permanent(s)
+  AI-A-1 drew 2 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Jayemdae Tome
+  Disenchant resolved and moved to graveyard
+G1 T4 AI-B-1 cast Prodigal Sorcerer -> resolved
+G1 T4 AI-B-1 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-1 untapped 0 permanent(s)
+  AI-B-1 drew 2 card(s) in draw step
+  Prodigal Sorcerer added to stack
+  AI-B-1 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G1 T5 AI-A-1 cast Lightning Bolt -> resolved
+  AI-A-1 untapped 0 permanent(s)
+  AI-A-1 drew 2 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-1 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+G1 T5 AI-B-1 cast Healing Salve -> resolved
+G1 T5 AI-B-1 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-1 untapped 0 permanent(s)
+  AI-B-1 drew 2 card(s) in draw step
+  Healing Salve added to stack
+  AI-B-1 gains prevention shield for 3 damage
+  Healing Salve resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G1 T6 AI-A-1 cast Lightning Bolt -> resolved
+  AI-A-1 untapped 0 permanent(s)
+  AI-A-1 drew 2 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-1 took 0 damage
+  Lightning Bolt resolved and moved to graveyard
+G1 T6 AI-B-1 cast Healing Salve -> resolved
+G1 T6 AI-B-1 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-1 untapped 0 permanent(s)
+  AI-B-1 drew 2 card(s) in draw step
+  Healing Salve added to stack
+  AI-B-1 gains prevention shield for 3 damage
+  Healing Salve resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G1 T7 AI-A-1 cast Prodigal Sorcerer -> resolved
+G1 T7 AI-A-1 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-1 untapped 0 permanent(s)
+  AI-A-1 drew 2 card(s) in draw step
+  Prodigal Sorcerer added to stack
+  AI-A-1 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G1 T7 AI-B-1 cast Unsummon -> resolved
+G1 T7 AI-B-1 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-1 untapped 0 permanent(s)
+  AI-B-1 drew 2 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G1 T8 AI-A-1 cast Prodigal Sorcerer -> resolved
+G1 T8 AI-A-1 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-1 untapped 0 permanent(s)
+  AI-A-1 drew 2 card(s) in draw step
+  Prodigal Sorcerer added to stack
+  AI-A-1 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G1 T8 AI-B-1 cast Lightning Bolt -> resolved
+G1 T8 AI-B-1 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-1 untapped 0 permanent(s)
+  AI-B-1 drew 2 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-1 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G1 T9 AI-A-1 cast Lightning Bolt -> resolved
+G1 T9 AI-A-1 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-1 untapped 0 permanent(s)
+  AI-A-1 drew 2 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-1 took 0 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G1 T9 AI-B-1 cast Jayemdae Tome -> resolved
+G1 T9 AI-B-1 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-1 untapped 0 permanent(s)
+  AI-B-1 drew 2 card(s) in draw step
+  Jayemdae Tome added to stack
+  AI-B-1 put Jayemdae Tome onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G1 T10 AI-A-1 cast Disenchant -> resolved
+G1 T10 AI-A-1 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-1 untapped 0 permanent(s)
+  AI-A-1 drew 2 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Howling Mine
+  Disenchant resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G1 T10 AI-B-1 cast Grizzly Bears -> resolved
+G1 T10 AI-B-1 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-1 untapped 0 permanent(s)
+  AI-B-1 drew 1 card(s) in draw step
+  Grizzly Bears added to stack
+  AI-B-1 put Grizzly Bears onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G1 T11 AI-A-1 cast Unsummon -> resolved
+G1 T11 AI-A-1 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-1 untapped 0 permanent(s)
+  AI-A-1 drew 1 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G1 T11 AI-B-1 cast Ancestral Recall -> resolved
+G1 T11 AI-B-1 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-1 untapped 0 permanent(s)
+  AI-B-1 drew 1 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-B-1 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G1 T12 AI-A-1 cast Unsummon -> resolved
+G1 T12 AI-A-1 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-1 untapped 0 permanent(s)
+  AI-A-1 drew 1 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G1 T12 AI-B-1 cast Ancestral Recall -> resolved
+G1 T12 AI-B-1 activate Jayemdae Tome -> resolved
+  AI-B-1 untapped 0 permanent(s)
+  AI-B-1 drew 1 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-B-1 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+  Jayemdae Tome ability added to stack
+  Jayemdae Tome drew 1 card
+  Jayemdae Tome ability resolved
+G1 T13 AI-A-1 cast Howling Mine -> resolved
+G1 T13 AI-A-1 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-1 untapped 0 permanent(s)
+  AI-A-1 drew 1 card(s) in draw step
+  Howling Mine added to stack
+  AI-A-1 put Howling Mine onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G1 T13 AI-B-1 cast Prodigal Sorcerer -> resolved
+G1 T13 AI-B-1 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-1 untapped 1 permanent(s)
+  AI-B-1 drew 2 card(s) in draw step
+  Prodigal Sorcerer added to stack
+  AI-B-1 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G1 T14 AI-A-1 cast Jayemdae Tome -> resolved
+G1 T14 AI-A-1 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-1 untapped 0 permanent(s)
+  AI-A-1 drew 2 card(s) in draw step
+  Jayemdae Tome added to stack
+  AI-A-1 put Jayemdae Tome onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G1 T14 AI-B-1 cast Disenchant -> resolved
+G1 T14 AI-B-1 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-1 untapped 0 permanent(s)
+  AI-B-1 drew 2 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Howling Mine
+  Disenchant resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G1 T15 AI-A-1 cast Prodigal Sorcerer -> resolved
+G1 T15 AI-A-1 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-1 untapped 0 permanent(s)
+  AI-A-1 drew 1 card(s) in draw step
+  Prodigal Sorcerer added to stack
+  AI-A-1 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G1 T15 AI-B-1 cast Prodigal Sorcerer -> resolved
+G1 T15 AI-B-1 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-1 untapped 0 permanent(s)
+  AI-B-1 drew 0 card(s) in draw step
+  Prodigal Sorcerer added to stack
+  AI-B-1 put Prodigal Sorcerer onto battlefield
+  AI-B-1 lost the game (704.5b: drew from empty library)
+  Prodigal Sorcerer has summoning sickness
+G1 T16 AI-A-1 cast Howling Mine -> resolved
+G1 T16 AI-A-1 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-1 untapped 0 permanent(s)
+  AI-A-1 drew 0 card(s) in draw step
+  Howling Mine added to stack
+  AI-A-1 put Howling Mine onto battlefield
+  AI-A-1 lost the game (704.5b: drew from empty library)
+  Prodigal Sorcerer has summoning sickness
+G1 T16 AI-B-1 cast Disenchant -> resolved
+G1 T16 AI-B-1 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-1 untapped 0 permanent(s)
+  AI-B-1 drew 0 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Jayemdae Tome
+  Disenchant resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G1 T17 AI-A-1 cast Jayemdae Tome -> resolved
+G1 T17 AI-A-1 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-1 untapped 0 permanent(s)
+  AI-A-1 drew 0 card(s) in draw step
+  Jayemdae Tome added to stack
+  AI-A-1 put Jayemdae Tome onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G1 T17 AI-B-1 cast Lightning Bolt -> resolved
+G1 T17 AI-B-1 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-1 untapped 0 permanent(s)
+  AI-B-1 drew 0 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-1 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G1 T18 AI-A-1 cast Grizzly Bears -> resolved
+G1 T18 AI-A-1 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-1 untapped 0 permanent(s)
+  AI-A-1 drew 0 card(s) in draw step
+  Grizzly Bears added to stack
+  AI-A-1 put Grizzly Bears onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G1 T18 AI-B-1 cast Lightning Bolt -> resolved
+G1 T18 AI-B-1 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-1 untapped 0 permanent(s)
+  AI-B-1 drew 0 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-1 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+RESULT G1: AI-A-1=11, AI-B-1=14
+
+=== Game 2 ===
+G2 T1 AI-A-2 cast Prodigal Sorcerer -> resolved
+G2 T1 AI-A-2 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  Coin flip: AI-A-2 wins and chooses to go first
+  AI-A-2 drew opening hand of 7 card(s)
+  AI-B-2 drew opening hand of 7 card(s)
+  AI-A-2 keeps opening hand of 7 card(s)
+  AI-B-2 keeps opening hand of 7 card(s)
+  AI-A-2 untapped 0 permanent(s)
+  AI-A-2 drew 1 card(s) in draw step
+  Prodigal Sorcerer added to stack
+  AI-A-2 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G2 T1 AI-B-2 cast Lightning Bolt -> resolved
+  AI-B-2 untapped 0 permanent(s)
+  AI-B-2 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-2 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+G2 T2 AI-A-2 cast Grizzly Bears -> resolved
+G2 T2 AI-A-2 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-2 untapped 0 permanent(s)
+  AI-A-2 drew 1 card(s) in draw step
+  Grizzly Bears added to stack
+  AI-A-2 put Grizzly Bears onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G2 T2 AI-B-2 cast Ancestral Recall -> resolved
+  AI-B-2 untapped 0 permanent(s)
+  AI-B-2 drew 1 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-B-2 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+G2 T3 AI-A-2 cast Healing Salve -> resolved
+G2 T3 AI-A-2 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-2 untapped 0 permanent(s)
+  AI-A-2 drew 1 card(s) in draw step
+  Healing Salve added to stack
+  AI-A-2 gains prevention shield for 3 damage
+  Healing Salve resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G2 T3 AI-B-2 cast Prodigal Sorcerer -> resolved
+G2 T3 AI-B-2 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-2 untapped 0 permanent(s)
+  AI-B-2 drew 1 card(s) in draw step
+  Prodigal Sorcerer added to stack
+  AI-B-2 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G2 T4 AI-A-2 cast Unsummon -> resolved
+G2 T4 AI-A-2 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-2 untapped 0 permanent(s)
+  AI-A-2 drew 1 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G2 T4 AI-B-2 cast Prodigal Sorcerer -> resolved
+G2 T4 AI-B-2 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-2 untapped 0 permanent(s)
+  AI-B-2 drew 1 card(s) in draw step
+  Prodigal Sorcerer added to stack
+  AI-B-2 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G2 T5 AI-A-2 cast Grizzly Bears -> resolved
+G2 T5 AI-A-2 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-2 untapped 0 permanent(s)
+  AI-A-2 drew 1 card(s) in draw step
+  Grizzly Bears added to stack
+  AI-A-2 put Grizzly Bears onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G2 T5 AI-B-2 cast Lightning Bolt -> resolved
+G2 T5 AI-B-2 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-2 untapped 0 permanent(s)
+  AI-B-2 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-2 took 0 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G2 T6 AI-A-2 cast Jayemdae Tome -> resolved
+G2 T6 AI-A-2 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-2 untapped 0 permanent(s)
+  AI-A-2 drew 1 card(s) in draw step
+  Jayemdae Tome added to stack
+  AI-A-2 put Jayemdae Tome onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G2 T6 AI-B-2 cast Lightning Bolt -> resolved
+G2 T6 AI-B-2 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-2 untapped 0 permanent(s)
+  AI-B-2 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-2 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G2 T7 AI-A-2 cast Healing Salve -> resolved
+G2 T7 AI-A-2 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-2 untapped 0 permanent(s)
+  AI-A-2 drew 1 card(s) in draw step
+  Healing Salve added to stack
+  AI-A-2 gains prevention shield for 3 damage
+  Healing Salve resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G2 T7 AI-B-2 cast Lightning Bolt -> resolved
+G2 T7 AI-B-2 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-2 untapped 0 permanent(s)
+  AI-B-2 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-2 took 0 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G2 T8 AI-A-2 cast Island -> resolved
+G2 T8 AI-A-2 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-2 untapped 0 permanent(s)
+  AI-A-2 drew 1 card(s) in draw step
+  AI-A-2 put Island onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G2 T8 AI-B-2 cast Unsummon -> resolved
+G2 T8 AI-B-2 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-2 untapped 0 permanent(s)
+  AI-B-2 drew 1 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G2 T9 AI-A-2 cast Prodigal Sorcerer -> resolved
+G2 T9 AI-A-2 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-2 untapped 0 permanent(s)
+  AI-A-2 drew 1 card(s) in draw step
+  Prodigal Sorcerer added to stack
+  AI-A-2 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G2 T9 AI-B-2 cast Unsummon -> resolved
+G2 T9 AI-B-2 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-2 untapped 0 permanent(s)
+  AI-B-2 drew 1 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G2 T10 AI-A-2 cast Jayemdae Tome -> resolved
+G2 T10 AI-A-2 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-2 untapped 0 permanent(s)
+  AI-A-2 drew 1 card(s) in draw step
+  Jayemdae Tome added to stack
+  AI-A-2 put Jayemdae Tome onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G2 T10 AI-B-2 cast Howling Mine -> resolved
+G2 T10 AI-B-2 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-2 untapped 0 permanent(s)
+  AI-B-2 drew 1 card(s) in draw step
+  Howling Mine added to stack
+  AI-B-2 put Howling Mine onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G2 T11 AI-A-2 cast Prodigal Sorcerer -> resolved
+G2 T11 AI-A-2 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-2 untapped 0 permanent(s)
+  AI-A-2 drew 2 card(s) in draw step
+  Prodigal Sorcerer added to stack
+  AI-A-2 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G2 T11 AI-B-2 cast Jayemdae Tome -> resolved
+G2 T11 AI-B-2 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-2 untapped 0 permanent(s)
+  AI-B-2 drew 2 card(s) in draw step
+  Jayemdae Tome added to stack
+  AI-B-2 put Jayemdae Tome onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G2 T12 AI-A-2 cast Disenchant -> resolved
+G2 T12 AI-A-2 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-2 untapped 0 permanent(s)
+  AI-A-2 drew 2 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Howling Mine
+  Disenchant resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G2 T12 AI-B-2 cast Prodigal Sorcerer -> resolved
+G2 T12 AI-B-2 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-2 untapped 0 permanent(s)
+  AI-B-2 drew 1 card(s) in draw step
+  Prodigal Sorcerer added to stack
+  AI-B-2 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G2 T13 AI-A-2 cast Disenchant -> resolved
+G2 T13 AI-A-2 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-2 untapped 0 permanent(s)
+  AI-A-2 drew 1 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Jayemdae Tome
+  Disenchant resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G2 T13 AI-B-2 cast Grizzly Bears -> resolved
+G2 T13 AI-B-2 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-2 untapped 0 permanent(s)
+  AI-B-2 drew 1 card(s) in draw step
+  Grizzly Bears added to stack
+  AI-B-2 put Grizzly Bears onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G2 T14 AI-A-2 cast Grizzly Bears -> resolved
+G2 T14 AI-A-2 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-2 untapped 0 permanent(s)
+  AI-A-2 drew 1 card(s) in draw step
+  Grizzly Bears added to stack
+  AI-A-2 put Grizzly Bears onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G2 T14 AI-B-2 cast Healing Salve -> resolved
+G2 T14 AI-B-2 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-2 untapped 0 permanent(s)
+  AI-B-2 drew 1 card(s) in draw step
+  Healing Salve added to stack
+  AI-B-2 gains prevention shield for 3 damage
+  Healing Salve resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G2 T15 AI-A-2 cast Black Lotus -> resolved
+G2 T15 AI-A-2 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-2 untapped 0 permanent(s)
+  AI-A-2 drew 1 card(s) in draw step
+  Black Lotus added to stack
+  AI-A-2 put Black Lotus onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G2 T15 AI-B-2 cast Black Lotus -> resolved
+G2 T15 AI-B-2 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-2 untapped 0 permanent(s)
+  AI-B-2 drew 1 card(s) in draw step
+  Black Lotus added to stack
+  AI-B-2 put Black Lotus onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G2 T16 AI-A-2 cast Ancestral Recall -> resolved
+G2 T16 AI-A-2 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-2 untapped 0 permanent(s)
+  AI-A-2 drew 1 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-A-2 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G2 T16 AI-B-2 cast Disenchant -> resolved
+G2 T16 AI-B-2 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-2 untapped 0 permanent(s)
+  AI-B-2 drew 1 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Jayemdae Tome
+  Disenchant resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G2 T17 AI-A-2 cast Lightning Bolt -> resolved
+G2 T17 AI-A-2 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-2 untapped 0 permanent(s)
+  AI-A-2 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-2 took 0 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G2 T17 AI-B-2 cast Disenchant -> resolved
+G2 T17 AI-B-2 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-2 untapped 0 permanent(s)
+  AI-B-2 drew 1 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Jayemdae Tome
+  Disenchant resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G2 T18 AI-A-2 cast Unsummon -> resolved
+G2 T18 AI-A-2 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-2 untapped 0 permanent(s)
+  AI-A-2 drew 1 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G2 T18 AI-B-2 cast Ancestral Recall -> resolved
+G2 T18 AI-B-2 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-2 untapped 0 permanent(s)
+  AI-B-2 drew 1 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-B-2 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+RESULT G2: AI-A-2=14, AI-B-2=20
+
+=== Game 3 ===
+G3 T1 AI-A-3 cast Howling Mine -> resolved
+  Coin flip: AI-A-3 wins and chooses to go first
+  AI-A-3 drew opening hand of 7 card(s)
+  AI-B-3 drew opening hand of 7 card(s)
+  AI-A-3 keeps opening hand of 7 card(s)
+  AI-B-3 keeps opening hand of 7 card(s)
+  AI-A-3 untapped 0 permanent(s)
+  AI-A-3 drew 1 card(s) in draw step
+  Howling Mine added to stack
+  AI-A-3 put Howling Mine onto battlefield
+G3 T1 AI-B-3 cast Prodigal Sorcerer -> resolved
+G3 T1 AI-B-3 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-3 untapped 0 permanent(s)
+  AI-B-3 drew 2 card(s) in draw step
+  Prodigal Sorcerer added to stack
+  AI-B-3 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G3 T2 AI-A-3 cast Howling Mine -> resolved
+  AI-A-3 untapped 0 permanent(s)
+  AI-A-3 drew 2 card(s) in draw step
+  Howling Mine added to stack
+  AI-A-3 put Howling Mine onto battlefield
+G3 T2 AI-B-3 cast Lightning Bolt -> resolved
+G3 T2 AI-B-3 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-3 untapped 0 permanent(s)
+  AI-B-3 drew 3 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-3 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G3 T3 AI-A-3 cast Grizzly Bears -> resolved
+  AI-A-3 untapped 0 permanent(s)
+  AI-A-3 drew 3 card(s) in draw step
+  Grizzly Bears added to stack
+  AI-A-3 put Grizzly Bears onto battlefield
+G3 T3 AI-B-3 cast Disenchant -> resolved
+G3 T3 AI-B-3 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-3 untapped 0 permanent(s)
+  AI-B-3 drew 3 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Howling Mine
+  Disenchant resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G3 T4 AI-A-3 cast Grizzly Bears -> resolved
+  AI-A-3 untapped 0 permanent(s)
+  AI-A-3 drew 2 card(s) in draw step
+  Grizzly Bears added to stack
+  AI-A-3 put Grizzly Bears onto battlefield
+G3 T4 AI-B-3 cast Ancestral Recall -> resolved
+G3 T4 AI-B-3 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-3 untapped 0 permanent(s)
+  AI-B-3 drew 2 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-B-3 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G3 T5 AI-A-3 cast Ancestral Recall -> resolved
+  AI-A-3 untapped 0 permanent(s)
+  AI-A-3 drew 2 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-A-3 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+G3 T5 AI-B-3 cast Howling Mine -> resolved
+G3 T5 AI-B-3 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-3 untapped 0 permanent(s)
+  AI-B-3 drew 2 card(s) in draw step
+  Howling Mine added to stack
+  AI-B-3 put Howling Mine onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G3 T6 AI-A-3 cast Lightning Bolt -> resolved
+  AI-A-3 untapped 0 permanent(s)
+  AI-A-3 drew 3 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-3 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+G3 T6 AI-B-3 cast Unsummon -> resolved
+G3 T6 AI-B-3 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-3 untapped 0 permanent(s)
+  AI-B-3 drew 3 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G3 T7 AI-A-3 cast Prodigal Sorcerer -> resolved
+G3 T7 AI-A-3 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-3 untapped 0 permanent(s)
+  AI-A-3 drew 3 card(s) in draw step
+  Prodigal Sorcerer added to stack
+  AI-A-3 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G3 T7 AI-B-3 cast Ancestral Recall -> resolved
+G3 T7 AI-B-3 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-3 untapped 0 permanent(s)
+  AI-B-3 drew 3 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-B-3 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G3 T8 AI-A-3 cast Prodigal Sorcerer -> resolved
+G3 T8 AI-A-3 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-3 untapped 0 permanent(s)
+  AI-A-3 drew 3 card(s) in draw step
+  Prodigal Sorcerer added to stack
+  AI-A-3 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G3 T8 AI-B-3 cast Prodigal Sorcerer -> resolved
+G3 T8 AI-B-3 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-3 untapped 0 permanent(s)
+  AI-B-3 drew 3 card(s) in draw step
+  Prodigal Sorcerer added to stack
+  AI-B-3 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G3 T9 AI-A-3 cast Lightning Bolt -> resolved
+G3 T9 AI-A-3 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-3 untapped 0 permanent(s)
+  AI-A-3 drew 3 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-3 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G3 T9 AI-B-3 cast Lightning Bolt -> resolved
+G3 T9 AI-B-3 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-3 untapped 0 permanent(s)
+  AI-B-3 drew 2 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-3 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  AI-B-3 lost the game (704.5b: drew from empty library)
+  Prodigal Sorcerer has summoning sickness
+G3 T10 AI-A-3 cast Ancestral Recall -> resolved
+G3 T10 AI-A-3 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-3 untapped 0 permanent(s)
+  AI-A-3 drew 3 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-A-3 drew 1 cards
+  Ancestral Recall resolved and moved to graveyard
+  AI-A-3 lost the game (704.5b: drew from empty library)
+  Prodigal Sorcerer has summoning sickness
+G3 T10 AI-B-3 cast Lightning Bolt -> resolved
+G3 T10 AI-B-3 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-3 untapped 0 permanent(s)
+  AI-B-3 drew 0 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-3 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G3 T11 AI-A-3 cast Lightning Bolt -> resolved
+G3 T11 AI-A-3 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-3 untapped 0 permanent(s)
+  AI-A-3 drew 0 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-3 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G3 T11 AI-B-3 cast Lightning Bolt -> resolved
+G3 T11 AI-B-3 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-3 untapped 0 permanent(s)
+  AI-B-3 drew 0 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-3 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G3 T12 AI-A-3 cast Lightning Bolt -> resolved
+G3 T12 AI-A-3 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-3 untapped 0 permanent(s)
+  AI-A-3 drew 0 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-3 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G3 T12 AI-B-3 cast Unsummon -> resolved
+G3 T12 AI-B-3 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-3 untapped 0 permanent(s)
+  AI-B-3 drew 0 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G3 T13 AI-A-3 cast Jayemdae Tome -> resolved
+G3 T13 AI-A-3 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-3 untapped 0 permanent(s)
+  AI-A-3 drew 0 card(s) in draw step
+  Jayemdae Tome added to stack
+  AI-A-3 put Jayemdae Tome onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G3 T13 AI-B-3 cast Disenchant -> resolved
+G3 T13 AI-B-3 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-3 untapped 0 permanent(s)
+  AI-B-3 drew 0 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Howling Mine
+  Disenchant resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G3 T14 AI-A-3 cast Jayemdae Tome -> resolved
+G3 T14 AI-A-3 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-3 untapped 0 permanent(s)
+  AI-A-3 drew 0 card(s) in draw step
+  Jayemdae Tome added to stack
+  AI-A-3 put Jayemdae Tome onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G3 T14 AI-B-3 cast Jayemdae Tome -> resolved
+G3 T14 AI-B-3 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-3 untapped 0 permanent(s)
+  AI-B-3 drew 0 card(s) in draw step
+  Jayemdae Tome added to stack
+  AI-B-3 put Jayemdae Tome onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G3 T15 AI-A-3 cast Disenchant -> resolved
+G3 T15 AI-A-3 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-3 untapped 0 permanent(s)
+  AI-A-3 drew 0 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Howling Mine
+  Disenchant resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G3 T15 AI-B-3 cast Howling Mine -> resolved
+G3 T15 AI-B-3 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-3 untapped 0 permanent(s)
+  AI-B-3 drew 0 card(s) in draw step
+  Howling Mine added to stack
+  AI-B-3 put Howling Mine onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G3 T16 AI-A-3 cast Disenchant -> resolved
+G3 T16 AI-A-3 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-3 untapped 0 permanent(s)
+  AI-A-3 drew 0 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Jayemdae Tome
+  Disenchant resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G3 T16 AI-B-3 cast Jayemdae Tome -> resolved
+G3 T16 AI-B-3 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-3 untapped 0 permanent(s)
+  AI-B-3 drew 0 card(s) in draw step
+  Jayemdae Tome added to stack
+  AI-B-3 put Jayemdae Tome onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G3 T17 AI-A-3 cast Unsummon -> resolved
+G3 T17 AI-A-3 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-3 untapped 0 permanent(s)
+  AI-A-3 drew 0 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G3 T17 AI-B-3 cast Prodigal Sorcerer -> resolved
+G3 T17 AI-B-3 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-3 untapped 0 permanent(s)
+  AI-B-3 drew 0 card(s) in draw step
+  Prodigal Sorcerer added to stack
+  AI-B-3 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G3 T18 AI-A-3 cast Unsummon -> resolved
+G3 T18 AI-A-3 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-3 untapped 0 permanent(s)
+  AI-A-3 drew 0 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G3 T18 AI-B-3 cast Prodigal Sorcerer -> resolved
+G3 T18 AI-B-3 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-3 untapped 0 permanent(s)
+  AI-B-3 drew 0 card(s) in draw step
+  Prodigal Sorcerer added to stack
+  AI-B-3 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer has summoning sickness
+RESULT G3: AI-A-3=8, AI-B-3=8
+
+=== Game 4 ===
+G4 T1 AI-A-4 cast Lightning Bolt -> resolved
+  Coin flip: AI-B-4 wins and chooses to go first
+  AI-B-4 drew opening hand of 7 card(s)
+  AI-A-4 drew opening hand of 7 card(s)
+  AI-A-4 keeps opening hand of 7 card(s)
+  AI-B-4 keeps opening hand of 7 card(s)
+  AI-A-4 untapped 0 permanent(s)
+  AI-A-4 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-4 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+G4 T1 AI-B-4 cast Lightning Bolt -> resolved
+  AI-B-4 untapped 0 permanent(s)
+  AI-B-4 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-4 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+G4 T2 AI-A-4 cast Lightning Bolt -> resolved
+  AI-A-4 untapped 0 permanent(s)
+  AI-A-4 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-4 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+G4 T2 AI-B-4 cast Ancestral Recall -> resolved
+  AI-B-4 untapped 0 permanent(s)
+  AI-B-4 drew 1 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-B-4 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+G4 T3 AI-A-4 cast Howling Mine -> resolved
+  AI-A-4 untapped 0 permanent(s)
+  AI-A-4 drew 1 card(s) in draw step
+  Howling Mine added to stack
+  AI-A-4 put Howling Mine onto battlefield
+G4 T3 AI-B-4 cast Lightning Bolt -> resolved
+  AI-B-4 untapped 0 permanent(s)
+  AI-B-4 drew 2 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-4 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+G4 T4 AI-A-4 cast Lightning Bolt -> resolved
+  AI-A-4 untapped 0 permanent(s)
+  AI-A-4 drew 2 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-4 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+G4 T4 AI-B-4 cast Jayemdae Tome -> resolved
+G4 T4 AI-B-4 activate Jayemdae Tome -> resolved
+  AI-B-4 untapped 0 permanent(s)
+  AI-B-4 drew 2 card(s) in draw step
+  Jayemdae Tome added to stack
+  AI-B-4 put Jayemdae Tome onto battlefield
+  Jayemdae Tome ability added to stack
+  Jayemdae Tome drew 1 card
+  Jayemdae Tome ability resolved
+G4 T5 AI-A-4 cast Disenchant -> resolved
+  AI-A-4 untapped 0 permanent(s)
+  AI-A-4 drew 2 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Jayemdae Tome
+  Disenchant resolved and moved to graveyard
+G4 T5 AI-B-4 cast Lightning Bolt -> resolved
+  AI-B-4 untapped 0 permanent(s)
+  AI-B-4 drew 2 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-4 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+G4 T6 AI-A-4 cast Prodigal Sorcerer -> resolved
+G4 T6 AI-A-4 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-4 untapped 0 permanent(s)
+  AI-A-4 drew 2 card(s) in draw step
+  Prodigal Sorcerer added to stack
+  AI-A-4 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G4 T6 AI-B-4 cast Howling Mine -> resolved
+  AI-B-4 untapped 0 permanent(s)
+  AI-B-4 drew 2 card(s) in draw step
+  Howling Mine added to stack
+  AI-B-4 put Howling Mine onto battlefield
+G4 T7 AI-A-4 cast Ancestral Recall -> resolved
+G4 T7 AI-A-4 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-4 untapped 0 permanent(s)
+  AI-A-4 drew 3 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-A-4 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G4 T7 AI-B-4 cast Lightning Bolt -> resolved
+  AI-B-4 untapped 0 permanent(s)
+  AI-B-4 drew 3 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-4 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+G4 T8 AI-A-4 cast Prodigal Sorcerer -> resolved
+G4 T8 AI-A-4 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-4 untapped 0 permanent(s)
+  AI-A-4 drew 3 card(s) in draw step
+  Prodigal Sorcerer added to stack
+  AI-A-4 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G4 T8 AI-B-4 cast Jayemdae Tome -> resolved
+G4 T8 AI-B-4 activate Jayemdae Tome -> resolved
+  AI-B-4 untapped 0 permanent(s)
+  AI-B-4 drew 3 card(s) in draw step
+  Jayemdae Tome added to stack
+  AI-B-4 put Jayemdae Tome onto battlefield
+  Jayemdae Tome ability added to stack
+  Jayemdae Tome drew 1 card
+  Jayemdae Tome ability resolved
+G4 T9 AI-A-4 cast Lightning Bolt -> resolved
+G4 T9 AI-A-4 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-4 untapped 0 permanent(s)
+  AI-A-4 drew 3 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-4 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G4 T9 AI-B-4 cast Ancestral Recall -> resolved
+G4 T9 AI-B-4 activate Jayemdae Tome -> resolved
+  AI-B-4 untapped 1 permanent(s)
+  AI-B-4 drew 3 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-B-4 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+  Jayemdae Tome ability added to stack
+  Jayemdae Tome drew 1 card
+  Jayemdae Tome ability resolved
+G4 T10 AI-A-4 cast Ancestral Recall -> resolved
+G4 T10 AI-A-4 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-4 untapped 0 permanent(s)
+  AI-A-4 drew 3 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-A-4 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G4 T10 AI-B-4 cast Prodigal Sorcerer -> resolved
+G4 T10 AI-B-4 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-4 untapped 1 permanent(s)
+  AI-B-4 drew 1 card(s) in draw step
+  Prodigal Sorcerer added to stack
+  AI-B-4 put Prodigal Sorcerer onto battlefield
+  AI-B-4 lost the game (704.5b: drew from empty library)
+  Prodigal Sorcerer has summoning sickness
+G4 T11 AI-A-4 cast Disenchant -> resolved
+G4 T11 AI-A-4 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-4 untapped 0 permanent(s)
+  AI-A-4 drew 2 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Howling Mine
+  Disenchant resolved and moved to graveyard
+  AI-A-4 lost the game (704.5b: drew from empty library)
+  Prodigal Sorcerer has summoning sickness
+G4 T11 AI-B-4 cast Prodigal Sorcerer -> resolved
+G4 T11 AI-B-4 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-4 untapped 0 permanent(s)
+  AI-B-4 drew 0 card(s) in draw step
+  Prodigal Sorcerer added to stack
+  AI-B-4 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G4 T12 AI-A-4 cast Howling Mine -> resolved
+G4 T12 AI-A-4 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-4 untapped 0 permanent(s)
+  AI-A-4 drew 0 card(s) in draw step
+  Howling Mine added to stack
+  AI-A-4 put Howling Mine onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G4 T12 AI-B-4 cast Disenchant -> resolved
+G4 T12 AI-B-4 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-4 untapped 0 permanent(s)
+  AI-B-4 drew 0 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Howling Mine
+  Disenchant resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G4 T13 AI-A-4 cast Jayemdae Tome -> resolved
+G4 T13 AI-A-4 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-4 untapped 0 permanent(s)
+  AI-A-4 drew 0 card(s) in draw step
+  Jayemdae Tome added to stack
+  AI-A-4 put Jayemdae Tome onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G4 T13 AI-B-4 cast Disenchant -> resolved
+G4 T13 AI-B-4 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-4 untapped 0 permanent(s)
+  AI-B-4 drew 0 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Howling Mine
+  Disenchant resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G4 T14 AI-A-4 cast Jayemdae Tome -> resolved
+G4 T14 AI-A-4 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-4 untapped 0 permanent(s)
+  AI-A-4 drew 0 card(s) in draw step
+  Jayemdae Tome added to stack
+  AI-A-4 put Jayemdae Tome onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G4 T14 AI-B-4 cast Howling Mine -> resolved
+G4 T14 AI-B-4 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-4 untapped 0 permanent(s)
+  AI-B-4 drew 0 card(s) in draw step
+  Howling Mine added to stack
+  AI-B-4 put Howling Mine onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G4 T15 AI-A-4 cast Unsummon -> resolved
+G4 T15 AI-A-4 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-4 untapped 0 permanent(s)
+  AI-A-4 drew 0 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G4 T15 AI-B-4 cast Prodigal Sorcerer -> resolved
+G4 T15 AI-B-4 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-4 untapped 0 permanent(s)
+  AI-B-4 drew 0 card(s) in draw step
+  Prodigal Sorcerer added to stack
+  AI-B-4 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G4 T16 AI-A-4 cast Unsummon -> resolved
+G4 T16 AI-A-4 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-4 untapped 0 permanent(s)
+  AI-A-4 drew 0 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G4 T16 AI-B-4 cast Prodigal Sorcerer -> resolved
+G4 T16 AI-B-4 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-4 untapped 0 permanent(s)
+  AI-B-4 drew 0 card(s) in draw step
+  Prodigal Sorcerer added to stack
+  AI-B-4 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G4 T17 AI-A-4 cast Healing Salve -> resolved
+G4 T17 AI-A-4 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-4 untapped 0 permanent(s)
+  AI-A-4 drew 0 card(s) in draw step
+  Healing Salve added to stack
+  AI-A-4 gains prevention shield for 3 damage
+  Healing Salve resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G4 T17 AI-B-4 cast Unsummon -> resolved
+G4 T17 AI-B-4 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-4 untapped 0 permanent(s)
+  AI-B-4 drew 0 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G4 T18 AI-A-4 cast Prodigal Sorcerer -> resolved
+G4 T18 AI-A-4 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-4 untapped 0 permanent(s)
+  AI-A-4 drew 0 card(s) in draw step
+  Prodigal Sorcerer added to stack
+  AI-A-4 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G4 T18 AI-B-4 cast Unsummon -> resolved
+G4 T18 AI-B-4 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-4 untapped 0 permanent(s)
+  AI-B-4 drew 0 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+RESULT G4: AI-A-4=8, AI-B-4=8
+
+=== Game 5 ===
+G5 T1 AI-A-5 cast Lightning Bolt -> resolved
+  Coin flip: AI-B-5 wins and chooses to go first
+  AI-B-5 drew opening hand of 7 card(s)
+  AI-A-5 drew opening hand of 7 card(s)
+  AI-A-5 keeps opening hand of 7 card(s)
+  AI-B-5 keeps opening hand of 7 card(s)
+  AI-A-5 untapped 0 permanent(s)
+  AI-A-5 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-5 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+G5 T1 AI-B-5 cast Healing Salve -> resolved
+  AI-B-5 untapped 0 permanent(s)
+  AI-B-5 drew 1 card(s) in draw step
+  Healing Salve added to stack
+  AI-B-5 gains prevention shield for 3 damage
+  Healing Salve resolved and moved to graveyard
+G5 T2 AI-A-5 cast Grizzly Bears -> resolved
+  AI-A-5 untapped 0 permanent(s)
+  AI-A-5 drew 1 card(s) in draw step
+  Grizzly Bears added to stack
+  AI-A-5 put Grizzly Bears onto battlefield
+G5 T2 AI-B-5 cast Unsummon -> resolved
+  AI-B-5 untapped 0 permanent(s)
+  AI-B-5 drew 1 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+G5 T3 AI-A-5 cast Grizzly Bears -> resolved
+  AI-A-5 untapped 0 permanent(s)
+  AI-A-5 drew 1 card(s) in draw step
+  Grizzly Bears added to stack
+  AI-A-5 put Grizzly Bears onto battlefield
+G5 T3 AI-B-5 cast Lightning Bolt -> resolved
+  AI-B-5 untapped 0 permanent(s)
+  AI-B-5 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-5 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+G5 T4 AI-A-5 cast Healing Salve -> resolved
+  AI-A-5 untapped 0 permanent(s)
+  AI-A-5 drew 1 card(s) in draw step
+  Healing Salve added to stack
+  AI-A-5 gains prevention shield for 3 damage
+  Healing Salve resolved and moved to graveyard
+G5 T4 AI-B-5 cast Prodigal Sorcerer -> resolved
+G5 T4 AI-B-5 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-5 untapped 0 permanent(s)
+  AI-B-5 drew 1 card(s) in draw step
+  Prodigal Sorcerer added to stack
+  AI-B-5 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G5 T5 AI-A-5 cast Unsummon -> resolved
+  AI-A-5 untapped 0 permanent(s)
+  AI-A-5 drew 1 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+G5 T5 AI-B-5 cast Ancestral Recall -> resolved
+  AI-B-5 untapped 0 permanent(s)
+  AI-B-5 drew 1 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-B-5 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+G5 T6 AI-A-5 cast Jayemdae Tome -> resolved
+G5 T6 AI-A-5 activate Jayemdae Tome -> resolved
+  AI-A-5 untapped 0 permanent(s)
+  AI-A-5 drew 1 card(s) in draw step
+  Jayemdae Tome added to stack
+  AI-A-5 put Jayemdae Tome onto battlefield
+  Jayemdae Tome ability added to stack
+  Jayemdae Tome drew 1 card
+  Jayemdae Tome ability resolved
+G5 T6 AI-B-5 cast Prodigal Sorcerer -> resolved
+G5 T6 AI-B-5 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-5 untapped 0 permanent(s)
+  AI-B-5 drew 1 card(s) in draw step
+  Prodigal Sorcerer added to stack
+  AI-B-5 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G5 T7 AI-A-5 cast Unsummon -> resolved
+G5 T7 AI-A-5 activate Jayemdae Tome -> resolved
+  AI-A-5 untapped 1 permanent(s)
+  AI-A-5 drew 1 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+  Jayemdae Tome ability added to stack
+  Jayemdae Tome drew 1 card
+  Jayemdae Tome ability resolved
+G5 T7 AI-B-5 cast Prodigal Sorcerer -> resolved
+G5 T7 AI-B-5 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-5 untapped 0 permanent(s)
+  AI-B-5 drew 1 card(s) in draw step
+  Prodigal Sorcerer added to stack
+  AI-B-5 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G5 T8 AI-A-5 cast Grizzly Bears -> resolved
+G5 T8 AI-A-5 activate Jayemdae Tome -> resolved
+  AI-A-5 untapped 1 permanent(s)
+  AI-A-5 drew 1 card(s) in draw step
+  Grizzly Bears added to stack
+  AI-A-5 put Grizzly Bears onto battlefield
+  Jayemdae Tome ability added to stack
+  Jayemdae Tome drew 1 card
+  Jayemdae Tome ability resolved
+G5 T8 AI-B-5 cast Ancestral Recall -> resolved
+G5 T8 AI-B-5 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-5 untapped 0 permanent(s)
+  AI-B-5 drew 1 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-B-5 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G5 T9 AI-A-5 cast Healing Salve -> resolved
+G5 T9 AI-A-5 activate Jayemdae Tome -> resolved
+  AI-A-5 untapped 1 permanent(s)
+  AI-A-5 drew 1 card(s) in draw step
+  Healing Salve added to stack
+  AI-A-5 gains prevention shield for 3 damage
+  Healing Salve resolved and moved to graveyard
+  Jayemdae Tome ability added to stack
+  Jayemdae Tome drew 1 card
+  Jayemdae Tome ability resolved
+G5 T9 AI-B-5 cast Lightning Bolt -> resolved
+G5 T9 AI-B-5 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-5 untapped 0 permanent(s)
+  AI-B-5 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-5 took 0 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G5 T10 AI-A-5 cast Prodigal Sorcerer -> resolved
+G5 T10 AI-A-5 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-5 untapped 1 permanent(s)
+  AI-A-5 drew 1 card(s) in draw step
+  Prodigal Sorcerer added to stack
+  AI-A-5 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G5 T10 AI-B-5 cast Lightning Bolt -> resolved
+G5 T10 AI-B-5 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-5 untapped 0 permanent(s)
+  AI-B-5 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-5 took 0 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G5 T11 AI-A-5 cast Lightning Bolt -> resolved
+G5 T11 AI-A-5 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-5 untapped 0 permanent(s)
+  AI-A-5 drew 1 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-5 took 0 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G5 T11 AI-B-5 cast Unsummon -> resolved
+G5 T11 AI-B-5 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-5 untapped 0 permanent(s)
+  AI-B-5 drew 1 card(s) in draw step
+  Unsummon added to stack
+  Returned creature to hand
+  Unsummon resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G5 T12 AI-A-5 cast Ancestral Recall -> resolved
+G5 T12 AI-A-5 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-5 untapped 0 permanent(s)
+  AI-A-5 drew 1 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-A-5 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G5 T12 AI-B-5 cast Prodigal Sorcerer -> resolved
+G5 T12 AI-B-5 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-5 untapped 0 permanent(s)
+  AI-B-5 drew 1 card(s) in draw step
+  Prodigal Sorcerer added to stack
+  AI-B-5 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G5 T13 AI-A-5 cast Ancestral Recall -> resolved
+G5 T13 AI-A-5 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-5 untapped 0 permanent(s)
+  AI-A-5 drew 1 card(s) in draw step
+  Ancestral Recall added to stack
+  AI-A-5 drew 3 cards
+  Ancestral Recall resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G5 T13 AI-B-5 cast Howling Mine -> resolved
+G5 T13 AI-B-5 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-5 untapped 0 permanent(s)
+  AI-B-5 drew 1 card(s) in draw step
+  Howling Mine added to stack
+  AI-B-5 put Howling Mine onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G5 T14 AI-A-5 cast Prodigal Sorcerer -> resolved
+G5 T14 AI-A-5 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-5 untapped 0 permanent(s)
+  AI-A-5 drew 2 card(s) in draw step
+  Prodigal Sorcerer added to stack
+  AI-A-5 put Prodigal Sorcerer onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G5 T14 AI-B-5 cast Lightning Bolt -> resolved
+G5 T14 AI-B-5 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-5 untapped 0 permanent(s)
+  AI-B-5 drew 2 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-A-5 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G5 T15 AI-A-5 cast Lightning Bolt -> resolved
+G5 T15 AI-A-5 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-5 untapped 0 permanent(s)
+  AI-A-5 drew 2 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-5 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G5 T15 AI-B-5 cast Howling Mine -> resolved
+G5 T15 AI-B-5 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-5 untapped 0 permanent(s)
+  AI-B-5 drew 2 card(s) in draw step
+  Howling Mine added to stack
+  AI-B-5 put Howling Mine onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G5 T16 AI-A-5 cast Disenchant -> resolved
+G5 T16 AI-A-5 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-5 untapped 0 permanent(s)
+  AI-A-5 drew 2 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Howling Mine
+  Disenchant resolved and moved to graveyard
+  AI-A-5 lost the game (704.5b: drew from empty library)
+  Prodigal Sorcerer has summoning sickness
+G5 T16 AI-B-5 cast Jayemdae Tome -> resolved
+G5 T16 AI-B-5 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-5 untapped 0 permanent(s)
+  AI-B-5 drew 2 card(s) in draw step
+  Jayemdae Tome added to stack
+  AI-B-5 put Jayemdae Tome onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G5 T17 AI-A-5 cast Disenchant -> resolved
+G5 T17 AI-A-5 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-5 untapped 0 permanent(s)
+  AI-A-5 drew 0 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Howling Mine
+  Disenchant resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G5 T17 AI-B-5 cast Jayemdae Tome -> resolved
+G5 T17 AI-B-5 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-5 untapped 0 permanent(s)
+  AI-B-5 drew 1 card(s) in draw step
+  Jayemdae Tome added to stack
+  AI-B-5 put Jayemdae Tome onto battlefield
+  Prodigal Sorcerer has summoning sickness
+G5 T18 AI-A-5 cast Lightning Bolt -> resolved
+G5 T18 AI-A-5 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-A-5 untapped 0 permanent(s)
+  AI-A-5 drew 0 card(s) in draw step
+  Lightning Bolt added to stack
+  AI-B-5 took 3 damage
+  Lightning Bolt resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+G5 T18 AI-B-5 cast Disenchant -> resolved
+G5 T18 AI-B-5 activate Prodigal Sorcerer -> Prodigal Sorcerer has summoning sickness
+  AI-B-5 untapped 0 permanent(s)
+  AI-B-5 drew 1 card(s) in draw step
+  Disenchant added to stack
+  Destroyed Jayemdae Tome
+  Disenchant resolved and moved to graveyard
+  Prodigal Sorcerer has summoning sickness
+RESULT G5: AI-A-5=14, AI-B-5=11
+
+
+--- Summary ---
+Games completed: 5/5
+Total interactions: 326
+Issues: none
