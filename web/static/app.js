@@ -2776,6 +2776,61 @@ function renderCardRow(containerId, cards, options = {}) {
   appendEntries(container, entries);
 }
 
+function renderHandFan(containerId, cards, options = {}) {
+  const container = q(containerId);
+  container.innerHTML = "";
+
+  const isOpponent = container.classList.contains("hand-fan--opponent");
+  const entries = Array.isArray(cards) ? cards : [];
+  const count = entries.length;
+  const MAX_ANGLE = 15;
+  const MAX_RISE = isOpponent ? 22 : 44;
+  const PUSH_X = isOpponent ? 7 : 14;
+
+  const slots = [];
+
+  entries.forEach((card, index) => {
+    const normalizedPos = count <= 1 ? 0 : (index / (count - 1)) * 2 - 1;
+    const angle = normalizedPos * MAX_ANGLE * (isOpponent ? -1 : 1);
+    // Both hands: center card most prominent (1-pos² parabola).
+    const rise = (1 - normalizedPos * normalizedPos) * MAX_RISE;
+
+    const isHidden = card === "<hidden>";
+    const cardEl = createCardElement(isHidden ? "Hidden" : card, {
+      ...options,
+      compact: false,
+      hidden: isHidden,
+      handIndex: index,
+    });
+
+    const slot = document.createElement("div");
+    slot.className = "hand-fan-slot";
+    slot.style.setProperty("--fan-angle", `${angle}deg`);
+    slot.style.setProperty("--fan-push-x", "0px");
+    slot.style.zIndex = String(index + 1);
+    if (isOpponent) {
+      slot.style.marginTop = `${rise}px`;
+    } else {
+      slot.style.marginBottom = `${rise}px`;
+    }
+    slot.appendChild(cardEl);
+
+    container.appendChild(slot);
+    slots.push(slot);
+  });
+
+  slots.forEach((slot, i) => {
+    slot.addEventListener("mouseenter", () => {
+      slots.forEach((other, j) => {
+        other.style.setProperty("--fan-push-x", `${(j - i) * PUSH_X}px`);
+      });
+    });
+    slot.addEventListener("mouseleave", () => {
+      slots.forEach((other) => other.style.setProperty("--fan-push-x", "0px"));
+    });
+  });
+}
+
 function renderZoneCards(containerId, cards) {
   const container = q(containerId);
   container.innerHTML = "";
@@ -3188,7 +3243,7 @@ function renderBoard(state) {
   q("selfName").classList.toggle("active-turn-name", isSelfTurn);
   q("oppName").classList.toggle("opponent-turn-name", !isSelfTurn);
 
-  renderCardRow("selfHand", me.hand, {
+  renderHandFan("selfHand", me.hand, {
     draggable: !requiresCleanupSelection,
     dragKind: "hand",
     zoneKind: "hand",
@@ -3197,7 +3252,7 @@ function renderBoard(state) {
     cleanupSelectable: requiresCleanupSelection,
     selectedHandIndices: cleanupDiscard?.selected_indices || [],
   });
-  renderCardRow("oppHand", opp.hand, { compact: true, zoneKind: "hand", targetSeat: oppSeat });
+  renderHandFan("oppHand", opp.hand, { zoneKind: "hand", targetSeat: oppSeat });
 
   // Canvas battlefield update
   if (battlefieldCanvas) {

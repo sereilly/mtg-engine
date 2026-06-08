@@ -126,12 +126,8 @@ button:hover {
   margin-bottom: 6px;
 }
 
-.player-header .lane-head {
-  margin-bottom: 4px;
-}
-
-.hand-row-opponent {
-  margin-bottom: 4px;
+.player-header {
+  overflow: visible;
 }
 
 .battlefield-canvas-wrap {
@@ -312,12 +308,98 @@ button:hover {
   margin-bottom: 8px;
 }
 
-.hand-row {
-  flex-wrap: nowrap;
-  overflow-x: auto;
+/* ==== Fanned hand ==== */
+.hand-fan-wrap {
+  position: relative;
+  overflow: visible;
+}
+
+.hand-fan {
+  display: flex;
   justify-content: center;
-  min-height: unset;
+  align-items: flex-end;
+  padding: 0 48px 8px;
+  overflow: visible;
+  height: 100px;
+}
+
+.hand-fan--opponent {
+  align-items: flex-start;
+  padding: 8px 48px 0;
+}
+
+.hand-fan-slot {
+  position: relative;
+  flex-shrink: 0;
+  margin: 0 -28px;
+  transform-origin: bottom center;
+  transform: translateX(var(--fan-push-x, 0px)) rotate(var(--fan-angle, 0deg));
+  transition: transform 0.18s ease, margin 0.18s ease;
+}
+
+.hand-fan--opponent .hand-fan-slot {
+  transform-origin: top center;
+  margin: 0 -14px;
+}
+
+/* Hover lifts card straight up in screen space (translateY before rotate) */
+.hand-fan-slot:hover {
+  transform: translateX(var(--fan-push-x, 0px)) translateY(-30px) rotate(var(--fan-angle, 0deg)) scale(1.15);
+  z-index: 100 !important;
+}
+
+.hand-fan--opponent .hand-fan-slot:hover {
+  transform: translateX(var(--fan-push-x, 0px)) translateY(-30px) rotate(var(--fan-angle, 0deg)) scale(1.15);
+  z-index: 100 !important;
+}
+
+.hand-fan .card {
+  width: 150px;
+  min-height: 210px;
+}
+
+.hand-fan--opponent .card {
+  width: 75px;
+  min-height: 105px;
+}
+
+.hand-fan .card.draggable:hover,
+.hand-fan .card.clickable:hover,
+.hand-fan .card.cleanup-selectable:hover {
+  transform: none;
+}
+
+.hand-fan-info {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
   align-items: center;
+  gap: 10px;
+  z-index: 10;
+  background: rgba(10, 18, 28, 0.75);
+  border: 1px solid rgba(126, 196, 255, 0.25);
+  border-radius: 20px;
+  padding: 5px 14px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.hand-fan-info > * {
+  pointer-events: auto;
+}
+
+.hand-fan-info h2 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.hand-fan-info--self {
+  bottom: 0px;
+}
+
+.hand-fan-info--opponent {
+  top: 0px;
 }
 
 .battlefield-row {
@@ -579,7 +661,7 @@ button:hover {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 0;
+  top: 0;
   background: linear-gradient(180deg, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.82));
   color: #fff;
   font-size: 0.72rem;

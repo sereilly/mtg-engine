@@ -120,11 +120,13 @@
           <div class="board-column center-column">
             <div class="center-top-bar">
               <div class="player-header opponent-header">
-                <div class="lane-head">
-                  <h2 id="oppName">Opponent</h2>
-                  <div id="oppLife" class="life-pill">20</div>
+                <div class="hand-fan-wrap">
+                  <div class="hand-fan-info hand-fan-info--opponent">
+                    <h2 id="oppName">Opponent</h2>
+                    <div id="oppLife" class="life-pill">20</div>
+                  </div>
+                  <div id="oppHand" class="hand-fan hand-fan--opponent"></div>
                 </div>
-                <div id="oppHand" class="card-row hand-row hand-row-opponent"></div>
               </div>
             </div>
 
@@ -135,10 +137,12 @@
 
             <div class="center-bottom-bar">
               <div class="player-header self-header">
-                <div id="selfHand" class="card-row hand-row"></div>
-                <div class="lane-head">
-                  <h2 id="selfName">You</h2>
-                  <div id="selfLife" class="life-pill">20</div>
+                <div class="hand-fan-wrap">
+                  <div id="selfHand" class="hand-fan"></div>
+                  <div class="hand-fan-info hand-fan-info--self">
+                    <h2 id="selfName">You</h2>
+                    <div id="selfLife" class="life-pill">20</div>
+                  </div>
                 </div>
               </div>
             </div>
