@@ -3575,13 +3575,14 @@ function renderBoard(state) {
   }
 }
 
-function renderState(state) {
+function renderState(state, { skipStaleCheck = false } = {}) {
   // Discard stale responses: when a slow HTTP response arrives after a faster SSE+getState
   // has already applied newer state, log length is monotonically increasing so we can use
   // it as a version guard to avoid regressing currentState.
+  // (skipStaleCheck is set for undo, which intentionally produces a shorter log.)
   const incomingLogLen = Array.isArray(state?.log) ? state.log.length : -1;
   const currentLogLen = Array.isArray(currentState?.log) ? currentState.log.length : -1;
-  if (incomingLogLen < currentLogLen) return;
+  if (!skipStaleCheck && incomingLogLen < currentLogLen) return;
   const wasInPregame = !!currentState?.pregame;
 
   if (autoPassTurnEndEnabled && seat === null) {
@@ -4240,7 +4241,7 @@ q("undoBtn").addEventListener("click", async () => {
     const resp = await fetch(url, { method: "POST" });
     const payload = await resp.json();
     if (!resp.ok) throw new Error(payload.detail || "undo failed");
-    renderState(payload);
+    renderState(payload, { skipStaleCheck: true });
     updateActionHint("Undone.");
   } catch (e) {
     alert(e.message);
