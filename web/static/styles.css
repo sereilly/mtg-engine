@@ -240,6 +240,18 @@ button:hover {
   font-weight: 700;
 }
 
+.life-pill.targeting-valid {
+  outline: 2px solid rgba(80, 255, 176, 0.85);
+  box-shadow: 0 0 12px rgba(80, 255, 176, 0.45);
+  cursor: pointer;
+}
+
+h2.targeting-valid {
+  color: #50ffb0;
+  text-shadow: 0 0 8px rgba(80, 255, 176, 0.5);
+  cursor: pointer;
+}
+
 .life-pill.life-flash-gain {
   animation: life-gain-flash 480ms ease-out;
 }

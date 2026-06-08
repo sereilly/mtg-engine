@@ -49,6 +49,7 @@ class BattlefieldCanvas {
     this.viewerSeat = 0;
     this.selectedKeys = new Set();
     this.attackingKeys = new Set();
+    this.targetingKeys = new Set();
     this.combatArrows = [];
     this.hoveredKey = null;
 
@@ -329,6 +330,7 @@ class BattlefieldCanvas {
 
   setSelectedKeys(keys) { this.selectedKeys = new Set(keys); this.needsRedraw = true; }
   setAttackingKeys(keys) { this.attackingKeys = new Set(keys); this.needsRedraw = true; }
+  setTargetingKeys(keys) { this.targetingKeys = new Set(keys); this.needsRedraw = true; }
 
   setCombatArrows(arrows) {
     // arrows: [{fromSeat, fromIdx, toSeat, toIdx, kind}]
@@ -396,7 +398,7 @@ class BattlefieldCanvas {
   }
 
   _drawCardFace(ctx, x, y, w, h, card, flags) {
-    const { selected, attacking, hovered, isDragGhost } = flags || {};
+    const { selected, attacking, hovered, isDragGhost, targeting } = flags || {};
     const img = card?.image_uri ? this._loadImage(card.image_uri) : null;
     const R = 4;
     const alpha = isDragGhost ? 0.45 : 1;
@@ -432,10 +434,11 @@ class BattlefieldCanvas {
     ctx.save();
     if (attacking) { ctx.shadowColor = "#ff5555"; ctx.shadowBlur = 18 / this.zoom; }
     else if (selected) { ctx.shadowColor = "#ffe040"; ctx.shadowBlur = 14 / this.zoom; }
+    else if (targeting) { ctx.shadowColor = "#50ffb0"; ctx.shadowBlur = 16 / this.zoom; }
     else if (hovered && !isDragGhost) { ctx.shadowColor = "#7ec4ff"; ctx.shadowBlur = 10 / this.zoom; }
 
-    ctx.strokeStyle = attacking ? "#ff5555" : selected ? "#ffe040" : hovered ? "#7ec4ff" : "rgba(255,255,255,0.22)";
-    ctx.lineWidth = (attacking || selected ? 2.5 : 1) / this.zoom;
+    ctx.strokeStyle = attacking ? "#ff5555" : selected ? "#ffe040" : targeting ? "#50ffb0" : hovered ? "#7ec4ff" : "rgba(255,255,255,0.22)";
+    ctx.lineWidth = (attacking || selected || targeting ? 2.5 : 1) / this.zoom;
     this._roundRect(ctx, x, y, w, h, R);
     ctx.stroke();
     ctx.restore();
@@ -477,6 +480,7 @@ class BattlefieldCanvas {
     const flags = {
       selected: this.selectedKeys.has(item.key),
       attacking: this.attackingKeys.has(item.key),
+      targeting: this.targetingKeys.has(item.key),
       hovered: this.hoveredKey === item.key,
       ...overrideFlags,
     };

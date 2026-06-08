@@ -1464,11 +1464,25 @@ class Game:
             return True, "resolved"
 
         if instruction.kind == "deal_damage_and_self_damage":
-            damage = self._prevent_damage(target, int(instruction.payload.get("amount", 0)))
-            if damage > 0:
-                target.life -= damage
-            caster.life -= int(instruction.payload.get("self_damage", 0))
-            self.log.append(f"{card.name} dealt {damage} damage and 3 self-damage")
+            amount = int(instruction.payload.get("amount", 0))
+            self_damage = int(instruction.payload.get("self_damage", 0))
+            target_perm_idx = context.target_permanent_index
+            if isinstance(target_perm_idx, int) and 0 <= target_perm_idx < len(target.battlefield):
+                target_perm = target.battlefield[target_perm_idx]
+                target_perm.damage_marked += amount
+                self.log.append(f"{card.name} dealt {amount} damage to {target_perm.card.name}")
+                if target_perm.damage_marked >= target_perm.effective_toughness:
+                    target_perm.metadata["no_regenerate"] = True
+                    target.battlefield.pop(target_perm_idx)
+                    self._permanent_to_graveyard(target, target_perm)
+                    self.log.append(f"{target_perm.card.name} died from damage dealt by {card.name}")
+            else:
+                damage = self._prevent_damage(target, amount)
+                if damage > 0:
+                    target.life -= damage
+                self.log.append(f"{card.name} dealt {damage} damage to {target.name}")
+            caster.life -= self_damage
+            self.log.append(f"{card.name} dealt {self_damage} damage to {caster.name} (self-damage)")
             return True, "resolved"
 
         if instruction.kind == "deal_damage_and_gain_life":

@@ -889,6 +889,27 @@ function cardRequiresTargetArtifact(card) {
   return (card.oracle_text || "").toLowerCase().includes("enchant artifact");
 }
 
+function cardRequiresTargetAny(card) {
+  if (!card || typeof card === "string") return false;
+  return (card.oracle_text || "").toLowerCase().includes("any target");
+}
+
+function getTargetableAnyPermanentsForPrompt(state = currentState) {
+  if (!state) return [];
+  const result = [];
+  for (const targetSeat of [0, 1]) {
+    const player = state.players?.[targetSeat];
+    if (!player || !Array.isArray(player.battlefield)) continue;
+    for (const [permanentIndex, permanent] of player.battlefield.entries()) {
+      if (!permanent) continue;
+      const type = String(permanent.type || "").toLowerCase();
+      if (!type.includes("creature") && !type.includes("planeswalker")) continue;
+      result.push({ targetSeat, permanentIndex, cardName: permanent.name || "Permanent", ownerName: player.name || `Seat ${targetSeat}` });
+    }
+  }
+  return result;
+}
+
 function cardRequiresManaColorChoice(card) {
   if (!card || typeof card === "string") return false;
   const text = (card.oracle_text || "").toLowerCase();
@@ -1209,6 +1230,14 @@ function isPendingCastTargetValidForCard(card, { targetSeat = null, zoneKind = "
     if (zoneKind !== "battlefield") return false;
     if (!Number.isInteger(permanentIndex)) return false;
     return true;
+  }
+
+  if (pendingCastTarget.targetKind === "any") {
+    if (zoneKind !== "battlefield") return false;
+    if (!Number.isInteger(permanentIndex)) return false;
+    if (!card || typeof card === "string") return false;
+    const type = String(card.type || "").toLowerCase();
+    return type.includes("creature") || type.includes("planeswalker");
   }
 
   return false;
@@ -1795,6 +1824,19 @@ function renderActivationPrompt() {
     } else if (pendingCastTarget.targetKind === "permanent") {
       body.textContent = "Click any permanent on the battlefield to choose the target.";
       steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
+    } else if (pendingCastTarget.targetKind === "any") {
+      const players = Array.isArray(currentState?.players) ? currentState.players : [];
+      const targetButtons = players
+        .map((player, index) => {
+          const label = player?.name || `Seat ${index}`;
+          return `<button type="button" class="prompt-choice-btn" data-target-choice="${index}">${escapeHtml(label)}</button>`;
+        })
+        .join("");
+      body.textContent = "Click a creature on the battlefield, or select a player below.";
+      steps.innerHTML = [
+        `<div>Card: ${pendingCastTarget.cardName}</div>`,
+        `<div class="prompt-choice-row">${targetButtons}</div>`,
+      ].join("");
     } else {
       const players = Array.isArray(currentState?.players) ? currentState.players : [];
       const targetButtons = players
@@ -2078,6 +2120,21 @@ function startCastArtifactTargetPrompt(card, castAction = "cast") {
   updateActionHint(`Choose an artifact target for ${cardName}.`);
 }
 
+function startCastAnyTargetPrompt(card, castAction = "cast") {
+  const cardName = normalizeCardName(card);
+  if (!cardName) return;
+
+  pendingCastTarget = {
+    card,
+    cardName,
+    targetKind: "any",
+    castAction,
+  };
+  renderActivationPrompt();
+  renderBoard(currentState);
+  updateActionHint(`Choose any target for ${cardName}: click a creature on the battlefield or select a player.`);
+}
+
 function startCastXPrompt(card, targetSeat, targetPermanentIndex = null, castAction = "cast") {
   const cardName = normalizeCardName(card);
   if (!cardName) return;
@@ -2121,6 +2178,10 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
   }
 
   pendingCastTarget = null;
+  battlefieldCanvas?.setTargetingKeys([]);
+  for (const elementId of ["selfLife", "oppLife", "selfName", "oppName"]) {
+    q(elementId)?.classList.remove("targeting-valid");
+  }
   renderActivationPrompt();
 
   if (hasXCost(pending.card)) {
@@ -2154,7 +2215,7 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
 
 function handlePlayerTargetClick(targetSeat) {
   if (!pendingCastTarget) return;
-  if (pendingCastTarget.targetKind !== "player") return;
+  if (pendingCastTarget.targetKind !== "player" && pendingCastTarget.targetKind !== "any") return;
   if (!Number.isInteger(targetSeat)) return;
   resolvePendingCastTarget(targetSeat);
 }
@@ -2692,6 +2753,11 @@ function createCardElement(card, options = {}) {
 
         if (cardRequiresTargetPermanent(card)) {
           startCastPermanentTargetPrompt(card);
+          return;
+        }
+
+        if (cardRequiresTargetAny(card)) {
+          startCastAnyTargetPrompt(card);
           return;
         }
 
@@ -3289,6 +3355,18 @@ function renderBoard(state) {
       }
     }
     battlefieldCanvas.setSelectedKeys([...selfSelectedKeys, ...allSelectedKeys]);
+
+    if (pendingCastTarget && pendingCastTarget.targetKind === "any") {
+      const targets = getTargetableAnyPermanentsForPrompt(state);
+      battlefieldCanvas.setTargetingKeys(targets.map((t) => `${t.targetSeat}-${t.permanentIndex}`));
+    } else {
+      battlefieldCanvas.setTargetingKeys([]);
+    }
+  }
+
+  const isAnyTarget = !!(pendingCastTarget && pendingCastTarget.targetKind === "any");
+  for (const elementId of ["selfLife", "oppLife", "selfName", "oppName"]) {
+    q(elementId)?.classList.toggle("targeting-valid", isAnyTarget);
   }
 
   q("selfDeckCount").textContent = me.library_count;
@@ -3491,6 +3569,7 @@ async function handleHandCardDropOnBattlefield({ event, targetSeat, targetItem }
       if (card && cardRequiresTargetArtifact(card)) { startCastArtifactTargetPrompt(card); return; }
       if (card && cardRequiresTargetCreature(card)) { startCastCreatureTargetPrompt(card); return; }
       if (card && cardRequiresTargetPermanent(card)) { startCastPermanentTargetPrompt(card); return; }
+      if (card && cardRequiresTargetAny(card)) { startCastAnyTargetPrompt(card); return; }
       if (card && cardRequiresTargetPlayer(card)) { startCastTargetPrompt(card); return; }
       const castTargetSeat = card ? getDefaultTargetSeat(payload.name) : targetSeat;
       if (card && hasXCost(card)) { startCastXPrompt(card, castTargetSeat); return; }
@@ -3828,7 +3907,7 @@ q("joinBtn").addEventListener("click", async () => {
 
 for (const elementId of ["selfName", "oppName", "selfLife", "oppLife"]) {
   q(elementId)?.addEventListener("click", (event) => {
-    if (!pendingCastTarget || pendingCastTarget.targetKind !== "player") return;
+    if (!pendingCastTarget || (pendingCastTarget.targetKind !== "player" && pendingCastTarget.targetKind !== "any")) return;
     const source = event.currentTarget;
     if (!(source instanceof HTMLElement)) return;
     const targetSeat = Number(source.dataset.targetSeat);
@@ -3858,6 +3937,10 @@ q("promptCancelBtn").addEventListener("click", () => {
   pendingManaColor = null;
   pendingAutoTap = null;
   clearPendingHandCast();
+  battlefieldCanvas?.setTargetingKeys([]);
+  for (const elementId of ["selfLife", "oppLife", "selfName", "oppName"]) {
+    q(elementId)?.classList.remove("targeting-valid");
+  }
   renderActivationPrompt();
   updateActionHint("Prompt canceled.");
 });
