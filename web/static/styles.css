@@ -19,18 +19,21 @@
 body {
   margin: 0;
   font-family: "Verdana", "Segoe UI", sans-serif;
+  /* Arena-style environment: dark room with a glowing horizon behind the table */
   background:
-    radial-gradient(circle at 10% 10%, rgba(126, 196, 255, 0.25), transparent 30%),
-    radial-gradient(circle at 85% 5%, rgba(242, 184, 75, 0.2), transparent 28%),
-    linear-gradient(140deg, var(--bg-night), var(--bg-deep));
+    radial-gradient(ellipse at 50% -12%, rgba(126, 196, 255, 0.18), transparent 55%),
+    radial-gradient(ellipse at 50% 115%, rgba(242, 184, 75, 0.1), transparent 55%),
+    radial-gradient(ellipse at 50% 50%, #16273b 0%, #0b1420 60%, #060b12 100%);
+  background-attachment: fixed;
   color: var(--ink);
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 main {
   max-width: 2400px;
   margin: 0 auto;
-  padding: 20px;
+  padding: 14px;
 }
 
 .top-join-url {
@@ -93,11 +96,21 @@ button:hover {
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
 }
 
+/* Full-bleed game board: the 3D table is the stage, everything else floats above it. */
+#boardPanel.panel {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  margin: 0;
+}
+
 .board-shell {
   display: grid;
   grid-template-columns: 0.95fr 3.15fr 1fr;
   gap: 12px;
-  min-height: calc(100vh - 60px);
+  height: calc(100vh - 28px);
+  min-height: 540px;
   align-items: stretch;
 }
 
@@ -106,46 +119,58 @@ button:hover {
   min-width: 0;
 }
 
+/* ---- Arena stage (center column) ---- */
+/* The battlefield fills the whole column; hands, phase bar, and hints overlay it. */
 .center-column {
-  display: flex;
-  flex-direction: column;
+  position: relative;
   min-height: 0;
 }
 
-/* ---- Canvas battlefield ---- */
 .center-top-bar,
 .center-bottom-bar {
-  flex-shrink: 0;
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 6;
+  pointer-events: none;
+}
+
+.center-top-bar {
+  top: 0;
+}
+
+.center-bottom-bar {
+  bottom: -26px; /* hand tucks into the bottom edge of the stage */
 }
 
 .player-header {
-  background: var(--panel-soft);
-  border: 1px solid rgba(126, 196, 255, 0.22);
-  border-radius: 10px;
-  padding: 8px 10px;
-  margin-bottom: 6px;
-}
-
-.player-header {
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
   overflow: visible;
 }
 
 .battlefield-canvas-wrap {
-  flex: 1 1 0;
-  min-height: 260px;
-  position: relative;
-  border-radius: 10px;
+  position: absolute;
+  inset: 0;
+  border-radius: 18px;
   overflow: hidden;
-  margin-bottom: 6px;
-  border: 1px solid rgba(126, 196, 255, 0.12);
-  background: #0d1117;
+  border: 1px solid rgba(126, 196, 255, 0.14);
+  /* Room behind the tilted table: dark floor with a glowing horizon at the top */
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(126, 196, 255, 0.12), transparent 55%),
+    linear-gradient(180deg, #04070c 0%, #0a1019 45%, #101a28 100%);
+  box-shadow:
+    inset 0 0 90px rgba(0, 0, 0, 0.6),
+    0 18px 50px rgba(0, 0, 0, 0.5);
 }
 
 #battlefieldCanvas {
+  /* Size, position, and 3D tilt are managed by BattlefieldCanvas (battlefield-canvas.js). */
   display: block;
-  width: 100%;
-  height: 100%;
   cursor: grab;
+  will-change: transform;
 }
 
 #battlefieldCanvas.active-drop {
@@ -158,10 +183,11 @@ button:hover {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  overflow-y: auto;
+  min-height: 0;
 }
 
-.player-lane,
-.middle-lane {
+.player-lane {
   background: var(--panel-soft);
   border: 1px solid rgba(126, 196, 255, 0.28);
   border-radius: 12px;
@@ -169,15 +195,38 @@ button:hover {
   margin-bottom: 10px;
 }
 
+/* Floating action hint, top-right of the stage */
+.middle-lane {
+  position: absolute;
+  right: 14px;
+  top: 14px;
+  z-index: 7;
+  max-width: 300px;
+  margin: 0;
+  padding: 8px 12px;
+  background: rgba(8, 14, 22, 0.78);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(126, 196, 255, 0.22);
+  border-radius: 12px;
+  pointer-events: none;
+}
+
+/* Floating phase / turn controls, bottom-right of the stage */
 .phase-row {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 8;
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 10px;
-  padding: 10px 12px;
-  background: rgba(23, 39, 57, 0.72);
-  border: 1px solid rgba(242, 184, 75, 0.22);
-  border-radius: 12px;
+  margin: 0;
+  padding: 8px 10px;
+  background: rgba(8, 14, 22, 0.8);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(242, 184, 75, 0.28);
+  border-radius: 14px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
 }
 
 .phase-rail {
@@ -218,26 +267,44 @@ button:hover {
   text-shadow: 0 0 10px rgba(225, 109, 112, 0.5);
 }
 
-.player-lane.turn-zone-self,
-.player-header.turn-zone-self {
+.player-lane.turn-zone-self {
   border-color: rgba(133, 200, 134, 0.9);
   box-shadow: inset 0 0 0 1px rgba(133, 200, 134, 0.35);
 }
 
-.player-lane.turn-zone-opponent,
-.player-header.turn-zone-opponent {
+.player-lane.turn-zone-opponent {
   border-color: rgba(225, 109, 112, 0.9);
   box-shadow: inset 0 0 0 1px rgba(225, 109, 112, 0.35);
 }
 
+/* Active turn is shown on the floating name/life chips */
+.player-header.turn-zone-self .hand-fan-info {
+  border-color: rgba(133, 200, 134, 0.9);
+  box-shadow: 0 0 14px rgba(133, 200, 134, 0.4);
+}
+
+.player-header.turn-zone-opponent .hand-fan-info {
+  border-color: rgba(225, 109, 112, 0.9);
+  box-shadow: 0 0 14px rgba(225, 109, 112, 0.4);
+}
+
+/* Arena-style life orb */
 .life-pill {
-  min-width: 46px;
-  text-align: center;
-  border-radius: 999px;
-  background: rgba(133, 200, 134, 0.2);
-  border: 1px solid rgba(133, 200, 134, 0.7);
-  padding: 6px 12px;
-  font-weight: 700;
+  min-width: 50px;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 28%, rgba(133, 200, 134, 0.55), rgba(16, 52, 28, 0.92) 75%);
+  border: 2px solid rgba(133, 200, 134, 0.8);
+  box-shadow:
+    0 0 16px rgba(133, 200, 134, 0.35),
+    inset 0 2px 8px rgba(255, 255, 255, 0.18);
+  padding: 0;
+  font-weight: 800;
+  font-size: 1.12rem;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 
 .life-pill.targeting-valid {
@@ -320,10 +387,11 @@ h2.targeting-valid {
   margin-bottom: 8px;
 }
 
-/* ==== Fanned hand ==== */
+/* ==== Fanned hand (3D, facing the camera like Arena) ==== */
 .hand-fan-wrap {
   position: relative;
   overflow: visible;
+  pointer-events: none; /* overlay bar lets clicks through; cards/chips re-enable below */
 }
 
 .hand-fan {
@@ -333,6 +401,8 @@ h2.targeting-valid {
   padding: 0 48px 8px;
   overflow: visible;
   height: 100px;
+  perspective: 900px;
+  transform-style: preserve-3d;
 }
 
 .hand-fan--opponent {
@@ -344,24 +414,27 @@ h2.targeting-valid {
   position: relative;
   flex-shrink: 0;
   margin: 0 -28px;
+  pointer-events: auto;
   transform-origin: bottom center;
-  transform: translateX(var(--fan-push-x, 0px)) rotate(var(--fan-angle, 0deg));
+  /* Cards are held tilted slightly back, like a hand of cards facing you */
+  transform: translateX(var(--fan-push-x, 0px)) rotate(var(--fan-angle, 0deg)) rotateX(16deg);
   transition: transform 0.18s ease, margin 0.18s ease;
 }
 
 .hand-fan--opponent .hand-fan-slot {
   transform-origin: top center;
   margin: 0 -14px;
+  transform: translateX(var(--fan-push-x, 0px)) rotate(var(--fan-angle, 0deg)) rotateX(-12deg);
 }
 
-/* Hover lifts card straight up in screen space (translateY before rotate) */
+/* Hover pops the card up, flat to the camera, enlarged for readability */
 .hand-fan-slot:hover {
-  transform: translateX(var(--fan-push-x, 0px)) translateY(-30px) rotate(var(--fan-angle, 0deg)) scale(1.15);
+  transform: translateX(var(--fan-push-x, 0px)) translateY(-52px) rotate(var(--fan-angle, 0deg)) rotateX(0deg) scale(1.32);
   z-index: 100 !important;
 }
 
 .hand-fan--opponent .hand-fan-slot:hover {
-  transform: translateX(var(--fan-push-x, 0px)) translateY(-30px) rotate(var(--fan-angle, 0deg)) scale(1.15);
+  transform: translateX(var(--fan-push-x, 0px)) translateY(-26px) rotate(var(--fan-angle, 0deg)) rotateX(0deg) scale(1.15);
   z-index: 100 !important;
 }
 
@@ -389,12 +462,15 @@ h2.targeting-valid {
   align-items: center;
   gap: 10px;
   z-index: 10;
-  background: rgba(10, 18, 28, 0.75);
+  background: rgba(8, 14, 22, 0.82);
+  backdrop-filter: blur(8px);
   border: 1px solid rgba(126, 196, 255, 0.25);
-  border-radius: 20px;
-  padding: 5px 14px;
+  border-radius: 999px;
+  padding: 4px 16px 4px 6px;
   white-space: nowrap;
   pointer-events: none;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45);
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
 }
 
 .hand-fan-info > * {
@@ -407,11 +483,17 @@ h2.targeting-valid {
 }
 
 .hand-fan-info--self {
-  bottom: 0px;
+  bottom: 30px;
+  left: 24px;
+  transform: none;
+  flex-direction: row-reverse;
+  padding: 4px 6px 4px 16px;
 }
 
 .hand-fan-info--opponent {
-  top: 0px;
+  top: 10px;
+  left: 24px;
+  transform: none;
 }
 
 .battlefield-row {
@@ -767,10 +849,12 @@ h2.targeting-valid {
 }
 
 .side-panel {
-  background: var(--panel-soft);
-  border: 1px solid rgba(242, 184, 75, 0.35);
-  border-radius: 12px;
+  background: rgba(9, 16, 26, 0.74);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(126, 196, 255, 0.16);
+  border-radius: 14px;
   padding: 10px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
 }
 
 .activation-panel {

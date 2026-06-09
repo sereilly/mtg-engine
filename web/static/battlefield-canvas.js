@@ -1,7 +1,18 @@
-// battlefield-canvas.js — canvas-based battlefield renderer
+// battlefield-canvas.js — canvas-based battlefield renderer, projected onto a
+// 3D-tilted table plane (bird's-eye Arena-style view).
 
 const BF_CARD_W = 80;
 const BF_CARD_H = 112;
+
+// ---- 3D table perspective ----
+// The canvas is tilted away from the camera with a CSS rotateX inside a
+// perspective container, so the opponent's side recedes into the distance.
+// All mouse coordinates are mapped back onto the plane analytically.
+const BF_TILT_DEG = 26; // tilt of the table away from the camera
+const BF_PERSPECTIVE = 1500; // CSS perspective distance (px)
+const BF_OVERSCAN_X = 1.22; // oversize the plane so it fills the stage when tilted
+const BF_OVERSCAN_Y = 1.34;
+const BF_OVERSAMPLE = 1.3; // extra backing resolution so the projection stays crisp
 // Stack: each successive card is offset down (positive Y) so cards fan downward.
 // Target (bottom of stack) is at base Y; auras layer below it.
 const BF_STACK_OFFSET_X = 0;
@@ -16,6 +27,17 @@ class BattlefieldCanvas {
     this.canvas = canvasEl;
     this.ctx = canvasEl.getContext("2d");
     this.dpr = window.devicePixelRatio || 1;
+    this.tiltRad = (BF_TILT_DEG * Math.PI) / 180;
+
+    // Tilt the canvas plane in 3D. The wrapper provides the perspective camera.
+    const wrap = canvasEl.parentElement;
+    if (wrap) {
+      wrap.style.perspective = `${BF_PERSPECTIVE}px`;
+      wrap.style.perspectiveOrigin = "50% 50%";
+    }
+    canvasEl.style.position = "absolute";
+    canvasEl.style.transformOrigin = "50% 50%";
+    canvasEl.style.transform = `rotateX(${BF_TILT_DEG}deg)`;
 
     // Camera state (in CSS-pixel space)
     this.camX = 30;
@@ -66,6 +88,10 @@ class BattlefieldCanvas {
     this.needsRedraw = true;
 
     this._resize();
+    // Shift the default camera so world-origin content sits inside the visible
+    // (non-overscan) part of the tilted plane.
+    this.camX = 30 + ((this.cssW || 0) * (1 - 1 / BF_OVERSCAN_X)) / 2;
+    this.camY = 20 + ((this.cssH || 0) * (1 - 1 / BF_OVERSCAN_Y)) / 2;
     this._bindEvents();
     this._startLoop();
   }
@@ -87,14 +113,40 @@ class BattlefieldCanvas {
     return { x: wx * this.zoom + this.camX, y: wy * this.zoom + this.camY };
   }
 
-  _canvasOffset() {
-    const r = this.canvas.getBoundingClientRect();
-    return { x: r.left, y: r.top };
+  // Center of the (untransformed) stage wrapper in client coordinates.
+  // The canvas is centered on it, and both the transform-origin and the
+  // perspective-origin coincide with it, which keeps the math closed-form.
+  _stageCenter() {
+    const el = this.canvas.parentElement || this.canvas;
+    const r = el.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
   }
 
+  // Inverse perspective projection: client (page) coords -> flat canvas-local coords.
+  // Derivation: a plane point (x, y) under rotateX(t) + perspective P projects to
+  //   X = x * s,  Y = y * cos(t) * s,  with s = P / (P - y * sin(t))
+  // which solves to y = Y*P / (P*cos(t) + Y*sin(t)).
   _pageToCanvas(pageX, pageY) {
-    const o = this._canvasOffset();
-    return { x: pageX - o.x, y: pageY - o.y };
+    const c = this._stageCenter();
+    const X = pageX - c.x;
+    const Y = pageY - c.y;
+    const sin = Math.sin(this.tiltRad);
+    const cos = Math.cos(this.tiltRad);
+    const y = (Y * BF_PERSPECTIVE) / (BF_PERSPECTIVE * cos + Y * sin);
+    const s = BF_PERSPECTIVE / (BF_PERSPECTIVE - y * sin);
+    const x = X / s;
+    return { x: x + (this.cssW || 0) / 2, y: y + (this.cssH || 0) / 2 };
+  }
+
+  // Forward perspective projection: flat canvas-local coords -> client (page) coords.
+  _canvasToPage(u, v) {
+    const c = this._stageCenter();
+    const x = u - (this.cssW || 0) / 2;
+    const y = v - (this.cssH || 0) / 2;
+    const sin = Math.sin(this.tiltRad);
+    const cos = Math.cos(this.tiltRad);
+    const s = BF_PERSPECTIVE / (BF_PERSPECTIVE - y * sin);
+    return { x: c.x + x * s, y: c.y + y * cos * s };
   }
 
   // ---------------------------------------------------------------------------
@@ -213,7 +265,7 @@ class BattlefieldCanvas {
     this.viewerSeat = viewerSeat ?? 0;
     this.currentState = state;
 
-    const canvasH = this.canvas.getBoundingClientRect().height || 500;
+    const canvasH = this.cssH || 500;
     const newKeys = new Set();
     const incoming = new Map(); // key -> {seat, idx, card}
 
@@ -360,8 +412,7 @@ class BattlefieldCanvas {
     const wx = tapped ? pos.x + BF_CARD_H / 2 : pos.x + BF_CARD_W / 2;
     const wy = tapped ? pos.y + BF_CARD_W / 2 : pos.y + BF_CARD_H / 2;
     const canvasPos = this.worldToCanvas(wx, wy);
-    const offset = this._canvasOffset();
-    return { x: canvasPos.x + offset.x, y: canvasPos.y + offset.y };
+    return this._canvasToPage(canvasPos.x, canvasPos.y);
   }
 
   // ---------------------------------------------------------------------------
@@ -406,6 +457,16 @@ class BattlefieldCanvas {
 
     ctx.save();
     ctx.globalAlpha = alpha;
+
+    // ---- Drop shadow onto the table ----
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,0.55)";
+    ctx.shadowBlur = (hovered || isDragGhost ? 24 : 12) / this.zoom;
+    ctx.shadowOffsetY = (hovered || isDragGhost ? 10 : 5) / this.zoom;
+    ctx.fillStyle = "rgba(0,0,0,0.4)";
+    this._roundRect(ctx, x, y, w, h, R);
+    ctx.fill();
+    ctx.restore();
 
     // ---- Clipped card art ----
     ctx.save();
@@ -500,6 +561,17 @@ class BattlefieldCanvas {
     }
 
     ctx.save();
+    // Hovered / dragged cards lift slightly off the table.
+    const lifted = (flags.hovered && !flags.isDragGhost) || flags.isDragGhost;
+    if (lifted) {
+      const center = this._cardCenter(item.key);
+      if (center) {
+        const liftScale = 1.07;
+        ctx.translate(center.x, center.y);
+        ctx.scale(liftScale, liftScale);
+        ctx.translate(-center.x, -center.y);
+      }
+    }
     if (tapped) {
       const cx = pos.x + BF_CARD_W / 2;
       const cy = pos.y + BF_CARD_H / 2;
@@ -553,34 +625,79 @@ class BattlefieldCanvas {
 
     const canvas = this.canvas;
     const ctx = this.ctx;
-    const dpr = this.dpr;
-    const cw = canvas.width / dpr;
-    const ch = canvas.height / dpr;
+    const scale = this.renderScale || this.dpr;
+    const cw = canvas.width / scale;
+    const ch = canvas.height / scale;
 
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
 
-    // Background
-    ctx.fillStyle = "#0d1117";
+    // ---- Table surface ----
+    // Vertical gradient: darker toward the far (opponent) edge, lighter up close.
+    const bgGrad = ctx.createLinearGradient(0, 0, 0, ch);
+    bgGrad.addColorStop(0, "#0b1320");
+    bgGrad.addColorStop(0.45, "#152434");
+    bgGrad.addColorStop(1, "#21344b");
+    ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, cw, ch);
 
-    // Separator line + zone labels (canvas space)
+    // Soft center sheen
+    const sheen = ctx.createRadialGradient(cw / 2, ch / 2, 0, cw / 2, ch / 2, Math.max(cw, ch) * 0.62);
+    sheen.addColorStop(0, "rgba(126,196,255,0.09)");
+    sheen.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = sheen;
+    ctx.fillRect(0, 0, cw, ch);
+
+    // Subtle grid: straight lines on the plane converge on screen under the
+    // real 3D tilt, which is what visually sells the perspective.
+    ctx.save();
+    ctx.strokeStyle = "rgba(126,196,255,0.055)";
+    ctx.lineWidth = 1;
+    const GRID = 92;
+    ctx.beginPath();
+    for (let gx = ((cw / 2) % GRID); gx < cw; gx += GRID) {
+      ctx.moveTo(gx, 0);
+      ctx.lineTo(gx, ch);
+    }
+    for (let gy = ((ch / 2) % GRID); gy < ch; gy += GRID) {
+      ctx.moveTo(0, gy);
+      ctx.lineTo(cw, gy);
+    }
+    ctx.stroke();
+    ctx.restore();
+
+    // Edge vignette so the table fades out toward the stage borders
+    const vig = ctx.createRadialGradient(cw / 2, ch / 2, Math.min(cw, ch) * 0.38, cw / 2, ch / 2, Math.max(cw, ch) * 0.78);
+    vig.addColorStop(0, "rgba(0,0,0,0)");
+    vig.addColorStop(1, "rgba(0,0,0,0.42)");
+    ctx.fillStyle = vig;
+    ctx.fillRect(0, 0, cw, ch);
+
+    // ---- Glowing separator between the two player halves ----
     const splitCanvas = this.worldToCanvas(0, BF_WORLD_SPLIT_Y);
     ctx.save();
-    ctx.strokeStyle = "rgba(255,255,255,0.25)";
-    ctx.lineWidth = 1;
-    ctx.setLineDash([8, 6]);
+    const lineGrad = ctx.createLinearGradient(0, 0, cw, 0);
+    lineGrad.addColorStop(0, "rgba(126,196,255,0)");
+    lineGrad.addColorStop(0.5, "rgba(126,196,255,0.45)");
+    lineGrad.addColorStop(1, "rgba(126,196,255,0)");
+    // Soft glow band
+    ctx.fillStyle = lineGrad;
+    ctx.globalAlpha = 0.16;
+    ctx.fillRect(0, splitCanvas.y - 9, cw, 18);
+    ctx.globalAlpha = 1;
+    // Crisp core line
+    ctx.strokeStyle = lineGrad;
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(0, splitCanvas.y);
     ctx.lineTo(cw, splitCanvas.y);
     ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle = "rgba(255,255,255,0.18)";
-    ctx.font = "14px sans-serif";
+    ctx.fillStyle = "rgba(190,215,240,0.22)";
+    ctx.font = "600 13px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "bottom";
-    ctx.fillText("Opponent", cw / 2, splitCanvas.y - 5);
+    ctx.fillText("OPPONENT", cw / 2, splitCanvas.y - 7);
     ctx.textBaseline = "top";
-    ctx.fillText("You", cw / 2, splitCanvas.y + 5);
+    ctx.fillText("YOU", cw / 2, splitCanvas.y + 7);
     ctx.restore();
 
     // Apply camera transform for world-space drawing
@@ -656,12 +773,21 @@ class BattlefieldCanvas {
     const container = this.canvas.parentElement;
     if (!container) return;
     const r = container.getBoundingClientRect();
-    const w = Math.max(r.width || 600, 300);
-    const h = Math.max(r.height || 400, 200);
-    this.canvas.width = w * this.dpr;
-    this.canvas.height = h * this.dpr;
+    const baseW = Math.max(r.width || 600, 300);
+    const baseH = Math.max(r.height || 400, 200);
+    // Oversize the plane so the tilted projection still covers the stage,
+    // and keep it centered on the wrapper (origin of the projection math).
+    const w = baseW * BF_OVERSCAN_X;
+    const h = baseH * BF_OVERSCAN_Y;
+    this.cssW = w;
+    this.cssH = h;
+    this.renderScale = this.dpr * BF_OVERSAMPLE;
+    this.canvas.width = Math.round(w * this.renderScale);
+    this.canvas.height = Math.round(h * this.renderScale);
     this.canvas.style.width = w + "px";
     this.canvas.style.height = h + "px";
+    this.canvas.style.left = (baseW - w) / 2 + "px";
+    this.canvas.style.top = (baseH - h) / 2 + "px";
     this.needsRedraw = true;
   }
 
