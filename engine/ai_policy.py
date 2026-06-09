@@ -373,10 +373,23 @@ def _score_spell_target(card: CardDefinition, caster_index: int, target_index: i
 
     score = 0.0
     if "draw" in text:
-        score += 5.0 if target_index == caster_index else 0.5
+        if target_index == caster_index:
+            # Targeting self when library has < 3 cards would exhaust it and cause an
+            # immediate loss via rule 704.5b; redirect to the opponent instead.
+            if card.name == "Ancestral Recall" and len(caster.library) < 3:
+                score -= 100.0
+            else:
+                score += 5.0
+        else:
+            score += 0.5
     if "gain" in text and "life" in text:
-        life_pressure = max(0, 12 - caster.life)
-        score += (2.0 + life_pressure * 0.2) if target_index == caster_index else -2.0
+        if target_index == caster_index:
+            # Scale score with how much life has been lost from the 20-life starting total.
+            # At full life (20+) the gain is worthless; pressure grows as life drops.
+            life_lost = max(0, 20 - caster.life)
+            score += life_lost * 0.15
+        else:
+            score -= 2.0
 
     damage = _extract_damage(card)
     if damage > 0:
@@ -443,11 +456,18 @@ def _score_cast(game: Game, caster_index: int, card: CardDefinition, target_inde
 
     if card.name == "Ancestral Recall":
         score += 8.0
+        # Never self-target when fewer than 3 library cards remain — would cause an immediate loss
+        if target_index == caster_index and len(caster.library) < 3:
+            return -100.0
     elif card.name == "Lightning Bolt" and target_index == 1 - caster_index and opponent.life <= 3:
         score += 12.0
     elif card.name == "Black Lotus":
-        hand_nonlands = sum(1 for hand_card in caster.hand if hand_card.primary_type != "land")
-        score += 2.0 if hand_nonlands >= 2 else 0.5
+        if game.enforce_mana_costs:
+            hand_nonlands = sum(1 for hand_card in caster.hand if hand_card.primary_type != "land")
+            score += 2.0 if hand_nonlands >= 2 else 0.5
+        else:
+            # Mana costs not enforced — Black Lotus provides no benefit, make it unattractive
+            score -= 2.0
 
     return score
 

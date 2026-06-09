@@ -106,3 +106,36 @@ def test_simulation_stops_when_player_loses_via_empty_library():
             assert not (" activate " in line and line.startswith("G")), (
                 f"Activation found after player lost via empty library: {line!r}"
             )
+
+
+def test_ancestral_recall_never_self_causes_library_loss():
+    """Regression: AI must not self-cast Ancestral Recall when library has < 3 cards.
+
+    Before the fix, the AI's score for Ancestral Recall did not account for library
+    depth, causing it to self-target the spell when nearly out of cards and lose the
+    game immediately via rule 704.5b.  The fix returns -100 in that scenario.
+
+    We verify this by scanning the log for the distinctive pattern:
+      'cast Ancestral Recall' followed by 'lost the game (704.5b' in the *same turn block*
+    which is the footprint of an AI-caused library self-kill from Ancestral Recall.
+    """
+    report = run_ai_simulation(
+        cards_path=Path("lea_cards.json"),
+        games=10,
+        seed=1337,
+        max_turns=25,
+    )
+
+    prev_was_ancestral_cast = False
+    for line in report.log_lines:
+        stripped = line.strip()
+        if "cast Ancestral Recall" in stripped:
+            prev_was_ancestral_cast = True
+            continue
+        if prev_was_ancestral_cast:
+            assert "lost the game (704.5b" not in stripped, (
+                f"Ancestral Recall self-cast triggered a library-death loss: {stripped!r}"
+            )
+            # Reset once we move past the immediate follow-up lines
+            if stripped.startswith("G") or stripped.startswith("RESULT") or stripped == "":
+                prev_was_ancestral_cast = False

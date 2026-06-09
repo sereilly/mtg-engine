@@ -102,7 +102,14 @@ def test_basalt_monolith_tap_and_untap(all_cards):
 
 def test_choose_cast_action_targets_self_for_ancestral_recall(all_cards):
     recall = _get(all_cards, "Ancestral Recall")
-    p1 = PlayerState(name="P1", hand=[recall], mana_pool={"W": 0, "U": 1, "B": 0, "R": 0, "G": 0, "C": 0})
+    island = _get(all_cards, "Island")
+    # Provide enough library cards so self-targeting is safe (≥ 3 required).
+    p1 = PlayerState(
+        name="P1",
+        hand=[recall],
+        library=[island, island, island, island, island],
+        mana_pool={"W": 0, "U": 1, "B": 0, "R": 0, "G": 0, "C": 0},
+    )
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2], enforce_mana_costs=True)
 
