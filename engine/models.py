@@ -109,6 +109,7 @@ class PlayerState:
     lost: bool = False
     drew_from_empty: bool = False
     mulligans_taken: int = 0
+    poison_counters: int = 0
 
     def draw(self, count: int = 1) -> int:
         actual = 0

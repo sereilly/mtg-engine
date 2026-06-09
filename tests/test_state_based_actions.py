@@ -168,24 +168,21 @@ def test_704_5b_drawing_from_empty_library_causes_player_to_lose():
 # loses the game.
 # ---------------------------------------------------------------------------
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "Rule 704.5c not implemented: PlayerState has no 'poison_counters' attribute. "
-        "Poison counters and the ten-counter loss condition are not tracked."
-    ),
-)
 def test_704_5c_ten_poison_counters_cause_player_to_lose():
     """704.5c: A player with 10 or more poison counters loses the game."""
     p1 = PlayerState(name="P1")
-    # The engine does not provide a poison_counters field
-    assert hasattr(p1, "poison_counters")  # type: ignore[attr-defined]
+    p2 = PlayerState(name="P2")
+    p2.poison_counters = 10
+    game = Game(players=[p1, p2])
+    game.check_state_based_actions()
+    assert p2.lost
 
 
-def test_704_5c_player_state_has_no_poison_counter_field():
-    """704.5c: PlayerState does not yet have a poison_counters field — the feature is absent."""
+def test_704_5c_player_state_has_poison_counter_field():
+    """704.5c: PlayerState now tracks poison_counters, defaulting to 0."""
     p1 = PlayerState(name="P1")
-    assert not hasattr(p1, "poison_counters")
+    assert hasattr(p1, "poison_counters")
+    assert p1.poison_counters == 0
 
 
 # ---------------------------------------------------------------------------

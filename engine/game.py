@@ -151,6 +151,8 @@ class Game:
     pending_reorder_library: dict | None = None
     # 610.3: tracks creatures exiled "until end of turn" — (owner_player_index, card)
     exile_until_eot: list[tuple[int, CardDefinition]] = field(default_factory=list)
+    # 104.4: True when the game ends in a draw for all players
+    is_draw: bool = False
 
     def __post_init__(self) -> None:
         # Preserve legacy external phase naming while internally tracking phase/step.
@@ -1949,6 +1951,36 @@ class Game:
             self.log.append(f"{card.name} tapped all lands and drained mana from {target.name}")
             return True, "resolved"
 
+        # Rule 104.3e: effect that states a player loses the game
+        if instruction.kind in ("target_player_loses_game", "player_loses_game"):
+            # "you lose the game" triggers apply to caster; targeted spells apply to target
+            loser = target if instruction.kind == "target_player_loses_game" else caster
+            if not loser.lost:
+                loser.lost = True
+                self.log.append(f"{card.name}: {loser.name} lost the game (104.3e)")
+            return True, "resolved"
+
+        # Rule 104.2b: effect that states caster wins the game
+        if instruction.kind == "player_wins_game":
+            # 104.3f: if caster would also lose simultaneously, they lose instead
+            if not caster.lost:
+                # Mark all opponents as lost so caster is last standing (104.2a)
+                for player in self.players:
+                    if player is not caster and not player.lost:
+                        player.lost = True
+                        self.log.append(f"{card.name}: {player.name} lost (104.2b: opponent loses)")
+                self.log.append(f"{card.name}: {caster.name} wins the game (104.2b)")
+            return True, "resolved"
+
+        # Rule 104.4c: effect that states the game is a draw
+        if instruction.kind == "game_is_draw":
+            if not self.is_draw:
+                self.is_draw = True
+                for player in self.players:
+                    player.lost = True
+                self.log.append(f"{card.name}: the game is a draw (104.4c)")
+            return True, "resolved"
+
         if instruction.kind == "target_loses_life":
             amount = int(instruction.payload.get("amount", 0))
             before = target.life
@@ -3402,6 +3434,40 @@ class Game:
         if any_died:
             self._recalculate_lord_buffs()
 
+    # -----------------------------------------------------------------------
+    # Rule 104 – Ending the Game
+    # -----------------------------------------------------------------------
+
+    def concede(self, player_index: int) -> None:
+        """Rule 104.3a: A player who concedes leaves the game immediately and loses."""
+        player = self.players[player_index]
+        if not player.lost:
+            player.lost = True
+            self.log.append(f"{player.name} conceded and lost the game (104.3a)")
+
+    def get_winner(self) -> PlayerState | None:
+        """Return the single player who has won the game, or None if the game is not yet won.
+
+        Rule 104.2a: a player wins if all opponents have lost.
+        Rule 104.3f: a player who would win and lose simultaneously instead loses.
+        """
+        if self.is_draw:
+            return None
+        active = [p for p in self.players if not p.lost]
+        if len(active) == 1:
+            return active[0]
+        return None
+
+    def is_game_over(self) -> bool:
+        """Rule 104.1: True if a player has won, the game is a draw, or all players have lost."""
+        if self.is_draw:
+            return True
+        if all(p.lost for p in self.players):
+            return True
+        if self.get_winner() is not None:
+            return True
+        return False
+
     def check_state_based_actions(self) -> bool:
         """Check and apply all state-based actions per CR 704. Returns True if any action fired."""
         any_changed = False
@@ -3424,6 +3490,19 @@ class Game:
                         player.lost = True
                         self.log.append(f"{player.name} lost the game (704.5b: drew from empty library)")
                     changed = True
+
+            # 704.5c / 104.3d: player with 10 or more poison counters loses
+            for player in self.players:
+                if not player.lost and player.poison_counters >= 10:
+                    player.lost = True
+                    self.log.append(f"{player.name} lost the game (704.5c / 104.3d: {player.poison_counters} poison counters)")
+                    changed = True
+
+            # 104.4a: if all players have now lost, the game is a draw
+            if not self.is_draw and len(self.players) > 1 and all(p.lost for p in self.players):
+                self.is_draw = True
+                self.log.append("Game is a draw (104.4a: all players lost simultaneously)")
+                changed = True
 
             # 704.5d: tokens in non-battlefield zones cease to exist
             for player in self.players:

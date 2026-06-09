@@ -70,6 +70,9 @@ SUPPORTED_SPELL_PATTERNS = (
     "creatures get +",
     "target player discards",
     "loses",
+    "target player loses the game",
+    "you win the game",
+    "the game is a draw",
     "regenerate target",
     "tap target",
     "untap target",
@@ -765,6 +768,18 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
         count = _parse_number_token(token)
         if count > 0:
             return _instruction("discard_target_cards", amount=count), "spell_pattern"
+
+    # Rule 104.3e: effect that states a player loses the game
+    if "target player loses the game" in text:
+        return _instruction("target_player_loses_game"), "spell_pattern"
+
+    # Rule 104.2b: effect that states a player wins the game (spell/sorcery form)
+    if "you win the game" in text:
+        return _instruction("player_wins_game"), "spell_pattern"
+
+    # Rule 104.4c: effect that states the game is a draw
+    if "the game is a draw" in text:
+        return _instruction("game_is_draw"), "spell_pattern"
 
     lose_life_match = re.search(r"target player loses (\d+) life", text)
     if lose_life_match:
