@@ -60,7 +60,7 @@ def test_103_1_result_is_logged():
 def test_103_1_coin_flip_can_select_first_player():
     """Coin flip can select player 0 (Alice) as starting player (103.1)."""
     game = _two_player_game()
-    with patch("engine.game.random.randrange", return_value=0):
+    with patch("engine.mixins.turn_management.random.randrange", return_value=0):
         idx = game.select_starting_player()
     assert idx == 0
     assert "Alice" in game.log[-1]
@@ -69,7 +69,7 @@ def test_103_1_coin_flip_can_select_first_player():
 def test_103_1_coin_flip_can_select_second_player():
     """Coin flip can select player 1 (Bob) as starting player (103.1)."""
     game = _two_player_game()
-    with patch("engine.game.random.randrange", return_value=1):
+    with patch("engine.mixins.turn_management.random.randrange", return_value=1):
         idx = game.select_starting_player()
     assert idx == 1
     assert "Bob" in game.log[-1]
@@ -79,7 +79,7 @@ def test_103_1_game_supports_more_than_two_players():
     """select_starting_player works for multi-player games (103.1)."""
     players = [PlayerState(name=f"P{i}", library=_library(10)) for i in range(4)]
     game = Game(players=players)
-    with patch("engine.game.random.randrange", return_value=2):
+    with patch("engine.mixins.turn_management.random.randrange", return_value=2):
         idx = game.select_starting_player()
     assert idx == 2
 
@@ -241,7 +241,7 @@ def test_103_5_bottom_card_indices_places_specific_cards_on_bottom():
     game = _two_player_game()
     # Disable shuffle so card order is deterministic: after dealing, library[0] is
     # the first undealt card and will be drawn first on the mulligan.
-    with patch("engine.game.random.shuffle"):
+    with patch("engine.mixins.turn_management.random.shuffle"):
         game.deal_opening_hands(0)
         player = game.players[0]
         # library[0] is the first card that will be drawn into the new hand.
