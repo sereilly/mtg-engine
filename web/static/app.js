@@ -3083,6 +3083,7 @@ function renderHandFan(containerId, cards, options = {}) {
     slot.className = "hand-fan-slot";
     slot.style.setProperty("--fan-angle", `${angle}deg`);
     slot.style.setProperty("--fan-push-x", "0px");
+    slot.style.setProperty("--fan-z", `${index * 2}px`);
     slot.style.zIndex = String(index + 1);
     if (isOpponent) {
       slot.style.marginTop = `${rise}px`;
