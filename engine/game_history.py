@@ -17,6 +17,7 @@ class GameSnapshot:
     untap_selected_indices: list[int]
     upkeep_pay_choices: list[dict]
     upkeep_resolved_choices: dict[str, bool]
+    island_sanctuary_pending: bool = False
 
 
 class GameHistory:
@@ -36,6 +37,7 @@ class GameHistory:
                 untap_selected_indices=list(session.untap_selected_indices),
                 upkeep_pay_choices=list(session.upkeep_pay_choices),
                 upkeep_resolved_choices=dict(session.upkeep_resolved_choices),
+                island_sanctuary_pending=session.island_sanctuary_pending,
             )
         )
 

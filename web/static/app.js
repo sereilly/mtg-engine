@@ -632,8 +632,10 @@ function openStateSyncStream() {
   if (!sessionId) return;
 
   const source = new EventSource(`/api/sessions/${sessionId}/events`);
-  source.addEventListener("state", () => {
-    getState().catch(() => {
+  source.addEventListener("state", (event) => {
+    let skipStale = false;
+    try { if (JSON.parse(event.data)?.reason === "undo") skipStale = true; } catch {}
+    getState(skipStale).catch(() => {
       // Ignore transient refresh failures; the stream will keep delivering future updates.
     });
   });
@@ -1268,6 +1270,12 @@ function getUpkeepPayInfo(state = currentState) {
   return info;
 }
 
+function getIslandSanctuaryInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  if (state.current_turn !== seat) return null;
+  return state.island_sanctuary_pending ? true : null;
+}
+
 function getPregameInfo(state = currentState) {
   const info = state?.pregame;
   if (!info || !info.phase) return null;
@@ -1661,6 +1669,43 @@ function applyUpkeepPayPrompt(upkeepInfo) {
   if (sacBtnEl) {
     sacBtnEl.addEventListener("click", async () => {
       await sendAction({ seat, action: "sacrifice_upkeep", card_name: cardName });
+    });
+  }
+}
+
+function applyIslandSanctuaryPrompt() {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  title.textContent = "Island Sanctuary";
+  body.textContent = "Skip your draw to gain protection from non-flying, non-islandwalk creatures this turn, or draw normally.";
+
+  const skipBtn = `<button type="button" class="prompt-choice-btn" id="sanctuarySkipBtn">Skip Draw (gain protection)</button>`;
+  const drawBtn = `<button type="button" class="prompt-choice-btn" id="sanctuaryDrawBtn">Draw a card</button>`;
+  steps.innerHTML = `<div class="prompt-choice-row">${skipBtn}${drawBtn}</div>`;
+
+  const skipEl = document.getElementById("sanctuarySkipBtn");
+  const drawEl = document.getElementById("sanctuaryDrawBtn");
+  if (skipEl) {
+    skipEl.addEventListener("click", async () => {
+      await sendAction({ seat, action: "island_sanctuary_skip" });
+    });
+  }
+  if (drawEl) {
+    drawEl.addEventListener("click", async () => {
+      await sendAction({ seat, action: "island_sanctuary_draw" });
     });
   }
 }
@@ -2059,6 +2104,12 @@ function renderActivationPrompt() {
 
   if (upkeepPayInfo) {
     applyUpkeepPayPrompt(upkeepPayInfo);
+    return;
+  }
+
+  const islandSanctuaryInfo = getIslandSanctuaryInfo();
+  if (islandSanctuaryInfo) {
+    applyIslandSanctuaryPrompt();
     return;
   }
 
@@ -3788,9 +3839,10 @@ function renderState(state, { skipStaleCheck = false } = {}) {
   const cleanupInfo = getCleanupDiscardInfo(state);
   const untapInfo = getUntapLandSelectionInfo(state);
   const upkeepPayInfo = getUpkeepPayInfo(state);
+  const islandSanctuaryPending = getIslandSanctuaryInfo(state);
   const searchLibraryInfo = getSearchLibraryInfo(state);
   const reorderLibraryInfo = getReorderLibraryInfo(state);
-  if (cleanupInfo || untapInfo || upkeepPayInfo) {
+  if (cleanupInfo || untapInfo || upkeepPayInfo || islandSanctuaryPending) {
     pendingActivation = null;
     pendingCastTarget = null;
     pendingCastX = null;
@@ -3802,7 +3854,7 @@ function renderState(state, { skipStaleCheck = false } = {}) {
   }
   const viewerSeat = seat ?? 0;
   const isSelfTurn = state.current_turn === viewerSeat;
-  if (lastAnnouncedTurn !== state.current_turn) {
+  if (lastAnnouncedTurn !== state.current_turn && !state.pregame) {
     lastAnnouncedTurn = state.current_turn;
     showTurnAnnouncement(isSelfTurn);
   }
@@ -3835,6 +3887,8 @@ function renderState(state, { skipStaleCheck = false } = {}) {
     applyUntapPrompt(untapInfo);
   } else if (upkeepPayInfo) {
     applyUpkeepPayPrompt(upkeepPayInfo);
+  } else if (islandSanctuaryPending) {
+    applyIslandSanctuaryPrompt();
   }
 
   maybeAutoStepAi(state);
@@ -4132,7 +4186,7 @@ function initCardPreviewHover() {
   });
 }
 
-async function getState() {
+async function getState(skipStaleCheck = false) {
   if (!sessionId) return;
   const params = new URLSearchParams();
   if (Number.isInteger(seat)) {
@@ -4147,7 +4201,7 @@ async function getState() {
   }
   if (!resp.ok) return;
   const state = await resp.json();
-  renderState(state);
+  renderState(state, { skipStaleCheck });
 }
 
 async function postJson(url, body) {

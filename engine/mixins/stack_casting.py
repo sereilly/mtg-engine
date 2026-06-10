@@ -437,8 +437,14 @@ class StackCastingMixin:
         if primary.kind == "destroy_target_permanent":
             type_filter = primary.payload.get("type_filter")
             color_filter = primary.payload.get("color_filter")
+            def _type_matches(p, tf):
+                if not tf:
+                    return True
+                if tf == "artifact_or_enchantment":
+                    return p.card.primary_type in ("artifact", "enchantment")
+                return tf in p.card.type_line.lower()
             has_target = any(
-                (not type_filter or type_filter in p.card.type_line.lower())
+                _type_matches(p, type_filter)
                 and (not color_filter or color_filter in p.card.colors)
                 for p in target.battlefield
             )

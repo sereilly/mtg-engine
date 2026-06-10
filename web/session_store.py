@@ -31,6 +31,7 @@ class Session:
     untap_selected_indices: list[int] = field(default_factory=list)
     upkeep_pay_choices: list[dict] = field(default_factory=list)
     upkeep_resolved_choices: dict[str, bool] = field(default_factory=dict)
+    island_sanctuary_pending: bool = False
     history: GameHistory = field(default_factory=GameHistory)
     # Pregame state (used when enable_pregame=True).  None once the game starts.
     pregame_phase: str | None = None  # "coin_flip", "mulligan", "bottom_select"

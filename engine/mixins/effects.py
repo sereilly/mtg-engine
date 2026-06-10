@@ -36,10 +36,17 @@ class EffectsMixin:
         target_player_index = next(
             (i for i, p in enumerate(self.players) if p is target), None
         )
+        def _passes_type(card, tf):
+            if not tf:
+                return True
+            if tf == "artifact_or_enchantment":
+                return card.primary_type in ("artifact", "enchantment")
+            return card.primary_type == tf
+
         if target_permanent_index is not None:
             if 0 <= target_permanent_index < len(target.battlefield):
                 permanent = target.battlefield[target_permanent_index]
-                if type_filter and permanent.card.primary_type != type_filter:
+                if not _passes_type(permanent.card, type_filter):
                     return None
                 if color_filter and color_filter not in permanent.card.colors:
                     return None
@@ -59,7 +66,7 @@ class EffectsMixin:
             return None
 
         for idx, permanent in enumerate(target.battlefield):
-            if type_filter and permanent.card.primary_type != type_filter:
+            if not _passes_type(permanent.card, type_filter):
                 continue
             if color_filter and color_filter not in permanent.card.colors:
                 continue

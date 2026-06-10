@@ -136,7 +136,7 @@ class TurnManagementMixin:
         self.start_turn(next_player)
         return next_player
 
-    def resolve_draw_step(self, player_index: int) -> int:
+    def resolve_draw_step(self, player_index: int, sanctuary_choice: bool | None = None) -> int:
         phase = "beginning"
         step = "draw"
         self._set_phase_and_step(phase, step)
@@ -151,9 +151,10 @@ class TurnManagementMixin:
             self._on_step_or_phase_end(phase, step)
             return 0
 
-        # Island Sanctuary: AI always skips the draw to gain protection from non-flying/non-islandwalk attackers
+        # Island Sanctuary: sanctuary_choice=None means auto-skip (AI); True=skip (human chose);
+        # False=draw normally (human chose to draw instead of gaining protection)
         has_sanctuary = any(perm.card.name == "Island Sanctuary" for perm in player.battlefield)
-        if has_sanctuary:
+        if has_sanctuary and sanctuary_choice is not False:
             player.island_sanctuary_protected = True
             self.log.append(f"{player.name} skipped draw (Island Sanctuary active)")
             if self._receives_priority(step):

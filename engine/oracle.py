@@ -740,6 +740,8 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
         type_filter: str | None = None
         if "target creature" in text:
             type_filter = "creature"
+        elif "target artifact or enchantment" in text:
+            type_filter = "artifact_or_enchantment"
         elif "target artifact" in text:
             type_filter = "artifact"
         elif "target enchantment" in text:

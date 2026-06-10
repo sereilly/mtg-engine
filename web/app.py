@@ -294,6 +294,10 @@ def _clear_upkeep_pay_choices(session: Session) -> None:
     session.upkeep_resolved_choices = {}
 
 
+def _has_island_sanctuary(game, player_index: int) -> bool:
+    return any(p.card.name == "Island Sanctuary" for p in game.players[player_index].battlefield)
+
+
 def _upkeep_pay_pending(session: Session) -> list[dict]:
     """Return pay-or-sacrifice choices that still need a player decision."""
     if session.game.current_step != "upkeep":
@@ -309,6 +313,9 @@ def _advance_after_upkeep_choices(session: Session) -> None:
     choices = dict(session.upkeep_resolved_choices)
     _clear_upkeep_pay_choices(session)
     session.game.resolve_upkeep(session.current_turn, human_choices=choices)
+    if _seat_type(session, session.current_turn) == "human" and _has_island_sanctuary(session.game, session.current_turn):
+        session.island_sanctuary_pending = True
+        return
     session.game.resolve_draw_step(session.current_turn)
     session.game._enter_main_phase(precombat=True)
 
@@ -495,6 +502,9 @@ def _begin_turn(session: Session, player_index: int, defer_untap_selection: bool
 
     _clear_upkeep_pay_choices(session)
     game.resolve_upkeep(player_index)
+    if _seat_type(session, player_index) == "human" and _has_island_sanctuary(game, player_index):
+        session.island_sanctuary_pending = True
+        return False
     game.resolve_draw_step(player_index)
     game._enter_main_phase(precombat=True)
     return True
@@ -504,6 +514,7 @@ def _start_next_turn(session: Session) -> None:
     _clear_cleanup_selection(session)
     _clear_untap_selection(session)
     _clear_upkeep_pay_choices(session)
+    session.island_sanctuary_pending = False
     session.game.active_player_index = session.current_turn
     session.game.turn += 1
     session.current_turn = session.game._compute_next_active_player()
@@ -566,6 +577,8 @@ def _compute_playable_hand_indices(session: Session, player_index: int) -> list[
     if _untap_land_selection_requirement(session) > 0:
         return []
     if _upkeep_pay_pending(session):
+        return []
+    if session.island_sanctuary_pending:
         return []
     if game.pending_search_library is not None:
         return []
@@ -742,6 +755,7 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "cleanup_discard": cleanup_info,
         "untap_land_selection": untap_info,
         "upkeep_pay": _build_upkeep_pay_info(session, viewer_seat),
+        "island_sanctuary_pending": session.island_sanctuary_pending and viewer_seat == session.current_turn,
         "search_library": search_library_info,
         "reorder_library": reorder_library_info,
         "pregame": _build_pregame_info(session, viewer_seat),
@@ -1146,6 +1160,9 @@ def do_action(session_id: str, req: GameActionRequest):
     if _upkeep_pay_pending(session) and req.action not in {"pay_upkeep", "sacrifice_upkeep", "tap", "activate", "debug_add_to_hand", "debug_cast_free"}:
         raise HTTPException(status_code=400, detail="resolve upkeep payment before other actions")
 
+    if session.island_sanctuary_pending and req.action not in {"island_sanctuary_skip", "island_sanctuary_draw", "debug_add_to_hand", "debug_cast_free"}:
+        raise HTTPException(status_code=400, detail="choose Island Sanctuary draw option before other actions")
+
     if session.game.pending_search_library is not None and req.action not in {"search_library_confirm", "debug_add_to_hand", "debug_cast_free"}:
         raise HTTPException(status_code=400, detail="complete library search before other actions")
 
@@ -1414,8 +1431,11 @@ def do_action(session_id: str, req: GameActionRequest):
         else:
             _clear_upkeep_pay_choices(session)
             session.game.resolve_upkeep(session.current_turn)
-            session.game.resolve_draw_step(session.current_turn)
-            session.game._enter_main_phase(precombat=True)
+            if _seat_type(session, session.current_turn) == "human" and _has_island_sanctuary(session.game, session.current_turn):
+                session.island_sanctuary_pending = True
+            else:
+                session.game.resolve_draw_step(session.current_turn)
+                session.game._enter_main_phase(precombat=True)
 
     elif req.action == "pay_upkeep":
         if req.seat != session.current_turn:
@@ -1456,6 +1476,16 @@ def do_action(session_id: str, req: GameActionRequest):
 
         if not _upkeep_pay_pending(session):
             _advance_after_upkeep_choices(session)
+
+    elif req.action in {"island_sanctuary_skip", "island_sanctuary_draw"}:
+        if req.seat != session.current_turn:
+            raise HTTPException(status_code=400, detail="not your turn")
+        if not session.island_sanctuary_pending:
+            raise HTTPException(status_code=400, detail="no Island Sanctuary choice pending")
+        session.island_sanctuary_pending = False
+        skip = req.action == "island_sanctuary_skip"
+        session.game.resolve_draw_step(session.current_turn, sanctuary_choice=skip)
+        session.game._enter_main_phase(precombat=True)
 
     elif req.action == "search_library_confirm":
         pending = session.game.pending_search_library
@@ -1655,6 +1685,7 @@ def undo_action(session_id: str, seat: int | None = Query(default=None, ge=0, le
     session.untap_selected_indices = snapshot.untap_selected_indices
     session.upkeep_pay_choices = snapshot.upkeep_pay_choices
     session.upkeep_resolved_choices = snapshot.upkeep_resolved_choices
+    session.island_sanctuary_pending = snapshot.island_sanctuary_pending
 
     _notify_session_change(session.id, "undo")
     return _serialize_state(session, viewer_seat=seat)
