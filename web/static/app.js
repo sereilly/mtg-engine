@@ -673,6 +673,20 @@ async function maybeAutoPassPriority(state = currentState) {
   autoPassPriorityRequestedStateKey = stateKey;
   autoPassPriorityInFlight = true;
   try {
+    // Let the cast animation and stack dwell play out before resolving the
+    // spell, so the game state never runs ahead of what's on screen.
+    await waitForBattlefieldAnimations();
+    const latest = currentState;
+    if (
+      holdPriorityActive ||
+      !latest ||
+      latest.priority_player !== seat ||
+      hasBlockingPromptForAutoPass(latest) ||
+      combatPromptNeedsConfirmation(latest) ||
+      !(Array.isArray(latest.stack) && latest.stack.length > 0)
+    ) {
+      return;
+    }
     await sendAction({ seat, action: "pass_priority" });
   } catch {
     // Silently absorb; next state update will retry if needed.
@@ -703,6 +717,17 @@ async function maybeAutoPassDisabledPhase(state = currentState) {
   autoPassDisabledPhaseRequestedStateKey = stateKey;
   autoPassDisabledPhaseInFlight = true;
   try {
+    // Don't advance the phase while a resolve/entrance animation is mid-flight.
+    await waitForBattlefieldAnimations();
+    const latest = currentState;
+    if (
+      holdPriorityActive ||
+      !latest ||
+      latest.priority_player !== seat ||
+      hasBlockingPromptForAutoPass(latest)
+    ) {
+      return;
+    }
     const combat = getCombatState(state);
     if (isCombatStep(state, "declare_attackers") && seat === state.current_turn && !combat?.attackers_locked) {
       await sendAction({
@@ -722,6 +747,24 @@ async function maybeAutoPassDisabledPhase(state = currentState) {
     // Silently absorb
   } finally {
     autoPassDisabledPhaseInFlight = false;
+  }
+}
+
+// ---- Pacing: animation-aware delays for automatic actions ----
+const AI_ACTION_DELAY_MS = 700; // breather between automatic AI actions
+const ANIMATION_WAIT_TIMEOUT_MS = 8000; // never stall the game on a stuck animation
+const ANIMATION_POLL_MS = 100;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Resolves once the battlefield canvas reports no in-flight card animations
+// (cast flights, stack dwell, resolve/land effects), or after a safety timeout.
+async function waitForBattlefieldAnimations() {
+  const deadline = Date.now() + ANIMATION_WAIT_TIMEOUT_MS;
+  while (battlefieldCanvas?.hasPendingAnimations() && Date.now() < deadline) {
+    await sleep(ANIMATION_POLL_MS);
   }
 }
 
@@ -756,6 +799,11 @@ async function maybeAutoStepAi(state = currentState) {
   aiAutoStepRequestedStateKey = stateKey;
   aiAutoStepInFlight = true;
   try {
+    // Pace the AI: let card animations finish playing, then take a short
+    // breather so each action is watchable before the next one fires.
+    await waitForBattlefieldAnimations();
+    await sleep(AI_ACTION_DELAY_MS);
+    if (!shouldAutoStepAi(currentState)) return;
     await sendAction({ seat: seat ?? 0, action: "ai_step" });
   } catch (error) {
     const message = error instanceof Error ? error.message : "AI step failed";

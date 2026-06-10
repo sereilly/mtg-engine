@@ -347,7 +347,9 @@ class BattlefieldCanvas {
       item.y = item.ty;
     }
 
+    const firstSync = !this._stackSynced;
     this._syncStackZone(state, brandNew);
+    if (!firstSync) this._spawnLandEntranceFx(brandNew);
 
     this._sortRenderOrder();
     this._updateCameraTarget();
@@ -767,6 +769,32 @@ class BattlefieldCanvas {
     });
   }
 
+  // Lands never go on the stack: new land permanents play the same
+  // hover-and-slam entrance as resolved permanents, flying straight in from
+  // the controller's hand. Cards already claimed by a stack-resolve
+  // animation are skipped.
+  _spawnLandEntranceFx(brandNew) {
+    for (const item of brandNew) {
+      if (item._fxClaimed) continue;
+      const typeStr = String(item.card?.type || "").toLowerCase();
+      if (!typeStr.includes("land")) continue;
+      const pos = this._targetRenderPos(item.key) || { x: item.tx, y: item.ty };
+      const slot = { x: pos.x + BF_CARD_W / 2, y: pos.y + BF_CARD_H / 2 };
+      const hover = { x: slot.x, y: slot.y - BF_RESOLVE_HOVER_LIFT };
+      const from = this._castOrigin({ caster_index: item.seat });
+      this.suppressedKeys.add(item.key);
+      this.fxAnims.push({
+        type: "card", card: item.card, suppressKey: item.key, impactAt: slot,
+        stageIdx: 0, stageStart: null, x: from.x, y: from.y, scale: from.scale, alpha: 1,
+        stages: [
+          { x0: from.x, y0: from.y, s0: from.scale, a0: 1, x1: hover.x, y1: hover.y, s1: 1.12, a1: 1, dur: BF_RESOLVE_FLY_MS, ease: _easeOutCubic, lifted: true },
+          { x0: hover.x, y0: hover.y, s0: 1.12, a0: 1, x1: hover.x, y1: hover.y, s1: 1.12, a1: 1, dur: BF_RESOLVE_HOVER_MS, ease: null, lifted: true },
+          { x0: hover.x, y0: hover.y, s0: 1.12, a0: 1, x1: slot.x, y1: slot.y, s1: 1, a1: 1, dur: BF_RESOLVE_SLAM_MS, ease: _easeInQuad },
+        ],
+      });
+    }
+  }
+
   // Advance time-based resolve animations. Returns true while any are active.
   _tickFx(now) {
     if (!this.fxAnims.length) return false;
@@ -808,6 +836,19 @@ class BattlefieldCanvas {
       }
     }
     return true;
+  }
+
+  // True while a cast/resolve animation is visually in progress: a stack card
+  // still flying in or sitting out its minimum dwell, or any time-based fx
+  // (resolve flights, fizzles, land entrances, impact rings). Lets the app
+  // pace automatic actions to what the player has actually seen.
+  hasPendingAnimations() {
+    if (this.fxAnims.length > 0) return true;
+    const now = performance.now();
+    for (const v of this.stackVisuals) {
+      if (!v.settledAt || now - v.settledAt < BF_STACK_DWELL_MS) return true;
+    }
+    return false;
   }
 
   // ---------------------------------------------------------------------------
