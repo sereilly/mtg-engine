@@ -211,18 +211,21 @@ button:hover {
   pointer-events: none;
 }
 
-/* Floating phase / turn controls bar, pinned across the full bottom of the stage */
+/* Floating phase / turn controls bar, pinned vertically along the left edge of the stage.
+   Top/bottom offsets keep it clear of the opponent and self name/life chips. */
 .phase-row {
   position: absolute;
   left: 14px;
-  right: 14px;
-  bottom: 14px;
+  top: 84px;
+  bottom: 104px;
+  width: 112px;
   z-index: 8;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   gap: 10px;
   margin: 0;
-  padding: 8px 10px;
+  padding: 8px;
   background: rgba(8, 14, 22, 0.8);
   backdrop-filter: blur(8px);
   border: 1px solid rgba(242, 184, 75, 0.28);
@@ -232,16 +235,24 @@ button:hover {
 
 .phase-rail {
   display: flex;
+  flex-direction: column;
   flex: 1;
   gap: 6px;
-  min-width: 0;
+  min-height: 0;
   overflow: hidden;
 }
 
 .phase-controls {
   display: flex;
-  gap: 8px;
+  flex-direction: column;
+  gap: 6px;
   flex-shrink: 0;
+}
+
+.phase-controls button {
+  margin-left: 0;
+  font-size: 0.78rem;
+  white-space: normal;
 }
 
 #nextPhaseBtn:disabled {
@@ -1072,7 +1083,7 @@ h2.targeting-valid {
 .phase-chip-item {
   flex: 1 1 0;
   min-width: 0;
-  min-height: 38px;
+  min-height: 22px;
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.16);
   color: var(--ink-soft);
