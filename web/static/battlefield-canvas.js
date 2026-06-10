@@ -65,6 +65,24 @@ const BF_FIZZLE_MS = 480; // non-permanent: stack -> graveyard shrink/fade
 const BF_ABILITY_FADE_MS = 260; // resolved ability: shrink/fade in place
 const BF_IMPACT_RING_MS = 240; // expanding ring when a permanent slams down
 
+// ---- Combat damage animations ----
+// On damage resolution each attacker lunges toward its target under a glowing
+// red chevron, fires a particle beam at whatever takes its damage, blockers
+// recoil from the hit while their toughness visibly ticks down, and any
+// creature that died stays visible as a "ghost" until its fx finish.
+const BF_COMBAT_STAGGER_MS = 240; // delay between successive attackers
+const BF_PUNCH_MS = 380; // attacker lunge out + settle back
+const BF_PUNCH_DIST = 30; // world px the attacker lunges forward
+const BF_PUNCH_IMPACT_MS = 130; // moment within the punch the hit lands
+const BF_CHEVRON_MS = 1100; // glowing chevron above the attacker
+const BF_BEAM_MS = 340; // particle beam head travel time
+const BF_BEAM_LINGER_MS = 180; // beam tail fade after the head arrives
+const BF_RECOIL_MS = 320; // knock-back on a card taking damage
+const BF_RECOIL_DIST = 16;
+const BF_TOUGHNESS_MS = 800; // blocker toughness count-down ticker
+const BF_HIT_RING_MS = 280; // red impact flash on the target
+const BF_GHOST_FADE_MS = 240; // dead participants fade out at the end
+
 class BattlefieldCanvas {
   constructor(canvasEl, callbacks = {}) {
     this.canvas = canvasEl;
@@ -112,6 +130,11 @@ class BattlefieldCanvas {
     // battlefield keys hidden while their entrance animation plays.
     this.fxAnims = [];
     this.suppressedKeys = new Set();
+
+    // Combat damage fx timeline (punches, chevrons, beams, recoils, tickers)
+    // and the per-key world-space render offsets the punches/recoils produce.
+    this.combatFx = [];
+    this.combatOffsets = new Map();
 
     // Per seat+band ordered list of layout group ids, persisted across updates
     // so existing cards keep their slots when new ones arrive.
@@ -843,12 +866,172 @@ class BattlefieldCanvas {
   // (resolve flights, fizzles, land entrances, impact rings). Lets the app
   // pace automatic actions to what the player has actually seen.
   hasPendingAnimations() {
-    if (this.fxAnims.length > 0) return true;
+    if (this.fxAnims.length > 0 || this.combatFx.length > 0) return true;
     const now = performance.now();
     for (const v of this.stackVisuals) {
       if (!v.settledAt || now - v.settledAt < BF_STACK_DWELL_MS) return true;
     }
     return false;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Combat damage fx
+  // ---------------------------------------------------------------------------
+
+  // Play the combat damage step animation. Must be called BEFORE the state
+  // update that applies the damage, while the canvas still holds every
+  // participant (positions and card data are snapshotted here so creatures
+  // that die can keep animating as ghosts).
+  //
+  // strikes: [{
+  //   attackerSeat, attackerIdx, defenderSeat,
+  //   playerDamage,                       // damage dealt to the defending player
+  //   blockers: [{seat, idx, damage, returnDamage, power, toughness}],
+  // }]
+  playCombatDamage(strikes) {
+    if (!Array.isArray(strikes) || !strikes.length) return;
+    const now = performance.now();
+
+    // Snapshot each participant once; refs are shared across fx so per-frame
+    // resolution (live card vs ghost) stays consistent.
+    const refs = new Map();
+    const getRef = (seatIdx, idx) => {
+      const key = `${seatIdx}-${idx}`;
+      let ref = refs.get(key);
+      if (ref) return ref;
+      const item = this.cardItems.find((c) => c.key === key);
+      if (!item) return null;
+      const center = this._cardCenter(key) || { x: item.x + BF_CARD_W / 2, y: item.y + BF_CARD_H / 2 };
+      ref = { seat: seatIdx, idx, key, name: item.card?.name || "", card: item.card, snapX: center.x, snapY: center.y, tapped: !!item.card?.tapped };
+      refs.set(key, ref);
+      return ref;
+    };
+    // Track how long each participant stays involved so its ghost (used only
+    // if the creature died) survives until its last fx finishes.
+    const ghostEnd = new Map();
+    const noteUse = (ref, end) => {
+      if (ref) ghostEnd.set(ref, Math.max(ghostEnd.get(ref) || 0, end));
+    };
+
+    let lane = 0;
+    for (const strike of strikes) {
+      const atk = getRef(strike.attackerSeat, strike.attackerIdx);
+      if (!atk) continue;
+      const t0 = now + lane * BF_COMBAT_STAGGER_MS;
+      lane++;
+      const forwardY = strike.attackerSeat === this.viewerSeat ? -1 : 1;
+
+      // Punch toward the first blocker when there is one, straight ahead otherwise.
+      const blockers = Array.isArray(strike.blockers) ? strike.blockers : [];
+      const firstBlocker = blockers.length ? getRef(blockers[0].seat, blockers[0].idx) : null;
+      let dirX = 0;
+      let dirY = forwardY;
+      if (firstBlocker) {
+        const dx = firstBlocker.snapX - atk.snapX;
+        const dy = firstBlocker.snapY - atk.snapY;
+        const len = Math.hypot(dx, dy) || 1;
+        dirX = dx / len;
+        dirY = dy / len;
+      }
+
+      this.combatFx.push({ kind: "chevron", ref: atk, dirY: forwardY, start: t0, dur: BF_CHEVRON_MS });
+      this.combatFx.push({ kind: "punch", ref: atk, dirX, dirY, amp: BF_PUNCH_DIST, start: t0, dur: BF_PUNCH_MS });
+      noteUse(atk, t0 + Math.max(BF_CHEVRON_MS, BF_PUNCH_MS));
+
+      const impact = t0 + BF_PUNCH_IMPACT_MS;
+      const beamDur = BF_BEAM_MS + BF_BEAM_LINGER_MS;
+
+      for (const b of blockers) {
+        const bRef = getRef(b.seat, b.idx);
+        if (!bRef) continue;
+        const arrive = impact + BF_BEAM_MS;
+        const damage = Math.max(0, Number(b.damage) || 0);
+        if (damage > 0) {
+          this.combatFx.push({ kind: "beam", fromRef: atk, toRef: bRef, start: impact, travel: BF_BEAM_MS, dur: beamDur, particles: _beamParticles() });
+          this.combatFx.push({ kind: "hit", ref: bRef, start: arrive, dur: BF_HIT_RING_MS });
+          const fromT = Number(b.toughness) || 0;
+          this.combatFx.push({ kind: "toughness", ref: bRef, power: Number(b.power) || 0, fromT, toT: Math.max(0, fromT - damage), start: arrive, dur: BF_TOUGHNESS_MS });
+        }
+        // The blocker recoils from the clash either when the beam lands or,
+        // for a damage-less clash, right at the punch impact.
+        const recoilAt = damage > 0 ? arrive : impact;
+        this.combatFx.push({ kind: "recoil", ref: bRef, dirX, dirY, amp: BF_RECOIL_DIST, start: recoilAt, dur: BF_RECOIL_MS });
+        noteUse(bRef, Math.max(recoilAt + BF_RECOIL_MS, damage > 0 ? arrive + BF_TOUGHNESS_MS : 0));
+
+        // Blockers deal their damage back to the attacker.
+        const returnDamage = Math.max(0, Number(b.returnDamage) || 0);
+        if (returnDamage > 0) {
+          const returnArrive = arrive + BF_BEAM_MS;
+          this.combatFx.push({ kind: "beam", fromRef: bRef, toRef: atk, start: arrive, travel: BF_BEAM_MS, dur: beamDur, particles: _beamParticles() });
+          this.combatFx.push({ kind: "hit", ref: atk, start: returnArrive, dur: BF_HIT_RING_MS });
+          this.combatFx.push({ kind: "recoil", ref: atk, dirX: -dirX, dirY: -dirY, amp: BF_RECOIL_DIST * 0.8, start: returnArrive, dur: BF_RECOIL_MS });
+          noteUse(bRef, arrive + beamDur);
+          noteUse(atk, returnArrive + BF_RECOIL_MS);
+        }
+      }
+
+      if (Number(strike.playerDamage) > 0) {
+        this.combatFx.push({ kind: "beam", fromRef: atk, toPlayerSeat: strike.defenderSeat, start: impact, travel: BF_BEAM_MS, dur: beamDur, particles: _beamParticles() });
+        noteUse(atk, impact + beamDur);
+      }
+    }
+
+    // Ghost cards keep dead participants visible while their fx play out.
+    for (const [ref, end] of ghostEnd) {
+      this.combatFx.push({ kind: "ghost", ref, start: now, dur: end - now + BF_GHOST_FADE_MS });
+    }
+    this.needsRedraw = true;
+  }
+
+  // Per-frame resolution of a combat participant: the live card (tracking
+  // layout motion) when it still exists, its snapshot position otherwise.
+  _combatRefState(ref) {
+    const item = this.cardItems.find((c) => c.key === ref.key);
+    if (item && item.card?.name === ref.name && !this.suppressedKeys.has(ref.key)) {
+      const c = this._cardCenter(ref.key);
+      if (c) return { alive: true, x: c.x, y: c.y };
+    }
+    return { alive: false, x: ref.snapX, y: ref.snapY };
+  }
+
+  _combatOffsetFor(ref) {
+    const off = this.combatOffsets.get(ref.key);
+    return off && off.name === ref.name ? off : { x: 0, y: 0 };
+  }
+
+  // Beam / fx anchor point of a participant, including its punch/recoil offset.
+  _combatAnchor(ref) {
+    const st = this._combatRefState(ref);
+    const off = this._combatOffsetFor(ref);
+    return { x: st.x + off.x, y: st.y + off.y };
+  }
+
+  // World-space point standing in for a player: the matching table edge.
+  _combatPlayerPoint(seatIdx, anchorX) {
+    const rect = this._visibleWorldRect();
+    const y = seatIdx === this.viewerSeat ? rect.maxY - 26 : rect.minY + 26;
+    const x = Math.min(rect.maxX - 40, Math.max(rect.minX + 40, anchorX));
+    return { x, y };
+  }
+
+  // Advance combat fx: prune finished entries and rebuild the punch/recoil
+  // offsets applied to cards this frame. Returns true while any are active.
+  _tickCombatFx(now) {
+    this.combatOffsets.clear();
+    if (!this.combatFx.length) return false;
+    this.combatFx = this.combatFx.filter((fx) => now - fx.start < fx.dur);
+    for (const fx of this.combatFx) {
+      if (fx.kind !== "punch" && fx.kind !== "recoil") continue;
+      const t = now - fx.start;
+      if (t < 0) continue;
+      const env = _strikeEnv(t / fx.dur, fx.kind === "punch" ? 0.32 : 0.22);
+      if (env <= 0) continue;
+      const off = this.combatOffsets.get(fx.ref.key) || { x: 0, y: 0, name: fx.ref.name };
+      off.x += fx.dirX * fx.amp * env;
+      off.y += fx.dirY * fx.amp * env;
+      this.combatOffsets.set(fx.ref.key, off);
+    }
+    return this.combatFx.length > 0;
   }
 
   // ---------------------------------------------------------------------------
@@ -944,6 +1127,7 @@ class BattlefieldCanvas {
       }
     }
     if (this._tickFx(performance.now())) moving = true;
+    if (this._tickCombatFx(performance.now())) moving = true;
     const t = this.camTarget;
     if (t && (t.x !== this.camX || t.y !== this.camY || t.zoom !== this.zoom)) {
       const dx = t.x - this.camX;
@@ -1164,6 +1348,11 @@ class BattlefieldCanvas {
     }
 
     ctx.save();
+    // Combat punch / recoil knock-back offset.
+    const combatOff = this.combatOffsets.get(item.key);
+    if (combatOff && combatOff.name === card?.name) {
+      ctx.translate(combatOff.x, combatOff.y);
+    }
     // Hovered cards lift slightly off the table.
     if (flags.hovered) {
       const center = this._cardCenter(item.key);
@@ -1330,10 +1519,169 @@ class BattlefieldCanvas {
       }
     }
 
+    // ---- Combat damage fx (ghosts, beams, chevrons, hit flashes, tickers) ----
+    this._drawCombatFx(ctx, performance.now());
+
     // ---- Spell stack zone and cast/resolve animations (drawn on top) ----
     this._drawStackAndFx(ctx);
 
     ctx.restore(); // camera
+  }
+
+  _drawCombatFx(ctx, now) {
+    if (!this.combatFx.length) return;
+    const ordered = [...this.combatFx].sort(
+      (a, b) => (_COMBAT_FX_DRAW_ORDER[a.kind] || 0) - (_COMBAT_FX_DRAW_ORDER[b.kind] || 0)
+    );
+    for (const fx of ordered) {
+      const t = now - fx.start;
+      if (t < 0 || t >= fx.dur) continue;
+      const p = t / fx.dur;
+      switch (fx.kind) {
+        case "ghost": this._drawCombatGhost(ctx, fx, p); break;
+        case "beam": this._drawCombatBeam(ctx, fx, t, now); break;
+        case "hit": this._drawCombatHit(ctx, fx, p); break;
+        case "chevron": this._drawCombatChevron(ctx, fx, now, p); break;
+        case "toughness": this._drawCombatToughness(ctx, fx, p); break;
+      }
+    }
+  }
+
+  // A participant that left the battlefield mid-animation keeps rendering at
+  // its snapshot position (with its knock-back offset) until its fx finish.
+  _drawCombatGhost(ctx, fx, p) {
+    const st = this._combatRefState(fx.ref);
+    if (st.alive) return;
+    const fadeStart = Math.max(0, 1 - BF_GHOST_FADE_MS / fx.dur);
+    const alpha = p > fadeStart ? (1 - p) / (1 - fadeStart) : 1;
+    const off = this._combatOffsetFor(fx.ref);
+    this._drawFloatingCard(ctx, fx.ref.card, st.x + off.x, st.y + off.y, 1, alpha * 0.95, false, fx.ref.tapped ? Math.PI / 2 : 0);
+  }
+
+  _drawCombatBeam(ctx, fx, t, now) {
+    const a = this._combatAnchor(fx.fromRef);
+    const b = fx.toPlayerSeat != null ? this._combatPlayerPoint(fx.toPlayerSeat, a.x) : this._combatAnchor(fx.toRef);
+    const h = Math.min(1, t / fx.travel);
+    const fade = t <= fx.travel ? 1 : Math.max(0, 1 - (t - fx.travel) / (fx.dur - fx.travel));
+    const hx = _lerp(a.x, b.x, h);
+    const hy = _lerp(a.y, b.y, h);
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const px = -dy / len;
+    const py = dx / len;
+
+    ctx.save();
+    ctx.shadowColor = "#ff3322";
+    ctx.shadowBlur = 12 / this.zoom;
+
+    // Core ray up to the beam head
+    ctx.strokeStyle = `rgba(255,64,48,${0.5 * fade})`;
+    ctx.lineWidth = 3 / this.zoom;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(hx, hy);
+    ctx.stroke();
+
+    // Bright head while traveling
+    if (t <= fx.travel) {
+      ctx.fillStyle = `rgba(255,170,130,${0.95 * fade})`;
+      ctx.beginPath();
+      ctx.arc(hx, hy, 4.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Particles streaming from the source toward the target
+    for (const part of fx.particles) {
+      const u = (part.u0 + t / 520) % 1;
+      if (u > h) continue;
+      const wobble = Math.sin(now / 120 + part.ph) * part.j;
+      const x = _lerp(a.x, b.x, u) + px * wobble;
+      const y = _lerp(a.y, b.y, u) + py * wobble;
+      const twinkle = 0.45 + 0.55 * (0.5 + 0.5 * Math.sin(now / 90 + part.ph * 3));
+      ctx.fillStyle = `rgba(255,110,80,${fade * twinkle})`;
+      ctx.beginPath();
+      ctx.arc(x, y, part.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // Red flash + expanding ring where damage lands.
+  _drawCombatHit(ctx, fx, p) {
+    const c = this._combatAnchor(fx.ref);
+    const k = _easeOutCubic(p);
+    ctx.save();
+    ctx.fillStyle = `rgba(255,80,56,${0.28 * (1 - p)})`;
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, 14 + 26 * k, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = `rgba(255,90,60,${0.85 * (1 - p)})`;
+    ctx.lineWidth = 3 / this.zoom;
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, 12 + 40 * k, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Glowing red chevron hovering off the attacker's leading edge, pointing at
+  // the opponent. A fainter trailing chevron sells the direction.
+  _drawCombatChevron(ctx, fx, now, p) {
+    const st = this._combatRefState(fx.ref);
+    const off = this._combatOffsetFor(fx.ref);
+    const item = this.cardItems.find((c) => c.key === fx.ref.key);
+    const tapped = st.alive ? !!item?.card?.tapped : fx.ref.tapped;
+    const half = tapped ? BF_CARD_W / 2 : BF_CARD_H / 2;
+    const dir = fx.dirY; // -1 when the opponent is up-screen, +1 when down
+    const alpha = Math.min(1, p / 0.12) * Math.min(1, (1 - p) / 0.25);
+    const pulse = 0.7 + 0.3 * Math.sin(now / 110);
+    const bob = Math.sin(now / 150) * 3;
+    const cx = st.x + off.x;
+    const baseY = st.y + off.y + dir * (half + 22 + bob);
+
+    ctx.save();
+    ctx.lineWidth = 4.5;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.shadowColor = "#ff2a1a";
+    ctx.shadowBlur = 16 / this.zoom;
+    for (let i = 0; i < 2; i++) {
+      const yOff = baseY - dir * i * 11;
+      ctx.strokeStyle = `rgba(255,70,50,${alpha * pulse * (i === 0 ? 1 : 0.45)})`;
+      ctx.beginPath();
+      ctx.moveTo(cx - 13, yOff - dir * 7);
+      ctx.lineTo(cx, yOff + dir * 7);
+      ctx.lineTo(cx + 13, yOff - dir * 7);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // Floating P/T readout over a blocker whose toughness counts down by the
+  // damage it just took, drifting up and fading out.
+  _drawCombatToughness(ctx, fx, p) {
+    const st = this._combatRefState(fx.ref);
+    const off = this._combatOffsetFor(fx.ref);
+    const tickP = Math.min(1, p / 0.65); // count down, then hold the result
+    const value = Math.round(_lerp(fx.fromT, fx.toT, _easeOutCubic(tickP)));
+    const alpha = p > 0.8 ? (1 - p) / 0.2 : 1;
+    const half = fx.ref.tapped ? BF_CARD_W / 2 : BF_CARD_H / 2;
+    const x = st.x + off.x;
+    const y = st.y + off.y - half - 10 - 10 * p;
+    const label = `${fx.power}/${value}`;
+    ctx.save();
+    ctx.font = "bold 16px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    ctx.shadowColor = "#ff2a1a";
+    ctx.shadowBlur = 10 / this.zoom;
+    ctx.lineWidth = 3.5;
+    ctx.strokeStyle = `rgba(20,8,8,${0.85 * alpha})`;
+    ctx.strokeText(label, x, y);
+    ctx.fillStyle = value <= 0 ? `rgba(255,60,60,${alpha})` : `rgba(255,120,100,${alpha})`;
+    ctx.fillText(label, x, y);
+    ctx.restore();
   }
 
   _drawStackAndFx(ctx) {
@@ -1376,13 +1724,19 @@ class BattlefieldCanvas {
 
   // Draw a card centered at (cx, cy) at an arbitrary scale/alpha; `lifted`
   // borrows the hover treatment (bigger drop shadow) to sell height.
-  _drawFloatingCard(ctx, card, cx, cy, scale, alpha, lifted) {
+  _drawFloatingCard(ctx, card, cx, cy, scale, alpha, lifted, rot = 0) {
     if (!(scale > 0) || !(alpha > 0)) return;
     const w = BF_CARD_W * scale;
     const h = BF_CARD_H * scale;
     ctx.save();
     ctx.globalAlpha = Math.min(1, alpha);
-    this._drawCardFace(ctx, cx - w / 2, cy - h / 2, w, h, card, { hovered: !!lifted });
+    if (rot) {
+      ctx.translate(cx, cy);
+      ctx.rotate(rot);
+      this._drawCardFace(ctx, -w / 2, -h / 2, w, h, card, { hovered: !!lifted });
+    } else {
+      this._drawCardFace(ctx, cx - w / 2, cy - h / 2, w, h, card, { hovered: !!lifted });
+    }
     ctx.restore();
   }
 
@@ -1608,6 +1962,34 @@ function _easeInCubic(t) {
 
 function _easeInQuad(t) {
   return t * t;
+}
+
+// ---- Combat fx helpers ----
+
+// Draw order within a frame: ghosts under everything, text on top.
+const _COMBAT_FX_DRAW_ORDER = { ghost: 0, beam: 1, hit: 2, chevron: 3, toughness: 4 };
+
+// Out-and-back envelope for punches/recoils: fast strike out (the first
+// `out` fraction of the duration), then a smooth settle back to rest.
+function _strikeEnv(p, out) {
+  if (p <= 0 || p >= 1) return 0;
+  if (p < out) return _easeOutCubic(p / out);
+  const r = (p - out) / (1 - out);
+  return 1 - r * r * (3 - 2 * r);
+}
+
+// Random particle set for one damage beam.
+function _beamParticles() {
+  const particles = [];
+  for (let i = 0; i < 22; i++) {
+    particles.push({
+      u0: Math.random(),
+      j: (Math.random() - 0.5) * 10,
+      r: 1.2 + Math.random() * 2,
+      ph: Math.random() * Math.PI * 2,
+    });
+  }
+  return particles;
 }
 
 // Utility: word-wrap text on canvas

@@ -384,6 +384,105 @@ function renderCombatOverlay(state = currentState) {
   battlefieldCanvas.setAttackingKeys(attackingKeys);
 }
 
+function cardHasKeyword(card, keyword) {
+  return String(card?.oracle_text || "").toLowerCase().includes(keyword);
+}
+
+// Rebuild the damage events of a combat damage resolution from the state that
+// preceded it, mirroring the engine's default assignment (lethal to each
+// blocker in declared order, deathtouch needs 1, trample excess to the player).
+function buildCombatDamageStrikes(prev, firstStrikePass, regularPass) {
+  const combat = getCombatState(prev);
+  const attackerSeat = prev.current_turn;
+  const defenderSeat = Number.isInteger(combat.defending_player_index)
+    ? combat.defending_player_index
+    : 1 - attackerSeat;
+  const attackerBattlefield = prev.players?.[attackerSeat]?.battlefield || [];
+  const defenderBattlefield = prev.players?.[defenderSeat]?.battlefield || [];
+
+  const hasFirst = (card) => cardHasKeyword(card, "first strike") || cardHasKeyword(card, "double strike");
+  // Which creatures deal damage in the pass(es) covered by this update.
+  const strikesNow = (card) => {
+    if (firstStrikePass && regularPass) return true; // both passes bundled in one update
+    if (firstStrikePass) return hasFirst(card);
+    if (combat.first_strike_done) return cardHasKeyword(card, "double strike") || !hasFirst(card);
+    return true;
+  };
+
+  const blockersByAttacker = new Map();
+  for (const pair of combat.blockers || []) {
+    const attackerIndex = Number(pair.attacker_index);
+    if (!blockersByAttacker.has(attackerIndex)) blockersByAttacker.set(attackerIndex, []);
+    blockersByAttacker.get(attackerIndex).push(Number(pair.blocker_index));
+  }
+
+  const strikes = [];
+  for (const link of combat.attackers || []) {
+    const attackerIdx = Number(link.attacker_index);
+    const attackerCard = attackerBattlefield[attackerIdx];
+    if (!attackerCard) continue;
+    const power = Math.max(0, Number(attackerCard.power) || 0);
+    const attackerStrikes = power > 0 && strikesNow(attackerCard);
+    const blockerIndices = (blockersByAttacker.get(attackerIdx) || []).sort((a, b) => a - b);
+    const deathtouch = cardHasKeyword(attackerCard, "deathtouch");
+    const trample = cardHasKeyword(attackerCard, "trample");
+
+    let powerLeft = attackerStrikes ? power : 0;
+    const blockers = [];
+    blockerIndices.forEach((blockerIdx, i) => {
+      const blockerCard = defenderBattlefield[blockerIdx];
+      if (!blockerCard) return;
+      let damage = 0;
+      if (powerLeft > 0) {
+        let lethal = Math.max(0, (Number(blockerCard.toughness) || 0) - (Number(blockerCard.damage_marked) || 0));
+        if (deathtouch && lethal > 0) lethal = 1;
+        damage = i === blockerIndices.length - 1 && !trample ? powerLeft : Math.min(powerLeft, lethal);
+        powerLeft -= damage;
+      }
+      blockers.push({
+        seat: defenderSeat,
+        idx: blockerIdx,
+        damage,
+        returnDamage: strikesNow(blockerCard) ? Math.max(0, Number(blockerCard.power) || 0) : 0,
+        power: Number(blockerCard.power) || 0,
+        toughness: Number(blockerCard.toughness) || 0,
+      });
+    });
+
+    let playerDamage = 0;
+    if (attackerStrikes) {
+      if (!blockerIndices.length) {
+        // Blocked stays blocked even if the blocker died to first strike.
+        playerDamage = attackerCard.blocked && !trample ? 0 : power;
+      } else if (trample) {
+        playerDamage = powerLeft;
+      }
+    }
+
+    if (!attackerStrikes && blockers.every((b) => b.returnDamage <= 0)) continue;
+    strikes.push({ attackerSeat, attackerIdx, defenderSeat, playerDamage, blockers });
+  }
+  return strikes;
+}
+
+// Detect a combat damage resolution between two consecutive states (via the
+// engine's log entries) and play the battlefield animation for it. Must run
+// before the new state is applied so the canvas can snapshot creatures that
+// died to the damage.
+function maybeTriggerCombatDamageFx(prev, next) {
+  if (!battlefieldCanvas || !prev || !next) return;
+  const combat = getCombatState(prev);
+  if (!combat || !Array.isArray(combat.attackers) || !combat.attackers.length || combat.damage_resolved) return;
+  const prevLogLen = Array.isArray(prev.log) ? prev.log.length : 0;
+  const newEntries = (Array.isArray(next.log) ? next.log.slice(prevLogLen) : []).map(String);
+  if (!newEntries.length) return;
+  const firstStrikePass = newEntries.includes("Resolved first strike combat damage");
+  const regularPass = newEntries.includes("Resolved combat damage");
+  if (!firstStrikePass && !regularPass) return;
+  const strikes = buildCombatDamageStrikes(prev, firstStrikePass, regularPass);
+  if (strikes.length) battlefieldCanvas.playCombatDamage(strikes);
+}
+
 function escapeHtml(value) {
   return String(value)
     .replace(/&/g, "&amp;")
@@ -3679,6 +3778,7 @@ function renderState(state, { skipStaleCheck = false } = {}) {
     autoPassMode = null;
   }
 
+  maybeTriggerCombatDamageFx(currentState, state);
   currentState = state;
   syncJoinUrlVisibility(state);
   syncCombatDrafts(state);
