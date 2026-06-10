@@ -2241,6 +2241,7 @@ function startCastLandTargetPrompt(card, castAction = "cast") {
   if (!cardName) return;
 
   if (getTargetableLandsForPrompt().length === 0) {
+    clearPendingHandCast();
     updateActionHint(`No valid land targets in play for ${cardName}.`, true);
     return;
   }
@@ -2260,6 +2261,7 @@ function startCastCreatureTargetPrompt(card, castAction = "cast") {
   if (!cardName) return;
 
   if (getTargetableCreaturesForPrompt().length === 0) {
+    clearPendingHandCast();
     updateActionHint(`No valid creature targets in play for ${cardName}.`, true);
     return;
   }
@@ -2279,6 +2281,7 @@ function startCastPermanentTargetPrompt(card, castAction = "cast") {
   if (!cardName) return;
 
   if (getTargetablePermanentsForPrompt().length === 0) {
+    clearPendingHandCast();
     updateActionHint(`No valid permanent targets in play for ${cardName}.`, true);
     return;
   }
@@ -2298,6 +2301,7 @@ function startCastArtifactTargetPrompt(card, castAction = "cast") {
   if (!cardName) return;
 
   if (getTargetableArtifactsForPrompt().length === 0) {
+    clearPendingHandCast();
     updateActionHint(`No valid artifact targets in play for ${cardName}.`, true);
     return;
   }

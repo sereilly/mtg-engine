@@ -46,6 +46,25 @@ const BF_FIT_PADDING = 44; // world-space padding around the fitted bounding box
 const BF_CAM_EASE = 0.16; // per-frame easing toward the camera target
 const BF_CARD_EASE = 0.22; // per-frame easing of cards toward their slots
 
+// ---- Stack zone & spell animations ----
+// Spells on the stack render as enlarged cards in a cascade on the right side
+// of the battlefield. Casting flies the card in from the caster's hand;
+// resolution either slams a permanent onto its battlefield slot or shrinks a
+// non-permanent away toward the caster's graveyard.
+const BF_STACK_SCALE = 1.7; // stack cards render larger than battlefield cards
+const BF_STACK_OFFSET_X = 30; // cascade offset between overlapping stack cards
+const BF_STACK_OFFSET_Y = 38;
+const BF_STACK_DWELL_MS = 1000; // minimum time a spell stays on the stack before resolving
+const BF_STACK_GAP_X = 64; // gap between battlefield content and the stack zone
+const BF_STACK_EASE = 0.18; // per-frame easing of stack cards (position + scale)
+const BF_RESOLVE_FLY_MS = 340; // stack -> hover point above the battlefield slot
+const BF_RESOLVE_HOVER_MS = 200; // pause hovering above the slot
+const BF_RESOLVE_SLAM_MS = 110; // quick slam down into place
+const BF_RESOLVE_HOVER_LIFT = 30; // world px the card hovers above its slot
+const BF_FIZZLE_MS = 480; // non-permanent: stack -> graveyard shrink/fade
+const BF_ABILITY_FADE_MS = 260; // resolved ability: shrink/fade in place
+const BF_IMPACT_RING_MS = 240; // expanding ring when a permanent slams down
+
 class BattlefieldCanvas {
   constructor(canvasEl, callbacks = {}) {
     this.canvas = canvasEl;
@@ -81,6 +100,18 @@ class BattlefieldCanvas {
     // stacks: [{id, keys[], offsetY, kind: "pile"|"aura"}]
     // keys is ordered bottom-to-top; the bottom key renders first (behind).
     this.stacks = [];
+
+    // Visuals for the engine's spell stack, drawn in the stack zone to the
+    // right of the battlefield. Center-based coordinates so scaling is easy:
+    // [{sig, item, cx, cy, scale, tcx, tcy, tScale}]
+    this.stackVisuals = [];
+    this._stackSynced = false;
+    this._stackBaseX = 6 * BF_SLOT_PITCH_X + BF_STACK_GAP_X;
+
+    // Time-based resolve animations (card flights + impact rings) and the
+    // battlefield keys hidden while their entrance animation plays.
+    this.fxAnims = [];
+    this.suppressedKeys = new Set();
 
     // Per seat+band ordered list of layout group ids, persisted across updates
     // so existing cards keep their slots when new ones arrive.
@@ -282,6 +313,17 @@ class BattlefieldCanvas {
     // Prune cards that left the battlefield
     this.cardItems = this.cardItems.filter((c) => newKeys.has(c.key));
 
+    // Drop stale entrance suppressions when the board changed under them
+    // (index shifted or the permanent is already gone).
+    for (const fx of this.fxAnims) {
+      if (!fx.suppressKey) continue;
+      const data = incoming.get(fx.suppressKey);
+      if (!data || data.card?.name !== fx.card?.name) {
+        this.suppressedKeys.delete(fx.suppressKey);
+        fx.suppressKey = null;
+      }
+    }
+
     // Update existing cards / add new ones
     const brandNew = [];
     for (const [key, data] of incoming) {
@@ -304,6 +346,8 @@ class BattlefieldCanvas {
       item.x = item.tx;
       item.y = item.ty;
     }
+
+    this._syncStackZone(state, brandNew);
 
     this._sortRenderOrder();
     this._updateCameraTarget();
@@ -507,6 +551,266 @@ class BattlefieldCanvas {
   }
 
   // ---------------------------------------------------------------------------
+  // Spell stack zone & cast/resolve animations
+  // ---------------------------------------------------------------------------
+
+  // Diff the engine's spell stack against our visuals. New items fly in from
+  // the caster's hand (spells) or source permanent (abilities) and grow into
+  // the stack zone; removed items play a resolve animation.
+  _syncStackZone(state, brandNew) {
+    const stackData = Array.isArray(state.stack) ? state.stack : [];
+
+    // Rightmost battlefield content; only used as a directional fallback for
+    // the hand/graveyard anchors (the cascade itself is pinned to the view).
+    let maxX = 6 * BF_SLOT_PITCH_X;
+    for (const item of this.cardItems) maxX = Math.max(maxX, item.tx + BF_CARD_W);
+    this._stackBaseX = maxX + BF_STACK_GAP_X;
+
+    // In-order signature matching keeps visuals stable across pushes/pops and
+    // tolerates a counterspell plucking an item out of the middle. The
+    // serialized stack is top-first and only the top changes, so match from
+    // the BOTTOM (the stable end): with identical names on the stack, the
+    // existing visuals keep their slots and the unmatched newcomer lands on
+    // top, and on resolution it is the top visual that animates away.
+    const sigs = stackData.map((it) => `${it.type}|${it.card?.name || it.label || "?"}|${it.caster_index}`);
+    const old = this.stackVisuals;
+    const matched = new Array(old.length).fill(false);
+    const next = new Array(stackData.length);
+    let scanFrom = old.length - 1;
+    for (let i = stackData.length - 1; i >= 0; i--) {
+      let found = -1;
+      for (let j = scanFrom; j >= 0; j--) {
+        if (!matched[j] && old[j].sig === sigs[i]) { found = j; break; }
+      }
+      if (found >= 0) {
+        matched[found] = true;
+        scanFrom = found - 1;
+        old[found].item = stackData[i];
+        next[i] = old[found];
+      } else {
+        const from = this._castOrigin(stackData[i]);
+        next[i] = { sig: sigs[i], item: stackData[i], cx: from.x, cy: from.y, scale: from.scale, tcx: from.x, tcy: from.y, tScale: BF_STACK_SCALE };
+      }
+    }
+    const removed = old.filter((v, j) => !matched[j]);
+    this.stackVisuals = next;
+    this._retargetStackVisuals();
+
+    if (!this._stackSynced) {
+      // First sync after (re)joining: place without animating.
+      this._stackSynced = true;
+      for (const v of next) {
+        v.cx = v.tcx;
+        v.cy = v.tcy;
+        v.scale = v.tScale;
+      }
+      return;
+    }
+    for (const v of removed) this._spawnResolveFx(v, brandNew);
+  }
+
+  // Pin the stack cascade to the right side of the currently visible
+  // battlefield. The camera never moves to accommodate the stack, so this is
+  // re-run every frame instead — camera motion can't strand the stack off
+  // screen. Sizes divide by zoom so stack cards keep a constant on-screen
+  // size however far the camera is zoomed out. The serialized stack is
+  // top-first: index 0 (next to resolve) takes the deepest down-right offset
+  // and is drawn on top.
+  _retargetStackVisuals() {
+    const n = this.stackVisuals.length;
+    if (!n) return;
+    const rect = this._visibleWorldRect();
+    const sc = BF_STACK_SCALE / this.zoom;
+    const w = BF_CARD_W * sc;
+    const offX = BF_STACK_OFFSET_X / this.zoom;
+    const offY = BF_STACK_OFFSET_Y / this.zoom;
+    const margin = 30 / this.zoom;
+    const baseX = rect.maxX - margin - w / 2 - (n - 1) * offX;
+    const centerY = (rect.minY + rect.maxY) / 2;
+    this.stackVisuals.forEach((v, i) => {
+      const pos = n - 1 - i;
+      v.tcx = baseX + pos * offX;
+      v.tcy = centerY + (pos - (n - 1) / 2) * offY;
+      v.tScale = sc;
+    });
+  }
+
+  // World-space rectangle currently visible on the battlefield stage (the
+  // non-overscan part of the canvas, mapped through the camera).
+  _visibleWorldRect() {
+    const vx = ((this.cssW || 0) * (1 - 1 / BF_OVERSCAN_X)) / 2;
+    const vy = ((this.cssH || 0) * (1 - 1 / BF_OVERSCAN_Y)) / 2;
+    const vw = (this.cssW || 0) / BF_OVERSCAN_X;
+    const vh = (this.cssH || 0) / BF_OVERSCAN_Y;
+    const tl = this.canvasToWorld(vx, vy);
+    const br = this.canvasToWorld(vx + vw, vy + vh);
+    return { minX: tl.x, minY: tl.y, maxX: br.x, maxY: br.y };
+  }
+
+  // Clamp a world point so a card anchored there stays on the battlefield.
+  _clampToBattlefield(x, y) {
+    const rect = this._visibleWorldRect();
+    const pad = BF_CARD_W * 0.75;
+    return {
+      x: Math.min(rect.maxX - pad, Math.max(rect.minX + pad, x)),
+      y: Math.min(rect.maxY - pad, Math.max(rect.minY + pad, y)),
+    };
+  }
+
+  // World-space point a newly cast stack item flies in from. Hand/graveyard
+  // anchors live outside the canvas, so the projected point is clamped to the
+  // visible battlefield — the card enters from the matching table edge
+  // instead of teleporting in from off screen.
+  _castOrigin(item) {
+    if (item?.type === "ability" && item.source_permanent_seat != null && item.source_permanent_index != null) {
+      const pos = this._renderPos(`${item.source_permanent_seat}-${item.source_permanent_index}`);
+      if (pos) return { x: pos.x + BF_CARD_W / 2, y: pos.y + BF_CARD_H / 2, scale: 1.0 };
+    }
+    const fromViewer = item?.caster_index === this.viewerSeat;
+    const el = document.getElementById(fromViewer ? "selfHand" : "oppHand");
+    if (el) {
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 || r.height > 0) {
+        const c = this._pageToCanvas(r.left + r.width / 2, r.top + r.height / 2);
+        const w = this.canvasToWorld(c.x, c.y);
+        const p = this._clampToBattlefield(w.x, w.y);
+        return { x: p.x, y: p.y, scale: 0.55 / this.zoom };
+      }
+    }
+    const fallback = this._clampToBattlefield(this._stackBaseX, BF_WORLD_SPLIT_Y + (fromViewer ? 520 : -520));
+    return { x: fallback.x, y: fallback.y, scale: 0.55 / this.zoom };
+  }
+
+  // World-space point a resolved non-permanent shrinks away toward, clamped
+  // so the fizzle heads in the graveyard's direction without leaving the
+  // battlefield.
+  _graveAnchor(casterSeat) {
+    const isViewer = casterSeat === this.viewerSeat;
+    const el = document.getElementById(isViewer ? "selfGraveCount" : "oppGraveCount");
+    if (el) {
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 || r.height > 0) {
+        const c = this._pageToCanvas(r.left + r.width / 2, r.top + r.height / 2);
+        const w = this.canvasToWorld(c.x, c.y);
+        return this._clampToBattlefield(w.x, w.y);
+      }
+    }
+    return this._clampToBattlefield(this._stackBaseX + 260, BF_WORLD_SPLIT_Y + (isViewer ? 420 : -420));
+  }
+
+  // A stack item disappeared: animate its resolution. Permanents fly to their
+  // new battlefield slot, hover briefly, then slam down; other spells shrink
+  // toward the caster's graveyard; abilities just fade out.
+  _spawnResolveFx(v, brandNew) {
+    const item = v.item || {};
+    const card = item.card || null;
+    const typeStr = String(card?.type || "").toLowerCase();
+    const isSpell = item.type !== "ability";
+    const isPermanentSpell = isSpell && !/instant|sorcery/.test(typeStr) &&
+      /creature|artifact|enchantment|planeswalker|battle|land/.test(typeStr);
+
+    // Spells stay on the stack for a minimum dwell even when priority passes
+    // immediately, measured from when the card visually arrived there (or
+    // from now if it is still mid-flight). The dwell stage also finishes the
+    // cast flight, so the resolve movement always departs from the stack slot.
+    const now = performance.now();
+    const dwell = Math.max(0, BF_STACK_DWELL_MS - (now - (v.settledAt ?? now)));
+    const hold = dwell > 16
+      ? [{ x0: v.cx, y0: v.cy, s0: v.scale, a0: 1, x1: v.tcx, y1: v.tcy, s1: v.tScale, a1: 1, dur: dwell, ease: _easeOutCubic }]
+      : [];
+    const sx = hold.length ? v.tcx : v.cx;
+    const sy = hold.length ? v.tcy : v.cy;
+    const ss = hold.length ? v.tScale : v.scale;
+
+    if (isPermanentSpell) {
+      const landed = (brandNew || []).find(
+        (bi) => !bi._fxClaimed && bi.seat === item.caster_index && bi.card?.name === card?.name
+      );
+      if (landed) {
+        landed._fxClaimed = true;
+        const pos = this._targetRenderPos(landed.key) || { x: landed.tx, y: landed.ty };
+        const slot = { x: pos.x + BF_CARD_W / 2, y: pos.y + BF_CARD_H / 2 };
+        const hover = { x: slot.x, y: slot.y - BF_RESOLVE_HOVER_LIFT };
+        this.suppressedKeys.add(landed.key);
+        this.fxAnims.push({
+          type: "card", card, suppressKey: landed.key, impactAt: slot,
+          stageIdx: 0, stageStart: null, x: v.cx, y: v.cy, scale: v.scale, alpha: 1,
+          stages: [
+            ...hold,
+            { x0: sx, y0: sy, s0: ss, a0: 1, x1: hover.x, y1: hover.y, s1: 1.12, a1: 1, dur: BF_RESOLVE_FLY_MS, ease: _easeOutCubic, lifted: true },
+            { x0: hover.x, y0: hover.y, s0: 1.12, a0: 1, x1: hover.x, y1: hover.y, s1: 1.12, a1: 1, dur: BF_RESOLVE_HOVER_MS, ease: null, lifted: true },
+            { x0: hover.x, y0: hover.y, s0: 1.12, a0: 1, x1: slot.x, y1: slot.y, s1: 1, a1: 1, dur: BF_RESOLVE_SLAM_MS, ease: _easeInQuad },
+          ],
+        });
+        return;
+      }
+    }
+
+    if (isSpell) {
+      const g = this._graveAnchor(item.caster_index ?? 0);
+      this.fxAnims.push({
+        type: "card", card, stageIdx: 0, stageStart: null, x: v.cx, y: v.cy, scale: v.scale, alpha: 1,
+        stages: [
+          ...hold,
+          { x0: sx, y0: sy, s0: ss, a0: 1, x1: g.x, y1: g.y, s1: 0.2, a1: 0, dur: BF_FIZZLE_MS, ease: _easeInCubic },
+        ],
+      });
+      return;
+    }
+
+    this.fxAnims.push({
+      type: "card", card, stageIdx: 0, stageStart: null, x: v.cx, y: v.cy, scale: v.scale, alpha: 1,
+      stages: [
+        ...hold,
+        { x0: sx, y0: sy, s0: ss, a0: 1, x1: sx, y1: sy, s1: ss * 0.6, a1: 0, dur: BF_ABILITY_FADE_MS, ease: null },
+      ],
+    });
+  }
+
+  // Advance time-based resolve animations. Returns true while any are active.
+  _tickFx(now) {
+    if (!this.fxAnims.length) return false;
+    const done = [];
+    for (const fx of this.fxAnims) {
+      if (fx.type === "ring") {
+        if (fx.start == null) fx.start = now;
+        fx.t = (now - fx.start) / fx.dur;
+        if (fx.t >= 1) done.push(fx);
+        continue;
+      }
+      if (fx.stageStart == null) fx.stageStart = now;
+      let stage = fx.stages[fx.stageIdx];
+      let t = stage.dur > 0 ? (now - fx.stageStart) / stage.dur : 1;
+      while (t >= 1 && fx.stageIdx < fx.stages.length - 1) {
+        fx.stageStart += stage.dur;
+        fx.stageIdx++;
+        stage = fx.stages[fx.stageIdx];
+        t = stage.dur > 0 ? (now - fx.stageStart) / stage.dur : 1;
+      }
+      const k = Math.min(1, Math.max(0, t));
+      const e = stage.ease ? stage.ease(k) : k;
+      // Re-clamp against the live view every tick: the camera may pan/zoom
+      // for battlefield changes mid-animation, and the card must ride the
+      // view edge rather than be left out of frame.
+      const p = this._clampToBattlefield(_lerp(stage.x0, stage.x1, e), _lerp(stage.y0, stage.y1, e));
+      fx.x = p.x;
+      fx.y = p.y;
+      fx.scale = _lerp(stage.s0, stage.s1, e);
+      fx.alpha = _lerp(stage.a0, stage.a1, e);
+      fx.lifted = !!stage.lifted;
+      if (t >= 1 && fx.stageIdx === fx.stages.length - 1) done.push(fx);
+    }
+    for (const fx of done) {
+      this.fxAnims.splice(this.fxAnims.indexOf(fx), 1);
+      if (fx.suppressKey) this.suppressedKeys.delete(fx.suppressKey);
+      if (fx.impactAt) {
+        this.fxAnims.push({ type: "ring", x: fx.impactAt.x, y: fx.impactAt.y, dur: BF_IMPACT_RING_MS, start: null, t: 0 });
+      }
+    }
+    return true;
+  }
+
+  // ---------------------------------------------------------------------------
   // Automatic camera
   // ---------------------------------------------------------------------------
 
@@ -572,6 +876,33 @@ class BattlefieldCanvas {
       }
       moving = true;
     }
+    // Stack-zone cards ease toward their cascade slot, growing on the way.
+    // Targets are re-pinned to the visible battlefield every frame so camera
+    // motion never carries the stack out of view.
+    this._retargetStackVisuals();
+    for (const v of this.stackVisuals) {
+      const dx = v.tcx - v.cx;
+      const dy = v.tcy - v.cy;
+      const ds = v.tScale - v.scale;
+      if (dx !== 0 || dy !== 0 || ds !== 0) {
+        if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5 && Math.abs(ds) < 0.004) {
+          v.cx = v.tcx;
+          v.cy = v.tcy;
+          v.scale = v.tScale;
+        } else {
+          v.cx += dx * BF_STACK_EASE;
+          v.cy += dy * BF_STACK_EASE;
+          v.scale += ds * BF_STACK_EASE;
+        }
+        moving = true;
+      }
+      // Stamp when the card visually reaches the stack; the resolve dwell
+      // is measured from here so the flight doesn't eat into it.
+      if (!v.settledAt && Math.abs(v.tcx - v.cx) < 12 && Math.abs(v.tcy - v.cy) < 12) {
+        v.settledAt = performance.now();
+      }
+    }
+    if (this._tickFx(performance.now())) moving = true;
     const t = this.camTarget;
     if (t && (t.x !== this.camX || t.y !== this.camY || t.zoom !== this.zoom)) {
       const dx = t.x - this.camX;
@@ -764,6 +1095,8 @@ class BattlefieldCanvas {
   }
 
   _drawCard(ctx, item) {
+    // Hidden while its entrance (slam) animation is still playing.
+    if (this.suppressedKeys.has(item.key)) return;
     const pos = this._renderPos(item.key);
     if (!pos) return;
     const card = item.card;
@@ -956,7 +1289,60 @@ class BattlefieldCanvas {
       }
     }
 
+    // ---- Spell stack zone and cast/resolve animations (drawn on top) ----
+    this._drawStackAndFx(ctx);
+
     ctx.restore(); // camera
+  }
+
+  _drawStackAndFx(ctx) {
+    if (this.stackVisuals.length) {
+      // Faint zone label below the cascade.
+      const n = this.stackVisuals.length;
+      const h = BF_CARD_H * (BF_STACK_SCALE / this.zoom);
+      const labelX = this.stackVisuals.reduce((sum, v) => sum + v.tcx, 0) / n;
+      const labelY = Math.max(...this.stackVisuals.map((v) => v.tcy)) + h / 2 + 12 / this.zoom;
+      ctx.save();
+      ctx.fillStyle = "rgba(190,215,240,0.3)";
+      ctx.font = `600 ${13 / this.zoom}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      ctx.fillText("STACK", labelX, labelY);
+      ctx.restore();
+    }
+
+    // Bottom of the stack first; the top spell (next to resolve) draws on top.
+    for (let i = this.stackVisuals.length - 1; i >= 0; i--) {
+      const v = this.stackVisuals[i];
+      this._drawFloatingCard(ctx, v.item?.card, v.cx, v.cy, v.scale, 1, false);
+    }
+
+    for (const fx of this.fxAnims) {
+      if (fx.type === "ring") {
+        const k = Math.min(1, Math.max(0, fx.t));
+        ctx.save();
+        ctx.strokeStyle = `rgba(255,225,140,${0.7 * (1 - k)})`;
+        ctx.lineWidth = 3 / this.zoom;
+        ctx.beginPath();
+        ctx.arc(fx.x, fx.y, 18 + 52 * k, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      } else {
+        this._drawFloatingCard(ctx, fx.card, fx.x, fx.y, fx.scale, fx.alpha, fx.lifted);
+      }
+    }
+  }
+
+  // Draw a card centered at (cx, cy) at an arbitrary scale/alpha; `lifted`
+  // borrows the hover treatment (bigger drop shadow) to sell height.
+  _drawFloatingCard(ctx, card, cx, cy, scale, alpha, lifted) {
+    if (!(scale > 0) || !(alpha > 0)) return;
+    const w = BF_CARD_W * scale;
+    const h = BF_CARD_H * scale;
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, alpha);
+    this._drawCardFace(ctx, cx - w / 2, cy - h / 2, w, h, card, { hovered: !!lifted });
+    ctx.restore();
   }
 
   _startLoop() {
@@ -1164,6 +1550,23 @@ class BattlefieldCanvas {
       });
     }
   }
+}
+
+// ---- Easing helpers for the spell animations ----
+function _lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+function _easeOutCubic(t) {
+  return 1 - Math.pow(1 - t, 3);
+}
+
+function _easeInCubic(t) {
+  return t * t * t;
+}
+
+function _easeInQuad(t) {
+  return t * t;
 }
 
 // Utility: word-wrap text on canvas
