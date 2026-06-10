@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from engine import Game, PlayerState, classify_card, load_cards
+from engine.mixins.stack_casting import aura_enchant_noun, permanent_matches_enchant_noun
 from engine.models import CardDefinition, Permanent
 
 _NUMBER_WORDS = {
@@ -157,6 +158,10 @@ def _snapshot(p1: PlayerState, p2: PlayerState) -> _Snapshot:
 
 def _run_card(card: CardDefinition, all_cards: list[CardDefinition]) -> tuple[Game, PlayerState, PlayerState, _Snapshot, object]:
     game, p1, p2 = _build_game_for_card(card, all_cards)
+    if card.name == "Animate Wall":
+        # Animate Wall needs a Wall on the battlefield to target (Rule 115.1b)
+        wall = next(c for c in all_cards if "wall" in c.type_line.lower())
+        p2.battlefield.append(Permanent(card=wall))
     before = _snapshot(p1, p2)
 
     if card.name in {"Counterspell", "Power Sink", "Spell Blast"}:
@@ -197,7 +202,16 @@ def _run_card(card: CardDefinition, all_cards: list[CardDefinition]) -> tuple[Ga
         result = game.cast_from_hand(0, card.name, target_player_index=1)
         return game, p1, p2, before, result
 
-    result = game.cast_from_hand(0, card.name, target_player_index=1)
+    # Aura spells must declare a legal enchant target when cast (Rule 115.1b)
+    aura_target_index = None
+    enchant_noun = aura_enchant_noun(card)
+    if enchant_noun is not None:
+        aura_target_index = next(
+            (idx for idx, perm in enumerate(p2.battlefield) if permanent_matches_enchant_noun(perm, enchant_noun)),
+            None,
+        )
+
+    result = game.cast_from_hand(0, card.name, target_player_index=1, target_permanent_index=aura_target_index)
 
     activatable_fragments = (
         "this creature gets +1/+0 until end of turn",

@@ -60,6 +60,70 @@ def test_ancestral_recall_not_cast_on_self_with_two_library_cards(all_cards):
         )
 
 
+def test_ai_chooses_creature_target_when_casting_fear(all_cards):
+    """Regression: the AI cast Fear (an Aura) without choosing a target.
+
+    Aura spells require a target (Rule 115.1b) — the AI must pick a legal
+    creature for Fear, not a land, and put the beneficial Aura on its own creature.
+    """
+    fear = _get(all_cards, "Fear")
+    grizzly = _get(all_cards, "Grizzly Bears")
+    swamp = _get(all_cards, "Swamp")
+
+    p1 = PlayerState(name="P1", hand=[fear], battlefield=[Permanent(card=swamp), Permanent(card=grizzly)])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=grizzly)])
+    game = Game(players=[p1, p2])
+
+    action = choose_cast_action(game, 0)
+
+    assert action is not None
+    assert action.card_name == "Fear"
+    assert action.target_player_index == 0
+    assert action.target_permanent_index == 1, "AI must target its creature, not the Swamp"
+
+    # The chosen action must actually be castable by the engine
+    result = game.cast_from_hand(
+        0,
+        action.card_name,
+        target_player_index=action.target_player_index,
+        target_permanent_index=action.target_permanent_index,
+    )
+    assert result.supported
+    fear_perm = next(perm for perm in p1.battlefield if perm.card.name == "Fear")
+    assert fear_perm.metadata.get("attached_to") is not None
+
+
+def test_ai_skips_aura_with_no_legal_target(all_cards):
+    """The AI must not try to cast an Aura when no legal enchant target exists."""
+    fear = _get(all_cards, "Fear")
+    swamp = _get(all_cards, "Swamp")
+
+    p1 = PlayerState(name="P1", hand=[fear], battlefield=[Permanent(card=swamp)])
+    p2 = PlayerState(name="P2")  # no creatures anywhere
+    game = Game(players=[p1, p2])
+
+    action = choose_cast_action(game, 0)
+
+    assert action is None or action.card_name != "Fear"
+
+
+def test_ai_puts_harmful_aura_on_opponent_creature(all_cards):
+    """A harmful Aura (Paralyze) goes on an opponent's creature, not the AI's own."""
+    paralyze = _get(all_cards, "Paralyze")
+    grizzly = _get(all_cards, "Grizzly Bears")
+
+    p1 = PlayerState(name="P1", hand=[paralyze], battlefield=[Permanent(card=grizzly)])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=grizzly)])
+    game = Game(players=[p1, p2])
+
+    action = choose_cast_action(game, 0)
+
+    assert action is not None
+    assert action.card_name == "Paralyze"
+    assert action.target_player_index == 1
+    assert action.target_permanent_index == 0
+
+
 def test_healing_salve_not_cast_at_full_life(all_cards):
     """Regression: AI must not prefer Healing Salve when the caster is at full (20) life.
 

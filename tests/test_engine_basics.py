@@ -113,7 +113,7 @@ def test_aura_creature_buff_applies():
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=creature)])
     game = Game(players=[p1, p2])
 
-    game.cast_from_hand(0, "Aura Buff", target_player_index=1)
+    game.cast_from_hand(0, "Aura Buff", target_player_index=1, target_permanent_index=0)
     assert p2.battlefield[0].effective_power == 4
     assert p2.battlefield[0].effective_toughness == 3
 
@@ -125,7 +125,7 @@ def test_aura_land_logs_simplified_resolution():
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=land)])
     game = Game(players=[p1, p2])
 
-    result = game.cast_from_hand(0, "Land Aura", target_player_index=1)
+    result = game.cast_from_hand(0, "Land Aura", target_player_index=1, target_permanent_index=0)
     assert result.supported
     assert any("enchants" in line.lower() for line in game.log)
 

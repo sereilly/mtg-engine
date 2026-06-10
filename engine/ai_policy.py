@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import re
 
 from .game import Game
+from .mixins.stack_casting import aura_enchant_noun, permanent_matches_enchant_noun
 from .models import CardDefinition, Permanent, PlayerState
 from .oracle import OracleInstruction, compile_card_oracle
 
@@ -18,6 +19,7 @@ class CastAction:
     land_tap_indices: tuple[int, ...]
     score: float
     hand_index: int
+    target_permanent_index: int | None = None
 
 
 @dataclass(frozen=True)
@@ -46,6 +48,12 @@ def choose_cast_action(game: Game, player_index: int) -> CastAction | None:
             continue
 
         target = _choose_target_for_spell(card, player_index, game)
+        target_permanent_index: int | None = None
+        if aura_enchant_noun(card) is not None:
+            aura_choice = _choose_aura_target(game, player_index, card)
+            if aura_choice is None:
+                continue  # Aura spells require a legal target (Rule 115.1b)
+            target, target_permanent_index = aura_choice
         x_value = _pick_x_value(game, player, card)
         if x_value == 0:
             continue
@@ -66,6 +74,7 @@ def choose_cast_action(game: Game, player_index: int) -> CastAction | None:
             land_tap_indices=tap_indices,
             score=score,
             hand_index=hand_index,
+            target_permanent_index=target_permanent_index,
         )
         if _is_better_cast(candidate, best):
             best = candidate
@@ -354,6 +363,35 @@ def _can_cast_with_targets(game: Game, caster_index: int, card: CardDefinition) 
             return any(perm.card.primary_type == "creature" for perm in caster.battlefield)
 
     return True
+
+
+def _choose_aura_target(game: Game, caster_index: int, card: CardDefinition) -> tuple[int, int] | None:
+    """Pick (player_index, permanent_index) for an Aura's enchant target.
+
+    Harmful auras go on an opponent's permanent, beneficial ones on the caster's.
+    Returns None when the preferred player has no legal target — the Aura is
+    unplayable this turn rather than cast onto a permanent that helps the enemy.
+    """
+    noun = aura_enchant_noun(card)
+    if noun is None:
+        return None
+    text = card.oracle_text.lower()
+    harmful = any(
+        marker in text
+        for marker in (
+            "gets -",
+            "doesn't untap",
+            "tap enchanted",
+            "you control enchanted",
+            "can't attack",
+            "can't block",
+        )
+    )
+    target_player_index = (1 - caster_index) if harmful else caster_index
+    for permanent_index, permanent in enumerate(game.players[target_player_index].battlefield):
+        if permanent_matches_enchant_noun(permanent, noun):
+            return target_player_index, permanent_index
+    return None
 
 
 def _choose_target_for_spell(card: CardDefinition, caster_index: int, game: Game) -> int:

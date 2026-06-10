@@ -9,6 +9,41 @@ from ..models import CardDefinition, Permanent, PlayerState
 from ..oracle import OracleInstruction, _COLOR_WORD_TO_SYMBOL, compile_card_oracle, lex_oracle_text
 from ._constants import _MANA_SYMBOLS
 
+# Maps an "enchant X" noun to a predicate matching legal battlefield targets.
+_ENCHANT_TARGET_MATCHERS = {
+    "artifact": lambda perm: "artifact" in perm.card.type_line.lower(),
+    "creature": lambda perm: perm.card.primary_type == "creature",
+    "land": lambda perm: perm.card.primary_type == "land",
+    "enchantment": lambda perm: "enchantment" in perm.card.type_line.lower(),
+    "wall": lambda perm: "wall" in perm.card.type_line.lower(),
+}
+
+
+def aura_enchant_noun(card: CardDefinition) -> str | None:
+    """Return the battlefield enchant noun for an Aura card, or None.
+
+    Returns None for non-Auras and for Auras that don't enchant battlefield
+    permanents (e.g. Animate Dead's "enchant creature card in a graveyard").
+    """
+    if "Aura" not in card.type_line:
+        return None
+    first_line = card.oracle_text.lower().split("\n")[0]
+    first_line = re.sub(r"\([^)]*\)", "", first_line).strip()  # drop reminder text
+    if not first_line.startswith("enchant "):
+        return None
+    noun = first_line[len("enchant "):].strip()
+    if "graveyard" in noun:
+        return None
+    return noun
+
+
+def permanent_matches_enchant_noun(permanent: Permanent, noun: str) -> bool:
+    matcher = _ENCHANT_TARGET_MATCHERS.get(noun)
+    if matcher is None:
+        return True  # unknown enchant type — treat any permanent as legal
+    return matcher(permanent)
+
+
 class StackCastingMixin:
     def cast_from_hand(
         self,
@@ -292,7 +327,9 @@ class StackCastingMixin:
                 self.log.append(details)
                 return SimulationResult(card.name, False, classification.effect_kind, details)
 
-        target_ok, target_reason = self._validate_cast_targets(card, caster_index, target_player_index)
+        target_ok, target_reason = self._validate_cast_targets(
+            card, caster_index, target_player_index, target_permanent_index
+        )
         if not target_ok:
             self.log.append(target_reason)
             return SimulationResult(card.name, False, classification.effect_kind, target_reason)
@@ -348,6 +385,7 @@ class StackCastingMixin:
         card: CardDefinition,
         caster_index: int,
         target_player_index: int | None,
+        target_permanent_index: int | None = None,
     ) -> tuple[bool, str]:
         """Return (True, 'valid') if all required targets exist, else (False, reason).
 
@@ -355,32 +393,32 @@ class StackCastingMixin:
         the battlefield regardless of whether their activated abilities have targets.
         """
         if card.primary_type not in ("instant", "sorcery"):
-            # Auras require a legal enchant target on the battlefield (MTG Rule 601.2c)
+            # Aura spells are always targeted: a legal enchant target must be
+            # chosen when the spell is cast (MTG Rules 115.1b, 601.2c)
             if "Aura" in card.type_line:
-                oracle_lower = card.oracle_text.lower()
-                first_line = oracle_lower.split("\n")[0].strip()
-                if first_line.startswith("enchant "):
-                    enchant_noun = first_line[len("enchant "):].strip()
-                    all_perms = [p for player in self.players for p in player.battlefield]
-                    if enchant_noun == "artifact":
-                        has_target = any("artifact" in p.card.type_line.lower() for p in all_perms)
-                    elif enchant_noun == "creature":
-                        has_target = any(p.card.primary_type == "creature" for p in all_perms)
-                    elif enchant_noun == "land":
-                        has_target = any(p.card.primary_type == "land" for p in all_perms)
-                    elif enchant_noun == "enchantment":
-                        has_target = any("enchantment" in p.card.type_line.lower() for p in all_perms)
-                    elif "graveyard" in enchant_noun:
+                enchant_noun = aura_enchant_noun(card)
+                if enchant_noun is not None:
+                    if not isinstance(target_permanent_index, int):
+                        return False, f"{card.name} requires a target"
+                    target_idx = target_player_index if target_player_index is not None else (1 - caster_index)
+                    if target_idx < 0 or target_idx >= len(self.players):
+                        target_idx = 1 - caster_index
+                    battlefield = self.players[target_idx].battlefield
+                    if not (0 <= target_permanent_index < len(battlefield)) or not permanent_matches_enchant_noun(
+                        battlefield[target_permanent_index], enchant_noun
+                    ):
+                        return False, f"no valid target for {card.name}"
+                else:
+                    first_line = card.oracle_text.lower().split("\n")[0].strip()
+                    if first_line.startswith("enchant ") and "graveyard" in first_line:
                         # e.g. "enchant creature card in a graveyard" (Animate Dead)
                         has_target = any(
                             c.primary_type == "creature"
                             for player in self.players
                             for c in player.graveyard
                         )
-                    else:
-                        has_target = True  # unknown enchant type — allow cast
-                    if not has_target:
-                        return False, f"no valid target for {card.name}"
+                        if not has_target:
+                            return False, f"no valid target for {card.name}"
             return True, "valid"
 
         program = compile_card_oracle(card)
@@ -618,6 +656,22 @@ class StackCastingMixin:
             self.log.append(f"{caster.name} put {card.name} onto battlefield")
             self._apply_global_buff(caster, card)
             self._apply_aura_effect(caster_index, permanent, target_player_index, target_permanent_index)
+            # An Aura that failed to attach (its target left the battlefield while the
+            # spell was on the stack) goes to its owner's graveyard instead of
+            # remaining on the battlefield unattached (MTG Rule 303.4g)
+            if (
+                "Aura" in card.type_line
+                and card.oracle_text.lower().split("\n")[0].strip().startswith("enchant")
+                and permanent.metadata.get("attached_to") is None
+            ):
+                for player in self.players:
+                    if permanent in player.battlefield:
+                        player.battlefield.remove(permanent)
+                        break
+                caster.graveyard.append(card)
+                self.log.append(f"{card.name} had no legal target and was put into {caster.name}'s graveyard")
+                self._refresh_dynamic_creatures()
+                return
             self._apply_cast_triggers(caster_index, card)
             self._refresh_dynamic_creatures()
             if primary_type == "land":

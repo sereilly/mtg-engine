@@ -222,7 +222,7 @@ def test_fear_enchanted_creature_unblockable_by_non_artifact_non_black(all_cards
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=grizzly)], life=20)
     game = Game(players=[p1, p2])
 
-    cast_result = game.cast_from_hand(0, "Fear", target_player_index=0)
+    cast_result = game.cast_from_hand(0, "Fear", target_player_index=0, target_permanent_index=0)
     assert cast_result.supported
 
     # Attack with the enchanted creature
@@ -239,6 +239,48 @@ def test_fear_enchanted_creature_unblockable_by_non_artifact_non_black(all_cards
 
     # Non-artifact non-black Grizzly should not be able to block creature with fear
     assert blockers == {}
+
+
+def test_fear_cannot_be_cast_without_target(all_cards):
+    """Regression: Fear (an Aura) was cast without a target and resolved unattached.
+
+    All Aura spells require a target chosen at cast time (Rules 115.1b, 601.2c).
+    """
+    fear = _get(all_cards, "Fear")
+    grizzly = _get(all_cards, "Grizzly Bears")
+
+    p1 = PlayerState(name="P1", hand=[fear], battlefield=[Permanent(card=grizzly)])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=grizzly)], life=20)
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Fear", target_player_index=0)
+
+    assert not result.supported
+    assert "requires a target" in result.details
+    assert any(c.name == "Fear" for c in p1.hand)
+    assert not any(perm.card.name == "Fear" for perm in p1.battlefield)
+    # No creature was silently enchanted
+    assert all(perm.metadata.get("attached_aura") is None for perm in p1.battlefield)
+    assert all(perm.metadata.get("attached_aura") is None for perm in p2.battlefield)
+
+
+def test_fear_cannot_be_cast_targeting_a_land(all_cards):
+    """Regression companion: Fear can only target a creature, never a land."""
+    fear = _get(all_cards, "Fear")
+    swamp = _get(all_cards, "Swamp")
+    grizzly = _get(all_cards, "Grizzly Bears")
+
+    p1 = PlayerState(name="P1", hand=[fear], battlefield=[Permanent(card=swamp), Permanent(card=grizzly)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    # Index 0 is the Swamp — illegal target for "Enchant creature"
+    result = game.cast_from_hand(0, "Fear", target_player_index=0, target_permanent_index=0)
+
+    assert not result.supported
+    assert any(c.name == "Fear" for c in p1.hand)
+    assert not any(perm.card.name == "Fear" for perm in p1.battlefield)
+
 
 def test_choose_combat_instant_cast_action_prefers_interaction_in_block_step(all_cards):
     bolt = _get(all_cards, "Lightning Bolt")
@@ -292,7 +334,7 @@ def test_flight_grants_flying(all_cards):
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
 
-    result = game.cast_from_hand(0, "Flight", target_player_index=0)
+    result = game.cast_from_hand(0, "Flight", target_player_index=0, target_permanent_index=0)
     assert result.supported
 
     creature_perm = p1.battlefield[0]
@@ -786,7 +828,7 @@ def test_aspect_of_wolf_applies_half_forest_buff(all_cards):
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
 
-    result = game.cast_from_hand(0, "Aspect of Wolf", target_player_index=0)
+    result = game.cast_from_hand(0, "Aspect of Wolf", target_player_index=0, target_permanent_index=0)
 
     assert result.supported
     # Creature is the first permanent on battlefield
@@ -945,7 +987,7 @@ def test_verduran_enchantress_draw_trigger(all_cards):
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
 
-    result = game.cast_from_hand(0, "Blessing", target_player_index=0)
+    result = game.cast_from_hand(0, "Blessing", target_player_index=0, target_permanent_index=0)
 
     assert result.supported
     assert len(p1.hand) == 1
@@ -1201,7 +1243,7 @@ def test_animate_wall_allows_wall_to_attack(all_cards):
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=wall)])
     game = Game(players=[p1, p2])
 
-    result = game.cast_from_hand(0, "Animate Wall", target_player_index=1)
+    result = game.cast_from_hand(0, "Animate Wall", target_player_index=1, target_permanent_index=0)
 
     assert result.supported
     wall_perm = p2.battlefield[0]
@@ -1912,7 +1954,7 @@ def test_holy_strength_gives_static_buff_to_enchanted_creature(all_cards):
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=grizzly)])
     game = Game(players=[p1, p2])
 
-    result = game.cast_from_hand(0, "Holy Strength", target_player_index=1)
+    result = game.cast_from_hand(0, "Holy Strength", target_player_index=1, target_permanent_index=0)
 
     assert result.supported
     perm = p2.battlefield[0]
@@ -1928,7 +1970,7 @@ def test_holy_armor_gives_static_toughness_and_activates_for_more(all_cards):
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
 
-    result = game.cast_from_hand(0, "Holy Armor", target_player_index=0)
+    result = game.cast_from_hand(0, "Holy Armor", target_player_index=0, target_permanent_index=0)
 
     assert result.supported
     creature_perm = p1.battlefield[0]
@@ -2080,7 +2122,7 @@ def test_paralyze_taps_creature_on_enter_and_prevents_untap(all_cards):
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=grizzly)])
     game = Game(players=[p1, p2])
 
-    result = game.cast_from_hand(0, "Paralyze", target_player_index=1)
+    result = game.cast_from_hand(0, "Paralyze", target_player_index=1, target_permanent_index=0)
 
     assert result.supported
     creature_perm = p2.battlefield[0]
@@ -3263,7 +3305,7 @@ def test_burrowing_grants_mountainwalk_to_enchanted_creature(all_cards):
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=creature)])
     game = Game(players=[p1, p2])
 
-    result = game.cast_from_hand(0, "Burrowing", target_player_index=1)
+    result = game.cast_from_hand(0, "Burrowing", target_player_index=1, target_permanent_index=0)
 
     assert result.supported
     bear_perm = p2.battlefield[0]
@@ -3360,7 +3402,7 @@ def test_consecrate_land_grants_indestructible_to_enchanted_land(all_cards):
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
 
-    result = game.cast_from_hand(0, "Consecrate Land", target_player_index=0)
+    result = game.cast_from_hand(0, "Consecrate Land", target_player_index=0, target_permanent_index=0)
 
     assert result.supported
     land_perm = p1.battlefield[0]
@@ -3390,7 +3432,7 @@ def test_control_magic_steals_opponent_creature(all_cards):
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=creature)])
     game = Game(players=[p1, p2])
 
-    result = game.cast_from_hand(0, "Control Magic", target_player_index=1)
+    result = game.cast_from_hand(0, "Control Magic", target_player_index=1, target_permanent_index=0)
 
     assert result.supported
     assert any(p.card.name == "Target Bear" for p in p1.battlefield)
@@ -3476,7 +3518,7 @@ def test_cursed_land_deals_upkeep_damage_to_land_controller(all_cards):
     p2.battlefield.append(Permanent(card=forest))
     game = Game(players=[p1, p2])
 
-    result = game.cast_from_hand(0, "Cursed Land", target_player_index=1)
+    result = game.cast_from_hand(0, "Cursed Land", target_player_index=1, target_permanent_index=0)
     assert result.supported
 
     game.resolve_upkeep(1)
@@ -3493,7 +3535,7 @@ def test_creature_bond_deals_damage_when_enchanted_creature_dies(all_cards):
     p2.battlefield.append(Permanent(card=bear))
     game = Game(players=[p1, p2])
 
-    result = game.cast_from_hand(0, "Creature Bond", target_player_index=1)
+    result = game.cast_from_hand(0, "Creature Bond", target_player_index=1, target_permanent_index=0)
     assert result.supported
 
     # Destroy the enchanted creature; P2 (controller) should take damage equal to toughness (2)
@@ -4118,7 +4160,7 @@ def test_instill_energy_grants_haste_to_enchanted_creature(all_cards):
     grizzly_perm = p1.battlefield[0]
     grizzly_perm.metadata["summoning_sickness_turn"] = game.turn
 
-    result = game.cast_from_hand(0, "Instill Energy", target_player_index=0)
+    result = game.cast_from_hand(0, "Instill Energy", target_player_index=0, target_permanent_index=0)
     assert result.supported
 
     # The creature should be able to attack despite summoning sickness due to Instill Energy's haste grant
@@ -4133,7 +4175,7 @@ def test_instill_energy_untap_ability(all_cards):
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
 
-    result = game.cast_from_hand(0, "Instill Energy", target_player_index=0)
+    result = game.cast_from_hand(0, "Instill Energy", target_player_index=0, target_permanent_index=0)
     assert result.supported
 
     grizzly_perm = p1.battlefield[0]
@@ -4152,7 +4194,7 @@ def test_invisibility_only_blockable_by_walls(all_cards):
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=grizzly)], life=20)
     game = Game(players=[p1, p2])
 
-    cast_result = game.cast_from_hand(0, "Invisibility", target_player_index=0)
+    cast_result = game.cast_from_hand(0, "Invisibility", target_player_index=0, target_permanent_index=0)
     assert cast_result.supported
 
     game.active_player_index = 0
@@ -4480,7 +4522,7 @@ def test_lure_forces_all_creatures_to_block(all_cards):
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=blocker1), Permanent(card=blocker2)])
     game = Game(players=[p1, p2])
 
-    result = game.cast_from_hand(0, "Lure", target_player_index=0)
+    result = game.cast_from_hand(0, "Lure", target_player_index=0, target_permanent_index=0)
     assert result.supported
 
     game.active_player_index = 0
@@ -5091,7 +5133,7 @@ def test_red_ward_grants_protection_from_red(all_cards):
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
 
-    result = game.cast_from_hand(0, "Red Ward", target_player_index=0)
+    result = game.cast_from_hand(0, "Red Ward", target_player_index=0, target_permanent_index=0)
 
     assert result.supported
     assert p1.battlefield[0].metadata.get("protection_from_red") is True

@@ -165,7 +165,7 @@ def test_303_4a_enchant_creature_aura_attaches_to_target_creature():
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=creature)])
     game = Game(players=[p1, p2])
 
-    game.cast_from_hand(0, "Power Buff", target_player_index=1)
+    game.cast_from_hand(0, "Power Buff", target_player_index=1, target_permanent_index=0)
 
     aura_perm = next(perm for perm in p1.battlefield if perm.card.name == "Power Buff")
     assert aura_perm.metadata.get("attached_to") is not None
@@ -181,7 +181,7 @@ def test_303_4a_enchant_land_aura_attaches_to_target_land():
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=land)])
     game = Game(players=[p1, p2])
 
-    game.cast_from_hand(0, "Land Aura", target_player_index=1)
+    game.cast_from_hand(0, "Land Aura", target_player_index=1, target_permanent_index=0)
 
     aura_perm = next(perm for perm in p1.battlefield if perm.card.name == "Land Aura")
     assert aura_perm.metadata.get("attached_to") is not None
@@ -201,7 +201,7 @@ def test_303_4b_enchanted_object_holds_aura_reference():
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=creature)])
     game = Game(players=[p1, p2])
 
-    game.cast_from_hand(0, "Test Aura", target_player_index=1)
+    game.cast_from_hand(0, "Test Aura", target_player_index=1, target_permanent_index=0)
 
     enchanted_creature = p2.battlefield[0]
     assert enchanted_creature.metadata.get("attached_aura") is not None
@@ -216,7 +216,7 @@ def test_303_4b_aura_holds_reference_to_enchanted_object():
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=creature)])
     game = Game(players=[p1, p2])
 
-    game.cast_from_hand(0, "Test Aura", target_player_index=1)
+    game.cast_from_hand(0, "Test Aura", target_player_index=1, target_permanent_index=0)
 
     aura_perm = next(perm for perm in p1.battlefield if perm.card.name == "Test Aura")
     assert aura_perm.metadata.get("attached_to") is not None
@@ -246,7 +246,7 @@ def test_303_4c_aura_goes_to_graveyard_when_enchanted_creature_is_destroyed():
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=creature)])
     game = Game(players=[p1, p2])
 
-    game.cast_from_hand(0, "Test Aura", target_player_index=1)
+    game.cast_from_hand(0, "Test Aura", target_player_index=1, target_permanent_index=0)
     game.cast_from_hand(0, "Wrath", target_player_index=1)
 
     # 303.4c: Aura with no legal enchantment target goes to its owner's graveyard
@@ -268,7 +268,7 @@ def test_303_4d_aura_not_attached_to_itself():
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=creature)])
     game = Game(players=[p1, p2])
 
-    game.cast_from_hand(0, "Self Check Aura", target_player_index=1)
+    game.cast_from_hand(0, "Self Check Aura", target_player_index=1, target_permanent_index=0)
 
     aura_perm = next(perm for perm in p1.battlefield if perm.card.name == "Self Check Aura")
     assert aura_perm.metadata.get("attached_to") is not aura_perm
@@ -283,7 +283,7 @@ def test_303_4d_aura_enchants_exactly_one_permanent():
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=creature_a), Permanent(card=creature_b)])
     game = Game(players=[p1, p2])
 
-    game.cast_from_hand(0, "Single Target Aura", target_player_index=1)
+    game.cast_from_hand(0, "Single Target Aura", target_player_index=1, target_permanent_index=0)
 
     enchanted_count = sum(
         1 for perm in p2.battlefield if perm.metadata.get("attached_aura") is not None
@@ -306,7 +306,7 @@ def test_303_4e_aura_is_on_casters_battlefield_while_creature_stays_on_opponents
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=creature)])
     game = Game(players=[p1, p2])
 
-    game.cast_from_hand(0, "Control Test Aura", target_player_index=1)
+    game.cast_from_hand(0, "Control Test Aura", target_player_index=1, target_permanent_index=0)
 
     assert any(perm.card.name == "Control Test Aura" for perm in p1.battlefield)
     assert any(perm.card.name == "Opponent Creature" for perm in p2.battlefield)
@@ -322,7 +322,7 @@ def test_303_4e_ability_granted_by_aura_is_stamped_on_enchanted_object():
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=creature)])
     game = Game(players=[p1, p2])
 
-    game.cast_from_hand(0, "Wings Aura", target_player_index=1)
+    game.cast_from_hand(0, "Wings Aura", target_player_index=1, target_permanent_index=0)
 
     enchanted_creature = p2.battlefield[0]
     assert enchanted_creature.metadata.get("gains_flying") is True
@@ -336,7 +336,7 @@ def test_303_4e_first_strike_granted_to_enchanted_creature():
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=creature)])
     game = Game(players=[p1, p2])
 
-    game.cast_from_hand(0, "Strike Aura", target_player_index=1)
+    game.cast_from_hand(0, "Strike Aura", target_player_index=1, target_permanent_index=0)
 
     enchanted_creature = p2.battlefield[0]
     assert enchanted_creature.metadata.get("gains_first_strike") is True
@@ -400,6 +400,30 @@ def test_303_4g_enchant_creature_aura_with_no_creatures_goes_to_graveyard():
 
     assert any(c.name == "Orphan Aura" for c in p1.graveyard)
     assert not any(perm.card.name == "Orphan Aura" for perm in p1.battlefield)
+
+
+def test_303_4g_aura_goes_to_graveyard_when_target_removed_while_on_stack():
+    """303.4g: An Aura whose target disappears while it is on the stack goes to the graveyard.
+
+    Regression: the Aura previously resolved onto the battlefield unattached when its
+    chosen target left the battlefield before resolution.
+    """
+    aura = _mk_card("Stack Aura", "Enchantment — Aura", "Enchant creature\nEnchanted creature gets +1/+1.")
+    creature = _mk_creature("Doomed Creature")
+    p1 = PlayerState(name="P1", hand=[aura])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=creature)])
+    game = Game(players=[p1, p2])
+
+    result = game.queue_from_hand(0, "Stack Aura", target_player_index=1, target_permanent_index=0)
+    assert result.supported
+
+    # The target leaves the battlefield while the Aura spell is still on the stack
+    p2.battlefield.clear()
+    game.resolve_stack()
+
+    assert any(c.name == "Stack Aura" for c in p1.graveyard)
+    assert not any(perm.card.name == "Stack Aura" for perm in p1.battlefield)
+    assert not any(perm.card.name == "Stack Aura" for perm in p2.battlefield)
 
 
 # ---------------------------------------------------------------------------
@@ -480,7 +504,7 @@ def test_303_4j_enchant_creature_aura_attaches_to_creature_not_land():
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=land), Permanent(card=creature)])
     game = Game(players=[p1, p2])
 
-    game.cast_from_hand(0, "Creature Magnet", target_player_index=1)
+    game.cast_from_hand(0, "Creature Magnet", target_player_index=1, target_permanent_index=1)
 
     aura_perm = next(perm for perm in p1.battlefield if perm.card.name == "Creature Magnet")
     attached = aura_perm.metadata.get("attached_to")
@@ -499,7 +523,7 @@ def test_303_4j_enchant_land_aura_attaches_to_land_not_creature():
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=creature), Permanent(card=land)])
     game = Game(players=[p1, p2])
 
-    game.cast_from_hand(0, "Land Seeker", target_player_index=1)
+    game.cast_from_hand(0, "Land Seeker", target_player_index=1, target_permanent_index=1)
 
     aura_perm = next(perm for perm in p1.battlefield if perm.card.name == "Land Seeker")
     attached = aura_perm.metadata.get("attached_to")
@@ -543,7 +567,7 @@ def test_601_2c_animate_artifact_can_be_cast_with_artifact_target():
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=artifact)])
     game = Game(players=[p1, p2])
 
-    result = game.cast_from_hand(0, "Animate Artifact", target_player_index=1)
+    result = game.cast_from_hand(0, "Animate Artifact", target_player_index=1, target_permanent_index=0)
 
     assert result.supported
     assert not any(c.name == "Animate Artifact" for c in p1.hand)
@@ -564,7 +588,7 @@ def test_303_4m_enchanted_creature_receives_power_toughness_buff():
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=creature)])
     game = Game(players=[p1, p2])
 
-    game.cast_from_hand(0, "Power Aura", target_player_index=1)
+    game.cast_from_hand(0, "Power Aura", target_player_index=1, target_permanent_index=0)
 
     enchanted = p2.battlefield[0]
     assert enchanted.effective_power == 4
@@ -579,7 +603,7 @@ def test_303_4m_enchanted_creature_receives_negative_buff():
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=creature)])
     game = Game(players=[p1, p2])
 
-    game.cast_from_hand(0, "Weakness Aura", target_player_index=1)
+    game.cast_from_hand(0, "Weakness Aura", target_player_index=1, target_permanent_index=0)
 
     enchanted = p2.battlefield[0]
     assert enchanted.effective_power == 2
@@ -598,7 +622,7 @@ def test_303_4m_enchanted_creature_unaffected_by_aura_on_different_creature():
     ])
     game = Game(players=[p1, p2])
 
-    game.cast_from_hand(0, "Selective Aura", target_player_index=1)
+    game.cast_from_hand(0, "Selective Aura", target_player_index=1, target_permanent_index=0)
 
     # The first creature (the one the aura attaches to) gets the buff
     enchanted = p2.battlefield[0]

@@ -32,7 +32,6 @@ class Session:
     upkeep_pay_choices: list[dict] = field(default_factory=list)
     upkeep_resolved_choices: dict[str, bool] = field(default_factory=dict)
     history: GameHistory = field(default_factory=GameHistory)
-    card_positions: dict[str, dict[str, float]] = field(default_factory=dict)
     # Pregame state (used when enable_pregame=True).  None once the game starts.
     pregame_phase: str | None = None  # "coin_flip", "mulligan", "bottom_select"
     coin_flip_winner: int | None = None

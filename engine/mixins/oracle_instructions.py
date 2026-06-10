@@ -1242,11 +1242,21 @@ class OracleInstructionsMixin:
                 self.log.append(f"{aura_permanent.card.name} reanimated {revived_card.name} and attached to aura")
                 return
 
-            # Normal enchant-creature behavior: attach to a creature already on the battlefield
-            target_creature = next(
-                (perm for perm in target_player.battlefield if perm.card.primary_type == "creature"),
-                None,
-            )
+            # Normal enchant-creature behavior: attach to the creature chosen at cast time.
+            # If the chosen target is no longer a legal creature (it left the battlefield
+            # while the spell was on the stack), do not attach — the caller moves the
+            # unattached Aura to the graveyard.
+            target_creature = None
+            if isinstance(target_permanent_index, int):
+                if 0 <= target_permanent_index < len(target_player.battlefield):
+                    candidate = target_player.battlefield[target_permanent_index]
+                    if candidate.card.primary_type == "creature":
+                        target_creature = candidate
+            else:
+                target_creature = next(
+                    (perm for perm in target_player.battlefield if perm.card.primary_type == "creature"),
+                    None,
+                )
             if not target_creature:
                 return
 
@@ -1369,7 +1379,7 @@ class OracleInstructionsMixin:
                 candidate = target_player.battlefield[target_permanent_index]
                 if candidate.card.primary_type == "land":
                     target_land = candidate
-            if target_land is None:
+            if target_land is None and target_permanent_index is None:
                 target_land = next((p for p in target_player.battlefield if p.card.primary_type == "land"), None)
             if target_land is None:
                 self.log.append(f"{aura_permanent.card.name} found no land target")
@@ -1385,10 +1395,17 @@ class OracleInstructionsMixin:
                 target_land.metadata["land_type_override"] = "island"
             self.log.append(f"{aura_permanent.card.name} enchants {target_land.card.name}")
         elif text.startswith("enchant wall"):
-            target_wall = next(
-                (perm for perm in target_player.battlefield if "wall" in perm.card.type_line.lower()),
-                None,
-            )
+            target_wall = None
+            if isinstance(target_permanent_index, int):
+                if 0 <= target_permanent_index < len(target_player.battlefield):
+                    candidate = target_player.battlefield[target_permanent_index]
+                    if "wall" in candidate.card.type_line.lower():
+                        target_wall = candidate
+            else:
+                target_wall = next(
+                    (perm for perm in target_player.battlefield if "wall" in perm.card.type_line.lower()),
+                    None,
+                )
             if target_wall:
                 aura_permanent.metadata["attached_to"] = target_wall
                 target_wall.metadata["attached_aura"] = aura_permanent
@@ -1405,7 +1422,7 @@ class OracleInstructionsMixin:
                     candidate = target_player.battlefield[target_permanent_index]
                     if candidate.card.primary_type == "artifact":
                         target_artifact = candidate
-            if target_artifact is None:
+            if target_artifact is None and target_permanent_index is None:
                 target_artifact = next((perm for perm in target_player.battlefield if perm.card.primary_type == "artifact"), None)
 
             if target_artifact is None:
@@ -1452,7 +1469,7 @@ class OracleInstructionsMixin:
                     candidate = target_player.battlefield[target_permanent_index]
                     if candidate.card.primary_type == "enchantment":
                         target_enchantment = candidate
-            if target_enchantment is None:
+            if target_enchantment is None and target_permanent_index is None:
                 target_enchantment = next((perm for perm in target_player.battlefield if perm.card.primary_type == "enchantment"), None)
 
             if target_enchantment is None:

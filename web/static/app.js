@@ -875,7 +875,9 @@ function cardRequiresTargetLand(card) {
 
 function cardRequiresTargetCreature(card) {
   if (!card || typeof card === "string") return false;
-  return (card.oracle_text || "").toLowerCase().includes("enchant creature");
+  const text = (card.oracle_text || "").toLowerCase();
+  if (text.includes("enchant creature card in a graveyard")) return false;
+  return text.includes("enchant creature") || text.includes("enchant wall");
 }
 
 function cardRequiresTargetPermanent(card) {
@@ -3654,7 +3656,7 @@ function renderState(state, { skipStaleCheck = false } = {}) {
   }
   renderBoard(state);
   if (wasInPregame && !state?.pregame) {
-    updateActionHint("Drag from your hand to cast, or drag cards on the battlefield to reposition.");
+    updateActionHint("Drag from your hand to cast. The battlefield arranges itself automatically.");
   }
   renderActivationPrompt();
   renderSearchLibraryModal(searchLibraryInfo);
@@ -3893,26 +3895,24 @@ function initBattlefieldCanvas() {
           return;
         }
 
-        // Tap entire stack: if card is in a multi-card stack and has a simple
-        // auto-activating ability (no interactive cost prompt), also activate all
-        // other stack members with tap abilities.
-        if (
-          battlefieldCanvas &&
-          !cardRequiresManaColorChoice(card) &&
-          !shouldPromptForActivationCost(getActivatedAbilityCost(card))
-        ) {
+        // Identical cards are auto-stacked into piles. If the clicked copy is
+        // already tapped, redirect the activation to an untapped copy in the
+        // same pile so clicking the pile taps cards one at a time.
+        let activateCard = card;
+        let activateIdx = permanentIndex;
+        if (battlefieldCanvas && card.tapped) {
           const stackMembers = battlefieldCanvas.getStackMembers(cardSeat, permanentIndex);
-          if (stackMembers.length > 1) {
-            for (const member of stackMembers) {
-              const memberCard = currentState.players?.[member.seat]?.battlefield?.[member.idx];
-              if (!memberCard) continue;
-              startActivationPrompt(memberCard, 1 - seat, member.idx);
+          for (const member of stackMembers) {
+            const memberCard = currentState.players?.[member.seat]?.battlefield?.[member.idx];
+            if (memberCard && memberCard.name === card.name && !memberCard.tapped) {
+              activateCard = memberCard;
+              activateIdx = member.idx;
+              break;
             }
-            return;
           }
         }
 
-        startActivationPrompt(card, 1 - seat, permanentIndex);
+        startActivationPrompt(activateCard, 1 - seat, activateIdx);
       } catch (e) {
         updateActionHint(e.message, true);
       }
@@ -3940,17 +3940,6 @@ function initBattlefieldCanvas() {
       combatBlockerDraft[blockerIdx] = attackerIdx;
       renderBoard(currentState);
       updateActionHint("Blocker assigned. Press OK when done.");
-    },
-
-    onPermanentDrop() {
-      if (!battlefieldCanvas || !Number.isInteger(seat)) return;
-      const positions = {};
-      for (const item of battlefieldCanvas.cardItems) {
-        if (item.seat === seat) {
-          positions[item.key] = { x: item.x, y: item.y };
-        }
-      }
-      postJson(`/api/sessions/${sessionId}/card-positions`, { seat, positions }).catch(() => {});
     },
   });
 }
@@ -4046,7 +4035,7 @@ async function createSession() {
   initBattlefieldCanvas();
   renderState(data.state);
   if (!data.state?.pregame) {
-    updateActionHint("Session ready. Drag from your hand to cast, or drag cards on the battlefield to reposition.");
+    updateActionHint("Session ready. Drag from your hand to cast. The battlefield arranges itself automatically.");
   }
 }
 
@@ -4081,7 +4070,7 @@ async function joinSession() {
   initBattlefieldCanvas();
   renderState(data.state);
   if (!data.state?.pregame) {
-    updateActionHint("Joined. Drag from your hand to play, or drag cards on the battlefield to reposition.");
+    updateActionHint("Joined. Drag from your hand to play. The battlefield arranges itself automatically.");
   }
 }
 

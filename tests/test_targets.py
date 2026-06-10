@@ -210,6 +210,98 @@ def test_115_1b_enchant_artifact_attaches_to_chosen_artifact_not_first():
     )
 
 
+def test_115_1b_aura_cast_without_target_is_rejected():
+    """An Aura spell cannot be cast without choosing a target (115.1b, 601.2c).
+
+    Regression: Fear was cast with no target at all — the engine only checked that
+    some legal target existed somewhere and let the Aura resolve unattached.
+    """
+    fear = _mk_card(
+        "Fear",
+        "Enchantment — Aura",
+        "Enchant creature\nEnchanted creature has fear.",
+    )
+    bear = _mk_card("Grizzly Bears", "Creature — Bear")
+    p1 = PlayerState(name="P1", hand=[fear], battlefield=[Permanent(card=bear)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Fear", target_player_index=0)
+
+    assert not result.supported
+    assert "requires a target" in result.details
+    assert any(c.name == "Fear" for c in p1.hand)
+    assert not any(perm.card.name == "Fear" for perm in p1.battlefield)
+
+
+def test_115_1b_aura_cast_with_wrong_type_target_is_rejected():
+    """An Aura cast at a permanent its enchant ability can't enchant is illegal (115.1b)."""
+    fear = _mk_card(
+        "Fear",
+        "Enchantment — Aura",
+        "Enchant creature\nEnchanted creature has fear.",
+    )
+    forest = _mk_card("Forest", "Basic Land — Forest")
+    bear = _mk_card("Grizzly Bears", "Creature — Bear")
+    p1 = PlayerState(name="P1", hand=[fear])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=forest), Permanent(card=bear)])
+    game = Game(players=[p1, p2])
+
+    # Index 0 is the Forest — not a legal target for "Enchant creature"
+    result = game.cast_from_hand(0, "Fear", target_player_index=1, target_permanent_index=0)
+
+    assert not result.supported
+    assert any(c.name == "Fear" for c in p1.hand)
+    assert not any(perm.card.name == "Fear" for perm in p1.battlefield)
+
+
+def test_115_1b_aura_cast_with_out_of_range_target_is_rejected():
+    """An Aura cast with a target index that points at nothing is illegal (115.1b)."""
+    fear = _mk_card(
+        "Fear",
+        "Enchantment — Aura",
+        "Enchant creature\nEnchanted creature has fear.",
+    )
+    bear = _mk_card("Grizzly Bears", "Creature — Bear")
+    p1 = PlayerState(name="P1", hand=[fear])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Fear", target_player_index=1, target_permanent_index=5)
+
+    assert not result.supported
+    assert any(c.name == "Fear" for c in p1.hand)
+    assert not any(perm.card.name == "Fear" for perm in p1.battlefield)
+
+
+def test_115_1b_enchant_creature_attaches_to_chosen_creature_not_first():
+    """An 'enchant creature' Aura attaches to the chosen creature, not the first found (115.1b).
+
+    Regression: the enchant-creature resolution path ignored target_permanent_index
+    and always attached to the first creature on the target player's battlefield.
+    """
+    aura = _mk_card(
+        "Power Aura",
+        "Enchantment — Aura",
+        "Enchant creature\nEnchanted creature gets +2/+2.",
+    )
+    bear_a = _mk_card("First Bear", "Creature — Bear")
+    bear_b = _mk_card("Second Bear", "Creature — Bear")
+    p1 = PlayerState(name="P1", hand=[aura])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear_a), Permanent(card=bear_b)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Power Aura", target_player_index=1, target_permanent_index=1)
+
+    assert result.supported
+    aura_perm = next(perm for perm in p1.battlefield if perm.card.name == "Power Aura")
+    attached = aura_perm.metadata.get("attached_to")
+    assert attached is not None
+    assert attached.card.name == "Second Bear"
+    assert p2.battlefield[0].metadata.get("attached_aura") is None
+    assert p2.battlefield[1].effective_power == 4
+
+
 def test_115_1b_aura_spell_stores_enchant_target():
     """An Aura spell's enchant target is declared when the spell is cast (115.1b).
 
