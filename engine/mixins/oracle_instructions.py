@@ -365,6 +365,30 @@ class OracleInstructionsMixin:
                 self.log.append(f"{card.name}: no valid creature to exile")
             return True, "resolved"
 
+        if instruction.kind == "exile_creature_gain_life_equal_to_power":
+            # Swords to Plowshares: exile target creature; its controller gains life = its power
+            target_perm_idx = context.target_permanent_index
+            exiled_perm: Permanent | None = None
+            if isinstance(target_perm_idx, int) and 0 <= target_perm_idx < len(target.battlefield):
+                candidate = target.battlefield[target_perm_idx]
+                if candidate.card.primary_type == "creature":
+                    exiled_perm = candidate
+                    target.battlefield.pop(target_perm_idx)
+            if exiled_perm is None:
+                for idx, perm in enumerate(target.battlefield):
+                    if perm.card.primary_type == "creature":
+                        exiled_perm = perm
+                        target.battlefield.pop(idx)
+                        break
+            if exiled_perm is not None:
+                target.exile.append(exiled_perm.card)
+                life_gain = exiled_perm.effective_power
+                target.life += life_gain
+                self.log.append(f"{exiled_perm.card.name} exiled by {card.name}; {target.name} gains {life_gain} life")
+            else:
+                self.log.append(f"{card.name}: no valid creature to exile")
+            return True, "resolved"
+
         if instruction.kind == "prevent_all_combat_damage":
             self.combat_damage_prevented_until_eot = True
             self.log.append("Combat damage prevented until end of turn")
@@ -449,10 +473,11 @@ class OracleInstructionsMixin:
             return True, "resolved"
 
         if instruction.kind == "destroy_all_creatures":
+            bypass_regen = instruction.payload.get("bypass_regeneration", False)
             for player in self.players:
                 survivors: list[Permanent] = []
                 for permanent in player.battlefield:
-                    if permanent.card.primary_type == "creature" and permanent.regeneration_shield > 0:
+                    if permanent.card.primary_type == "creature" and not bypass_regen and permanent.regeneration_shield > 0:
                         permanent.regeneration_shield -= 1
                         permanent.tapped = True
                         survivors.append(permanent)
@@ -481,6 +506,18 @@ class OracleInstructionsMixin:
             self.log.append("All artifacts, creatures, and enchantments were destroyed")
             return True, "resolved"
 
+        if instruction.kind == "destroy_all_enchantments":
+            for player in self.players:
+                survivors: list[Permanent] = []
+                for permanent in player.battlefield:
+                    if permanent.card.primary_type == "enchantment":
+                        player.graveyard.append(permanent.card)
+                    else:
+                        survivors.append(permanent)
+                player.battlefield = survivors
+            self.log.append("All enchantments were destroyed")
+            return True, "resolved"
+
         if instruction.kind == "destroy_all_lands":
             for player in self.players:
                 survivors: list[Permanent] = []
@@ -494,7 +531,7 @@ class OracleInstructionsMixin:
             return True, "resolved"
 
         if instruction.kind == "destroy_all_lands_of_type":
-            land_type = str(instruction.payload.get("land_type", "")).lower()
+            land_type = str(instruction.payload.get("land_type", "")).lower().rstrip("s")
             for player in self.players:
                 survivors: list[Permanent] = []
                 for permanent in player.battlefield:
@@ -506,7 +543,7 @@ class OracleInstructionsMixin:
                             continue
                     survivors.append(permanent)
                 player.battlefield = survivors
-            self.log.append(f"All {land_type} lands were destroyed")
+            self.log.append(f"All {land_type}s were destroyed")
             return True, "resolved"
 
         if instruction.kind == "chaos_orb_flip":
@@ -539,6 +576,9 @@ class OracleInstructionsMixin:
                 type_filter=instruction.payload.get("type_filter"),
                 color_filter=instruction.payload.get("color_filter"),
                 target_permanent_index=context.target_permanent_index,
+                exclude_colors=instruction.payload.get("exclude_colors"),
+                exclude_types=instruction.payload.get("exclude_types"),
+                bypass_regeneration=instruction.payload.get("bypass_regeneration", False),
             )
             if destroyed:
                 if source_permanent is not None:
@@ -1431,6 +1471,13 @@ class OracleInstructionsMixin:
             # Attach metadata links
             aura_permanent.metadata["attached_to"] = target_artifact
             target_artifact.metadata["attached_aura"] = aura_permanent
+
+            # Control effect: steal artifact to caster's battlefield (e.g. Steal Artifact)
+            if "you control enchanted artifact" in text:
+                if target_artifact in target_player.battlefield:
+                    target_player.battlefield.remove(target_artifact)
+                    self.players[caster_index].battlefield.append(target_artifact)
+                    self.log.append(f"{aura_permanent.card.name} took control of {target_artifact.card.name}")
 
             # Only animate if this Aura explicitly makes the artifact a creature (e.g. Animate Artifact)
             if ("it's an artifact creature" in text or "becomes an artifact creature" in text) and target_artifact.card.primary_type != "creature":

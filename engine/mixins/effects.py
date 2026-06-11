@@ -32,10 +32,14 @@ class EffectsMixin:
         type_filter: str | None = None,
         color_filter: str | None = None,
         target_permanent_index: int | None = None,
+        exclude_colors: list[str] | None = None,
+        exclude_types: list[str] | None = None,
+        bypass_regeneration: bool = False,
     ) -> CardDefinition | None:
         target_player_index = next(
             (i for i, p in enumerate(self.players) if p is target), None
         )
+
         def _passes_type(card, tf):
             if not tf:
                 return True
@@ -43,46 +47,47 @@ class EffectsMixin:
                 return card.primary_type in ("artifact", "enchantment")
             return card.primary_type == tf
 
+        def _is_legal_target(perm) -> bool:
+            card = perm.card
+            effective_colors = [perm.metadata.get("color_override")] if perm.metadata.get("color_override") else list(card.colors)
+            if not _passes_type(card, type_filter):
+                return False
+            if color_filter and color_filter not in effective_colors:
+                return False
+            if exclude_colors and any(c in effective_colors for c in exclude_colors):
+                return False
+            if exclude_types:
+                type_line_lower = card.type_line.lower()
+                if any(et in type_line_lower for et in exclude_types):
+                    return False
+            return True
+
+        def _do_destroy(perm: "Permanent", idx: int) -> "CardDefinition":
+            if not bypass_regeneration and perm.regeneration_shield > 0:
+                perm.regeneration_shield -= 1
+                perm.tapped = True
+                perm.damage_marked = 0
+                self.log.append(f"{perm.card.name} regenerated")
+                return None  # type: ignore[return-value]
+            target.battlefield.pop(idx)
+            target.graveyard.append(perm.card)
+            self._trigger_aura_death_effects(perm, target)
+            if perm.card.primary_type == "land" and target_player_index is not None:
+                self._process_land_dies(target_player_index)
+            return perm.card
+
         if target_permanent_index is not None:
             if 0 <= target_permanent_index < len(target.battlefield):
                 permanent = target.battlefield[target_permanent_index]
-                if not _passes_type(permanent.card, type_filter):
+                if not _is_legal_target(permanent):
                     return None
-                if color_filter and color_filter not in permanent.card.colors:
-                    return None
-                # 614.8: regeneration is a destruction-replacement effect
-                if permanent.regeneration_shield > 0:
-                    permanent.regeneration_shield -= 1
-                    permanent.tapped = True
-                    permanent.damage_marked = 0
-                    self.log.append(f"{permanent.card.name} regenerated")
-                    return None
-                removed = target.battlefield.pop(target_permanent_index)
-                target.graveyard.append(removed.card)
-                self._trigger_aura_death_effects(removed, target)
-                if removed.card.primary_type == "land" and target_player_index is not None:
-                    self._process_land_dies(target_player_index)
-                return removed.card
+                return _do_destroy(permanent, target_permanent_index)
             return None
 
         for idx, permanent in enumerate(target.battlefield):
-            if not _passes_type(permanent.card, type_filter):
+            if not _is_legal_target(permanent):
                 continue
-            if color_filter and color_filter not in permanent.card.colors:
-                continue
-            # 614.8: regeneration is a destruction-replacement effect
-            if permanent.regeneration_shield > 0:
-                permanent.regeneration_shield -= 1
-                permanent.tapped = True
-                permanent.damage_marked = 0
-                self.log.append(f"{permanent.card.name} regenerated")
-                return None
-            removed = target.battlefield.pop(idx)
-            target.graveyard.append(removed.card)
-            self._trigger_aura_death_effects(removed, target)
-            if removed.card.primary_type == "land" and target_player_index is not None:
-                self._process_land_dies(target_player_index)
-            return removed.card
+            return _do_destroy(permanent, idx)
 
         return None
 

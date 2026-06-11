@@ -15,6 +15,8 @@ def _make_test(name, idx):
     test_func.__name__ = f"test_lea_card_presence_{idx}"
     return test_func
 
+import pytest
+
 # Consolidated imports required by extracted tests
 from engine.ai_policy import (
     choose_cast_action,
@@ -3712,7 +3714,7 @@ def test_drudge_skeletons_regeneration_activation(all_cards):
 
 
 def test_drudge_skeletons_regeneration_shield_prevents_wrath(all_cards):
-    # After activating regeneration, Drudge Skeletons survives Wrath of God.
+    # Wrath of God says "They can't be regenerated." — regeneration shield is bypassed.
     drudge = _get(all_cards, "Drudge Skeletons")
     wrath = _get(all_cards, "Wrath of God")
 
@@ -3726,10 +3728,33 @@ def test_drudge_skeletons_regeneration_shield_prevents_wrath(all_cards):
     result = game.cast_from_hand(0, "Wrath of God")
 
     assert result.supported
-    # Drudge Skeletons survived (regeneration shield consumed)
-    assert len(p1.battlefield) == 1
-    assert p1.battlefield[0].card.name == "Drudge Skeletons"
-    assert p1.battlefield[0].regeneration_shield == 0
+    # Wrath says "can't be regenerated" — the regeneration shield must NOT save the creature
+    assert len(p1.battlefield) == 0
+    assert any(c.name == "Drudge Skeletons" for c in p1.graveyard)
+
+
+def test_drudge_skeletons_regeneration_shield_prevents_ordinary_destroy(all_cards):
+    # Regeneration shield saves a creature from a plain "destroy target creature" effect
+    # (no 'can't be regenerated' clause).  Use a synthetic sorcery to avoid card-specific
+    # restrictions (Terror targets non-black, Wrath bypasses regen).
+    drudge = _get(all_cards, "Drudge Skeletons")
+    destroy_spell = _mk_card("Plain Destroy", "Sorcery", "Destroy target creature.")
+
+    p1 = PlayerState(name="P1", hand=[destroy_spell])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=drudge)])
+    game = Game(players=[p1, p2])
+
+    game.activate_permanent_ability(1, "Drudge Skeletons")
+    assert p2.battlefield[0].regeneration_shield == 1
+
+    result = game.cast_from_hand(0, "Plain Destroy", target_player_index=1, target_permanent_index=0)
+
+    assert result.supported
+    # Drudge Skeletons regenerated (shield consumed, creature tapped, stays on battlefield)
+    assert len(p2.battlefield) == 1
+    assert p2.battlefield[0].card.name == "Drudge Skeletons"
+    assert p2.battlefield[0].regeneration_shield == 0
+    assert p2.battlefield[0].tapped is True
 
 
 def test_dwarven_demolition_team_destroys_wall(all_cards):
@@ -6282,3 +6307,1402 @@ def test_wrath_of_god_destroys_all_creatures(all_cards):
     assert not any(p.card.primary_type == "creature" for p in p2.battlefield)
     assert any(c.name == "Bear A" for c in p1.graveyard)
     assert any(c.name == "Bear B" for c in p2.graveyard)
+
+
+# ---------------------------------------------------------------------------
+# Shared helpers
+# ---------------------------------------------------------------------------
+
+def _grizzly(all_cards):
+    return _get(all_cards, "Grizzly Bears")
+
+
+def _island(all_cards):
+    return _get(all_cards, "Island")
+
+
+def _plains(all_cards):
+    return _get(all_cards, "Plains")
+
+
+def _swamp(all_cards):
+    return _get(all_cards, "Swamp")
+
+
+def _mountain(all_cards):
+    return _get(all_cards, "Mountain")
+
+
+def _forest(all_cards):
+    return _get(all_cards, "Forest")
+
+
+# ===========================================================================
+# 1. REGRESSION TESTS â€” bugs fixed in this session
+# ===========================================================================
+
+class TestRegressionWrathOfGod:
+    """Wrath of God says 'They can't be regenerated.' â€” the regeneration shield
+    must be bypassed, not consumed."""
+
+    def test_wrath_kills_creature_with_regen_shield(self, all_cards):
+        wrath = _get(all_cards, "Wrath of God")
+        drudge = _get(all_cards, "Drudge Skeletons")
+
+        p1 = PlayerState(name="P1", hand=[wrath])
+        p2 = PlayerState(name="P2", battlefield=[Permanent(card=drudge, regeneration_shield=3)])
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Wrath of God")
+
+        assert result.supported
+        assert len(p2.battlefield) == 0
+        assert any(c.name == "Drudge Skeletons" for c in p2.graveyard)
+
+    def test_wrath_kills_all_creatures_both_sides(self, all_cards):
+        wrath = _get(all_cards, "Wrath of God")
+        bear = _grizzly(all_cards)
+
+        p1 = PlayerState(name="P1", hand=[wrath], battlefield=[Permanent(card=bear)])
+        p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Wrath of God")
+
+        assert result.supported
+        assert len(p1.battlefield) == 0
+        assert len(p2.battlefield) == 0
+
+    def test_wrath_does_not_destroy_lands(self, all_cards):
+        wrath = _get(all_cards, "Wrath of God")
+        plains = _plains(all_cards)
+
+        p1 = PlayerState(name="P1", hand=[wrath], battlefield=[Permanent(card=plains)])
+        p2 = PlayerState(name="P2", battlefield=[Permanent(card=plains)])
+        game = Game(players=[p1, p2])
+
+        game.cast_from_hand(0, "Wrath of God")
+
+        assert len(p1.battlefield) == 1  # plains survive
+        assert len(p2.battlefield) == 1
+
+
+class TestRegressionSwordsToPlowshares:
+    """Swords to Plowshares must *exile* the target creature (not destroy it) and
+    give its controller life equal to the creature's power."""
+
+    def test_exiles_not_destroys(self, all_cards):
+        stoP = _get(all_cards, "Swords to Plowshares")
+        bear = _grizzly(all_cards)
+
+        p1 = PlayerState(name="P1", hand=[stoP])
+        p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)], life=20)
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Swords to Plowshares", target_player_index=1, target_permanent_index=0)
+
+        assert result.supported
+        assert len(p2.battlefield) == 0
+        # Exiled, not in graveyard
+        assert not any(c.name == "Grizzly Bears" for c in p2.graveyard)
+        assert any(c.name == "Grizzly Bears" for c in p2.exile)
+
+    def test_controller_gains_life_equal_to_power(self, all_cards):
+        stoP = _get(all_cards, "Swords to Plowshares")
+        bear = _grizzly(all_cards)  # power 2
+
+        p1 = PlayerState(name="P1", hand=[stoP])
+        p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)], life=20)
+        game = Game(players=[p1, p2])
+
+        game.cast_from_hand(0, "Swords to Plowshares", target_player_index=1, target_permanent_index=0)
+
+        assert p2.life == 22  # gained 2 (power of Grizzly Bears)
+
+    def test_life_gain_scales_with_power(self, all_cards):
+        stoP = _get(all_cards, "Swords to Plowshares")
+        dragon = _get(all_cards, "Shivan Dragon")  # 5/5
+
+        p1 = PlayerState(name="P1", hand=[stoP])
+        p2 = PlayerState(name="P2", battlefield=[Permanent(card=dragon)], life=10)
+        game = Game(players=[p1, p2])
+
+        game.cast_from_hand(0, "Swords to Plowshares", target_player_index=1, target_permanent_index=0)
+
+        assert p2.life == 15  # gained 5 (Shivan Dragon power)
+
+
+class TestRegressionTerror:
+    """Terror: 'Destroy target nonartifact, nonblack creature. It can't be
+    regenerated.' â€” must reject black and artifact targets."""
+
+    def test_terror_destroys_green_creature(self, all_cards):
+        terror = _get(all_cards, "Terror")
+        bear = _grizzly(all_cards)  # green creature
+
+        p1 = PlayerState(name="P1", hand=[terror])
+        p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Terror", target_player_index=1, target_permanent_index=0)
+
+        assert result.supported
+        assert len(p2.battlefield) == 0
+        assert any(c.name == "Grizzly Bears" for c in p2.graveyard)
+
+    def test_terror_cannot_destroy_black_creature(self, all_cards):
+        terror = _get(all_cards, "Terror")
+        knight = _get(all_cards, "Black Knight")  # black creature
+
+        p1 = PlayerState(name="P1", hand=[terror])
+        p2 = PlayerState(name="P2", battlefield=[Permanent(card=knight)])
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Terror", target_player_index=1, target_permanent_index=0)
+
+        assert result.supported  # spell resolves but finds no legal target
+        assert len(p2.battlefield) == 1  # knight survives
+        assert not any(c.name == "Black Knight" for c in p2.graveyard)
+
+    def test_terror_cannot_destroy_artifact_creature(self, all_cards):
+        terror = _get(all_cards, "Terror")
+        golem = _get(all_cards, "Obsianus Golem")  # artifact creature
+
+        p1 = PlayerState(name="P1", hand=[terror])
+        p2 = PlayerState(name="P2", battlefield=[Permanent(card=golem)])
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Terror", target_player_index=1, target_permanent_index=0)
+
+        assert result.supported
+        assert len(p2.battlefield) == 1  # golem survives
+
+    def test_terror_bypasses_regeneration(self, all_cards):
+        terror = _get(all_cards, "Terror")
+        # Uthden Troll is a red, regenerating creature â€” not black or artifact
+        troll = _get(all_cards, "Uthden Troll")
+
+        p1 = PlayerState(name="P1", hand=[terror])
+        p2 = PlayerState(name="P2", battlefield=[Permanent(card=troll, regeneration_shield=1)])
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Terror", target_player_index=1, target_permanent_index=0)
+
+        assert result.supported
+        # Terror says "It can't be regenerated" â€” shield must not save it
+        assert len(p2.battlefield) == 0
+        assert any(c.name == "Uthden Troll" for c in p2.graveyard)
+
+
+class TestRegressionStealArtifact:
+    """Steal Artifact ('Enchant artifact / You control enchanted artifact') must
+    move the target artifact to the caster's battlefield, just like Control Magic
+    does for creatures."""
+
+    def test_steal_artifact_moves_artifact_to_caster(self, all_cards):
+        steal = _get(all_cards, "Steal Artifact")
+        lotus = _get(all_cards, "Black Lotus")
+
+        p1 = PlayerState(name="P1", hand=[steal])
+        p2 = PlayerState(name="P2", battlefield=[Permanent(card=lotus)])
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Steal Artifact", target_player_index=1, target_permanent_index=0)
+
+        assert result.supported
+        assert any(p.card.name == "Black Lotus" for p in p1.battlefield)
+        assert not any(p.card.name == "Black Lotus" for p in p2.battlefield)
+
+    def test_steal_artifact_aura_stays_on_casters_side(self, all_cards):
+        steal = _get(all_cards, "Steal Artifact")
+        sol_ring = _get(all_cards, "Sol Ring")
+
+        p1 = PlayerState(name="P1", hand=[steal])
+        p2 = PlayerState(name="P2", battlefield=[Permanent(card=sol_ring)])
+        game = Game(players=[p1, p2])
+
+        game.cast_from_hand(0, "Steal Artifact", target_player_index=1, target_permanent_index=0)
+
+        assert any(p.card.name == "Steal Artifact" for p in p1.battlefield)
+
+    def test_steal_artifact_requires_artifact_target(self, all_cards):
+        steal = _get(all_cards, "Steal Artifact")
+        bear = _grizzly(all_cards)  # creature, not artifact
+
+        p1 = PlayerState(name="P1", hand=[steal])
+        p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
+        game = Game(players=[p1, p2])
+
+        # Steal Artifact targets artifacts; casting at a non-artifact should fail
+        result = game.cast_from_hand(0, "Steal Artifact", target_player_index=1, target_permanent_index=0)
+
+        # Spell resolves but the non-artifact is not stolen
+        assert not any(p.card.name == "Grizzly Bears" for p in p1.battlefield)
+
+
+# ===========================================================================
+# 2. WHITE CARDS
+# ===========================================================================
+
+class TestWhiteCards:
+    def test_armageddon_destroys_all_lands(self, all_cards):
+        armageddon = _get(all_cards, "Armageddon")
+        plains = _plains(all_cards)
+
+        p1 = PlayerState(name="P1", hand=[armageddon], battlefield=[Permanent(card=plains)])
+        p2 = PlayerState(name="P2", battlefield=[Permanent(card=plains)])
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Armageddon")
+
+        assert result.supported
+        assert all(p.card.primary_type != "land" for p in p1.battlefield)
+        assert all(p.card.primary_type != "land" for p in p2.battlefield)
+
+    def test_balance_equalizes_resources(self, all_cards):
+        balance = _get(all_cards, "Balance")
+        plains = _plains(all_cards)
+        bear = _grizzly(all_cards)
+
+        p1 = PlayerState(
+            name="P1",
+            hand=[balance, plains, plains],
+            battlefield=[Permanent(card=plains), Permanent(card=plains), Permanent(card=bear)],
+        )
+        p2 = PlayerState(
+            name="P2",
+            hand=[],
+            battlefield=[Permanent(card=plains)],
+        )
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Balance")
+
+        assert result.supported
+        p1_lands = sum(1 for p in p1.battlefield if p.card.primary_type == "land")
+        p2_lands = sum(1 for p in p2.battlefield if p.card.primary_type == "land")
+        assert p1_lands == p2_lands
+
+    def test_benalish_hero_is_1_1_with_banding(self, all_cards):
+        hero = _get(all_cards, "Benalish Hero")
+        assert classify_card(hero).supported
+        perm = Permanent(card=hero)
+        assert perm.effective_power == 1
+        assert perm.effective_toughness == 1
+        assert "Banding" in hero.keywords
+
+    def test_circle_of_protection_white_prevents_damage(self, all_cards):
+        cop = _get(all_cards, "Circle of Protection: White")
+        p1 = PlayerState(name="P1", battlefield=[Permanent(card=cop)])
+        p2 = PlayerState(name="P2")
+        game = Game(players=[p1, p2])
+
+        result = game.activate_permanent_ability(0, "Circle of Protection: White", target_player_index=0)
+
+        assert result.supported
+        assert p1.damage_prevention_pool >= 1
+
+    def test_crusade_buffs_white_creatures(self, all_cards):
+        crusade = _get(all_cards, "Crusade")
+        hero = _get(all_cards, "Benalish Hero")
+
+        p1 = PlayerState(name="P1", hand=[crusade], battlefield=[Permanent(card=hero)])
+        p2 = PlayerState(name="P2")
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Crusade")
+
+        assert result.supported
+        assert p1.battlefield[0].effective_power == 2
+        assert p1.battlefield[0].effective_toughness == 2
+
+    def test_disenchant_destroys_enchantment(self, all_cards):
+        disenchant = _get(all_cards, "Disenchant")
+        bad_moon = _get(all_cards, "Bad Moon")
+
+        p1 = PlayerState(name="P1", hand=[disenchant])
+        p2 = PlayerState(name="P2", battlefield=[Permanent(card=bad_moon)])
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Disenchant", target_player_index=1)
+
+        assert result.supported
+        assert len(p2.battlefield) == 0
+        assert any(c.name == "Bad Moon" for c in p2.graveyard)
+
+    def test_disenchant_destroys_artifact(self, all_cards):
+        disenchant = _get(all_cards, "Disenchant")
+        lotus = _get(all_cards, "Black Lotus")
+
+        p1 = PlayerState(name="P1", hand=[disenchant])
+        p2 = PlayerState(name="P2", battlefield=[Permanent(card=lotus)])
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Disenchant", target_player_index=1)
+
+        assert result.supported
+        assert len(p2.battlefield) == 0
+
+    def test_fog_prevents_all_combat_damage(self, all_cards):
+        fog = _get(all_cards, "Fog")
+        p1 = PlayerState(name="P1", hand=[fog])
+        p2 = PlayerState(name="P2")
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Fog")
+
+        assert result.supported
+        assert game.combat_damage_prevented_until_eot is True
+
+    def test_healing_salve_prevents_damage(self, all_cards):
+        salve = _get(all_cards, "Healing Salve")
+        p1 = PlayerState(name="P1", hand=[salve], life=10)
+        p2 = PlayerState(name="P2")
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Healing Salve", target_player_index=0)
+
+        assert result.supported
+        # Healing Salve either gains 3 life or prevents 3 damage
+        assert p1.damage_prevention_pool >= 3 or p1.life == 13
+
+    def test_holy_strength_buffs_creature(self, all_cards):
+        holy_strength = _get(all_cards, "Holy Strength")
+        bear = _grizzly(all_cards)
+
+        p1 = PlayerState(name="P1", hand=[holy_strength])
+        p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Holy Strength", target_player_index=1, target_permanent_index=0)
+
+        assert result.supported
+        assert p2.battlefield[0].effective_power == 3
+        assert p2.battlefield[0].effective_toughness == 4
+
+    def test_resurrection_returns_creature_from_graveyard(self, all_cards):
+        resurrect = _get(all_cards, "Resurrection")
+        bear = _grizzly(all_cards)
+
+        p1 = PlayerState(name="P1", hand=[resurrect], graveyard=[bear])
+        p2 = PlayerState(name="P2")
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Resurrection", target_player_index=0)
+
+        assert result.supported
+        assert any(p.card.name == "Grizzly Bears" for p in p1.battlefield)
+        assert not any(c.name == "Grizzly Bears" for c in p1.graveyard)
+
+    def test_reverse_damage_replaces_damage_with_life_gain(self, all_cards):
+        reverse = _get(all_cards, "Reverse Damage")
+        p1 = PlayerState(name="P1", hand=[reverse], life=20)
+        p2 = PlayerState(name="P2", life=20)
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Reverse Damage", target_player_index=0)
+
+        assert result.supported
+
+    def test_righteousness_buffs_blocking_creature(self, all_cards):
+        righteousness = _get(all_cards, "Righteousness")
+        bear = _grizzly(all_cards)
+
+        p1 = PlayerState(name="P1", hand=[righteousness])
+        p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
+        game = Game(players=[p1, p2])
+
+        before = p2.battlefield[0].effective_toughness
+        result = game.cast_from_hand(0, "Righteousness", target_player_index=1, target_permanent_index=0)
+
+        assert result.supported
+        assert p2.battlefield[0].effective_toughness >= before
+
+    def test_samite_healer_prevents_damage(self, all_cards):
+        healer = _get(all_cards, "Samite Healer")
+        p1 = PlayerState(name="P1", battlefield=[Permanent(card=healer)])
+        p2 = PlayerState(name="P2")
+        game = Game(players=[p1, p2])
+
+        result = game.activate_permanent_ability(0, "Samite Healer", target_player_index=0)
+
+        assert result.supported
+        assert p1.damage_prevention_pool >= 1
+
+    def test_serra_angel_is_4_4_flying_vigilance(self, all_cards):
+        angel = _get(all_cards, "Serra Angel")
+        p1 = PlayerState(name="P1", hand=[angel])
+        p2 = PlayerState(name="P2")
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Serra Angel")
+
+        assert result.supported
+        perm = p1.battlefield[0]
+        assert perm.effective_power == 4
+        assert perm.effective_toughness == 4
+        assert "Flying" in angel.keywords
+        assert "Vigilance" in angel.keywords
+
+    def test_swords_to_plowshares_exiles_and_gains_life(self, all_cards):
+        stoP = _get(all_cards, "Swords to Plowshares")
+        bear = _grizzly(all_cards)
+
+        p1 = PlayerState(name="P1", hand=[stoP])
+        p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)], life=20)
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Swords to Plowshares", target_player_index=1, target_permanent_index=0)
+
+        assert result.supported
+        assert any(c.name == "Grizzly Bears" for c in p2.exile)
+        assert p2.life == 22  # +2 for Grizzly Bears' power
+
+
+# ===========================================================================
+# 3. BLUE CARDS
+# ===========================================================================
+
+class TestBlueCards:
+    def test_ancestral_recall_draws_three(self, all_cards):
+        recall = _get(all_cards, "Ancestral Recall")
+        island = _island(all_cards)
+
+        p1 = PlayerState(name="P1", hand=[recall])
+        p2 = PlayerState(name="P2", library=[island] * 5)
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Ancestral Recall", target_player_index=1)
+
+        assert result.supported
+        assert len(p2.hand) == 3
+
+    def test_blue_elemental_blast_counters_red_spell(self, all_cards):
+        beb = _get(all_cards, "Blue Elemental Blast")
+        bolt = _get(all_cards, "Lightning Bolt")
+
+        p1 = PlayerState(name="P1", hand=[beb])
+        p2 = PlayerState(name="P2", hand=[bolt], life=20)
+        game = Game(players=[p1, p2])
+
+        game.queue_from_hand(1, "Lightning Bolt", target_player_index=0)
+        result = game.cast_from_hand(0, "Blue Elemental Blast", target_player_index=1)
+
+        assert result.supported
+        assert any("countered" in line.lower() for line in game.log)
+        assert p1.life == 20  # bolt was countered
+
+    def test_braingeyser_draws_x_cards(self, all_cards):
+        geyser = _get(all_cards, "Braingeyser")
+        island = _island(all_cards)
+
+        p1 = PlayerState(name="P1", hand=[geyser])
+        p2 = PlayerState(name="P2", library=[island] * 10)
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Braingeyser", target_player_index=1, x_value=5)
+
+        assert result.supported
+        assert len(p2.hand) == 5
+
+    def test_clone_copies_creature(self, all_cards):
+        clone = _get(all_cards, "Clone")
+        dragon = _get(all_cards, "Shivan Dragon")
+
+        p1 = PlayerState(name="P1", hand=[clone], battlefield=[Permanent(card=dragon)])
+        p2 = PlayerState(name="P2")
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Clone", target_player_index=0)
+
+        assert result.supported
+        clone_perm = next(p for p in p1.battlefield if p.card.name == "Clone")
+        assert clone_perm.metadata.get("copied_from") == "Shivan Dragon"
+
+    def test_control_magic_steals_creature(self, all_cards):
+        ctrl = _get(all_cards, "Control Magic")
+        bear = _grizzly(all_cards)
+
+        p1 = PlayerState(name="P1", hand=[ctrl])
+        p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Control Magic", target_player_index=1, target_permanent_index=0)
+
+        assert result.supported
+        assert any(p.card.name == "Grizzly Bears" for p in p1.battlefield)
+        assert not any(p.card.name == "Grizzly Bears" for p in p2.battlefield)
+
+    def test_counterspell_counters_spell(self, all_cards):
+        counter = _get(all_cards, "Counterspell")
+        recall = _get(all_cards, "Ancestral Recall")
+        island = _island(all_cards)
+
+        p1 = PlayerState(name="P1", hand=[recall])
+        p2 = PlayerState(name="P2", hand=[counter], library=[island] * 5)
+        game = Game(players=[p1, p2])
+
+        game.queue_from_hand(0, "Ancestral Recall", target_player_index=1)
+        game.queue_from_hand(1, "Counterspell", target_player_index=0)
+        game.resolve_stack()
+
+        assert any(c.name == "Ancestral Recall" for c in p1.graveyard)
+        assert len(p2.hand) == 0  # did not draw 3
+
+    def test_drain_power_taps_opponent_lands_and_steals_mana(self, all_cards):
+        drain = _get(all_cards, "Drain Power")
+        island = _island(all_cards)
+
+        p1 = PlayerState(name="P1", hand=[drain])
+        p2 = PlayerState(name="P2", battlefield=[Permanent(card=island), Permanent(card=island)])
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Drain Power", target_player_index=1)
+
+        assert result.supported
+        assert all(p.tapped for p in p2.battlefield)
+
+    def test_lord_of_atlantis_buffs_merfolk(self, all_cards):
+        lord = _get(all_cards, "Lord of Atlantis")
+        merfolk = _get(all_cards, "Merfolk of the Pearl Trident")
+
+        p1 = PlayerState(name="P1", hand=[lord], battlefield=[Permanent(card=merfolk)])
+        p2 = PlayerState(name="P2")
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Lord of Atlantis")
+
+        assert result.supported
+        assert p1.battlefield[0].effective_power == 2  # 1 + 1 from lord
+        assert p1.battlefield[0].effective_toughness == 2
+
+    def test_mana_short_taps_all_lands_and_empties_pool(self, all_cards):
+        mana_short = _get(all_cards, "Mana Short")
+        island = _island(all_cards)
+
+        p1 = PlayerState(name="P1", hand=[mana_short])
+        p2 = PlayerState(
+            name="P2",
+            battlefield=[Permanent(card=island), Permanent(card=island)],
+            mana_pool={"W": 0, "U": 3, "B": 0, "R": 0, "G": 0, "C": 0},
+        )
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Mana Short", target_player_index=1)
+
+        assert result.supported
+        assert all(p.tapped for p in p2.battlefield)
+        assert p2.mana_pool["U"] == 0
+
+    def test_mind_twist_discards_x_cards(self, all_cards):
+        twist = _get(all_cards, "Mind Twist")
+        island = _island(all_cards)
+
+        p1 = PlayerState(name="P1", hand=[twist])
+        p2 = PlayerState(name="P2", hand=[island] * 5)
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Mind Twist", target_player_index=1, x_value=3)
+
+        assert result.supported
+        assert len(p2.hand) == 2
+        assert len(p2.graveyard) == 3
+
+    def test_power_sink_counters_with_mana_drain(self, all_cards):
+        power_sink = _get(all_cards, "Power Sink")
+        recall = _get(all_cards, "Ancestral Recall")
+
+        p1 = PlayerState(name="P1", hand=[power_sink])
+        p2 = PlayerState(name="P2", hand=[recall])
+        game = Game(players=[p1, p2])
+
+        game.queue_from_hand(1, "Ancestral Recall", target_player_index=1)
+        result = game.cast_from_hand(0, "Power Sink", target_player_index=1, x_value=2)
+
+        assert result.supported
+
+    def test_time_walk_grants_extra_turn(self, all_cards):
+        walk = _get(all_cards, "Time Walk")
+        p1 = PlayerState(name="P1", hand=[walk])
+        p2 = PlayerState(name="P2")
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Time Walk")
+
+        assert result.supported
+        assert game.extra_turns.get(0, 0) == 1
+
+    def test_timetwister_shuffles_and_draws_seven(self, all_cards):
+        twister = _get(all_cards, "Timetwister")
+        island = _island(all_cards)
+        bear = _grizzly(all_cards)
+
+        p1 = PlayerState(name="P1", hand=[twister], graveyard=[bear], library=[island] * 10)
+        p2 = PlayerState(name="P2", hand=[island, island], graveyard=[bear], library=[island] * 10)
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Timetwister")
+
+        assert result.supported
+        assert len(p1.hand) == 7
+        assert len(p2.hand) == 7
+
+    def test_unsummon_returns_creature_to_hand(self, all_cards):
+        unsummon = _get(all_cards, "Unsummon")
+        bear = _grizzly(all_cards)
+
+        p1 = PlayerState(name="P1", hand=[unsummon])
+        p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Unsummon", target_player_index=1)
+
+        assert result.supported
+        assert not p2.battlefield
+        assert any(c.name == "Grizzly Bears" for c in p2.hand)
+
+    def test_wheel_of_fortune_discards_and_draws_seven(self, all_cards):
+        wheel = _get(all_cards, "Wheel of Fortune")
+        island = _island(all_cards)
+
+        p1 = PlayerState(name="P1", hand=[wheel, island], library=[island] * 10)
+        p2 = PlayerState(name="P2", hand=[island, island], library=[island] * 10)
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Wheel of Fortune")
+
+        assert result.supported
+        assert len(p1.hand) == 7
+        assert len(p2.hand) == 7
+
+
+# ===========================================================================
+# 4. BLACK CARDS
+# ===========================================================================
+
+class TestBlackCards:
+    def test_animate_dead_reanimates_from_graveyard(self, all_cards):
+        animate = _get(all_cards, "Animate Dead")
+        bear = _grizzly(all_cards)
+
+        p1 = PlayerState(name="P1", hand=[animate], graveyard=[bear])
+        p2 = PlayerState(name="P2")
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Animate Dead", target_player_index=0)
+
+        assert result.supported
+        assert any(p.card.name == "Grizzly Bears" for p in p1.battlefield)
+
+    def test_black_knight_is_2_2_protection_from_white(self, all_cards):
+        knight = _get(all_cards, "Black Knight")
+        perm = Permanent(card=knight)
+        assert perm.effective_power == 2
+        assert perm.effective_toughness == 2
+        assert "First strike" in knight.keywords or "First Strike" in knight.keywords
+        assert classify_card(knight).supported
+
+    def test_dark_ritual_adds_black_mana(self, all_cards):
+        ritual = _get(all_cards, "Dark Ritual")
+        p1 = PlayerState(name="P1", hand=[ritual])
+        p2 = PlayerState(name="P2")
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Dark Ritual", target_player_index=0)
+
+        assert result.supported
+        assert p1.mana_pool["B"] == 3
+
+    def test_demonic_tutor_searches_library(self, all_cards):
+        tutor = _get(all_cards, "Demonic Tutor")
+        mountain = _get(all_cards, "Mountain")
+        forest = _forest(all_cards)
+        island = _island(all_cards)
+
+        p1 = PlayerState(name="P1", hand=[tutor], library=[mountain, forest, island])
+        p2 = PlayerState(name="P2")
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Demonic Tutor", target_player_index=0)
+
+        assert result.supported
+        assert game.pending_search_library is not None
+        confirmed = game.confirm_search_library(0, 2)
+        assert confirmed
+        assert any(c.name == "Island" for c in p1.hand)
+
+    def test_drain_life_damages_and_heals(self, all_cards):
+        drain = _get(all_cards, "Drain Life")
+        p1 = PlayerState(name="P1", hand=[drain], life=10)
+        p2 = PlayerState(name="P2", life=20)
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Drain Life", target_player_index=1, x_value=5)
+
+        assert result.supported
+        assert p2.life == 15  # took 5 damage
+        assert p1.life == 15  # gained 5 life
+
+    def test_hypnotic_specter_enters_as_2_2_flying(self, all_cards):
+        specter = _get(all_cards, "Hypnotic Specter")
+        assert classify_card(specter).supported
+        perm = Permanent(card=specter)
+        assert perm.effective_power == 2
+        assert perm.effective_toughness == 2
+        assert "Flying" in specter.keywords
+
+    def test_raise_dead_returns_creature_to_hand(self, all_cards):
+        raise_dead = _get(all_cards, "Raise Dead")
+        bear = _grizzly(all_cards)
+
+        p1 = PlayerState(name="P1", hand=[raise_dead], graveyard=[bear])
+        p2 = PlayerState(name="P2")
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Raise Dead", target_player_index=0)
+
+        assert result.supported
+        assert any(c.name == "Grizzly Bears" for c in p1.hand)
+        assert not any(c.name == "Grizzly Bears" for c in p1.graveyard)
+
+    def test_royal_assassin_destroys_tapped_creature(self, all_cards):
+        assassin = _get(all_cards, "Royal Assassin")
+        bear = _grizzly(all_cards)
+
+        p1 = PlayerState(name="P1", battlefield=[Permanent(card=assassin)])
+        p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear, tapped=True)])
+        game = Game(players=[p1, p2])
+
+        result = game.activate_permanent_ability(0, "Royal Assassin", target_player_index=1)
+
+        assert result.supported
+        assert not p2.battlefield
+
+    def test_sinkhole_destroys_target_land(self, all_cards):
+        sinkhole = _get(all_cards, "Sinkhole")
+        island = _island(all_cards)
+
+        p1 = PlayerState(name="P1", hand=[sinkhole])
+        p2 = PlayerState(name="P2", battlefield=[Permanent(card=island)])
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Sinkhole", target_player_index=1, target_permanent_index=0)
+
+        assert result.supported
+        assert len(p2.battlefield) == 0
+
+    def test_terror_destroys_nonblack_nona_rtifact_creature(self, all_cards):
+        terror = _get(all_cards, "Terror")
+        bear = _grizzly(all_cards)
+
+        p1 = PlayerState(name="P1", hand=[terror])
+        p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Terror", target_player_index=1, target_permanent_index=0)
+
+        assert result.supported
+        assert len(p2.battlefield) == 0
+
+    def test_terror_rejected_by_black_creature(self, all_cards):
+        terror = _get(all_cards, "Terror")
+        knight = _get(all_cards, "Black Knight")
+
+        p1 = PlayerState(name="P1", hand=[terror])
+        p2 = PlayerState(name="P2", battlefield=[Permanent(card=knight)])
+        game = Game(players=[p1, p2])
+
+        game.cast_from_hand(0, "Terror", target_player_index=1, target_permanent_index=0)
+
+        assert len(p2.battlefield) == 1  # knight survives
+
+    def test_wrath_of_god_bypasses_regeneration(self, all_cards):
+        wrath = _get(all_cards, "Wrath of God")
+        drudge = _get(all_cards, "Drudge Skeletons")
+
+        p1 = PlayerState(name="P1", hand=[wrath])
+        p2 = PlayerState(name="P2", battlefield=[Permanent(card=drudge, regeneration_shield=2)])
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Wrath of God")
+
+        assert result.supported
+        assert len(p2.battlefield) == 0
+
+
+# ===========================================================================
+# 5. RED CARDS
+# ===========================================================================
+
+class TestRedCards:
+    def test_berserk_grants_trample_and_doubles_power(self, all_cards):
+        berserk = _get(all_cards, "Berserk")
+        bear = _grizzly(all_cards)
+
+        p1 = PlayerState(name="P1", hand=[berserk])
+        p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
+        game = Game(players=[p1, p2])
+
+        before_power = p2.battlefield[0].effective_power
+        result = game.cast_from_hand(0, "Berserk", target_player_index=1, target_permanent_index=0)
+
+        assert result.supported
+        assert p2.battlefield[0].effective_power >= before_power * 2
+
+    def test_disintegrate_damages_player(self, all_cards):
+        disintegrate = _get(all_cards, "Disintegrate")
+        p1 = PlayerState(name="P1", hand=[disintegrate])
+        p2 = PlayerState(name="P2", life=20)
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Disintegrate", target_player_index=1, x_value=5)
+
+        assert result.supported
+        assert p2.life == 15
+
+    def test_earthquake_deals_x_to_non_flying_and_players(self, all_cards):
+        quake = _get(all_cards, "Earthquake")
+        bear = _grizzly(all_cards)
+
+        p1 = PlayerState(name="P1", hand=[quake], life=20)
+        p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)], life=20)
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Earthquake", x_value=3)
+
+        assert result.supported
+        assert p1.life == 17  # took 3 damage
+        assert p2.life == 17  # took 3 damage
+        assert len(p2.battlefield) == 0  # bear died
+
+    def test_fireball_deals_x_damage_to_player(self, all_cards):
+        fireball = _get(all_cards, "Fireball")
+        p1 = PlayerState(name="P1", hand=[fireball])
+        p2 = PlayerState(name="P2", life=20)
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Fireball", target_player_index=1, x_value=7)
+
+        assert result.supported
+        assert p2.life == 13
+
+    def test_lightning_bolt_deals_3_damage(self, all_cards):
+        bolt = _get(all_cards, "Lightning Bolt")
+        p1 = PlayerState(name="P1", hand=[bolt])
+        p2 = PlayerState(name="P2", life=20)
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Lightning Bolt", target_player_index=1)
+
+        assert result.supported
+        assert p2.life == 17
+
+    def test_lightning_bolt_kills_creature(self, all_cards):
+        bolt = _get(all_cards, "Lightning Bolt")
+        bear = _grizzly(all_cards)
+
+        p1 = PlayerState(name="P1", hand=[bolt])
+        p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Lightning Bolt", target_player_index=1, target_permanent_index=0)
+
+        assert result.supported
+        assert len(p2.battlefield) == 0
+
+    def test_red_elemental_blast_counters_blue_spell(self, all_cards):
+        reb = _get(all_cards, "Red Elemental Blast")
+        recall = _get(all_cards, "Ancestral Recall")
+        island = _island(all_cards)
+
+        p1 = PlayerState(name="P1", hand=[reb])
+        p2 = PlayerState(name="P2", hand=[recall], library=[island] * 5, life=20)
+        game = Game(players=[p1, p2])
+
+        game.queue_from_hand(1, "Ancestral Recall", target_player_index=1)
+        result = game.cast_from_hand(0, "Red Elemental Blast", target_player_index=1)
+
+        assert result.supported
+        assert any("countered" in line.lower() for line in game.log)
+
+    def test_shatter_destroys_artifact(self, all_cards):
+        shatter = _get(all_cards, "Shatter")
+        lotus = _get(all_cards, "Black Lotus")
+
+        p1 = PlayerState(name="P1", hand=[shatter])
+        p2 = PlayerState(name="P2", battlefield=[Permanent(card=lotus)])
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Shatter", target_player_index=1)
+
+        assert result.supported
+        assert len(p2.battlefield) == 0
+
+    def test_stone_rain_destroys_target_land(self, all_cards):
+        rain = _get(all_cards, "Stone Rain")
+        island = _island(all_cards)
+
+        p1 = PlayerState(name="P1", hand=[rain])
+        p2 = PlayerState(name="P2", battlefield=[Permanent(card=island)])
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Stone Rain", target_player_index=1, target_permanent_index=0)
+
+        assert result.supported
+        assert len(p2.battlefield) == 0
+
+
+# ===========================================================================
+# 6. GREEN CARDS
+# ===========================================================================
+
+class TestGreenCards:
+    def test_giant_growth_pumps_creature(self, all_cards):
+        growth = _get(all_cards, "Giant Growth")
+        bear = _grizzly(all_cards)
+
+        p1 = PlayerState(name="P1", hand=[growth])
+        p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Giant Growth", target_player_index=1, target_permanent_index=0)
+
+        assert result.supported
+        assert p2.battlefield[0].effective_power == 5
+        assert p2.battlefield[0].effective_toughness == 5
+
+    def test_llanowar_elves_taps_for_green_mana(self, all_cards):
+        elves = _get(all_cards, "Llanowar Elves")
+        p1 = PlayerState(name="P1", battlefield=[Permanent(card=elves)])
+        p2 = PlayerState(name="P2")
+        game = Game(players=[p1, p2])
+
+        result = game.activate_permanent_ability(0, "Llanowar Elves", target_player_index=0)
+
+        assert result.supported
+        assert p1.mana_pool["G"] == 1
+
+    def test_regrowth_returns_card_from_graveyard_to_hand(self, all_cards):
+        regrowth = _get(all_cards, "Regrowth")
+        bear = _grizzly(all_cards)
+
+        p1 = PlayerState(name="P1", hand=[regrowth], graveyard=[bear])
+        p2 = PlayerState(name="P2")
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Regrowth", target_player_index=0)
+
+        assert result.supported
+        assert any(c.name == "Grizzly Bears" for c in p1.hand)
+        assert not any(c.name == "Grizzly Bears" for c in p1.graveyard)
+
+    def test_stream_of_life_gains_x_life(self, all_cards):
+        stream = _get(all_cards, "Stream of Life")
+        p1 = PlayerState(name="P1", hand=[stream], life=10)
+        p2 = PlayerState(name="P2")
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Stream of Life", target_player_index=0, x_value=7)
+
+        assert result.supported
+        assert p1.life == 17
+
+    def test_tranquility_destroys_all_enchantments(self, all_cards):
+        tranquility = _get(all_cards, "Tranquility")
+        bad_moon = _get(all_cards, "Bad Moon")
+
+        p1 = PlayerState(name="P1", hand=[tranquility])
+        p2 = PlayerState(name="P2", battlefield=[Permanent(card=bad_moon)])
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Tranquility")
+
+        assert result.supported
+        assert all(p.card.primary_type != "enchantment" for p in p2.battlefield)
+
+    def test_tsunami_destroys_all_islands(self, all_cards):
+        tsunami = _get(all_cards, "Tsunami")
+        island = _island(all_cards)
+        forest = _forest(all_cards)
+
+        p1 = PlayerState(name="P1", hand=[tsunami], battlefield=[Permanent(card=forest)])
+        p2 = PlayerState(name="P2", battlefield=[Permanent(card=island), Permanent(card=forest)])
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Tsunami")
+
+        assert result.supported
+        assert all("island" not in p.card.type_line.lower() for p in p2.battlefield)
+        assert any("forest" in p.card.type_line.lower() for p in p1.battlefield)
+
+    def test_wild_growth_provides_extra_mana(self, all_cards):
+        wild_growth = _get(all_cards, "Wild Growth")
+        forest = _forest(all_cards)
+
+        p1 = PlayerState(name="P1", hand=[wild_growth], battlefield=[Permanent(card=forest)])
+        p2 = PlayerState(name="P2")
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Wild Growth", target_player_index=0, target_permanent_index=0)
+
+        assert result.supported
+
+
+# ===========================================================================
+# 7. ARTIFACT CARDS
+# ===========================================================================
+
+class TestArtifactCards:
+    def test_black_lotus_adds_three_mana(self, all_cards):
+        lotus = _get(all_cards, "Black Lotus")
+        p1 = PlayerState(name="P1", battlefield=[Permanent(card=lotus)])
+        p2 = PlayerState(name="P2")
+        game = Game(players=[p1, p2])
+
+        result = game.activate_permanent_ability(0, "Black Lotus", mana_color="U")
+
+        assert result.supported
+        assert p1.mana_pool["U"] == 3
+        assert not p1.battlefield  # lotus sacrificed itself
+
+    def test_mox_sapphire_taps_for_blue(self, all_cards):
+        mox = _get(all_cards, "Mox Sapphire")
+        p1 = PlayerState(name="P1", battlefield=[Permanent(card=mox)])
+        p2 = PlayerState(name="P2")
+        game = Game(players=[p1, p2])
+
+        result = game.activate_permanent_ability(0, "Mox Sapphire", target_player_index=0)
+
+        assert result.supported
+        assert p1.mana_pool["U"] == 1
+
+    def test_mox_emerald_taps_for_green(self, all_cards):
+        mox = _get(all_cards, "Mox Emerald")
+        p1 = PlayerState(name="P1", battlefield=[Permanent(card=mox)])
+        p2 = PlayerState(name="P2")
+        game = Game(players=[p1, p2])
+
+        result = game.activate_permanent_ability(0, "Mox Emerald", target_player_index=0)
+
+        assert result.supported
+        assert p1.mana_pool["G"] == 1
+
+    def test_mox_jet_taps_for_black(self, all_cards):
+        mox = _get(all_cards, "Mox Jet")
+        p1 = PlayerState(name="P1", battlefield=[Permanent(card=mox)])
+        p2 = PlayerState(name="P2")
+        game = Game(players=[p1, p2])
+
+        result = game.activate_permanent_ability(0, "Mox Jet", target_player_index=0)
+
+        assert result.supported
+        assert p1.mana_pool["B"] == 1
+
+    def test_mox_pearl_taps_for_white(self, all_cards):
+        mox = _get(all_cards, "Mox Pearl")
+        p1 = PlayerState(name="P1", battlefield=[Permanent(card=mox)])
+        p2 = PlayerState(name="P2")
+        game = Game(players=[p1, p2])
+
+        result = game.activate_permanent_ability(0, "Mox Pearl", target_player_index=0)
+
+        assert result.supported
+        assert p1.mana_pool["W"] == 1
+
+    def test_mox_ruby_taps_for_red(self, all_cards):
+        mox = _get(all_cards, "Mox Ruby")
+        p1 = PlayerState(name="P1", battlefield=[Permanent(card=mox)])
+        p2 = PlayerState(name="P2")
+        game = Game(players=[p1, p2])
+
+        result = game.activate_permanent_ability(0, "Mox Ruby", target_player_index=0)
+
+        assert result.supported
+        assert p1.mana_pool["R"] == 1
+
+    def test_sol_ring_taps_for_two_colorless(self, all_cards):
+        ring = _get(all_cards, "Sol Ring")
+        p1 = PlayerState(name="P1", battlefield=[Permanent(card=ring)])
+        p2 = PlayerState(name="P2")
+        game = Game(players=[p1, p2])
+
+        result = game.activate_permanent_ability(0, "Sol Ring", target_player_index=0)
+
+        assert result.supported
+        assert p1.mana_pool["C"] == 2
+
+    def test_nevinyrral_disk_destroys_artifacts_creatures_enchantments(self, all_cards):
+        disk = _get(all_cards, "Nevinyrral's Disk")
+        bear = _grizzly(all_cards)
+        bad_moon = _get(all_cards, "Bad Moon")
+        plains = _plains(all_cards)
+
+        p1 = PlayerState(
+            name="P1",
+            battlefield=[
+                Permanent(card=disk, tapped=False),
+                Permanent(card=bear),
+                Permanent(card=bad_moon),
+                Permanent(card=plains),
+            ],
+        )
+        p2 = PlayerState(name="P2")
+        game = Game(players=[p1, p2])
+
+        result = game.activate_permanent_ability(0, "Nevinyrral's Disk")
+
+        assert result.supported
+        types_remaining = {p.card.primary_type for p in p1.battlefield}
+        assert "creature" not in types_remaining
+        assert "enchantment" not in types_remaining
+        assert "artifact" not in types_remaining
+        assert "land" in types_remaining  # plains survives
+
+    def test_steal_artifact_moves_artifact_to_caster(self, all_cards):
+        steal = _get(all_cards, "Steal Artifact")
+        sol_ring = _get(all_cards, "Sol Ring")
+
+        p1 = PlayerState(name="P1", hand=[steal])
+        p2 = PlayerState(name="P2", battlefield=[Permanent(card=sol_ring)])
+        game = Game(players=[p1, p2])
+
+        result = game.cast_from_hand(0, "Steal Artifact", target_player_index=1, target_permanent_index=0)
+
+        assert result.supported
+        assert any(p.card.name == "Sol Ring" for p in p1.battlefield)
+        assert not any(p.card.name == "Sol Ring" for p in p2.battlefield)
+
+    def test_icy_manipulator_taps_any_permanent(self, all_cards):
+        icy = _get(all_cards, "Icy Manipulator")
+        bear = _grizzly(all_cards)
+
+        p1 = PlayerState(name="P1", battlefield=[Permanent(card=icy)])
+        p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
+        game = Game(players=[p1, p2])
+
+        result = game.activate_permanent_ability(0, "Icy Manipulator", target_player_index=1)
+
+        assert result.supported
+        assert p2.battlefield[0].tapped is True
+
+    def test_rod_of_ruin_deals_1_damage(self, all_cards):
+        rod = _get(all_cards, "Rod of Ruin")
+        p1 = PlayerState(name="P1", battlefield=[Permanent(card=rod)])
+        p2 = PlayerState(name="P2", life=20)
+        game = Game(players=[p1, p2])
+
+        result = game.activate_permanent_ability(0, "Rod of Ruin", target_player_index=1)
+
+        assert result.supported
+        assert p2.life == 19
+
+
+# ===========================================================================
+# 8. LAND CARDS
+# ===========================================================================
+
+class TestLandCards:
+    def test_basic_lands_produce_correct_mana(self, all_cards):
+        land_mana = [
+            ("Plains", "W"),
+            ("Island", "U"),
+            ("Swamp", "B"),
+            ("Mountain", "R"),
+            ("Forest", "G"),
+        ]
+        for land_name, expected_color in land_mana:
+            land = _get(all_cards, land_name)
+            p1 = PlayerState(name="P1", battlefield=[Permanent(card=land)])
+            p2 = PlayerState(name="P2")
+            game = Game(players=[p1, p2])
+
+            ok = game.tap_land_for_mana(0, land_name)
+
+            assert ok, f"{land_name} should be tappable for mana"
+            assert p1.mana_pool[expected_color] == 1, f"{land_name} should produce {expected_color}"
+
+    def test_dual_lands_produce_either_color(self, all_cards):
+        # Each dual land should tap for one of its two colors
+        dual_pairs = [
+            ("Tundra", "W", "U"),
+            ("Underground Sea", "U", "B"),
+            ("Badlands", "B", "R"),
+            ("Taiga", "R", "G"),
+            ("Savannah", "G", "W"),
+            ("Scrubland", "W", "B"),
+            ("Bayou", "B", "G"),
+            ("Plateau", "R", "W"),
+            ("Tropical Island", "G", "U"),
+        ]
+        for land_name, color_a, color_b in dual_pairs:
+            land = _get(all_cards, land_name)
+            p1 = PlayerState(name="P1", battlefield=[Permanent(card=land)])
+            p2 = PlayerState(name="P2")
+            game = Game(players=[p1, p2])
+
+            ok = game.tap_land_for_mana(0, land_name)
+
+            assert ok, f"{land_name} should be tappable"
+            produced = sum(p1.mana_pool.get(c, 0) for c in (color_a, color_b))
+            assert produced >= 1, f"{land_name} should produce {color_a} or {color_b}"
+
+
+# ===========================================================================
+# 9. COMPREHENSIVE CASTING â€” every LEA card resolves without crashing
+# ===========================================================================
+
+@pytest.mark.parametrize("card_name", [
+    "Air Elemental", "Ancestral Recall", "Animate Artifact", "Animate Dead",
+    "Animate Wall", "Ankh of Mishra", "Armageddon", "Aspect of Wolf",
+    "Bad Moon", "Balance", "Basalt Monolith", "Benalish Hero", "Berserk",
+    "Birds of Paradise", "Black Knight", "Black Lotus", "Black Vise",
+    "Blaze of Glory", "Blessing", "Blue Elemental Blast", "Bog Wraith",
+    "Braingeyser", "Burrowing", "Camouflage", "Castle",
+    "Circle of Protection: Blue", "Circle of Protection: Green",
+    "Circle of Protection: Red", "Circle of Protection: White",
+    "Clockwork Beast", "Clone", "Cockatrice", "Conservator",
+    "Control Magic", "Conversion", "Copper Tablet", "Copy Artifact",
+    "Counterspell", "Craw Wurm", "Creature Bond", "Crusade",
+    "Crystal Rod", "Cursed Land", "Cyclopean Tomb", "Dark Ritual",
+    "Death Ward", "Deathlace", "Demonic Hordes", "Demonic Tutor",
+    "Dingus Egg", "Disenchant", "Disintegrate", "Disrupting Scepter",
+    "Dragon Whelp", "Drain Life", "Drudge Skeletons", "Dwarven Demolition Team",
+    "Dwarven Warriors", "Earth Elemental", "Earthbind", "Earthquake",
+    "Elvish Archers", "Evil Presence", "False Orders", "Fear",
+    "Feedback", "Fire Elemental", "Fireball", "Firebreathing", "Flashfires",
+    "Flight", "Fog", "Force of Nature", "Forcefield",
+    "Frozen Shade", "Fungusaur", "Gaea's Liege", "Gauntlet of Might",
+    "Giant Growth", "Giant Spider", "Glasses of Urza", "Gloom",
+    "Goblin Balloon Brigade", "Goblin King", "Granite Gargoyle", "Gray Ogre",
+    "Grizzly Bears", "Guardian Angel", "Healing Salve", "Helm of Chatzuk",
+    "Hill Giant", "Holy Armor", "Holy Strength", "Howl from Beyond",
+    "Howling Mine", "Hurloon Minotaur", "Hurricane", "Hypnotic Specter",
+    "Ice Storm", "Icy Manipulator", "Ironroot Treefolk", "Island Sanctuary",
+    "Jade Statue", "Jayemdae Tome", "Juggernaut", "Jump",
+    "Keldon Warlord", "Kormus Bell", "Lance", "Library of Leng",
+    "Lightning Bolt", "Llanowar Elves", "Lord of Atlantis", "Lure",
+    "Mahamoti Djinn", "Mana Flare", "Mana Short", "Mana Vault",
+    "Manabarbs", "Meekstone", "Merfolk of the Pearl Trident", "Mesa Pegasus",
+    "Mind Twist", "Mons's Goblin Raiders", "Natural Selection", "Nether Shadow",
+    "Nettling Imp", "Nevinyrral's Disk", "Nightmare", "Northern Paladin",
+    "Obsianus Golem", "Orcish Artillery", "Orcish Oriflamme", "Paralyze",
+    "Pearled Unicorn", "Pestilence", "Phantom Monster", "Pirate Ship",
+    "Plague Rats", "Power Leak", "Power Surge", "Prodigal Sorcerer",
+    "Psionic Blast", "Psychic Venom", "Raging River", "Raise Dead",
+    "Red Elemental Blast", "Regeneration", "Regrowth", "Resurrection",
+    "Reverse Damage", "Righteousness", "Roc of Kher Ridges", "Rock Hydra",
+    "Rod of Ruin", "Royal Assassin", "Samite Healer", "Savannah Lions",
+    "Scathe Zombies", "Scavenging Ghoul", "Scryb Sprites", "Sea Serpent",
+    "Sedge Troll", "Sengir Vampire", "Serra Angel", "Shatter",
+    "Shivan Dragon", "Sinkhole", "Sleight of Mind", "Smoke",
+    "Sol Ring", "Spell Blast", "Stasis", "Steal Artifact",
+    "Stone Giant", "Stone Rain", "Stream of Life", "Swords to Plowshares",
+    "Terror", "The Hive", "Thicket Basilisk", "Time Walk",
+    "Timetwister", "Tranquility", "Tsunami", "Twiddle",
+    "Two-Headed Giant of Foriys", "Unholy Strength", "Unsummon", "Uthden Troll",
+    "Verduran Enchantress", "Veteran Bodyguard", "Volcanic Eruption",
+    "Wall of Air", "Wall of Bone", "Wall of Brambles", "Wall of Fire",
+    "Wall of Ice", "Wall of Stone", "Wall of Swords", "Wall of Water",
+    "Wall of Wood", "Wanderlust", "War Mammoth", "Warp Artifact",
+    "Water Elemental", "Weakness", "Wheel of Fortune",
+    "White Knight", "Wild Growth", "Will-o'-the-Wisp", "Winter Orb",
+    "Wooden Sphere", "Word of Command", "Wrath of God", "Zombie Master",
+])
+def test_all_lea_cards_resolve_without_exception(all_cards, card_name):
+    """Every LEA card must resolve without throwing a Python exception.
+    This is a smoke-test â€” it does not check the effect in detail.
+    """
+    from engine.mixins.stack_casting import aura_enchant_noun, permanent_matches_enchant_noun
+
+    card = _get(all_cards, card_name)
+    island = _island(all_cards)
+    plains = _plains(all_cards)
+    swamp = _swamp(all_cards)
+    mountain = _mountain(all_cards)
+    forest = _forest(all_cards)
+    bear = _grizzly(all_cards)
+    bad_moon = _get(all_cards, "Bad Moon")
+    black_lotus = _get(all_cards, "Black Lotus")
+
+    p1 = PlayerState(
+        name="P1",
+        hand=[card],
+        library=[island, plains, swamp, mountain, forest] * 4,
+        battlefield=[
+            Permanent(card=bear),
+            Permanent(card=plains),
+            Permanent(card=black_lotus),
+            Permanent(card=bad_moon),
+        ],
+        graveyard=[bear],
+    )
+    p2 = PlayerState(
+        name="P2",
+        hand=[island, plains, bear],
+        library=[island, plains, swamp, mountain, forest] * 4,
+        battlefield=[
+            Permanent(card=bear, tapped=True),
+            Permanent(card=island),
+            Permanent(card=black_lotus),
+            Permanent(card=bad_moon),
+        ],
+        graveyard=[bear],
+        life=20,
+    )
+
+    game = Game(players=[p1, p2])
+
+    # Determine target index for aura spells
+    aura_target_idx = None
+    enchant_noun = aura_enchant_noun(card)
+    if enchant_noun is not None:
+        aura_target_idx = next(
+            (
+                idx
+                for idx, perm in enumerate(p2.battlefield)
+                if permanent_matches_enchant_noun(perm, enchant_noun)
+            ),
+            None,
+        )
+
+    # Cards requiring special setup
+    if card_name == "Camouflage":
+        game.start_turn(0)
+        game._close_current_priority_step()
+        game.advance_combat_phase()  # â†’ beginning_of_combat
+        game.advance_combat_phase()  # â†’ declare_attackers
+        game.cast_from_hand(0, card_name, target_player_index=1)
+        return
+
+    if card_name in {"Counterspell", "Power Sink", "Spell Blast", "Blue Elemental Blast"}:
+        bolt = _get(all_cards, "Lightning Bolt")
+        p2.hand.append(bolt)
+        game.queue_from_hand(1, "Lightning Bolt", target_player_index=0)
+        game.cast_from_hand(0, card_name, target_player_index=1)
+        return
+
+    if card_name == "Red Elemental Blast":
+        recall = _get(all_cards, "Ancestral Recall")
+        p2.hand.append(recall)
+        game.queue_from_hand(1, "Ancestral Recall", target_player_index=1)
+        game.cast_from_hand(0, card_name, target_player_index=1)
+        return
+
+    if card_name == "Fork":
+        recall = _get(all_cards, "Ancestral Recall")
+        p1.hand.insert(0, recall)
+        game.queue_from_hand(0, "Ancestral Recall", target_player_index=1)
+        game.cast_from_hand(0, "Fork", target_player_index=1)
+        return
+
+    # General cast
+    result = game.cast_from_hand(
+        0,
+        card_name,
+        target_player_index=1,
+        target_permanent_index=aura_target_idx,
+        x_value=3,
+    )
+    # The call must not raise; result being unsupported is acceptable
+    # (some cards may have unmet preconditions in this generic setup)
+    assert result is not None

@@ -666,6 +666,9 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
     if "exile target creature until end of turn" in text:
         return _instruction("exile_target_creature_until_eot"), "spell_pattern"
 
+    if "exile target creature" in text and "its controller gains life equal to its power" in text:
+        return _instruction("exile_creature_gain_life_equal_to_power"), "spell_pattern"
+
     if "prevent all combat damage that would be dealt this turn" in text:
         return _instruction("prevent_all_combat_damage"), "spell_pattern"
 
@@ -708,7 +711,12 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
         return _instruction("destroy_all_artifacts_creatures_enchantments"), "spell_pattern"
 
     if "destroy all creatures" in text:
-        return _instruction("destroy_all_creatures"), "spell_pattern"
+        no_regen = "can't be regenerated" in text or "cannot be regenerated" in text
+        payload: dict[str, Any] = {"bypass_regeneration": True} if no_regen else {}
+        return OracleInstruction("destroy_all_creatures", "", payload), "spell_pattern"
+
+    if "destroy all enchantments" in text:
+        return _instruction("destroy_all_enchantments"), "spell_pattern"
 
     if "destroy all lands" in text:
         return _instruction("destroy_all_lands"), "spell_pattern"
@@ -752,11 +760,27 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
             (sym for word, sym in _COLOR_WORD_TO_SYMBOL.items() if f" {word} " in f" {text} "),
             None,
         )
+        # Parse exclusion restrictions: "nonblack", "nonartifact", etc.
+        exclude_colors: list[str] = []
+        for word, sym in _COLOR_WORD_TO_SYMBOL.items():
+            if f"non{word}" in text:
+                exclude_colors.append(sym)
+        exclude_types: list[str] = []
+        for t in ("artifact", "creature", "enchantment", "land"):
+            if f"non{t}" in text:
+                exclude_types.append(t)
         _destroy_payload: dict[str, Any] = {}
         if type_filter:
             _destroy_payload["type_filter"] = type_filter
         if color_filter:
             _destroy_payload["color_filter"] = color_filter
+        if exclude_colors:
+            _destroy_payload["exclude_colors"] = exclude_colors
+        if exclude_types:
+            _destroy_payload["exclude_types"] = exclude_types
+        no_regen_destroy = "can't be regenerated" in text or "cannot be regenerated" in text
+        if no_regen_destroy:
+            _destroy_payload["bypass_regeneration"] = True
         return OracleInstruction("destroy_target_permanent", "", _destroy_payload), effect_kind
 
     if "from your graveyard to your hand" in text:
