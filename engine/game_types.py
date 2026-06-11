@@ -31,6 +31,7 @@ class StackItem:
     source_permanent: Permanent | None = None
     target_stack_name: str | None = None
     ability_text: str | None = None
+    new_color: str | None = None
 
 
 @dataclass
@@ -42,6 +43,7 @@ class OracleExecutionContext:
     target_permanent_index: int | list[int] | None = None
     x_value: int | None = None
     source_permanent: Permanent | None = None
+    new_color: str | None = None
 
 
 class OracleStateMachine:

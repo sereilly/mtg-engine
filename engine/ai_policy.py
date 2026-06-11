@@ -102,7 +102,9 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
 
         target = _choose_target_for_instruction(ability.instruction, player_index, game)
         if ability.instruction.kind == "grant_banding_to_target":
-            target_creatures = [perm for perm in game.players[target].battlefield if perm.card.primary_type == "creature"]
+            # Banding grants go to the controller's own creatures.
+            target = player_index
+            target_creatures = [perm for perm in game.players[player_index].battlefield if perm.card.primary_type == "creature"]
             if not target_creatures:
                 continue
 

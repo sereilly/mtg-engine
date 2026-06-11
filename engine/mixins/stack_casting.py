@@ -52,6 +52,7 @@ class StackCastingMixin:
         target_player_index: int | None = None,
         target_permanent_index: int | None = None,
         x_value: int | None = None,
+        new_color: str | None = None,
     ) -> SimulationResult:
         queued = self.queue_from_hand(
             caster_index,
@@ -59,6 +60,7 @@ class StackCastingMixin:
             target_player_index=target_player_index,
             target_permanent_index=target_permanent_index,
             x_value=x_value,
+            new_color=new_color,
         )
         if not queued.supported:
             return queued
@@ -172,6 +174,9 @@ class StackCastingMixin:
             return SimulationResult(permanent.card.name, False, "unsupported", "ability not implemented")
 
         if ability.instruction.kind == "grant_banding_to_target":
+            # Banding grants go to the controller's own creatures, not the opponent's.
+            target_idx = controller_index
+            target_player = self.players[target_idx]
             has_valid_target = any(perm.card.primary_type == "creature" for perm in target_player.battlefield)
             if not has_valid_target:
                 details = "no valid creature target for banding effect"
@@ -283,6 +288,7 @@ class StackCastingMixin:
         target_player_index: int | None = None,
         target_permanent_index: int | None = None,
         x_value: int | None = None,
+        new_color: str | None = None,
     ) -> SimulationResult:
         caster = self.players[caster_index]
         try:
@@ -366,6 +372,7 @@ class StackCastingMixin:
                     target_permanent_index=target_permanent_index,
                     x_value=resolved_x_value,
                     target_stack_name=target_stack_name_val,
+                    new_color=new_color,
                 )
             )
             self.log.append(f"{card.name} added to stack")
@@ -640,6 +647,7 @@ class StackCastingMixin:
             target_player_index=item.target_player_index,
             target_permanent_index=item.target_permanent_index,
             x_value=item.x_value,
+            new_color=item.new_color,
         )
         return True
 
@@ -651,6 +659,7 @@ class StackCastingMixin:
         target_player_index: int | None,
         target_permanent_index: int | None = None,
         x_value: int | None = None,
+        new_color: str | None = None,
     ) -> None:
         caster = self.players[caster_index]
         primary_type = card.primary_type
@@ -704,6 +713,7 @@ class StackCastingMixin:
             card,
             target_permanent_index=target_permanent_index,
             x_value=x_value,
+            new_color=new_color,
         )
         self._apply_spell_resolved_triggers(caster_index, card)
         caster.graveyard.append(card)

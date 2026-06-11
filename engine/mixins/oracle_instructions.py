@@ -441,9 +441,19 @@ class OracleInstructionsMixin:
             return True, "pending_reorder_library"
 
         if instruction.kind == "mark_text_modified":
-            if target.battlefield:
+            perm_idx = context.target_permanent_index if isinstance(context.target_permanent_index, int) else None
+            # Always mark text_modified for the target permanent (backward compat).
+            if perm_idx is not None and 0 <= perm_idx < len(target.battlefield):
+                target.battlefield[perm_idx].metadata["text_modified"] = True
+            elif target.battlefield:
                 target.battlefield[0].metadata["text_modified"] = True
-            self.log.append(f"{card.name} applied a text change effect")
+            # Also apply a color override when the caster specified a new color.
+            symbol = context.new_color or ""
+            if symbol:
+                self._apply_color_override(target, symbol, target_permanent_index=perm_idx)
+                self.log.append(f"{card.name} changed target's color to {symbol}")
+            else:
+                self.log.append(f"{card.name} applied a text change effect")
             return True, "resolved"
 
         if instruction.kind == "peek_hand_and_force_play":
@@ -698,14 +708,16 @@ class OracleInstructionsMixin:
         if instruction.kind == "grant_prevention_shield":
             raw_amount = instruction.payload.get("amount", 0)
             amount = max(0, x_value or 0) if raw_amount == "x" else int(raw_amount)
-            recipient = target
-            recipient.damage_prevention_pool += amount
-            if source_permanent is not None and instruction.payload.get("protection_kind") == "color":
+            # CoP-style abilities say "prevent damage to you" — protection_kind="color"
+            # means the caster/controller is always the beneficiary.
+            # All other prevention (Samite Healer, etc.) goes to the designated target.
+            if instruction.payload.get("protection_kind") == "color":
+                recipient = caster
                 self.log.append("Color protection shield granted")
-            elif source_permanent is not None:
-                self.log.append("Prevention shield granted by activated ability")
             else:
-                self.log.append(f"{caster.name} gains prevention shield for {amount} damage")
+                recipient = target
+                self.log.append(f"{recipient.name} gains prevention shield for {amount} damage")
+            recipient.damage_prevention_pool += amount
             return True, "resolved"
 
         if instruction.kind == "grant_forcefield_shield":
@@ -835,7 +847,8 @@ class OracleInstructionsMixin:
             return True, "resolved"
 
         if instruction.kind == "grant_banding_to_target":
-            target_creature = next((perm for perm in target.battlefield if perm.card.primary_type == "creature"), None)
+            # Banding is granted to one of the controller's own creatures, not the opponent's.
+            target_creature = next((perm for perm in caster.battlefield if perm.card.primary_type == "creature"), None)
             if target_creature is None:
                 self.log.append("No valid creature target for banding effect")
                 return False, "no valid creature target for banding effect"
@@ -1143,6 +1156,7 @@ class OracleInstructionsMixin:
         card: CardDefinition,
         target_permanent_index: int | None = None,
         x_value: int | None = None,
+        new_color: str | None = None,
     ) -> None:
         instruction = self._select_executable_instruction(card)
         if instruction is None:
@@ -1157,6 +1171,7 @@ class OracleInstructionsMixin:
                 card=card,
                 target_permanent_index=target_permanent_index,
                 x_value=x_value,
+                new_color=new_color,
             ),
         )
         state_machine.run(instruction)
@@ -1260,11 +1275,21 @@ class OracleInstructionsMixin:
             # Prefer the parsed instruction if available
             has_reanimate = any(instr.kind == "reanimate_creature" for instr in program.instructions)
             if has_reanimate or ("creature card in a graveyard" in text and "return enchanted creature card to the battlefield" in text):
-                # find a creature card in the target player's graveyard
+                # Search all players' graveyards for a creature card.
+                # Prefer the caster's own graveyard first, then the target player's,
+                # then any other player — so Animate Dead works when the owner's
+                # graveyard is the only one that holds a creature.
                 revived_card = None
-                for idx, card in enumerate(target_player.graveyard):
-                    if card.primary_type == "creature":
-                        revived_card = target_player.graveyard.pop(idx)
+                caster_player = self.players[caster_index]
+                search_order = [caster_player, target_player] + [
+                    p for p in self.players if p is not caster_player and p is not target_player
+                ]
+                for source_player in search_order:
+                    for idx, card in enumerate(source_player.graveyard):
+                        if card.primary_type == "creature":
+                            revived_card = source_player.graveyard.pop(idx)
+                            break
+                    if revived_card is not None:
                         break
                 if revived_card is None:
                     return

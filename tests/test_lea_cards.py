@@ -1616,24 +1616,26 @@ def test_banding_keyword_cards_classify_supported(all_cards):
 def test_helm_of_chatzuk_grants_banding_until_eot(all_cards):
     helm = _get(all_cards, "Helm of Chatzuk")
     bear = _mk_card("Band Target", "Creature — Bear")
-    p1 = PlayerState(name="P1", battlefield=[Permanent(card=helm)])
-    p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
+    # Helm grants banding to the controller's own creatures (Bug 5 fix).
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=helm), Permanent(card=bear)])
+    p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
 
-    result = game.activate_permanent_ability(0, "Helm of Chatzuk", target_player_index=1)
+    result = game.activate_permanent_ability(0, "Helm of Chatzuk", target_player_index=0)
 
     assert result.supported
     assert p1.battlefield[0].tapped is True
-    assert p2.battlefield[0].metadata.get("gains_banding_until_eot") is True
+    # Banding is granted to the caster's own creature, not an opponent's
+    assert p1.battlefield[1].metadata.get("gains_banding_until_eot") is True
 
 def test_helm_of_chatzuk_requires_valid_creature_target(all_cards):
     helm = _get(all_cards, "Helm of Chatzuk")
-    island = _get(all_cards, "Island")
+    # P1 has only the Helm, no creature — activation should fail
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=helm)])
-    p2 = PlayerState(name="P2", battlefield=[Permanent(card=island)])
+    p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
 
-    result = game.activate_permanent_ability(0, "Helm of Chatzuk", target_player_index=1)
+    result = game.activate_permanent_ability(0, "Helm of Chatzuk", target_player_index=0)
 
     assert result.supported is False
     assert result.details == "no valid creature target for banding effect"

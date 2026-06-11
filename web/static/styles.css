@@ -1575,3 +1575,36 @@ pre {
 .turn-announcement.announcing {
   animation: turnAnnounceFade 2s ease-out forwards;
 }
+
+.game-over-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.65);
+  z-index: 30;
+  pointer-events: all;
+}
+
+.game-over-overlay.hidden {
+  display: none;
+}
+
+.game-over-text {
+  font-size: 4rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-shadow: 0 0 40px currentColor, 0 2px 12px rgba(0,0,0,0.9);
+  animation: gameOverPulse 2s ease-in-out infinite;
+}
+
+.game-over-text.victory  { color: #ffd700; }
+.game-over-text.defeat   { color: #e04444; }
+.game-over-text.draw     { color: #a0a0c0; }
+
+@keyframes gameOverPulse {
+  0%, 100% { transform: scale(1);    opacity: 1; }
+  50%       { transform: scale(1.06); opacity: 0.85; }
+}

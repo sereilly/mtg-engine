@@ -200,6 +200,7 @@ function toggleCombatAttackerDraft(permanentIndex) {
 
 function isCardLikelyAttacker(card) {
   if (!card || typeof card === "string") return false;
+  if (card.summoning_sick) return false;
   return String(card.type || "").toLowerCase().includes("creature") && !card.tapped;
 }
 
@@ -210,6 +211,12 @@ function canCardAttackDefenderFromPublicState(card, defenderBattlefield) {
   const hasDefender = text.includes("defender");
   const canIgnoreDefender = text.includes("can attack as though it didn't have defender");
   if (hasDefender && !canIgnoreDefender) return false;
+
+  // Filter activated-ability lines before checking static restrictions
+  const nonActivatedLines = (card.oracle_text || "").split("\n")
+    .filter((line) => !/^\s*(\{[^}]+\})+\s*:/.test(line))
+    .map((line) => line.toLowerCase());
+  if (nonActivatedLines.some((line) => line.includes("can't attack"))) return false;
 
   if (text.includes("can't attack unless defending player controls an island")) {
     const defenderControlsIsland = Array.isArray(defenderBattlefield)
@@ -1014,31 +1021,49 @@ function hasXCost(card) {
 
 function cardRequiresTargetPlayer(card) {
   if (!card || typeof card === "string") return false;
-  return (card.oracle_text || "").toLowerCase().includes("target player");
+  const lines = (card.oracle_text || "").split("\n");
+  const nonActivatedLines = lines.filter((line) => !/^\s*(\{[^}]+\})+\s*:/.test(line));
+  return nonActivatedLines.some((line) => line.toLowerCase().includes("target player"));
 }
 
 function cardRequiresTargetLand(card) {
   if (!card || typeof card === "string") return false;
-  const text = (card.oracle_text || "").toLowerCase();
-  return text.includes("target land") || text.includes("enchant land");
+  const lines = (card.oracle_text || "").split("\n");
+  // Exclude activated ability lines (format: "{cost}: effect") — those trigger on activation, not cast
+  const nonActivatedLines = lines.filter((line) => !/^\s*(\{[^}]+\})+\s*:/.test(line));
+  return nonActivatedLines.some((line) => {
+    const t = line.toLowerCase();
+    return t.includes("target land") || t.includes("enchant land");
+  });
 }
 
 function cardRequiresTargetCreature(card) {
   if (!card || typeof card === "string") return false;
   const text = (card.oracle_text || "").toLowerCase();
   if (text.includes("enchant creature card in a graveyard")) return false;
-  return text.includes("enchant creature") || text.includes("enchant wall");
+  const lines = (card.oracle_text || "").split("\n");
+  const nonActivatedLines = lines.filter((line) => !/^\s*(\{[^}]+\})+\s*:/.test(line));
+  return nonActivatedLines.some((line) => {
+    const t = line.toLowerCase();
+    return t.includes("enchant creature") || t.includes("enchant wall");
+  });
 }
 
 function cardRequiresTargetPermanent(card) {
   if (!card || typeof card === "string") return false;
-  const text = (card.oracle_text || "").toLowerCase();
-  return text.includes("target spell or permanent") || (text.includes("target permanent") && !text.includes("target land") && !text.includes("target creature"));
+  const lines = (card.oracle_text || "").split("\n");
+  const nonActivatedLines = lines.filter((line) => !/^\s*(\{[^}]+\})+\s*:/.test(line));
+  return nonActivatedLines.some((line) => {
+    const t = line.toLowerCase();
+    return t.includes("target spell or permanent") || (t.includes("target permanent") && !t.includes("target land") && !t.includes("target creature"));
+  });
 }
 
 function cardRequiresTargetArtifact(card) {
   if (!card || typeof card === "string") return false;
-  return (card.oracle_text || "").toLowerCase().includes("enchant artifact");
+  const lines = (card.oracle_text || "").split("\n");
+  const nonActivatedLines = lines.filter((line) => !/^\s*(\{[^}]+\})+\s*:/.test(line));
+  return nonActivatedLines.some((line) => line.toLowerCase().includes("enchant artifact"));
 }
 
 function cardRequiresTargetAny(card) {
@@ -1065,10 +1090,33 @@ function getTargetableAnyPermanentsForPrompt(state = currentState) {
   return result;
 }
 
+function activatedAbilityTargetsSelf(card) {
+  if (!card || typeof card === "string") return false;
+  // Abilities that grant keywords/buffs to "target creature" refer to the controller's
+  // own creatures (e.g. Helm of Chatzuk: "Target creature gains banding until end of turn").
+  const activatedLines = (card.oracle_text || "").split("\n")
+    .filter((line) => /^\s*(\{[^}]+\})+\s*:/.test(line))
+    .map((line) => line.toLowerCase());
+  return activatedLines.some((line) =>
+    line.includes("target creature gains banding") ||
+    line.includes("target creature gains flying") ||
+    line.includes("target creature gains") ||
+    line.includes("untap target") ||
+    line.includes("regenerate target") ||
+    line.includes("target creature gets +")
+  );
+}
+
 function cardRequiresManaColorChoice(card) {
   if (!card || typeof card === "string") return false;
   const text = (card.oracle_text || "").toLowerCase();
   return text.includes("any one color") || text.includes("one mana of any color");
+}
+
+function cardRequiresCastColorChoice(card) {
+  if (!card || typeof card === "string") return false;
+  const text = (card.oracle_text || "").toLowerCase();
+  return text.includes("replacing all instances of one color word with another");
 }
 
 function getDualLandColors(card) {
@@ -2260,8 +2308,13 @@ function renderActivationPrompt() {
     panel.classList.remove("hidden");
     okBtn.classList.add("hidden");
     customRow.classList.add("hidden");
-    title.textContent = `Choose mana color for ${pendingManaColor.cardName}`;
-    body.textContent = "Select the mana color this ability should generate.";
+    if (pendingManaColor.kind === "cast") {
+      title.textContent = `Choose replacement color for ${pendingManaColor.cardName}`;
+      body.textContent = "Select the new color to replace the color word in the target.";
+    } else {
+      title.textContent = `Choose mana color for ${pendingManaColor.cardName}`;
+      body.textContent = "Select the mana color this ability should generate.";
+    }
     steps.innerHTML = [
       `<div>Ability: ${renderSymbolsInline(pendingManaColor.oracleText || "Activated mana ability")}</div>`,
       `<div class="prompt-choice-row">${(pendingManaColor.colorOptions || MANA_COLOR_OPTIONS).map(
@@ -2407,6 +2460,22 @@ function resolvePendingManaColor(manaColor) {
   const pending = pendingManaColor;
   pendingManaColor = null;
   renderActivationPrompt();
+
+  if (pending.kind === "cast") {
+    const actionBody = { ...pending.castActionBody, mana_color: manaColor };
+    updateActionHint(`Casting ${pending.cardName} with color ${manaColor}...`);
+    sendAction(actionBody)
+      .then(() => {
+        updateActionHint(`Cast ${pending.cardName} replacing color with ${manaColor}.`);
+        clearPendingHandCast();
+      })
+      .catch((e) => {
+        clearPendingHandCast();
+        updateActionHint(e.message, true);
+      });
+    return;
+  }
+
   updateActionHint(`Activating ${pending.cardName} for ${manaColor} mana...`);
 
   sendAction({
@@ -2591,6 +2660,19 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
     target_seat: selectedTarget,
     permanent_index: selectedPermanentIndex,
   };
+
+  if (cardRequiresCastColorChoice(pending.card)) {
+    pendingManaColor = {
+      kind: "cast",
+      cardName: pending.cardName,
+      castActionBody: actionBody,
+      oracleText: pending.card.oracle_text || "",
+    };
+    renderActivationPrompt();
+    updateActionHint(`Choose a replacement color for ${pending.cardName}.`);
+    return;
+  }
+
   updateActionHint(`Casting ${pending.cardName}...`);
   sendAction(actionBody)
     .then(() => {
@@ -3095,7 +3177,9 @@ function createCardElement(card, options = {}) {
           return;
         }
 
-        startActivationPrompt(card, 1 - seat, permanentIndex);
+        // Abilities that buff/modify the controller's own creatures target self, not opponent.
+        const activationTargetSeat = activatedAbilityTargetsSelf(card) ? seat : 1 - seat;
+        startActivationPrompt(card, activationTargetSeat, permanentIndex);
       } catch (e) {
         updateActionHint(e.message, true);
       }
@@ -3686,7 +3770,33 @@ function showTurnAnnouncement(isSelfTurn) {
   el.addEventListener("animationend", () => el.classList.remove("announcing"), { once: true });
 }
 
+function renderGameOverOverlay(state) {
+  const overlay = q("gameOverOverlay");
+  const textEl = q("gameOverText");
+  if (!overlay || !textEl) return;
+
+  const w = state.winner;
+  if (w === null || w === undefined) {
+    overlay.classList.add("hidden");
+    return;
+  }
+
+  overlay.classList.remove("hidden");
+  textEl.className = "game-over-text";
+  if (w === -1) {
+    textEl.textContent = "Draw";
+    textEl.classList.add("draw");
+  } else if (seat !== null && w === seat) {
+    textEl.textContent = "Victory";
+    textEl.classList.add("victory");
+  } else {
+    textEl.textContent = "Defeat";
+    textEl.classList.add("defeat");
+  }
+}
+
 function renderBoard(state) {
+  renderGameOverOverlay(state);
   const viewerSeat = seat ?? 0;
   const oppSeat = viewerSeat === 0 ? 1 : 0;
   const me = state.players[viewerSeat];

@@ -1217,6 +1217,7 @@ def do_action(session_id: str, req: GameActionRequest):
             target_player_index=target,
             target_permanent_index=req.permanent_index,
             x_value=req.x_value,
+            new_color=req.mana_color,
         )
         if not result.supported:
             raise HTTPException(status_code=400, detail=result.details)
