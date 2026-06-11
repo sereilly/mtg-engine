@@ -87,6 +87,7 @@ class StackCastingMixin:
             return queued
         if queued.details == "queued":
             self.resolve_stack()
+            self.check_state_based_actions()
             self.clear_priority_window()
             return SimulationResult(queued.card_name, True, queued.effect_kind, "resolved")
         return queued

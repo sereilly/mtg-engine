@@ -412,9 +412,9 @@ def _score_spell_target(card: CardDefinition, caster_index: int, target_index: i
     score = 0.0
     if "draw" in text:
         if target_index == caster_index:
-            # Targeting self when library has < 3 cards would exhaust it and cause an
-            # immediate loss via rule 704.5b; redirect to the opponent instead.
-            if card.name == "Ancestral Recall" and len(caster.library) < 3:
+            # Targeting self when library has <= 3 cards would exhaust it and cause a
+            # loss via rule 704.5b on the next draw step; redirect to the opponent instead.
+            if card.name == "Ancestral Recall" and len(caster.library) <= 3:
                 score -= 100.0
             else:
                 score += 5.0
@@ -494,8 +494,9 @@ def _score_cast(game: Game, caster_index: int, card: CardDefinition, target_inde
 
     if card.name == "Ancestral Recall":
         score += 8.0
-        # Never self-target when fewer than 3 library cards remain — would cause an immediate loss
-        if target_index == caster_index and len(caster.library) < 3:
+        # Never self-target when 3 or fewer library cards remain — drawing 3 leaves library
+        # at 0, causing a 704.5b loss on the next draw step.
+        if target_index == caster_index and len(caster.library) <= 3:
             return -100.0
     elif card.name == "Lightning Bolt" and target_index == 1 - caster_index and opponent.life <= 3:
         score += 12.0

@@ -242,7 +242,7 @@ def run_ai_simulation(cards_path: Path, games: int = 10, seed: int = 1337, max_t
                     if expectation_error:
                         report.issues.append(InteractionIssue(game_index, turn, expectation_error))
 
-                activation_action = choose_activation_action(game, active)
+                activation_action = None if game.is_game_over() else choose_activation_action(game, active)
                 if activation_action is not None:
                     for permanent_index in activation_action.land_tap_indices:
                         permanent = game.players[active].battlefield[permanent_index]
