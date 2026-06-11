@@ -552,13 +552,15 @@ h2.targeting-valid {
   left: 24px;
   transform: none;
   flex-direction: row-reverse;
-  padding: 4px 6px 4px 16px;
+  padding: 4px 14px 4px 4px;
 }
 
 .hand-fan-info--opponent {
   top: 10px;
   left: 24px;
   transform: none;
+  flex-direction: row-reverse;
+  padding: 4px 14px 4px 4px;
 }
 
 .battlefield-row {
