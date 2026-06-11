@@ -131,6 +131,7 @@ function renderLifePill(elementId, seatIndex, nextLife) {
 
   if (Number.isFinite(previousLife) && Number.isFinite(numericLife) && numericLife !== previousLife) {
     triggerLifeFlash(lifeEl, numericLife > previousLife ? "gain" : "loss");
+    SFX.onLifeChange(numericSeat, previousLife, numericLife, seat ?? 0);
   }
 
   if (Number.isFinite(numericSeat) && Number.isFinite(numericLife)) {
@@ -3830,6 +3831,7 @@ function renderState(state, { skipStaleCheck = false } = {}) {
   }
 
   maybeTriggerCombatDamageFx(currentState, state);
+  SFX.onStateChange(currentState, state, seat ?? 0);
   currentState = state;
   syncJoinUrlVisibility(state);
   syncCombatDrafts(state);
@@ -4156,6 +4158,7 @@ function initTabs() {
     q("rawTabBtn").classList.remove("active");
     q("logTab").classList.remove("hidden");
     q("rawTab").classList.add("hidden");
+    SFX.onLogOpen();
   });
 
   q("rawTabBtn").addEventListener("click", () => {
@@ -4163,6 +4166,7 @@ function initTabs() {
     q("logTabBtn").classList.remove("active");
     q("rawTab").classList.remove("hidden");
     q("logTab").classList.add("hidden");
+    SFX.onLogClose();
   });
 }
 
@@ -4338,6 +4342,7 @@ for (const [element, label] of [[joinUrlEl, "Join URL"], [lanJoinUrlEl, "LAN joi
 }
 
 q("promptCancelBtn").addEventListener("click", () => {
+  SFX.onMenuCancel();
   const wasCasting = !!(pendingCastTarget || pendingCastX || pendingAutoTap);
   pendingActivation = null;
   pendingCastTarget = null;
@@ -4450,6 +4455,7 @@ q("endTurnBtn").addEventListener("click", async () => {
 });
 
 q("undoBtn").addEventListener("click", async () => {
+  SFX.onMenuCancel();
   if (!sessionId) return;
   try {
     const url = seat !== null
@@ -4585,3 +4591,30 @@ initTabs();
 initCardPreviewHover();
 initCombatContextMenu();
 clearCardPreview();
+
+// ── Audio controls ────────────────────────────────────────────────────────────
+(function initAudioControls() {
+  const muteBtn = q("muteBtn");
+  const volSlider = q("volumeSlider");
+  if (!muteBtn || !volSlider) return;
+
+  // Restore persisted state
+  volSlider.value = String(Math.round(SFX.getVolume() * 100));
+  muteBtn.textContent = SFX.isMuted() ? "🔇" : "🔊";
+
+  muteBtn.addEventListener("click", () => {
+    const next = !SFX.isMuted();
+    SFX.setMuted(next);
+    muteBtn.textContent = next ? "🔇" : "🔊";
+    SFX.onMenuToggle(!next);
+  });
+
+  volSlider.addEventListener("input", () => {
+    const v = parseInt(volSlider.value) / 100;
+    SFX.setVolume(v);
+    if (SFX.isMuted() && v > 0) {
+      SFX.setMuted(false);
+      muteBtn.textContent = "🔊";
+    }
+  });
+})();
