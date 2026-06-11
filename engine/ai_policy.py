@@ -130,6 +130,48 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
     return best
 
 
+def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
+    """Return indices of creatures that should attack this turn."""
+    player = game.players[attacking_player_index]
+    opponent_index = 1 - attacking_player_index
+    opponent = game.players[opponent_index]
+
+    legal_attackers = [
+        idx
+        for idx, perm in enumerate(player.battlefield)
+        if perm.card.primary_type == "creature"
+        and not perm.tapped
+        and not game._is_summoning_sick(perm)
+        and game.can_attack(perm, opponent_index)
+    ]
+    if not legal_attackers:
+        return []
+
+    opponent_blockers = [
+        perm
+        for perm in opponent.battlefield
+        if perm.card.primary_type == "creature" and not perm.tapped
+    ]
+    if not opponent_blockers:
+        return legal_attackers
+
+    chosen = []
+    for idx in legal_attackers:
+        attacker = player.battlefield[idx]
+        best_defender_score = max(
+            _score_block_pair(blocker, attacker) for blocker in opponent_blockers
+        )
+        # Attack when the best possible block is not clearly profitable for the opponent.
+        if best_defender_score <= _permanent_value(attacker):
+            chosen.append(idx)
+
+    # Go all-in when lethal is on the table.
+    if sum(player.battlefield[i].effective_power for i in legal_attackers) >= opponent.life:
+        return legal_attackers
+
+    return chosen
+
+
 def choose_combat_blockers(game: Game, defending_player_index: int) -> dict[int, int]:
     combat = game.get_combat_state()
     if game.current_turn_phase != "combat" or game.current_step != "declare_blockers":

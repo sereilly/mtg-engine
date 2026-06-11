@@ -14,6 +14,7 @@ from engine import Game
 from engine.game_history import GameHistory
 from engine.ai_policy import (
     choose_activation_action,
+    choose_attackers,
     choose_cast_action,
     choose_combat_blockers,
     choose_combat_instant_cast_action,
@@ -977,6 +978,12 @@ def _advance_phase(session: Session) -> None:
         _clear_cleanup_selection(session)
         return
     if phase == "combat":
+        if step == "declare_attackers" and not game.combat_attackers_locked:
+            if _seat_type(session, game.active_player_index) == "ai":
+                attacker_indices = choose_attackers(game, game.active_player_index)
+                ok, _ = game.declare_attackers(game.active_player_index, attacker_indices)
+                if not ok:
+                    game.declare_attackers(game.active_player_index, [])
         if step == "declare_blockers":
             combat_state = game.get_combat_state()
             defender_index = combat_state.get("defending_player_index")
@@ -1514,8 +1521,20 @@ def do_action(session_id: str, req: GameActionRequest):
     elif req.action == "ai_step":
         if _seat_type(session, session.current_turn) != "ai":
             raise HTTPException(status_code=400, detail="current turn is not AI")
+        phase = session.game.current_turn_phase
         if _ai_step(session):
-            _end_turn(session)
+            if phase == "postcombat_main":
+                _end_turn(session)
+            else:
+                # Advance into combat and auto-declare AI attackers
+                _advance_phase(session)
+                for _safety in range(8):
+                    if session.game.current_turn_phase != "combat":
+                        break
+                    prev_step = session.game.current_step
+                    _advance_phase(session)
+                    if session.game.current_step == prev_step:
+                        break  # stuck waiting for human input (e.g. declare blockers)
 
     elif req.action == "debug_add_to_hand":
         if seat_type != "human":
@@ -1660,6 +1679,15 @@ def run_ai(session_id: str, steps: int = Query(default=1, ge=1, le=200)):
             break
         if not _ai_step(session):
             break
+        # Advance through combat before ending the turn
+        _advance_phase(session)  # close precombat_main, enter combat
+        for _safety in range(8):
+            if session.game.current_turn_phase != "combat":
+                break
+            prev_step = session.game.current_step
+            _advance_phase(session)
+            if session.game.current_step == prev_step:
+                break  # no progress; safety exit
         _end_turn(session)
         if _winner(session) is not None:
             session.status = "finished"
