@@ -52,8 +52,11 @@ const boardEl = document.getElementById("boardPanel");
 const aiControlsEl = document.getElementById("aiControls");
 const joinUrlEl = document.getElementById("joinUrl");
 const lanJoinUrlEl = document.getElementById("lanJoinUrl");
-const startGameSectionEl = document.getElementById("startGameSection");
-const joinExistingSectionEl = document.getElementById("joinExistingSection");
+const menuPages = {
+  home: document.getElementById("homePage"),
+  host: document.getElementById("hostGamePage"),
+  join: document.getElementById("joinGamePage"),
+};
 
 const MANA_ORDER = ["W", "U", "B", "R", "G", "C"];
 const MANA_COLOR_OPTIONS = [
@@ -610,14 +613,12 @@ function syncSeedControls() {
   q("customSeed").disabled = !useCustomSeed;
 }
 
-function setSetupModeForUrlSession(hasSessionInUrl) {
-  if (!startGameSectionEl || !joinExistingSectionEl) return;
-
-  startGameSectionEl.classList.toggle("hidden", hasSessionInUrl);
-  startGameSectionEl.hidden = hasSessionInUrl;
-
-  joinExistingSectionEl.classList.remove("hidden");
-  joinExistingSectionEl.hidden = false;
+function showMenuPage(name) {
+  for (const [key, element] of Object.entries(menuPages)) {
+    if (!element) continue;
+    element.classList.toggle("hidden", key !== name);
+    element.hidden = key !== name;
+  }
 }
 
 function setVisible(active) {
@@ -668,6 +669,7 @@ function resetToSetup(message = "Session not found. Start a new game.") {
     battlefieldCanvas = null;
   }
   showSetupPanel();
+  showMenuPage("home");
   boardEl.classList.add("hidden");
   aiControlsEl?.classList.add("hidden");
   setJoinUrls("", "");
@@ -4342,6 +4344,8 @@ async function createSession() {
     guest_name: q("guestName").value,
     host_colors: Number(q("hostColors").value),
     guest_colors: Number(q("guestColors").value),
+    host_deck_id: q("hostDeckSelect")?.value || null,
+    guest_deck_id: q("guestDeckSelect")?.value || null,
     use_custom_seed: useCustomSeed,
     custom_seed: useCustomSeed ? Number(q("customSeed").value) : null,
     enable_pregame: true,
@@ -4399,6 +4403,22 @@ async function sendAction(actionBody) {
   const payload = await postJson(`/api/sessions/${sessionId}/action`, actionBody);
   renderState(payload);
 }
+
+q("homeHostBtn")?.addEventListener("click", () => {
+  showMenuPage("host");
+});
+
+q("homeJoinBtn")?.addEventListener("click", () => {
+  showMenuPage("join");
+});
+
+q("hostBackBtn")?.addEventListener("click", () => {
+  showMenuPage("home");
+});
+
+q("joinBackBtn")?.addEventListener("click", () => {
+  showMenuPage("home");
+});
 
 q("startBtn").addEventListener("click", async () => {
   try {
@@ -4678,9 +4698,9 @@ q("debugCastFreeBtn").addEventListener("click", async () => {
 
 const params = new URLSearchParams(window.location.search);
 const sessionFromUrl = params.get("session");
-setSetupModeForUrlSession(Boolean(sessionFromUrl));
 if (sessionFromUrl) {
   q("joinSessionId").value = sessionFromUrl;
+  showMenuPage("join");
 }
 
 syncGuestNameForMode();

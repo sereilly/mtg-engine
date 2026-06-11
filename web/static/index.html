@@ -4,40 +4,172 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Magic LEA Web App</title>
-    <link rel="stylesheet" href="/styles.css?v=20260609-3d2" />
+    <link rel="stylesheet" href="/styles.css?v=20260611-menu" />
   </head>
   <body>
     <main>
       <p id="joinUrl" class="top-join-url hidden"></p>
       <p id="lanJoinUrl" class="top-join-url hidden"></p>
 
-      <section id="setup" class="panel">
-        <div id="startGameSection">
-          <h2>Start Game</h2>
-          <label>Mode
-            <select id="mode">
-              <option value="human_vs_ai">Human vs AI</option>
-              <option value="ai_vs_ai">AI vs AI</option>
-              <option value="human_vs_human">Human vs Human (Networked)</option>
-            </select>
-          </label>
-          <label>Host name <input id="hostName" value="Player 1" /></label>
-          <label>Guest name <input id="guestName" value="Player 2" /></label>
-          <label>Host deck colors (1-5) <input id="hostColors" type="number" min="1" max="5" value="2" /></label>
-          <label>Guest deck colors (1-5) <input id="guestColors" type="number" min="1" max="5" value="2" /></label>
-          <label>
-            <input id="useCustomSeed" type="checkbox" />
-            Use custom seed
-          </label>
-          <label id="customSeedLabel" class="hidden">Custom seed <input id="customSeed" type="number" value="1337" disabled /></label>
-          <button id="startBtn">Create Session</button>
+      <section id="setup" class="menu-shell">
+        <div id="homePage" class="menu-page">
+          <h1 class="menu-title">MTG Simulator</h1>
+          <p class="menu-tagline">Play Magic in your browser!</p>
+          <div class="home-buttons">
+            <button id="homeHostBtn" type="button" class="home-btn home-btn--host">
+              <span class="home-btn-icon">⚔️</span>
+              <span class="home-btn-title">Host Game</span>
+              <span class="home-btn-desc">Play against the AI, watch AI vs AI, or host a networked match for a friend.</span>
+            </button>
+            <button id="homeJoinBtn" type="button" class="home-btn home-btn--join">
+              <span class="home-btn-icon">🌐</span>
+              <span class="home-btn-title">Join Game</span>
+              <span class="home-btn-desc">Join a friend's session with a session ID or an invite link.</span>
+            </button>
+            <button id="deckEditorBtn" type="button" class="home-btn home-btn--decks">
+              <span class="home-btn-icon">📜</span>
+              <span class="home-btn-title">Deck Editor</span>
+              <span class="home-btn-desc">Build, import and manage your custom decks.</span>
+            </button>
+          </div>
         </div>
 
-        <div id="joinExistingSection">
-          <h3>Join Existing Session</h3>
-          <label>Session ID <input id="joinSessionId" placeholder="paste session id" /></label>
-          <label>Your name <input id="joinName" value="Player 2" /></label>
-          <button id="joinBtn">Join Session</button>
+        <div id="hostGamePage" class="menu-page hidden">
+          <div class="menu-form-card">
+            <div class="menu-form-topbar">
+              <button id="hostBackBtn" type="button" class="secondary-btn">&larr; Back</button>
+              <h2>Host Game</h2>
+            </div>
+            <label>Mode
+              <select id="mode">
+                <option value="human_vs_ai">Human vs AI</option>
+                <option value="ai_vs_ai">AI vs AI</option>
+                <option value="human_vs_human">Human vs Human (Networked)</option>
+              </select>
+            </label>
+            <label>Host name <input id="hostName" value="Player 1" /></label>
+            <label>Guest name <input id="guestName" value="Player 2" /></label>
+            <label>Host deck
+              <select id="hostDeckSelect">
+                <option value="">Random deck</option>
+              </select>
+            </label>
+            <label id="hostColorsLabel">Host deck colors (1-5) <input id="hostColors" type="number" min="1" max="5" value="2" /></label>
+            <label>Guest deck
+              <select id="guestDeckSelect">
+                <option value="">Random deck</option>
+              </select>
+            </label>
+            <label id="guestColorsLabel">Guest deck colors (1-5) <input id="guestColors" type="number" min="1" max="5" value="2" /></label>
+            <label class="menu-checkbox-label">
+              <input id="useCustomSeed" type="checkbox" />
+              Use custom seed
+            </label>
+            <label id="customSeedLabel" class="hidden">Custom seed <input id="customSeed" type="number" value="1337" disabled /></label>
+            <button id="startBtn" class="menu-primary-btn">Create Session</button>
+          </div>
+        </div>
+
+        <div id="joinGamePage" class="menu-page hidden">
+          <div class="menu-form-card">
+            <div class="menu-form-topbar">
+              <button id="joinBackBtn" type="button" class="secondary-btn">&larr; Back</button>
+              <h2>Join Game</h2>
+            </div>
+            <label>Session ID <input id="joinSessionId" placeholder="paste session id" /></label>
+            <label>Your name <input id="joinName" value="Player 2" /></label>
+            <button id="joinBtn" class="menu-primary-btn">Join Session</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="deckEditorPanel" class="panel deck-editor-panel hidden">
+        <div class="deck-editor-topbar">
+          <button id="deckEditorBackBtn" type="button" class="secondary-btn">&larr; Back</button>
+          <h2 class="deck-editor-title">Deck Editor</h2>
+          <select id="deckLoadSelect">
+            <option value="">— Load a deck —</option>
+          </select>
+          <button id="deckNewBtn" type="button" class="secondary-btn">New</button>
+          <button id="deckImportBtn" type="button" class="secondary-btn">Import</button>
+          <button id="deckSaveBtn" type="button">Save</button>
+          <button id="deckSaveAsBtn" type="button" class="secondary-btn">Save As Copy</button>
+          <button id="deckDeleteBtn" type="button" class="secondary-btn deck-delete-btn">Delete</button>
+          <span id="deckEditorStatus" class="deck-editor-status"></span>
+        </div>
+
+        <div class="deck-editor-main">
+          <div class="card-browser">
+            <div class="browser-filters">
+              <input id="browserSearch" type="text" placeholder="Search name, rules text, type…" autocomplete="off" />
+              <div class="browser-filter-row">
+                <div id="browserColorFilters" class="browser-color-filters" title="Filter by color">
+                  <button type="button" class="color-filter-btn" data-color="W">W</button>
+                  <button type="button" class="color-filter-btn" data-color="U">U</button>
+                  <button type="button" class="color-filter-btn" data-color="B">B</button>
+                  <button type="button" class="color-filter-btn" data-color="R">R</button>
+                  <button type="button" class="color-filter-btn" data-color="G">G</button>
+                  <button type="button" class="color-filter-btn" data-color="C" title="Colorless">C</button>
+                  <button type="button" class="color-filter-btn" data-color="M" title="Multicolor">M</button>
+                </div>
+                <select id="browserTypeFilter">
+                  <option value="">All types</option>
+                  <option value="creature">Creature</option>
+                  <option value="instant">Instant</option>
+                  <option value="sorcery">Sorcery</option>
+                  <option value="enchantment">Enchantment</option>
+                  <option value="artifact">Artifact</option>
+                  <option value="land">Land</option>
+                </select>
+                <select id="browserRarityFilter">
+                  <option value="">Any rarity</option>
+                  <option value="common">Common</option>
+                  <option value="uncommon">Uncommon</option>
+                  <option value="rare">Rare</option>
+                </select>
+              </div>
+              <div class="browser-filter-row">
+                <label class="browser-cmc-label">CMC
+                  <input id="browserCmcMin" type="number" min="0" max="16" placeholder="min" />
+                  –
+                  <input id="browserCmcMax" type="number" min="0" max="16" placeholder="max" />
+                </label>
+                <select id="browserSortSelect">
+                  <option value="name">Sort: Name</option>
+                  <option value="cmc">Sort: Mana Value</option>
+                  <option value="color">Sort: Color</option>
+                  <option value="type">Sort: Type</option>
+                </select>
+                <button id="browserClearFiltersBtn" type="button" class="secondary-btn">Clear</button>
+                <span id="browserResultCount" class="browser-result-count"></span>
+              </div>
+            </div>
+            <div id="browserGrid" class="browser-grid"></div>
+          </div>
+
+          <div class="deck-pane">
+            <label class="deck-name-label">Deck name <input id="deckNameInput" type="text" value="Untitled Deck" maxlength="100" /></label>
+            <div id="deckStats" class="deck-stats"></div>
+            <div id="deckCurve" class="deck-curve"></div>
+            <div id="deckList" class="deck-list"></div>
+          </div>
+
+          <div class="editor-preview-pane">
+            <div id="editorPreviewFrame" class="card-preview-frame empty-preview">
+              <img id="editorPreviewImage" alt="Card preview" class="hidden" />
+              <div id="editorPreviewEmpty" class="card-preview-empty">Click a card to preview it.</div>
+            </div>
+            <div class="card-preview-meta">
+              <div id="editorPreviewName" class="card-preview-name">No card selected</div>
+              <div id="editorPreviewType" class="card-preview-type"></div>
+              <div id="editorPreviewText" class="card-preview-text"></div>
+              <div id="editorPreviewWarning" class="editor-preview-warning hidden"></div>
+            </div>
+            <div class="editor-preview-actions">
+              <button id="editorPreviewAddBtn" type="button" disabled>Add to Deck</button>
+              <button id="editorPreviewRemoveBtn" type="button" class="secondary-btn" disabled>Remove</button>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -238,8 +370,27 @@
       </div>
     </div>
 
+    <div id="importDeckModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="importDeckTitle">
+      <div class="modal-box import-deck-box">
+        <h2 id="importDeckTitle" class="modal-title">Import Deck</h2>
+        <p class="modal-subtitle">Import from a public Moxfield deck URL, or paste a deck list below.</p>
+        <label class="import-deck-label">Moxfield URL
+          <input id="importMoxfieldUrl" type="text" placeholder="https://moxfield.com/decks/…" autocomplete="off" />
+        </label>
+        <label class="import-deck-label">Deck list
+          <textarea id="importDeckText" rows="10" placeholder="4 Lightning Bolt&#10;4x Giant Growth&#10;20 Mountain"></textarea>
+        </label>
+        <p id="importDeckStatus" class="import-deck-status"></p>
+        <div class="modal-footer">
+          <button id="importDeckCancelBtn" type="button" class="secondary-btn">Cancel</button>
+          <button id="importDeckConfirmBtn" type="button">Import</button>
+        </div>
+      </div>
+    </div>
+
     <script src="/battlefield-canvas.js?v=20260609-3d"></script>
     <script src="/sfx.js?v=1"></script>
-    <script src="/app.js?v=20260609-3d"></script>
+    <script src="/app.js?v=20260611-menu"></script>
+    <script src="/deck-editor.js?v=20260611-de"></script>
   </body>
 </html>

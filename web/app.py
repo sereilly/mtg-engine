@@ -24,26 +24,42 @@ from engine.classifier import classify_card
 from engine.models import Permanent, PlayerState
 
 from .deck_builder import build_random_deck
-from .schemas import CreateSessionRequest, GameActionRequest, JoinSessionRequest, RandomDeckRequest
+from .deck_store import (
+    DeckImportError,
+    DeckNotFoundError,
+    DeckStore,
+    fetch_moxfield_deck,
+    parse_decklist_text,
+)
+from .schemas import (
+    CreateSessionRequest,
+    DeckImportRequest,
+    DeckSaveRequest,
+    GameActionRequest,
+    JoinSessionRequest,
+    RandomDeckRequest,
+)
 from .session_store import Session, SessionStore
 
 
 ROOT = Path(__file__).resolve().parent.parent
 CARDS_PATH = ROOT / "lea_cards.json"
+DECKS_DIR = ROOT / "decks"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 CARD_CATALOG = load_cards(CARDS_PATH)
 CARD_BY_NAME = {card.name.casefold(): card for card in CARD_CATALOG}
 CARD_SEARCH_ORDER = sorted(CARD_CATALOG, key=lambda card: card.name)
 
 app = FastAPI(title="Magic LEA Web App")
-store = SessionStore(cards_path=CARDS_PATH)
+deck_store = DeckStore(DECKS_DIR)
+store = SessionStore(cards_path=CARDS_PATH, deck_store=deck_store)
 _session_event_queues: dict[str, set[asyncio.Queue[dict[str, str]]]] = defaultdict(set)
 
 
 @app.middleware("http")
 async def _no_cache_assets(request: Request, call_next):
     response = await call_next(request)
-    if request.url.path in {"/", "/index.html", "/app.js", "/styles.css"} or request.url.path.startswith("/api/"):
+    if request.url.path in {"/", "/index.html", "/app.js", "/deck-editor.js", "/styles.css"} or request.url.path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-store, max-age=0"
         response.headers["Pragma"] = "no-cache"
     return response
@@ -132,6 +148,83 @@ def _search_cards(query: str, limit: int) -> list[dict]:
 
     ranked = starts_with + contains
     return [_serialize_card_summary(card) for card in ranked[:limit]]
+
+
+def _build_catalog_payload() -> list[dict]:
+    entries: list[dict] = []
+    seen: set[str] = set()
+    for card in CARD_SEARCH_ORDER:
+        if card.name in seen:
+            continue
+        seen.add(card.name)
+        classification = classify_card(card)
+        raw = card.raw if isinstance(card.raw, dict) else {}
+        image_uris = raw.get("image_uris") if isinstance(raw.get("image_uris"), dict) else {}
+        entries.append(
+            {
+                "name": card.name,
+                "mana_cost": card.mana_cost,
+                "cmc": card.cmc,
+                "type_line": card.type_line,
+                "oracle_text": card.oracle_text,
+                "colors": list(card.colors),
+                "color_identity": list(card.color_identity),
+                "keywords": list(card.keywords),
+                "power": raw.get("power"),
+                "toughness": raw.get("toughness"),
+                "rarity": raw.get("rarity"),
+                "image_uri": image_uris.get("normal"),
+                "large_image_uri": image_uris.get("large"),
+                "supported": classification.supported,
+                "unsupported_reason": None if classification.supported else classification.reason,
+            }
+        )
+    return entries
+
+
+CATALOG_PAYLOAD = _build_catalog_payload()
+CATALOG_BY_NAME = {entry["name"].casefold(): entry for entry in CATALOG_PAYLOAD}
+
+
+def _resolve_deck_entries(entries: list[dict]) -> list[dict]:
+    """Resolve deck entries against the catalog, attaching a status to each."""
+    resolved: list[dict] = []
+    for entry in entries:
+        name = str(entry.get("name", "")).strip()
+        count = int(entry.get("count", 0))
+        if not name or count <= 0:
+            continue
+        match = CATALOG_BY_NAME.get(name.casefold())
+        if match is None:
+            resolved.append({"name": name, "count": count, "status": "unknown"})
+        else:
+            status = "ok" if match["supported"] else "unsupported"
+            resolved.append({"name": match["name"], "count": count, "status": status})
+    return resolved
+
+
+def _deck_summary(deck: dict) -> dict:
+    entries = _resolve_deck_entries(deck.get("cards", []))
+    colors: set[str] = set()
+    for entry in entries:
+        match = CATALOG_BY_NAME.get(entry["name"].casefold())
+        if match:
+            colors.update(match["color_identity"])
+    return {
+        "id": deck["id"],
+        "name": deck["name"],
+        "card_count": sum(e["count"] for e in entries),
+        "colors": [c for c in ("W", "U", "B", "R", "G") if c in colors],
+        "unsupported_count": sum(e["count"] for e in entries if e["status"] == "unsupported"),
+        "unknown_count": sum(e["count"] for e in entries if e["status"] == "unknown"),
+        "updated_at": deck.get("updated_at"),
+    }
+
+
+def _deck_detail(deck: dict) -> dict:
+    detail = _deck_summary(deck)
+    detail["cards"] = _resolve_deck_entries(deck.get("cards", []))
+    return detail
 
 
 def _serialize_mana_pool(player: PlayerState) -> dict:
@@ -1061,9 +1154,85 @@ def random_deck(req: RandomDeckRequest):
     }
 
 
+@app.get("/api/cards/catalog")
+def get_card_catalog():
+    return {"cards": CATALOG_PAYLOAD}
+
+
+@app.get("/api/decks")
+def list_decks():
+    return {"decks": [_deck_summary(deck) for deck in deck_store.list()]}
+
+
+@app.post("/api/decks")
+def create_deck(req: DeckSaveRequest):
+    deck = deck_store.create(req.name.strip() or "Untitled Deck", [c.model_dump() for c in req.cards])
+    return _deck_detail(deck)
+
+
+@app.get("/api/decks/{deck_id}")
+def get_deck(deck_id: str):
+    try:
+        deck = deck_store.get(deck_id)
+    except DeckNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="deck not found") from exc
+    return _deck_detail(deck)
+
+
+@app.put("/api/decks/{deck_id}")
+def update_deck(deck_id: str, req: DeckSaveRequest):
+    try:
+        deck = deck_store.update(deck_id, req.name.strip() or "Untitled Deck", [c.model_dump() for c in req.cards])
+    except DeckNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="deck not found") from exc
+    return _deck_detail(deck)
+
+
+@app.delete("/api/decks/{deck_id}")
+def delete_deck(deck_id: str):
+    try:
+        deck_store.delete(deck_id)
+    except DeckNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="deck not found") from exc
+    return {"ok": True}
+
+
+@app.post("/api/decks/import")
+def import_deck(req: DeckImportRequest):
+    """Parse a pasted decklist or fetch a Moxfield deck. Does not save anything;
+    returns resolved entries so the editor can show unsupported/unknown cards."""
+    warnings: list[str] = []
+    if req.url and req.url.strip():
+        try:
+            name, entries = fetch_moxfield_deck(req.url.strip())
+        except DeckImportError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    elif req.text and req.text.strip():
+        entries, warnings = parse_decklist_text(req.text)
+        name = "Imported Deck"
+    else:
+        raise HTTPException(status_code=400, detail="provide a decklist text or a Moxfield URL")
+
+    resolved = _resolve_deck_entries(entries)
+    if not resolved:
+        raise HTTPException(status_code=400, detail="no cards found in the deck list")
+    return {
+        "name": name,
+        "cards": resolved,
+        "warnings": warnings,
+        "unknown_count": sum(e["count"] for e in resolved if e["status"] == "unknown"),
+        "unsupported_count": sum(e["count"] for e in resolved if e["status"] == "unsupported"),
+    }
+
+
 @app.post("/api/sessions")
 def create_session(req: CreateSessionRequest, request: Request):
-    session = store.create(req)
+    try:
+        session = store.create(req)
+    except DeckNotFoundError as exc:
+        raise HTTPException(status_code=400, detail="selected deck not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     _pregame_auto_advance(session)
     join_url = _build_join_url(request, session.id)
     lan_join_url = _build_lan_join_url(request, session.id)

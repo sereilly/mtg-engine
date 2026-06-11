@@ -40,6 +40,9 @@ class CreateSessionRequest(BaseModel):
     guest_name: str = Field(default="Player 2")
     host_colors: int = Field(default=2, ge=1, le=5)
     guest_colors: int = Field(default=2, ge=1, le=5)
+    # When set, use a saved deck (by id) instead of a random deck for that seat.
+    host_deck_id: str | None = Field(default=None)
+    guest_deck_id: str | None = Field(default=None)
     use_custom_seed: bool = Field(default=False)
     custom_seed: int | None = Field(default=None)
     # Backward-compatible field for older clients that still post `seed`.
@@ -71,3 +74,18 @@ class GameActionRequest(BaseModel):
 class RandomDeckRequest(BaseModel):
     colors: int = Field(ge=1, le=5)
     seed: int = 1337
+
+
+class DeckCardEntry(BaseModel):
+    name: str = Field(min_length=1)
+    count: int = Field(ge=1, le=99)
+
+
+class DeckSaveRequest(BaseModel):
+    name: str = Field(default="Untitled Deck", max_length=100)
+    cards: list[DeckCardEntry] = Field(default_factory=list)
+
+
+class DeckImportRequest(BaseModel):
+    text: str | None = None
+    url: str | None = None

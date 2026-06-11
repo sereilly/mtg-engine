@@ -149,6 +149,41 @@ def _pick_cards(
     return result
 
 
+def build_deck_from_entries(
+    cards_path: Path,
+    entries: list[dict],
+    seed: int,
+) -> list[CardDefinition]:
+    """Build a shuffled library from saved deck entries [{"name", "count"}].
+
+    Raises ValueError listing any card names not present in the catalog.
+    """
+    cards = _card_map(cards_path)
+    by_name = {name.casefold(): card for name, card in cards.items()}
+
+    deck: list[CardDefinition] = []
+    missing: list[str] = []
+    for entry in entries:
+        name = str(entry.get("name", "")).strip()
+        count = int(entry.get("count", 0))
+        if not name or count <= 0:
+            continue
+        card = by_name.get(name.casefold())
+        if card is None:
+            missing.append(name)
+            continue
+        deck.extend([card] * count)
+
+    if missing:
+        raise ValueError(f"Deck contains cards not in the catalog: {', '.join(missing)}")
+    if not deck:
+        raise ValueError("Deck is empty")
+
+    rng = random.Random(seed)
+    rng.shuffle(deck)
+    return deck
+
+
 def build_random_deck(cards_path: Path, color_count: int, seed: int) -> tuple[list[CardDefinition], list[str]]:
     if not (1 <= color_count <= 5):
         raise ValueError("color_count must be between 1 and 5")

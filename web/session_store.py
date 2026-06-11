@@ -8,7 +8,8 @@ import secrets
 from engine import Game, PlayerState
 from engine.game_history import GameHistory
 
-from .deck_builder import build_random_deck
+from .deck_builder import build_deck_from_entries, build_random_deck
+from .deck_store import DeckStore
 from .schemas import CreateSessionRequest
 
 
@@ -45,9 +46,17 @@ class Session:
 
 
 class SessionStore:
-    def __init__(self, cards_path: Path):
+    def __init__(self, cards_path: Path, deck_store: DeckStore | None = None):
         self.cards_path = cards_path
+        self.deck_store = deck_store
         self._sessions: dict[str, Session] = {}
+
+    def _build_seat_deck(self, deck_id: str | None, colors: int, seed: int):
+        if deck_id and self.deck_store is not None:
+            deck = self.deck_store.get(deck_id)
+            return build_deck_from_entries(self.cards_path, deck.get("cards", []), seed)
+        deck, _ = build_random_deck(self.cards_path, colors, seed)
+        return deck
 
     def create(self, request: CreateSessionRequest) -> Session:
         sid = secrets.token_urlsafe(8)
@@ -58,8 +67,8 @@ class SessionStore:
         if request.mode in {"human_vs_ai", "ai_vs_ai"} and guest_name.strip() in {"", "Player 2"}:
             guest_name = "AI"
 
-        host_deck, _ = build_random_deck(self.cards_path, request.host_colors, seed)
-        guest_deck, _ = build_random_deck(self.cards_path, request.guest_colors, seed + 1)
+        host_deck = self._build_seat_deck(request.host_deck_id, request.host_colors, seed)
+        guest_deck = self._build_seat_deck(request.guest_deck_id, request.guest_colors, seed + 1)
 
         p1 = PlayerState(name=request.host_name, library=host_deck)
         p2 = PlayerState(name=guest_name, library=guest_deck)
