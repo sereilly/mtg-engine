@@ -494,12 +494,12 @@ h2.targeting-valid {
 
 /* Hover pops the card up, flat to the camera, enlarged for readability */
 .hand-fan-slot:hover {
-  transform: translateX(var(--fan-push-x, 0px)) translateY(-52px) rotate(var(--fan-angle, 0deg)) rotateX(0deg) scale(1.32);
+  transform: translateX(var(--fan-push-x, 0px)) translateY(-52px) translateZ(60px) rotate(var(--fan-angle, 0deg)) rotateX(0deg) scale(1.32);
   z-index: 100 !important;
 }
 
 .hand-fan--opponent .hand-fan-slot:hover {
-  transform: translateX(var(--fan-push-x, 0px)) translateY(-26px) rotate(var(--fan-angle, 0deg)) rotateX(0deg) scale(1.15);
+  transform: translateX(var(--fan-push-x, 0px)) translateY(-26px) translateZ(60px) rotate(var(--fan-angle, 0deg)) rotateX(0deg) scale(1.15);
   z-index: 100 !important;
 }
 
