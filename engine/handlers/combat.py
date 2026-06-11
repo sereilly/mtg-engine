@@ -1,0 +1,101 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from .registry import effect_handler
+
+if TYPE_CHECKING:
+    from ..game import Game
+    from ..game_types import OracleExecutionContext
+    from ..oracle import OracleInstruction
+
+
+@effect_handler("grant_unlimited_blocking")
+def grant_unlimited_blocking(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    target = context.target
+    card = context.card
+    blocker = next((perm for perm in target.battlefield if perm.card.primary_type == "creature"), None)
+    if blocker is not None:
+        blocker.metadata["must_block_all_until_eot"] = True
+    game.log.append(f"{card.name} created a forced blocking assignment")
+    return True, "resolved"
+
+
+@effect_handler("randomize_blockers")
+def randomize_blockers(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    card = context.card
+    game.log.append(f"{card.name} set up random pile blocking this turn")
+    return True, "resolved"
+
+
+@effect_handler("remove_creature_from_combat")
+def remove_creature_from_combat(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    target = context.target
+    card = context.card
+    removed = next((perm for perm in target.battlefield if perm.card.primary_type == "creature"), None)
+    if removed is not None:
+        removed.metadata["removed_from_combat"] = True
+    game.log.append(f"{card.name} removed a blocker from combat")
+    return True, "resolved"
+
+
+@effect_handler("left_right_combat_division")
+def left_right_combat_division(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    card = context.card
+    game.log.append(f"{card.name} established left/right combat division")
+    return True, "resolved"
+
+
+@effect_handler("prevent_all_combat_damage")
+def prevent_all_combat_damage(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    game.combat_damage_prevented_until_eot = True
+    game.log.append("Combat damage prevented until end of turn")
+    return True, "resolved"
+
+
+@effect_handler("mark_non_wall_target_to_attack")
+def mark_non_wall_target_to_attack(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    target = context.target
+    target_creature = next(
+        (
+            perm
+            for perm in target.battlefield
+            if perm.card.primary_type == "creature" and "wall" not in perm.card.type_line.lower()
+        ),
+        None,
+    )
+    if target_creature is not None:
+        target_creature.metadata["must_attack_until_eot"] = True
+        target_creature.metadata["destroy_if_did_not_attack_eot"] = True
+        game.log.append(f"{target_creature.card.name} marked to attack this turn")
+    else:
+        game.log.append("No non-Wall target for Nettling Imp effect")
+    return True, "resolved"
+
+
+@effect_handler("grant_unblockable_to_low_power_target")
+def grant_unblockable_to_low_power_target(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    target = context.target
+    target_creature = next(
+        (perm for perm in target.battlefield if perm.card.primary_type == "creature" and perm.effective_power <= 2),
+        None,
+    )
+    if target_creature is not None:
+        target_creature.metadata["cant_be_blocked_until_eot"] = True
+        game.log.append(f"{target_creature.card.name} can't be blocked this turn")
+    else:
+        game.log.append("No valid low-power creature for unblockable effect")
+    return True, "resolved"
+
+
+@effect_handler("grant_banding_to_target")
+def grant_banding_to_target(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    caster = context.caster
+    # Banding is granted to one of the controller's own creatures, not the opponent's.
+    target_creature = next((perm for perm in caster.battlefield if perm.card.primary_type == "creature"), None)
+    if target_creature is None:
+        game.log.append("No valid creature target for banding effect")
+        return False, "no valid creature target for banding effect"
+    target_creature.metadata["gains_banding_until_eot"] = True
+    game.log.append(f"{target_creature.card.name} gains banding until end of turn")
+    return True, "resolved"

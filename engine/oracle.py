@@ -1,13 +1,46 @@
-# New additions to oracle_compiler.py
+"""Oracle-text compiler.
+
+Turns a card's oracle text into an OracleProgram: a set of instructions,
+activated abilities, triggered abilities, and static lines the game engine
+can execute. Effect-clause parsing is delegated to the declarative rule
+registry in engine.parsing; this module owns tokenizing, line classification
+(keyword / triggered / activated / static), and the per-card compile cache.
+"""
 
 from __future__ import annotations
 
-from typing import Any
-from dataclasses import dataclass, field
-from functools import lru_cache
 import re
+from functools import lru_cache
 
 from .models import CardDefinition
+from .oracle_types import (
+    ActivatedAbilityCost,
+    OracleInstruction,
+    OracleProgram,
+    OracleToken,
+    ParsedActivatedAbility,
+    ParsedTriggeredAbility,
+    TriggerCondition,
+    _COLOR_WORD_TO_SYMBOL,
+    _extract_mana_cost_from_text,
+    _instruction,
+    _parse_number_token,
+)
+from .parsing import parse_primary_instruction
+
+__all__ = [
+    "ActivatedAbilityCost",
+    "OracleInstruction",
+    "OracleProgram",
+    "OracleToken",
+    "ParsedActivatedAbility",
+    "ParsedTriggeredAbility",
+    "TriggerCondition",
+    "compile_card_oracle",
+    "lex_oracle_text",
+    "normalize_creature_line",
+    "parse_activated_ability_cost",
+]
 
 
 SUPPORTED_KEYWORDS = {
@@ -37,25 +70,6 @@ UNSUPPORTED_KEYWORDS = {
 UNSUPPORTED_PATTERNS = (
     "exchange control",
 )
-
-_COLOR_WORD_TO_SYMBOL: dict[str, str] = {
-    "white": "W",
-    "blue": "U",
-    "black": "B",
-    "red": "R",
-    "green": "G",
-}
-
-
-def _extract_mana_cost_from_text(text: str) -> dict[str, int]:
-    """Extract the first mana cost symbols found in *text* and return counts."""
-    cost: dict[str, int] = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0, "generic": 0}
-    for token in re.findall(r"\{([^}]+)\}", text.upper()):
-        if token.isdigit():
-            cost["generic"] += int(token)
-        elif token in {"W", "U", "B", "R", "G", "C"}:
-            cost[token] += 1
-    return cost
 
 
 SUPPORTED_SPELL_PATTERNS = (
@@ -219,77 +233,18 @@ IF_CONDITION_PATTERNS: tuple[tuple[str, str], ...] = (
 )
 
 
-@dataclass(frozen=True)
-class OracleToken:
-    kind: str
-    value: str
+def _compile_trigger_patterns(
+    patterns: tuple[tuple[str, str], ...],
+) -> tuple[tuple[str, re.Pattern[str]], ...]:
+    return tuple((kind, re.compile(pattern)) for kind, pattern in patterns)
 
 
-@dataclass(frozen=True)
-class ActivatedAbilityCost:
-    mana: dict[str, int]
-    requires_tap: bool = False
-
-
-@dataclass(frozen=True)
-class OracleInstruction:
-    kind: str
-    value: str = ""
-    payload: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass(frozen=True)
-class TriggerCondition:
-    """Represents the condition half of a triggered ability.
-
-    kind     -- semantic label, e.g. "creature_dies", "upkeep_self"
-    trigger  -- the raw trigger word: "when", "whenever", or "at"
-    raw_text -- the normalized condition clause as it appeared in oracle text
-    payload  -- optional structured data extracted from the condition
-    """
-    kind: str
-    trigger: str          # "when" | "whenever" | "at"
-    raw_text: str
-    payload: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass(frozen=True)
-class ParsedActivatedAbility:
-    source_line: str
-    normalized_effect: str
-    supported: bool
-    cost: ActivatedAbilityCost
-    effect_kind: str = "unsupported"
-    instruction: OracleInstruction | None = None
-
-
-@dataclass(frozen=True)
-class ParsedTriggeredAbility:
-    """A fully parsed triggered ability: condition + effect instruction.
-
-    source_line  -- original oracle text line
-    condition    -- the parsed trigger condition
-    instruction  -- the parsed effect, or None if unsupported
-    supported    -- True only if both condition and effect are recognized
-    effect_kind  -- mirrors the effect_kind convention used elsewhere
-    """
-    source_line: str
-    condition: TriggerCondition
-    instruction: OracleInstruction | None
-    supported: bool
-    effect_kind: str = "unsupported"
-
-
-@dataclass(frozen=True)
-class OracleProgram:
-    supported: bool
-    effect_kind: str
-    reason: str
-    normalized_text: str
-    instructions: tuple[OracleInstruction, ...] = ()
-    activated_abilities: tuple[ParsedActivatedAbility, ...] = ()
-    triggered_abilities: tuple[ParsedTriggeredAbility, ...] = ()
-    static_lines: tuple[str, ...] = ()
+# Precompiled once at import. Python's internal regex cache holds only 512
+# entries, so relying on it would thrash as the pattern tables grow.
+_COMPILED_WHENEVER_PATTERNS = _compile_trigger_patterns(WHENEVER_TRIGGER_PATTERNS)
+_COMPILED_WHEN_PATTERNS = _compile_trigger_patterns(WHEN_TRIGGER_PATTERNS)
+_COMPILED_AT_PATTERNS = _compile_trigger_patterns(AT_TRIGGER_PATTERNS)
+_COMPILED_IF_PATTERNS = _compile_trigger_patterns(IF_CONDITION_PATTERNS)
 
 
 class OracleLexer:
@@ -327,16 +282,23 @@ def lex_oracle_text(oracle_text: str) -> tuple[OracleToken, ...]:
     return _LEXER.tokenize(oracle_text)
 
 
+_WHITESPACE_RE = re.compile(r"\s+")
+_PARENTHETICAL_RE = re.compile(r"\([^)]*\)")
+
+
 def _normalize_text(oracle_text: str) -> str:
-    return re.sub(r"\s+", " ", oracle_text.strip().lower())
+    return _WHITESPACE_RE.sub(" ", oracle_text.strip().lower())
 
 
 def normalize_creature_line(line: str) -> str:
     lowered = line.lower()
-    lowered = re.sub(r"\([^)]*\)", "", lowered)
+    lowered = _PARENTHETICAL_RE.sub("", lowered)
     lowered = lowered.replace(";", ",")
-    lowered = re.sub(r"\s+", " ", lowered).strip(" .,")
+    lowered = _WHITESPACE_RE.sub(" ", lowered).strip(" .,")
     return lowered
+
+
+_MANA_TOKEN_RE = re.compile(r"\{([^}]+)\}")
 
 
 def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
@@ -346,7 +308,7 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         return ActivatedAbilityCost(required, requires_tap)
 
     cost_part = line.split(":", 1)[0]
-    for token in re.findall(r"\{([^}]+)\}", cost_part.upper()):
+    for token in _MANA_TOKEN_RE.findall(cost_part.upper()):
         if token == "T":
             requires_tap = True
             continue
@@ -358,37 +320,17 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     return ActivatedAbilityCost(required, requires_tap)
 
 
-def _instruction(kind: str, value: str = "", **payload: Any) -> OracleInstruction:
-    return OracleInstruction(kind, value, payload)
-
-
-def _parse_number_token(token: str) -> int:
-    number_words = {
-        "a": 1,
-        "one": 1,
-        "two": 2,
-        "three": 3,
-        "four": 4,
-        "five": 5,
-        "six": 6,
-        "seven": 7,
-    }
-    if token.isdigit():
-        return int(token)
-    return number_words.get(token, 0)
-
-
 # ---------------------------------------------------------------------------
 # Trigger condition parsing
 # ---------------------------------------------------------------------------
 
 def _match_trigger_patterns(
     text: str,
-    patterns: tuple[tuple[str, str], ...],
+    patterns: tuple[tuple[str, re.Pattern[str]], ...],
     trigger_word: str,
 ) -> TriggerCondition | None:
     for kind, pattern in patterns:
-        m = re.match(pattern, text)
+        m = pattern.match(text)
         if m:
             return TriggerCondition(kind=kind, trigger=trigger_word, raw_text=m.group(0))
     return None
@@ -402,24 +344,27 @@ def _parse_trigger_condition(normalized_line: str) -> tuple[TriggerCondition | N
     punctuation and whitespace stripped.
     """
     if normalized_line.startswith("whenever "):
-        cond = _match_trigger_patterns(normalized_line, WHENEVER_TRIGGER_PATTERNS, "whenever")
+        cond = _match_trigger_patterns(normalized_line, _COMPILED_WHENEVER_PATTERNS, "whenever")
         if cond:
             remainder = normalized_line[len(cond.raw_text):].lstrip(" ,")
             return cond, remainder
 
     if normalized_line.startswith("when "):
-        cond = _match_trigger_patterns(normalized_line, WHEN_TRIGGER_PATTERNS, "when")
+        cond = _match_trigger_patterns(normalized_line, _COMPILED_WHEN_PATTERNS, "when")
         if cond:
             remainder = normalized_line[len(cond.raw_text):].lstrip(" ,")
             return cond, remainder
 
     if normalized_line.startswith("at "):
-        cond = _match_trigger_patterns(normalized_line, AT_TRIGGER_PATTERNS, "at")
+        cond = _match_trigger_patterns(normalized_line, _COMPILED_AT_PATTERNS, "at")
         if cond:
             remainder = normalized_line[len(cond.raw_text):].lstrip(" ,")
             return cond, remainder
 
     return None, normalized_line
+
+
+_TRAILING_IF_RE = re.compile(r",\s*(if .+)$")
 
 
 def _extract_if_condition(effect_text: str) -> tuple[str | None, str]:
@@ -428,13 +373,13 @@ def _extract_if_condition(effect_text: str) -> tuple[str | None, str]:
     Returns (None, original_text) if no recognized 'if' condition is present.
     """
     # Look for ", if ..." near the end of the effect text
-    if_match = re.search(r",\s*(if .+)$", effect_text)
+    if_match = _TRAILING_IF_RE.search(effect_text)
     if not if_match:
         return None, effect_text
 
     if_clause = if_match.group(1)
-    for kind, pattern in IF_CONDITION_PATTERNS:
-        if re.match(pattern, if_clause):
+    for kind, pattern in _COMPILED_IF_PATTERNS:
+        if pattern.match(if_clause):
             clean = effect_text[: if_match.start()].strip()
             return kind, clean
 
@@ -461,7 +406,7 @@ def _parse_triggered_ability(line: str) -> ParsedTriggeredAbility | None:
     # Extract any trailing "if ..." guard on the effect
     if_kind, clean_effect = _extract_if_condition(remainder)
 
-    instruction, effect_kind = _parse_primary_instruction(clean_effect, activated=False)
+    instruction, effect_kind = parse_primary_instruction(clean_effect, activated=False)
 
     if instruction is not None and if_kind is not None:
         # Attach the if-condition into the instruction payload
@@ -482,513 +427,12 @@ def _parse_triggered_ability(line: str) -> ParsedTriggeredAbility | None:
 
 
 # ---------------------------------------------------------------------------
-# Effect instruction parsing
+# Effect instruction parsing — delegated to the engine.parsing rule registry.
+# Kept as a module-level alias for backwards compatibility.
 # ---------------------------------------------------------------------------
 
 def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleInstruction | None, str]:
-    # "Choose one" modal spells: parse only the first bullet so the primary
-    # instruction matches the card's first mode (e.g. Healing Salve gains life,
-    # Blue/Red Elemental Blast counters a spell).
-    if "choose one" in text and "•" in text:
-        parts = re.split(r"\s*•\s*", text, maxsplit=2)
-        if len(parts) >= 2:
-            first_mode = parts[1].strip()
-            instr, kind = _parse_primary_instruction(first_mode, activated=activated)
-            if instr is not None:
-                return instr, kind
-
-    # ---------------------------------------------------------------------------
-    # Upkeep triggered-ability effects (condition already stripped by caller)
-    # ---------------------------------------------------------------------------
-
-    # "sacrifice this enchantment unless you pay {X}..." (Conversion, Stasis)
-    if "sacrifice this enchantment unless you pay" in text:
-        mana = _extract_mana_cost_from_text(text)
-        return _instruction("upkeep_pay_or_sacrifice_enchantment", mana=mana), "upkeep_effect"
-
-    # "sacrifice this creature unless you pay {X}" (Seasinger, Sea Serpent variants)
-    if "sacrifice this creature unless you pay" in text:
-        mana = _extract_mana_cost_from_text(text)
-        return _instruction("upkeep_pay_or_sacrifice_self", mana=mana), "upkeep_effect"
-
-    # "this creature/artifact deals N damage to you unless you pay {X}..." (Force of Nature)
-    _damage_unless_pay = re.search(r"this \w+ deals (\d+) damage to you unless you pay", text)
-    if _damage_unless_pay:
-        damage = int(_damage_unless_pay.group(1))
-        mana = _extract_mana_cost_from_text(text)
-        return _instruction("upkeep_pay_or_deal_damage_to_controller", damage=damage, mana=mana), "upkeep_effect"
-
-    # "unless you pay {...}, tap this creature and sacrifice a land of an opponent's choice" (Demonic Hordes)
-    if "unless you pay" in text and "sacrifice a land of an opponent" in text:
-        mana = _extract_mana_cost_from_text(text)
-        return _instruction("upkeep_pay_or_tap_and_sacrifice_opponent_land", mana=mana), "upkeep_effect"
-
-    # "sacrifice a creature other than this creature. if you can't, this creature deals N damage to you"
-    if "sacrifice a creature other than this creature" in text:
-        _alt_damage = re.search(r"this creature deals (\d+) damage to you", text)
-        alt_damage = int(_alt_damage.group(1)) if _alt_damage else 0
-        return _instruction("upkeep_sacrifice_other_creature_or_deal_damage", damage=alt_damage), "upkeep_effect"
-
-    # Black Vise: "this artifact deals x damage to that player, where x is the number of cards in their hand minus 4"
-    if "number of cards in their hand minus 4" in text:
-        return _instruction("upkeep_chosen_player_hand_overflow_damage"), "upkeep_effect"
-
-    # Raging River: left/right pile combat division
-    if "each defending player divides all creatures without flying they control into a \"left\" pile and a \"right\" pile" in text:
-        return _instruction("left_right_combat_division"), "triggered_combat"
-
-    # Cockatrice: effect-only match (trigger condition is already stripped by caller)
-    if (
-        "destroy that creature at end of combat" in text
-        or "destroy that creature at the end of combat" in text
-    ):
-        return _instruction("delayed_destroy_blocked_or_blocker"), "triggered_delayed_destroy"
-
-    # Hypnotic Specter: effect-only match
-    if "that player discards a card at random" in text:
-        return _instruction("opponent_discards_random_card_on_damage"), "triggered_discard"
-
-    # Scavenging Ghoul: at end step, corpse counters for each creature that died
-    if (
-        "put a corpse counter on this creature for each creature that died this turn" in text
-        or "put a corpse counter on this creature for each creature that died" in text
-    ):
-        return _instruction("add_corpse_counters_for_each_creature_died"), "triggered_counter"
-
-    # Scavenging Ghoul: remove a corpse counter to regenerate
-    if "remove a corpse counter from this creature: regenerate this creature" in text:
-        return _instruction("remove_counter_to_regenerate_self"), "activated_regenerate"
-
-    # Dwarven Warriors: make small creature unblockable
-    if "target creature with power 2 or less can't be blocked this turn" in text:
-        return _instruction("grant_unblockable_to_low_power_target"), "activated_evasion" if activated else "spell_pattern"
-
-    # Dragon Whelp: pump and delayed sacrifice
-    if (
-        "this creature gets +1/+0 until end of turn" in text
-        and "if this ability has been activated four or more times this turn" in text
-        and "sacrifice this creature at the beginning of the next end step" in text
-    ):
-        return _instruction("pump_self_with_sacrifice_condition"), "activated_pump"
-    # Animate Dead and similar: 'Return enchanted creature card to the battlefield under your control'
-    if re.search(r"return enchanted creature card to the battlefield under your control", text):
-        return _instruction("reanimate_creature"), "spell_pattern"
-    if activated and ("untap this artifact" in text or "untap this permanent" in text):
-        return _instruction("untap_self"), "activated_untap"
-    if "target player draws x cards" in text:
-        effect_kind = "activated_draw" if activated else "spell_pattern"
-        return _instruction("draw_target_cards", amount="x"), effect_kind
-
-    if "discard your hand, ante the top card of your library, then draw seven cards" in text:
-        return _instruction("discard_hand_ante_then_draw_seven"), "spell_pattern"
-
-    if "each player antes the top card of their library" in text:
-        return _instruction("each_player_antes_top_card"), "spell_pattern"
-
-    if "you own target card in the ante. exchange that card with the top card of your library" in text:
-        return _instruction("exchange_ante_with_top_library"), "spell_pattern"
-
-    draw_match = re.search(r"target player draws (\w+) cards?", text)
-    if draw_match:
-        count = _parse_number_token(draw_match.group(1))
-        if count > 0:
-            effect_kind = "activated_draw" if activated else "spell_pattern"
-            return _instruction("draw_target_cards", amount=count), effect_kind
-
-    if "copy target instant or sorcery spell" in text:
-        return _instruction("copy_top_stack_spell"), "spell_pattern"
-
-    if "each player chooses a number of lands they control equal to the number of lands controlled by the player who controls the fewest" in text:
-        return _instruction("balance_resources"), "spell_pattern"
-
-    if "target creature defending player controls can block any number of creatures this turn" in text:
-        effect_kind = "activated_keyword" if activated else "spell_pattern"
-        return _instruction("grant_unlimited_blocking"), effect_kind
-
-    if "this turn, instead of declaring blockers" in text:
-        return _instruction("randomize_blockers"), "spell_pattern"
-
-    if "remove target creature defending player controls from combat" in text:
-        effect_kind = "activated_combat" if activated else "spell_pattern"
-        return _instruction("remove_creature_from_combat"), effect_kind
-
-    if "whenever one or more creatures you control attack, each defending player divides all creatures without flying" in text:
-        return _instruction("left_right_combat_division"), "spell_pattern"
-
-    if "activates a mana ability of each land they control" in text and "loses all unspent mana" in text:
-        return _instruction("drain_target_lands_mana"), "spell_pattern"
-
-    if "tap all lands target player controls" in text and "loses all unspent mana" in text:
-        return _instruction("tap_target_player_lands_and_drain_mana"), "spell_pattern"
-
-    if "deals x damage" in text and "each creature without flying" in text:
-        effect_kind = "activated_damage" if activated else "spell_pattern"
-        return _instruction("earthquake_damage", amount="x"), effect_kind
-
-    if "deals x damage" in text and "each creature with flying" in text:
-        effect_kind = "activated_damage" if activated else "spell_pattern"
-        return _instruction("hurricane_damage", amount="x"), effect_kind
-
-    if "deals x damage" in text and "you gain life equal to the damage dealt" in text:
-        effect_kind = "activated_damage" if activated else "spell_pattern"
-        return _instruction("deal_damage_and_gain_life", amount="x"), effect_kind
-
-    if "deals x damage" in text:
-        effect_kind = "activated_damage" if activated else "spell_pattern"
-        return _instruction("deal_damage", amount="x"), effect_kind
-
-    _self_dmg_match = re.search(r"deals (\d+) damage to any target and (\d+) damage to you", text)
-    if _self_dmg_match:
-        effect_kind = "activated_damage" if activated else "spell_pattern"
-        return _instruction("deal_damage_and_self_damage", amount=int(_self_dmg_match.group(1)), self_damage=int(_self_dmg_match.group(2))), effect_kind
-
-    if "deals damage" in text and "equal to the number of swamps" in text:
-        return _instruction("deal_damage_equal_to_swamps"), "upkeep_effect"
-
-    if "deals 1 damage to each creature and each player" in text:
-        effect_kind = "activated_damage" if activated else "spell_pattern"
-        return _instruction("deal_damage_each_creature_and_player", amount=1), effect_kind
-
-    if "no creatures are on the battlefield" in text and "sacrifice this" in text:
-        return _instruction("sacrifice_if_no_creatures"), "triggered_sacrifice"
-
-    dmg_match = re.search(r"deals (\d+) damage", text)
-    if dmg_match:
-        effect_kind = "activated_damage" if activated else "spell_pattern"
-        return _instruction("deal_damage", amount=int(dmg_match.group(1))), effect_kind
-
-    if "from your graveyard to the battlefield" in text or "from a graveyard onto the battlefield" in text:
-        return _instruction("reanimate_creature"), "spell_pattern"
-
-    if "return target creature to its owner's hand" in text:
-        return _instruction("bounce_target_creature"), "spell_pattern"
-
-    if "exile target creature until end of turn" in text:
-        return _instruction("exile_target_creature_until_eot"), "spell_pattern"
-
-    if "exile target creature" in text and "its controller gains life equal to its power" in text:
-        return _instruction("exile_creature_gain_life_equal_to_power"), "spell_pattern"
-
-    if "prevent all combat damage that would be dealt this turn" in text:
-        return _instruction("prevent_all_combat_damage"), "spell_pattern"
-
-    if "each player discards their hand, then draws seven cards" in text:
-        return _instruction("wheel_of_fortune"), "spell_pattern"
-
-    if "each player shuffles their hand and graveyard into their library, then draws seven cards" in text:
-        return _instruction("timetwister"), "spell_pattern"
-
-    if "search your library for a card, put that card into your hand, then shuffle" in text:
-        return _instruction("search_library", count=1, card_type="any"), "spell_pattern"
-
-    if "take an extra turn after this one" in text:
-        return _instruction("grant_extra_turn"), "spell_pattern"
-
-    if "look at the top three cards of target player's library, then put them back in any order" in text:
-        return _instruction("reorder_target_library_top"), "spell_pattern"
-
-    if "change the text of target spell or permanent by replacing all instances of one" in text:
-        return _instruction("mark_text_modified"), "spell_pattern"
-
-    if "look at target opponent's hand and choose a card from it" in text:
-        return _instruction("peek_hand_and_force_play"), "spell_pattern"
-
-    if "as an additional cost to cast this spell, sacrifice a creature" in text:
-        return _instruction("sacrifice_creature_for_black_mana"), "spell_pattern"
-
-    if any(f"becomes {color}" in text for color in ("red", "black", "blue", "green", "white")):
-        target_color = next(
-            (sym for word, sym in _COLOR_WORD_TO_SYMBOL.items() if f"becomes {word}" in text),
-            None,
-        )
-        payload: dict[str, Any] = {"target_color": target_color} if target_color else {}
-        return OracleInstruction("recolor_target_from_text", "", payload), "spell_pattern"
-
-    if "flip it onto the battlefield" in text:
-        return _instruction("chaos_orb_flip"), "activated_chaos_orb"
-
-    if "destroy all artifacts, creatures, and enchantments" in text:
-        return _instruction("destroy_all_artifacts_creatures_enchantments"), "spell_pattern"
-
-    if "destroy all creatures" in text:
-        no_regen = "can't be regenerated" in text or "cannot be regenerated" in text
-        payload: dict[str, Any] = {"bypass_regeneration": True} if no_regen else {}
-        return OracleInstruction("destroy_all_creatures", "", payload), "spell_pattern"
-
-    if "destroy all enchantments" in text:
-        return _instruction("destroy_all_enchantments"), "spell_pattern"
-
-    if "destroy all lands" in text:
-        return _instruction("destroy_all_lands"), "spell_pattern"
-
-    # Destroy all of a specific land type (e.g., "Destroy all Plains.")
-    m = re.search(r"destroy all (plains|islands|swamps|mountains|forests)", text)
-    if m:
-        land = m.group(1)
-        return _instruction("destroy_all_lands_of_type", land_type=land), "spell_pattern"
-
-    if "target creature gains trample and gets +x/+0 until end of turn" in text:
-        return _instruction("berserk_pump"), "spell_pattern"
-
-    if "target creature gains flying until end of turn" in text:
-        ek = "activated_keyword" if activated else "spell_pattern"
-        return _instruction("grant_target_flying_until_eot"), ek
-
-    _pump_target_x_match = re.search(r"target (?:blocking )?creature gets \+(x|\d+)/\+(x|\d+) until end of turn", text)
-    if _pump_target_x_match:
-        p_str, t_str = _pump_target_x_match.group(1), _pump_target_x_match.group(2)
-        return _instruction(
-            "pump_target_creature_until_eot",
-            power=p_str if p_str == "x" else int(p_str),
-            toughness=t_str if t_str == "x" else int(t_str),
-        ), "spell_pattern"
-
-    if "destroy target" in text:
-        effect_kind = "activated_destroy" if activated else "spell_pattern"
-        type_filter: str | None = None
-        if "target creature" in text:
-            type_filter = "creature"
-        elif "target artifact or enchantment" in text:
-            type_filter = "artifact_or_enchantment"
-        elif "target artifact" in text:
-            type_filter = "artifact"
-        elif "target enchantment" in text:
-            type_filter = "enchantment"
-        elif "target land" in text:
-            type_filter = "land"
-        color_filter: str | None = next(
-            (sym for word, sym in _COLOR_WORD_TO_SYMBOL.items() if f" {word} " in f" {text} "),
-            None,
-        )
-        # Parse exclusion restrictions: "nonblack", "nonartifact", etc.
-        exclude_colors: list[str] = []
-        for word, sym in _COLOR_WORD_TO_SYMBOL.items():
-            if f"non{word}" in text:
-                exclude_colors.append(sym)
-        exclude_types: list[str] = []
-        for t in ("artifact", "creature", "enchantment", "land"):
-            if f"non{t}" in text:
-                exclude_types.append(t)
-        _destroy_payload: dict[str, Any] = {}
-        if type_filter:
-            _destroy_payload["type_filter"] = type_filter
-        if color_filter:
-            _destroy_payload["color_filter"] = color_filter
-        if exclude_colors:
-            _destroy_payload["exclude_colors"] = exclude_colors
-        if exclude_types:
-            _destroy_payload["exclude_types"] = exclude_types
-        no_regen_destroy = "can't be regenerated" in text or "cannot be regenerated" in text
-        if no_regen_destroy:
-            _destroy_payload["bypass_regeneration"] = True
-        return OracleInstruction("destroy_target_permanent", "", _destroy_payload), effect_kind
-
-    if "from your graveyard to your hand" in text:
-        return _instruction("return_creature_from_graveyard_to_hand"), "spell_pattern"
-
-    discard_match = re.search(r"target player discards (\w+) cards?", text)
-    if discard_match:
-        token = discard_match.group(1).lower()
-        if token == "x":
-            return _instruction("discard_x_target_cards"), "spell_pattern"
-        count = _parse_number_token(token)
-        if count > 0:
-            return _instruction("discard_target_cards", amount=count), "spell_pattern"
-
-    # Rule 104.3e: effect that states a player loses the game
-    if "target player loses the game" in text:
-        return _instruction("target_player_loses_game"), "spell_pattern"
-
-    # Rule 104.2b: effect that states a player wins the game (spell/sorcery form)
-    if "you win the game" in text:
-        return _instruction("player_wins_game"), "spell_pattern"
-
-    # Rule 104.4c: effect that states the game is a draw
-    if "the game is a draw" in text:
-        return _instruction("game_is_draw"), "spell_pattern"
-
-    lose_life_match = re.search(r"target player loses (\d+) life", text)
-    if lose_life_match:
-        return _instruction("target_loses_life", amount=int(lose_life_match.group(1))), "spell_pattern"
-
-    if "gains x life" in text or "gain x life" in text:
-        return _instruction("target_gains_life", amount="x"), "spell_pattern"
-
-    if activated and "untap enchanted creature" in text:
-        return _instruction("untap_enchanted_creature"), "activated_untap"
-
-    if "untap target land" in text and activated:
-        return _instruction("untap_target_land"), "activated_untap"
-
-    if "untap target" in text:
-        return _instruction("untap_target_permanent"), "spell_pattern"
-
-    if "tap target" in text:
-        return _instruction("tap_target_permanent"), "spell_pattern"
-
-    if "prevent the next x damage" in text:
-        effect_kind = "activated_prevent" if activated else "spell_pattern"
-        return _instruction("grant_prevention_shield", amount="x"), effect_kind
-
-    prevent_match = re.search(r"prevent the next (\d+) damage", text)
-    if prevent_match:
-        amount = int(prevent_match.group(1))
-        effect_kind = "activated_prevent" if activated else "spell_pattern"
-        return _instruction("grant_prevention_shield", amount=amount), effect_kind
-
-    if "would deal damage to you this turn, prevent that damage" in text and activated:
-        return _instruction("grant_prevention_shield", amount=1, protection_kind="color"), "activated_prevent"
-
-    if "the next time an unblocked creature of your choice would deal combat damage to you this turn, prevent all but 1 of that damage" in text and activated:
-        return _instruction("grant_forcefield_shield"), "activated_prevent"
-
-    if "regenerate target creature" in text:
-        effect_kind = "activated_regenerate" if activated else "spell_pattern"
-        return _instruction("grant_regeneration_to_target_creature"), effect_kind
-
-    if activated and "regenerate this creature" in text:
-        return _instruction("grant_regeneration_to_self"), "activated_regenerate"
-
-    if activated and "regenerate enchanted creature" in text:
-        return _instruction("grant_regeneration_to_enchanted_creature"), "activated_regenerate"
-
-    if "gain" in text and "life" in text:
-        gain_match = re.search(r"gains? (\d+) life", text)
-        if gain_match:
-            effect_kind = "activated_gain_life" if activated else "spell_pattern"
-            return _instruction("target_gains_life", amount=int(gain_match.group(1))), effect_kind
-
-    if activated and "this creature gets +1/+0 until end of turn" in text:
-        return _instruction("pump_self", power=1, toughness=0), "activated_pump"
-
-    if activated and "this creature gets +0/+1 until end of turn" in text:
-        return _instruction("pump_self", power=0, toughness=1), "activated_pump"
-
-    if activated and "this creature gets +1/+1 until end of turn" in text:
-        return _instruction("pump_self", power=1, toughness=1), "activated_pump"
-
-    # Activated pump that applies to the enchanted creature (e.g. Firebreathing)
-    if activated and re.search(r"enchanted creature gets \+(-?\d+)/\+(-?\d+)", text):
-        m = re.search(r"enchanted creature gets \+(-?\d+)/\+(-?\d+)", text)
-        return _instruction(
-            "pump_enchanted_creature",
-            power=int(m.group(1)),
-            toughness=int(m.group(2)),
-        ), "activated_pump"
-
-    if activated and "this creature gains flying until end of turn" in text:
-        return _instruction("grant_self_flying_until_eot"), "activated_keyword"
-
-    if activated and "target creature gains banding until end of turn" in text:
-        return _instruction("grant_banding_to_target"), "activated_keyword"
-
-    if activated and "put a +1/+1 counter on this creature" in text:
-        return _instruction("add_counter_to_self", power=1, toughness=1), "activated_counter"
-
-    if activated and "put up to x +1/+0 counters on this creature" in text:
-        return _instruction("add_variable_power_counters_to_self"), "activated_counter"
-
-    if activated and "add three mana of any one color" in text:
-        return _instruction("sacrifice_self_for_mana", amount=3, color="G", any_color=True), "activated_mana"
-
-    if activated and "draw a card" in text:
-        return _instruction("draw_controller_cards", amount=1), "activated_draw"
-
-    if activated and "target land becomes a forest" in text:
-        return _instruction("change_target_land_type", land_type="forest"), "activated_landtype"
-
-    if activated and "choose target non-wall creature" in text:
-        return _instruction("mark_non_wall_target_to_attack"), "activated_combat"
-
-    if activated and "target creature you control with toughness less than this creature's power gains flying until end of turn" in text:
-        return _instruction("grant_flying_and_delayed_destruction"), "activated_keyword"
-
-    if activated and "the next 1 damage that would be dealt to this creature this turn is dealt to its owner instead" in text:
-        return _instruction("redirect_one_damage_to_owner"), "activated_prevent"
-
-    if activated and "next time a source of your choice would deal damage to target creature this turn" in text:
-        return _instruction("jade_monolith_redirect"), "activated_prevent"
-
-    if activated and "this artifact becomes a 3/6 golem artifact creature until end of combat" in text:
-        return _instruction("animate_self_until_end_of_combat", power=3, toughness=6), "activated_animate"
-
-    if activated and "create a 1/1 colorless insect artifact creature token with flying named wasp" in text:
-        return _instruction("create_wasp_token"), "activated_token"
-
-    if activated and "you may cast that card face down as a 2/2 creature spell" in text:
-        return _instruction("cast_face_down_creature"), "activated_cast"
-
-    if activated and "look at target player's hand" in text:
-        return _instruction("look_at_target_hand"), "activated_look"
-
-    if activated and "put a mire counter on target non-swamp land" in text:
-        return _instruction("add_mire_counter_to_target_land"), "activated_landtype"
-
-    if "you may pay 1 life" in text and "add {c}" in text:
-        return _instruction("channel_life_for_mana"), "spell_pattern"
-
-    if activated and "add one mana of any color" in text:
-        return _instruction("add_mana_from_text", oracle_text=text, any_color=True), "activated_mana"
-
-    if "add {" in text:
-        any_color = "any one color" in text or "any color" in text
-        effect_kind = "activated_mana" if activated else "spell_pattern"
-        return _instruction("add_mana_from_text", oracle_text=text, any_color=any_color), effect_kind
-
-    # Color-specific counterspells (Deathgrip, Lifeforce, etc.)
-    for _cword, _csym in _COLOR_WORD_TO_SYMBOL.items():
-        if f"counter target {_cword} spell" in text:
-            return _instruction("counter_top_stack_spell", color_filter=_csym), "spell_pattern"
-
-    if "counter target spell" in text:
-        return _instruction("counter_top_stack_spell"), "spell_pattern"
-
-    # Triggered-ability effect shorthands (no "activated" guard needed)
-    if "draw a card" in text:
-        return _instruction("draw_controller_cards", amount=1), "triggered_draw"
-
-    if "put a +1/+1 counter on this creature" in text or "put a +1/+1 counter on it" in text:
-        return _instruction("add_counter_to_self", power=1, toughness=1), "triggered_counter"
-
-    if "put a +1/+1 counter on target creature" in text:
-        return _instruction("add_counter_to_target", power=1, toughness=1), "triggered_counter"
-
-    if "you lose the game" in text:
-        return _instruction("player_loses_game"), "triggered_loss"
-
-    if "you win the game" in text:
-        return _instruction("player_wins_game"), "triggered_win"
-
-    if "sacrifice this permanent" in text or "sacrifice this creature" in text or "sacrifice this enchantment" in text:
-        return _instruction("sacrifice_self"), "triggered_sacrifice"
-
-    if "its owner loses half their life, rounded up" in text:
-        return _instruction("owner_loses_half_life"), "triggered_loss"
-
-    # Global buff / animate-land effects (e.g. Kormus Bell, Living Lands)
-    if "all swamps are 1/1 black creatures that are still lands" in text:
-        return _instruction("animate_all_swamps"), "spell_pattern"
-
-    if "all forests are 1/1 creatures that are still lands" in text:
-        return _instruction("animate_all_forests"), "spell_pattern"
-
-    if "attacking creatures you control get +1/+0" in text:
-        return _instruction("buff_attacking_creatures", power=1, toughness=0), "spell_pattern"
-
-    if "untapped creatures you control get +0/+2" in text:
-        return _instruction("buff_untapped_creatures", power=0, toughness=2), "spell_pattern"
-
-    # Generic creatures-get pump (e.g. "white creatures get +1/+1")
-    _global_match = re.search(r"(white|blue|black|red|green)?\s*creatures(?: you control)? get \+(\d+)/\+(\d+)", text)
-    if _global_match:
-        color_word, power_s, toughness_s = _global_match.groups()
-        _payload: dict[str, Any] = {"power": int(power_s), "toughness": int(toughness_s)}
-        if color_word:
-            _payload["color"] = _COLOR_WORD_TO_SYMBOL.get(color_word)
-        _payload["all"] = "you control" not in text
-        return OracleInstruction("buff_creatures_global", "", _payload), "spell_pattern"
-
-    return None, "unsupported"
+    return parse_primary_instruction(text, activated=activated)
 
 
 # ---------------------------------------------------------------------------
@@ -1010,7 +454,7 @@ def _parse_activated_ability(line: str) -> ParsedActivatedAbility | None:
         return None
 
     effect_text = normalized.split(":", 1)[1].strip()
-    instruction, effect_kind = _parse_primary_instruction(effect_text, activated=True)
+    instruction, effect_kind = parse_primary_instruction(effect_text, activated=True)
     supported = instruction is not None
     return ParsedActivatedAbility(
         source_line=line,
@@ -1057,7 +501,7 @@ def _is_supported_static_creature_line(line: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Creature program parser — updated to handle triggered abilities per line
+# Creature program parser
 # ---------------------------------------------------------------------------
 
 def _parse_creature_program(
@@ -1193,7 +637,10 @@ def _parse_noncreature_triggered(oracle_text: str) -> tuple[ParsedTriggeredAbili
 # Top-level compiler
 # ---------------------------------------------------------------------------
 
-@lru_cache(maxsize=2048)
+# Unbounded cache: card definitions are immutable and the pool is finite, so
+# every distinct card compiles exactly once per process — even with thousands
+# of cards the programs are tiny compared to recompilation cost.
+@lru_cache(maxsize=None)
 def _compile_card_oracle(
     name: str,
     primary_type: str,
@@ -1220,7 +667,7 @@ def _compile_card_oracle(
             return OracleProgram(True, "permanent_vanilla", "no oracle text", normalized_text)
 
         instructions: list[OracleInstruction] = []
-        primary_instruction, _ = _parse_primary_instruction(normalized_text, activated=False)
+        primary_instruction, _ = parse_primary_instruction(normalized_text, activated=False)
         if primary_instruction is not None:
             instructions.append(primary_instruction)
 

@@ -178,6 +178,10 @@ def run_ai_simulation(cards_path: Path, games: int = 10, seed: int = 1337, max_t
     cards = {card.name: card for card in load_cards(cards_path)}
     report = SimulationReport(games_requested=games, games_completed=0, interaction_count=0)
     rng = random.Random(seed)
+    # The engine's coin flips, opening-hand shuffles, and random effects use the
+    # module-level RNG. Seed it so the simulation is fully reproducible — the
+    # deck-construction rng above only covers deck ordering.
+    random.seed(seed)
 
     for game_index in range(1, games + 1):
         p1 = PlayerState(name=f"AI-A-{game_index}", library=_build_deck(cards, rng.randint(1, 1_000_000)))

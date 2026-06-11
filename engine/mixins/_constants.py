@@ -17,14 +17,10 @@ _EOT_METADATA_KEYS = (
     "loses_flying_until_eot",
 )
 
-# Map: artifact name → (color that triggers it, life gained)
-_COLOR_ROD_TRIGGERS: dict[str, tuple[str, int]] = {
-    "Crystal Rod": ("U", 1),
-    "Iron Star": ("R", 1),
-    "Ivory Cup": ("W", 1),
-    "Throne of Bone": ("B", 1),
-    "Wooden Sphere": ("G", 1),
-}
+# Map: artifact name → (color that triggers it, life gained).
+# Kept as an alias for backwards compatibility; the data now lives in
+# engine.card_hooks alongside the other per-card behavior registries.
+from ..card_hooks import COLOR_ROD_TRIGGERS as _COLOR_ROD_TRIGGERS  # noqa: E402
 
 _TURN_PHASES: tuple[str, ...] = (
     "beginning",
