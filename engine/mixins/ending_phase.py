@@ -14,7 +14,12 @@ class EndingPhaseMixin:
         for controller in self.players:
             survivors: list[Permanent] = []
             for permanent in controller.battlefield:
-                if permanent.metadata.get("destroy_at_next_end_step"):
+                # Nettling Imp / Siren's Call: destroy creatures that were
+                # required to attack this turn but didn't.
+                did_not_attack = permanent.metadata.get(
+                    "destroy_if_did_not_attack_eot"
+                ) and not permanent.metadata.get("attacked_this_turn")
+                if permanent.metadata.get("destroy_at_next_end_step") or did_not_attack:
                     controller.graveyard.append(permanent.card)
                     destroyed_names.append(permanent.card.name)
                 else:
@@ -23,6 +28,24 @@ class EndingPhaseMixin:
 
         for name in destroyed_names:
             self.log.append(f"{name} was destroyed at end step")
+
+        # Scavenging Ghoul: "At the beginning of each end step, put a corpse
+        # counter on this creature for each creature that died this turn."
+        died = getattr(self, "creatures_died_this_turn", 0)
+        if died:
+            for controller in self.players:
+                for permanent in controller.battlefield:
+                    prog = compile_card_oracle(permanent.card)
+                    if any(
+                        t.condition.kind == "end_step"
+                        and t.instruction is not None
+                        and t.instruction.kind == "add_corpse_counters_for_each_creature_died"
+                        for t in prog.triggered_abilities
+                    ):
+                        permanent.metadata["corpse_counters"] = (
+                            int(permanent.metadata.get("corpse_counters", 0)) + died
+                        )
+                        self.log.append(f"{permanent.card.name} gets {died} corpse counter(s)")
 
         # Pestilence-style: "At the beginning of the end step, if no creatures on the battlefield, sacrifice"
         all_perms = [p for pl in self.players for p in pl.battlefield]

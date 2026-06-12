@@ -24,6 +24,17 @@ class EffectsMixin:
                 )
                 break
 
+    def _fire_dealt_damage_triggers(self, permanent: Permanent) -> None:
+        """Fire 'whenever this creature is dealt damage' triggers (e.g. Fungusaur)."""
+        program = compile_card_oracle(permanent.card)
+        for trig in program.triggered_abilities:
+            if trig.condition.kind != "creature_dealt_damage" or trig.instruction is None:
+                continue
+            if trig.instruction.kind == "add_counter_to_self":
+                permanent.power_bonus += int(trig.instruction.payload.get("power", 1))
+                permanent.toughness_bonus += int(trig.instruction.payload.get("toughness", 1))
+                self.log.append(f"{permanent.card.name} gets a +1/+1 counter (dealt damage)")
+
     def _destroy_target_permanent(
         self,
         target: PlayerState,

@@ -5586,10 +5586,13 @@ def test_sinkhole_destroys_target_land(all_cards):
 
 def test_sirens_call_resolves_without_error(all_cards):
     sirens_call = _get(all_cards, "Siren's Call")
+    island = _get(all_cards, "Island")
     p1 = PlayerState(name="P1", hand=[sirens_call])
-    p2 = PlayerState(name="P2")
+    p2 = PlayerState(name="P2", library=[island])
     game = Game(players=[p1, p2])
 
+    # Castable only during an opponent's turn, before attackers are declared.
+    game.start_turn(1)
     result = game.cast_from_hand(0, "Siren's Call")
 
     assert result.supported
@@ -7679,14 +7682,14 @@ class TestLandCards:
     "Animate Wall", "Ankh of Mishra", "Armageddon", "Aspect of Wolf",
     "Bad Moon", "Balance", "Basalt Monolith", "Benalish Hero", "Berserk",
     "Birds of Paradise", "Black Knight", "Black Lotus", "Black Vise",
-    "Blaze of Glory", "Blessing", "Blue Elemental Blast", "Bog Wraith",
+    "Blaze of Glory", "Blessing", "Blue Elemental Blast", "Blue Ward", "Bog Wraith",
     "Braingeyser", "Burrowing", "Camouflage", "Castle",
     "Circle of Protection: Blue", "Circle of Protection: Green",
     "Circle of Protection: Red", "Circle of Protection: White",
     "Clockwork Beast", "Clone", "Cockatrice", "Conservator",
     "Control Magic", "Conversion", "Copper Tablet", "Copy Artifact",
     "Counterspell", "Craw Wurm", "Creature Bond", "Crusade",
-    "Crystal Rod", "Cursed Land", "Cyclopean Tomb", "Dark Ritual",
+    "Crystal Rod", "Cursed Land", "Cyclopean Tomb", "Dark Ritual", "Darkpact",
     "Death Ward", "Deathlace", "Demonic Hordes", "Demonic Tutor",
     "Dingus Egg", "Disenchant", "Disintegrate", "Disrupting Scepter",
     "Dragon Whelp", "Drain Life", "Drudge Skeletons", "Dwarven Demolition Team",
@@ -7709,7 +7712,7 @@ class TestLandCards:
     "Mind Twist", "Mons's Goblin Raiders", "Natural Selection", "Nether Shadow",
     "Nettling Imp", "Nevinyrral's Disk", "Nightmare", "Northern Paladin",
     "Obsianus Golem", "Orcish Artillery", "Orcish Oriflamme", "Paralyze",
-    "Pearled Unicorn", "Pestilence", "Phantom Monster", "Pirate Ship",
+    "Pearled Unicorn", "Personal Incarnation", "Pestilence", "Phantom Monster", "Pirate Ship",
     "Plague Rats", "Power Leak", "Power Surge", "Prodigal Sorcerer",
     "Psionic Blast", "Psychic Venom", "Raging River", "Raise Dead",
     "Red Elemental Blast", "Regeneration", "Regrowth", "Resurrection",
@@ -7717,7 +7720,7 @@ class TestLandCards:
     "Rod of Ruin", "Royal Assassin", "Samite Healer", "Savannah Lions",
     "Scathe Zombies", "Scavenging Ghoul", "Scryb Sprites", "Sea Serpent",
     "Sedge Troll", "Sengir Vampire", "Serra Angel", "Shatter",
-    "Shivan Dragon", "Sinkhole", "Sleight of Mind", "Smoke",
+    "Shivan Dragon", "Sinkhole", "Siren's Call", "Sleight of Mind", "Smoke",
     "Sol Ring", "Spell Blast", "Stasis", "Steal Artifact",
     "Stone Giant", "Stone Rain", "Stream of Life", "Swords to Plowshares",
     "Terror", "The Hive", "Thicket Basilisk", "Time Walk",
@@ -7727,7 +7730,7 @@ class TestLandCards:
     "Wall of Air", "Wall of Bone", "Wall of Brambles", "Wall of Fire",
     "Wall of Ice", "Wall of Stone", "Wall of Swords", "Wall of Water",
     "Wall of Wood", "Wanderlust", "War Mammoth", "Warp Artifact",
-    "Water Elemental", "Weakness", "Wheel of Fortune",
+    "Water Elemental", "Weakness", "Web", "Wheel of Fortune",
     "White Knight", "Wild Growth", "Will-o'-the-Wisp", "Winter Orb",
     "Wooden Sphere", "Word of Command", "Wrath of God", "Zombie Master",
 ])
@@ -7829,3 +7832,437 @@ def test_all_lea_cards_resolve_without_exception(all_cards, card_name):
     # The call must not raise; result being unsupported is acceptable
     # (some cards may have unmet preconditions in this generic setup)
     assert result is not None
+
+
+# ===========================================================================
+# 10. ORACLE COVERAGE — previously untested LEA cards
+# ===========================================================================
+
+
+def test_blue_ward_grants_protection_from_blue(all_cards):
+    ward = _get(all_cards, "Blue Ward")
+    creature = _mk_creature_card("Test Knight", power=2, toughness=2)
+    p1 = PlayerState(name="P1", hand=[ward])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=creature)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Blue Ward", target_player_index=1, target_permanent_index=0)
+
+    assert result.supported
+    assert p2.battlefield[0].metadata.get("protection_from_blue") is True
+
+
+def test_web_grants_toughness_bonus_and_reach(all_cards):
+    web = _get(all_cards, "Web")
+    bears = _get(all_cards, "Grizzly Bears")
+    flyer = _get(all_cards, "Air Elemental")
+    bears_perm = Permanent(card=bears)
+    p1 = PlayerState(name="P1", hand=[web], battlefield=[bears_perm])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=flyer)])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Web", target_player_index=0, target_permanent_index=0)
+
+    assert result.supported
+    # "Enchanted creature gets +0/+2"
+    assert bears_perm.effective_power == 2
+    assert bears_perm.effective_toughness == 4
+    # "and has reach" — it can now block creatures with flying
+    assert game._has_keyword(bears_perm, "reach")
+    assert game._can_block_attacker(bears_perm, p2.battlefield[0]) is True
+
+
+def test_fire_elemental_vanilla_stats_and_cast(all_cards):
+    elemental = _get(all_cards, "Fire Elemental")
+    assert classify_card(elemental).supported
+    p1 = PlayerState(name="P1", hand=[elemental])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Fire Elemental")
+
+    assert result.supported
+    perm = p1.battlefield[0]
+    assert perm.card.name == "Fire Elemental"
+    assert perm.effective_power == 5
+    assert perm.effective_toughness == 4
+
+
+def test_gray_ogre_vanilla_stats_and_cast(all_cards):
+    ogre = _get(all_cards, "Gray Ogre")
+    assert classify_card(ogre).supported
+    p1 = PlayerState(name="P1", hand=[ogre])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Gray Ogre")
+
+    assert result.supported
+    perm = p1.battlefield[0]
+    assert perm.effective_power == 2
+    assert perm.effective_toughness == 2
+
+
+def test_zombie_master_grants_swampwalk_and_regeneration_to_other_zombies(all_cards):
+    master = _get(all_cards, "Zombie Master")
+    zombies = _get(all_cards, "Scathe Zombies")
+    zombie_perm = Permanent(card=zombies)
+    p1 = PlayerState(name="P1", hand=[master], battlefield=[zombie_perm])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Zombie Master")
+
+    assert result.supported
+    # "Other Zombie creatures have swampwalk."
+    assert zombie_perm.metadata.get("has_swampwalk") is True
+    # 'Other Zombies have "{B}: Regenerate this permanent."'
+    assert zombie_perm.metadata.get("granted_regen_ability") is True
+    regen = game.activate_permanent_ability(0, "Scathe Zombies")
+    assert regen.supported
+    assert zombie_perm.regeneration_shield == 1
+
+
+def test_demonic_hordes_tap_ability_destroys_target_land(all_cards):
+    hordes = _get(all_cards, "Demonic Hordes")
+    plains = _get(all_cards, "Plains")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=hordes)])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=plains)])
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Demonic Hordes", target_player_index=1)
+
+    assert result.supported
+    assert not p2.battlefield
+    assert p2.graveyard and p2.graveyard[0].name == "Plains"
+    assert p1.battlefield[0].tapped is True
+
+
+def test_demonic_hordes_upkeep_paid_with_bbb_keeps_it_untapped(all_cards):
+    hordes = _get(all_cards, "Demonic Hordes")
+    swamp = _get(all_cards, "Swamp")
+    hordes_perm = Permanent(card=hordes)
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[hordes_perm, Permanent(card=swamp)],
+        mana_pool={"W": 0, "U": 0, "B": 3, "R": 0, "G": 0, "C": 0},
+    )
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    game.resolve_upkeep(0)
+
+    assert hordes_perm.tapped is False
+    assert p1.mana_pool["B"] == 0
+    assert any(p.card.name == "Swamp" for p in p1.battlefield)
+
+
+def test_demonic_hordes_upkeep_unpaid_taps_it_and_sacrifices_own_land(all_cards):
+    hordes = _get(all_cards, "Demonic Hordes")
+    swamp = _get(all_cards, "Swamp")
+    plains = _get(all_cards, "Plains")
+    hordes_perm = Permanent(card=hordes)
+    p1 = PlayerState(name="P1", battlefield=[hordes_perm, Permanent(card=swamp)])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=plains)])
+    game = Game(players=[p1, p2])
+
+    game.resolve_upkeep(0)
+
+    assert hordes_perm.tapped is True
+    # The controller sacrifices their own land; the opponent's land is untouched.
+    assert not any(p.card.primary_type == "land" for p in p1.battlefield)
+    assert any(c.name == "Swamp" for c in p1.graveyard)
+    assert any(p.card.name == "Plains" for p in p2.battlefield)
+
+
+def test_fungusaur_gets_counter_when_dealt_nonlethal_damage(all_cards):
+    fungusaur = _get(all_cards, "Fungusaur")
+    zap = _mk_card("Test Zap", "Instant", "Test Zap deals 1 damage to any target.")
+    fungusaur_perm = Permanent(card=fungusaur)
+    p1 = PlayerState(name="P1", battlefield=[fungusaur_perm])
+    p2 = PlayerState(name="P2", hand=[zap])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(1, "Test Zap", target_player_index=0, target_permanent_index=0)
+
+    assert result.supported
+    # 2/2 base, 1 damage marked, +1/+1 counter from the trigger -> survives as a 3/3
+    assert fungusaur_perm in p1.battlefield
+    assert fungusaur_perm.damage_marked == 1
+    assert fungusaur_perm.effective_power == 3
+    assert fungusaur_perm.effective_toughness == 3
+
+
+def test_personal_incarnation_death_halves_owner_life(all_cards):
+    incarnation = _get(all_cards, "Personal Incarnation")
+    terror = _get(all_cards, "Terror")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=incarnation)], life=20)
+    p2 = PlayerState(name="P2", hand=[terror])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(1, "Terror", target_player_index=0, target_permanent_index=0)
+
+    assert result.supported
+    assert not p1.battlefield
+    # "its owner loses half their life, rounded up" — 20 -> 10
+    assert p1.life == 10
+
+
+def test_personal_incarnation_redirect_ability_marks_redirect(all_cards):
+    incarnation = _get(all_cards, "Personal Incarnation")
+    incarnation_perm = Permanent(card=incarnation)
+    p1 = PlayerState(name="P1", battlefield=[incarnation_perm], life=20)
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Personal Incarnation")
+
+    assert result.supported
+    assert incarnation_perm.metadata.get("redirect_one_damage_to_owner_until_eot") == 1
+
+
+def test_scavenging_ghoul_corpse_counters_and_regeneration(all_cards):
+    ghoul = _get(all_cards, "Scavenging Ghoul")
+    bears = _get(all_cards, "Grizzly Bears")
+    bolt = _get(all_cards, "Lightning Bolt")
+    ghoul_perm = Permanent(card=ghoul)
+    p1 = PlayerState(name="P1", battlefield=[ghoul_perm])
+    p2 = PlayerState(name="P2", hand=[bolt], battlefield=[Permanent(card=bears)])
+    game = Game(players=[p1, p2])
+
+    # A creature dies this turn...
+    result = game.cast_from_hand(1, "Lightning Bolt", target_player_index=1, target_permanent_index=0)
+    assert result.supported
+    assert not p2.battlefield
+
+    # ...so at the end step the Ghoul gets a corpse counter
+    game.resolve_end_step(0)
+    assert ghoul_perm.metadata.get("corpse_counters") == 1
+
+    # "Remove a corpse counter from this creature: Regenerate this creature."
+    regen = game.activate_permanent_ability(0, "Scavenging Ghoul")
+    assert regen.supported
+    assert ghoul_perm.regeneration_shield == 1
+    assert ghoul_perm.metadata.get("corpse_counters") == 0
+
+    # With no corpse counters left, the ability cannot be activated
+    regen_again = game.activate_permanent_ability(0, "Scavenging Ghoul")
+    assert not regen_again.supported
+
+
+def test_spell_blast_counters_spell_with_matching_x(all_cards):
+    blast = _get(all_cards, "Spell Blast")
+    elemental = _get(all_cards, "Air Elemental")  # mana value 5
+    p1 = PlayerState(name="P1", hand=[blast])
+    p2 = PlayerState(name="P2", hand=[elemental])
+    game = Game(players=[p1, p2])
+
+    game.queue_from_hand(1, "Air Elemental")
+    result = game.cast_from_hand(0, "Spell Blast", target_player_index=1, x_value=5)
+
+    assert result.supported
+    assert any("Spell Blast countered Air Elemental" in line for line in game.log)
+    assert not game.stack
+    assert not p2.battlefield
+
+
+def test_spell_blast_does_not_counter_spell_with_wrong_x(all_cards):
+    blast = _get(all_cards, "Spell Blast")
+    elemental = _get(all_cards, "Air Elemental")  # mana value 5
+    p1 = PlayerState(name="P1", hand=[blast])
+    p2 = PlayerState(name="P2", hand=[elemental])
+    game = Game(players=[p1, p2])
+
+    game.queue_from_hand(1, "Air Elemental")
+    result = game.cast_from_hand(0, "Spell Blast", target_player_index=1, x_value=2)
+
+    assert result.supported
+    assert not any("Spell Blast countered" in line for line in game.log)
+    # The Air Elemental still resolves
+    assert any(p.card.name == "Air Elemental" for p in p2.battlefield)
+
+
+def test_gaeas_liege_pt_equals_forests_controlled_when_not_attacking(all_cards):
+    liege = _get(all_cards, "Gaea's Liege")
+    forest = _get(all_cards, "Forest")
+    liege_perm = Permanent(card=liege)
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[liege_perm, Permanent(card=forest), Permanent(card=forest)],
+    )
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    game._refresh_dynamic_creatures()
+
+    assert liege_perm.effective_power == 2
+    assert liege_perm.effective_toughness == 2
+
+
+def test_gaeas_liege_pt_equals_defenders_forests_when_attacking(all_cards):
+    liege = _get(all_cards, "Gaea's Liege")
+    forest = _get(all_cards, "Forest")
+    liege_perm = Permanent(card=liege)
+    p1 = PlayerState(name="P1", battlefield=[liege_perm, Permanent(card=forest)])
+    p2 = PlayerState(
+        name="P2",
+        battlefield=[Permanent(card=forest), Permanent(card=forest), Permanent(card=forest)],
+    )
+    game = Game(players=[p1, p2])
+
+    liege_perm.attacking = True
+    liege_perm.defending_player_index = 1
+    game._refresh_dynamic_creatures()
+
+    assert liege_perm.effective_power == 3
+    assert liege_perm.effective_toughness == 3
+
+
+def test_darkpact_exchanges_top_library_card_with_simulated_ante(all_cards):
+    darkpact = _get(all_cards, "Darkpact")
+    swamp = _get(all_cards, "Swamp")
+    p1 = PlayerState(name="P1", hand=[darkpact], library=[swamp])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Darkpact")
+
+    assert result.supported
+    # Simplified ante model: the top library card moves to the graveyard
+    assert not p1.library
+    assert any(c.name == "Swamp" for c in p1.graveyard)
+    assert any(c.name == "Darkpact" for c in p1.graveyard)
+
+
+# ===========================================================================
+# Siren's Call
+# ===========================================================================
+
+def test_sirens_call_cannot_be_cast_during_your_own_turn(all_cards):
+    call = _get(all_cards, "Siren's Call")
+    bear = _mk_card("Bear", "Creature - Bear")
+
+    p1 = PlayerState(name="P1", hand=[call])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
+    game = Game(players=[p1, p2])  # P1 is the active player by default
+
+    result = game.cast_from_hand(0, "Siren's Call", target_player_index=1)
+
+    assert result.supported is False
+    assert any(c.name == "Siren's Call" for c in p1.hand)
+
+
+def test_sirens_call_cannot_be_cast_after_attackers_declared(all_cards):
+    call = _get(all_cards, "Siren's Call")
+    bear = _mk_card("Bear", "Creature - Bear")
+    island = _get(all_cards, "Island")
+
+    p1 = PlayerState(name="P1", hand=[call])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)], library=[island])
+    game = Game(players=[p1, p2])
+
+    game.start_turn(1)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # -> beginning_of_combat
+    game.advance_combat_phase()  # -> declare_attackers
+    ok, _ = game.declare_attackers(1, [0])
+    assert ok
+
+    result = game.cast_from_hand(0, "Siren's Call", target_player_index=1)
+
+    assert result.supported is False
+    assert any(c.name == "Siren's Call" for c in p1.hand)
+
+
+def test_sirens_call_marks_active_player_creatures(all_cards):
+    call = _get(all_cards, "Siren's Call")
+    bear = _mk_card("Opposing Bear", "Creature - Bear")
+    wall = _mk_card("Test Wall", "Creature - Wall")
+    home_bear = _mk_card("Home Bear", "Creature - Bear")
+    island = _get(all_cards, "Island")
+
+    p1 = PlayerState(name="P1", hand=[call], battlefield=[Permanent(card=home_bear)])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear), Permanent(card=wall)], library=[island])
+    game = Game(players=[p1, p2])
+    game.start_turn(1)
+
+    # Entered the battlefield this turn: exempt from the delayed destruction
+    # ("didn't control continuously since the beginning of the turn").
+    fresh = Permanent(card=_mk_card("Fresh Bear", "Creature - Bear"))
+    fresh.metadata["summoning_sickness_turn"] = game.turn
+    p2.battlefield.append(fresh)
+
+    result = game.cast_from_hand(0, "Siren's Call", target_player_index=1)
+
+    assert result.supported
+    assert any(c.name == "Siren's Call" for c in p1.graveyard)
+
+    bear_perm, wall_perm = p2.battlefield[0], p2.battlefield[1]
+    assert bear_perm.metadata.get("must_attack_until_eot") is True
+    assert bear_perm.metadata.get("destroy_if_did_not_attack_eot") is True
+    # Walls are never destroyed by Siren's Call
+    assert wall_perm.metadata.get("destroy_if_did_not_attack_eot") is None
+    assert fresh.metadata.get("destroy_if_did_not_attack_eot") is None
+    # The caster's own creatures are unaffected
+    assert p1.battlefield[0].metadata.get("must_attack_until_eot") is None
+
+
+def test_sirens_call_forces_creatures_to_attack(all_cards):
+    call = _get(all_cards, "Siren's Call")
+    bear = _mk_card("Reluctant Bear", "Creature - Bear")
+    island = _get(all_cards, "Island")
+
+    p1 = PlayerState(name="P1", hand=[call])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)], library=[island])
+    game = Game(players=[p1, p2])
+
+    game.start_turn(1)
+    result = game.cast_from_hand(0, "Siren's Call", target_player_index=1)
+    assert result.supported
+
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # -> beginning_of_combat
+    game.advance_combat_phase()  # -> declare_attackers
+
+    ok, reason = game.declare_attackers(1, [])
+    assert not ok
+    assert "must attack" in reason
+
+    ok, _ = game.declare_attackers(1, [0])
+    assert ok
+
+
+def test_sirens_call_destroys_non_attackers_at_end_step(all_cards):
+    call = _get(all_cards, "Siren's Call")
+    attacker = _mk_card("Eager Bear", "Creature - Bear")
+    slacker = _mk_card("Lazy Bear", "Creature - Bear")
+    island = _get(all_cards, "Island")
+
+    p1 = PlayerState(name="P1", hand=[call])
+    p2 = PlayerState(
+        name="P2",
+        battlefield=[Permanent(card=attacker), Permanent(card=slacker)],
+        library=[island],
+    )
+    game = Game(players=[p1, p2])
+
+    game.start_turn(1)
+    result = game.cast_from_hand(0, "Siren's Call", target_player_index=1)
+    assert result.supported
+
+    # A tapped creature can't attack, but it still didn't attack this turn,
+    # so it is destroyed at the beginning of the next end step.
+    p2.battlefield[1].tapped = True
+
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # -> beginning_of_combat
+    game.advance_combat_phase()  # -> declare_attackers
+    ok, _ = game.declare_attackers(1, [0])
+    assert ok
+
+    game.resolve_end_step(1)
+
+    names = [perm.card.name for perm in p2.battlefield]
+    assert "Eager Bear" in names
+    assert "Lazy Bear" not in names
+    assert any(c.name == "Lazy Bear" for c in p2.graveyard)

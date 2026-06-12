@@ -22,6 +22,14 @@ def counter_target_color_spell(text: str, activated: bool) -> RuleResult:
     return None
 
 
+# Spell Blast: "Counter target spell with mana value X."
+@parse_rule(1045)
+def counter_target_spell_with_mana_value_x(text: str, activated: bool) -> RuleResult:
+    if "counter target spell with mana value x" in text:
+        return _instruction("counter_top_stack_spell", mv_equals_x=True), "spell_pattern"
+    return None
+
+
 @parse_rule(1050)
 def counter_target_spell(text: str, activated: bool) -> RuleResult:
     if "counter target spell" in text:

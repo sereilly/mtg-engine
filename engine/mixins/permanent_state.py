@@ -121,6 +121,22 @@ class PermanentStateMixin:
                     permanent.metadata["absolute_power"] = swamp_count
                     permanent.metadata["absolute_toughness"] = swamp_count
 
+                if "dynamic_pt_forests_gaea" in instr_kinds:
+                    # Not attacking: forests its controller controls; attacking:
+                    # forests the defending player controls.
+                    if permanent.attacking and permanent.defending_player_index is not None:
+                        reference_player = self.players[permanent.defending_player_index]
+                    else:
+                        reference_player = player
+                    forest_count = sum(
+                        1
+                        for perm in reference_player.battlefield
+                        if "forest" in perm.card.type_line.lower()
+                        or perm.metadata.get("land_type_override") == "forest"
+                    )
+                    permanent.metadata["absolute_power"] = forest_count
+                    permanent.metadata["absolute_toughness"] = forest_count
+
                 if "conditional_swamp_bonus" in instr_kinds:
                     previous = int(permanent.metadata.get("conditional_swamp_bonus", 0))
                     if previous:
@@ -152,6 +168,8 @@ class PermanentStateMixin:
         if lower_keyword == "first strike" and permanent.metadata.get("gains_first_strike", False):
             return True
         if lower_keyword == "fear" and permanent.metadata.get("gains_fear", False):
+            return True
+        if lower_keyword == "reach" and permanent.metadata.get("gains_reach", False):
             return True
         if lower_keyword == "haste" and permanent.metadata.get("gains_haste", False):
             return True

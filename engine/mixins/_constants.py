@@ -7,6 +7,7 @@ _EOT_METADATA_KEYS = (
     "cant_be_blocked_until_eot",
     "must_attack_until_eot",
     "destroy_if_did_not_attack_eot",
+    "attacked_this_turn",
     "redirect_one_damage_to_owner_until_eot",
     # Layer 7b temporary set effects (613.4b)
     "absolute_power_until_eot",

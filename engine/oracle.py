@@ -570,6 +570,8 @@ def _parse_creature_program(
                 instructions.append(OracleInstruction("dynamic_pt_plague_rats"))
             elif "power and toughness are each equal to the number of swamps" in normalized:
                 instructions.append(OracleInstruction("dynamic_pt_swamps"))
+            elif normalized.startswith("as long as gaea's liege isn't attacking"):
+                instructions.append(OracleInstruction("dynamic_pt_forests_gaea"))
             elif (
                 "gets +1/+1 as long as you control a swamp" in normalized
                 or "this creature gets +1/+1 as long as you control a swamp" in normalized

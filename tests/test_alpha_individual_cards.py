@@ -162,6 +162,11 @@ def _run_card(card: CardDefinition, all_cards: list[CardDefinition]) -> tuple[Ga
         # Animate Wall needs a Wall on the battlefield to target (Rule 115.1b)
         wall = next(c for c in all_cards if "wall" in c.type_line.lower())
         p2.battlefield.append(Permanent(card=wall))
+    if card.name == "Gaea's Liege":
+        # CDA: P/T = number of Forests its controller controls. Without a Forest
+        # it enters as a 0/0 and dies to state-based actions (704.5f).
+        forest = next(c for c in all_cards if c.name == "Forest")
+        p1.battlefield.append(Permanent(card=forest))
     before = _snapshot(p1, p2)
 
     if card.name in {"Counterspell", "Power Sink", "Spell Blast"}:
@@ -199,6 +204,12 @@ def _run_card(card: CardDefinition, all_cards: list[CardDefinition]) -> tuple[Ga
         game._close_current_priority_step()
         game.advance_combat_phase()  # → beginning_of_combat
         game.advance_combat_phase()  # → declare_attackers
+        result = game.cast_from_hand(0, card.name, target_player_index=1)
+        return game, p1, p2, before, result
+
+    if card.name == "Siren's Call":
+        # Castable only during an opponent's turn, before attackers are declared.
+        game.start_turn(1)
         result = game.cast_from_hand(0, card.name, target_player_index=1)
         return game, p1, p2, before, result
 
@@ -253,6 +264,9 @@ def _run_card(card: CardDefinition, all_cards: list[CardDefinition]) -> tuple[Ga
         permanent = next((perm for perm in p1.battlefield if perm.card.name == card.name), None)
         if permanent is not None:
             permanent.metadata["summoning_sickness_turn"] = game.turn - 1
+            if "remove a corpse counter from this creature" in text:
+                # Scavenging Ghoul's regeneration costs a corpse counter
+                permanent.metadata["corpse_counters"] = 1
         activation_result = game.activate_permanent_ability(0, card.name, target_player_index=1)
         return game, p1, p2, before, activation_result
 
@@ -416,6 +430,16 @@ def _assert_supported_effect(card: CardDefinition, game: Game, p1: PlayerState, 
 
     if "choose target non-wall creature" in text:
         assert any(perm.metadata.get("must_attack_until_eot") for perm in p2.battlefield)
+        return
+
+    if "creatures the active player controls attack this turn if able" in text:
+        active_creatures = [
+            perm
+            for perm in game.players[game.active_player_index].battlefield
+            if perm.card.primary_type == "creature"
+        ]
+        assert active_creatures
+        assert all(perm.metadata.get("must_attack_until_eot") for perm in active_creatures)
         return
 
     if "gains flying until end of turn" in text and "target creature you control" in text:

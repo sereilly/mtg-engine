@@ -70,6 +70,8 @@ class Game(
     exile_until_eot: list[tuple[int, CardDefinition]] = field(default_factory=list)
     # 104.4: True when the game ends in a draw for all players
     is_draw: bool = False
+    # 700.4-style turn tracking: creatures that died this turn (e.g. Scavenging Ghoul)
+    creatures_died_this_turn: int = 0
 
     def __post_init__(self) -> None:
         # Preserve legacy external phase naming while internally tracking phase/step.

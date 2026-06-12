@@ -42,6 +42,8 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
                 target.battlefield.pop(idx)
                 game._permanent_to_graveyard(target, target_perm)
                 game.log.append(f"{target_perm.card.name} died from damage dealt by {card.name}")
+            elif per_target > 0:
+                game._fire_dealt_damage_triggers(target_perm)
         return True, "resolved"
     if target_perm_idx is not None and isinstance(target_perm_idx, int) and 0 <= target_perm_idx < len(target.battlefield):
         # Damage targets a creature permanent, not the player
@@ -70,6 +72,8 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
             target.battlefield.pop(target_perm_idx)
             game._permanent_to_graveyard(target, target_perm)
             game.log.append(f"{target_perm.card.name} died from damage dealt by {card.name}")
+        elif damage > 0:
+            game._fire_dealt_damage_triggers(target_perm)
     else:
         damage = game._deal_damage_to_player(target, damage)
         if source_permanent is not None:

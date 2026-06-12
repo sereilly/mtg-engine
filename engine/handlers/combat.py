@@ -73,6 +73,28 @@ def mark_non_wall_target_to_attack(game: Game, instruction: OracleInstruction, c
     return True, "resolved"
 
 
+@effect_handler("force_active_player_creatures_to_attack")
+def force_active_player_creatures_to_attack(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    active = game.players[game.active_player_index]
+    marked: list[str] = []
+    for permanent in active.battlefield:
+        if permanent.card.primary_type != "creature":
+            continue
+        permanent.metadata["must_attack_until_eot"] = True
+        is_wall = "wall" in permanent.card.type_line.lower()
+        # "Ignore this effect for each creature the player didn't control
+        # continuously since the beginning of the turn."
+        entered_this_turn = permanent.metadata.get("summoning_sickness_turn") == game.turn
+        if not is_wall and not entered_this_turn:
+            permanent.metadata["destroy_if_did_not_attack_eot"] = True
+        marked.append(permanent.card.name)
+    if marked:
+        game.log.append(f"{context.card.name} forces {', '.join(marked)} to attack this turn")
+    else:
+        game.log.append(f"{context.card.name} resolved with no creatures to force into combat")
+    return True, "resolved"
+
+
 @effect_handler("grant_unblockable_to_low_power_target")
 def grant_unblockable_to_low_power_target(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     target = context.target

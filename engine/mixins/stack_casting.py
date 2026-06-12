@@ -170,6 +170,11 @@ class StackCastingMixin:
             ability = next((item for item in program.activated_abilities if item.supported and item.instruction is not None), None)
 
         if ability is None or ability.instruction is None:
+            # Zombie Master grants other Zombies '{B}: Regenerate this permanent.'
+            if permanent.metadata.get("granted_regen_ability"):
+                permanent.regeneration_shield += 1
+                self.log.append(f"{permanent.card.name} regenerates (ability granted by lord)")
+                return SimulationResult(permanent.card.name, True, "activated_regenerate", "resolved")
             self.log.append(f"No implemented activated ability for {permanent.card.name}")
             return SimulationResult(permanent.card.name, False, "unsupported", "ability not implemented")
 
@@ -193,6 +198,19 @@ class StackCastingMixin:
                 details = f"no valid target for {permanent.card.name}"
                 self.log.append(details)
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
+
+        # Scavenging Ghoul: 'Remove a corpse counter from this creature: Regenerate
+        # this creature.' — the counter removal is the activation cost.
+        if (
+            ability.instruction.kind == "grant_regeneration_to_self"
+            and "remove a corpse counter from this creature" in program.normalized_text
+        ):
+            corpse_counters = int(permanent.metadata.get("corpse_counters", 0))
+            if corpse_counters <= 0:
+                details = f"{permanent.card.name} has no corpse counters to remove"
+                self.log.append(details)
+                return SimulationResult(permanent.card.name, False, "unsupported", details)
+            permanent.metadata["corpse_counters"] = corpse_counters - 1
 
         required_cost = dict(ability.cost.mana)
         requires_tap = ability.cost.requires_tap
@@ -331,6 +349,19 @@ class StackCastingMixin:
         if "cast this spell only during your declare attackers step" in card.oracle_text.lower():
             if self.current_step != "declare_attackers" or self.active_player_index != caster_index:
                 details = "can only be cast during your declare attackers step"
+                self.log.append(details)
+                return SimulationResult(card.name, False, classification.effect_kind, details)
+
+        if "cast this spell only during an opponent's turn, before attackers are declared" in card.oracle_text.lower():
+            if self.current_turn_phase == "combat":
+                before_attackers = (
+                    self.current_step in ("beginning_of_combat", "declare_attackers")
+                    and not self.combat_attackers_locked
+                )
+            else:
+                before_attackers = self.current_turn_phase in ("beginning", "precombat_main")
+            if self.active_player_index == caster_index or not before_attackers:
+                details = "can only be cast during an opponent's turn, before attackers are declared"
                 self.log.append(details)
                 return SimulationResult(card.name, False, classification.effect_kind, details)
 

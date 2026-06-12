@@ -125,6 +125,7 @@ class TurnManagementMixin:
     def start_turn(self, player_index: int) -> None:
         self.active_player_index = player_index
         self.lands_played_this_turn[player_index] = 0
+        self.creatures_died_this_turn = 0
         self.resolve_untap_step(player_index)
         self.resolve_upkeep(player_index)
         self.resolve_draw_step(player_index)

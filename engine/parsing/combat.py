@@ -56,3 +56,11 @@ def mark_non_wall_target_to_attack(text: str, activated: bool) -> RuleResult:
     if activated and "choose target non-wall creature" in text:
         return _instruction("mark_non_wall_target_to_attack"), "activated_combat"
     return None
+
+
+# Siren's Call: force every creature the active player controls to attack
+@parse_rule(925)
+def force_active_player_creatures_to_attack(text: str, activated: bool) -> RuleResult:
+    if "creatures the active player controls attack this turn if able" in text:
+        return _instruction("force_active_player_creatures_to_attack"), "spell_pattern"
+    return None

@@ -352,6 +352,7 @@ class CombatMixin:
         for idx in unique_indices:
             attacker = controller.battlefield[idx]
             attacker.tapped = True
+            attacker.metadata["attacked_this_turn"] = True
 
         self._prune_combat_state()
         self.log.append(f"{controller.name} declared {len(unique_indices)} attacker(s)")
@@ -566,6 +567,7 @@ class CombatMixin:
             if not run_first_pass and has_first_strike_pass and not participates_in_second_strike(blocker):
                 continue
             attacker.damage_marked += blocker.effective_power
+            self._fire_dealt_damage_triggers(attacker)
             # 704.5h: mark attacker if blocker has deathtouch
             if self._has_keyword(blocker, "deathtouch") and blocker.effective_power > 0:
                 attacker.metadata["received_deathtouch"] = True
@@ -577,6 +579,8 @@ class CombatMixin:
             if blocker_idx < 0 or blocker_idx >= len(defending_player.battlefield):
                 continue
             defending_player.battlefield[blocker_idx].damage_marked += damage
+            if damage > 0:
+                self._fire_dealt_damage_triggers(defending_player.battlefield[blocker_idx])
             # 704.5h: mark blocker if attacker has deathtouch
             if a_idx < len(attacker_controller.battlefield) and damage > 0:
                 atk = attacker_controller.battlefield[a_idx]

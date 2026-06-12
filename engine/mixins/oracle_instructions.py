@@ -115,6 +115,28 @@ class OracleInstructionsMixin:
                                 permanent.metadata["has_islandwalk"] = True
                 return
 
+            # Zombie Master style: "Other Zombie creatures have swampwalk." /
+            # 'Other Zombies have "{B}: Regenerate this permanent."'
+            if instr.kind == "static_line" and instr.value.startswith("other ") and " have " in instr.value:
+                lord_match = re.search(r"other (\w+?)s?(?: creatures?)? have (.+)", instr.value)
+                if lord_match:
+                    subtype = lord_match.group(1).lower()
+                    granted = lord_match.group(2).lower()
+                    for player in self.players:
+                        for permanent in player.battlefield:
+                            if permanent.card.primary_type != "creature":
+                                continue
+                            if subtype not in permanent.card.type_line.lower():
+                                continue
+                            if permanent.card is source:
+                                continue
+                            for walk_word in ("swampwalk", "mountainwalk", "islandwalk", "forestwalk", "plainswalk"):
+                                if walk_word in granted:
+                                    permanent.metadata[f"has_{walk_word}"] = True
+                            if "regenerate this permanent" in granted:
+                                permanent.metadata["granted_regen_ability"] = True
+                continue
+
     def _apply_aura_effect(
         self,
         caster_index: int,
@@ -257,6 +279,11 @@ class OracleInstructionsMixin:
             if _grants_flying:
                 target_creature.metadata["gains_flying"] = True
                 self.log.append(f"{target_creature.card.name} gains flying from {aura_permanent.card.name}")
+
+            # Reach: e.g. Web's "Enchanted creature gets +0/+2 and has reach."
+            if "has reach" in text or "gains reach" in text:
+                target_creature.metadata["gains_reach"] = True
+                self.log.append(f"{target_creature.card.name} gains reach from {aura_permanent.card.name}")
 
             # Haste: enchanted creature can attack as though it had haste
             if "can attack as though it had haste" in text:

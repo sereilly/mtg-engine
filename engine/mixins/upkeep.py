@@ -160,15 +160,16 @@ class UpkeepMixin:
                                     controller.mana_pool[sym] = controller.mana_pool.get(sym, 0) - count
                             self.log.append(f"{controller.name} paid upkeep for {permanent.card.name}")
                         else:
+                            # "tap this creature and sacrifice a land of an opponent's
+                            # choice" — the CONTROLLER sacrifices one of their own lands
+                            # (the opponent merely chooses which; simplified to the first).
                             permanent.tapped = True
-                            opponent = next((p for p in self.players if p is not controller), None)
-                            if opponent is not None:
-                                for idx, land in enumerate(opponent.battlefield):
-                                    if land.card.primary_type == "land":
-                                        removed = opponent.battlefield.pop(idx)
-                                        opponent.graveyard.append(removed.card)
-                                        self.log.append(f"{permanent.card.name} forced sacrifice of {removed.card.name}")
-                                        break
+                            for idx, land in enumerate(controller.battlefield):
+                                if land.card.primary_type == "land":
+                                    removed = controller.battlefield.pop(idx)
+                                    controller.graveyard.append(removed.card)
+                                    self.log.append(f"{permanent.card.name} forced sacrifice of {removed.card.name}")
+                                    break
                         break
 
                     if cond == "upkeep_self" and kind == "upkeep_sacrifice_other_creature_or_deal_damage":

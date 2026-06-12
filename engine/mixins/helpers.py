@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ..models import CardDefinition, Permanent, PlayerState
+from ..oracle import compile_card_oracle
 from ._constants import _MANA_SYMBOLS, _NO_PRIORITY_STEPS
 
 class GameHelpersMixin:
@@ -89,6 +90,21 @@ class GameHelpersMixin:
         """Move a permanent to the graveyard. Tokens (704.5d) cease to exist instead."""
         if not permanent.metadata.get("is_token", False):
             player.graveyard.append(permanent.card)
+        if permanent.card.primary_type == "creature":
+            self.creatures_died_this_turn = getattr(self, "creatures_died_this_turn", 0) + 1
+            program = compile_card_oracle(permanent.card)
+            for trig in program.triggered_abilities:
+                if (
+                    trig.condition.kind == "dies"
+                    and trig.instruction is not None
+                    and trig.instruction.kind == "owner_loses_half_life"
+                ):
+                    loss = max(0, (player.life + 1) // 2)
+                    player.life -= loss
+                    self.log.append(
+                        f"{permanent.card.name} died: {player.name} loses {loss} life (half, rounded up)"
+                    )
+                    break
         text = permanent.card.oracle_text.lower()
         if (
             "when this enchantment is put into a graveyard from the battlefield, you lose the game"
