@@ -70,9 +70,7 @@ def target_gains_life(game: Game, instruction: OracleInstruction, context: Oracl
     x_value = context.x_value
     amount = instruction.payload.get("amount", 0)
     life_gain = max(0, x_value or 0) if amount == "x" else int(amount)
-    before = target.life
-    target.life += life_gain
-    game.log.append(f"{card.name}: {target.name} gained {life_gain} life ({before} -> {target.life})")
+    game._gain_life(target, life_gain, card.name)
     return True, "resolved"
 
 

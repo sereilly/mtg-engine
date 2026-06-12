@@ -340,8 +340,7 @@ class TurnManagementMixin:
                 if i != player_index:
                     for perm in controller.battlefield:
                         if perm.card.name == "Lifetap":
-                            controller.life += 1
-                            self.log.append(f"Lifetap: {controller.name} gained 1 life")
+                            self._gain_life(controller, 1, "Lifetap")
 
         self.log.append(f"{player.name} tapped {land_name} for mana")
 
@@ -367,9 +366,7 @@ class TurnManagementMixin:
             for trig in aura_prog.triggered_abilities:
                 if trig.condition.kind == "enchanted_land_tapped" and trig.instruction is not None:
                     amount = int(trig.instruction.payload.get("amount", 0))
-                    damage = self._prevent_damage(player, amount)
-                    if damage > 0:
-                        player.life -= damage
+                    damage = self._deal_damage_to_player(player, amount)
                     self.log.append(f"{attached_aura.card.name} dealt {damage} damage to {player.name}")
 
         for controller in self.players:
@@ -378,9 +375,7 @@ class TurnManagementMixin:
                 for trig in prog.triggered_abilities:
                     if trig.condition.kind == "land_tapped_for_mana" and trig.instruction is not None:
                         amount = int(trig.instruction.payload.get("amount", 1))
-                        damage = self._prevent_damage(player, amount)
-                        if damage > 0:
-                            player.life -= damage
+                        damage = self._deal_damage_to_player(player, amount)
                         self.log.append(f"{perm.card.name} triggered: {player.name} took {damage} damage")
 
         return True

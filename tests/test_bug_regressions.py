@@ -378,3 +378,74 @@ def test_bug7_draw_when_both_players_lose_simultaneously():
     assert game.is_game_over() is True
     assert game.is_draw is True
     assert game.get_winner() is None
+
+
+# ---------------------------------------------------------------------------
+# Bug 8: creatures with 0 toughness must die to state-based actions
+#
+# Root cause: the 704.5f check in check_state_based_actions used a strict
+# `effective_toughness < 0` comparison, so a creature that entered the
+# battlefield with 0 toughness (or was reduced to exactly 0) survived.
+# CR 704.5f: a creature with toughness 0 or less is put into its owner's
+# graveyard.
+# ---------------------------------------------------------------------------
+
+def _mk_creature(name: str, power: int, toughness: int) -> CardDefinition:
+    type_line = "Creature - Test"
+    raw = {"name": name, "type_line": type_line, "power": str(power), "toughness": str(toughness)}
+    return CardDefinition(
+        name=name,
+        mana_cost="",
+        cmc=0.0,
+        type_line=type_line,
+        oracle_text="",
+        colors=(),
+        color_identity=(),
+        keywords=(),
+        produced_mana=(),
+        raw=raw,
+    )
+
+
+def test_bug8_creature_entering_with_zero_toughness_dies():
+    """A creature cast with 0 toughness must go straight to the graveyard (704.5f)."""
+    zero = _mk_creature("Zero Born", 0, 0)
+    p1 = PlayerState(name="P1", hand=[zero])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Zero Born")
+
+    assert result.supported
+    assert not any(perm.card.name == "Zero Born" for perm in p1.battlefield)
+    assert any(card.name == "Zero Born" for card in p1.graveyard)
+
+
+def test_bug8_creature_reduced_to_zero_toughness_dies():
+    """A creature whose toughness is reduced to exactly 0 dies on the next SBA check."""
+    bear = _mk_creature("Test Bear", 2, 2)
+    perm = Permanent(card=bear)
+    p1 = PlayerState(name="P1", battlefield=[perm])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    perm.toughness_bonus = -2
+    changed = game.check_state_based_actions()
+
+    assert changed
+    assert not p1.battlefield
+    assert any(card.name == "Test Bear" for card in p1.graveyard)
+
+
+def test_bug8_creature_with_positive_toughness_survives():
+    """Sanity check: the <= 0 fix must not kill creatures with toughness 1+."""
+    bear = _mk_creature("Test Bear", 2, 2)
+    perm = Permanent(card=bear)
+    p1 = PlayerState(name="P1", battlefield=[perm])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    perm.toughness_bonus = -1
+    game.check_state_based_actions()
+
+    assert perm in p1.battlefield

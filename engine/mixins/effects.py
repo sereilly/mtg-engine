@@ -18,9 +18,7 @@ class EffectsMixin:
         for trig in prog.triggered_abilities:
             if trig.condition.kind == "dies" and trig.condition.trigger == "when":
                 toughness = dead_permanent.effective_toughness
-                damage = self._prevent_damage(controller, toughness)
-                if damage > 0:
-                    controller.life -= damage
+                damage = self._deal_damage_to_player(controller, toughness)
                 self.log.append(
                     f"{aura.card.name} dealt {damage} damage to {controller.name} (death of {dead_permanent.card.name})"
                 )
@@ -70,7 +68,7 @@ class EffectsMixin:
                 self.log.append(f"{perm.card.name} regenerated")
                 return None  # type: ignore[return-value]
             target.battlefield.pop(idx)
-            target.graveyard.append(perm.card)
+            self._permanent_to_graveyard(target, perm)
             self._trigger_aura_death_effects(perm, target)
             if perm.card.primary_type == "land" and target_player_index is not None:
                 self._process_land_dies(target_player_index)
@@ -113,6 +111,58 @@ class EffectsMixin:
         prevented = min(damage, target.damage_prevention_pool)
         target.damage_prevention_pool -= prevented
         return damage - prevented
+
+    def _player_controls_text(self, player: PlayerState, phrase: str) -> bool:
+        return any(phrase in perm.card.oracle_text.lower() for perm in player.battlefield)
+
+    def _gain_life(self, target: PlayerState, amount: int, source_name: str | None = None) -> None:
+        """Apply a life gain, honoring 'If you would gain life, draw that many cards
+        instead' replacement effects (e.g. Lich, CR 614)."""
+        if amount <= 0:
+            return
+        source = f" from {source_name}" if source_name else ""
+        if self._player_controls_text(target, "if you would gain life, draw that many cards instead"):
+            drawn = target.draw(amount)
+            self.log.append(
+                f"{target.name} would gain {amount} life{source}; drew {drawn} card(s) instead (Lich)"
+            )
+            return
+        before = target.life
+        target.life += amount
+        self.log.append(f"{target.name} gained {amount} life{source} ({before} -> {target.life})")
+
+    def _deal_damage_to_player(self, target: PlayerState, amount: int) -> int:
+        """Apply damage to a player (after prevention) and fire 'whenever you're
+        dealt damage' triggers (e.g. Lich). Returns the damage actually dealt."""
+        damage = self._prevent_damage(target, amount)
+        if damage > 0:
+            target.life -= damage
+            self._on_player_dealt_damage(target, damage)
+        return damage
+
+    def _on_player_dealt_damage(self, target: PlayerState, damage: int) -> None:
+        if not self._player_controls_text(
+            target, "whenever you're dealt damage, sacrifice that many nontoken permanents"
+        ):
+            return
+        for _ in range(damage):
+            candidates = [
+                perm for perm in target.battlefield if not perm.metadata.get("is_token", False)
+            ]
+            if not candidates:
+                target.lost = True
+                self.log.append(
+                    f"{target.name} couldn't sacrifice a nontoken permanent and lost the game (Lich)"
+                )
+                return
+            # Sacrifice permanents whose death would lose the game (e.g. Lich itself) last.
+            choice = min(
+                candidates,
+                key=lambda perm: "you lose the game" in perm.card.oracle_text.lower(),
+            )
+            target.battlefield.remove(choice)
+            self._permanent_to_graveyard(target, choice)
+            self.log.append(f"{target.name} sacrificed {choice.card.name} (Lich)")
 
     def _add_mana_from_text(self, controller: PlayerState, text: str, preferred_color: str | None = None) -> None:
         # Prefer lexing the oracle text for mana symbols
@@ -189,9 +239,7 @@ class EffectsMixin:
                 if not any(t.condition.kind == "land_enters" for t in program.triggered_abilities):
                     continue
                 victim = self.players[land_controller_index]
-                damage = self._prevent_damage(victim, 2)
-                if damage > 0:
-                    victim.life -= damage
+                damage = self._deal_damage_to_player(victim, 2)
                 self.log.append(f"{permanent.card.name} triggered for {damage} damage")
 
     def _process_land_dies(self, land_controller_index: int) -> None:
@@ -204,9 +252,7 @@ class EffectsMixin:
                         continue
                     victim = self.players[land_controller_index]
                     amount = int(trig.instruction.payload.get("amount", 2))
-                    damage = self._prevent_damage(victim, amount)
-                    if damage > 0:
-                        victim.life -= damage
+                    damage = self._deal_damage_to_player(victim, amount)
                     self.log.append(f"{permanent.card.name} triggered for {damage} damage")
 
     def _fastbond_count(self, player_index: int) -> int:

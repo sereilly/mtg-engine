@@ -211,7 +211,12 @@ def _run_card(card: CardDefinition, all_cards: list[CardDefinition]) -> tuple[Ga
             None,
         )
 
-    result = game.cast_from_hand(0, card.name, target_player_index=1, target_permanent_index=aura_target_index)
+    # Creatures that enter with X +1/+1 counters (e.g. Rock Hydra) would enter
+    # as 0/0 and die to state-based actions (704.5f) if cast with X=0.
+    cast_x_value = 2 if "enters with x +1/+1 counters" in card.oracle_text.lower() else None
+    result = game.cast_from_hand(
+        0, card.name, target_player_index=1, target_permanent_index=aura_target_index, x_value=cast_x_value
+    )
 
     activatable_fragments = (
         "this creature gets +1/+0 until end of turn",

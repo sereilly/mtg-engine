@@ -218,8 +218,8 @@ def exile_creature_gain_life_equal_to_power(game: Game, instruction: OracleInstr
     if exiled_perm is not None:
         target.exile.append(exiled_perm.card)
         life_gain = exiled_perm.effective_power
-        target.life += life_gain
-        game.log.append(f"{exiled_perm.card.name} exiled by {card.name}; {target.name} gains {life_gain} life")
+        game.log.append(f"{exiled_perm.card.name} exiled by {card.name}")
+        game._gain_life(target, life_gain, card.name)
     else:
         game.log.append(f"{card.name}: no valid creature to exile")
     return True, "resolved"

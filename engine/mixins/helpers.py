@@ -89,6 +89,16 @@ class GameHelpersMixin:
         """Move a permanent to the graveyard. Tokens (704.5d) cease to exist instead."""
         if not permanent.metadata.get("is_token", False):
             player.graveyard.append(permanent.card)
+        text = permanent.card.oracle_text.lower()
+        if (
+            "when this enchantment is put into a graveyard from the battlefield, you lose the game"
+            in text
+            and not player.lost
+        ):
+            player.lost = True
+            self.log.append(
+                f"{player.name} lost the game ({permanent.card.name} was put into a graveyard from the battlefield)"
+            )
 
     def _put_permanent_onto_battlefield(
         self,

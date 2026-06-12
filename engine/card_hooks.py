@@ -54,10 +54,7 @@ COLOR_ROD_TRIGGERS: dict[str, tuple[str, int]] = {
 def _make_color_rod_hook(trigger_color: str, life_amount: int) -> SpellResolvedHook:
     def hook(game: Game, controller: PlayerState, permanent: Permanent, resolved_card: CardDefinition) -> None:
         if trigger_color in resolved_card.colors:
-            controller.life += life_amount
-            game.log.append(
-                f"{permanent.card.name} trigger: {controller.name} gained {life_amount} life"
-            )
+            game._gain_life(controller, life_amount, permanent.card.name)
 
     return hook
 

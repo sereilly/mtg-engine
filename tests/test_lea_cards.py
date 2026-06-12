@@ -4405,6 +4405,127 @@ def test_lich_loses_life_equal_to_life_total_on_entry(all_cards):
     assert p1.life == 0
 
 
+def test_lich_controller_does_not_lose_at_zero_or_less_life(all_cards):
+    """'You don't lose the game for having 0 or less life.'"""
+    lich = _get(all_cards, "Lich")
+    p1 = PlayerState(name="P1", hand=[lich], life=20)
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    game.cast_from_hand(0, "Lich")
+    assert p1.life == 0
+
+    game.check_state_based_actions()
+    assert p1.lost is False
+
+    p1.life = -5
+    game.check_state_based_actions()
+    assert p1.lost is False
+
+
+def test_lich_life_gain_draws_cards_instead(all_cards):
+    """'If you would gain life, draw that many cards instead.'"""
+    lich = _get(all_cards, "Lich")
+    forest = _get(all_cards, "Forest")
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[Permanent(card=lich)],
+        library=[forest, forest, forest, forest],
+        life=5,
+    )
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    game._gain_life(p1, 3)
+
+    assert p1.life == 5  # life total unchanged
+    assert len(p1.hand) == 3  # drew 3 cards instead
+    assert len(p1.library) == 1
+
+
+def test_lich_life_gain_from_spell_draws_cards_instead(all_cards):
+    """The replacement applies to life gained from resolving spells too."""
+    lich = _get(all_cards, "Lich")
+    stream = _get(all_cards, "Stream of Life")
+    forest = _get(all_cards, "Forest")
+    p1 = PlayerState(
+        name="P1",
+        hand=[stream],
+        battlefield=[Permanent(card=lich)],
+        library=[forest, forest, forest],
+        life=5,
+    )
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Stream of Life", target_player_index=0, x_value=2)
+
+    assert result.supported
+    assert p1.life == 5
+    assert len(p1.hand) == 2
+
+
+def test_lich_damage_forces_sacrifice_of_that_many_nontoken_permanents(all_cards):
+    """'Whenever you're dealt damage, sacrifice that many nontoken permanents.'"""
+    lich = _get(all_cards, "Lich")
+    forest = _get(all_cards, "Forest")
+    bolt = _get(all_cards, "Lightning Bolt")
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[
+            Permanent(card=lich),
+            Permanent(card=forest),
+            Permanent(card=forest),
+            Permanent(card=forest),
+            Permanent(card=forest),
+        ],
+        life=10,
+    )
+    p2 = PlayerState(name="P2", hand=[bolt])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(1, "Lightning Bolt", target_player_index=0)
+
+    assert result.supported
+    assert p1.life == 7
+    # Sacrificed 3 of the 4 Forests; Lich itself is spared while other permanents exist
+    assert sum(1 for perm in p1.battlefield if perm.card.name == "Forest") == 1
+    assert any(perm.card.name == "Lich" for perm in p1.battlefield)
+    assert sum(1 for card in p1.graveyard if card.name == "Forest") == 3
+    assert p1.lost is False
+
+
+def test_lich_damage_without_enough_permanents_loses_the_game(all_cards):
+    """'If you can't [sacrifice that many], you lose the game.'"""
+    lich = _get(all_cards, "Lich")
+    bolt = _get(all_cards, "Lightning Bolt")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=lich)], life=10)
+    p2 = PlayerState(name="P2", hand=[bolt])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(1, "Lightning Bolt", target_player_index=0)
+
+    assert result.supported
+    assert p1.lost is True
+
+
+def test_lich_put_into_graveyard_from_battlefield_loses_the_game(all_cards):
+    """'When this enchantment is put into a graveyard from the battlefield, you lose the game.'"""
+    lich = _get(all_cards, "Lich")
+    disenchant = _get(all_cards, "Disenchant")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=lich)], life=10)
+    p2 = PlayerState(name="P2", hand=[disenchant])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(1, "Disenchant", target_player_index=0, target_permanent_index=0)
+
+    assert result.supported
+    assert not any(perm.card.name == "Lich" for perm in p1.battlefield)
+    assert any(card.name == "Lich" for card in p1.graveyard)
+    assert p1.lost is True
+    assert game.get_winner() is p2
+
+
 def test_lifeforce_counters_black_spell(all_cards):
     lifeforce = _get(all_cards, "Lifeforce")
     black_knight = _get(all_cards, "Black Knight")

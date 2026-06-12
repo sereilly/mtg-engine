@@ -45,6 +45,11 @@ class GameEndingMixin:
             # 704.5a: player with 0 or less life loses the game
             for player in self.players:
                 if not player.lost and player.life <= 0:
+                    # e.g. Lich / Platinum Angel-style replacement
+                    if self._player_controls_text(
+                        player, "you don't lose the game for having 0 or less life"
+                    ):
+                        continue
                     player.lost = True
                     self.log.append(f"{player.name} lost the game (704.5a: 0 or less life)")
                     changed = True
@@ -83,7 +88,7 @@ class GameEndingMixin:
                     raw_t = str(perm.card.raw.get("toughness", "0"))
                     has_fixed_toughness = raw_t.lstrip("-").isdigit()
                     has_dynamic_toughness = not has_fixed_toughness and "absolute_toughness" not in perm.metadata
-                    if perm.card.primary_type == "creature" and not has_dynamic_toughness and perm.effective_toughness < 0:
+                    if perm.card.primary_type == "creature" and not has_dynamic_toughness and perm.effective_toughness <= 0:
                         self._permanent_to_graveyard(player, perm)
                         self.log.append(f"{perm.card.name} died (704.5f: toughness {perm.effective_toughness})")
                         self._trigger_aura_death_effects(perm, player)

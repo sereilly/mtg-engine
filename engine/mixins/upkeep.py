@@ -79,9 +79,7 @@ class UpkeepMixin:
                         else:
                             amount = int(raw_amount)
                         victim = self.players[player_index]
-                        damage = self._prevent_damage(victim, amount)
-                        if damage > 0:
-                            victim.life -= damage
+                        damage = self._deal_damage_to_player(victim, amount)
                         self.log.append(f"{permanent.card.name} dealt {damage} upkeep damage to {victim.name}")
                         break
 
@@ -92,9 +90,7 @@ class UpkeepMixin:
                             if "swamp" in perm.card.type_line.lower()
                             or perm.metadata.get("land_type_override") == "swamp"
                         )
-                        damage = self._prevent_damage(victim, swamp_count)
-                        if damage > 0:
-                            victim.life -= damage
+                        damage = self._deal_damage_to_player(victim, swamp_count)
                         self.log.append(f"{permanent.card.name} dealt {damage} damage to {victim.name} ({swamp_count} swamps)")
                         break
 
@@ -112,9 +108,7 @@ class UpkeepMixin:
                             break
                         amount = int(trig.instruction.payload.get("amount", 1))
                         victim = self.players[player_index]
-                        damage = self._prevent_damage(victim, amount)
-                        if damage > 0:
-                            victim.life -= damage
+                        damage = self._deal_damage_to_player(victim, amount)
                         self.log.append(f"{permanent.card.name} dealt {damage} upkeep damage to {victim.name}")
                         break
 
@@ -125,9 +119,7 @@ class UpkeepMixin:
                         victim = self.players[player_index]
                         damage = max(0, len(victim.hand) - 4)
                         if damage > 0:
-                            damage = self._prevent_damage(victim, damage)
-                            if damage > 0:
-                                victim.life -= damage
+                            damage = self._deal_damage_to_player(victim, damage)
                         self.log.append(f"{permanent.card.name} dealt {damage} upkeep damage")
                         break
 
@@ -148,7 +140,7 @@ class UpkeepMixin:
                                     controller.mana_pool[sym] = controller.mana_pool.get(sym, 0) - count
                             self.log.append(f"{controller.name} paid upkeep for {permanent.card.name}")
                         else:
-                            controller.life -= damage_amt
+                            damage_amt = self._deal_damage_to_player(controller, damage_amt)
                             self.log.append(f"{permanent.card.name} dealt {damage_amt} upkeep damage to {controller.name}")
                         break
 
@@ -194,7 +186,7 @@ class UpkeepMixin:
                             self.log.append(f"{controller.name} sacrificed {sacrificed.card.name} for {permanent.card.name}")
                         else:
                             alt_damage = int(trig.instruction.payload.get("damage", 0))
-                            controller.life -= alt_damage
+                            alt_damage = self._deal_damage_to_player(controller, alt_damage)
                             self.log.append(f"{permanent.card.name} dealt {alt_damage} upkeep damage to {controller.name}")
                         break
 
@@ -223,8 +215,8 @@ class UpkeepMixin:
                         counters = int(permanent.metadata.get("vitality_counters", 0))
                         if counters > 0:
                             permanent.metadata["vitality_counters"] = counters - 1
-                            controller.life += 1
-                            self.log.append(f"{permanent.card.name}: {controller.name} removed a vitality counter and gained 1 life")
+                            self.log.append(f"{permanent.card.name}: {controller.name} removed a vitality counter")
+                            self._gain_life(controller, 1, permanent.card.name)
                         break
 
                     if cond == "no_islands" and kind == "sacrifice_self":
@@ -266,9 +258,7 @@ class UpkeepMixin:
                     continue
                 amount = int(instr.payload.get("amount", 1))
                 victim = self.players[player_index]
-                damage = self._prevent_damage(victim, amount)
-                if damage > 0:
-                    victim.life -= damage
+                damage = self._deal_damage_to_player(victim, amount)
                 self.log.append(f"{permanent.card.name} dealt {damage} upkeep damage to {victim.name}")
 
         # Handle enchant-land auras with optional upkeep life gain (e.g. Farmstead)
@@ -311,8 +301,7 @@ class UpkeepMixin:
                     paid = True  # No payment required
                 if paid:
                     amount = int(instr.payload.get("amount", 1))
-                    gainer.life += amount
-                    self.log.append(f"{gainer.name} gained {amount} life from {permanent.card.name}")
+                    self._gain_life(gainer, amount, permanent.card.name)
 
         if self._receives_priority(step):
             self._resolve_priority_window()

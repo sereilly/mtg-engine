@@ -585,7 +585,9 @@ class CombatMixin:
 
         total_player_damage = sum(dmg for _, dmg in defender_damage_events)
         for _, damage in defender_damage_events:
+            # Prevention was already applied when the event was recorded.
             defender.life -= damage
+            self._on_player_dealt_damage(defender, damage)
 
         self._destroy_marked_creatures()
         self.check_state_based_actions()
