@@ -175,8 +175,8 @@ def main():
         click_state = page.evaluate(
             """
             () => ({
-              stackClickHoldActive: stackClickHoldActive,
-              stackClickHoldIndex: stackClickHoldIndex,
+              stackClickHoldActive: stackClickHold !== null,
+              stackClickHoldIndex: getHeldStackArrayIndex(),
               canvasHeldIndex: battlefieldCanvas.stackHeldIndex,
             })
             """
@@ -191,7 +191,7 @@ def main():
             () => ({
               hoveredStackIndex: battlefieldCanvas.hoveredStackIndex,
               stackCanvasHoverActive: stackCanvasHoverActive,
-              stackClickHoldActive: stackClickHoldActive,
+              stackClickHoldActive: stackClickHold !== null,
             })
             """
         )

@@ -24,8 +24,10 @@ let autoPassTurnEndInFlight = false;
 let autoPassTurnEndRequestedStateKey = "";
 let autoPassMode = null;
 let holdPriorityActive = false;
-let stackClickHoldActive = false;
-let stackClickHoldIndex = null;
+// Click-held stack item, or null. Tracked as {bottomOffset, sig} rather than
+// an array index: the serialized stack is top-first, so responses cast while
+// holding shift indices, while distance-from-bottom stays stable.
+let stackClickHold = null;
 let stackCanvasHoverActive = false;
 let searchLibrarySelectedIndex = null;
 let searchLibraryFilter = "";
@@ -773,7 +775,21 @@ function isStackHoverHolding() {
 }
 
 function isPriorityHeld() {
-  return holdPriorityActive || stackClickHoldActive || isStackHoverHolding();
+  return holdPriorityActive || stackClickHold !== null || isStackHoverHolding();
+}
+
+function _stackItemSig(item) {
+  return `${item?.type || "spell"}|${item?.card?.name || item?.label || "?"}|${item?.caster_index}`;
+}
+
+// Array index of the click-held item in the current serialized stack, or null
+// if nothing is held or the held item has left the stack (resolved/countered).
+function getHeldStackArrayIndex() {
+  if (!stackClickHold) return null;
+  const idx = _currentStack.length - 1 - stackClickHold.bottomOffset;
+  if (idx < 0 || idx >= _currentStack.length) return null;
+  if (_stackItemSig(_currentStack[idx]) !== stackClickHold.sig) return null;
+  return idx;
 }
 
 function resumeAutoPassAfterHold() {
@@ -784,9 +800,8 @@ function resumeAutoPassAfterHold() {
 }
 
 function releaseStackClickHold(message) {
-  if (!stackClickHoldActive) return;
-  stackClickHoldActive = false;
-  stackClickHoldIndex = null;
+  if (!stackClickHold) return;
+  stackClickHold = null;
   _refreshStackHoldVisuals();
   if (message) updateActionHint(message);
   if (!isPriorityHeld()) {
@@ -3582,36 +3597,45 @@ function _applyStackHoverHighlight(linkEl) {
 }
 
 function _refreshStackHoldVisuals() {
+  const heldIdx = getHeldStackArrayIndex();
   document.querySelectorAll("#stackZone .stack-item").forEach((el) => {
-    const held = stackClickHoldActive && Number(el.dataset.stackIndex) === stackClickHoldIndex;
+    const held = heldIdx !== null && Number(el.dataset.stackIndex) === heldIdx;
     el.classList.toggle("stack-held", held);
     const hint = el.querySelector(".stack-hold-hint");
     if (hint) hint.textContent = held ? "Priority held — click to release" : "Click to hold priority";
   });
   if (battlefieldCanvas) {
-    battlefieldCanvas.stackHeldIndex = stackClickHoldActive ? stackClickHoldIndex : null;
+    battlefieldCanvas.stackHeldIndex = heldIdx;
     battlefieldCanvas.needsRedraw = true;
   }
 }
 
 function toggleStackClickHold(arrayIndex) {
-  if (stackClickHoldActive && stackClickHoldIndex === arrayIndex) {
+  if (getHeldStackArrayIndex() === arrayIndex) {
     releaseStackClickHold("Priority hold released.");
     return;
   }
-  stackClickHoldActive = true;
-  stackClickHoldIndex = arrayIndex;
+  const item = _currentStack[arrayIndex];
+  if (!item) return;
+  stackClickHold = {
+    bottomOffset: _currentStack.length - 1 - arrayIndex,
+    sig: _stackItemSig(item),
+  };
   _refreshStackHoldVisuals();
-  updateActionHint("Priority held: it will stay held until you take an action.");
+  updateActionHint("Priority held: tap lands and cast responses freely. Click the card again to release.");
 }
 
 function renderStack(stack) {
   _currentStack = stack || [];
   const zone = q("stackZone");
+
+  // The hold lasts until the held spell leaves the stack (resolves or is
+  // countered) or the player clicks it again — taking actions keeps it.
+  if (stackClickHold && getHeldStackArrayIndex() === null) {
+    releaseStackClickHold("Priority hold released: the spell left the stack.");
+  }
+
   if (!stack || stack.length === 0) {
-    stackClickHoldActive = false;
-    stackClickHoldIndex = null;
-    _refreshStackHoldVisuals();
     zone.innerHTML = '<span class="stack-empty-label">Stack: empty</span>';
     return;
   }
@@ -4494,10 +4518,6 @@ async function joinSession() {
 async function sendAction(actionBody) {
   if (!sessionId) return;
   const payload = await postJson(`/api/sessions/${sessionId}/action`, actionBody);
-  // Taking any action releases a click-held priority lock; the upcoming
-  // renderState re-evaluates auto-pass against the fresh state.
-  stackClickHoldActive = false;
-  stackClickHoldIndex = null;
   renderState(payload);
 }
 
