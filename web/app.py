@@ -40,20 +40,27 @@ from .schemas import (
     GameActionRequest,
     JoinSessionRequest,
     RandomDeckRequest,
+    VerificationRequest,
 )
 from .session_store import Session, SessionStore
+from .verification_store import VerificationStore
 
 
 ROOT = Path(__file__).resolve().parent.parent
 CARDS_PATH = ROOT / "lea_cards.json"
 DECKS_DIR = ROOT / "decks"
+VERIFICATION_PATH = ROOT / "card_verification.json"
+VERIFICATION_MD_PATH = ROOT / "CARD_VERIFICATION.md"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 CARD_CATALOG = load_cards(CARDS_PATH)
 CARD_BY_NAME = {card.name.casefold(): card for card in CARD_CATALOG}
 CARD_SEARCH_ORDER = sorted(CARD_CATALOG, key=lambda card: card.name)
+# Unique catalog card names in display order (some cards share a name across printings).
+CATALOG_CARD_NAMES = list(dict.fromkeys(card.name for card in CARD_SEARCH_ORDER))
 
 app = FastAPI(title="Magic LEA Web App")
 deck_store = DeckStore(DECKS_DIR)
+verification_store = VerificationStore(VERIFICATION_PATH)
 store = SessionStore(cards_path=CARDS_PATH, deck_store=deck_store)
 _session_event_queues: dict[str, set[asyncio.Queue[dict[str, str]]]] = defaultdict(set)
 
@@ -1186,6 +1193,75 @@ def random_deck(req: RandomDeckRequest):
 @app.get("/api/cards/catalog")
 def get_card_catalog():
     return {"cards": CATALOG_PAYLOAD}
+
+
+def _verification_listing() -> tuple[list[dict], dict[str, int]]:
+    """Merge recorded results with the full catalog so every card is represented."""
+    results = verification_store.results()
+    cards: list[dict] = []
+    counts = {"pass": 0, "fail": 0, "untested": 0}
+    for name in CATALOG_CARD_NAMES:
+        entry = results.get(name)
+        status = entry["status"] if entry else "untested"
+        counts[status] = counts.get(status, 0) + 1
+        cards.append(
+            {
+                "card_name": name,
+                "status": status,
+                "reason": entry.get("reason", "") if entry else "",
+                "updated_at": entry.get("updated_at") if entry else None,
+            }
+        )
+    return cards, counts
+
+
+def _write_verification_markdown() -> None:
+    """Regenerate the human-readable master tracking document."""
+    cards, counts = _verification_listing()
+    lines = [
+        "# Card Verification Tracker",
+        "",
+        "Master record of which cards have been manually validated in-game. "
+        "Generated automatically — edit results via the in-game Debug Menu.",
+        "",
+        f"- Total cards: **{len(cards)}**",
+        f"- Passed: **{counts['pass']}**",
+        f"- Failed: **{counts['fail']}**",
+        f"- Untested: **{counts['untested']}**",
+        "",
+        "| Card | Status | Failure reason |",
+        "| --- | --- | --- |",
+    ]
+    badge = {"pass": "✅ pass", "fail": "❌ fail", "untested": "⬜ untested"}
+    for card in cards:
+        reason = (card["reason"] or "").replace("|", "\\|").replace("\n", " ")
+        lines.append(f"| {card['card_name']} | {badge[card['status']]} | {reason} |")
+    VERIFICATION_MD_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+@app.get("/api/verification")
+def get_verification():
+    cards, counts = _verification_listing()
+    return {"cards": cards, "counts": counts, "total": len(cards)}
+
+
+@app.get("/api/verification/next-untested")
+def get_next_untested():
+    results = verification_store.results()
+    untested = [name for name in CATALOG_CARD_NAMES if name not in results]
+    if not untested:
+        raise HTTPException(status_code=404, detail="all cards have been tested")
+    return {"card_name": random.choice(untested), "remaining": len(untested)}
+
+
+@app.post("/api/verification")
+def record_verification(req: VerificationRequest):
+    try:
+        entry = verification_store.record(req.card_name, req.status, req.reason or "")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    _write_verification_markdown()
+    return entry
 
 
 @app.get("/api/decks")

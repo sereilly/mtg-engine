@@ -90,3 +90,9 @@ class DeckSaveRequest(BaseModel):
 class DeckImportRequest(BaseModel):
     text: str | None = None
     url: str | None = None
+
+
+class VerificationRequest(BaseModel):
+    card_name: str = Field(min_length=1)
+    status: Literal["pass", "fail"]
+    reason: str | None = None

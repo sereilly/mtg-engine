@@ -247,6 +247,14 @@
                 <button id="debugCastFreeOpponentBtn" type="button">Cast Selected Card For Free (as Opponent)</button>
               </div>
               <p id="debugStatus" class="debug-status">Search for any LEA card, then add it to hand or cast it for free.</p>
+
+              <h3 class="debug-subhead">Card Verification</h3>
+              <p id="debugVerifyProgress" class="debug-status">Loading verification progress…</p>
+              <div class="button-row">
+                <button id="debugAddUntestedBtn" type="button">Add Untested Card to Hand</button>
+                <button id="debugMarkResultBtn" type="button">Mark Test Result…</button>
+                <button id="debugViewTrackerBtn" type="button">View Tracker</button>
+              </div>
             </section>
           </aside>
 
@@ -385,6 +393,48 @@
         <div class="modal-footer">
           <button id="importDeckCancelBtn" type="button" class="secondary-btn">Cancel</button>
           <button id="importDeckConfirmBtn" type="button">Import</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="verifyResultModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="verifyResultTitle">
+      <div class="modal-box verify-result-box">
+        <h2 id="verifyResultTitle" class="modal-title">Mark Test Result</h2>
+        <p class="modal-subtitle">Record whether this card has been manually validated as working in game.</p>
+        <label class="verify-field">Card
+          <input id="verifyCardName" type="text" list="debugCardOptions" placeholder="Card name" autocomplete="off" />
+        </label>
+        <div id="verifyResultRow" class="verify-result-row">
+          <label><input type="radio" name="verifyResult" value="pass" checked /> ✅ Pass</label>
+          <label><input type="radio" name="verifyResult" value="fail" /> ❌ Fail</label>
+        </div>
+        <label id="verifyReasonField" class="verify-field hidden">Failure reason
+          <textarea id="verifyReason" rows="3" placeholder="Describe what went wrong…"></textarea>
+        </label>
+        <p id="verifyResultStatus" class="debug-status"></p>
+        <div class="modal-footer verify-result-footer">
+          <button id="verifyResultCancelBtn" type="button" class="secondary-btn">Cancel</button>
+          <button id="verifyResultSubmitBtn" type="button">Save Result</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="trackerModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="trackerTitle">
+      <div class="modal-box tracker-box">
+        <h2 id="trackerTitle" class="modal-title">Card Verification Tracker</h2>
+        <p id="trackerSummary" class="modal-subtitle"></p>
+        <div class="modal-search-row tracker-controls">
+          <input id="trackerFilter" type="text" placeholder="Filter by name…" autocomplete="off" />
+          <select id="trackerStatusFilter">
+            <option value="all">All cards</option>
+            <option value="untested">Untested</option>
+            <option value="pass">Passed</option>
+            <option value="fail">Failed</option>
+          </select>
+        </div>
+        <div id="trackerList" class="tracker-list"></div>
+        <div class="modal-footer">
+          <button id="trackerCloseBtn" type="button" class="secondary-btn">Close</button>
         </div>
       </div>
     </div>

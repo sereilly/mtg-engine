@@ -3072,6 +3072,175 @@ async function castDebugCardForFreeAsOpponent() {
   updateActionHint(`Debug: cast ${resolvedCardName} for free as opponent.`);
 }
 
+// ---------------------------------------------------------------------------
+// Card verification tracker
+// ---------------------------------------------------------------------------
+
+async function refreshVerifyProgress() {
+  const el = q("debugVerifyProgress");
+  if (!el) return;
+  try {
+    const resp = await fetch("/api/verification");
+    if (!resp.ok) throw new Error("failed");
+    const payload = await resp.json();
+    const c = payload.counts || {};
+    el.textContent = `Verified ${c.pass || 0} passed, ${c.fail || 0} failed, ${c.untested || 0} untested (of ${payload.total || 0}).`;
+    el.classList.remove("error");
+  } catch (e) {
+    el.textContent = "Could not load verification progress.";
+    el.classList.add("error");
+  }
+}
+
+async function addUntestedCardToHand() {
+  if (!sessionId || seat === null) {
+    updateDebugStatus("Create or join a session first.", "error");
+    return;
+  }
+  const resp = await fetch("/api/verification/next-untested");
+  if (resp.status === 404) {
+    updateDebugStatus("All cards have already been tested. 🎉", "success");
+    return;
+  }
+  if (!resp.ok) {
+    updateDebugStatus("Could not pick an untested card.", "error");
+    return;
+  }
+  const payload = await resp.json();
+  const cardName = payload.card_name;
+  await sendAction({ seat, action: "debug_add_to_hand", card_name: cardName });
+  q("debugCardSearch").value = cardName;
+  updateDebugStatus(`Added untested card "${cardName}" to your hand (${payload.remaining} untested left). Test it, then Mark Test Result.`, "success");
+  updateActionHint(`Debug: added untested card "${cardName}" to your hand.`);
+}
+
+function setVerifyReasonVisibility() {
+  const failChecked = document.querySelector('input[name="verifyResult"]:checked')?.value === "fail";
+  q("verifyReasonField").classList.toggle("hidden", !failChecked);
+}
+
+function openVerifyResultModal(prefillName = "") {
+  const name = prefillName || q("debugCardSearch")?.value.trim() || "";
+  q("verifyCardName").value = name;
+  const passRadio = document.querySelector('input[name="verifyResult"][value="pass"]');
+  if (passRadio) passRadio.checked = true;
+  q("verifyReason").value = "";
+  setVerifyReasonVisibility();
+  updateVerifyStatus("");
+  q("verifyResultModal").classList.remove("hidden");
+  q("verifyCardName").focus();
+}
+
+function closeVerifyResultModal() {
+  q("verifyResultModal").classList.add("hidden");
+}
+
+function updateVerifyStatus(message, status) {
+  const el = q("verifyResultStatus");
+  if (!el) return;
+  el.textContent = message || "";
+  el.classList.remove("error", "success");
+  if (status) el.classList.add(status);
+}
+
+async function submitVerifyResult() {
+  const cardName = q("verifyCardName").value.trim();
+  if (!cardName) {
+    updateVerifyStatus("Enter a card name.", "error");
+    return;
+  }
+  const result = document.querySelector('input[name="verifyResult"]:checked')?.value || "pass";
+  const reason = q("verifyReason").value.trim();
+  if (result === "fail" && !reason) {
+    updateVerifyStatus("Add a reason describing the failure.", "error");
+    return;
+  }
+  try {
+    await postJson("/api/verification", {
+      card_name: cardName,
+      status: result,
+      reason: result === "fail" ? reason : null,
+    });
+  } catch (e) {
+    updateVerifyStatus(e.message || "Failed to save result.", "error");
+    return;
+  }
+  closeVerifyResultModal();
+  updateDebugStatus(`Recorded "${cardName}" as ${result.toUpperCase()}.`, "success");
+  refreshVerifyProgress();
+}
+
+let trackerCards = [];
+
+function renderTrackerList() {
+  const listEl = q("trackerList");
+  if (!listEl) return;
+  const nameFilter = q("trackerFilter").value.trim().toLowerCase();
+  const statusFilter = q("trackerStatusFilter").value;
+  const badge = { pass: "✅", fail: "❌", untested: "⬜" };
+  listEl.innerHTML = "";
+  const filtered = trackerCards.filter((card) => {
+    if (statusFilter !== "all" && card.status !== statusFilter) return false;
+    if (nameFilter && !card.card_name.toLowerCase().includes(nameFilter)) return false;
+    return true;
+  });
+  if (!filtered.length) {
+    const empty = document.createElement("p");
+    empty.className = "tracker-empty";
+    empty.textContent = "No cards match this filter.";
+    listEl.appendChild(empty);
+    return;
+  }
+  for (const card of filtered) {
+    const row = document.createElement("div");
+    row.className = `tracker-row tracker-row--${card.status}`;
+
+    const name = document.createElement("span");
+    name.className = "tracker-name";
+    name.textContent = `${badge[card.status]} ${card.card_name}`;
+    row.appendChild(name);
+
+    if (card.status === "fail" && card.reason) {
+      const reason = document.createElement("span");
+      reason.className = "tracker-reason";
+      reason.textContent = card.reason;
+      row.appendChild(reason);
+    }
+
+    const retest = document.createElement("button");
+    retest.type = "button";
+    retest.className = "secondary-btn tracker-retest";
+    retest.textContent = card.status === "untested" ? "Mark…" : "Re-mark…";
+    retest.addEventListener("click", () => {
+      closeTrackerModal();
+      openVerifyResultModal(card.card_name);
+    });
+    row.appendChild(retest);
+
+    listEl.appendChild(row);
+  }
+}
+
+async function openTrackerModal() {
+  q("trackerModal").classList.remove("hidden");
+  q("trackerSummary").textContent = "Loading…";
+  try {
+    const resp = await fetch("/api/verification");
+    if (!resp.ok) throw new Error("failed");
+    const payload = await resp.json();
+    trackerCards = payload.cards || [];
+    const c = payload.counts || {};
+    q("trackerSummary").textContent = `${c.pass || 0} passed · ${c.fail || 0} failed · ${c.untested || 0} untested · ${payload.total || 0} total`;
+    renderTrackerList();
+  } catch (e) {
+    q("trackerSummary").textContent = "Could not load the tracker.";
+  }
+}
+
+function closeTrackerModal() {
+  q("trackerModal").classList.add("hidden");
+}
+
 function clearCardPreview() {
   q("cardPreview").classList.add("empty-preview");
   q("cardPreviewImage").src = "/images/card_back.webp";
@@ -4905,6 +5074,40 @@ q("debugCastFreeOpponentBtn").addEventListener("click", async () => {
     updateDebugStatus(e.message, "error");
   }
 });
+
+q("debugAddUntestedBtn").addEventListener("click", async () => {
+  try {
+    await addUntestedCardToHand();
+  } catch (e) {
+    updateDebugStatus(e.message, "error");
+  }
+});
+
+q("debugMarkResultBtn").addEventListener("click", () => {
+  openVerifyResultModal();
+});
+
+q("debugViewTrackerBtn").addEventListener("click", () => {
+  openTrackerModal();
+});
+
+q("verifyResultRow").addEventListener("change", setVerifyReasonVisibility);
+q("verifyResultCancelBtn").addEventListener("click", closeVerifyResultModal);
+q("verifyResultSubmitBtn").addEventListener("click", async () => {
+  await submitVerifyResult();
+});
+q("verifyResultModal").addEventListener("click", (event) => {
+  if (event.target === q("verifyResultModal")) closeVerifyResultModal();
+});
+
+q("trackerFilter").addEventListener("input", renderTrackerList);
+q("trackerStatusFilter").addEventListener("change", renderTrackerList);
+q("trackerCloseBtn").addEventListener("click", closeTrackerModal);
+q("trackerModal").addEventListener("click", (event) => {
+  if (event.target === q("trackerModal")) closeTrackerModal();
+});
+
+refreshVerifyProgress();
 
 const params = new URLSearchParams(window.location.search);
 const sessionFromUrl = params.get("session");
