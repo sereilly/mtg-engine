@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import random
 import socket
 from collections import defaultdict
 from pathlib import Path
@@ -18,6 +19,7 @@ from engine.ai_policy import (
     choose_cast_action,
     choose_combat_blockers,
     choose_combat_instant_cast_action,
+    choose_search_library_index,
 )
 from engine.card_loader import load_cards
 from engine.classifier import classify_card
@@ -924,6 +926,28 @@ def _build_lan_join_url(request: Request, session_id: str) -> str | None:
     return f"{str(lan_base_url).rstrip('/')}/index.html?session={session_id}"
 
 
+def _auto_resolve_ai_pending_search(session: Session) -> None:
+    """Resolve a pending library search immediately when the searcher is an AI seat."""
+    game = session.game
+    while True:
+        pending = game.pending_search_library
+        if pending is None:
+            return
+        caster_seat = pending["caster_index"]
+        if _seat_type(session, caster_seat) != "ai":
+            return
+        caster = game.players[caster_seat]
+        choice = choose_search_library_index(game, caster_seat, card_type=pending.get("card_type", "any"))
+        if choice is None:
+            random.shuffle(caster.library)
+            game.pending_search_library = None
+            game.log.append(f"{caster.name} searched their library and found nothing")
+            continue
+        if not game.confirm_search_library(caster_seat, choice):
+            game.pending_search_library = None
+            return
+
+
 def _ai_step(session: Session) -> bool:
     """Run one AI action for the current turn.
 
@@ -933,6 +957,8 @@ def _ai_step(session: Session) -> bool:
     """
     seat = session.current_turn
     game = session.game
+
+    _auto_resolve_ai_pending_search(session)
 
     has_human_opponent = any(
         _seat_type(session, s) == "human"
@@ -970,6 +996,7 @@ def _ai_step(session: Session) -> bool:
                 target_permanent_index=cast_action.target_permanent_index,
                 x_value=cast_action.x_value,
             )
+            _auto_resolve_ai_pending_search(session)
 
     activation_action = choose_activation_action(game, seat)
     if activation_action is not None:
@@ -982,6 +1009,7 @@ def _ai_step(session: Session) -> bool:
             target_player_index=activation_action.target_player_index,
             permanent_index=activation_action.permanent_index,
         )
+        _auto_resolve_ai_pending_search(session)
 
     return True
 
@@ -1024,6 +1052,7 @@ def _run_priority_exchange(session: Session, acting_seat: int) -> None:
     result = session.game.pass_priority(acting_seat)
 
     while True:
+        _auto_resolve_ai_pending_search(session)
         _auto_advance_after_all_passed(session, result)
 
         ai_priority_seat = session.game.priority_player_index
@@ -1339,6 +1368,7 @@ def do_action(session_id: str, req: GameActionRequest):
     if session.island_sanctuary_pending and req.action not in {"island_sanctuary_skip", "island_sanctuary_draw", "debug_add_to_hand", "debug_cast_free"}:
         raise HTTPException(status_code=400, detail="choose Island Sanctuary draw option before other actions")
 
+    _auto_resolve_ai_pending_search(session)
     if session.game.pending_search_library is not None and req.action not in {"search_library_confirm", "debug_add_to_hand", "debug_cast_free"}:
         raise HTTPException(status_code=400, detail="complete library search before other actions")
 

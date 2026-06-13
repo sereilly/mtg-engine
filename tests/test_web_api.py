@@ -1164,3 +1164,39 @@ def test_ai_step_while_human_has_priority_does_not_crash():
     assert len(payload["stack"]) == 1
     assert payload["priority_player"] == 0
     assert payload["current_turn"] == 1
+
+
+def test_ai_demonic_tutor_search_resolves_automatically():
+    """Regression: when the AI resolves a tutor effect, it must search its own
+    library immediately instead of leaving the game stuck on pending_search_library."""
+    tutor = _mk_card(
+        name="AI Tutor",
+        mana_cost="{B}",
+        type_line="Sorcery",
+        oracle_text="Search your library for a card, put that card into your hand, then shuffle.",
+    )
+    sid = _make_ai_turn_session(80004)
+    session = store.get(sid)
+    session.game.players[1].hand = [tutor]
+    library_before = len(session.game.players[1].library)
+    assert library_before > 0
+
+    # AI casts the tutor and passes priority to the human.
+    first = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "ai_step"})
+    assert first.status_code == 200
+    assert len(first.json()["stack"]) == 1
+
+    # Human passes priority — tutor resolves and the AI must complete its search.
+    resp = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "pass_priority"})
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["stack"] == []
+    assert payload["search_library"] is None
+    assert session.game.pending_search_library is None
+    # The tutored card moved from the library into the AI's hand.
+    assert len(session.game.players[1].hand) == 1
+    assert len(session.game.players[1].library) == library_before - 1
+
+    # The game is not stuck: the human can keep acting normally.
+    follow_up = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "ai_step"})
+    assert follow_up.status_code == 200

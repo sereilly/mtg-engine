@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import re
 
+from .classifier import classify_card
 from .game import Game
 from .mixins.stack_casting import aura_enchant_noun, permanent_matches_enchant_noun
 from .models import CardDefinition, Permanent, PlayerState
@@ -287,6 +288,64 @@ def choose_combat_instant_cast_action(game: Game, player_index: int) -> CastActi
             best = candidate
 
     return best
+
+
+def choose_search_library_index(game: Game, player_index: int, card_type: str = "any") -> int | None:
+    """Pick the library index of the best card to tutor for (e.g. Demonic Tutor).
+
+    Returns None when no library card matches card_type (fail to find)."""
+    player = game.players[player_index]
+
+    best_index: int | None = None
+    best_score = float("-inf")
+    for index, card in enumerate(player.library):
+        if card_type != "any" and card.primary_type != card_type:
+            continue
+        score = _score_tutor_choice(game, player_index, card)
+        if best_index is None or score > best_score:
+            best_index = index
+            best_score = score
+    return best_index
+
+
+def _score_tutor_choice(game: Game, player_index: int, card: CardDefinition) -> float:
+    player = game.players[player_index]
+    opponent = game.players[1 - player_index]
+
+    # Cards the engine cannot cast would strand in hand.
+    if not classify_card(card).supported:
+        return -50.0
+
+    target = _choose_target_for_spell(card, player_index, game)
+    x_value = _pick_x_value(game, player, card)
+    score = _score_cast(game, player_index, card, target, x_value)
+
+    lands_available = sum(1 for perm in player.battlefield if perm.card.primary_type == "land") + sum(
+        1 for hand_card in player.hand if hand_card.primary_type == "land"
+    )
+    if card.primary_type == "land":
+        # Lands are only worth tutoring when mana-screwed.
+        if lands_available < 3:
+            score += 4.0 - lands_available
+        else:
+            score -= 4.0
+    elif game.enforce_mana_costs:
+        pool = _preview_pool_with_all_untapped_lands(player)
+        required = game._parse_mana_cost(
+            card.mana_cost, x_value=x_value if x_value is not None else 0, extra_generic=_extra_generic_tax(game, card)
+        )
+        if _can_pay_cost(pool, required, player.can_spend_white_as_red):
+            score += 3.0  # castable as soon as it reaches hand
+        else:
+            available = sum(pool.values())
+            score -= min(5.0, max(0.0, float(card.cmc) - available))
+
+    # A tutored burn spell that closes the game outranks everything else.
+    damage = _extract_damage(card)
+    if target == 1 - player_index and 0 < opponent.life <= damage:
+        score += 15.0
+
+    return score
 
 
 def _stack_response_bonus(game: Game, caster_index: int, card: CardDefinition, target_index: int) -> float:

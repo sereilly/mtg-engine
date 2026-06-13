@@ -5,6 +5,7 @@ from engine.ai_policy import (
     choose_cast_action,
     choose_combat_blockers,
     choose_combat_instant_cast_action,
+    choose_search_library_index,
 )
 from engine.game import Game
 from engine.models import Permanent, PlayerState
@@ -184,3 +185,61 @@ def test_black_lotus_not_preferred_when_mana_free(all_cards):
     assert action.card_name == "Lightning Bolt", (
         "AI should prefer Lightning Bolt over Black Lotus when mana costs are not enforced"
     )
+
+
+def test_tutor_picks_lethal_burn_when_opponent_low(all_cards):
+    """Demonic Tutor AI: with the opponent at 3 life, find the kill spell."""
+    bolt = _get(all_cards, "Lightning Bolt")
+    grizzly = _get(all_cards, "Grizzly Bears")
+    forest = _get(all_cards, "Forest")
+    mountain = _get(all_cards, "Mountain")
+
+    p1 = PlayerState(name="P1", library=[forest, grizzly, bolt], battlefield=[Permanent(card=mountain)])
+    p2 = PlayerState(name="P2", life=3)
+    game = Game(players=[p1, p2])
+
+    index = choose_search_library_index(game, 0)
+
+    assert index is not None
+    assert p1.library[index].name == "Lightning Bolt"
+
+
+def test_tutor_picks_land_when_mana_screwed(all_cards):
+    """Demonic Tutor AI: with no lands in play or hand, dig for mana."""
+    shivan = _get(all_cards, "Shivan Dragon")
+    mountain = _get(all_cards, "Mountain")
+
+    p1 = PlayerState(name="P1", library=[shivan, mountain])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = True
+
+    index = choose_search_library_index(game, 0)
+
+    assert index is not None
+    assert p1.library[index].name == "Mountain"
+
+
+def test_tutor_returns_none_on_empty_library(all_cards):
+    p1 = PlayerState(name="P1")
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    assert choose_search_library_index(game, 0) is None
+
+
+def test_tutor_prefers_castable_spell(all_cards):
+    """Demonic Tutor AI: with mana enforcement on, prefer a spell it can afford now."""
+    bolt = _get(all_cards, "Lightning Bolt")
+    shivan = _get(all_cards, "Shivan Dragon")
+    mountain = _get(all_cards, "Mountain")
+
+    p1 = PlayerState(name="P1", library=[shivan, bolt], battlefield=[Permanent(card=mountain)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = True
+
+    index = choose_search_library_index(game, 0)
+
+    assert index is not None
+    assert p1.library[index].name == "Lightning Bolt"
