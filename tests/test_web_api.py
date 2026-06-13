@@ -1288,6 +1288,78 @@ def test_ai_holds_priority_for_human_at_upkeep_on_turn_start():
     assert payload["priority_player"] == 0  # human holds priority at the AI's upkeep
 
 
+def test_ai_resolves_combat_damage_for_multi_blocked_attacker():
+    """A double-blocked attacker requires manual damage assignment, which the engine
+    defers to a player. When the active player is an AI the driver must assign damage
+    itself instead of spinning forever on the combat_damage step (the deadlock bug)."""
+    sid = _make_ai_turn_session(80301)
+    session = store.get(sid)
+    session.seat_types = {0: "ai", 1: "ai"}
+    game = session.game
+
+    attacker = Permanent(card=_mk_creature_card("Big Attacker", 3, 3))
+    attacker.attacking = True
+    attacker.blocked = True
+    wall_a = Permanent(card=_mk_creature_card("Wall A", 0, 2))
+    wall_b = Permanent(card=_mk_creature_card("Wall B", 0, 2))
+    game.players[1].battlefield = [attacker]
+    game.players[0].battlefield = [wall_a, wall_b]
+    game.players[1].hand = []
+
+    # Stand the engine up exactly where it deadlocked: locked combat with a
+    # double-blocked attacker, sitting on an unresolved combat_damage step.
+    game.combat_defending_player_index = 0
+    game.combat_attackers = {0: 0}
+    game.combat_blockers = {0: 0, 1: 0}
+    game.combat_attackers_locked = True
+    game.combat_blockers_locked = True
+    game.combat_damage_resolved = False
+    game.combat_first_strike_done = False
+    game._set_phase_and_step("combat", "combat_damage")
+
+    assert game._needs_manual_damage_assignment()
+
+    web_app._advance_phase(session)
+
+    assert game.combat_damage_resolved
+    assert game.current_step != "combat_damage"  # progressed past the damage step
+    # One wall took the attacker's full 3 power and died; the other survived.
+    survivors = [p.card.name for p in game.players[0].battlefield]
+    graveyard = [c.name for c in game.players[0].graveyard]
+    assert sorted(survivors) == ["Wall B"]
+    assert graveyard == ["Wall A"]
+
+
+def test_ai_does_not_cast_sorcery_speed_spell_during_combat_damage():
+    """choose_cast_action covers sorcery-speed plays (enchantments, creatures, ...).
+    The AI must not cast them outside its main phase — the enchantment-during-damage
+    bug came from _ai_step running at the (stuck) combat_damage step."""
+    sid = _make_ai_turn_session(80302)
+    session = store.get(sid)
+    session.seat_types = {0: "ai", 1: "ai"}  # no human => casts resolve immediately
+    creature = _mk_creature_card("Vanilla Bear", 2, 2)
+    game = session.game
+    game.players[1].battlefield = []
+
+    # Control: during the AI's main phase it readily plays the creature.
+    game.players[1].hand = [creature]
+    game._set_phase_and_step("precombat_main", "precombat_main")
+    game.start_priority_window(1)
+    web_app._ai_step(session)
+    assert any(p.card.name == "Vanilla Bear" for p in game.players[1].battlefield)
+    assert not any(c.name == "Vanilla Bear" for c in game.players[1].hand)
+
+    # During the combat damage step the same play must be refused.
+    game.players[1].battlefield = []
+    game.players[1].hand = [creature]
+    game._set_phase_and_step("combat", "combat_damage")
+    game.combat_damage_resolved = True  # damage already resolved; AI just has priority
+    game.start_priority_window(1)
+    web_app._ai_step(session)
+    assert any(c.name == "Vanilla Bear" for c in game.players[1].hand)
+    assert not any(p.card.name == "Vanilla Bear" for p in game.players[1].battlefield)
+
+
 def test_ai_turn_does_not_hold_when_nothing_flagged():
     """With no stop steps flagged, the AI's turn runs through to completion as before."""
     sid = _make_ai_turn_session(80105)

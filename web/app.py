@@ -989,7 +989,17 @@ def _ai_step(session: Session) -> bool:
     if game.priority_player_index is not None and game.priority_player_index != seat:
         return False
 
-    cast_action = choose_cast_action(game, seat)
+    # choose_cast_action covers sorcery-speed plays (enchantments, sorceries,
+    # creatures, artifacts, lands), which are legal only during the active player's
+    # main phase with an empty stack. Without this guard the AI would, e.g., drop an
+    # enchantment during the combat damage step. Instants are handled separately via
+    # _ai_respond_to_priority / the declare-blockers window.
+    sorcery_speed_ok = (
+        game.active_player_index == seat
+        and game.current_step in ("precombat_main", "postcombat_main")
+        and not game.stack
+    )
+    cast_action = choose_cast_action(game, seat) if sorcery_speed_ok else None
     if cast_action is not None:
         card_to_cast = game.players[seat].hand[cast_action.hand_index]
         for permanent_index in cast_action.land_tap_indices:
@@ -1132,6 +1142,21 @@ def _ai_declare_attackers(session: Session) -> None:
         game.declare_attackers(game.active_player_index, [])
 
 
+def _ai_assign_combat_damage(session: Session) -> None:
+    """Active-player (AI) assigns combat damage — the turn-based action the engine
+    defers to a player when an attacker is blocked by two or more creatures."""
+    game = session.game
+    if game.current_step != "combat_damage" or game.combat_damage_resolved:
+        return
+    if _seat_type(session, game.active_player_index) != "ai":
+        return
+    auto = game._build_auto_damage_assignment()
+    game.resolve_combat_damage(game.active_player_index, attacker_damage=auto)
+    if not game.combat_damage_resolved:
+        # First-strike pass resolved; resolve the regular-damage pass too.
+        game.resolve_combat_damage(game.active_player_index, attacker_damage=auto)
+
+
 def _hold_priority_for_human(session: Session) -> bool:
     """During the AI's turn, hand priority to a human opponent so they may act at a
     step they flagged on the phase rail.
@@ -1230,6 +1255,15 @@ def _advance_phase(session: Session) -> None:
         _clear_cleanup_selection(session)
         return
     if phase == "combat":
+        if (
+            step == "combat_damage"
+            and not game.combat_damage_resolved
+            and _seat_type(session, game.active_player_index) == "ai"
+        ):
+            # No human is assigning damage for the active AI. Resolve combat damage
+            # with a sensible default assignment so a multi-blocked attacker (which
+            # the engine defers for manual assignment) doesn't deadlock the step.
+            _ai_assign_combat_damage(session)
         if step == "declare_attackers" and not game.combat_attackers_locked:
             _ai_declare_attackers(session)
         if step == "declare_blockers":

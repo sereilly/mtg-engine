@@ -426,31 +426,71 @@ class CombatMixin:
         return False
 
     def _build_auto_damage_assignment(self) -> dict[int, dict[int, int]]:
-        """Build a damage assignment dict for simple cases (each attacker has at most 1 blocker)."""
+        """Build a sensible default damage assignment for every blocked attacker.
+
+        Single-blocked attackers assign their full power to that blocker (only
+        lethal for tramplers, so the remainder can trample through). Multi-blocked
+        attackers assign lethal to each blocker in declared order and dump any
+        leftover power onto the last blocker that received lethal — this keeps the
+        assignment legal (the resolver rejects a positive-but-sub-lethal amount)
+        while still killing as many blockers as the attacker can.
+        """
         if not self.combat_attackers:
             return {}
         attacker_controller = self.players[self.active_player_index]
+        defending_index = self.combat_defending_player_index
+        defender = (
+            self.players[defending_index]
+            if isinstance(defending_index, int) and 0 <= defending_index < len(self.players)
+            else None
+        )
         assignment: dict[int, dict[int, int]] = {}
         for attacker_idx in self.combat_attackers:
             if attacker_idx >= len(attacker_controller.battlefield):
                 continue
             attacker = attacker_controller.battlefield[attacker_idx]
-            blockers = self._combat_blockers_for_attacker(attacker_idx)
+            blockers = sorted(self._combat_blockers_for_attacker(attacker_idx))
+            if not blockers:
+                continue
+            has_trample = self._has_keyword(attacker, "trample")
+            has_deathtouch = self._has_keyword(attacker, "deathtouch")
+
+            def lethal_for(blocker_idx: int) -> int:
+                if defender is None or blocker_idx >= len(defender.battlefield):
+                    return 0
+                blocker = defender.battlefield[blocker_idx]
+                need = max(0, blocker.effective_toughness - blocker.damage_marked)
+                if has_deathtouch and need > 0:
+                    return 1
+                return need
+
             if len(blockers) == 1:
                 blocker_idx = blockers[0]
                 assign = max(0, attacker.effective_power)
                 # For trample assign only lethal to the blocker; the remainder
                 # flows to the defending player via the existing trample logic.
-                defending_index = self.combat_defending_player_index
-                if self._has_keyword(attacker, "trample") and defending_index is not None:
-                    defending_player = self.players[defending_index]
-                    if blocker_idx < len(defending_player.battlefield):
-                        blocker = defending_player.battlefield[blocker_idx]
-                        lethal = max(0, blocker.effective_toughness - blocker.damage_marked)
-                        if self._has_keyword(attacker, "deathtouch") and lethal > 0:
-                            lethal = 1
-                        assign = min(assign, lethal)
+                if has_trample:
+                    assign = min(assign, lethal_for(blocker_idx))
                 assignment[attacker_idx] = {blocker_idx: assign}
+                continue
+
+            # Multiple blockers: assign lethal in declared order while affordable.
+            power_left = max(0, attacker.effective_power)
+            per_blocker: dict[int, int] = {}
+            last_lethal_idx: int | None = None
+            for blocker_idx in blockers:
+                need = lethal_for(blocker_idx)
+                if need <= power_left:
+                    per_blocker[blocker_idx] = need
+                    power_left -= need
+                    last_lethal_idx = blocker_idx
+                else:
+                    per_blocker[blocker_idx] = 0
+            # Dump leftover power onto the last blocker we killed (now > lethal, still
+            # legal). Tramplers keep the leftover so it spills to the defender instead.
+            if power_left > 0 and not has_trample and last_lethal_idx is not None:
+                per_blocker[last_lethal_idx] += power_left
+            assignment[attacker_idx] = per_blocker
         return assignment
 
     def resolve_combat_damage(self, controller_index: int, attacker_damage: dict[int, dict[int, int]] | None = None) -> tuple[bool, str]:
