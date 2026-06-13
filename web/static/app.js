@@ -2981,9 +2981,21 @@ async function castDebugCardForFree() {
     return;
   }
 
+  if (card && cardRequiresTargetCreature(card)) {
+    startCastCreatureTargetPrompt(card, "debug_cast_free");
+    updateDebugStatus(`Choose a creature target for ${resolvedCardName}.`, "success");
+    return;
+  }
+
   if (card && cardRequiresTargetPermanent(card)) {
     startCastPermanentTargetPrompt(card, "debug_cast_free");
     updateDebugStatus(`Choose a permanent target for ${resolvedCardName}.`, "success");
+    return;
+  }
+
+  if (card && cardRequiresTargetAny(card)) {
+    startCastAnyTargetPrompt(card, "debug_cast_free");
+    updateDebugStatus(`Choose a target for ${resolvedCardName}.`, "success");
     return;
   }
 
@@ -3033,9 +3045,21 @@ async function castDebugCardForFreeAsOpponent() {
     return;
   }
 
+  if (card && cardRequiresTargetCreature(card)) {
+    startCastCreatureTargetPrompt(card, "debug_cast_free_opponent");
+    updateDebugStatus(`Choose a creature target for ${resolvedCardName} (as opponent).`, "success");
+    return;
+  }
+
   if (card && cardRequiresTargetPermanent(card)) {
     startCastPermanentTargetPrompt(card, "debug_cast_free_opponent");
     updateDebugStatus(`Choose a permanent target for ${resolvedCardName} (as opponent).`, "success");
+    return;
+  }
+
+  if (card && cardRequiresTargetAny(card)) {
+    startCastAnyTargetPrompt(card, "debug_cast_free_opponent");
+    updateDebugStatus(`Choose a target for ${resolvedCardName} (as opponent).`, "success");
     return;
   }
 
