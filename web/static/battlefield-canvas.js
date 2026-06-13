@@ -150,6 +150,8 @@ class BattlefieldCanvas {
     this.onCardHover = callbacks.onCardHover || null;
     this.onHandCardDrop = callbacks.onHandCardDrop || null;
     this.onBlockerAssign = callbacks.onBlockerAssign || null;
+    this.onStackCardHover = callbacks.onStackCardHover || null;
+    this.onStackCardClick = callbacks.onStackCardClick || null;
 
     // Runtime state
     this.viewerSeat = 0;
@@ -158,9 +160,19 @@ class BattlefieldCanvas {
     this.targetingKeys = new Set();
     this.combatArrows = [];
     this.hoveredKey = null;
+    // Floating stack-card interaction: index into stackVisuals (= serialized
+    // stack index) currently hovered, and the index click-locked for priority
+    // (set externally by app.js so the DOM stack list stays in sync).
+    this.hoveredStackIndex = null;
+    this.stackHeldIndex = null;
 
     // Mouse-press state (left mouse): click detection + blocker-assignment drag.
     this.pressState = null;
+
+    // Last known mouse position (client coords). Stack cards animate into
+    // place, so hover is re-evaluated every tick against this — a card
+    // sliding under a stationary cursor still registers as hovered.
+    this._lastMouseClient = null;
 
     // External context passed on updates (current game state for callback decisions)
     this.currentState = null;
@@ -297,6 +309,47 @@ class BattlefieldCanvas {
       }
     }
     return null;
+  }
+
+  // Hit-test the floating stack cascade. Index 0 (top of the engine stack)
+  // draws last and therefore sits on top, so test in ascending order.
+  _hitTestStack(wx, wy) {
+    for (let i = 0; i < this.stackVisuals.length; i++) {
+      const v = this.stackVisuals[i];
+      const w = BF_CARD_W * v.scale;
+      const h = BF_CARD_H * v.scale;
+      if (wx >= v.cx - w / 2 && wx <= v.cx + w / 2 && wy >= v.cy - h / 2 && wy <= v.cy + h / 2) {
+        return { index: i, item: v.item };
+      }
+    }
+    return null;
+  }
+
+  // Recompute which stack card (if any) is under the given world point and
+  // fire the hover callback on changes. Returns the hit, or null.
+  _updateStackHover(wx, wy) {
+    const stackHit = this._hitTestStack(wx, wy);
+    const newStackIndex = stackHit ? stackHit.index : null;
+    if (newStackIndex !== this.hoveredStackIndex) {
+      this.hoveredStackIndex = newStackIndex;
+      this.needsRedraw = true;
+      if (this.onStackCardHover) {
+        this.onStackCardHover(stackHit ? { index: stackHit.index, item: stackHit.item } : null);
+      }
+    }
+    return stackHit;
+  }
+
+  // Stack cards ease into their cascade slots, so a card can arrive under a
+  // cursor that isn't moving. Re-evaluate hover from the last known mouse
+  // position each tick; without this, hover only updates on mousemove and
+  // the auto-pass fires even though the player is pointing at the card.
+  _updateStackHoverFromLastMouse() {
+    if (!this._lastMouseClient || this.pressState) return;
+    if (!this.stackVisuals.length && this.hoveredStackIndex === null) return;
+    const { x: cx, y: cy } = this._pageToCanvas(this._lastMouseClient.x, this._lastMouseClient.y);
+    const world = this.canvasToWorld(cx, cy);
+    this._updateStackHover(world.x, world.y);
   }
 
   _sortRenderOrder() {
@@ -619,6 +672,13 @@ class BattlefieldCanvas {
     }
     const removed = old.filter((v, j) => !matched[j]);
     this.stackVisuals = next;
+    if (this.hoveredStackIndex != null && this.hoveredStackIndex >= next.length) {
+      this.hoveredStackIndex = null;
+      if (this.onStackCardHover) this.onStackCardHover(null);
+    }
+    if (this.stackHeldIndex != null && this.stackHeldIndex >= next.length) {
+      this.stackHeldIndex = null;
+    }
     this._retargetStackVisuals();
 
     if (!this._stackSynced) {
@@ -1126,6 +1186,7 @@ class BattlefieldCanvas {
         v.settledAt = performance.now();
       }
     }
+    this._updateStackHoverFromLastMouse();
     if (this._tickFx(performance.now())) moving = true;
     if (this._tickCombatFx(performance.now())) moving = true;
     const t = this.camTarget;
@@ -1703,8 +1764,11 @@ class BattlefieldCanvas {
     // Bottom of the stack first; the top spell (next to resolve) draws on top.
     for (let i = this.stackVisuals.length - 1; i >= 0; i--) {
       const v = this.stackVisuals[i];
-      this._drawFloatingCard(ctx, v.item?.card, v.cx, v.cy, v.scale, 1, false);
+      const lifted = i === this.hoveredStackIndex || i === this.stackHeldIndex;
+      this._drawFloatingCard(ctx, v.item?.card, v.cx, v.cy, v.scale, 1, lifted);
     }
+
+    this._drawStackHoldUi(ctx);
 
     for (const fx of this.fxAnims) {
       if (fx.type === "ring") {
@@ -1720,6 +1784,47 @@ class BattlefieldCanvas {
         this._drawFloatingCard(ctx, fx.card, fx.x, fx.y, fx.scale, fx.alpha, fx.lifted);
       }
     }
+  }
+
+  // Hover/click-hold affordances for the floating stack cascade: a glowing
+  // border on the click-held card, and a hint label beside the hovered card
+  // ("Click to hold priority" / "Priority held — click to release"). The
+  // stack hugs the right edge, so the label goes to the card's left.
+  _drawStackHoldUi(ctx) {
+    const heldVisual = this.stackHeldIndex != null ? this.stackVisuals[this.stackHeldIndex] : null;
+    if (heldVisual) {
+      const w = BF_CARD_W * heldVisual.scale;
+      const h = BF_CARD_H * heldVisual.scale;
+      ctx.save();
+      ctx.strokeStyle = "rgba(126, 196, 255, 0.95)";
+      ctx.lineWidth = 3 / this.zoom;
+      ctx.shadowColor = "#7ec4ff";
+      ctx.shadowBlur = 14 / this.zoom;
+      ctx.strokeRect(heldVisual.cx - w / 2, heldVisual.cy - h / 2, w, h);
+      ctx.restore();
+    }
+
+    const labelIndex = this.hoveredStackIndex != null ? this.hoveredStackIndex : this.stackHeldIndex;
+    const labelVisual = labelIndex != null ? this.stackVisuals[labelIndex] : null;
+    if (!labelVisual) return;
+    const text = labelIndex === this.stackHeldIndex
+      ? "Priority held — click to release"
+      : "Click to hold priority";
+    const w = BF_CARD_W * labelVisual.scale;
+    const tx = labelVisual.cx - w / 2 - 10 / this.zoom;
+    const ty = labelVisual.cy;
+    ctx.save();
+    ctx.font = `600 ${13 / this.zoom}px sans-serif`;
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
+    const pad = 6 / this.zoom;
+    const tw = ctx.measureText(text).width;
+    const th = 18 / this.zoom;
+    ctx.fillStyle = "rgba(12, 20, 32, 0.82)";
+    ctx.fillRect(tx - tw - pad, ty - th / 2 - pad / 2, tw + pad * 2, th + pad);
+    ctx.fillStyle = "rgba(126, 196, 255, 0.95)";
+    ctx.fillText(text, tx, ty);
+    ctx.restore();
   }
 
   // Draw a card centered at (cx, cy) at an arbitrary scale/alpha; `lifted`
@@ -1823,6 +1928,25 @@ class BattlefieldCanvas {
     const { x: cx, y: cy } = this._pageToCanvas(event.clientX, event.clientY);
     const world = this.canvasToWorld(cx, cy);
 
+    // Floating stack cards draw above the battlefield, so they win the press.
+    const stackHit = this._hitTestStack(world.x, world.y);
+    if (stackHit) {
+      this.pressState = {
+        stackIndex: stackHit.index,
+        key: null,
+        seat: null,
+        idx: null,
+        card: stackHit.item?.card || null,
+        startCX: cx,
+        startCY: cy,
+        currentCX: cx,
+        currentCY: cy,
+        combatDrag: false,
+        cancelled: false,
+      };
+      return;
+    }
+
     const item = this._hitTest(world.x, world.y);
     if (!item) return;
 
@@ -1841,6 +1965,7 @@ class BattlefieldCanvas {
   }
 
   _handleMouseMove(event) {
+    this._lastMouseClient = { x: event.clientX, y: event.clientY };
     const { x: cx, y: cy } = this._pageToCanvas(event.clientX, event.clientY);
     const world = this.canvasToWorld(cx, cy);
 
@@ -1871,10 +1996,12 @@ class BattlefieldCanvas {
       return;
     }
 
-    // Hover
-    const item = this._hitTest(world.x, world.y);
+    // Hover — the floating stack cascade sits above battlefield cards.
+    const stackHit = this._updateStackHover(world.x, world.y);
+
+    const item = stackHit ? null : this._hitTest(world.x, world.y);
     const newKey = item?.key || null;
-    this.canvas.style.cursor = item ? "pointer" : "default";
+    this.canvas.style.cursor = (item || stackHit) ? "pointer" : "default";
     if (newKey !== this.hoveredKey) {
       this.hoveredKey = newKey;
       this.needsRedraw = true;
@@ -1903,6 +2030,13 @@ class BattlefieldCanvas {
         this.onBlockerAssign
       ) {
         this.onBlockerAssign({ blockerIdx: ps.idx, attackerIdx: target.idx });
+      }
+      return;
+    }
+
+    if (!ps.cancelled && ps.stackIndex != null) {
+      if (this.onStackCardClick) {
+        this.onStackCardClick({ index: ps.stackIndex, item: this.stackVisuals[ps.stackIndex]?.item || null });
       }
       return;
     }

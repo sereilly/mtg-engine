@@ -24,6 +24,9 @@ let autoPassTurnEndInFlight = false;
 let autoPassTurnEndRequestedStateKey = "";
 let autoPassMode = null;
 let holdPriorityActive = false;
+let stackClickHoldActive = false;
+let stackClickHoldIndex = null;
+let stackCanvasHoverActive = false;
 let searchLibrarySelectedIndex = null;
 let searchLibraryFilter = "";
 let reorderLibraryCurrentOrder = null;
@@ -765,8 +768,34 @@ async function maybeAutoPassUntilTurnEnd(state = currentState) {
   }
 }
 
+function isStackHoverHolding() {
+  return stackCanvasHoverActive || !!document.querySelector("#stackZone .stack-item:hover");
+}
+
+function isPriorityHeld() {
+  return holdPriorityActive || stackClickHoldActive || isStackHoverHolding();
+}
+
+function resumeAutoPassAfterHold() {
+  autoPassPriorityRequestedStateKey = "";
+  autoPassDisabledPhaseRequestedStateKey = "";
+  maybeAutoPassPriority(currentState);
+  maybeAutoPassDisabledPhase(currentState);
+}
+
+function releaseStackClickHold(message) {
+  if (!stackClickHoldActive) return;
+  stackClickHoldActive = false;
+  stackClickHoldIndex = null;
+  _refreshStackHoldVisuals();
+  if (message) updateActionHint(message);
+  if (!isPriorityHeld()) {
+    resumeAutoPassAfterHold();
+  }
+}
+
 async function maybeAutoPassPriority(state = currentState) {
-  if (holdPriorityActive) return;
+  if (isPriorityHeld()) return;
   if (autoPassTurnEndEnabled) return;
   if (!state || seat === null) return;
   if (autoPassPriorityInFlight) return;
@@ -789,7 +818,7 @@ async function maybeAutoPassPriority(state = currentState) {
     await waitForBattlefieldAnimations();
     const latest = currentState;
     if (
-      holdPriorityActive ||
+      isPriorityHeld() ||
       !latest ||
       latest.priority_player !== seat ||
       hasBlockingPromptForAutoPass(latest) ||
@@ -807,7 +836,7 @@ async function maybeAutoPassPriority(state = currentState) {
 }
 
 async function maybeAutoPassDisabledPhase(state = currentState) {
-  if (holdPriorityActive) return;
+  if (isPriorityHeld()) return;
   if (autoPassTurnEndEnabled) return;
   if (!state || seat === null) return;
   if (autoPassDisabledPhaseInFlight) return;
@@ -832,7 +861,7 @@ async function maybeAutoPassDisabledPhase(state = currentState) {
     await waitForBattlefieldAnimations();
     const latest = currentState;
     if (
-      holdPriorityActive ||
+      isPriorityHeld() ||
       !latest ||
       latest.priority_player !== seat ||
       hasBlockingPromptForAutoPass(latest)
@@ -3552,10 +3581,37 @@ function _applyStackHoverHighlight(linkEl) {
   }
 }
 
+function _refreshStackHoldVisuals() {
+  document.querySelectorAll("#stackZone .stack-item").forEach((el) => {
+    const held = stackClickHoldActive && Number(el.dataset.stackIndex) === stackClickHoldIndex;
+    el.classList.toggle("stack-held", held);
+    const hint = el.querySelector(".stack-hold-hint");
+    if (hint) hint.textContent = held ? "Priority held — click to release" : "Click to hold priority";
+  });
+  if (battlefieldCanvas) {
+    battlefieldCanvas.stackHeldIndex = stackClickHoldActive ? stackClickHoldIndex : null;
+    battlefieldCanvas.needsRedraw = true;
+  }
+}
+
+function toggleStackClickHold(arrayIndex) {
+  if (stackClickHoldActive && stackClickHoldIndex === arrayIndex) {
+    releaseStackClickHold("Priority hold released.");
+    return;
+  }
+  stackClickHoldActive = true;
+  stackClickHoldIndex = arrayIndex;
+  _refreshStackHoldVisuals();
+  updateActionHint("Priority held: it will stay held until you take an action.");
+}
+
 function renderStack(stack) {
   _currentStack = stack || [];
   const zone = q("stackZone");
   if (!stack || stack.length === 0) {
+    stackClickHoldActive = false;
+    stackClickHoldIndex = null;
+    _refreshStackHoldVisuals();
     zone.innerHTML = '<span class="stack-empty-label">Stack: empty</span>';
     return;
   }
@@ -3567,8 +3623,29 @@ function renderStack(stack) {
     box.className = "stack-item";
     box.dataset.stackIndex = String(arrayIndex);
     box.innerHTML = _buildStackItemHtml(item, position);
+
+    const hint = document.createElement("span");
+    hint.className = "stack-hold-hint";
+    box.appendChild(hint);
+
+    // Hovering a stack item previews the card and implicitly holds priority
+    // (isStackHoverHolding checks :hover, so no flag needs tracking here).
+    box.addEventListener("mouseenter", () => {
+      if (item.card) {
+        showCardPreview(item.card);
+      }
+    });
+    box.addEventListener("mouseleave", () => {
+      if (!isPriorityHeld()) {
+        resumeAutoPassAfterHold();
+      }
+    });
+    box.addEventListener("click", () => toggleStackClickHold(arrayIndex));
+
     zone.appendChild(box);
   });
+
+  _refreshStackHoldVisuals();
 
   zone.querySelectorAll(".stack-card-link").forEach((link) => {
     link.addEventListener("mouseenter", () => {
@@ -4247,6 +4324,22 @@ function initBattlefieldCanvas() {
       showCardPreview(info.card);
     },
 
+    onStackCardHover(info) {
+      stackCanvasHoverActive = !!info;
+      if (info) {
+        if (info.item?.card) showCardPreview(info.item.card);
+        return;
+      }
+      // Hover ended: resume the normal flow unless something else still holds.
+      if (!isPriorityHeld()) {
+        resumeAutoPassAfterHold();
+      }
+    },
+
+    onStackCardClick(info) {
+      if (info) toggleStackClickHold(info.index);
+    },
+
     onHandCardDrop(info) {
       handleHandCardDropOnBattlefield(info).catch((e) => updateActionHint(e.message, true));
     },
@@ -4401,6 +4494,10 @@ async function joinSession() {
 async function sendAction(actionBody) {
   if (!sessionId) return;
   const payload = await postJson(`/api/sessions/${sessionId}/action`, actionBody);
+  // Taking any action releases a click-held priority lock; the upcoming
+  // renderState re-evaluates auto-pass against the fresh state.
+  stackClickHoldActive = false;
+  stackClickHoldIndex = null;
   renderState(payload);
 }
 
