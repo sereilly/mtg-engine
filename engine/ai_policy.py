@@ -308,6 +308,32 @@ def choose_search_library_index(game: Game, player_index: int, card_type: str = 
     return best_index
 
 
+def choose_reorder_library_order(
+    game: Game, caster_index: int, target_index: int, top_count: int
+) -> list[int]:
+    """Decide how to rearrange the top cards of a library (e.g. Natural Selection).
+
+    Returns a permutation of ``range(top_count)`` where element 0 is the original
+    index of the card that should end up on top (the next card drawn).
+
+    When reordering our own library we surface the most valuable card first so we
+    draw it next; when reordering an opponent's library we bury their best cards by
+    putting the least valuable one on top.
+    """
+    target = game.players[target_index]
+    top = target.library[:top_count]
+
+    # Score each card from the library owner's perspective — how good drawing it
+    # would be for them.
+    scored = [
+        (index, _score_tutor_choice(game, target_index, card))
+        for index, card in enumerate(top)
+    ]
+    surface_best_first = caster_index == target_index
+    scored.sort(key=lambda item: item[1], reverse=surface_best_first)
+    return [index for index, _ in scored]
+
+
 def _score_tutor_choice(game: Game, player_index: int, card: CardDefinition) -> float:
     player = game.players[player_index]
     opponent = game.players[1 - player_index]

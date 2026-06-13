@@ -23,6 +23,7 @@ from engine.ai_policy import (
     choose_activation_action,
     choose_combat_blockers,
     choose_combat_instant_cast_action,
+    choose_reorder_library_order,
 )
 from engine import Game, PlayerState, classify_card, load_cards
 from engine.models import CardDefinition, Permanent
@@ -1459,6 +1460,50 @@ def test_natural_selection_preserves_rest_of_library(all_cards):
     game.confirm_reorder_library(0, [0, 1, 2])
 
     assert [card.name for card in p2.library] == ["A", "B", "C", "D", "E"]
+
+
+def test_ai_reorder_surfaces_best_card_on_own_library(all_cards):
+    bolt = _get(all_cards, "Lightning Bolt")
+    ancestral = _get(all_cards, "Ancestral Recall")
+    land = _get(all_cards, "Forest")
+    # AI seat 0 reorders its own top three: [land, bolt, ancestral].
+    p1 = PlayerState(name="P1", library=[land, bolt, ancestral])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    order = choose_reorder_library_order(game, caster_index=0, target_index=0, top_count=3)
+    reordered = [game.players[0].library[i].name for i in order]
+
+    # Highest-value spells are surfaced ahead of the land we'd rather not draw next.
+    assert reordered[-1] == "Forest"
+    assert "Forest" not in reordered[:2]
+
+
+def test_ai_reorder_buries_opponent_best_card(all_cards):
+    bolt = _get(all_cards, "Lightning Bolt")
+    ancestral = _get(all_cards, "Ancestral Recall")
+    land = _get(all_cards, "Forest")
+    # AI seat 0 reorders the opponent's top three.
+    p1 = PlayerState(name="P1")
+    p2 = PlayerState(name="P2", library=[land, bolt, ancestral])
+    game = Game(players=[p1, p2])
+
+    order = choose_reorder_library_order(game, caster_index=0, target_index=1, top_count=3)
+    reordered = [game.players[1].library[i].name for i in order]
+
+    # The opponent's strongest card should not be left on top to be drawn next.
+    assert reordered[0] != "Ancestral Recall"
+
+
+def test_ai_reorder_order_is_valid_permutation(all_cards):
+    cards = [_mk_card(name, "Sorcery") for name in ["A", "B", "C"]]
+    p1 = PlayerState(name="P1", library=list(cards))
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    order = choose_reorder_library_order(game, caster_index=0, target_index=0, top_count=3)
+    assert sorted(order) == [0, 1, 2]
+
 
 def test_word_of_command_forces_play_from_hand(all_cards):
     word = _get(all_cards, "Word of Command")

@@ -19,6 +19,7 @@ from engine.ai_policy import (
     choose_cast_action,
     choose_combat_blockers,
     choose_combat_instant_cast_action,
+    choose_reorder_library_order,
     choose_search_library_index,
 )
 from engine.card_loader import load_cards
@@ -698,6 +699,8 @@ def _compute_playable_hand_indices(session: Session, player_index: int) -> list[
         return []
     if game.pending_search_library is not None:
         return []
+    if game.pending_reorder_library is not None:
+        return []
 
     if not game.has_priority(player_index):
         return []
@@ -829,7 +832,7 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
 
     reorder_library_info = None
     pending_reorder = session.game.pending_reorder_library
-    if pending_reorder is not None:
+    if pending_reorder is not None and _seat_type(session, pending_reorder["caster_index"]) != "ai":
         caster_seat = pending_reorder["caster_index"]
         if viewer_seat is None or viewer_seat == caster_seat:
             target = session.game.players[pending_reorder["target_index"]]
@@ -968,6 +971,31 @@ def _auto_resolve_ai_pending_search(session: Session) -> None:
             return
 
 
+def _auto_resolve_ai_pending_reorder(session: Session) -> None:
+    """Resolve a pending library reorder immediately when the caster is an AI seat.
+
+    AI players take the action headlessly — no "Reorder top of library" UI is shown.
+    """
+    game = session.game
+    pending = game.pending_reorder_library
+    if pending is None:
+        return
+    caster_seat = pending["caster_index"]
+    if _seat_type(session, caster_seat) != "ai":
+        return
+    new_order = choose_reorder_library_order(
+        game, caster_seat, pending["target_index"], pending["top_count"]
+    )
+    if not game.confirm_reorder_library(caster_seat, new_order):
+        game.pending_reorder_library = None
+
+
+def _auto_resolve_ai_pending(session: Session) -> None:
+    """Resolve any AI-owned pending choices (library search, library reorder)."""
+    _auto_resolve_ai_pending_search(session)
+    _auto_resolve_ai_pending_reorder(session)
+
+
 def _ai_step(session: Session) -> bool:
     """Run one AI action for the current turn.
 
@@ -978,7 +1006,7 @@ def _ai_step(session: Session) -> bool:
     seat = session.current_turn
     game = session.game
 
-    _auto_resolve_ai_pending_search(session)
+    _auto_resolve_ai_pending(session)
 
     has_human_opponent = any(
         _seat_type(session, s) == "human"
@@ -1026,7 +1054,7 @@ def _ai_step(session: Session) -> bool:
                 target_permanent_index=cast_action.target_permanent_index,
                 x_value=cast_action.x_value,
             )
-            _auto_resolve_ai_pending_search(session)
+            _auto_resolve_ai_pending(session)
 
     activation_action = choose_activation_action(game, seat)
     if activation_action is not None:
@@ -1039,7 +1067,7 @@ def _ai_step(session: Session) -> bool:
             target_player_index=activation_action.target_player_index,
             permanent_index=activation_action.permanent_index,
         )
-        _auto_resolve_ai_pending_search(session)
+        _auto_resolve_ai_pending(session)
 
     return True
 
@@ -1082,7 +1110,7 @@ def _run_priority_exchange(session: Session, acting_seat: int) -> None:
     result = session.game.pass_priority(acting_seat)
 
     while True:
-        _auto_resolve_ai_pending_search(session)
+        _auto_resolve_ai_pending(session)
         _auto_advance_after_all_passed(session, result)
 
         ai_priority_seat = session.game.priority_player_index
@@ -1602,9 +1630,11 @@ def do_action(session_id: str, req: GameActionRequest):
     if session.island_sanctuary_pending and req.action not in {"island_sanctuary_skip", "island_sanctuary_draw", "debug_add_to_hand", "debug_cast_free"}:
         raise HTTPException(status_code=400, detail="choose Island Sanctuary draw option before other actions")
 
-    _auto_resolve_ai_pending_search(session)
+    _auto_resolve_ai_pending(session)
     if session.game.pending_search_library is not None and req.action not in {"search_library_confirm", "debug_add_to_hand", "debug_cast_free"}:
         raise HTTPException(status_code=400, detail="complete library search before other actions")
+    if session.game.pending_reorder_library is not None and req.action not in {"reorder_library_confirm", "debug_add_to_hand", "debug_cast_free"}:
+        raise HTTPException(status_code=400, detail="complete library reorder before other actions")
 
     if req.action in {
         "cast",
