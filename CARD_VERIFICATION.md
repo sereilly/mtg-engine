@@ -3,9 +3,9 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **290**
-- Passed: **1**
-- Failed: **0**
-- Untested: **289**
+- Passed: **3**
+- Failed: **1**
+- Untested: **286**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -134,7 +134,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Iron Star | ⬜ untested |  |
 | Ironclaw Orcs | ⬜ untested |  |
 | Ironroot Treefolk | ⬜ untested |  |
-| Island | ⬜ untested |  |
+| Island | ✅ pass |  |
 | Island Sanctuary | ⬜ untested |  |
 | Ivory Cup | ⬜ untested |  |
 | Jade Monolith | ⬜ untested |  |
@@ -168,7 +168,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Mana Vault | ⬜ untested |  |
 | Manabarbs | ⬜ untested |  |
 | Meekstone | ⬜ untested |  |
-| Merfolk of the Pearl Trident | ⬜ untested |  |
+| Merfolk of the Pearl Trident | ✅ pass |  |
 | Mesa Pegasus | ⬜ untested |  |
 | Mind Twist | ⬜ untested |  |
 | Mons's Goblin Raiders | ⬜ untested |  |
@@ -295,7 +295,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Wild Growth | ⬜ untested |  |
 | Will-o'-the-Wisp | ⬜ untested |  |
 | Winter Orb | ⬜ untested |  |
-| Wooden Sphere | ⬜ untested |  |
+| Wooden Sphere | ❌ fail | Unable to use the activated ability. |
 | Word of Command | ⬜ untested |  |
 | Wrath of God | ⬜ untested |  |
 | Zombie Master | ⬜ untested |  |

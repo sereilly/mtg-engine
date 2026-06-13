@@ -25,6 +25,7 @@ ActionKind = Literal[
     "debug_add_to_hand",
     "debug_cast_free",
     "debug_cast_free_opponent",
+    "debug_add_mana",
     "search_library_confirm",
     "reorder_library_confirm",
     "coin_flip_choose",
@@ -65,7 +66,7 @@ class GameActionRequest(BaseModel):
     target_seat: int | None = Field(default=None, ge=0, le=1)
     x_value: int | None = Field(default=None, ge=0)
     hand_index: int | None = Field(default=None, ge=0)
-    mana_color: Literal["W", "U", "B", "R", "G"] | None = None
+    mana_color: Literal["W", "U", "B", "R", "G", "C"] | None = None
     attacker_indices: list[int] | None = None
     blocker_pairs: dict[int, int] | None = None
     attacker_damage: dict[int, dict[int, int]] | None = None

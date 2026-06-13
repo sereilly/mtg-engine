@@ -1914,6 +1914,19 @@ def do_action(session_id: str, req: GameActionRequest):
         session.game.note_priority_action_taken(opponent_seat)
         session.game.log.append(f"[Debug] {opponent.name} cast {card.name} for free.")
 
+    elif req.action == "debug_add_mana":
+        if seat_type != "human":
+            raise HTTPException(status_code=400, detail="cannot issue debug action for AI seat")
+        color = (req.mana_color or "").strip().upper()
+        if color not in {"W", "U", "B", "R", "G", "C"}:
+            raise HTTPException(status_code=400, detail="invalid mana color")
+
+        # target_seat selects whose pool to add to; default to the acting seat.
+        target = req.target_seat if req.target_seat is not None else req.seat
+        player = session.game.players[target]
+        player.mana_pool[color] += 1
+        session.game.log.append(f"[Debug] Added {{{color}}} to {player.name}'s mana pool.")
+
     elif req.action == "coin_flip_choose":
         if session.pregame_phase != "coin_flip":
             raise HTTPException(status_code=400, detail="not in coin flip phase")

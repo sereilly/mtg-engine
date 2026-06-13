@@ -1,9 +1,24 @@
 {
   "results": {
+    "Island": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1781378704.6242044
+    },
+    "Merfolk of the Pearl Trident": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1781378762.2991576
+    },
     "Timetwister": {
       "reason": "",
       "status": "pass",
       "updated_at": 1781378490.7807422
+    },
+    "Wooden Sphere": {
+      "reason": "Unable to use the activated ability.",
+      "status": "fail",
+      "updated_at": 1781378645.552908
     }
   }
 }

@@ -1270,6 +1270,17 @@ h2.targeting-valid {
   align-items: center;
 }
 
+.mana-symbol-addable {
+  cursor: pointer;
+  box-shadow: 0 0 0 2px rgba(120, 220, 255, 0.7);
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+
+.mana-symbol-addable:hover {
+  transform: scale(1.1);
+  box-shadow: 0 0 0 2px rgba(120, 220, 255, 1);
+}
+
 .mana-W { background: #f9f6df; }
 .mana-U { background: #7ec4ff; }
 .mana-B { background: #7a7f93; color: #f2f2f2; }

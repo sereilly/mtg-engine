@@ -9,6 +9,7 @@ let pendingCastHandCard = null;
 let pendingManaColor = null;
 let pendingAutoTap = null;
 let debugSearchTimer = null;
+let debugAddManaMode = false;
 let symbolMap = {};
 let combatDragSource = null;
 let combatDamageDraft = {};
@@ -3720,10 +3721,12 @@ function renderZoneCards(containerId, cards) {
   }
 }
 
-function renderMana(containerId, manaPool) {
+function renderMana(containerId, manaPool, targetSeat = null) {
   const container = q(containerId);
   container.innerHTML = "";
   const pool = manaPool || {};
+  const clickable = debugAddManaMode && targetSeat !== null;
+  container.classList.toggle("mana-row-addable", clickable);
   for (const symbol of MANA_ORDER) {
     const chip = document.createElement("div");
     chip.className = `mana-symbol mana-${symbol}`;
@@ -3734,8 +3737,26 @@ function renderMana(containerId, manaPool) {
     } else {
       chip.innerHTML = `<span>${symbol === "C" ? "GEN" : symbol} ${count}</span>`;
     }
+    if (clickable) {
+      chip.classList.add("mana-symbol-addable");
+      chip.title = `Debug: click to add {${symbol}} to this mana pool`;
+      chip.addEventListener("click", () => {
+        addDebugMana(targetSeat, symbol).catch((error) => {
+          updateDebugStatus(error.message || "Could not add mana.", "error");
+        });
+      });
+    }
     container.appendChild(chip);
   }
+}
+
+async function addDebugMana(targetSeat, color) {
+  if (sessionId === null || seat === null) {
+    updateDebugStatus("Create or join a session first.", "error");
+    return;
+  }
+  await sendAction({ seat, action: "debug_add_mana", target_seat: targetSeat, mana_color: color });
+  updateActionHint(`Debug: added {${color}} mana.`);
 }
 
 function renderPhaseRail(state) {
@@ -4265,8 +4286,8 @@ function renderBoard(state) {
   renderZoneCards("oppGraveyardCards", opp.graveyard);
   renderZoneCards("oppExileCards", opp.exile || []);
 
-  renderMana("selfMana", me.mana_pool);
-  renderMana("oppMana", opp.mana_pool);
+  renderMana("selfMana", me.mana_pool, seat);
+  renderMana("oppMana", opp.mana_pool, 1 - seat);
   renderPhaseRail(state);
   if (aiControlsEl) {
     aiControlsEl.classList.toggle("hidden", !shouldShowAiControls(state));
@@ -5094,6 +5115,13 @@ q("debugAddUntestedBtn").addEventListener("click", async () => {
     await addUntestedCardToHand();
   } catch (e) {
     updateDebugStatus(e.message, "error");
+  }
+});
+
+q("debugAddManaToggle").addEventListener("change", (event) => {
+  debugAddManaMode = event.target.checked;
+  if (currentState) {
+    renderState(currentState);
   }
 });
 
