@@ -52,9 +52,10 @@ const BF_CARD_EASE = 0.22; // per-frame easing of cards toward their slots
 // resolution either slams a permanent onto its battlefield slot or shrinks a
 // non-permanent away toward the caster's graveyard.
 const BF_STACK_SCALE = 1.7; // stack cards render larger than battlefield cards
+const BF_STACK_HOVER_SCALE = 1.5; // extra growth of the hovered stack card
 const BF_STACK_OFFSET_X = 30; // cascade offset between overlapping stack cards
 const BF_STACK_OFFSET_Y = 38;
-const BF_STACK_DWELL_MS = 1000; // minimum time a spell stays on the stack before resolving
+const BF_STACK_DWELL_MS = 1500; // minimum time a spell stays on the stack before resolving
 const BF_STACK_GAP_X = 64; // gap between battlefield content and the stack zone
 const BF_STACK_EASE = 0.18; // per-frame easing of stack cards (position + scale)
 const BF_RESOLVE_FLY_MS = 340; // stack -> hover point above the battlefield slot
@@ -312,15 +313,27 @@ class BattlefieldCanvas {
   }
 
   // Hit-test the floating stack cascade. Index 0 (top of the engine stack)
-  // draws last and therefore sits on top, so test in ascending order.
+  // draws last and therefore sits on top, so test in ascending order — but
+  // test the currently hovered card first: it's enlarged and drawn above
+  // everything, and giving it precedence keeps hover stable in overlaps.
   _hitTestStack(wx, wy) {
-    for (let i = 0; i < this.stackVisuals.length; i++) {
+    const hitAt = (i) => {
       const v = this.stackVisuals[i];
       const w = BF_CARD_W * v.scale;
       const h = BF_CARD_H * v.scale;
-      if (wx >= v.cx - w / 2 && wx <= v.cx + w / 2 && wy >= v.cy - h / 2 && wy <= v.cy + h / 2) {
-        return { index: i, item: v.item };
-      }
+      return wx >= v.cx - w / 2 && wx <= v.cx + w / 2 && wy >= v.cy - h / 2 && wy <= v.cy + h / 2
+        ? { index: i, item: v.item }
+        : null;
+    };
+    const hovered = this.hoveredStackIndex;
+    if (hovered != null && hovered < this.stackVisuals.length) {
+      const hit = hitAt(hovered);
+      if (hit) return hit;
+    }
+    for (let i = 0; i < this.stackVisuals.length; i++) {
+      if (i === hovered) continue;
+      const hit = hitAt(i);
+      if (hit) return hit;
     }
     return null;
   }
@@ -714,9 +727,13 @@ class BattlefieldCanvas {
     const centerY = (rect.minY + rect.maxY) / 2;
     this.stackVisuals.forEach((v, i) => {
       const pos = n - 1 - i;
-      v.tcx = baseX + pos * offX;
+      // The hovered card grows; shifting it left by the extra half-width
+      // keeps its right edge anchored (and on screen), and the enlarged
+      // bounds still fully contain the resting bounds so hover stays stable.
+      const hovered = i === this.hoveredStackIndex;
+      v.tcx = baseX + pos * offX - (hovered ? ((BF_STACK_HOVER_SCALE - 1) * w) / 2 : 0);
       v.tcy = centerY + (pos - (n - 1) / 2) * offY;
-      v.tScale = sc;
+      v.tScale = hovered ? sc * BF_STACK_HOVER_SCALE : sc;
     });
   }
 
@@ -1761,11 +1778,16 @@ class BattlefieldCanvas {
       ctx.restore();
     }
 
-    // Bottom of the stack first; the top spell (next to resolve) draws on top.
+    // Bottom of the stack first; the top spell (next to resolve) draws on
+    // top. The hovered card grows, so it draws above everything else.
     for (let i = this.stackVisuals.length - 1; i >= 0; i--) {
+      if (i === this.hoveredStackIndex) continue;
       const v = this.stackVisuals[i];
-      const lifted = i === this.hoveredStackIndex || i === this.stackHeldIndex;
-      this._drawFloatingCard(ctx, v.item?.card, v.cx, v.cy, v.scale, 1, lifted);
+      this._drawFloatingCard(ctx, v.item?.card, v.cx, v.cy, v.scale, 1, i === this.stackHeldIndex);
+    }
+    const hoveredVisual = this.hoveredStackIndex != null ? this.stackVisuals[this.hoveredStackIndex] : null;
+    if (hoveredVisual) {
+      this._drawFloatingCard(ctx, hoveredVisual.item?.card, hoveredVisual.cx, hoveredVisual.cy, hoveredVisual.scale, 1, true);
     }
 
     this._drawStackHoldUi(ctx);
