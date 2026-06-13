@@ -2301,18 +2301,8 @@ function renderActivationPrompt() {
       body.textContent = "Click any permanent on the battlefield to choose the target.";
       steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
     } else if (pendingCastTarget.targetKind === "any") {
-      const players = Array.isArray(currentState?.players) ? currentState.players : [];
-      const targetButtons = players
-        .map((player, index) => {
-          const label = player?.name || `Seat ${index}`;
-          return `<button type="button" class="prompt-choice-btn" data-target-choice="${index}">${escapeHtml(label)}</button>`;
-        })
-        .join("");
-      body.textContent = "Click a creature on the battlefield, or select a player below.";
-      steps.innerHTML = [
-        `<div>Card: ${pendingCastTarget.cardName}</div>`,
-        `<div class="prompt-choice-row">${targetButtons}</div>`,
-      ].join("");
+      body.textContent = "Click a creature on the battlefield, or click a player's life pill (glowing yellow) to target them.";
+      steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
     } else {
       const players = Array.isArray(currentState?.players) ? currentState.players : [];
       const targetButtons = players
@@ -2652,7 +2642,7 @@ function startCastAnyTargetPrompt(card, castAction = "cast") {
   };
   renderActivationPrompt();
   renderBoard(currentState);
-  updateActionHint(`Choose any target for ${cardName}: click a creature on the battlefield or select a player.`);
+  updateActionHint(`Choose any target for ${cardName}: click a creature on the battlefield, or click a player's glowing life pill.`);
 }
 
 function startCastXPrompt(card, targetSeat, targetPermanentIndex = null, castAction = "cast") {
