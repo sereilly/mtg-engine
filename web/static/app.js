@@ -1401,6 +1401,16 @@ function getDefaultTargetSeat(cardName) {
   return 1 - seat;
 }
 
+function getOpponentDefaultTargetSeat(cardName) {
+  // Default target when the spell is being cast on the opponent's behalf.
+  if (seat === null) return 0;
+  const opponentSeat = 1 - seat;
+  if (["Ancestral Recall", "Healing Salve", "Stream of Life"].includes(cardName)) {
+    return opponentSeat;
+  }
+  return seat;
+}
+
 function getTargetableLandsForPrompt(state = currentState) {
   if (!state) return [];
 
@@ -2902,6 +2912,7 @@ function setDebugMenuEnabled(enabled, canCastFree = false) {
   q("debugCardSearch").disabled = !enabled;
   q("debugAddToHandBtn").disabled = !enabled;
   q("debugCastFreeBtn").disabled = !enabled || !canCastFree;
+  q("debugCastFreeOpponentBtn").disabled = !enabled;
   if (!enabled) {
     renderDebugOptions([]);
   }
@@ -3002,6 +3013,63 @@ async function castDebugCardForFree() {
   await sendAction({ seat, action: "debug_cast_free", card_name: resolvedCardName, target_seat: targetSeat });
   updateDebugStatus(`Cast ${resolvedCardName} for free.`, "success");
   updateActionHint(`Debug: cast ${resolvedCardName} for free.`);
+}
+
+async function castDebugCardForFreeAsOpponent() {
+  if (!sessionId || seat === null) {
+    updateDebugStatus("Create or join a session first.", "error");
+    return;
+  }
+
+  const input = q("debugCardSearch");
+  const cardName = input.value.trim();
+  if (!cardName) {
+    updateDebugStatus("Type a card name before casting.", "error");
+    return;
+  }
+
+  const card = await fetchCardByName(cardName);
+  const resolvedCardName = normalizeCardName(card) || cardName;
+
+  if (card && cardRequiresTargetLand(card)) {
+    startCastLandTargetPrompt(card, "debug_cast_free_opponent");
+    updateDebugStatus(`Choose a land target for ${resolvedCardName} (as opponent).`, "success");
+    return;
+  }
+
+  if (card && cardRequiresTargetArtifact(card)) {
+    startCastArtifactTargetPrompt(card, "debug_cast_free_opponent");
+    updateDebugStatus(`Choose an artifact target for ${resolvedCardName} (as opponent).`, "success");
+    return;
+  }
+
+  if (card && cardRequiresTargetPermanent(card)) {
+    startCastPermanentTargetPrompt(card, "debug_cast_free_opponent");
+    updateDebugStatus(`Choose a permanent target for ${resolvedCardName} (as opponent).`, "success");
+    return;
+  }
+
+  if (card && cardRequiresTargetPlayer(card)) {
+    startCastTargetPrompt(card, "debug_cast_free_opponent");
+    updateDebugStatus(`Choose a target for ${resolvedCardName} (as opponent).`, "success");
+    return;
+  }
+
+  const targetSeat = getOpponentDefaultTargetSeat(resolvedCardName);
+  if (card && hasXCost(card)) {
+    startCastXPrompt(card, targetSeat, null, "debug_cast_free_opponent");
+    updateDebugStatus(`Choose X for ${resolvedCardName} (as opponent).`, "success");
+    return;
+  }
+
+  await sendAction({
+    seat,
+    action: "debug_cast_free_opponent",
+    card_name: resolvedCardName,
+    target_seat: targetSeat,
+  });
+  updateDebugStatus(`Cast ${resolvedCardName} for free as opponent.`, "success");
+  updateActionHint(`Debug: cast ${resolvedCardName} for free as opponent.`);
 }
 
 function clearCardPreview() {
@@ -4825,6 +4893,14 @@ q("debugAddToHandBtn").addEventListener("click", async () => {
 q("debugCastFreeBtn").addEventListener("click", async () => {
   try {
     await castDebugCardForFree();
+  } catch (e) {
+    updateDebugStatus(e.message, "error");
+  }
+});
+
+q("debugCastFreeOpponentBtn").addEventListener("click", async () => {
+  try {
+    await castDebugCardForFreeAsOpponent();
   } catch (e) {
     updateDebugStatus(e.message, "error");
   }

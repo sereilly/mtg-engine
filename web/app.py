@@ -1791,6 +1791,53 @@ def do_action(session_id: str, req: GameActionRequest):
         session.game.note_priority_action_taken(req.seat)
         session.game.log.append(f"[Debug] {player.name} cast {card.name} for free.")
 
+    elif req.action == "debug_cast_free_opponent":
+        if seat_type != "human":
+            raise HTTPException(status_code=400, detail="cannot issue debug action for AI seat")
+        if not req.card_name:
+            raise HTTPException(status_code=400, detail="card_name is required")
+
+        opponent_seat = 1 - req.seat
+        card = CARD_BY_NAME.get(req.card_name.strip().casefold())
+        if card is None:
+            raise HTTPException(status_code=404, detail="card not found")
+
+        opponent = session.game.players[opponent_seat]
+        opponent.hand.append(card)
+        target = req.target_seat if req.target_seat is not None else _default_target(card.name, opponent_seat)
+        x_value = req.x_value if req.x_value is not None else (0 if "{X}" in (card.mana_cost or "") else None)
+
+        # Debug exception: casting for the opponent is allowed even on your own turn,
+        # when priority belongs to you. Hand the opponent a priority window so the cast
+        # is accepted and the resulting game state (caster holds priority) is correct.
+        saved_priority_player_index = session.game.priority_player_index
+        session.game.start_priority_window(opponent_seat)
+
+        original_enforce_mana_costs = session.game.enforce_mana_costs
+        try:
+            session.game.enforce_mana_costs = False
+            result = session.game.queue_from_hand(
+                opponent_seat,
+                card.name,
+                target_player_index=target,
+                target_permanent_index=req.permanent_index,
+                x_value=x_value,
+            )
+        finally:
+            session.game.enforce_mana_costs = original_enforce_mana_costs
+
+        if not result.supported:
+            # Roll back the injected card and priority window if the cast did not complete.
+            session.game.priority_player_index = saved_priority_player_index
+            for idx in range(len(opponent.hand) - 1, -1, -1):
+                if opponent.hand[idx].name == card.name:
+                    del opponent.hand[idx]
+                    break
+            raise HTTPException(status_code=400, detail=result.details)
+
+        session.game.note_priority_action_taken(opponent_seat)
+        session.game.log.append(f"[Debug] {opponent.name} cast {card.name} for free.")
+
     elif req.action == "coin_flip_choose":
         if session.pregame_phase != "coin_flip":
             raise HTTPException(status_code=400, detail="not in coin flip phase")

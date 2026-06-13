@@ -24,6 +24,7 @@ ActionKind = Literal[
     "sacrifice_upkeep",
     "debug_add_to_hand",
     "debug_cast_free",
+    "debug_cast_free_opponent",
     "search_library_confirm",
     "reorder_library_confirm",
     "coin_flip_choose",
