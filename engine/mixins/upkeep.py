@@ -33,7 +33,7 @@ class UpkeepMixin:
                 break
         return choices
 
-    def resolve_upkeep(self, player_index: int, human_choices: dict[str, bool] | None = None) -> None:
+    def resolve_upkeep(self, player_index: int, human_choices: dict[str, bool] | None = None, defer_priority: bool = False) -> None:
         phase = "beginning"
         step = "upkeep"
         self._set_phase_and_step(phase, step)
@@ -304,6 +304,4 @@ class UpkeepMixin:
                     amount = int(instr.payload.get("amount", 1))
                     self._gain_life(gainer, amount, permanent.card.name)
 
-        if self._receives_priority(step):
-            self._resolve_priority_window()
-        self._on_step_or_phase_end(phase, step)
+        self._close_or_defer_step(phase, step, defer_priority)

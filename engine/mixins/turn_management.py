@@ -137,7 +137,7 @@ class TurnManagementMixin:
         self.start_turn(next_player)
         return next_player
 
-    def resolve_draw_step(self, player_index: int, sanctuary_choice: bool | None = None) -> int:
+    def resolve_draw_step(self, player_index: int, sanctuary_choice: bool | None = None, defer_priority: bool = False) -> int:
         phase = "beginning"
         step = "draw"
         self._set_phase_and_step(phase, step)
@@ -147,9 +147,7 @@ class TurnManagementMixin:
         # 614.1b/614.10: skip step is a replacement effect
         if self._consume_skip(self.skip_step_counts, step):
             self.log.append(f"{player.name} skipped draw step")
-            if self._receives_priority(step):
-                self._resolve_priority_window()
-            self._on_step_or_phase_end(phase, step)
+            self._close_or_defer_step(phase, step, defer_priority)
             return 0
 
         # Island Sanctuary: sanctuary_choice=None means auto-skip (AI); True=skip (human chose);
@@ -158,9 +156,7 @@ class TurnManagementMixin:
         if has_sanctuary and sanctuary_choice is not False:
             player.island_sanctuary_protected = True
             self.log.append(f"{player.name} skipped draw (Island Sanctuary active)")
-            if self._receives_priority(step):
-                self._resolve_priority_window()
-            self._on_step_or_phase_end(phase, step)
+            self._close_or_defer_step(phase, step, defer_priority)
             return 0
 
         bonus = 0
@@ -170,9 +166,7 @@ class TurnManagementMixin:
                     bonus += 1
         drawn = player.draw(1 + bonus)
         self.log.append(f"{player.name} drew {drawn} card(s) in draw step")
-        if self._receives_priority(step):
-            self._resolve_priority_window()
-        self._on_step_or_phase_end(phase, step)
+        self._close_or_defer_step(phase, step, defer_priority)
         return drawn
 
     def get_untap_land_selection_options(self, player_index: int) -> dict[str, object] | None:

@@ -1321,6 +1321,22 @@ h2.targeting-valid {
   background: rgba(255, 255, 255, 0.12);
 }
 
+/* Untap and cleanup never grant priority — these halves can't be toggled. */
+.phase-half-locked,
+.phase-half-locked:hover,
+.phase-chip-item.active .phase-half-locked,
+.phase-chip-item.active .phase-half-locked:hover {
+  cursor: default;
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.03),
+    rgba(255, 255, 255, 0.03) 3px,
+    rgba(255, 255, 255, 0.07) 3px,
+    rgba(255, 255, 255, 0.07) 6px
+  );
+  opacity: 0.5;
+}
+
 .phase-half-player.phase-half-enabled {
   background: rgba(50, 190, 80, 0.32);
 }

@@ -1200,3 +1200,106 @@ def test_ai_demonic_tutor_search_resolves_automatically():
     # The game is not stuck: the human can keep acting normally.
     follow_up = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "ai_step"})
     assert follow_up.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Phase-rail hold-priority on the opponent's (AI's) turn.
+# ---------------------------------------------------------------------------
+
+
+def test_ai_holds_priority_for_human_at_beginning_of_combat():
+    """Flagging beginning of combat must pause the AI's turn there and hand the
+    human priority (the original BC hold)."""
+    sid = _make_ai_turn_session(80101)
+    session = store.get(sid)
+    session.game.players[1].hand = []
+    session.game._set_phase_and_step("precombat_main", "precombat_main")
+    session.game.start_priority_window(1)
+
+    resp = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "ai_step", "stop_steps": ["beginning_of_combat"]},
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["current_turn"] == 1  # still the AI's turn
+    assert payload["current_step"] == "beginning_of_combat"
+    assert payload["priority_player"] == 0  # human holds priority
+
+
+def test_ai_holds_priority_for_human_at_end_step():
+    """Flagging the end step must pause the AI's turn at the end step and hand the
+    human priority — the reported EN regression."""
+    sid = _make_ai_turn_session(80102)
+    session = store.get(sid)
+    session.game.players[1].hand = []
+    session.game._set_phase_and_step("postcombat_main", "postcombat_main")
+    session.game.start_priority_window(1)
+
+    resp = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "ai_step", "stop_steps": ["end"]},
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["current_turn"] == 1  # turn has NOT ended
+    assert payload["current_step"] == "end"
+    assert payload["priority_player"] == 0  # human holds priority at the end step
+
+
+def test_human_passing_at_held_end_step_completes_ai_turn():
+    """After holding at the AI's end step, the human passing priority must finish the
+    AI's turn and pass the turn to the human."""
+    sid = _make_ai_turn_session(80103)
+    session = store.get(sid)
+    session.game.players[1].hand = []
+    session.game._set_phase_and_step("postcombat_main", "postcombat_main")
+    session.game.start_priority_window(1)
+
+    client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "ai_step", "stop_steps": ["end"]},
+    )
+    resp = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "pass_priority"})
+    assert resp.status_code == 200
+    assert resp.json()["current_turn"] == 0  # the AI's turn ended; now the human's
+
+
+def test_ai_holds_priority_for_human_at_upkeep_on_turn_start():
+    """Flagging upkeep must pause at the AI's upkeep step — exercising the turn-start
+    path that the AI normally resolves itself."""
+    sid = _make_ai_turn_session(80104)
+    session = store.get(sid)
+    # Hand the turn back to the human so ending it begins a fresh AI turn.
+    session.current_turn = 0
+    session.game.active_player_index = 0
+    session.game._set_phase_and_step("postcombat_main", "postcombat_main")
+    session.game.start_priority_window(0)
+    session.game.players[0].hand = session.game.players[0].hand[:5]  # avoid cleanup discard
+
+    resp = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "end_turn", "stop_steps": ["upkeep"]},
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["current_turn"] == 1  # now the AI's turn
+    assert payload["current_step"] == "upkeep"
+    assert payload["priority_player"] == 0  # human holds priority at the AI's upkeep
+
+
+def test_ai_turn_does_not_hold_when_nothing_flagged():
+    """With no stop steps flagged, the AI's turn runs through to completion as before."""
+    sid = _make_ai_turn_session(80105)
+    session = store.get(sid)
+    session.game.players[1].hand = []
+    session.game._set_phase_and_step("postcombat_main", "postcombat_main")
+    session.game.start_priority_window(1)
+
+    resp = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "ai_step", "stop_steps": []},
+    )
+    assert resp.status_code == 200
+    # No hold: the AI completed its turn and play passed to the human.
+    assert resp.json()["current_turn"] == 0

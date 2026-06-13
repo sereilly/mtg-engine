@@ -3,9 +3,9 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **290**
-- Passed: **3**
-- Failed: **0**
-- Untested: **287**
+- Passed: **5**
+- Failed: **1**
+- Untested: **284**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -111,8 +111,8 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Gloom | ⬜ untested |  |
 | Goblin Balloon Brigade | ⬜ untested |  |
 | Goblin King | ⬜ untested |  |
-| Granite Gargoyle | ⬜ untested |  |
-| Gray Ogre | ⬜ untested |  |
+| Granite Gargoyle | ✅ pass |  |
+| Gray Ogre | ✅ pass |  |
 | Green Ward | ⬜ untested |  |
 | Grizzly Bears | ⬜ untested |  |
 | Guardian Angel | ⬜ untested |  |
@@ -198,7 +198,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Plague Rats | ⬜ untested |  |
 | Plains | ⬜ untested |  |
 | Plateau | ⬜ untested |  |
-| Power Leak | ⬜ untested |  |
+| Power Leak | ❌ fail | It said there was no valid target even though I had an enchantment in play. |
 | Power Sink | ⬜ untested |  |
 | Power Surge | ⬜ untested |  |
 | Prodigal Sorcerer | ⬜ untested |  |

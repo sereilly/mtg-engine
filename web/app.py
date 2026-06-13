@@ -604,10 +604,23 @@ def _begin_turn(session: Session, player_index: int, defer_untap_selection: bool
             return False
 
     _clear_upkeep_pay_choices(session)
+
+    # On the AI's turn, pause to hand a human priority at the upkeep step if flagged.
+    if _ai_should_hold(session, "upkeep"):
+        game.resolve_upkeep(player_index, defer_priority=True)
+        _hold_priority_for_human(session)
+        return True
+
     game.resolve_upkeep(player_index)
     if _seat_type(session, player_index) == "human" and _has_island_sanctuary(game, player_index):
         session.island_sanctuary_pending = True
         return False
+
+    if _ai_should_hold(session, "draw"):
+        game.resolve_draw_step(player_index, defer_priority=True)
+        _hold_priority_for_human(session)
+        return True
+
     game.resolve_draw_step(player_index)
     game._enter_main_phase(precombat=True)
     return True
@@ -1096,10 +1109,120 @@ def _end_turn(session: Session, allow_manual_cleanup_selection: bool = False) ->
     return True
 
 
+def _has_human_opponent(session: Session) -> bool:
+    """True when a human shares the table with the active (AI) player."""
+    active = session.game.active_player_index
+    return any(
+        _seat_type(session, s) == "human"
+        for s in range(len(session.game.players))
+        if s != active
+    )
+
+
+def _ai_declare_attackers(session: Session) -> None:
+    """Active-player (AI) declares attackers — the declare-attackers turn-based action."""
+    game = session.game
+    if game.current_step != "declare_attackers" or game.combat_attackers_locked:
+        return
+    if _seat_type(session, game.active_player_index) != "ai":
+        return
+    attacker_indices = choose_attackers(game, game.active_player_index)
+    ok, _ = game.declare_attackers(game.active_player_index, attacker_indices)
+    if not ok:
+        game.declare_attackers(game.active_player_index, [])
+
+
+def _hold_priority_for_human(session: Session) -> bool:
+    """During the AI's turn, hand priority to a human opponent so they may act at a
+    step they flagged on the phase rail.
+
+    The active player (AI) passes first, leaving priority with the human exactly as a
+    real priority window would — when the human later passes, both players will have
+    passed and the phase advances normally. Returns True if priority was handed off.
+    """
+    game = session.game
+    human_seat = next(
+        (
+            s
+            for s in range(len(game.players))
+            if s != game.active_player_index and _seat_type(session, s) == "human"
+        ),
+        None,
+    )
+    if human_seat is None:
+        return False
+    if not game._receives_priority(game.current_step):
+        return False
+    if game.priority_player_index != game.active_player_index:
+        game.start_priority_window(game.active_player_index)
+    game.pass_priority(game.active_player_index)
+    return True
+
+
+def _ai_should_hold(session: Session, step: str) -> bool:
+    """True when the human asked (via the phase rail) to receive priority at `step`
+    on the AI's turn and that step actually grants priority."""
+    return (
+        step in session.opponent_stop_steps
+        and session.game._receives_priority(step)
+        and _has_human_opponent(session)
+    )
+
+
+def _advance_ai_turn(session: Session) -> None:
+    """Advance the AI's turn through its non-main steps after it has finished acting
+    in the current step.
+
+    Pauses to hand a human priority at any step they flagged on the phase rail. Stops
+    when a new main phase begins (so the AI can cast there on the next step), when the
+    turn ends, or when human input is required (e.g. declaring blockers).
+    """
+    for _safety in range(20):
+        game = session.game
+        step = game.current_step
+
+        if _ai_should_hold(session, step):
+            # Resolve the active player's turn-based action (declaring attackers)
+            # before handing priority to the human.
+            if step == "declare_attackers":
+                _ai_declare_attackers(session)
+            if _hold_priority_for_human(session):
+                return
+
+        prev_turn = session.current_turn
+        prev_phase = game.current_turn_phase
+        prev_step = step
+        _advance_phase(session)
+
+        if session.current_turn != prev_turn:
+            return  # the AI's turn has ended
+        if (
+            session.game.current_turn_phase == prev_phase
+            and session.game.current_step == prev_step
+        ):
+            return  # stuck waiting for human input (e.g. declare blockers)
+        # Stop at a main phase so the AI casts there (driven by the next ai_step).
+        if session.game.current_step in ("precombat_main", "postcombat_main"):
+            return
+
+
 def _advance_phase(session: Session) -> None:
     game = session.game
     phase = game.current_turn_phase
     step = game.current_step
+
+    if phase == "beginning" and step in ("upkeep", "draw"):
+        # Resume after a held upkeep/draw step on the AI's turn: close it and move on,
+        # holding again at the draw step if the human flagged it.
+        game.close_beginning_step()
+        if step == "upkeep" and _ai_should_hold(session, "draw"):
+            game.resolve_draw_step(session.current_turn, defer_priority=True)
+            _hold_priority_for_human(session)
+            return
+        if step == "upkeep":
+            game.resolve_draw_step(session.current_turn)
+        game._enter_main_phase(precombat=True)
+        return
 
     if phase == "precombat_main":
         game._close_current_priority_step()
@@ -1108,11 +1231,7 @@ def _advance_phase(session: Session) -> None:
         return
     if phase == "combat":
         if step == "declare_attackers" and not game.combat_attackers_locked:
-            if _seat_type(session, game.active_player_index) == "ai":
-                attacker_indices = choose_attackers(game, game.active_player_index)
-                ok, _ = game.declare_attackers(game.active_player_index, attacker_indices)
-                if not ok:
-                    game.declare_attackers(game.active_player_index, [])
+            _ai_declare_attackers(session)
         if step == "declare_blockers":
             combat_state = game.get_combat_state()
             defender_index = combat_state.get("defending_player_index")
@@ -1413,6 +1532,11 @@ def do_action(session_id: str, req: GameActionRequest):
         _save_snapshot(session)
 
     seat_type = _seat_type(session, req.seat)
+
+    # Remember the human's phase-rail hold-priority preferences so the AI can stop
+    # at them even on steps (turn start, end step) it would otherwise resolve itself.
+    if req.stop_steps is not None:
+        session.opponent_stop_steps = set(req.stop_steps)
 
     cleanup_required = _cleanup_discard_requirement(session)
     untap_required = _untap_land_selection_requirement(session)
@@ -1798,20 +1922,18 @@ def do_action(session_id: str, req: GameActionRequest):
     elif req.action == "ai_step":
         if _seat_type(session, session.current_turn) != "ai":
             raise HTTPException(status_code=400, detail="current turn is not AI")
-        phase = session.game.current_turn_phase
         if _ai_step(session):
-            if phase == "postcombat_main":
-                _end_turn(session)
+            # The AI finished acting in the current step. Hold here if the human
+            # flagged this (main) step; otherwise leave it and advance the turn,
+            # pausing at any later step they flagged.
+            step = session.game.current_step
+            if _ai_should_hold(session, step):
+                if step == "declare_attackers":
+                    _ai_declare_attackers(session)
+                _hold_priority_for_human(session)
             else:
-                # Advance into combat and auto-declare AI attackers
                 _advance_phase(session)
-                for _safety in range(8):
-                    if session.game.current_turn_phase != "combat":
-                        break
-                    prev_step = session.game.current_step
-                    _advance_phase(session)
-                    if session.game.current_step == prev_step:
-                        break  # stuck waiting for human input (e.g. declare blockers)
+                _advance_ai_turn(session)
 
     elif req.action == "debug_add_to_hand":
         if seat_type != "human":

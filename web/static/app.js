@@ -49,6 +49,16 @@ const opponentDisabledPhases = new Set([
   "declare_blockers", "combat_damage", "end_of_combat",
   "postcombat_main", "end", "cleanup",
 ]);
+// Steps that never receive priority — can't be held regardless of toggle state.
+const NO_PRIORITY_STEPS = new Set(["untap", "cleanup"]);
+
+// Engine step names the human wants to stop at on the opponent's turn (the phases
+// NOT toggled to auto-pass). Sent with `ai_step` so the AI hands us priority there.
+function opponentStopSteps() {
+  return PHASE_RAIL
+    .map((p) => p.key)
+    .filter((key) => !NO_PRIORITY_STEPS.has(key) && !opponentDisabledPhases.has(key));
+}
 /** @type {BattlefieldCanvas|null} */
 let battlefieldCanvas = null;
 let lastAnnouncedTurn = null;
@@ -3820,40 +3830,52 @@ function renderPhaseRail(state) {
       item.setAttribute("aria-current", "step");
     }
 
+    // Untap and cleanup never grant priority, so holding there is impossible.
+    const lockedNoPriority = NO_PRIORITY_STEPS.has(phase.key);
     const playerEnabled = !disabledPhases.has(phase.key);
     const oppEnabled = !opponentDisabledPhases.has(phase.key);
 
     const leftHalf = document.createElement("div");
     leftHalf.className = "phase-half phase-half-player" + (playerEnabled ? " phase-half-enabled" : "");
-    leftHalf.title = playerEnabled
-      ? `${phase.title}: hold priority (your turn) — click to auto-pass`
-      : `${phase.title}: auto-pass (your turn) — click to hold priority`;
-    leftHalf.addEventListener("click", () => {
-      if (disabledPhases.has(phase.key)) {
-        disabledPhases.delete(phase.key);
-      } else {
-        disabledPhases.add(phase.key);
-        autoPassDisabledPhaseRequestedStateKey = "";
-        maybeAutoPassDisabledPhase();
-      }
-      renderPhaseRail(currentState);
-    });
+    if (lockedNoPriority) {
+      leftHalf.classList.add("phase-half-locked");
+      leftHalf.title = `${phase.title}: no priority — can't hold here`;
+    } else {
+      leftHalf.title = playerEnabled
+        ? `${phase.title}: hold priority (your turn) — click to auto-pass`
+        : `${phase.title}: auto-pass (your turn) — click to hold priority`;
+      leftHalf.addEventListener("click", () => {
+        if (disabledPhases.has(phase.key)) {
+          disabledPhases.delete(phase.key);
+        } else {
+          disabledPhases.add(phase.key);
+          autoPassDisabledPhaseRequestedStateKey = "";
+          maybeAutoPassDisabledPhase();
+        }
+        renderPhaseRail(currentState);
+      });
+    }
 
     const rightHalf = document.createElement("div");
     rightHalf.className = "phase-half phase-half-opp" + (oppEnabled ? " phase-half-enabled" : "");
-    rightHalf.title = oppEnabled
-      ? `${phase.title}: hold priority (opponent's turn) — click to auto-pass`
-      : `${phase.title}: auto-pass (opponent's turn) — click to hold priority`;
-    rightHalf.addEventListener("click", () => {
-      if (opponentDisabledPhases.has(phase.key)) {
-        opponentDisabledPhases.delete(phase.key);
-      } else {
-        opponentDisabledPhases.add(phase.key);
-        autoPassDisabledPhaseRequestedStateKey = "";
-        maybeAutoPassDisabledPhase();
-      }
-      renderPhaseRail(currentState);
-    });
+    if (lockedNoPriority) {
+      rightHalf.classList.add("phase-half-locked");
+      rightHalf.title = `${phase.title}: no priority — can't hold here`;
+    } else {
+      rightHalf.title = oppEnabled
+        ? `${phase.title}: hold priority (opponent's turn) — click to auto-pass`
+        : `${phase.title}: auto-pass (opponent's turn) — click to hold priority`;
+      rightHalf.addEventListener("click", () => {
+        if (opponentDisabledPhases.has(phase.key)) {
+          opponentDisabledPhases.delete(phase.key);
+        } else {
+          opponentDisabledPhases.add(phase.key);
+          autoPassDisabledPhaseRequestedStateKey = "";
+          maybeAutoPassDisabledPhase();
+        }
+        renderPhaseRail(currentState);
+      });
+    }
 
     const label = document.createElement("span");
     label.className = "phase-chip-label";
@@ -4852,7 +4874,10 @@ async function joinSession() {
 
 async function sendAction(actionBody) {
   if (!sessionId) return;
-  const payload = await postJson(`/api/sessions/${sessionId}/action`, actionBody);
+  // Always carry the current phase-rail hold preferences so the server knows where
+  // to stop on the AI's turn — including steps it resolves itself (turn start, end).
+  const body = { stop_steps: opponentStopSteps(), ...actionBody };
+  const payload = await postJson(`/api/sessions/${sessionId}/action`, body);
   renderState(payload);
 }
 

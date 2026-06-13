@@ -10,6 +10,28 @@ class PhaseStepsMixin:
             if not self.stack:
                 return
 
+    def _close_or_defer_step(self, phase: str, step: str, defer_priority: bool) -> None:
+        """End a step, or — when defer_priority is set — leave a priority window open
+        for the active player so a caller can hand priority to another player."""
+        if not self._receives_priority(step):
+            self._on_step_or_phase_end(phase, step)
+            return
+        if defer_priority:
+            self.start_priority_window(self.active_player_index)
+            return
+        self._resolve_priority_window()
+        self._on_step_or_phase_end(phase, step)
+
+    def close_beginning_step(self) -> None:
+        """Close a deferred upkeep/draw step (counterpart to close_end_step)."""
+        phase = self.current_turn_phase
+        step = self.current_step
+        if phase != "beginning" or step not in ("upkeep", "draw"):
+            return
+        if self._receives_priority(step):
+            self.clear_priority_window()
+        self._on_step_or_phase_end(phase, step)
+
     def start_priority_window(self, starting_player_index: int | None = None) -> None:
         player_index = self.active_player_index if starting_player_index is None else starting_player_index
         if player_index < 0 or player_index >= len(self.players):
