@@ -3248,6 +3248,23 @@ function createCardElement(card, options = {}) {
         return;
       }
 
+      // Second click on the card while the insufficient-mana prompt is open
+      // performs the auto-tap, same as pressing the Auto-Tap button.
+      if (pendingAutoTap && isPendingHandCastCard(card, handIndex)) {
+        const me = getCurrentPlayerState();
+        const canSatisfy = !!me && canAutoTapSatisfyCost(
+          pendingAutoTap.card.mana_cost || "",
+          me.mana_pool,
+          me.battlefield
+        );
+        if (!canSatisfy) {
+          updateActionHint("Not enough untapped lands to auto-tap for this cost.", true);
+          return;
+        }
+        await performAutoTap();
+        return;
+      }
+
       try {
         if (cleanupSelectable) {
           await sendAction({ seat, action: "cleanup_select", hand_index: handIndex });
