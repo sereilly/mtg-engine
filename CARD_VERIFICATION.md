@@ -4,8 +4,8 @@ Master record of which cards have been manually validated in-game. Generated aut
 
 - Total cards: **290**
 - Passed: **3**
-- Failed: **1**
-- Untested: **286**
+- Failed: **0**
+- Untested: **287**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -295,7 +295,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Wild Growth | ⬜ untested |  |
 | Will-o'-the-Wisp | ⬜ untested |  |
 | Winter Orb | ⬜ untested |  |
-| Wooden Sphere | ❌ fail | Unable to use the activated ability. |
+| Wooden Sphere | ⬜ untested |  |
 | Word of Command | ⬜ untested |  |
 | Wrath of God | ⬜ untested |  |
 | Zombie Master | ⬜ untested |  |

@@ -1154,6 +1154,16 @@ function activatedAbilityTargetsSelf(card) {
   );
 }
 
+function activatedAbilityRequiresTargetLand(card) {
+  if (!card || typeof card === "string") return false;
+  // Activated-ability lines (format: "{cost}: effect") that act on a target land,
+  // e.g. Gaea's Liege: "{T}: Target land becomes a Forest...".
+  const activatedLines = (card.oracle_text || "").split("\n")
+    .filter((line) => /^\s*(\{[^}]+\})+\s*:/.test(line))
+    .map((line) => line.toLowerCase());
+  return activatedLines.some((line) => line.includes("target land"));
+}
+
 function cardRequiresManaColorChoice(card) {
   if (!card || typeof card === "string") return false;
   const text = (card.oracle_text || "").toLowerCase();
@@ -2695,6 +2705,23 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
   }
   renderActivationPrompt();
 
+  // Activated ability targeting a permanent (e.g. Gaea's Liege targeting a land):
+  // send an "activate" action with the chosen target permanent rather than a cast.
+  if (pending.castAction === "activate") {
+    updateActionHint(`Activating ${pending.cardName}...`);
+    sendAction({
+      seat,
+      action: "activate",
+      permanent_name: pending.cardName,
+      permanent_index: pending.sourcePermanentIndex,
+      target_seat: selectedTarget,
+      target_permanent_index: selectedPermanentIndex,
+    })
+      .then(() => updateActionHint(`Activated ${pending.cardName}.`))
+      .catch((e) => updateActionHint(e.message, true));
+    return;
+  }
+
   if (hasXCost(pending.card)) {
     startCastXPrompt(pending.card, selectedTarget, selectedPermanentIndex, pending.castAction || "cast");
     return;
@@ -3472,6 +3499,25 @@ function createCardElement(card, options = {}) {
 
         if (!hasActivatedAbility(card)) {
           updateActionHint(`${cardName} has no activated ability to use.`, true);
+          return;
+        }
+
+        // Activated abilities that act on a target land (e.g. Gaea's Liege)
+        // let the player pick which land in play to affect.
+        if (activatedAbilityRequiresTargetLand(card)) {
+          if (getTargetableLandsForPrompt().length === 0) {
+            updateActionHint(`No valid land targets in play for ${cardName}.`, true);
+            return;
+          }
+          pendingCastTarget = {
+            card,
+            cardName: normalizeCardName(card),
+            targetKind: "land",
+            castAction: "activate",
+            sourcePermanentIndex: permanentIndex,
+          };
+          renderActivationPrompt();
+          updateActionHint(`Choose a target land for ${cardName}'s ability.`);
           return;
         }
 

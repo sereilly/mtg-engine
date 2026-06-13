@@ -76,7 +76,16 @@ def recolor_target_from_text(game: Game, instruction: OracleInstruction, context
 @effect_handler("change_target_land_type")
 def change_target_land_type(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     target = context.target
-    target_land = next((perm for perm in target.battlefield if perm.card.primary_type == "land"), None)
+    target_land = None
+    # Honor a specifically chosen land (e.g. a player selected the target land
+    # in the UI). Fall back to the first land the target player controls.
+    chosen_index = context.target_permanent_index
+    if isinstance(chosen_index, int) and 0 <= chosen_index < len(target.battlefield):
+        candidate = target.battlefield[chosen_index]
+        if candidate.card.primary_type == "land":
+            target_land = candidate
+    if target_land is None:
+        target_land = next((perm for perm in target.battlefield if perm.card.primary_type == "land"), None)
     if target_land is not None:
         target_land.metadata["land_type_override"] = str(instruction.payload.get("land_type", "forest"))
         game.log.append(f"{target_land.card.name} became a Forest")

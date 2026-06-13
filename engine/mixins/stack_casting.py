@@ -77,6 +77,7 @@ class StackCastingMixin:
         target_player_index: int | None = None,
         permanent_index: int | None = None,
         mana_color: str | None = None,
+        target_permanent_index: int | None = None,
     ) -> SimulationResult:
         queued = self.queue_permanent_ability(
             controller_index,
@@ -84,6 +85,7 @@ class StackCastingMixin:
             target_player_index=target_player_index,
             permanent_index=permanent_index,
             mana_color=mana_color,
+            target_permanent_index=target_permanent_index,
         )
         if not queued.supported:
             return queued
@@ -130,6 +132,7 @@ class StackCastingMixin:
         target_player_index: int | None = None,
         permanent_index: int | None = None,
         mana_color: str | None = None,
+        target_permanent_index: int | None = None,
     ) -> SimulationResult:
         controller = self.players[controller_index]
         resolved = self._find_controlled_permanent(controller, permanent_name, permanent_index)
@@ -272,7 +275,7 @@ class StackCastingMixin:
                 card=permanent.card,
                 caster_index=controller_index,
                 target_player_index=target_idx,
-                target_permanent_index=None,
+                target_permanent_index=target_permanent_index,
                 x_value=None,
                 ability_instruction=instruction,
                 ability_effect_kind=ability.effect_kind,
@@ -730,6 +733,11 @@ class StackCastingMixin:
                             damage = self._deal_damage_to_player(caster, fastbond_count)
                             self.log.append(f"Fastbond dealt {damage} damage to {caster.name}")
                 self._process_land_enters(caster_index)
+            else:
+                # A resolving permanent spell (creature/artifact/enchantment) is
+                # still a spell that was cast, so it triggers "whenever a player
+                # casts a [color] spell" effects like the Rod/Cup/Sphere cycle.
+                self._apply_spell_resolved_triggers(caster_index, card)
             return
 
         # Sorceries and instants resolve immediately in this basic engine.

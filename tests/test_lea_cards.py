@@ -8118,6 +8118,81 @@ def test_gaeas_liege_pt_equals_defenders_forests_when_attacking(all_cards):
     assert liege_perm.effective_toughness == 3
 
 
+def test_gaeas_liege_pt_refreshes_when_attackers_declared(all_cards):
+    # Regression: declaring attackers must recompute dynamic P/T so the Liege
+    # switches from its controller's Forests to the defending player's Forests.
+    liege = _get(all_cards, "Gaea's Liege")
+    forest = _get(all_cards, "Forest")
+    liege_perm = Permanent(card=liege)
+    p1 = PlayerState(name="P1", battlefield=[liege_perm, Permanent(card=forest)])
+    p2 = PlayerState(
+        name="P2",
+        battlefield=[Permanent(card=forest), Permanent(card=forest), Permanent(card=forest)],
+    )
+    game = Game(players=[p1, p2])
+    game._refresh_dynamic_creatures()
+    assert (liege_perm.effective_power, liege_perm.effective_toughness) == (1, 1)
+
+    game.active_player_index = 0
+    game.current_turn_phase = "combat"
+    game.current_step = "declare_attackers"
+    liege_perm.tapped = False
+
+    ok, _ = game.declare_attackers(0, [0], defending_player_index=1)
+    assert ok
+    assert (liege_perm.effective_power, liege_perm.effective_toughness) == (3, 3)
+
+
+def test_gaeas_liege_dies_with_zero_forests(all_cards):
+    # Regression: with 0 Forests its toughness is 0, so it dies as a state-based action.
+    liege = _get(all_cards, "Gaea's Liege")
+    plains = _get(all_cards, "Plains")
+    p1 = PlayerState(name="P1", hand=[liege])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=plains)])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    game.cast_from_hand(0, "Gaea's Liege")
+    game.check_state_based_actions()
+
+    assert not any(p.card.name == "Gaea's Liege" for p in p1.battlefield)
+    assert any(c.name == "Gaea's Liege" for c in p1.graveyard)
+
+
+def test_gaeas_liege_activation_targets_chosen_land(all_cards):
+    # Regression: the player may pick which land becomes a Forest, not just the first.
+    liege = _get(all_cards, "Gaea's Liege")
+    plains = _get(all_cards, "Plains")
+    island = _get(all_cards, "Island")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=liege)])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=plains), Permanent(card=island)])
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(
+        0, "Gaea's Liege", target_player_index=1, target_permanent_index=1
+    )
+
+    assert result.supported
+    assert p2.battlefield[0].metadata.get("land_type_override") is None
+    assert p2.battlefield[1].metadata.get("land_type_override") == "forest"
+
+
+def test_wooden_sphere_gains_life_on_green_creature_spell(all_cards):
+    # Regression: rod-style life gain must also fire when the green spell that
+    # resolves is a permanent (creature/artifact), not only an instant/sorcery.
+    sphere = _get(all_cards, "Wooden Sphere")
+    bears = _get(all_cards, "Grizzly Bears")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=sphere)], hand=[bears])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    starting_life = p1.life
+    game.cast_from_hand(0, "Grizzly Bears")
+
+    assert p1.life == starting_life + 1
+
+
 def test_darkpact_exchanges_top_library_card_with_simulated_ante(all_cards):
     darkpact = _get(all_cards, "Darkpact")
     swamp = _get(all_cards, "Swamp")

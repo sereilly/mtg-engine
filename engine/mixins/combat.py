@@ -150,6 +150,9 @@ class CombatMixin:
                 permanent.blocking_attacker_index = None
                 if clear_damage_marked:
                     permanent.damage_marked = 0
+        # Clearing attacking status can change dynamic P/T (e.g. Gaea's Liege
+        # reverts from the defender's Forest count to its controller's).
+        self._refresh_dynamic_creatures()
 
     def _prune_combat_state(self) -> None:
         if self.active_player_index < 0 or self.active_player_index >= len(self.players):
@@ -218,6 +221,11 @@ class CombatMixin:
             blocker = defender.battlefield[blocker_idx]
             blocker.blocking_attacker_controller = self.active_player_index
             blocker.blocking_attacker_index = attacker_idx
+
+        # Attacking/defending status can change a creature's power and toughness
+        # (e.g. Gaea's Liege uses the defending player's Forests while attacking),
+        # so recompute dynamic P/T now that combat flags have settled.
+        self._refresh_dynamic_creatures()
 
     def _can_block_attacker(self, blocker: Permanent, attacker: Permanent) -> bool:
         if attacker.metadata.get("cant_be_blocked_until_eot"):

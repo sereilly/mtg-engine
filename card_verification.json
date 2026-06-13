@@ -14,11 +14,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781378490.7807422
-    },
-    "Wooden Sphere": {
-      "reason": "Unable to use the activated ability.",
-      "status": "fail",
-      "updated_at": 1781378645.552908
     }
   }
 }
