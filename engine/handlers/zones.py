@@ -246,7 +246,16 @@ def peek_hand_and_force_play(game: Game, instruction: OracleInstruction, context
 @effect_handler("look_at_target_hand")
 def look_at_target_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     target = context.target
+    viewer = context.caster
     card = context.card
+    # Record the reveal so the UI can show the viewer the actual cards in the
+    # target player's hand (Glasses of Urza). The viewer is the ability's
+    # controller; the target is the player whose hand is looked at.
+    game.pending_hand_reveal = {
+        "viewer_index": game.players.index(viewer),
+        "target_index": game.players.index(target),
+        "card_names": [c.name for c in target.hand],
+    }
     seen = len(target.hand)
-    game.log.append(f"{card.name} looked at {target.name}'s hand ({seen} cards)")
+    game.log.append(f"{card.name}: {viewer.name} looked at {target.name}'s hand ({seen} cards)")
     return True, "resolved"

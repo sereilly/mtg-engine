@@ -93,7 +93,12 @@ class Permanent:
         else:
             base = self._base_stat("power")
         # Layer 7c: modifications on top of 7b base
-        return base + self.power_bonus + int(self.metadata.get("static_buff_power", 0))
+        return (
+            base
+            + self.power_bonus
+            + int(self.metadata.get("static_buff_power", 0))
+            + (int(self.metadata.get("attacking_buff_power", 0)) if self.attacking else 0)
+        )
 
     @property
     def effective_toughness(self) -> int:
@@ -114,7 +119,12 @@ class Permanent:
         else:
             base = self._base_stat("toughness")
         # Layer 7c: modifications on top of 7b base
-        return base + self.toughness_bonus + int(self.metadata.get("static_buff_toughness", 0))
+        return (
+            base
+            + self.toughness_bonus
+            + int(self.metadata.get("static_buff_toughness", 0))
+            + (int(self.metadata.get("attacking_buff_toughness", 0)) if self.attacking else 0)
+        )
 
 
 @dataclass

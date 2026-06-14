@@ -1153,6 +1153,9 @@ function cardRequiresTargetCreature(card) {
     if (t.includes("target creature gets") || t.includes("target creature gains")) return true;
     // Direct damage to a target creature (Simulacrum).
     if (t.includes("damage to target creature")) return true;
+    // Bounce: "Return target creature to its owner's hand" (Unsummon). Can target
+    // any player's creature, so the player must choose which.
+    if (t.includes("return target creature")) return true;
     return false;
   });
 }
@@ -1312,6 +1315,25 @@ function activatedAbilityRequiresTargetCreature(card) {
   return activatedLines.some(
     (line) => line.includes("destroy target") && (/\bcreature\b/.test(line) || /\bwall\b/.test(line)),
   );
+}
+
+function activatedAbilityRequiresTargetAny(card) {
+  if (!card || typeof card === "string") return false;
+  // Activated abilities that deal damage to "any target" (Orcish Artillery, Rod of
+  // Ruin, Prodigal Sorcerer). The player picks a creature or a player's face.
+  const activatedLines = (card.oracle_text || "").split("\n")
+    .filter((line) => /^\s*(\{[^}]+\})+\s*:/.test(line))
+    .map((line) => line.toLowerCase());
+  return activatedLines.some((line) => line.includes("any target"));
+}
+
+function activatedAbilityRequiresTargetPlayer(card) {
+  if (!card || typeof card === "string") return false;
+  // Activated abilities that look at a target player's hand (Glasses of Urza).
+  const activatedLines = (card.oracle_text || "").split("\n")
+    .filter((line) => /^\s*(\{[^}]+\})+\s*:/.test(line))
+    .map((line) => line.toLowerCase());
+  return activatedLines.some((line) => line.includes("target player"));
 }
 
 function cardRequiresManaColorChoice(card) {
@@ -1551,6 +1573,14 @@ function getReorderLibraryInfo(state = currentState) {
   const info = state.reorder_library;
   if (!info) return null;
   if (info.caster_seat !== seat) return null;
+  return info;
+}
+
+function getHandRevealInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.hand_reveal;
+  if (!info) return null;
+  if (info.viewer_seat !== seat) return null;
   return info;
 }
 
@@ -2244,6 +2274,50 @@ function renderSearchLibraryModal(info) {
   if (confirmBtn) confirmBtn.disabled = searchLibrarySelectedIndex === null;
 }
 
+// Glasses of Urza: show the viewer the actual cards in the looked-at player's
+// hand (card art), with a Continue button that dismisses the reveal.
+function renderHandRevealModal(info) {
+  const modal = document.getElementById("handRevealModal");
+  if (!modal) return;
+
+  if (!info) {
+    modal.classList.add("hidden");
+    return;
+  }
+
+  const cards = info.cards || [];
+  const subtitle = document.getElementById("handRevealSubtitle");
+  if (subtitle) {
+    const n = cards.length;
+    subtitle.textContent = n === 0
+      ? `${info.target_name}'s hand is empty.`
+      : `${info.target_name}'s hand (${n} card${n === 1 ? "" : "s"}). Click Continue when done.`;
+  }
+
+  modal.classList.remove("hidden");
+
+  const grid = document.getElementById("handRevealGrid");
+  if (grid) {
+    grid.innerHTML = cards
+      .map((card) => {
+        const inner = card.image_uri
+          ? `<img src="${escapeHtml(card.image_uri)}" alt="${escapeHtml(card.name)}" loading="lazy" />`
+          : `<div class="library-card-text-placeholder">${escapeHtml(card.name)}</div>`;
+        return `<div class="library-card-choice">${inner}<div class="library-card-choice-name">${escapeHtml(card.name)}</div></div>`;
+      })
+      .join("");
+  }
+
+  const continueBtn = document.getElementById("handRevealContinueBtn");
+  if (continueBtn && !continueBtn.dataset.bound) {
+    continueBtn.dataset.bound = "1";
+    continueBtn.addEventListener("click", async () => {
+      modal.classList.add("hidden");
+      await sendAction({ seat, action: "dismiss_hand_reveal" });
+    });
+  }
+}
+
 function renderReorderLibraryModal(info) {
   const modal = document.getElementById("reorderLibraryModal");
   if (!modal) return;
@@ -2741,6 +2815,37 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     };
     renderActivationPrompt();
     updateActionHint(`Choose a creature target for ${cardName}'s ability.`);
+    return;
+  }
+
+  // Abilities that deal damage to "any target" (Orcish Artillery): the player must
+  // choose a creature or a player's face before the ability is activated.
+  if (activatedAbilityRequiresTargetAny(card)) {
+    pendingCastTarget = {
+      card,
+      cardName,
+      targetKind: "any",
+      castAction: "activate",
+      sourcePermanentIndex: permanentIndex,
+    };
+    renderActivationPrompt();
+    renderBoard(currentState);
+    updateActionHint(`Choose any target for ${cardName}'s ability: click a creature, or a player's glowing life pill.`);
+    return;
+  }
+
+  // Abilities that look at a target player's hand (Glasses of Urza): choose whose
+  // hand to look at.
+  if (activatedAbilityRequiresTargetPlayer(card)) {
+    pendingCastTarget = {
+      card,
+      cardName,
+      targetKind: "player",
+      castAction: "activate",
+      sourcePermanentIndex: permanentIndex,
+    };
+    renderActivationPrompt();
+    updateActionHint(`Choose whose hand to look at with ${cardName}: click a player's life pill.`);
     return;
   }
 
@@ -5132,6 +5237,7 @@ function renderState(state, { skipStaleCheck = false } = {}) {
   renderActivationPrompt();
   renderSearchLibraryModal(searchLibraryInfo);
   renderReorderLibraryModal(reorderLibraryInfo);
+  renderHandRevealModal(getHandRevealInfo(state));
   attemptPendingActivation();
 
   const combat = getCombatState(state);

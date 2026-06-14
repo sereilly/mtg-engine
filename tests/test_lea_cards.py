@@ -897,7 +897,16 @@ def test_orcish_oriflamme_applies_power_bonus(all_cards):
     result = game.cast_from_hand(0, "Orcish Oriflamme", target_player_index=0)
 
     assert result.supported
-    assert p1.battlefield[0].effective_power == 3
+    attacker = p1.battlefield[0]
+    # "Attacking creatures you control get +1/+0": no bonus while idle.
+    assert attacker.effective_power == 2
+    # The bonus applies only while the creature is actually attacking.
+    attacker.attacking = True
+    game._refresh_dynamic_creatures()
+    assert attacker.effective_power == 3
+    attacker.attacking = False
+    game._refresh_dynamic_creatures()
+    assert attacker.effective_power == 2
 
 def test_aspect_of_wolf_applies_half_forest_buff(all_cards):
     aspect = _get(all_cards, "Aspect of Wolf")

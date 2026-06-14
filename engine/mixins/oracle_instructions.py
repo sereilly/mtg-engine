@@ -77,9 +77,11 @@ class OracleInstructionsMixin:
                 self._refresh_dynamic_creatures()
                 return
             if instr.kind == "buff_attacking_creatures":
-                for permanent in caster.battlefield:
-                    if permanent.card.primary_type == "creature":
-                        permanent.power_bonus += int(instr.payload.get("power", 0))
+                # Static ability (Orcish Oriflamme: "Attacking creatures you control
+                # get +1/+0"). Applied dynamically to *attacking* creatures only via
+                # _refresh_dynamic_creatures / effective P/T, never as a flat buff to
+                # every creature the controller has.
+                self._refresh_dynamic_creatures()
                 return
             if instr.kind == "buff_untapped_creatures":
                 for permanent in caster.battlefield:

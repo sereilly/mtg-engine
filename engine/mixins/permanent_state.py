@@ -118,6 +118,22 @@ class PermanentStateMixin:
         living_lands_active = any(perm.card.name == "Living Lands" for perm in all_permanents)
 
         for player in self.players:
+            # Static "Attacking creatures you control get +X/+Y" sources (Orcish
+            # Oriflamme). The bonus only applies while a creature is attacking, so it
+            # is stored in metadata and added by effective_power/toughness when the
+            # creature has attacking == True.
+            attacking_buff_power = 0
+            attacking_buff_toughness = 0
+            for perm in player.battlefield:
+                for instr in compile_card_oracle(perm.card).instructions:
+                    if instr.kind == "buff_attacking_creatures":
+                        attacking_buff_power += int(instr.payload.get("power", 0))
+                        attacking_buff_toughness += int(instr.payload.get("toughness", 0))
+            for perm in player.battlefield:
+                if perm.card.primary_type == "creature":
+                    perm.metadata["attacking_buff_power"] = attacking_buff_power
+                    perm.metadata["attacking_buff_toughness"] = attacking_buff_toughness
+
             non_wall_creatures = sum(
                 1
                 for perm in player.battlefield

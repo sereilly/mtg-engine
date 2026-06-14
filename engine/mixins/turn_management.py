@@ -204,7 +204,10 @@ class TurnManagementMixin:
         self._set_phase_and_step(phase, step)
         self._on_step_or_phase_begin(phase, step)
         player = self.players[player_index]
-        # Record untapped lands before untap step (used by Power Surge upkeep trigger)
+        # Record untapped lands at the beginning of the turn — i.e. *before* the
+        # untap step untaps anything (Power Surge: X = "the number of untapped lands
+        # they controlled at the beginning of this turn"). Lands tapped going into
+        # the turn don't count, so tapping out before your turn avoids the damage.
         self.untapped_lands_at_turn_start[player_index] = sum(
             1 for perm in player.battlefield
             if perm.card.primary_type == "land" and not perm.tapped

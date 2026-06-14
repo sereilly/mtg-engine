@@ -28,6 +28,7 @@ ActionKind = Literal[
     "debug_add_mana",
     "search_library_confirm",
     "reorder_library_confirm",
+    "dismiss_hand_reveal",
     "coin_flip_choose",
     "mulligan_take",
     "mulligan_keep",

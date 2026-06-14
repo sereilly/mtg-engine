@@ -66,6 +66,10 @@ class Game(
     untapped_lands_at_turn_start: dict[int, int] = field(default_factory=dict)
     pending_search_library: dict | None = None
     pending_reorder_library: dict | None = None
+    # Glasses of Urza / Jayemdae-style "look at target player's hand": the most
+    # recent reveal, surfaced to the UI as {"viewer_index", "target_index",
+    # "card_names"}. Cleared once the viewer dismisses it.
+    pending_hand_reveal: dict | None = None
     # 610.3: tracks creatures exiled "until end of turn" — (owner_player_index, card)
     exile_until_eot: list[tuple[int, CardDefinition]] = field(default_factory=list)
     # 104.4: True when the game ends in a draw for all players

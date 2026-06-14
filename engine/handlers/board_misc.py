@@ -43,18 +43,42 @@ def balance_resources(game: Game, instruction: OracleInstruction, context: Oracl
     return True, "resolved"
 
 
+# Mana symbol → the basic land type Magical Hack swaps a land to (CR 305.7). The
+# chosen replacement type is passed through as the cast's "new color".
+_SYMBOL_TO_LAND_TYPE = {
+    "W": "plains",
+    "U": "island",
+    "B": "swamp",
+    "R": "mountain",
+    "G": "forest",
+}
+
+
 @effect_handler("mark_text_modified")
 def mark_text_modified(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     target = context.target
     card = context.card
     perm_idx = context.target_permanent_index if isinstance(context.target_permanent_index, int) else None
-    # Always mark text_modified for the target permanent (backward compat).
+    # Resolve the actual targeted permanent (default to the first one).
+    target_perm = None
     if perm_idx is not None and 0 <= perm_idx < len(target.battlefield):
-        target.battlefield[perm_idx].metadata["text_modified"] = True
+        target_perm = target.battlefield[perm_idx]
     elif target.battlefield:
-        target.battlefield[0].metadata["text_modified"] = True
-    # Also apply a color override when the caster specified a new color.
-    symbol = context.new_color or ""
+        target_perm = target.battlefield[0]
+    if target_perm is not None:
+        target_perm.metadata["text_modified"] = True
+
+    symbol = (context.new_color or "").upper()
+    # Magical Hack on a land swaps one basic land type for another, changing the
+    # mana it produces (Forest → Island taps for blue). This replaces the land's
+    # type, not its color, so set a land-type override rather than a color override.
+    if target_perm is not None and target_perm.card.primary_type == "land" and symbol in _SYMBOL_TO_LAND_TYPE:
+        new_type = _SYMBOL_TO_LAND_TYPE[symbol]
+        target_perm.metadata["land_type_override"] = new_type
+        game.log.append(f"{card.name} changed {target_perm.card.name} into a {new_type.title()}")
+        return True, "resolved"
+
+    # Otherwise (spell or non-land permanent) apply a color override when one was chosen.
     if symbol:
         game._apply_color_override(target, symbol, target_permanent_index=perm_idx)
         game.log.append(f"{card.name} changed target's color to {symbol}")

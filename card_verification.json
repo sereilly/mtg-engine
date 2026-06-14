@@ -1,5 +1,10 @@
 {
   "results": {
+    "Armageddon": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1781475506.7830067
+    },
     "Black Lotus": {
       "reason": "",
       "status": "pass",
@@ -55,11 +60,6 @@
       "status": "pass",
       "updated_at": 1781378704.6242044
     },
-    "Lich": {
-      "reason": "Lich killed me when I played it even though it says I don't lose the game for having 0 or less life.",
-      "status": "fail",
-      "updated_at": 1781455810.6596625
-    },
     "Mana Flare": {
       "reason": "",
       "status": "pass",
@@ -70,11 +70,6 @@
       "status": "pass",
       "updated_at": 1781378762.2991576
     },
-    "Orcish Artillery": {
-      "reason": "The activated ability didn't let me choose any target",
-      "status": "fail",
-      "updated_at": 1781463215.1691566
-    },
     "Psychic Venom": {
       "reason": "",
       "status": "pass",
@@ -84,11 +79,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781411184.698975
-    },
-    "Simulacrum": {
-      "reason": "I targeted an opponent's creature, which is not a valid target. It still ended up killing my own creature though.",
-      "status": "fail",
-      "updated_at": 1781455727.3487961
     },
     "Stasis": {
       "reason": "",

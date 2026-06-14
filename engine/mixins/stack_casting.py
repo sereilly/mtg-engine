@@ -600,13 +600,30 @@ class StackCastingMixin:
             elif color_filter and not any(color_filter in item.card.colors for item in self.stack):
                 return False, f"no valid target for {card.name}"
 
+        elif primary.kind == "bounce_target_creature":
+            # "Return target creature to its owner's hand" (Unsummon) can target a
+            # creature controlled by ANY player. When a specific target is chosen it
+            # must itself be a creature; otherwise any creature on any battlefield
+            # makes the cast legal.
+            if isinstance(target_permanent_index, int):
+                battlefield = target.battlefield
+                if not (0 <= target_permanent_index < len(battlefield)) or (
+                    battlefield[target_permanent_index].card.primary_type != "creature"
+                ):
+                    return False, f"no valid target for {card.name}"
+            elif not any(
+                p.card.primary_type == "creature"
+                for pl in self.players
+                for p in pl.battlefield
+            ):
+                return False, f"no valid target for {card.name}"
+
         elif primary.kind in (
             "pump_target_creature_until_eot",
             "grant_target_flying_until_eot",
             "grant_regeneration_to_target_creature",
             "berserk_pump",
             "grant_unlimited_blocking",
-            "bounce_target_creature",
             "exile_target_creature_until_eot",
         ):
             if not any(p.card.primary_type == "creature" for p in target.battlefield):
@@ -627,10 +644,20 @@ class StackCastingMixin:
                 return False, f"no valid target for {card.name}"
 
         elif primary.kind == "simulacrum_redirect":
-            # Simulacrum targets a creature the caster controls; it can't be cast
-            # without one.
+            # Simulacrum deals damage to "target creature you control" — only a
+            # creature the caster controls is a legal target. A specific choice must
+            # be one of the caster's creatures (targeting an opponent's creature is
+            # illegal); with no explicit choice, the caster just needs one creature.
             caster = self.players[caster_index]
-            if not any(p.card.primary_type == "creature" for p in caster.battlefield):
+            if isinstance(target_permanent_index, int):
+                if target_player_index is not None and target_player_index != caster_index:
+                    return False, f"no valid target for {card.name}"
+                battlefield = caster.battlefield
+                if not (0 <= target_permanent_index < len(battlefield)) or (
+                    battlefield[target_permanent_index].card.primary_type != "creature"
+                ):
+                    return False, f"no valid target for {card.name}"
+            elif not any(p.card.primary_type == "creature" for p in caster.battlefield):
                 return False, f"no valid target for {card.name}"
 
         elif primary.kind == "copy_top_stack_spell":

@@ -1001,6 +1001,20 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
                 "cards": [_serialize_card_summary(card) for card in target.library[:top_count]],
             }
 
+    # Glasses of Urza: surface a revealed hand only to the player who looked.
+    hand_reveal_info = None
+    pending_reveal = session.game.pending_hand_reveal
+    if pending_reveal is not None:
+        viewer_index = pending_reveal["viewer_index"]
+        if viewer_seat is None or viewer_seat == viewer_index:
+            revealed = session.game.players[pending_reveal["target_index"]]
+            hand_reveal_info = {
+                "viewer_seat": viewer_index,
+                "target_seat": pending_reveal["target_index"],
+                "target_name": revealed.name,
+                "cards": [_serialize_card_summary(card) for card in revealed.hand],
+            }
+
     return {
         "session_id": session.id,
         "mode": session.mode,
@@ -1036,6 +1050,7 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "island_sanctuary_pending": session.island_sanctuary_pending and viewer_seat == session.current_turn,
         "search_library": search_library_info,
         "reorder_library": reorder_library_info,
+        "hand_reveal": hand_reveal_info,
         "pregame": _build_pregame_info(session, viewer_seat),
     }
 
@@ -2232,6 +2247,11 @@ def do_action(session_id: str, req: GameActionRequest):
         ok = session.game.confirm_reorder_library(req.seat, req.card_order, shuffle=bool(req.shuffle))
         if not ok:
             raise HTTPException(status_code=400, detail="invalid card order")
+
+    elif req.action == "dismiss_hand_reveal":
+        pending = session.game.pending_hand_reveal
+        if pending is not None and req.seat == pending["viewer_index"]:
+            session.game.pending_hand_reveal = None
 
     elif req.action == "ai_step":
         if _seat_type(session, session.current_turn) != "ai":

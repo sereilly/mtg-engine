@@ -3,9 +3,9 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **290**
-- Passed: **18**
-- Failed: **3**
-- Untested: **269**
+- Passed: **19**
+- Failed: **0**
+- Untested: **271**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -15,7 +15,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Animate Dead | ⬜ untested |  |
 | Animate Wall | ⬜ untested |  |
 | Ankh of Mishra | ⬜ untested |  |
-| Armageddon | ⬜ untested |  |
+| Armageddon | ✅ pass |  |
 | Aspect of Wolf | ⬜ untested |  |
 | Bad Moon | ⬜ untested |  |
 | Badlands | ⬜ untested |  |
@@ -149,7 +149,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Lance | ⬜ untested |  |
 | Ley Druid | ⬜ untested |  |
 | Library of Leng | ⬜ untested |  |
-| Lich | ❌ fail | Lich killed me when I played it even though it says I don't lose the game for having 0 or less life. |
+| Lich | ⬜ untested |  |
 | Lifeforce | ⬜ untested |  |
 | Lifelace | ⬜ untested |  |
 | Lifetap | ⬜ untested |  |
@@ -185,7 +185,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Nightmare | ⬜ untested |  |
 | Northern Paladin | ⬜ untested |  |
 | Obsianus Golem | ⬜ untested |  |
-| Orcish Artillery | ❌ fail | The activated ability didn't let me choose any target |
+| Orcish Artillery | ⬜ untested |  |
 | Orcish Oriflamme | ⬜ untested |  |
 | Paralyze | ⬜ untested |  |
 | Pearled Unicorn | ⬜ untested |  |
@@ -233,7 +233,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Shanodin Dryads | ⬜ untested |  |
 | Shatter | ⬜ untested |  |
 | Shivan Dragon | ⬜ untested |  |
-| Simulacrum | ❌ fail | I targeted an opponent's creature, which is not a valid target. It still ended up killing my own creature though. |
+| Simulacrum | ⬜ untested |  |
 | Sinkhole | ⬜ untested |  |
 | Siren's Call | ⬜ untested |  |
 | Sleight of Mind | ⬜ untested |  |

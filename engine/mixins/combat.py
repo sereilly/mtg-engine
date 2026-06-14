@@ -3,6 +3,17 @@ from __future__ import annotations
 from ..models import CardDefinition, Permanent, PlayerState
 from ..oracle import compile_card_oracle
 
+# Landwalk keyword → the basic land subtype the defender must control for the
+# attacker to be unblockable (CR 702.14). Sourced from the attacker's printed
+# keywords or a granted "has_<type>walk" metadata flag (e.g. Goblin King).
+_LANDWALK_TO_LAND_TYPE = {
+    "plainswalk": "plains",
+    "islandwalk": "island",
+    "swampwalk": "swamp",
+    "mountainwalk": "mountain",
+    "forestwalk": "forest",
+}
+
 class CombatMixin:
     def _has_any_legal_attacker(self, attacker_index: int, defender_index: int) -> bool:
         if attacker_index < 0 or attacker_index >= len(self.players):
@@ -266,7 +277,34 @@ class CombatMixin:
             if attacker.effective_power >= 2:
                 return False
 
+        # Landwalk (CR 702.14): the attacker can't be blocked if the defending
+        # player controls a land of the matching basic type. The blocker is one of
+        # the defending player's creatures, so its controller is the defender.
+        if self._attacker_has_active_landwalk(attacker, blocker):
+            return False
+
         return True
+
+    def _attacker_has_active_landwalk(self, attacker: Permanent, blocker: Permanent) -> bool:
+        defender = next((p for p in self.players if blocker in p.battlefield), None)
+        if defender is None:
+            return False
+        for walk, land_type in _LANDWALK_TO_LAND_TYPE.items():
+            has_walk = attacker.metadata.get(f"has_{walk}") or any(
+                kw.lower() == walk for kw in attacker.card.keywords
+            )
+            if not has_walk:
+                continue
+            for perm in defender.battlefield:
+                if perm.card.primary_type != "land":
+                    continue
+                override = str(perm.metadata.get("land_type_override", "")).lower()
+                if override:
+                    if land_type in override:
+                        return True
+                elif land_type in perm.card.type_line.lower():
+                    return True
+        return False
 
     def _destroy_marked_creatures(self) -> None:
         any_died = False
