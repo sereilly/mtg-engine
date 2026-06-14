@@ -295,6 +295,89 @@ def test_human_vs_ai_keeps_custom_guest_name():
     assert created["state"]["players"][1]["name"] == "Sparky"
 
 
+def test_networked_hvh_waits_for_opponent_before_starting():
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "host_colors": 2,
+            "seed": 7100,
+            "enable_pregame": True,
+        },
+    ).json()
+    sid = created["session_id"]
+
+    # The game is held: no pregame, opponent's deck/hand not built yet.
+    assert created["state"]["awaiting_opponent"] is True
+    assert created["state"]["pregame"] is None
+    assert created["state"]["players"][1]["hand_count"] == 0
+
+    # The host cannot act until the opponent joins.
+    blocked = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "pass_priority"},
+    )
+    assert blocked.status_code == 400
+    assert "opponent" in blocked.json()["detail"]
+
+
+def test_networked_hvh_join_sets_name_and_starts_game():
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "host_colors": 2,
+            "seed": 7101,
+            "enable_pregame": True,
+        },
+    ).json()
+    sid = created["session_id"]
+
+    joined = client.post(
+        f"/api/sessions/{sid}/join",
+        json={"guest_name": "Joiner", "guest_colors": 3},
+    )
+    assert joined.status_code == 200
+    state = joined.json()["state"]
+    assert state["awaiting_opponent"] is False
+    assert state["players"][1]["name"] == "Joiner"
+    # Game has begun: the coin-flip pregame phase is now active.
+    assert state["pregame"]["phase"] == "coin_flip"
+
+
+def test_networked_hvh_join_builds_guest_deck_off_host_seed(monkeypatch):
+    captured_seeds = []
+    stub_deck = [_mk_card("Island", "", "Basic Land - Island", "") for _ in range(40)]
+
+    def _fake_build_random_deck(_cards_path, _colors, seed):
+        captured_seeds.append(seed)
+        return list(stub_deck), ["U"]
+
+    monkeypatch.setattr(web_session_store, "build_random_deck", _fake_build_random_deck)
+
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "host_colors": 2,
+            "seed": 7102,
+            "enable_pregame": True,
+        },
+    ).json()
+    sid = created["session_id"]
+
+    # Only the host deck is built up front (seed). The guest deck is deferred.
+    assert captured_seeds == [7102]
+
+    client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
+
+    # The guest deck is built on join, deterministically off the host's seed + 1.
+    assert captured_seeds == [7102, 7103]
+
+
 
 
 

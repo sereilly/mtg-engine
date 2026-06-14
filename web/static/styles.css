@@ -36,17 +36,16 @@ main {
   padding: 14px;
 }
 
-.top-join-url {
-  margin: 0 0 12px;
-  color: var(--accent);
+.join-url-link {
+  color: var(--accent-2);
   font-weight: 700;
-  letter-spacing: 0.01em;
-  word-break: break-word;
+  text-decoration: underline;
   cursor: pointer;
+  word-break: break-word;
 }
 
-.top-join-url:hover {
-  text-decoration: underline;
+.join-url-link:hover {
+  color: #b9deff;
 }
 
 h1,

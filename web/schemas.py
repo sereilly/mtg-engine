@@ -55,6 +55,10 @@ class CreateSessionRequest(BaseModel):
 
 class JoinSessionRequest(BaseModel):
     guest_name: str = Field(default="Player 2")
+    # The joining player picks their own deck; sent to the host with their name.
+    # When unset, a random deck is built for them.
+    guest_deck_id: str | None = Field(default=None)
+    guest_colors: int = Field(default=2, ge=1, le=5)
 
 
 class GameActionRequest(BaseModel):

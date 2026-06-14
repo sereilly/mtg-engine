@@ -66,8 +66,10 @@ let lastAnnouncedTurn = null;
 const setupEl = document.getElementById("setup");
 const boardEl = document.getElementById("boardPanel");
 const aiControlsEl = document.getElementById("aiControls");
-const joinUrlEl = document.getElementById("joinUrl");
-const lanJoinUrlEl = document.getElementById("lanJoinUrl");
+// Join URLs for the current hosted session. Surfaced in the "Waiting for
+// Opponent" prompt rather than at the top of the page.
+let currentJoinUrl = "";
+let currentLanJoinUrl = "";
 const menuPages = {
   home: document.getElementById("homePage"),
   host: document.getElementById("hostGamePage"),
@@ -981,21 +983,6 @@ async function maybeAutoStepAi(state = currentState) {
     // This ensures the AI continues acting on the most recent currentState.
     maybeAutoStepAi();
   }
-}
-
-function hasOpenHumanSlot(state) {
-  if (!state) return false;
-
-  const joinedSeats = new Set((state.joined_seats || []).map((value) => Number(value)));
-  const seatTypes = state.seat_types || {};
-  for (const seat of [0, 1]) {
-    const seatType = seatTypes[seat] ?? seatTypes[String(seat)] ?? "human";
-    if (seatType === "human" && !joinedSeats.has(seat)) {
-      return true;
-    }
-  }
-
-  return false;
 }
 
 function hasActivatedAbility(card) {
@@ -1963,6 +1950,45 @@ function applyIslandSanctuaryPrompt() {
   }
 }
 
+function applyAwaitingOpponentPrompt() {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  cancelBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  okBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  title.textContent = "Waiting for Opponent";
+  const linkUrl = currentLanJoinUrl || currentJoinUrl;
+  const joinLink = linkUrl
+    ? `<a href="${escapeHtml(linkUrl)}" id="awaitingJoinLink" class="join-url-link" title="Click to copy">Join URL</a>`
+    : "Join URL";
+  body.innerHTML = `Send the ${joinLink} to a friend. The game will begin once they join.`;
+  steps.innerHTML = `<div>Waiting for an opponent to join…</div>`;
+
+  const linkEl = document.getElementById("awaitingJoinLink");
+  if (linkEl) {
+    linkEl.addEventListener("click", async (event) => {
+      event.preventDefault();
+      try {
+        await copyTextToClipboard(linkUrl);
+        updateActionHint("Join URL copied to clipboard.");
+      } catch {
+        updateActionHint("Could not copy the Join URL. Copy it manually.", true);
+      }
+    });
+  }
+}
+
 function applyCoinFlipPrompt(info) {
   const panel = q("activationPanel");
   const title = q("promptTitle");
@@ -2352,6 +2378,11 @@ function renderActivationPrompt() {
   const isCombatDeclarePromptStep = isDeclareAttackersStep || isDeclareBlockersStep;
 
   applyPriorityPromptStyle(panel, currentState);
+
+  if (currentState?.awaiting_opponent) {
+    applyAwaitingOpponentPrompt();
+    return;
+  }
 
   const pregameInfo = getPregameInfo();
   if (pregameInfo) {
@@ -3056,36 +3087,9 @@ function updateActionHint(message, isError = false) {
   }
 }
 
-function setSingleJoinUrl(element, label, url = "") {
-  if (!element) return;
-  const trimmed = String(url || "").trim();
-  if (!trimmed) {
-    element.dataset.url = "";
-    element.textContent = "";
-    element.classList.add("hidden");
-    return;
-  }
-
-  element.dataset.url = trimmed;
-  element.textContent = `${label}: ${trimmed}`;
-  element.classList.remove("hidden");
-}
-
 function setJoinUrls(url = "", lanUrl = "") {
-  setSingleJoinUrl(joinUrlEl, "Join URL", url);
-  setSingleJoinUrl(lanJoinUrlEl, "LAN Join URL", lanUrl);
-}
-
-function syncJoinUrlVisibility(state) {
-  const visible = hasOpenHumanSlot(state);
-  for (const element of [joinUrlEl, lanJoinUrlEl]) {
-    if (!element) continue;
-    if (!element.dataset.url) {
-      element.classList.add("hidden");
-      continue;
-    }
-    element.classList.toggle("hidden", !visible);
-  }
+  currentJoinUrl = String(url || "").trim();
+  currentLanJoinUrl = String(lanUrl || "").trim();
 }
 
 async function copyTextToClipboard(text) {
@@ -4738,7 +4742,6 @@ function renderState(state, { skipStaleCheck = false } = {}) {
   maybeTriggerCombatDamageFx(currentState, state);
   SFX.onStateChange(currentState, state, seat ?? 0);
   currentState = state;
-  syncJoinUrlVisibility(state);
   syncCombatDrafts(state);
   if (!isCombatStep(state, "combat_damage")) {
     combatDamageDraft = {};
@@ -4761,7 +4764,7 @@ function renderState(state, { skipStaleCheck = false } = {}) {
   }
   const viewerSeat = seat ?? 0;
   const isSelfTurn = state.current_turn === viewerSeat;
-  if (lastAnnouncedTurn !== state.current_turn && !state.pregame) {
+  if (lastAnnouncedTurn !== state.current_turn && !state.pregame && !state.awaiting_opponent) {
     lastAnnouncedTurn = state.current_turn;
     showTurnAnnouncement(isSelfTurn);
   }
@@ -5147,17 +5150,18 @@ async function postJson(url, body) {
 
 async function createSession() {
   hideSetupPanel();
-  syncGuestNameForMode();
   syncSeedControls();
+  const mode = q("mode").value;
   const useCustomSeed = q("useCustomSeed").checked;
   const req = {
-    mode: q("mode").value,
+    mode,
     host_name: q("hostName").value,
-    guest_name: q("guestName").value,
     host_colors: Number(q("hostColors").value),
-    guest_colors: Number(q("guestColors").value),
     host_deck_id: q("hostDeckSelect")?.value || null,
-    guest_deck_id: q("guestDeckSelect")?.value || null,
+    // The opponent's deck is only host-configurable when it's AI. For networked
+    // human_vs_human the guest brings their own deck on join.
+    guest_colors: Number(q("guestColors").value),
+    guest_deck_id: mode === "human_vs_human" ? null : (q("guestDeckSelect")?.value || null),
     use_custom_seed: useCustomSeed,
     custom_seed: useCustomSeed ? Number(q("customSeed").value) : null,
     enable_pregame: true,
@@ -5170,25 +5174,10 @@ async function createSession() {
   setVisible(true);
   initBattlefieldCanvas();
   renderState(data.state);
-  if (!data.state?.pregame) {
+  if (data.state?.awaiting_opponent) {
+    updateActionHint("Waiting for an opponent to join — share the Join URL above.");
+  } else if (!data.state?.pregame) {
     updateActionHint("Session ready. Drag from your hand to cast. The battlefield arranges itself automatically.");
-  }
-}
-
-function syncGuestNameForMode() {
-  const mode = q("mode").value;
-  const guestNameInput = q("guestName");
-  const guestName = guestNameInput.value.trim();
-
-  if (mode === "human_vs_ai" || mode === "ai_vs_ai") {
-    if (guestName === "" || guestName === "Player 2") {
-      guestNameInput.value = "AI";
-    }
-    return;
-  }
-
-  if (mode === "human_vs_human" && (guestName === "" || guestName === "AI")) {
-    guestNameInput.value = "Player 2";
   }
 }
 
@@ -5198,7 +5187,11 @@ async function joinSession() {
     alert("Enter a session ID");
     return;
   }
-  const data = await postJson(`/api/sessions/${sessionId}/join`, { guest_name: q("joinName").value });
+  const data = await postJson(`/api/sessions/${sessionId}/join`, {
+    guest_name: q("joinName").value,
+    guest_deck_id: q("joinDeckSelect")?.value || null,
+    guest_colors: Number(q("joinColors")?.value) || 2,
+  });
   seat = data.seat;
   openStateSyncStream();
   setJoinUrls(data.join_url, data.lan_join_url);
@@ -5221,6 +5214,7 @@ async function sendAction(actionBody) {
 
 q("homeHostBtn")?.addEventListener("click", () => {
   showMenuPage("host");
+  window.syncStartPageColorInputs?.();
 });
 
 q("homeJoinBtn")?.addEventListener("click", () => {
@@ -5246,7 +5240,7 @@ q("startBtn").addEventListener("click", async () => {
 });
 
 q("mode").addEventListener("change", () => {
-  syncGuestNameForMode();
+  window.syncStartPageColorInputs?.();
 });
 
 q("useCustomSeed").addEventListener("change", () => {
@@ -5273,18 +5267,6 @@ for (const elementId of ["selfName", "oppName", "selfLife", "oppLife"]) {
   });
 }
 
-for (const [element, label] of [[joinUrlEl, "Join URL"], [lanJoinUrlEl, "LAN join URL"]]) {
-  element?.addEventListener("click", async () => {
-    const targetUrl = element.dataset.url;
-    if (!targetUrl) return;
-    try {
-      await copyTextToClipboard(targetUrl);
-      updateActionHint(`${label} copied to clipboard.`);
-    } catch {
-      updateActionHint(`Could not copy ${label.toLowerCase()}. Copy it manually.`, true);
-    }
-  });
-}
 
 q("promptCancelBtn").addEventListener("click", () => {
   SFX.onMenuCancel();
@@ -5580,7 +5562,7 @@ if (sessionFromUrl) {
   showMenuPage("join");
 }
 
-syncGuestNameForMode();
+window.syncStartPageColorInputs?.();
 syncSeedControls();
 setDebugMenuEnabled(false);
 q("undoBtn").disabled = true;

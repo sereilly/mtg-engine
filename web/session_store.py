@@ -25,6 +25,13 @@ class Session:
     # hvh: seat1 joins later. other modes are immediately joined.
     joined_seats: set[int] = field(default_factory=lambda: {0})
     seat_types: dict[int, str] = field(default_factory=dict)
+    # Seed used to build decks / drive the coin flip. Kept so the guest deck (built
+    # at join time for networked human_vs_human) stays deterministic with the host.
+    seed: int = 0
+    use_pregame: bool = False
+    # Networked human_vs_human only: the guest deck arrives with the join request,
+    # so the game is held until the opponent joins.  False once they have.
+    awaiting_opponent: bool = False
     cleanup_required_discards: int = 0
     cleanup_selected_indices: list[int] = field(default_factory=list)
     untap_required_lands: int = 0
@@ -71,14 +78,6 @@ class SessionStore:
         if request.mode in {"human_vs_ai", "ai_vs_ai"} and guest_name.strip() in {"", "Player 2"}:
             guest_name = "AI"
 
-        host_deck = self._build_seat_deck(request.host_deck_id, request.host_colors, seed)
-        guest_deck = self._build_seat_deck(request.guest_deck_id, request.guest_colors, seed + 1)
-
-        p1 = PlayerState(name=request.host_name, library=host_deck)
-        p2 = PlayerState(name=guest_name, library=guest_deck)
-
-        game = Game(players=[p1, p2], enforce_mana_costs=True)
-
         seat_types = {0: "human", 1: "human"}
         joined_seats: set[int] = {0}
         if request.mode == "human_vs_ai":
@@ -91,7 +90,48 @@ class SessionStore:
 
         use_pregame = request.enable_pregame and request.mode != "ai_vs_ai"
 
-        if use_pregame:
+        # Networked human_vs_human: the joining player chooses their own name and
+        # deck, so defer building the guest deck (and starting the game) until they
+        # join.  Legacy/test clients (no pregame) keep the immediate-start behavior.
+        awaiting_opponent = request.mode == "human_vs_human" and use_pregame
+
+        host_deck = self._build_seat_deck(request.host_deck_id, request.host_colors, seed)
+        if awaiting_opponent:
+            guest_deck: list = []
+        else:
+            guest_deck = self._build_seat_deck(request.guest_deck_id, request.guest_colors, seed + 1)
+
+        p1 = PlayerState(name=request.host_name, library=host_deck)
+        p2 = PlayerState(name=guest_name, library=guest_deck)
+
+        game = Game(players=[p1, p2], enforce_mana_costs=True)
+
+        session = Session(
+            id=sid,
+            mode=request.mode,
+            host_name=request.host_name,
+            guest_name=guest_name,
+            game=game,
+            current_turn=0,
+            joined_seats=joined_seats,
+            seat_types=seat_types,
+            seed=seed,
+            use_pregame=use_pregame,
+            awaiting_opponent=awaiting_opponent,
+        )
+
+        if not awaiting_opponent:
+            self._begin_pregame(session)
+
+        self._sessions[sid] = session
+        return session
+
+    def _begin_pregame(self, session: Session) -> None:
+        """Start the game once all decks are known (immediately, or once the
+        networked opponent has joined)."""
+        game = session.game
+        seed = session.seed
+        if session.use_pregame:
             # Rule 103.1: flip coin and record the winner; hand dealing is deferred
             # until the winner chooses to go first or second.
             flip_rng = random.Random(seed + 2)
@@ -99,37 +139,15 @@ class SessionStore:
             game.log.append(
                 f"Coin flip: {game.players[coin_flip_winner].name} wins the coin flip!"
             )
-            session = Session(
-                id=sid,
-                mode=request.mode,
-                host_name=request.host_name,
-                guest_name=guest_name,
-                game=game,
-                current_turn=0,
-                joined_seats=joined_seats,
-                seat_types=seat_types,
-                pregame_phase="coin_flip",
-                coin_flip_winner=coin_flip_winner,
-            )
+            session.pregame_phase = "coin_flip"
+            session.coin_flip_winner = coin_flip_winner
         else:
             # Skip interactive pregame (ai_vs_ai or legacy clients).
             starting_player = game.select_starting_player(rng=random.Random(seed + 2))
             game.deal_opening_hands(starting_player)
             for i in range(len(game.players)):
                 game.keep_hand(i)
-            session = Session(
-                id=sid,
-                mode=request.mode,
-                host_name=request.host_name,
-                guest_name=guest_name,
-                game=game,
-                current_turn=starting_player,
-                joined_seats=joined_seats,
-                seat_types=seat_types,
-            )
-
-        self._sessions[sid] = session
-        return session
+            session.current_turn = starting_player
 
     def _resolve_seed(self, request: CreateSessionRequest) -> int:
         if request.use_custom_seed:
@@ -148,11 +166,29 @@ class SessionStore:
             raise KeyError("session not found")
         return self._sessions[session_id]
 
-    def join(self, session_id: str, guest_name: str) -> Session:
+    def join(
+        self,
+        session_id: str,
+        guest_name: str,
+        guest_deck_id: str | None = None,
+        guest_colors: int = 2,
+    ) -> Session:
         session = self.get(session_id)
         if session.mode != "human_vs_human":
             return session
+
+        already_joined = 1 in session.joined_seats
         session.joined_seats.add(1)
         session.guest_name = guest_name
         session.game.players[1].name = guest_name
+
+        # Networked flow: the guest's deck travels with the join request. Build it
+        # now (deterministically off the host's seed) and start the game.
+        if session.awaiting_opponent and not already_joined:
+            session.game.players[1].library = self._build_seat_deck(
+                guest_deck_id, guest_colors, session.seed + 1
+            )
+            session.awaiting_opponent = False
+            self._begin_pregame(session)
+
         return session

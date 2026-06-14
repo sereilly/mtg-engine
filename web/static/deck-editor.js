@@ -90,6 +90,7 @@
       ["deckLoadSelect", "— Load a deck —"],
       ["hostDeckSelect", "Random deck"],
       ["guestDeckSelect", "Random deck"],
+      ["joinDeckSelect", "Random deck"],
     ];
     for (const [id, placeholder] of configs) {
       const select = q(id);
@@ -115,17 +116,47 @@
     syncStartPageColorInputs();
   }
 
-  function syncStartPageColorInputs() {
-    const pairs = [
-      ["hostDeckSelect", "hostColorsLabel"],
-      ["guestDeckSelect", "guestColorsLabel"],
-    ];
-    for (const [selectId, labelId] of pairs) {
-      const select = q(selectId);
-      const label = q(labelId);
-      if (select && label) label.classList.toggle("hidden", Boolean(select.value));
-    }
+  function setHidden(id, hidden) {
+    const el = q(id);
+    if (el) el.classList.toggle("hidden", Boolean(hidden));
   }
+
+  function setText(id, text) {
+    const el = q(id);
+    if (el) el.textContent = text;
+  }
+
+  // Lays out the Host form for the selected mode and shows the per-seat colors
+  // inputs only when that seat is on a random deck. The host never sets the
+  // opponent's name; the opponent's deck is host-configurable only when it's AI.
+  function syncStartPageColorInputs() {
+    const modeEl = q("mode");
+    const mode = modeEl ? modeEl.value : "human_vs_ai";
+    const isAiVsAi = mode === "ai_vs_ai";
+    const isHvh = mode === "human_vs_human";
+
+    // Host's own name is irrelevant for AI vs AI.
+    setHidden("hostNameLabel", isAiVsAi);
+
+    // Label wording per mode.
+    setText("hostDeckText", isAiVsAi ? "Player 1 deck" : "Your deck");
+    setText("hostColorsText", isAiVsAi ? "Player 1 deck colors (1-5)" : "Your deck colors (1-5)");
+    setText("guestDeckText", isAiVsAi ? "Player 2 deck" : "AI deck");
+    setText("guestColorsText", isAiVsAi ? "Player 2 deck colors (1-5)" : "AI deck colors (1-5)");
+
+    // The opponent's deck is only host-configurable when the opponent is AI.
+    setHidden("guestDeckLabel", isHvh);
+
+    const hostSel = q("hostDeckSelect");
+    const guestSel = q("guestDeckSelect");
+    const joinSel = q("joinDeckSelect");
+    setHidden("hostColorsLabel", Boolean(hostSel && hostSel.value));
+    setHidden("guestColorsLabel", isHvh || Boolean(guestSel && guestSel.value));
+    setHidden("joinColorsLabel", Boolean(joinSel && joinSel.value));
+  }
+
+  // Let app.js re-run the layout when the mode changes.
+  window.syncStartPageColorInputs = syncStartPageColorInputs;
 
   // ── Navigation ────────────────────────────────────────────────────────────
 
@@ -788,6 +819,7 @@
 
     q("hostDeckSelect")?.addEventListener("change", syncStartPageColorInputs);
     q("guestDeckSelect")?.addEventListener("change", syncStartPageColorInputs);
+    q("joinDeckSelect")?.addEventListener("change", syncStartPageColorInputs);
   }
 
   async function init() {

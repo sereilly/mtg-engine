@@ -4,13 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Magic LEA Web App</title>
-    <link rel="stylesheet" href="/styles.css?v=20260611-menu" />
+    <link rel="stylesheet" href="/styles.css?v=20260613-hostjoin3" />
   </head>
   <body>
     <main>
-      <p id="joinUrl" class="top-join-url hidden"></p>
-      <p id="lanJoinUrl" class="top-join-url hidden"></p>
-
       <section id="setup" class="menu-shell">
         <div id="homePage" class="menu-page">
           <h1 class="menu-title">MTG Simulator</h1>
@@ -47,20 +44,19 @@
                 <option value="human_vs_human">Human vs Human (Networked)</option>
               </select>
             </label>
-            <label>Host name <input id="hostName" value="Player 1" /></label>
-            <label>Guest name <input id="guestName" value="Player 2" /></label>
-            <label>Host deck
+            <label id="hostNameLabel">Your name <input id="hostName" value="Player 1" /></label>
+            <label id="hostDeckLabel"><span id="hostDeckText">Your deck</span>
               <select id="hostDeckSelect">
                 <option value="">Random deck</option>
               </select>
             </label>
-            <label id="hostColorsLabel">Host deck colors (1-5) <input id="hostColors" type="number" min="1" max="5" value="2" /></label>
-            <label>Guest deck
+            <label id="hostColorsLabel"><span id="hostColorsText">Your deck colors (1-5)</span> <input id="hostColors" type="number" min="1" max="5" value="2" /></label>
+            <label id="guestDeckLabel"><span id="guestDeckText">AI deck</span>
               <select id="guestDeckSelect">
                 <option value="">Random deck</option>
               </select>
             </label>
-            <label id="guestColorsLabel">Guest deck colors (1-5) <input id="guestColors" type="number" min="1" max="5" value="2" /></label>
+            <label id="guestColorsLabel"><span id="guestColorsText">AI deck colors (1-5)</span> <input id="guestColors" type="number" min="1" max="5" value="2" /></label>
             <label class="menu-checkbox-label">
               <input id="useCustomSeed" type="checkbox" />
               Use custom seed
@@ -78,6 +74,12 @@
             </div>
             <label>Session ID <input id="joinSessionId" placeholder="paste session id" /></label>
             <label>Your name <input id="joinName" value="Player 2" /></label>
+            <label>Your deck
+              <select id="joinDeckSelect">
+                <option value="">Random deck</option>
+              </select>
+            </label>
+            <label id="joinColorsLabel">Deck colors (1-5) <input id="joinColors" type="number" min="1" max="5" value="2" /></label>
             <button id="joinBtn" class="menu-primary-btn">Join Session</button>
           </div>
         </div>
@@ -448,7 +450,7 @@
 
     <script src="/battlefield-canvas.js?v=20260612-dwell15"></script>
     <script src="/sfx.js?v=1"></script>
-    <script src="/app.js?v=20260613-verify-untested"></script>
-    <script src="/deck-editor.js?v=20260611-de"></script>
+    <script src="/app.js?v=20260613-hostjoin4"></script>
+    <script src="/deck-editor.js?v=20260613-hostjoin2"></script>
   </body>
 </html>

@@ -894,6 +894,7 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "priority_pass_count": session.game.priority_pass_count,
         "joined_seats": sorted(session.joined_seats),
         "seat_types": session.seat_types,
+        "awaiting_opponent": session.awaiting_opponent,
         "players": [
             _serialize_player(
                 session.game.players[0], viewer_seat, 0, session.game,
@@ -1571,7 +1572,15 @@ def create_session(req: CreateSessionRequest, request: Request):
 @app.post("/api/sessions/{session_id}/join")
 def join_session(session_id: str, req: JoinSessionRequest, request: Request):
     session = _require_session(session_id)
-    session = store.join(session_id, req.guest_name)
+    try:
+        session = store.join(
+            session_id, req.guest_name, req.guest_deck_id, req.guest_colors
+        )
+    except DeckNotFoundError as exc:
+        raise HTTPException(status_code=400, detail="selected deck not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    _pregame_auto_advance(session)
     _notify_session_change(session.id, "join")
     join_url = _build_join_url(request, session.id)
     lan_join_url = _build_lan_join_url(request, session.id)
@@ -1617,6 +1626,9 @@ def do_action(session_id: str, req: GameActionRequest):
     session = _require_session(session_id)
     if session.status == "finished":
         raise HTTPException(status_code=400, detail="game already finished")
+
+    if session.awaiting_opponent:
+        raise HTTPException(status_code=400, detail="waiting for opponent to join")
 
     if req.seat not in session.joined_seats:
         raise HTTPException(status_code=400, detail="seat has not joined")
