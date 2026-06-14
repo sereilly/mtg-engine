@@ -4071,21 +4071,34 @@ function renderZoneCards(containerId, cards, { zoneSeat = null, zoneKind = "" } 
   }
 }
 
+const lastManaCounts = {};
+
 function renderMana(containerId, manaPool, targetSeat = null) {
   const container = q(containerId);
   container.innerHTML = "";
   const pool = manaPool || {};
   const clickable = debugAddManaMode && targetSeat !== null;
   container.classList.toggle("mana-row-addable", clickable);
+  const prev = lastManaCounts[containerId] || {};
+  const current = {};
+  let total = 0;
   for (const symbol of MANA_ORDER) {
     const chip = document.createElement("div");
-    chip.className = `mana-symbol mana-${symbol}`;
     const count = Number(pool[symbol] || 0);
+    current[symbol] = count;
+    total += count;
+    chip.className =
+      `mana-symbol mana-${symbol} ` + (count > 0 ? "mana-symbol-filled" : "mana-symbol-empty");
     const src = symbolSrc(`{${symbol}}`);
-    if (src) {
-      chip.innerHTML = `<span><img class="mtg-symbol mtg-symbol-mana" src="${escapeHtml(src)}" alt="{${symbol}}" title="{${symbol}}" /> ${count}</span>`;
-    } else {
-      chip.innerHTML = `<span>${symbol === "C" ? "GEN" : symbol} ${count}</span>`;
+    const glyph = src
+      ? `<img class="mtg-symbol mtg-symbol-mana" src="${escapeHtml(src)}" alt="{${symbol}}" title="{${symbol}}" />`
+      : `<span class="mana-glyph-text">${symbol === "C" ? "◇" : symbol}</span>`;
+    chip.innerHTML =
+      `<span class="mana-orb-glyph">${glyph}</span>` +
+      `<span class="mana-orb-count">${count}</span>`;
+    // Pop the orb when its count changes (e.g. mana added/spent) for feedback.
+    if (count !== (prev[symbol] || 0)) {
+      chip.classList.add("mana-symbol-bump");
     }
     if (clickable) {
       chip.classList.add("mana-symbol-addable");
@@ -4098,6 +4111,14 @@ function renderMana(containerId, manaPool, targetSeat = null) {
     }
     container.appendChild(chip);
   }
+  const totalChip = document.createElement("div");
+  totalChip.className = "mana-total" + (total > 0 ? " mana-total-active" : "");
+  totalChip.title = `${total} total mana available`;
+  totalChip.innerHTML =
+    `<span class="mana-total-num">${total}</span>` +
+    `<span class="mana-total-label">total</span>`;
+  container.appendChild(totalChip);
+  lastManaCounts[containerId] = current;
 }
 
 async function addDebugMana(targetSeat, color) {

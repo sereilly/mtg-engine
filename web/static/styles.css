@@ -1257,44 +1257,173 @@ h2.targeting-valid {
 .mana-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 9px;
+  align-items: center;
 }
 
 .mana-symbol {
-  min-width: 38px;
-  height: 38px;
+  position: relative;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
   color: #0f1722;
+  transition: transform 0.15s ease, box-shadow 0.25s ease, filter 0.25s ease,
+    opacity 0.25s ease;
 }
 
-.mana-symbol span {
-  font-size: 0.82rem;
+/* Glossy highlight to make each orb read as a polished gem. */
+.mana-symbol::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  left: 9px;
+  width: 38%;
+  height: 28%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0));
+  pointer-events: none;
+}
+
+.mana-orb-glyph {
+  position: absolute;
+  inset: 0;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+}
+
+.mana-orb-glyph .mtg-symbol-mana {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+}
+
+.mana-glyph-text {
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.mana-orb-count {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 4px;
+  border-radius: 10px;
+  background: #0b1622;
+  color: var(--ink);
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
+}
+
+/* Colors you have light up; colors you don't fade to the background. */
+.mana-symbol-empty {
+  filter: grayscale(0.5) brightness(0.66);
+  opacity: 0.45;
+}
+
+.mana-symbol-empty .mana-orb-count {
+  opacity: 0.65;
+}
+
+.mana-symbol-filled {
+  box-shadow: 0 0 13px 1px var(--mana-glow, rgba(255, 255, 255, 0.4)),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.22);
+}
+
+@keyframes mana-orb-bump {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.32); }
+  100% { transform: scale(1); }
+}
+
+.mana-symbol-bump {
+  animation: mana-orb-bump 0.42s ease;
 }
 
 .mana-symbol-addable {
   cursor: pointer;
   box-shadow: 0 0 0 2px rgba(120, 220, 255, 0.7);
-  transition: transform 0.08s ease, box-shadow 0.08s ease;
 }
 
 .mana-symbol-addable:hover {
-  transform: scale(1.1);
+  transform: scale(1.12);
   box-shadow: 0 0 0 2px rgba(120, 220, 255, 1);
 }
 
-.mana-W { background: #f9f6df; }
-.mana-U { background: #7ec4ff; }
-.mana-B { background: #7a7f93; color: #f2f2f2; }
-.mana-R { background: #f28c73; }
-.mana-G { background: #9edb97; }
-.mana-C { background: #d0b889; }
+.mana-total {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  height: 40px;
+  margin-left: 2px;
+  border-radius: 11px;
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  color: var(--ink-soft);
+  opacity: 0.6;
+  transition: all 0.25s ease;
+}
+
+.mana-total-active {
+  opacity: 1;
+  border-style: solid;
+  border-color: rgba(242, 184, 75, 0.5);
+  color: var(--accent);
+  box-shadow: 0 0 11px rgba(242, 184, 75, 0.22);
+}
+
+.mana-total-num {
+  font-size: 1.05rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.mana-total-label {
+  font-size: 0.55rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  opacity: 0.8;
+}
+
+.mana-W {
+  background: radial-gradient(circle at 32% 28%, #fffdf0, #f4edcf 55%, #d9cf9e);
+  --mana-glow: rgba(244, 237, 207, 0.75);
+}
+.mana-U {
+  background: radial-gradient(circle at 32% 28%, #bfe4ff, #6db8ff 55%, #2f7fd6);
+  --mana-glow: rgba(109, 184, 255, 0.75);
+}
+.mana-B {
+  background: radial-gradient(circle at 32% 28%, #9a9fb2, #6b7186 55%, #3c4254);
+  color: #f2f2f2;
+  --mana-glow: rgba(140, 148, 170, 0.75);
+}
+.mana-R {
+  background: radial-gradient(circle at 32% 28%, #ffb9a6, #f47a5e 55%, #c8462c);
+  --mana-glow: rgba(244, 122, 94, 0.75);
+}
+.mana-G {
+  background: radial-gradient(circle at 32% 28%, #c4f0bd, #84d178 55%, #4ba046);
+  --mana-glow: rgba(132, 209, 120, 0.75);
+}
+.mana-C {
+  background: radial-gradient(circle at 32% 28%, #e8d9b4, #d0b889 55%, #a8916a);
+  --mana-glow: rgba(208, 184, 137, 0.75);
+}
 
 .phase-chip-item {
   flex: 1 1 0;
