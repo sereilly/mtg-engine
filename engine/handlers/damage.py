@@ -34,15 +34,15 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         per_target = damage // n if n > 0 else 0
         for idx in sorted(indices, reverse=True):
             target_perm = target.battlefield[idx]
-            target_perm.damage_marked += per_target
+            dealt = game._mark_damage_on_permanent(target_perm, per_target)
             effective_toughness = target_perm.effective_toughness
-            game.log.append(f"{card.name} dealt {per_target} damage to {target_perm.card.name}")
+            game.log.append(f"{card.name} dealt {dealt} damage to {target_perm.card.name}")
             if target_perm.damage_marked >= effective_toughness:
                 target_perm.metadata["no_regenerate"] = True
                 target.battlefield.pop(idx)
                 game._permanent_to_graveyard(target, target_perm)
                 game.log.append(f"{target_perm.card.name} died from damage dealt by {card.name}")
-            elif per_target > 0:
+            elif dealt > 0:
                 game._fire_dealt_damage_triggers(target_perm)
         return True, "resolved"
     if target_perm_idx is not None and isinstance(target_perm_idx, int) and 0 <= target_perm_idx < len(target.battlefield):
@@ -64,15 +64,15 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
             d = game._deal_damage_to_player(redirect_player, damage)
             game.log.append(f"Jade Monolith redirected {d} damage to {redirect_player.name}")
             return True, "resolved"
-        target_perm.damage_marked += damage
+        dealt = game._mark_damage_on_permanent(target_perm, damage)
         effective_toughness = target_perm.effective_toughness
-        game.log.append(f"{card.name} dealt {damage} damage to {target_perm.card.name}")
+        game.log.append(f"{card.name} dealt {dealt} damage to {target_perm.card.name}")
         if target_perm.damage_marked >= effective_toughness:
             target_perm.metadata["no_regenerate"] = True
             target.battlefield.pop(target_perm_idx)
             game._permanent_to_graveyard(target, target_perm)
             game.log.append(f"{target_perm.card.name} died from damage dealt by {card.name}")
-        elif damage > 0:
+        elif dealt > 0:
             game._fire_dealt_damage_triggers(target_perm)
     else:
         damage = game._deal_damage_to_player(target, damage)
@@ -107,15 +107,15 @@ def simulacrum_redirect(game: Game, instruction: OracleInstruction, context: Ora
         game.log.append(f"{card.name}: no creature to deal damage to")
         return True, "resolved"
 
-    target_perm.damage_marked += amount
-    game.log.append(f"{card.name} dealt {amount} damage to {target_perm.card.name} and {caster.name} gained {amount} life")
-    if amount > 0 and target_perm.damage_marked >= target_perm.effective_toughness:
+    dealt = game._mark_damage_on_permanent(target_perm, amount)
+    game.log.append(f"{card.name} dealt {dealt} damage to {target_perm.card.name} and {caster.name} gained {amount} life")
+    if dealt > 0 and target_perm.damage_marked >= target_perm.effective_toughness:
         idx = caster.battlefield.index(target_perm)
         target_perm.metadata["no_regenerate"] = True
         caster.battlefield.pop(idx)
         game._permanent_to_graveyard(caster, target_perm)
         game.log.append(f"{target_perm.card.name} died from {card.name}")
-    elif amount > 0:
+    elif dealt > 0:
         game._fire_dealt_damage_triggers(target_perm)
     return True, "resolved"
 
@@ -130,7 +130,7 @@ def deal_damage_each_creature_and_player(game: Game, instruction: OracleInstruct
     for player in game.players:
         for perm in player.battlefield:
             if perm.card.primary_type == "creature":
-                perm.damage_marked += amount
+                game._mark_damage_on_permanent(perm, amount)
                 if perm.damage_marked >= perm.effective_toughness:
                     dead.append((player, perm))
     for player, perm in dead:
@@ -152,8 +152,8 @@ def deal_damage_and_self_damage(game: Game, instruction: OracleInstruction, cont
     target_perm_idx = context.target_permanent_index
     if isinstance(target_perm_idx, int) and 0 <= target_perm_idx < len(target.battlefield):
         target_perm = target.battlefield[target_perm_idx]
-        target_perm.damage_marked += amount
-        game.log.append(f"{card.name} dealt {amount} damage to {target_perm.card.name}")
+        dealt = game._mark_damage_on_permanent(target_perm, amount)
+        game.log.append(f"{card.name} dealt {dealt} damage to {target_perm.card.name}")
         if target_perm.damage_marked >= target_perm.effective_toughness:
             target_perm.metadata["no_regenerate"] = True
             target.battlefield.pop(target_perm_idx)
@@ -202,7 +202,7 @@ def earthquake_damage(game: Game, instruction: OracleInstruction, context: Oracl
             )
             if has_flying:
                 continue
-            perm.damage_marked += damage
+            game._mark_damage_on_permanent(perm, damage)
     game._destroy_marked_creatures()
     game.log.append(f"{card.name} dealt {damage} earthquake damage to each non-flying creature and each player")
     return True, "resolved"
@@ -227,7 +227,7 @@ def hurricane_damage(game: Game, instruction: OracleInstruction, context: Oracle
             )
             if not has_flying:
                 continue
-            perm.damage_marked += damage
+            game._mark_damage_on_permanent(perm, damage)
     game._destroy_marked_creatures()
     game.log.append(f"{card.name} dealt {damage} hurricane damage to each flying creature and each player")
     return True, "resolved"

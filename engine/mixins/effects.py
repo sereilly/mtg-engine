@@ -129,6 +129,26 @@ class EffectsMixin:
         target.damage_prevention_pool -= prevented
         return damage - prevented
 
+    def _prevent_permanent_damage(self, permanent, damage: int) -> int:
+        """Reduce *damage* about to be dealt to a creature by its prevention pool
+        (Healing Salve prevention mode, Samite Healer, …). Returns the unprevented
+        remainder, consuming the shield as it goes."""
+        if damage <= 0 or permanent.damage_prevention_pool <= 0:
+            return max(0, damage)
+        prevented = min(damage, permanent.damage_prevention_pool)
+        permanent.damage_prevention_pool -= prevented
+        if prevented > 0:
+            self.log.append(f"Prevented {prevented} damage to {permanent.card.name}")
+        return damage - prevented
+
+    def _mark_damage_on_permanent(self, permanent, amount: int) -> int:
+        """Mark *amount* damage on a creature after applying its prevention pool.
+        Returns the damage actually marked (0 if fully prevented)."""
+        dealt = self._prevent_permanent_damage(permanent, amount)
+        if dealt > 0:
+            permanent.damage_marked += dealt
+        return dealt
+
     def _player_controls_text(self, player: PlayerState, phrase: str) -> bool:
         return any(phrase in perm.card.oracle_text.lower() for perm in player.battlefield)
 

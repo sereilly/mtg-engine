@@ -43,6 +43,7 @@ def copy_top_stack_spell(game: Game, instruction: OracleInstruction, context: Or
         copied.card,
         target_permanent_index=copied.target_permanent_index,
         x_value=copied.x_value,
+        mode_index=copied.chosen_mode_index,
     )
     game.log.append(f"{card.name} copied {copied.card.name}")
     return True, "resolved"

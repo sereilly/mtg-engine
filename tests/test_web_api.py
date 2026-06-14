@@ -501,6 +501,80 @@ def test_spell_stays_on_stack_until_both_players_pass_priority():
     assert resolved["stack"] == []
 
 
+def test_modal_spell_serializes_modes_in_hand():
+    """A "Choose one —" modal spell exposes its selectable modes (with target
+    kinds) on each hand card so the UI can render a generic mode prompt."""
+    created = client.post(
+        "/api/sessions",
+        json={"mode": "human_vs_human", "seed": 7777},
+    ).json()
+    sid = created["session_id"]
+
+    session = store.get(sid)
+    salve = _mk_card(
+        name="Salve Modal Test",
+        mana_cost="{W}",
+        type_line="Instant",
+        oracle_text=(
+            "Choose one —\n"
+            "• Target player gains 3 life.\n"
+            "• Prevent the next 3 damage that would be dealt to any target this turn."
+        ),
+    )
+    session.game.players[0].hand = [salve]
+
+    state = client.get(f"/api/sessions/{sid}/state?seat=0").json()
+    hand = state["players"][0]["hand"]
+    card = next(c for c in hand if c["name"] == "Salve Modal Test")
+    modes = card["modes"]
+    assert len(modes) == 2
+    assert modes[0]["label"] == "Target player gains 3 life"
+    assert modes[0]["target_kind"] == "player"
+    assert modes[0]["supported"] is True
+    # "Prevent the next 3 damage ... to any target" can shield a creature or player.
+    assert modes[1]["target_kind"] == "any"
+
+
+def test_modal_spell_resolves_chosen_mode_via_action():
+    """Casting a modal spell with mode_index resolves that mode's effect."""
+    created = client.post(
+        "/api/sessions",
+        json={"mode": "human_vs_human", "seed": 7778},
+    ).json()
+    sid = created["session_id"]
+
+    session = store.get(sid)
+    salve = _mk_card(
+        name="Salve Resolve Test",
+        mana_cost="{W}",
+        type_line="Instant",
+        oracle_text=(
+            "Choose one —\n"
+            "• Target player gains 3 life.\n"
+            "• Prevent the next 3 damage that would be dealt to any target this turn."
+        ),
+    )
+    session.game.players[0].hand = [salve]
+    session.game.players[0].mana_pool = {"W": 1, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0}
+    session.game.players[0].life = 17
+
+    cast = client.post(
+        f"/api/sessions/{sid}/action",
+        json={
+            "seat": 0,
+            "action": "cast",
+            "card_name": "Salve Resolve Test",
+            "target_seat": 0,
+            "mode_index": 1,
+        },
+    )
+    assert cast.status_code == 200
+    _resolve_top_stack(sid, 0)
+
+    state = client.get(f"/api/sessions/{sid}/state?seat=0").json()
+    assert state["players"][0]["life"] == 17, "Prevention mode should not gain life"
+
+
 def test_both_players_passing_empty_stack_auto_advances_phase():
     created = client.post(
         "/api/sessions",

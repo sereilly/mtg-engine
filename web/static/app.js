@@ -8,6 +8,10 @@ let pendingCastX = null;
 let pendingCastHandCard = null;
 let pendingManaColor = null;
 let pendingAutoTap = null;
+// "Choose one —" modal spell awaiting the caster's mode selection.
+let pendingModalChoice = null;
+// Chosen mode index for the cast in progress, injected into the cast action.
+let pendingCastModeIndex = null;
 let debugSearchTimer = null;
 let debugAddManaMode = false;
 let symbolMap = {};
@@ -722,7 +726,7 @@ function getAutoPassStateKey(state) {
 
 function hasBlockingPromptForAutoPass(state = currentState) {
   if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state)) return true;
-  return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor);
+  return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice);
 }
 
 function shouldAutoPassUntilTurnEnd(state = currentState) {
@@ -1669,6 +1673,8 @@ function findCardInCurrentHand(cardName) {
 function beginPendingHandCast(card, handIndex = null) {
   const cardName = normalizeCardName(card);
   if (!cardName) return;
+  // A fresh cast starts with no chosen mode; a modal prompt sets it later.
+  pendingCastModeIndex = null;
   pendingCastHandCard = {
     cardName,
     handIndex: Number.isInteger(handIndex) && handIndex >= 0 ? handIndex : null,
@@ -1677,6 +1683,8 @@ function beginPendingHandCast(card, handIndex = null) {
 
 function clearPendingHandCast() {
   pendingCastHandCard = null;
+  pendingModalChoice = null;
+  pendingCastModeIndex = null;
   document.querySelectorAll(".casting-card").forEach((el) => el.classList.remove("casting-card"));
 }
 
@@ -1697,7 +1705,7 @@ function isAnyPromptActive(state = currentState) {
   if (getUntapLandSelectionInfo(state)) return true;
   if (getUpkeepPayInfo(state)) return true;
   if (shouldShowPriorityPrompt(state)) return true;
-  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingAutoTap) return true;
+  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingAutoTap || pendingModalChoice) return true;
 
   const hasValidAttackers = getValidAttackerIndices(state).length > 0;
   const hasValidBlockers = getValidBlockerAssignments(state).length > 0;
@@ -1801,7 +1809,7 @@ async function handleCombatPromptOk() {
 
 async function handlePriorityPromptOk() {
   if (!currentState || seat === null) return false;
-  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor) return false;
+  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice) return false;
   if (!shouldShowPriorityPrompt(currentState)) return false;
   await sendAction({ seat, action: "pass_priority" });
   updateActionHint("Passed priority.");
@@ -2453,6 +2461,27 @@ function renderActivationPrompt() {
     return;
   }
 
+  if (pendingModalChoice) {
+    panel.classList.remove("hidden");
+    okBtn.classList.add("hidden");
+    customRow.classList.add("hidden");
+    title.textContent = `Choose one — ${pendingModalChoice.cardName}`;
+    body.textContent = "Select which mode to cast.";
+    const modeButtons = pendingModalChoice.modes
+      .map((mode, index) => {
+        const disabled = mode.supported === false ? " disabled" : "";
+        const suffix = mode.supported === false ? " (unsupported)" : "";
+        return `<button type="button" class="prompt-choice-btn" data-mode-choice="${index}"${disabled}>${escapeHtml(mode.label)}${suffix}</button>`;
+      })
+      .join("");
+    steps.innerHTML = `<div class="prompt-choice-column">${modeButtons}</div>`;
+    okBtn.disabled = true;
+    cancelBtn.classList.remove("hidden");
+    cancelBtn.disabled = false;
+    customOkBtn.disabled = true;
+    return;
+  }
+
   if (!pendingActivation && !pendingCastTarget && !pendingCastX && !pendingManaColor) {
     const shouldShowPriority = shouldShowPriorityPrompt(currentState);
     const opponentHasPriority =
@@ -2764,6 +2793,90 @@ function resolvePendingManaColor(manaColor) {
   })
     .then(() => updateActionHint(`Activated ${pending.cardName} and chose ${manaColor}.`))
     .catch((e) => updateActionHint(e.message, true));
+}
+
+// Selectable modes of a "Choose one —" modal spell, as serialized by the server
+// on each hand card. A card is modal (worth prompting) only with 2+ modes.
+function cardModeOptions(card) {
+  if (!card || typeof card === "string") return [];
+  return Array.isArray(card.modes) ? card.modes : [];
+}
+
+function cardIsModal(card) {
+  return cardModeOptions(card).length >= 2;
+}
+
+// Show the generic mode-choice prompt for a modal spell. Returns true when the
+// prompt was opened, false when the card isn't actually modal.
+function startModalChoicePrompt(card, castAction = "cast") {
+  const cardName = normalizeCardName(card);
+  if (!cardName) return false;
+  const modes = cardModeOptions(card);
+  if (modes.length < 2) return false;
+
+  pendingModalChoice = { card, cardName, castAction, modes };
+  renderActivationPrompt();
+  updateActionHint(`Choose a mode for ${cardName}.`);
+  return true;
+}
+
+// Apply the caster's mode pick: record the index, then continue into the normal
+// targeting flow using that mode's target kind.
+function chooseModalMode(index) {
+  if (!pendingModalChoice) return;
+  const choice = pendingModalChoice;
+  const mode = choice.modes[index];
+  if (!mode) return;
+  if (mode.supported === false) {
+    updateActionHint("That mode isn't supported yet — pick another.", true);
+    return;
+  }
+
+  pendingModalChoice = null;
+  pendingCastModeIndex = index;
+  renderActivationPrompt();
+  updateActionHint(`${choice.cardName} — ${mode.label}.`);
+  dispatchModalCast(choice.card, choice.castAction, mode.target_kind);
+}
+
+// Route a chosen mode to the targeting prompt its effect needs, or cast directly
+// when the mode targets nothing.
+function dispatchModalCast(card, castAction, targetKind) {
+  switch (targetKind) {
+    case "creature":
+      startCastCreatureTargetPrompt(card, castAction);
+      return;
+    case "artifact":
+      startCastArtifactTargetPrompt(card, castAction);
+      return;
+    case "permanent":
+      startCastPermanentTargetPrompt(card, castAction);
+      return;
+    case "stack":
+      startCastStackSpellPrompt(card, castAction);
+      return;
+    case "any":
+      startCastAnyTargetPrompt(card, castAction);
+      return;
+    case "player":
+      startCastTargetPrompt(card, castAction);
+      return;
+    default:
+      break; // "none" — no target to choose.
+  }
+
+  const cardName = normalizeCardName(card);
+  const targetSeat = getDefaultTargetSeat(cardName);
+  const actionBody = { seat, action: castAction, card_name: cardName, target_seat: targetSeat };
+  sendAction(actionBody)
+    .then(() => {
+      updateActionHint(`Cast ${cardName}.`);
+      clearPendingHandCast();
+    })
+    .catch((e) => {
+      clearPendingHandCast();
+      updateActionHint(e.message, true);
+    });
 }
 
 function startCastTargetPrompt(card, castAction = "cast") {
@@ -3236,6 +3349,12 @@ async function castDebugCardForFree() {
 
   const card = await fetchCardByName(cardName);
   const resolvedCardName = normalizeCardName(card) || cardName;
+  pendingCastModeIndex = null;
+
+  if (card && cardIsModal(card) && startModalChoicePrompt(card, "debug_cast_free")) {
+    updateDebugStatus(`Choose a mode for ${resolvedCardName}.`, "success");
+    return;
+  }
 
   if (card && cardRequiresTargetGraveyardCreature(card)) {
     startCastGraveyardCreatureTargetPrompt(card, "debug_cast_free");
@@ -3318,6 +3437,12 @@ async function castDebugCardForFreeAsOpponent() {
 
   const card = await fetchCardByName(cardName);
   const resolvedCardName = normalizeCardName(card) || cardName;
+  pendingCastModeIndex = null;
+
+  if (card && cardIsModal(card) && startModalChoicePrompt(card, "debug_cast_free_opponent")) {
+    updateDebugStatus(`Choose a mode for ${resolvedCardName} (as opponent).`, "success");
+    return;
+  }
 
   if (card && cardRequiresTargetGraveyardCreature(card)) {
     startCastGraveyardCreatureTargetPrompt(card, "debug_cast_free_opponent");
@@ -3863,6 +3988,12 @@ function createCardElement(card, options = {}) {
         if (!cardName) return;
         beginPendingHandCast(card, handIndex);
         cardEl.classList.add("casting-card");
+
+        // Modal "Choose one —" spells prompt for the mode first; the chosen mode
+        // then drives which targeting flow (if any) runs.
+        if (cardIsModal(card) && startModalChoicePrompt(card)) {
+          return;
+        }
 
         if (cardRequiresTargetGraveyardCreature(card)) {
           startCastGraveyardCreatureTargetPrompt(card);
@@ -4937,6 +5068,7 @@ async function handleHandCardDropOnBattlefield({ event, targetSeat, targetItem }
     if (payload.kind === "hand") {
       const card = findCardInCurrentHand(payload.name);
       beginPendingHandCast(card || payload.name, Number.isInteger(payload.handIndex) ? payload.handIndex : null);
+      if (card && cardIsModal(card) && startModalChoicePrompt(card)) { return; }
       if (card && cardRequiresTargetGraveyardCreature(card)) { startCastGraveyardCreatureTargetPrompt(card); return; }
       if (card && cardRequiresTargetLand(card)) { startCastLandTargetPrompt(card); return; }
       if (card && cardRequiresTargetArtifact(card)) { startCastArtifactTargetPrompt(card); return; }
@@ -5250,11 +5382,18 @@ async function joinSession() {
   }
 }
 
+const _CAST_ACTIONS = new Set(["cast", "debug_cast_free", "debug_cast_free_opponent"]);
+
 async function sendAction(actionBody) {
   if (!sessionId) return;
   // Always carry the current phase-rail hold preferences so the server knows where
   // to stop on the AI's turn — including steps it resolves itself (turn start, end).
   const body = { stop_steps: opponentStopSteps(), ...actionBody };
+  // Carry the chosen mode for a "Choose one —" modal spell through whichever cast
+  // path fires (direct, targeted, X, auto-tap retry) without threading it manually.
+  if (_CAST_ACTIONS.has(body.action) && body.mode_index == null && pendingCastModeIndex != null) {
+    body.mode_index = pendingCastModeIndex;
+  }
   const payload = await postJson(`/api/sessions/${sessionId}/action`, body);
   renderState(payload);
 }
@@ -5363,12 +5502,13 @@ for (const elementId of ["selfName", "oppName", "selfLife", "oppLife"]) {
 
 q("promptCancelBtn").addEventListener("click", () => {
   SFX.onMenuCancel();
-  const wasCasting = !!(pendingCastTarget || pendingCastX || pendingAutoTap);
+  const wasCasting = !!(pendingCastTarget || pendingCastX || pendingAutoTap || pendingModalChoice);
   pendingActivation = null;
   pendingCastTarget = null;
   pendingCastX = null;
   pendingManaColor = null;
   pendingAutoTap = null;
+  pendingModalChoice = null;
   clearPendingHandCast();
   battlefieldCanvas?.setTargetingKeys([]);
   for (const elementId of ["selfLife", "oppLife", "selfName", "oppName"]) {
@@ -5413,6 +5553,12 @@ q("promptCustomOkBtn").addEventListener("click", () => {
 q("promptSteps").addEventListener("click", (event) => {
   const target = event.target;
   if (!(target instanceof HTMLElement)) return;
+
+  const modeChoice = target.dataset.modeChoice;
+  if (modeChoice !== undefined && pendingModalChoice) {
+    chooseModalMode(Number(modeChoice));
+    return;
+  }
 
   const targetChoice = target.dataset.targetChoice;
   if (targetChoice && pendingCastTarget) {

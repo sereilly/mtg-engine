@@ -117,6 +117,7 @@ class EndingPhaseMixin:
             player.channel_active_until_eot = False
             for permanent in player.battlefield:
                 permanent.damage_marked = 0
+                permanent.damage_prevention_pool = 0
                 temp_power = int(permanent.metadata.pop("temporary_power_bonus_until_eot", 0))
                 temp_toughness = int(permanent.metadata.pop("temporary_toughness_bonus_until_eot", 0))
                 if temp_power:

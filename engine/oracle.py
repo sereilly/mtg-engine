@@ -15,6 +15,7 @@ from functools import lru_cache
 from .models import CardDefinition
 from .oracle_types import (
     ActivatedAbilityCost,
+    ModalOption,
     OracleInstruction,
     OracleProgram,
     OracleToken,
@@ -26,10 +27,11 @@ from .oracle_types import (
     _instruction,
     _parse_number_token,
 )
-from .parsing import parse_primary_instruction
+from .parsing import parse_modal_options, parse_primary_instruction
 
 __all__ = [
     "ActivatedAbilityCost",
+    "ModalOption",
     "OracleInstruction",
     "OracleProgram",
     "OracleToken",
@@ -679,6 +681,11 @@ def _compile_card_oracle(
             if pattern in normalized_text
         )
 
+        # "Choose one —" modal spells: parse each bullet as a selectable mode so
+        # the game can resolve the player's chosen mode rather than always the
+        # first. Built from the original text to keep human-readable labels.
+        modes = parse_modal_options(oracle_text)
+
         activated_abilities = _parse_noncreature_abilities(oracle_text)
         triggered_abilities = _parse_noncreature_triggered(oracle_text)
 
@@ -696,6 +703,7 @@ def _compile_card_oracle(
                 tuple(instructions),
                 activated_abilities,
                 triggered_abilities,
+                modes=modes,
             )
 
         return OracleProgram(False, "unsupported", "effect not in basic pattern set", normalized_text)

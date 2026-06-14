@@ -678,7 +678,7 @@ class CombatMixin:
                 continue
             if not run_first_pass and has_first_strike_pass and not participates_in_second_strike(blocker):
                 continue
-            attacker.damage_marked += blocker.effective_power
+            self._mark_damage_on_permanent(attacker, blocker.effective_power)
             self._fire_dealt_damage_triggers(attacker)
             # 704.5h: mark attacker if blocker has deathtouch
             if self._has_keyword(blocker, "deathtouch") and blocker.effective_power > 0:
@@ -690,7 +690,7 @@ class CombatMixin:
             defending_player = self.players[defending_idx]
             if blocker_idx < 0 or blocker_idx >= len(defending_player.battlefield):
                 continue
-            defending_player.battlefield[blocker_idx].damage_marked += damage
+            self._mark_damage_on_permanent(defending_player.battlefield[blocker_idx], damage)
             if damage > 0:
                 self._fire_dealt_damage_triggers(defending_player.battlefield[blocker_idx])
             # 704.5h: mark blocker if attacker has deathtouch

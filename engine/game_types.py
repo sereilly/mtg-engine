@@ -35,6 +35,9 @@ class StackItem:
     target_stack_item: "StackItem | None" = None
     ability_text: str | None = None
     new_color: str | None = None
+    # Chosen mode of a "Choose one —" modal spell, as an index into the card's
+    # compiled OracleProgram.modes. None for non-modal spells (resolve mode 0).
+    chosen_mode_index: int | None = None
 
 
 @dataclass

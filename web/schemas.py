@@ -83,6 +83,9 @@ class GameActionRequest(BaseModel):
     # Natural Selection: "you may have that player shuffle" — true to shuffle the
     # target's library after reordering its top cards.
     shuffle: bool | None = None
+    # "Choose one —" modal spells (Healing Salve, the Elemental Blasts): which
+    # mode the caster picked, as an index into the card's serialized `modes`.
+    mode_index: int | None = Field(default=None, ge=0)
     # Steps (engine step names) the human wants to stop at on the opponent's turn.
     # Sent with `ai_step` so the AI hands priority to the human at those steps
     # instead of advancing past them. Set via the phase-rail hold-priority toggles.

@@ -30,8 +30,9 @@ class OracleInstructionsMixin:
         x_value: int | None = None,
         new_color: str | None = None,
         stack_target=None,
+        mode_index: int | None = None,
     ) -> None:
-        instruction = self._select_executable_instruction(card)
+        instruction = self._select_executable_instruction(card, mode_index)
         if instruction is None:
             self.log.append(f"Resolved supported pattern for {card.name} without state mutation")
             return
@@ -322,7 +323,7 @@ class OracleInstructionsMixin:
                     or target_creature.metadata.get("gains_flying_until_eot")
                 )
                 if has_flying:
-                    target_creature.damage_marked += 2
+                    self._mark_damage_on_permanent(target_creature, 2)
                     target_creature.metadata["loses_flying"] = True
                     self.log.append(f"{aura_permanent.card.name} dealt 2 damage to {target_creature.card.name} and stripped flying")
 

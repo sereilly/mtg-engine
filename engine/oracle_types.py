@@ -82,6 +82,21 @@ class ParsedTriggeredAbility:
 
 
 @dataclass(frozen=True)
+class ModalOption:
+    """One mode of a "Choose one —" modal spell.
+
+    label        -- human-readable bullet text (original case), for the UI prompt
+    instruction  -- the parsed effect for this mode, or None if unsupported
+    effect_kind  -- mirrors the effect_kind convention used elsewhere
+    supported    -- True only if the mode's effect was recognized
+    """
+    label: str
+    instruction: OracleInstruction | None
+    effect_kind: str = "unsupported"
+    supported: bool = False
+
+
+@dataclass(frozen=True)
 class OracleProgram:
     supported: bool
     effect_kind: str
@@ -91,6 +106,9 @@ class OracleProgram:
     activated_abilities: tuple[ParsedActivatedAbility, ...] = ()
     triggered_abilities: tuple[ParsedTriggeredAbility, ...] = ()
     static_lines: tuple[str, ...] = ()
+    # Modes of a "Choose one —" modal spell, in bullet order. Empty for
+    # non-modal cards. The player chooses one mode when the spell is cast.
+    modes: tuple[ModalOption, ...] = ()
 
 
 def _instruction(kind: str, value: str = "", **payload: Any) -> OracleInstruction:

@@ -54,6 +54,7 @@ class StackCastingMixin:
         x_value: int | None = None,
         new_color: str | None = None,
         target_stack_index: int | None = None,
+        mode_index: int | None = None,
     ) -> SimulationResult:
         queued = self.queue_from_hand(
             caster_index,
@@ -63,6 +64,7 @@ class StackCastingMixin:
             x_value=x_value,
             new_color=new_color,
             target_stack_index=target_stack_index,
+            mode_index=mode_index,
         )
         if not queued.supported:
             return queued
@@ -319,6 +321,7 @@ class StackCastingMixin:
         x_value: int | None = None,
         new_color: str | None = None,
         target_stack_index: int | None = None,
+        mode_index: int | None = None,
     ) -> SimulationResult:
         caster = self.players[caster_index]
         try:
@@ -390,7 +393,8 @@ class StackCastingMixin:
             target_stack_item = self.stack[target_stack_index]
 
         target_ok, target_reason = self._validate_cast_targets(
-            card, caster_index, target_player_index, target_permanent_index, target_stack_item
+            card, caster_index, target_player_index, target_permanent_index, target_stack_item,
+            mode_index=mode_index,
         )
         if not target_ok:
             self.log.append(target_reason)
@@ -433,6 +437,7 @@ class StackCastingMixin:
                     target_stack_name=target_stack_name_val,
                     target_stack_item=target_stack_item_val,
                     new_color=new_color,
+                    chosen_mode_index=mode_index,
                 )
             )
             self.log.append(f"{card.name} added to stack")
@@ -455,11 +460,15 @@ class StackCastingMixin:
         target_player_index: int | None,
         target_permanent_index: int | None = None,
         target_stack_item=None,
+        mode_index: int | None = None,
     ) -> tuple[bool, str]:
         """Return (True, 'valid') if all required targets exist, else (False, reason).
 
         Only instants and sorceries execute effects at cast time; permanents enter
         the battlefield regardless of whether their activated abilities have targets.
+
+        For a "Choose one —" modal spell, the chosen mode's instruction (not the
+        first one) determines what the spell targets.
         """
         if card.primary_type not in ("instant", "sorcery"):
             # Aura spells are always targeted: a legal enchant target must be
@@ -503,10 +512,18 @@ class StackCastingMixin:
             return True, "valid"
 
         program = compile_card_oracle(card)
-        primary = next(
-            (instr for instr in program.instructions if instr.kind != "spell_pattern"),
-            None,
-        )
+        if (
+            mode_index is not None
+            and program.modes
+            and 0 <= mode_index < len(program.modes)
+            and program.modes[mode_index].instruction is not None
+        ):
+            primary = program.modes[mode_index].instruction
+        else:
+            primary = next(
+                (instr for instr in program.instructions if instr.kind != "spell_pattern"),
+                None,
+            )
         if primary is None:
             return True, "valid"
 
@@ -772,6 +789,7 @@ class StackCastingMixin:
             x_value=item.x_value,
             new_color=item.new_color,
             stack_target=item.target_stack_item,
+            chosen_mode_index=item.chosen_mode_index,
         )
         return True
 
@@ -785,6 +803,7 @@ class StackCastingMixin:
         x_value: int | None = None,
         new_color: str | None = None,
         stack_target=None,
+        chosen_mode_index: int | None = None,
     ) -> None:
         caster = self.players[caster_index]
         primary_type = card.primary_type
@@ -851,11 +870,20 @@ class StackCastingMixin:
             x_value=x_value,
             new_color=new_color,
             stack_target=stack_target,
+            mode_index=chosen_mode_index,
         )
         self._apply_spell_resolved_triggers(caster_index, card)
         caster.graveyard.append(card)
         self.log.append(f"{card.name} resolved and moved to graveyard")
 
-    def _select_executable_instruction(self, card: CardDefinition) -> OracleInstruction | None:
+    def _select_executable_instruction(
+        self, card: CardDefinition, mode_index: int | None = None
+    ) -> OracleInstruction | None:
         program = compile_card_oracle(card)
+        # A modal spell resolves the player's chosen mode; fall back to the first
+        # instruction (mode 0) when no mode was chosen (e.g. AI casts).
+        if mode_index is not None and program.modes and 0 <= mode_index < len(program.modes):
+            mode = program.modes[mode_index]
+            if mode.instruction is not None:
+                return mode.instruction
         return next((instruction for instruction in program.instructions if instruction.kind != "spell_pattern"), None)

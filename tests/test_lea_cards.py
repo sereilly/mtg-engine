@@ -4914,6 +4914,94 @@ def test_red_elemental_blast_choose_one_compiles_to_counter(all_cards):
     assert primary.payload.get("color_filter") == "U"
 
 
+def test_healing_salve_compiles_both_modes(all_cards):
+    """The modal compiler exposes each "Choose one —" bullet as a selectable mode
+    so the game can resolve the player's pick rather than always the first."""
+    salve = _get(all_cards, "Healing Salve")
+    program = compile_card_oracle(salve)
+    assert len(program.modes) == 2
+    assert program.modes[0].instruction is not None
+    assert program.modes[0].instruction.kind == "target_gains_life"
+    assert program.modes[0].supported
+    assert program.modes[1].instruction is not None
+    assert program.modes[1].instruction.kind == "grant_prevention_shield"
+    assert program.modes[1].supported
+    # Labels keep human-readable, original-case text for the UI prompt.
+    assert program.modes[0].label == "Target player gains 3 life"
+
+
+def test_healing_salve_resolves_chosen_prevention_mode(all_cards):
+    """Casting Healing Salve with mode_index=1 applies the prevention shield mode
+    instead of the default life-gain mode."""
+    salve = _get(all_cards, "Healing Salve")
+    p1 = PlayerState(name="P1", hand=[salve], life=17)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Healing Salve", target_player_index=0, mode_index=1)
+
+    assert result.supported
+    assert p1.life == 17, "Prevention mode should not gain life"
+    assert p1.damage_prevention_pool == 3, "Prevention mode should grant a 3-damage shield"
+
+
+def test_healing_salve_resolves_chosen_life_mode(all_cards):
+    """mode_index=0 gains life; the default (no mode) matches this first mode."""
+    salve = _get(all_cards, "Healing Salve")
+    p1 = PlayerState(name="P1", hand=[salve], life=17)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Healing Salve", target_player_index=0, mode_index=0)
+
+    assert result.supported
+    assert p1.life == 20
+    assert p1.damage_prevention_pool == 0
+
+
+def test_healing_salve_prevention_shields_targeted_creature(all_cards):
+    """Regression: the prevention mode aimed at a 1/1 creature must shield that
+    creature, so a later Lightning Bolt is reduced and the creature survives."""
+    salve = _get(all_cards, "Healing Salve")
+    bolt = _get(all_cards, "Lightning Bolt")
+    bear = _grizzly(all_cards)  # 2/2
+
+    p1 = PlayerState(name="P1", hand=[salve, bolt])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
+    game = Game(players=[p1, p2])
+
+    # Shield the opponent's creature, then bolt it.
+    salved = game.cast_from_hand(
+        0, "Healing Salve", target_player_index=1, target_permanent_index=0, mode_index=1
+    )
+    assert salved.supported
+    assert p2.battlefield[0].damage_prevention_pool == 3
+
+    game.cast_from_hand(0, "Lightning Bolt", target_player_index=1, target_permanent_index=0)
+
+    # 3 prevented from 3 damage → creature takes 0 and survives.
+    assert len(p2.battlefield) == 1, "Prevention shield should keep the creature alive"
+    assert p2.battlefield[0].damage_marked == 0
+    assert p2.battlefield[0].damage_prevention_pool == 0
+
+
+def test_creature_prevention_pool_clears_at_end_of_turn(all_cards):
+    """The creature prevention shield is a 'this turn' effect and must reset so it
+    doesn't linger into later turns."""
+    salve = _get(all_cards, "Healing Salve")
+    bear = _grizzly(all_cards)
+
+    p1 = PlayerState(name="P1", hand=[salve])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
+    game = Game(players=[p1, p2])
+
+    game.cast_from_hand(0, "Healing Salve", target_player_index=1, target_permanent_index=0, mode_index=1)
+    assert p2.battlefield[0].damage_prevention_pool == 3
+
+    game.resolve_cleanup_step(0)
+    assert p2.battlefield[0].damage_prevention_pool == 0
+
+
 # ---------------------------------------------------------------------------
 # Regression tests for AI prevention-shield awareness (bug fix)
 # ---------------------------------------------------------------------------

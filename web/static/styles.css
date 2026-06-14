@@ -1152,8 +1152,26 @@ h2.targeting-valid {
   align-items: center;
 }
 
+.prompt-choice-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.prompt-choice-column .prompt-choice-btn {
+  width: 100%;
+  text-align: left;
+  white-space: normal;
+}
+
 .prompt-choice-btn {
   min-width: 40px;
+}
+
+.prompt-choice-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .prompt-custom-row {

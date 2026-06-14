@@ -50,6 +50,10 @@ class Permanent:
     blocking_attacker_controller: int | None = None
     blocking_attacker_index: int | None = None
     damage_marked: int = 0
+    # "Prevent the next N damage that would be dealt to this creature this turn"
+    # (Healing Salve's prevention mode, Samite Healer, …). Consumed as damage —
+    # combat or spell — would be marked, and cleared during cleanup.
+    damage_prevention_pool: int = 0
 
     def _base_stat(self, key: str) -> int:
         raw_value = str(self.card.raw.get(key, "0"))

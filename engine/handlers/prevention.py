@@ -20,14 +20,27 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
     # CoP-style abilities say "prevent damage to you" — protection_kind="color"
     # means the caster/controller is always the beneficiary. Conservator-style
     # abilities ("...dealt to you this turn") set to_self=True for the same reason.
-    # All other prevention (Samite Healer, etc.) goes to the designated target.
     if instruction.payload.get("protection_kind") == "color" or instruction.payload.get("to_self"):
-        recipient = caster
-        game.log.append(f"{recipient.name} gains prevention shield for {amount} damage")
-    else:
-        recipient = target
-        game.log.append(f"{recipient.name} gains prevention shield for {amount} damage")
-    recipient.damage_prevention_pool += amount
+        caster.damage_prevention_pool += amount
+        game.log.append(f"{caster.name} gains prevention shield for {amount} damage")
+        return True, "resolved"
+
+    # "Prevent the next N damage that would be dealt to any target" (Healing
+    # Salve's prevention mode, Samite Healer, …): the target may be a creature,
+    # in which case the shield protects that creature rather than its controller.
+    target_perm_idx = context.target_permanent_index
+    if (
+        isinstance(target_perm_idx, int)
+        and 0 <= target_perm_idx < len(target.battlefield)
+        and target.battlefield[target_perm_idx].card.primary_type == "creature"
+    ):
+        permanent = target.battlefield[target_perm_idx]
+        permanent.damage_prevention_pool += amount
+        game.log.append(f"{permanent.card.name} gains prevention shield for {amount} damage")
+        return True, "resolved"
+
+    target.damage_prevention_pool += amount
+    game.log.append(f"{target.name} gains prevention shield for {amount} damage")
     return True, "resolved"
 
 

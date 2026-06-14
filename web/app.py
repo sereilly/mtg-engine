@@ -25,6 +25,7 @@ from engine.ai_policy import (
 from engine.card_loader import load_cards
 from engine.classifier import classify_card
 from engine.models import Permanent, PlayerState
+from engine.oracle import compile_card_oracle
 
 from .deck_builder import build_random_deck
 from .deck_store import (
@@ -145,6 +146,54 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
     }
 
 
+# Maps an effect instruction kind to the client target-prompt kind a modal mode
+# uses, so the UI can route the right targeting flow after a mode is chosen.
+_MODE_TARGET_KIND_OVERRIDES = {
+    "counter_top_stack_spell": "stack",
+    "copy_top_stack_spell": "stack",
+}
+
+
+def _mode_target_kind(instruction) -> str:
+    """The client targeting kind for one modal mode's instruction."""
+    if instruction is None:
+        return "none"
+    kind = instruction.kind
+    if kind in _MODE_TARGET_KIND_OVERRIDES:
+        return _MODE_TARGET_KIND_OVERRIDES[kind]
+    if kind == "destroy_target_permanent":
+        type_filter = instruction.payload.get("type_filter")
+        if type_filter == "creature":
+            return "creature"
+        if type_filter == "artifact":
+            return "artifact"
+        return "permanent"
+    if kind == "grant_prevention_shield":
+        # "...dealt to you this turn" goes to the controller (no target choice);
+        # "...dealt to any target" lets the caster shield a creature or a player.
+        if instruction.payload.get("to_self") or instruction.payload.get("protection_kind"):
+            return "none"
+        return "any"
+    # Life gain / loss, draws, discards, etc. all designate a target player.
+    return "player"
+
+
+def _serialize_modes(card) -> list[dict]:
+    """Selectable modes of a "Choose one —" modal spell, or [] when not modal."""
+    program = compile_card_oracle(card)
+    if not program.modes:
+        return []
+    return [
+        {
+            "index": index,
+            "label": mode.label,
+            "supported": mode.supported,
+            "target_kind": _mode_target_kind(mode.instruction),
+        }
+        for index, mode in enumerate(program.modes)
+    ]
+
+
 def _serialize_card(card) -> dict:
     image_uris = card.raw.get("image_uris") if isinstance(card.raw, dict) else None
     image_uri = image_uris.get("normal") if isinstance(image_uris, dict) else None
@@ -157,6 +206,7 @@ def _serialize_card(card) -> dict:
         "image_uri": image_uri,
         "large_image_uri": large_image_uri,
         "colors": list(card.colors),
+        "modes": _serialize_modes(card),
     }
 
 
@@ -169,6 +219,7 @@ def _serialize_card_summary(card) -> dict:
         "mana_cost": card.mana_cost,
         "oracle_text": card.oracle_text,
         "image_uri": image_uri,
+        "modes": _serialize_modes(card),
     }
 
 
@@ -1794,6 +1845,7 @@ def do_action(session_id: str, req: GameActionRequest):
             x_value=req.x_value,
             new_color=req.mana_color,
             target_stack_index=engine_stack_index,
+            mode_index=req.mode_index,
         )
         if not result.supported:
             raise HTTPException(status_code=400, detail=result.details)
@@ -2156,6 +2208,7 @@ def do_action(session_id: str, req: GameActionRequest):
                 target_player_index=target,
                 target_permanent_index=req.permanent_index,
                 x_value=x_value,
+                mode_index=req.mode_index,
             )
         finally:
             session.game.enforce_mana_costs = original_enforce_mana_costs
@@ -2202,6 +2255,7 @@ def do_action(session_id: str, req: GameActionRequest):
                 target_player_index=target,
                 target_permanent_index=req.permanent_index,
                 x_value=x_value,
+                mode_index=req.mode_index,
             )
         finally:
             session.game.enforce_mana_costs = original_enforce_mana_costs
