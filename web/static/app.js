@@ -3044,6 +3044,29 @@ async function fetchDebugSuggestions(query = "") {
   renderDebugOptions(payload.cards || []);
 }
 
+function renderVerifyOptions(cards) {
+  const list = q("verifyCardOptions");
+  if (!list) return;
+  list.innerHTML = "";
+  for (const card of cards || []) {
+    const option = document.createElement("option");
+    option.value = card.name;
+    option.label = `${card.name} - ${card.type || "Unknown"}`;
+    list.appendChild(option);
+  }
+}
+
+async function fetchVerifySuggestions(query = "") {
+  const term = (query || "").trim();
+  const url = `/api/cards/search?query=${encodeURIComponent(term)}&limit=20&untested_only=true`;
+  const resp = await fetch(url);
+  if (!resp.ok) {
+    throw new Error("failed to fetch untested card suggestions");
+  }
+  const payload = await resp.json();
+  renderVerifyOptions(payload.cards || []);
+}
+
 async function fetchCardByName(cardName) {
   const term = (cardName || "").trim();
   if (!term) return null;
@@ -3280,6 +3303,9 @@ function openVerifyResultModal(prefillName = "") {
   updateVerifyStatus("");
   q("verifyResultModal").classList.remove("hidden");
   q("verifyCardName").focus();
+  fetchVerifySuggestions(name).catch(() => {
+    // Keep silent on open to avoid noisy UI warnings.
+  });
 }
 
 function closeVerifyResultModal() {
@@ -3408,8 +3434,12 @@ function showCardPreview(card) {
   q("cardPreviewName").textContent = normalizeCardName(card) || "Card";
   q("cardPreviewType").textContent = typeof card === "string" ? "" : card.type || "";
   const previewText = typeof card === "string" ? "" : card.oracle_text || "";
+  const keywords = typeof card === "object" && Array.isArray(card?.keywords) ? card.keywords : [];
+  // Effective keywords reflect the live board (aura grants, pumps, removals), so
+  // a creature that gained Flying — or lost it to Earthbind — reads correctly.
+  const keywordLabel = keywords.length ? `Keywords: ${keywords.join(", ")}` : "";
   const sicknessLabel = typeof card === "object" && card?.summoning_sick ? "Summoning Sickness" : "";
-  setSymbolsHtml(q("cardPreviewText"), [previewText, sicknessLabel].filter(Boolean).join("\n"));
+  setSymbolsHtml(q("cardPreviewText"), [keywordLabel, previewText, sicknessLabel].filter(Boolean).join("\n"));
 
   if (!largeImageUri) {
     q("cardPreview").classList.add("empty-preview");
@@ -5316,6 +5346,19 @@ q("debugMarkResultBtn").addEventListener("click", () => {
 
 q("debugViewTrackerBtn").addEventListener("click", () => {
   openTrackerModal();
+});
+
+let verifySearchTimer = null;
+q("verifyCardName").addEventListener("input", (event) => {
+  const value = event.target.value;
+  if (verifySearchTimer !== null) {
+    clearTimeout(verifySearchTimer);
+  }
+  verifySearchTimer = setTimeout(() => {
+    fetchVerifySuggestions(value).catch(() => {
+      // Keep silent to avoid noisy UI warnings while typing.
+    });
+  }, 120);
 });
 
 q("verifyResultRow").addEventListener("change", setVerifyReasonVisibility);

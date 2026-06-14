@@ -75,6 +75,33 @@ async def _no_cache_assets(request: Request, call_next):
     return response
 
 
+# Keywords surfaced on battlefield cards and the card preview. Order here is the
+# order they render in. Passed through the engine's keyword logic so granted
+# keywords (auras, "until end of turn" pumps) appear and removed ones disappear.
+_DISPLAY_KEYWORDS = (
+    "Flying", "First Strike", "Double Strike", "Trample", "Deathtouch",
+    "Reach", "Vigilance", "Haste", "Defender", "Banding", "Fear",
+    "Lifelink", "Shroud", "Protection", "Rampage", "Flanking",
+    "Plainswalk", "Islandwalk", "Swampwalk", "Mountainwalk", "Forestwalk",
+)
+
+
+def _effective_keywords(perm: Permanent, game: Game) -> list[str]:
+    """The keywords a creature currently has, reflecting grants and removals.
+
+    Only creatures get a keyword strip; for anything else this is empty. Each
+    candidate is resolved through ``game._has_keyword`` so aura-granted and
+    "until end of turn" keywords show up, and Layer 6 removal effects (e.g.
+    Earthbind stripping Flying) take it back off.
+    """
+    if "creature" not in perm.card.type_line.lower():
+        return []
+    keywords = [kw for kw in _DISPLAY_KEYWORDS if game._has_keyword(perm, kw)]
+    if perm.metadata.get("loses_flying") or perm.metadata.get("loses_flying_until_eot"):
+        keywords = [kw for kw in keywords if kw.lower() != "flying"]
+    return keywords
+
+
 def _serialize_permanent(perm: Permanent, game: Game) -> dict:
     image_uris = perm.card.raw.get("image_uris") if isinstance(perm.card.raw, dict) else None
     image_uri = image_uris.get("normal") if isinstance(image_uris, dict) else None
@@ -99,6 +126,7 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         "toughness": perm.effective_toughness,
         "mana_cost": perm.card.mana_cost,
         "oracle_text": perm.card.oracle_text,
+        "keywords": _effective_keywords(perm, game),
         "image_uri": image_uri,
         "large_image_uri": large_image_uri,
         "attacking": perm.attacking,
@@ -142,14 +170,20 @@ def _serialize_card_summary(card) -> dict:
     }
 
 
-def _search_cards(query: str, limit: int) -> list[dict]:
+def _search_cards(query: str, limit: int, *, untested_only: bool = False) -> list[dict]:
     term = query.strip().casefold()
+    if untested_only:
+        tested = verification_store.results()
+        candidates = [card for card in CARD_SEARCH_ORDER if card.name not in tested]
+    else:
+        candidates = CARD_SEARCH_ORDER
+
     if not term:
-        return [_serialize_card_summary(card) for card in CARD_SEARCH_ORDER[:limit]]
+        return [_serialize_card_summary(card) for card in candidates[:limit]]
 
     starts_with: list = []
     contains: list = []
-    for card in CARD_SEARCH_ORDER:
+    for card in candidates:
         lowered = card.name.casefold()
         if lowered.startswith(term):
             starts_with.append(card)
@@ -1567,8 +1601,12 @@ def get_state(session_id: str, seat: int | None = Query(default=None, ge=0, le=1
 
 
 @app.get("/api/cards/search")
-def search_cards(query: str = Query(default=""), limit: int = Query(default=16, ge=1, le=50)):
-    return {"cards": _search_cards(query, limit)}
+def search_cards(
+    query: str = Query(default=""),
+    limit: int = Query(default=16, ge=1, le=50),
+    untested_only: bool = Query(default=False),
+):
+    return {"cards": _search_cards(query, limit, untested_only=untested_only)}
 
 
 @app.post("/api/sessions/{session_id}/action")

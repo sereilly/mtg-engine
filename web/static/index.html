@@ -407,7 +407,8 @@
         <h2 id="verifyResultTitle" class="modal-title">Mark Test Result</h2>
         <p class="modal-subtitle">Record whether this card has been manually validated as working in game.</p>
         <label class="verify-field">Card
-          <input id="verifyCardName" type="text" list="debugCardOptions" placeholder="Card name" autocomplete="off" />
+          <input id="verifyCardName" type="text" list="verifyCardOptions" placeholder="Search untested cards…" autocomplete="off" />
+          <datalist id="verifyCardOptions"></datalist>
         </label>
         <div id="verifyResultRow" class="verify-result-row">
           <label><input type="radio" name="verifyResult" value="pass" checked /> ✅ Pass</label>
@@ -446,7 +447,7 @@
 
     <script src="/battlefield-canvas.js?v=20260612-dwell15"></script>
     <script src="/sfx.js?v=1"></script>
-    <script src="/app.js?v=20260611-menu"></script>
+    <script src="/app.js?v=20260613-verify-untested"></script>
     <script src="/deck-editor.js?v=20260611-de"></script>
   </body>
 </html>

@@ -1351,6 +1351,34 @@ class BattlefieldCanvas {
     ctx.stroke();
     ctx.restore();
 
+    // ---- Keyword strip ----
+    // Render the creature's current keywords (Flying, Trample, First Strike, …)
+    // in a translucent band just above the badge row. For an enchanted creature
+    // hidden under an aura, creatureCard carries the keywords (incl. any the
+    // aura grants); otherwise the card's own keywords are used.
+    const kwCard = creatureCard || card;
+    const keywords = Array.isArray(kwCard?.keywords) ? kwCard.keywords : [];
+    if (keywords.length && String(kwCard?.type || "").toLowerCase().includes("creature")) {
+      const font = Math.max(6, w * 0.085);
+      ctx.font = `bold ${font}px sans-serif`;
+      const lineH = font + 2;
+      const lines = _wrapKeywordLines(ctx, keywords, w - 6);
+      const bandH = lines.length * lineH + 3;
+      const reserveBottom = 16; // leave the bottom corners for P/T and damage badges
+      const bandBottom = y + h - reserveBottom;
+      const bandTop = bandBottom - bandH;
+      ctx.fillStyle = "rgba(0,0,0,0.62)";
+      ctx.fillRect(x, bandTop, w, bandH);
+      ctx.fillStyle = "#ffe9a8";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      let ty = bandTop + 2;
+      for (const line of lines) {
+        ctx.fillText(line, x + w / 2, ty);
+        ty += lineH;
+      }
+    }
+
     // ---- P/T badge ----
     // If creatureCard is provided, show its P/T on this card (enchantment on top of creature).
     const ptCard = creatureCard || card;
@@ -2146,6 +2174,25 @@ function _beamParticles() {
     });
   }
   return particles;
+}
+
+// Wrap a list of keywords into lines that fit maxWidth, keeping each keyword
+// whole (never splitting "First Strike" across two lines). The active ctx font
+// must already be set so measurement matches what gets drawn.
+function _wrapKeywordLines(ctx, keywords, maxWidth) {
+  const lines = [];
+  let line = "";
+  for (const kw of keywords) {
+    const test = line ? `${line}  ${kw}` : kw;
+    if (line && ctx.measureText(test).width > maxWidth) {
+      lines.push(line);
+      line = kw;
+    } else {
+      line = test;
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
 }
 
 // Utility: word-wrap text on canvas

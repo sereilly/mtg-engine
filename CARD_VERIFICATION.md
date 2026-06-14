@@ -4,8 +4,8 @@ Master record of which cards have been manually validated in-game. Generated aut
 
 - Total cards: **290**
 - Passed: **10**
-- Failed: **0**
-- Untested: **280**
+- Failed: **5**
+- Untested: **275**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -46,8 +46,8 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Circle of Protection: Green | ⬜ untested |  |
 | Circle of Protection: Red | ⬜ untested |  |
 | Circle of Protection: White | ⬜ untested |  |
-| Clockwork Beast | ⬜ untested |  |
-| Clone | ⬜ untested |  |
+| Clockwork Beast | ❌ fail | Clockwork Beast's end of combat trigger didn't occur. In general, triggered effects should go on the stack. |
+| Clone | ❌ fail | Clone didn't let me choose a target |
 | Cockatrice | ⬜ untested |  |
 | Consecrate Land | ⬜ untested |  |
 | Conservator | ⬜ untested |  |
@@ -82,7 +82,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Dwarven Demolition Team | ⬜ untested |  |
 | Dwarven Warriors | ⬜ untested |  |
 | Earth Elemental | ⬜ untested |  |
-| Earthbind | ⬜ untested |  |
+| Earthbind | ❌ fail | Earthbind didn't make the flying creature lose flying. |
 | Earthquake | ⬜ untested |  |
 | Elvish Archers | ⬜ untested |  |
 | Evil Presence | ⬜ untested |  |
@@ -100,7 +100,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Force of Nature | ⬜ untested |  |
 | Forcefield | ⬜ untested |  |
 | Forest | ⬜ untested |  |
-| Fork | ⬜ untested |  |
+| Fork | ❌ fail | Fork didn't let me select a spell target |
 | Frozen Shade | ⬜ untested |  |
 | Fungusaur | ⬜ untested |  |
 | Gaea's Liege | ⬜ untested |  |
@@ -233,7 +233,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Shanodin Dryads | ⬜ untested |  |
 | Shatter | ⬜ untested |  |
 | Shivan Dragon | ⬜ untested |  |
-| Simulacrum | ⬜ untested |  |
+| Simulacrum | ❌ fail | Simulacrum should require a creature target to cast it. |
 | Sinkhole | ⬜ untested |  |
 | Siren's Call | ⬜ untested |  |
 | Sleight of Mind | ⬜ untested |  |
