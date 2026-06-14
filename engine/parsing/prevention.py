@@ -14,7 +14,10 @@ _PREVENT_N_RE = re.compile(r"prevent the next (\d+) damage")
 def prevent_next_x_damage(text: str, activated: bool) -> RuleResult:
     if "prevent the next x damage" in text:
         effect_kind = "activated_prevent" if activated else "spell_pattern"
-        return _instruction("grant_prevention_shield", amount="x"), effect_kind
+        # "dealt to you" means the activating player, not a chosen target
+        # (e.g. Conservator). Otherwise the shield goes to the designated target.
+        to_self = "would be dealt to you" in text
+        return _instruction("grant_prevention_shield", amount="x", to_self=to_self), effect_kind
     return None
 
 
@@ -24,7 +27,11 @@ def prevent_next_n_damage(text: str, activated: bool) -> RuleResult:
     if prevent_match:
         amount = int(prevent_match.group(1))
         effect_kind = "activated_prevent" if activated else "spell_pattern"
-        return _instruction("grant_prevention_shield", amount=amount), effect_kind
+        # Conservator: "Prevent the next 2 damage that would be dealt to you this
+        # turn." — "you" is the ability's controller, so the shield is granted to
+        # the caster, not to the default (opponent) target.
+        to_self = "would be dealt to you" in text
+        return _instruction("grant_prevention_shield", amount=amount, to_self=to_self), effect_kind
     return None
 
 

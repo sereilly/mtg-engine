@@ -35,6 +35,16 @@ def deal_x_damage_and_gain_life(text: str, activated: bool) -> RuleResult:
     return None
 
 
+@parse_rule(315)
+def simulacrum_effect(text: str, activated: bool) -> RuleResult:
+    # Simulacrum: "You gain life equal to the damage dealt to you this turn.
+    # Simulacrum deals damage to target creature you control equal to the damage
+    # dealt to you this turn."
+    if "deals damage to target creature you control equal to the damage dealt to you this turn" in text:
+        return _instruction("simulacrum_redirect"), "spell_pattern"
+    return None
+
+
 @parse_rule(320)
 def deal_x_damage(text: str, activated: bool) -> RuleResult:
     if "deals x damage" in text:

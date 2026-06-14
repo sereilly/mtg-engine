@@ -126,6 +126,8 @@ class TurnManagementMixin:
         self.active_player_index = player_index
         self.lands_played_this_turn[player_index] = 0
         self.creatures_died_this_turn = 0
+        for player in self.players:
+            player.damage_taken_this_turn = 0
         self.resolve_untap_step(player_index)
         self.resolve_upkeep(player_index)
         self.resolve_draw_step(player_index)
@@ -346,11 +348,12 @@ class TurnManagementMixin:
 
         land.tapped = True
         mana_symbol = chosen_color
-        if land.card.produced_mana:
-            if chosen_color in land.card.produced_mana:
+        produced = land.effective_produced_mana
+        if produced:
+            if chosen_color in produced:
                 mana_symbol = chosen_color
             else:
-                mana_symbol = land.card.produced_mana[0]
+                mana_symbol = produced[0]
         else:
             land_types = [str(land.metadata.get("land_type_override", "")).lower(), land.card.type_line.lower()]
             if any("plains" in value for value in land_types):

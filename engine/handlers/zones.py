@@ -111,10 +111,14 @@ def reorder_target_library_top(game: Game, instruction: OracleInstruction, conte
     caster_index = game.players.index(caster)
     target_index = game.players.index(target)
     top_count = min(3, len(target.library))
+    # "You may have that player shuffle" (Natural Selection) lets the caster
+    # optionally shuffle the target's library after reordering.
+    may_shuffle = "you may have that player shuffle" in context.card.oracle_text.lower()
     game.pending_reorder_library = {
         "caster_index": caster_index,
         "target_index": target_index,
         "top_count": top_count,
+        "may_shuffle": may_shuffle,
     }
     game.log.append(f"{caster.name} is looking at the top {top_count} cards of {target.name}'s library")
     return True, "pending_reorder_library"

@@ -28,9 +28,11 @@ class PermanentStateMixin:
             chosen = target_player_index if target_player_index is not None else (1 - caster_index)
             permanent.metadata["chosen_player_index"] = chosen
 
-        # enters with fixed counters
+        # enters with fixed counters (Clockwork Beast). Track the counter count so
+        # the end-of-combat trigger and the upkeep activated ability can adjust it.
         if any("enters with seven +1/+0 counters on it" == line for line in program.static_lines) or "enters with seven +1/+0 counters on it" in text:
             permanent.power_bonus += 7
+            permanent.metadata["plus_1_0_counters"] = 7
 
         # enters with X +1/+1 counters
         if any("enters with x +1/+1 counters on it" == line for line in program.static_lines) or "enters with x +1/+1 counters on it" in text:
@@ -41,15 +43,17 @@ class PermanentStateMixin:
 
         # copy-as-enter creature
         if any("you may have this creature enter as a copy of any creature on the battlefield" == line for line in program.static_lines) or "you may have this creature enter as a copy of any creature on the battlefield" in text:
-            source = next(
-                (
-                    perm
-                    for player in self.players
-                    for perm in player.battlefield
-                    if perm is not permanent and perm.card.primary_type == "creature"
-                ),
-                None,
-            )
+            source = self._resolve_copy_target(permanent, "creature")
+            if source is None:
+                source = next(
+                    (
+                        perm
+                        for player in self.players
+                        for perm in player.battlefield
+                        if perm is not permanent and perm.card.primary_type == "creature"
+                    ),
+                    None,
+                )
             if source is not None:
                 permanent.metadata["copied_from"] = source.card.name
                 permanent.metadata["absolute_power"] = source.effective_power
@@ -84,6 +88,29 @@ class PermanentStateMixin:
             life_loss = controller.life
             controller.life -= life_loss
             self.log.append(f"{permanent.card.name}: {controller.name} lost {life_loss} life on entry")
+
+    def _resolve_copy_target(self, permanent: Permanent, primary_type: str) -> Permanent | None:
+        """Return the player-chosen permanent for a "copy as it enters" effect.
+
+        The chosen target is recorded as ``copy_target = (player_index, perm_index)``
+        when the spell is cast. Returns None if no legal choice was recorded so the
+        caller can fall back to an arbitrary legal permanent.
+        """
+        copy_target = permanent.metadata.pop("copy_target", None)
+        if copy_target is None:
+            return None
+        player_index, perm_index = copy_target
+        if not isinstance(player_index, int) or not isinstance(perm_index, int):
+            return None
+        if not (0 <= player_index < len(self.players)):
+            return None
+        battlefield = self.players[player_index].battlefield
+        if not (0 <= perm_index < len(battlefield)):
+            return None
+        candidate = battlefield[perm_index]
+        if candidate is permanent or candidate.card.primary_type != primary_type:
+            return None
+        return candidate
 
     def _refresh_dynamic_creatures(self) -> None:
         all_permanents = [perm for player in self.players for perm in player.battlefield]
@@ -161,6 +188,13 @@ class PermanentStateMixin:
 
     def _has_keyword(self, permanent: Permanent, keyword: str) -> bool:
         lower_keyword = keyword.lower()
+        # "Loses flying" (e.g. Earthbind's granted ability) removes flying
+        # regardless of its source — printed keyword or a granting effect.
+        if lower_keyword == "flying" and (
+            permanent.metadata.get("loses_flying", False)
+            or permanent.metadata.get("loses_flying_until_eot", False)
+        ):
+            return False
         if any(item.lower() == lower_keyword for item in permanent.card.keywords):
             return True
         if lower_keyword == "flying" and permanent.metadata.get("gains_flying_until_eot", False):

@@ -5597,11 +5597,14 @@ def test_shatter_destroys_target_artifact(all_cards):
 
 def test_simulacrum_resolves_without_error(all_cards):
     simulacrum = _get(all_cards, "Simulacrum")
-    p1 = PlayerState(name="P1", hand=[simulacrum])
+    grizzly = _get(all_cards, "Grizzly Bears")
+    # Simulacrum targets a creature you control, so it needs one to be cast.
+    p1 = PlayerState(name="P1", hand=[simulacrum], battlefield=[Permanent(card=grizzly)])
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
 
-    result = game.cast_from_hand(0, "Simulacrum")
+    result = game.cast_from_hand(0, "Simulacrum", target_player_index=0, target_permanent_index=0)
 
     assert result.supported
     assert not p1.hand

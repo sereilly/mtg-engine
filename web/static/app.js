@@ -1139,11 +1139,28 @@ function cardRequiresTargetCreature(card) {
   const nonActivatedLines = lines.filter((line) => !/^\s*(\{[^}]+\})+\s*:/.test(line));
   return nonActivatedLines.some((line) => {
     const t = line.toLowerCase();
+    // "target creature card" refers to a graveyard card (Raise Dead, Resurrection),
+    // not a battlefield creature — not a battlefield target prompt.
+    if (t.includes("target creature card")) return false;
     if (t.includes("enchant creature") || t.includes("enchant wall")) return true;
     // Spells that destroy a target creature (incl. Walls): Terror, Tunnel, etc.
     if (t.includes("destroy target") && (/\bcreature\b/.test(t) || /\bwall\b/.test(t))) return true;
+    // Pumps/keyword grants (Berserk, Giant Growth, Jump, Howl from Beyond).
+    if (t.includes("target creature gets") || t.includes("target creature gains")) return true;
+    // Direct damage to a target creature (Simulacrum).
+    if (t.includes("damage to target creature")) return true;
     return false;
   });
+}
+
+// Clone-style permanents that may "enter as a copy of any creature on the
+// battlefield". The copy is optional, so it's only a prompt when a creature
+// exists to copy; otherwise the spell is cast as-is.
+function cardOffersCopyCreatureChoice(card) {
+  if (!card || typeof card === "string") return false;
+  return (card.oracle_text || "")
+    .toLowerCase()
+    .includes("enter as a copy of any creature on the battlefield");
 }
 
 function cardRequiresTargetPermanent(card) {
@@ -2131,6 +2148,7 @@ function renderReorderLibraryModal(info) {
 
   const container = document.getElementById("reorderLibraryCards");
   const confirmBtn = document.getElementById("reorderLibraryConfirmBtn");
+  const shuffleBtn = document.getElementById("reorderLibraryShuffleBtn");
 
   let dragSrcSlot = null;
 
@@ -2212,9 +2230,32 @@ function renderReorderLibraryModal(info) {
       const order = [...reorderLibraryCurrentOrder];
       reorderLibraryCurrentOrder = null;
       delete confirmBtn.dataset.bound;
+      if (shuffleBtn) delete shuffleBtn.dataset.bound;
       modal.classList.add("hidden");
       await sendAction({ seat, action: "reorder_library_confirm", card_order: order });
     });
+  }
+
+  // "You may have that player shuffle" (Natural Selection): offer a shuffle option.
+  if (shuffleBtn) {
+    if (info.may_shuffle) {
+      shuffleBtn.classList.remove("hidden");
+      const who = info.target_name ? ` (${info.target_name})` : "";
+      shuffleBtn.textContent = `Have Them Shuffle${who}`;
+      if (!shuffleBtn.dataset.bound) {
+        shuffleBtn.dataset.bound = "1";
+        shuffleBtn.addEventListener("click", async () => {
+          const order = [...reorderLibraryCurrentOrder];
+          reorderLibraryCurrentOrder = null;
+          delete shuffleBtn.dataset.bound;
+          if (confirmBtn) delete confirmBtn.dataset.bound;
+          modal.classList.add("hidden");
+          await sendAction({ seat, action: "reorder_library_confirm", card_order: order, shuffle: true });
+        });
+      }
+    } else {
+      shuffleBtn.classList.add("hidden");
+    }
   }
 
   buildCards();
@@ -3135,6 +3176,12 @@ async function castDebugCardForFree() {
     return;
   }
 
+  if (card && cardOffersCopyCreatureChoice(card) && getTargetableCreaturesForPrompt().length > 0) {
+    startCastCreatureTargetPrompt(card, "debug_cast_free");
+    updateDebugStatus(`Choose a creature for ${resolvedCardName} to copy.`, "success");
+    return;
+  }
+
   if (card && cardRequiresTargetCreature(card)) {
     startCastCreatureTargetPrompt(card, "debug_cast_free");
     updateDebugStatus(`Choose a creature target for ${resolvedCardName}.`, "success");
@@ -3202,6 +3249,12 @@ async function castDebugCardForFreeAsOpponent() {
   if (card && cardRequiresTargetArtifact(card)) {
     startCastArtifactTargetPrompt(card, "debug_cast_free_opponent");
     updateDebugStatus(`Choose an artifact target for ${resolvedCardName} (as opponent).`, "success");
+    return;
+  }
+
+  if (card && cardOffersCopyCreatureChoice(card) && getTargetableCreaturesForPrompt().length > 0) {
+    startCastCreatureTargetPrompt(card, "debug_cast_free_opponent");
+    updateDebugStatus(`Choose a creature for ${resolvedCardName} to copy (as opponent).`, "success");
     return;
   }
 
@@ -3732,6 +3785,11 @@ function createCardElement(card, options = {}) {
 
         if (cardRequiresTargetArtifact(card)) {
           startCastArtifactTargetPrompt(card);
+          return;
+        }
+
+        if (cardOffersCopyCreatureChoice(card) && getTargetableCreaturesForPrompt().length > 0) {
+          startCastCreatureTargetPrompt(card);
           return;
         }
 
@@ -4698,6 +4756,7 @@ async function handleHandCardDropOnBattlefield({ event, targetSeat, targetItem }
       if (card && cardRequiresTargetGraveyardCreature(card)) { startCastGraveyardCreatureTargetPrompt(card); return; }
       if (card && cardRequiresTargetLand(card)) { startCastLandTargetPrompt(card); return; }
       if (card && cardRequiresTargetArtifact(card)) { startCastArtifactTargetPrompt(card); return; }
+      if (card && cardOffersCopyCreatureChoice(card) && getTargetableCreaturesForPrompt().length > 0) { startCastCreatureTargetPrompt(card); return; }
       if (card && cardRequiresTargetCreature(card)) { startCastCreatureTargetPrompt(card); return; }
       if (card && cardRequiresTargetPermanent(card)) { startCastPermanentTargetPrompt(card); return; }
       if (card && cardRequiresTargetAny(card)) { startCastAnyTargetPrompt(card); return; }

@@ -1,4 +1,4 @@
-"""Regression tests for the 10 cards marked FAILED in CARD_VERIFICATION.md.
+"""Regression tests for cards reported FAILED in CARD_VERIFICATION.md.
 
 Each test documents the in-game bug that was reported, then guards the
 rules-correct behavior after the fix. Tests load the real Alpha (LEA) card

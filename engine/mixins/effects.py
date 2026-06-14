@@ -158,6 +158,9 @@ class EffectsMixin:
         return damage
 
     def _on_player_dealt_damage(self, target: PlayerState, damage: int) -> None:
+        # Track total damage dealt to each player this turn (Simulacrum, etc.).
+        if damage > 0:
+            target.damage_taken_this_turn += damage
         if not self._player_controls_text(
             target, "whenever you're dealt damage, sacrifice that many nontoken permanents"
         ):

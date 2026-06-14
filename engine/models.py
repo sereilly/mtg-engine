@@ -3,6 +3,16 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+# Basic land subtype → the mana symbol it taps for. Used when a land's type has
+# been overridden (e.g. Evil Presence makes a land a Swamp).
+_LAND_TYPE_MANA = {
+    "plains": "W",
+    "island": "U",
+    "swamp": "B",
+    "mountain": "R",
+    "forest": "G",
+}
+
 
 @dataclass(frozen=True)
 class CardDefinition:
@@ -44,6 +54,21 @@ class Permanent:
     def _base_stat(self, key: str) -> int:
         raw_value = str(self.card.raw.get(key, "0"))
         return int(raw_value) if raw_value.isdigit() else 0
+
+    @property
+    def effective_produced_mana(self) -> tuple[str, ...]:
+        """Mana this permanent produces, honoring a land-type override.
+
+        "Enchanted land is a Swamp" (Evil Presence) / Phantasmal Terrain replace
+        the land's types, so it produces only the override type's mana and loses
+        its printed mana ability (CR 305.7).
+        """
+        override = str(self.metadata.get("land_type_override", "")).lower()
+        if override:
+            for land_type, symbol in _LAND_TYPE_MANA.items():
+                if land_type in override:
+                    return (symbol,)
+        return self.card.produced_mana
 
     @property
     def effective_power(self) -> int:
@@ -110,6 +135,7 @@ class PlayerState:
     drew_from_empty: bool = False
     mulligans_taken: int = 0
     poison_counters: int = 0
+    damage_taken_this_turn: int = 0
 
     def draw(self, count: int = 1) -> int:
         actual = 0

@@ -206,6 +206,25 @@ def become_pt_until_eot(game: Game, instruction: OracleInstruction, context: Ora
     return True, "resolved"
 
 
+@effect_handler("add_variable_power_counters_to_self")
+def add_variable_power_counters_to_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    # Clockwork Beast: "{X}, {T}: Put up to X +1/+0 counters on this creature.
+    # This ability can't cause the total number of +1/+0 counters on this
+    # creature to be greater than seven."
+    card = context.card
+    source_permanent = context.source_permanent
+    if source_permanent is None:
+        return False, "ability not implemented"
+    current = int(source_permanent.metadata.get("plus_1_0_counters", 0))
+    requested = max(0, context.x_value or 0)
+    added = min(requested, max(0, 7 - current))
+    if added:
+        source_permanent.power_bonus += added
+        source_permanent.metadata["plus_1_0_counters"] = current + added
+    game.log.append(f"{card.name} gets {added} +1/+0 counter(s)")
+    return True, "resolved"
+
+
 @effect_handler("add_counter_to_self")
 def add_counter_to_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     card = context.card

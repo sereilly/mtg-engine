@@ -18,11 +18,12 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
     raw_amount = instruction.payload.get("amount", 0)
     amount = max(0, x_value or 0) if raw_amount == "x" else int(raw_amount)
     # CoP-style abilities say "prevent damage to you" — protection_kind="color"
-    # means the caster/controller is always the beneficiary.
+    # means the caster/controller is always the beneficiary. Conservator-style
+    # abilities ("...dealt to you this turn") set to_self=True for the same reason.
     # All other prevention (Samite Healer, etc.) goes to the designated target.
-    if instruction.payload.get("protection_kind") == "color":
+    if instruction.payload.get("protection_kind") == "color" or instruction.payload.get("to_self"):
         recipient = caster
-        game.log.append("Color protection shield granted")
+        game.log.append(f"{recipient.name} gains prevention shield for {amount} damage")
     else:
         recipient = target
         game.log.append(f"{recipient.name} gains prevention shield for {amount} damage")

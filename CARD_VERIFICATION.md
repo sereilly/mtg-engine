@@ -4,8 +4,8 @@ Master record of which cards have been manually validated in-game. Generated aut
 
 - Total cards: **290**
 - Passed: **15**
-- Failed: **10**
-- Untested: **265**
+- Failed: **0**
+- Untested: **275**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -23,7 +23,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Basalt Monolith | ⬜ untested |  |
 | Bayou | ⬜ untested |  |
 | Benalish Hero | ⬜ untested |  |
-| Berserk | ❌ fail | Berserk didn't let me choose a target creature |
+| Berserk | ⬜ untested |  |
 | Birds of Paradise | ⬜ untested |  |
 | Black Knight | ⬜ untested |  |
 | Black Lotus | ✅ pass |  |
@@ -46,11 +46,11 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Circle of Protection: Green | ⬜ untested |  |
 | Circle of Protection: Red | ⬜ untested |  |
 | Circle of Protection: White | ⬜ untested |  |
-| Clockwork Beast | ❌ fail | Clockwork Beast's end of combat trigger didn't occur. In general, triggered effects should go on the stack. |
-| Clone | ❌ fail | Clone didn't let me choose a target |
+| Clockwork Beast | ⬜ untested |  |
+| Clone | ⬜ untested |  |
 | Cockatrice | ⬜ untested |  |
 | Consecrate Land | ⬜ untested |  |
-| Conservator | ❌ fail | I used the ability and then cast lightning bolt on myself. I should have only taken 1 damage but I took 3 |
+| Conservator | ⬜ untested |  |
 | Contract from Below | ⬜ untested |  |
 | Control Magic | ✅ pass |  |
 | Conversion | ⬜ untested |  |
@@ -82,10 +82,10 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Dwarven Demolition Team | ⬜ untested |  |
 | Dwarven Warriors | ⬜ untested |  |
 | Earth Elemental | ⬜ untested |  |
-| Earthbind | ❌ fail | Earthbind didn't make the flying creature lose flying. |
+| Earthbind | ⬜ untested |  |
 | Earthquake | ⬜ untested |  |
 | Elvish Archers | ⬜ untested |  |
-| Evil Presence | ❌ fail | This card does not work. It should turn the enchanted land into a basic swamp |
+| Evil Presence | ⬜ untested |  |
 | False Orders | ⬜ untested |  |
 | Farmstead | ⬜ untested |  |
 | Fastbond | ⬜ untested |  |
@@ -100,7 +100,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Force of Nature | ⬜ untested |  |
 | Forcefield | ⬜ untested |  |
 | Forest | ⬜ untested |  |
-| Fork | ❌ fail | Fork didn't let me select a spell target |
+| Fork | ⬜ untested |  |
 | Frozen Shade | ⬜ untested |  |
 | Fungusaur | ⬜ untested |  |
 | Gaea's Liege | ⬜ untested |  |
@@ -178,7 +178,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Mox Pearl | ⬜ untested |  |
 | Mox Ruby | ⬜ untested |  |
 | Mox Sapphire | ⬜ untested |  |
-| Natural Selection | ❌ fail | After rearranging the cards, I should have a prompt to shuffle the library of the player I chose. |
+| Natural Selection | ⬜ untested |  |
 | Nether Shadow | ⬜ untested |  |
 | Nettling Imp | ⬜ untested |  |
 | Nevinyrral's Disk | ⬜ untested |  |
@@ -227,13 +227,13 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Scrubland | ⬜ untested |  |
 | Scryb Sprites | ✅ pass |  |
 | Sea Serpent | ⬜ untested |  |
-| Sedge Troll | ❌ fail | I activated regenerate and then played terror to destroy it, but then Sedge Troll went to the graveyard instead of becoming tapped. |
+| Sedge Troll | ⬜ untested |  |
 | Sengir Vampire | ⬜ untested |  |
 | Serra Angel | ⬜ untested |  |
 | Shanodin Dryads | ⬜ untested |  |
 | Shatter | ⬜ untested |  |
 | Shivan Dragon | ⬜ untested |  |
-| Simulacrum | ❌ fail | Simulacrum should require a creature target to cast it. |
+| Simulacrum | ⬜ untested |  |
 | Sinkhole | ⬜ untested |  |
 | Siren's Call | ⬜ untested |  |
 | Sleight of Mind | ⬜ untested |  |

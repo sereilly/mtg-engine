@@ -140,7 +140,7 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         "is_aura": "aura" in perm.card.type_line.lower(),
         "attached_to_index": attached_to_index,
         "attached_to_seat": attached_to_seat,
-        "produced_mana": list(perm.card.produced_mana),
+        "produced_mana": list(perm.effective_produced_mana),
     }
 
 
@@ -743,7 +743,7 @@ def _compute_playable_hand_indices(session: Session, player_index: int) -> list[
     potential_pool: dict[str, int] = dict(player.mana_pool)
     for perm in player.battlefield:
         if not perm.tapped and perm.card.primary_type == "land":
-            for color in perm.card.produced_mana:
+            for color in perm.effective_produced_mana:
                 sym = color.upper()
                 potential_pool[sym] = potential_pool.get(sym, 0) + 1
 
@@ -875,6 +875,8 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
                 "caster_seat": caster_seat,
                 "target_seat": pending_reorder["target_index"],
                 "top_count": top_count,
+                "may_shuffle": bool(pending_reorder.get("may_shuffle")),
+                "target_name": target.name,
                 "cards": [_serialize_card_summary(card) for card in target.library[:top_count]],
             }
 
@@ -2021,7 +2023,7 @@ def do_action(session_id: str, req: GameActionRequest):
             raise HTTPException(status_code=400, detail="not your library reorder")
         if req.card_order is None:
             raise HTTPException(status_code=400, detail="card_order is required")
-        ok = session.game.confirm_reorder_library(req.seat, req.card_order)
+        ok = session.game.confirm_reorder_library(req.seat, req.card_order, shuffle=bool(req.shuffle))
         if not ok:
             raise HTTPException(status_code=400, detail="invalid card order")
 

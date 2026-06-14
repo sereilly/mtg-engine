@@ -110,7 +110,7 @@ class StackCastingMixin:
         self.log.append(f"{caster.name} searched library and put {card.name} into hand")
         return True
 
-    def confirm_reorder_library(self, caster_index: int, new_order: list) -> bool:
+    def confirm_reorder_library(self, caster_index: int, new_order: list, shuffle: bool = False) -> bool:
         pending = self.pending_reorder_library
         if pending is None or pending["caster_index"] != caster_index:
             return False
@@ -121,8 +121,14 @@ class StackCastingMixin:
         if len(new_order) != top_count or sorted(new_order) != list(range(top_count)):
             return False
         target.library = [top[i] for i in new_order] + rest
+        # "You may have that player shuffle" (Natural Selection): only honored when
+        # the effect allows it.
+        if shuffle and pending.get("may_shuffle"):
+            random.shuffle(target.library)
+            self.log.append(f"{target.name}'s library was shuffled")
+        else:
+            self.log.append(f"Top {top_count} cards of {target.name}'s library reordered")
         self.pending_reorder_library = None
-        self.log.append(f"Top {top_count} cards of {target.name}'s library reordered")
         return True
 
     def queue_permanent_ability(
@@ -572,6 +578,19 @@ class StackCastingMixin:
             if not any(c.primary_type == "creature" for c in caster.graveyard):
                 return False, f"no valid target for {card.name}"
 
+        elif primary.kind == "simulacrum_redirect":
+            # Simulacrum targets a creature the caster controls; it can't be cast
+            # without one.
+            caster = self.players[caster_index]
+            if not any(p.card.primary_type == "creature" for p in caster.battlefield):
+                return False, f"no valid target for {card.name}"
+
+        elif primary.kind == "copy_top_stack_spell":
+            # Fork copies a target instant or sorcery spell, so it requires one on
+            # the stack (excluding Fork itself, which isn't on the stack yet).
+            if not any(item.card.primary_type in ("instant", "sorcery") for item in self.stack):
+                return False, f"no valid target for {card.name}"
+
         return True, "valid"
 
     def _infer_x_value(self, player: PlayerState, mana_cost: str, extra_generic: int = 0) -> int:
@@ -748,6 +767,14 @@ class StackCastingMixin:
             permanent = Permanent(card=card)
             if x_value is not None:
                 permanent.metadata["cast_x_value"] = x_value
+            # A "copy as it enters" permanent (Clone) records the chosen copy
+            # target so initialization can copy the player-selected creature
+            # rather than an arbitrary one.
+            if target_permanent_index is not None:
+                permanent.metadata["copy_target"] = (
+                    target_player_index if target_player_index is not None else caster_index,
+                    target_permanent_index,
+                )
             self._put_permanent_onto_battlefield(caster_index, permanent, target_player_index)
             self.log.append(f"{caster.name} put {card.name} onto battlefield")
             self._apply_global_buff(caster, card)

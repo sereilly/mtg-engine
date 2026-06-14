@@ -72,6 +72,9 @@ class GameActionRequest(BaseModel):
     blocker_pairs: dict[int, int] | None = None
     attacker_damage: dict[int, dict[int, int]] | None = None
     card_order: list[int] | None = None
+    # Natural Selection: "you may have that player shuffle" — true to shuffle the
+    # target's library after reordering its top cards.
+    shuffle: bool | None = None
     # Steps (engine step names) the human wants to stop at on the opponent's turn.
     # Sent with `ai_step` so the AI hands priority to the human at those steps
     # instead of advancing past them. Set via the phase-rail hold-priority toggles.

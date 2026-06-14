@@ -83,6 +83,43 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
     return True, "resolved"
 
 
+@effect_handler("simulacrum_redirect")
+def simulacrum_redirect(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    # Simulacrum: caster gains life equal to the damage dealt to them this turn,
+    # then deals that much damage to a target creature they control.
+    caster = context.caster
+    card = context.card
+    amount = max(0, caster.damage_taken_this_turn)
+
+    if amount > 0:
+        game._gain_life(caster, amount, card.name)
+
+    target_perm_idx = context.target_permanent_index
+    target_perm = None
+    if isinstance(target_perm_idx, int) and 0 <= target_perm_idx < len(caster.battlefield):
+        candidate = caster.battlefield[target_perm_idx]
+        if candidate.card.primary_type == "creature":
+            target_perm = candidate
+    if target_perm is None:
+        target_perm = next((p for p in caster.battlefield if p.card.primary_type == "creature"), None)
+
+    if target_perm is None:
+        game.log.append(f"{card.name}: no creature to deal damage to")
+        return True, "resolved"
+
+    target_perm.damage_marked += amount
+    game.log.append(f"{card.name} dealt {amount} damage to {target_perm.card.name} and {caster.name} gained {amount} life")
+    if amount > 0 and target_perm.damage_marked >= target_perm.effective_toughness:
+        idx = caster.battlefield.index(target_perm)
+        target_perm.metadata["no_regenerate"] = True
+        caster.battlefield.pop(idx)
+        game._permanent_to_graveyard(caster, target_perm)
+        game.log.append(f"{target_perm.card.name} died from {card.name}")
+    elif amount > 0:
+        game._fire_dealt_damage_triggers(target_perm)
+    return True, "resolved"
+
+
 @effect_handler("deal_damage_each_creature_and_player")
 def deal_damage_each_creature_and_player(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     card = context.card

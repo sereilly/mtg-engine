@@ -13,15 +13,33 @@ if TYPE_CHECKING:
 
 @effect_handler("copy_top_stack_spell")
 def copy_top_stack_spell(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    # Fork: "Copy target instant or sorcery spell..." Copy the topmost instant or
+    # sorcery on the stack (Fork itself has already been popped to resolve). The
+    # copy keeps the original's targets (Fork lets you choose new ones, which the
+    # simulation does not model).
     caster = context.caster
-    target = context.target
     card = context.card
-    if game.stack:
-        copied = game.stack[-1]
-        game._apply_spell_text(caster, target, copied.card, x_value=copied.x_value)
-        game.log.append(f"{card.name} copied {copied.card.name}")
-    else:
-        game.log.append(f"{card.name} resolved with no spell to copy")
+    copied = next(
+        (item for item in reversed(game.stack) if item.card.primary_type in ("instant", "sorcery")),
+        None,
+    )
+    if copied is None:
+        game.log.append(f"{card.name} resolved with no instant or sorcery spell to copy")
+        return True, "resolved"
+    copy_target_idx = (
+        copied.target_player_index
+        if copied.target_player_index is not None
+        else (1 - copied.caster_index)
+    )
+    copy_target = game.players[copy_target_idx] if 0 <= copy_target_idx < len(game.players) else caster
+    game._apply_spell_text(
+        caster,
+        copy_target,
+        copied.card,
+        target_permanent_index=copied.target_permanent_index,
+        x_value=copied.x_value,
+    )
+    game.log.append(f"{card.name} copied {copied.card.name}")
     return True, "resolved"
 
 
