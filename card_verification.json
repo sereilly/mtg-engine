@@ -1,5 +1,30 @@
 {
   "results": {
+    "Animate Dead": {
+      "reason": "Animate dead should let me target a creature in the graveyard when cast",
+      "status": "fail",
+      "updated_at": 1781394153.0821207
+    },
+    "Control Magic": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1781394074.1245754
+    },
+    "Counterspell": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1781393461.2817519
+    },
+    "Disenchant": {
+      "reason": "I'm not able to cast disenchant even when there are valid targets.",
+      "status": "fail",
+      "updated_at": 1781393587.2805693
+    },
+    "False Orders": {
+      "reason": "Card was cast at an illegal time",
+      "status": "fail",
+      "updated_at": 1781392803.5782547
+    },
     "Granite Gargoyle": {
       "reason": "",
       "status": "pass",
@@ -10,10 +35,20 @@
       "status": "pass",
       "updated_at": 1781381460.7865078
     },
+    "Hurricane": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1781393631.596616
+    },
     "Island": {
       "reason": "",
       "status": "pass",
       "updated_at": 1781378704.6242044
+    },
+    "Mana Flare": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1781394187.407336
     },
     "Merfolk of the Pearl Trident": {
       "reason": "",
@@ -25,10 +60,45 @@
       "status": "fail",
       "updated_at": 1781382194.024041
     },
+    "Raging River": {
+      "reason": "When I attacked Raging River's trigger did not activate.",
+      "status": "fail",
+      "updated_at": 1781392699.8077176
+    },
+    "Royal Assassin": {
+      "reason": "The activated ability didn't prompt me to target a creature and instead just destroyed a Mountain, which isn't even a valid target.",
+      "status": "fail",
+      "updated_at": 1781394275.798346
+    },
+    "Soul Net": {
+      "reason": "Soul Net has a triggered ability. This ability should give me a prompt when the condition is satisfied.\nIn this particular case, the triggered ability is a creature dying.",
+      "status": "fail",
+      "updated_at": 1781392017.9493728
+    },
+    "Terror": {
+      "reason": "Terror didn't let me choose a target",
+      "status": "fail",
+      "updated_at": 1781393506.397748
+    },
+    "Time Vault": {
+      "reason": "Time Vault should not automatically untap during the untap step. Also, it should prompt me at the beginning of my turn if I want to untap it to draw a card.",
+      "status": "fail",
+      "updated_at": 1781393116.4913235
+    },
     "Timetwister": {
       "reason": "",
       "status": "pass",
       "updated_at": 1781378490.7807422
+    },
+    "Tunnel": {
+      "reason": "Tunnel didn't prompt me to select a target. Also the target needs to be a wall.",
+      "status": "fail",
+      "updated_at": 1781393381.322718
+    },
+    "Wheel of Fortune": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1781392747.2317514
     }
   }
 }

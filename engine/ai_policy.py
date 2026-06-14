@@ -559,6 +559,12 @@ def _score_spell_target(card: CardDefinition, caster_index: int, target_index: i
             score -= 2.0
 
     damage = _extract_damage(card)
+    if damage == 0:
+        # X-damage spells (Disintegrate, Fireball, …) parse to amount 'x', so the
+        # literal extractor reads 0. Estimate the damage from the most X the caster
+        # can pay; without this the spell registers as dealing no damage and the
+        # tie-break below points it at the caster's own face.
+        damage = _estimate_x_damage(game, caster, card)
     if damage > 0:
         if target_index != caster_index:
             score += 4.0
@@ -682,6 +688,20 @@ def _choose_target_for_instruction(instruction: OracleInstruction, caster_index:
 
     # Fallback: prefer opponent for proactive effects.
     return 1 - caster_index
+
+
+def _estimate_x_damage(game: Game, caster: PlayerState, card: CardDefinition) -> int:
+    """Estimate the damage an X-damage spell would deal, based on the most X the
+    caster can currently pay for. Returns 0 for spells that don't deal X damage."""
+    program = compile_card_oracle(card)
+    deals_x_damage = any(
+        instruction.kind == "deal_damage"
+        and str(instruction.payload.get("amount")).lower() == "x"
+        for instruction in program.instructions
+    )
+    if not deals_x_damage:
+        return 0
+    return _max_affordable_x(game, caster, card)
 
 
 def _extract_damage(card: CardDefinition) -> int:

@@ -1131,20 +1131,26 @@ function cardRequiresTargetAny(card) {
   return nonActivatedLines.some((line) => line.toLowerCase().includes("any target"));
 }
 
-function getTargetableAnyPermanentsForPrompt(state = currentState) {
-  if (!state) return [];
-  const result = [];
+// Battlefield permanents that are legal targets for the in-progress cast prompt,
+// returned as "seat-permanentIndex" canvas keys. Covers every battlefield target
+// kind (creature/land/artifact/permanent/any) so the canvas can highlight them —
+// e.g. Control Magic ("Enchant creature") highlights every creature. Player-only
+// targets are highlighted on the life/name elements instead, not here.
+function getTargetablePermanentKeysForPrompt(state = currentState) {
+  if (!state || !pendingCastTarget) return [];
+  if (pendingCastTarget.targetKind === "player") return [];
+  const keys = [];
   for (const targetSeat of [0, 1]) {
     const player = state.players?.[targetSeat];
     if (!player || !Array.isArray(player.battlefield)) continue;
     for (const [permanentIndex, permanent] of player.battlefield.entries()) {
       if (!permanent) continue;
-      const type = String(permanent.type || "").toLowerCase();
-      if (!type.includes("creature") && !type.includes("planeswalker")) continue;
-      result.push({ targetSeat, permanentIndex, cardName: permanent.name || "Permanent", ownerName: player.name || `Seat ${targetSeat}` });
+      if (isPendingCastTargetValidForCard(permanent, { targetSeat, zoneKind: "battlefield", permanentIndex })) {
+        keys.push(`${targetSeat}-${permanentIndex}`);
+      }
     }
   }
-  return result;
+  return keys;
 }
 
 function activatedAbilityTargetsSelf(card) {
@@ -4329,17 +4335,15 @@ function renderBoard(state) {
     }
     battlefieldCanvas.setSelectedKeys([...selfSelectedKeys, ...allSelectedKeys]);
 
-    if (pendingCastTarget && pendingCastTarget.targetKind === "any") {
-      const targets = getTargetableAnyPermanentsForPrompt(state);
-      battlefieldCanvas.setTargetingKeys(targets.map((t) => `${t.targetSeat}-${t.permanentIndex}`));
-    } else {
-      battlefieldCanvas.setTargetingKeys([]);
-    }
+    battlefieldCanvas.setTargetingKeys(getTargetablePermanentKeysForPrompt(state));
   }
 
-  const isAnyTarget = !!(pendingCastTarget && pendingCastTarget.targetKind === "any");
+  const highlightPlayerFaces = !!(
+    pendingCastTarget &&
+    (pendingCastTarget.targetKind === "any" || pendingCastTarget.targetKind === "player")
+  );
   for (const elementId of ["selfLife", "oppLife", "selfName", "oppName"]) {
-    q(elementId)?.classList.toggle("targeting-valid", isAnyTarget);
+    q(elementId)?.classList.toggle("targeting-valid", highlightPlayerFaces);
   }
 
   q("selfDeckCount").textContent = me.library_count;

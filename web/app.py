@@ -1790,14 +1790,18 @@ def do_action(session_id: str, req: GameActionRequest):
             raise HTTPException(status_code=400, detail="no combat attackers declared")
         if req.seat != defender_seat:
             raise HTTPException(status_code=400, detail="only defending player may declare blockers")
-        if not session.game.has_priority(req.seat):
-            raise HTTPException(status_code=400, detail="you do not currently have priority")
+        # Declaring blockers is the defending player's turn-based action, not a
+        # priority action: the defender declares even while the active player
+        # (e.g. an attacking AI) holds priority. Requiring priority here wrongly
+        # blocked the human defender from confirming blockers on the AI's turn.
         raw_pairs = req.blocker_pairs or {}
         blocker_pairs = {int(k): int(v) for k, v in raw_pairs.items()}
         ok, details = session.game.declare_blockers(req.seat, blocker_pairs)
         if not ok:
             raise HTTPException(status_code=400, detail=details)
-        session.game.note_priority_action_taken(req.seat)
+        # After blockers are declared the active player receives priority (704-step
+        # priority window), so the AI's turn can resume / the attacker may respond.
+        session.game.start_priority_window(session.game.active_player_index)
 
     elif req.action == "assign_combat_damage":
         if req.seat != session.current_turn:
@@ -2098,7 +2102,12 @@ def do_action(session_id: str, req: GameActionRequest):
                     break
             raise HTTPException(status_code=400, detail=result.details)
 
-        session.game.note_priority_action_taken(opponent_seat)
+        # The spell is now on the stack under a temporary priority window we handed
+        # the opponent so the cast would be accepted. Hand priority back to the acting
+        # (human) player: it's their turn, so the AI opponent would never get a turn to
+        # pass and the spell would strand on the stack. With priority restored the human
+        # resolves it by passing, exactly like a spell they cast themselves.
+        session.game.start_priority_window(req.seat)
         session.game.log.append(f"[Debug] {opponent.name} cast {card.name} for free.")
 
     elif req.action == "debug_add_mana":

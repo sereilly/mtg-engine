@@ -243,3 +243,26 @@ def test_tutor_prefers_castable_spell(all_cards):
 
     assert index is not None
     assert p1.library[index].name == "Lightning Bolt"
+
+
+def test_ai_does_not_self_target_x_damage_spell(all_cards):
+    """Regression: Disintegrate ("deals X damage to any target") parses to amount 'x',
+    so the literal damage extractor read 0 and the target tie-break pointed the spell at
+    the caster's own face. The AI must aim X-damage burn at the opponent."""
+    disintegrate = _get(all_cards, "Disintegrate")
+    mountain = _get(all_cards, "Mountain")
+
+    p1 = PlayerState(
+        name="P1",
+        hand=[disintegrate],
+        battlefield=[Permanent(card=mountain) for _ in range(3)],
+    )
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = True
+
+    action = choose_cast_action(game, 0)
+
+    assert action is not None
+    assert action.card_name == "Disintegrate"
+    assert action.target_player_index == 1, "AI must aim X-damage burn at the opponent, not itself"

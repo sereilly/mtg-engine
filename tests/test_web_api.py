@@ -817,6 +817,91 @@ def test_next_phase_ai_defender_auto_declares_blockers_and_advances_when_no_inst
 
 
 
+def test_human_defender_can_declare_blockers_while_ai_attacker_holds_priority():
+    """Regression: on the AI's turn the active (AI) player holds priority during the
+    declare-blockers step. Declaring blockers is the defending player's turn-based
+    action, so the human defender must be able to confirm blockers even though the
+    AI attacker holds priority (previously rejected with "you do not have priority")."""
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_ai",
+            "host_name": "Host",
+            "guest_name": "AI",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 99210,
+        },
+    ).json()
+    sid = created["session_id"]
+    session = store.get(sid)
+    session.seat_types = {0: "human", 1: "ai"}
+
+    attacker = _mk_creature_card("Attacker", 3, 3)
+    blocker = _mk_creature_card("Blocker", 2, 2)
+    session.game.players[1].battlefield = [Permanent(card=attacker)]
+    session.game.players[0].battlefield = [Permanent(card=blocker)]
+    session.current_turn = 1
+    session.game.active_player_index = 1
+    session.game.current_turn_phase = "combat"
+    session.game.current_step = "declare_attackers"
+    session.game.current_phase = "combat"
+    session.game.start_priority_window(1)
+
+    ok, _ = session.game.declare_attackers(1, [0], defending_player_index=0)
+    assert ok
+    session.game.current_step = "declare_blockers"
+    session.game.start_priority_window(1)  # active (AI) player holds priority
+
+    resp = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "declare_blockers", "blocker_pairs": {"0": 0}},
+    )
+    assert resp.status_code == 200, resp.text
+    payload = resp.json()
+    assert payload["combat"]["blockers"] == [{"blocker_index": 0, "attacker_index": 0}]
+    # After blockers are declared the active player receives priority so the AI's
+    # turn can resume.
+    assert payload["priority_player"] == 1
+
+
+def test_debug_cast_free_opponent_returns_priority_to_caster():
+    """Regression: debug-casting a creature for the AI opponent left priority with the
+    AI on the human's turn, so the spell stranded on the stack (the AI never got a turn
+    to pass). Priority must return to the acting human so they can resolve it."""
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_ai",
+            "host_name": "Host",
+            "guest_name": "AI",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 99211,
+        },
+    ).json()
+    sid = created["session_id"]
+    session = store.get(sid)
+    session.seat_types = {0: "human", 1: "ai"}
+    session.current_turn = 0
+    session.game.active_player_index = 0
+    session.game.current_turn_phase = "precombat_main"
+    session.game.current_step = "precombat_main"
+    session.game.current_phase = "main"
+    session.game.start_priority_window(0)
+
+    resp = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "debug_cast_free_opponent", "card_name": "Hill Giant"},
+    )
+    assert resp.status_code == 200, resp.text
+    payload = resp.json()
+    assert len(payload["stack"]) == 1
+    assert payload["stack"][0]["caster_index"] == 1
+    # Priority is with the human caster (not the AI), so the spell is not stranded.
+    assert payload["priority_player"] == 0
+
+
 def test_next_phase_runs_end_then_cleanup_then_next_turn():
     created = client.post(
         "/api/sessions",
