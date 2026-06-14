@@ -70,6 +70,11 @@
       "status": "pass",
       "updated_at": 1781378762.2991576
     },
+    "Orcish Artillery": {
+      "reason": "The activated ability didn't let me choose any target",
+      "status": "fail",
+      "updated_at": 1781463215.1691566
+    },
     "Psychic Venom": {
       "reason": "",
       "status": "pass",

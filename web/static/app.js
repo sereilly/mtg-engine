@@ -63,6 +63,14 @@ function opponentStopSteps() {
     .map((p) => p.key)
     .filter((key) => !NO_PRIORITY_STEPS.has(key) && !opponentDisabledPhases.has(key));
 }
+// Engine step names the human wants to stop at on their OWN turn (the phases NOT
+// toggled to auto-pass). Sent so the server opens a priority window at steps it
+// would otherwise resolve itself (upkeep, draw) instead of skipping into the main phase.
+function selfStopSteps() {
+  return PHASE_RAIL
+    .map((p) => p.key)
+    .filter((key) => !NO_PRIORITY_STEPS.has(key) && !disabledPhases.has(key));
+}
 /** @type {BattlefieldCanvas|null} */
 let battlefieldCanvas = null;
 let lastAnnouncedTurn = null;
@@ -5405,7 +5413,7 @@ async function sendAction(actionBody) {
   if (!sessionId) return;
   // Always carry the current phase-rail hold preferences so the server knows where
   // to stop on the AI's turn — including steps it resolves itself (turn start, end).
-  const body = { stop_steps: opponentStopSteps(), ...actionBody };
+  const body = { stop_steps: opponentStopSteps(), self_stop_steps: selfStopSteps(), ...actionBody };
   // Carry the chosen mode for a "Choose one —" modal spell through whichever cast
   // path fires (direct, targeted, X, auto-tap retry) without threading it manually.
   if (_CAST_ACTIONS.has(body.action) && body.mode_index == null && pendingCastModeIndex != null) {

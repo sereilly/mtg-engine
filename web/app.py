@@ -747,6 +747,12 @@ def _begin_turn(session: Session, player_index: int, defer_untap_selection: bool
         _hold_priority_for_human(session)
         return True
 
+    # On the human's own turn, open a priority window at upkeep if flagged on the
+    # phase rail, instead of resolving straight through to the main phase.
+    if _self_should_hold(session, "upkeep"):
+        game.resolve_upkeep(player_index, defer_priority=True)
+        return True
+
     game.resolve_upkeep(player_index)
     if _seat_type(session, player_index) == "human" and _has_island_sanctuary(game, player_index):
         session.island_sanctuary_pending = True
@@ -755,6 +761,10 @@ def _begin_turn(session: Session, player_index: int, defer_untap_selection: bool
     if _ai_should_hold(session, "draw"):
         game.resolve_draw_step(player_index, defer_priority=True)
         _hold_priority_for_human(session)
+        return True
+
+    if _self_should_hold(session, "draw"):
+        game.resolve_draw_step(player_index, defer_priority=True)
         return True
 
     game.resolve_draw_step(player_index)
@@ -1361,6 +1371,17 @@ def _ai_should_hold(session: Session, step: str) -> bool:
     )
 
 
+def _self_should_hold(session: Session, step: str) -> bool:
+    """True when the human asked (via the phase rail) to receive a priority window at
+    `step` on their OWN turn — for steps the server would otherwise resolve itself
+    (upkeep, draw) — and that step actually grants priority."""
+    return (
+        step in session.self_stop_steps
+        and session.game._receives_priority(step)
+        and _seat_type(session, session.game.active_player_index) == "human"
+    )
+
+
 def _advance_ai_turn(session: Session) -> None:
     """Advance the AI's turn through its non-main steps after it has finished acting
     in the current step.
@@ -1410,6 +1431,9 @@ def _advance_phase(session: Session) -> None:
         if step == "upkeep" and _ai_should_hold(session, "draw"):
             game.resolve_draw_step(session.current_turn, defer_priority=True)
             _hold_priority_for_human(session)
+            return
+        if step == "upkeep" and _self_should_hold(session, "draw"):
+            game.resolve_draw_step(session.current_turn, defer_priority=True)
             return
         if step == "upkeep":
             game.resolve_draw_step(session.current_turn)
@@ -1792,6 +1816,8 @@ def do_action(session_id: str, req: GameActionRequest):
     # at them even on steps (turn start, end step) it would otherwise resolve itself.
     if req.stop_steps is not None:
         session.opponent_stop_steps = set(req.stop_steps)
+    if req.self_stop_steps is not None:
+        session.self_stop_steps = set(req.self_stop_steps)
 
     cleanup_required = _cleanup_discard_requirement(session)
     untap_required = _untap_land_selection_requirement(session)

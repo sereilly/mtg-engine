@@ -102,6 +102,10 @@ class GameActionRequest(BaseModel):
     # Sent with `ai_step` so the AI hands priority to the human at those steps
     # instead of advancing past them. Set via the phase-rail hold-priority toggles.
     stop_steps: list[str] | None = None
+    # Steps the human wants a priority window at on their OWN turn. Sent so the
+    # server opens a window at steps it would otherwise resolve itself (upkeep,
+    # draw). Set via the phase-rail hold-priority toggles (left/own-turn halves).
+    self_stop_steps: list[str] | None = None
 
 
 class RematchRequest(BaseModel):

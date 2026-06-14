@@ -57,6 +57,10 @@ class Session:
     # set from the phase-rail hold-priority toggles. The AI hands the human
     # priority at these steps instead of advancing past them.
     opponent_stop_steps: set[str] = field(default_factory=set)
+    # Engine step names a human wants a priority window at on their OWN turn,
+    # set from the phase-rail hold-priority toggles. The server opens a window at
+    # these steps (e.g. upkeep, draw) instead of resolving straight into the main phase.
+    self_stop_steps: set[str] = field(default_factory=set)
     history: GameHistory = field(default_factory=GameHistory)
     # Pregame state (used when enable_pregame=True).  None once the game starts.
     pregame_phase: str | None = None  # "coin_flip", "mulligan", "bottom_select"

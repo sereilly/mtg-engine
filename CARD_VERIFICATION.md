@@ -4,8 +4,8 @@ Master record of which cards have been manually validated in-game. Generated aut
 
 - Total cards: **290**
 - Passed: **18**
-- Failed: **2**
-- Untested: **270**
+- Failed: **3**
+- Untested: **269**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -185,7 +185,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Nightmare | ⬜ untested |  |
 | Northern Paladin | ⬜ untested |  |
 | Obsianus Golem | ⬜ untested |  |
-| Orcish Artillery | ⬜ untested |  |
+| Orcish Artillery | ❌ fail | The activated ability didn't let me choose any target |
 | Orcish Oriflamme | ⬜ untested |  |
 | Paralyze | ⬜ untested |  |
 | Pearled Unicorn | ⬜ untested |  |
