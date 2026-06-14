@@ -30,6 +30,3 @@ pip-wheel-metadata/
 # Misc
 .DS_Store
 *.log
-
-# Saved decks (user data)
-decks/

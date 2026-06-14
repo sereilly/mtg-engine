@@ -1,0 +1,53 @@
+{
+  "id": "2BSTcZj6kIw",
+  "name": "The Great Wall",
+  "description": "Stall the battlefield with walls while controlling threats and winning in the air. (White/Blue)",
+  "cards": [
+    {
+      "name": "Wall of Swords",
+      "count": 4
+    },
+    {
+      "name": "Wall of Air",
+      "count": 4
+    },
+    {
+      "name": "Wall of Water",
+      "count": 4
+    },
+    {
+      "name": "Serra Angel",
+      "count": 4
+    },
+    {
+      "name": "Air Elemental",
+      "count": 4
+    },
+    {
+      "name": "Counterspell",
+      "count": 4
+    },
+    {
+      "name": "Swords to Plowshares",
+      "count": 4
+    },
+    {
+      "name": "Unsummon",
+      "count": 4
+    },
+    {
+      "name": "Healing Salve",
+      "count": 4
+    },
+    {
+      "name": "Plains",
+      "count": 12
+    },
+    {
+      "name": "Island",
+      "count": 12
+    }
+  ],
+  "created_at": 1781462941.9330583,
+  "updated_at": 1781462941.9330583
+}

@@ -38,6 +38,10 @@ class Session:
     host_colors: int = 2
     guest_deck_id: str | None = None
     guest_colors: int = 2
+    # Inline cards for personal (browser-only) decks that have no server-side id.
+    # Kept so a rematch can rebuild the same deck off a new seed.
+    host_deck_cards: list[dict] | None = None
+    guest_deck_cards: list[dict] | None = None
     # Coordinated rematch (human_vs_human): seats that have requested a rematch on the
     # finished game. When every joined human seat has voted, the game is rebuilt.
     rematch_votes: set[int] = field(default_factory=set)
@@ -71,7 +75,16 @@ class SessionStore:
         self.deck_store = deck_store
         self._sessions: dict[str, Session] = {}
 
-    def _build_seat_deck(self, deck_id: str | None, colors: int, seed: int):
+    def _build_seat_deck(
+        self,
+        deck_id: str | None,
+        colors: int,
+        seed: int,
+        cards: list[dict] | None = None,
+    ):
+        # Inline cards (a personal/browser deck) win over a server-side id.
+        if cards:
+            return build_deck_from_entries(self.cards_path, cards, seed)
         if deck_id and self.deck_store is not None:
             deck = self.deck_store.get(deck_id)
             return build_deck_from_entries(self.cards_path, deck.get("cards", []), seed)
@@ -104,11 +117,18 @@ class SessionStore:
         # join.  Legacy/test clients (no pregame) keep the immediate-start behavior.
         awaiting_opponent = request.mode == "human_vs_human" and use_pregame
 
-        host_deck = self._build_seat_deck(request.host_deck_id, request.host_colors, seed)
+        host_deck_cards = _entries_to_dicts(request.host_deck_cards)
+        guest_deck_cards = _entries_to_dicts(request.guest_deck_cards)
+
+        host_deck = self._build_seat_deck(
+            request.host_deck_id, request.host_colors, seed, host_deck_cards
+        )
         if awaiting_opponent:
             guest_deck: list = []
         else:
-            guest_deck = self._build_seat_deck(request.guest_deck_id, request.guest_colors, seed + 1)
+            guest_deck = self._build_seat_deck(
+                request.guest_deck_id, request.guest_colors, seed + 1, guest_deck_cards
+            )
 
         p1 = PlayerState(name=request.host_name, library=host_deck)
         p2 = PlayerState(name=guest_name, library=guest_deck)
@@ -131,6 +151,8 @@ class SessionStore:
             host_colors=request.host_colors,
             guest_deck_id=request.guest_deck_id,
             guest_colors=request.guest_colors,
+            host_deck_cards=host_deck_cards,
+            guest_deck_cards=guest_deck_cards,
         )
 
         if not awaiting_opponent:
@@ -185,11 +207,13 @@ class SessionStore:
         guest_name: str,
         guest_deck_id: str | None = None,
         guest_colors: int = 2,
+        guest_deck_cards: list[dict] | None = None,
     ) -> Session:
         session = self.get(session_id)
         if session.mode != "human_vs_human":
             return session
 
+        guest_deck_cards = _entries_to_dicts(guest_deck_cards)
         already_joined = 1 in session.joined_seats
         session.joined_seats.add(1)
         session.guest_name = guest_name
@@ -197,12 +221,13 @@ class SessionStore:
         # Remember the guest's deck choice so a rematch can rebuild it.
         session.guest_deck_id = guest_deck_id
         session.guest_colors = guest_colors
+        session.guest_deck_cards = guest_deck_cards
 
         # Networked flow: the guest's deck travels with the join request. Build it
         # now (deterministically off the host's seed) and start the game.
         if session.awaiting_opponent and not already_joined:
             session.game.players[1].library = self._build_seat_deck(
-                guest_deck_id, guest_colors, session.seed + 1
+                guest_deck_id, guest_colors, session.seed + 1, guest_deck_cards
             )
             session.awaiting_opponent = False
             self._begin_pregame(session)
@@ -217,8 +242,12 @@ class SessionStore:
         mulligans). All per-game transient state on the session is reset.
         """
         seed = secrets.randbits(32)
-        host_deck = self._build_seat_deck(session.host_deck_id, session.host_colors, seed)
-        guest_deck = self._build_seat_deck(session.guest_deck_id, session.guest_colors, seed + 1)
+        host_deck = self._build_seat_deck(
+            session.host_deck_id, session.host_colors, seed, session.host_deck_cards
+        )
+        guest_deck = self._build_seat_deck(
+            session.guest_deck_id, session.guest_colors, seed + 1, session.guest_deck_cards
+        )
         p1 = PlayerState(name=session.host_name, library=host_deck)
         p2 = PlayerState(name=session.guest_name, library=guest_deck)
         session.game = Game(players=[p1, p2], enforce_mana_costs=True)
@@ -245,3 +274,16 @@ class SessionStore:
         session.mulligan_bottom_selected = []
         self._begin_pregame(session)
         return session
+
+
+def _entries_to_dicts(entries) -> list[dict] | None:
+    """Normalize inline deck cards (DeckCardEntry models or dicts) to plain
+    [{"name", "count"}] dicts, or None when no inline deck was supplied."""
+    if not entries:
+        return None
+    out: list[dict] = []
+    for entry in entries:
+        if hasattr(entry, "model_dump"):
+            entry = entry.model_dump()
+        out.append({"name": entry["name"], "count": entry["count"]})
+    return out

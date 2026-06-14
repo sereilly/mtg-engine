@@ -1,0 +1,49 @@
+{
+  "id": "zp6GHZ8HaEo",
+  "name": "Tides of Power",
+  "description": "Draw cards, counter key threats, and win with evasive flyers. (Blue)",
+  "cards": [
+    {
+      "name": "Air Elemental",
+      "count": 4
+    },
+    {
+      "name": "Phantom Monster",
+      "count": 4
+    },
+    {
+      "name": "Phantasmal Forces",
+      "count": 4
+    },
+    {
+      "name": "Water Elemental",
+      "count": 4
+    },
+    {
+      "name": "Counterspell",
+      "count": 4
+    },
+    {
+      "name": "Unsummon",
+      "count": 4
+    },
+    {
+      "name": "Ancestral Recall",
+      "count": 4
+    },
+    {
+      "name": "Twiddle",
+      "count": 4
+    },
+    {
+      "name": "Power Sink",
+      "count": 4
+    },
+    {
+      "name": "Island",
+      "count": 24
+    }
+  ],
+  "created_at": 1781462941.9326406,
+  "updated_at": 1781462941.9326406
+}

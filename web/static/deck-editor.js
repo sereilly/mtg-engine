@@ -73,15 +73,51 @@
     state.catalogByName = new Map(state.catalog.map((c) => [c.name.toLowerCase(), c]));
   }
 
+  // Build a deck-list summary for a personal (localStorage) deck, mirroring the
+  // shape the server returns for shared decks so both render the same way.
+  function summarizePersonalDeck(deck) {
+    const cards = (deck.cards || []).map((c) => ({ name: c.name, count: c.count }));
+    const colors = new Set();
+    let cardCount = 0;
+    let unknown = 0;
+    let unsupported = 0;
+    for (const c of cards) {
+      cardCount += c.count;
+      const card = lookupCard(c.name);
+      if (!card) {
+        unknown += c.count;
+      } else {
+        if (!card.supported) unsupported += c.count;
+        for (const col of card.color_identity || []) colors.add(col);
+      }
+    }
+    return {
+      id: deck.id,
+      name: deck.name,
+      description: deck.description || "",
+      card_count: cardCount,
+      colors: ["W", "U", "B", "R", "G"].filter((c) => colors.has(c)),
+      unsupported_count: unsupported,
+      unknown_count: unknown,
+      updated_at: deck.updated_at,
+      scope: "personal",
+      cards,
+    };
+  }
+
   async function refreshDeckLists() {
+    let shared = [];
     try {
       const resp = await fetch("/api/decks");
-      if (!resp.ok) return;
-      const payload = await resp.json();
-      state.decks = payload.decks || [];
+      if (resp.ok) {
+        const payload = await resp.json();
+        shared = (payload.decks || []).map((d) => ({ ...d, scope: d.scope || "shared" }));
+      }
     } catch {
-      state.decks = [];
+      shared = [];
     }
+    const personal = (window.PersonalDecks?.all() || []).map(summarizePersonalDeck);
+    state.decks = [...shared, ...personal];
     renderDeckSelectOptions();
   }
 
@@ -92,6 +128,14 @@
       ["guestDeckSelect", "Random deck"],
       ["joinDeckSelect", "Random deck"],
     ];
+    const makeOption = (deck) => {
+      const option = document.createElement("option");
+      option.value = deck.id;
+      let label = `${deck.name} (${deck.card_count})`;
+      if (deck.unknown_count > 0) label += " ⚠";
+      option.textContent = label;
+      return option;
+    };
     for (const [id, placeholder] of configs) {
       const select = q(id);
       if (!select) continue;
@@ -101,13 +145,14 @@
       blank.value = "";
       blank.textContent = placeholder;
       select.appendChild(blank);
-      for (const deck of state.decks) {
-        const option = document.createElement("option");
-        option.value = deck.id;
-        let label = `${deck.name} (${deck.card_count})`;
-        if (deck.unknown_count > 0) label += " ⚠";
-        option.textContent = label;
-        select.appendChild(option);
+      // Group decks by scope so the source of each is unambiguous.
+      for (const [scope, groupLabel] of [["personal", "Personal"], ["shared", "Shared"]]) {
+        const decks = state.decks.filter((d) => (d.scope || "shared") === scope);
+        if (decks.length === 0) continue;
+        const group = document.createElement("optgroup");
+        group.label = groupLabel;
+        for (const deck of decks) group.appendChild(makeOption(deck));
+        select.appendChild(group);
       }
       if ([...select.options].some((o) => o.value === previous)) {
         select.value = previous;
@@ -218,43 +263,63 @@
     if (minus) minus.disabled = !entry;
   }
 
-  function resetDeck(name = "Untitled Deck", entries = [], id = null) {
-    state.current = { id, name, entries };
+  function resetDeck(name = "Untitled Deck", entries = [], id = null, scope = "personal", description = "") {
+    state.current = { id, name, description, entries, scope };
     state.dirty = false;
     state.selectedCardName = null;
     q("deckNameInput").value = name;
+    q("deckDescriptionInput").value = description;
     renderAll();
   }
 
   async function loadDeck(deckId) {
+    // Personal decks live in localStorage; shared decks are fetched from the server.
+    if (window.PersonalDecks?.isPersonalId(deckId)) {
+      const deck = window.PersonalDecks.get(deckId);
+      if (!deck) throw new Error("could not load deck");
+      resetDeck(deck.name, (deck.cards || []).map((c) => ({ ...c })), deck.id, "personal", deck.description || "");
+      setStatus(`Loaded "${deck.name}".`);
+      return;
+    }
     const resp = await fetch(`/api/decks/${encodeURIComponent(deckId)}`);
     if (!resp.ok) throw new Error("could not load deck");
     const deck = await resp.json();
-    resetDeck(deck.name, deck.cards.map((c) => ({ ...c })), deck.id);
-    setStatus(`Loaded "${deck.name}".`);
+    resetDeck(deck.name, deck.cards.map((c) => ({ ...c })), deck.id, "shared", deck.description || "");
+    // Shared decks are read-only here; editing this and saving makes a personal copy.
+    setStatus(`Loaded shared deck "${deck.name}" — saving will create a personal copy.`);
   }
 
+  // Clients can only save to their personal (localStorage) decks. Saving while a
+  // shared deck is open (or via "Save As Copy") always produces a new personal deck.
   async function saveDeck(asCopy = false) {
-    const name = q("deckNameInput").value.trim() || "Untitled Deck";
+    if (!window.PersonalDecks) {
+      setStatus("Local storage is unavailable, so decks can't be saved.", true);
+      return;
+    }
+    let name = q("deckNameInput").value.trim() || "Untitled Deck";
+    const description = q("deckDescriptionInput").value.trim();
     const cards = state.current.entries.map((e) => ({ name: e.name, count: e.count }));
     if (cards.length === 0) {
       setStatus("Cannot save an empty deck.", true);
       return;
     }
+    const isPersonal = state.current.scope === "personal" && state.current.id;
+    const makeCopy = asCopy || !isPersonal;
+    if (makeCopy && state.current.id) name = `${name} (copy)`;
     let deck;
-    if (state.current.id && !asCopy) {
-      deck = await postJsonMethod(`/api/decks/${encodeURIComponent(state.current.id)}`, "PUT", { name, cards });
-    } else {
-      deck = await postJson("/api/decks", { name: asCopy && state.current.id ? `${name} (copy)` : name, cards });
-      q("deckNameInput").value = deck.name;
+    try {
+      deck = window.PersonalDecks.save({ id: makeCopy ? null : state.current.id, name, description, cards });
+    } catch (e) {
+      setStatus(e.message || "Could not save deck.", true);
+      return;
     }
-    state.current.id = deck.id;
-    state.current.name = deck.name;
-    state.dirty = false;
+    q("deckNameInput").value = deck.name;
+    resetDeck(deck.name, deck.cards.map((c) => ({ ...c })), deck.id, "personal", deck.description || "");
     await refreshDeckLists();
     q("deckLoadSelect").value = deck.id;
     renderTopbar();
-    setStatus(`Saved "${deck.name}" (${deck.card_count} cards).`);
+    const cardCount = deck.cards.reduce((s, c) => s + c.count, 0);
+    setStatus(`Saved personal deck "${deck.name}" (${cardCount} cards).`);
   }
 
   async function deleteDeck() {
@@ -262,9 +327,12 @@
       setStatus("This deck has not been saved yet.", true);
       return;
     }
+    if (state.current.scope !== "personal") {
+      setStatus("Shared decks are read-only and can't be deleted here.", true);
+      return;
+    }
     if (!window.confirm(`Delete deck "${state.current.name}"? This cannot be undone.`)) return;
-    const resp = await fetch(`/api/decks/${encodeURIComponent(state.current.id)}`, { method: "DELETE" });
-    if (!resp.ok) {
+    if (!window.PersonalDecks?.remove(state.current.id)) {
       setStatus("Could not delete deck.", true);
       return;
     }
@@ -339,8 +407,14 @@
 
   function renderTopbar() {
     const total = deckTotal();
-    q("deckSaveBtn").textContent = state.current.id ? (state.dirty ? "Save*" : "Save") : "Save";
-    q("deckDeleteBtn").disabled = !state.current.id;
+    const editingPersonal = Boolean(state.current.id) && state.current.scope === "personal";
+    // A shared deck is read-only: saving it writes a new personal copy instead.
+    q("deckSaveBtn").textContent = editingPersonal
+      ? state.dirty
+        ? "Save*"
+        : "Save"
+      : "Save to Personal";
+    q("deckDeleteBtn").disabled = !editingPersonal;
     q("deckSaveAsBtn").disabled = total === 0;
   }
 
@@ -766,6 +840,11 @@
 
     q("deckNameInput").addEventListener("input", () => {
       state.current.name = q("deckNameInput").value;
+      markDirty();
+    });
+
+    q("deckDescriptionInput").addEventListener("input", () => {
+      state.current.description = q("deckDescriptionInput").value;
       markDirty();
     });
 

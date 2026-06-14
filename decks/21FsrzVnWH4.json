@@ -1,0 +1,53 @@
+{
+  "id": "21FsrzVnWH4",
+  "name": "Dark Pact",
+  "description": "Fast mana, aggressive creatures, and devastating burn spells. (Black/Red)",
+  "cards": [
+    {
+      "name": "Black Knight",
+      "count": 4
+    },
+    {
+      "name": "Bog Wraith",
+      "count": 4
+    },
+    {
+      "name": "Hurloon Minotaur",
+      "count": 4
+    },
+    {
+      "name": "Orcish Artillery",
+      "count": 4
+    },
+    {
+      "name": "Sengir Vampire",
+      "count": 4
+    },
+    {
+      "name": "Dark Ritual",
+      "count": 4
+    },
+    {
+      "name": "Lightning Bolt",
+      "count": 4
+    },
+    {
+      "name": "Terror",
+      "count": 4
+    },
+    {
+      "name": "Fireball",
+      "count": 4
+    },
+    {
+      "name": "Swamp",
+      "count": 12
+    },
+    {
+      "name": "Mountain",
+      "count": 12
+    }
+  ],
+  "created_at": 1781462941.9343867,
+  "updated_at": 1781462941.934387
+}

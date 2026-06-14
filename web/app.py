@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import random
 import socket
 from collections import defaultdict
@@ -63,6 +64,20 @@ CATALOG_CARD_NAMES = list(dict.fromkeys(card.name for card in CARD_SEARCH_ORDER)
 
 app = FastAPI(title="Magic LEA Web App")
 deck_store = DeckStore(DECKS_DIR)
+
+# The on-disk `decks/` folder is the *shared* deck pool — read-only to browser
+# clients, who keep their own (personal) decks in localStorage. Only a server
+# operator who launches the app with MAGIC_ALLOW_SHARED_DECK_WRITES=1 (or code
+# calling DeckStore directly) may create/update/delete shared decks via the API.
+ALLOW_SHARED_DECK_WRITES = os.getenv("MAGIC_ALLOW_SHARED_DECK_WRITES") == "1"
+
+
+def _require_shared_writes() -> None:
+    if not ALLOW_SHARED_DECK_WRITES:
+        raise HTTPException(
+            status_code=403,
+            detail="Shared decks are read-only. Save to your personal decks instead.",
+        )
 verification_store = VerificationStore(VERIFICATION_PATH)
 store = SessionStore(cards_path=CARDS_PATH, deck_store=deck_store)
 _session_event_queues: dict[str, set[asyncio.Queue[dict[str, str]]]] = defaultdict(set)
@@ -71,7 +86,7 @@ _session_event_queues: dict[str, set[asyncio.Queue[dict[str, str]]]] = defaultdi
 @app.middleware("http")
 async def _no_cache_assets(request: Request, call_next):
     response = await call_next(request)
-    if request.url.path in {"/", "/index.html", "/app.js", "/battlefield-canvas.js", "/deck-editor.js", "/styles.css"} or request.url.path.startswith("/api/"):
+    if request.url.path in {"/", "/index.html", "/app.js", "/battlefield-canvas.js", "/deck-editor.js", "/personal-decks.js", "/styles.css"} or request.url.path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-store, max-age=0"
         response.headers["Pragma"] = "no-cache"
     return response
@@ -310,11 +325,15 @@ def _deck_summary(deck: dict) -> dict:
     return {
         "id": deck["id"],
         "name": deck["name"],
+        "description": deck.get("description", ""),
         "card_count": sum(e["count"] for e in entries),
         "colors": [c for c in ("W", "U", "B", "R", "G") if c in colors],
         "unsupported_count": sum(e["count"] for e in entries if e["status"] == "unsupported"),
         "unknown_count": sum(e["count"] for e in entries if e["status"] == "unknown"),
         "updated_at": deck.get("updated_at"),
+        # Decks served from the on-disk store are the shared pool. Personal decks
+        # live in the client's browser and are never returned by these endpoints.
+        "scope": "shared",
     }
 
 
@@ -1572,7 +1591,12 @@ def list_decks():
 
 @app.post("/api/decks")
 def create_deck(req: DeckSaveRequest):
-    deck = deck_store.create(req.name.strip() or "Untitled Deck", [c.model_dump() for c in req.cards])
+    _require_shared_writes()
+    deck = deck_store.create(
+        req.name.strip() or "Untitled Deck",
+        [c.model_dump() for c in req.cards],
+        req.description.strip(),
+    )
     return _deck_detail(deck)
 
 
@@ -1587,8 +1611,14 @@ def get_deck(deck_id: str):
 
 @app.put("/api/decks/{deck_id}")
 def update_deck(deck_id: str, req: DeckSaveRequest):
+    _require_shared_writes()
     try:
-        deck = deck_store.update(deck_id, req.name.strip() or "Untitled Deck", [c.model_dump() for c in req.cards])
+        deck = deck_store.update(
+            deck_id,
+            req.name.strip() or "Untitled Deck",
+            [c.model_dump() for c in req.cards],
+            req.description.strip(),
+        )
     except DeckNotFoundError as exc:
         raise HTTPException(status_code=404, detail="deck not found") from exc
     return _deck_detail(deck)
@@ -1596,6 +1626,7 @@ def update_deck(deck_id: str, req: DeckSaveRequest):
 
 @app.delete("/api/decks/{deck_id}")
 def delete_deck(deck_id: str):
+    _require_shared_writes()
     try:
         deck_store.delete(deck_id)
     except DeckNotFoundError as exc:
@@ -1656,7 +1687,11 @@ def join_session(session_id: str, req: JoinSessionRequest, request: Request):
     session = _require_session(session_id)
     try:
         session = store.join(
-            session_id, req.guest_name, req.guest_deck_id, req.guest_colors
+            session_id,
+            req.guest_name,
+            req.guest_deck_id,
+            req.guest_colors,
+            req.guest_deck_cards,
         )
     except DeckNotFoundError as exc:
         raise HTTPException(status_code=400, detail="selected deck not found") from exc

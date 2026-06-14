@@ -447,6 +447,82 @@ def test_networked_hvh_join_builds_guest_deck_off_host_seed(monkeypatch):
     assert captured_seeds == [7102, 7103]
 
 
+def test_create_session_with_inline_personal_deck_cards():
+    # Personal decks live only in the browser, so the client posts their cards
+    # inline; the server builds the seat library straight from them (no id).
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_ai",
+            "host_name": "Host",
+            "host_deck_cards": [{"name": "Island", "count": 40}],
+            "seed": 555,
+            "enable_pregame": True,  # defers dealing, so the full library is intact
+        },
+    ).json()
+    session = store.get(created["session_id"])
+
+    library = session.game.players[0].library
+    assert len(library) == 40
+    assert all(card.name == "Island" for card in library)
+    # Inline cards are persisted so a rematch can rebuild the same deck.
+    assert session.host_deck_cards == [{"name": "Island", "count": 40}]
+
+
+def test_inline_personal_deck_cards_take_precedence_over_id():
+    # When both an id and inline cards are sent, the inline cards win (the id may
+    # be a stale server reference; the browser's personal deck is authoritative).
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_ai",
+            "host_name": "Host",
+            "host_deck_id": "does-not-exist",
+            "host_deck_cards": [{"name": "Mountain", "count": 30}],
+            "seed": 99,
+            "enable_pregame": True,
+        },
+    )
+    assert created.status_code == 200
+    session = store.get(created.json()["session_id"])
+    assert all(card.name == "Mountain" for card in session.game.players[0].library)
+
+
+def test_shared_deck_writes_are_rejected_for_clients():
+    body = {"name": "Client Deck", "cards": [{"name": "Island", "count": 1}]}
+    assert client.post("/api/decks", json=body).status_code == 403
+    assert client.put("/api/decks/whatever", json=body).status_code == 403
+    assert client.delete("/api/decks/whatever").status_code == 403
+
+
+def test_shared_deck_writes_allowed_when_server_opts_in(monkeypatch):
+    monkeypatch.setattr(web_app, "ALLOW_SHARED_DECK_WRITES", True)
+    body = {
+        "name": "Server Shared Deck",
+        "description": "Mono-blue control.",
+        "cards": [{"name": "Island", "count": 1}],
+    }
+    created = client.post("/api/decks", json=body)
+    assert created.status_code == 200
+    deck = created.json()
+    assert deck["scope"] == "shared"
+    assert deck["description"] == "Mono-blue control."
+    try:
+        # The description round-trips through both the summary list and detail get.
+        listed = client.get("/api/decks").json()["decks"]
+        assert any(d["id"] == deck["id"] for d in listed)
+        fetched = client.get(f"/api/decks/{deck['id']}").json()
+        assert fetched["description"] == "Mono-blue control."
+        # Updating replaces the description.
+        updated = client.put(
+            f"/api/decks/{deck['id']}",
+            json={"name": "Server Shared Deck", "description": "Now aggro.", "cards": body["cards"]},
+        ).json()
+        assert updated["description"] == "Now aggro."
+    finally:
+        web_app.deck_store.delete(deck["id"])
+
+
 
 
 

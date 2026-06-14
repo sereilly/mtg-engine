@@ -29,7 +29,8 @@ class DeckImportError(ValueError):
 class DeckStore:
     """Persists decks as JSON files in a directory.
 
-    Deck shape: {"id": str, "name": str, "cards": [{"name": str, "count": int}],
+    Deck shape: {"id": str, "name": str, "description": str,
+                 "cards": [{"name": str, "count": int}],
                  "created_at": float, "updated_at": float}
     """
 
@@ -61,10 +62,11 @@ class DeckStore:
             raise DeckNotFoundError(deck_id)
         return json.loads(path.read_text(encoding="utf-8"))
 
-    def create(self, name: str, cards: list[dict]) -> dict:
+    def create(self, name: str, cards: list[dict], description: str = "") -> dict:
         deck = {
             "id": secrets.token_urlsafe(8).replace("-", "a").replace("_", "b"),
             "name": name,
+            "description": description,
             "cards": _normalize_cards(cards),
             "created_at": time.time(),
             "updated_at": time.time(),
@@ -72,9 +74,10 @@ class DeckStore:
         self._path(deck["id"]).write_text(json.dumps(deck, indent=2), encoding="utf-8")
         return deck
 
-    def update(self, deck_id: str, name: str, cards: list[dict]) -> dict:
+    def update(self, deck_id: str, name: str, cards: list[dict], description: str = "") -> dict:
         deck = self.get(deck_id)
         deck["name"] = name
+        deck["description"] = description
         deck["cards"] = _normalize_cards(cards)
         deck["updated_at"] = time.time()
         self._path(deck_id).write_text(json.dumps(deck, indent=2), encoding="utf-8")

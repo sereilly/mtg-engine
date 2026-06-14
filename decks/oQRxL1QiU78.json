@@ -1,0 +1,53 @@
+{
+  "id": "oQRxL1QiU78",
+  "name": "Necromancer's Legion",
+  "description": "Raise a shambling army while draining resources and controlling the board with black removal. (Black)",
+  "cards": [
+    {
+      "name": "Zombie Master",
+      "count": 4
+    },
+    {
+      "name": "Drudge Skeletons",
+      "count": 4
+    },
+    {
+      "name": "Scathe Zombies",
+      "count": 4
+    },
+    {
+      "name": "Bog Wraith",
+      "count": 4
+    },
+    {
+      "name": "Will-o'-the-Wisp",
+      "count": 4
+    },
+    {
+      "name": "Sengir Vampire",
+      "count": 4
+    },
+    {
+      "name": "Terror",
+      "count": 4
+    },
+    {
+      "name": "Dark Ritual",
+      "count": 3
+    },
+    {
+      "name": "Weakness",
+      "count": 3
+    },
+    {
+      "name": "Raise Dead",
+      "count": 2
+    },
+    {
+      "name": "Swamp",
+      "count": 24
+    }
+  ],
+  "created_at": 1781462941.922622,
+  "updated_at": 1781462941.9226222
+}

@@ -1,0 +1,53 @@
+{
+  "id": "R355phpWpB4",
+  "name": "Elements Unleashed",
+  "description": "Burn and bounce opposing threats while powerful elementals close out games. (Blue/Red)",
+  "cards": [
+    {
+      "name": "Air Elemental",
+      "count": 4
+    },
+    {
+      "name": "Water Elemental",
+      "count": 4
+    },
+    {
+      "name": "Earth Elemental",
+      "count": 4
+    },
+    {
+      "name": "Fire Elemental",
+      "count": 4
+    },
+    {
+      "name": "Phantom Monster",
+      "count": 4
+    },
+    {
+      "name": "Lightning Bolt",
+      "count": 4
+    },
+    {
+      "name": "Unsummon",
+      "count": 4
+    },
+    {
+      "name": "Counterspell",
+      "count": 4
+    },
+    {
+      "name": "Fireball",
+      "count": 4
+    },
+    {
+      "name": "Island",
+      "count": 12
+    },
+    {
+      "name": "Mountain",
+      "count": 12
+    }
+  ],
+  "created_at": 1781462941.9340415,
+  "updated_at": 1781462941.9340417
+}

@@ -1,0 +1,57 @@
+{
+  "id": "uhKmOWaAHX8",
+  "name": "The Ancient Forest",
+  "description": "Build mana, draw cards, and dominate the late game with huge threats. (Green/Blue)",
+  "cards": [
+    {
+      "name": "Llanowar Elves",
+      "count": 4
+    },
+    {
+      "name": "Grizzly Bears",
+      "count": 4
+    },
+    {
+      "name": "Elvish Archers",
+      "count": 4
+    },
+    {
+      "name": "Air Elemental",
+      "count": 4
+    },
+    {
+      "name": "Force of Nature",
+      "count": 3
+    },
+    {
+      "name": "Craw Wurm",
+      "count": 3
+    },
+    {
+      "name": "Giant Growth",
+      "count": 4
+    },
+    {
+      "name": "Unsummon",
+      "count": 4
+    },
+    {
+      "name": "Counterspell",
+      "count": 3
+    },
+    {
+      "name": "Timetwister",
+      "count": 3
+    },
+    {
+      "name": "Forest",
+      "count": 12
+    },
+    {
+      "name": "Island",
+      "count": 12
+    }
+  ],
+  "created_at": 1781462941.934737,
+  "updated_at": 1781462941.934737
+}

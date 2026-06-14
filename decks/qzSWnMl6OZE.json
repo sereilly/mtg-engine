@@ -1,0 +1,61 @@
+{
+  "id": "qzSWnMl6OZE",
+  "name": "Savannah Stampede",
+  "description": "Deploy sturdy creatures and overwhelm opponents with efficient attackers backed by Giant Growth and Swords to Plowshares. (Green/White)",
+  "cards": [
+    {
+      "name": "Savannah Lions",
+      "count": 4
+    },
+    {
+      "name": "White Knight",
+      "count": 4
+    },
+    {
+      "name": "Benalish Hero",
+      "count": 4
+    },
+    {
+      "name": "Grizzly Bears",
+      "count": 4
+    },
+    {
+      "name": "Elvish Archers",
+      "count": 3
+    },
+    {
+      "name": "Craw Wurm",
+      "count": 3
+    },
+    {
+      "name": "Giant Growth",
+      "count": 4
+    },
+    {
+      "name": "Swords to Plowshares",
+      "count": 3
+    },
+    {
+      "name": "Healing Salve",
+      "count": 3
+    },
+    {
+      "name": "Holy Strength",
+      "count": 2
+    },
+    {
+      "name": "Aspect of Wolf",
+      "count": 2
+    },
+    {
+      "name": "Plains",
+      "count": 12
+    },
+    {
+      "name": "Forest",
+      "count": 12
+    }
+  ],
+  "created_at": 1781462941.922055,
+  "updated_at": 1781462941.922055
+}

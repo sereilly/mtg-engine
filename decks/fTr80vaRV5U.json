@@ -1,0 +1,53 @@
+{
+  "id": "fTr80vaRV5U",
+  "name": "Fire and Fury",
+  "description": "Classic Alpha red deck that wins through direct damage and aggressive creatures. (Red)",
+  "cards": [
+    {
+      "name": "Mons's Goblin Raiders",
+      "count": 4
+    },
+    {
+      "name": "Goblin Balloon Brigade",
+      "count": 4
+    },
+    {
+      "name": "Orcish Artillery",
+      "count": 4
+    },
+    {
+      "name": "Hurloon Minotaur",
+      "count": 3
+    },
+    {
+      "name": "Rock Hydra",
+      "count": 3
+    },
+    {
+      "name": "Lightning Bolt",
+      "count": 4
+    },
+    {
+      "name": "Fireball",
+      "count": 4
+    },
+    {
+      "name": "Disintegrate",
+      "count": 4
+    },
+    {
+      "name": "Shatter",
+      "count": 3
+    },
+    {
+      "name": "Red Elemental Blast",
+      "count": 3
+    },
+    {
+      "name": "Mountain",
+      "count": 24
+    }
+  ],
+  "created_at": 1781462941.9230826,
+  "updated_at": 1781462941.9230826
+}

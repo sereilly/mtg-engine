@@ -1,0 +1,49 @@
+{
+  "id": "d0bgdbE3lKE",
+  "name": "Knightly Valor",
+  "description": "An army of knights supported by enchantments and removal. (White)",
+  "cards": [
+    {
+      "name": "White Knight",
+      "count": 4
+    },
+    {
+      "name": "Benalish Hero",
+      "count": 4
+    },
+    {
+      "name": "Mesa Pegasus",
+      "count": 4
+    },
+    {
+      "name": "Personal Incarnation",
+      "count": 4
+    },
+    {
+      "name": "Serra Angel",
+      "count": 4
+    },
+    {
+      "name": "Savannah Lions",
+      "count": 4
+    },
+    {
+      "name": "Swords to Plowshares",
+      "count": 4
+    },
+    {
+      "name": "Holy Strength",
+      "count": 4
+    },
+    {
+      "name": "Healing Salve",
+      "count": 4
+    },
+    {
+      "name": "Plains",
+      "count": 24
+    }
+  ],
+  "created_at": 1781462941.9337313,
+  "updated_at": 1781462941.9337313
+}

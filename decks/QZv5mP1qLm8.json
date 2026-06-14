@@ -1,0 +1,49 @@
+{
+  "id": "QZv5mP1qLm8",
+  "name": "Elven Kingdom",
+  "description": "Use Llanowar Elves and Fastbond to deploy enormous creatures ahead of schedule. (Green)",
+  "cards": [
+    {
+      "name": "Llanowar Elves",
+      "count": 4
+    },
+    {
+      "name": "Elvish Archers",
+      "count": 4
+    },
+    {
+      "name": "Grizzly Bears",
+      "count": 4
+    },
+    {
+      "name": "Ironroot Treefolk",
+      "count": 4
+    },
+    {
+      "name": "Force of Nature",
+      "count": 4
+    },
+    {
+      "name": "Craw Wurm",
+      "count": 4
+    },
+    {
+      "name": "Giant Growth",
+      "count": 4
+    },
+    {
+      "name": "Fastbond",
+      "count": 4
+    },
+    {
+      "name": "Aspect of Wolf",
+      "count": 4
+    },
+    {
+      "name": "Forest",
+      "count": 24
+    }
+  ],
+  "created_at": 1781462941.9334056,
+  "updated_at": 1781462941.9334056
+}

@@ -3,9 +3,9 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **290**
-- Passed: **17**
+- Passed: **18**
 - Failed: **2**
-- Untested: **271**
+- Untested: **270**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -116,7 +116,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Green Ward | ⬜ untested |  |
 | Grizzly Bears | ⬜ untested |  |
 | Guardian Angel | ⬜ untested |  |
-| Healing Salve | ⬜ untested |  |
+| Healing Salve | ✅ pass |  |
 | Helm of Chatzuk | ⬜ untested |  |
 | Hill Giant | ⬜ untested |  |
 | Holy Armor | ⬜ untested |  |

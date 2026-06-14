@@ -5327,20 +5327,35 @@ async function postJson(url, body) {
   return payload;
 }
 
+// Resolve a deck-select value into a request payload. Personal decks live only in
+// this browser, so they're sent inline (deck_cards) rather than by server id.
+function deckSelection(selectId) {
+  const id = q(selectId)?.value || null;
+  if (id && window.PersonalDecks?.isPersonalId(id)) {
+    const deck = window.PersonalDecks.get(id);
+    if (deck) return { deck_id: null, deck_cards: deck.cards || [] };
+  }
+  return { deck_id: id, deck_cards: null };
+}
+
 async function createSession() {
   hideSetupPanel();
   syncSeedControls();
   const mode = q("mode").value;
   const useCustomSeed = q("useCustomSeed").checked;
+  const hostSel = deckSelection("hostDeckSelect");
+  // The opponent's deck is only host-configurable when it's AI. For networked
+  // human_vs_human the guest brings their own deck on join.
+  const guestSel = mode === "human_vs_human" ? { deck_id: null, deck_cards: null } : deckSelection("guestDeckSelect");
   const req = {
     mode,
     host_name: q("hostName").value,
     host_colors: Number(q("hostColors").value),
-    host_deck_id: q("hostDeckSelect")?.value || null,
-    // The opponent's deck is only host-configurable when it's AI. For networked
-    // human_vs_human the guest brings their own deck on join.
+    host_deck_id: hostSel.deck_id,
+    host_deck_cards: hostSel.deck_cards,
     guest_colors: Number(q("guestColors").value),
-    guest_deck_id: mode === "human_vs_human" ? null : (q("guestDeckSelect")?.value || null),
+    guest_deck_id: guestSel.deck_id,
+    guest_deck_cards: guestSel.deck_cards,
     use_custom_seed: useCustomSeed,
     custom_seed: useCustomSeed ? Number(q("customSeed").value) : null,
     enable_pregame: true,
@@ -5366,9 +5381,11 @@ async function joinSession() {
     alert("Enter a session ID");
     return;
   }
+  const joinSel = deckSelection("joinDeckSelect");
   const data = await postJson(`/api/sessions/${sessionId}/join`, {
     guest_name: q("joinName").value,
-    guest_deck_id: q("joinDeckSelect")?.value || null,
+    guest_deck_id: joinSel.deck_id,
+    guest_deck_cards: joinSel.deck_cards,
     guest_colors: Number(q("joinColors")?.value) || 2,
   });
   seat = data.seat;
