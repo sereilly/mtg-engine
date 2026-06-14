@@ -354,3 +354,75 @@ class TestSimulacrum:
         # Gains 4 life (back to 16) and deals 4 to the 3/3, which dies.
         assert p1.life == 16
         assert giant not in p1.battlefield
+
+
+# ---------------------------------------------------------------------------
+# Choosing a specific spell on the stack (Counterspell, Fork) — not just the top.
+# ---------------------------------------------------------------------------
+
+class TestChooseStackTarget:
+    def _two_spell_stack(self, cards):
+        """Stack (bottom -> top): Lightning Bolt at P1, then Giant Growth on P1's
+        Grizzly Bears. Returns (game, p1, p2, bears)."""
+        bears = Permanent(card=cards["Grizzly Bears"])
+        p1 = PlayerState(name="P1", battlefield=[bears], life=20)
+        p2 = PlayerState(
+            name="P2", hand=[cards["Lightning Bolt"], cards["Giant Growth"]], life=20
+        )
+        game = _game(p1, p2)
+        game.queue_from_hand(1, "Lightning Bolt", target_player_index=0)            # engine idx 0
+        game.queue_from_hand(1, "Giant Growth", target_player_index=0, target_permanent_index=0)  # engine idx 1
+        return game, p1, p2, bears
+
+    def test_counterspell_counters_the_chosen_bottom_spell(self, cards):
+        game, p1, p2, bears = self._two_spell_stack(cards)
+        p1.hand.append(cards["Counterspell"])
+
+        # Counter the BOTTOM spell (Lightning Bolt, engine index 0).
+        result = game.cast_from_hand(0, "Counterspell", target_stack_index=0)
+        assert result.supported
+        game.resolve_stack()
+
+        # The bolt was countered (P1 still at 20), Giant Growth resolved (bears 2 -> 5).
+        assert p1.life == 20
+        assert any(c.name == "Lightning Bolt" for c in p2.graveyard)
+        assert bears.effective_power == 5
+
+    def test_counterspell_counters_the_chosen_top_spell(self, cards):
+        game, p1, p2, bears = self._two_spell_stack(cards)
+        p1.hand.append(cards["Counterspell"])
+
+        # Counter the TOP spell (Giant Growth, engine index 1).
+        result = game.cast_from_hand(0, "Counterspell", target_stack_index=1)
+        assert result.supported
+        game.resolve_stack()
+
+        # Giant Growth was countered (bears unbuffed), the bolt resolved (P1 -3).
+        assert any(c.name == "Giant Growth" for c in p2.graveyard)
+        assert bears.effective_power == 2
+        assert p1.life == 17
+
+    def test_fork_copies_the_chosen_spell(self, cards):
+        # Stack (bottom -> top): Lightning Bolt at P1 (idx 0), Giant Growth on
+        # P1's bears (idx 1).
+        bears = Permanent(card=cards["Grizzly Bears"])
+        p1 = PlayerState(
+            name="P1",
+            hand=[cards["Fork"], cards["Giant Growth"]],
+            battlefield=[bears],
+            life=20,
+        )
+        p2 = PlayerState(name="P2", hand=[cards["Lightning Bolt"]], life=20)
+        game = _game(p1, p2)
+        game.queue_from_hand(1, "Lightning Bolt", target_player_index=0)  # idx 0
+        game.queue_from_hand(0, "Giant Growth", target_player_index=0, target_permanent_index=0)  # idx 1
+
+        # Fork copies the BOTTOM spell (Lightning Bolt) even though Giant Growth is on top.
+        result = game.cast_from_hand(0, "Fork", target_stack_index=0)
+        assert result.supported
+        game.resolve_stack()
+
+        # Fork's copy dealt 3 to P1 and the original bolt dealt 3 more = 6.
+        assert p1.life == 20 - 6
+        # Giant Growth still resolved on the bears (2 -> 5).
+        assert bears.effective_power == 5

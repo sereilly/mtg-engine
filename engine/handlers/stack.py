@@ -13,16 +13,21 @@ if TYPE_CHECKING:
 
 @effect_handler("copy_top_stack_spell")
 def copy_top_stack_spell(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    # Fork: "Copy target instant or sorcery spell..." Copy the topmost instant or
-    # sorcery on the stack (Fork itself has already been popped to resolve). The
-    # copy keeps the original's targets (Fork lets you choose new ones, which the
-    # simulation does not model).
+    # Fork: "Copy target instant or sorcery spell..." Copy the chosen spell if one
+    # was targeted, otherwise the topmost instant or sorcery on the stack (Fork
+    # itself has already been popped to resolve). The copy keeps the original's
+    # targets (Fork lets you choose new ones, which the simulation does not model).
     caster = context.caster
     card = context.card
-    copied = next(
-        (item for item in reversed(game.stack) if item.card.primary_type in ("instant", "sorcery")),
-        None,
-    )
+    copied = None
+    chosen = context.stack_target
+    if chosen is not None and chosen in game.stack and chosen.card.primary_type in ("instant", "sorcery"):
+        copied = chosen
+    if copied is None:
+        copied = next(
+            (item for item in reversed(game.stack) if item.card.primary_type in ("instant", "sorcery")),
+            None,
+        )
     if copied is None:
         game.log.append(f"{card.name} resolved with no instant or sorcery spell to copy")
         return True, "resolved"
@@ -48,21 +53,24 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
     card = context.card
     color_filter = instruction.payload.get("color_filter")
     if game.stack:
-        top = game.stack[-1]
-        if color_filter and color_filter not in (top.card.colors or ()):
-            game.log.append(f"{card.name}: top spell is not color {color_filter}, cannot counter")
+        # Counter the chosen spell if one was targeted, otherwise the top of stack.
+        chosen = context.stack_target
+        target = chosen if (chosen is not None and chosen in game.stack) else game.stack[-1]
+        if color_filter and color_filter not in (target.card.colors or ()):
+            game.log.append(f"{card.name}: {target.card.name} is not color {color_filter}, cannot counter")
             return True, "resolved"
         # Spell Blast: X must equal the target spell's mana value. When no X was
         # chosen (None, or 0 auto-inferred from an empty pool), assume the caster
         # chose the matching value.
         if instruction.payload.get("mv_equals_x") and context.x_value:
-            top_mv = int(top.card.cmc or 0)
-            if int(context.x_value) != top_mv:
+            target_mv = int(target.card.cmc or 0)
+            if int(context.x_value) != target_mv:
                 game.log.append(
-                    f"{card.name}: X={context.x_value} does not match {top.card.name}'s mana value {top_mv}, cannot counter"
+                    f"{card.name}: X={context.x_value} does not match {target.card.name}'s mana value {target_mv}, cannot counter"
                 )
                 return True, "resolved"
-        countered = game.stack.pop()
+        game.stack.remove(target)
+        countered = target
         game.players[countered.caster_index].graveyard.append(countered.card)
         game.log.append(f"{card.name} countered {countered.card.name}")
         counter_hook = ON_SPELL_COUNTERED.get(card.name)

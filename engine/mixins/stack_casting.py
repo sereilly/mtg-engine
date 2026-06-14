@@ -53,6 +53,7 @@ class StackCastingMixin:
         target_permanent_index: int | None = None,
         x_value: int | None = None,
         new_color: str | None = None,
+        target_stack_index: int | None = None,
     ) -> SimulationResult:
         queued = self.queue_from_hand(
             caster_index,
@@ -61,6 +62,7 @@ class StackCastingMixin:
             target_permanent_index=target_permanent_index,
             x_value=x_value,
             new_color=new_color,
+            target_stack_index=target_stack_index,
         )
         if not queued.supported:
             return queued
@@ -316,6 +318,7 @@ class StackCastingMixin:
         target_permanent_index: int | None = None,
         x_value: int | None = None,
         new_color: str | None = None,
+        target_stack_index: int | None = None,
     ) -> SimulationResult:
         caster = self.players[caster_index]
         try:
@@ -380,8 +383,14 @@ class StackCastingMixin:
                 self.log.append(details)
                 return SimulationResult(card.name, False, classification.effect_kind, details)
 
+        # Resolve an explicitly chosen target spell on the stack (Counterspell,
+        # Fork). target_stack_index indexes into self.stack (bottom-first).
+        target_stack_item = None
+        if target_stack_index is not None and 0 <= target_stack_index < len(self.stack):
+            target_stack_item = self.stack[target_stack_index]
+
         target_ok, target_reason = self._validate_cast_targets(
-            card, caster_index, target_player_index, target_permanent_index
+            card, caster_index, target_player_index, target_permanent_index, target_stack_item
         )
         if not target_ok:
             self.log.append(target_reason)
@@ -401,15 +410,19 @@ class StackCastingMixin:
         card = caster.hand.pop(hand_index)
 
         if card.primary_type != "land":
-            target_stack_name_val: str | None = None
-            if self.stack and "counter target" in card.oracle_text.lower():
+            # Determine which stack spell this one targets. An explicit choice
+            # (target_stack_item) wins; otherwise fall back to the topmost legal
+            # spell so AI and untargeted casts still work.
+            target_stack_item_val = target_stack_item
+            if target_stack_item_val is None and self.stack and "counter target" in card.oracle_text.lower():
                 color_match = re.search(r"counter target (\w+) spell", card.oracle_text.lower())
                 color_filter: str | None = None
                 if color_match:
                     color_filter = _COLOR_WORD_TO_SYMBOL.get(color_match.group(1))
                 matching = [it for it in self.stack if not color_filter or color_filter in it.card.colors]
                 if matching:
-                    target_stack_name_val = matching[-1].card.name
+                    target_stack_item_val = matching[-1]
+            target_stack_name_val = target_stack_item_val.card.name if target_stack_item_val is not None else None
             self.stack.append(
                 StackItem(
                     card=card,
@@ -418,6 +431,7 @@ class StackCastingMixin:
                     target_permanent_index=target_permanent_index,
                     x_value=resolved_x_value,
                     target_stack_name=target_stack_name_val,
+                    target_stack_item=target_stack_item_val,
                     new_color=new_color,
                 )
             )
@@ -440,6 +454,7 @@ class StackCastingMixin:
         caster_index: int,
         target_player_index: int | None,
         target_permanent_index: int | None = None,
+        target_stack_item=None,
     ) -> tuple[bool, str]:
         """Return (True, 'valid') if all required targets exist, else (False, reason).
 
@@ -549,7 +564,13 @@ class StackCastingMixin:
             color_filter = primary.payload.get("color_filter")
             if not self.stack:
                 return False, f"no valid target for {card.name}"
-            if color_filter and not any(color_filter in item.card.colors for item in self.stack):
+            if target_stack_item is not None:
+                # A specific spell was chosen — it must itself be a legal target.
+                if target_stack_item not in self.stack:
+                    return False, f"no valid target for {card.name}"
+                if color_filter and color_filter not in target_stack_item.card.colors:
+                    return False, f"no valid target for {card.name}"
+            elif color_filter and not any(color_filter in item.card.colors for item in self.stack):
                 return False, f"no valid target for {card.name}"
 
         elif primary.kind in (
@@ -588,7 +609,10 @@ class StackCastingMixin:
         elif primary.kind == "copy_top_stack_spell":
             # Fork copies a target instant or sorcery spell, so it requires one on
             # the stack (excluding Fork itself, which isn't on the stack yet).
-            if not any(item.card.primary_type in ("instant", "sorcery") for item in self.stack):
+            if target_stack_item is not None:
+                if target_stack_item not in self.stack or target_stack_item.card.primary_type not in ("instant", "sorcery"):
+                    return False, f"no valid target for {card.name}"
+            elif not any(item.card.primary_type in ("instant", "sorcery") for item in self.stack):
                 return False, f"no valid target for {card.name}"
 
         return True, "valid"
@@ -747,6 +771,7 @@ class StackCastingMixin:
             target_permanent_index=item.target_permanent_index,
             x_value=item.x_value,
             new_color=item.new_color,
+            stack_target=item.target_stack_item,
         )
         return True
 
@@ -759,6 +784,7 @@ class StackCastingMixin:
         target_permanent_index: int | None = None,
         x_value: int | None = None,
         new_color: str | None = None,
+        stack_target=None,
     ) -> None:
         caster = self.players[caster_index]
         primary_type = card.primary_type
@@ -824,6 +850,7 @@ class StackCastingMixin:
             target_permanent_index=target_permanent_index,
             x_value=x_value,
             new_color=new_color,
+            stack_target=stack_target,
         )
         self._apply_spell_resolved_triggers(caster_index, card)
         caster.graveyard.append(card)

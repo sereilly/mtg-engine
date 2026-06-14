@@ -656,6 +656,15 @@ h2.targeting-valid {
   box-shadow: 0 0 8px rgba(126, 196, 255, 0.3);
 }
 
+/* A spell on the stack that is a legal target for the in-progress cast
+   (Counterspell, Fork). */
+.stack-item.stack-targetable {
+  border-color: rgba(120, 230, 150, 0.95);
+  background: rgba(120, 230, 150, 0.16);
+  box-shadow: 0 0 10px rgba(120, 230, 150, 0.45);
+  cursor: crosshair;
+}
+
 .stack-hold-hint {
   display: none;
   margin-top: 4px;

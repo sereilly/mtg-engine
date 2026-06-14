@@ -155,6 +155,7 @@ def _serialize_card(card) -> dict:
         "oracle_text": card.oracle_text,
         "image_uri": image_uri,
         "large_image_uri": large_image_uri,
+        "colors": list(card.colors),
     }
 
 
@@ -1714,6 +1715,11 @@ def do_action(session_id: str, req: GameActionRequest):
                 raise HTTPException(status_code=400, detail="can only cast this card when stack is empty")
 
         target = req.target_seat if req.target_seat is not None else _default_target(req.card_name, req.seat)
+        # The client sends a top-first stack index (0 = topmost). The engine stack
+        # is bottom-first, so convert before queueing.
+        engine_stack_index = None
+        if req.target_stack_index is not None:
+            engine_stack_index = len(session.game.stack) - 1 - req.target_stack_index
         result = session.game.queue_from_hand(
             req.seat,
             req.card_name,
@@ -1721,6 +1727,7 @@ def do_action(session_id: str, req: GameActionRequest):
             target_permanent_index=req.permanent_index,
             x_value=req.x_value,
             new_color=req.mana_color,
+            target_stack_index=engine_stack_index,
         )
         if not result.supported:
             raise HTTPException(status_code=400, detail=result.details)

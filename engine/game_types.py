@@ -30,6 +30,9 @@ class StackItem:
     ability_effect_kind: str | None = None
     source_permanent: Permanent | None = None
     target_stack_name: str | None = None
+    # Direct reference to the stack item this spell/ability targets (Counterspell,
+    # Fork). Lets the effect act on the chosen spell rather than the top of stack.
+    target_stack_item: "StackItem | None" = None
     ability_text: str | None = None
     new_color: str | None = None
 
@@ -44,6 +47,8 @@ class OracleExecutionContext:
     x_value: int | None = None
     source_permanent: Permanent | None = None
     new_color: str | None = None
+    # The chosen target spell/ability on the stack (Counterspell, Fork).
+    stack_target: "StackItem | None" = None
 
 
 class OracleStateMachine:

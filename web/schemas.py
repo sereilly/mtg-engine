@@ -72,6 +72,10 @@ class GameActionRequest(BaseModel):
     blocker_pairs: dict[int, int] | None = None
     attacker_damage: dict[int, dict[int, int]] | None = None
     card_order: list[int] | None = None
+    # Counterspell / Fork: which spell on the stack to target, as a top-first index
+    # into the serialized stack (0 = topmost). Converted server-side to an engine
+    # stack index.
+    target_stack_index: int | None = Field(default=None, ge=0)
     # Natural Selection: "you may have that player shuffle" — true to shuffle the
     # target's library after reordering its top cards.
     shuffle: bool | None = None

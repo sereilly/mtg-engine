@@ -1194,6 +1194,52 @@ function cardRequiresTargetAny(card) {
   return nonActivatedLines.some((line) => line.toLowerCase().includes("any target"));
 }
 
+// Spells that target another spell on the stack (Counterspell, Fork, the colored
+// Blasts, Spell Blast). The player chooses which spell on the stack to target.
+function cardRequiresTargetStackSpell(card) {
+  if (!card || typeof card === "string") return false;
+  const lines = (card.oracle_text || "").split("\n");
+  const nonActivatedLines = lines.filter((line) => !/^\s*(\{[^}]+\})+\s*:/.test(line));
+  return nonActivatedLines.some((line) => {
+    const t = line.toLowerCase();
+    return t.includes("counter target") || (t.includes("copy target") && t.includes("spell"));
+  });
+}
+
+// Color word the spell-target prompt is restricted to (Blue/Red Elemental Blast),
+// or null when any spell is a legal target.
+function stackSpellTargetColorFilter(card) {
+  const text = (card.oracle_text || "").toLowerCase();
+  const m = text.match(/counter target (\w+) spell/);
+  if (!m) return null;
+  return { blue: "U", red: "R", black: "B", green: "G", white: "W" }[m[1]] || null;
+}
+
+// True when the spell can only copy instants/sorceries (Fork).
+function stackSpellTargetInstantSorceryOnly(card) {
+  return (card.oracle_text || "").toLowerCase().includes("copy target instant or sorcery spell");
+}
+
+// Whether a serialized stack item is a legal target for the in-progress
+// spell-target cast prompt.
+function isStackItemValidCastTarget(item) {
+  if (!item || !pendingCastTarget || pendingCastTarget.targetKind !== "stack") return false;
+  if (item.type !== "spell") return false;  // only spells, not activated/triggered abilities
+  const card = pendingCastTarget.card;
+  const cardType = String(item.card?.type || "").toLowerCase();
+  if (stackSpellTargetInstantSorceryOnly(card) &&
+      !(cardType.includes("instant") || cardType.includes("sorcery"))) {
+    return false;
+  }
+  const colorFilter = stackSpellTargetColorFilter(card);
+  if (colorFilter) {
+    const colors = (item.card?.colors || []).map((c) => String(c).toUpperCase());
+    // Fall back to a color-identity check if explicit colors aren't serialized.
+    if (!colors.includes(colorFilter)) return false;
+  }
+  return true;
+}
+
 // Battlefield permanents that are legal targets for the in-progress cast prompt,
 // returned as "seat-permanentIndex" canvas keys. Covers every battlefield target
 // kind (creature/land/artifact/permanent/any) so the canvas can highlight them —
@@ -2429,6 +2475,9 @@ function renderActivationPrompt() {
     } else if (pendingCastTarget.targetKind === "any") {
       body.textContent = "Click a creature on the battlefield, or click a player's life pill (glowing yellow) to target them.";
       steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
+    } else if (pendingCastTarget.targetKind === "stack") {
+      body.textContent = "Click a glowing spell on the stack to choose which one to target.";
+      steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
     } else {
       const players = Array.isArray(currentState?.players) ? currentState.players : [];
       const targetButtons = players
@@ -2788,6 +2837,27 @@ function startCastAnyTargetPrompt(card, castAction = "cast") {
   renderActivationPrompt();
   renderBoard(currentState);
   updateActionHint(`Choose any target for ${cardName}: click a creature on the battlefield, or click a player's glowing life pill.`);
+}
+
+function startCastStackSpellPrompt(card, castAction = "cast") {
+  const cardName = normalizeCardName(card);
+  if (!cardName) return;
+
+  pendingCastTarget = {
+    card,
+    cardName,
+    targetKind: "stack",
+    castAction,
+  };
+  const validCount = (_currentStack || []).filter(isStackItemValidCastTarget).length;
+  if (validCount === 0) {
+    clearPendingHandCast();
+    updateActionHint(`No valid spell on the stack for ${cardName} to target.`, true);
+    return;
+  }
+  renderActivationPrompt();
+  renderStack(currentState ? currentState.stack : _currentStack);
+  updateActionHint(`Choose a spell on the stack for ${cardName} to target (glowing).`);
 }
 
 function startCastXPrompt(card, targetSeat, targetPermanentIndex = null, castAction = "cast") {
@@ -3194,6 +3264,12 @@ async function castDebugCardForFree() {
     return;
   }
 
+  if (card && cardRequiresTargetStackSpell(card)) {
+    startCastStackSpellPrompt(card, "debug_cast_free");
+    updateDebugStatus(`Choose a spell on the stack for ${resolvedCardName}.`, "success");
+    return;
+  }
+
   if (card && cardRequiresTargetAny(card)) {
     startCastAnyTargetPrompt(card, "debug_cast_free");
     updateDebugStatus(`Choose a target for ${resolvedCardName}.`, "success");
@@ -3267,6 +3343,12 @@ async function castDebugCardForFreeAsOpponent() {
   if (card && cardRequiresTargetPermanent(card)) {
     startCastPermanentTargetPrompt(card, "debug_cast_free_opponent");
     updateDebugStatus(`Choose a permanent target for ${resolvedCardName} (as opponent).`, "success");
+    return;
+  }
+
+  if (card && cardRequiresTargetStackSpell(card)) {
+    startCastStackSpellPrompt(card, "debug_cast_free_opponent");
+    updateDebugStatus(`Choose a spell on the stack for ${resolvedCardName} (as opponent).`, "success");
     return;
   }
 
@@ -3803,6 +3885,11 @@ function createCardElement(card, options = {}) {
           return;
         }
 
+        if (cardRequiresTargetStackSpell(card)) {
+          startCastStackSpellPrompt(card);
+          return;
+        }
+
         if (cardRequiresTargetAny(card)) {
           startCastAnyTargetPrompt(card);
           return;
@@ -4185,6 +4272,40 @@ function toggleStackClickHold(arrayIndex) {
   updateActionHint("Priority held: tap lands and cast responses freely. Click the card again to release.");
 }
 
+function selectStackSpellTarget(arrayIndex) {
+  const pending = pendingCastTarget;
+  if (!pending || pending.targetKind !== "stack") return;
+  const item = _currentStack[arrayIndex];
+  if (!item || !isStackItemValidCastTarget(item)) return;
+
+  pendingCastTarget = null;
+  renderActivationPrompt();
+
+  // arrayIndex is the top-first index the server expects for target_stack_index.
+  const actionBody = {
+    seat,
+    action: pending.castAction || "cast",
+    card_name: pending.cardName,
+    target_stack_index: arrayIndex,
+  };
+
+  updateActionHint(`Casting ${pending.cardName} at ${item.card?.name || "spell"}...`);
+  sendAction(actionBody)
+    .then(() => {
+      updateActionHint(`Cast ${pending.cardName}.`);
+      clearPendingHandCast();
+    })
+    .catch((e) => {
+      if (e.message && e.message.toLowerCase().startsWith("insufficient mana")) {
+        pendingAutoTap = { card: pending.card, cardName: pending.cardName, actionBody };
+        renderActivationPrompt();
+        return;
+      }
+      clearPendingHandCast();
+      updateActionHint(e.message, true);
+    });
+}
+
 function renderStack(stack) {
   _currentStack = stack || [];
   const zone = q("stackZone");
@@ -4199,6 +4320,8 @@ function renderStack(stack) {
     zone.innerHTML = '<span class="stack-empty-label">Stack: empty</span>';
     return;
   }
+
+  const choosingStackTarget = !!pendingCastTarget && pendingCastTarget.targetKind === "stack";
 
   zone.innerHTML = "";
   stack.forEach((item, arrayIndex) => {
@@ -4224,7 +4347,18 @@ function renderStack(stack) {
         resumeAutoPassAfterHold();
       }
     });
-    box.addEventListener("click", () => toggleStackClickHold(arrayIndex));
+
+    if (choosingStackTarget) {
+      // While targeting a spell on the stack (Counterspell, Fork), clicking a
+      // legal spell chooses it as the target instead of toggling a hold.
+      const valid = isStackItemValidCastTarget(item);
+      box.classList.toggle("stack-targetable", valid);
+      if (valid) {
+        box.addEventListener("click", () => selectStackSpellTarget(arrayIndex));
+      }
+    } else {
+      box.addEventListener("click", () => toggleStackClickHold(arrayIndex));
+    }
 
     zone.appendChild(box);
   });
@@ -4759,6 +4893,7 @@ async function handleHandCardDropOnBattlefield({ event, targetSeat, targetItem }
       if (card && cardOffersCopyCreatureChoice(card) && getTargetableCreaturesForPrompt().length > 0) { startCastCreatureTargetPrompt(card); return; }
       if (card && cardRequiresTargetCreature(card)) { startCastCreatureTargetPrompt(card); return; }
       if (card && cardRequiresTargetPermanent(card)) { startCastPermanentTargetPrompt(card); return; }
+      if (card && cardRequiresTargetStackSpell(card)) { startCastStackSpellPrompt(card); return; }
       if (card && cardRequiresTargetAny(card)) { startCastAnyTargetPrompt(card); return; }
       if (card && cardRequiresTargetPlayer(card)) { startCastTargetPrompt(card); return; }
       const castTargetSeat = card ? getDefaultTargetSeat(payload.name) : targetSeat;
