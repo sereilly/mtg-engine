@@ -1198,6 +1198,15 @@ function cardRequiresTargetAny(card) {
   return nonActivatedLines.some((line) => line.toLowerCase().includes("any target"));
 }
 
+// Fireball-style spells: "X damage divided ... among any number of targets". The
+// player picks any number of targets (creatures and/or a player's face) and X,
+// and the spell costs {1} more per target beyond the first.
+function cardRequiresDividedDamage(card) {
+  if (!card || typeof card === "string") return false;
+  const t = (card.oracle_text || "").toLowerCase();
+  return t.includes("divided") && t.includes("among any number of targets");
+}
+
 // Spells that target another spell on the stack (Counterspell, Fork, the colored
 // Blasts, Spell Blast). The player chooses which spell on the stack to target.
 function cardRequiresTargetStackSpell(card) {
@@ -1669,6 +1678,13 @@ function isPendingCastTargetValidForCard(card, { targetSeat = null, zoneKind = "
     return type.includes("creature") || type.includes("planeswalker");
   }
 
+  if (pendingCastTarget.targetKind === "divided") {
+    if (zoneKind !== "battlefield") return false;
+    if (!Number.isInteger(permanentIndex)) return false;
+    if (!card || typeof card === "string") return false;
+    return String(card.type || "").toLowerCase().includes("creature");
+  }
+
   return false;
 }
 
@@ -2027,9 +2043,12 @@ function applyCoinFlipPrompt(info) {
   cancelBtn.disabled = true;
   customOkBtn.disabled = true;
 
+  const loserChoice = !!info.is_loser_choice;
   if (info.is_my_turn) {
-    title.textContent = "You won the coin flip!";
-    body.textContent = `${escapeHtml(info.winner_name || "You")} won the coin flip. Do you want to go first or second?`;
+    title.textContent = loserChoice ? "You lost — your call" : "You won the coin flip!";
+    body.textContent = loserChoice
+      ? `You lost the last game, so ${escapeHtml(info.winner_name || "you")} choose who plays first. Do you want to go first or second?`
+      : `${escapeHtml(info.winner_name || "You")} won the coin flip. Do you want to go first or second?`;
     steps.innerHTML = `
       <div class="prompt-choice-row">
         <button type="button" class="prompt-choice-btn" id="coinFlipFirstBtn">Go First</button>
@@ -2042,8 +2061,10 @@ function applyCoinFlipPrompt(info) {
       sendAction({ seat, action: "coin_flip_choose", hand_index: 1 })
     );
   } else {
-    title.textContent = "Coin Flip";
-    body.textContent = `${escapeHtml(info.winner_name || "Opponent")} won the coin flip and is choosing who goes first.`;
+    title.textContent = loserChoice ? "Choosing who plays first" : "Coin Flip";
+    body.textContent = loserChoice
+      ? `${escapeHtml(info.winner_name || "Opponent")} lost the last game and is choosing who plays first.`
+      : `${escapeHtml(info.winner_name || "Opponent")} won the coin flip and is choosing who goes first.`;
     steps.innerHTML = `<div>Waiting for ${escapeHtml(info.waiting_for || "opponent")} to choose...</div>`;
   }
 }
@@ -2548,6 +2569,21 @@ function renderActivationPrompt() {
     } else if (pendingCastTarget.targetKind === "any") {
       body.textContent = "Click a creature on the battlefield, or click a player's life pill (glowing yellow) to target them.";
       steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
+    } else if (pendingCastTarget.targetKind === "divided") {
+      body.textContent =
+        "Click creatures to split the damage among them, or click a player's life pill to hit their face. Then confirm to choose X.";
+      const n = dividedTargetCount();
+      steps.innerHTML = [
+        `<div>Card: ${escapeHtml(pendingCastTarget.cardName)}</div>`,
+        `<div>${escapeHtml(dividedTargetsHint())}</div>`,
+        `<div class="prompt-choice-row"><button type="button" class="prompt-choice-btn" id="dividedConfirmBtn"${n === 0 ? " disabled" : ""}>Confirm targets</button></div>`,
+      ].join("");
+      const confirmBtn = document.getElementById("dividedConfirmBtn");
+      if (confirmBtn) confirmBtn.addEventListener("click", confirmDividedTargets);
+      cancelBtn.classList.remove("hidden");
+      cancelBtn.disabled = false;
+      customOkBtn.disabled = true;
+      return;
     } else if (pendingCastTarget.targetKind === "stack") {
       body.textContent = "Click a glowing spell on the stack to choose which one to target.";
       steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
@@ -2996,6 +3032,110 @@ function startCastAnyTargetPrompt(card, castAction = "cast") {
   updateActionHint(`Choose any target for ${cardName}: click a creature on the battlefield, or click a player's glowing life pill.`);
 }
 
+// Fireball-style "divided among any number of targets" cast flow. The player
+// accumulates targets (creatures on one side, or a single player's face),
+// confirms, then chooses X — the extra targets are taxed {1} each.
+function startCastDividedPrompt(card, castAction = "cast") {
+  const cardName = normalizeCardName(card);
+  if (!cardName) return;
+  pendingCastTarget = {
+    card,
+    cardName,
+    castAction,
+    targetKind: "divided",
+    dividedTargets: [], // [{ seat, idx }] creatures, all on one seat
+    dividedFaceSeat: null, // a player's face when chosen instead of creatures
+  };
+  renderActivationPrompt();
+  renderBoard(currentState);
+  updateActionHint(
+    `Choose targets for ${cardName}: click creatures to split the damage among them, or click a player's life pill to hit their face. Then confirm.`,
+  );
+}
+
+function dividedTargetCount() {
+  const p = pendingCastTarget;
+  if (!p || p.targetKind !== "divided") return 0;
+  return p.dividedFaceSeat !== null ? 1 : p.dividedTargets.length;
+}
+
+function dividedTargetsHint() {
+  const n = dividedTargetCount();
+  if (n === 0) return "No targets chosen yet.";
+  const extra = n > 1 ? ` (+${n - 1} mana for the extra target${n - 1 === 1 ? "" : "s"})` : "";
+  return `${n} target${n === 1 ? "" : "s"} chosen${extra}.`;
+}
+
+function toggleDividedCreatureTarget(targetSeat, permanentIndex) {
+  const p = pendingCastTarget;
+  if (!p || p.targetKind !== "divided") return;
+  // Choosing a creature clears any face selection (the engine splits damage
+  // among creatures on one battlefield, or sends it all to one face).
+  p.dividedFaceSeat = null;
+  if (p.dividedTargets.length && p.dividedTargets[0].seat !== targetSeat) {
+    updateActionHint("All creature targets must be on the same side.", true);
+    return;
+  }
+  const existing = p.dividedTargets.findIndex((t) => t.seat === targetSeat && t.idx === permanentIndex);
+  if (existing >= 0) p.dividedTargets.splice(existing, 1);
+  else p.dividedTargets.push({ seat: targetSeat, idx: permanentIndex });
+  renderActivationPrompt();
+  renderBoard(currentState);
+  updateActionHint(dividedTargetsHint());
+}
+
+function setDividedFaceTarget(targetSeat) {
+  const p = pendingCastTarget;
+  if (!p || p.targetKind !== "divided") return;
+  p.dividedTargets = [];
+  p.dividedFaceSeat = targetSeat;
+  renderActivationPrompt();
+  renderBoard(currentState);
+  updateActionHint(dividedTargetsHint());
+}
+
+function confirmDividedTargets() {
+  const p = pendingCastTarget;
+  if (!p || p.targetKind !== "divided") return;
+  const n = dividedTargetCount();
+  if (n === 0) {
+    updateActionHint("Choose at least one target first.", true);
+    return;
+  }
+  const resolved =
+    p.dividedFaceSeat !== null
+      ? { targetSeat: p.dividedFaceSeat, indices: null }
+      : { targetSeat: p.dividedTargets[0].seat, indices: p.dividedTargets.map((t) => t.idx) };
+  const { card, cardName, castAction } = p;
+  pendingCastTarget = null;
+  battlefieldCanvas?.setTargetingKeys([]);
+  for (const elementId of ["selfLife", "oppLife", "selfName", "oppName"]) {
+    q(elementId)?.classList.remove("targeting-valid");
+  }
+  startCastDividedXPrompt(card, cardName, resolved, n - 1, castAction || "cast");
+}
+
+function startCastDividedXPrompt(card, cardName, resolved, extraTargetTax, castAction = "cast") {
+  const baseMax = getMaxAffordableX(getCurrentPlayerState()?.mana_pool, card.mana_cost || "");
+  pendingCastX = {
+    kind: "cast_x",
+    card,
+    cardName,
+    targetSeat: resolved.targetSeat,
+    targetPermanentIndex: null,
+    dividedIndices: resolved.indices, // null => all damage to the chosen face
+    extraTargetTax,
+    castAction,
+    manaRequirement: parseManaCostSymbols(card.mana_cost || ""),
+    // Each target beyond the first eats {1} of generic mana that could go to X.
+    maxX: Math.max(0, baseMax - Math.max(0, extraTargetTax)),
+    awaitingCustomValue: false,
+  };
+  renderActivationPrompt();
+  const count = resolved.indices ? resolved.indices.length : 1;
+  updateActionHint(`Choose X for ${cardName} — damage split among ${count} target${count === 1 ? "" : "s"}.`);
+}
+
 function startCastStackSpellPrompt(card, castAction = "cast") {
   const cardName = normalizeCardName(card);
   if (!cardName) return;
@@ -3131,8 +3271,12 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
 
 function handlePlayerTargetClick(targetSeat) {
   if (!pendingCastTarget) return;
-  if (pendingCastTarget.targetKind !== "player" && pendingCastTarget.targetKind !== "any") return;
   if (!Number.isInteger(targetSeat)) return;
+  if (pendingCastTarget.targetKind === "divided") {
+    setDividedFaceTarget(targetSeat);
+    return;
+  }
+  if (pendingCastTarget.targetKind !== "player" && pendingCastTarget.targetKind !== "any") return;
   resolvePendingCastTarget(targetSeat);
 }
 
@@ -3158,14 +3302,22 @@ function resolvePendingCastX(xValue) {
   renderActivationPrompt();
   updateActionHint(`Casting ${pending.cardName} with X = ${selectedX}...`);
 
-  sendAction({
+  const body = {
     seat,
     action: pending.castAction || "cast",
     card_name: pending.cardName,
     target_seat: pending.targetSeat,
-    permanent_index: pending.targetPermanentIndex,
     x_value: selectedX,
-  })
+  };
+  // Fireball-style casts carry a list of split targets; everything else carries
+  // a single permanent index (or none, for a face/player target).
+  if (Array.isArray(pending.dividedIndices)) {
+    body.target_permanent_indices = pending.dividedIndices;
+  } else {
+    body.permanent_index = pending.targetPermanentIndex;
+  }
+
+  sendAction(body)
     .then(() => updateActionHint(`Cast ${pending.cardName} with X = ${selectedX}.`))
     .catch((e) => updateActionHint(e.message, true))
     .finally(() => clearPendingHandCast());
@@ -3406,6 +3558,12 @@ async function castDebugCardForFree() {
     return;
   }
 
+  if (card && cardRequiresDividedDamage(card)) {
+    startCastDividedPrompt(card, "debug_cast_free");
+    updateDebugStatus(`Choose targets for ${resolvedCardName}.`, "success");
+    return;
+  }
+
   if (card && cardRequiresTargetAny(card)) {
     startCastAnyTargetPrompt(card, "debug_cast_free");
     updateDebugStatus(`Choose a target for ${resolvedCardName}.`, "success");
@@ -3491,6 +3649,12 @@ async function castDebugCardForFreeAsOpponent() {
   if (card && cardRequiresTargetStackSpell(card)) {
     startCastStackSpellPrompt(card, "debug_cast_free_opponent");
     updateDebugStatus(`Choose a spell on the stack for ${resolvedCardName} (as opponent).`, "success");
+    return;
+  }
+
+  if (card && cardRequiresDividedDamage(card)) {
+    startCastDividedPrompt(card, "debug_cast_free_opponent");
+    updateDebugStatus(`Choose targets for ${resolvedCardName} (as opponent).`, "success");
     return;
   }
 
@@ -4035,6 +4199,11 @@ function createCardElement(card, options = {}) {
 
         if (cardRequiresTargetStackSpell(card)) {
           startCastStackSpellPrompt(card);
+          return;
+        }
+
+        if (cardRequiresDividedDamage(card)) {
+          startCastDividedPrompt(card);
           return;
         }
 
@@ -4861,7 +5030,9 @@ function renderBoard(state) {
 
   const highlightPlayerFaces = !!(
     pendingCastTarget &&
-    (pendingCastTarget.targetKind === "any" || pendingCastTarget.targetKind === "player")
+    (pendingCastTarget.targetKind === "any" ||
+      pendingCastTarget.targetKind === "player" ||
+      pendingCastTarget.targetKind === "divided")
   );
   for (const elementId of ["selfLife", "oppLife", "selfName", "oppName"]) {
     q(elementId)?.classList.toggle("targeting-valid", highlightPlayerFaces);
@@ -5084,6 +5255,7 @@ async function handleHandCardDropOnBattlefield({ event, targetSeat, targetItem }
       if (card && cardRequiresTargetCreature(card)) { startCastCreatureTargetPrompt(card); return; }
       if (card && cardRequiresTargetPermanent(card)) { startCastPermanentTargetPrompt(card); return; }
       if (card && cardRequiresTargetStackSpell(card)) { startCastStackSpellPrompt(card); return; }
+      if (card && cardRequiresDividedDamage(card)) { startCastDividedPrompt(card); return; }
       if (card && cardRequiresTargetAny(card)) { startCastAnyTargetPrompt(card); return; }
       if (card && cardRequiresTargetPlayer(card)) { startCastTargetPrompt(card); return; }
       const castTargetSeat = card ? getDefaultTargetSeat(payload.name) : targetSeat;
@@ -5192,6 +5364,10 @@ function initBattlefieldCanvas() {
             permanentIndex,
           });
           if (!valid) { updateActionHint("That is not a valid target.", true); return; }
+          if (pendingCastTarget.targetKind === "divided") {
+            toggleDividedCreatureTarget(cardSeat, permanentIndex);
+            return;
+          }
           resolvePendingCastTarget(cardSeat, permanentIndex);
           return;
         }
@@ -5246,7 +5422,16 @@ function initBattlefieldCanvas() {
     },
 
     onStackCardClick(info) {
-      if (info) toggleStackClickHold(info.index);
+      if (!info) return;
+      // While targeting a spell on the stack (Counterspell, Fork, …), clicking a
+      // spell card on the on-battlefield stack chooses it as the target — the
+      // same as clicking it in the side stack panel. The canvas stack index
+      // matches the stack-panel array index (both come from state.stack).
+      if (pendingCastTarget && pendingCastTarget.targetKind === "stack") {
+        selectStackSpellTarget(info.index);
+        return;
+      }
+      toggleStackClickHold(info.index);
     },
 
     onHandCardDrop(info) {
@@ -5514,7 +5699,13 @@ q("joinBtn").addEventListener("click", async () => {
 
 for (const elementId of ["selfName", "oppName", "selfLife", "oppLife"]) {
   q(elementId)?.addEventListener("click", (event) => {
-    if (!pendingCastTarget || (pendingCastTarget.targetKind !== "player" && pendingCastTarget.targetKind !== "any")) return;
+    if (
+      !pendingCastTarget ||
+      (pendingCastTarget.targetKind !== "player" &&
+        pendingCastTarget.targetKind !== "any" &&
+        pendingCastTarget.targetKind !== "divided")
+    )
+      return;
     const source = event.currentTarget;
     if (!(source instanceof HTMLElement)) return;
     const targetSeat = Number(source.dataset.targetSeat);

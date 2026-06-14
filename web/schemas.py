@@ -80,6 +80,10 @@ class GameActionRequest(BaseModel):
     permanent_name: str | None = None
     permanent_index: int | None = Field(default=None, ge=0)
     target_permanent_index: int | None = Field(default=None, ge=0)
+    # Fireball and other "divided among any number of targets" spells: the list
+    # of battlefield indices (on target_seat) the damage is split among. Takes
+    # precedence over the single permanent_index when present.
+    target_permanent_indices: list[int] | None = Field(default=None)
     target_seat: int | None = Field(default=None, ge=0, le=1)
     x_value: int | None = Field(default=None, ge=0)
     hand_index: int | None = Field(default=None, ge=0)

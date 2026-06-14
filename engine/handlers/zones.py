@@ -168,7 +168,7 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
 @effect_handler("bounce_target_creature")
 def bounce_target_creature(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     target = context.target
-    bounced = game._bounce_target_creature(target)
+    bounced = game._bounce_target_creature(target, context.target_permanent_index)
     game.log.append("Returned creature to hand" if bounced else "No creature to return")
     return True, "resolved"
 

@@ -66,6 +66,11 @@ class Session:
     pregame_phase: str | None = None  # "coin_flip", "mulligan", "bottom_select"
     coin_flip_winner: int | None = None
     pregame_starting_player: int | None = None
+    # On a rematch the previous game's loser, rather than a coin flip, decides
+    # who plays first. When set, _begin_pregame skips the flip and hands that
+    # seat the first-player choice; coin_flip_is_loser_choice drives the UI text.
+    regame_first_chooser: int | None = None
+    coin_flip_is_loser_choice: bool = False
     mulligan_offer_seat: int | None = None
     mulligan_kept_seats: set[int] = field(default_factory=set)
     mulligan_bottom_seat: int | None = None
@@ -171,15 +176,26 @@ class SessionStore:
         game = session.game
         seed = session.seed
         if session.use_pregame:
-            # Rule 103.1: flip coin and record the winner; hand dealing is deferred
-            # until the winner chooses to go first or second.
-            flip_rng = random.Random(seed + 2)
-            coin_flip_winner = flip_rng.randrange(len(game.players))
-            game.log.append(
-                f"Coin flip: {game.players[coin_flip_winner].name} wins the coin flip!"
-            )
-            session.pregame_phase = "coin_flip"
-            session.coin_flip_winner = coin_flip_winner
+            chooser = session.regame_first_chooser
+            if chooser is not None:
+                # Rematch: the previous loser chooses who plays first — no flip.
+                game.log.append(
+                    f"{game.players[chooser].name} lost the last game and chooses who plays first"
+                )
+                session.pregame_phase = "coin_flip"
+                session.coin_flip_winner = chooser
+                session.coin_flip_is_loser_choice = True
+            else:
+                # Rule 103.1: flip coin and record the winner; hand dealing is deferred
+                # until the winner chooses to go first or second.
+                flip_rng = random.Random(seed + 2)
+                coin_flip_winner = flip_rng.randrange(len(game.players))
+                game.log.append(
+                    f"Coin flip: {game.players[coin_flip_winner].name} wins the coin flip!"
+                )
+                session.pregame_phase = "coin_flip"
+                session.coin_flip_winner = coin_flip_winner
+                session.coin_flip_is_loser_choice = False
         else:
             # Skip interactive pregame (ai_vs_ai or legacy clients).
             starting_player = game.select_starting_player(rng=random.Random(seed + 2))
@@ -238,12 +254,14 @@ class SessionStore:
 
         return session
 
-    def restart(self, session: Session) -> Session:
+    def restart(self, session: Session, first_chooser: int | None = None) -> Session:
         """Rebuild a fresh game in the same session for a coordinated rematch.
 
         Keeps the same two players, seat assignments, and deck selections, but
-        reshuffles both decks off a new seed and replays the pregame (coin flip /
-        mulligans). All per-game transient state on the session is reset.
+        reshuffles both decks off a new seed and replays the pregame (mulligans).
+        When ``first_chooser`` is given (the previous game's loser) that seat
+        chooses who plays first instead of a coin flip. All per-game transient
+        state on the session is reset.
         """
         seed = secrets.randbits(32)
         host_deck = self._build_seat_deck(
@@ -271,6 +289,8 @@ class SessionStore:
         session.pregame_phase = None
         session.coin_flip_winner = None
         session.pregame_starting_player = None
+        session.regame_first_chooser = first_chooser
+        session.coin_flip_is_loser_choice = False
         session.mulligan_offer_seat = None
         session.mulligan_kept_seats = set()
         session.mulligan_bottom_seat = None

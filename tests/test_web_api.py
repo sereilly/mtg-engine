@@ -1762,3 +1762,212 @@ def test_ai_turn_does_not_hold_when_nothing_flagged():
     assert resp.status_code == 200
     # No hold: the AI completed its turn and play passed to the human.
     assert resp.json()["current_turn"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Playtest fixes: Fireball multi-target prompt, Unsummon targeting, regame order
+# ---------------------------------------------------------------------------
+
+
+def _make_main_phase_session(seed: int, hand_card, mana_pool=None, opp_battlefield=None):
+    """HvH session with seat 0 on the play in its main phase, holding priority."""
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "guest_name": "Guest",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": seed,
+        },
+    ).json()
+    sid = created["session_id"]
+    client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
+    session = store.get(sid)
+    session.game.players[0].hand = [hand_card]
+    if mana_pool is not None:
+        session.game.players[0].mana_pool = mana_pool
+    if opp_battlefield is not None:
+        session.game.players[1].battlefield = opp_battlefield
+    session.game.current_turn_phase = "precombat_main"
+    session.game.current_step = "precombat_main"
+    session.game.current_phase = "main"
+    session.current_turn = 0
+    session.game.active_player_index = 0
+    session.game.start_priority_window(0)
+    return sid
+
+
+_FIREBALL_TEXT = (
+    "This spell costs {1} more to cast for each target beyond the first.\n"
+    "Fireball deals X damage divided evenly, rounded down, among any number of targets."
+)
+
+
+def test_fireball_splits_damage_among_multiple_creatures_via_api():
+    fireball = _mk_card(
+        name="Fireball",
+        mana_cost="{X}{R}",
+        type_line="Sorcery",
+        oracle_text=_FIREBALL_TEXT,
+    )
+    creatures = [_mk_creature_card("Goblin A", 2, 2), _mk_creature_card("Goblin B", 2, 2)]
+    sid = _make_main_phase_session(
+        90101,
+        fireball,
+        mana_pool={"W": 0, "U": 0, "B": 0, "R": 1, "G": 0, "C": 5},
+        opp_battlefield=[Permanent(card=c) for c in creatures],
+    )
+
+    # X=4 over two targets => 2 damage each; the extra target costs {1} more, so
+    # the total is R + 4 + 1 = 6 mana.
+    cast = client.post(
+        f"/api/sessions/{sid}/action",
+        json={
+            "seat": 0,
+            "action": "cast",
+            "card_name": "Fireball",
+            "target_seat": 1,
+            "target_permanent_indices": [0, 1],
+            "x_value": 4,
+        },
+    )
+    assert cast.status_code == 200, cast.json()
+    assert len(cast.json()["stack"]) == 1
+
+    _resolve_top_stack(sid, 0)
+    state = client.get(f"/api/sessions/{sid}/state?seat=0").json()
+    assert state["players"][1]["battlefield"] == []
+
+
+def test_fireball_extra_target_cost_makes_underfunded_cast_fail_via_api():
+    fireball = _mk_card(
+        name="Fireball",
+        mana_cost="{X}{R}",
+        type_line="Sorcery",
+        oracle_text=_FIREBALL_TEXT,
+    )
+    creatures = [_mk_creature_card("Goblin A", 2, 2), _mk_creature_card("Goblin B", 2, 2)]
+    # Only 5 mana (R + 4 generic): two targets need 6, so the cast is rejected.
+    sid = _make_main_phase_session(
+        90102,
+        fireball,
+        mana_pool={"W": 0, "U": 0, "B": 0, "R": 1, "G": 0, "C": 4},
+        opp_battlefield=[Permanent(card=c) for c in creatures],
+    )
+
+    cast = client.post(
+        f"/api/sessions/{sid}/action",
+        json={
+            "seat": 0,
+            "action": "cast",
+            "card_name": "Fireball",
+            "target_seat": 1,
+            "target_permanent_indices": [0, 1],
+            "x_value": 4,
+        },
+    )
+    assert cast.status_code == 400
+
+
+def test_fireball_all_damage_to_face_via_api():
+    fireball = _mk_card(
+        name="Fireball",
+        mana_cost="{X}{R}",
+        type_line="Sorcery",
+        oracle_text=_FIREBALL_TEXT,
+    )
+    sid = _make_main_phase_session(
+        90103,
+        fireball,
+        mana_pool={"W": 0, "U": 0, "B": 0, "R": 1, "G": 0, "C": 6},
+    )
+    cast = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "cast", "card_name": "Fireball", "target_seat": 1, "x_value": 6},
+    )
+    assert cast.status_code == 200, cast.json()
+    _resolve_top_stack(sid, 0)
+    state = client.get(f"/api/sessions/{sid}/state?seat=0").json()
+    assert state["players"][1]["life"] == 14
+
+
+def test_unsummon_returns_the_chosen_creature_via_api():
+    unsummon = _mk_card(
+        name="Unsummon",
+        mana_cost="{U}",
+        type_line="Instant",
+        oracle_text="Return target creature to its owner's hand.",
+    )
+    bear = _mk_creature_card("Bear", 2, 2)
+    ogre = _mk_creature_card("Ogre", 3, 3)
+    sid = _make_main_phase_session(
+        90104,
+        unsummon,
+        mana_pool={"W": 0, "U": 1, "B": 0, "R": 0, "G": 0, "C": 0},
+        opp_battlefield=[Permanent(card=bear), Permanent(card=ogre)],
+    )
+
+    # Target the second creature (index 1, the Ogre).
+    cast = client.post(
+        f"/api/sessions/{sid}/action",
+        json={
+            "seat": 0,
+            "action": "cast",
+            "card_name": "Unsummon",
+            "target_seat": 1,
+            "permanent_index": 1,
+        },
+    )
+    assert cast.status_code == 200, cast.json()
+    _resolve_top_stack(sid, 0)
+
+    state = client.get(f"/api/sessions/{sid}/state?seat=0").json()
+    remaining = [p["name"] for p in state["players"][1]["battlefield"]]
+    assert remaining == ["Bear"]
+
+
+def test_rematch_loser_chooses_who_plays_first():
+    sid = _make_started_hvh_session(90200)
+    session = store.get(sid)
+    # Seat 0 loses the game; seat 1 is the winner.
+    session.game.players[0].life = 0
+    assert client.get(f"/api/sessions/{sid}/state?seat=0").json()["winner"] == 1
+
+    # Both players agree to a rematch.
+    client.post(f"/api/sessions/{sid}/rematch", json={"seat": 0})
+    second = client.post(f"/api/sessions/{sid}/rematch", json={"seat": 1}).json()
+
+    # No coin flip: the previous loser (seat 0) is the chooser.
+    pregame = second["pregame"]
+    assert pregame["phase"] == "coin_flip"
+    assert pregame["is_loser_choice"] is True
+    assert pregame["winner_seat"] == 0  # the chooser is the loser
+
+    loser_view = client.get(f"/api/sessions/{sid}/state?seat=0").json()["pregame"]
+    assert loser_view["is_my_turn"] is True
+    winner_view = client.get(f"/api/sessions/{sid}/state?seat=1").json()["pregame"]
+    assert winner_view["is_my_turn"] is False
+
+    # The winner cannot make the choice.
+    rejected = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 1, "action": "coin_flip_choose", "hand_index": 0},
+    )
+    assert rejected.status_code == 400
+
+    # The loser chooses to go first; the new game starts with them on the play.
+    chosen = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "coin_flip_choose", "hand_index": 0},
+    )
+    assert chosen.status_code == 200
+    assert store.get(sid).pregame_starting_player == 0
+
+
+def test_fresh_game_coin_flip_is_not_a_loser_choice():
+    sid = _make_started_hvh_session(90201)
+    pregame = client.get(f"/api/sessions/{sid}/state?seat=0").json()["pregame"]
+    assert pregame["phase"] == "coin_flip"
+    assert pregame["is_loser_choice"] is False

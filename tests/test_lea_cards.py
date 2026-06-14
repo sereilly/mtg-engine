@@ -708,6 +708,88 @@ def test_unsummon_returns_target_creature(all_cards):
     assert not p2.battlefield
     assert any(card.name == "Bear" for card in p2.hand)
 
+
+def test_unsummon_bounces_the_chosen_creature(all_cards):
+    # With several creatures in play, Unsummon must return the one the player
+    # targeted (index 1), not simply the first creature found.
+    unsummon = _get(all_cards, "Unsummon")
+    bear = _mk_card("Bear", "Creature — Bear")
+    ogre = _mk_card("Ogre", "Creature — Ogre")
+    wall = _mk_card("Wall", "Creature — Wall")
+    p1 = PlayerState(name="P1", hand=[unsummon])
+    p2 = PlayerState(
+        name="P2",
+        battlefield=[Permanent(card=bear), Permanent(card=ogre), Permanent(card=wall)],
+    )
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Unsummon", target_player_index=1, target_permanent_index=1)
+
+    assert result.supported
+    assert [p.card.name for p in p2.battlefield] == ["Bear", "Wall"]
+    assert [c.name for c in p2.hand] == ["Ogre"]
+
+
+def test_fireball_divides_damage_evenly_rounded_down(all_cards):
+    # X damage split evenly (rounded down) among the chosen targets.
+    fireball = _get(all_cards, "Fireball")
+    a = _mk_card("Grizzly", "Creature — Bear")  # 2/2 default
+    b = _mk_card("Hill Giant", "Creature — Giant")
+    p1 = PlayerState(name="P1", hand=[fireball])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=a), Permanent(card=b)])
+    game = Game(players=[p1, p2])
+
+    # X=5 over 2 targets => 2 damage each (rounded down); both 2/2s die.
+    result = game.cast_from_hand(
+        0, "Fireball", target_player_index=1, target_permanent_index=[0, 1], x_value=5
+    )
+
+    assert result.supported
+    assert not p2.battlefield
+
+
+def test_fireball_all_damage_to_a_single_player(all_cards):
+    fireball = _get(all_cards, "Fireball")
+    p1 = PlayerState(name="P1", hand=[fireball])
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Fireball", target_player_index=1, x_value=6)
+
+    assert result.supported
+    assert p2.life == 14
+
+
+def test_fireball_costs_one_more_for_each_target_beyond_the_first(all_cards):
+    # {X}{R}; two targets cost {1} more, so X=4 at two targets needs R+4+1 = 6.
+    fireball = _get(all_cards, "Fireball")
+    targets = [Permanent(card=_mk_card(f"Goblin{i}", "Creature — Goblin")) for i in range(2)]
+
+    # 6 mana available: cast succeeds and empties the pool.
+    p1 = PlayerState(name="P1", hand=[fireball],
+                     mana_pool={"W": 0, "U": 0, "B": 0, "R": 1, "G": 0, "C": 5})
+    p2 = PlayerState(name="P2", battlefield=list(targets))
+    game = Game(players=[p1, p2], enforce_mana_costs=True)
+    ok = game.queue_from_hand(
+        0, "Fireball", target_player_index=1, target_permanent_index=[0, 1], x_value=4
+    )
+    assert ok.supported
+    assert sum(p1.mana_pool.values()) == 0
+
+    # Only 5 mana (R+4): the extra-target tax makes the two-target cast unaffordable.
+    p1b = PlayerState(name="P1", hand=[fireball],
+                      mana_pool={"W": 0, "U": 0, "B": 0, "R": 1, "G": 0, "C": 4})
+    p2b = PlayerState(
+        name="P2",
+        battlefield=[Permanent(card=_mk_card(f"Goblin{i}", "Creature — Goblin")) for i in range(2)],
+    )
+    gameb = Game(players=[p1b, p2b], enforce_mana_costs=True)
+    fail = gameb.queue_from_hand(
+        0, "Fireball", target_player_index=1, target_permanent_index=[0, 1], x_value=4
+    )
+    assert not fail.supported
+
+
 def test_wheel_of_fortune_discards_then_draws(all_cards):
     wheel = _get(all_cards, "Wheel of Fortune")
     island = _get(all_cards, "Island")

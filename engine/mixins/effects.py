@@ -240,7 +240,19 @@ class EffectsMixin:
                 return True
         return False
 
-    def _bounce_target_creature(self, target: PlayerState) -> bool:
+    def _bounce_target_creature(
+        self, target: PlayerState, target_permanent_index: int | None = None
+    ) -> bool:
+        # Respect the chosen target when one was declared; otherwise fall back to
+        # the first creature so AI / legacy callers still resolve.
+        if isinstance(target_permanent_index, int) and 0 <= target_permanent_index < len(
+            target.battlefield
+        ):
+            candidate = target.battlefield[target_permanent_index]
+            if candidate.card.primary_type == "creature":
+                target.hand.append(candidate.card)
+                target.battlefield.pop(target_permanent_index)
+                return True
         for idx, permanent in enumerate(target.battlefield):
             if permanent.card.primary_type == "creature":
                 target.hand.append(permanent.card)

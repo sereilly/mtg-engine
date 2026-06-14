@@ -479,6 +479,15 @@ def _winner(session: Session) -> int | None:
     return None
 
 
+def _loser(session: Session) -> int | None:
+    """Return the seat of the losing player, or None when the game was a draw
+    or is not yet decided."""
+    win = _winner(session)
+    if win is None or win == -1:
+        return None
+    return 1 - win
+
+
 def _rematch_human_seats(session: Session) -> list[int]:
     """Joined human seats whose agreement is needed to start a rematch."""
     return [
@@ -586,6 +595,7 @@ def _build_pregame_info(session: Session, viewer_seat: int | None) -> dict | Non
         info["winner_seat"] = winner
         info["winner_name"] = winner_name
         info["is_my_turn"] = viewer_seat is not None and viewer_seat == winner
+        info["is_loser_choice"] = session.coin_flip_is_loser_choice
         if not info["is_my_turn"]:
             info["waiting_for"] = winner_name
 
@@ -1748,7 +1758,10 @@ def rematch_session(session_id: str, req: RematchRequest):
     needed = _rematch_human_seats(session)
 
     if all(s in session.rematch_votes for s in needed):
-        store.restart(session)
+        # The previous game's loser, not a coin flip, chooses who plays first.
+        # Capture it before restart() resets the board (and the life totals).
+        loser_seat = _loser(session)
+        store.restart(session, first_chooser=loser_seat)
         _pregame_auto_advance(session)
         _notify_session_change(session.id, "rematch_start")
     else:
@@ -1898,11 +1911,18 @@ def do_action(session_id: str, req: GameActionRequest):
         engine_stack_index = None
         if req.target_stack_index is not None:
             engine_stack_index = len(session.game.stack) - 1 - req.target_stack_index
+        # Fireball-style multi-target spells send a list of indices; it takes
+        # precedence over the single permanent_index.
+        permanent_target = (
+            req.target_permanent_indices
+            if req.target_permanent_indices is not None
+            else req.permanent_index
+        )
         result = session.game.queue_from_hand(
             req.seat,
             req.card_name,
             target_player_index=target,
-            target_permanent_index=req.permanent_index,
+            target_permanent_index=permanent_target,
             x_value=req.x_value,
             new_color=req.mana_color,
             target_stack_index=engine_stack_index,

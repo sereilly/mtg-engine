@@ -370,7 +370,14 @@ class BattlefieldCanvas {
     const free = this.cardItems.filter((c) => !stackedKeys.has(c.key));
     const stacked = [];
     for (const stack of this.stacks) {
-      for (const k of stack.keys) {
+      // Aura stacks keep the enchanted permanent at keys[0]; draw its auras
+      // first so they sit BEHIND the creature and never occlude it. Regular
+      // piles keep their natural bottom-to-top order.
+      const drawKeys =
+        stack.kind === "aura" && stack.keys.length > 1
+          ? [...stack.keys.slice(1), stack.keys[0]]
+          : stack.keys;
+      for (const k of drawKeys) {
         const item = this.cardItems.find((c) => c.key === k);
         if (item) stacked.push(item);
       }
@@ -625,7 +632,9 @@ class BattlefieldCanvas {
 
         let stack = this.stacks.find((s) => s.kind === "aura" && s.keys[0] === targetKey);
         if (!stack) {
-          stack = { id: `aura-${targetKey}`, keys: [targetKey], offsetY: BF_AURA_OFFSET_Y, kind: "aura" };
+          // Negative offset: auras fan UPWARD so they stick out the top of the
+          // enchanted permanent rather than below it.
+          stack = { id: `aura-${targetKey}`, keys: [targetKey], offsetY: -BF_AURA_OFFSET_Y, kind: "aura" };
           this.stacks.push(stack);
         }
         if (!stack.keys.includes(auraKey)) stack.keys.push(auraKey);
@@ -1222,6 +1231,9 @@ class BattlefieldCanvas {
       }
       moving = true;
     }
+    // The priority pulse animates continuously, so keep redrawing while a side
+    // holds priority and the game is still going.
+    if (this._priorityPulseSide()) moving = true;
     if (moving) this.needsRedraw = true;
   }
 
@@ -1516,6 +1528,46 @@ class BattlefieldCanvas {
       : { x: pos.x + BF_CARD_W / 2, y: pos.y + BF_CARD_H / 2 };
   }
 
+  // Which board half should pulse, or null if neither. Returns "you" when the
+  // viewer holds priority, "opponent" when the other player does. Suppressed
+  // once the game is over.
+  _priorityPulseSide() {
+    const st = this.currentState;
+    if (!st || st.winner !== null && st.winner !== undefined) return null;
+    const pp = st.priority_player;
+    if (pp !== 0 && pp !== 1) return null;
+    return pp === this.viewerSeat ? "you" : "opponent";
+  }
+
+  _drawPriorityPulse(ctx, cw, ch, grid) {
+    const side = this._priorityPulseSide();
+    if (!side) return;
+    const splitY = this.worldToCanvas(0, BF_WORLD_SPLIT_Y).y;
+    const yTop = side === "you" ? splitY : 0;
+    const yBot = side === "you" ? ch : splitY;
+    if (yBot - yTop <= 1) return;
+    const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 350);
+    const alpha = 0.08 + pulse * 0.24;
+    const color = side === "you" ? `rgba(74,222,128,${alpha})` : `rgba(248,82,82,${alpha})`;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, yTop, cw, yBot - yTop);
+    ctx.clip();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let gx = ((cw / 2) % grid); gx < cw; gx += grid) {
+      ctx.moveTo(gx, yTop);
+      ctx.lineTo(gx, yBot);
+    }
+    for (let gy = ((ch / 2) % grid); gy < ch; gy += grid) {
+      ctx.moveTo(0, gy);
+      ctx.lineTo(cw, gy);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
   _render() {
     if (!this.needsRedraw) return;
     this.needsRedraw = false;
@@ -1561,6 +1613,11 @@ class BattlefieldCanvas {
     }
     ctx.stroke();
     ctx.restore();
+
+    // ---- Priority pulse: tint the grid on the half of the player who holds
+    // priority — green on your side, red on the opponent's side — so it's
+    // obvious at a glance whose turn it is to act.
+    this._drawPriorityPulse(ctx, cw, ch, GRID);
 
     // Edge vignette so the table fades out toward the stage borders
     const vig = ctx.createRadialGradient(cw / 2, ch / 2, Math.min(cw, ch) * 0.38, cw / 2, ch / 2, Math.max(cw, ch) * 0.78);

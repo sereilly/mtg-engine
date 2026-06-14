@@ -400,6 +400,16 @@ class StackCastingMixin:
             self.log.append(target_reason)
             return SimulationResult(card.name, False, classification.effect_kind, target_reason)
 
+        # Fireball-style spells cost {1} more to cast for each target beyond the
+        # first. Count the chosen targets (a list of creature indices, or a
+        # single creature/player) and tax the extras as generic mana.
+        if "costs {1} more to cast for each target beyond the first" in card.oracle_text.lower():
+            if isinstance(target_permanent_index, list):
+                num_targets = len([i for i in target_permanent_index if isinstance(i, int)])
+            else:
+                num_targets = 1
+            extra_generic_tax += max(0, num_targets - 1)
+
         resolved_x_value = x_value
         if resolved_x_value is None and "{X}" in card.mana_cost.upper():
             resolved_x_value = self._infer_x_value(caster, card.mana_cost, extra_generic_tax)
