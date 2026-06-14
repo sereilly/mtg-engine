@@ -661,7 +661,12 @@ function openStateSyncStream() {
   const source = new EventSource(`/api/sessions/${sessionId}/events`);
   source.addEventListener("state", (event) => {
     let skipStale = false;
-    try { if (JSON.parse(event.data)?.reason === "undo") skipStale = true; } catch {}
+    // A rematch rebuilds the game with a fresh (shorter) log, so the monotonic-log
+    // stale guard would wrongly discard it — bypass the guard for those resets too.
+    try {
+      const reason = JSON.parse(event.data)?.reason;
+      if (reason === "undo" || reason === "rematch_start") skipStale = true;
+    } catch {}
     getState(skipStale).catch(() => {
       // Ignore transient refresh failures; the stream will keep delivering future updates.
     });
@@ -4615,6 +4620,27 @@ function renderGameOverOverlay(state) {
     textEl.textContent = "Defeat";
     textEl.classList.add("defeat");
   }
+
+  updateRematchButtons(state);
+}
+
+function updateRematchButtons(state) {
+  const playBtn = q("playAgainBtn");
+  if (!playBtn) return;
+
+  const rematch = state.mode === "human_vs_human" ? state.rematch : null;
+  if (rematch && rematch.you_requested) {
+    // We've asked; waiting on the opponent to agree.
+    playBtn.disabled = true;
+    playBtn.textContent = "Waiting for opponent…";
+  } else if (rematch && rematch.opponent_requested) {
+    // The opponent already asked — one click accepts and starts the rematch.
+    playBtn.disabled = false;
+    playBtn.textContent = "Accept Rematch";
+  } else {
+    playBtn.disabled = false;
+    playBtn.textContent = "Play Again";
+  }
 }
 
 function renderBoard(state) {
@@ -5248,6 +5274,52 @@ q("hostBackBtn")?.addEventListener("click", () => {
 
 q("joinBackBtn")?.addEventListener("click", () => {
   showMenuPage("home");
+});
+
+async function requestRematch() {
+  // Coordinated rematch: tell the server this seat wants to play again and wait
+  // for the opponent to agree. The shared session stays open; when both players
+  // have voted the server rebuilds the game and pushes fresh state over SSE.
+  if (!sessionId || seat === null) return;
+  const btn = q("playAgainBtn");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Waiting for opponent…";
+  }
+  try {
+    const payload = await postJson(`/api/sessions/${sessionId}/rematch`, { seat });
+    renderState(payload, { skipStaleCheck: true });
+  } catch (e) {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Play Again";
+    }
+    alert(e.message);
+  }
+}
+
+function restartLocalGame() {
+  // Single-browser modes (vs AI / AI vs AI): tear down the finished session and
+  // spin up a fresh one. createSession() reads the (still-populated) host inputs.
+  q("gameOverOverlay")?.classList.add("hidden");
+  closeStateSyncStream();
+  sessionId = null;
+  seat = null;
+  currentState = null;
+  previousLifeBySeat = {};
+  return createSession().catch((e) => resetToSetup(e.message));
+}
+
+q("playAgainBtn")?.addEventListener("click", async () => {
+  if (currentState?.mode === "human_vs_human") {
+    await requestRematch();
+  } else {
+    await restartLocalGame();
+  }
+});
+
+q("leaveRoomBtn")?.addEventListener("click", () => {
+  resetToSetup("Left the game. Start a new one when you're ready.");
 });
 
 q("startBtn").addEventListener("click", async () => {

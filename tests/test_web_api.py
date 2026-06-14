@@ -347,6 +347,75 @@ def test_networked_hvh_join_sets_name_and_starts_game():
     assert state["pregame"]["phase"] == "coin_flip"
 
 
+def _make_started_hvh_session(seed: int) -> str:
+    """Create a human_vs_human session with both players joined and the game live."""
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "host_colors": 2,
+            "seed": seed,
+            "enable_pregame": True,
+        },
+    ).json()
+    sid = created["session_id"]
+    client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
+    return sid
+
+
+def test_rematch_requires_both_players_then_rebuilds_game():
+    sid = _make_started_hvh_session(7200)
+    session = store.get(sid)
+    # Force a finished game: host (seat 0) has lost.
+    session.game.players[0].life = 0
+    finished = client.get(f"/api/sessions/{sid}/state?seat=0").json()
+    assert finished["winner"] == 1
+    assert finished["status"] == "finished"
+
+    # First vote: not enough — the game stays finished, opponent is told to wait.
+    first = client.post(f"/api/sessions/{sid}/rematch", json={"seat": 0})
+    assert first.status_code == 200
+    body = first.json()
+    assert body["status"] == "finished"
+    assert body["rematch"]["you_requested"] is True
+    assert body["rematch"]["opponent_requested"] is False
+
+    # The other player sees the pending request.
+    opp_view = client.get(f"/api/sessions/{sid}/state?seat=1").json()
+    assert opp_view["rematch"]["opponent_requested"] is True
+
+    # Second vote: both agree -> a fresh game is rebuilt in the same session.
+    second = client.post(f"/api/sessions/{sid}/rematch", json={"seat": 1}).json()
+    assert second["status"] == "active"
+    assert second["winner"] is None
+    assert second["pregame"]["phase"] == "coin_flip"
+    # Same session id and players, full life restored, votes cleared.
+    assert second["session_id"] == sid
+    assert second["players"][0]["life"] == 20
+    assert second["players"][1]["life"] == 20
+    assert second["rematch"]["votes"] == []
+
+
+def test_rematch_rejected_before_game_finishes():
+    sid = _make_started_hvh_session(7201)
+    resp = client.post(f"/api/sessions/{sid}/rematch", json={"seat": 0})
+    assert resp.status_code == 400
+    assert "finished" in resp.json()["detail"]
+
+
+def test_rematch_rejected_for_non_hvh_mode():
+    created = client.post(
+        "/api/sessions",
+        json={"mode": "human_vs_ai", "host_name": "Solo", "host_colors": 2, "seed": 7202},
+    ).json()
+    sid = created["session_id"]
+    store.get(sid).game.players[1].life = 0  # AI loses
+    resp = client.post(f"/api/sessions/{sid}/rematch", json={"seat": 0})
+    assert resp.status_code == 400
+    assert "human vs human" in resp.json()["detail"]
+
+
 def test_networked_hvh_join_builds_guest_deck_off_host_seed(monkeypatch):
     captured_seeds = []
     stub_deck = [_mk_card("Island", "", "Basic Land - Island", "") for _ in range(40)]

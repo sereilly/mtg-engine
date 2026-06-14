@@ -41,6 +41,7 @@ from .schemas import (
     GameActionRequest,
     JoinSessionRequest,
     RandomDeckRequest,
+    RematchRequest,
     VerificationRequest,
 )
 from .session_store import Session, SessionStore
@@ -406,6 +407,35 @@ def _winner(session: Session) -> int | None:
     if life1 <= 0:
         return 0
     return None
+
+
+def _rematch_human_seats(session: Session) -> list[int]:
+    """Joined human seats whose agreement is needed to start a rematch."""
+    return [
+        s for s in sorted(session.joined_seats)
+        if _seat_type(session, s) == "human"
+    ]
+
+
+def _build_rematch_info(session: Session, viewer_seat: int | None) -> dict | None:
+    """Serialize coordinated-rematch state for human_vs_human games.
+
+    Only meaningful once the game is finished; clients use it to drive the
+    "Play Again" / "Accept Rematch" / "Waiting for opponent…" button states.
+    """
+    if session.mode != "human_vs_human":
+        return None
+    needed = _rematch_human_seats(session)
+    you_requested = viewer_seat is not None and viewer_seat in session.rematch_votes
+    opponent_requested = any(
+        s in session.rematch_votes for s in needed if s != viewer_seat
+    )
+    return {
+        "votes": sorted(session.rematch_votes),
+        "needed": needed,
+        "you_requested": you_requested,
+        "opponent_requested": opponent_requested,
+    }
 
 
 def _cleanup_discard_requirement(session: Session) -> int:
@@ -909,6 +939,7 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "combat": session.game.get_combat_state(),
         "log": session.game.log,
         "winner": win,
+        "rematch": _build_rematch_info(session, viewer_seat),
         "cleanup_discard": cleanup_info,
         "untap_land_selection": untap_info,
         "upkeep_pay": _build_upkeep_pay_info(session, viewer_seat),
@@ -1591,6 +1622,29 @@ def join_session(session_id: str, req: JoinSessionRequest, request: Request):
         "seat": 1,
         "state": _serialize_state(session, viewer_seat=1),
     }
+
+
+@app.post("/api/sessions/{session_id}/rematch")
+def rematch_session(session_id: str, req: RematchRequest):
+    session = _require_session(session_id)
+    if session.mode != "human_vs_human":
+        raise HTTPException(status_code=400, detail="rematch is only available in human vs human games")
+    if req.seat not in session.joined_seats:
+        raise HTTPException(status_code=400, detail="seat has not joined")
+    if _winner(session) is None and session.status != "finished":
+        raise HTTPException(status_code=400, detail="game is not finished")
+
+    session.rematch_votes.add(req.seat)
+    needed = _rematch_human_seats(session)
+
+    if all(s in session.rematch_votes for s in needed):
+        store.restart(session)
+        _pregame_auto_advance(session)
+        _notify_session_change(session.id, "rematch_start")
+    else:
+        _notify_session_change(session.id, "rematch_vote")
+
+    return _serialize_state(session, viewer_seat=req.seat)
 
 
 @app.get("/api/sessions/{session_id}/events")

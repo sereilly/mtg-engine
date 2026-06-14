@@ -3,9 +3,9 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **290**
-- Passed: **15**
-- Failed: **0**
-- Untested: **275**
+- Passed: **17**
+- Failed: **2**
+- Untested: **271**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -84,7 +84,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Earth Elemental | ⬜ untested |  |
 | Earthbind | ⬜ untested |  |
 | Earthquake | ⬜ untested |  |
-| Elvish Archers | ⬜ untested |  |
+| Elvish Archers | ✅ pass |  |
 | Evil Presence | ⬜ untested |  |
 | False Orders | ⬜ untested |  |
 | Farmstead | ⬜ untested |  |
@@ -96,7 +96,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Firebreathing | ⬜ untested |  |
 | Flashfires | ⬜ untested |  |
 | Flight | ⬜ untested |  |
-| Fog | ⬜ untested |  |
+| Fog | ✅ pass |  |
 | Force of Nature | ⬜ untested |  |
 | Forcefield | ⬜ untested |  |
 | Forest | ⬜ untested |  |
@@ -149,7 +149,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Lance | ⬜ untested |  |
 | Ley Druid | ⬜ untested |  |
 | Library of Leng | ⬜ untested |  |
-| Lich | ⬜ untested |  |
+| Lich | ❌ fail | Lich killed me when I played it even though it says I don't lose the game for having 0 or less life. |
 | Lifeforce | ⬜ untested |  |
 | Lifelace | ⬜ untested |  |
 | Lifetap | ⬜ untested |  |
@@ -233,7 +233,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Shanodin Dryads | ⬜ untested |  |
 | Shatter | ⬜ untested |  |
 | Shivan Dragon | ⬜ untested |  |
-| Simulacrum | ⬜ untested |  |
+| Simulacrum | ❌ fail | I targeted an opponent's creature, which is not a valid target. It still ended up killing my own creature though. |
 | Sinkhole | ⬜ untested |  |
 | Siren's Call | ⬜ untested |  |
 | Sleight of Mind | ⬜ untested |  |

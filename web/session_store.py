@@ -32,6 +32,15 @@ class Session:
     # Networked human_vs_human only: the guest deck arrives with the join request,
     # so the game is held until the opponent joins.  False once they have.
     awaiting_opponent: bool = False
+    # Deck selections kept so a rematch can rebuild fresh (reshuffled) decks for the
+    # same two players. guest_* is filled at join time for networked human_vs_human.
+    host_deck_id: str | None = None
+    host_colors: int = 2
+    guest_deck_id: str | None = None
+    guest_colors: int = 2
+    # Coordinated rematch (human_vs_human): seats that have requested a rematch on the
+    # finished game. When every joined human seat has voted, the game is rebuilt.
+    rematch_votes: set[int] = field(default_factory=set)
     cleanup_required_discards: int = 0
     cleanup_selected_indices: list[int] = field(default_factory=list)
     untap_required_lands: int = 0
@@ -118,6 +127,10 @@ class SessionStore:
             seed=seed,
             use_pregame=use_pregame,
             awaiting_opponent=awaiting_opponent,
+            host_deck_id=request.host_deck_id,
+            host_colors=request.host_colors,
+            guest_deck_id=request.guest_deck_id,
+            guest_colors=request.guest_colors,
         )
 
         if not awaiting_opponent:
@@ -181,6 +194,9 @@ class SessionStore:
         session.joined_seats.add(1)
         session.guest_name = guest_name
         session.game.players[1].name = guest_name
+        # Remember the guest's deck choice so a rematch can rebuild it.
+        session.guest_deck_id = guest_deck_id
+        session.guest_colors = guest_colors
 
         # Networked flow: the guest's deck travels with the join request. Build it
         # now (deterministically off the host's seed) and start the game.
@@ -191,4 +207,41 @@ class SessionStore:
             session.awaiting_opponent = False
             self._begin_pregame(session)
 
+        return session
+
+    def restart(self, session: Session) -> Session:
+        """Rebuild a fresh game in the same session for a coordinated rematch.
+
+        Keeps the same two players, seat assignments, and deck selections, but
+        reshuffles both decks off a new seed and replays the pregame (coin flip /
+        mulligans). All per-game transient state on the session is reset.
+        """
+        seed = secrets.randbits(32)
+        host_deck = self._build_seat_deck(session.host_deck_id, session.host_colors, seed)
+        guest_deck = self._build_seat_deck(session.guest_deck_id, session.guest_colors, seed + 1)
+        p1 = PlayerState(name=session.host_name, library=host_deck)
+        p2 = PlayerState(name=session.guest_name, library=guest_deck)
+        session.game = Game(players=[p1, p2], enforce_mana_costs=True)
+        session.seed = seed
+        session.current_turn = 0
+        session.status = "active"
+        session.rematch_votes = set()
+        session.cleanup_required_discards = 0
+        session.cleanup_selected_indices = []
+        session.untap_required_lands = 0
+        session.untap_candidate_indices = []
+        session.untap_selected_indices = []
+        session.upkeep_pay_choices = []
+        session.upkeep_resolved_choices = {}
+        session.island_sanctuary_pending = False
+        session.history = GameHistory()
+        session.pregame_phase = None
+        session.coin_flip_winner = None
+        session.pregame_starting_player = None
+        session.mulligan_offer_seat = None
+        session.mulligan_kept_seats = set()
+        session.mulligan_bottom_seat = None
+        session.mulligan_bottom_required = 0
+        session.mulligan_bottom_selected = []
+        self._begin_pregame(session)
         return session

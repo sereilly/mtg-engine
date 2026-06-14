@@ -89,6 +89,10 @@ class GameActionRequest(BaseModel):
     stop_steps: list[str] | None = None
 
 
+class RematchRequest(BaseModel):
+    seat: int = Field(ge=0, le=1)
+
+
 class RandomDeckRequest(BaseModel):
     colors: int = Field(ge=1, le=5)
     seed: int = 1337

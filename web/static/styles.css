@@ -1889,11 +1889,23 @@ pre {
   position: absolute;
   inset: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 2rem;
   background: rgba(0, 0, 0, 0.65);
   z-index: 30;
   pointer-events: all;
+}
+
+.game-over-actions {
+  display: flex;
+  align-items: stretch;
+  gap: 1rem;
+}
+
+.game-over-actions button {
+  white-space: nowrap;
 }
 
 .game-over-overlay.hidden {
