@@ -1602,6 +1602,8 @@ def test_false_orders_marks_creature_removed_from_combat(all_cards):
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
     game = Game(players=[p1, p2])
 
+    # False Orders may only be cast during the declare blockers step.
+    game._set_phase_and_step("combat", "declare_blockers")
     result = game.cast_from_hand(0, "False Orders", target_player_index=1)
 
     assert result.supported
@@ -6631,7 +6633,8 @@ class TestRegressionTerror:
 
         result = game.cast_from_hand(0, "Terror", target_player_index=1, target_permanent_index=0)
 
-        assert result.supported  # spell resolves but finds no legal target
+        # A black creature is not a legal target, so Terror can't be cast at it (601.2c).
+        assert not result.supported
         assert len(p2.battlefield) == 1  # knight survives
         assert not any(c.name == "Black Knight" for c in p2.graveyard)
 
@@ -6645,7 +6648,8 @@ class TestRegressionTerror:
 
         result = game.cast_from_hand(0, "Terror", target_player_index=1, target_permanent_index=0)
 
-        assert result.supported
+        # An artifact creature is not a legal target, so Terror can't be cast at it (601.2c).
+        assert not result.supported
         assert len(p2.battlefield) == 1  # golem survives
 
     def test_terror_bypasses_regeneration(self, all_cards):

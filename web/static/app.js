@@ -1094,6 +1094,43 @@ function cardRequiresTargetLand(card) {
   });
 }
 
+function cardRequiresTargetGraveyardCreature(card) {
+  if (!card || typeof card === "string") return false;
+  const text = (card.oracle_text || "").toLowerCase();
+  // Animate Dead and similar reanimation Auras enchant a creature card in a
+  // graveyard, chosen as the spell's target when it is cast (Rule 601.2c).
+  return text.includes("enchant creature card in a graveyard");
+}
+
+function getTargetableGraveyardCreatures(state = currentState) {
+  if (!state) return [];
+  const result = [];
+  for (const targetSeat of [0, 1]) {
+    const player = state.players?.[targetSeat];
+    if (!player || !Array.isArray(player.graveyard)) continue;
+    player.graveyard.forEach((card, index) => {
+      if (String(card.type || "").toLowerCase().includes("creature")) {
+        result.push({ targetSeat, index, cardName: card.name || "Creature" });
+      }
+    });
+  }
+  return result;
+}
+
+function startCastGraveyardCreatureTargetPrompt(card, castAction = "cast") {
+  const cardName = normalizeCardName(card);
+  if (!cardName) return;
+  if (getTargetableGraveyardCreatures().length === 0) {
+    clearPendingHandCast();
+    updateActionHint(`No creature cards in any graveyard for ${cardName}.`, true);
+    return;
+  }
+  pendingCastTarget = { card, cardName, targetKind: "graveyard_creature", castAction };
+  renderActivationPrompt();
+  renderBoard(currentState);
+  updateActionHint(`Choose a creature card in a graveyard to reanimate with ${cardName}.`);
+}
+
 function cardRequiresTargetCreature(card) {
   if (!card || typeof card === "string") return false;
   const text = (card.oracle_text || "").toLowerCase();
@@ -1102,7 +1139,10 @@ function cardRequiresTargetCreature(card) {
   const nonActivatedLines = lines.filter((line) => !/^\s*(\{[^}]+\})+\s*:/.test(line));
   return nonActivatedLines.some((line) => {
     const t = line.toLowerCase();
-    return t.includes("enchant creature") || t.includes("enchant wall");
+    if (t.includes("enchant creature") || t.includes("enchant wall")) return true;
+    // Spells that destroy a target creature (incl. Walls): Terror, Tunnel, etc.
+    if (t.includes("destroy target") && (/\bcreature\b/.test(t) || /\bwall\b/.test(t))) return true;
+    return false;
   });
 }
 
@@ -1112,7 +1152,13 @@ function cardRequiresTargetPermanent(card) {
   const nonActivatedLines = lines.filter((line) => !/^\s*(\{[^}]+\})+\s*:/.test(line));
   return nonActivatedLines.some((line) => {
     const t = line.toLowerCase();
-    return t.includes("target spell or permanent") || (t.includes("target permanent") && !t.includes("target land") && !t.includes("target creature"));
+    if (t.includes("target spell or permanent")) return true;
+    if (t.includes("target permanent") && !t.includes("target land") && !t.includes("target creature")) return true;
+    // Disenchant: "Destroy target artifact or enchantment" — either type, either side.
+    if (t.includes("destroy target artifact or enchantment")) return true;
+    // Power Leak: an Aura that enchants an enchantment (chosen on cast).
+    if (t.includes("enchant enchantment")) return true;
+    return false;
   });
 }
 
@@ -1178,6 +1224,18 @@ function activatedAbilityRequiresTargetLand(card) {
     .filter((line) => /^\s*(\{[^}]+\})+\s*:/.test(line))
     .map((line) => line.toLowerCase());
   return activatedLines.some((line) => line.includes("target land"));
+}
+
+function activatedAbilityRequiresTargetCreature(card) {
+  if (!card || typeof card === "string") return false;
+  // Activated-ability lines that destroy a target creature, e.g. Royal Assassin:
+  // "{T}: Destroy target tapped creature." The player must pick which creature.
+  const activatedLines = (card.oracle_text || "").split("\n")
+    .filter((line) => /^\s*(\{[^}]+\})+\s*:/.test(line))
+    .map((line) => line.toLowerCase());
+  return activatedLines.some(
+    (line) => line.includes("destroy target") && (/\bcreature\b/.test(line) || /\bwall\b/.test(line)),
+  );
 }
 
 function cardRequiresManaColorChoice(card) {
@@ -2468,6 +2526,25 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   const cardName = normalizeCardName(card);
   if (!cardName) return;
 
+  // Activated abilities that destroy a target creature (e.g. Royal Assassin)
+  // must let the player choose which creature before the ability is activated.
+  if (activatedAbilityRequiresTargetCreature(card)) {
+    if (getTargetableCreaturesForPrompt().length === 0) {
+      updateActionHint(`No valid creature targets in play for ${cardName}.`, true);
+      return;
+    }
+    pendingCastTarget = {
+      card,
+      cardName,
+      targetKind: "creature",
+      castAction: "activate",
+      sourcePermanentIndex: permanentIndex,
+    };
+    renderActivationPrompt();
+    updateActionHint(`Choose a creature target for ${cardName}'s ability.`);
+    return;
+  }
+
   if (cardRequiresManaColorChoice(card)) {
     pendingManaColor = {
       cardName,
@@ -2711,6 +2788,10 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
   }
   if (pending.targetKind === "permanent" && selectedPermanentIndex === null) {
     updateActionHint("Choose a permanent in play to target.", true);
+    return;
+  }
+  if (pending.targetKind === "graveyard_creature" && selectedPermanentIndex === null) {
+    updateActionHint("Choose a creature card in a graveyard to target.", true);
     return;
   }
 
@@ -3013,6 +3094,12 @@ async function castDebugCardForFree() {
   const card = await fetchCardByName(cardName);
   const resolvedCardName = normalizeCardName(card) || cardName;
 
+  if (card && cardRequiresTargetGraveyardCreature(card)) {
+    startCastGraveyardCreatureTargetPrompt(card, "debug_cast_free");
+    updateDebugStatus(`Choose a creature card in a graveyard for ${resolvedCardName}.`, "success");
+    return;
+  }
+
   if (card && cardRequiresTargetLand(card)) {
     startCastLandTargetPrompt(card, "debug_cast_free");
     updateDebugStatus(`Choose a land target for ${resolvedCardName}.`, "success");
@@ -3076,6 +3163,12 @@ async function castDebugCardForFreeAsOpponent() {
 
   const card = await fetchCardByName(cardName);
   const resolvedCardName = normalizeCardName(card) || cardName;
+
+  if (card && cardRequiresTargetGraveyardCreature(card)) {
+    startCastGraveyardCreatureTargetPrompt(card, "debug_cast_free_opponent");
+    updateDebugStatus(`Choose a creature card in a graveyard for ${resolvedCardName} (as opponent).`, "success");
+    return;
+  }
 
   if (card && cardRequiresTargetLand(card)) {
     startCastLandTargetPrompt(card, "debug_cast_free_opponent");
@@ -3597,6 +3690,11 @@ function createCardElement(card, options = {}) {
         beginPendingHandCast(card, handIndex);
         cardEl.classList.add("casting-card");
 
+        if (cardRequiresTargetGraveyardCreature(card)) {
+          startCastGraveyardCreatureTargetPrompt(card);
+          return;
+        }
+
         if (cardRequiresTargetLand(card)) {
           startCastLandTargetPrompt(card);
           return;
@@ -3774,12 +3872,23 @@ function renderHandFan(containerId, cards, options = {}) {
   });
 }
 
-function renderZoneCards(containerId, cards) {
+function renderZoneCards(containerId, cards, { zoneSeat = null, zoneKind = "" } = {}) {
   const container = q(containerId);
   container.innerHTML = "";
   if (!cards || cards.length === 0) return;
-  for (const card of cards) {
-    container.appendChild(createCardElement(card, { compact: true }));
+  const graveyardTargeting =
+    pendingCastTarget &&
+    pendingCastTarget.targetKind === "graveyard_creature" &&
+    zoneKind === "graveyard" &&
+    Number.isInteger(zoneSeat);
+  for (const [index, card] of cards.entries()) {
+    const el = createCardElement(card, { compact: true });
+    if (graveyardTargeting && String(card.type || "").toLowerCase().includes("creature")) {
+      el.classList.add("targeting-valid");
+      el.style.cursor = "pointer";
+      el.addEventListener("click", () => resolvePendingCastTarget(zoneSeat, index));
+    }
+    container.appendChild(el);
   }
 }
 
@@ -4353,9 +4462,9 @@ function renderBoard(state) {
   q("oppGraveCount").textContent = opp.graveyard.length;
   q("oppExileCount").textContent = (opp.exile || []).length;
 
-  renderZoneCards("selfGraveyardCards", me.graveyard);
+  renderZoneCards("selfGraveyardCards", me.graveyard, { zoneSeat: seat, zoneKind: "graveyard" });
   renderZoneCards("selfExileCards", me.exile || []);
-  renderZoneCards("oppGraveyardCards", opp.graveyard);
+  renderZoneCards("oppGraveyardCards", opp.graveyard, { zoneSeat: 1 - seat, zoneKind: "graveyard" });
   renderZoneCards("oppExileCards", opp.exile || []);
 
   renderMana("selfMana", me.mana_pool, seat);
@@ -4556,6 +4665,7 @@ async function handleHandCardDropOnBattlefield({ event, targetSeat, targetItem }
     if (payload.kind === "hand") {
       const card = findCardInCurrentHand(payload.name);
       beginPendingHandCast(card || payload.name, Number.isInteger(payload.handIndex) ? payload.handIndex : null);
+      if (card && cardRequiresTargetGraveyardCreature(card)) { startCastGraveyardCreatureTargetPrompt(card); return; }
       if (card && cardRequiresTargetLand(card)) { startCastLandTargetPrompt(card); return; }
       if (card && cardRequiresTargetArtifact(card)) { startCastArtifactTargetPrompt(card); return; }
       if (card && cardRequiresTargetCreature(card)) { startCastCreatureTargetPrompt(card); return; }

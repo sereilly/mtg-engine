@@ -63,17 +63,35 @@ def destroy_target(text: str, activated: bool) -> RuleResult:
     if "destroy target" not in text:
         return None
     effect_kind = "activated_destroy" if activated else "spell_pattern"
+    # Inspect the noun phrase that follows "destroy target" — adjectives such as
+    # "tapped", "nonblack", or a subtype like "Wall" can sit between "target" and
+    # the actual type word (e.g. "destroy target tapped creature",
+    # "destroy target nonartifact, nonblack creature", "destroy target Wall").
+    # Matching the bare type word with a word boundary avoids false hits inside
+    # "noncreature"/"nonartifact" (those have no boundary before the type word).
+    clause = text.split("destroy target", 1)[1].split(".")[0]
+
+    def _clause_has(word: str) -> bool:
+        return re.search(rf"\b{word}\b", clause) is not None
+
     type_filter: str | None = None
-    if "target creature" in text:
-        type_filter = "creature"
-    elif "target artifact or enchantment" in text:
+    subtype_filter: str | None = None
+    if "artifact or enchantment" in clause:
         type_filter = "artifact_or_enchantment"
-    elif "target artifact" in text:
+    elif _clause_has("wall"):
+        # Walls are creatures; restrict by the Wall subtype (e.g. Tunnel).
+        type_filter = "creature"
+        subtype_filter = "wall"
+    elif _clause_has("creature"):
+        type_filter = "creature"
+    elif _clause_has("artifact"):
         type_filter = "artifact"
-    elif "target enchantment" in text:
+    elif _clause_has("enchantment"):
         type_filter = "enchantment"
-    elif "target land" in text:
+    elif _clause_has("land"):
         type_filter = "land"
+    # "destroy target tapped creature" (Royal Assassin) only hits tapped permanents.
+    tapped_only = _clause_has("tapped")
     color_filter: str | None = next(
         (sym for word, sym in _COLOR_WORD_TO_SYMBOL.items() if f" {word} " in f" {text} "),
         None,
@@ -90,6 +108,10 @@ def destroy_target(text: str, activated: bool) -> RuleResult:
     destroy_payload: dict[str, Any] = {}
     if type_filter:
         destroy_payload["type_filter"] = type_filter
+    if subtype_filter:
+        destroy_payload["subtype_filter"] = subtype_filter
+    if tapped_only:
+        destroy_payload["tapped_only"] = True
     if color_filter:
         destroy_payload["color_filter"] = color_filter
     if exclude_colors:

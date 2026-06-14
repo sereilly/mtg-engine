@@ -364,7 +364,38 @@ class CombatMixin:
 
         self._prune_combat_state()
         self.log.append(f"{controller.name} declared {len(unique_indices)} attacker(s)")
+        if unique_indices:
+            self._fire_attack_triggers(controller_index)
         return True, "declared attackers"
+
+    def _fire_attack_triggers(self, controller_index: int) -> None:
+        """Fire "whenever one or more creatures you control attack" triggers.
+
+        Covers Raging River and similar enchantments whose ability triggers once
+        when the controller declares one or more attackers (Rule 508.1, 603.2).
+        """
+        from ..game_types import OracleExecutionContext, OracleStateMachine
+
+        controller = self.players[controller_index]
+        defender_index = self.combat_defending_player_index
+        defender = (
+            self.players[defender_index]
+            if isinstance(defender_index, int) and 0 <= defender_index < len(self.players)
+            else controller
+        )
+        for permanent in list(controller.battlefield):
+            program = compile_card_oracle(permanent.card)
+            for trig in program.triggered_abilities:
+                if trig.condition.kind != "one_or_more_attack" or trig.instruction is None:
+                    continue
+                context = OracleExecutionContext(
+                    caster=controller,
+                    target=defender,
+                    card=permanent.card,
+                    source_permanent=permanent,
+                )
+                OracleStateMachine(self, context).run(trig.instruction)
+                self.log.append(f"{permanent.card.name} triggered on attack")
 
     def declare_blockers(self, controller_index: int, blocker_to_attacker: dict[int, int]) -> tuple[bool, str]:
         if self.current_turn_phase != "combat" or self.current_step != "declare_blockers":

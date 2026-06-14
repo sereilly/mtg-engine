@@ -44,6 +44,8 @@ class EffectsMixin:
         exclude_colors: list[str] | None = None,
         exclude_types: list[str] | None = None,
         bypass_regeneration: bool = False,
+        subtype_filter: str | None = None,
+        tapped_only: bool = False,
     ) -> CardDefinition | None:
         target_player_index = next(
             (i for i, p in enumerate(self.players) if p is target), None
@@ -60,6 +62,10 @@ class EffectsMixin:
             card = perm.card
             effective_colors = [perm.metadata.get("color_override")] if perm.metadata.get("color_override") else list(card.colors)
             if not _passes_type(card, type_filter):
+                return False
+            if subtype_filter and subtype_filter not in card.type_line.lower():
+                return False
+            if tapped_only and not perm.tapped:
                 return False
             if color_filter and color_filter not in effective_colors:
                 return False

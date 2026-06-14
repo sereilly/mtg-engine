@@ -161,22 +161,30 @@ class OracleInstructionsMixin:
             # Prefer the parsed instruction if available
             has_reanimate = any(instr.kind == "reanimate_creature" for instr in program.instructions)
             if has_reanimate or ("creature card in a graveyard" in text and "return enchanted creature card to the battlefield" in text):
-                # Search all players' graveyards for a creature card.
-                # Prefer the caster's own graveyard first, then the target player's,
-                # then any other player — so Animate Dead works when the owner's
-                # graveyard is the only one that holds a creature.
                 revived_card = None
                 caster_player = self.players[caster_index]
-                search_order = [caster_player, target_player] + [
-                    p for p in self.players if p is not caster_player and p is not target_player
-                ]
-                for source_player in search_order:
-                    for idx, card in enumerate(source_player.graveyard):
-                        if card.primary_type == "creature":
-                            revived_card = source_player.graveyard.pop(idx)
+                # The player chooses which creature card in a graveyard to target
+                # (Rule 601.2c). target_player_index identifies the graveyard's
+                # owner and target_permanent_index is the index into that graveyard.
+                if (
+                    isinstance(target_permanent_index, int)
+                    and 0 <= target_permanent_index < len(target_player.graveyard)
+                    and target_player.graveyard[target_permanent_index].primary_type == "creature"
+                ):
+                    revived_card = target_player.graveyard.pop(target_permanent_index)
+                else:
+                    # Fallback (e.g. AI with no explicit choice): search graveyards,
+                    # preferring the caster's own, then the target's, then others.
+                    search_order = [caster_player, target_player] + [
+                        p for p in self.players if p is not caster_player and p is not target_player
+                    ]
+                    for source_player in search_order:
+                        for idx, card in enumerate(source_player.graveyard):
+                            if card.primary_type == "creature":
+                                revived_card = source_player.graveyard.pop(idx)
+                                break
+                        if revived_card is not None:
                             break
-                    if revived_card is not None:
-                        break
                 if revived_card is None:
                     return
 

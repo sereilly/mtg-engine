@@ -355,6 +355,12 @@ class StackCastingMixin:
                 self.log.append(details)
                 return SimulationResult(card.name, False, classification.effect_kind, details)
 
+        if "cast this spell only during the declare blockers step" in card.oracle_text.lower():
+            if self.current_turn_phase != "combat" or self.current_step != "declare_blockers":
+                details = "can only be cast during the declare blockers step"
+                self.log.append(details)
+                return SimulationResult(card.name, False, classification.effect_kind, details)
+
         if "cast this spell only during an opponent's turn, before attackers are declared" in card.oracle_text.lower():
             if self.current_turn_phase == "combat":
                 before_attackers = (
@@ -453,14 +459,26 @@ class StackCastingMixin:
                 else:
                     first_line = card.oracle_text.lower().split("\n")[0].strip()
                     if first_line.startswith("enchant ") and "graveyard" in first_line:
-                        # e.g. "enchant creature card in a graveyard" (Animate Dead)
-                        has_target = any(
-                            c.primary_type == "creature"
-                            for player in self.players
-                            for c in player.graveyard
-                        )
-                        if not has_target:
-                            return False, f"no valid target for {card.name}"
+                        # e.g. "enchant creature card in a graveyard" (Animate Dead).
+                        # If the player chose a specific graveyard card, validate that
+                        # choice; otherwise require at least one legal creature card.
+                        if isinstance(target_permanent_index, int):
+                            gy_idx = target_player_index if target_player_index is not None else caster_index
+                            if gy_idx < 0 or gy_idx >= len(self.players):
+                                gy_idx = caster_index
+                            graveyard = self.players[gy_idx].graveyard
+                            if not (0 <= target_permanent_index < len(graveyard)) or (
+                                graveyard[target_permanent_index].primary_type != "creature"
+                            ):
+                                return False, f"no valid target for {card.name}"
+                        else:
+                            has_target = any(
+                                c.primary_type == "creature"
+                                for player in self.players
+                                for c in player.graveyard
+                            )
+                            if not has_target:
+                                return False, f"no valid target for {card.name}"
             return True, "valid"
 
         program = compile_card_oracle(card)
@@ -479,19 +497,47 @@ class StackCastingMixin:
         if primary.kind == "destroy_target_permanent":
             type_filter = primary.payload.get("type_filter")
             color_filter = primary.payload.get("color_filter")
+            subtype_filter = primary.payload.get("subtype_filter")
+            tapped_only = primary.payload.get("tapped_only", False)
+            exclude_colors = primary.payload.get("exclude_colors") or []
+            exclude_types = primary.payload.get("exclude_types") or []
+
             def _type_matches(p, tf):
                 if not tf:
                     return True
                 if tf == "artifact_or_enchantment":
                     return p.card.primary_type in ("artifact", "enchantment")
                 return tf in p.card.type_line.lower()
-            has_target = any(
-                _type_matches(p, type_filter)
-                and (not color_filter or color_filter in p.card.colors)
-                for p in target.battlefield
-            )
-            if not has_target:
-                return False, f"no valid target for {card.name}"
+
+            def _is_legal(p):
+                if not _type_matches(p, type_filter):
+                    return False
+                if subtype_filter and subtype_filter not in p.card.type_line.lower():
+                    return False
+                if tapped_only and not p.tapped:
+                    return False
+                if color_filter and color_filter not in p.card.colors:
+                    return False
+                if exclude_colors and any(c in p.card.colors for c in exclude_colors):
+                    return False
+                if exclude_types and any(t in p.card.type_line.lower() for t in exclude_types):
+                    return False
+                return True
+
+            if isinstance(target_permanent_index, int):
+                # A specific target was chosen — it must itself be legal (601.2c).
+                battlefield = target.battlefield
+                if not (0 <= target_permanent_index < len(battlefield)) or not _is_legal(
+                    battlefield[target_permanent_index]
+                ):
+                    return False, f"no valid target for {card.name}"
+            else:
+                # No specific choice: destruction can target a permanent controlled
+                # by anyone, so a legal target on the caster's own battlefield (e.g.
+                # Disenchant on one's own artifact) is enough to make the cast legal.
+                has_target = any(_is_legal(p) for pl in self.players for p in pl.battlefield)
+                if not has_target:
+                    return False, f"no valid target for {card.name}"
 
         elif primary.kind == "counter_top_stack_spell":
             color_filter = primary.payload.get("color_filter")

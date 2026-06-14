@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from ..models import CardDefinition, Permanent, PlayerState
 from ..oracle import compile_card_oracle
 from ._constants import _MANA_SYMBOLS, _NO_PRIORITY_STEPS
@@ -115,6 +117,45 @@ class GameHelpersMixin:
             self.log.append(
                 f"{player.name} lost the game ({permanent.card.name} was put into a graveyard from the battlefield)"
             )
+
+        if permanent.card.primary_type == "creature":
+            self._fire_creature_dies_triggers(permanent)
+
+    def _fire_creature_dies_triggers(self, dead_permanent: Permanent) -> None:
+        """Fire "whenever a creature dies" triggers (e.g. Soul Net).
+
+        Observers may be controlled by any player. For "you may pay {N}" optional
+        triggers the controller pays automatically when able (deterministic), then
+        applies the rider effect (Rule 603.2, 603.3).
+        """
+        for controller in self.players:
+            for observer in list(controller.battlefield):
+                if observer is dead_permanent:
+                    continue
+                program = compile_card_oracle(observer.card)
+                for trig in program.triggered_abilities:
+                    if trig.condition.kind != "creature_dies" or trig.instruction is None:
+                        continue
+                    instr = trig.instruction
+                    obs_text = observer.card.oracle_text.lower()
+                    pay_match = re.search(r"you may pay \{(\d+)\}", obs_text)
+                    if pay_match:
+                        needed = int(pay_match.group(1))
+                        available = sum(controller.mana_pool.get(s, 0) for s in controller.mana_pool)
+                        if available < needed:
+                            continue  # chose not to / unable to pay
+                        remaining = needed
+                        for sym in list(controller.mana_pool):
+                            while remaining > 0 and controller.mana_pool.get(sym, 0) > 0:
+                                controller.mana_pool[sym] -= 1
+                                remaining -= 1
+                    if instr.kind == "target_gains_life":
+                        amount = int(instr.payload.get("amount", 1))
+                        self._gain_life(controller, amount, observer.card.name)
+                        self.log.append(
+                            f"{observer.card.name} trigger: {controller.name} gained {amount} life ({dead_permanent.card.name} died)"
+                        )
+                    break
 
     def _put_permanent_onto_battlefield(
         self,

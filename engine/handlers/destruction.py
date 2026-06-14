@@ -109,6 +109,8 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
         exclude_colors=instruction.payload.get("exclude_colors"),
         exclude_types=instruction.payload.get("exclude_types"),
         bypass_regeneration=instruction.payload.get("bypass_regeneration", False),
+        subtype_filter=instruction.payload.get("subtype_filter"),
+        tapped_only=instruction.payload.get("tapped_only", False),
     )
     if destroyed:
         if source_permanent is not None:

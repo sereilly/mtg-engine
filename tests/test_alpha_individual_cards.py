@@ -162,6 +162,13 @@ def _run_card(card: CardDefinition, all_cards: list[CardDefinition]) -> tuple[Ga
         # Animate Wall needs a Wall on the battlefield to target (Rule 115.1b)
         wall = next(c for c in all_cards if "wall" in c.type_line.lower())
         p2.battlefield.append(Permanent(card=wall))
+    if card.name == "Tunnel":
+        # Tunnel ("Destroy target Wall") needs a Wall to target.
+        wall = next(c for c in all_cards if "wall" in c.type_line.lower())
+        p2.battlefield.append(Permanent(card=wall))
+    if card.name == "False Orders":
+        # False Orders may only be cast during the declare blockers step.
+        game._set_phase_and_step("combat", "declare_blockers")
     if card.name == "Gaea's Liege":
         # CDA: P/T = number of Forests its controller controls. Without a Forest
         # it enters as a 0/0 and dies to state-based actions (704.5f).

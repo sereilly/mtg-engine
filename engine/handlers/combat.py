@@ -42,6 +42,11 @@ def remove_creature_from_combat(game: Game, instruction: OracleInstruction, cont
 @effect_handler("left_right_combat_division")
 def left_right_combat_division(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     card = context.card
+    # Record that the division was established this combat so the rest of the
+    # engine (and tests) can observe that the attack trigger actually fired.
+    if context.source_permanent is not None:
+        context.source_permanent.metadata["left_right_division_turn"] = game.turn
+    game.left_right_division_active = True
     game.log.append(f"{card.name} established left/right combat division")
     return True, "resolved"
 

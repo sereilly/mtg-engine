@@ -4,15 +4,15 @@ Master record of which cards have been manually validated in-game. Generated aut
 
 - Total cards: **290**
 - Passed: **10**
-- Failed: **10**
-- Untested: **270**
+- Failed: **0**
+- Untested: **280**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
 | Air Elemental | ⬜ untested |  |
 | Ancestral Recall | ⬜ untested |  |
 | Animate Artifact | ⬜ untested |  |
-| Animate Dead | ❌ fail | Animate dead should let me target a creature in the graveyard when cast |
+| Animate Dead | ⬜ untested |  |
 | Animate Wall | ⬜ untested |  |
 | Ankh of Mishra | ⬜ untested |  |
 | Armageddon | ⬜ untested |  |
@@ -72,7 +72,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Demonic Hordes | ⬜ untested |  |
 | Demonic Tutor | ⬜ untested |  |
 | Dingus Egg | ⬜ untested |  |
-| Disenchant | ❌ fail | I'm not able to cast disenchant even when there are valid targets. |
+| Disenchant | ⬜ untested |  |
 | Disintegrate | ⬜ untested |  |
 | Disrupting Scepter | ⬜ untested |  |
 | Dragon Whelp | ⬜ untested |  |
@@ -86,7 +86,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Earthquake | ⬜ untested |  |
 | Elvish Archers | ⬜ untested |  |
 | Evil Presence | ⬜ untested |  |
-| False Orders | ❌ fail | Card was cast at an illegal time |
+| False Orders | ⬜ untested |  |
 | Farmstead | ⬜ untested |  |
 | Fastbond | ⬜ untested |  |
 | Fear | ⬜ untested |  |
@@ -198,14 +198,14 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Plague Rats | ⬜ untested |  |
 | Plains | ⬜ untested |  |
 | Plateau | ⬜ untested |  |
-| Power Leak | ❌ fail | It said there was no valid target even though I had an enchantment in play. |
+| Power Leak | ⬜ untested |  |
 | Power Sink | ⬜ untested |  |
 | Power Surge | ⬜ untested |  |
 | Prodigal Sorcerer | ⬜ untested |  |
 | Psionic Blast | ⬜ untested |  |
 | Psychic Venom | ⬜ untested |  |
 | Purelace | ⬜ untested |  |
-| Raging River | ❌ fail | When I attacked Raging River's trigger did not activate. |
+| Raging River | ⬜ untested |  |
 | Raise Dead | ⬜ untested |  |
 | Red Elemental Blast | ⬜ untested |  |
 | Red Ward | ⬜ untested |  |
@@ -217,7 +217,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Roc of Kher Ridges | ⬜ untested |  |
 | Rock Hydra | ⬜ untested |  |
 | Rod of Ruin | ⬜ untested |  |
-| Royal Assassin | ❌ fail | The activated ability didn't prompt me to target a creature and instead just destroyed a Mountain, which isn't even a valid target. |
+| Royal Assassin | ⬜ untested |  |
 | Sacrifice | ⬜ untested |  |
 | Samite Healer | ⬜ untested |  |
 | Savannah | ⬜ untested |  |
@@ -239,7 +239,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Sleight of Mind | ⬜ untested |  |
 | Smoke | ⬜ untested |  |
 | Sol Ring | ⬜ untested |  |
-| Soul Net | ❌ fail | Soul Net has a triggered ability. This ability should give me a prompt when the condition is satisfied. In this particular case, the triggered ability is a creature dying. |
+| Soul Net | ⬜ untested |  |
 | Spell Blast | ⬜ untested |  |
 | Stasis | ⬜ untested |  |
 | Steal Artifact | ⬜ untested |  |
@@ -250,20 +250,20 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Swamp | ⬜ untested |  |
 | Swords to Plowshares | ⬜ untested |  |
 | Taiga | ⬜ untested |  |
-| Terror | ❌ fail | Terror didn't let me choose a target |
+| Terror | ⬜ untested |  |
 | The Hive | ⬜ untested |  |
 | Thicket Basilisk | ⬜ untested |  |
 | Thoughtlace | ⬜ untested |  |
 | Throne of Bone | ⬜ untested |  |
 | Timber Wolves | ⬜ untested |  |
-| Time Vault | ❌ fail | Time Vault should not automatically untap during the untap step. Also, it should prompt me at the beginning of my turn if I want to untap it to draw a card. |
+| Time Vault | ⬜ untested |  |
 | Time Walk | ⬜ untested |  |
 | Timetwister | ✅ pass |  |
 | Tranquility | ⬜ untested |  |
 | Tropical Island | ⬜ untested |  |
 | Tsunami | ⬜ untested |  |
 | Tundra | ⬜ untested |  |
-| Tunnel | ❌ fail | Tunnel didn't prompt me to select a target. Also the target needs to be a wall. |
+| Tunnel | ⬜ untested |  |
 | Twiddle | ⬜ untested |  |
 | Two-Headed Giant of Foriys | ⬜ untested |  |
 | Underground Sea | ⬜ untested |  |
