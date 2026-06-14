@@ -3,9 +3,9 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **290**
-- Passed: **10**
-- Failed: **5**
-- Untested: **275**
+- Passed: **15**
+- Failed: **10**
+- Untested: **265**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -23,10 +23,10 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Basalt Monolith | ⬜ untested |  |
 | Bayou | ⬜ untested |  |
 | Benalish Hero | ⬜ untested |  |
-| Berserk | ⬜ untested |  |
+| Berserk | ❌ fail | Berserk didn't let me choose a target creature |
 | Birds of Paradise | ⬜ untested |  |
 | Black Knight | ⬜ untested |  |
-| Black Lotus | ⬜ untested |  |
+| Black Lotus | ✅ pass |  |
 | Black Vise | ⬜ untested |  |
 | Black Ward | ⬜ untested |  |
 | Blaze of Glory | ⬜ untested |  |
@@ -50,7 +50,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Clone | ❌ fail | Clone didn't let me choose a target |
 | Cockatrice | ⬜ untested |  |
 | Consecrate Land | ⬜ untested |  |
-| Conservator | ⬜ untested |  |
+| Conservator | ❌ fail | I used the ability and then cast lightning bolt on myself. I should have only taken 1 damage but I took 3 |
 | Contract from Below | ⬜ untested |  |
 | Control Magic | ✅ pass |  |
 | Conversion | ⬜ untested |  |
@@ -85,7 +85,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Earthbind | ❌ fail | Earthbind didn't make the flying creature lose flying. |
 | Earthquake | ⬜ untested |  |
 | Elvish Archers | ⬜ untested |  |
-| Evil Presence | ⬜ untested |  |
+| Evil Presence | ❌ fail | This card does not work. It should turn the enchanted land into a basic swamp |
 | False Orders | ⬜ untested |  |
 | Farmstead | ⬜ untested |  |
 | Fastbond | ⬜ untested |  |
@@ -109,7 +109,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Giant Spider | ⬜ untested |  |
 | Glasses of Urza | ⬜ untested |  |
 | Gloom | ⬜ untested |  |
-| Goblin Balloon Brigade | ⬜ untested |  |
+| Goblin Balloon Brigade | ✅ pass |  |
 | Goblin King | ⬜ untested |  |
 | Granite Gargoyle | ✅ pass |  |
 | Gray Ogre | ✅ pass |  |
@@ -178,7 +178,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Mox Pearl | ⬜ untested |  |
 | Mox Ruby | ⬜ untested |  |
 | Mox Sapphire | ⬜ untested |  |
-| Natural Selection | ⬜ untested |  |
+| Natural Selection | ❌ fail | After rearranging the cards, I should have a prompt to shuffle the library of the player I chose. |
 | Nether Shadow | ⬜ untested |  |
 | Nettling Imp | ⬜ untested |  |
 | Nevinyrral's Disk | ⬜ untested |  |
@@ -203,7 +203,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Power Surge | ⬜ untested |  |
 | Prodigal Sorcerer | ⬜ untested |  |
 | Psionic Blast | ⬜ untested |  |
-| Psychic Venom | ⬜ untested |  |
+| Psychic Venom | ✅ pass |  |
 | Purelace | ⬜ untested |  |
 | Raging River | ⬜ untested |  |
 | Raise Dead | ⬜ untested |  |
@@ -225,9 +225,9 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Scathe Zombies | ⬜ untested |  |
 | Scavenging Ghoul | ⬜ untested |  |
 | Scrubland | ⬜ untested |  |
-| Scryb Sprites | ⬜ untested |  |
+| Scryb Sprites | ✅ pass |  |
 | Sea Serpent | ⬜ untested |  |
-| Sedge Troll | ⬜ untested |  |
+| Sedge Troll | ❌ fail | I activated regenerate and then played terror to destroy it, but then Sedge Troll went to the graveyard instead of becoming tapped. |
 | Sengir Vampire | ⬜ untested |  |
 | Serra Angel | ⬜ untested |  |
 | Shanodin Dryads | ⬜ untested |  |
@@ -241,7 +241,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Sol Ring | ⬜ untested |  |
 | Soul Net | ⬜ untested |  |
 | Spell Blast | ⬜ untested |  |
-| Stasis | ⬜ untested |  |
+| Stasis | ✅ pass |  |
 | Steal Artifact | ⬜ untested |  |
 | Stone Giant | ⬜ untested |  |
 | Stone Rain | ⬜ untested |  |
