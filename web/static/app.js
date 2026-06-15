@@ -226,8 +226,10 @@ function toggleCombatAttackerDraft(permanentIndex) {
   if (!Number.isInteger(idx) || idx < 0) return;
   if (combatAttackerDraft.includes(idx)) {
     combatAttackerDraft = combatAttackerDraft.filter((value) => value !== idx);
+    SFX.onMenuToggle(false);
   } else {
     combatAttackerDraft = [...combatAttackerDraft, idx].sort((a, b) => a - b);
+    SFX.onMenuToggle(true);
   }
 }
 
@@ -3848,6 +3850,7 @@ function openVerifyResultModal(prefillName = "") {
   setVerifyReasonVisibility();
   updateVerifyStatus("");
   q("verifyResultModal").classList.remove("hidden");
+  SFX.onNotificationAppear();
   q("verifyCardName").focus();
   fetchVerifySuggestions(name).catch(() => {
     // Keep silent on open to avoid noisy UI warnings.
@@ -3855,6 +3858,7 @@ function openVerifyResultModal(prefillName = "") {
 }
 
 function closeVerifyResultModal() {
+  if (!q("verifyResultModal").classList.contains("hidden")) SFX.onNotificationClose();
   q("verifyResultModal").classList.add("hidden");
 }
 
@@ -3946,6 +3950,7 @@ function renderTrackerList() {
 
 async function openTrackerModal() {
   q("trackerModal").classList.remove("hidden");
+  SFX.onNotificationAppear();
   q("trackerSummary").textContent = "Loading…";
   try {
     const resp = await fetch("/api/verification");
@@ -3961,6 +3966,7 @@ async function openTrackerModal() {
 }
 
 function closeTrackerModal() {
+  if (!q("trackerModal").classList.contains("hidden")) SFX.onNotificationClose();
   q("trackerModal").classList.add("hidden");
 }
 
@@ -5283,6 +5289,7 @@ function handleCanvasCardContextMenu({ seat: targetSeat, idx: permanentIndex, ca
       !combat?.attackers_locked
     ) {
       combatAttackerDraft = combatAttackerDraft.filter((idx) => idx !== permanentIndex);
+      SFX.onMenuToggle(false);
       renderBoard(currentState);
       updateActionHint("Removed attacker from draft selection.");
       return;
@@ -5303,6 +5310,7 @@ function handleCanvasCardContextMenu({ seat: targetSeat, idx: permanentIndex, ca
           }
         }
       }
+      SFX.onMenuToggle(false);
       renderBoard(currentState);
       updateActionHint("Removed blocker target link from draft.");
     }
@@ -5394,6 +5402,7 @@ async function handleHandCardDropOnBattlefield({ event, targetSeat, targetItem }
         !getCombatState(currentState)?.blockers_locked
       ) {
         combatBlockerDraft[Number(payload.permanentIndex)] = targetItem.idx;
+        SFX.onMenuToggle(true);
         renderBoard(currentState);
         updateActionHint("Blocker link added. Press OK when done declaring blockers.");
         return;

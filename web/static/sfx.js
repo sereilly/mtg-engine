@@ -23,42 +23,15 @@ const SFX = (() => {
     return arr[Math.floor(Math.random() * arr.length)];
   }
 
-  // Derive primary color from a mana cost string like "{2}{G}{G}"
-  function _colorOf(manaCost) {
-    if (!manaCost || typeof manaCost !== 'string') return 'colorless';
-    const found = [...new Set((manaCost.toUpperCase().match(/\{([WUBRG])\}/g) || []).map(t => t[1]))];
-    if (found.length === 0) return 'colorless';
-    if (found.length > 1) return 'multi';
-    return found[0].toLowerCase();
-  }
-
-  function _isStrong(card) {
-    return typeof card?.power === 'number' && card.power >= 4;
-  }
-
-  // Play the appropriate creature-enter sound based on color and power
+  // Play the creature-enter sound. Tokens get a dedicated sting; everything
+  // else uses the generic summon sound (color-specific stings are intentionally
+  // not used).
   function _playCreatureEnter(card) {
-    if (!card || typeof card === 'string') { _play('events/Creature_Summon.wav'); return; }
-    const type = String(card.type || '').toLowerCase();
-    if (type.includes('token') || card.is_token) { _play('card_ux/Token_Summon.wav'); return; }
-    const strong = _isStrong(card);
-    switch (_colorOf(card.mana_cost)) {
-      case 'u': _play(strong ? 'events/Blue_Enter_StrongCreature.wav.wav' : 'events/Blue_Enter_WeakCreature.wav'); break;
-      case 'b': _play(strong ? 'events/Dark_Enter_Strong.wav' : 'events/Dark_Enter_Weak.wav'); break;
-      case 'g': _play(strong ? 'events/Green_Enter_Strong.wav' : 'events/Green_Enter_Weak.wav'); break;
-      case 'r': _play(strong ? 'events/Red_enter_StrongCreature.wav' : 'events/Red_Enter_WeakCreature.wav'); break;
-      case 'w': _play(strong ? 'events/White_Enter_StrongCreature.wav' : 'events/White_Enter_WeakCreature.wav'); break;
-      default: _play('events/Creature_Summon.wav'); break;
+    if (card && typeof card !== 'string') {
+      const type = String(card.type || '').toLowerCase();
+      if (type.includes('token') || card.is_token) { _play('card_ux/Token_Summon.wav'); return; }
     }
-  }
-
-  // Play the appropriate attack sound based on the attacker's color
-  function _playAttackSound(card) {
-    if (!card || typeof card === 'string') { _play('events/Attack_Colorless.wav'); return; }
-    const sounds = { u: 'events/Blue_Attack.wav', b: 'events/Dark_Attack.wav', g: 'events/Green_Attack.wav',
-                     r: 'events/Red_Attack.wav', w: 'events/White_Attack.wav',
-                     multi: 'events/Attack_Multicolored.wav', colorless: 'events/Attack_Colorless.wav' };
-    _play(sounds[_colorOf(card.mana_cost)] ?? sounds.colorless);
+    _play('events/Creature_Summon.wav');
   }
 
   // Find the first creature that newly appeared on any battlefield between two states.
@@ -75,6 +48,31 @@ const SFX = (() => {
       }
     }
     return null;
+  }
+
+  // Count token permanents across both battlefields.
+  function _countTokens(state) {
+    let n = 0;
+    for (const s of [0, 1]) {
+      const bf = state?.players?.[s]?.battlefield ?? [];
+      for (const c of bf) {
+        if (c && (c.is_token || String(c.type || '').toLowerCase().includes('token'))) n++;
+      }
+    }
+    return n;
+  }
+
+  // Whether a card-selection window is open for the viewer (search / reorder /
+  // hand-reveal prompts driven by server state).
+  function _selectionActive(state, viewerSeat) {
+    if (!state) return false;
+    const sl = state.search_library;
+    if (sl && sl.caster_seat === viewerSeat) return true;
+    const rl = state.reorder_library;
+    if (rl && rl.caster_seat === viewerSeat) return true;
+    const hr = state.hand_reveal;
+    if (hr && hr.viewer_seat === viewerSeat) return true;
+    return false;
   }
 
   // ─── Public: called from renderLifePill in app.js ──────────────────────────
@@ -118,6 +116,16 @@ const SFX = (() => {
     const nextStackLen = Array.isArray(next.stack) ? next.stack.length : 0;
     if (prevStackLen > 0 && nextStackLen === 0) {
       setTimeout(() => _play('events/Stack_End.wav'), 350);
+    }
+
+    // A token left the battlefield (fewer tokens than before).
+    if (_countTokens(next) < _countTokens(prev)) {
+      _play('card_ux/Token_Disappear.wav');
+    }
+
+    // A card-selection window just opened for the viewer.
+    if (_selectionActive(next, viewerSeat) && !_selectionActive(prev, viewerSeat)) {
+      _play('ui/UI_Selection_Appear.wav');
     }
   }
 
@@ -232,13 +240,6 @@ const SFX = (() => {
       // ── Declare attackers ────────────────────────────────────────────────────
       if (s.includes('declared') && s.includes('attacker')) {
         _play('events/Flag_As_Attacker.wav');
-        const combat = next.combat;
-        if (combat && Array.isArray(combat.attackers) && combat.attackers.length > 0) {
-          const bf = next.players?.[next.current_turn]?.battlefield ?? [];
-          const firstAtt = combat.attackers[0];
-          const perm = firstAtt ? bf[firstAtt.attacker_index] : null;
-          if (perm) setTimeout(() => _playAttackSound(perm), 200);
-        }
         continue;
       }
 
@@ -279,10 +280,26 @@ const SFX = (() => {
         continue;
       }
 
+      // ── Dice roll ────────────────────────────────────────────────────────────
+      if (s.includes('roll') && (s.includes('die') || s.includes('dice') || /\bd\d+\b/.test(s))) {
+        _play('events/Dice_Roll.wav');
+        setTimeout(() => _play('events/Dice_Result.wav'), 600);
+        continue;
+      }
+
       // ── Coin flip ────────────────────────────────────────────────────────────
-      if (s.includes('coin flip')) {
+      if (s.includes('coin flip') || (s.includes('flip') && (s.includes('coin') || s.includes('heads') || s.includes('tails')))) {
         _play('events/Coin_Flip.wav');
-        if (s.includes('wins')) setTimeout(() => _play('events/Coin_Success.wav'), 700);
+        const won = s.includes('wins') || s.includes('heads') || s.includes('won');
+        const lost = s.includes('loses') || s.includes('tails') || s.includes('lost');
+        if (won) setTimeout(() => _play('events/Coin_Success.wav'), 700);
+        else if (lost) setTimeout(() => _play('events/Coin_Fail.wav'), 700);
+        continue;
+      }
+
+      // ── Loyalty counter on a planeswalker ────────────────────────────────────
+      if (s.includes('loyalty') && (s.includes('counter') || s.includes('gain') || s.includes('+'))) {
+        _play('events/Loyalty_Gain.wav');
         continue;
       }
 
@@ -293,6 +310,19 @@ const SFX = (() => {
       }
       if (s.includes('counter') && (s.includes('removed') || s.includes('cancelled'))) {
         _play('card_ux/Counter_Removed.wav');
+        continue;
+      }
+
+      // ── Power/toughness pump (a +X/+X buff, not a +1/+1 counter) ──────────────
+      if (!s.includes('counter') && /\+\d+\/\+\d+/.test(s) &&
+          (s.includes('grants') || s.includes('gives') || s.includes('pumped') || s.includes('gets'))) {
+        _play('events/Gain_Power_Or_Toughness.wav');
+        continue;
+      }
+
+      // ── Reveal a card from hand to the opponent ──────────────────────────────
+      if ((s.includes('reveal') && s.includes('hand')) || s.includes('revealed from hand')) {
+        _play('card_ux/Reveal_Card_To_Oponent.wav');
         continue;
       }
 
@@ -328,10 +358,14 @@ const SFX = (() => {
   function onMenuDecide()  { _play('ui/Menu_Decide.wav'); }
   function onMenuCancel()  { _play('ui/Menu_Cancel.wav'); }
   function onMenuToggle(on){ _play(on ? 'ui/Menu_Toggle.wav' : 'ui/Menu_Untoggle.wav'); }
+  function onNotificationAppear() { _play('ui/UI_Notification_Appear.wav'); }
+  function onNotificationClose()  { _play('ui/UI_Notification_Close.wav'); }
+  function onSelectionAppear()    { _play('ui/UI_Selection_Appear.wav'); }
 
   return {
     onStateChange, onLifeChange,
     onLogOpen, onLogClose, onMenuDecide, onMenuCancel, onMenuToggle,
+    onNotificationAppear, onNotificationClose, onSelectionAppear,
     setVolume, setMuted, getVolume, isMuted,
   };
 })();
