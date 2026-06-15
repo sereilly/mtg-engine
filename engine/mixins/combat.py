@@ -550,37 +550,64 @@ class CombatMixin:
         return True, "declared blockers"
 
     def _fire_block_triggers(self, controller_index: int) -> None:
-        """Fire abilities that trigger when blockers are declared (Rule 509.1i, 509.2a).
+        """Put abilities that trigger on blockers being declared onto the stack.
 
+        Rule 509.1i / 509.2a: these triggered abilities are placed on the stack
+        before the active player gets priority (they don't resolve immediately).
         Covers Cockatrice / Thicket Basilisk: "Whenever this creature blocks or
         becomes blocked by a non-Wall creature, destroy that creature at end of
         combat." Per 509.3a the trigger fires once for the creature that blocks
-        (marking the attacker it blocks) and per 509.3c/509.3d once for the
-        attacker that becomes blocked (marking each creature blocking it). A Wall
-        partner is excluded by the "non-Wall" clause.
+        (targeting the attacker it blocks) and per 509.3c/509.3d once for the
+        attacker that becomes blocked (one per creature blocking it). A Wall
+        partner is excluded by the "non-Wall" clause, checked now (509.3f).
         """
         if controller_index < 0 or controller_index >= len(self.players):
             return
         if self.active_player_index < 0 or self.active_player_index >= len(self.players):
             return
+        from ..game_types import StackItem
+
         defender = self.players[controller_index]
         attacker_controller = self.players[self.active_player_index]
 
-        def has_block_destroy_trigger(perm: Permanent) -> bool:
+        def block_destroy_instruction(perm: Permanent):
             program = compile_card_oracle(perm.card)
-            return any(
-                trig.condition.kind == "cockatrice_blocks_or_blocked"
-                and trig.instruction is not None
-                and trig.instruction.kind == "delayed_destroy_blocked_or_blocker"
-                for trig in program.triggered_abilities
-            )
+            for trig in program.triggered_abilities:
+                if (
+                    trig.condition.kind == "cockatrice_blocks_or_blocked"
+                    and trig.instruction is not None
+                    and trig.instruction.kind == "delayed_destroy_blocked_or_blocker"
+                ):
+                    return trig.instruction, trig.source_line
+            return None, None
 
-        def mark_for_destruction(victim: Permanent, source: Permanent) -> None:
+        def queue_trigger(
+            source: Permanent,
+            source_controller_index: int,
+            victim: Permanent,
+            victim_player_index: int,
+            victim_index: int,
+        ) -> None:
             if "wall" in victim.card.type_line.lower():
                 return
-            victim.metadata["destroy_at_end_of_combat"] = True
+            instruction, source_line = block_destroy_instruction(source)
+            if instruction is None:
+                return
+            self.stack.append(
+                StackItem(
+                    card=source.card,
+                    caster_index=source_controller_index,
+                    target_player_index=victim_player_index,
+                    target_permanent_index=victim_index,
+                    x_value=None,
+                    ability_instruction=instruction,
+                    ability_effect_kind="triggered_delayed_destroy",
+                    source_permanent=source,
+                    ability_text=source_line,
+                )
+            )
             self.log.append(
-                f"{source.card.name} will destroy {victim.card.name} at end of combat"
+                f"{source.card.name} block trigger added to stack (targeting {victim.card.name})"
             )
 
         # A blocker that blocks an attacker (509.3a "Whenever this creature blocks").
@@ -588,21 +615,29 @@ class CombatMixin:
             if blocker_idx < 0 or blocker_idx >= len(defender.battlefield):
                 continue
             blocker = defender.battlefield[blocker_idx]
-            if not has_block_destroy_trigger(blocker):
-                continue
             if 0 <= attacker_idx < len(attacker_controller.battlefield):
-                mark_for_destruction(attacker_controller.battlefield[attacker_idx], blocker)
+                queue_trigger(
+                    blocker,
+                    controller_index,
+                    attacker_controller.battlefield[attacker_idx],
+                    self.active_player_index,
+                    attacker_idx,
+                )
 
         # An attacker that becomes blocked (509.3c/509.3d "becomes blocked").
         for attacker_idx in self.combat_attackers:
             if attacker_idx < 0 or attacker_idx >= len(attacker_controller.battlefield):
                 continue
             attacker = attacker_controller.battlefield[attacker_idx]
-            if not has_block_destroy_trigger(attacker):
-                continue
             for blocker_idx in self._combat_blockers_for_attacker(attacker_idx):
                 if 0 <= blocker_idx < len(defender.battlefield):
-                    mark_for_destruction(defender.battlefield[blocker_idx], attacker)
+                    queue_trigger(
+                        attacker,
+                        self.active_player_index,
+                        defender.battlefield[blocker_idx],
+                        controller_index,
+                        blocker_idx,
+                    )
 
     def _combat_blockers_for_attacker(self, attacker_idx: int) -> list[int]:
         return [blocker_idx for blocker_idx, a_idx in self.combat_blockers.items() if a_idx == attacker_idx]
@@ -764,6 +799,11 @@ class CombatMixin:
             requested = attacker_damage.get(attacker_idx, {})
             assigned_total = 0
             block_order = sorted(blockers)
+            # CR 510.1c: with multiple blockers ordered by the attacker, a blocker
+            # may be assigned combat damage only if every earlier blocker in the
+            # order has been assigned lethal damage. A single (or the last) blocker
+            # carries no such constraint and may receive any amount, even sub-lethal.
+            sublethal_blocker_seen = False
             for blocker_idx in block_order:
                 if blocker_idx >= len(defender.battlefield):
                     continue
@@ -776,8 +816,11 @@ class CombatMixin:
                     return False, "combat damage assignment cannot be negative"
                 if requested_damage > power_left:
                     return False, "assigned combat damage exceeds attacker power"
-                if not self._has_keyword(attacker, "trample") and requested_damage > 0 and requested_damage < lethal:
-                    return False, "must assign lethal to each blocker in order"
+                if not self._has_keyword(attacker, "trample"):
+                    if sublethal_blocker_seen and requested_damage > 0:
+                        return False, "must assign lethal to each blocker in order"
+                    if requested_damage < lethal:
+                        sublethal_blocker_seen = True
                 assigned_total += requested_damage
                 power_left -= requested_damage
                 if requested_damage > 0:

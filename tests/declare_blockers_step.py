@@ -65,6 +65,10 @@ def _get(all_cards, name: str) -> CardDefinition:
     return next(card for card in all_cards if card.name == name)
 
 
+def _block_triggers_on_stack(game: Game) -> list:
+    return [item for item in game.stack if item.ability_effect_kind == "triggered_delayed_destroy"]
+
+
 # ---------------------------------------------------------------------------
 # 509.1 — the declaration is atomic; an illegal declaration is undone
 # ---------------------------------------------------------------------------
@@ -328,6 +332,31 @@ def test_509_2_priority_passing_advances_from_active_to_nonactive_player():
 # 509.1i / 509.2a / 509.3 — abilities trigger on blockers being declared
 # ---------------------------------------------------------------------------
 
+def test_509_2a_block_trigger_goes_on_stack_before_active_player_priority(all_cards):
+    """509.2a: a triggered ability is put on the stack when blockers are declared,
+    and the active player has priority while it sits there (it has not resolved)."""
+    basilisk = Permanent(card=_get(all_cards, "Thicket Basilisk"))
+    attacker = Permanent(card=_mk_creature("Victim", 1, 1))
+    p1 = PlayerState(name="P1", battlefield=[attacker])
+    p2 = PlayerState(name="P2", battlefield=[basilisk])
+    game = Game(players=[p1, p2])
+    _to_declare_blockers(game, [0])
+
+    ok, _ = game.declare_blockers(1, {0: 0})
+    assert ok
+    # Trigger is on the stack, not yet resolved.
+    assert len(_block_triggers_on_stack(game)) == 1
+    assert attacker.metadata.get("destroy_at_end_of_combat") is None
+    # 509.2: the active player holds priority with the trigger on the stack.
+    assert game.priority_player_index == game.active_player_index == 0
+
+    # It resolves only once both players pass priority.
+    game.pass_priority(0)
+    game.pass_priority(1)
+    assert _block_triggers_on_stack(game) == []
+    assert attacker.metadata.get("destroy_at_end_of_combat") is True
+
+
 def test_509_3a_creature_that_blocks_destroys_what_it_blocks(all_cards):
     """509.3a: Thicket Basilisk blocks -> destroys the blocked creature at EOC."""
     basilisk = Permanent(card=_get(all_cards, "Thicket Basilisk"))
@@ -339,10 +368,11 @@ def test_509_3a_creature_that_blocks_destroys_what_it_blocks(all_cards):
 
     ok, _ = game.declare_blockers(1, {0: 0})
     assert ok
-    # 509.1i: trigger marked the blocked creature.
-    assert attacker.metadata.get("destroy_at_end_of_combat") is True
+    # 509.1i / 509.2a: the trigger is queued on the stack, not resolved yet.
+    assert len(_block_triggers_on_stack(game)) == 1
 
-    game.advance_combat_phase()  # combat_damage (auto)
+    game.advance_combat_phase()  # resolves stack on step end, then combat_damage
+    assert attacker.metadata.get("destroy_at_end_of_combat") is True
     game.advance_combat_phase()  # end_of_combat
     assert all(perm.card.name != "Victim" for perm in p1.battlefield)
 
@@ -358,15 +388,16 @@ def test_509_3c_attacker_that_becomes_blocked_destroys_its_blocker(all_cards):
 
     ok, _ = game.declare_blockers(1, {0: 0})
     assert ok
-    assert blocker.metadata.get("destroy_at_end_of_combat") is True
+    assert len(_block_triggers_on_stack(game)) == 1
 
     game.advance_combat_phase()  # combat_damage
+    assert blocker.metadata.get("destroy_at_end_of_combat") is True
     game.advance_combat_phase()  # end_of_combat
     assert all(perm.card.name != "Chump" for perm in p2.battlefield)
 
 
 def test_509_3_block_trigger_excludes_walls(all_cards):
-    """The "non-Wall creature" clause: a Wall blocker is not destroyed."""
+    """The "non-Wall creature" clause: a Wall blocker triggers nothing."""
     basilisk = Permanent(card=_get(all_cards, "Thicket Basilisk"))
     wall = Permanent(card=_mk_creature("Stone Wall", 0, 4, type_line="Creature - Wall"))
     p1 = PlayerState(name="P1", battlefield=[basilisk])
@@ -376,7 +407,11 @@ def test_509_3_block_trigger_excludes_walls(all_cards):
 
     ok, _ = game.declare_blockers(1, {0: 0})
     assert ok
-    assert wall.metadata.get("destroy_at_end_of_combat") is None
+    assert _block_triggers_on_stack(game) == []
+
+    game.advance_combat_phase()  # combat_damage
+    game.advance_combat_phase()  # end_of_combat
+    assert any(perm.card.name == "Stone Wall" for perm in p2.battlefield)
 
 
 def test_509_3_block_trigger_does_not_fire_for_unblocked_attacker(all_cards):
@@ -390,6 +425,7 @@ def test_509_3_block_trigger_does_not_fire_for_unblocked_attacker(all_cards):
 
     ok, _ = game.declare_blockers(1, {})  # no blocks
     assert ok
+    assert _block_triggers_on_stack(game) == []
     assert bystander.metadata.get("destroy_at_end_of_combat") is None
 
 

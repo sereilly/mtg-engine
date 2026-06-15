@@ -10,6 +10,26 @@ if TYPE_CHECKING:
     from ..oracle import OracleInstruction
 
 
+@effect_handler("delayed_destroy_blocked_or_blocker")
+def delayed_destroy_blocked_or_blocker(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Resolve Cockatrice / Thicket Basilisk's block trigger (Rule 509.2a).
+
+    The trigger was put on the stack when blockers were declared; on resolution
+    it marks the creature it blocked / that blocked it for destruction at end of
+    combat. The victim is identified by the stack item's target indices, captured
+    at declaration time (509.3f).
+    """
+    target = context.target
+    idx = context.target_permanent_index
+    victim = target.battlefield[idx] if isinstance(idx, int) and 0 <= idx < len(target.battlefield) else None
+    if victim is None:
+        game.log.append(f"{context.card.name} block trigger had no valid target")
+        return True, "no target"
+    victim.metadata["destroy_at_end_of_combat"] = True
+    game.log.append(f"{context.card.name} will destroy {victim.card.name} at end of combat")
+    return True, "resolved"
+
+
 @effect_handler("grant_unlimited_blocking")
 def grant_unlimited_blocking(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     target = context.target
