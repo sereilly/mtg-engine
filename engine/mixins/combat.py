@@ -465,6 +465,36 @@ class CombatMixin:
                     f"({counters - 1} remaining)"
                 )
 
+        self._resolve_end_of_combat_destruction()
+
+    def _resolve_end_of_combat_destruction(self) -> None:
+        """Destroy creatures marked by a "destroy at end of combat" trigger.
+
+        Used by Cockatrice / Thicket Basilisk (see _fire_block_triggers). Honors
+        regeneration shields like any other destruction.
+        """
+        any_died = False
+        for player in self.players:
+            survivors: list[Permanent] = []
+            for permanent in player.battlefield:
+                if not permanent.metadata.pop("destroy_at_end_of_combat", False):
+                    survivors.append(permanent)
+                    continue
+                if permanent.regeneration_shield > 0:
+                    permanent.regeneration_shield -= 1
+                    permanent.tapped = True
+                    permanent.damage_marked = 0
+                    survivors.append(permanent)
+                    self.log.append(f"{permanent.card.name} regenerated")
+                    continue
+                self._permanent_to_graveyard(player, permanent)
+                self._trigger_aura_death_effects(permanent, player)
+                self.log.append(f"{permanent.card.name} was destroyed at end of combat")
+                any_died = True
+            player.battlefield = survivors
+        if any_died:
+            self._recalculate_lord_buffs()
+
     def declare_blockers(self, controller_index: int, blocker_to_attacker: dict[int, int]) -> tuple[bool, str]:
         if self.current_turn_phase != "combat" or self.current_step != "declare_blockers":
             return False, "blockers can only be declared during declare_blockers"
@@ -515,7 +545,64 @@ class CombatMixin:
                 defender.battlefield[blocker_idx].metadata["blocked_this_combat"] = True
         self._prune_combat_state()
         self.log.append(f"{defender.name} declared {len(assignments)} blocker(s)")
+        # 509.1i / 509.2a: abilities that trigger on blockers being declared fire now.
+        self._fire_block_triggers(controller_index)
         return True, "declared blockers"
+
+    def _fire_block_triggers(self, controller_index: int) -> None:
+        """Fire abilities that trigger when blockers are declared (Rule 509.1i, 509.2a).
+
+        Covers Cockatrice / Thicket Basilisk: "Whenever this creature blocks or
+        becomes blocked by a non-Wall creature, destroy that creature at end of
+        combat." Per 509.3a the trigger fires once for the creature that blocks
+        (marking the attacker it blocks) and per 509.3c/509.3d once for the
+        attacker that becomes blocked (marking each creature blocking it). A Wall
+        partner is excluded by the "non-Wall" clause.
+        """
+        if controller_index < 0 or controller_index >= len(self.players):
+            return
+        if self.active_player_index < 0 or self.active_player_index >= len(self.players):
+            return
+        defender = self.players[controller_index]
+        attacker_controller = self.players[self.active_player_index]
+
+        def has_block_destroy_trigger(perm: Permanent) -> bool:
+            program = compile_card_oracle(perm.card)
+            return any(
+                trig.condition.kind == "cockatrice_blocks_or_blocked"
+                and trig.instruction is not None
+                and trig.instruction.kind == "delayed_destroy_blocked_or_blocker"
+                for trig in program.triggered_abilities
+            )
+
+        def mark_for_destruction(victim: Permanent, source: Permanent) -> None:
+            if "wall" in victim.card.type_line.lower():
+                return
+            victim.metadata["destroy_at_end_of_combat"] = True
+            self.log.append(
+                f"{source.card.name} will destroy {victim.card.name} at end of combat"
+            )
+
+        # A blocker that blocks an attacker (509.3a "Whenever this creature blocks").
+        for blocker_idx, attacker_idx in self.combat_blockers.items():
+            if blocker_idx < 0 or blocker_idx >= len(defender.battlefield):
+                continue
+            blocker = defender.battlefield[blocker_idx]
+            if not has_block_destroy_trigger(blocker):
+                continue
+            if 0 <= attacker_idx < len(attacker_controller.battlefield):
+                mark_for_destruction(attacker_controller.battlefield[attacker_idx], blocker)
+
+        # An attacker that becomes blocked (509.3c/509.3d "becomes blocked").
+        for attacker_idx in self.combat_attackers:
+            if attacker_idx < 0 or attacker_idx >= len(attacker_controller.battlefield):
+                continue
+            attacker = attacker_controller.battlefield[attacker_idx]
+            if not has_block_destroy_trigger(attacker):
+                continue
+            for blocker_idx in self._combat_blockers_for_attacker(attacker_idx):
+                if 0 <= blocker_idx < len(defender.battlefield):
+                    mark_for_destruction(defender.battlefield[blocker_idx], attacker)
 
     def _combat_blockers_for_attacker(self, attacker_idx: int) -> list[int]:
         return [blocker_idx for blocker_idx, a_idx in self.combat_blockers.items() if a_idx == attacker_idx]

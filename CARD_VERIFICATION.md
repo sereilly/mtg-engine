@@ -3,9 +3,9 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **290**
-- Passed: **19**
-- Failed: **0**
-- Untested: **271**
+- Passed: **20**
+- Failed: **1**
+- Untested: **269**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -99,7 +99,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Fog | ✅ pass |  |
 | Force of Nature | ⬜ untested |  |
 | Forcefield | ⬜ untested |  |
-| Forest | ⬜ untested |  |
+| Forest | ✅ pass |  |
 | Fork | ⬜ untested |  |
 | Frozen Shade | ⬜ untested |  |
 | Fungusaur | ⬜ untested |  |
@@ -149,7 +149,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Lance | ⬜ untested |  |
 | Ley Druid | ⬜ untested |  |
 | Library of Leng | ⬜ untested |  |
-| Lich | ⬜ untested |  |
+| Lich | ❌ fail | I lose the game when I play this card even though I shouldn't based on its oracle text |
 | Lifeforce | ⬜ untested |  |
 | Lifelace | ⬜ untested |  |
 | Lifetap | ⬜ untested |  |

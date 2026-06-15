@@ -30,6 +30,11 @@
       "status": "pass",
       "updated_at": 1781455588.34887
     },
+    "Forest": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1781503124.4112332
+    },
     "Goblin Balloon Brigade": {
       "reason": "",
       "status": "pass",
@@ -59,6 +64,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781378704.6242044
+    },
+    "Lich": {
+      "reason": "I lose the game when I play this card even though I shouldn't based on its oracle text",
+      "status": "fail",
+      "updated_at": 1781503311.0413384
     },
     "Mana Flare": {
       "reason": "",
