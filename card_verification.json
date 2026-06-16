@@ -10,6 +10,11 @@
       "status": "pass",
       "updated_at": 1781410851.5122583
     },
+    "Blue Elemental Blast": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1781588398.4474864
+    },
     "Control Magic": {
       "reason": "",
       "status": "pass",
@@ -24,6 +29,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781393461.2817519
+    },
+    "Deathgrip": {
+      "reason": "The activated ability should let me choose a target green spell rather than auto targeting",
+      "status": "fail",
+      "updated_at": 1781585712.1158247
     },
     "Elvish Archers": {
       "reason": "",
@@ -80,20 +90,50 @@
       "status": "pass",
       "updated_at": 1781394187.407336
     },
+    "Mana Short": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1781585587.1657355
+    },
     "Merfolk of the Pearl Trident": {
       "reason": "",
       "status": "pass",
       "updated_at": 1781378762.2991576
+    },
+    "Orcish Artillery": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1781586499.052248
+    },
+    "Phantom Monster": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1781586546.701313
+    },
+    "Prodigal Sorcerer": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1781585810.397277
     },
     "Psychic Venom": {
       "reason": "",
       "status": "pass",
       "updated_at": 1781410771.1947188
     },
+    "Red Elemental Blast": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1781588405.2655096
+    },
     "Scryb Sprites": {
       "reason": "",
       "status": "pass",
       "updated_at": 1781411184.698975
+    },
+    "Shivan Dragon": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1781585859.2176287
     },
     "Stasis": {
       "reason": "",

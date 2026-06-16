@@ -3,9 +3,9 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **290**
-- Passed: **21**
-- Failed: **3**
-- Untested: **266**
+- Passed: **28**
+- Failed: **4**
+- Untested: **258**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -31,7 +31,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Black Ward | ⬜ untested |  |
 | Blaze of Glory | ⬜ untested |  |
 | Blessing | ⬜ untested |  |
-| Blue Elemental Blast | ⬜ untested |  |
+| Blue Elemental Blast | ✅ pass |  |
 | Blue Ward | ⬜ untested |  |
 | Bog Wraith | ⬜ untested |  |
 | Braingeyser | ⬜ untested |  |
@@ -66,7 +66,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Dark Ritual | ⬜ untested |  |
 | Darkpact | ⬜ untested |  |
 | Death Ward | ⬜ untested |  |
-| Deathgrip | ⬜ untested |  |
+| Deathgrip | ❌ fail | The activated ability should let me choose a target green spell rather than auto targeting |
 | Deathlace | ⬜ untested |  |
 | Demonic Attorney | ⬜ untested |  |
 | Demonic Hordes | ⬜ untested |  |
@@ -164,7 +164,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Magical Hack | ⬜ untested |  |
 | Mahamoti Djinn | ⬜ untested |  |
 | Mana Flare | ✅ pass |  |
-| Mana Short | ⬜ untested |  |
+| Mana Short | ✅ pass |  |
 | Mana Vault | ⬜ untested |  |
 | Manabarbs | ⬜ untested |  |
 | Meekstone | ⬜ untested |  |
@@ -185,7 +185,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Nightmare | ⬜ untested |  |
 | Northern Paladin | ⬜ untested |  |
 | Obsianus Golem | ⬜ untested |  |
-| Orcish Artillery | ⬜ untested |  |
+| Orcish Artillery | ✅ pass |  |
 | Orcish Oriflamme | ⬜ untested |  |
 | Paralyze | ⬜ untested |  |
 | Pearled Unicorn | ⬜ untested |  |
@@ -193,7 +193,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Pestilence | ⬜ untested |  |
 | Phantasmal Forces | ⬜ untested |  |
 | Phantasmal Terrain | ⬜ untested |  |
-| Phantom Monster | ⬜ untested |  |
+| Phantom Monster | ✅ pass |  |
 | Pirate Ship | ⬜ untested |  |
 | Plague Rats | ⬜ untested |  |
 | Plains | ⬜ untested |  |
@@ -201,13 +201,13 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Power Leak | ⬜ untested |  |
 | Power Sink | ⬜ untested |  |
 | Power Surge | ⬜ untested |  |
-| Prodigal Sorcerer | ⬜ untested |  |
+| Prodigal Sorcerer | ✅ pass |  |
 | Psionic Blast | ⬜ untested |  |
 | Psychic Venom | ✅ pass |  |
 | Purelace | ⬜ untested |  |
 | Raging River | ⬜ untested |  |
 | Raise Dead | ⬜ untested |  |
-| Red Elemental Blast | ⬜ untested |  |
+| Red Elemental Blast | ✅ pass |  |
 | Red Ward | ⬜ untested |  |
 | Regeneration | ⬜ untested |  |
 | Regrowth | ⬜ untested |  |
@@ -232,7 +232,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Serra Angel | ⬜ untested |  |
 | Shanodin Dryads | ⬜ untested |  |
 | Shatter | ⬜ untested |  |
-| Shivan Dragon | ⬜ untested |  |
+| Shivan Dragon | ✅ pass |  |
 | Simulacrum | ⬜ untested |  |
 | Sinkhole | ⬜ untested |  |
 | Siren's Call | ⬜ untested |  |

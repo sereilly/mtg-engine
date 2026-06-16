@@ -119,6 +119,17 @@ def _effective_keywords(perm: Permanent, game: Game) -> list[str]:
     return keywords
 
 
+def _printed_stat(card, key: str) -> int | None:
+    """The card's printed (base) power/toughness as an int, or None when the
+    value is variable (`*`) or absent — the UI uses it to decide whether the
+    current value is buffed (green) or reduced (red)."""
+    raw_value = card.raw.get(key) if isinstance(card.raw, dict) else None
+    if raw_value is None:
+        return None
+    text = str(raw_value)
+    return int(text) if text.isdigit() else None
+
+
 def _serialize_permanent(perm: Permanent, game: Game) -> dict:
     image_uris = perm.card.raw.get("image_uris") if isinstance(perm.card.raw, dict) else None
     image_uri = image_uris.get("normal") if isinstance(image_uris, dict) else None
@@ -141,6 +152,8 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         "tapped": perm.tapped,
         "power": perm.effective_power,
         "toughness": perm.effective_toughness,
+        "base_power": _printed_stat(perm.card, "power"),
+        "base_toughness": _printed_stat(perm.card, "toughness"),
         "mana_cost": perm.card.mana_cost,
         "oracle_text": perm.card.oracle_text,
         "keywords": _effective_keywords(perm, game),

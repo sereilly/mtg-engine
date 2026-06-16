@@ -55,7 +55,7 @@ const BF_STACK_SCALE = 1.7; // stack cards render larger than battlefield cards
 const BF_STACK_HOVER_SCALE = 1.5; // extra growth of the hovered stack card
 const BF_STACK_OFFSET_X = 30; // cascade offset between overlapping stack cards
 const BF_STACK_OFFSET_Y = 38;
-const BF_STACK_DWELL_MS = 1500; // minimum time a spell stays on the stack before resolving
+const BF_STACK_DWELL_MS = 1200; // minimum time a spell stays on the stack before resolving
 const BF_STACK_GAP_X = 64; // gap between battlefield content and the stack zone
 const BF_STACK_EASE = 0.18; // per-frame easing of stack cards (position + scale)
 const BF_RESOLVE_FLY_MS = 340; // stack -> hover point above the battlefield slot
@@ -70,11 +70,11 @@ const BF_IMPACT_RING_MS = 240; // expanding ring when a permanent slams down
 // Creatures with Flying hover off the table and rock gently side to side, with
 // a soft contact shadow left behind on the board to sell the height.
 const BF_FLY_LIFT = 11; // base world px a flyer floats above its slot
-const BF_FLY_BOB = 3; // extra px of vertical bob added to the lift
-const BF_FLY_BOB_MS = 1700; // period of the vertical bob
-const BF_FLY_TILT = 0.5; // peak swivel angle in radians (~29°) about the vertical axis
-const BF_FLY_TILT_MS = 2600; // period of the left/right swivel
-const BF_FLY_SKEW = 0.16; // perspective shear strength accompanying the swivel
+const BF_FLY_BOB = 8; // extra px of vertical bob added to the lift
+const BF_FLY_BOB_MS = 1200; // period of the vertical bob
+const BF_FLY_TILT = 0.3; // peak swivel angle in radians (~29°) about the vertical axis
+const BF_FLY_TILT_MS = 1000; // period of the left/right swivel
+const BF_FLY_SKEW = 0.2; // perspective shear strength accompanying the swivel
 
 // ---- Combat damage animations ----
 // On damage resolution each attacker lunges toward its target under a glowing
@@ -1583,8 +1583,8 @@ class BattlefieldCanvas {
   // floats, the larger, softer and fainter the shadow gets.
   _drawGroundShadow(ctx, cx, cy, lift, tapped) {
     const t = Math.max(0, Math.min(1, lift / (BF_FLY_LIFT + BF_FLY_BOB)));
-    const w = (tapped ? BF_CARD_H : BF_CARD_W) * (1.04 + 0.12 * t);
-    const h = (tapped ? BF_CARD_W : BF_CARD_H) * (0.98 + 0.12 * t);
+    const w = (tapped ? BF_CARD_H : BF_CARD_W) * (0.8 + 0.12 * t);
+    const h = (tapped ? BF_CARD_W : BF_CARD_H) * (0.8 + 0.12 * t);
     ctx.save();
     ctx.globalAlpha = 0.4 - 0.14 * t;
     ctx.fillStyle = "#000";
