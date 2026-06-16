@@ -149,6 +149,9 @@ class CombatMixin:
     def _reset_combat_state(self, clear_damage_marked: bool) -> None:
         self.combat_attackers = {}
         self.combat_blockers = {}
+        self.combat_bands = []
+        self.combat_band_blocks = {}
+        self.combat_banding_damage = {}
         self.combat_defending_player_index = None
         self.combat_damage_resolved = False
         self.combat_first_strike_done = False
@@ -234,6 +237,10 @@ class CombatMixin:
             blocker = defender.battlefield[blocker_idx]
             blocker.blocking_attacker_controller = self.active_player_index
             blocker.blocking_attacker_index = attacker_idx
+
+        # CR 702.22h: propagate band blocks (no-op when no bands were declared).
+        # Recomputed here so the propagated "blocked" status survives every prune.
+        self._apply_band_block_propagation()
 
         # Attacking/defending status can change a creature's power and toughness
         # (e.g. Gaea's Liege uses the defending player's Forests while attacking),
@@ -356,6 +363,7 @@ class CombatMixin:
         controller_index: int,
         attacker_indices: list[int],
         defending_player_index: int | None = None,
+        bands: list[list[int]] | None = None,
     ) -> tuple[bool, str]:
         if self.current_turn_phase != "combat" or self.current_step != "declare_attackers":
             return False, "attackers can only be declared during declare_attackers"
@@ -393,9 +401,19 @@ class CombatMixin:
             if not self.can_attack(attacker, defender_idx):
                 return False, f"{attacker.card.name} cannot attack"
 
+        # CR 702.22c: validate any declared attacking bands before committing.
+        validated_bands, band_error = self._validate_attacking_bands(
+            bands, unique_indices, controller
+        )
+        if band_error is not None:
+            return False, band_error
+
         self.combat_defending_player_index = defender_idx
         self.combat_attackers = {idx: defender_idx for idx in unique_indices}
         self.combat_blockers = {}
+        self.combat_bands = validated_bands
+        self.combat_band_blocks = {}
+        self.combat_banding_damage = {}
         self.combat_damage_resolved = False
         self.combat_first_strike_done = False
         self.combat_attackers_locked = True
@@ -411,9 +429,133 @@ class CombatMixin:
 
         self._prune_combat_state()
         self.log.append(f"{controller.name} declared {len(unique_indices)} attacker(s)")
+        if validated_bands:
+            self.log.append(f"{controller.name} declared {len(validated_bands)} band(s)")
         if unique_indices:
             self._fire_attack_triggers(controller_index)
         return True, "declared attackers"
+
+    # ------------------------------------------------------------------
+    # Banding (CR 702.22)
+    # ------------------------------------------------------------------
+
+    def _creature_has_banding(self, permanent: Permanent) -> bool:
+        """Whether a creature currently has banding (printed or granted)."""
+        if permanent.metadata.get("gains_banding_until_eot"):
+            return True
+        return self._has_keyword(permanent, "banding")
+
+    def _validate_attacking_bands(
+        self,
+        bands: list[list[int]] | None,
+        attacker_indices: list[int],
+        controller: PlayerState,
+    ) -> tuple[list[list[int]], str | None]:
+        """Validate declared attacking bands (CR 702.22c). Returns (bands, error).
+
+        A band is one or more attacking creatures with banding plus up to one
+        attacking creature without banding; each creature may join only one band.
+        """
+        if not bands:
+            return [], None
+        attacker_set = set(attacker_indices)
+        seen: set[int] = set()
+        validated: list[list[int]] = []
+        for group in bands:
+            members = sorted(set(group))
+            if len(members) < 2:
+                return [], "a band must contain at least two creatures"
+            banding_count = 0
+            nonbanding_count = 0
+            for idx in members:
+                if idx not in attacker_set:
+                    return [], "every band member must be a declared attacker"
+                if idx in seen:
+                    return [], "a creature may belong to only one band"
+                seen.add(idx)
+                if self._creature_has_banding(controller.battlefield[idx]):
+                    banding_count += 1
+                else:
+                    nonbanding_count += 1
+            if banding_count < 1:
+                return [], "a band needs at least one creature with banding"
+            if nonbanding_count > 1:
+                return [], "a band may include at most one creature without banding"
+            validated.append(members)
+        return validated, None
+
+    def _attacker_band(self, attacker_idx: int) -> list[int] | None:
+        for band in self.combat_bands:
+            if attacker_idx in band:
+                return band
+        return None
+
+    def _attacker_all_blockers(self, attacker_idx: int) -> list[int]:
+        """Every creature blocking an attacker, including band-propagated blocks."""
+        blockers = set(self._combat_blockers_for_attacker(attacker_idx))
+        blockers.update(self.combat_band_blocks.get(attacker_idx, []))
+        return sorted(blockers)
+
+    def _attacker_blocked_by_banding(self, attacker_idx: int) -> bool:
+        """CR 702.22j: is this attacker blocked by at least one creature with banding?"""
+        defending_index = self.combat_defending_player_index
+        if not isinstance(defending_index, int) or not (0 <= defending_index < len(self.players)):
+            return False
+        defender = self.players[defending_index]
+        for blocker_idx in self._attacker_all_blockers(attacker_idx):
+            if 0 <= blocker_idx < len(defender.battlefield):
+                if self._creature_has_banding(defender.battlefield[blocker_idx]):
+                    return True
+        return False
+
+    def _apply_band_block_propagation(self) -> None:
+        """CR 702.22h/i: when one band member becomes blocked, every other creature
+        in that band becomes blocked by the same blocker(s).
+
+        Recomputed from ``combat_blockers`` so it stays correct as combat state is
+        pruned. A no-op when no attacking bands were declared.
+        """
+        self.combat_band_blocks = {}
+        if not self.combat_bands:
+            return
+        if self.active_player_index < 0 or self.active_player_index >= len(self.players):
+            return
+        active = self.players[self.active_player_index]
+        for band in self.combat_bands:
+            band_blockers: set[int] = set()
+            for member in band:
+                band_blockers.update(self._combat_blockers_for_attacker(member))
+            if not band_blockers:
+                continue
+            for member in band:
+                if member < 0 or member >= len(active.battlefield):
+                    continue
+                extra = sorted(band_blockers - set(self._combat_blockers_for_attacker(member)))
+                if extra:
+                    self.combat_band_blocks[member] = extra
+                active.battlefield[member].blocked = True
+
+    def assign_banding_combat_damage(
+        self,
+        defender_index: int,
+        attacker_damage: dict[int, dict[int, int]],
+    ) -> tuple[bool, str]:
+        """CR 702.22j: the defending player pre-commits how each attacker that is
+        blocked by a creature with banding assigns its combat damage.
+
+        Stored and consumed by :meth:`resolve_combat_damage` in place of the active
+        player's assignment for those attackers.
+        """
+        if defender_index != self.combat_defending_player_index:
+            return False, "only the defending player may assign banding damage"
+        for attacker_idx in attacker_damage:
+            if not self._attacker_blocked_by_banding(attacker_idx):
+                return False, "attacker is not blocked by a creature with banding"
+        self.combat_banding_damage = {
+            int(a): {int(b): int(v) for b, v in dmg.items()}
+            for a, dmg in attacker_damage.items()
+        }
+        return True, "banding damage assignment recorded"
 
     def _fire_attack_triggers(self, controller_index: int) -> None:
         """Fire "whenever one or more creatures you control attack" triggers.
@@ -724,9 +866,17 @@ class CombatMixin:
         return [blocker_idx for blocker_idx, a_idx in self.combat_blockers.items() if a_idx == attacker_idx]
 
     def _needs_manual_damage_assignment(self) -> bool:
-        """Return True when any blocked attacker has 2+ blockers, requiring player input."""
+        """Return True when combat damage needs a player's assignment choice.
+
+        That is any blocked attacker with 2+ blockers, or any attacking band whose
+        block propagated (CR 702.22h) so the active player must choose where each
+        shared blocker's damage goes (702.22k). Pure non-banding combat is
+        unaffected, so AI auto-resolution keeps working unchanged.
+        """
+        if self.combat_band_blocks:
+            return True
         for attacker_idx in self.combat_attackers:
-            if len(self._combat_blockers_for_attacker(attacker_idx)) >= 2:
+            if len(self._attacker_all_blockers(attacker_idx)) >= 2:
                 return True
         return False
 
@@ -754,7 +904,7 @@ class CombatMixin:
             if attacker_idx >= len(attacker_controller.battlefield):
                 continue
             attacker = attacker_controller.battlefield[attacker_idx]
-            blockers = sorted(self._combat_blockers_for_attacker(attacker_idx))
+            blockers = self._attacker_all_blockers(attacker_idx)
             if not blockers:
                 continue
             has_trample = self._has_keyword(attacker, "trample")
@@ -798,7 +948,12 @@ class CombatMixin:
             assignment[attacker_idx] = per_blocker
         return assignment
 
-    def resolve_combat_damage(self, controller_index: int, attacker_damage: dict[int, dict[int, int]] | None = None) -> tuple[bool, str]:
+    def resolve_combat_damage(
+        self,
+        controller_index: int,
+        attacker_damage: dict[int, dict[int, int]] | None = None,
+        blocker_damage: dict[int, int] | None = None,
+    ) -> tuple[bool, str]:
         if self.current_turn_phase != "combat" or self.current_step != "combat_damage":
             return False, "combat damage can only be resolved during combat_damage"
         if controller_index != self.active_player_index:
@@ -825,8 +980,12 @@ class CombatMixin:
                 not self._has_keyword(perm, "first strike") and not self._has_keyword(perm, "double strike")
             )
 
+        # None means "no explicit assignment given" — fall back to the engine's
+        # default assignment (full power to blockers). An empty dict, by contrast,
+        # is an explicit "assign nothing". This lets a caller supply only
+        # blocker_damage (CR 702.22k) and still have attackers deal normally.
         if attacker_damage is None:
-            attacker_damage = {}
+            attacker_damage = self._build_auto_damage_assignment()
 
         # CR 510.5: there is a separate first-strike combat damage step if any
         # attacking or blocking creature has first strike or double strike — this
@@ -838,7 +997,7 @@ class CombatMixin:
             if attacker_idx >= len(attacker_controller.battlefield):
                 continue
             attacker = attacker_controller.battlefield[attacker_idx]
-            blockers = self._combat_blockers_for_attacker(attacker_idx)
+            blockers = self._attacker_all_blockers(attacker_idx)
             if blockers:
                 for blocker_idx in blockers:
                     if blocker_idx < len(defender.battlefield):
@@ -876,7 +1035,7 @@ class CombatMixin:
             if not run_first_pass and has_first_strike_pass and not participates_in_second_strike(attacker):
                 continue
 
-            blockers = self._combat_blockers_for_attacker(attacker_idx)
+            blockers = self._attacker_all_blockers(attacker_idx)
             power_left = attacker.effective_power
             if not blockers:
                 if self.combat_damage_prevented_until_eot:
@@ -893,7 +1052,12 @@ class CombatMixin:
                         add_lifelink(self.active_player_index, damage)
                 continue
 
-            requested = attacker_damage.get(attacker_idx, {})
+            # CR 702.22j: when an attacker is blocked by a creature with banding, the
+            # defending player (not the active player) assigns that attacker's damage.
+            if self._attacker_blocked_by_banding(attacker_idx) and attacker_idx in self.combat_banding_damage:
+                requested = self.combat_banding_damage[attacker_idx]
+            else:
+                requested = attacker_damage.get(attacker_idx, {})
             assigned_total = 0
             block_order = sorted(blockers)
             # CR 510.1c: with multiple blockers ordered by the attacker, a blocker
@@ -937,6 +1101,14 @@ class CombatMixin:
                 continue
             if attacker_idx < 0 or attacker_idx >= len(attacker_controller.battlefield):
                 continue
+            # CR 702.22k: a blocker blocking a band (which always contains a creature
+            # with banding) deals its damage where the *active* player chooses among
+            # the band members it blocks. Default: the creature it explicitly blocked.
+            band = self._attacker_band(attacker_idx)
+            if band and blocker_damage and blocker_idx in blocker_damage:
+                chosen = blocker_damage[blocker_idx]
+                if chosen in band and 0 <= chosen < len(attacker_controller.battlefield):
+                    attacker_idx = chosen
             blocker = defender.battlefield[blocker_idx]
             attacker = attacker_controller.battlefield[attacker_idx]
             if blocker.effective_power <= 0:
@@ -1021,6 +1193,10 @@ class CombatMixin:
             "first_strike_done": self.combat_first_strike_done,
             "attackers_locked": self.combat_attackers_locked,
             "blockers_locked": self.combat_blockers_locked,
+            # Banding (CR 702.22): declared attacking bands and the per-attacker
+            # blockers added by band propagation (702.22h).
+            "bands": [list(band) for band in self.combat_bands],
+            "band_blocks": {k: list(v) for k, v in self.combat_band_blocks.items()},
         }
 
     def can_attack(self, attacker: Permanent, defending_player_index: int) -> bool:

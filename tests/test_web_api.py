@@ -1069,6 +1069,93 @@ def test_assign_combat_damage_endpoint_changes_life():
     assert assign.json()["players"][1]["life"] == 17
 
 
+def _mk_banding_card(name: str, power: int, toughness: int):
+    return CardDefinition(
+        name=name,
+        mana_cost="",
+        cmc=0.0,
+        type_line="Creature - Test",
+        oracle_text="Banding",
+        colors=(),
+        color_identity=(),
+        keywords=("Banding",),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Test", "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def test_banding_declare_attack_with_band_and_route_blocker_damage():
+    """End-to-end (CR 702.22): a band is declared via the API, the lone blocker is
+    forced to block the whole band, and the active player routes its damage onto the
+    expendable bander so the beater survives."""
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "guest_name": "Guest",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 99077,
+        },
+    ).json()
+    sid = created["session_id"]
+    client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
+
+    session = store.get(sid)
+    beater = _mk_creature_card("Beater", 3, 3)
+    bander = _mk_banding_card("Bander", 1, 1)
+    blocker = _mk_creature_card("Blocker", 3, 3)
+    session.game.players[0].battlefield = [Permanent(card=beater), Permanent(card=bander)]
+    session.game.players[1].battlefield = [Permanent(card=blocker)]
+    session.game.current_turn_phase = "combat"
+    session.game.current_phase = "combat"
+    session.game.current_step = "declare_attackers"
+    session.current_turn = 0
+    session.game.start_priority_window(0)
+
+    declare = client.post(
+        f"/api/sessions/{sid}/action",
+        json={
+            "seat": 0,
+            "action": "declare_attackers",
+            "attacker_indices": [0, 1],
+            "bands": [[0, 1]],
+            "target_seat": 1,
+        },
+    )
+    assert declare.status_code == 200, declare.text
+    assert session.game.combat_bands == [[0, 1]]
+
+    session.game.current_step = "declare_blockers"
+    session.game.priority_player_index = 1
+    block = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 1, "action": "declare_blockers", "blocker_pairs": {"0": 0}},
+    )
+    assert block.status_code == 200, block.text
+    # 702.22h: blocking the beater also blocks the bander.
+    assert session.game.combat_band_blocks.get(1) == [0]
+
+    session.game.current_step = "combat_damage"
+    session.game.start_priority_window(0)
+    damage = client.post(
+        f"/api/sessions/{sid}/action",
+        json={
+            "seat": 0,
+            "action": "assign_combat_damage",
+            "blocker_damage": {"0": 1},  # route the blocker's damage onto the bander
+        },
+    )
+    assert damage.status_code == 200, damage.text
+
+    names_p0 = {p.card.name for p in session.game.players[0].battlefield}
+    names_p1 = {p.card.name for p in session.game.players[1].battlefield}
+    assert "Beater" in names_p0       # saved
+    assert "Bander" not in names_p0   # absorbed the blocker's damage
+    assert "Blocker" not in names_p1  # 3 + 1 killed it
+
+
 def test_next_phase_ai_defender_auto_declares_blockers_and_advances_when_no_instant():
     created = client.post(
         "/api/sessions",

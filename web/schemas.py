@@ -16,6 +16,7 @@ ActionKind = Literal[
     "declare_attackers",
     "declare_blockers",
     "assign_combat_damage",
+    "assign_banding_damage",
     "ai_step",
     "cleanup_select",
     "untap_select",
@@ -90,8 +91,17 @@ class GameActionRequest(BaseModel):
     hand_index: int | None = Field(default=None, ge=0)
     mana_color: Literal["W", "U", "B", "R", "G", "C"] | None = None
     attacker_indices: list[int] | None = None
+    # Banding (CR 702.22c): attacking bands, each a list of attacker battlefield
+    # indices, declared alongside attacker_indices in a declare_attackers action.
+    bands: list[list[int]] | None = None
     blocker_pairs: dict[int, int] | None = None
     attacker_damage: dict[int, dict[int, int]] | None = None
+    # Banding (CR 702.22k): how a shared blocker's damage is routed among the band
+    # members it blocks — maps blocker battlefield index to the chosen attacker index.
+    blocker_damage: dict[int, int] | None = None
+    # Banding (CR 702.22j): the defending player's damage assignment for attackers
+    # blocked by a creature with banding, submitted via an assign_banding_damage action.
+    banding_damage: dict[int, dict[int, int]] | None = None
     card_order: list[int] | None = None
     # Counterspell / Fork: which spell on the stack to target, as a top-first index
     # into the serialized stack (0 = topmost). Converted server-side to an engine

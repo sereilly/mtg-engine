@@ -61,6 +61,14 @@ class Game(
     combat_first_strike_done: bool = False
     combat_attackers_locked: bool = False
     combat_blockers_locked: bool = False
+    # Banding (CR 702.22). ``combat_bands`` holds the attacking bands declared this
+    # combat (each a list of attacker indices). ``combat_band_blocks`` maps an
+    # attacker index to the blocker indices that block it via band propagation
+    # (702.22h). ``combat_banding_damage`` is the defending player's pre-committed
+    # damage assignment for attackers blocked by a creature with banding (702.22j).
+    combat_bands: list[list[int]] = field(default_factory=list)
+    combat_band_blocks: dict[int, list[int]] = field(default_factory=dict)
+    combat_banding_damage: dict[int, dict[int, int]] = field(default_factory=dict)
     priority_player_index: int | None = None
     priority_pass_count: int = 0
     untapped_lands_at_turn_start: dict[int, int] = field(default_factory=dict)

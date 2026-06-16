@@ -745,17 +745,221 @@ def test_702_14_real_card_forestwalk(all_cards):
 # ---------------------------------------------------------------------------
 
 
-def test_702_22_banding_keyword_is_recognized(all_cards):
-    """702.22a: banding is a static ability. The engine recognizes it on the three
-    Alpha banding creatures via ``_has_keyword``."""
-    hero = Permanent(card=_get(all_cards, "Benalish Hero"))
-    game, _, _ = _game([hero], [])
-    assert game._has_keyword(hero, "banding")
+def _to_declare_blockers_banded(game: Game, attacker_indices, bands):
+    """Advance to declare_blockers with the given attackers and attacking bands."""
+    _to_declare_attackers(game)
+    ok, msg = game.declare_attackers(0, attacker_indices, bands=bands)
+    assert ok, msg
+    game.advance_combat_phase()  # declare_blockers
+    assert game.current_step == "declare_blockers"
 
 
-def test_702_22_banding_creature_attacks_and_fights_normally(all_cards):
-    """A banding creature attacks and is blocked like any other; full multi-creature
-    band declaration is not modeled, but ordinary combat with one must not crash."""
+def _mk_bander(name: str, power: int = 1, toughness: int = 1) -> CardDefinition:
+    return _mk_creature(name, power, toughness, keywords=("Banding",))
+
+
+def test_702_22a_banding_keyword_is_recognized(all_cards):
+    """702.22a: banding is a static ability, recognized on the Alpha banders."""
+    for name in ("Benalish Hero", "Mesa Pegasus", "Timber Wolves"):
+        perm = Permanent(card=_get(all_cards, name))
+        game, _, _ = _game([perm], [])
+        assert game._creature_has_banding(perm), name
+
+
+# --- 702.22c: band declaration legality --------------------------------------
+
+
+def test_702_22c_valid_band_of_bander_plus_one_nonbander():
+    bander = Permanent(card=_mk_bander("Bander"))
+    ally = Permanent(card=_mk_creature("Ally", 2, 2))
+    game, _, _ = _game([bander, ally], [])
+    _to_declare_attackers(game)
+    ok, msg = game.declare_attackers(0, [0, 1], bands=[[0, 1]])
+    assert ok, msg
+    assert game.combat_bands == [[0, 1]]
+
+
+def test_702_22c_band_with_two_nonbanders_is_illegal():
+    bander = Permanent(card=_mk_bander("Bander"))
+    a = Permanent(card=_mk_creature("A", 2, 2))
+    b = Permanent(card=_mk_creature("B", 2, 2))
+    game, _, _ = _game([bander, a, b], [])
+    _to_declare_attackers(game)
+    ok, _ = game.declare_attackers(0, [0, 1, 2], bands=[[0, 1, 2]])
+    assert not ok
+
+
+def test_702_22c_band_without_a_bander_is_illegal():
+    a = Permanent(card=_mk_creature("A", 2, 2))
+    b = Permanent(card=_mk_creature("B", 2, 2))
+    game, _, _ = _game([a, b], [])
+    _to_declare_attackers(game)
+    ok, _ = game.declare_attackers(0, [0, 1], bands=[[0, 1]])
+    assert not ok
+
+
+def test_702_22c_two_or_more_banders_may_band_together():
+    b1 = Permanent(card=_mk_bander("B1"))
+    b2 = Permanent(card=_mk_bander("B2"))
+    game, _, _ = _game([b1, b2], [])
+    _to_declare_attackers(game)
+    ok, msg = game.declare_attackers(0, [0, 1], bands=[[0, 1]])
+    assert ok, msg
+
+
+def test_702_22c_creature_cannot_be_in_two_bands():
+    bander = Permanent(card=_mk_bander("Bander"))
+    b2 = Permanent(card=_mk_bander("Bander2"))
+    ally = Permanent(card=_mk_creature("Ally", 2, 2))
+    game, _, _ = _game([bander, b2, ally], [])
+    _to_declare_attackers(game)
+    ok, _ = game.declare_attackers(0, [0, 1, 2], bands=[[0, 2], [1, 2]])
+    assert not ok
+
+
+def test_702_22c_band_member_must_be_an_attacker():
+    bander = Permanent(card=_mk_bander("Bander"))
+    ally = Permanent(card=_mk_creature("Ally", 2, 2))
+    game, _, _ = _game([bander, ally], [])
+    _to_declare_attackers(game)
+    ok, _ = game.declare_attackers(0, [0], bands=[[0, 1]])  # 1 not attacking
+    assert not ok
+
+
+# --- 702.22h/i: blocking one band member blocks the whole band ---------------
+
+
+def test_702_22h_block_propagates_to_the_whole_band():
+    beater = Permanent(card=_mk_creature("Beater", 3, 3))
+    bander = Permanent(card=_mk_bander("Bander"))
+    blocker = Permanent(card=_mk_creature("Blocker", 3, 3))
+    game, p1, _ = _game([beater, bander], [blocker])
+    _to_declare_blockers_banded(game, [0, 1], bands=[[0, 1]])
+
+    ok, msg = game.declare_blockers(1, {0: 0})  # block only the beater
+    assert ok, msg
+    # Both band members are now blocked (702.22h).
+    assert p1.battlefield[0].blocked is True
+    assert p1.battlefield[1].blocked is True
+    assert game.combat_band_blocks.get(1) == [0]
+
+
+def test_702_22k_active_player_routes_shared_blockers_damage_to_save_the_beater():
+    """702.22h + 702.22k: a band forces the lone blocker to block the whole band,
+    and the active player assigns that blocker's damage onto the expendable bander,
+    so the beater survives while everyone gangs up on the blocker."""
+    beater = Permanent(card=_mk_creature("Beater", 3, 3))
+    bander = Permanent(card=_mk_bander("Bander", 1, 1))
+    blocker = Permanent(card=_mk_creature("Blocker", 3, 3))
+    game, p1, p2 = _game([beater, bander], [blocker])
+    _to_declare_blockers_banded(game, [0, 1], bands=[[0, 1]])
+    game.declare_blockers(1, {0: 0})
+
+    game.advance_combat_phase()  # enter combat_damage (manual: band propagation)
+    assert game.current_step == "combat_damage"
+    # Active player sends the blocker's 3 damage onto the bander (band member 1).
+    ok, msg = game.resolve_combat_damage(0, blocker_damage={0: 1})
+    assert ok, msg
+
+    assert any(p.card.name == "Beater" for p in p1.battlefield)      # beater saved
+    assert all(p.card.name != "Bander" for p in p1.battlefield)      # bander died
+    assert all(p.card.name != "Blocker" for p in p2.battlefield)     # 3+1 killed blocker
+
+
+def test_702_22k_without_redirect_blocker_damage_hits_the_blocked_creature():
+    """Contrast: with no 702.22k redirect, the shared blocker damages the creature
+    it was declared against — the beater — which then dies."""
+    beater = Permanent(card=_mk_creature("Beater", 3, 3))
+    bander = Permanent(card=_mk_bander("Bander", 1, 1))
+    blocker = Permanent(card=_mk_creature("Blocker", 3, 3))
+    game, p1, _ = _game([beater, bander], [blocker])
+    _to_declare_blockers_banded(game, [0, 1], bands=[[0, 1]])
+    game.declare_blockers(1, {0: 0})
+
+    game.advance_combat_phase()
+    game.resolve_combat_damage(0)  # no redirect
+
+    assert all(p.card.name != "Beater" for p in p1.battlefield)  # beater took the 3
+
+
+# --- 702.22j: the defender assigns damage of an attacker blocked by a bander --
+
+
+def test_702_22j_defender_assigns_banding_blocked_attacker_damage_to_save_a_blocker():
+    """702.22j: because a creature with banding is among the blockers, the defending
+    player chooses how the attacker's combat damage is split. The defender dumps it
+    all on their own banding creature, saving the vanilla blocker beside it."""
+    attacker = Permanent(card=_mk_creature("Ogre", 3, 3))
+    bander = Permanent(card=_mk_bander("Bander", 1, 1))   # defender index 0
+    chump = Permanent(card=_mk_creature("Chump", 2, 2))    # defender index 1
+    game, p1, p2 = _game([attacker], [bander, chump])
+    _to_declare_blockers(game, [0])
+    ok, msg = game.declare_blockers(1, {0: 0, 1: 0})  # both block the Ogre
+    assert ok, msg
+
+    game.advance_combat_phase()  # enter combat_damage (manual: 2 blockers)
+    assert game.current_step == "combat_damage"
+    # Defender pre-commits: all 3 onto the banding creature (index 0), none on chump.
+    ok, msg = game.assign_banding_combat_damage(1, {0: {0: 3, 1: 0}})
+    assert ok, msg
+    ok, msg = game.resolve_combat_damage(0)
+    assert ok, msg
+
+    assert all(p.card.name != "Bander" for p in p2.battlefield)   # bander absorbed it
+    assert any(p.card.name == "Chump" for p in p2.battlefield)    # chump saved
+    assert all(p.card.name != "Ogre" for p in p1.battlefield)     # Ogre took 1+2=3
+
+
+def test_702_22j_only_the_defending_player_may_assign_banding_damage():
+    attacker = Permanent(card=_mk_creature("Ogre", 3, 3))
+    bander = Permanent(card=_mk_bander("Bander", 1, 1))
+    chump = Permanent(card=_mk_creature("Chump", 2, 2))
+    game, _, _ = _game([attacker], [bander, chump])
+    _to_declare_blockers(game, [0])
+    game.declare_blockers(1, {0: 0, 1: 0})
+    game.advance_combat_phase()
+
+    # The active player (seat 0) may not pre-assign banding damage.
+    ok, _ = game.assign_banding_combat_damage(0, {0: {0: 3}})
+    assert not ok
+
+
+def test_702_22j_assignment_rejected_when_no_banding_blocker_present():
+    attacker = Permanent(card=_mk_creature("Ogre", 3, 3))
+    v1 = Permanent(card=_mk_creature("V1", 2, 2))
+    v2 = Permanent(card=_mk_creature("V2", 2, 2))
+    game, _, _ = _game([attacker], [v1, v2])
+    _to_declare_blockers(game, [0])
+    game.declare_blockers(1, {0: 0, 1: 0})
+    game.advance_combat_phase()
+
+    ok, _ = game.assign_banding_combat_damage(1, {0: {0: 3}})
+    assert not ok  # neither blocker has banding
+
+
+# --- real Alpha banders + the grant-banding ability --------------------------
+
+
+def test_702_22_real_band_with_timber_wolves(all_cards):
+    """Timber Wolves (1/1 banding) bands with a beater; blocking the beater blocks
+    the whole band, and the active player routes the blocker's damage to the wolves."""
+    beater = Permanent(card=_mk_creature("Beater", 3, 3))
+    wolves = Permanent(card=_get(all_cards, "Timber Wolves"))  # 1/1 banding
+    blocker = Permanent(card=_mk_creature("Blocker", 3, 3))
+    game, p1, p2 = _game([beater, wolves], [blocker])
+    _to_declare_blockers_banded(game, [0, 1], bands=[[0, 1]])
+    game.declare_blockers(1, {0: 0})
+    game.advance_combat_phase()
+    ok, msg = game.resolve_combat_damage(0, blocker_damage={0: 1})
+    assert ok, msg
+
+    assert any(p.card.name == "Beater" for p in p1.battlefield)
+    assert all(p.card.name != "Timber Wolves" for p in p1.battlefield)
+    assert all(p.card.name != "Blocker" for p in p2.battlefield)
+
+
+def test_702_22_normal_combat_with_a_lone_bander_is_unchanged(all_cards):
+    """A banding creature attacking alone fights exactly like a vanilla creature."""
     hero = Permanent(card=_get(all_cards, "Benalish Hero"))  # 1/1 banding
     blocker = Permanent(card=_mk_creature("Bear", 2, 2))
     game, p1, _ = _game([hero], [blocker])
@@ -763,26 +967,32 @@ def test_702_22_banding_creature_attacks_and_fights_normally(all_cards):
     ok, _ = game.declare_blockers(1, {0: 0})
     assert ok
     _resolve_combat(game)
-
-    # The 1/1 hero trades into a 2/2 and dies; no exception during resolution.
     assert all(p.card.name != "Benalish Hero" for p in p1.battlefield)
 
 
-def test_grant_banding_until_end_of_turn_sets_flag():
-    """The "target creature gains banding until end of turn" ability (e.g. Helm of
-    Chatzuk) stamps the until-eot flag on one of the controller's creatures."""
+def test_grant_banding_until_end_of_turn_lets_a_creature_band():
+    """The "target creature gains banding until end of turn" ability grants banding,
+    so the creature can be the banding member of a band that same combat."""
     helm = _mk_creature(
-        "Bander", 0, 0, type_line="Artifact",
+        "Bander Helm", 0, 0, type_line="Artifact",
         oracle_text="{0}: Target creature gains banding until end of turn.",
     )
-    target = _mk_creature("Soldier", 2, 2)
-    p1 = PlayerState(name="P1", battlefield=[Permanent(card=helm), Permanent(card=target)])
+    soldier = _mk_creature("Soldier", 2, 2)
+    ally = _mk_creature("Ally", 2, 2)
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[Permanent(card=helm), Permanent(card=soldier), Permanent(card=ally)],
+    )
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
 
-    result = game.activate_permanent_ability(0, "Bander", target_player_index=0)
+    result = game.activate_permanent_ability(0, "Bander Helm", target_player_index=0)
     assert result.supported, result.details
-    assert any(
-        perm.metadata.get("gains_banding_until_eot")
-        for perm in p1.battlefield
-    )
+    soldier_perm = p1.battlefield[1]
+    assert soldier_perm.metadata.get("gains_banding_until_eot")
+    assert game._creature_has_banding(soldier_perm)
+
+    # The newly-granted bander (index 1) may band with the vanilla ally (index 2).
+    _to_declare_attackers(game)
+    ok, msg = game.declare_attackers(0, [1, 2], bands=[[1, 2]])
+    assert ok, msg

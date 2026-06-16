@@ -1892,6 +1892,7 @@ def do_action(session_id: str, req: GameActionRequest):
         "declare_attackers",
         "declare_blockers",
         "assign_combat_damage",
+        "assign_banding_damage",
         "untap_select",
         "untap_confirm",
     } and seat_type != "human":
@@ -2040,6 +2041,7 @@ def do_action(session_id: str, req: GameActionRequest):
             req.seat,
             req.attacker_indices or [],
             defending_player_index=req.target_seat,
+            bands=req.bands,
         )
         if not ok:
             raise HTTPException(status_code=400, detail=details)
@@ -2069,15 +2071,39 @@ def do_action(session_id: str, req: GameActionRequest):
             raise HTTPException(status_code=400, detail="not your turn")
         if not session.game.has_priority(req.seat):
             raise HTTPException(status_code=400, detail="you do not currently have priority")
-        attacker_damage_raw = req.attacker_damage or {}
-        attacker_damage = {
-            int(attacker_idx): {int(blocker_idx): int(value) for blocker_idx, value in blockers.items()}
-            for attacker_idx, blockers in attacker_damage_raw.items()
-        }
-        ok, details = session.game.resolve_combat_damage(req.seat, attacker_damage=attacker_damage)
+        # Distinguish "no assignment given" (None -> engine default/auto) from an
+        # explicit empty assignment ({} -> deal nothing). This lets a caller supply
+        # only blocker_damage (banding, CR 702.22k) and have attackers deal normally.
+        if req.attacker_damage is None:
+            attacker_damage = None
+        else:
+            attacker_damage = {
+                int(attacker_idx): {int(blocker_idx): int(value) for blocker_idx, value in blockers.items()}
+                for attacker_idx, blockers in req.attacker_damage.items()
+            }
+        blocker_damage = (
+            {int(b): int(a) for b, a in req.blocker_damage.items()}
+            if req.blocker_damage
+            else None
+        )
+        ok, details = session.game.resolve_combat_damage(
+            req.seat, attacker_damage=attacker_damage, blocker_damage=blocker_damage
+        )
         if not ok:
             raise HTTPException(status_code=400, detail=details)
         session.game.note_priority_action_taken(req.seat)
+
+    elif req.action == "assign_banding_damage":
+        # CR 702.22j: the defending player pre-commits how attackers blocked by a
+        # creature with banding split their combat damage.
+        banding_raw = req.banding_damage or {}
+        banding_damage = {
+            int(attacker_idx): {int(blocker_idx): int(value) for blocker_idx, value in blockers.items()}
+            for attacker_idx, blockers in banding_raw.items()
+        }
+        ok, details = session.game.assign_banding_combat_damage(req.seat, banding_damage)
+        if not ok:
+            raise HTTPException(status_code=400, detail=details)
 
     elif req.action == "cleanup_select":
         if req.seat != session.current_turn:
