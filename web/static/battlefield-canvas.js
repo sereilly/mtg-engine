@@ -66,6 +66,16 @@ const BF_FIZZLE_MS = 480; // non-permanent: stack -> graveyard shrink/fade
 const BF_ABILITY_FADE_MS = 260; // resolved ability: shrink/fade in place
 const BF_IMPACT_RING_MS = 240; // expanding ring when a permanent slams down
 
+// ---- Flying creatures ----
+// Creatures with Flying hover off the table and rock gently side to side, with
+// a soft contact shadow left behind on the board to sell the height.
+const BF_FLY_LIFT = 11; // base world px a flyer floats above its slot
+const BF_FLY_BOB = 3; // extra px of vertical bob added to the lift
+const BF_FLY_BOB_MS = 1700; // period of the vertical bob
+const BF_FLY_TILT = 0.5; // peak swivel angle in radians (~29°) about the vertical axis
+const BF_FLY_TILT_MS = 2600; // period of the left/right swivel
+const BF_FLY_SKEW = 0.16; // perspective shear strength accompanying the swivel
+
 // ---- Combat damage animations ----
 // On damage resolution each attacker lunges toward its target under a glowing
 // red chevron, fires a particle beam at whatever takes its damage, blockers
@@ -1234,6 +1244,8 @@ class BattlefieldCanvas {
     // The priority pulse animates continuously, so keep redrawing while a side
     // holds priority and the game is still going.
     if (this._priorityPulseSide()) moving = true;
+    // Flyers bob and tilt continuously, so keep the frame loop alive for them.
+    if (!moving && this.cardItems.some((it) => _isFlyer(it.card))) moving = true;
     if (moving) this.needsRedraw = true;
   }
 
@@ -1395,15 +1407,33 @@ class BattlefieldCanvas {
     // If creatureCard is provided, show its P/T on this card (enchantment on top of creature).
     const ptCard = creatureCard || card;
     if (ptCard && typeof ptCard.power === "number" && typeof ptCard.toughness === "number" && String(ptCard.type || "").toLowerCase().includes("creature")) {
-      const label = `${ptCard.power}/${ptCard.toughness}`;
       const bw = 26, bh = 13;
+      const bx = x + w - bw - 2, by = y + h - bh - 2;
       ctx.fillStyle = "rgba(0,0,0,0.78)";
-      ctx.fillRect(x + w - bw - 2, y + h - bh - 2, bw, bh);
-      ctx.fillStyle = "#fff";
+      ctx.fillRect(bx, by, bw, bh);
       ctx.font = `bold ${Math.max(8, bh * 0.75)}px sans-serif`;
-      ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(label, x + w - bw / 2 - 2, y + h - bh / 2 - 2);
+      // Green when buffed above the printed base, red when reduced below it,
+      // white when unchanged or the base is variable (`*`).
+      const ptColor = (value, base) => {
+        if (typeof base !== "number") return "#fff";
+        if (value > base) return "#5dd55d";
+        if (value < base) return "#ff6b6b";
+        return "#fff";
+      };
+      const pStr = String(ptCard.power), tStr = String(ptCard.toughness);
+      const wP = ctx.measureText(pStr).width;
+      const wSlash = ctx.measureText("/").width;
+      const wT = ctx.measureText(tStr).width;
+      const cy = by + bh / 2;
+      let tx = bx + bw / 2 - (wP + wSlash + wT) / 2;
+      ctx.textAlign = "left";
+      ctx.fillStyle = ptColor(ptCard.power, ptCard.base_power);
+      ctx.fillText(pStr, tx, cy); tx += wP;
+      ctx.fillStyle = "#fff";
+      ctx.fillText("/", tx, cy); tx += wSlash;
+      ctx.fillStyle = ptColor(ptCard.toughness, ptCard.base_toughness);
+      ctx.fillText(tStr, tx, cy);
     }
 
     // ---- Damage badge ----
@@ -1471,6 +1501,26 @@ class BattlefieldCanvas {
     if (combatOff && combatOff.name === card?.name) {
       ctx.translate(combatOff.x, combatOff.y);
     }
+    // Flying creatures float off the board and rock gently side to side, with a
+    // soft contact shadow left behind on the table beneath them.
+    if (_isFlyer(card)) {
+      const center = this._cardCenter(item.key);
+      if (center) {
+        const now = performance.now();
+        // Per-card phase so a board full of flyers doesn't bob in lockstep.
+        const phase = _keyPhase(item.key);
+        const lift = BF_FLY_LIFT + (0.5 + 0.5 * Math.sin(now / BF_FLY_BOB_MS + phase)) * BF_FLY_BOB;
+        // Swivel about the card's vertical (Y) axis, faked on the 2D canvas:
+        // compress the width by cos(angle) and add a vertical shear for the
+        // perspective so one edge reads as nearer than the other.
+        const swing = BF_FLY_TILT * Math.sin(now / BF_FLY_TILT_MS + phase);
+        this._drawGroundShadow(ctx, center.x, center.y, lift, tapped);
+        ctx.translate(center.x, center.y);
+        ctx.translate(0, -lift);
+        ctx.transform(Math.cos(swing), Math.sin(swing) * BF_FLY_SKEW, 0, 1, 0, 0);
+        ctx.translate(-center.x, -center.y);
+      }
+    }
     // Hovered cards lift slightly off the table.
     if (flags.hovered) {
       const center = this._cardCenter(item.key);
@@ -1526,6 +1576,23 @@ class BattlefieldCanvas {
     return tapped
       ? { x: pos.x + BF_CARD_H / 2, y: pos.y + BF_CARD_W / 2 }
       : { x: pos.x + BF_CARD_W / 2, y: pos.y + BF_CARD_H / 2 };
+  }
+
+  // Soft contact shadow cast on the table beneath a floating (flying) card. A
+  // rounded rectangle that echoes the card's own footprint; the higher it
+  // floats, the larger, softer and fainter the shadow gets.
+  _drawGroundShadow(ctx, cx, cy, lift, tapped) {
+    const t = Math.max(0, Math.min(1, lift / (BF_FLY_LIFT + BF_FLY_BOB)));
+    const w = (tapped ? BF_CARD_H : BF_CARD_W) * (1.04 + 0.12 * t);
+    const h = (tapped ? BF_CARD_W : BF_CARD_H) * (0.98 + 0.12 * t);
+    ctx.save();
+    ctx.globalAlpha = 0.4 - 0.14 * t;
+    ctx.fillStyle = "#000";
+    ctx.shadowColor = "rgba(0,0,0,0.5)";
+    ctx.shadowBlur = (12 + 14 * t) / this.zoom;
+    this._roundRect(ctx, cx - w / 2, cy - h / 2 + 6, w, h, 6);
+    ctx.fill();
+    ctx.restore();
   }
 
   // Which board half should pulse, or null if neither. Returns "you" when the
@@ -2231,6 +2298,22 @@ function _beamParticles() {
     });
   }
   return particles;
+}
+
+// True for a battlefield creature that has the Flying keyword (case-insensitive).
+function _isFlyer(card) {
+  if (!card || !String(card.type || "").toLowerCase().includes("creature")) return false;
+  const kws = Array.isArray(card.keywords) ? card.keywords : [];
+  return kws.some((k) => String(k).toLowerCase() === "flying");
+}
+
+// Stable per-card phase offset (radians) derived from its key, so multiple
+// flyers bob and tilt out of sync rather than in lockstep.
+function _keyPhase(key) {
+  let h = 0;
+  const s = String(key);
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return ((h % 1000) / 1000) * Math.PI * 2;
 }
 
 // Wrap a list of keywords into lines that fit maxWidth, keeping each keyword
