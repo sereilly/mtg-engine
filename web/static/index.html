@@ -318,8 +318,14 @@
                 <button id="endTurnBtn" type="button">End Turn</button>
               </div>
               <div class="audio-controls">
-                <button id="muteBtn" type="button" class="secondary-btn audio-mute-btn" title="Mute / unmute sound">🔊</button>
-                <input id="volumeSlider" type="range" min="0" max="100" value="70" class="volume-slider" title="Volume" />
+                <div class="audio-row">
+                  <button id="muteBtn" type="button" class="secondary-btn audio-mute-btn" title="Mute / unmute sound effects">🔊</button>
+                  <input id="volumeSlider" type="range" min="0" max="100" value="70" class="volume-slider" title="Sound effects volume" />
+                </div>
+                <div class="audio-row">
+                  <button id="musicMuteBtn" type="button" class="secondary-btn audio-mute-btn" title="Mute / unmute music">🎵</button>
+                  <input id="musicVolumeSlider" type="range" min="0" max="100" value="40" class="volume-slider" title="Music volume" />
+                </div>
               </div>
             </section>
           </div>
@@ -468,8 +474,9 @@
 
     <script src="/battlefield-canvas.js?v=20260612-dwell15"></script>
     <script src="/sfx.js?v=2-sfx"></script>
+    <script src="/music.js?v=1-music"></script>
     <script src="/personal-decks.js?v=20260614-desc1"></script>
-    <script src="/app.js?v=20260614-sfx2"></script>
+    <script src="/app.js?v=20260615-music"></script>
     <script src="/deck-editor.js?v=20260614-desc1"></script>
   </body>
 </html>

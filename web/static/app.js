@@ -5209,6 +5209,8 @@ function renderState(state, { skipStaleCheck = false } = {}) {
 
   maybeTriggerCombatDamageFx(currentState, state);
   SFX.onStateChange(currentState, state, seat ?? 0);
+  // Begin background music once the game is underway (idempotent per session).
+  if (state && !state.pregame && !state.winner) MUSIC.start();
   currentState = state;
   syncCombatDrafts(state);
   if (!isCombatStep(state, "combat_damage")) {
@@ -6176,4 +6178,28 @@ clearCardPreview();
       muteBtn.textContent = "🔊";
     }
   });
+
+  // ── Music controls ──────────────────────────────────────────────────────────
+  const musicMuteBtn = q("musicMuteBtn");
+  const musicSlider = q("musicVolumeSlider");
+  if (musicMuteBtn && musicSlider) {
+    musicSlider.value = String(Math.round(MUSIC.getVolume() * 100));
+    musicMuteBtn.textContent = MUSIC.isMuted() ? "🔇" : "🎵";
+
+    musicMuteBtn.addEventListener("click", () => {
+      const next = !MUSIC.isMuted();
+      MUSIC.setMuted(next);
+      musicMuteBtn.textContent = next ? "🔇" : "🎵";
+      SFX.onMenuToggle(!next);
+    });
+
+    musicSlider.addEventListener("input", () => {
+      const v = parseInt(musicSlider.value) / 100;
+      MUSIC.setVolume(v);
+      if (MUSIC.isMuted() && v > 0) {
+        MUSIC.setMuted(false);
+        musicMuteBtn.textContent = "🎵";
+      }
+    });
+  }
 })();

@@ -2519,4 +2519,17 @@ def undo_action(session_id: str, seat: int | None = Query(default=None, ge=0, le
     return _serialize_state(session, viewer_seat=seat)
 
 
+@app.get("/api/music")
+def list_music():
+    """Return the available background-music tracks (mp3s in static/music)."""
+    music_dir = STATIC_DIR / "music"
+    if not music_dir.is_dir():
+        return {"tracks": []}
+    tracks = sorted(
+        f"/music/{p.name}" for p in music_dir.iterdir()
+        if p.is_file() and p.suffix.lower() == ".mp3"
+    )
+    return {"tracks": tracks}
+
+
 app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
