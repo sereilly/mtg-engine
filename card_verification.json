@@ -15,6 +15,11 @@
       "status": "pass",
       "updated_at": 1781394074.1245754
     },
+    "Copy Artifact": {
+      "reason": "Didn't let me choose an artifact when it entered",
+      "status": "fail",
+      "updated_at": 1781577169.5819836
+    },
     "Counterspell": {
       "reason": "",
       "status": "pass",
@@ -95,10 +100,20 @@
       "status": "pass",
       "updated_at": 1781410889.892921
     },
+    "Swords to Plowshares": {
+      "reason": "Didn't let me choose a target",
+      "status": "fail",
+      "updated_at": 1781577109.291581
+    },
     "Timetwister": {
       "reason": "",
       "status": "pass",
       "updated_at": 1781378490.7807422
+    },
+    "Tunnel": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1781577230.9356234
     },
     "Wheel of Fortune": {
       "reason": "",

@@ -37,6 +37,17 @@ class OracleInstructionsMixin:
             self.log.append(f"Resolved supported pattern for {card.name} without state mutation")
             return
 
+        # CR 702.16b / 702.18: a spell that targets a permanent with shroud, or with
+        # protection from the spell's color, has an illegal target. On resolution it
+        # does nothing (608.3b — removed from the stack with no effect).
+        if isinstance(target_permanent_index, int) and 0 <= target_permanent_index < len(target.battlefield):
+            chosen = target.battlefield[target_permanent_index]
+            if chosen.card.primary_type == "creature" and not self._can_be_targeted(chosen, card):
+                self.log.append(
+                    f"{card.name} does nothing: {chosen.card.name} is an illegal target"
+                )
+                return
+
         state_machine = OracleStateMachine(
             self,
             OracleExecutionContext(

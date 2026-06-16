@@ -3,9 +3,9 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **290**
-- Passed: **20**
-- Failed: **1**
-- Untested: **269**
+- Passed: **21**
+- Failed: **3**
+- Untested: **266**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -55,7 +55,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Control Magic | ✅ pass |  |
 | Conversion | ⬜ untested |  |
 | Copper Tablet | ⬜ untested |  |
-| Copy Artifact | ⬜ untested |  |
+| Copy Artifact | ❌ fail | Didn't let me choose an artifact when it entered |
 | Counterspell | ✅ pass |  |
 | Craw Wurm | ⬜ untested |  |
 | Creature Bond | ⬜ untested |  |
@@ -248,7 +248,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Stream of Life | ⬜ untested |  |
 | Sunglasses of Urza | ⬜ untested |  |
 | Swamp | ⬜ untested |  |
-| Swords to Plowshares | ⬜ untested |  |
+| Swords to Plowshares | ❌ fail | Didn't let me choose a target |
 | Taiga | ⬜ untested |  |
 | Terror | ⬜ untested |  |
 | The Hive | ⬜ untested |  |
@@ -263,7 +263,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Tropical Island | ⬜ untested |  |
 | Tsunami | ⬜ untested |  |
 | Tundra | ⬜ untested |  |
-| Tunnel | ⬜ untested |  |
+| Tunnel | ✅ pass |  |
 | Twiddle | ⬜ untested |  |
 | Two-Headed Giant of Foriys | ⬜ untested |  |
 | Underground Sea | ⬜ untested |  |

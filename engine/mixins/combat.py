@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from ..models import CardDefinition, Permanent, PlayerState
 from ..oracle import compile_card_oracle
 
@@ -264,6 +266,11 @@ class CombatMixin:
             if not (is_artifact_creature or is_black_creature):
                 return False
 
+        # Protection (CR 702.16f): an attacking creature with protection from a
+        # quality can't be blocked by creatures that have that quality.
+        if self._is_protected_from(attacker, blocker):
+            return False
+
         if "cant_be_blocked_by_walls" in attacker_kinds and "wall" in blocker.card.type_line.lower():
             return False
 
@@ -397,7 +404,9 @@ class CombatMixin:
 
         for idx in unique_indices:
             attacker = controller.battlefield[idx]
-            attacker.tapped = True
+            # CR 702.20b: attacking doesn't cause a creature with vigilance to tap.
+            if not self._has_keyword(attacker, "vigilance"):
+                attacker.tapped = True
             attacker.metadata["attacked_this_turn"] = True
 
         self._prune_combat_state()
@@ -547,7 +556,79 @@ class CombatMixin:
         self.log.append(f"{defender.name} declared {len(assignments)} blocker(s)")
         # 509.1i / 509.2a: abilities that trigger on blockers being declared fire now.
         self._fire_block_triggers(controller_index)
+        self._apply_rampage_and_flanking(controller_index)
         return True, "declared blockers"
+
+    def _apply_temporary_buff(self, permanent: Permanent, power: int, toughness: int) -> None:
+        """Apply an "until end of turn" P/T change that the cleanup step reverts."""
+        permanent.metadata["temporary_power_bonus_until_eot"] = (
+            int(permanent.metadata.get("temporary_power_bonus_until_eot", 0)) + power
+        )
+        permanent.metadata["temporary_toughness_bonus_until_eot"] = (
+            int(permanent.metadata.get("temporary_toughness_bonus_until_eot", 0)) + toughness
+        )
+        permanent.power_bonus += power
+        permanent.toughness_bonus += toughness
+
+    def _rampage_value(self, permanent: Permanent) -> int:
+        """The N of "Rampage N" on this creature, or 0 if it has no rampage."""
+        if not self._has_keyword(permanent, "rampage"):
+            # Keyword may be printed as "Rampage 2"; _has_keyword won't match that
+            # against the bare word, so also scan the keyword list directly.
+            if not any("rampage" in kw.lower() for kw in permanent.card.keywords):
+                return 0
+        for source in (*permanent.card.keywords, permanent.card.oracle_text or ""):
+            match = re.search(r"rampage (\d+)", source.lower())
+            if match:
+                return int(match.group(1))
+        return 0
+
+    def _apply_rampage_and_flanking(self, controller_index: int) -> None:
+        """Resolve Rampage (CR 702.23) and Flanking (CR 702.25) on declared blocks.
+
+        Both trigger when a creature becomes blocked. Rampage gives the attacker
+        +N/+N for each blocker beyond the first; flanking gives each non-flanking
+        blocker -1/-1. Applied as until-end-of-turn effects.
+        """
+        if self.active_player_index < 0 or self.active_player_index >= len(self.players):
+            return
+        attacker_controller = self.players[self.active_player_index]
+        if controller_index < 0 or controller_index >= len(self.players):
+            return
+        defender = self.players[controller_index]
+
+        for attacker_idx in self.combat_attackers:
+            if attacker_idx < 0 or attacker_idx >= len(attacker_controller.battlefield):
+                continue
+            attacker = attacker_controller.battlefield[attacker_idx]
+            blocker_indices = self._combat_blockers_for_attacker(attacker_idx)
+            if not blocker_indices:
+                continue
+
+            # CR 702.23a: Rampage N — +N/+N for each blocker beyond the first.
+            rampage_n = self._rampage_value(attacker)
+            if rampage_n and len(blocker_indices) > 1:
+                bonus = rampage_n * (len(blocker_indices) - 1)
+                self._apply_temporary_buff(attacker, bonus, bonus)
+                self.log.append(
+                    f"{attacker.card.name} gets +{bonus}/+{bonus} from rampage "
+                    f"({len(blocker_indices)} blockers)"
+                )
+
+            # CR 702.25a: Flanking — each non-flanking blocker gets -1/-1 per instance.
+            if self._has_keyword(attacker, "flanking"):
+                for blocker_idx in blocker_indices:
+                    if blocker_idx < 0 or blocker_idx >= len(defender.battlefield):
+                        continue
+                    blocker = defender.battlefield[blocker_idx]
+                    if self._has_keyword(blocker, "flanking"):
+                        continue
+                    self._apply_temporary_buff(blocker, -1, -1)
+                    self.log.append(
+                        f"{blocker.card.name} gets -1/-1 from {attacker.card.name}'s flanking"
+                    )
+        # Flanking may drop a blocker's toughness to 0; clean it up now.
+        self.check_state_based_actions()
 
     def _fire_block_triggers(self, controller_index: int) -> None:
         """Put abilities that trigger on blockers being declared onto the stack.
@@ -747,6 +828,10 @@ class CombatMixin:
         if attacker_damage is None:
             attacker_damage = {}
 
+        # CR 510.5: there is a separate first-strike combat damage step if any
+        # attacking or blocking creature has first strike or double strike — this
+        # includes an *unblocked* first/double striker dealing to the player, not
+        # only creatures locked in a block.
         attacker_passes: list[int] = []
         blocker_passes: list[int] = []
         for attacker_idx in self.combat_attackers:
@@ -762,6 +847,8 @@ class CombatMixin:
                             attacker_passes.append(attacker_idx)
                             blocker_passes.append(blocker_idx)
                             break
+            elif participates_in_first_strike(attacker):
+                attacker_passes.append(attacker_idx)
 
         has_first_strike_pass = bool(attacker_passes)
         run_first_pass = has_first_strike_pass and not self.combat_first_strike_done
@@ -769,6 +856,14 @@ class CombatMixin:
         # (defending_idx, blocker_idx, damage, attacker_idx)
         attacker_damage_events: list[tuple[int, int, int, int]] = []
         defender_damage_events: list[tuple[int, int]] = []
+        # CR 702.15b: damage dealt by a source with lifelink gains its controller
+        # that much life. Accumulated per controller and applied after all combat
+        # damage is dealt this step (the life-gain events happen simultaneously).
+        lifelink_gain: dict[int, int] = {}
+
+        def add_lifelink(controller_index: int, amount: int) -> None:
+            if amount > 0:
+                lifelink_gain[controller_index] = lifelink_gain.get(controller_index, 0) + amount
 
         for attacker_idx in sorted(self.combat_attackers):
             if attacker_idx < 0 or attacker_idx >= len(attacker_controller.battlefield):
@@ -794,6 +889,8 @@ class CombatMixin:
                 damage = self._prevent_damage(defender, power_left)
                 if damage > 0:
                     defender_damage_events.append((defending_index, damage))
+                    if self._has_keyword(attacker, "lifelink"):
+                        add_lifelink(self.active_player_index, damage)
                 continue
 
             requested = attacker_damage.get(attacker_idx, {})
@@ -832,6 +929,8 @@ class CombatMixin:
                 trample_damage = self._prevent_damage(defender, power_left)
                 if trample_damage > 0:
                     defender_damage_events.append((defending_index, trample_damage))
+                    if self._has_keyword(attacker, "lifelink"):
+                        add_lifelink(self.active_player_index, trample_damage)
 
         for blocker_idx, attacker_idx in sorted(self.combat_blockers.items()):
             if blocker_idx < 0 or blocker_idx >= len(defender.battlefield):
@@ -846,8 +945,14 @@ class CombatMixin:
                 continue
             if not run_first_pass and has_first_strike_pass and not participates_in_second_strike(blocker):
                 continue
-            self._mark_damage_on_permanent(attacker, blocker.effective_power)
-            self._fire_dealt_damage_triggers(attacker)
+            # CR 702.16e: damage from a source of the protected quality is prevented.
+            if self._is_protected_from(attacker, blocker):
+                continue
+            dealt = self._mark_damage_on_permanent(attacker, blocker.effective_power)
+            if dealt > 0:
+                self._fire_dealt_damage_triggers(attacker)
+                if self._has_keyword(blocker, "lifelink"):
+                    add_lifelink(defending_index, dealt)
             # 704.5h: mark attacker if blocker has deathtouch
             if self._has_keyword(blocker, "deathtouch") and blocker.effective_power > 0:
                 attacker.metadata["received_deathtouch"] = True
@@ -858,20 +963,35 @@ class CombatMixin:
             defending_player = self.players[defending_idx]
             if blocker_idx < 0 or blocker_idx >= len(defending_player.battlefield):
                 continue
-            self._mark_damage_on_permanent(defending_player.battlefield[blocker_idx], damage)
-            if damage > 0:
-                self._fire_dealt_damage_triggers(defending_player.battlefield[blocker_idx])
+            blocker_perm = defending_player.battlefield[blocker_idx]
+            source_attacker = (
+                attacker_controller.battlefield[a_idx]
+                if 0 <= a_idx < len(attacker_controller.battlefield)
+                else None
+            )
+            # CR 702.16e: protection prevents damage from the protected quality.
+            if source_attacker is not None and self._is_protected_from(blocker_perm, source_attacker):
+                continue
+            dealt = self._mark_damage_on_permanent(blocker_perm, damage)
+            if dealt > 0:
+                self._fire_dealt_damage_triggers(blocker_perm)
+                if source_attacker is not None and self._has_keyword(source_attacker, "lifelink"):
+                    add_lifelink(self.active_player_index, dealt)
             # 704.5h: mark blocker if attacker has deathtouch
-            if a_idx < len(attacker_controller.battlefield) and damage > 0:
-                atk = attacker_controller.battlefield[a_idx]
-                if self._has_keyword(atk, "deathtouch"):
-                    defending_player.battlefield[blocker_idx].metadata["received_deathtouch"] = True
+            if source_attacker is not None and damage > 0:
+                if self._has_keyword(source_attacker, "deathtouch"):
+                    blocker_perm.metadata["received_deathtouch"] = True
 
         total_player_damage = sum(dmg for _, dmg in defender_damage_events)
         for _, damage in defender_damage_events:
             # Prevention was already applied when the event was recorded.
             defender.life -= damage
             self._on_player_dealt_damage(defender, damage)
+
+        # CR 702.15b: apply lifelink life gain for damage dealt this step.
+        for controller_index, amount in lifelink_gain.items():
+            if 0 <= controller_index < len(self.players):
+                self._gain_life(self.players[controller_index], amount, source_name="lifelink")
 
         self._destroy_marked_creatures()
         self.check_state_based_actions()

@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 
 from ..models import CardDefinition, Permanent, PlayerState
-from ..oracle import compile_card_oracle
+from ..oracle import _COLOR_WORD_TO_SYMBOL, compile_card_oracle
 
 class PermanentStateMixin:
     def _initialize_permanent_state(
@@ -231,6 +231,57 @@ class PermanentStateMixin:
             i.kind in ("keyword_line", "static_line") and lower_keyword in i.value
             for i in program.instructions
         )
+
+    def _effective_colors(self, permanent: Permanent) -> set[str]:
+        """The color symbols a permanent currently has (honoring color overrides)."""
+        override = permanent.metadata.get("color_override")
+        if override:
+            return {override}
+        return set(permanent.card.colors)
+
+    def _protection_colors(self, permanent: Permanent) -> set[str]:
+        """Color symbols this permanent has protection from (CR 702.16).
+
+        Sourced from a printed "protection from [color]" static line or from a
+        ``protection_from_<color>`` metadata flag granted by an Aura. Only color
+        qualities are modeled — Limited Edition Alpha protection is always from a
+        single color (e.g. Black Knight's "protection from white").
+        """
+        colors: set[str] = set()
+        program = compile_card_oracle(permanent.card)
+        for instr in program.instructions:
+            if instr.kind == "static_line" and instr.value.startswith("protection from "):
+                word = instr.value[len("protection from "):].strip()
+                symbol = _COLOR_WORD_TO_SYMBOL.get(word)
+                if symbol:
+                    colors.add(symbol)
+        for key in permanent.metadata:
+            if key.startswith("protection_from_"):
+                symbol = _COLOR_WORD_TO_SYMBOL.get(key[len("protection_from_"):])
+                if symbol:
+                    colors.add(symbol)
+        return colors
+
+    def _is_protected_from(self, victim: Permanent, source: Permanent) -> bool:
+        """True if *victim* has protection from a color *source* has (CR 702.16e/f)."""
+        protection = self._protection_colors(victim)
+        return bool(protection and protection & self._effective_colors(source))
+
+    def _can_be_targeted(
+        self, target: Permanent, source_card: CardDefinition | None
+    ) -> bool:
+        """Whether *target* is a legal target for *source_card* (CR 702.16b/702.18).
+
+        Shroud forbids any targeting; protection forbids targeting by sources of
+        the protected color. A ``None`` source is treated as colorless.
+        """
+        if self._has_keyword(target, "shroud"):
+            return False
+        protection = self._protection_colors(target)
+        if protection and source_card is not None:
+            if protection & set(source_card.colors):
+                return False
+        return True
 
     def _recalculate_lord_buffs(self) -> None:
         """Recalculate static-ability buffs from all lords on the battlefield.
