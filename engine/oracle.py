@@ -492,7 +492,6 @@ def _is_supported_static_creature_line(line: str) -> bool:
         "this creature gets +1/+1 as long as you control a swamp",
         "this creature can't be blocked by walls",
         "as long as this creature is untapped, all damage that would be dealt to you by unblocked creatures is dealt to this creature instead",
-        "at the beginning of your upkeep, if this card is in your graveyard with three or more creature cards above it, you may put this card onto the battlefield",
         "remove a corpse counter from this creature: regenerate this creature",
         "you may have this creature enter as a copy of any creature on the battlefield",
         "other ",

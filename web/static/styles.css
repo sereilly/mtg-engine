@@ -1588,6 +1588,16 @@ h2.targeting-valid {
   overflow: auto;
 }
 
+.raw-state-actions {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.raw-state-actions button {
+  flex: 1;
+}
+
 .log-list {
   display: flex;
   flex-direction: column;

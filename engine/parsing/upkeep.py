@@ -9,6 +9,13 @@ from .base import RuleResult, parse_rule
 
 _DAMAGE_UNLESS_PAY_RE = re.compile(r"this \w+ deals (\d+) damage to you unless you pay")
 _SELF_DAMAGE_RE = re.compile(r"this creature deals (\d+) damage to you")
+_CREATURES_ABOVE_RE = re.compile(r"(\w+) or more creature cards above it")
+
+# Spelled-out small numbers that appear in LEA graveyard-recursion text.
+_NUMBER_WORDS = {
+    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+    "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+}
 
 
 # "sacrifice this enchantment unless you pay {X}..." (Conversion, Stasis)
@@ -64,4 +71,22 @@ def upkeep_sacrifice_other_creature_or_deal_damage(text: str, activated: bool) -
 def upkeep_chosen_player_hand_overflow_damage(text: str, activated: bool) -> RuleResult:
     if "number of cards in their hand minus 4" in text:
         return _instruction("upkeep_chosen_player_hand_overflow_damage"), "upkeep_effect"
+    return None
+
+
+# Nether Shadow: "if this card is in your graveyard with N or more creature cards
+# above it, you may put this card onto the battlefield". This ability functions
+# from the graveyard, so resolve_upkeep scans the owner's graveyard for it.
+@parse_rule(65)
+def upkeep_return_self_from_graveyard(text: str, activated: bool) -> RuleResult:
+    if (
+        "in your graveyard" in text
+        and "creature cards above it" in text
+        and "put this card onto the battlefield" in text
+    ):
+        match = _CREATURES_ABOVE_RE.search(text)
+        min_above = _NUMBER_WORDS.get(match.group(1), 3) if match else 3
+        return _instruction(
+            "upkeep_return_self_from_graveyard", min_creatures_above=min_above
+        ), "upkeep_effect"
     return None

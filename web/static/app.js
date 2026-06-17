@@ -5584,6 +5584,56 @@ function initTabs() {
     q("logTab").classList.add("hidden");
     SFX.onLogClose();
   });
+
+  q("rawStateCopyBtn").addEventListener("click", async () => {
+    try {
+      await copyTextToClipboard(q("rawState").textContent || "");
+      updateActionHint("Raw state copied to clipboard.");
+    } catch {
+      updateActionHint("Could not copy raw state to clipboard.", true);
+    }
+  });
+
+  q("rawStatePasteBtn").addEventListener("click", pasteRawState);
+}
+
+// Read JSON from the clipboard, show it in the Raw State box, and push it to the
+// server so the live game (for every player) is rebuilt to match.
+async function pasteRawState() {
+  if (!sessionId) {
+    updateActionHint("No active game to paste state into.", true);
+    return;
+  }
+  let text;
+  try {
+    if (!navigator.clipboard || !window.isSecureContext) {
+      throw new Error("Clipboard read is unavailable in this context.");
+    }
+    text = await navigator.clipboard.readText();
+  } catch {
+    updateActionHint("Could not read the clipboard. Paste raw state manually.", true);
+    return;
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    updateActionHint("Clipboard does not contain valid JSON game state.", true);
+    return;
+  }
+
+  q("rawState").textContent = JSON.stringify(parsed, null, 2);
+  try {
+    const state = await postJson(`/api/sessions/${sessionId}/raw-state`, {
+      state: parsed,
+      seat: Number.isInteger(seat) ? seat : null,
+    });
+    renderState(state, { skipStaleCheck: true });
+    updateActionHint("Game state replaced from pasted raw state.");
+  } catch (e) {
+    updateActionHint(`Could not apply raw state: ${e.message}`, true);
+  }
 }
 
 function initCardPreviewHover() {

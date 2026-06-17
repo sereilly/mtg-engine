@@ -3,9 +3,9 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **290**
-- Passed: **28**
+- Passed: **29**
 - Failed: **4**
-- Untested: **258**
+- Untested: **257**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -61,7 +61,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Creature Bond | ⬜ untested |  |
 | Crusade | ⬜ untested |  |
 | Crystal Rod | ⬜ untested |  |
-| Cursed Land | ⬜ untested |  |
+| Cursed Land | ✅ pass |  |
 | Cyclopean Tomb | ⬜ untested |  |
 | Dark Ritual | ⬜ untested |  |
 | Darkpact | ⬜ untested |  |

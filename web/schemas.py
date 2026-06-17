@@ -123,6 +123,13 @@ class GameActionRequest(BaseModel):
     self_stop_steps: list[str] | None = None
 
 
+class RawStateRequest(BaseModel):
+    # The full serialized game-state object (as produced by GET .../state and
+    # shown in the board's Raw State tab), pasted back to overwrite the live game.
+    state: dict
+    seat: int | None = Field(default=None, ge=0, le=1)
+
+
 class RematchRequest(BaseModel):
     seat: int = Field(ge=0, le=1)
 

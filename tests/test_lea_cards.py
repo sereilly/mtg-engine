@@ -2222,6 +2222,64 @@ def test_nether_shadow_classifies_supported(all_cards):
     assert classify_card(shadow).supported
 
 
+def test_nether_shadow_returns_with_three_creatures_above(all_cards):
+    shadow = _get(all_cards, "Nether Shadow")
+    bears = _get(all_cards, "Grizzly Bears")
+    bolt = _get(all_cards, "Lightning Bolt")
+    # Graveyard ordered oldest→newest (append order). Cards "above" Nether Shadow
+    # are those put in more recently — later in the list. Three creatures sit above
+    # it (a non-creature in the mix shouldn't count toward the threshold).
+    p1 = PlayerState(
+        name="P1",
+        graveyard=[shadow, bears, bolt, bears, bears],
+    )
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    game.resolve_upkeep(0)
+
+    assert all(c.name != "Nether Shadow" for c in p1.graveyard)
+    returned = [perm for perm in p1.battlefield if perm.card.name == "Nether Shadow"]
+    assert len(returned) == 1
+    # Haste: it should not be summoning sick the turn it returns.
+    assert not game._is_summoning_sick(returned[0])
+
+
+def test_nether_shadow_stays_with_too_few_creatures_above(all_cards):
+    shadow = _get(all_cards, "Nether Shadow")
+    bears = _get(all_cards, "Grizzly Bears")
+    bolt = _get(all_cards, "Lightning Bolt")
+    # Only two creature cards above Nether Shadow — below the threshold of three.
+    p1 = PlayerState(
+        name="P1",
+        graveyard=[shadow, bears, bolt, bears],
+    )
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    game.resolve_upkeep(0)
+
+    assert any(c.name == "Nether Shadow" for c in p1.graveyard)
+    assert all(perm.card.name != "Nether Shadow" for perm in p1.battlefield)
+
+
+def test_nether_shadow_only_returns_on_owners_upkeep(all_cards):
+    shadow = _get(all_cards, "Nether Shadow")
+    bears = _get(all_cards, "Grizzly Bears")
+    p1 = PlayerState(
+        name="P1",
+        graveyard=[shadow, bears, bears, bears],
+    )
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    # Opponent's upkeep — "your upkeep" must not fire for P1's graveyard card.
+    game.resolve_upkeep(1)
+
+    assert any(c.name == "Nether Shadow" for c in p1.graveyard)
+    assert all(perm.card.name != "Nether Shadow" for perm in p1.battlefield)
+
+
 def test_northern_paladin_destroys_black_permanent(all_cards):
     paladin = _get(all_cards, "Northern Paladin")
     black_knight = _get(all_cards, "Black Knight")

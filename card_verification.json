@@ -30,6 +30,11 @@
       "status": "pass",
       "updated_at": 1781393461.2817519
     },
+    "Cursed Land": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1781664983.633319
+    },
     "Deathgrip": {
       "reason": "The activated ability should let me choose a target green spell rather than auto targeting",
       "status": "fail",

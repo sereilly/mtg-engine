@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from ..models import PlayerState
+from ..models import Permanent, PlayerState
 from ..oracle import OracleInstruction, compile_card_oracle
 from ._constants import _UPKEEP_PAY_KINDS
 
@@ -303,5 +303,42 @@ class UpkeepMixin:
                 if paid:
                     amount = int(instr.payload.get("amount", 1))
                     self._gain_life(gainer, amount, permanent.card.name)
+
+        # Graveyard-recursion upkeep triggers (e.g. Nether Shadow). These abilities
+        # function from the owner's graveyard, so they aren't covered by the
+        # battlefield loop above. A card may return itself to the battlefield if at
+        # least N creature cards lie above it (i.e. were put into the graveyard more
+        # recently — appended later in the list).
+        owner = self.players[player_index]
+        to_return = []
+        for grave_index, card in enumerate(owner.graveyard):
+            program = compile_card_oracle(card)
+            instr = next(
+                (
+                    trig.instruction
+                    for trig in program.triggered_abilities
+                    if trig.instruction is not None
+                    and trig.instruction.kind == "upkeep_return_self_from_graveyard"
+                    and trig.condition.kind == "upkeep_self"
+                ),
+                None,
+            )
+            if instr is None:
+                continue
+            creatures_above = sum(
+                1
+                for above in owner.graveyard[grave_index + 1:]
+                if above.primary_type == "creature"
+            )
+            min_above = int(instr.payload.get("min_creatures_above", 3))
+            if creatures_above >= min_above:
+                to_return.append(card)
+
+        for card in to_return:
+            owner.graveyard = [c for c in owner.graveyard if c is not card]
+            self._put_permanent_onto_battlefield(player_index, Permanent(card=card), None)
+            self.log.append(
+                f"{owner.name} returned {card.name} to the battlefield from the graveyard"
+            )
 
         self._close_or_defer_step(phase, step, defer_priority)
