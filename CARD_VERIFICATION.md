@@ -3,9 +3,9 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **290**
-- Passed: **29**
+- Passed: **30**
 - Failed: **4**
-- Untested: **257**
+- Untested: **256**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -179,7 +179,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Mox Ruby | ⬜ untested |  |
 | Mox Sapphire | ⬜ untested |  |
 | Natural Selection | ⬜ untested |  |
-| Nether Shadow | ⬜ untested |  |
+| Nether Shadow | ✅ pass |  |
 | Nettling Imp | ⬜ untested |  |
 | Nevinyrral's Disk | ⬜ untested |  |
 | Nightmare | ⬜ untested |  |

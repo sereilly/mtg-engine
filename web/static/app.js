@@ -735,7 +735,7 @@ function getAutoPassStateKey(state) {
 }
 
 function hasBlockingPromptForAutoPass(state = currentState) {
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state)) return true;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state)) return true;
   return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice);
 }
 
@@ -1550,6 +1550,16 @@ function getUpkeepPayInfo(state = currentState) {
   return info;
 }
 
+function getOptionalTriggerInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  if (state.current_step !== "upkeep") return null;
+  if (state.current_turn !== seat) return null;
+
+  const info = state.optional_trigger;
+  if (!info || !Array.isArray(info.pending) || info.pending.length === 0) return null;
+  return info;
+}
+
 function getIslandSanctuaryInfo(state = currentState) {
   if (!state || seat === null) return null;
   if (state.current_turn !== seat) return null;
@@ -1760,6 +1770,7 @@ function isAnyPromptActive(state = currentState) {
   if (getCleanupDiscardInfo(state)) return true;
   if (getUntapLandSelectionInfo(state)) return true;
   if (getUpkeepPayInfo(state)) return true;
+  if (getOptionalTriggerInfo(state)) return true;
   if (shouldShowPriorityPrompt(state)) return true;
   if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingAutoTap || pendingModalChoice) return true;
 
@@ -1773,7 +1784,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -1978,6 +1989,52 @@ function applyUpkeepPayPrompt(upkeepInfo) {
   if (sacBtnEl) {
     sacBtnEl.addEventListener("click", async () => {
       await sendAction({ seat, action: "sacrifice_upkeep", card_name: cardName });
+    });
+  }
+}
+
+function applyOptionalTriggerPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  const pending = info.pending || [];
+  const current = pending[0];
+  const cardName = current?.card_name || "Unknown";
+  const promptText = current?.prompt || `Resolve ${cardName}'s triggered ability?`;
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  title.textContent = "Optional Trigger";
+  body.textContent = promptText;
+
+  const yesBtn = `<button type="button" class="prompt-choice-btn" id="optionalTriggerYesBtn">Yes</button>`;
+  const noBtn = `<button type="button" class="prompt-choice-btn" id="optionalTriggerNoBtn">No</button>`;
+  steps.innerHTML = [
+    `<div>Card: ${escapeHtml(cardName)}</div>`,
+    `<div>Remaining decisions: ${pending.length}</div>`,
+    `<div class="prompt-choice-row">${yesBtn}${noBtn}</div>`,
+  ].join("");
+
+  const yesEl = document.getElementById("optionalTriggerYesBtn");
+  const noEl = document.getElementById("optionalTriggerNoBtn");
+  if (yesEl) {
+    yesEl.addEventListener("click", async () => {
+      await sendAction({ seat, action: "resolve_optional_trigger", card_name: cardName, accept: true });
+    });
+  }
+  if (noEl) {
+    noEl.addEventListener("click", async () => {
+      await sendAction({ seat, action: "resolve_optional_trigger", card_name: cardName, accept: false });
     });
   }
 }
@@ -2530,6 +2587,12 @@ function renderActivationPrompt() {
 
   if (upkeepPayInfo) {
     applyUpkeepPayPrompt(upkeepPayInfo);
+    return;
+  }
+
+  const optionalTriggerInfo = getOptionalTriggerInfo();
+  if (optionalTriggerInfo) {
+    applyOptionalTriggerPrompt(optionalTriggerInfo);
     return;
   }
 
@@ -5219,10 +5282,11 @@ function renderState(state, { skipStaleCheck = false } = {}) {
   const cleanupInfo = getCleanupDiscardInfo(state);
   const untapInfo = getUntapLandSelectionInfo(state);
   const upkeepPayInfo = getUpkeepPayInfo(state);
+  const optionalTriggerInfo = getOptionalTriggerInfo(state);
   const islandSanctuaryPending = getIslandSanctuaryInfo(state);
   const searchLibraryInfo = getSearchLibraryInfo(state);
   const reorderLibraryInfo = getReorderLibraryInfo(state);
-  if (cleanupInfo || untapInfo || upkeepPayInfo || islandSanctuaryPending) {
+  if (cleanupInfo || untapInfo || upkeepPayInfo || optionalTriggerInfo || islandSanctuaryPending) {
     pendingActivation = null;
     pendingCastTarget = null;
     pendingCastX = null;
@@ -5268,6 +5332,8 @@ function renderState(state, { skipStaleCheck = false } = {}) {
     applyUntapPrompt(untapInfo);
   } else if (upkeepPayInfo) {
     applyUpkeepPayPrompt(upkeepPayInfo);
+  } else if (optionalTriggerInfo) {
+    applyOptionalTriggerPrompt(optionalTriggerInfo);
   } else if (islandSanctuaryPending) {
     applyIslandSanctuaryPrompt();
   }

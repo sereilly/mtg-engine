@@ -23,6 +23,7 @@ ActionKind = Literal[
     "untap_confirm",
     "pay_upkeep",
     "sacrifice_upkeep",
+    "resolve_optional_trigger",
     "debug_add_to_hand",
     "debug_cast_free",
     "debug_cast_free_opponent",
@@ -113,6 +114,9 @@ class GameActionRequest(BaseModel):
     # "Choose one —" modal spells (Healing Salve, the Elemental Blasts): which
     # mode the caster picked, as an index into the card's serialized `modes`.
     mode_index: int | None = Field(default=None, ge=0)
+    # Yes/No answer for an optional ("you may") trigger prompt, sent with the
+    # `resolve_optional_trigger` action (true = let the trigger happen).
+    accept: bool | None = None
     # Steps (engine step names) the human wants to stop at on the opponent's turn.
     # Sent with `ai_step` so the AI hands priority to the human at those steps
     # instead of advancing past them. Set via the phase-rail hold-priority toggles.

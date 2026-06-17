@@ -33,7 +33,59 @@ class UpkeepMixin:
                 break
         return choices
 
-    def resolve_upkeep(self, player_index: int, human_choices: dict[str, bool] | None = None, defer_priority: bool = False) -> None:
+    def _graveyard_return_candidates(self, player_index: int) -> list:
+        """Graveyard cards whose 'return during your upkeep' trigger condition is
+        currently met for ``player_index`` (e.g. Nether Shadow with enough creature
+        cards above it). Shared by the prompt query and the upkeep resolver so both
+        agree on which cards are eligible.
+        """
+        owner = self.players[player_index]
+        candidates = []
+        for grave_index, card in enumerate(owner.graveyard):
+            program = compile_card_oracle(card)
+            instr = next(
+                (
+                    trig.instruction
+                    for trig in program.triggered_abilities
+                    if trig.instruction is not None
+                    and trig.instruction.kind == "upkeep_return_self_from_graveyard"
+                    and trig.condition.kind == "upkeep_self"
+                ),
+                None,
+            )
+            if instr is None:
+                continue
+            creatures_above = sum(
+                1
+                for above in owner.graveyard[grave_index + 1:]
+                if above.primary_type == "creature"
+            )
+            if creatures_above >= int(instr.payload.get("min_creatures_above", 3)):
+                candidates.append(card)
+        return candidates
+
+    def get_optional_upkeep_triggers(self, player_index: int) -> list[dict]:
+        """Optional ("you may") upkeep triggers awaiting a yes/no decision on this
+        player's own upkeep.
+
+        Generic across trigger sources; currently covers graveyard-recursion
+        abilities (Nether Shadow). Each entry carries a human-readable ``prompt``
+        and the ``card_name`` used to key the player's decision.
+        """
+        triggers: list[dict] = []
+        seen: set[str] = set()
+        for card in self._graveyard_return_candidates(player_index):
+            if card.name in seen:
+                continue
+            seen.add(card.name)
+            triggers.append({
+                "card_name": card.name,
+                "kind": "upkeep_return_self_from_graveyard",
+                "prompt": f"Return {card.name} to the battlefield from your graveyard?",
+            })
+        return triggers
+
+    def resolve_upkeep(self, player_index: int, human_choices: dict[str, bool] | None = None, optional_choices: dict[str, bool] | None = None, defer_priority: bool = False) -> None:
         phase = "beginning"
         step = "upkeep"
         self._set_phase_and_step(phase, step)
@@ -308,33 +360,18 @@ class UpkeepMixin:
         # function from the owner's graveyard, so they aren't covered by the
         # battlefield loop above. A card may return itself to the battlefield if at
         # least N creature cards lie above it (i.e. were put into the graveyard more
-        # recently — appended later in the list).
+        # recently — appended later in the list). These are optional ("you may"):
+        # ``optional_choices`` maps the card name to the player's decision. When it
+        # is None (AI turns, scripted/test runs) the beneficial default is taken;
+        # when provided, the card returns only on an explicit yes.
         owner = self.players[player_index]
-        to_return = []
-        for grave_index, card in enumerate(owner.graveyard):
-            program = compile_card_oracle(card)
-            instr = next(
-                (
-                    trig.instruction
-                    for trig in program.triggered_abilities
-                    if trig.instruction is not None
-                    and trig.instruction.kind == "upkeep_return_self_from_graveyard"
-                    and trig.condition.kind == "upkeep_self"
-                ),
-                None,
-            )
-            if instr is None:
+        for card in self._graveyard_return_candidates(player_index):
+            if optional_choices is None:
+                accepted = True
+            else:
+                accepted = optional_choices.get(card.name, False)
+            if not accepted:
                 continue
-            creatures_above = sum(
-                1
-                for above in owner.graveyard[grave_index + 1:]
-                if above.primary_type == "creature"
-            )
-            min_above = int(instr.payload.get("min_creatures_above", 3))
-            if creatures_above >= min_above:
-                to_return.append(card)
-
-        for card in to_return:
             owner.graveyard = [c for c in owner.graveyard if c is not card]
             self._put_permanent_onto_battlefield(player_index, Permanent(card=card), None)
             self.log.append(

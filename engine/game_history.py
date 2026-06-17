@@ -17,6 +17,8 @@ class GameSnapshot:
     untap_selected_indices: list[int]
     upkeep_pay_choices: list[dict]
     upkeep_resolved_choices: dict[str, bool]
+    optional_trigger_choices: list[dict] = field(default_factory=list)
+    optional_trigger_resolved: dict[str, bool] = field(default_factory=dict)
     island_sanctuary_pending: bool = False
 
 
@@ -37,6 +39,8 @@ class GameHistory:
                 untap_selected_indices=list(session.untap_selected_indices),
                 upkeep_pay_choices=list(session.upkeep_pay_choices),
                 upkeep_resolved_choices=dict(session.upkeep_resolved_choices),
+                optional_trigger_choices=list(session.optional_trigger_choices),
+                optional_trigger_resolved=dict(session.optional_trigger_resolved),
                 island_sanctuary_pending=session.island_sanctuary_pending,
             )
         )

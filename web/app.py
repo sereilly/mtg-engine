@@ -554,6 +554,8 @@ def _clear_untap_selection(session: Session) -> None:
 def _clear_upkeep_pay_choices(session: Session) -> None:
     session.upkeep_pay_choices = []
     session.upkeep_resolved_choices = {}
+    session.optional_trigger_choices = []
+    session.optional_trigger_resolved = {}
 
 
 def _has_island_sanctuary(game, player_index: int) -> bool:
@@ -570,11 +572,46 @@ def _upkeep_pay_pending(session: Session) -> list[dict]:
     ]
 
 
+def _optional_trigger_pending(session: Session) -> list[dict]:
+    """Return optional ('you may') upkeep triggers still awaiting a yes/no answer."""
+    if session.game.current_step != "upkeep":
+        return []
+    return [
+        c for c in session.optional_trigger_choices
+        if c["card_name"] not in session.optional_trigger_resolved
+    ]
+
+
+def _upkeep_decisions_pending(session: Session) -> bool:
+    """True while any upkeep decision (pay-or-sacrifice or optional trigger) is open."""
+    return bool(_upkeep_pay_pending(session) or _optional_trigger_pending(session))
+
+
+def _gather_upkeep_decisions(session: Session, player_index: int) -> bool:
+    """Populate pending upkeep decisions for a human player and pause at upkeep.
+
+    Returns True if a decision is pending (caller should stop and prompt), False
+    if the player has nothing to decide and the upkeep can resolve immediately.
+    """
+    game = session.game
+    pay_choices = game.get_upkeep_pay_triggers(player_index)
+    optional_choices = game.get_optional_upkeep_triggers(player_index)
+    if not pay_choices and not optional_choices:
+        return False
+    session.upkeep_pay_choices = pay_choices
+    session.upkeep_resolved_choices = {}
+    session.optional_trigger_choices = optional_choices
+    session.optional_trigger_resolved = {}
+    game._set_phase_and_step("beginning", "upkeep")
+    return True
+
+
 def _advance_after_upkeep_choices(session: Session) -> None:
-    """Called once all upkeep pay-or-sacrifice choices are resolved."""
+    """Called once all upkeep decisions (pay-or-sacrifice and optional) are resolved."""
     choices = dict(session.upkeep_resolved_choices)
+    optional = dict(session.optional_trigger_resolved)
     _clear_upkeep_pay_choices(session)
-    session.game.resolve_upkeep(session.current_turn, human_choices=choices)
+    session.game.resolve_upkeep(session.current_turn, human_choices=choices, optional_choices=optional)
     if _seat_type(session, session.current_turn) == "human" and _has_island_sanctuary(session.game, session.current_turn):
         session.island_sanctuary_pending = True
         return
@@ -593,6 +630,19 @@ def _build_upkeep_pay_info(session: Session, viewer_seat: int | None) -> dict | 
         "choices": session.upkeep_pay_choices,
         "resolved": session.upkeep_resolved_choices,
         "pending": pending,
+    }
+
+
+def _build_optional_trigger_info(session: Session, viewer_seat: int | None) -> dict | None:
+    """Serialize pending optional ('you may') trigger prompts for the response."""
+    if not session.optional_trigger_choices:
+        return None
+    if viewer_seat != session.current_turn:
+        return None
+    return {
+        "choices": session.optional_trigger_choices,
+        "resolved": session.optional_trigger_resolved,
+        "pending": _optional_trigger_pending(session),
     }
 
 
@@ -756,11 +806,7 @@ def _begin_turn(session: Session, player_index: int, defer_untap_selection: bool
     game.resolve_untap_step(player_index)
 
     if _seat_type(session, player_index) == "human":
-        choices = game.get_upkeep_pay_triggers(player_index)
-        if choices:
-            session.upkeep_pay_choices = choices
-            session.upkeep_resolved_choices = {}
-            game._set_phase_and_step("beginning", "upkeep")
+        if _gather_upkeep_decisions(session, player_index):
             return False
 
     _clear_upkeep_pay_choices(session)
@@ -863,6 +909,8 @@ def _compute_playable_hand_indices(session: Session, player_index: int) -> list[
     if _untap_land_selection_requirement(session) > 0:
         return []
     if _upkeep_pay_pending(session):
+        return []
+    if _optional_trigger_pending(session):
         return []
     if session.island_sanctuary_pending:
         return []
@@ -1061,6 +1109,7 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "cleanup_discard": cleanup_info,
         "untap_land_selection": untap_info,
         "upkeep_pay": _build_upkeep_pay_info(session, viewer_seat),
+        "optional_trigger": _build_optional_trigger_info(session, viewer_seat),
         "island_sanctuary_pending": session.island_sanctuary_pending and viewer_seat == session.current_turn,
         "search_library": search_library_info,
         "reorder_library": reorder_library_info,
@@ -2017,8 +2066,11 @@ def do_action(session_id: str, req: GameActionRequest):
     if untap_required > 0 and req.action not in {"untap_select", "untap_confirm", "debug_add_to_hand", "debug_cast_free"}:
         raise HTTPException(status_code=400, detail="select untap lands before other actions")
 
-    if _upkeep_pay_pending(session) and req.action not in {"pay_upkeep", "sacrifice_upkeep", "tap", "activate", "debug_add_to_hand", "debug_cast_free"}:
+    if _upkeep_pay_pending(session) and req.action not in {"pay_upkeep", "sacrifice_upkeep", "resolve_optional_trigger", "tap", "activate", "debug_add_to_hand", "debug_cast_free"}:
         raise HTTPException(status_code=400, detail="resolve upkeep payment before other actions")
+
+    if _optional_trigger_pending(session) and req.action not in {"resolve_optional_trigger", "pay_upkeep", "sacrifice_upkeep", "tap", "activate", "debug_add_to_hand", "debug_cast_free"}:
+        raise HTTPException(status_code=400, detail="resolve optional trigger before other actions")
 
     if session.island_sanctuary_pending and req.action not in {"island_sanctuary_skip", "island_sanctuary_draw", "debug_add_to_hand", "debug_cast_free"}:
         raise HTTPException(status_code=400, detail="choose Island Sanctuary draw option before other actions")
@@ -2332,11 +2384,8 @@ def do_action(session_id: str, req: GameActionRequest):
 
         _clear_untap_selection(session)
 
-        choices = session.game.get_upkeep_pay_triggers(session.current_turn)
-        if choices and _seat_type(session, session.current_turn) == "human":
-            session.upkeep_pay_choices = choices
-            session.upkeep_resolved_choices = {}
-            session.game._set_phase_and_step("beginning", "upkeep")
+        if _seat_type(session, session.current_turn) == "human" and _gather_upkeep_decisions(session, session.current_turn):
+            pass
         else:
             _clear_upkeep_pay_choices(session)
             session.game.resolve_upkeep(session.current_turn)
@@ -2366,7 +2415,7 @@ def do_action(session_id: str, req: GameActionRequest):
 
         session.upkeep_resolved_choices[req.card_name] = True
 
-        if not _upkeep_pay_pending(session):
+        if not _upkeep_decisions_pending(session):
             _advance_after_upkeep_choices(session)
 
     elif req.action == "sacrifice_upkeep":
@@ -2383,7 +2432,26 @@ def do_action(session_id: str, req: GameActionRequest):
 
         session.upkeep_resolved_choices[req.card_name] = False
 
-        if not _upkeep_pay_pending(session):
+        if not _upkeep_decisions_pending(session):
+            _advance_after_upkeep_choices(session)
+
+    elif req.action == "resolve_optional_trigger":
+        if req.seat != session.current_turn:
+            raise HTTPException(status_code=400, detail="not your turn")
+        if not _optional_trigger_pending(session):
+            raise HTTPException(status_code=400, detail="no optional trigger pending")
+        if not req.card_name:
+            raise HTTPException(status_code=400, detail="card_name is required")
+        if req.accept is None:
+            raise HTTPException(status_code=400, detail="accept (true/false) is required")
+
+        pending = {c["card_name"]: c for c in _optional_trigger_pending(session)}
+        if req.card_name not in pending:
+            raise HTTPException(status_code=400, detail="card not awaiting an optional trigger decision")
+
+        session.optional_trigger_resolved[req.card_name] = bool(req.accept)
+
+        if not _upkeep_decisions_pending(session):
             _advance_after_upkeep_choices(session)
 
     elif req.action in {"island_sanctuary_skip", "island_sanctuary_draw"}:
@@ -2685,6 +2753,8 @@ def undo_action(session_id: str, seat: int | None = Query(default=None, ge=0, le
     session.untap_selected_indices = snapshot.untap_selected_indices
     session.upkeep_pay_choices = snapshot.upkeep_pay_choices
     session.upkeep_resolved_choices = snapshot.upkeep_resolved_choices
+    session.optional_trigger_choices = snapshot.optional_trigger_choices
+    session.optional_trigger_resolved = snapshot.optional_trigger_resolved
     session.island_sanctuary_pending = snapshot.island_sanctuary_pending
 
     _notify_session_change(session.id, "undo")

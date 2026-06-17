@@ -52,6 +52,10 @@ class Session:
     untap_selected_indices: list[int] = field(default_factory=list)
     upkeep_pay_choices: list[dict] = field(default_factory=list)
     upkeep_resolved_choices: dict[str, bool] = field(default_factory=dict)
+    # Optional ("you may") upkeep triggers awaiting a yes/no decision (e.g. Nether
+    # Shadow returning from the graveyard), and the answers collected so far.
+    optional_trigger_choices: list[dict] = field(default_factory=list)
+    optional_trigger_resolved: dict[str, bool] = field(default_factory=dict)
     island_sanctuary_pending: bool = False
     # Engine step names a human wants to stop at on the opponent's (AI's) turn,
     # set from the phase-rail hold-priority toggles. The AI hands the human
@@ -284,6 +288,8 @@ class SessionStore:
         session.untap_selected_indices = []
         session.upkeep_pay_choices = []
         session.upkeep_resolved_choices = {}
+        session.optional_trigger_choices = []
+        session.optional_trigger_resolved = {}
         session.island_sanctuary_pending = False
         session.history = GameHistory()
         session.pregame_phase = None

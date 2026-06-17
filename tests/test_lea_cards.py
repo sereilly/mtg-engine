@@ -2280,6 +2280,134 @@ def test_nether_shadow_only_returns_on_owners_upkeep(all_cards):
     assert all(perm.card.name != "Nether Shadow" for perm in p1.battlefield)
 
 
+def test_get_optional_upkeep_triggers_lists_eligible_nether_shadow(all_cards):
+    shadow = _get(all_cards, "Nether Shadow")
+    bears = _get(all_cards, "Grizzly Bears")
+    p1 = PlayerState(name="P1", graveyard=[shadow, bears, bears, bears])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    triggers = game.get_optional_upkeep_triggers(0)
+
+    assert len(triggers) == 1
+    assert triggers[0]["card_name"] == "Nether Shadow"
+    assert triggers[0]["kind"] == "upkeep_return_self_from_graveyard"
+    assert "Nether Shadow" in triggers[0]["prompt"]
+
+
+def test_get_optional_upkeep_triggers_empty_when_condition_unmet(all_cards):
+    shadow = _get(all_cards, "Nether Shadow")
+    bears = _get(all_cards, "Grizzly Bears")
+    # Only two creatures above — not eligible, so no prompt should be offered.
+    p1 = PlayerState(name="P1", graveyard=[shadow, bears, bears])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    assert game.get_optional_upkeep_triggers(0) == []
+
+
+def test_nether_shadow_optional_choice_declined_keeps_in_graveyard(all_cards):
+    shadow = _get(all_cards, "Nether Shadow")
+    bears = _get(all_cards, "Grizzly Bears")
+    p1 = PlayerState(name="P1", graveyard=[shadow, bears, bears, bears])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    game.resolve_upkeep(0, optional_choices={"Nether Shadow": False})
+
+    assert any(c.name == "Nether Shadow" for c in p1.graveyard)
+    assert all(perm.card.name != "Nether Shadow" for perm in p1.battlefield)
+
+
+def test_nether_shadow_optional_choice_accepted_returns(all_cards):
+    shadow = _get(all_cards, "Nether Shadow")
+    bears = _get(all_cards, "Grizzly Bears")
+    p1 = PlayerState(name="P1", graveyard=[shadow, bears, bears, bears])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    game.resolve_upkeep(0, optional_choices={"Nether Shadow": True})
+
+    assert all(c.name != "Nether Shadow" for c in p1.graveyard)
+    assert any(perm.card.name == "Nether Shadow" for perm in p1.battlefield)
+
+
+def _start_session_with_p0_graveyard(graveyard, seed):
+    """Create a joined human_vs_human session, give P0 the supplied graveyard, and
+    advance to P0's second upkeep (the empty battlefield avoids an untap prompt)."""
+    from web.app import _end_turn
+
+    created = client.post(
+        "/api/sessions",
+        json={"mode": "human_vs_human", "host_name": "P1", "guest_name": "P2", "seed": seed},
+    ).json()
+    sid = created["session_id"]
+    client.post(f"/api/sessions/{sid}/join", json={"guest_name": "P2"})
+
+    session = store.get(sid)
+    p0 = session.game.players[0]
+    p0.battlefield = []
+    p0.hand = []
+    p0.graveyard = list(graveyard)
+
+    # Advance turns until P0 begins its own upkeep and pauses for the optional
+    # trigger. Whether that takes one or two end-turns depends on which seat the
+    # seed sends first, so loop rather than assume.
+    for _ in range(6):
+        if (
+            session.current_turn == 0
+            and session.game.current_step == "upkeep"
+            and session.optional_trigger_choices
+        ):
+            break
+        _end_turn(session, allow_manual_cleanup_selection=False)
+    return sid, session
+
+
+def test_nether_shadow_upkeep_prompts_human_then_accepts(all_cards):
+    shadow = _get(all_cards, "Nether Shadow")
+    bears = _get(all_cards, "Grizzly Bears")
+    sid, session = _start_session_with_p0_graveyard([shadow, bears, bears, bears], seed=91)
+
+    assert session.game.current_step == "upkeep", "must pause at upkeep for the optional trigger"
+    assert any(c["card_name"] == "Nether Shadow" for c in session.optional_trigger_choices)
+    # Must not act before the player decides.
+    assert any(c.name == "Nether Shadow" for c in session.game.players[0].graveyard)
+
+    state = client.get(f"/api/sessions/{sid}/state?seat=0").json()
+    info = state["optional_trigger"]
+    assert info is not None
+    assert any(c["card_name"] == "Nether Shadow" for c in info["pending"])
+
+    resp = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "resolve_optional_trigger", "card_name": "Nether Shadow", "accept": True},
+    )
+    assert resp.status_code == 200
+    p0 = session.game.players[0]
+    assert any(p.card.name == "Nether Shadow" for p in p0.battlefield)
+    assert all(c.name != "Nether Shadow" for c in p0.graveyard)
+    assert session.game.current_turn_phase == "precombat_main"
+
+
+def test_nether_shadow_upkeep_prompt_declined(all_cards):
+    shadow = _get(all_cards, "Nether Shadow")
+    bears = _get(all_cards, "Grizzly Bears")
+    sid, session = _start_session_with_p0_graveyard([shadow, bears, bears, bears], seed=92)
+
+    assert session.game.current_step == "upkeep"
+
+    resp = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "resolve_optional_trigger", "card_name": "Nether Shadow", "accept": False},
+    )
+    assert resp.status_code == 200
+    p0 = session.game.players[0]
+    assert all(p.card.name != "Nether Shadow" for p in p0.battlefield)
+    assert any(c.name == "Nether Shadow" for c in p0.graveyard)
+    assert session.game.current_turn_phase == "precombat_main"
+
+
 def test_northern_paladin_destroys_black_permanent(all_cards):
     paladin = _get(all_cards, "Northern Paladin")
     black_knight = _get(all_cards, "Black Knight")
