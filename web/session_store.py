@@ -207,6 +207,14 @@ class SessionStore:
             for i in range(len(game.players)):
                 game.keep_hand(i)
             session.current_turn = starting_player
+            # Align the engine's active player and priority window with the chosen
+            # starter. The Game constructor defaults both to seat 0, so without this
+            # an AI-vs-AI game where seat 1 wins the flip deadlocks: current_turn is
+            # 1 but priority sits with 0, so neither the AI step nor the UI advances.
+            # (Legacy no-pregame human/test sessions keep seat 0 as the actor.)
+            if session.mode == "ai_vs_ai":
+                game.active_player_index = starting_player
+                game.start_priority_window(starting_player)
 
     def _resolve_seed(self, request: CreateSessionRequest) -> int:
         if request.use_custom_seed:
