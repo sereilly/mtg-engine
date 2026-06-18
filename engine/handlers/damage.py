@@ -35,15 +35,12 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         for idx in sorted(indices, reverse=True):
             target_perm = target.battlefield[idx]
             dealt = game._mark_damage_on_permanent(target_perm, per_target)
-            effective_toughness = target_perm.effective_toughness
             game.log.append(f"{card.name} dealt {dealt} damage to {target_perm.card.name}")
-            if target_perm.damage_marked >= effective_toughness:
-                target_perm.metadata["no_regenerate"] = True
-                target.battlefield.pop(idx)
-                game._permanent_to_graveyard(target, target_perm)
-                game.log.append(f"{target_perm.card.name} died from damage dealt by {card.name}")
-            elif dealt > 0:
+            if dealt > 0 and target_perm.damage_marked < target_perm.effective_toughness:
                 game._fire_dealt_damage_triggers(target_perm)
+        # Lethal damage destroys as a state-based action, which regeneration
+        # shields can replace (CR 704.5g / 701.15).
+        game._destroy_marked_creatures()
         return True, "resolved"
     if target_perm_idx is not None and isinstance(target_perm_idx, int) and 0 <= target_perm_idx < len(target.battlefield):
         # Damage targets a creature permanent, not the player
@@ -68,10 +65,9 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         effective_toughness = target_perm.effective_toughness
         game.log.append(f"{card.name} dealt {dealt} damage to {target_perm.card.name}")
         if target_perm.damage_marked >= effective_toughness:
-            target_perm.metadata["no_regenerate"] = True
-            target.battlefield.pop(target_perm_idx)
-            game._permanent_to_graveyard(target, target_perm)
-            game.log.append(f"{target_perm.card.name} died from damage dealt by {card.name}")
+            # Lethal damage destroys as a state-based action, which regeneration
+            # shields can replace (CR 704.5g / 701.15).
+            game._destroy_marked_creatures()
         elif dealt > 0:
             game._fire_dealt_damage_triggers(target_perm)
     else:
@@ -110,11 +106,9 @@ def simulacrum_redirect(game: Game, instruction: OracleInstruction, context: Ora
     dealt = game._mark_damage_on_permanent(target_perm, amount)
     game.log.append(f"{card.name} dealt {dealt} damage to {target_perm.card.name} and {caster.name} gained {amount} life")
     if dealt > 0 and target_perm.damage_marked >= target_perm.effective_toughness:
-        idx = caster.battlefield.index(target_perm)
-        target_perm.metadata["no_regenerate"] = True
-        caster.battlefield.pop(idx)
-        game._permanent_to_graveyard(caster, target_perm)
-        game.log.append(f"{target_perm.card.name} died from {card.name}")
+        # Lethal damage destroys as a state-based action, which regeneration
+        # shields can replace (CR 704.5g / 701.15).
+        game._destroy_marked_creatures()
     elif dealt > 0:
         game._fire_dealt_damage_triggers(target_perm)
     return True, "resolved"
@@ -155,10 +149,9 @@ def deal_damage_and_self_damage(game: Game, instruction: OracleInstruction, cont
         dealt = game._mark_damage_on_permanent(target_perm, amount)
         game.log.append(f"{card.name} dealt {dealt} damage to {target_perm.card.name}")
         if target_perm.damage_marked >= target_perm.effective_toughness:
-            target_perm.metadata["no_regenerate"] = True
-            target.battlefield.pop(target_perm_idx)
-            game._permanent_to_graveyard(target, target_perm)
-            game.log.append(f"{target_perm.card.name} died from damage dealt by {card.name}")
+            # Lethal damage destroys as a state-based action, which regeneration
+            # shields can replace (CR 704.5g / 701.15).
+            game._destroy_marked_creatures()
     else:
         damage = game._deal_damage_to_player(target, amount)
         game.log.append(f"{card.name} dealt {damage} damage to {target.name}")

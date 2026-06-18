@@ -118,6 +118,9 @@ class EndingPhaseMixin:
             for permanent in player.battlefield:
                 permanent.damage_marked = 0
                 permanent.damage_prevention_pool = 0
+                # 614.8 / 701.15: an unused regeneration shield lasts only until
+                # the end of the turn it was created.
+                permanent.regeneration_shield = 0
                 temp_power = int(permanent.metadata.pop("temporary_power_bonus_until_eot", 0))
                 temp_toughness = int(permanent.metadata.pop("temporary_toughness_bonus_until_eot", 0))
                 if temp_power:

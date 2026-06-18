@@ -1449,6 +1449,27 @@ class BattlefieldCanvas {
       ctx.fillText(String(dmgCard.damage_marked), x + 2 + bw / 2, y + h - bh / 2 - 2);
     }
 
+    // ---- Regeneration badge ----
+    const regenCard = creatureCard || card;
+    if (regenCard && Number(regenCard.regeneration_shield) > 0) {
+      const label = "Regeneration";
+      const bh = 13;
+      ctx.font = `bold ${Math.max(7, bh * 0.62)}px sans-serif`;
+      const bw = Math.min(w - 4, Math.ceil(ctx.measureText(label).width) + 8);
+      const bx = x + (w - bw) / 2, by = y + 2;
+      ctx.fillStyle = "rgba(34,139,34,0.9)";
+      this._roundRect(ctx, bx, by, bw, bh, 3);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(120,255,120,0.85)";
+      ctx.lineWidth = 1;
+      this._roundRect(ctx, bx, by, bw, bh, 3);
+      ctx.stroke();
+      ctx.fillStyle = "#eaffea";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(label, bx + bw / 2, by + bh / 2);
+    }
+
     // ---- Pile count badge ----
     if (pileCount >= 2) {
       const label = `×${pileCount}`;

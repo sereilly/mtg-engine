@@ -473,6 +473,21 @@ def test_610_1_destroy_does_not_return_after_cleanup():
     assert len(p2.graveyard) == 1
 
 
+def test_614_8_unused_regeneration_shield_expires_at_cleanup():
+    """614.8 / 701.15: a regeneration shield that is not used lasts only until the
+    end of the turn it was created. After the cleanup step it is gone.
+    """
+    creature = _mk_creature("Shielded Bear", 2, 2)
+    perm = Permanent(card=creature, regeneration_shield=2)
+    p1 = PlayerState(name="P1", battlefield=[perm])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    assert perm.regeneration_shield == 2
+    game.resolve_cleanup_step(0)
+    assert perm.regeneration_shield == 0
+
+
 def test_610_1_draw_cards_is_immediate_and_one_shot():
     """610.1: Drawing cards is a one-shot effect. Cards move to the hand immediately
     when the spell resolves. There is no duration.

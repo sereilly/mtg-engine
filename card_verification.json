@@ -155,6 +155,11 @@
       "status": "fail",
       "updated_at": 1781577109.291581
     },
+    "The Hive": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1781670012.8092935
+    },
     "Timetwister": {
       "reason": "",
       "status": "pass",
@@ -164,6 +169,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781577230.9356234
+    },
+    "Wall of Bone": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1781756746.9480946
     },
     "Wheel of Fortune": {
       "reason": "",

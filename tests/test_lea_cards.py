@@ -4083,6 +4083,35 @@ def test_drudge_skeletons_regeneration_shield_prevents_ordinary_destroy(all_card
     assert p2.battlefield[0].tapped is True
 
 
+def test_regeneration_shield_saves_creature_from_lethal_damage(all_cards):
+    # A regenerated creature dealt lethal direct damage (e.g. Lightning Bolt) is
+    # destroyed as a state-based action, which the shield replaces: it stays on the
+    # battlefield tapped with its damage cleared, rather than going to the graveyard.
+    wall = _get(all_cards, "Wall of Bone")  # 0/4
+    bolt = _get(all_cards, "Lightning Bolt")  # deals 3
+
+    p1 = PlayerState(name="P1", hand=[bolt, bolt])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=wall, regeneration_shield=1)])
+    game = Game(players=[p1, p2])
+
+    # First bolt: 3 damage on a 0/4 — not lethal, survives.
+    r1 = game.cast_from_hand(0, "Lightning Bolt", target_player_index=1, target_permanent_index=0)
+    assert r1.supported
+    assert len(p2.battlefield) == 1
+    assert p2.battlefield[0].damage_marked == 3
+
+    # Second bolt: 6 total >= toughness 4 — lethal. Regeneration replaces the
+    # destruction: shield consumed, damage cleared, creature tapped, still on battlefield.
+    r2 = game.cast_from_hand(0, "Lightning Bolt", target_player_index=1, target_permanent_index=0)
+    assert r2.supported
+    assert len(p2.battlefield) == 1, "Regenerated wall should survive lethal damage"
+    assert p2.battlefield[0].card.name == "Wall of Bone"
+    assert p2.battlefield[0].regeneration_shield == 0
+    assert p2.battlefield[0].damage_marked == 0
+    assert p2.battlefield[0].tapped is True
+    assert not any(c.name == "Wall of Bone" for c in p2.graveyard)
+
+
 def test_dwarven_demolition_team_destroys_wall(all_cards):
     # Dwarven Demolition Team: "{2}{R} — {T}: Destroy target Wall."
     team = _get(all_cards, "Dwarven Demolition Team")

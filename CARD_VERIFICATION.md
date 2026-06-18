@@ -3,9 +3,9 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **290**
-- Passed: **30**
+- Passed: **32**
 - Failed: **4**
-- Untested: **256**
+- Untested: **254**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -251,7 +251,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Swords to Plowshares | ❌ fail | Didn't let me choose a target |
 | Taiga | ⬜ untested |  |
 | Terror | ⬜ untested |  |
-| The Hive | ⬜ untested |  |
+| The Hive | ✅ pass |  |
 | Thicket Basilisk | ⬜ untested |  |
 | Thoughtlace | ⬜ untested |  |
 | Throne of Bone | ⬜ untested |  |
@@ -275,7 +275,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Veteran Bodyguard | ⬜ untested |  |
 | Volcanic Eruption | ⬜ untested |  |
 | Wall of Air | ⬜ untested |  |
-| Wall of Bone | ⬜ untested |  |
+| Wall of Bone | ✅ pass |  |
 | Wall of Brambles | ⬜ untested |  |
 | Wall of Fire | ⬜ untested |  |
 | Wall of Ice | ⬜ untested |  |

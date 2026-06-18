@@ -11,6 +11,31 @@ if TYPE_CHECKING:
     from ..oracle import OracleInstruction
 
 
+def _token_image_uris(source_card: CardDefinition, token_name: str) -> dict[str, str] | None:
+    """Resolve a token's Scryfall image URLs from its creating card's ``all_parts``.
+
+    Scryfall image URLs are derivable from a card's id, so we only need the id
+    that ``all_parts`` records for the token component — no network call. Returns
+    None when the source card has no matching token part (e.g. minimal raw data).
+    """
+    raw = source_card.raw
+    if not isinstance(raw, dict):
+        return None
+    for part in raw.get("all_parts") or ():
+        if not isinstance(part, dict):
+            continue
+        if part.get("component") == "token" and part.get("name") == token_name:
+            card_id = part.get("id")
+            if not isinstance(card_id, str) or len(card_id) < 2:
+                continue
+            base = f"{card_id[0]}/{card_id[1]}/{card_id}.jpg"
+            return {
+                size: f"https://cards.scryfall.io/{size}/front/{base}"
+                for size in ("small", "normal", "large", "art_crop", "border_crop")
+            }
+    return None
+
+
 @effect_handler("balance_resources")
 def balance_resources(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     min_lands = min(sum(1 for perm in player.battlefield if perm.card.primary_type == "land") for player in game.players)
@@ -157,6 +182,10 @@ def create_wasp_token(game: Game, instruction: OracleInstruction, context: Oracl
     caster = context.caster
     card = context.card
     controller_index = game.players.index(caster)
+    raw = {"name": "Wasp", "type_line": "Artifact Creature — Insect", "power": "1", "toughness": "1"}
+    image_uris = _token_image_uris(card, "Wasp")
+    if image_uris is not None:
+        raw["image_uris"] = image_uris
     wasp = CardDefinition(
         name="Wasp",
         mana_cost="",
@@ -167,7 +196,7 @@ def create_wasp_token(game: Game, instruction: OracleInstruction, context: Oracl
         color_identity=(),
         keywords=("Flying",),
         produced_mana=(),
-        raw={"name": "Wasp", "type_line": "Artifact Creature — Insect", "power": "1", "toughness": "1"},
+        raw=raw,
     )
     game._put_permanent_onto_battlefield(controller_index, Permanent(card=wasp), None)
     game.log.append(f"{card.name} created a Wasp token")

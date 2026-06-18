@@ -166,6 +166,7 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         "blocking_attacker_controller": perm.blocking_attacker_controller,
         "blocking_attacker_index": perm.blocking_attacker_index,
         "damage_marked": perm.damage_marked,
+        "regeneration_shield": perm.regeneration_shield,
         "summoning_sick": game._is_summoning_sick(perm),
         "is_token": bool(perm.metadata.get("is_token", False)),
         "is_aura": "aura" in perm.card.type_line.lower(),
