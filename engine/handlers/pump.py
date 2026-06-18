@@ -272,14 +272,24 @@ def grant_flying_and_delayed_destruction(game: Game, instruction: OracleInstruct
     source_permanent = context.source_permanent
     if source_permanent is None:
         return False, "ability not implemented"
-    target_creature = next(
-        (
-            perm
-            for perm in caster.battlefield
-            if perm.card.primary_type == "creature" and perm.effective_toughness < source_permanent.effective_power
-        ),
-        None,
-    )
+
+    def _is_legal(perm) -> bool:
+        return (
+            perm.card.primary_type == "creature"
+            and perm.effective_toughness < source_permanent.effective_power
+        )
+
+    # Honor the player-chosen creature (Stone Giant targets "target creature you
+    # control with toughness less than this creature's power"). Fall back to the
+    # first legal creature for AI/untargeted activations.
+    target_creature = None
+    idx = context.target_permanent_index
+    if isinstance(idx, int) and 0 <= idx < len(caster.battlefield):
+        candidate = caster.battlefield[idx]
+        if _is_legal(candidate):
+            target_creature = candidate
+    if target_creature is None and not isinstance(idx, int):
+        target_creature = next((perm for perm in caster.battlefield if _is_legal(perm)), None)
     if target_creature is not None:
         target_creature.metadata["gains_flying_until_eot"] = True
         target_creature.metadata["destroy_at_next_end_step"] = True

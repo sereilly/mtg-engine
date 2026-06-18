@@ -30,11 +30,6 @@
       "status": "pass",
       "updated_at": 1781394074.1245754
     },
-    "Copy Artifact": {
-      "reason": "Didn't let me choose an artifact when it entered",
-      "status": "fail",
-      "updated_at": 1781577169.5819836
-    },
     "Counterspell": {
       "reason": "",
       "status": "pass",
@@ -44,16 +39,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781664983.633319
-    },
-    "Death Ward": {
-      "reason": "Says no valid target. I should be able to target any creature",
-      "status": "fail",
-      "updated_at": 1781756803.883068
-    },
-    "Deathgrip": {
-      "reason": "The activated ability should let me choose a target green spell rather than auto targeting",
-      "status": "fail",
-      "updated_at": 1781585712.1158247
     },
     "Drudge Skeletons": {
       "reason": "",
@@ -114,16 +99,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781378704.6242044
-    },
-    "Ley Druid": {
-      "reason": "Ley Druid's ability doesn't prompt me to choose a land.",
-      "status": "fail",
-      "updated_at": 1781757363.7739513
-    },
-    "Lich": {
-      "reason": "I lose the game when I play this card even though I shouldn't based on its oracle text",
-      "status": "fail",
-      "updated_at": 1781503311.0413384
     },
     "Mahamoti Djinn": {
       "reason": "",
@@ -200,16 +175,6 @@
       "status": "pass",
       "updated_at": 1781410889.892921
     },
-    "Stone Giant": {
-      "reason": "Stone Giant's activated ability doesn't let me choose a target",
-      "status": "fail",
-      "updated_at": 1781761636.042845
-    },
-    "Swords to Plowshares": {
-      "reason": "Doesn't let me choose a target",
-      "status": "fail",
-      "updated_at": 1781760874.5624197
-    },
     "The Hive": {
       "reason": "",
       "status": "pass",
@@ -239,11 +204,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781757313.6477668
-    },
-    "Wanderlust": {
-      "reason": "Wanderlust's upkeep trigger isn't working",
-      "status": "fail",
-      "updated_at": 1781761462.1555035
     },
     "Water Elemental": {
       "reason": "",

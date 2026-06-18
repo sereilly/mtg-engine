@@ -4,8 +4,8 @@ Master record of which cards have been manually validated in-game. Generated aut
 
 - Total cards: **290**
 - Passed: **45**
-- Failed: **8**
-- Untested: **237**
+- Failed: **0**
+- Untested: **245**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -55,7 +55,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Control Magic | ✅ pass |  |
 | Conversion | ⬜ untested |  |
 | Copper Tablet | ⬜ untested |  |
-| Copy Artifact | ❌ fail | Didn't let me choose an artifact when it entered |
+| Copy Artifact | ⬜ untested |  |
 | Counterspell | ✅ pass |  |
 | Craw Wurm | ⬜ untested |  |
 | Creature Bond | ⬜ untested |  |
@@ -65,8 +65,8 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Cyclopean Tomb | ⬜ untested |  |
 | Dark Ritual | ⬜ untested |  |
 | Darkpact | ⬜ untested |  |
-| Death Ward | ❌ fail | Says no valid target. I should be able to target any creature |
-| Deathgrip | ❌ fail | The activated ability should let me choose a target green spell rather than auto targeting |
+| Death Ward | ⬜ untested |  |
+| Deathgrip | ⬜ untested |  |
 | Deathlace | ⬜ untested |  |
 | Demonic Attorney | ⬜ untested |  |
 | Demonic Hordes | ⬜ untested |  |
@@ -147,9 +147,9 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Kormus Bell | ⬜ untested |  |
 | Kudzu | ⬜ untested |  |
 | Lance | ⬜ untested |  |
-| Ley Druid | ❌ fail | Ley Druid's ability doesn't prompt me to choose a land. |
+| Ley Druid | ⬜ untested |  |
 | Library of Leng | ⬜ untested |  |
-| Lich | ❌ fail | I lose the game when I play this card even though I shouldn't based on its oracle text |
+| Lich | ⬜ untested |  |
 | Lifeforce | ⬜ untested |  |
 | Lifelace | ⬜ untested |  |
 | Lifetap | ⬜ untested |  |
@@ -243,12 +243,12 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Spell Blast | ⬜ untested |  |
 | Stasis | ✅ pass |  |
 | Steal Artifact | ⬜ untested |  |
-| Stone Giant | ❌ fail | Stone Giant's activated ability doesn't let me choose a target |
+| Stone Giant | ⬜ untested |  |
 | Stone Rain | ⬜ untested |  |
 | Stream of Life | ⬜ untested |  |
 | Sunglasses of Urza | ⬜ untested |  |
 | Swamp | ⬜ untested |  |
-| Swords to Plowshares | ❌ fail | Doesn't let me choose a target |
+| Swords to Plowshares | ⬜ untested |  |
 | Taiga | ⬜ untested |  |
 | Terror | ⬜ untested |  |
 | The Hive | ✅ pass |  |
@@ -283,7 +283,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Wall of Swords | ✅ pass |  |
 | Wall of Water | ⬜ untested |  |
 | Wall of Wood | ⬜ untested |  |
-| Wanderlust | ❌ fail | Wanderlust's upkeep trigger isn't working |
+| Wanderlust | ⬜ untested |  |
 | War Mammoth | ⬜ untested |  |
 | Warp Artifact | ⬜ untested |  |
 | Water Elemental | ✅ pass |  |

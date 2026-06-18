@@ -192,6 +192,9 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         "attached_to_index": attached_to_index,
         "attached_to_seat": attached_to_seat,
         "produced_mana": list(perm.effective_produced_mana),
+        # A color-changing effect (e.g. Lifelace: "Target ... becomes green.")
+        # records the new color so the UI can label the recolored permanent.
+        "color_override": perm.metadata.get("color_override"),
     }
 
 
@@ -501,14 +504,31 @@ def _serialize_player(
     }
 
 
+def _player_has_lost(game, seat: int) -> bool:
+    """Whether the player in *seat* has lost the game.
+
+    Uses the engine's own state-based-action flag when set, and otherwise
+    falls back to the 0-or-less-life rule — honoring replacement effects such as
+    Lich's "You don't lose the game for having 0 or less life." so dropping to 0
+    life does not hand the game to the opponent."""
+    player = game.players[seat]
+    if getattr(player, "lost", False):
+        return True
+    if player.life <= 0 and not game._player_controls_text(
+        player, "you don't lose the game for having 0 or less life"
+    ):
+        return True
+    return False
+
+
 def _winner(session: Session) -> int | None:
-    life0 = session.game.players[0].life
-    life1 = session.game.players[1].life
-    if life0 <= 0 and life1 <= 0:
+    lost0 = _player_has_lost(session.game, 0)
+    lost1 = _player_has_lost(session.game, 1)
+    if lost0 and lost1:
         return -1
-    if life0 <= 0:
+    if lost0:
         return 1
-    if life1 <= 0:
+    if lost1:
         return 0
     return None
 
@@ -2214,6 +2234,11 @@ def do_action(session_id: str, req: GameActionRequest):
             if not session.game.has_priority(req.seat):
                 raise HTTPException(status_code=400, detail="you do not currently have priority")
             target = req.target_seat if req.target_seat is not None else 1 - req.seat
+            # The client sends a top-first stack index; convert to the engine's
+            # bottom-first indexing (Deathgrip: "Counter target green spell").
+            engine_stack_index = None
+            if req.target_stack_index is not None:
+                engine_stack_index = len(session.game.stack) - 1 - req.target_stack_index
             result = session.game.queue_permanent_ability(
                 req.seat,
                 permanent.card.name,
@@ -2221,6 +2246,7 @@ def do_action(session_id: str, req: GameActionRequest):
                 permanent_index=permanent_index,
                 mana_color=req.mana_color,
                 target_permanent_index=req.target_permanent_index,
+                target_stack_index=engine_stack_index,
             )
             if not result.supported:
                 raise HTTPException(status_code=400, detail=result.details)

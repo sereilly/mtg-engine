@@ -82,6 +82,7 @@ class StackCastingMixin:
         permanent_index: int | None = None,
         mana_color: str | None = None,
         target_permanent_index: int | None = None,
+        target_stack_index: int | None = None,
     ) -> SimulationResult:
         queued = self.queue_permanent_ability(
             controller_index,
@@ -90,6 +91,7 @@ class StackCastingMixin:
             permanent_index=permanent_index,
             mana_color=mana_color,
             target_permanent_index=target_permanent_index,
+            target_stack_index=target_stack_index,
         )
         if not queued.supported:
             return queued
@@ -143,6 +145,7 @@ class StackCastingMixin:
         permanent_index: int | None = None,
         mana_color: str | None = None,
         target_permanent_index: int | None = None,
+        target_stack_index: int | None = None,
     ) -> SimulationResult:
         controller = self.players[controller_index]
         resolved = self._find_controlled_permanent(controller, permanent_name, permanent_index)
@@ -153,6 +156,12 @@ class StackCastingMixin:
         program = compile_card_oracle(permanent.card)
         target_idx = target_player_index if target_player_index is not None else (1 - controller_index)
         target_player = self.players[target_idx]
+
+        # An explicitly chosen spell on the stack (e.g. Deathgrip: "{B}{B}: Counter
+        # target green spell"). target_stack_index indexes self.stack (bottom-first).
+        target_stack_item = None
+        if target_stack_index is not None and 0 <= target_stack_index < len(self.stack):
+            target_stack_item = self.stack[target_stack_index]
 
 
 
@@ -203,14 +212,23 @@ class StackCastingMixin:
 
         if ability.instruction.kind == "counter_top_stack_spell":
             color_filter = ability.instruction.payload.get("color_filter")
-            has_valid_target = any(
-                not color_filter or color_filter in (item.card.colors or [])
-                for item in self.stack
-            )
-            if not has_valid_target:
-                details = f"no valid target for {permanent.card.name}"
-                self.log.append(details)
-                return SimulationResult(permanent.card.name, False, "unsupported", details)
+            if target_stack_item is not None:
+                # A specific spell was chosen — it must itself be a legal target.
+                if target_stack_item not in self.stack or (
+                    color_filter and color_filter not in (target_stack_item.card.colors or [])
+                ):
+                    details = f"no valid target for {permanent.card.name}"
+                    self.log.append(details)
+                    return SimulationResult(permanent.card.name, False, "unsupported", details)
+            else:
+                has_valid_target = any(
+                    not color_filter or color_filter in (item.card.colors or [])
+                    for item in self.stack
+                )
+                if not has_valid_target:
+                    details = f"no valid target for {permanent.card.name}"
+                    self.log.append(details)
+                    return SimulationResult(permanent.card.name, False, "unsupported", details)
 
         # Scavenging Ghoul: 'Remove a corpse counter from this creature: Regenerate
         # this creature.' — the counter removal is the activation cost.
@@ -291,6 +309,8 @@ class StackCastingMixin:
                 ability_effect_kind=ability.effect_kind,
                 source_permanent=permanent,
                 ability_text=ability.source_line,
+                target_stack_item=target_stack_item,
+                target_stack_name=target_stack_item.card.name if target_stack_item is not None else None,
             )
         )
         self.log.append(f"{permanent.card.name} ability added to stack")
@@ -637,8 +657,23 @@ class StackCastingMixin:
             "berserk_pump",
             "grant_unlimited_blocking",
             "exile_target_creature_until_eot",
+            "exile_creature_gain_life_equal_to_power",
         ):
-            if not any(p.card.primary_type == "creature" for p in target.battlefield):
+            # These spells can target a creature controlled by ANY player (Death
+            # Ward regenerates your own creature; Swords to Plowshares exiles any
+            # creature). A specific choice must itself be a creature; otherwise any
+            # creature on any battlefield makes the cast legal.
+            if isinstance(target_permanent_index, int):
+                battlefield = target.battlefield
+                if not (0 <= target_permanent_index < len(battlefield)) or (
+                    battlefield[target_permanent_index].card.primary_type != "creature"
+                ):
+                    return False, f"no valid target for {card.name}"
+            elif not any(
+                p.card.primary_type == "creature"
+                for pl in self.players
+                for p in pl.battlefield
+            ):
                 return False, f"no valid target for {card.name}"
 
         elif primary.kind in ("tap_target_permanent", "untap_target_permanent"):
@@ -819,6 +854,7 @@ class StackCastingMixin:
                     target_permanent_index=item.target_permanent_index,
                     x_value=item.x_value,
                     source_permanent=item.source_permanent,
+                    stack_target=item.target_stack_item,
                 ),
             )
             supported, details = state_machine.run(item.ability_instruction)

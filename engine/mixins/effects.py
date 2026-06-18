@@ -112,7 +112,17 @@ class EffectsMixin:
             return True
         return False
 
-    def _grant_regeneration_shield(self, target: PlayerState) -> bool:
+    def _grant_regeneration_shield(
+        self, target: PlayerState, target_permanent_index: int | None = None
+    ) -> bool:
+        # Honor an explicitly chosen creature (e.g. Death Ward's "Regenerate target
+        # creature" — the player picks which one). Fall back to the first creature.
+        if isinstance(target_permanent_index, int) and 0 <= target_permanent_index < len(target.battlefield):
+            chosen = target.battlefield[target_permanent_index]
+            if chosen.card.primary_type == "creature":
+                chosen.regeneration_shield += 1
+                return True
+            return False
         for permanent in target.battlefield:
             if permanent.card.primary_type == "creature":
                 permanent.regeneration_shield += 1

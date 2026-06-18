@@ -27,11 +27,20 @@ def untap_self(game: Game, instruction: OracleInstruction, context: OracleExecut
 def untap_target_land(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     target = context.target
     untapped = False
-    for perm in target.battlefield:
-        if perm.card.primary_type == "land":
-            perm.tapped = False
+    # Honor an explicitly chosen land (Ley Druid: "{T}: Untap target land" — the
+    # player picks which land). Fall back to the first land the target controls.
+    idx = context.target_permanent_index
+    if isinstance(idx, int) and 0 <= idx < len(target.battlefield):
+        chosen = target.battlefield[idx]
+        if chosen.card.primary_type == "land":
+            chosen.tapped = False
             untapped = True
-            break
+    if not untapped and not isinstance(idx, int):
+        for perm in target.battlefield:
+            if perm.card.primary_type == "land":
+                perm.tapped = False
+                untapped = True
+                break
     game.log.append("Untapped target land" if untapped else "No land to untap")
     return True, "resolved"
 

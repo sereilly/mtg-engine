@@ -13,7 +13,9 @@ if TYPE_CHECKING:
 @effect_handler("grant_regeneration_to_target_creature")
 def grant_regeneration_to_target_creature(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     target = context.target
-    regenerated = game._grant_regeneration_shield(target)
+    regenerated = game._grant_regeneration_shield(
+        target, target_permanent_index=context.target_permanent_index
+    )
     game.log.append("Regeneration shield granted" if regenerated else "No valid creature to regenerate")
     return True, "resolved"
 

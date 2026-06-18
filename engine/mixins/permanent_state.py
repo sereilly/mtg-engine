@@ -61,15 +61,19 @@ class PermanentStateMixin:
 
         # copy-as-enter enchantment
         if "you may have this enchantment enter as a copy of any artifact on the battlefield" in text:
-            source = next(
-                (
-                    perm
-                    for player in self.players
-                    for perm in player.battlefield
-                    if perm is not permanent and perm.card.primary_type == "artifact"
-                ),
-                None,
-            )
+            # Honor the artifact the player chose when casting (Copy Artifact);
+            # fall back to the first artifact for AI/untargeted casts.
+            source = self._resolve_copy_target(permanent, "artifact")
+            if source is None:
+                source = next(
+                    (
+                        perm
+                        for player in self.players
+                        for perm in player.battlefield
+                        if perm is not permanent and perm.card.primary_type == "artifact"
+                    ),
+                    None,
+                )
             if source is not None:
                 permanent.metadata["copied_from"] = source.card.name
                 if "power" in source.card.raw and str(source.card.raw.get("power", "")).isdigit():

@@ -1154,6 +1154,10 @@ function cardRequiresTargetCreature(card) {
     if (t.includes("destroy target") && (/\bcreature\b/.test(t) || /\bwall\b/.test(t))) return true;
     // Pumps/keyword grants (Berserk, Giant Growth, Jump, Howl from Beyond).
     if (t.includes("target creature gets") || t.includes("target creature gains")) return true;
+    // Regenerate a target creature (Death Ward) — may be any player's creature.
+    if (t.includes("regenerate target creature")) return true;
+    // Exile a target creature (Swords to Plowshares).
+    if (t.includes("exile target creature")) return true;
     // Direct damage to a target creature (Simulacrum).
     if (t.includes("damage to target creature")) return true;
     // Bounce: "Return target creature to its owner's hand" (Unsummon). Can target
@@ -1171,6 +1175,16 @@ function cardOffersCopyCreatureChoice(card) {
   return (card.oracle_text || "")
     .toLowerCase()
     .includes("enter as a copy of any creature on the battlefield");
+}
+
+// Copy Artifact: "You may have this enchantment enter as a copy of any artifact
+// on the battlefield." The copy is optional, so it's only a prompt when an
+// artifact exists to copy; otherwise the enchantment enters as itself.
+function cardOffersCopyArtifactChoice(card) {
+  if (!card || typeof card === "string") return false;
+  return (card.oracle_text || "")
+    .toLowerCase()
+    .includes("enter as a copy of any artifact on the battlefield");
 }
 
 function cardRequiresTargetPermanent(card) {
@@ -1337,6 +1351,30 @@ function activatedAbilityRequiresTargetPlayer(card) {
     .filter((line) => /^\s*(\{[^}]+\})+\s*:/.test(line))
     .map((line) => line.toLowerCase());
   return activatedLines.some((line) => line.includes("target player"));
+}
+
+function activatedAbilityRequiresTargetCreatureGrant(card) {
+  if (!card || typeof card === "string") return false;
+  // Activated abilities that grant a keyword/pump to a target creature, e.g.
+  // Stone Giant: "{T}: Target creature you control ... gains flying ..." or
+  // Helm of Chatzuk: "{0}: Target creature gains banding until end of turn."
+  // (Destroy-target abilities are handled by activatedAbilityRequiresTargetCreature.)
+  const activatedLines = (card.oracle_text || "").split("\n")
+    .filter((line) => /^\s*(\{[^}]+\})+\s*:/.test(line))
+    .map((line) => line.toLowerCase());
+  return activatedLines.some(
+    (line) => line.includes("target creature") && (line.includes("gains") || line.includes("gets")),
+  );
+}
+
+function activatedAbilityRequiresTargetStackSpell(card) {
+  if (!card || typeof card === "string") return false;
+  // Activated abilities that counter a spell on the stack, e.g. Deathgrip:
+  // "{B}{B}: Counter target green spell." The player chooses which spell.
+  const activatedLines = (card.oracle_text || "").split("\n")
+    .filter((line) => /^\s*(\{[^}]+\})+\s*:/.test(line))
+    .map((line) => line.toLowerCase());
+  return activatedLines.some((line) => line.includes("counter target") && line.includes("spell"));
 }
 
 function cardRequiresManaColorChoice(card) {
@@ -2882,6 +2920,58 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     return;
   }
 
+  // Abilities that untap a target land (Ley Druid, Gaea's Liege): the player
+  // chooses which land before the ability is activated.
+  if (activatedAbilityRequiresTargetLand(card)) {
+    pendingCastTarget = {
+      card,
+      cardName,
+      targetKind: "land",
+      castAction: "activate",
+      sourcePermanentIndex: permanentIndex,
+    };
+    renderActivationPrompt();
+    renderBoard(currentState);
+    updateActionHint(`Choose a target land for ${cardName}'s ability.`);
+    return;
+  }
+
+  // Abilities that grant a keyword/pump to a target creature (Stone Giant,
+  // Helm of Chatzuk): the player chooses which creature.
+  if (activatedAbilityRequiresTargetCreatureGrant(card)) {
+    if (getTargetableCreaturesForPrompt().length === 0) {
+      updateActionHint(`No valid creature targets in play for ${cardName}.`, true);
+      return;
+    }
+    pendingCastTarget = {
+      card,
+      cardName,
+      targetKind: "creature",
+      castAction: "activate",
+      sourcePermanentIndex: permanentIndex,
+    };
+    renderActivationPrompt();
+    renderBoard(currentState);
+    updateActionHint(`Choose a creature target for ${cardName}'s ability.`);
+    return;
+  }
+
+  // Abilities that counter a target spell on the stack (Deathgrip): the player
+  // chooses which spell.
+  if (activatedAbilityRequiresTargetStackSpell(card)) {
+    pendingCastTarget = {
+      card,
+      cardName,
+      targetKind: "stack",
+      castAction: "activate",
+      sourcePermanentIndex: permanentIndex,
+    };
+    renderActivationPrompt();
+    renderBoard(currentState);
+    updateActionHint(`Choose a spell on the stack for ${cardName} to counter.`);
+    return;
+  }
+
   // Abilities that deal damage to "any target" (Orcish Artillery): the player must
   // choose a creature or a player's face before the ability is activated.
   if (activatedAbilityRequiresTargetAny(card)) {
@@ -3709,6 +3799,12 @@ async function castDebugCardForFree() {
     return;
   }
 
+  if (card && cardOffersCopyArtifactChoice(card) && getTargetableArtifactsForPrompt().length > 0) {
+    startCastArtifactTargetPrompt(card, "debug_cast_free");
+    updateDebugStatus(`Choose an artifact for ${resolvedCardName} to copy.`, "success");
+    return;
+  }
+
   if (card && cardRequiresTargetCreature(card)) {
     startCastCreatureTargetPrompt(card, "debug_cast_free");
     updateDebugStatus(`Choose a creature target for ${resolvedCardName}.`, "success");
@@ -3800,6 +3896,12 @@ async function castDebugCardForFreeAsOpponent() {
   if (card && cardOffersCopyCreatureChoice(card) && getTargetableCreaturesForPrompt().length > 0) {
     startCastCreatureTargetPrompt(card, "debug_cast_free_opponent");
     updateDebugStatus(`Choose a creature for ${resolvedCardName} to copy (as opponent).`, "success");
+    return;
+  }
+
+  if (card && cardOffersCopyArtifactChoice(card) && getTargetableArtifactsForPrompt().length > 0) {
+    startCastArtifactTargetPrompt(card, "debug_cast_free_opponent");
+    updateDebugStatus(`Choose an artifact for ${resolvedCardName} to copy (as opponent).`, "success");
     return;
   }
 
@@ -4367,6 +4469,11 @@ function createCardElement(card, options = {}) {
           return;
         }
 
+        if (cardOffersCopyArtifactChoice(card) && getTargetableArtifactsForPrompt().length > 0) {
+          startCastArtifactTargetPrompt(card);
+          return;
+        }
+
         if (cardRequiresTargetCreature(card)) {
           startCastCreatureTargetPrompt(card);
           return;
@@ -4799,6 +4906,22 @@ function selectStackSpellTarget(arrayIndex) {
 
   pendingCastTarget = null;
   renderActivationPrompt();
+
+  // Activated ability that counters a target spell (Deathgrip): send an
+  // "activate" action identifying the source permanent and the chosen spell.
+  if (pending.castAction === "activate") {
+    updateActionHint(`Activating ${pending.cardName} at ${item.card?.name || "spell"}...`);
+    sendAction({
+      seat,
+      action: "activate",
+      permanent_name: pending.cardName,
+      permanent_index: pending.sourcePermanentIndex,
+      target_stack_index: arrayIndex,
+    })
+      .then(() => updateActionHint(`Activated ${pending.cardName}.`))
+      .catch((e) => updateActionHint(e.message, true));
+    return;
+  }
 
   // arrayIndex is the top-first index the server expects for target_stack_index.
   const actionBody = {
@@ -5558,6 +5681,7 @@ async function handleHandCardDropOnBattlefield({ event, targetSeat, targetItem }
       if (card && cardRequiresTargetLand(card)) { startCastLandTargetPrompt(card); return; }
       if (card && cardRequiresTargetArtifact(card)) { startCastArtifactTargetPrompt(card); return; }
       if (card && cardOffersCopyCreatureChoice(card) && getTargetableCreaturesForPrompt().length > 0) { startCastCreatureTargetPrompt(card); return; }
+      if (card && cardOffersCopyArtifactChoice(card) && getTargetableArtifactsForPrompt().length > 0) { startCastArtifactTargetPrompt(card); return; }
       if (card && cardRequiresTargetCreature(card)) { startCastCreatureTargetPrompt(card); return; }
       if (card && cardRequiresTargetPermanent(card)) { startCastPermanentTargetPrompt(card); return; }
       if (card && cardRequiresTargetStackSpell(card)) { startCastStackSpellPrompt(card); return; }

@@ -1470,6 +1470,31 @@ class BattlefieldCanvas {
       ctx.fillText(label, bx + bw / 2, by + bh / 2);
     }
 
+    // ---- Color-change label (e.g. Lifelace: "Target ... becomes green.") ----
+    const colorCard = creatureCard || card;
+    const colorOverride = colorCard && colorCard.color_override;
+    if (colorOverride) {
+      const COLOR_SWATCH = { W: "#f8f6d8", U: "#3b7fd4", B: "#5a4a5a", R: "#d4452f", G: "#2f9e44", C: "#b8b8b8" };
+      const label = `Color: {${colorOverride}}`;
+      const bh = 13;
+      ctx.font = `bold ${Math.max(7, bh * 0.62)}px sans-serif`;
+      const bw = Math.min(w - 4, Math.ceil(ctx.measureText(label).width) + 8);
+      const bx = x + (w - bw) / 2;
+      // Sit just below the regeneration badge if present, else at the top.
+      const by = y + 2 + (regenCard && Number(regenCard.regeneration_shield) > 0 ? 15 : 0);
+      ctx.fillStyle = "rgba(0,0,0,0.78)";
+      this._roundRect(ctx, bx, by, bw, bh, 3);
+      ctx.fill();
+      ctx.strokeStyle = COLOR_SWATCH[colorOverride] || "rgba(255,255,255,0.85)";
+      ctx.lineWidth = 1.5;
+      this._roundRect(ctx, bx, by, bw, bh, 3);
+      ctx.stroke();
+      ctx.fillStyle = "#ffffff";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(label, bx + bw / 2, by + bh / 2);
+    }
+
     // ---- Pile count badge ----
     if (pileCount >= 2) {
       const label = `×${pileCount}`;
