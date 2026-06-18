@@ -256,6 +256,14 @@ const SFX = (() => {
         continue;
       }
 
+      // ── Discard (hand → graveyard) ───────────────────────────────────────────
+      // Slightly delayed so it lands with the card-flight animation in app.js.
+      if (!graveyardPlayed && s.includes('discarded')) {
+        setTimeout(() => _play('card_ux/Card_Enter_Graveyard.wav'), 220);
+        graveyardPlayed = true;
+        continue;
+      }
+
       // ── Goes to graveyard ────────────────────────────────────────────────────
       if (!graveyardPlayed && (
         s.includes('died from') || s.includes('died (') ||

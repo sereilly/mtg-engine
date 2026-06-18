@@ -874,6 +874,14 @@ h2.targeting-valid {
   display: block;
 }
 
+/* Card flying from hand to graveyard on discard. WAAPI drives the transform, so
+   suppress the inherited .card transition and keep it above the board. */
+.discard-fly {
+  transition: none;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.55);
+  will-change: transform, opacity;
+}
+
 .card-wrapper {
   position: relative;
   display: inline-block;

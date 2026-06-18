@@ -5241,6 +5241,116 @@ function renderBoard(state) {
   }
 }
 
+// Indices of cards present in prevHand that are no longer in nextHand, matched
+// greedily by name so duplicates resolve correctly. Used to pick which hand
+// slots should fly to the graveyard on discard.
+function removedHandIndices(prevHand, nextHand) {
+  const nextCounts = {};
+  for (const c of nextHand || []) {
+    const k = normalizeCardName(c) || "<hidden>";
+    nextCounts[k] = (nextCounts[k] || 0) + 1;
+  }
+  const removed = [];
+  (prevHand || []).forEach((c, i) => {
+    const k = normalizeCardName(c) || "<hidden>";
+    if (nextCounts[k] > 0) nextCounts[k] -= 1;
+    else removed.push(i);
+  });
+  return removed;
+}
+
+// Animate a single card flying from a hand slot (source rect) to the graveyard
+// pile (dest rect). Builds a throwaway fixed-position clone; removes it on finish.
+function flyCardToGraveyard(source, dest, imageUri) {
+  const fly = document.createElement("div");
+  fly.className = "discard-fly card";
+  fly.style.position = "fixed";
+  fly.style.left = `${source.left}px`;
+  fly.style.top = `${source.top}px`;
+  fly.style.width = `${source.width}px`;
+  fly.style.height = `${source.height}px`;
+  fly.style.margin = "0";
+  fly.style.zIndex = "9999";
+  fly.style.pointerEvents = "none";
+
+  const img = document.createElement("img");
+  img.src = imageUri || "/images/card_back.webp";
+  img.alt = "";
+  fly.appendChild(img);
+  document.body.appendChild(fly);
+
+  const dx = dest.left + dest.width / 2 - (source.left + source.width / 2);
+  const dy = dest.top + dest.height / 2 - (source.top + source.height / 2);
+  const scale = dest.width > 0 ? Math.min(1, dest.width / source.width) : 0.55;
+
+  const anim = fly.animate(
+    [
+      { transform: "translate(0px, 0px) scale(1) rotate(0deg)", opacity: 1 },
+      { transform: `translate(${dx}px, ${dy}px) scale(${scale}) rotate(-8deg)`, opacity: 0.25 },
+    ],
+    { duration: 480, easing: "cubic-bezier(0.4, 0.1, 0.3, 1)", fill: "forwards" }
+  );
+  anim.onfinish = () => fly.remove();
+  anim.oncancel = () => fly.remove();
+}
+
+// Detect cards discarded between two states and animate them flying from the
+// hand into the owner's graveyard pile. Must be called BEFORE renderBoard
+// re-renders the hand, so the outgoing hand slots are still in the DOM to read
+// their on-screen positions from.
+function animateDiscards(prev, next, viewerSeat) {
+  if (!prev || !next || next.pregame) return;
+  const prevLogLen = Array.isArray(prev.log) ? prev.log.length : 0;
+  const newEntries = Array.isArray(next.log) ? next.log.slice(prevLogLen) : [];
+  const discardEntries = newEntries
+    .map((e) => String(e))
+    .filter((e) => /discarded/i.test(e) && !/drew/i.test(e));
+  if (discardEntries.length === 0) return;
+
+  for (let s = 0; s < 2; s++) {
+    const grew = (next.players?.[s]?.graveyard?.length ?? 0) - (prev.players?.[s]?.graveyard?.length ?? 0);
+    if (grew <= 0) continue;
+    const name = next.players?.[s]?.name;
+    if (!name || !discardEntries.some((e) => e.includes(name))) continue;
+
+    const isSelf = s === viewerSeat;
+    const container = document.getElementById(isSelf ? "selfHand" : "oppHand");
+    const slotEls = container ? Array.from(container.querySelectorAll(".hand-fan-slot")) : [];
+    if (slotEls.length === 0) continue;
+
+    // Which slots fly: for our own hand we know exactly which cards left and can
+    // show their art; the opponent's hand is hidden, so fly the last N backs.
+    let picks;
+    if (isSelf) {
+      picks = removedHandIndices(prev.players?.[s]?.hand, next.players?.[s]?.hand)
+        .filter((i) => i < slotEls.length)
+        .slice(0, grew);
+    } else {
+      picks = [];
+      for (let i = slotEls.length - 1; i >= 0 && picks.length < grew; i--) picks.unshift(i);
+    }
+    if (picks.length === 0) continue;
+
+    const flights = picks.map((i) => {
+      const el = slotEls[i].querySelector(".card") || slotEls[i];
+      const card = isSelf ? prev.players?.[s]?.hand?.[i] : null;
+      return { source: el.getBoundingClientRect(), imageUri: normalizeImageUri(card) };
+    });
+    const graveId = isSelf ? "selfGraveyardCards" : "oppGraveyardCards";
+
+    // Destination is read after renderBoard has added the card to the pile.
+    requestAnimationFrame(() => {
+      const grave = document.getElementById(graveId);
+      if (!grave) return;
+      const last = grave.lastElementChild;
+      const dest = (last || grave).getBoundingClientRect();
+      flights.forEach((f, idx) => {
+        setTimeout(() => flyCardToGraveyard(f.source, dest, f.imageUri), idx * 90);
+      });
+    });
+  }
+}
+
 function renderState(state, { skipStaleCheck = false } = {}) {
   // Discard stale responses: when a slow HTTP response arrives after a faster SSE+getState
   // has already applied newer state, log length is monotonically increasing so we can use
@@ -5250,6 +5360,7 @@ function renderState(state, { skipStaleCheck = false } = {}) {
   const currentLogLen = Array.isArray(currentState?.log) ? currentState.log.length : -1;
   if (!skipStaleCheck && incomingLogLen < currentLogLen) return;
   const wasInPregame = !!currentState?.pregame;
+  const prevStateForDiscard = currentState;
 
   if (autoPassTurnEndEnabled && seat === null) {
     autoPassTurnEndEnabled = false;
@@ -5301,6 +5412,7 @@ function renderState(state, { skipStaleCheck = false } = {}) {
     lastAnnouncedTurn = state.current_turn;
     showTurnAnnouncement(isSelfTurn);
   }
+  animateDiscards(prevStateForDiscard, state, viewerSeat);
   renderBoard(state);
   if (wasInPregame && !state?.pregame) {
     updateActionHint("Drag from your hand to cast. The battlefield arranges itself automatically.");
