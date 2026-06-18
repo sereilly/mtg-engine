@@ -4249,6 +4249,13 @@ function createCardElement(card, options = {}) {
           return;
         }
 
+        // Beyond this point we're trying to use the permanent (tap/activate),
+        // which only the controller may do.
+        if (zoneKind === "battlefield" && targetSeat !== seat) {
+          updateActionHint("You don't control this permanent.", true);
+          return;
+        }
+
         if (!hasActivatedAbility(card)) {
           updateActionHint(`${cardName} has no activated ability to use.`, true);
           return;
@@ -5663,6 +5670,14 @@ function initBattlefieldCanvas() {
             return;
           }
           resolvePendingCastTarget(cardSeat, permanentIndex);
+          return;
+        }
+
+        // Beyond this point we're trying to use the permanent (tap/activate),
+        // which only the controller may do. Targeting an opponent's permanent
+        // for a pending spell/ability was already handled above.
+        if (cardSeat !== seat) {
+          updateActionHint("You don't control this permanent.", true);
           return;
         }
 
