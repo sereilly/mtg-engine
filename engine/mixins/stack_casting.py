@@ -496,6 +496,10 @@ class StackCastingMixin:
                         battlefield[target_permanent_index], enchant_noun
                     ):
                         return False, f"no valid target for {card.name}"
+                    # CR 702.16b/c: an Aura with a quality can't be cast targeting a
+                    # permanent with protection from that quality.
+                    if not self._can_be_targeted(battlefield[target_permanent_index], card):
+                        return False, f"no valid target for {card.name}"
                 else:
                     first_line = card.oracle_text.lower().split("\n")[0].strip()
                     if first_line.startswith("enchant ") and "graveyard" in first_line:
@@ -541,6 +545,14 @@ class StackCastingMixin:
         if target_idx < 0 or target_idx >= len(self.players):
             target_idx = 1 - caster_index
         target = self.players[target_idx]
+
+        # CR 702.16b: a spell can't be cast targeting a creature with protection
+        # from the spell's quality (or with shroud). Reject the illegal target at
+        # cast time, mirroring the resolution-time check, so it is never offered.
+        if isinstance(target_permanent_index, int) and 0 <= target_permanent_index < len(target.battlefield):
+            chosen = target.battlefield[target_permanent_index]
+            if chosen.card.primary_type == "creature" and not self._can_be_targeted(chosen, card):
+                return False, f"{chosen.card.name} is an illegal target for {card.name}"
 
         if primary.kind == "destroy_target_permanent":
             type_filter = primary.payload.get("type_filter")

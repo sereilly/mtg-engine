@@ -2344,6 +2344,23 @@ function _wrapKeywordLines(ctx, keywords, maxWidth) {
   const lines = [];
   let line = "";
   for (const kw of keywords) {
+    // A single keyword wider than the card (e.g. "Protection from white") is
+    // allowed to wrap across lines on word boundaries so it doesn't overflow.
+    if (ctx.measureText(kw).width > maxWidth && kw.includes(" ")) {
+      if (line) { lines.push(line); line = ""; }
+      let wrapped = "";
+      for (const word of kw.split(" ")) {
+        const test = wrapped ? `${wrapped} ${word}` : word;
+        if (wrapped && ctx.measureText(test).width > maxWidth) {
+          lines.push(wrapped);
+          wrapped = word;
+        } else {
+          wrapped = test;
+        }
+      }
+      line = wrapped;
+      continue;
+    }
     const test = line ? `${line}  ${kw}` : kw;
     if (line && ctx.measureText(test).width > maxWidth) {
       lines.push(line);

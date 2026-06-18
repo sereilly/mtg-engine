@@ -248,7 +248,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Stream of Life | ⬜ untested |  |
 | Sunglasses of Urza | ⬜ untested |  |
 | Swamp | ⬜ untested |  |
-| Swords to Plowshares | ❌ fail | Didn't let me choose a target |
+| Swords to Plowshares | ❌ fail | Doesn't let me choose a target |
 | Taiga | ⬜ untested |  |
 | Terror | ⬜ untested |  |
 | The Hive | ✅ pass |  |

@@ -167,6 +167,46 @@ class GameEndingMixin:
                     survivors.append(perm)
                 player.battlefield = survivors
 
+            # CR 702.16c / 702.16n: an Aura with a quality the enchanted permanent
+            # has protection from is put into its owner's graveyard, unless the
+            # Aura's own text says the effect doesn't remove it (702.16n, e.g.
+            # White Ward).
+            for player in self.players:
+                survivors = []
+                for perm in player.battlefield:
+                    attached_to = perm.metadata.get("attached_to")
+                    if "Aura" in perm.card.type_line and attached_to is not None:
+                        protection = self._protection_colors(attached_to)
+                        if protection and (protection & self._effective_colors(perm)):
+                            text = perm.card.oracle_text.lower()
+                            exempt = "remove this aura" in text or "remove all auras" in text
+                            if not exempt:
+                                self._permanent_to_graveyard(player, perm)
+                                self.log.append(
+                                    f"{perm.card.name} put into graveyard (702.16c: enchanted permanent has protection)"
+                                )
+                                changed = True
+                                continue
+                    survivors.append(perm)
+                player.battlefield = survivors
+
+            # CR 702.16d: Equipment with a quality the equipped permanent has
+            # protection from becomes unattached, but stays on the battlefield.
+            for player in self.players:
+                for perm in player.battlefield:
+                    if "Equipment" not in perm.card.type_line:
+                        continue
+                    attached_to = perm.metadata.get("attached_to")
+                    if attached_to is None:
+                        continue
+                    protection = self._protection_colors(attached_to)
+                    if protection and (protection & self._effective_colors(perm)):
+                        perm.metadata["attached_to"] = None
+                        self.log.append(
+                            f"{perm.card.name} became unattached (702.16d: equipped permanent has protection)"
+                        )
+                        changed = True
+
             # 704.5n: Equipment attached to illegal permanent → becomes unattached (stays on battlefield)
             for player in self.players:
                 for perm in player.battlefield:

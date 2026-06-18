@@ -251,10 +251,14 @@ class PermanentStateMixin:
         program = compile_card_oracle(permanent.card)
         for instr in program.instructions:
             if instr.kind == "static_line" and instr.value.startswith("protection from "):
-                word = instr.value[len("protection from "):].strip()
-                symbol = _COLOR_WORD_TO_SYMBOL.get(word)
-                if symbol:
-                    colors.add(symbol)
+                clause = instr.value[len("protection from "):].strip()
+                # CR 702.16g/h/i: "protection from [A] and from [B]" (and comma
+                # separated variants) is shorthand for several separate protection
+                # abilities. Pull every color word out of the remaining clause.
+                for word in re.split(r",|\band from\b|\band\b", clause):
+                    symbol = _COLOR_WORD_TO_SYMBOL.get(word.strip())
+                    if symbol:
+                        colors.add(symbol)
         for key in permanent.metadata:
             if key.startswith("protection_from_"):
                 symbol = _COLOR_WORD_TO_SYMBOL.get(key[len("protection_from_"):])

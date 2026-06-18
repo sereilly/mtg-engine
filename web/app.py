@@ -104,6 +104,10 @@ _DISPLAY_KEYWORDS = (
 )
 
 
+# Color symbol → display word, for spelling out protection qualities on the card.
+_SYMBOL_TO_COLOR_WORD = {"W": "white", "U": "blue", "B": "black", "R": "red", "G": "green"}
+
+
 def _effective_keywords(perm: Permanent, game: Game) -> list[str]:
     """The keywords a creature currently has, reflecting grants and removals.
 
@@ -111,12 +115,27 @@ def _effective_keywords(perm: Permanent, game: Game) -> list[str]:
     candidate is resolved through ``game._has_keyword`` so aura-granted and
     "until end of turn" keywords show up, and Layer 6 removal effects (e.g.
     Earthbind stripping Flying) take it back off.
+
+    "Protection" is spelled out with the quality it's from (e.g. "Protection
+    from white") so the player can see which color the permanent is protected
+    against, not just that it has protection.
     """
     if "creature" not in perm.card.type_line.lower():
         return []
     keywords = [kw for kw in _DISPLAY_KEYWORDS if game._has_keyword(perm, kw)]
     if perm.metadata.get("loses_flying") or perm.metadata.get("loses_flying_until_eot"):
         keywords = [kw for kw in keywords if kw.lower() != "flying"]
+    # Protection is driven by the effective protected colors (CR 702.16) rather
+    # than the printed keyword, so a quality granted by another card (e.g. White
+    # Ward) shows up and is spelled out — "Protection from white".
+    colors = sorted(game._protection_colors(perm))
+    if colors:
+        words = [_SYMBOL_TO_COLOR_WORD.get(symbol, symbol) for symbol in colors]
+        label = "Protection from " + " and ".join(words)
+        keywords = [kw for kw in keywords if kw != "Protection"]
+        keywords.append(label)
+    else:
+        keywords = [kw for kw in keywords if kw != "Protection"]
     return keywords
 
 
