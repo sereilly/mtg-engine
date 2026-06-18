@@ -35,6 +35,11 @@
       "status": "pass",
       "updated_at": 1781664983.633319
     },
+    "Death Ward": {
+      "reason": "Says no valid target. I should be able to target any creature",
+      "status": "fail",
+      "updated_at": 1781756803.883068
+    },
     "Deathgrip": {
       "reason": "The activated ability should let me choose a target green spell rather than auto targeting",
       "status": "fail",
@@ -44,6 +49,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781455740.8711123
+    },
+    "Fire Elemental": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1781756819.3621137
     },
     "Fog": {
       "reason": "",
@@ -85,10 +95,20 @@
       "status": "pass",
       "updated_at": 1781378704.6242044
     },
+    "Ley Druid": {
+      "reason": "Ley Druid's ability doesn't prompt me to choose a land.",
+      "status": "fail",
+      "updated_at": 1781757363.7739513
+    },
     "Lich": {
       "reason": "I lose the game when I play this card even though I shouldn't based on its oracle text",
       "status": "fail",
       "updated_at": 1781503311.0413384
+    },
+    "Mahamoti Djinn": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1781756840.729526
     },
     "Mana Flare": {
       "reason": "",
@@ -114,6 +134,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781586499.052248
+    },
+    "Pestilence": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1781757064.6528566
     },
     "Phantom Monster": {
       "reason": "",
@@ -174,6 +199,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781756746.9480946
+    },
+    "Wall of Swords": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1781757313.6477668
     },
     "Wheel of Fortune": {
       "reason": "",

@@ -3,9 +3,9 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **290**
-- Passed: **32**
-- Failed: **4**
-- Untested: **254**
+- Passed: **36**
+- Failed: **6**
+- Untested: **248**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -65,7 +65,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Cyclopean Tomb | ⬜ untested |  |
 | Dark Ritual | ⬜ untested |  |
 | Darkpact | ⬜ untested |  |
-| Death Ward | ⬜ untested |  |
+| Death Ward | ❌ fail | Says no valid target. I should be able to target any creature |
 | Deathgrip | ❌ fail | The activated ability should let me choose a target green spell rather than auto targeting |
 | Deathlace | ⬜ untested |  |
 | Demonic Attorney | ⬜ untested |  |
@@ -91,7 +91,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Fastbond | ⬜ untested |  |
 | Fear | ⬜ untested |  |
 | Feedback | ⬜ untested |  |
-| Fire Elemental | ⬜ untested |  |
+| Fire Elemental | ✅ pass |  |
 | Fireball | ⬜ untested |  |
 | Firebreathing | ⬜ untested |  |
 | Flashfires | ⬜ untested |  |
@@ -147,7 +147,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Kormus Bell | ⬜ untested |  |
 | Kudzu | ⬜ untested |  |
 | Lance | ⬜ untested |  |
-| Ley Druid | ⬜ untested |  |
+| Ley Druid | ❌ fail | Ley Druid's ability doesn't prompt me to choose a land. |
 | Library of Leng | ⬜ untested |  |
 | Lich | ❌ fail | I lose the game when I play this card even though I shouldn't based on its oracle text |
 | Lifeforce | ⬜ untested |  |
@@ -162,7 +162,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Lord of the Pit | ⬜ untested |  |
 | Lure | ⬜ untested |  |
 | Magical Hack | ⬜ untested |  |
-| Mahamoti Djinn | ⬜ untested |  |
+| Mahamoti Djinn | ✅ pass |  |
 | Mana Flare | ✅ pass |  |
 | Mana Short | ✅ pass |  |
 | Mana Vault | ⬜ untested |  |
@@ -190,7 +190,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Paralyze | ⬜ untested |  |
 | Pearled Unicorn | ⬜ untested |  |
 | Personal Incarnation | ⬜ untested |  |
-| Pestilence | ⬜ untested |  |
+| Pestilence | ✅ pass |  |
 | Phantasmal Forces | ⬜ untested |  |
 | Phantasmal Terrain | ⬜ untested |  |
 | Phantom Monster | ✅ pass |  |
@@ -280,7 +280,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Wall of Fire | ⬜ untested |  |
 | Wall of Ice | ⬜ untested |  |
 | Wall of Stone | ⬜ untested |  |
-| Wall of Swords | ⬜ untested |  |
+| Wall of Swords | ✅ pass |  |
 | Wall of Water | ⬜ untested |  |
 | Wall of Wood | ⬜ untested |  |
 | Wanderlust | ⬜ untested |  |

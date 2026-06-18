@@ -1902,10 +1902,8 @@ function applyCleanupPrompt(cleanupDiscard) {
   title.textContent = "Cleanup discard required";
   body.textContent = "Select cards from your hand to discard. The turn will continue automatically once all required cards are selected.";
   steps.innerHTML = [
-    `<div>Chosen: ${selectedCount}</div>`,
-    `<div>Total needed: ${requiredCount}</div>`,
-    `<div>Remaining: ${remaining}</div>`,
-    "<div>Action: click cards in your hand to select or unselect them.</div>",
+    `<div><strong>Selected ${selectedCount} of ${requiredCount}</strong> (${remaining} more to discard)</div>`,
+    "<div>Action: click cards in your hand to select; click a highlighted card again to unselect it.</div>",
   ].join("");
   cancelBtn.disabled = true;
   customOkBtn.disabled = true;
@@ -4490,7 +4488,7 @@ function renderHandFan(containerId, cards, options = {}) {
   const MAX_ANGLE = 15;
   const MAX_RISE = isOpponent ? 22 : 44;
   const PUSH_X = isOpponent ? 7 : 14;
-  const { playableHandIndices = [], ...fanOptions } = options;
+  const { playableHandIndices = [], selectedHandIndices = [], ...fanOptions } = options;
 
   const slots = [];
 
@@ -4507,6 +4505,7 @@ function renderHandFan(containerId, cards, options = {}) {
       hidden: isHidden,
       handIndex: index,
       playable: !isHidden && playableHandIndices.includes(index),
+      selected: !isHidden && selectedHandIndices.includes(index),
     });
 
     const slot = document.createElement("div");

@@ -804,6 +804,12 @@ h2.targeting-valid {
   border-color: rgba(242, 184, 75, 0.95);
 }
 
+/* Selection highlight takes priority over the cleanup hover highlight. */
+.card.cleanup-selectable.selected-card:hover {
+  box-shadow: 0 0 0 3px rgba(242, 184, 75, 0.95), 0 0 16px rgba(242, 184, 75, 0.45);
+  border-color: rgba(242, 184, 75, 0.95);
+}
+
 .card.casting-card {
   box-shadow: 0 0 0 3px rgba(255, 221, 74, 0.98), 0 0 20px rgba(255, 221, 74, 0.55);
   border-color: rgba(255, 221, 74, 1);
