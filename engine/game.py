@@ -47,6 +47,11 @@ class Game(
     log: list[str] = field(default_factory=list)
     extra_turns: dict[int, int] = field(default_factory=dict)
     extra_turn_queue: list[int] = field(default_factory=list)
+    current_turn_is_extra: bool = False
+    # 500.7: extra turns are *inserted* after the current turn; the normal
+    # turn rotation must continue from the last non-extra turn, not from the
+    # player who happens to be taking an extra turn. Anchored here.
+    normal_rotation_anchor: int = 0
     extra_phases_after: dict[str, list[str]] = field(default_factory=dict)
     extra_steps_after: dict[str, list[str]] = field(default_factory=dict)
     custom_phase_steps: dict[str, tuple[str, ...]] = field(default_factory=dict)

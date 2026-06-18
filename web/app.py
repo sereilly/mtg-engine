@@ -1105,6 +1105,7 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "current_turn_phase": session.game.current_turn_phase,
         "current_step": session.game.current_step,
         "current_turn": session.current_turn,
+        "current_turn_is_extra": session.game.current_turn_is_extra,
         "turn_number": session.game.turn,
         "priority_player": session.game.priority_player_index,
         "priority_pass_count": session.game.priority_pass_count,

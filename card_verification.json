@@ -10,10 +10,20 @@
       "status": "pass",
       "updated_at": 1781410851.5122583
     },
+    "Black Ward": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1781761302.7020597
+    },
     "Blue Elemental Blast": {
       "reason": "",
       "status": "pass",
       "updated_at": 1781588398.4474864
+    },
+    "Blue Ward": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1781761307.1950977
     },
     "Control Magic": {
       "reason": "",
@@ -44,6 +54,11 @@
       "reason": "The activated ability should let me choose a target green spell rather than auto targeting",
       "status": "fail",
       "updated_at": 1781585712.1158247
+    },
+    "Drudge Skeletons": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1781761361.8322399
     },
     "Elvish Archers": {
       "reason": "",
@@ -79,6 +94,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781381460.7865078
+    },
+    "Green Ward": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1781761314.0411894
     },
     "Healing Salve": {
       "reason": "",
@@ -160,6 +180,11 @@
       "status": "pass",
       "updated_at": 1781588405.2655096
     },
+    "Red Ward": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1781761319.0183372
+    },
     "Scryb Sprites": {
       "reason": "",
       "status": "pass",
@@ -175,6 +200,11 @@
       "status": "pass",
       "updated_at": 1781410889.892921
     },
+    "Stone Giant": {
+      "reason": "Stone Giant's activated ability doesn't let me choose a target",
+      "status": "fail",
+      "updated_at": 1781761636.042845
+    },
     "Swords to Plowshares": {
       "reason": "Doesn't let me choose a target",
       "status": "fail",
@@ -184,6 +214,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781670012.8092935
+    },
+    "Time Walk": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1781762515.8758051
     },
     "Timetwister": {
       "reason": "",
@@ -205,10 +240,30 @@
       "status": "pass",
       "updated_at": 1781757313.6477668
     },
+    "Wanderlust": {
+      "reason": "Wanderlust's upkeep trigger isn't working",
+      "status": "fail",
+      "updated_at": 1781761462.1555035
+    },
+    "Water Elemental": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1781761508.8249533
+    },
+    "Weakness": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1781761495.226897
+    },
     "Wheel of Fortune": {
       "reason": "",
       "status": "pass",
       "updated_at": 1781392747.2317514
+    },
+    "White Ward": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1781761323.133161
     }
   }
 }

@@ -74,6 +74,38 @@ def test_extra_turn_queue_is_lifo():
     assert game.start_next_turn() == 0
 
 
+def test_extra_turn_for_opponent_is_inserted_not_substituted():
+    # 500.7: an extra turn is *inserted* after the current turn; the normal
+    # rotation resumes afterward. P0 (active) gives P1 an extra turn, so P1
+    # takes the extra turn AND then their normal turn before P0 acts again.
+    p1 = PlayerState(name="P1")
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.active_player_index = 0
+
+    game.add_extra_turn(1)
+
+    assert game.start_next_turn() == 1  # inserted extra turn
+    assert game.current_turn_is_extra
+    assert game.start_next_turn() == 1  # P1's normal turn (rotation resumes)
+    assert not game.current_turn_is_extra
+    assert game.start_next_turn() == 0  # back to P0
+
+
+def test_extra_turn_does_not_disturb_normal_rotation():
+    # P0 takes an extra turn, then the rotation continues to P1, not back to P0.
+    p1 = PlayerState(name="P1")
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.active_player_index = 0
+
+    game.add_extra_turn(0)
+
+    assert game.start_next_turn() == 0  # extra turn
+    assert game.start_next_turn() == 1  # normal rotation resumes
+    assert game.start_next_turn() == 0
+
+
 def test_skip_turn_is_applied():
     p1 = PlayerState(name="P1")
     p2 = PlayerState(name="P2")

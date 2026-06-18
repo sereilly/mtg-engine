@@ -3,9 +3,9 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **290**
-- Passed: **36**
-- Failed: **6**
-- Untested: **248**
+- Passed: **45**
+- Failed: **8**
+- Untested: **237**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -28,11 +28,11 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Black Knight | ⬜ untested |  |
 | Black Lotus | ✅ pass |  |
 | Black Vise | ⬜ untested |  |
-| Black Ward | ⬜ untested |  |
+| Black Ward | ✅ pass |  |
 | Blaze of Glory | ⬜ untested |  |
 | Blessing | ⬜ untested |  |
 | Blue Elemental Blast | ✅ pass |  |
-| Blue Ward | ⬜ untested |  |
+| Blue Ward | ✅ pass |  |
 | Bog Wraith | ⬜ untested |  |
 | Braingeyser | ⬜ untested |  |
 | Burrowing | ⬜ untested |  |
@@ -78,7 +78,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Dragon Whelp | ⬜ untested |  |
 | Drain Life | ⬜ untested |  |
 | Drain Power | ⬜ untested |  |
-| Drudge Skeletons | ⬜ untested |  |
+| Drudge Skeletons | ✅ pass |  |
 | Dwarven Demolition Team | ⬜ untested |  |
 | Dwarven Warriors | ⬜ untested |  |
 | Earth Elemental | ⬜ untested |  |
@@ -113,7 +113,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Goblin King | ⬜ untested |  |
 | Granite Gargoyle | ✅ pass |  |
 | Gray Ogre | ✅ pass |  |
-| Green Ward | ⬜ untested |  |
+| Green Ward | ✅ pass |  |
 | Grizzly Bears | ⬜ untested |  |
 | Guardian Angel | ⬜ untested |  |
 | Healing Salve | ✅ pass |  |
@@ -208,7 +208,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Raging River | ⬜ untested |  |
 | Raise Dead | ⬜ untested |  |
 | Red Elemental Blast | ✅ pass |  |
-| Red Ward | ⬜ untested |  |
+| Red Ward | ✅ pass |  |
 | Regeneration | ⬜ untested |  |
 | Regrowth | ⬜ untested |  |
 | Resurrection | ⬜ untested |  |
@@ -243,7 +243,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Spell Blast | ⬜ untested |  |
 | Stasis | ✅ pass |  |
 | Steal Artifact | ⬜ untested |  |
-| Stone Giant | ⬜ untested |  |
+| Stone Giant | ❌ fail | Stone Giant's activated ability doesn't let me choose a target |
 | Stone Rain | ⬜ untested |  |
 | Stream of Life | ⬜ untested |  |
 | Sunglasses of Urza | ⬜ untested |  |
@@ -257,7 +257,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Throne of Bone | ⬜ untested |  |
 | Timber Wolves | ⬜ untested |  |
 | Time Vault | ⬜ untested |  |
-| Time Walk | ⬜ untested |  |
+| Time Walk | ✅ pass |  |
 | Timetwister | ✅ pass |  |
 | Tranquility | ⬜ untested |  |
 | Tropical Island | ⬜ untested |  |
@@ -283,15 +283,15 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Wall of Swords | ✅ pass |  |
 | Wall of Water | ⬜ untested |  |
 | Wall of Wood | ⬜ untested |  |
-| Wanderlust | ⬜ untested |  |
+| Wanderlust | ❌ fail | Wanderlust's upkeep trigger isn't working |
 | War Mammoth | ⬜ untested |  |
 | Warp Artifact | ⬜ untested |  |
-| Water Elemental | ⬜ untested |  |
-| Weakness | ⬜ untested |  |
+| Water Elemental | ✅ pass |  |
+| Weakness | ✅ pass |  |
 | Web | ⬜ untested |  |
 | Wheel of Fortune | ✅ pass |  |
 | White Knight | ⬜ untested |  |
-| White Ward | ⬜ untested |  |
+| White Ward | ✅ pass |  |
 | Wild Growth | ⬜ untested |  |
 | Will-o'-the-Wisp | ⬜ untested |  |
 | Winter Orb | ⬜ untested |  |

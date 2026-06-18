@@ -87,7 +87,10 @@ class PhaseStepsMixin:
         return "all_passed_empty"
 
     def add_extra_turn(self, player_index: int) -> None:
-        # 500.7 most recently created turn occurs first.
+        # 500.7: extra turns are added one at a time and the most recently
+        # created turn is taken first (LIFO via pop()). When a single effect
+        # grants extra turns to multiple players, the caller must add them in
+        # APNAP order so the last-added (final in APNAP order) is taken first.
         self.extra_turn_queue.append(player_index)
         self.extra_turns[player_index] = self.extra_turns.get(player_index, 0) + 1
 
@@ -195,23 +198,28 @@ class PhaseStepsMixin:
         return candidate
 
     def _compute_next_active_player(self) -> int:
+        # 500.7: an extra turn is inserted directly after the current turn and
+        # does not advance the normal rotation. If the turn that just ended was
+        # a *normal* turn, its active player anchors where the rotation resumes
+        # once every inserted extra turn has been taken.
+        if not self.current_turn_is_extra:
+            self.normal_rotation_anchor = self.active_player_index
+
         if self.extra_turn_queue:
+            # LIFO: the most recently created extra turn is taken first (500.7).
             chosen = self.extra_turn_queue.pop()
             pending = self.extra_turns.get(chosen, 0)
             if pending > 0:
                 self.extra_turns[chosen] = pending - 1
+            self.current_turn_is_extra = True
             return chosen
 
-        # Legacy extra turn effects can still increment this map directly.
-        pending_legacy = self.extra_turns.get(self.active_player_index, 0)
-        if pending_legacy > 0:
-            self.extra_turns[self.active_player_index] = pending_legacy - 1
-            return self.active_player_index
-
-        candidate = 1 - self.active_player_index
+        self.current_turn_is_extra = False
+        player_count = len(self.players)
+        candidate = (self.normal_rotation_anchor + 1) % player_count
         while self.skip_turn_counts.get(candidate, 0) > 0:
             self._consume_skip(self.skip_turn_counts, candidate)
-            candidate = 1 - candidate
+            candidate = (candidate + 1) % player_count
         return candidate
 
     def _enter_main_phase(self, *, precombat: bool) -> None:

@@ -74,6 +74,7 @@ function selfStopSteps() {
 /** @type {BattlefieldCanvas|null} */
 let battlefieldCanvas = null;
 let lastAnnouncedTurn = null;
+let lastAnnouncedTurnNumber = null;
 
 const setupEl = document.getElementById("setup");
 const boardEl = document.getElementById("boardPanel");
@@ -5072,15 +5073,17 @@ function renderLog(state) {
   if (logTab) logTab.scrollTop = logTab.scrollHeight;
 }
 
-function showTurnAnnouncement(isSelfTurn) {
+function showTurnAnnouncement(isSelfTurn, isExtraTurn = false) {
   const el = document.getElementById("turnAnnouncement");
   if (!el) return;
   el.classList.remove("announcing");
   // Force reflow so removing+adding the class restarts the animation
   void el.offsetWidth;
-  el.innerHTML = isSelfTurn
-    ? '<span style="color:#5dde6a;">Your Turn</span>'
-    : '<span style="color:#e16d70;">Opponent\'s Turn</span>';
+  const label = isSelfTurn
+    ? (isExtraTurn ? "Your Extra Turn" : "Your Turn")
+    : (isExtraTurn ? "Opponent's Extra Turn" : "Opponent's Turn");
+  const color = isSelfTurn ? "#5dde6a" : "#e16d70";
+  el.innerHTML = `<span style="color:${color};">${label}</span>`;
   el.classList.add("announcing");
   el.addEventListener("animationend", () => el.classList.remove("announcing"), { once: true });
 }
@@ -5415,9 +5418,12 @@ function renderState(state, { skipStaleCheck = false } = {}) {
   }
   const viewerSeat = seat ?? 0;
   const isSelfTurn = state.current_turn === viewerSeat;
-  if (lastAnnouncedTurn !== state.current_turn && !state.pregame && !state.awaiting_opponent) {
+  const turnChanged =
+    lastAnnouncedTurn !== state.current_turn || lastAnnouncedTurnNumber !== state.turn_number;
+  if (turnChanged && !state.pregame && !state.awaiting_opponent) {
     lastAnnouncedTurn = state.current_turn;
-    showTurnAnnouncement(isSelfTurn);
+    lastAnnouncedTurnNumber = state.turn_number;
+    showTurnAnnouncement(isSelfTurn, state.current_turn_is_extra);
   }
   animateDiscards(prevStateForDiscard, state, viewerSeat);
   renderBoard(state);
