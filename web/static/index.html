@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Magic LEA Web App</title>
-    <link rel="stylesheet" href="/styles.css?v=20260613-hostjoin3" />
+    <link rel="stylesheet" href="/styles.css?v=20260618-cdadialog" />
   </head>
   <body>
     <main>
@@ -390,6 +390,18 @@
       </div>
     </div>
 
+    <div id="combatDamageModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="combatDamageTitle">
+      <div class="modal-box combat-damage-box">
+        <h2 id="combatDamageTitle" class="modal-title">Assign Combat Damage</h2>
+        <p class="modal-subtitle">Distribute each attacker's power among the creatures blocking it. The total assigned to a blocker's row cannot exceed the attacker's damage.</p>
+        <div id="combatDamageDialogBody" class="combat-damage-dialog-body"></div>
+        <div class="modal-footer combat-damage-dialog-footer">
+          <button id="combatDamageAutoBtn" type="button" class="secondary-btn">Auto-assign</button>
+          <button id="combatDamageConfirmBtn" type="button">Confirm Damage</button>
+        </div>
+      </div>
+    </div>
+
     <div id="searchLibraryModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="searchLibraryTitle">
       <div class="modal-box">
         <h2 id="searchLibraryTitle" class="modal-title">Search Library</h2>
@@ -480,7 +492,7 @@
     <script src="/sfx.js?v=2-sfx"></script>
     <script src="/music.js?v=1-music"></script>
     <script src="/personal-decks.js?v=20260614-desc1"></script>
-    <script src="/app.js?v=20260615-music"></script>
+    <script src="/app.js?v=20260618-cdadialog"></script>
     <script src="/deck-editor.js?v=20260614-desc1"></script>
   </body>
 </html>

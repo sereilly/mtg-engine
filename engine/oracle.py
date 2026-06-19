@@ -49,6 +49,7 @@ SUPPORTED_KEYWORDS = {
     "Banding",
     "Flying",
     "First strike",
+    "Double strike",
     "Trample",
     "Vigilance",
     "Haste",

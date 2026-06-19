@@ -757,6 +757,149 @@ h2.targeting-valid {
   width: 52px;
 }
 
+/* Assign-combat-damage dialog */
+.combat-damage-box {
+  width: min(820px, 94vw);
+}
+
+.combat-damage-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  max-height: 64vh;
+  padding: 4px 2px;
+}
+
+.cda-attacker {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: center;
+  gap: 16px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.cda-attacker-footer {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 8px;
+}
+
+.cda-attacker-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.cda-dealing {
+  font-size: 0.8rem;
+  color: var(--accent);
+  text-align: center;
+}
+
+.cda-arrow {
+  font-size: 1.5rem;
+  color: var(--ink-soft);
+  text-align: center;
+}
+
+.cda-blockers {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.cda-blocker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.cda-card {
+  width: 92px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.cda-card img {
+  width: 100%;
+  border-radius: 6px;
+  display: block;
+}
+
+.cda-card-placeholder {
+  width: 100%;
+  aspect-ratio: 5 / 7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+}
+
+.cda-card-name {
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+  word-break: break-word;
+  line-height: 1.15;
+  margin-top: 3px;
+}
+
+.cda-card-pt {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.cda-card-sub {
+  font-size: 0.68rem;
+  color: var(--accent-2);
+}
+
+.cda-input {
+  width: 64px;
+  text-align: center;
+}
+
+.cda-total {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.cda-total-over {
+  color: #e16d70;
+}
+
+.cda-warning {
+  font-size: 0.8rem;
+  color: #e16d70;
+}
+
+#combatDamageConfirmBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.combat-damage-dialog-footer {
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .drop-target.active-drop {
   outline: 2px solid var(--accent-2);
   background: rgba(126, 196, 255, 0.12);

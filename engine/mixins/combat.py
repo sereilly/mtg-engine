@@ -1199,6 +1199,31 @@ class CombatMixin:
             "band_blocks": {k: list(v) for k, v in self.combat_band_blocks.items()},
         }
 
+    def creature_attacking_alone(self, permanent: Permanent) -> bool:
+        """CR 506.5: a creature is *attacking alone* if it's attacking but no
+        other creatures are. Returns False if the permanent isn't itself
+        attacking."""
+        if not permanent.attacking:
+            return False
+        attacking = sum(
+            1 for player in self.players for perm in player.battlefield if perm.attacking
+        )
+        return attacking == 1
+
+    def creature_blocking_alone(self, permanent: Permanent) -> bool:
+        """CR 506.5: a creature is *blocking alone* if it's blocking but no
+        other creatures are. Returns False if the permanent isn't itself
+        blocking."""
+        if permanent.blocking_attacker_index is None:
+            return False
+        blocking = sum(
+            1
+            for player in self.players
+            for perm in player.battlefield
+            if perm.blocking_attacker_index is not None
+        )
+        return blocking == 1
+
     def can_attack(self, attacker: Permanent, defending_player_index: int) -> bool:
         if self._is_summoning_sick(attacker):
             return False

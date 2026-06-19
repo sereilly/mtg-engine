@@ -17,6 +17,7 @@ let debugAddManaMode = false;
 let symbolMap = {};
 let combatDragSource = null;
 let combatDamageDraft = {};
+let combatDamageDialogKey = "";
 let combatAttackerDraft = [];
 let combatBlockerDraft = {};
 let combatDraftStepKey = "";
@@ -5107,68 +5108,263 @@ function renderCombatControls(state) {
   }
 
   if (isCombatStep(state, "combat_damage") && seat === state.current_turn && !combat?.damage_resolved) {
-    const byAttacker = {};
-    for (const pair of blockers) {
-      const attackerIndex = Number(pair.attacker_index);
-      if (!byAttacker[attackerIndex]) {
-        byAttacker[attackerIndex] = [];
-      }
-      byAttacker[attackerIndex].push(Number(pair.blocker_index));
+    // Manual assignment is only needed when an attacker is blocked by 2+ creatures.
+    const groups = getMultiBlockedAttackerGroups(state);
+    if (groups.length === 0) return;
+
+    const prompt = document.createElement("div");
+    prompt.className = "combat-summary";
+    prompt.textContent = "An attacker is blocked by multiple creatures. Open the dialog to split its damage.";
+    damagePanel.appendChild(prompt);
+
+    const openBtn = document.createElement("button");
+    openBtn.type = "button";
+    openBtn.textContent = "Assign Combat Damage";
+    openBtn.addEventListener("click", () => openCombatDamageDialog(state));
+    actions.appendChild(openBtn);
+
+    // Auto-open the dialog the first time we reach this assignment for this step.
+    const key = getCombatDraftStepKey(state);
+    if (combatDamageDialogKey !== key) {
+      combatDamageDialogKey = key;
+      openCombatDamageDialog(state);
     }
+  }
+}
 
-    // Only show manual assignment UI when an attacker is blocked by 2+ creatures.
-    const multiBlockedEntries = Object.entries(byAttacker).filter(([, bl]) => bl.length >= 2);
-    if (multiBlockedEntries.length === 0) return;
+// Collect attackers blocked by 2+ creatures, with the card data and per-blocker
+// lethal thresholds needed to drive the manual damage-assignment dialog. Mirrors
+// the engine's view: attacker on the active player's battlefield, blockers on the
+// defender's, blockers processed in ascending (declared) index order.
+function getMultiBlockedAttackerGroups(state = currentState) {
+  const combat = getCombatState(state);
+  if (!combat) return [];
+  const attackerSeat = state.current_turn;
+  const defenderSeat = Number.isInteger(combat.defending_player_index)
+    ? combat.defending_player_index
+    : 1 - attackerSeat;
+  const attackerBattlefield = state.players?.[attackerSeat]?.battlefield || [];
+  const defenderBattlefield = state.players?.[defenderSeat]?.battlefield || [];
 
-    for (const [attackerIndexRaw, blockerIndices] of multiBlockedEntries) {
-      const attackerIndex = Number(attackerIndexRaw);
-      const row = document.createElement("div");
-      row.className = "combat-damage-row";
-      const label = document.createElement("div");
-      label.textContent = `Attacker ${attackerIndex} assigns damage`;
-      const inputs = document.createElement("div");
-      inputs.className = "combat-damage-inputs";
-      for (const blockerIndex of blockerIndices) {
-        const wrapper = document.createElement("label");
-        wrapper.textContent = `B${blockerIndex}`;
-        const input = document.createElement("input");
-        input.type = "number";
-        input.min = "0";
-        input.value = String(
-          Number(combatDamageDraft?.[attackerIndex]?.[blockerIndex] ?? 0),
-        );
-        input.dataset.attackerIndex = String(attackerIndex);
-        input.dataset.blockerIndex = String(blockerIndex);
-        input.addEventListener("change", () => {
-          const a = Number(input.dataset.attackerIndex);
-          const b = Number(input.dataset.blockerIndex);
-          if (!combatDamageDraft[a]) {
-            combatDamageDraft[a] = {};
-          }
-          combatDamageDraft[a][b] = Math.max(0, Number(input.value || 0));
-        });
-        wrapper.appendChild(input);
-        inputs.appendChild(wrapper);
-      }
-      row.appendChild(label);
-      row.appendChild(inputs);
-      damagePanel.appendChild(row);
+  const byAttacker = new Map();
+  for (const pair of combat.blockers || []) {
+    const a = Number(pair.attacker_index);
+    if (!byAttacker.has(a)) byAttacker.set(a, []);
+    byAttacker.get(a).push(Number(pair.blocker_index));
+  }
+
+  const groups = [];
+  for (const [attackerIdx, blockerIndices] of byAttacker) {
+    if (blockerIndices.length < 2) continue;
+    const attackerCard = attackerBattlefield[attackerIdx];
+    if (!attackerCard) continue;
+    const deathtouch = cardHasKeyword(attackerCard, "deathtouch");
+    const trample = cardHasKeyword(attackerCard, "trample");
+    const blockers = blockerIndices
+      .slice()
+      .sort((a, b) => a - b)
+      .map((blockerIdx) => {
+        const card = defenderBattlefield[blockerIdx];
+        let lethal = Math.max(0, (Number(card?.toughness) || 0) - (Number(card?.damage_marked) || 0));
+        if (deathtouch && lethal > 0) lethal = 1;
+        return { blockerIdx, card, lethal };
+      })
+      .filter((b) => b.card);
+    if (blockers.length < 2) continue;
+    groups.push({
+      attackerIdx,
+      attackerCard,
+      power: Math.max(0, Number(attackerCard.power) || 0),
+      deathtouch,
+      trample,
+      blockers,
+    });
+  }
+  groups.sort((a, b) => a.attackerIdx - b.attackerIdx);
+  return groups;
+}
+
+// Fill combatDamageDraft with the engine's default assignment: lethal to each
+// blocker in declared order while power remains, then dump any leftover onto the
+// last blocker that received lethal (trampling attackers leave the remainder for
+// the player, so they don't get the leftover here).
+function autoAssignCombatDamage(groups) {
+  for (const group of groups) {
+    const perBlocker = {};
+    let powerLeft = group.power;
+    let lastLethalIdx = null;
+    for (const { blockerIdx, lethal } of group.blockers) {
+      const give = Math.min(powerLeft, lethal);
+      perBlocker[blockerIdx] = give;
+      powerLeft -= give;
+      if (give > 0 && give >= lethal) lastLethalIdx = blockerIdx;
     }
+    if (powerLeft > 0 && !group.trample && lastLethalIdx !== null) {
+      perBlocker[lastLethalIdx] += powerLeft;
+    }
+    combatDamageDraft[group.attackerIdx] = perBlocker;
+  }
+}
 
-    const submitBtn = document.createElement("button");
-    submitBtn.type = "button";
-    submitBtn.textContent = "Assign Combat Damage";
-    submitBtn.addEventListener("click", async () => {
+// Validate one attacker's assignment against the engine's rules so we can guide
+// the player before they submit (CR 510.1c lethal-in-order, total <= power).
+function validateCombatDamageGroup(group) {
+  const draft = combatDamageDraft[group.attackerIdx] || {};
+  let total = 0;
+  let sublethalSeen = false;
+  let violation = null;
+  for (const { blockerIdx, lethal } of group.blockers) {
+    const value = Math.max(0, Number(draft[blockerIdx]) || 0);
+    total += value;
+    if (!group.trample) {
+      if (sublethalSeen && value > 0) {
+        violation = "Assign lethal to each blocker in order before the next.";
+      }
+      if (value < lethal) sublethalSeen = true;
+    }
+  }
+  if (total > group.power) violation = "Assigned damage exceeds the attacker's power.";
+  return { total, violation, valid: !violation };
+}
+
+function closeCombatDamageDialog() {
+  const modal = q("combatDamageModal");
+  if (modal) modal.classList.add("hidden");
+}
+
+function openCombatDamageDialog(state = currentState) {
+  const modal = q("combatDamageModal");
+  if (!modal) return;
+  const groups = getMultiBlockedAttackerGroups(state);
+  if (groups.length === 0) {
+    closeCombatDamageDialog();
+    return;
+  }
+
+  // Seed any unassigned attacker with the sensible default distribution.
+  const needsSeed = groups.filter((g) => !combatDamageDraft[g.attackerIdx]);
+  if (needsSeed.length) autoAssignCombatDamage(needsSeed);
+
+  renderCombatDamageDialogBody(groups);
+  modal.classList.remove("hidden");
+
+  const autoBtn = q("combatDamageAutoBtn");
+  if (autoBtn) {
+    autoBtn.onclick = () => {
+      autoAssignCombatDamage(groups);
+      renderCombatDamageDialogBody(groups);
+    };
+  }
+  const confirmBtn = q("combatDamageConfirmBtn");
+  if (confirmBtn) {
+    confirmBtn.onclick = async () => {
+      if (groups.some((g) => !validateCombatDamageGroup(g).valid)) return;
       try {
+        confirmBtn.disabled = true;
         await sendAction({ seat, action: "assign_combat_damage", attacker_damage: combatDamageDraft });
         updateActionHint("Combat damage resolved.");
+        closeCombatDamageDialog();
       } catch (e) {
         updateActionHint(e.message, true);
+      } finally {
+        confirmBtn.disabled = false;
       }
-    });
-    actions.appendChild(submitBtn);
-
+    };
   }
+}
+
+// Build the per-attacker assignment UI. Rebuilt on every change so totals and
+// validity stay in sync with combatDamageDraft.
+function renderCombatDamageDialogBody(groups) {
+  const body = q("combatDamageDialogBody");
+  if (!body) return;
+  body.innerHTML = "";
+
+  const cardThumb = (card, sub) => {
+    const el = document.createElement("div");
+    el.className = "cda-card";
+    const pt = `${Number(card?.power) || 0}/${Number(card?.toughness) || 0}`;
+    const art = card?.image_uri
+      ? `<img src="${escapeHtml(card.image_uri)}" alt="${escapeHtml(card.name || "")}" loading="lazy" />`
+      : `<div class="cda-card-placeholder">${escapeHtml(card?.name || "")}</div>`;
+    el.innerHTML =
+      `${art}` +
+      `<div class="cda-card-name">${escapeHtml(card?.name || "")}</div>` +
+      `<div class="cda-card-pt">${pt}</div>` +
+      (sub ? `<div class="cda-card-sub">${escapeHtml(sub)}</div>` : "");
+    return el;
+  };
+
+  let allValid = true;
+  for (const group of groups) {
+    const result = validateCombatDamageGroup(group);
+    if (!result.valid) allValid = false;
+
+    const section = document.createElement("div");
+    section.className = "cda-attacker";
+
+    // Attacker side.
+    const attackerSide = document.createElement("div");
+    attackerSide.className = "cda-attacker-side";
+    const tags = [];
+    if (group.deathtouch) tags.push("deathtouch");
+    if (group.trample) tags.push("trample");
+    attackerSide.appendChild(cardThumb(group.attackerCard, tags.join(", ")));
+    const dealing = document.createElement("div");
+    dealing.className = "cda-dealing";
+    dealing.textContent = `${group.power} damage to assign`;
+    attackerSide.appendChild(dealing);
+    section.appendChild(attackerSide);
+
+    const arrow = document.createElement("div");
+    arrow.className = "cda-arrow";
+    arrow.textContent = "→";
+    section.appendChild(arrow);
+
+    // Blockers side.
+    const blockersSide = document.createElement("div");
+    blockersSide.className = "cda-blockers";
+    for (const { blockerIdx, card, lethal } of group.blockers) {
+      const col = document.createElement("div");
+      col.className = "cda-blocker";
+      col.appendChild(cardThumb(card, `lethal: ${lethal}`));
+
+      const input = document.createElement("input");
+      input.type = "number";
+      input.min = "0";
+      input.max = String(group.power);
+      input.className = "cda-input";
+      input.value = String(Math.max(0, Number(combatDamageDraft?.[group.attackerIdx]?.[blockerIdx]) || 0));
+      input.addEventListener("input", () => {
+        if (!combatDamageDraft[group.attackerIdx]) combatDamageDraft[group.attackerIdx] = {};
+        combatDamageDraft[group.attackerIdx][blockerIdx] = Math.max(0, Math.floor(Number(input.value) || 0));
+        renderCombatDamageDialogBody(groups);
+      });
+      col.appendChild(input);
+      blockersSide.appendChild(col);
+    }
+    section.appendChild(blockersSide);
+
+    // Running total + validation message.
+    const footer = document.createElement("div");
+    footer.className = "cda-attacker-footer";
+    const totalEl = document.createElement("span");
+    totalEl.className = "cda-total" + (result.total > group.power ? " cda-total-over" : "");
+    totalEl.textContent = `Assigned ${result.total} / ${group.power}`;
+    footer.appendChild(totalEl);
+    if (result.violation) {
+      const warn = document.createElement("span");
+      warn.className = "cda-warning";
+      warn.textContent = result.violation;
+      footer.appendChild(warn);
+    }
+    section.appendChild(footer);
+
+    body.appendChild(section);
+  }
+
+  const confirmBtn = q("combatDamageConfirmBtn");
+  if (confirmBtn) confirmBtn.disabled = !allValid;
 }
 
 function renderLog(state) {
@@ -5519,8 +5715,10 @@ function renderState(state, { skipStaleCheck = false } = {}) {
   if (state && !state.pregame && !state.winner) MUSIC.start();
   currentState = state;
   syncCombatDrafts(state);
-  if (!isCombatStep(state, "combat_damage")) {
+  if (!isCombatStep(state, "combat_damage") || getCombatState(state)?.damage_resolved) {
     combatDamageDraft = {};
+    combatDamageDialogKey = "";
+    closeCombatDamageDialog();
   }
   const cleanupInfo = getCleanupDiscardInfo(state);
   const untapInfo = getUntapLandSelectionInfo(state);

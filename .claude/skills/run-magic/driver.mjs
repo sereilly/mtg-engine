@@ -8,6 +8,7 @@
 // Subcommands (see SKILL.md for the canonical invocations):
 //   shot   <url> <outfile>              navigate, settle, PNG screenshot
 //   eval   <url> <jsExpr>               navigate, print JSON result of jsExpr
+//   evalshot <url> <jsExpr> <outfile>   navigate, run jsExpr, then screenshot
 //   click  <url> <selector> <outfile>   navigate, click selector, screenshot
 //   flow   <outfile>                    full scripted flow: start a human-vs-AI
 //                                        game from the menu, screenshot the board
@@ -142,6 +143,13 @@ async function main() {
       const [url, expr] = rest;
       await cdp.navigate(url || APP_URL);
       console.log(JSON.stringify(await cdp.eval(expr), null, 2));
+    } else if (cmd === 'evalshot') {
+      // navigate, run a setup expression, then screenshot — all in one session.
+      const [url, expr, out] = rest;
+      await cdp.navigate(url || APP_URL);
+      console.log('eval', JSON.stringify(await cdp.eval(expr)));
+      await sleep(500);
+      console.log('saved', await cdp.shot(out || 'shots/evalshot.png'));
     } else if (cmd === 'click') {
       const [url, sel, out] = rest;
       await cdp.navigate(url || APP_URL);

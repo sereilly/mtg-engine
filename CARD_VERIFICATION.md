@@ -3,9 +3,9 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **290**
-- Passed: **45**
+- Passed: **46**
 - Failed: **0**
-- Untested: **245**
+- Untested: **244**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -20,7 +20,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Bad Moon | ⬜ untested |  |
 | Badlands | ⬜ untested |  |
 | Balance | ⬜ untested |  |
-| Basalt Monolith | ⬜ untested |  |
+| Basalt Monolith | ✅ pass |  |
 | Bayou | ⬜ untested |  |
 | Benalish Hero | ⬜ untested |  |
 | Berserk | ⬜ untested |  |
