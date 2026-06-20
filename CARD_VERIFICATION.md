@@ -3,9 +3,9 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **290**
-- Passed: **46**
+- Passed: **47**
 - Failed: **0**
-- Untested: **244**
+- Untested: **243**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -197,7 +197,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Pirate Ship | ⬜ untested |  |
 | Plague Rats | ⬜ untested |  |
 | Plains | ⬜ untested |  |
-| Plateau | ⬜ untested |  |
+| Plateau | ✅ pass |  |
 | Power Leak | ⬜ untested |  |
 | Power Sink | ⬜ untested |  |
 | Power Surge | ⬜ untested |  |

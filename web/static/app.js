@@ -1029,6 +1029,10 @@ function getActivatedAbilityCost(card) {
   return "";
 }
 
+function abilityCostRequiresTap(card) {
+  return /\{t\}/i.test(getActivatedAbilityCost(card));
+}
+
 function shouldPromptForActivationCost(costText) {
   const cleaned = (costText || "").replace(/[()\s]/g, "").toUpperCase();
   if (!cleaned) return false;
@@ -6029,6 +6033,15 @@ function initBattlefieldCanvas() {
               break;
             }
           }
+        }
+
+        // If the ability costs {T} and the (chosen) copy is still tapped — no
+        // untapped copy was found in the pile — it can't be activated. Don't
+        // open a prompt; just play the error sound and say so.
+        if (activateCard.tapped && abilityCostRequiresTap(activateCard)) {
+          SFX.onError();
+          updateActionHint("Card is already tapped.", true);
+          return;
         }
 
         startActivationPrompt(activateCard, 1 - seat, activateIdx);

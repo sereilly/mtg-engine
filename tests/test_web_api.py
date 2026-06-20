@@ -1022,6 +1022,124 @@ def test_combat_actions_declare_attackers_and_blockers():
     assert declare_block.json()["combat"]["blockers"] == [{"blocker_index": 0, "attacker_index": 0}]
 
 
+def test_no_spells_during_declare_attackers_assignment_then_priority_after():
+    """CR 508.1/508.4: declaring attackers is a turn-based action taken before any
+    player has priority, so no spell can be cast during the assignment portion. Once
+    attackers are declared, the active player receives priority and may cast."""
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "guest_name": "Guest",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 99033,
+        },
+    ).json()
+    sid = created["session_id"]
+    client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
+
+    session = store.get(sid)
+    attacker = _mk_creature_card("Attacker", 3, 3)
+    bolt = _mk_card(
+        name="Bolt Test",
+        mana_cost="{R}",
+        type_line="Instant",
+        oracle_text="Bolt Test deals 3 damage to any target.",
+    )
+    session.game.players[0].battlefield = [Permanent(card=attacker)]
+    session.game.players[0].hand = [bolt]
+    session.game.players[0].mana_pool = {"W": 0, "U": 0, "B": 0, "R": 1, "G": 0, "C": 0}
+    session.game.current_turn_phase = "combat"
+    session.game.current_step = "declare_attackers"
+    session.game.current_phase = "combat"
+    session.current_turn = 0
+    session.game.clear_priority_window()  # assignment portion: nobody has priority
+
+    blocked = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "cast", "card_name": "Bolt Test", "target_seat": 1},
+    )
+    assert blocked.status_code == 400
+    assert "priority" in blocked.json()["detail"].lower()
+
+    declared = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "declare_attackers", "attacker_indices": [0], "target_seat": 1},
+    )
+    assert declared.status_code == 200
+    assert declared.json()["priority_player"] == 0
+
+    # With priority now held, the active player can cast in the declare attackers step.
+    cast = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "cast", "card_name": "Bolt Test", "target_seat": 1},
+    )
+    assert cast.status_code == 200
+    assert len(cast.json()["stack"]) == 1
+
+
+def test_no_spells_during_declare_blockers_assignment():
+    """CR 509.1: declaring blockers is the defending player's turn-based action; no
+    spell can be cast during the assignment portion (no priority window is open)."""
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_human",
+            "host_name": "Host",
+            "guest_name": "Guest",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 99034,
+        },
+    ).json()
+    sid = created["session_id"]
+    client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
+
+    session = store.get(sid)
+    attacker = _mk_creature_card("Attacker", 3, 3)
+    blocker = _mk_creature_card("Blocker", 2, 2)
+    bolt = _mk_card(
+        name="Bolt Test",
+        mana_cost="{R}",
+        type_line="Instant",
+        oracle_text="Bolt Test deals 3 damage to any target.",
+    )
+    session.game.players[0].battlefield = [Permanent(card=attacker)]
+    session.game.players[1].battlefield = [Permanent(card=blocker)]
+    session.game.players[1].hand = [bolt]
+    session.game.players[1].mana_pool = {"W": 0, "U": 0, "B": 0, "R": 1, "G": 0, "C": 0}
+    session.game.current_turn_phase = "combat"
+    session.game.current_step = "declare_attackers"
+    session.game.current_phase = "combat"
+    session.current_turn = 0
+
+    client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "declare_attackers", "attacker_indices": [0], "target_seat": 1},
+    )
+    # Advance into the declare blockers step (active player held priority, passes it).
+    session.game.current_step = "declare_blockers"
+    session.game.clear_priority_window()  # blocker-assignment portion: no priority
+
+    # The defending player can't cast before declaring blockers.
+    blocked = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 1, "action": "cast", "card_name": "Bolt Test", "target_seat": 0},
+    )
+    assert blocked.status_code == 400
+    assert "priority" in blocked.json()["detail"].lower()
+
+    # After blockers are declared, the active player receives priority (CR 509.4).
+    declared = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 1, "action": "declare_blockers", "blocker_pairs": {"0": 0}},
+    )
+    assert declared.status_code == 200
+    assert declared.json()["priority_player"] == 0
+
+
 def test_assign_combat_damage_endpoint_changes_life():
     created = client.post(
         "/api/sessions",

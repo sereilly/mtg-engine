@@ -433,6 +433,9 @@ class CombatMixin:
             self.log.append(f"{controller.name} declared {len(validated_bands)} band(s)")
         if unique_indices:
             self._fire_attack_triggers(controller_index)
+        # CR 508.4: once attackers have been declared (the turn-based action of the
+        # declare attackers step), the active player receives priority.
+        self.start_priority_window(self.active_player_index)
         return True, "declared attackers"
 
     # ------------------------------------------------------------------
@@ -699,6 +702,9 @@ class CombatMixin:
         # 509.1i / 509.2a: abilities that trigger on blockers being declared fire now.
         self._fire_block_triggers(controller_index)
         self._apply_rampage_and_flanking(controller_index)
+        # CR 509.4: once blockers have been declared (the turn-based action of the
+        # declare blockers step), the active player receives priority.
+        self.start_priority_window(self.active_player_index)
         return True, "declared blockers"
 
     def _apply_temporary_buff(self, permanent: Permanent, power: int, toughness: int) -> None:

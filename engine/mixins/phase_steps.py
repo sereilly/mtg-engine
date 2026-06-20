@@ -250,7 +250,16 @@ class PhaseStepsMixin:
             self.combat_blockers_locked = not bool(self.combat_attackers)
         self._set_phase_and_step("combat", step)
         self._on_step_or_phase_begin("combat", step)
-        if self._receives_priority(step):
+        # CR 508.1 / 509.1: declaring attackers and declaring blockers are
+        # turn-based actions that happen *before* any player receives priority,
+        # so no spell or ability can be cast/activated during that assignment.
+        # A priority window is opened only once the declaration is made — see
+        # declare_attackers / declare_blockers, which grant the active player
+        # priority afterward (CR 508.4 / 509.4). Every other combat step opens a
+        # priority window immediately on entry.
+        if step in ("declare_attackers", "declare_blockers"):
+            self.clear_priority_window()
+        elif self._receives_priority(step):
             self.start_priority_window(self.active_player_index)
 
     def _set_phase_and_step(self, phase: str, step: str) -> None:

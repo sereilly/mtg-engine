@@ -516,6 +516,83 @@ def test_creature_not_blocking_alone_with_two_blockers():
 
 
 # ---------------------------------------------------------------------------
+# 508.1 / 509.1 — declaring attackers/blockers is a turn-based action taken
+# before any player has priority; the active player gets priority afterward.
+# (No spell or ability can be cast during the assignment portion.)
+# ---------------------------------------------------------------------------
+
+def test_no_priority_during_declare_attackers_assignment():
+    attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
+    p1 = PlayerState(name="P1", battlefield=[attacker])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    _to_declare_attackers(game)
+    # Before attackers are declared, no player holds priority — nothing can be cast.
+    assert game.priority_player_index is None
+    assert game.has_priority(0) is False
+
+
+def test_active_player_gets_priority_after_declaring_attackers():
+    attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
+    p1 = PlayerState(name="P1", battlefield=[attacker])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    _to_declare_attackers(game)
+    ok, _ = game.declare_attackers(0, [0])
+    assert ok
+    # CR 508.4: the active player receives priority once attackers are declared.
+    assert game.priority_player_index == game.active_player_index == 0
+    assert game.has_priority(0) is True
+
+
+def test_declaring_no_attackers_still_grants_active_player_priority():
+    attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
+    p1 = PlayerState(name="P1", battlefield=[attacker])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    _to_declare_attackers(game)
+    ok, _ = game.declare_attackers(0, [])  # declares no attackers
+    assert ok
+    assert game.priority_player_index == 0
+
+
+def test_no_priority_during_declare_blockers_assignment():
+    attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
+    blocker = Permanent(card=_mk_creature("Blocker", 2, 2))
+    p1 = PlayerState(name="P1", battlefield=[attacker])
+    p2 = PlayerState(name="P2", battlefield=[blocker])
+    game = Game(players=[p1, p2])
+
+    _to_declare_attackers(game)
+    game.declare_attackers(0, [0])
+    game.advance_combat_phase()  # declare_blockers
+    assert game.current_step == "declare_blockers"
+    # Before blockers are declared, no player holds priority.
+    assert game.priority_player_index is None
+    assert game.has_priority(0) is False
+
+
+def test_active_player_gets_priority_after_declaring_blockers():
+    attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
+    blocker = Permanent(card=_mk_creature("Blocker", 2, 2))
+    p1 = PlayerState(name="P1", battlefield=[attacker])
+    p2 = PlayerState(name="P2", battlefield=[blocker])
+    game = Game(players=[p1, p2])
+
+    _to_declare_attackers(game)
+    game.declare_attackers(0, [0])
+    game.advance_combat_phase()  # declare_blockers
+    ok, _ = game.declare_blockers(1, {0: 0})
+    assert ok
+    # CR 509.4: the active player (not the defender) receives priority afterward.
+    assert game.priority_player_index == game.active_player_index == 0
+    assert game.has_priority(0) is True
+
+
+# ---------------------------------------------------------------------------
 # 506.6 — "had to attack"
 # ---------------------------------------------------------------------------
 

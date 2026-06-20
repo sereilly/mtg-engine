@@ -369,11 +369,12 @@ const SFX = (() => {
   function onNotificationAppear() { _play('ui/UI_Notification_Appear.wav'); }
   function onNotificationClose()  { _play('ui/UI_Notification_Close.wav'); }
   function onSelectionAppear()    { _play('ui/UI_Selection_Appear.wav'); }
+  function onError()              { _play('ui/Menu_Cancel.wav'); }
 
   return {
     onStateChange, onLifeChange,
     onLogOpen, onLogClose, onMenuDecide, onMenuCancel, onMenuToggle,
-    onNotificationAppear, onNotificationClose, onSelectionAppear,
+    onNotificationAppear, onNotificationClose, onSelectionAppear, onError,
     setVolume, setMuted, getVolume, isMuted,
   };
 })();
