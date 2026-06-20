@@ -477,6 +477,41 @@ def _serialize_stack_item(item, game: Game) -> dict:
     }
 
 
+def _serialize_emblems(player: PlayerState) -> list[dict]:
+    """Player-owned, non-card activated abilities granted until end of turn.
+
+    Currently only Guardian Angel's "pay {1}: prevent the next 1 damage" emblem.
+    Each emblem renders as a card-like token (with the source card's art) the
+    controller can click to activate; the rich card fields drive the hover
+    preview. `index` matches the engine list position used by activate_emblem."""
+    emblems: list[dict] = []
+    entries = player.prevent_one_damage_emblems
+    if entries:
+        source = CARD_BY_NAME.get("guardian angel")
+        image_uris = source.raw.get("image_uris") if source and isinstance(source.raw, dict) else None
+        image_uri = image_uris.get("normal") if isinstance(image_uris, dict) else None
+        large_image_uri = image_uris.get("large") if isinstance(image_uris, dict) else None
+        # The granted ability's reminder text — {1} renders as the mana symbol in
+        # the preview, and names the fixed target ("that permanent or player").
+        ability_text = (
+            "Pay {1} any time you could cast an instant: Prevent the next 1 damage "
+            "that would be dealt to that permanent or player this turn."
+        )
+        for index in range(len(entries)):
+            emblems.append({
+                "kind": "prevent_one_damage",
+                "index": index,
+                "label": "Pay {1}: prevent next 1",
+                "name": "Guardian Angel",
+                "source": "Guardian Angel",
+                "type": "Emblem — Guardian Angel",
+                "oracle_text": ability_text,
+                "image_uri": image_uri,
+                "large_image_uri": large_image_uri,
+            })
+    return emblems
+
+
 def _serialize_player(
     player: PlayerState,
     viewer_seat: int | None,
@@ -499,6 +534,7 @@ def _serialize_player(
         "graveyard": [_serialize_card(card) for card in player.graveyard],
         "exile": [_serialize_card(card) for card in player.exile],
         "battlefield": [_serialize_permanent(perm, game) for perm in player.battlefield],
+        "emblems": _serialize_emblems(player),
         "mana_pool": _serialize_mana_pool(player),
         "playable_hand_indices": playable_hand_indices if viewer_seat == seat else [],
     }
@@ -2251,6 +2287,17 @@ def do_action(session_id: str, req: GameActionRequest):
             if not result.supported:
                 raise HTTPException(status_code=400, detail=result.details)
             session.game.note_priority_action_taken(req.seat)
+
+    elif req.action == "activate_emblem":
+        if not session.game.has_priority(req.seat):
+            raise HTTPException(status_code=400, detail="you do not currently have priority")
+        result = session.game.activate_prevent_one_emblem(
+            req.seat,
+            emblem_index=req.emblem_index if req.emblem_index is not None else 0,
+        )
+        if not result.supported:
+            raise HTTPException(status_code=400, detail=result.details)
+        session.game.note_priority_action_taken(req.seat)
 
     elif req.action == "pass_priority":
         try:

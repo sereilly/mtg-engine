@@ -115,6 +115,7 @@ class EndingPhaseMixin:
             player.damage_prevention_pool = 0
             player.combat_damage_cap_one_charges = 0
             player.channel_active_until_eot = False
+            player.prevent_one_damage_emblems = []
             for permanent in player.battlefield:
                 permanent.damage_marked = 0
                 permanent.damage_prevention_pool = 0

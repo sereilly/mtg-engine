@@ -9,6 +9,7 @@ GameMode = Literal["human_vs_ai", "ai_vs_ai", "human_vs_human"]
 ActionKind = Literal[
     "cast",
     "activate",
+    "activate_emblem",
     "pass_priority",
     "tap",
     "end_turn",
@@ -88,6 +89,8 @@ class GameActionRequest(BaseModel):
     # precedence over the single permanent_index when present.
     target_permanent_indices: list[int] | None = Field(default=None)
     target_seat: int | None = Field(default=None, ge=0, le=1)
+    # Which of the acting player's emblems to activate (activate_emblem action).
+    emblem_index: int | None = Field(default=None, ge=0)
     x_value: int | None = Field(default=None, ge=0)
     hand_index: int | None = Field(default=None, ge=0)
     mana_color: Literal["W", "U", "B", "R", "G", "C"] | None = None

@@ -11,6 +11,9 @@ Hook registries:
                         that player controls whose name is registered.
 - ON_SPELL_RESOLVED   — fired after a spell resolves, once per permanent on any
                         battlefield whose name is registered.
+- ON_SELF_RESOLVED    — fired when the named instant/sorcery itself resolves
+                        (keyed by the resolving card's own name), for bespoke
+                        effects the single compiled instruction can't express.
 - ON_SPELL_COUNTERED  — fired after the named card counters a spell (keyed by
                         the counterspell's own name).
 """
@@ -26,6 +29,7 @@ if TYPE_CHECKING:
 
 SpellCastHook = Callable[["Game", "PlayerState", "Permanent", "CardDefinition"], None]
 SpellResolvedHook = Callable[["Game", "PlayerState", "Permanent", "CardDefinition"], None]
+SelfResolvedHook = Callable[["Game", "PlayerState", "CardDefinition", int, "int | None"], None]
 SpellCounteredHook = Callable[["Game", "CardDefinition", "StackItem"], None]
 
 
@@ -61,6 +65,30 @@ def _make_color_rod_hook(trigger_color: str, life_amount: int) -> SpellResolvedH
 
 ON_SPELL_RESOLVED: dict[str, SpellResolvedHook] = {
     name: _make_color_rod_hook(color, amount) for name, (color, amount) in COLOR_ROD_TRIGGERS.items()
+}
+
+
+def _guardian_angel(
+    game: Game,
+    caster: PlayerState,
+    resolved_card: CardDefinition,
+    target_player_index: int,
+    target_permanent_index: int | None,
+) -> None:
+    # The first sentence (prevent the next X damage) resolves through the compiled
+    # instruction. This hook adds the second sentence's granted ability: an emblem
+    # the caster may activate ("pay {1}: prevent next 1 damage") until end of turn.
+    # "That permanent or player" is the spell's original target, so the emblem
+    # remembers it and never re-prompts on activation.
+    caster.prevent_one_damage_emblems.append({
+        "target_player_index": target_player_index,
+        "target_permanent_index": target_permanent_index,
+    })
+    game.log.append(f"{caster.name} gains a Guardian Angel prevention emblem until end of turn")
+
+
+ON_SELF_RESOLVED: dict[str, SelfResolvedHook] = {
+    "Guardian Angel": _guardian_angel,
 }
 
 

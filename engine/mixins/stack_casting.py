@@ -102,6 +102,39 @@ class StackCastingMixin:
             return SimulationResult(queued.card_name, True, queued.effect_kind, "resolved")
         return queued
 
+    def activate_prevent_one_emblem(self, controller_index: int, emblem_index: int = 0) -> SimulationResult:
+        """Activate a Guardian Angel emblem: pay {1} to prevent the next 1 damage to
+        the emblem's stored target (the original spell's "that permanent or player").
+        Repeatable while the emblem exists."""
+        from ..handlers.prevention import apply_prevention_shield
+
+        label = "Prevention Emblem"
+        controller = self.players[controller_index]
+        emblems = controller.prevent_one_damage_emblems
+        if not (0 <= emblem_index < len(emblems)):
+            return SimulationResult(label, False, "unsupported", "no prevention emblem available")
+        entry = emblems[emblem_index]
+
+        target_idx = entry.get("target_player_index")
+        if target_idx is None or not (0 <= target_idx < len(self.players)):
+            return SimulationResult(label, False, "unsupported", "emblem target is no longer valid")
+        target_player = self.players[target_idx]
+        target_perm_idx = entry.get("target_permanent_index")
+        # "That permanent" — if the original creature target has left play, the
+        # ability has no legal target and does nothing.
+        if isinstance(target_perm_idx, int):
+            if not (0 <= target_perm_idx < len(target_player.battlefield)
+                    and target_player.battlefield[target_perm_idx].card.primary_type == "creature"):
+                return SimulationResult(label, False, "unsupported", "emblem target is no longer in play")
+
+        if self.enforce_mana_costs:
+            required = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0, "generic": 1}
+            if not self._pay_mana_cost(controller, required):
+                return SimulationResult(label, False, "unsupported", "insufficient mana to activate emblem")
+
+        apply_prevention_shield(self, target_player, target_perm_idx, 1)
+        return SimulationResult(label, True, "activated_prevent_one", "resolved")
+
     def confirm_search_library(self, caster_index: int, library_index: int) -> bool:
         pending = self.pending_search_library
         if pending is None or pending["caster_index"] != caster_index:
@@ -958,6 +991,7 @@ class StackCastingMixin:
             mode_index=chosen_mode_index,
         )
         self._apply_spell_resolved_triggers(caster_index, card)
+        self._apply_self_resolved_hook(caster_index, card, target_idx, target_permanent_index)
         caster.graveyard.append(card)
         self.log.append(f"{card.name} resolved and moved to graveyard")
 

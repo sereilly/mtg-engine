@@ -2902,6 +2902,37 @@ async function attemptPendingActivation() {
   }
 }
 
+// Activate a Guardian Angel emblem ("pay {1}: prevent next 1 damage"). The
+// ability is locked to the original spell's target ("that permanent or player"),
+// so there is no target prompt: clicking just pays {1} (auto-tapping lands if
+// needed) and the engine applies the shield to the stored target.
+function startEmblemActivation(emblemIndex) {
+  if (!currentState || seat === null) return;
+  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingAutoTap || pendingModalChoice) {
+    updateActionHint("Finish the current action first.", true);
+    return;
+  }
+  if (currentState.priority_player !== seat) {
+    SFX.onError();
+    updateActionHint("You can only use the emblem when you have priority (instant speed).", true);
+    return;
+  }
+  const actionBody = { seat, action: "activate_emblem", emblem_index: emblemIndex };
+  updateActionHint("Activating Guardian Angel emblem...");
+  sendAction(actionBody)
+    .then(() => updateActionHint("Activated Guardian Angel emblem."))
+    .catch((e) => {
+      if (e.message && e.message.toLowerCase().startsWith("insufficient mana")) {
+        // Reuse the cast auto-tap flow to pay {1}.
+        const pseudoCard = { name: "Guardian Angel emblem", mana_cost: "{1}" };
+        pendingAutoTap = { card: pseudoCard, cardName: "Guardian Angel emblem", actionBody };
+        renderActivationPrompt();
+        return;
+      }
+      updateActionHint(e.message, true);
+    });
+}
+
 function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   const cardName = normalizeCardName(card);
   if (!cardName) return;
@@ -6082,6 +6113,14 @@ function initBattlefieldCanvas() {
         return;
       }
       toggleStackClickHold(info.index);
+    },
+
+    onEmblemClick({ index, emblem }) {
+      startEmblemActivation(typeof emblem?.index === "number" ? emblem.index : index);
+    },
+
+    onEmblemHover(emblem) {
+      if (emblem) showCardPreview(emblem);
     },
 
     onHandCardDrop(info) {

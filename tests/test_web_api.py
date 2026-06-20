@@ -651,6 +651,46 @@ def test_modal_spell_resolves_chosen_mode_via_action():
     assert state["players"][0]["life"] == 17, "Prevention mode should not gain life"
 
 
+def test_activate_emblem_grants_prevention_and_requires_priority():
+    """The Guardian Angel emblem is activatable via the activate_emblem action,
+    gated on priority, and grants a prevention shield to the chosen target."""
+    created = client.post(
+        "/api/sessions",
+        json={"mode": "human_vs_human", "seed": 5151},
+    ).json()
+    sid = created["session_id"]
+
+    session = store.get(sid)
+    p0 = session.game.players[0]
+    p0.prevent_one_damage_emblems = [{"target_player_index": 0, "target_permanent_index": None}]
+    p0.mana_pool = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 1}
+
+    # The emblem is serialized for the controller (with preview fields).
+    state = client.get(f"/api/sessions/{sid}/state?seat=0").json()
+    assert len(state["players"][0]["emblems"]) == 1
+    emblem = state["players"][0]["emblems"][0]
+    assert emblem["kind"] == "prevent_one_damage"
+    assert emblem["index"] == 0
+    assert "{1}" in emblem["oracle_text"]
+
+    # Without priority the action is rejected.
+    session.game.priority_player_index = 1
+    rejected = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "activate_emblem", "emblem_index": 0},
+    )
+    assert rejected.status_code == 400
+
+    # With priority it succeeds and applies the shield to the stored target.
+    session.game.priority_player_index = 0
+    ok = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "activate_emblem", "emblem_index": 0},
+    )
+    assert ok.status_code == 200
+    assert session.game.players[0].damage_prevention_pool == 1
+
+
 def test_both_players_passing_empty_stack_auto_advances_phase():
     created = client.post(
         "/api/sessions",

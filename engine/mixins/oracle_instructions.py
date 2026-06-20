@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from ..card_hooks import ON_SPELL_CAST, ON_SPELL_RESOLVED
+from ..card_hooks import ON_SELF_RESOLVED, ON_SPELL_CAST, ON_SPELL_RESOLVED
 from ..game_types import OracleExecutionContext, OracleStateMachine
 from ..handlers import EFFECT_HANDLERS
 from ..models import CardDefinition, Permanent, PlayerState
@@ -77,6 +77,19 @@ class OracleInstructionsMixin:
                 resolved_hook = ON_SPELL_RESOLVED.get(permanent.card.name)
                 if resolved_hook is not None:
                     resolved_hook(self, controller, permanent, card)
+
+    def _apply_self_resolved_hook(
+        self,
+        caster_index: int,
+        card: CardDefinition,
+        target_player_index: int,
+        target_permanent_index: int | None,
+    ) -> None:
+        """Fire a bespoke hook for an instant/sorcery resolving itself (e.g. Guardian
+        Angel), passing the spell's resolved target so the hook can reference it."""
+        self_hook = ON_SELF_RESOLVED.get(card.name)
+        if self_hook is not None:
+            self_hook(self, self.players[caster_index], card, target_player_index, target_permanent_index)
 
     def _apply_global_buff(self, caster: PlayerState, source: CardDefinition) -> None:
         program = compile_card_oracle(source)

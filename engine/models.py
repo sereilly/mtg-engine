@@ -144,6 +144,12 @@ class PlayerState:
     has_no_max_hand_size: bool = False
     can_spend_white_as_red: bool = False
     channel_active_until_eot: bool = False
+    # "Pay {1} any time you could cast an instant: prevent the next 1 damage to
+    # that permanent or player" emblems the player controls until end of turn
+    # (granted by Guardian Angel). One entry per granting spell; each is
+    # repeatable. "That permanent or player" is the original spell's target, so
+    # each entry records it as {"target_player_index", "target_permanent_index"}.
+    prevent_one_damage_emblems: list = field(default_factory=list)
     island_sanctuary_protected: bool = False
     lost: bool = False
     drew_from_empty: bool = False

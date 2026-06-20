@@ -163,6 +163,14 @@ class BattlefieldCanvas {
     this.onBlockerAssign = callbacks.onBlockerAssign || null;
     this.onStackCardHover = callbacks.onStackCardHover || null;
     this.onStackCardClick = callbacks.onStackCardClick || null;
+    this.onEmblemClick = callbacks.onEmblemClick || null;
+    this.onEmblemHover = callbacks.onEmblemHover || null;
+
+    // emblemItems: [{index, emblem, x, y, w, h}] — the viewer's own non-card
+    // activated abilities granted until end of turn (Guardian Angel). Drawn as
+    // card-like tokens with a glowing orange border to mark them as abilities.
+    this.emblemItems = [];
+    this.hoveredEmblemIndex = null;
 
     // Runtime state
     this.viewerSeat = 0;
@@ -444,6 +452,7 @@ class BattlefieldCanvas {
     }
 
     this._layoutBoard(state);
+    this._layoutEmblems(state);
     this._syncAuraStacks(state, newKeys);
 
     // New arrivals appear directly at their assigned slot; existing cards
@@ -624,6 +633,37 @@ class BattlefieldCanvas {
     }
 
     this.stacks = piles;
+  }
+
+  // Lay out the viewer's emblem tokens just to the LEFT of their battlefield,
+  // along the front band row, so they sit near (but never collide with) the
+  // viewer's permanents. Only the viewer's own emblems are shown/clickable.
+  _layoutEmblems(state) {
+    const players = Array.isArray(state.players) ? state.players : [];
+    const me = players[this.viewerSeat];
+    const emblems = Array.isArray(me?.emblems) ? me.emblems : [];
+    const rowTop = BF_WORLD_SPLIT_Y + BF_SPLIT_GAP;
+    this.emblemItems = emblems.map((emblem, i) => ({
+      index: i,
+      emblem,
+      x: -(i + 1) * BF_SLOT_PITCH_X,
+      y: rowTop,
+      w: BF_CARD_W,
+      h: BF_CARD_H,
+    }));
+  }
+
+  _emblemBounds(item) {
+    return { x: item.x, y: item.y, w: item.w, h: item.h };
+  }
+
+  _hitTestEmblem(wx, wy) {
+    for (let i = this.emblemItems.length - 1; i >= 0; i--) {
+      const item = this.emblemItems[i];
+      const b = this._emblemBounds(item);
+      if (wx >= b.x && wx <= b.x + b.w && wy >= b.y && wy <= b.y + b.h) return item;
+    }
+    return null;
   }
 
   _syncAuraStacks(state, newKeys) {
@@ -1149,6 +1189,14 @@ class BattlefieldCanvas {
       maxX = Math.max(maxX, b.x + b.w);
       maxY = Math.max(maxY, b.y + b.h);
     }
+    // Keep the viewer's emblem tokens (left of the board) in frame.
+    for (const item of this.emblemItems) {
+      const b = this._emblemBounds(item);
+      minX = Math.min(minX, b.x);
+      minY = Math.min(minY, b.y);
+      maxX = Math.max(maxX, b.x + b.w);
+      maxY = Math.max(maxY, b.y + b.h);
+    }
     if (!Number.isFinite(minX)) {
       // Empty board: frame a sensible area around the split line.
       minX = 0;
@@ -1321,8 +1369,109 @@ class BattlefieldCanvas {
     ctx.closePath();
   }
 
+  // Draw a single emblem token: the source card's art in a card-like frame with
+  // a glowing orange border (marking it as an ability, not a real card) and a
+  // short cost/effect label so the player knows what clicking it does.
+  _drawEmblem(ctx, item) {
+    const { x, y, w, h } = item;
+    const emblem = item.emblem || {};
+    const cardLike = { name: emblem.source || "Emblem", image_uri: emblem.image_uri || null, type: "" };
+    const hovered = this.hoveredEmblemIndex === item.index;
+    this._drawCardFace(ctx, x, y, w, h, cardLike, { emblem: true, hovered }, null);
+
+    // Cost/effect caption across the bottom of the token, rendering {N}/{W}…
+    // mana tokens as their actual symbol art rather than literal "{1}" text.
+    if (emblem.label) this._drawEmblemCaption(ctx, emblem.label, x, y, w, h);
+  }
+
+  // Map a mana token like "{1}" or "{W}" to its symbol SVG (served from
+  // /symbols/<body>.svg, matching web/static/symbols/).
+  _symbolSrc(token) {
+    const m = /^\{([^}]+)\}$/.exec(token);
+    if (!m) return null;
+    return `/symbols/${m[1].toLowerCase()}.svg`;
+  }
+
+  // Split a whitespace-free word into text runs and {symbol} tokens so a word
+  // like "{1}:" draws as the mana symbol immediately followed by the colon.
+  _segmentSymbolWord(word) {
+    const segs = [];
+    const re = /\{[^}]+\}/g;
+    let last = 0, m;
+    while ((m = re.exec(word)) !== null) {
+      if (m.index > last) segs.push({ t: "text", s: word.slice(last, m.index) });
+      segs.push({ t: "sym", token: m[0], src: this._symbolSrc(m[0]) });
+      last = m.index + m[0].length;
+    }
+    if (last < word.length) segs.push({ t: "text", s: word.slice(last) });
+    return segs;
+  }
+
+  _drawEmblemCaption(ctx, label, x, y, w, h) {
+    ctx.save();
+    const font = Math.max(6, w * 0.1);
+    ctx.font = `bold ${font}px sans-serif`;
+    const lineH = font + 3;
+    const symSize = font + 1;
+    const maxWidth = w - 6;
+    const spaceW = ctx.measureText(" ").width;
+
+    // Each word is a list of text/symbol segments; symbols are square (symSize).
+    const wordWidth = (segs) =>
+      segs.reduce((sum, sg) => sum + (sg.t === "sym" && sg.src ? symSize : ctx.measureText(sg.t === "sym" ? sg.token : sg.s).width), 0);
+
+    const words = String(label).split(" ").filter(Boolean).map((wd) => {
+      const segs = this._segmentSymbolWord(wd);
+      return { segs, width: wordWidth(segs) };
+    });
+
+    // Greedy wrap into lines, tracking each line's pixel width for centering.
+    const lines = [];
+    let cur = [], curW = 0;
+    for (const word of words) {
+      const add = (cur.length ? spaceW : 0) + word.width;
+      if (cur.length && curW + add > maxWidth) {
+        lines.push({ words: cur, width: curW });
+        cur = [word]; curW = word.width;
+      } else {
+        cur.push(word); curW += add;
+      }
+    }
+    if (cur.length) lines.push({ words: cur, width: curW });
+
+    const bandH = lines.length * lineH + 4;
+    const bandTop = y + h - bandH;
+    ctx.fillStyle = "rgba(120,60,0,0.82)";
+    ctx.fillRect(x, bandTop, w, bandH);
+
+    ctx.fillStyle = "#ffd9a0";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    let ty = bandTop + 2 + lineH / 2;
+    for (const line of lines) {
+      let tx = x + (w - line.width) / 2;
+      for (let i = 0; i < line.words.length; i++) {
+        if (i > 0) tx += spaceW;
+        for (const sg of line.words[i].segs) {
+          if (sg.t === "sym" && sg.src) {
+            const img = this._loadImage(sg.src);
+            if (img) ctx.drawImage(img, tx, ty - symSize / 2, symSize, symSize);
+            else { ctx.fillText(sg.token, tx, ty); }
+            tx += symSize;
+          } else {
+            const s = sg.t === "sym" ? sg.token : sg.s;
+            ctx.fillText(s, tx, ty);
+            tx += ctx.measureText(s).width;
+          }
+        }
+      }
+      ty += lineH;
+    }
+    ctx.restore();
+  }
+
   _drawCardFace(ctx, x, y, w, h, card, flags, creatureCard) {
-    const { selected, attacking, hovered, targeting, pileCount } = flags || {};
+    const { selected, attacking, hovered, targeting, pileCount, emblem } = flags || {};
     const img = card?.image_uri ? this._loadImage(card.image_uri) : null;
     const R = 4;
 
@@ -1364,13 +1513,14 @@ class BattlefieldCanvas {
 
     // ---- Glow / border ----
     ctx.save();
-    if (attacking) { ctx.shadowColor = "#ff5555"; ctx.shadowBlur = 18 / this.zoom; }
+    if (emblem) { ctx.shadowColor = "#ff9933"; ctx.shadowBlur = (hovered ? 22 : 16) / this.zoom; }
+    else if (attacking) { ctx.shadowColor = "#ff5555"; ctx.shadowBlur = 18 / this.zoom; }
     else if (selected) { ctx.shadowColor = "#ffe040"; ctx.shadowBlur = 14 / this.zoom; }
     else if (targeting) { ctx.shadowColor = "#50ffb0"; ctx.shadowBlur = 16 / this.zoom; }
     else if (hovered) { ctx.shadowColor = "#7ec4ff"; ctx.shadowBlur = 10 / this.zoom; }
 
-    ctx.strokeStyle = attacking ? "#ff5555" : selected ? "#ffe040" : targeting ? "#50ffb0" : hovered ? "#7ec4ff" : "rgba(255,255,255,0.22)";
-    ctx.lineWidth = (attacking || selected || targeting ? 2.5 : 1) / this.zoom;
+    ctx.strokeStyle = emblem ? "#ff9933" : attacking ? "#ff5555" : selected ? "#ffe040" : targeting ? "#50ffb0" : hovered ? "#7ec4ff" : "rgba(255,255,255,0.22)";
+    ctx.lineWidth = (emblem || attacking || selected || targeting ? 2.5 : 1) / this.zoom;
     this._roundRect(ctx, x, y, w, h, R);
     ctx.stroke();
     ctx.restore();
@@ -1777,6 +1927,11 @@ class BattlefieldCanvas {
       this._drawCard(ctx, item);
     }
 
+    // ---- Draw the viewer's emblem tokens (orange-bordered ability markers) ----
+    for (const item of this.emblemItems) {
+      this._drawEmblem(ctx, item);
+    }
+
     // ---- Combat arrows ----
     for (const arrow of this.combatArrows) {
       const fc = this._cardCenter(`${arrow.fromSeat}-${arrow.fromIdx}`);
@@ -2167,6 +2322,25 @@ class BattlefieldCanvas {
       return;
     }
 
+    const emblemHit = this._hitTestEmblem(world.x, world.y);
+    if (emblemHit) {
+      this.pressState = {
+        key: null,
+        seat: null,
+        idx: null,
+        card: null,
+        emblemIndex: emblemHit.index,
+        emblem: emblemHit.emblem,
+        startCX: cx,
+        startCY: cy,
+        currentCX: cx,
+        currentCY: cy,
+        combatDrag: false,
+        cancelled: false,
+      };
+      return;
+    }
+
     const item = this._hitTest(world.x, world.y);
     if (!item) return;
 
@@ -2219,9 +2393,18 @@ class BattlefieldCanvas {
     // Hover — the floating stack cascade sits above battlefield cards.
     const stackHit = this._updateStackHover(world.x, world.y);
 
-    const item = stackHit ? null : this._hitTest(world.x, world.y);
+    const emblemHit = stackHit ? null : this._hitTestEmblem(world.x, world.y);
+    const item = stackHit || emblemHit ? null : this._hitTest(world.x, world.y);
     const newKey = item?.key || null;
-    this.canvas.style.cursor = (item || stackHit) ? "pointer" : "default";
+    this.canvas.style.cursor = (item || stackHit || emblemHit) ? "pointer" : "default";
+
+    const newEmblemIndex = emblemHit ? emblemHit.index : null;
+    if (newEmblemIndex !== this.hoveredEmblemIndex) {
+      this.hoveredEmblemIndex = newEmblemIndex;
+      this.needsRedraw = true;
+      if (this.onEmblemHover && emblemHit) this.onEmblemHover(emblemHit.emblem);
+    }
+
     if (newKey !== this.hoveredKey) {
       this.hoveredKey = newKey;
       this.needsRedraw = true;
@@ -2257,6 +2440,13 @@ class BattlefieldCanvas {
     if (!ps.cancelled && ps.stackIndex != null) {
       if (this.onStackCardClick) {
         this.onStackCardClick({ index: ps.stackIndex, item: this.stackVisuals[ps.stackIndex]?.item || null });
+      }
+      return;
+    }
+
+    if (!ps.cancelled && ps.emblemIndex != null) {
+      if (this.onEmblemClick) {
+        this.onEmblemClick({ index: ps.emblemIndex, emblem: ps.emblem });
       }
       return;
     }

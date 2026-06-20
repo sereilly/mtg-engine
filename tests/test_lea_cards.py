@@ -2156,6 +2156,80 @@ def test_guardian_angel_prevents_x_damage(all_cards):
 
     assert result.supported
     assert p1.damage_prevention_pool == 3
+    # The second sentence grants a repeatable "pay {1}: prevent next 1 damage"
+    # emblem until end of turn, locked to the spell's original target (player 0).
+    assert len(p1.prevent_one_damage_emblems) == 1
+    assert p1.prevent_one_damage_emblems[0]["target_player_index"] == 0
+
+
+def test_guardian_angel_emblem_reuses_player_target_and_cleanup(all_cards):
+    angel = _get(all_cards, "Guardian Angel")
+
+    p1 = PlayerState(name="P1", hand=[angel], life=20)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2], enforce_mana_costs=False)
+    # Cast targeting the controller themselves; the emblem is locked to player 0.
+    game.cast_from_hand(0, "Guardian Angel", target_player_index=0, x_value=0)
+    assert len(p1.prevent_one_damage_emblems) == 1
+
+    # Activation needs no target — it reuses the stored one (player 0).
+    before = p1.damage_prevention_pool
+    result = game.activate_prevent_one_emblem(0)
+    assert result.supported
+    assert p1.damage_prevention_pool == before + 1
+
+    # Repeatable: activating again grants another shield (emblem is not consumed).
+    game.activate_prevent_one_emblem(0)
+    assert p1.damage_prevention_pool == before + 2
+
+    # The emblem (and its shields) expire at cleanup.
+    game.resolve_cleanup_step(0)
+    assert p1.prevent_one_damage_emblems == []
+    assert p1.damage_prevention_pool == 0
+
+
+def test_guardian_angel_emblem_reuses_creature_target(all_cards):
+    angel = _get(all_cards, "Guardian Angel")
+    bears = _get(all_cards, "Grizzly Bears")
+
+    p1 = PlayerState(name="P1", hand=[angel], life=20, battlefield=[Permanent(card=bears)])
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2], enforce_mana_costs=False)
+    # Cast targeting the controller's own Grizzly Bears.
+    game.cast_from_hand(0, "Guardian Angel", target_player_index=0, target_permanent_index=0, x_value=0)
+    entry = p1.prevent_one_damage_emblems[0]
+    assert entry["target_player_index"] == 0
+    assert entry["target_permanent_index"] == 0
+
+    # Activation protects that same creature, no re-targeting.
+    game.activate_prevent_one_emblem(0)
+    assert p1.battlefield[0].damage_prevention_pool == 1
+
+    # If the creature leaves play, the emblem has no legal target and does nothing.
+    p1.battlefield.clear()
+    result = game.activate_prevent_one_emblem(0)
+    assert not result.supported
+
+
+def test_guardian_angel_emblem_requires_mana_when_enforced(all_cards):
+    p1 = PlayerState(name="P1", life=20)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2], enforce_mana_costs=True)
+    # Grant the emblem directly (target = player 0) to isolate activation-cost
+    # behavior from the Angel's own casting cost.
+    p1.prevent_one_damage_emblems = [{"target_player_index": 0, "target_permanent_index": None}]
+
+    # No mana in pool: activation fails and grants no shield.
+    result = game.activate_prevent_one_emblem(0)
+    assert not result.supported
+    assert p1.damage_prevention_pool == 0
+
+    # With {1} available, it succeeds and spends the mana.
+    p1.mana_pool["C"] = 1
+    result = game.activate_prevent_one_emblem(0)
+    assert result.supported
+    assert p1.damage_prevention_pool == 1
+    assert p1.mana_pool["C"] == 0
 
 def test_card_search_endpoint_returns_autocomplete_matches():
     response = client.get("/api/cards/search?query=air&limit=5")

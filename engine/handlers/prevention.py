@@ -7,7 +7,27 @@ from .registry import effect_handler
 if TYPE_CHECKING:
     from ..game import Game
     from ..game_types import OracleExecutionContext
+    from ..models import PlayerState
     from ..oracle import OracleInstruction
+
+
+def apply_prevention_shield(
+    game: Game, target: PlayerState, target_permanent_index: object, amount: int
+) -> str:
+    """Grant `amount` prevention shields to a chosen creature, or otherwise to the
+    target player. Returns the name of the beneficiary (creature or player)."""
+    if (
+        isinstance(target_permanent_index, int)
+        and 0 <= target_permanent_index < len(target.battlefield)
+        and target.battlefield[target_permanent_index].card.primary_type == "creature"
+    ):
+        permanent = target.battlefield[target_permanent_index]
+        permanent.damage_prevention_pool += amount
+        game.log.append(f"{permanent.card.name} gains prevention shield for {amount} damage")
+        return permanent.card.name
+    target.damage_prevention_pool += amount
+    game.log.append(f"{target.name} gains prevention shield for {amount} damage")
+    return target.name
 
 
 @effect_handler("grant_prevention_shield")
@@ -28,19 +48,7 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
     # "Prevent the next N damage that would be dealt to any target" (Healing
     # Salve's prevention mode, Samite Healer, …): the target may be a creature,
     # in which case the shield protects that creature rather than its controller.
-    target_perm_idx = context.target_permanent_index
-    if (
-        isinstance(target_perm_idx, int)
-        and 0 <= target_perm_idx < len(target.battlefield)
-        and target.battlefield[target_perm_idx].card.primary_type == "creature"
-    ):
-        permanent = target.battlefield[target_perm_idx]
-        permanent.damage_prevention_pool += amount
-        game.log.append(f"{permanent.card.name} gains prevention shield for {amount} damage")
-        return True, "resolved"
-
-    target.damage_prevention_pool += amount
-    game.log.append(f"{target.name} gains prevention shield for {amount} damage")
+    apply_prevention_shield(game, target, context.target_permanent_index, amount)
     return True, "resolved"
 
 
