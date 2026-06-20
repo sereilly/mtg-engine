@@ -7,9 +7,6 @@ from .game_types import OracleExecutionContext, OracleStateMachine, SimulationRe
 from .models import CardDefinition, PlayerState
 from .mixins import (
     GameEndingMixin,
-    CombatMixin,
-    EndingPhaseMixin,
-    UpkeepMixin,
     TurnManagementMixin,
     PhaseStepsMixin,
     StackCastingMixin,
@@ -18,15 +15,48 @@ from .mixins import (
     EffectsMixin,
     GameHelpersMixin,
 )
+# Per-phase and per-step turn-structure logic (CR 500–514) lives in engine.phases,
+# one mixin class per phase/step. See engine/phases/__init__.py for the taxonomy.
+from .phases import (
+    BeginningPhaseMixin,
+    UntapStepMixin,
+    UpkeepStepMixin,
+    DrawStepMixin,
+    PrecombatMainPhaseMixin,
+    CombatPhaseMixin,
+    BeginningOfCombatStepMixin,
+    DeclareAttackersStepMixin,
+    DeclareBlockersStepMixin,
+    CombatDamageStepMixin,
+    EndOfCombatStepMixin,
+    PostcombatMainPhaseMixin,
+    EndingPhaseMixin,
+    EndStepMixin,
+    CleanupStepMixin,
+)
 
 
 
 @dataclass
 class Game(
     GameEndingMixin,
-    CombatMixin,
+    # Phases and steps (CR 500–514)
+    BeginningPhaseMixin,
+    UntapStepMixin,
+    UpkeepStepMixin,
+    DrawStepMixin,
+    PrecombatMainPhaseMixin,
+    CombatPhaseMixin,
+    BeginningOfCombatStepMixin,
+    DeclareAttackersStepMixin,
+    DeclareBlockersStepMixin,
+    CombatDamageStepMixin,
+    EndOfCombatStepMixin,
+    PostcombatMainPhaseMixin,
     EndingPhaseMixin,
-    UpkeepMixin,
+    EndStepMixin,
+    CleanupStepMixin,
+    # Cross-cutting flow and supporting machinery
     TurnManagementMixin,
     PhaseStepsMixin,
     StackCastingMixin,

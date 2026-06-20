@@ -57,8 +57,15 @@ adding entries, not editing dispatch**:
 - `engine/card_hooks.py` — name-keyed registries for truly bespoke behavior.
   **This is the only sanctioned place to reference a card by name**; do not put
   card names anywhere else in the engine.
-- `engine/mixins/` — game flow (turn structure, priority, combat, stack, upkeep,
-  state-based actions). Consumes compiled programs; must never parse oracle text.
+- `engine/phases/` — one mixin per turn phase and per step within a phase
+  (CR 500–514): beginning phase (untap/upkeep/draw steps), the two main phases,
+  combat phase (its five steps), and the ending phase (end/cleanup steps). Each is
+  composed onto `Game`; see `engine/phases/__init__.py` for the taxonomy. Put
+  phase/step turn-based logic here.
+- `engine/mixins/` — cross-cutting game flow *not* tied to a single phase:
+  turn-structure navigation and priority (`phase_steps`), per-turn/pregame
+  management (`turn_management`), stack/casting, state-based actions, effects,
+  helpers. Consumes compiled programs; must never parse oracle text.
 
 `engine/oracle.py` is the compiler (tokenize → classify lines as
 keyword/triggered/activated/static → delegate effect clauses to `engine.parsing`).

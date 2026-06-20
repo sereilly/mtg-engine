@@ -22,16 +22,6 @@ class PhaseStepsMixin:
         self._resolve_priority_window()
         self._on_step_or_phase_end(phase, step)
 
-    def close_beginning_step(self) -> None:
-        """Close a deferred upkeep/draw step (counterpart to close_end_step)."""
-        phase = self.current_turn_phase
-        step = self.current_step
-        if phase != "beginning" or step not in ("upkeep", "draw"):
-            return
-        if self._receives_priority(step):
-            self.clear_priority_window()
-        self._on_step_or_phase_end(phase, step)
-
     def start_priority_window(self, starting_player_index: int | None = None) -> None:
         player_index = self.active_player_index if starting_player_index is None else starting_player_index
         if player_index < 0 or player_index >= len(self.players):
@@ -222,14 +212,6 @@ class PhaseStepsMixin:
             candidate = (candidate + 1) % player_count
         return candidate
 
-    def _enter_main_phase(self, *, precombat: bool) -> None:
-        phase = "precombat_main" if precombat else "postcombat_main"
-        step = phase
-        self._set_phase_and_step(phase, step)
-        self._on_step_or_phase_begin(phase, step)
-        if self._receives_priority(step):
-            self.start_priority_window(self.active_player_index)
-
     def _close_current_priority_step(self) -> None:
         phase = self.current_turn_phase
         step = self.current_step
@@ -237,30 +219,6 @@ class PhaseStepsMixin:
             self._resolve_priority_window()
             self.clear_priority_window()
         self._on_step_or_phase_end(phase, step)
-
-    def _enter_combat_step(self, step: str) -> None:
-        if step == "beginning_of_combat":
-            self._reset_combat_state(clear_damage_marked=False)
-        if step == "declare_attackers":
-            self.combat_attackers_locked = False
-            self.combat_blockers_locked = False
-            if self.combat_defending_player_index is None:
-                self.combat_defending_player_index = 1 - self.active_player_index
-        if step == "declare_blockers":
-            self.combat_blockers_locked = not bool(self.combat_attackers)
-        self._set_phase_and_step("combat", step)
-        self._on_step_or_phase_begin("combat", step)
-        # CR 508.1 / 509.1: declaring attackers and declaring blockers are
-        # turn-based actions that happen *before* any player receives priority,
-        # so no spell or ability can be cast/activated during that assignment.
-        # A priority window is opened only once the declaration is made — see
-        # declare_attackers / declare_blockers, which grant the active player
-        # priority afterward (CR 508.4 / 509.4). Every other combat step opens a
-        # priority window immediately on entry.
-        if step in ("declare_attackers", "declare_blockers"):
-            self.clear_priority_window()
-        elif self._receives_priority(step):
-            self.start_priority_window(self.active_player_index)
 
     def _set_phase_and_step(self, phase: str, step: str) -> None:
         self.current_turn_phase = phase

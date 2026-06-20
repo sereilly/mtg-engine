@@ -32,7 +32,8 @@ EFFECT_HANDLERS[instruction.kind](game, instruction, context)   ← O(1) dict di
 | `engine/oracle.py` | The compiler: tokenizes oracle text, classifies lines (keyword / triggered / activated / static), delegates effect clauses to `engine.parsing`, and caches one `OracleProgram` per card. |
 | `engine/handlers/` | Effect executors. Each `@effect_handler(kind)` function mutates game state for one instruction kind. Registered into `EFFECT_HANDLERS` and dispatched with a single dict lookup. |
 | `engine/card_hooks.py` | Name-keyed registries for truly bespoke card behavior (cast triggers, spell-resolved triggers, counterspell riders). The only sanctioned place to reference a card by name. |
-| `engine/mixins/` | Game flow: turn structure, combat, stack, upkeep, state-based actions. Consumes compiled programs; should never parse oracle text itself. |
+| `engine/phases/` | One mixin per turn phase and per step within a phase (CR 500–514): `beginning_phase` + `untap_step`/`upkeep_step`/`draw_step`, `precombat_main_phase`, `combat_phase` + its five step modules, `postcombat_main_phase`, `ending_phase` + `end_step`/`cleanup_step`. Each is composed onto `Game`. See `engine/phases/__init__.py` for the full taxonomy. |
+| `engine/mixins/` | Cross-cutting game flow not tied to a single phase: turn-structure navigation and priority (`phase_steps`), per-turn/pregame management (`turn_management`), stack and casting, state-based actions, effects, helpers. Consumes compiled programs; should never parse oracle text itself. |
 
 ## Adding support for a new card
 

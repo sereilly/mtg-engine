@@ -1,8 +1,6 @@
-# Mixin classes for the Game dataclass
+# Mixin classes for the Game dataclass.
+# Per-phase / per-step turn-structure mixins live in engine.phases, not here.
 from .game_ending import GameEndingMixin
-from .combat import CombatMixin
-from .ending_phase import EndingPhaseMixin
-from .upkeep import UpkeepMixin
 from .turn_management import TurnManagementMixin
 from .phase_steps import PhaseStepsMixin
 from .stack_casting import StackCastingMixin

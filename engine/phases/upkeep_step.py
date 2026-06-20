@@ -1,12 +1,20 @@
 from __future__ import annotations
 
+"""Upkeep step (CR 503).
+
+"At the beginning of upkeep" triggered abilities are put on the stack here, plus
+the pay-or-consequence upkeep triggers that may require an interactive choice,
+enchant-land upkeep effects, and graveyard-recursion upkeep triggers.
+"""
+
 import re
 
-from ..models import Permanent, PlayerState
-from ..oracle import OracleInstruction, compile_card_oracle
-from ._constants import _UPKEEP_PAY_KINDS
+from ..models import Permanent
+from ..oracle import compile_card_oracle
+from ..mixins._constants import _UPKEEP_PAY_KINDS
 
-class UpkeepMixin:
+
+class UpkeepStepMixin:
     def get_upkeep_pay_triggers(self, player_index: int) -> list[dict]:
         """Return pay-or-consequence upkeep triggers that the player must decide on.
 
