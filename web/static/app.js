@@ -176,6 +176,25 @@ function renderLifePill(elementId, seatIndex, nextLife) {
   }
 }
 
+// Show/hide a player's damage-prevention shield badge next to their life pill.
+// Hovering it previews the card that granted the shield, like the card-shield
+// badge on the canvas.
+function renderPlayerShield(elementId, player) {
+  const el = q(elementId);
+  if (!el) return;
+  const amount = Number(player?.damage_prevention_pool || 0);
+  const source = player?.shield_source || null;
+  if (amount > 0) {
+    el.textContent = String(amount);
+    el.classList.remove("hidden");
+    el.title = source?.name ? `Prevent ${amount} damage — ${source.name}` : `Prevent ${amount} damage`;
+    el.onmouseenter = source ? () => showCardPreview(source) : null;
+  } else {
+    el.classList.add("hidden");
+    el.onmouseenter = null;
+  }
+}
+
 function getCombatState(state = currentState) {
   return state?.combat || null;
 }
@@ -5625,6 +5644,8 @@ function renderBoard(state) {
   q("oppName").dataset.targetSeat = String(oppSeat);
   renderLifePill("oppLife", oppSeat, opp.life);
   q("oppLife").dataset.targetSeat = String(oppSeat);
+  renderPlayerShield("selfShield", me);
+  renderPlayerShield("oppShield", opp);
 
   const isSelfTurn = state.current_turn === viewerSeat;
   const hasPriority = seat !== null && state.priority_player === seat;
@@ -6243,6 +6264,11 @@ function initBattlefieldCanvas() {
 
     onEmblemHover(emblem) {
       if (emblem) showCardPreview(emblem);
+    },
+
+    onShieldHover(source) {
+      // Hovering a permanent's shield badge previews the card that granted it.
+      if (source) showCardPreview(source);
     },
 
     onHandCardDrop(info) {

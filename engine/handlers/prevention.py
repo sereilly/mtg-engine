@@ -12,10 +12,15 @@ if TYPE_CHECKING:
 
 
 def apply_prevention_shield(
-    game: Game, target: PlayerState, target_permanent_index: object, amount: int
+    game: Game,
+    target: PlayerState,
+    target_permanent_index: object,
+    amount: int,
+    source_name: str | None = None,
 ) -> str:
     """Grant `amount` prevention shields to a chosen creature, or otherwise to the
-    target player. Returns the name of the beneficiary (creature or player)."""
+    target player. Records `source_name` (the granting card) so the UI can show
+    its art on the shield badge. Returns the name of the beneficiary."""
     if (
         isinstance(target_permanent_index, int)
         and 0 <= target_permanent_index < len(target.battlefield)
@@ -23,9 +28,11 @@ def apply_prevention_shield(
     ):
         permanent = target.battlefield[target_permanent_index]
         permanent.damage_prevention_pool += amount
+        permanent.damage_prevention_source = source_name
         game.log.append(f"{permanent.card.name} gains prevention shield for {amount} damage")
         return permanent.card.name
     target.damage_prevention_pool += amount
+    target.damage_prevention_source = source_name
     game.log.append(f"{target.name} gains prevention shield for {amount} damage")
     return target.name
 
@@ -37,18 +44,20 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
     x_value = context.x_value
     raw_amount = instruction.payload.get("amount", 0)
     amount = max(0, x_value or 0) if raw_amount == "x" else int(raw_amount)
+    source_name = context.card.name if context.card else None
     # CoP-style abilities say "prevent damage to you" — protection_kind="color"
     # means the caster/controller is always the beneficiary. Conservator-style
     # abilities ("...dealt to you this turn") set to_self=True for the same reason.
     if instruction.payload.get("protection_kind") == "color" or instruction.payload.get("to_self"):
         caster.damage_prevention_pool += amount
+        caster.damage_prevention_source = source_name
         game.log.append(f"{caster.name} gains prevention shield for {amount} damage")
         return True, "resolved"
 
     # "Prevent the next N damage that would be dealt to any target" (Healing
     # Salve's prevention mode, Samite Healer, …): the target may be a creature,
     # in which case the shield protects that creature rather than its controller.
-    apply_prevention_shield(game, target, context.target_permanent_index, amount)
+    apply_prevention_shield(game, target, context.target_permanent_index, amount, source_name)
     return True, "resolved"
 
 

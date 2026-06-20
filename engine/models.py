@@ -54,6 +54,10 @@ class Permanent:
     # (Healing Salve's prevention mode, Samite Healer, …). Consumed as damage —
     # combat or spell — would be marked, and cleared during cleanup.
     damage_prevention_pool: int = 0
+    # Name of the card/effect that granted the current prevention pool, so the UI
+    # can show its art when the shield badge is hovered. Cleared with the pool
+    # (when fully consumed or during cleanup).
+    damage_prevention_source: str | None = None
 
     def _base_stat(self, key: str) -> int:
         raw_value = str(self.card.raw.get(key, "0"))
@@ -140,6 +144,9 @@ class PlayerState:
         default_factory=lambda: {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0}
     )
     damage_prevention_pool: int = 0
+    # Name of the card/effect that granted the player's current prevention pool,
+    # surfaced as a hover preview on the life pill's shield badge.
+    damage_prevention_source: str | None = None
     combat_damage_cap_one_charges: int = 0
     has_no_max_hand_size: bool = False
     can_spend_white_as_red: bool = False

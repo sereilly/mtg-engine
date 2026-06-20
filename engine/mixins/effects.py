@@ -137,6 +137,8 @@ class EffectsMixin:
             return damage
         prevented = min(damage, target.damage_prevention_pool)
         target.damage_prevention_pool -= prevented
+        if target.damage_prevention_pool <= 0:
+            target.damage_prevention_source = None
         return damage - prevented
 
     def _prevent_permanent_damage(self, permanent, damage: int) -> int:
@@ -147,6 +149,8 @@ class EffectsMixin:
             return max(0, damage)
         prevented = min(damage, permanent.damage_prevention_pool)
         permanent.damage_prevention_pool -= prevented
+        if permanent.damage_prevention_pool <= 0:
+            permanent.damage_prevention_source = None
         if prevented > 0:
             self.log.append(f"Prevented {prevented} damage to {permanent.card.name}")
         return damage - prevented

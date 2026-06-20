@@ -377,6 +377,30 @@ button:hover {
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 
+.shield-pill {
+  min-width: 42px;
+  height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 8px;
+  padding: 0 6px 8px;
+  font-weight: 800;
+  font-size: 1.05rem;
+  color: #eaf3ff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+  background: linear-gradient(180deg, #5a93f0, #2b5fb0);
+  border: 1.5px solid rgba(214, 232, 255, 0.85);
+  /* Heater-shield silhouette: flat top tapering to a point at the bottom. */
+  clip-path: polygon(0% 0%, 100% 0%, 100% 52%, 50% 100%, 0% 52%);
+  box-shadow: 0 0 12px rgba(90, 147, 240, 0.45);
+  cursor: help;
+}
+
+.shield-pill.hidden {
+  display: none;
+}
+
 .life-pill.targeting-valid {
   outline: 2px solid rgba(255, 224, 64, 0.9);
   box-shadow: 0 0 16px rgba(255, 215, 0, 0.65);

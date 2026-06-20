@@ -51,12 +51,14 @@ class CleanupStepMixin:
         self.combat_damage_prevented_until_eot = False
         for player in self.players:
             player.damage_prevention_pool = 0
+            player.damage_prevention_source = None
             player.combat_damage_cap_one_charges = 0
             player.channel_active_until_eot = False
             player.prevent_one_damage_emblems = []
             for permanent in player.battlefield:
                 permanent.damage_marked = 0
                 permanent.damage_prevention_pool = 0
+                permanent.damage_prevention_source = None
                 # 614.8 / 701.15: an unused regeneration shield lasts only until
                 # the end of the turn it was created.
                 permanent.regeneration_shield = 0

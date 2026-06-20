@@ -394,6 +394,28 @@ def test_609_7_prevention_pool_exhausted_after_use():
     assert p2.damage_prevention_pool == 0
 
 
+def test_prevention_shield_records_and_clears_source():
+    """The granting card is recorded on the shield (so the UI can preview it) and
+    cleared once the pool is fully consumed."""
+    prevent_spell = _mk_card(
+        "Healing Salve", "Instant", "Prevent the next 3 damage that would be dealt to any target this turn."
+    )
+    bolt = _mk_card("Bolt", "Instant", "Bolt deals 3 damage to any target.")
+
+    p1 = PlayerState(name="P1", hand=[prevent_spell, bolt])
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+
+    game.cast_from_hand(0, "Healing Salve", target_player_index=1)
+    assert p2.damage_prevention_pool == 3
+    assert p2.damage_prevention_source == "Healing Salve"
+
+    game.cast_from_hand(0, "Bolt", target_player_index=1)
+    # Pool exhausted → source cleared so no stale shield art lingers.
+    assert p2.damage_prevention_pool == 0
+    assert p2.damage_prevention_source is None
+
+
 # ---------------------------------------------------------------------------
 # Rule 610.1 — One-shot effects do something just once and have no duration
 # ---------------------------------------------------------------------------

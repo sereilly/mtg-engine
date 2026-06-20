@@ -9,6 +9,8 @@
 
 const BF_CARD_W = 80;
 const BF_CARD_H = 112;
+// Hover hit-box (world units) for the shield badge at a card's top-left corner.
+const SHIELD_BADGE_HIT = 24;
 
 // ---- 3D table perspective ----
 // The canvas is tilted away from the camera with a CSS rotateX inside a
@@ -165,6 +167,10 @@ class BattlefieldCanvas {
     this.onStackCardClick = callbacks.onStackCardClick || null;
     this.onEmblemClick = callbacks.onEmblemClick || null;
     this.onEmblemHover = callbacks.onEmblemHover || null;
+    // Fires with the granting card's preview payload when the damage-prevention
+    // shield badge on a permanent is hovered (null when the hover ends).
+    this.onShieldHover = callbacks.onShieldHover || null;
+    this.hoveredShieldKey = null;
 
     // emblemItems: [{index, emblem, x, y, w, h}] — the viewer's own non-card
     // activated abilities granted until end of turn (Guardian Angel). Drawn as
@@ -664,6 +670,49 @@ class BattlefieldCanvas {
       if (wx >= b.x && wx <= b.x + b.w && wy >= b.y && wy <= b.y + b.h) return item;
     }
     return null;
+  }
+
+  // Hover hit-test for the damage-prevention shield badge drawn at a permanent's
+  // top-left corner. Returns the granting card's preview payload so app.js can
+  // show it, mirroring the source-card hover on emblems. Only cards that recorded
+  // a `shield_source` participate, so cardless shields don't swallow card hover.
+  _hitTestShield(wx, wy) {
+    for (let i = this.cardItems.length - 1; i >= 0; i--) {
+      const item = this.cardItems[i];
+      const card = item.card;
+      if (!card || !(Number(card.damage_prevention_pool) > 0) || !card.shield_source) continue;
+      const b = this._cardBounds(item.key);
+      if (!b) continue;
+      // The badge hugs the card's top-left corner (see _drawShieldBadge).
+      if (wx >= b.x && wx <= b.x + SHIELD_BADGE_HIT && wy >= b.y && wy <= b.y + SHIELD_BADGE_HIT) {
+        return { key: item.key, source: card.shield_source };
+      }
+    }
+    return null;
+  }
+
+  // A small heater-shield glyph with the prevention value centered inside.
+  _drawShieldBadge(ctx, sx, sy, value) {
+    const sw = 18, sh = 20;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(sx + sw, sy);
+    ctx.lineTo(sx + sw, sy + sh * 0.5);
+    ctx.quadraticCurveTo(sx + sw, sy + sh * 0.92, sx + sw / 2, sy + sh);
+    ctx.quadraticCurveTo(sx, sy + sh * 0.92, sx, sy + sh * 0.5);
+    ctx.closePath();
+    ctx.fillStyle = "rgba(56,118,224,0.94)";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(214,232,255,0.96)";
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    ctx.fillStyle = "#ffffff";
+    ctx.font = `bold ${Math.max(9, sh * 0.5)}px sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(String(value), sx + sw / 2, sy + sh * 0.46);
+    ctx.restore();
   }
 
   _syncAuraStacks(state, newKeys) {
@@ -1599,6 +1648,14 @@ class BattlefieldCanvas {
       ctx.fillText(String(dmgCard.damage_marked), x + 2 + bw / 2, y + h - bh / 2 - 2);
     }
 
+    // ---- Damage-prevention shield badge ----
+    // A shield with the remaining prevention value (Healing Salve / Samite Healer
+    // on a creature, …). Sits at the top-left; hovering it previews the source.
+    const shieldCard = creatureCard || card;
+    if (shieldCard && Number(shieldCard.damage_prevention_pool) > 0) {
+      this._drawShieldBadge(ctx, x + 3, y + 3, shieldCard.damage_prevention_pool);
+    }
+
     // ---- Regeneration badge ----
     const regenCard = creatureCard || card;
     if (regenCard && Number(regenCard.regeneration_shield) > 0) {
@@ -2430,15 +2487,24 @@ class BattlefieldCanvas {
     const stackHit = this._updateStackHover(world.x, world.y);
 
     const emblemHit = stackHit ? null : this._hitTestEmblem(world.x, world.y);
-    const item = stackHit || emblemHit ? null : this._hitTest(world.x, world.y);
+    // The shield badge sits on top of its card, so it wins over the card's own
+    // hover preview — but yields to the stack cascade and emblems above it.
+    const shieldHit = stackHit || emblemHit ? null : this._hitTestShield(world.x, world.y);
+    const item = stackHit || emblemHit || shieldHit ? null : this._hitTest(world.x, world.y);
     const newKey = item?.key || null;
-    this.canvas.style.cursor = (item || stackHit || emblemHit) ? "pointer" : "default";
+    this.canvas.style.cursor = (item || stackHit || emblemHit || shieldHit) ? "pointer" : "default";
 
     const newEmblemIndex = emblemHit ? emblemHit.index : null;
     if (newEmblemIndex !== this.hoveredEmblemIndex) {
       this.hoveredEmblemIndex = newEmblemIndex;
       this.needsRedraw = true;
       if (this.onEmblemHover && emblemHit) this.onEmblemHover(emblemHit.emblem);
+    }
+
+    const newShieldKey = shieldHit ? shieldHit.key : null;
+    if (newShieldKey !== this.hoveredShieldKey) {
+      this.hoveredShieldKey = newShieldKey;
+      if (this.onShieldHover) this.onShieldHover(shieldHit ? shieldHit.source : null);
     }
 
     if (newKey !== this.hoveredKey) {

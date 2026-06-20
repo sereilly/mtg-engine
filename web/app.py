@@ -150,6 +150,27 @@ def _printed_stat(card, key: str) -> int | None:
     return int(text) if text.isdigit() else None
 
 
+def _shield_source_payload(source_name: str | None) -> dict | None:
+    """A card-preview payload for the effect that granted a damage-prevention
+    shield, so the UI can show its art when the shield badge is hovered. Returns
+    None when there is no recorded source."""
+    if not source_name:
+        return None
+    card = CARD_BY_NAME.get(source_name.casefold())
+    if card is None:
+        return {"name": source_name}
+    image_uris = card.raw.get("image_uris") if isinstance(card.raw, dict) else None
+    image_uri = image_uris.get("normal") if isinstance(image_uris, dict) else None
+    large_image_uri = image_uris.get("large") if isinstance(image_uris, dict) else None
+    return {
+        "name": card.name,
+        "type": card.type_line,
+        "oracle_text": card.oracle_text,
+        "image_uri": image_uri,
+        "large_image_uri": large_image_uri,
+    }
+
+
 def _serialize_permanent(perm: Permanent, game: Game) -> dict:
     image_uris = perm.card.raw.get("image_uris") if isinstance(perm.card.raw, dict) else None
     image_uri = image_uris.get("normal") if isinstance(image_uris, dict) else None
@@ -186,6 +207,10 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         "blocking_attacker_index": perm.blocking_attacker_index,
         "damage_marked": perm.damage_marked,
         "regeneration_shield": perm.regeneration_shield,
+        # "Prevent the next N damage" shield on this creature, with the granting
+        # card's preview payload for the hover tooltip.
+        "damage_prevention_pool": perm.damage_prevention_pool,
+        "shield_source": _shield_source_payload(perm.damage_prevention_source),
         "summoning_sick": game._is_summoning_sick(perm),
         "is_token": bool(perm.metadata.get("is_token", False)),
         "land_type_override": perm.metadata.get("land_type_override"),
@@ -529,6 +554,10 @@ def _serialize_player(
     return {
         "name": player.name,
         "life": player.life,
+        # Damage-prevention shield protecting the player directly (Conservator,
+        # Circle of Protection, Healing Salve's "to any target" mode, …).
+        "damage_prevention_pool": player.damage_prevention_pool,
+        "shield_source": _shield_source_payload(player.damage_prevention_source),
         "hand": hand,
         "hand_count": len(player.hand),
         "deck": {"count": len(player.library)},
