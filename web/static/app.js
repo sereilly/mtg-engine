@@ -42,6 +42,8 @@ let autoPassPriorityInFlight = false;
 let autoPassPriorityRequestedStateKey = "";
 let autoPassDisabledPhaseInFlight = false;
 let autoPassDisabledPhaseRequestedStateKey = "";
+let autoCombatDeclareInFlight = false;
+let autoCombatDeclareRequestedStateKey = "";
 // Phases toggled OFF will be auto-passed. Default: only M1, AT, M2 are ON.
 const disabledPhases = new Set([
   "untap", "upkeep", "draw",
@@ -936,6 +938,84 @@ async function maybeAutoPassDisabledPhase(state = currentState) {
     // Silently absorb
   } finally {
     autoPassDisabledPhaseInFlight = false;
+  }
+}
+
+// Declaring attackers/blockers is a turn-based action with no priority window,
+// so when the active/defending player has NO legal declaration to make (e.g. no
+// untapped non-summoning-sick creatures), there is no UI affordance to advance:
+// "Next Phase" needs priority (none here), and the combat OK button only appears
+// when there's a real choice to confirm. Auto-submit the empty declaration so
+// combat never deadlocks. Only fires when there are zero legal choices — when a
+// real choice exists, the player declares it themselves via the combat UI.
+async function maybeAutoAdvanceCombatDeclaration(state = currentState) {
+  if (isPriorityHeld()) return;
+  if (!state || seat === null) return;
+  if (autoCombatDeclareInFlight) return;
+  if (state.current_turn_phase !== "combat") return;
+  if (hasBlockingPromptForAutoPass(state)) return;
+
+  const combat = getCombatState(state);
+  if (!combat) return;
+
+  let actionBody = null;
+  if (
+    isCombatStep(state, "declare_attackers") &&
+    seat === state.current_turn &&
+    !combat.attackers_locked &&
+    getValidAttackerIndices(state).length === 0
+  ) {
+    const defendingSeat = Number.isInteger(combat.defending_player_index) ? combat.defending_player_index : 1 - seat;
+    actionBody = { seat, action: "declare_attackers", attacker_indices: [], target_seat: defendingSeat };
+  } else if (
+    isCombatStep(state, "declare_blockers") &&
+    seat === combat.defending_player_index &&
+    !combat.blockers_locked &&
+    getValidBlockerAssignments(state).length === 0
+  ) {
+    actionBody = { seat, action: "declare_blockers", blocker_pairs: {} };
+  } else if (
+    // I'm the attacker stalled on the declare-blockers turn-based step (no priority
+    // window), and the defender is the AI (or there are no attackers to block).
+    // Nudge the server to run the AI's blocks (or skip the empty step) — nothing
+    // else triggers it. This holds whether or not blocks are already locked.
+    isCombatStep(state, "declare_blockers") &&
+    seat === state.current_turn &&
+    !Number.isInteger(state.priority_player)
+  ) {
+    const seatTypes = state.seat_types || {};
+    const defender = combat.defending_player_index;
+    const noAttackers = !Array.isArray(combat.attackers) || combat.attackers.length === 0;
+    const defenderIsAi = Number.isInteger(defender) ? seatTypes[defender] === "ai" : true;
+    if (noAttackers || defenderIsAi) {
+      actionBody = { seat, action: "next_phase" };
+    }
+  }
+  if (!actionBody) return;
+
+  const stateKey = getAutoPassStateKey(state);
+  if (!stateKey || stateKey === autoCombatDeclareRequestedStateKey) return;
+
+  autoCombatDeclareRequestedStateKey = stateKey;
+  autoCombatDeclareInFlight = true;
+  try {
+    await waitForBattlefieldAnimations();
+    const latest = currentState;
+    // Re-validate against the freshest state before committing.
+    if (
+      isPriorityHeld() ||
+      !latest ||
+      latest.current_turn_phase !== "combat" ||
+      latest.current_step !== state.current_step ||
+      hasBlockingPromptForAutoPass(latest)
+    ) {
+      return;
+    }
+    await sendAction(actionBody);
+  } catch {
+    // Silently absorb; the next state update will retry if still stuck.
+  } finally {
+    autoCombatDeclareInFlight = false;
   }
 }
 
@@ -5820,6 +5900,7 @@ function renderState(state, { skipStaleCheck = false } = {}) {
 
   maybeAutoStepAi(state);
   maybeAutoPassUntilTurnEnd(state);
+  maybeAutoAdvanceCombatDeclaration(state);
   maybeAutoPassDisabledPhase(state);
   maybeAutoPassPriority(state);
 }
