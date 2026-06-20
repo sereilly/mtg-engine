@@ -1645,6 +1645,42 @@ class BattlefieldCanvas {
       ctx.fillText(label, bx + bw / 2, by + bh / 2);
     }
 
+    // ---- Land-type override label ----
+    // A land whose type has been changed shows its new basic type so the player
+    // can see at a glance that it's now, e.g., a Swamp: a mire counter (Cyclopean
+    // Tomb) or Evil Presence → Swamp, Gaea's Liege / Magical Hack → another type.
+    const landOverride = card && card.land_type_override;
+    if (landOverride && String(card.type || "").toLowerCase().includes("land")) {
+      const TYPE_FILL = {
+        plains: "rgba(150,140,60,0.92)",
+        island: "rgba(40,90,170,0.92)",
+        swamp: "rgba(70,55,80,0.95)",
+        mountain: "rgba(180,60,40,0.92)",
+        forest: "rgba(40,130,60,0.92)",
+      };
+      const t = String(landOverride).toLowerCase();
+      const typeName = t.charAt(0).toUpperCase() + t.slice(1);
+      // Note the source when a mire counter is what made it a Swamp.
+      const label = card.mire_counter ? `${typeName} (mire)` : typeName;
+      const bh = 13;
+      ctx.font = `bold ${Math.max(7, bh * 0.62)}px sans-serif`;
+      const bw = Math.min(w - 4, Math.ceil(ctx.measureText(label).width) + 8);
+      // Drop below the top-right pile-count badge when this card is a pile, so
+      // the two labels don't overlap on a stack of same-named lands.
+      const bx = x + (w - bw) / 2, by = y + 2 + (pileCount >= 2 ? 16 : 0);
+      ctx.fillStyle = TYPE_FILL[t] || "rgba(0,0,0,0.82)";
+      this._roundRect(ctx, bx, by, bw, bh, 3);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,0.7)";
+      ctx.lineWidth = 1;
+      this._roundRect(ctx, bx, by, bw, bh, 3);
+      ctx.stroke();
+      ctx.fillStyle = "#ffffff";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(label, bx + bw / 2, by + bh / 2);
+    }
+
     // ---- Pile count badge ----
     if (pileCount >= 2) {
       const label = `×${pileCount}`;

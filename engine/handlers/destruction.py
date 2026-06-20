@@ -42,7 +42,7 @@ def destroy_all_artifacts_creatures_enchantments(game: Game, instruction: Oracle
                 permanent.tapped = True
                 survivors.append(permanent)
             elif primary_type in {"artifact", "creature", "enchantment"}:
-                player.graveyard.append(permanent.card)
+                game._permanent_to_graveyard(player, permanent)
             else:
                 survivors.append(permanent)
         player.battlefield = survivors
@@ -56,7 +56,7 @@ def destroy_all_enchantments(game: Game, instruction: OracleInstruction, context
         survivors: list[Permanent] = []
         for permanent in player.battlefield:
             if permanent.card.primary_type == "enchantment":
-                player.graveyard.append(permanent.card)
+                game._permanent_to_graveyard(player, permanent)
             else:
                 survivors.append(permanent)
         player.battlefield = survivors
@@ -70,7 +70,7 @@ def destroy_all_lands(game: Game, instruction: OracleInstruction, context: Oracl
         survivors: list[Permanent] = []
         for permanent in player.battlefield:
             if permanent.card.primary_type == "land":
-                player.graveyard.append(permanent.card)
+                game._permanent_to_graveyard(player, permanent)
             else:
                 survivors.append(permanent)
         player.battlefield = survivors
@@ -88,7 +88,7 @@ def destroy_all_lands_of_type(game: Game, instruction: OracleInstruction, contex
                 # Determine printed or overridden land type
                 perm_type_line = (permanent.metadata.get("land_type_override") or permanent.card.type_line or "").lower()
                 if land_type in perm_type_line:
-                    player.graveyard.append(permanent.card)
+                    game._permanent_to_graveyard(player, permanent)
                     continue
             survivors.append(permanent)
         player.battlefield = survivors
@@ -135,15 +135,15 @@ def chaos_orb_flip(game: Game, instruction: OracleInstruction, context: OracleEx
     num_to_destroy = random.randint(0, min(2, len(candidates)))
     chosen = random.sample(candidates, num_to_destroy) if num_to_destroy > 0 else []
     for victim_player, victim_perm in chosen:
-        victim_player.graveyard.append(victim_perm.card)
         victim_player.battlefield = [p for p in victim_player.battlefield if p is not victim_perm]
+        game._permanent_to_graveyard(victim_player, victim_perm)
         game.log.append(f"Chaos Orb flip destroyed {victim_perm.card.name}")
     # Always destroy Chaos Orb itself
     if source_permanent is not None:
         for player in game.players:
             if source_permanent in player.battlefield:
-                player.graveyard.append(source_permanent.card)
                 player.battlefield = [p for p in player.battlefield if p is not source_permanent]
+                game._permanent_to_graveyard(player, source_permanent)
                 break
     game.log.append("Chaos Orb was destroyed after flip")
     return True, "resolved"

@@ -143,24 +143,54 @@ def change_target_land_type(game: Game, instruction: OracleInstruction, context:
     return True, "resolved"
 
 
+def _is_swamp(perm: Permanent) -> bool:
+    return (
+        "swamp" in perm.card.type_line.lower()
+        or perm.metadata.get("land_type_override") == "swamp"
+    )
+
+
 @effect_handler("add_mire_counter_to_target_land")
 def add_mire_counter_to_target_land(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Cyclopean Tomb: "Put a mire counter on target non-Swamp land. That land is
+    a Swamp for as long as it has a mire counter on it."
+
+    The mire counter both flags the land and overrides its type to Swamp (CR 305.7).
+    The source artifact records each land it mires so its rest-of-game cleanup
+    trigger (see ON_LEAVE_BATTLEFIELD) knows which lands to undo when it dies.
+    """
     target = context.target
-    target_land = next(
-        (
-            perm
-            for perm in target.battlefield
-            if perm.card.primary_type == "land"
-            and "swamp" not in perm.card.type_line.lower()
-        ),
-        None,
-    )
-    if target_land is not None:
-        target_land.metadata["land_type_override"] = "swamp"
-        target_land.metadata["mire_counter"] = True
-        game.log.append(f"{target_land.card.name} became a Swamp due to mire counter")
-    else:
+    target_land = None
+    chosen_index = context.target_permanent_index
+    # Honor the explicitly chosen land when one was targeted.
+    if isinstance(chosen_index, int) and 0 <= chosen_index < len(target.battlefield):
+        candidate = target.battlefield[chosen_index]
+        if candidate.card.primary_type == "land" and not _is_swamp(candidate):
+            target_land = candidate
+    if target_land is None:
+        target_land = next(
+            (
+                perm
+                for perm in target.battlefield
+                if perm.card.primary_type == "land" and not _is_swamp(perm)
+            ),
+            None,
+        )
+    if target_land is None:
         game.log.append("No valid non-Swamp land for mire counter")
+        return True, "resolved"
+
+    target_land.metadata["mire_counter"] = True
+    target_land.metadata["land_type_override"] = "swamp"
+    game.log.append(f"{target_land.card.name} got a mire counter and became a Swamp")
+
+    # Remember this land on the activating artifact so its death trigger can later
+    # remove the mire counter "for the rest of the game".
+    source = context.source_permanent
+    if source is not None:
+        mired = source.metadata.setdefault("mired_lands", [])
+        if target_land not in mired:
+            mired.append(target_land)
     return True, "resolved"
 
 

@@ -188,6 +188,8 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         "regeneration_shield": perm.regeneration_shield,
         "summoning_sick": game._is_summoning_sick(perm),
         "is_token": bool(perm.metadata.get("is_token", False)),
+        "land_type_override": perm.metadata.get("land_type_override"),
+        "mire_counter": bool(perm.metadata.get("mire_counter", False)),
         "is_aura": "aura" in perm.card.type_line.lower(),
         "attached_to_index": attached_to_index,
         "attached_to_seat": attached_to_seat,

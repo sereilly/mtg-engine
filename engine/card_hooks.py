@@ -16,6 +16,8 @@ Hook registries:
                         effects the single compiled instruction can't express.
 - ON_SPELL_COUNTERED  — fired after the named card counters a spell (keyed by
                         the counterspell's own name).
+- ON_LEAVE_BATTLEFIELD — fired when the named permanent is put into a graveyard
+                        from the battlefield (keyed by the permanent's name).
 """
 
 from __future__ import annotations
@@ -31,6 +33,7 @@ SpellCastHook = Callable[["Game", "PlayerState", "Permanent", "CardDefinition"],
 SpellResolvedHook = Callable[["Game", "PlayerState", "Permanent", "CardDefinition"], None]
 SelfResolvedHook = Callable[["Game", "PlayerState", "CardDefinition", int, "int | None"], None]
 SpellCounteredHook = Callable[["Game", "CardDefinition", "StackItem"], None]
+LeaveBattlefieldHook = Callable[["Game", "PlayerState", "Permanent"], None]
 
 
 def _verduran_enchantress(game: Game, controller: PlayerState, permanent: Permanent, cast_card: CardDefinition) -> None:
@@ -103,4 +106,32 @@ def _power_sink(game: Game, counter_card: CardDefinition, countered: StackItem) 
 
 ON_SPELL_COUNTERED: dict[str, SpellCounteredHook] = {
     "Power Sink": _power_sink,
+}
+
+
+def _cyclopean_tomb_leaves(game: Game, owner: PlayerState, permanent: Permanent) -> None:
+    # "When this artifact is put into a graveyard from the battlefield, at the
+    # beginning of each of your upkeeps for the rest of the game, remove all mire
+    # counters from a land that a mire counter was put onto with this artifact but
+    # that a mire counter has not been removed from with this artifact."
+    #
+    # Set up a rest-of-game obligation that removes the mire counter from one such
+    # land per upkeep (drained in Game.resolve_upkeep). Only lands that are still
+    # mired qualify — any whose counter was already removed are excluded.
+    mired = permanent.metadata.get("mired_lands") or []
+    remaining = [land for land in mired if land.metadata.get("mire_counter")]
+    if not remaining:
+        return
+    controller_index = game.players.index(owner)
+    game.mire_cleanup_obligations.append(
+        {"controller_index": controller_index, "lands": remaining}
+    )
+    game.log.append(
+        f"{permanent.card.name} left the battlefield; "
+        f"{len(remaining)} mired land(s) will be freed over future upkeeps"
+    )
+
+
+ON_LEAVE_BATTLEFIELD: dict[str, LeaveBattlefieldHook] = {
+    "Cyclopean Tomb": _cyclopean_tomb_leaves,
 }

@@ -276,6 +276,15 @@ class StackCastingMixin:
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
             permanent.metadata["corpse_counters"] = corpse_counters - 1
 
+        # "Activate only during your upkeep." (Cyclopean Tomb, the Clockwork
+        # creatures). The ability is legal only while it's the controller's own
+        # upkeep step.
+        if "activate only during your upkeep" in permanent.card.oracle_text.lower():
+            if not (self.current_step == "upkeep" and self.active_player_index == controller_index):
+                details = f"{permanent.card.name} can only be activated during your upkeep"
+                self.log.append(details)
+                return SimulationResult(permanent.card.name, False, "unsupported", details)
+
         required_cost = dict(ability.cost.mana)
         requires_tap = ability.cost.requires_tap
         if self.enforce_mana_costs and any(required_cost.values()):

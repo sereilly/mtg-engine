@@ -253,7 +253,7 @@ function canCardAttackDefenderFromPublicState(card, defenderBattlefield) {
 
   // Filter activated-ability lines before checking static restrictions
   const nonActivatedLines = (card.oracle_text || "").split("\n")
-    .filter((line) => !/^\s*(\{[^}]+\})+\s*:/.test(line))
+    .filter((line) => !/^\s*(\{[^}]+\}[,\s]*)+:/.test(line))
     .map((line) => line.toLowerCase());
   if (nonActivatedLines.some((line) => line.includes("can't attack"))) return false;
 
@@ -1171,7 +1171,7 @@ function hasXCost(card) {
 function cardRequiresTargetPlayer(card) {
   if (!card || typeof card === "string") return false;
   const lines = (card.oracle_text || "").split("\n");
-  const nonActivatedLines = lines.filter((line) => !/^\s*(\{[^}]+\})+\s*:/.test(line));
+  const nonActivatedLines = lines.filter((line) => !/^\s*(\{[^}]+\}[,\s]*)+:/.test(line));
   return nonActivatedLines.some((line) => line.toLowerCase().includes("target player"));
 }
 
@@ -1179,7 +1179,7 @@ function cardRequiresTargetLand(card) {
   if (!card || typeof card === "string") return false;
   const lines = (card.oracle_text || "").split("\n");
   // Exclude activated ability lines (format: "{cost}: effect") — those trigger on activation, not cast
-  const nonActivatedLines = lines.filter((line) => !/^\s*(\{[^}]+\})+\s*:/.test(line));
+  const nonActivatedLines = lines.filter((line) => !/^\s*(\{[^}]+\}[,\s]*)+:/.test(line));
   return nonActivatedLines.some((line) => {
     const t = line.toLowerCase();
     return t.includes("target land") || t.includes("enchant land");
@@ -1228,7 +1228,7 @@ function cardRequiresTargetCreature(card) {
   const text = (card.oracle_text || "").toLowerCase();
   if (text.includes("enchant creature card in a graveyard")) return false;
   const lines = (card.oracle_text || "").split("\n");
-  const nonActivatedLines = lines.filter((line) => !/^\s*(\{[^}]+\})+\s*:/.test(line));
+  const nonActivatedLines = lines.filter((line) => !/^\s*(\{[^}]+\}[,\s]*)+:/.test(line));
   return nonActivatedLines.some((line) => {
     const t = line.toLowerCase();
     // "target creature card" refers to a graveyard card (Raise Dead, Resurrection),
@@ -1275,7 +1275,7 @@ function cardOffersCopyArtifactChoice(card) {
 function cardRequiresTargetPermanent(card) {
   if (!card || typeof card === "string") return false;
   const lines = (card.oracle_text || "").split("\n");
-  const nonActivatedLines = lines.filter((line) => !/^\s*(\{[^}]+\})+\s*:/.test(line));
+  const nonActivatedLines = lines.filter((line) => !/^\s*(\{[^}]+\}[,\s]*)+:/.test(line));
   return nonActivatedLines.some((line) => {
     const t = line.toLowerCase();
     if (t.includes("target spell or permanent")) return true;
@@ -1291,7 +1291,7 @@ function cardRequiresTargetPermanent(card) {
 function cardRequiresTargetArtifact(card) {
   if (!card || typeof card === "string") return false;
   const lines = (card.oracle_text || "").split("\n");
-  const nonActivatedLines = lines.filter((line) => !/^\s*(\{[^}]+\})+\s*:/.test(line));
+  const nonActivatedLines = lines.filter((line) => !/^\s*(\{[^}]+\}[,\s]*)+:/.test(line));
   return nonActivatedLines.some((line) => line.toLowerCase().includes("enchant artifact"));
 }
 
@@ -1299,7 +1299,7 @@ function cardRequiresTargetAny(card) {
   if (!card || typeof card === "string") return false;
   const lines = (card.oracle_text || "").split("\n");
   // Exclude activated ability lines (format: "{cost}: effect") — those trigger on activation, not cast
-  const nonActivatedLines = lines.filter((line) => !/^\s*(\{[^}]+\})+\s*:/.test(line));
+  const nonActivatedLines = lines.filter((line) => !/^\s*(\{[^}]+\}[,\s]*)+:/.test(line));
   return nonActivatedLines.some((line) => line.toLowerCase().includes("any target"));
 }
 
@@ -1317,7 +1317,7 @@ function cardRequiresDividedDamage(card) {
 function cardRequiresTargetStackSpell(card) {
   if (!card || typeof card === "string") return false;
   const lines = (card.oracle_text || "").split("\n");
-  const nonActivatedLines = lines.filter((line) => !/^\s*(\{[^}]+\})+\s*:/.test(line));
+  const nonActivatedLines = lines.filter((line) => !/^\s*(\{[^}]+\}[,\s]*)+:/.test(line));
   return nonActivatedLines.some((line) => {
     const t = line.toLowerCase();
     return t.includes("counter target") || (t.includes("copy target") && t.includes("spell"));
@@ -1385,7 +1385,7 @@ function activatedAbilityTargetsSelf(card) {
   // Abilities that grant keywords/buffs to "target creature" refer to the controller's
   // own creatures (e.g. Helm of Chatzuk: "Target creature gains banding until end of turn").
   const activatedLines = (card.oracle_text || "").split("\n")
-    .filter((line) => /^\s*(\{[^}]+\})+\s*:/.test(line))
+    .filter((line) => /^\s*(\{[^}]+\}[,\s]*)+:/.test(line))
     .map((line) => line.toLowerCase());
   return activatedLines.some((line) =>
     line.includes("target creature gains banding") ||
@@ -1397,14 +1397,29 @@ function activatedAbilityTargetsSelf(card) {
   );
 }
 
+// Matches "target land" plus qualified variants like "target non-Swamp land"
+// (Cyclopean Tomb) — any run of adjective words between "target" and "land".
+const TARGET_LAND_RE = /target (?:[\w-]+ )*land\b/;
+
 function activatedAbilityRequiresTargetLand(card) {
   if (!card || typeof card === "string") return false;
   // Activated-ability lines (format: "{cost}: effect") that act on a target land,
-  // e.g. Gaea's Liege: "{T}: Target land becomes a Forest...".
+  // e.g. Gaea's Liege: "{T}: Target land becomes a Forest...", or Cyclopean Tomb:
+  // "{2}, {T}: Put a mire counter on target non-Swamp land...".
   const activatedLines = (card.oracle_text || "").split("\n")
-    .filter((line) => /^\s*(\{[^}]+\})+\s*:/.test(line))
+    .filter((line) => /^\s*(\{[^}]+\}[,\s]*)+:/.test(line))
     .map((line) => line.toLowerCase());
-  return activatedLines.some((line) => line.includes("target land"));
+  return activatedLines.some((line) => TARGET_LAND_RE.test(line));
+}
+
+function activatedAbilityTargetLandExcludesSwamp(card) {
+  // Cyclopean Tomb targets a "non-Swamp land" — Swamps aren't legal targets, so
+  // they shouldn't be offered as choices.
+  if (!card || typeof card === "string") return false;
+  const activatedLines = (card.oracle_text || "").split("\n")
+    .filter((line) => /^\s*(\{[^}]+\}[,\s]*)+:/.test(line))
+    .map((line) => line.toLowerCase());
+  return activatedLines.some((line) => TARGET_LAND_RE.test(line) && line.includes("non-swamp land"));
 }
 
 function activatedAbilityRequiresTargetCreature(card) {
@@ -1412,7 +1427,7 @@ function activatedAbilityRequiresTargetCreature(card) {
   // Activated-ability lines that destroy a target creature, e.g. Royal Assassin:
   // "{T}: Destroy target tapped creature." The player must pick which creature.
   const activatedLines = (card.oracle_text || "").split("\n")
-    .filter((line) => /^\s*(\{[^}]+\})+\s*:/.test(line))
+    .filter((line) => /^\s*(\{[^}]+\}[,\s]*)+:/.test(line))
     .map((line) => line.toLowerCase());
   return activatedLines.some(
     (line) => line.includes("destroy target") && (/\bcreature\b/.test(line) || /\bwall\b/.test(line)),
@@ -1424,7 +1439,7 @@ function activatedAbilityRequiresTargetAny(card) {
   // Activated abilities that deal damage to "any target" (Orcish Artillery, Rod of
   // Ruin, Prodigal Sorcerer). The player picks a creature or a player's face.
   const activatedLines = (card.oracle_text || "").split("\n")
-    .filter((line) => /^\s*(\{[^}]+\})+\s*:/.test(line))
+    .filter((line) => /^\s*(\{[^}]+\}[,\s]*)+:/.test(line))
     .map((line) => line.toLowerCase());
   return activatedLines.some((line) => line.includes("any target"));
 }
@@ -1433,7 +1448,7 @@ function activatedAbilityRequiresTargetPlayer(card) {
   if (!card || typeof card === "string") return false;
   // Activated abilities that look at a target player's hand (Glasses of Urza).
   const activatedLines = (card.oracle_text || "").split("\n")
-    .filter((line) => /^\s*(\{[^}]+\})+\s*:/.test(line))
+    .filter((line) => /^\s*(\{[^}]+\}[,\s]*)+:/.test(line))
     .map((line) => line.toLowerCase());
   return activatedLines.some((line) => line.includes("target player"));
 }
@@ -1445,7 +1460,7 @@ function activatedAbilityRequiresTargetCreatureGrant(card) {
   // Helm of Chatzuk: "{0}: Target creature gains banding until end of turn."
   // (Destroy-target abilities are handled by activatedAbilityRequiresTargetCreature.)
   const activatedLines = (card.oracle_text || "").split("\n")
-    .filter((line) => /^\s*(\{[^}]+\})+\s*:/.test(line))
+    .filter((line) => /^\s*(\{[^}]+\}[,\s]*)+:/.test(line))
     .map((line) => line.toLowerCase());
   return activatedLines.some(
     (line) => line.includes("target creature") && (line.includes("gains") || line.includes("gets")),
@@ -1457,7 +1472,7 @@ function activatedAbilityRequiresTargetStackSpell(card) {
   // Activated abilities that counter a spell on the stack, e.g. Deathgrip:
   // "{B}{B}: Counter target green spell." The player chooses which spell.
   const activatedLines = (card.oracle_text || "").split("\n")
-    .filter((line) => /^\s*(\{[^}]+\})+\s*:/.test(line))
+    .filter((line) => /^\s*(\{[^}]+\}[,\s]*)+:/.test(line))
     .map((line) => line.toLowerCase());
   return activatedLines.some((line) => line.includes("counter target") && line.includes("spell"));
 }
@@ -1813,7 +1828,16 @@ function isPendingCastTargetValidForCard(card, { targetSeat = null, zoneKind = "
     if (zoneKind !== "battlefield") return false;
     if (!Number.isInteger(permanentIndex)) return false;
     if (!card || typeof card === "string") return false;
-    return String(card.type || "").toLowerCase().includes("land");
+    if (!String(card.type || "").toLowerCase().includes("land")) return false;
+    // "target non-Swamp land" (Cyclopean Tomb): exclude printed Swamps and lands
+    // already turned into Swamps by a mire counter.
+    if (pendingCastTarget.excludeSwamp) {
+      const isSwamp =
+        String(card.type || "").toLowerCase().includes("swamp") ||
+        card.land_type_override === "swamp";
+      if (isSwamp) return false;
+    }
+    return true;
   }
 
   if (pendingCastTarget.targetKind === "creature") {
@@ -3039,12 +3063,21 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   // Abilities that untap a target land (Ley Druid, Gaea's Liege): the player
   // chooses which land before the ability is activated.
   if (activatedAbilityRequiresTargetLand(card)) {
+    const excludeSwamp = activatedAbilityTargetLandExcludesSwamp(card);
+    if (excludeSwamp && getTargetableLandsForPrompt().every((l) => {
+      const perm = currentState?.players?.[l.targetSeat]?.battlefield?.[l.permanentIndex];
+      return perm && (String(perm.type || "").toLowerCase().includes("swamp") || perm.land_type_override === "swamp");
+    })) {
+      updateActionHint(`No valid non-Swamp land targets in play for ${cardName}.`, true);
+      return;
+    }
     pendingCastTarget = {
       card,
       cardName,
       targetKind: "land",
       castAction: "activate",
       sourcePermanentIndex: permanentIndex,
+      excludeSwamp,
     };
     renderActivationPrompt();
     renderBoard(currentState);
@@ -4483,8 +4516,15 @@ function createCardElement(card, options = {}) {
         // Activated abilities that act on a target land (e.g. Gaea's Liege)
         // let the player pick which land in play to affect.
         if (activatedAbilityRequiresTargetLand(card)) {
-          if (getTargetableLandsForPrompt().length === 0) {
-            updateActionHint(`No valid land targets in play for ${cardName}.`, true);
+          const excludeSwamp = activatedAbilityTargetLandExcludesSwamp(card);
+          const validLands = getTargetableLandsForPrompt().filter((l) => {
+            if (!excludeSwamp) return true;
+            const perm = currentState?.players?.[l.targetSeat]?.battlefield?.[l.permanentIndex];
+            return perm && !(String(perm.type || "").toLowerCase().includes("swamp") || perm.land_type_override === "swamp");
+          });
+          if (validLands.length === 0) {
+            const noun = excludeSwamp ? "non-Swamp land" : "land";
+            updateActionHint(`No valid ${noun} targets in play for ${cardName}.`, true);
             return;
           }
           pendingCastTarget = {
@@ -4493,6 +4533,7 @@ function createCardElement(card, options = {}) {
             targetKind: "land",
             castAction: "activate",
             sourcePermanentIndex: permanentIndex,
+            excludeSwamp,
           };
           renderActivationPrompt();
           updateActionHint(`Choose a target land for ${cardName}'s ability.`);

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 
+from ..card_hooks import ON_LEAVE_BATTLEFIELD
 from ..models import CardDefinition, Permanent, PlayerState
 from ..oracle import compile_card_oracle
 from ._constants import _MANA_SYMBOLS, _NO_PRIORITY_STEPS
@@ -120,6 +121,10 @@ class GameHelpersMixin:
 
         if permanent.card.primary_type == "creature":
             self._fire_creature_dies_triggers(permanent)
+
+        leave_hook = ON_LEAVE_BATTLEFIELD.get(permanent.card.name)
+        if leave_hook is not None:
+            leave_hook(self, player, permanent)
 
     def _fire_creature_dies_triggers(self, dead_permanent: Permanent) -> None:
         """Fire "whenever a creature dies" triggers (e.g. Soul Net).

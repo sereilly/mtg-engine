@@ -274,6 +274,10 @@ def _run_card(card: CardDefinition, all_cards: list[CardDefinition]) -> tuple[Ga
             if "remove a corpse counter from this creature" in text:
                 # Scavenging Ghoul's regeneration costs a corpse counter
                 permanent.metadata["corpse_counters"] = 1
+            if "activate only during your upkeep" in text:
+                # Such abilities (Cyclopean Tomb) are legal only on the controller's upkeep.
+                game._set_phase_and_step("beginning", "upkeep")
+                game.active_player_index = 0
         activation_result = game.activate_permanent_ability(0, card.name, target_player_index=1)
         return game, p1, p2, before, activation_result
 

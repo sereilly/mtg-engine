@@ -1680,11 +1680,136 @@ def test_cyclopean_tomb_marks_land_as_swamp(all_cards):
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=tomb)])
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=plains)])
     game = Game(players=[p1, p2])
+    game._set_phase_and_step("beginning", "upkeep")
+    game.active_player_index = 0
 
-    result = game.activate_permanent_ability(0, "Cyclopean Tomb", target_player_index=1)
+    result = game.activate_permanent_ability(
+        0, "Cyclopean Tomb", target_player_index=1, target_permanent_index=0
+    )
 
     assert result.supported
-    assert p2.battlefield[0].metadata.get("land_type_override") == "swamp"
+    mired = p2.battlefield[0]
+    assert mired.metadata.get("mire_counter") is True
+    assert mired.metadata.get("land_type_override") == "swamp"
+    # The land is now a Swamp: it taps for black, not white.
+    assert mired.effective_produced_mana == ("B",)
+
+
+def test_cyclopean_tomb_only_activates_during_your_upkeep(all_cards):
+    tomb = _get(all_cards, "Cyclopean Tomb")
+    plains = _get(all_cards, "Plains")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=tomb)])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=plains)])
+    game = Game(players=[p1, p2])
+
+    # Default state is a main phase — the ability is not legal here.
+    result = game.activate_permanent_ability(
+        0, "Cyclopean Tomb", target_player_index=1, target_permanent_index=0
+    )
+    assert not result.supported
+    assert p2.battlefield[0].metadata.get("mire_counter") is None
+
+    # Not legal during the opponent's upkeep either.
+    game._set_phase_and_step("beginning", "upkeep")
+    game.active_player_index = 1
+    result = game.activate_permanent_ability(
+        0, "Cyclopean Tomb", target_player_index=1, target_permanent_index=0
+    )
+    assert not result.supported
+    assert p2.battlefield[0].metadata.get("mire_counter") is None
+
+
+def test_cyclopean_tomb_does_not_target_swamp(all_cards):
+    tomb = _get(all_cards, "Cyclopean Tomb")
+    swamp = _get(all_cards, "Swamp")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=tomb)])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=swamp)])
+    game = Game(players=[p1, p2])
+    game._set_phase_and_step("beginning", "upkeep")
+    game.active_player_index = 0
+
+    result = game.activate_permanent_ability(
+        0, "Cyclopean Tomb", target_player_index=1, target_permanent_index=0
+    )
+    # Resolves, but a Swamp is not a legal target so no counter is placed.
+    assert result.supported
+    assert p2.battlefield[0].metadata.get("mire_counter") is None
+
+
+def test_cyclopean_tomb_death_frees_mired_lands_over_upkeeps(all_cards):
+    tomb = _get(all_cards, "Cyclopean Tomb")
+    plains = _get(all_cards, "Plains")
+    forest = _get(all_cards, "Forest")
+    tomb_perm = Permanent(card=tomb)
+    p1 = PlayerState(name="P1", battlefield=[tomb_perm])
+    plains_perm = Permanent(card=plains)
+    forest_perm = Permanent(card=forest)
+    p2 = PlayerState(name="P2", battlefield=[plains_perm, forest_perm])
+    game = Game(players=[p1, p2])
+    game._set_phase_and_step("beginning", "upkeep")
+    game.active_player_index = 0
+
+    # Mire both of P2's lands across two upkeep activations (untap between).
+    game.activate_permanent_ability(0, "Cyclopean Tomb", target_player_index=1, target_permanent_index=0)
+    tomb_perm.tapped = False
+    game.activate_permanent_ability(0, "Cyclopean Tomb", target_player_index=1, target_permanent_index=1)
+    assert plains_perm.metadata.get("mire_counter") is True
+    assert forest_perm.metadata.get("mire_counter") is True
+
+    # The Tomb dies: an obligation to free those lands is created.
+    p1.battlefield.remove(tomb_perm)
+    game._permanent_to_graveyard(p1, tomb_perm)
+    assert len(game.mire_cleanup_obligations) == 1
+
+    # One land is freed per controller upkeep.
+    game.resolve_upkeep(0)
+    freed_first = [perm for perm in (plains_perm, forest_perm) if perm.metadata.get("mire_counter") is None]
+    assert len(freed_first) == 1
+    assert freed_first[0].metadata.get("land_type_override") is None
+
+    # An opponent's upkeep does not advance the controller's obligation.
+    game.resolve_upkeep(1)
+    still_mired = [perm for perm in (plains_perm, forest_perm) if perm.metadata.get("mire_counter")]
+    assert len(still_mired) == 1
+
+    # The next controller upkeep frees the last land and clears the obligation.
+    game.resolve_upkeep(0)
+    assert plains_perm.metadata.get("mire_counter") is None
+    assert forest_perm.metadata.get("mire_counter") is None
+    assert game.mire_cleanup_obligations == []
+
+
+def test_cyclopean_tomb_death_trigger_fires_on_board_wipe(all_cards):
+    # A board wipe (Nevinyrral's Disk: destroy all artifacts/creatures/enchantments)
+    # must still fire the Tomb's leave-the-battlefield trigger, so its mired lands
+    # are freed on later upkeeps. This guards the mass-destruction path that used to
+    # bypass _permanent_to_graveyard (where the leave hook lives).
+    from engine.game_types import OracleExecutionContext, OracleStateMachine
+    from engine.oracle import OracleInstruction
+
+    tomb = _get(all_cards, "Cyclopean Tomb")
+    plains = _get(all_cards, "Plains")
+    tomb_perm = Permanent(card=tomb)
+    plains_perm = Permanent(card=plains)
+    p1 = PlayerState(name="P1", battlefield=[tomb_perm, plains_perm])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game._set_phase_and_step("beginning", "upkeep")
+    game.active_player_index = 0
+
+    game.activate_permanent_ability(0, "Cyclopean Tomb", target_player_index=0, target_permanent_index=1)
+    assert plains_perm.metadata.get("mire_counter") is True
+
+    OracleStateMachine(
+        game, OracleExecutionContext(caster=p1, target=p1, card=tomb)
+    ).run(OracleInstruction("destroy_all_artifacts_creatures_enchantments", "", {}))
+
+    assert not any(perm.card.name == "Cyclopean Tomb" for perm in p1.battlefield)
+    assert len(game.mire_cleanup_obligations) == 1
+
+    game.resolve_upkeep(0)
+    assert plains_perm.metadata.get("mire_counter") is None
+    assert plains_perm.metadata.get("land_type_override") is None
 
 def test_false_orders_marks_creature_removed_from_combat(all_cards):
     false_orders = _get(all_cards, "False Orders")

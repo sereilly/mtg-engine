@@ -119,6 +119,12 @@ class Game(
     is_draw: bool = False
     # 700.4-style turn tracking: creatures that died this turn (e.g. Scavenging Ghoul)
     creatures_died_this_turn: int = 0
+    # "Rest of the game" delayed upkeep triggers left behind by a permanent that
+    # has died (Cyclopean Tomb): each entry is {"controller_index", "lands"} where
+    # ``lands`` are the still-mired Permanents whose mire counters must be removed
+    # one-per-upkeep at the beginning of that controller's upkeeps. Populated via
+    # the ON_LEAVE_BATTLEFIELD card hook and drained in resolve_upkeep.
+    mire_cleanup_obligations: list = field(default_factory=list)
 
     def __post_init__(self) -> None:
         # Preserve legacy external phase naming while internally tracking phase/step.

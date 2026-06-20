@@ -41,6 +41,42 @@ class UpkeepStepMixin:
                 break
         return choices
 
+    def _process_mire_cleanups(self, player_index: int) -> None:
+        """Drain Cyclopean Tomb's rest-of-game mire-removal obligations.
+
+        For each obligation belonging to this player, remove all mire counters
+        from one still-mired land at the beginning of their upkeep (the trigger
+        acts on a single land per upkeep). A land whose counter has already gone —
+        because the land left the battlefield or was freed by a prior upkeep — is
+        no longer eligible. An obligation with no eligible lands left is dropped
+        (it would do nothing on future upkeeps).
+        """
+        if not self.mire_cleanup_obligations:
+            return
+
+        def _on_battlefield(land) -> bool:
+            return any(land in player.battlefield for player in self.players)
+
+        surviving: list = []
+        for obligation in self.mire_cleanup_obligations:
+            if obligation.get("controller_index") != player_index:
+                surviving.append(obligation)
+                continue
+            lands = [
+                land
+                for land in obligation.get("lands", [])
+                if land.metadata.get("mire_counter") and _on_battlefield(land)
+            ]
+            if lands:
+                freed = lands.pop(0)
+                freed.metadata.pop("mire_counter", None)
+                freed.metadata.pop("land_type_override", None)
+                self.log.append(f"Mire counter removed from {freed.card.name}")
+            if lands:
+                obligation["lands"] = lands
+                surviving.append(obligation)
+        self.mire_cleanup_obligations = surviving
+
     def _graveyard_return_candidates(self, player_index: int) -> list:
         """Graveyard cards whose 'return during your upkeep' trigger condition is
         currently met for ``player_index`` (e.g. Nether Shadow with enough creature
@@ -98,6 +134,7 @@ class UpkeepStepMixin:
         step = "upkeep"
         self._set_phase_and_step(phase, step)
         self._on_step_or_phase_begin(phase, step)
+        self._process_mire_cleanups(player_index)
         for controller in self.players:
             for permanent in controller.battlefield:
                 program = compile_card_oracle(permanent.card)
