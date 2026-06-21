@@ -1626,6 +1626,16 @@ def _advance_phase(session: Session) -> None:
         # Resume after a held upkeep/draw step on the AI's turn: close it and move on,
         # holding again at the draw step if the human flagged it.
         game.close_beginning_step()
+        # Island Sanctuary: the human must choose whether to skip their draw before
+        # the draw step resolves (CR 504 replacement choice). Pause for the prompt
+        # instead of drawing through it.
+        if (
+            step == "upkeep"
+            and _seat_type(session, session.current_turn) == "human"
+            and _has_island_sanctuary(game, session.current_turn)
+        ):
+            session.island_sanctuary_pending = True
+            return
         if step == "upkeep" and _ai_should_hold(session, "draw"):
             game.resolve_draw_step(session.current_turn, defer_priority=True)
             _hold_priority_for_human(session)
@@ -2316,6 +2326,8 @@ def do_action(session_id: str, req: GameActionRequest):
                 mana_color=req.mana_color,
                 target_permanent_index=req.target_permanent_index,
                 target_stack_index=engine_stack_index,
+                ability_index=req.ability_index,
+                x_value=req.x_value,
             )
             if not result.supported:
                 raise HTTPException(status_code=400, detail=result.details)

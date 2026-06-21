@@ -1311,7 +1311,14 @@ function cardRequiresTargetArtifact(card) {
   if (!card || typeof card === "string") return false;
   const lines = (card.oracle_text || "").split("\n");
   const nonActivatedLines = lines.filter((line) => !/^\s*(\{[^}]+\}[,\s]*)+:/.test(line));
-  return nonActivatedLines.some((line) => line.toLowerCase().includes("enchant artifact"));
+  return nonActivatedLines.some((line) => {
+    const t = line.toLowerCase();
+    if (t.includes("enchant artifact")) return true;
+    // Shatter / Steal Artifact: "Destroy target artifact" / "Gain control of
+    // target artifact" — but not "artifact or enchantment" (handled as permanent).
+    if (t.includes("target artifact") && !t.includes("artifact or enchantment")) return true;
+    return false;
+  });
 }
 
 function cardRequiresTargetAny(card) {
@@ -1443,13 +1450,16 @@ function activatedAbilityTargetLandExcludesSwamp(card) {
 
 function activatedAbilityRequiresTargetCreature(card) {
   if (!card || typeof card === "string") return false;
-  // Activated-ability lines that destroy a target creature, e.g. Royal Assassin:
-  // "{T}: Destroy target tapped creature." The player must pick which creature.
+  // Activated-ability lines that pick a target creature, e.g. Royal Assassin
+  // ("{T}: Destroy target tapped creature.") or Nettling Imp ("{T}: Choose target
+  // non-Wall creature ..."). The player must pick which creature.
   const activatedLines = (card.oracle_text || "").split("\n")
     .filter((line) => /^\s*(\{[^}]+\}[,\s]*)+:/.test(line))
     .map((line) => line.toLowerCase());
   return activatedLines.some(
-    (line) => line.includes("destroy target") && (/\bcreature\b/.test(line) || /\bwall\b/.test(line)),
+    (line) =>
+      (line.includes("destroy target") || line.includes("choose target")) &&
+      (/\bcreature\b/.test(line) || /\bwall\b/.test(line)),
   );
 }
 
@@ -1889,6 +1899,13 @@ function isPendingCastTargetValidForCard(card, { targetSeat = null, zoneKind = "
   if (pendingCastTarget.targetKind === "permanent") {
     if (zoneKind !== "battlefield") return false;
     if (!Number.isInteger(permanentIndex)) return false;
+    // Feedback / Power Leak: "Enchant enchantment" — only enchantments are legal
+    // targets, so only those should glow (not every permanent).
+    const sourceText = String(pendingCastTarget.card?.oracle_text || "").toLowerCase();
+    if (sourceText.includes("enchant enchantment")) {
+      if (!card || typeof card === "string") return false;
+      return String(card.type || "").toLowerCase().includes("enchantment");
+    }
     return true;
   }
 
@@ -2138,14 +2155,27 @@ function applyUpkeepPayPrompt(upkeepInfo) {
   const cardName = current?.card_name || "Unknown";
   const manaStr = manaObjectToSymbolString(current?.mana);
 
+  // The consequence of declining depends on the trigger: most cards are
+  // sacrificed, but some (Force of Nature) deal damage to you instead.
+  const kind = current?.kind || "";
+  let declineLabel;
+  if (kind === "upkeep_pay_or_deal_damage_to_controller") {
+    const dmg = current?.damage || 0;
+    declineLabel = `Take ${dmg} damage`;
+  } else if (kind === "upkeep_pay_or_tap_and_sacrifice_opponent_land") {
+    declineLabel = "Don't pay (tap & sacrifice a land)";
+  } else {
+    declineLabel = `Sacrifice ${escapeHtml(cardName)}`;
+  }
+
   panel.classList.remove("hidden");
   okBtn.classList.add("hidden");
   customRow.classList.add("hidden");
   title.textContent = "Upkeep Payment Required";
-  body.textContent = `${cardName} requires a payment at the beginning of your upkeep. Tap lands to generate mana, then pay or sacrifice.`;
+  body.textContent = `${cardName} requires a payment at the beginning of your upkeep. Tap lands to generate mana, then pay or decline.`;
 
   const payBtn = `<button type="button" class="prompt-choice-btn" id="upkeepPayBtn">Pay ${renderSymbolsInline(manaStr)}</button>`;
-  const sacBtn = `<button type="button" class="prompt-choice-btn" id="upkeepSacBtn">Sacrifice ${escapeHtml(cardName)}</button>`;
+  const sacBtn = `<button type="button" class="prompt-choice-btn" id="upkeepSacBtn">${declineLabel}</button>`;
   const remaining = pending.length;
   steps.innerHTML = [
     `<div>Card: ${escapeHtml(cardName)}</div>`,
@@ -2881,7 +2911,12 @@ function renderActivationPrompt() {
       body.textContent = "Click a valid artifact on the battlefield to choose the target.";
       steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
     } else if (pendingCastTarget.targetKind === "permanent") {
-      body.textContent = "Click any permanent on the battlefield to choose the target.";
+      const isEnchantEnchantment = String(pendingCastTarget.card?.oracle_text || "")
+        .toLowerCase()
+        .includes("enchant enchantment");
+      body.textContent = isEnchantEnchantment
+        ? "Click a glowing enchantment on the battlefield to choose the target."
+        : "Click any permanent on the battlefield to choose the target.";
       steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
     } else if (pendingCastTarget.targetKind === "any") {
       body.textContent = "Click a creature on the battlefield, or click a player's life pill (glowing yellow) to target them.";
@@ -3657,17 +3692,28 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
   // Activated ability targeting a permanent (e.g. Gaea's Liege targeting a land):
   // send an "activate" action with the chosen target permanent rather than a cast.
   if (pending.castAction === "activate") {
-    updateActionHint(`Activating ${pending.cardName}...`);
-    sendAction({
+    const activateBody = {
       seat,
       action: "activate",
       permanent_name: pending.cardName,
       permanent_index: pending.sourcePermanentIndex,
       target_seat: selectedTarget,
       target_permanent_index: selectedPermanentIndex,
-    })
+    };
+    updateActionHint(`Activating ${pending.cardName}...`);
+    sendAction(activateBody)
       .then(() => updateActionHint(`Activated ${pending.cardName}.`))
-      .catch((e) => updateActionHint(e.message, true));
+      .catch((e) => {
+        // Abilities with a mana cost (e.g. Rod of Ruin's "{3}, {T}") prompt the
+        // auto-tap/auto-pay flow when the pool can't cover the cost, just like
+        // casting a spell.
+        if (e.message && e.message.toLowerCase().startsWith("insufficient mana")) {
+          pendingAutoTap = { card: pending.card, cardName: pending.cardName, actionBody: activateBody };
+          renderActivationPrompt();
+          return;
+        }
+        updateActionHint(e.message, true);
+      });
     return;
   }
 

@@ -174,6 +174,11 @@ def _run_card(card: CardDefinition, all_cards: list[CardDefinition]) -> tuple[Ga
         # it enters as a 0/0 and dies to state-based actions (704.5f).
         forest = next(c for c in all_cards if c.name == "Forest")
         p1.battlefield.append(Permanent(card=forest))
+    if card.name in {"Sea Serpent", "Pirate Ship"}:
+        # "When you control no Islands, sacrifice this creature." The controller
+        # must control an Island or it is sacrificed as a state-based action.
+        island = next(c for c in all_cards if c.name == "Island")
+        p1.battlefield.append(Permanent(card=island))
     before = _snapshot(p1, p2)
 
     if card.name in {"Counterspell", "Power Sink", "Spell Blast"}:

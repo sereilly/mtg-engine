@@ -120,6 +120,10 @@ class GameActionRequest(BaseModel):
     # Yes/No answer for an optional ("you may") trigger prompt, sent with the
     # `resolve_optional_trigger` action (true = let the trigger happen).
     accept: bool | None = None
+    # Which activated ability to use, for permanents with more than one (Rock Hydra:
+    # 0 = {R} prevention, 1 = {R}{R}{R} +1/+1 counter). Index into the permanent's
+    # supported activated abilities. Omitted (None) uses the first one.
+    ability_index: int | None = Field(default=None, ge=0)
     # Steps (engine step names) the human wants to stop at on the opponent's turn.
     # Sent with `ai_step` so the AI hands priority to the human at those steps
     # instead of advancing past them. Set via the phase-rail hold-priority toggles.

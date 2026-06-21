@@ -37,6 +37,10 @@ class UpkeepStepMixin:
                     "card_name": permanent.card.name,
                     "mana": mana,
                     "kind": trig.instruction.kind,
+                    # "unless you pay" alternative consequence, used to label the
+                    # decline button (e.g. Force of Nature deals 8 damage; it is
+                    # not a sacrifice).
+                    "damage": int(trig.instruction.payload.get("damage", 0)),
                 })
                 break
         return choices

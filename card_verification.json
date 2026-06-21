@@ -40,6 +40,11 @@
       "status": "pass",
       "updated_at": 1782001418.1112854
     },
+    "Contract from Below": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782007747.1978514
+    },
     "Control Magic": {
       "reason": "",
       "status": "pass",
@@ -49,6 +54,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781393461.2817519
+    },
+    "Craw Wurm": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782006718.854789
     },
     "Cursed Land": {
       "reason": "",
@@ -120,20 +130,30 @@
       "status": "pass",
       "updated_at": 1781393631.596616
     },
+    "Ice Storm": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782009230.2792885
+    },
     "Island": {
       "reason": "",
       "status": "pass",
       "updated_at": 1781378704.6242044
     },
+    "Jayemdae Tome": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782007143.640714
+    },
+    "Karma": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782008813.4584646
+    },
     "Lightning Bolt": {
       "reason": "",
       "status": "pass",
       "updated_at": 1782005004.5772283
-    },
-    "Lord of Atlantis": {
-      "reason": "It grants +1/+1 but not islandwalk.",
-      "status": "fail",
-      "updated_at": 1781997911.1210005
     },
     "Mahamoti Djinn": {
       "reason": "",
@@ -155,6 +175,11 @@
       "status": "pass",
       "updated_at": 1781378762.2991576
     },
+    "Mons's Goblin Raiders": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782006692.2706053
+    },
     "Nether Shadow": {
       "reason": "",
       "status": "pass",
@@ -174,6 +199,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781586546.701313
+    },
+    "Plains": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782007559.386425
     },
     "Plateau": {
       "reason": "",
@@ -205,6 +235,11 @@
       "status": "pass",
       "updated_at": 1781997960.0992842
     },
+    "Savannah Lions": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782006702.9532018
+    },
     "Scryb Sprites": {
       "reason": "",
       "status": "pass",
@@ -235,6 +270,11 @@
       "status": "pass",
       "updated_at": 1781378490.7807422
     },
+    "Tsunami": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782016294.1066148
+    },
     "Tunnel": {
       "reason": "",
       "status": "pass",
@@ -244,6 +284,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781756746.9480946
+    },
+    "Wall of Ice": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782008091.2800379
     },
     "Wall of Swords": {
       "reason": "",
@@ -270,10 +315,10 @@
       "status": "pass",
       "updated_at": 1781761323.133161
     },
-    "Wild Growth": {
-      "reason": "Trigger doesn't work",
-      "status": "fail",
-      "updated_at": 1782001012.870595
+    "Wrath of God": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782008868.629678
     }
   }
 }

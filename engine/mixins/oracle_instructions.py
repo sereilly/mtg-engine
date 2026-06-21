@@ -108,9 +108,9 @@ class OracleInstructionsMixin:
                 self._refresh_dynamic_creatures()
                 return
             if instr.kind == "buff_untapped_creatures":
-                for permanent in caster.battlefield:
-                    if permanent.card.primary_type == "creature" and not permanent.tapped:
-                        permanent.toughness_bonus += int(instr.payload.get("toughness", 0))
+                # Castle-style static buff. Dynamically recalculated (611.3a) so it
+                # tracks tap state and is removed when the source leaves (611.3b).
+                self._recalculate_lord_buffs()
                 return
             if instr.kind == "buff_creatures_global":
                 # Static ability: dynamically recalculated (611.3a). Use
@@ -121,27 +121,10 @@ class OracleInstructionsMixin:
                 return
 
             if instr.kind == "static_line" and instr.value.startswith("other ") and " get +" in instr.value:
-                lord_match = re.search(r"other (\w+)s? get \+(\d+)/\+(\d+)(.*)", instr.value)
-                if lord_match:
-                    subtype_raw = lord_match.group(1).lower()
-                    subtype = subtype_raw[:-1] if subtype_raw.endswith("s") else subtype_raw
-                    power_bonus = int(lord_match.group(2))
-                    toughness_bonus = int(lord_match.group(3))
-                    rest = lord_match.group(4).lower()
-                    for player in self.players:
-                        for permanent in player.battlefield:
-                            if permanent.card.primary_type != "creature":
-                                continue
-                            if subtype not in permanent.card.type_line.lower():
-                                continue
-                            if permanent.card is source:
-                                continue
-                            permanent.power_bonus += power_bonus
-                            permanent.toughness_bonus += toughness_bonus
-                            if "mountainwalk" in rest:
-                                permanent.metadata["has_mountainwalk"] = True
-                            if "islandwalk" in rest:
-                                permanent.metadata["has_islandwalk"] = True
+                # Lord-style "Other [Subtype] get +A/+B [and have <landwalk>]."
+                # Recalculated dynamically so the buff (and any granted landwalk)
+                # reaches creatures entering later and ends when the lord leaves.
+                self._recalculate_lord_buffs()
                 return
 
             # Zombie Master style: "Other Zombie creatures have swampwalk." /
@@ -247,6 +230,13 @@ class OracleInstructionsMixin:
                 )
             if not target_creature:
                 return
+
+            # Snapshot the creature's pre-grant state so the continuous effects this
+            # Aura grants can be reversed when the Aura leaves the battlefield
+            # (CR 611.3 — a granted continuous effect ends when its source is gone).
+            _pre_power_bonus = target_creature.power_bonus
+            _pre_toughness_bonus = target_creature.toughness_bonus
+            _pre_meta_keys = set(target_creature.metadata.keys())
 
             # Handle numeric static buffs/debuffs like "gets +2/+1" or "gets -2/-1"
             buff_match = re.search(r"gets ([+-]\d+)/([+-]\d+)", text)
@@ -365,6 +355,20 @@ class OracleInstructionsMixin:
                     target_player.battlefield.remove(target_creature)
                     self.players[caster_index].battlefield.append(target_creature)
                     self.log.append(f"{aura_permanent.card.name} took control of {target_creature.card.name}")
+
+            # Record what continuous effects this Aura granted so they can be undone
+            # when the Aura leaves the battlefield (see _remove_aura_effects).
+            aura_permanent.metadata["aura_granted_power"] = (
+                target_creature.power_bonus - _pre_power_bonus
+            )
+            aura_permanent.metadata["aura_granted_toughness"] = (
+                target_creature.toughness_bonus - _pre_toughness_bonus
+            )
+            aura_permanent.metadata["aura_granted_meta"] = [
+                key
+                for key in target_creature.metadata
+                if key not in _pre_meta_keys and key != "attached_aura"
+            ]
 
         elif text.startswith("enchant land"):
             target_land = None

@@ -65,12 +65,16 @@ def target_loses_life(game: Game, instruction: OracleInstruction, context: Oracl
 
 @effect_handler("target_gains_life")
 def target_gains_life(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    target = context.target
     card = context.card
     x_value = context.x_value
     amount = instruction.payload.get("amount", 0)
+    # "You gain N life" affects the controller; "target player gains N life"
+    # affects the chosen target (CR 115.10b). Default to target for legacy
+    # instructions that predate the recipient payload.
+    recipient = instruction.payload.get("recipient", "target")
+    gainer = context.caster if recipient == "caster" else context.target
     life_gain = max(0, x_value or 0) if amount == "x" else int(amount)
-    game._gain_life(target, life_gain, card.name)
+    game._gain_life(gainer, life_gain, card.name)
     return True, "resolved"
 
 

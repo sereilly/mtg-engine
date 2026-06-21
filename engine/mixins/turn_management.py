@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import random
+import re
 
 from ..game_types import SimulationResult
 from ..oracle import compile_card_oracle
@@ -231,6 +232,18 @@ class TurnManagementMixin:
                     amount = int(trig.instruction.payload.get("amount", 0))
                     damage = self._deal_damage_to_player(player, amount)
                     self.log.append(f"{attached_aura.card.name} dealt {damage} damage to {player.name}")
+            # Wild Growth: "Whenever enchanted land is tapped for mana, its controller
+            # adds an additional {G}." The "for mana" phrasing isn't compiled as a
+            # generic trigger, so read the produced mana from the Aura's text here.
+            aura_text = attached_aura.card.oracle_text.lower()
+            mana_match = re.search(
+                r"enchanted land is tapped for mana, its controller adds an additional \{([wubrgc])\}",
+                aura_text,
+            )
+            if mana_match:
+                extra = mana_match.group(1).upper()
+                player.mana_pool[extra] = player.mana_pool.get(extra, 0) + 1
+                self.log.append(f"{attached_aura.card.name}: {player.name} added an additional {{{extra}}}")
 
         for controller in self.players:
             for perm in controller.battlefield:

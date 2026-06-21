@@ -1525,6 +1525,9 @@ h2.targeting-valid {
   display: inline-block;
   object-fit: contain;
   vertical-align: text-bottom;
+  /* Let clicks fall through to the enclosing button/label instead of
+     landing on the symbol image itself. */
+  pointer-events: none;
 }
 
 .mtg-symbol-inline {

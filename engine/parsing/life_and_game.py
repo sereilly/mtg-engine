@@ -11,6 +11,19 @@ _LOSE_LIFE_RE = re.compile(r"target player loses (\d+) life")
 _GAIN_LIFE_RE = re.compile(r"gains? (\d+) life")
 
 
+def _life_recipient(text: str) -> str:
+    """Who gains the life: the spell/ability's controller or a chosen target.
+
+    "Target player gains N life" / "that player gains N life" is a targeted
+    effect (CR 115). "You gain N life" and the bare "gain N life" form (common
+    on activated abilities, e.g. "{T}: You gain 1 life") affect the controller —
+    "you" is never a target (CR 115.10b).
+    """
+    if "target player" in text or "that player" in text:
+        return "target"
+    return "caster"
+
+
 @parse_rule(460)
 def grant_extra_turn(text: str, activated: bool) -> RuleResult:
     if "take an extra turn after this one" in text:
@@ -53,7 +66,7 @@ def target_loses_n_life(text: str, activated: bool) -> RuleResult:
 @parse_rule(680)
 def target_gains_x_life(text: str, activated: bool) -> RuleResult:
     if "gains x life" in text or "gain x life" in text:
-        return _instruction("target_gains_life", amount="x"), "spell_pattern"
+        return _instruction("target_gains_life", amount="x", recipient=_life_recipient(text)), "spell_pattern"
     return None
 
 
@@ -63,5 +76,9 @@ def target_gains_n_life(text: str, activated: bool) -> RuleResult:
         gain_match = _GAIN_LIFE_RE.search(text)
         if gain_match:
             effect_kind = "activated_gain_life" if activated else "spell_pattern"
-            return _instruction("target_gains_life", amount=int(gain_match.group(1))), effect_kind
+            return _instruction(
+                "target_gains_life",
+                amount=int(gain_match.group(1)),
+                recipient=_life_recipient(text),
+            ), effect_kind
     return None

@@ -3,9 +3,9 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **290**
-- Passed: **53**
-- Failed: **2**
-- Untested: **235**
+- Passed: **64**
+- Failed: **0**
+- Untested: **226**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -51,13 +51,13 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Cockatrice | ⬜ untested |  |
 | Consecrate Land | ✅ pass |  |
 | Conservator | ⬜ untested |  |
-| Contract from Below | ⬜ untested |  |
+| Contract from Below | ✅ pass |  |
 | Control Magic | ✅ pass |  |
 | Conversion | ⬜ untested |  |
 | Copper Tablet | ⬜ untested |  |
 | Copy Artifact | ⬜ untested |  |
 | Counterspell | ✅ pass |  |
-| Craw Wurm | ⬜ untested |  |
+| Craw Wurm | ✅ pass |  |
 | Creature Bond | ⬜ untested |  |
 | Crusade | ⬜ untested |  |
 | Crystal Rod | ⬜ untested |  |
@@ -126,7 +126,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Hurloon Minotaur | ⬜ untested |  |
 | Hurricane | ✅ pass |  |
 | Hypnotic Specter | ⬜ untested |  |
-| Ice Storm | ⬜ untested |  |
+| Ice Storm | ✅ pass |  |
 | Icy Manipulator | ⬜ untested |  |
 | Illusionary Mask | ⬜ untested |  |
 | Instill Energy | ⬜ untested |  |
@@ -139,10 +139,10 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Ivory Cup | ⬜ untested |  |
 | Jade Monolith | ⬜ untested |  |
 | Jade Statue | ⬜ untested |  |
-| Jayemdae Tome | ⬜ untested |  |
+| Jayemdae Tome | ✅ pass |  |
 | Juggernaut | ⬜ untested |  |
 | Jump | ⬜ untested |  |
-| Karma | ⬜ untested |  |
+| Karma | ✅ pass |  |
 | Keldon Warlord | ⬜ untested |  |
 | Kormus Bell | ⬜ untested |  |
 | Kudzu | ⬜ untested |  |
@@ -158,7 +158,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Living Lands | ⬜ untested |  |
 | Living Wall | ⬜ untested |  |
 | Llanowar Elves | ⬜ untested |  |
-| Lord of Atlantis | ❌ fail | It grants +1/+1 but not islandwalk. |
+| Lord of Atlantis | ⬜ untested |  |
 | Lord of the Pit | ⬜ untested |  |
 | Lure | ⬜ untested |  |
 | Magical Hack | ⬜ untested |  |
@@ -171,7 +171,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Merfolk of the Pearl Trident | ✅ pass |  |
 | Mesa Pegasus | ⬜ untested |  |
 | Mind Twist | ⬜ untested |  |
-| Mons's Goblin Raiders | ⬜ untested |  |
+| Mons's Goblin Raiders | ✅ pass |  |
 | Mountain | ⬜ untested |  |
 | Mox Emerald | ⬜ untested |  |
 | Mox Jet | ⬜ untested |  |
@@ -196,7 +196,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Phantom Monster | ✅ pass |  |
 | Pirate Ship | ⬜ untested |  |
 | Plague Rats | ⬜ untested |  |
-| Plains | ⬜ untested |  |
+| Plains | ✅ pass |  |
 | Plateau | ✅ pass |  |
 | Power Leak | ⬜ untested |  |
 | Power Sink | ⬜ untested |  |
@@ -221,7 +221,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Sacrifice | ⬜ untested |  |
 | Samite Healer | ⬜ untested |  |
 | Savannah | ⬜ untested |  |
-| Savannah Lions | ⬜ untested |  |
+| Savannah Lions | ✅ pass |  |
 | Scathe Zombies | ⬜ untested |  |
 | Scavenging Ghoul | ⬜ untested |  |
 | Scrubland | ⬜ untested |  |
@@ -261,7 +261,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Timetwister | ✅ pass |  |
 | Tranquility | ⬜ untested |  |
 | Tropical Island | ⬜ untested |  |
-| Tsunami | ⬜ untested |  |
+| Tsunami | ✅ pass |  |
 | Tundra | ⬜ untested |  |
 | Tunnel | ✅ pass |  |
 | Twiddle | ⬜ untested |  |
@@ -278,7 +278,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Wall of Bone | ✅ pass |  |
 | Wall of Brambles | ⬜ untested |  |
 | Wall of Fire | ⬜ untested |  |
-| Wall of Ice | ⬜ untested |  |
+| Wall of Ice | ✅ pass |  |
 | Wall of Stone | ⬜ untested |  |
 | Wall of Swords | ✅ pass |  |
 | Wall of Water | ⬜ untested |  |
@@ -292,10 +292,10 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Wheel of Fortune | ✅ pass |  |
 | White Knight | ⬜ untested |  |
 | White Ward | ✅ pass |  |
-| Wild Growth | ❌ fail | Trigger doesn't work |
+| Wild Growth | ⬜ untested |  |
 | Will-o'-the-Wisp | ⬜ untested |  |
 | Winter Orb | ⬜ untested |  |
 | Wooden Sphere | ⬜ untested |  |
 | Word of Command | ⬜ untested |  |
-| Wrath of God | ⬜ untested |  |
+| Wrath of God | ✅ pass |  |
 | Zombie Master | ⬜ untested |  |

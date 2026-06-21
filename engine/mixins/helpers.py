@@ -89,8 +89,35 @@ class GameHelpersMixin:
             for symbol in _MANA_SYMBOLS:
                 player.mana_pool[symbol] = 0
 
+    def _recompute_continuous_effects(self) -> None:
+        """Recalculate all static/continuous P/T effects (611.3). Call after any
+        permanent leaves the battlefield so lord buffs (Crusade, Gauntlet of Might,
+        Lord of Atlantis, Castle) and dynamic P/T (Nightmare) reflect the new board."""
+        self._recalculate_lord_buffs()
+        self._refresh_dynamic_creatures()
+
+    def _remove_aura_effects(self, aura: Permanent) -> None:
+        """Undo the continuous effects an Aura granted to the permanent it was
+        attached to (CR 611.3 — the effect ends when the Aura leaves). The grants
+        were recorded on the Aura by _apply_aura_effect."""
+        attached = aura.metadata.get("attached_to")
+        if attached is None:
+            return
+        power_delta = int(aura.metadata.get("aura_granted_power", 0) or 0)
+        toughness_delta = int(aura.metadata.get("aura_granted_toughness", 0) or 0)
+        if power_delta:
+            attached.power_bonus -= power_delta
+        if toughness_delta:
+            attached.toughness_bonus -= toughness_delta
+        for key in aura.metadata.get("aura_granted_meta", []) or []:
+            attached.metadata.pop(key, None)
+        if attached.metadata.get("attached_aura") is aura:
+            attached.metadata.pop("attached_aura", None)
+
     def _permanent_to_graveyard(self, player: PlayerState, permanent: Permanent) -> None:
         """Move a permanent to the graveyard. Tokens (704.5d) cease to exist instead."""
+        if "Aura" in permanent.card.type_line:
+            self._remove_aura_effects(permanent)
         if not permanent.metadata.get("is_token", False):
             player.graveyard.append(permanent.card)
         if permanent.card.primary_type == "creature":
@@ -173,4 +200,4 @@ class GameHelpersMixin:
         # 611.3a/611.3c: static abilities apply as permanents enter. Recalculate
         # lord buffs so the new permanent immediately receives applicable bonuses,
         # and so any new lord immediately buffs existing matching permanents.
-        self._recalculate_lord_buffs()
+        self._recompute_continuous_effects()

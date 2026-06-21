@@ -97,6 +97,10 @@ class EffectsMixin:
             self._trigger_aura_death_effects(perm, target)
             if perm.card.primary_type == "land" and target_player_index is not None:
                 self._process_land_dies(target_player_index)
+            # 611.3b: a destroyed permanent's static buffs / dynamic P/T (Castle,
+            # Gauntlet of Might, Lord of Atlantis, Nightmare's swamp count) must be
+            # recomputed now that it has left the battlefield.
+            self._recompute_continuous_effects()
             return perm.card
 
         if target_permanent_index is not None:

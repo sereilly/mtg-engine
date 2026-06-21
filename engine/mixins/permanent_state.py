@@ -300,11 +300,33 @@ class PermanentStateMixin:
         newly-entered creatures immediately receive relevant lord buffs, and
         creatures whose lords have left the battlefield lose those buffs.
         """
-        # Step 1: Clear all existing static-ability-derived bonuses
+        # Step 1: Clear all existing static-ability-derived bonuses. Lord-granted
+        # landwalk flags are tracked per permanent so they can be cleared and
+        # recomputed too (611.3b — the grant ends when the lord leaves), without
+        # disturbing landwalk granted by an Aura or printed on the card.
         for player in self.players:
             for perm in player.battlefield:
                 perm.metadata.pop("static_buff_power", None)
                 perm.metadata.pop("static_buff_toughness", None)
+                lord_walks = perm.metadata.pop("_lord_walk_flags", None)
+                if lord_walks:
+                    for flag in lord_walks:
+                        perm.metadata.pop(flag, None)
+
+        def _add_static_buff(perm: Permanent, power: int, toughness: int) -> None:
+            perm.metadata["static_buff_power"] = (
+                int(perm.metadata.get("static_buff_power", 0)) + power
+            )
+            perm.metadata["static_buff_toughness"] = (
+                int(perm.metadata.get("static_buff_toughness", 0)) + toughness
+            )
+
+        def _grant_lord_walk(perm: Permanent, walk: str) -> None:
+            flag = f"has_{walk}"
+            perm.metadata[flag] = True
+            tracked = perm.metadata.setdefault("_lord_walk_flags", [])
+            if flag not in tracked:
+                tracked.append(flag)
 
         # Step 2: Re-apply static buffs from every permanent currently on battlefield
         for ctrl_player in self.players:
@@ -325,9 +347,53 @@ class PermanentStateMixin:
                                     actual_colors = {target_perm.metadata["color_override"]}
                                 if color_sym and color_sym not in actual_colors:
                                     continue
-                                target_perm.metadata["static_buff_power"] = (
-                                    int(target_perm.metadata.get("static_buff_power", 0)) + power
-                                )
-                                target_perm.metadata["static_buff_toughness"] = (
-                                    int(target_perm.metadata.get("static_buff_toughness", 0)) + toughness
-                                )
+                                _add_static_buff(target_perm, power, toughness)
+
+                    # Castle-style "Untapped creatures you control get +X/+Y." The
+                    # bonus is recomputed every call so it tracks tap state and ends
+                    # when the source leaves (611.3a/611.3b).
+                    elif instr.kind == "buff_untapped_creatures":
+                        power = int(instr.payload.get("power", 0))
+                        toughness = int(instr.payload.get("toughness", 0))
+                        for target_perm in ctrl_player.battlefield:
+                            if target_perm.card.primary_type != "creature":
+                                continue
+                            if target_perm.tapped:
+                                continue
+                            _add_static_buff(target_perm, power, toughness)
+
+                    # Lord-style "Other [Subtype] get +A/+B [and have <landwalk>]."
+                    # (e.g. Lord of Atlantis, Goblin King). Applied dynamically so it
+                    # reaches creatures entering later and is removed when the lord
+                    # leaves the battlefield.
+                    elif (
+                        instr.kind == "static_line"
+                        and instr.value.startswith("other ")
+                        and " get +" in instr.value
+                    ):
+                        lord_match = re.search(
+                            r"other (\w+)s? get \+(\d+)/\+(\d+)(.*)", instr.value
+                        )
+                        if not lord_match:
+                            continue
+                        subtype_raw = lord_match.group(1).lower()
+                        subtype = subtype_raw[:-1] if subtype_raw.endswith("s") else subtype_raw
+                        power = int(lord_match.group(2))
+                        toughness = int(lord_match.group(3))
+                        rest = lord_match.group(4).lower()
+                        granted_walks = [
+                            w
+                            for w in ("islandwalk", "mountainwalk", "swampwalk", "forestwalk", "plainswalk")
+                            if w in rest
+                        ]
+                        for player in self.players:
+                            for target_perm in player.battlefield:
+                                if target_perm.card.primary_type != "creature":
+                                    continue
+                                if subtype not in target_perm.card.type_line.lower():
+                                    continue
+                                if target_perm is source_perm:  # "other"
+                                    continue
+                                _add_static_buff(target_perm, power, toughness)
+                                for walk in granted_walks:
+                                    _grant_lord_walk(target_perm, walk)

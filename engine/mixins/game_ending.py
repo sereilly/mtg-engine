@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 
 from ..models import CardDefinition, Permanent, PlayerState
+from ..oracle import compile_card_oracle
 
 class GameEndingMixin:
     def concede(self, player_index: int) -> None:
@@ -75,6 +76,34 @@ class GameEndingMixin:
                 self.is_draw = True
                 self.log.append("Game is a draw (104.4a: all players lost simultaneously)")
                 changed = True
+
+            # State trigger: "When you control no Islands, sacrifice this creature"
+            # (Sea Serpent). Modeled alongside SBAs so it fires immediately when the
+            # last Island leaves, not only at the next upkeep (CR 603.8).
+            for player in self.players:
+                survivors_ss: list[Permanent] = []
+                for perm in player.battlefield:
+                    program = compile_card_oracle(perm.card)
+                    needs_island = any(
+                        trig.condition.kind == "no_islands"
+                        and trig.instruction is not None
+                        and trig.instruction.kind == "sacrifice_self"
+                        for trig in program.triggered_abilities
+                    )
+                    if needs_island and not any(
+                        p.card.primary_type == "land"
+                        and (
+                            "island" in p.card.type_line.lower()
+                            or p.metadata.get("land_type_override") == "island"
+                        )
+                        for p in player.battlefield
+                    ):
+                        self._permanent_to_graveyard(player, perm)
+                        self.log.append(f"{perm.card.name} sacrificed (controls no Islands)")
+                        changed = True
+                        continue
+                    survivors_ss.append(perm)
+                player.battlefield = survivors_ss
 
             # 704.5d: tokens in non-battlefield zones cease to exist
             for player in self.players:
@@ -322,5 +351,11 @@ class GameEndingMixin:
 
             if changed:
                 any_changed = True
+
+        # 611.3b: permanents may have left the battlefield above (lethal damage,
+        # sacrifice, legend/world rule, mass destruction resolving just before this
+        # SBA check). Recompute static buffs / dynamic P/T so the board is current.
+        if any_changed:
+            self._recompute_continuous_effects()
 
         return any_changed

@@ -1035,7 +1035,9 @@ def test_rock_hydra_x_counters_on_entry(all_cards):
 def test_sea_serpent_attack_restriction(all_cards):
     serpent = _get(all_cards, "Sea Serpent")
     island = _get(all_cards, "Island")
-    p1 = PlayerState(name="P1", battlefield=[Permanent(card=serpent)])
+    # Sea Serpent's controller must control an Island or it is sacrificed
+    # (state-based) before it can attack.
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=serpent), Permanent(card=island)])
     p2 = PlayerState(name="P2", battlefield=[])
     game = Game(players=[p1, p2])
 
@@ -5769,8 +5771,10 @@ def test_phantom_monster_classifies_supported(all_cards):
 
 def test_pirate_ship_cannot_attack_without_defending_island(all_cards):
     ship = _get(all_cards, "Pirate Ship")
+    island = _get(all_cards, "Island")
 
-    p1 = PlayerState(name="P1", battlefield=[Permanent(card=ship)])
+    # Controller keeps an Island so Pirate Ship isn't sacrificed (state-based).
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=ship), Permanent(card=island)])
     p2 = PlayerState(name="P2", battlefield=[])
     game = Game(players=[p1, p2])
 
@@ -5781,7 +5785,7 @@ def test_pirate_ship_can_attack_with_defending_island(all_cards):
     ship = _get(all_cards, "Pirate Ship")
     island = _get(all_cards, "Island")
 
-    p1 = PlayerState(name="P1", battlefield=[Permanent(card=ship)])
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=ship), Permanent(card=island)])
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=island)])
     game = Game(players=[p1, p2])
 
@@ -5790,8 +5794,9 @@ def test_pirate_ship_can_attack_with_defending_island(all_cards):
 
 def test_pirate_ship_tap_deals_1_damage(all_cards):
     ship = _get(all_cards, "Pirate Ship")
+    island = _get(all_cards, "Island")
 
-    p1 = PlayerState(name="P1", battlefield=[Permanent(card=ship)])
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=ship), Permanent(card=island)])
     p2 = PlayerState(name="P2", life=20)
     game = Game(players=[p1, p2])
 

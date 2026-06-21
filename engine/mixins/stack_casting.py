@@ -83,6 +83,8 @@ class StackCastingMixin:
         mana_color: str | None = None,
         target_permanent_index: int | None = None,
         target_stack_index: int | None = None,
+        ability_index: int | None = None,
+        x_value: int | None = None,
     ) -> SimulationResult:
         queued = self.queue_permanent_ability(
             controller_index,
@@ -92,6 +94,8 @@ class StackCastingMixin:
             mana_color=mana_color,
             target_permanent_index=target_permanent_index,
             target_stack_index=target_stack_index,
+            ability_index=ability_index,
+            x_value=x_value,
         )
         if not queued.supported:
             return queued
@@ -179,6 +183,8 @@ class StackCastingMixin:
         mana_color: str | None = None,
         target_permanent_index: int | None = None,
         target_stack_index: int | None = None,
+        ability_index: int | None = None,
+        x_value: int | None = None,
     ) -> SimulationResult:
         controller = self.players[controller_index]
         resolved = self._find_controlled_permanent(controller, permanent_name, permanent_index)
@@ -221,6 +227,15 @@ class StackCastingMixin:
             if ability == untap_ability and not permanent.tapped:
                 self.log.append(f"Cannot untap Basalt Monolith when already untapped")
                 return SimulationResult(permanent.card.name, False, "unsupported", "already untapped")
+        elif ability_index is not None:
+            # The caller chose which ability to activate (cards with more than one
+            # activated ability, e.g. Rock Hydra's {R} prevention vs {R}{R}{R} pump).
+            usable = [
+                item
+                for item in program.activated_abilities
+                if item.supported and item.instruction is not None
+            ]
+            ability = usable[ability_index] if 0 <= ability_index < len(usable) else None
         else:
             ability = next((item for item in program.activated_abilities if item.supported and item.instruction is not None), None)
 
@@ -287,6 +302,11 @@ class StackCastingMixin:
 
         required_cost = dict(ability.cost.mana)
         requires_tap = ability.cost.requires_tap
+        # Abilities with an "{X}" in their cost (e.g. Clockwork Beast's
+        # "{X}, {T}: Put up to X +1/+0 counters") charge X generic mana on top of
+        # the printed symbols, where X is the amount the player chose.
+        if x_value and "{x}" in (ability.source_line or "").lower():
+            required_cost["generic"] = required_cost.get("generic", 0) + int(x_value)
         if self.enforce_mana_costs and any(required_cost.values()):
             if not self._pay_mana_cost(controller, required_cost):
                 details = f"insufficient mana to activate {permanent.card.name}"
@@ -346,7 +366,7 @@ class StackCastingMixin:
                 caster_index=controller_index,
                 target_player_index=target_idx,
                 target_permanent_index=target_permanent_index,
-                x_value=None,
+                x_value=x_value,
                 ability_instruction=instruction,
                 ability_effect_kind=ability.effect_kind,
                 source_permanent=permanent,
