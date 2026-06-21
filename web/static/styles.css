@@ -186,6 +186,12 @@ button:hover {
   min-height: 0;
 }
 
+/* Opponent and player panels stay at their natural height so the preview panel
+   between them absorbs the remaining vertical space. */
+.right-column > .side-panel:not(.preview-panel) {
+  flex: 0 0 auto;
+}
+
 .player-lane {
   background: var(--panel-soft);
   border: 1px solid rgba(126, 196, 255, 0.28);
@@ -1378,8 +1384,29 @@ h2.targeting-valid {
 
 .preview-panel {
   position: static;
-  max-height: 480px;
-  overflow-y: scroll;
+  /* Grow to fill the gap between the opponent (top) and player (bottom) panels. */
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* In the right column the preview art expands to fill the available height
+   instead of being clamped to a fixed card-sized box. */
+.preview-panel .card-preview-frame {
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  aspect-ratio: auto;
+}
+
+.preview-panel .card-preview-frame img {
+  object-fit: contain;
+}
+
+.preview-panel .card-preview-meta {
+  flex: 0 0 auto;
 }
 
 .card-preview-frame {
@@ -1737,7 +1764,9 @@ h2.targeting-valid {
 .zone-cards {
   display: flex;
   gap: 6px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
   min-height: 40px;
   border: 1px dashed rgba(255, 255, 255, 0.15);
   border-radius: 8px;
@@ -1747,6 +1776,7 @@ h2.targeting-valid {
 .zone-cards .card {
   width: 54px;
   min-height: 74px;
+  flex: 0 0 auto;
 }
 
 .tab-row {

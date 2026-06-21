@@ -337,6 +337,17 @@
           </div>
 
           <aside class="side-column right-column">
+            <section class="side-panel">
+              <h3>Opponent</h3>
+              <p class="side-label">Mana Pool</p>
+              <div id="oppMana" class="mana-row"></div>
+              <p class="side-label">Deck (<span id="oppDeckCount">0</span>)</p>
+              <p class="side-label">Graveyard (<span id="oppGraveCount">0</span>)</p>
+              <div id="oppGraveyardCards" class="zone-cards"></div>
+              <p class="side-label">Exile (<span id="oppExileCount">0</span>)</p>
+              <div id="oppExileCards" class="zone-cards"></div>
+            </section>
+
             <section class="side-panel preview-panel">
               <div id="cardPreview" class="card-preview-frame empty-preview">
                 <img id="cardPreviewImage" alt="Hovered card preview" class="hidden" />
@@ -350,25 +361,14 @@
             </section>
 
             <section class="side-panel">
-              <h3>Mana Pool</h3>
-              <p class="side-label">You</p>
+              <h3>You</h3>
+              <p class="side-label">Mana Pool</p>
               <div id="selfMana" class="mana-row"></div>
-              <p class="side-label">Opponent</p>
-              <div id="oppMana" class="mana-row"></div>
-            </section>
-
-            <section class="side-panel">
-              <h3>Zones</h3>
-              <p class="side-label">Your Deck (<span id="selfDeckCount">0</span>)</p>
-              <p class="side-label">Your Graveyard (<span id="selfGraveCount">0</span>)</p>
+              <p class="side-label">Deck (<span id="selfDeckCount">0</span>)</p>
+              <p class="side-label">Graveyard (<span id="selfGraveCount">0</span>)</p>
               <div id="selfGraveyardCards" class="zone-cards"></div>
-              <p class="side-label">Your Exile (<span id="selfExileCount">0</span>)</p>
+              <p class="side-label">Exile (<span id="selfExileCount">0</span>)</p>
               <div id="selfExileCards" class="zone-cards"></div>
-              <p class="side-label">Opponent Deck (<span id="oppDeckCount">0</span>)</p>
-              <p class="side-label">Opponent Graveyard (<span id="oppGraveCount">0</span>)</p>
-              <div id="oppGraveyardCards" class="zone-cards"></div>
-              <p class="side-label">Opponent Exile (<span id="oppExileCount">0</span>)</p>
-              <div id="oppExileCards" class="zone-cards"></div>
             </section>
           </aside>
         </div>

@@ -4854,7 +4854,10 @@ function renderZoneCards(containerId, cards, { zoneSeat = null, zoneKind = "" } 
     pendingCastTarget.targetKind === "graveyard_creature" &&
     zoneKind === "graveyard" &&
     Number.isInteger(zoneSeat);
-  for (const [index, card] of cards.entries()) {
+  // Render with the most recently added card (end of the array) leftmost,
+  // while keeping each card's original index for targeting clicks.
+  for (let index = cards.length - 1; index >= 0; index--) {
+    const card = cards[index];
     const el = createCardElement(card, { compact: true });
     if (graveyardTargeting && String(card.type || "").toLowerCase().includes("creature")) {
       el.classList.add("targeting-valid");
