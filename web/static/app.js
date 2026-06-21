@@ -4787,22 +4787,41 @@ function renderCardRow(containerId, cards, options = {}) {
   appendEntries(container, entries);
 }
 
+// When the viewer's hand overflows, it becomes a carousel: only a window of
+// cards is fanned at once and left/right arrows scroll through the rest.
+const HAND_CAROUSEL_WINDOW = 12;
+const HAND_CAROUSEL_STEP = 4;
+let handCarouselOffset = 0;
+
 function renderHandFan(containerId, cards, options = {}) {
   const container = q(containerId);
   container.innerHTML = "";
 
   const isOpponent = container.classList.contains("hand-fan--opponent");
   const entries = Array.isArray(cards) ? cards : [];
-  const count = entries.length;
+  const totalCount = entries.length;
   const MAX_ANGLE = 15;
   const MAX_RISE = isOpponent ? 22 : 44;
   const PUSH_X = isOpponent ? 7 : 14;
   const { playableHandIndices = [], selectedHandIndices = [], ...fanOptions } = options;
 
+  // Carousel only applies to the viewer's own (face-up) hand when it overflows.
+  const carousel = !isOpponent && totalCount > HAND_CAROUSEL_WINDOW;
+  let windowEntries = entries.map((card, index) => ({ card, index }));
+  let maxOffset = 0;
+  if (carousel) {
+    maxOffset = totalCount - HAND_CAROUSEL_WINDOW;
+    handCarouselOffset = Math.max(0, Math.min(handCarouselOffset, maxOffset));
+    windowEntries = windowEntries.slice(handCarouselOffset, handCarouselOffset + HAND_CAROUSEL_WINDOW);
+  } else {
+    handCarouselOffset = 0;
+  }
+  const count = windowEntries.length;
+
   const slots = [];
 
-  entries.forEach((card, index) => {
-    const normalizedPos = count <= 1 ? 0 : (index / (count - 1)) * 2 - 1;
+  windowEntries.forEach(({ card, index }, pos) => {
+    const normalizedPos = count <= 1 ? 0 : (pos / (count - 1)) * 2 - 1;
     const angle = normalizedPos * MAX_ANGLE * (isOpponent ? -1 : 1);
     // Both hands: center card most prominent (1-pos² parabola).
     const rise = (1 - normalizedPos * normalizedPos) * MAX_RISE;
@@ -4821,8 +4840,8 @@ function renderHandFan(containerId, cards, options = {}) {
     slot.className = "hand-fan-slot";
     slot.style.setProperty("--fan-angle", `${angle}deg`);
     slot.style.setProperty("--fan-push-x", "0px");
-    slot.style.setProperty("--fan-z", `${index * 5}px`);
-    slot.style.zIndex = String(index + 1);
+    slot.style.setProperty("--fan-z", `${pos * 5}px`);
+    slot.style.zIndex = String(pos + 1);
     if (isOpponent) {
       slot.style.marginTop = `${rise}px`;
     } else {
@@ -4832,6 +4851,14 @@ function renderHandFan(containerId, cards, options = {}) {
 
     container.appendChild(slot);
     slots.push(slot);
+  });
+
+  renderHandCarouselArrows(container, {
+    active: carousel,
+    offset: handCarouselOffset,
+    maxOffset,
+    totalCount,
+    rerender: () => renderHandFan(containerId, cards, options),
   });
 
   slots.forEach((slot, i) => {
@@ -4844,6 +4871,43 @@ function renderHandFan(containerId, cards, options = {}) {
       slots.forEach((other) => other.style.setProperty("--fan-push-x", "0px"));
     });
   });
+}
+
+// Manage the carousel arrows that live in the hand-fan-wrap alongside the fan.
+// They scroll the viewer's hand window left/right when it overflows.
+function renderHandCarouselArrows(container, { active, offset, maxOffset, totalCount, rerender }) {
+  const wrap = container.parentElement;
+  if (!wrap) return;
+  wrap
+    .querySelectorAll(".hand-carousel-arrow")
+    .forEach((el) => el.remove());
+  if (!active) return;
+
+  const makeArrow = (dir) => {
+    const atStart = dir < 0 && offset <= 0;
+    const atEnd = dir > 0 && offset >= maxOffset;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className =
+      `hand-carousel-arrow hand-carousel-arrow--${dir < 0 ? "left" : "right"}` +
+      (atStart || atEnd ? " hand-carousel-arrow--disabled" : "");
+    btn.textContent = dir < 0 ? "‹" : "›";
+    btn.title =
+      dir < 0 ? "Scroll hand left" : "Scroll hand right";
+    btn.setAttribute("aria-label", btn.title);
+    if (atStart || atEnd) {
+      btn.disabled = true;
+    } else {
+      btn.addEventListener("click", () => {
+        handCarouselOffset = Math.max(0, Math.min(offset + dir * HAND_CAROUSEL_STEP, maxOffset));
+        rerender();
+      });
+    }
+    return btn;
+  };
+
+  wrap.appendChild(makeArrow(-1));
+  wrap.appendChild(makeArrow(1));
 }
 
 function renderZoneCards(containerId, cards, { zoneSeat = null, zoneKind = "" } = {}) {

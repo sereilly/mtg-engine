@@ -3,14 +3,14 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **290**
-- Passed: **51**
+- Passed: **53**
 - Failed: **2**
-- Untested: **237**
+- Untested: **235**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
 | Air Elemental | ⬜ untested |  |
-| Ancestral Recall | ⬜ untested |  |
+| Ancestral Recall | ✅ pass |  |
 | Animate Artifact | ⬜ untested |  |
 | Animate Dead | ⬜ untested |  |
 | Animate Wall | ⬜ untested |  |
@@ -153,7 +153,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Lifeforce | ⬜ untested |  |
 | Lifelace | ⬜ untested |  |
 | Lifetap | ⬜ untested |  |
-| Lightning Bolt | ⬜ untested |  |
+| Lightning Bolt | ✅ pass |  |
 | Living Artifact | ⬜ untested |  |
 | Living Lands | ⬜ untested |  |
 | Living Wall | ⬜ untested |  |
