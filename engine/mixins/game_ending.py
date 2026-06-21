@@ -167,6 +167,27 @@ class GameEndingMixin:
                     survivors.append(perm)
                 player.battlefield = survivors
 
+            # An Aura attached to a permanent that "can't be enchanted by other
+            # Auras" (Consecrate Land) is illegally attached and is put into its
+            # owner's graveyard. The Aura granting the restriction is exempt. This
+            # covers Consecrate Land entering onto a land that already had Auras.
+            for player in self.players:
+                survivors = []
+                for perm in player.battlefield:
+                    attached_to = perm.metadata.get("attached_to")
+                    if (
+                        "Aura" in perm.card.type_line
+                        and attached_to is not None
+                        and attached_to.metadata.get("cant_be_enchanted_by_auras")
+                        and "can't be enchanted by other auras" not in perm.card.oracle_text.lower()
+                    ):
+                        self._permanent_to_graveyard(player, perm)
+                        self.log.append(f"{perm.card.name} put into graveyard (enchanted land can't be enchanted by other Auras)")
+                        changed = True
+                        continue
+                    survivors.append(perm)
+                player.battlefield = survivors
+
             # CR 702.16c / 702.16n: an Aura with a quality the enchanted permanent
             # has protection from is put into its owner's graveyard, unless the
             # Aura's own text says the effect doesn't remove it (702.16n, e.g.

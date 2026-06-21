@@ -69,6 +69,10 @@ class PhaseStepsMixin:
         self.priority_pass_count = 0
         if self.stack:
             self.resolve_top_of_stack()
+            # 704.3: state-based actions are checked before any player would
+            # receive priority after a spell or ability resolves (e.g. an Aura
+            # now illegally attached is put into its owner's graveyard).
+            self.check_state_based_actions()
             # 117.3b: active player gets priority after a spell/ability resolves.
             self.priority_player_index = self.active_player_index
             return "resolved_top"

@@ -215,6 +215,8 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         "is_token": bool(perm.metadata.get("is_token", False)),
         "land_type_override": perm.metadata.get("land_type_override"),
         "mire_counter": bool(perm.metadata.get("mire_counter", False)),
+        "cant_be_enchanted_by_auras": bool(perm.metadata.get("cant_be_enchanted_by_auras", False)),
+        "is_indestructible": bool(perm.metadata.get("is_indestructible", False)),
         "is_aura": "aura" in perm.card.type_line.lower(),
         "attached_to_index": attached_to_index,
         "attached_to_seat": attached_to_seat,

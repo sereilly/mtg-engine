@@ -381,6 +381,8 @@ class OracleInstructionsMixin:
             target_land.metadata["attached_aura"] = aura_permanent
             if "indestructible" in text:
                 target_land.metadata["is_indestructible"] = True
+            if "can't be enchanted by other auras" in text:
+                target_land.metadata["cant_be_enchanted_by_auras"] = True
             if "enchanted land is a swamp" in text:
                 target_land.metadata["land_type_override"] = "swamp"
             elif "enchanted land is the chosen type" in text:

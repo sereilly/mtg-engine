@@ -1772,8 +1772,12 @@ function getOpponentDefaultTargetSeat(cardName) {
   return seat;
 }
 
-function getTargetableLandsForPrompt(state = currentState) {
+function getTargetableLandsForPrompt(state = currentState, forCard = null) {
   if (!state) return [];
+
+  // An Aura whose text grants "can't be enchanted by other Auras" (Consecrate
+  // Land) makes the enchanted land an illegal target for any other Aura.
+  const castingAura = !!forCard && String(forCard.type || "").toLowerCase().includes("aura");
 
   const result = [];
   for (const targetSeat of [0, 1]) {
@@ -1781,6 +1785,7 @@ function getTargetableLandsForPrompt(state = currentState) {
     if (!player || !Array.isArray(player.battlefield)) continue;
     for (const [permanentIndex, permanent] of player.battlefield.entries()) {
       if (!permanent || !String(permanent.type || "").toLowerCase().includes("land")) continue;
+      if (castingAura && permanent.cant_be_enchanted_by_auras) continue;
       result.push({
         targetSeat,
         permanentIndex,
@@ -1848,6 +1853,14 @@ function isPendingCastTargetValidForCard(card, { targetSeat = null, zoneKind = "
     if (!Number.isInteger(permanentIndex)) return false;
     if (!card || typeof card === "string") return false;
     if (!String(card.type || "").toLowerCase().includes("land")) return false;
+    // A land that "can't be enchanted by other Auras" (Consecrate Land) is not a
+    // legal target for another Aura — but stays targetable by non-Aura effects.
+    if (
+      card.cant_be_enchanted_by_auras &&
+      String(pendingCastTarget.card?.type || "").toLowerCase().includes("aura")
+    ) {
+      return false;
+    }
     // "target non-Swamp land" (Cyclopean Tomb): exclude printed Swamps and lands
     // already turned into Swamps by a mire counter.
     if (pendingCastTarget.excludeSwamp) {
@@ -3368,7 +3381,7 @@ function startCastLandTargetPrompt(card, castAction = "cast") {
   const cardName = normalizeCardName(card);
   if (!cardName) return;
 
-  if (getTargetableLandsForPrompt().length === 0) {
+  if (getTargetableLandsForPrompt(currentState, card).length === 0) {
     clearPendingHandCast();
     updateActionHint(`No valid land targets in play for ${cardName}.`, true);
     return;
@@ -3381,6 +3394,7 @@ function startCastLandTargetPrompt(card, castAction = "cast") {
     castAction,
   };
   renderActivationPrompt();
+  renderBoard(currentState);
   updateActionHint(`Choose a land target for ${cardName}.`);
 }
 
@@ -3401,6 +3415,7 @@ function startCastCreatureTargetPrompt(card, castAction = "cast") {
     castAction,
   };
   renderActivationPrompt();
+  renderBoard(currentState);
   updateActionHint(`Choose a creature target for ${cardName}.`);
 }
 
@@ -3421,6 +3436,7 @@ function startCastPermanentTargetPrompt(card, castAction = "cast") {
     castAction,
   };
   renderActivationPrompt();
+  renderBoard(currentState);
   updateActionHint(`Choose a target permanent for ${cardName}.`);
 }
 
@@ -3441,6 +3457,7 @@ function startCastArtifactTargetPrompt(card, castAction = "cast") {
     castAction,
   };
   renderActivationPrompt();
+  renderBoard(currentState);
   updateActionHint(`Choose an artifact target for ${cardName}.`);
 }
 

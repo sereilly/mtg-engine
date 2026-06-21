@@ -3,9 +3,9 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **290**
-- Passed: **48**
-- Failed: **0**
-- Untested: **242**
+- Passed: **51**
+- Failed: **2**
+- Untested: **237**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -49,7 +49,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Clockwork Beast | ⬜ untested |  |
 | Clone | ⬜ untested |  |
 | Cockatrice | ⬜ untested |  |
-| Consecrate Land | ⬜ untested |  |
+| Consecrate Land | ✅ pass |  |
 | Conservator | ⬜ untested |  |
 | Contract from Below | ⬜ untested |  |
 | Control Magic | ✅ pass |  |
@@ -65,7 +65,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Cyclopean Tomb | ✅ pass |  |
 | Dark Ritual | ⬜ untested |  |
 | Darkpact | ⬜ untested |  |
-| Death Ward | ⬜ untested |  |
+| Death Ward | ✅ pass |  |
 | Deathgrip | ⬜ untested |  |
 | Deathlace | ⬜ untested |  |
 | Demonic Attorney | ⬜ untested |  |
@@ -158,7 +158,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Living Lands | ⬜ untested |  |
 | Living Wall | ⬜ untested |  |
 | Llanowar Elves | ⬜ untested |  |
-| Lord of Atlantis | ⬜ untested |  |
+| Lord of Atlantis | ❌ fail | It grants +1/+1 but not islandwalk. |
 | Lord of the Pit | ⬜ untested |  |
 | Lure | ⬜ untested |  |
 | Magical Hack | ⬜ untested |  |
@@ -214,7 +214,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Resurrection | ⬜ untested |  |
 | Reverse Damage | ⬜ untested |  |
 | Righteousness | ⬜ untested |  |
-| Roc of Kher Ridges | ⬜ untested |  |
+| Roc of Kher Ridges | ✅ pass |  |
 | Rock Hydra | ⬜ untested |  |
 | Rod of Ruin | ⬜ untested |  |
 | Royal Assassin | ⬜ untested |  |
@@ -292,7 +292,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Wheel of Fortune | ✅ pass |  |
 | White Knight | ⬜ untested |  |
 | White Ward | ✅ pass |  |
-| Wild Growth | ⬜ untested |  |
+| Wild Growth | ❌ fail | Trigger doesn't work |
 | Will-o'-the-Wisp | ⬜ untested |  |
 | Winter Orb | ⬜ untested |  |
 | Wooden Sphere | ⬜ untested |  |

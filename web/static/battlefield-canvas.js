@@ -1738,6 +1738,33 @@ class BattlefieldCanvas {
       ctx.fillText(label, bx + bw / 2, by + bh / 2);
     }
 
+    // ---- Indestructible badge ----
+    // A permanent granted indestructible (e.g. a land enchanted by Consecrate
+    // Land) shows a steel "Indestructible" tag so the player knows it can't be
+    // destroyed. Stacks below any land-type / pile badge already at the top.
+    const indestructibleCard = creatureCard || card;
+    if (indestructibleCard && indestructibleCard.is_indestructible) {
+      const label = "Indestructible";
+      const bh = 13;
+      ctx.font = `bold ${Math.max(7, bh * 0.62)}px sans-serif`;
+      const bw = Math.min(w - 4, Math.ceil(ctx.measureText(label).width) + 8);
+      const bx = x + (w - bw) / 2;
+      let by = y + 2;
+      if (pileCount >= 2) by += 16;
+      if (landOverride && String(card.type || "").toLowerCase().includes("land")) by += 15;
+      ctx.fillStyle = "rgba(88,92,104,0.92)";
+      this._roundRect(ctx, bx, by, bw, bh, 3);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(206,212,224,0.9)";
+      ctx.lineWidth = 1;
+      this._roundRect(ctx, bx, by, bw, bh, 3);
+      ctx.stroke();
+      ctx.fillStyle = "#f2f4f8";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(label, bx + bw / 2, by + bh / 2);
+    }
+
     // ---- Pile count badge ----
     if (pileCount >= 2) {
       const label = `×${pileCount}`;

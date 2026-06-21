@@ -558,6 +558,10 @@ class StackCastingMixin:
                         battlefield[target_permanent_index], enchant_noun
                     ):
                         return False, f"no valid target for {card.name}"
+                    # A permanent that "can't be enchanted by other Auras" (Consecrate
+                    # Land) is an illegal target for any other Aura spell.
+                    if battlefield[target_permanent_index].metadata.get("cant_be_enchanted_by_auras"):
+                        return False, f"{battlefield[target_permanent_index].card.name} can't be enchanted by other Auras"
                     # CR 702.16b/c: an Aura with a quality can't be cast targeting a
                     # permanent with protection from that quality.
                     if not self._can_be_targeted(battlefield[target_permanent_index], card):

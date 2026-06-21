@@ -18,7 +18,9 @@ def destroy_all_creatures(game: Game, instruction: OracleInstruction, context: O
     for player in game.players:
         survivors: list[Permanent] = []
         for permanent in player.battlefield:
-            if permanent.card.primary_type == "creature" and not bypass_regen and permanent.regeneration_shield > 0:
+            if permanent.card.primary_type == "creature" and game._is_indestructible(permanent):
+                survivors.append(permanent)
+            elif permanent.card.primary_type == "creature" and not bypass_regen and permanent.regeneration_shield > 0:
                 permanent.regeneration_shield -= 1
                 permanent.tapped = True
                 survivors.append(permanent)
@@ -37,7 +39,9 @@ def destroy_all_artifacts_creatures_enchantments(game: Game, instruction: Oracle
         survivors: list[Permanent] = []
         for permanent in player.battlefield:
             primary_type = permanent.card.primary_type
-            if primary_type == "creature" and permanent.regeneration_shield > 0:
+            if primary_type in {"artifact", "creature", "enchantment"} and game._is_indestructible(permanent):
+                survivors.append(permanent)
+            elif primary_type == "creature" and permanent.regeneration_shield > 0:
                 permanent.regeneration_shield -= 1
                 permanent.tapped = True
                 survivors.append(permanent)
@@ -55,7 +59,7 @@ def destroy_all_enchantments(game: Game, instruction: OracleInstruction, context
     for player in game.players:
         survivors: list[Permanent] = []
         for permanent in player.battlefield:
-            if permanent.card.primary_type == "enchantment":
+            if permanent.card.primary_type == "enchantment" and not game._is_indestructible(permanent):
                 game._permanent_to_graveyard(player, permanent)
             else:
                 survivors.append(permanent)
@@ -69,7 +73,7 @@ def destroy_all_lands(game: Game, instruction: OracleInstruction, context: Oracl
     for player in game.players:
         survivors: list[Permanent] = []
         for permanent in player.battlefield:
-            if permanent.card.primary_type == "land":
+            if permanent.card.primary_type == "land" and not game._is_indestructible(permanent):
                 game._permanent_to_graveyard(player, permanent)
             else:
                 survivors.append(permanent)
@@ -84,7 +88,7 @@ def destroy_all_lands_of_type(game: Game, instruction: OracleInstruction, contex
     for player in game.players:
         survivors: list[Permanent] = []
         for permanent in player.battlefield:
-            if permanent.card.primary_type == "land":
+            if permanent.card.primary_type == "land" and not game._is_indestructible(permanent):
                 # Determine printed or overridden land type
                 perm_type_line = (permanent.metadata.get("land_type_override") or permanent.card.type_line or "").lower()
                 if land_type in perm_type_line:

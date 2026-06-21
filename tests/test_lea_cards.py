@@ -3938,6 +3938,104 @@ def test_consecrate_land_grants_indestructible_to_enchanted_land(all_cards):
     assert aura_perm.metadata.get("attached_to") is land_perm
 
 
+def test_consecrate_land_indestructible_survives_destroy(all_cards):
+    consecrate = _get(all_cards, "Consecrate Land")
+    stone_rain = _get(all_cards, "Stone Rain")
+    plains = _get(all_cards, "Plains")
+
+    p1 = PlayerState(name="P1", hand=[consecrate], battlefield=[Permanent(card=plains)])
+    p2 = PlayerState(name="P2", hand=[stone_rain])
+    game = Game(players=[p1, p2])
+
+    assert game.cast_from_hand(0, "Consecrate Land", target_player_index=0, target_permanent_index=0).supported
+
+    # The enchanted Plains has indestructible: Stone Rain can target it but can't destroy it.
+    result = game.cast_from_hand(1, "Stone Rain", target_player_index=0, target_permanent_index=0)
+    assert result.supported
+    assert any(p.card.name == "Plains" for p in p1.battlefield)
+    assert not any(c.name == "Plains" for c in p1.graveyard)
+
+
+def test_consecrate_land_blocks_other_auras(all_cards):
+    consecrate = _get(all_cards, "Consecrate Land")
+    plains = _get(all_cards, "Plains")
+
+    # Two copies of Consecrate Land in hand; the second can't enchant the protected land.
+    p1 = PlayerState(name="P1", hand=[consecrate, consecrate], battlefield=[Permanent(card=plains)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    assert game.cast_from_hand(0, "Consecrate Land", target_player_index=0, target_permanent_index=0).supported
+    second = game.cast_from_hand(0, "Consecrate Land", target_player_index=0, target_permanent_index=0)
+    assert not second.supported
+    assert "can't be enchanted" in second.details.lower()
+
+
+def test_consecrate_land_grant_ends_when_aura_leaves(all_cards):
+    consecrate = _get(all_cards, "Consecrate Land")
+    disenchant = _get(all_cards, "Disenchant")
+    plains = _get(all_cards, "Plains")
+
+    p1 = PlayerState(name="P1", hand=[consecrate], battlefield=[Permanent(card=plains)])
+    p2 = PlayerState(name="P2", hand=[disenchant])
+    game = Game(players=[p1, p2])
+
+    assert game.cast_from_hand(0, "Consecrate Land", target_player_index=0, target_permanent_index=0).supported
+    land = p1.battlefield[0]
+    assert land.metadata.get("is_indestructible") is True
+
+    # Destroying the Aura ends both continuous grants on the land.
+    result = game.cast_from_hand(1, "Disenchant", target_player_index=0, target_permanent_index=1)
+    assert result.supported
+    assert land.metadata.get("is_indestructible") is not True
+    assert land.metadata.get("cant_be_enchanted_by_auras") is not True
+
+
+def test_consecrate_land_graveyards_existing_other_auras_on_enter(all_cards):
+    consecrate = _get(all_cards, "Consecrate Land")
+    wild_growth = _get(all_cards, "Wild Growth")
+    plains = _get(all_cards, "Plains")
+
+    p1 = PlayerState(name="P1", hand=[wild_growth, consecrate], battlefield=[Permanent(card=plains)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    # The land is already enchanted by another Aura.
+    assert game.cast_from_hand(0, "Wild Growth", target_player_index=0, target_permanent_index=0).supported
+    assert any(p.card.name == "Wild Growth" for p in p1.battlefield)
+
+    # Consecrate Land entering attached to it sends the other Aura to the graveyard.
+    assert game.cast_from_hand(0, "Consecrate Land", target_player_index=0, target_permanent_index=0).supported
+    assert not any(p.card.name == "Wild Growth" for p in p1.battlefield)
+    assert any(c.name == "Wild Growth" for c in p1.graveyard)
+    assert any(p.card.name == "Consecrate Land" for p in p1.battlefield)
+
+
+def test_consecrate_land_graveyards_other_auras_via_priority_resolution(all_cards):
+    # Regression: in real play the Aura resolves through the priority-pass path,
+    # which must check state-based actions afterward (the immediate cast_from_hand
+    # path always did, masking the bug).
+    consecrate = _get(all_cards, "Consecrate Land")
+    wild_growth = _get(all_cards, "Wild Growth")
+    plains = _get(all_cards, "Plains")
+
+    p1 = PlayerState(name="P1", hand=[wild_growth, consecrate], battlefield=[Permanent(card=plains)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    assert game.cast_from_hand(0, "Wild Growth", target_player_index=0, target_permanent_index=0).supported
+
+    # Resolve Consecrate Land via a priority window rather than cast_from_hand.
+    game.queue_from_hand(0, "Consecrate Land", target_player_index=0, target_permanent_index=0)
+    game.start_priority_window(0)
+    game.pass_priority(0)
+    game.pass_priority(1)
+
+    assert not any(p.card.name == "Wild Growth" for p in p1.battlefield)
+    assert any(c.name == "Wild Growth" for c in p1.graveyard)
+    assert any(p.card.name == "Consecrate Land" for p in p1.battlefield)
+
+
 def test_conservator_activated_prevents_two_damage(all_cards):
     conservator = _get(all_cards, "Conservator")
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=conservator)])

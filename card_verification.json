@@ -30,6 +30,11 @@
       "status": "pass",
       "updated_at": 1781761307.1950977
     },
+    "Consecrate Land": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782001418.1112854
+    },
     "Control Magic": {
       "reason": "",
       "status": "pass",
@@ -49,6 +54,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781987899.028273
+    },
+    "Death Ward": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1781997943.5428312
     },
     "Drudge Skeletons": {
       "reason": "",
@@ -109,6 +119,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781378704.6242044
+    },
+    "Lord of Atlantis": {
+      "reason": "It grants +1/+1 but not islandwalk.",
+      "status": "fail",
+      "updated_at": 1781997911.1210005
     },
     "Mahamoti Djinn": {
       "reason": "",
@@ -175,6 +190,11 @@
       "status": "pass",
       "updated_at": 1781761319.0183372
     },
+    "Roc of Kher Ridges": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1781997960.0992842
+    },
     "Scryb Sprites": {
       "reason": "",
       "status": "pass",
@@ -239,6 +259,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781761323.133161
+    },
+    "Wild Growth": {
+      "reason": "Trigger doesn't work",
+      "status": "fail",
+      "updated_at": 1782001012.870595
     }
   }
 }

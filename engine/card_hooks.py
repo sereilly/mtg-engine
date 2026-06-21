@@ -132,6 +132,20 @@ def _cyclopean_tomb_leaves(game: Game, owner: PlayerState, permanent: Permanent)
     )
 
 
+def _consecrate_land_leaves(game: Game, owner: PlayerState, permanent: Permanent) -> None:
+    # "Enchanted land has indestructible and can't be enchanted by other Auras."
+    # Both are continuous effects from this Aura — when it leaves the battlefield
+    # the enchanted land loses indestructibility and may again be enchanted.
+    land = permanent.metadata.get("attached_to")
+    if land is None:
+        return
+    land.metadata.pop("is_indestructible", None)
+    land.metadata.pop("cant_be_enchanted_by_auras", None)
+    if land.metadata.get("attached_aura") is permanent:
+        land.metadata.pop("attached_aura", None)
+
+
 ON_LEAVE_BATTLEFIELD: dict[str, LeaveBattlefieldHook] = {
     "Cyclopean Tomb": _cyclopean_tomb_leaves,
+    "Consecrate Land": _consecrate_land_leaves,
 }

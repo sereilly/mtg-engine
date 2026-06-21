@@ -35,6 +35,11 @@ class EffectsMixin:
                 permanent.toughness_bonus += int(trig.instruction.payload.get("toughness", 1))
                 self.log.append(f"{permanent.card.name} gets a +1/+1 counter (dealt damage)")
 
+    def _is_indestructible(self, permanent: Permanent) -> bool:
+        """CR 700.4: a permanent with indestructible can't be destroyed by 'destroy'
+        effects or lethal damage. In LEA, Consecrate Land grants this to a land."""
+        return bool(permanent.metadata.get("is_indestructible"))
+
     def _destroy_target_permanent(
         self,
         target: PlayerState,
@@ -78,6 +83,9 @@ class EffectsMixin:
             return True
 
         def _do_destroy(perm: "Permanent", idx: int) -> "CardDefinition":
+            if self._is_indestructible(perm):
+                self.log.append(f"{perm.card.name} can't be destroyed (indestructible)")
+                return None  # type: ignore[return-value]
             if not bypass_regeneration and perm.regeneration_shield > 0:
                 perm.regeneration_shield -= 1
                 perm.tapped = True
