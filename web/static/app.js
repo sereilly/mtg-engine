@@ -3108,6 +3108,15 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   const cardName = normalizeCardName(card);
   if (!cardName) return;
 
+  // A {T} ability can't be activated while the creature is summoning sick
+  // (CR 302.6). When the only way to use the card is a tap ability, don't open a
+  // prompt that's doomed to fail — play the error sound and say why.
+  if (card && card.summoning_sick && abilityCostRequiresTap(card)) {
+    SFX.onError();
+    updateActionHint(`${cardName} has summoning sickness and can't use its tap ability yet.`, true);
+    return;
+  }
+
   // Activated abilities that destroy a target creature (e.g. Royal Assassin)
   // must let the player choose which creature before the ability is activated.
   if (activatedAbilityRequiresTargetCreature(card)) {
@@ -3911,6 +3920,7 @@ function setDebugMenuEnabled(enabled, canCastFree = false) {
   q("debugAddToHandBtn").disabled = !enabled;
   q("debugCastFreeBtn").disabled = !enabled || !canCastFree;
   q("debugCastFreeOpponentBtn").disabled = !enabled;
+  q("debugForceAttackAllToggle").disabled = !enabled;
   if (!enabled) {
     renderDebugOptions([]);
   }
@@ -6986,6 +6996,23 @@ q("debugAddManaToggle").addEventListener("change", (event) => {
   debugAddManaMode = event.target.checked;
   if (currentState) {
     renderState(currentState);
+  }
+});
+
+q("debugForceAttackAllToggle").addEventListener("change", async (event) => {
+  const enabled = event.target.checked;
+  try {
+    await sendAction({ seat, action: "debug_force_ai_attack_all", force_attack_all: enabled });
+    updateDebugStatus(
+      enabled
+        ? "AI will now attack with every legal attacker."
+        : "AI attacker selection restored to normal.",
+      "success"
+    );
+  } catch (e) {
+    // Roll the checkbox back to match the server's unchanged state on failure.
+    event.target.checked = !enabled;
+    updateDebugStatus(e.message || "Could not toggle force-attack.", "error");
   }
 });
 

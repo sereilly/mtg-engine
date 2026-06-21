@@ -57,6 +57,9 @@ class Session:
     optional_trigger_choices: list[dict] = field(default_factory=list)
     optional_trigger_resolved: dict[str, bool] = field(default_factory=dict)
     island_sanctuary_pending: bool = False
+    # Debug toggle: when True, the AI declares every legal attacker each combat
+    # instead of its normal risk-weighted choice. Set via the in-game Debug Menu.
+    force_ai_attack_all: bool = False
     # Engine step names a human wants to stop at on the opponent's (AI's) turn,
     # set from the phase-rail hold-priority toggles. The AI hands the human
     # priority at these steps instead of advancing past them.
@@ -299,6 +302,7 @@ class SessionStore:
         session.optional_trigger_choices = []
         session.optional_trigger_resolved = {}
         session.island_sanctuary_pending = False
+        session.force_ai_attack_all = False
         session.history = GameHistory()
         session.pregame_phase = None
         session.coin_flip_winner = None

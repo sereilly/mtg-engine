@@ -133,13 +133,12 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
     return best
 
 
-def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
-    """Return indices of creatures that should attack this turn."""
+def legal_attackers(game: Game, attacking_player_index: int) -> list[int]:
+    """Return battlefield indices of every creature that may legally attack this
+    turn — untapped, not summoning sick, and allowed to attack the opponent."""
     player = game.players[attacking_player_index]
     opponent_index = 1 - attacking_player_index
-    opponent = game.players[opponent_index]
-
-    legal_attackers = [
+    return [
         idx
         for idx, perm in enumerate(player.battlefield)
         if perm.card.primary_type == "creature"
@@ -147,7 +146,16 @@ def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
         and not game._is_summoning_sick(perm)
         and game.can_attack(perm, opponent_index)
     ]
-    if not legal_attackers:
+
+
+def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
+    """Return indices of creatures that should attack this turn."""
+    player = game.players[attacking_player_index]
+    opponent_index = 1 - attacking_player_index
+    opponent = game.players[opponent_index]
+
+    legal_attackers_list = legal_attackers(game, attacking_player_index)
+    if not legal_attackers_list:
         return []
 
     opponent_blockers = [
@@ -156,10 +164,10 @@ def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
         if perm.card.primary_type == "creature" and not perm.tapped
     ]
     if not opponent_blockers:
-        return legal_attackers
+        return legal_attackers_list
 
     chosen = []
-    for idx in legal_attackers:
+    for idx in legal_attackers_list:
         attacker = player.battlefield[idx]
         best_defender_score = max(
             _score_block_pair(blocker, attacker) for blocker in opponent_blockers
@@ -169,8 +177,8 @@ def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
             chosen.append(idx)
 
     # Go all-in when lethal is on the table.
-    if sum(player.battlefield[i].effective_power for i in legal_attackers) >= opponent.life:
-        return legal_attackers
+    if sum(player.battlefield[i].effective_power for i in legal_attackers_list) >= opponent.life:
+        return legal_attackers_list
 
     return chosen
 

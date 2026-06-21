@@ -192,6 +192,37 @@ def test_bug4_summoning_sick_creature_cannot_attack(all_cards):
     assert not game.can_attack(perm, 1), "Summoning-sick creature must not be able to attack"
 
 
+def test_summoning_sickness_persists_through_opponents_turn(all_cards):
+    """Sickness must clear at the controller's *own* next turn, not the opponent's.
+
+    Regression: ``_is_summoning_sick`` compared the marker to the global turn
+    counter, which advances every player's turn. A creature P1 played on turn 1
+    therefore looked non-sick on turn 2 (P2's turn) — a full turn early. The
+    untap-step re-stamp keeps the marker aligned so the creature stays sick until
+    P1's next turn (turn 3).
+    """
+    bear = _mk_card("Grizzly Bears", "Creature — Bear")
+    perm = Permanent(card=bear)
+    p1 = PlayerState(name="P1", battlefield=[perm])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    # Turn 1: P1 plays the bear.
+    game.turn = 1
+    game._initialize_permanent_state(perm, 0, None)
+    assert game._is_summoning_sick(perm), "sick on the turn it entered"
+
+    # Turn 2: P2's untap step. P1's bear is still summoning sick.
+    game.turn = 2
+    game.resolve_untap_step(1)
+    assert game._is_summoning_sick(perm), "still sick during the opponent's turn"
+
+    # Turn 3: P1's own untap step clears the sickness.
+    game.turn = 3
+    game.resolve_untap_step(0)
+    assert not game._is_summoning_sick(perm), "sickness clears on the controller's next turn"
+
+
 def test_bug4_creature_without_sickness_can_attack(all_cards):
     """A creature that has been in play since last turn can attack freely."""
     wolf = _mk_card("Timber Wolves", "Creature — Wolf")

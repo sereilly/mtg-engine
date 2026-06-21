@@ -34,6 +34,31 @@ class GameHelpersMixin:
             return False
         return permanent.metadata.get("summoning_sickness_turn") == self.turn
 
+    def _advance_summoning_sickness(self, active_player_index: int) -> None:
+        """Carry summoning sickness across other players' turns (CR 302.6).
+
+        ``self.turn`` advances on *every* player's turn, but a creature only sheds
+        summoning sickness once *its controller's* most recent turn begins. A sick
+        creature is marked with ``summoning_sickness_turn == self.turn``; left
+        untouched, the marker would no longer match once an opponent's turn bumps
+        the counter, clearing sickness a full turn early.
+
+        Called at the start of each turn (untap step), this re-stamps the marker on
+        every *non-active* player's still-sick creatures so it keeps tracking the
+        current turn. The active player's own creatures are deliberately left stale
+        so their marker falls behind ``self.turn`` — that is how they shed sickness
+        as their turn begins.
+        """
+        for index, player in enumerate(self.players):
+            if index == active_player_index:
+                continue
+            for permanent in player.battlefield:
+                if (
+                    permanent.card.primary_type == "creature"
+                    and permanent.metadata.get("summoning_sickness_turn") == self.turn - 1
+                ):
+                    permanent.metadata["summoning_sickness_turn"] = self.turn
+
     def _public_phase_name(self, phase: str, step: str) -> str:
         if phase in {"precombat_main", "postcombat_main"}:
             return "main"

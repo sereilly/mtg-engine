@@ -3,9 +3,9 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **290**
-- Passed: **64**
-- Failed: **0**
-- Untested: **226**
+- Passed: **66**
+- Failed: **1**
+- Untested: **223**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -183,7 +183,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Nettling Imp | ⬜ untested |  |
 | Nevinyrral's Disk | ⬜ untested |  |
 | Nightmare | ⬜ untested |  |
-| Northern Paladin | ⬜ untested |  |
+| Northern Paladin | ❌ fail | Didn't let me choose a target |
 | Obsianus Golem | ⬜ untested |  |
 | Orcish Artillery | ✅ pass |  |
 | Orcish Oriflamme | ⬜ untested |  |
@@ -220,7 +220,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Royal Assassin | ⬜ untested |  |
 | Sacrifice | ⬜ untested |  |
 | Samite Healer | ⬜ untested |  |
-| Savannah | ⬜ untested |  |
+| Savannah | ✅ pass |  |
 | Savannah Lions | ✅ pass |  |
 | Scathe Zombies | ⬜ untested |  |
 | Scavenging Ghoul | ⬜ untested |  |
@@ -229,7 +229,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Sea Serpent | ⬜ untested |  |
 | Sedge Troll | ⬜ untested |  |
 | Sengir Vampire | ⬜ untested |  |
-| Serra Angel | ⬜ untested |  |
+| Serra Angel | ✅ pass |  |
 | Shanodin Dryads | ⬜ untested |  |
 | Shatter | ⬜ untested |  |
 | Shivan Dragon | ✅ pass |  |

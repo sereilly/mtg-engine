@@ -185,6 +185,11 @@
       "status": "pass",
       "updated_at": 1781667960.3270679
     },
+    "Northern Paladin": {
+      "reason": "Didn't let me choose a target",
+      "status": "fail",
+      "updated_at": 1782017237.2337701
+    },
     "Orcish Artillery": {
       "reason": "",
       "status": "pass",
@@ -235,6 +240,11 @@
       "status": "pass",
       "updated_at": 1781997960.0992842
     },
+    "Savannah": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782016496.2256975
+    },
     "Savannah Lions": {
       "reason": "",
       "status": "pass",
@@ -244,6 +254,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781411184.698975
+    },
+    "Serra Angel": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782016549.60368
     },
     "Shivan Dragon": {
       "reason": "",

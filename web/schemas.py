@@ -29,6 +29,7 @@ ActionKind = Literal[
     "debug_cast_free",
     "debug_cast_free_opponent",
     "debug_add_mana",
+    "debug_force_ai_attack_all",
     "search_library_confirm",
     "reorder_library_confirm",
     "dismiss_hand_reveal",
@@ -120,6 +121,9 @@ class GameActionRequest(BaseModel):
     # Yes/No answer for an optional ("you may") trigger prompt, sent with the
     # `resolve_optional_trigger` action (true = let the trigger happen).
     accept: bool | None = None
+    # Debug toggle (`debug_force_ai_attack_all`): when true, the AI declares every
+    # legal attacker each combat instead of its normal risk-weighted selection.
+    force_attack_all: bool | None = None
     # Which activated ability to use, for permanents with more than one (Rock Hydra:
     # 0 = {R} prevention, 1 = {R}{R}{R} +1/+1 counter). Index into the permanent's
     # supported activated abilities. Omitted (None) uses the first one.

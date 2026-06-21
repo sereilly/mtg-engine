@@ -22,6 +22,7 @@ from engine.ai_policy import (
     choose_combat_instant_cast_action,
     choose_reorder_library_order,
     choose_search_library_index,
+    legal_attackers,
 )
 from engine.card_loader import load_cards
 from engine.classifier import classify_card
@@ -1511,7 +1512,11 @@ def _ai_declare_attackers(session: Session) -> None:
         return
     if _seat_type(session, game.active_player_index) != "ai":
         return
-    attacker_indices = choose_attackers(game, game.active_player_index)
+    if session.force_ai_attack_all:
+        # Debug override: attack with every legal attacker, ignoring AI judgement.
+        attacker_indices = legal_attackers(game, game.active_player_index)
+    else:
+        attacker_indices = choose_attackers(game, game.active_player_index)
     ok, _ = game.declare_attackers(game.active_player_index, attacker_indices)
     if not ok:
         game.declare_attackers(game.active_player_index, [])
@@ -2780,6 +2785,13 @@ def do_action(session_id: str, req: GameActionRequest):
         player = session.game.players[target]
         player.mana_pool[color] += 1
         session.game.log.append(f"[Debug] Added {{{color}}} to {player.name}'s mana pool.")
+
+    elif req.action == "debug_force_ai_attack_all":
+        if seat_type != "human":
+            raise HTTPException(status_code=400, detail="cannot issue debug action for AI seat")
+        session.force_ai_attack_all = bool(req.force_attack_all)
+        state = "ON" if session.force_ai_attack_all else "OFF"
+        session.game.log.append(f"[Debug] Force AI to attack with all creatures: {state}.")
 
     elif req.action == "coin_flip_choose":
         if session.pregame_phase != "coin_flip":
