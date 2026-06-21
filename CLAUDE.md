@@ -31,7 +31,7 @@ python scripts/support_report.py      # per-category card-support coverage
 ```
 
 To **launch and drive the running web app** (screenshots, scripted UI flow via a
-headless-browser CDP driver), use the `/run-magic` skill at
+headless Playwright browser driver), use the `/run-magic` skill at
 `.claude/skills/run-magic/` — the board is canvas-rendered, so DOM selectors
 won't find cards; that skill documents the working harness.
 

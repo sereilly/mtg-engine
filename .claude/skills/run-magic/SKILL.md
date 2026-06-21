@@ -13,25 +13,24 @@ browser game UI (`web/static/`). The board is drawn on an HTML canvas
 **Paths below are relative to the repo root** (`c:\Users\qwv48_66yef5i\Desktop\Magic`).
 
 The agent harness for the browser is
-[.claude/skills/run-magic/driver.mjs](.claude/skills/run-magic/driver.mjs) — a
-dependency-free Node 22 script that speaks the Chrome DevTools Protocol
-directly (built-in `WebSocket` + `fetch`). `chromium-cli`/Playwright are **not**
-installed here; this driver is the substitute. It auto-detects Chrome or Edge
-on Windows and launches headless.
+[.claude/skills/run-magic/driver.py](.claude/skills/run-magic/driver.py) — a
+small Python script built on [Playwright](https://playwright.dev/python/), which
+is installed in the workspace venv (`playwright` + its bundled Chromium). It runs
+headless and manages its own browser, so no system Chrome/Edge is required.
 
 ## Prerequisites (verified on Windows 11 / PowerShell)
 
 - Python venv already present at `.venv\` with the web deps. Confirm:
   ```powershell
-  .\.venv\Scripts\python.exe -m pip list | Select-String "fastapi|uvicorn|starlette|pydantic"
+  .\.venv\Scripts\python.exe -m pip list | Select-String "fastapi|uvicorn|starlette|pydantic|playwright"
   ```
-  Expected: fastapi 0.136.x, uvicorn 0.47.x, starlette 1.1.x, pydantic 2.13.x.
-- Node 22+ for the driver:
+  Expected: fastapi 0.136.x, uvicorn 0.47.x, starlette 1.1.x, pydantic 2.13.x,
+  playwright 1.60.x.
+- Playwright's Chromium browser installed (one-time, already done in this
+  environment). If `driver.py` reports a missing browser, install it with:
   ```powershell
-  node --version
+  .\.venv\Scripts\python.exe -m playwright install chromium
   ```
-- Chrome or Edge installed (the driver auto-detects both standard install
-  paths). No `npm install` is needed — the driver has zero dependencies.
 
 ## Run (agent path) — START HERE
 
@@ -45,29 +44,35 @@ Start-Sleep -Seconds 4
 
 ### 2. Drive the browser with the driver
 
+Run the driver with the venv python. Paths below are relative to the repo root.
+
 ```powershell
-Set-Location "c:\Users\qwv48_66yef5i\Desktop\Magic\.claude\skills\run-magic"
+Set-Location "c:\Users\qwv48_66yef5i\Desktop\Magic"
+$py = ".\.venv\Scripts\python.exe"
+$drv = ".claude\skills\run-magic\driver.py"
 
 # Screenshot the home menu.
-node driver.mjs shot http://127.0.0.1:8010/ shots/home.png
+& $py $drv shot http://127.0.0.1:8010/ .claude/skills/run-magic/shots/home.png
 
 # Read any value out of the live page (prints JSON).
-node driver.mjs eval http://127.0.0.1:8010/ "document.title"        # -> "Magic LEA Web App"
+& $py $drv eval http://127.0.0.1:8010/ "document.title"        # -> "Magic LEA Web App"
 
 # Full scripted flow: Home -> Host Game -> Create Session (human vs AI),
 # then screenshot the live board. Prints progress + the in-game prompt.
-node driver.mjs flow shots/flow.png
+& $py $drv flow .claude/skills/run-magic/shots/flow.png
 ```
 
 `flow` output on success (exit 0):
 ```
-home shown: true
-host page: true
-board visible: true
-prompt: You won the coin flip!
-canvas: true
-saved shots/flow.png
+home shown: True
+host page: True
+board visible: True
+prompt: Keep or Mulligan?
+canvas: True
+saved .claude/skills/run-magic/shots/flow.png
 ```
+(The exact `prompt` text varies with the pregame state — e.g. a coin-flip or
+mulligan prompt. What matters is `board visible: True` and `canvas: True`.)
 
 Screenshots land in `.claude/skills/run-magic/shots/`. **Open the PNG and look
 at it** — `flow.png` should show the game board (life totals, mana pool, stack
@@ -81,15 +86,18 @@ Stop-Job -Name mtg; Remove-Job -Name mtg
 
 ### Driver subcommands
 
+Invoke as `& $py $drv <command> ...` (with `$py`/`$drv` set as above).
+
 | Command | What it does |
 |---|---|
-| `node driver.mjs shot <url> <out.png>` | Navigate, settle, screenshot |
-| `node driver.mjs eval <url> "<jsExpr>"` | Navigate, print JSON of `jsExpr` evaluated in the page |
-| `node driver.mjs click <url> <selector> <out.png>` | Navigate, click a selector, screenshot |
-| `node driver.mjs flow <out.png>` | Full menu→game flow, screenshot the live board |
+| `driver.py shot <url> <out.png>` | Navigate, settle, screenshot |
+| `driver.py eval <url> "<jsExpr>"` | Navigate, print JSON of `jsExpr` evaluated in the page |
+| `driver.py evalshot <url> "<jsExpr>" <out.png>` | Navigate, run `jsExpr`, then screenshot |
+| `driver.py click <url> <selector> <out.png>` | Navigate, click a selector, screenshot |
+| `driver.py flow <out.png>` | Full menu→game flow, screenshot the live board |
 
-Env: `APP_URL` (default `http://127.0.0.1:8010`), `CHROME` (override exe path),
-`HEADED=1` (visible window instead of headless).
+Env: `APP_URL` (default `http://127.0.0.1:8010`), `HEADED=1` (visible window
+instead of headless).
 
 ## Direct invocation (no browser) — drive the engine / API
 
@@ -139,15 +147,15 @@ browser — for agents use the background-job + driver path above.
 - **Real menu selectors** (from `web/static/index.html`): `#homeHostBtn` →
   `#hostGamePage`, the `#mode` `<select>`, `#startBtn` ("Create Session"),
   board container `#boardPanel` (loses its `hidden` class when the game starts).
-- **Driver picks its own debug port** (`9222 + pid%1000`) and a throwaway
-  `--user-data-dir`, so multiple `driver.mjs` runs don't collide. Each run
-  launches and kills its own browser; nothing to clean up.
+- **Each driver run launches its own Playwright Chromium** in a fresh context
+  and closes it on exit, so multiple `driver.py` runs don't collide; nothing to
+  clean up.
 
 ## Troubleshooting
 
 | Symptom | Fix |
 |---|---|
-| `node driver.mjs ...` prints `ERROR Chrome devtools endpoint never came up` | Chrome/Edge not found at a standard path. Set `CHROME` to the exe, e.g. `$env:CHROME="C:\Program Files\Google\Chrome\Application\chrome.exe"`. |
-| `flow` shows `board visible: false` (exit 1) | Server not running or wrong port. Confirm step 1 returned `200` and `APP_URL` matches. |
+| `driver.py` prints `ERROR ...Executable doesn't exist...` | Playwright's Chromium isn't installed. Run `.\.venv\Scripts\python.exe -m playwright install chromium`. |
+| `flow` shows `board visible: False` (exit 1) | Server not running or wrong port. Confirm step 1 returned `200` and `APP_URL` matches. |
 | API returns 422 on session create | Use a valid `mode` literal (see Gotchas), not `"ai"`. |
-| `shot`/`flow` PNG shows the menu, not the board | Increase the post-`Create Session` settle in `driver.mjs` (`flow` waits 3500 ms); session creation deals opening hands and can be slow on first run. |
+| `shot`/`flow` PNG shows the menu, not the board | Increase the post-`Create Session` settle in `driver.py` (`flow` waits 3500 ms); session creation deals opening hands and can be slow on first run. |
