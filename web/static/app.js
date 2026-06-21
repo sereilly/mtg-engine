@@ -4375,6 +4375,7 @@ function createCardElement(card, options = {}) {
     targetSeat = null,
     zoneKind = "",
     playable = false,
+    showManaCost = true,
   } = options;
   const cardEl = document.createElement("div");
   cardEl.className = "card";
@@ -4728,7 +4729,7 @@ function createCardElement(card, options = {}) {
   wrapper.className = "card-wrapper";
   wrapper.appendChild(cardEl);
 
-  if (!hidden && typeof card === "object" && card.mana_cost) {
+  if (!hidden && showManaCost && typeof card === "object" && card.mana_cost) {
     const costEl = document.createElement("div");
     costEl.className = "card-mana-cost";
     costEl.innerHTML = renderSymbolsInline(card.mana_cost);
@@ -4858,7 +4859,7 @@ function renderZoneCards(containerId, cards, { zoneSeat = null, zoneKind = "" } 
   // while keeping each card's original index for targeting clicks.
   for (let index = cards.length - 1; index >= 0; index--) {
     const card = cards[index];
-    const el = createCardElement(card, { compact: true });
+    const el = createCardElement(card, { compact: true, showManaCost: false });
     if (graveyardTargeting && String(card.type || "").toLowerCase().includes("creature")) {
       el.classList.add("targeting-valid");
       el.style.cursor = "pointer";
