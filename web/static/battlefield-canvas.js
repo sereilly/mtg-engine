@@ -394,12 +394,15 @@ class BattlefieldCanvas {
     const free = this.cardItems.filter((c) => !stackedKeys.has(c.key));
     const stacked = [];
     for (const stack of this.stacks) {
-      // Aura stacks keep the enchanted permanent at keys[0]; draw its auras
-      // first so they sit BEHIND the creature and never occlude it. Regular
-      // piles keep their natural bottom-to-top order.
+      // Aura stacks keep the enchanted permanent at keys[0] and fan the auras
+      // UPWARD (keys[last] sits highest on screen). Draw them top-down — the
+      // topmost (highest) aura first so it sits BEHIND, then progressively
+      // lower auras painted on top — so each lower card's top edge shows. The
+      // enchanted permanent (keys[0], lowest) is drawn last, on top of all,
+      // and never occluded. Regular piles keep their natural order.
       const drawKeys =
         stack.kind === "aura" && stack.keys.length > 1
-          ? [...stack.keys.slice(1), stack.keys[0]]
+          ? [...stack.keys].reverse()
           : stack.keys;
       for (const k of drawKeys) {
         const item = this.cardItems.find((c) => c.key === k);
