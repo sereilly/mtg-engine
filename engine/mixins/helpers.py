@@ -143,6 +143,12 @@ class GameHelpersMixin:
             attached.toughness_bonus -= toughness_delta
         for key in aura.metadata.get("aura_granted_meta", []) or []:
             attached.metadata.pop(key, None)
+        # Animate Artifact (and similar) replaced the permanent's card with an
+        # animated artifact-creature version. Restore the original card so it stops
+        # being a creature and the UI drops its power/toughness labels (CR 611.3).
+        pre_animate_card = attached.metadata.pop("pre_animate_card", None)
+        if pre_animate_card is not None:
+            attached.card = pre_animate_card
         if attached.metadata.get("attached_aura") is aura:
             attached.metadata.pop("attached_aura", None)
 

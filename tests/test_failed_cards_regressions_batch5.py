@@ -436,33 +436,48 @@ class TestPowerLeak:
 
 # ---------------------------------------------------------------------------
 # Iron Star — "I can't use Iron Star's triggered ability. It should prompt me to
-# use it when a player casts a red spell."  The engine gains 1 life whenever any
-# player casts a red spell.
+# use it when a player casts a red spell."  Rules text: "Whenever a player casts a
+# red spell, you may pay {1}. If you do, you gain 1 life." The {1} payment is
+# required (paid automatically from the pool when able); with no mana, no life.
 # ---------------------------------------------------------------------------
 
 class TestIronStar:
     def test_gains_life_when_either_player_casts_a_red_spell(self, cards):
         star = Permanent(card=cards["Iron Star"])
         p1 = PlayerState(name="P1", battlefield=[star], hand=[cards["Lightning Bolt"]], life=20)
+        p1.mana_pool["C"] = 1  # available to pay the {1}
         p2 = PlayerState(name="P2", life=20)
         game = _game(p1, p2)
         game.cast_from_hand(0, "Lightning Bolt", target_player_index=1)
         game.resolve_stack()
         assert p1.life == 21
+        assert p1.mana_pool["C"] == 0  # the {1} was paid
 
         # Opponent casting a red spell also triggers Iron Star for its controller.
         star2 = Permanent(card=cards["Iron Star"])
         p1 = PlayerState(name="P1", battlefield=[star2], life=20)
+        p1.mana_pool["C"] = 1
         p2 = PlayerState(name="P2", hand=[cards["Lightning Bolt"]], life=20)
         game = _game(p1, p2)
         game.cast_from_hand(1, "Lightning Bolt", target_player_index=0)
         game.resolve_stack()
-        # P1 took 3 from the bolt but gained 1 from Iron Star.
+        # P1 took 3 from the bolt but gained 1 from Iron Star (paid {1}).
         assert p1.life == 18
+
+    def test_no_life_when_unable_to_pay(self, cards):
+        # Empty mana pool: the optional {1} can't be paid, so no life is gained.
+        star = Permanent(card=cards["Iron Star"])
+        p1 = PlayerState(name="P1", battlefield=[star], hand=[cards["Lightning Bolt"]], life=20)
+        p2 = PlayerState(name="P2", life=20)
+        game = _game(p1, p2)
+        game.cast_from_hand(0, "Lightning Bolt", target_player_index=1)
+        game.resolve_stack()
+        assert p1.life == 20
 
     def test_no_life_on_a_nonred_spell(self, cards):
         star = Permanent(card=cards["Iron Star"])
         p1 = PlayerState(name="P1", battlefield=[star], hand=[cards["Ancestral Recall"]], life=20)
+        p1.mana_pool["C"] = 1
         p2 = PlayerState(name="P2", life=20)
         game = _game(p1, p2)
         game.cast_from_hand(0, "Ancestral Recall", target_player_index=0)

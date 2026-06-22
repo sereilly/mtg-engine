@@ -266,11 +266,30 @@ class EffectsMixin:
                 return True
         return False
 
-    def _reanimate_creature_to_battlefield(self, caster: PlayerState) -> bool:
+    def _reanimate_creature_to_battlefield(
+        self,
+        caster: PlayerState,
+        target: PlayerState | None = None,
+        target_permanent_index: int | None = None,
+    ) -> bool:
+        controller_index = self.players.index(caster)
+        # "Return target creature card from your graveyard" (Resurrection): honor the
+        # creature the caster chose (Rule 601.2c) instead of always grabbing the
+        # first one. target is the graveyard's owner; for Resurrection that is the
+        # caster, but a chosen index is respected for any reanimation source.
+        source = target if target is not None else caster
+        if (
+            isinstance(target_permanent_index, int)
+            and 0 <= target_permanent_index < len(source.graveyard)
+            and source.graveyard[target_permanent_index].primary_type == "creature"
+        ):
+            revived = source.graveyard.pop(target_permanent_index)
+            self._put_permanent_onto_battlefield(controller_index, Permanent(card=revived), None)
+            return True
+        # Fallback (AI / legacy callers with no explicit choice): first creature.
         for idx, card in enumerate(caster.graveyard):
             if card.primary_type == "creature":
                 revived = caster.graveyard.pop(idx)
-                controller_index = self.players.index(caster)
                 self._put_permanent_onto_battlefield(controller_index, Permanent(card=revived), None)
                 return True
         return False

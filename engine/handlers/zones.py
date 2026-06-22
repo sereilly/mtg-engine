@@ -160,7 +160,11 @@ def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstru
 @effect_handler("reanimate_creature")
 def reanimate_creature(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     caster = context.caster
-    reanimated = game._reanimate_creature_to_battlefield(caster)
+    # Resurrection returns "target creature card from your graveyard", so the chosen
+    # index is into the caster's own graveyard regardless of which seat the UI tags.
+    idx = context.target_permanent_index
+    idx = idx if isinstance(idx, int) else None
+    reanimated = game._reanimate_creature_to_battlefield(caster, caster, idx)
     game.log.append("Reanimated creature to battlefield" if reanimated else "No creature to reanimate")
     return True, "resolved"
 

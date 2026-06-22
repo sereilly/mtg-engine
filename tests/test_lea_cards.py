@@ -1641,6 +1641,11 @@ def test_blaze_of_glory_sets_forced_blocking_marker(all_cards):
     p1 = PlayerState(name="P1", hand=[blaze])
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
     game = Game(players=[p1, p2])
+    # Blaze of Glory may be cast only during combat before blockers are declared.
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # → beginning_of_combat
+    game.advance_combat_phase()  # → declare_attackers
 
     result = game.cast_from_hand(0, "Blaze of Glory", target_player_index=1)
 
@@ -4127,6 +4132,7 @@ def test_crystal_rod_gains_life_when_controller_casts_blue_spell(all_cards):
     blue_spell = _mk_card("Blue Bolt", "Instant", "", mana_cost="{U}", colors=("U",))
 
     p1 = PlayerState(name="P1", hand=[blue_spell], life=20)
+    p1.mana_pool["C"] = 1  # to pay Crystal Rod's optional {1}
     p1.battlefield.append(Permanent(card=crystal_rod))
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
@@ -4895,12 +4901,13 @@ def test_iron_star_gains_life_on_red_spell(all_cards):
     lightning_bolt = _get(all_cards, "Lightning Bolt")
 
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=star)], life=20)
+    p1.mana_pool["C"] = 1  # to pay Iron Star's optional {1}
     p2 = PlayerState(name="P2", hand=[lightning_bolt], life=20)
     game = Game(players=[p1, p2])
 
     game.cast_from_hand(1, "Lightning Bolt", target_player_index=1)
 
-    # Iron Star should have triggered: P1 gains 1 life
+    # Iron Star should have triggered: P1 paid {1} and gains 1 life
     assert p1.life == 21
 
 
@@ -4935,6 +4942,7 @@ def test_ivory_cup_triggers_on_white_spell(all_cards):
     salve = _get(all_cards, "Healing Salve")
 
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=cup)], life=20)
+    p1.mana_pool["C"] = 1  # to pay Ivory Cup's optional {1}
     p2 = PlayerState(name="P2", hand=[salve])
     game = Game(players=[p1, p2])
 
@@ -6537,6 +6545,7 @@ def test_throne_of_bone_gains_life_when_black_spell_cast(all_cards):
     black_spell = _mk_card("Dark Ritual", "Instant", "", mana_cost="{B}", colors=("B",))
 
     p1 = PlayerState(name="P1", hand=[black_spell], battlefield=[Permanent(card=throne)], life=20)
+    p1.mana_pool["C"] = 1  # to pay Throne of Bone's optional {1}
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
 
@@ -7160,6 +7169,7 @@ def test_wooden_sphere_gains_life_when_green_spell_cast(all_cards):
     green_spell = _mk_card("Giant Growth", "Instant", "", mana_cost="{G}", colors=("G",))
 
     p1 = PlayerState(name="P1", hand=[green_spell], battlefield=[Permanent(card=sphere)], life=20)
+    p1.mana_pool["C"] = 1  # to pay Wooden Sphere's optional {1}
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
 
@@ -8949,6 +8959,7 @@ def test_wooden_sphere_gains_life_on_green_creature_spell(all_cards):
     sphere = _get(all_cards, "Wooden Sphere")
     bears = _get(all_cards, "Grizzly Bears")
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=sphere)], hand=[bears])
+    p1.mana_pool["C"] = 1  # to pay Wooden Sphere's optional {1}
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
     game.enforce_mana_costs = False

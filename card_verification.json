@@ -5,6 +5,11 @@
       "status": "pass",
       "updated_at": 1782005045.2563467
     },
+    "Ankh of Mishra": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782105248.329876
+    },
     "Armageddon": {
       "reason": "",
       "status": "pass",
@@ -40,6 +45,11 @@
       "status": "pass",
       "updated_at": 1781761302.7020597
     },
+    "Blessing": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782106425.0137851
+    },
     "Blue Elemental Blast": {
       "reason": "",
       "status": "pass",
@@ -54,6 +64,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782020824.069998
+    },
+    "Celestial Prism": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782105893.8562238
     },
     "Clone": {
       "reason": "",
@@ -115,6 +130,11 @@
       "status": "pass",
       "updated_at": 1781997943.5428312
     },
+    "Deathgrip": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782105511.172316
+    },
     "Dingus Egg": {
       "reason": "",
       "status": "pass",
@@ -150,6 +170,11 @@
       "status": "pass",
       "updated_at": 1781756819.3621137
     },
+    "Firebreathing": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782105849.706113
+    },
     "Fog": {
       "reason": "",
       "status": "pass",
@@ -164,6 +189,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782086170.3540556
+    },
+    "Giant Growth": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782104927.8845181
     },
     "Goblin Balloon Brigade": {
       "reason": "",
@@ -189,6 +219,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781461708.2940688
+    },
+    "Holy Armor": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782107620.0918534
     },
     "Holy Strength": {
       "reason": "",
@@ -255,10 +290,20 @@
       "status": "pass",
       "updated_at": 1781585587.1657355
     },
+    "Manabarbs": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782107912.8393338
+    },
     "Merfolk of the Pearl Trident": {
       "reason": "",
       "status": "pass",
       "updated_at": 1781378762.2991576
+    },
+    "Mind Twist": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782105016.6717145
     },
     "Mons's Goblin Raiders": {
       "reason": "",
@@ -279,6 +324,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781667960.3270679
+    },
+    "Northern Paladin": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782107544.2623038
     },
     "Orcish Artillery": {
       "reason": "",
@@ -339,6 +389,16 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781997960.0992842
+    },
+    "Rod of Ruin": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782107895.8262937
+    },
+    "Samite Healer": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782107959.368606
     },
     "Savannah": {
       "reason": "",
@@ -410,6 +470,11 @@
       "status": "pass",
       "updated_at": 1782016294.1066148
     },
+    "Tundra": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782106270.5000408
+    },
     "Tunnel": {
       "reason": "",
       "status": "pass",
@@ -434,6 +499,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782008091.2800379
+    },
+    "Wall of Stone": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782107449.490769
     },
     "Wall of Swords": {
       "reason": "",

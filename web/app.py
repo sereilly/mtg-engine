@@ -566,6 +566,10 @@ def _serialize_player(
         # Circle of Protection, Healing Salve's "to any target" mode, …).
         "damage_prevention_pool": player.damage_prevention_pool,
         "shield_source": _shield_source_payload(player.damage_prevention_source),
+        # Color a Circle of Protection shield is set against (e.g. "R").
+        "shield_color": player.damage_prevention_color,
+        # Channel emblem: while active the player may pay life for {C} this turn.
+        "channel_active": player.channel_active_until_eot,
         "hand": hand,
         "hand_count": len(player.hand),
         "deck": {"count": len(player.library)},
@@ -1076,6 +1080,19 @@ def _compute_playable_hand_indices(session: Session, player_index: int) -> list[
         # Card-specific timing restriction
         if "cast this spell only during your declare attackers step" in card.oracle_text.lower():
             if game.current_step != "declare_attackers" or game.active_player_index != player_index:
+                continue
+
+        # Blaze of Glory: only during combat before blockers are declared.
+        if "cast this spell only during combat before blockers are declared" in card.oracle_text.lower():
+            if game.current_phase != "combat" or game.current_step not in (
+                "beginning_of_combat",
+                "declare_attackers",
+            ):
+                continue
+
+        # False Orders / similar: only during the declare blockers step.
+        if "cast this spell only during the declare blockers step" in card.oracle_text.lower():
+            if game.current_phase != "combat" or game.current_step != "declare_blockers":
                 continue
 
         # Target validation (aura enchant targets, removal targets, counter targets, etc.)
@@ -2350,6 +2367,17 @@ def do_action(session_id: str, req: GameActionRequest):
             req.seat,
             emblem_index=req.emblem_index if req.emblem_index is not None else 0,
         )
+        if not result.supported:
+            raise HTTPException(status_code=400, detail=result.details)
+        session.game.note_priority_action_taken(req.seat)
+
+    elif req.action == "channel_mana":
+        # Channel emblem: "any time you could activate a mana ability, you may pay 1
+        # life. If you do, add {C}." Pay `x_value` life (default 1) for that many {C}.
+        if not session.game.has_priority(req.seat):
+            raise HTTPException(status_code=400, detail="you do not currently have priority")
+        amount = req.x_value if req.x_value is not None else 1
+        result = session.game.use_channel_mana(req.seat, amount)
         if not result.supported:
             raise HTTPException(status_code=400, detail=result.details)
         session.game.note_priority_action_taken(req.seat)

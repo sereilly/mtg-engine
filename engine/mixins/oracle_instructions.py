@@ -471,6 +471,11 @@ class OracleInstructionsMixin:
                     raw=new_raw,
                 )
 
+                # Snapshot the original (non-creature) card so the animation can be
+                # undone when this Aura leaves the battlefield (CR 611.3). Without
+                # this the artifact would keep its granted creature type and P/T —
+                # the UI would still show stale power/toughness labels.
+                target_artifact.metadata["pre_animate_card"] = target_artifact.card
                 target_artifact.card = new_card
                 self.log.append(f"{aura_permanent.card.name} animated {target_artifact.card.name} into an artifact creature")
         elif text.startswith("enchant enchantment"):

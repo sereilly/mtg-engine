@@ -147,6 +147,9 @@ class PlayerState:
     # Name of the card/effect that granted the player's current prevention pool,
     # surfaced as a hover preview on the life pill's shield badge.
     damage_prevention_source: str | None = None
+    # Color symbol of the source a Circle of Protection shield is set against
+    # (e.g. "R" for Circle of Protection: Red), for UI display.
+    damage_prevention_color: str | None = None
     combat_damage_cap_one_charges: int = 0
     has_no_max_hand_size: bool = False
     can_spend_white_as_red: bool = False

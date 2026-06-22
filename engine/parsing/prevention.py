@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import re
 
-from ..oracle_types import _instruction
+from ..oracle_types import _COLOR_WORD_TO_SYMBOL, _instruction
 from .base import RuleResult, parse_rule
 
 _PREVENT_N_RE = re.compile(r"prevent the next (\d+) damage")
+_COLOR_SOURCE_RE = re.compile(r"a (\w+) source of your choice")
 
 
 @parse_rule(730)
@@ -35,11 +36,25 @@ def prevent_next_n_damage(text: str, activated: bool) -> RuleResult:
     return None
 
 
-# Circle of Protection style: "would deal damage to you this turn, prevent that damage"
+# Circle of Protection style: "The next time a red source of your choice would deal
+# damage to you this turn, prevent that damage." The controller chooses a source of
+# the named color; the color is captured so the UI can prompt for that source.
 @parse_rule(750)
 def color_protection_shield(text: str, activated: bool) -> RuleResult:
     if "would deal damage to you this turn, prevent that damage" in text and activated:
-        return _instruction("grant_prevention_shield", amount=1, protection_kind="color"), "activated_prevent"
+        color_match = _COLOR_SOURCE_RE.search(text)
+        prevention_color = (
+            _COLOR_WORD_TO_SYMBOL.get(color_match.group(1)) if color_match else None
+        )
+        return (
+            _instruction(
+                "grant_prevention_shield",
+                amount=1,
+                protection_kind="color",
+                prevention_color=prevention_color,
+            ),
+            "activated_prevent",
+        )
     return None
 
 

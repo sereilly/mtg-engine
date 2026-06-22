@@ -1236,7 +1236,11 @@ function cardRequiresTargetGraveyardCreature(card) {
   const text = (card.oracle_text || "").toLowerCase();
   // Animate Dead and similar reanimation Auras enchant a creature card in a
   // graveyard, chosen as the spell's target when it is cast (Rule 601.2c).
-  return text.includes("enchant creature card in a graveyard");
+  if (text.includes("enchant creature card in a graveyard")) return true;
+  // Resurrection / Raise Dead: "Return target creature card from ... graveyard".
+  // The player must choose which creature card in a graveyard to target.
+  if (text.includes("target creature card") && text.includes("graveyard")) return true;
+  return false;
 }
 
 function getTargetableGraveyardCreatures(state = currentState) {
@@ -3752,7 +3756,7 @@ function startCastStackSpellPrompt(card, castAction = "cast") {
   updateActionHint(`Choose a spell on the stack for ${cardName} to target (glowing).`);
 }
 
-function startCastXPrompt(card, targetSeat, targetPermanentIndex = null, castAction = "cast") {
+function startCastXPrompt(card, targetSeat, targetPermanentIndex = null, castAction = "cast", targetStackIndex = null) {
   const cardName = normalizeCardName(card);
   if (!cardName) return;
 
@@ -3762,6 +3766,7 @@ function startCastXPrompt(card, targetSeat, targetPermanentIndex = null, castAct
     cardName,
     targetSeat,
     targetPermanentIndex,
+    targetStackIndex,
     castAction,
     manaRequirement: parseManaCostSymbols(card.mana_cost || ""),
     maxX: getMaxAffordableX(getCurrentPlayerState()?.mana_pool, card.mana_cost || ""),
@@ -3915,9 +3920,12 @@ function resolvePendingCastX(xValue) {
     target_seat: pending.targetSeat,
     x_value: selectedX,
   };
-  // Fireball-style casts carry a list of split targets; everything else carries
-  // a single permanent index (or none, for a face/player target).
-  if (Array.isArray(pending.dividedIndices)) {
+  // Fireball-style casts carry a list of split targets; Power Sink carries the
+  // index of the spell on the stack it counters; everything else carries a single
+  // permanent index (or none, for a face/player target).
+  if (Number.isInteger(pending.targetStackIndex)) {
+    body.target_stack_index = pending.targetStackIndex;
+  } else if (Array.isArray(pending.dividedIndices)) {
     body.target_permanent_indices = pending.dividedIndices;
   } else {
     body.permanent_index = pending.targetPermanentIndex;
@@ -5349,6 +5357,13 @@ function selectStackSpellTarget(arrayIndex) {
     })
       .then(() => updateActionHint(`Activated ${pending.cardName}.`))
       .catch((e) => updateActionHint(e.message, true));
+    return;
+  }
+
+  // Power Sink ({X}{U}): after choosing the spell to counter, prompt for X (the
+  // amount its controller must pay) before sending the cast.
+  if (hasXCost(pending.card)) {
+    startCastXPrompt(pending.card, null, null, pending.castAction || "cast", arrayIndex);
     return;
   }
 

@@ -30,6 +30,16 @@ def counter_target_spell_with_mana_value_x(text: str, activated: bool) -> RuleRe
     return None
 
 
+# Power Sink: "Counter target spell unless its controller pays {X}. If that player
+# doesn't, they tap all lands with mana abilities they control and lose all unspent
+# mana." The controller may pay {X} (X chosen by Power Sink's caster) to save it.
+@parse_rule(1048)
+def counter_target_spell_unless_pays_x(text: str, activated: bool) -> RuleResult:
+    if "counter target spell unless its controller pays {x}" in text:
+        return _instruction("counter_top_stack_spell", unless_pays_x=True), "spell_pattern"
+    return None
+
+
 @parse_rule(1050)
 def counter_target_spell(text: str, activated: bool) -> RuleResult:
     if "counter target spell" in text:

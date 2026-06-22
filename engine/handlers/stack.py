@@ -70,6 +70,27 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
                     f"{card.name}: X={context.x_value} does not match {target.card.name}'s mana value {target_mv}, cannot counter"
                 )
                 return True, "resolved"
+        # Power Sink: "Counter target spell unless its controller pays {X}." The
+        # targeted spell's controller may pay {X} (X chosen by Power Sink's caster)
+        # to keep their spell. Paid automatically from the pool when able
+        # (deterministic). Paying {0} always succeeds, so X=0 counters nothing.
+        if instruction.payload.get("unless_pays_x"):
+            cost = max(0, int(context.x_value or 0))
+            spell_controller = game.players[target.caster_index]
+            available = sum(spell_controller.mana_pool.get(s, 0) for s in spell_controller.mana_pool)
+            if available >= cost:
+                remaining = cost
+                for sym in list(spell_controller.mana_pool):
+                    while remaining > 0 and spell_controller.mana_pool.get(sym, 0) > 0:
+                        spell_controller.mana_pool[sym] -= 1
+                        remaining -= 1
+                game.log.append(
+                    f"{spell_controller.name} paid {{{cost}}}; {target.card.name} is not countered by {card.name}"
+                )
+                return True, "resolved"
+            # Couldn't pay: spell is countered and the rider (tap lands, drain mana)
+            # applies via the ON_SPELL_COUNTERED hook below.
+
         game.stack.remove(target)
         countered = target
         game.players[countered.caster_index].graveyard.append(countered.card)

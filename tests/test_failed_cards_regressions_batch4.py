@@ -458,6 +458,7 @@ class TestWoodenSphere:
         p1 = PlayerState(
             name="P1", battlefield=[sphere, bear], hand=[cards["Giant Growth"]], life=20
         )
+        p1.mana_pool["C"] = 1  # to pay Wooden Sphere's optional {1}
         p2 = PlayerState(name="P2")
         game = _game(p1, p2)
 

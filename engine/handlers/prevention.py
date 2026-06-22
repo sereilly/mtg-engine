@@ -51,7 +51,15 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
     if instruction.payload.get("protection_kind") == "color" or instruction.payload.get("to_self"):
         caster.damage_prevention_pool += amount
         caster.damage_prevention_source = source_name
-        game.log.append(f"{caster.name} gains prevention shield for {amount} damage")
+        # Circle of Protection: remember the chosen source's color so the UI can
+        # show which color (red/blue/…) the shield is set against.
+        prevention_color = instruction.payload.get("prevention_color")
+        if prevention_color:
+            caster.damage_prevention_color = prevention_color
+        game.log.append(
+            f"{caster.name} gains prevention shield for {amount} damage"
+            + (f" from a {prevention_color} source" if prevention_color else "")
+        )
         return True, "resolved"
 
     # "Prevent the next N damage that would be dealt to any target" (Healing

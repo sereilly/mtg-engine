@@ -3,9 +3,9 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **290**
-- Passed: **93**
+- Passed: **107**
 - Failed: **0**
-- Untested: **197**
+- Untested: **183**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -14,7 +14,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Animate Artifact | ⬜ untested |  |
 | Animate Dead | ⬜ untested |  |
 | Animate Wall | ⬜ untested |  |
-| Ankh of Mishra | ⬜ untested |  |
+| Ankh of Mishra | ✅ pass |  |
 | Armageddon | ✅ pass |  |
 | Aspect of Wolf | ⬜ untested |  |
 | Bad Moon | ⬜ untested |  |
@@ -30,7 +30,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Black Vise | ✅ pass |  |
 | Black Ward | ✅ pass |  |
 | Blaze of Glory | ⬜ untested |  |
-| Blessing | ⬜ untested |  |
+| Blessing | ✅ pass |  |
 | Blue Elemental Blast | ✅ pass |  |
 | Blue Ward | ✅ pass |  |
 | Bog Wraith | ⬜ untested |  |
@@ -38,7 +38,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Burrowing | ⬜ untested |  |
 | Camouflage | ⬜ untested |  |
 | Castle | ⬜ untested |  |
-| Celestial Prism | ⬜ untested |  |
+| Celestial Prism | ✅ pass |  |
 | Channel | ⬜ untested |  |
 | Chaos Orb | ⬜ untested |  |
 | Chaoslace | ⬜ untested |  |
@@ -66,7 +66,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Dark Ritual | ✅ pass |  |
 | Darkpact | ⬜ untested |  |
 | Death Ward | ✅ pass |  |
-| Deathgrip | ⬜ untested |  |
+| Deathgrip | ✅ pass |  |
 | Deathlace | ⬜ untested |  |
 | Demonic Attorney | ⬜ untested |  |
 | Demonic Hordes | ⬜ untested |  |
@@ -93,7 +93,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Feedback | ⬜ untested |  |
 | Fire Elemental | ✅ pass |  |
 | Fireball | ⬜ untested |  |
-| Firebreathing | ⬜ untested |  |
+| Firebreathing | ✅ pass |  |
 | Flashfires | ⬜ untested |  |
 | Flight | ⬜ untested |  |
 | Fog | ✅ pass |  |
@@ -105,7 +105,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Fungusaur | ⬜ untested |  |
 | Gaea's Liege | ⬜ untested |  |
 | Gauntlet of Might | ✅ pass |  |
-| Giant Growth | ⬜ untested |  |
+| Giant Growth | ✅ pass |  |
 | Giant Spider | ⬜ untested |  |
 | Glasses of Urza | ⬜ untested |  |
 | Gloom | ⬜ untested |  |
@@ -119,7 +119,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Healing Salve | ✅ pass |  |
 | Helm of Chatzuk | ⬜ untested |  |
 | Hill Giant | ⬜ untested |  |
-| Holy Armor | ⬜ untested |  |
+| Holy Armor | ✅ pass |  |
 | Holy Strength | ✅ pass |  |
 | Howl from Beyond | ⬜ untested |  |
 | Howling Mine | ✅ pass |  |
@@ -166,11 +166,11 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Mana Flare | ✅ pass |  |
 | Mana Short | ✅ pass |  |
 | Mana Vault | ⬜ untested |  |
-| Manabarbs | ⬜ untested |  |
+| Manabarbs | ✅ pass |  |
 | Meekstone | ⬜ untested |  |
 | Merfolk of the Pearl Trident | ✅ pass |  |
 | Mesa Pegasus | ⬜ untested |  |
-| Mind Twist | ⬜ untested |  |
+| Mind Twist | ✅ pass |  |
 | Mons's Goblin Raiders | ✅ pass |  |
 | Mountain | ⬜ untested |  |
 | Mox Emerald | ✅ pass |  |
@@ -183,7 +183,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Nettling Imp | ⬜ untested |  |
 | Nevinyrral's Disk | ⬜ untested |  |
 | Nightmare | ⬜ untested |  |
-| Northern Paladin | ⬜ untested |  |
+| Northern Paladin | ✅ pass |  |
 | Obsianus Golem | ⬜ untested |  |
 | Orcish Artillery | ✅ pass |  |
 | Orcish Oriflamme | ⬜ untested |  |
@@ -216,10 +216,10 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Righteousness | ⬜ untested |  |
 | Roc of Kher Ridges | ✅ pass |  |
 | Rock Hydra | ⬜ untested |  |
-| Rod of Ruin | ⬜ untested |  |
+| Rod of Ruin | ✅ pass |  |
 | Royal Assassin | ⬜ untested |  |
 | Sacrifice | ⬜ untested |  |
-| Samite Healer | ⬜ untested |  |
+| Samite Healer | ✅ pass |  |
 | Savannah | ✅ pass |  |
 | Savannah Lions | ✅ pass |  |
 | Scathe Zombies | ⬜ untested |  |
@@ -262,7 +262,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Tranquility | ✅ pass |  |
 | Tropical Island | ⬜ untested |  |
 | Tsunami | ✅ pass |  |
-| Tundra | ⬜ untested |  |
+| Tundra | ✅ pass |  |
 | Tunnel | ✅ pass |  |
 | Twiddle | ⬜ untested |  |
 | Two-Headed Giant of Foriys | ⬜ untested |  |
@@ -279,7 +279,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Wall of Brambles | ✅ pass |  |
 | Wall of Fire | ⬜ untested |  |
 | Wall of Ice | ✅ pass |  |
-| Wall of Stone | ⬜ untested |  |
+| Wall of Stone | ✅ pass |  |
 | Wall of Swords | ✅ pass |  |
 | Wall of Water | ⬜ untested |  |
 | Wall of Wood | ⬜ untested |  |

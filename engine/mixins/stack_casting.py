@@ -307,12 +307,17 @@ class StackCastingMixin:
         if ability.instruction.kind == "destroy_target_permanent":
             color_filter = ability.instruction.payload.get("color_filter")
             type_filter = ability.instruction.payload.get("type_filter")
-            if (color_filter or type_filter) and isinstance(target_permanent_index, int):
+            # Dwarven Demolition Team / Tunnel: "Destroy target Wall." The subtype
+            # filter must be enforced too — a non-Wall creature is an illegal target.
+            subtype_filter = ability.instruction.payload.get("subtype_filter")
+            if (color_filter or type_filter or subtype_filter) and isinstance(target_permanent_index, int):
                 bf = target_player.battlefield
                 legal = 0 <= target_permanent_index < len(bf)
                 if legal and color_filter and color_filter not in bf[target_permanent_index].card.colors:
                     legal = False
                 if legal and type_filter and type_filter not in bf[target_permanent_index].card.type_line.lower():
+                    legal = False
+                if legal and subtype_filter and subtype_filter not in bf[target_permanent_index].card.type_line.lower():
                     legal = False
                 if not legal:
                     details = f"no valid target for {permanent.card.name}"
@@ -471,6 +476,19 @@ class StackCastingMixin:
         if "cast this spell only during the declare blockers step" in card.oracle_text.lower():
             if self.current_turn_phase != "combat" or self.current_step != "declare_blockers":
                 details = "can only be cast during the declare blockers step"
+                self.log.append(details)
+                return SimulationResult(card.name, False, classification.effect_kind, details)
+
+        # Blaze of Glory: "Cast this spell only during combat before blockers are
+        # declared" — legal during the beginning-of-combat and declare-attackers
+        # steps (while attackers may still be declared / blockers not yet declared).
+        if "cast this spell only during combat before blockers are declared" in card.oracle_text.lower():
+            before_blockers = (
+                self.current_turn_phase == "combat"
+                and self.current_step in ("beginning_of_combat", "declare_attackers")
+            )
+            if not before_blockers:
+                details = "can only be cast during combat before blockers are declared"
                 self.log.append(details)
                 return SimulationResult(card.name, False, classification.effect_kind, details)
 

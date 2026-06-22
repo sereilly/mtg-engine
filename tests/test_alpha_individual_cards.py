@@ -169,6 +169,9 @@ def _run_card(card: CardDefinition, all_cards: list[CardDefinition]) -> tuple[Ga
     if card.name == "False Orders":
         # False Orders may only be cast during the declare blockers step.
         game._set_phase_and_step("combat", "declare_blockers")
+    if card.name == "Blaze of Glory":
+        # Blaze of Glory may be cast only during combat before blockers are declared.
+        game._set_phase_and_step("combat", "declare_attackers")
     if card.name == "Gaea's Liege":
         # CDA: P/T = number of Forests its controller controls. Without a Forest
         # it enters as a 0/0 and dies to state-based actions (704.5f).
