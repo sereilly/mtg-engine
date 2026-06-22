@@ -5,6 +5,16 @@
       "status": "pass",
       "updated_at": 1782005045.2563467
     },
+    "Animate Dead": {
+      "reason": "The targeting works but the prompt is wrong",
+      "status": "fail",
+      "updated_at": 1782022393.0898745
+    },
+    "Animate Wall": {
+      "reason": "The targeting prompt should only highlight valid targets (i.e. walls)",
+      "status": "fail",
+      "updated_at": 1782019182.9736893
+    },
     "Armageddon": {
       "reason": "",
       "status": "pass",
@@ -15,15 +25,35 @@
       "status": "pass",
       "updated_at": 1781843411.049817
     },
+    "Birds of Paradise": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782022822.5738397
+    },
+    "Black Knight": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782018648.8488278
+    },
     "Black Lotus": {
       "reason": "",
       "status": "pass",
       "updated_at": 1781410851.5122583
     },
+    "Black Vise": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782021267.037546
+    },
     "Black Ward": {
       "reason": "",
       "status": "pass",
       "updated_at": 1781761302.7020597
+    },
+    "Blessing": {
+      "reason": "Blessing should only buff the creature if I use the ability, not when I attach the aura",
+      "status": "fail",
+      "updated_at": 1782020874.4954185
     },
     "Blue Elemental Blast": {
       "reason": "",
@@ -34,6 +64,16 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781761307.1950977
+    },
+    "Braingeyser": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782020824.069998
+    },
+    "Clone": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782020378.44773
     },
     "Consecrate Land": {
       "reason": "",
@@ -50,6 +90,16 @@
       "status": "pass",
       "updated_at": 1781394074.1245754
     },
+    "Conversion": {
+      "reason": "Card doesn't work",
+      "status": "fail",
+      "updated_at": 1782018423.193998
+    },
+    "Copper Tablet": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782019908.8105206
+    },
     "Counterspell": {
       "reason": "",
       "status": "pass",
@@ -59,6 +109,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782006718.854789
+    },
+    "Creature Bond": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782019848.6426058
     },
     "Cursed Land": {
       "reason": "",
@@ -70,25 +125,65 @@
       "status": "pass",
       "updated_at": 1781987899.028273
     },
+    "Dark Ritual": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782021429.201607
+    },
     "Death Ward": {
       "reason": "",
       "status": "pass",
       "updated_at": 1781997943.5428312
+    },
+    "Dingus Egg": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782018807.0121405
+    },
+    "Disintegrate": {
+      "reason": "This card should put the target in exile if it dies this turn, not the graveyard",
+      "status": "fail",
+      "updated_at": 1782023166.2722936
     },
     "Drudge Skeletons": {
       "reason": "",
       "status": "pass",
       "updated_at": 1781761361.8322399
     },
+    "Earth Elemental": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782021280.9004796
+    },
+    "Earthquake": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782086101.2387257
+    },
     "Elvish Archers": {
       "reason": "",
       "status": "pass",
       "updated_at": 1781455740.8711123
     },
+    "Evil Presence": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782022287.5750093
+    },
+    "Feedback": {
+      "reason": "I had multiple Feedbacks in play but only 1 of them triggered",
+      "status": "fail",
+      "updated_at": 1782018747.8984208
+    },
     "Fire Elemental": {
       "reason": "",
       "status": "pass",
       "updated_at": 1781756819.3621137
+    },
+    "Firebreathing": {
+      "reason": "Should not give +1 power by default. Only when I activate the ability",
+      "status": "fail",
+      "updated_at": 1782020585.250978
     },
     "Fog": {
       "reason": "",
@@ -99,6 +194,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781503124.4112332
+    },
+    "Gauntlet of Might": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782086170.3540556
     },
     "Goblin Balloon Brigade": {
       "reason": "",
@@ -125,6 +225,21 @@
       "status": "pass",
       "updated_at": 1781461708.2940688
     },
+    "Holy Strength": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782086222.825565
+    },
+    "Howling Mine": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782086286.6517365
+    },
+    "Hurloon Minotaur": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782098161.0563412
+    },
     "Hurricane": {
       "reason": "",
       "status": "pass",
@@ -135,10 +250,20 @@
       "status": "pass",
       "updated_at": 1782009230.2792885
     },
+    "Iron Star": {
+      "reason": "I can't use Iron Star's triggered ability. It should prompt me to use it when a player casts a red spell.",
+      "status": "fail",
+      "updated_at": 1782021069.653191
+    },
     "Island": {
       "reason": "",
       "status": "pass",
       "updated_at": 1781378704.6242044
+    },
+    "Jade Monolith": {
+      "reason": "Doesn't let me choose a source (target spell or permanent)",
+      "status": "fail",
+      "updated_at": 1782020485.5945206
     },
     "Jayemdae Tome": {
       "reason": "",
@@ -150,10 +275,35 @@
       "status": "pass",
       "updated_at": 1782008813.4584646
     },
+    "Kormus Bell": {
+      "reason": "I'm not able to attack with my lands when Kormus Bell is in play.",
+      "status": "fail",
+      "updated_at": 1782023275.8736556
+    },
+    "Kudzu": {
+      "reason": "Doesn't let me choose a new target when I tap the enchanted land",
+      "status": "fail",
+      "updated_at": 1782019292.8896358
+    },
     "Lightning Bolt": {
       "reason": "",
       "status": "pass",
       "updated_at": 1782005004.5772283
+    },
+    "Living Lands": {
+      "reason": "Living lands did not turn Forests into creatures",
+      "status": "fail",
+      "updated_at": 1782085983.7992985
+    },
+    "Living Wall": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782085905.4015296
+    },
+    "Magical Hack": {
+      "reason": "Doesn't prompt me to change the color. It should ask me which color I want to change and which color I want to change it to, then replace the text for those colors in the card text and reevaluate the card.",
+      "status": "fail",
+      "updated_at": 1782021403.468241
     },
     "Mahamoti Djinn": {
       "reason": "",
@@ -179,6 +329,16 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782006692.2706053
+    },
+    "Mox Emerald": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782021412.5865803
+    },
+    "Mox Ruby": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782023053.8073714
     },
     "Nether Shadow": {
       "reason": "",
@@ -215,10 +375,20 @@
       "status": "pass",
       "updated_at": 1781931114.369114
     },
+    "Power Leak": {
+      "reason": "I didn't get a prompt to pay any amount of mana to negate the damage from Power Leak",
+      "status": "fail",
+      "updated_at": 1782020796.6237903
+    },
     "Prodigal Sorcerer": {
       "reason": "",
       "status": "pass",
       "updated_at": 1781585810.397277
+    },
+    "Psionic Blast": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782019690.004691
     },
     "Psychic Venom": {
       "reason": "",
@@ -234,6 +404,16 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781761319.0183372
+    },
+    "Regeneration": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782019199.2218683
+    },
+    "Righteousness": {
+      "reason": "It doesn't let me choose a target. Also it should only let me target blocking creatures.",
+      "status": "fail",
+      "updated_at": 1782020327.585251
     },
     "Roc of Kher Ridges": {
       "reason": "",
@@ -255,6 +435,16 @@
       "status": "pass",
       "updated_at": 1781411184.698975
     },
+    "Sea Serpent": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782086581.6832159
+    },
+    "Sengir Vampire": {
+      "reason": "I didn't get a +1/+1 counter for blocking and killing a creature",
+      "status": "fail",
+      "updated_at": 1782022786.261108
+    },
     "Serra Angel": {
       "reason": "",
       "status": "pass",
@@ -270,10 +460,25 @@
       "status": "pass",
       "updated_at": 1781410889.892921
     },
+    "Stream of Life": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782018447.4809692
+    },
+    "Swamp": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782021420.3454254
+    },
     "The Hive": {
       "reason": "",
       "status": "pass",
       "updated_at": 1781670012.8092935
+    },
+    "Thoughtlace": {
+      "reason": "The color label, e.g. Color: {U} should use the mana symbol",
+      "status": "fail",
+      "updated_at": 1782020004.235643
     },
     "Time Walk": {
       "reason": "",
@@ -285,6 +490,11 @@
       "status": "pass",
       "updated_at": 1781378490.7807422
     },
+    "Tranquility": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782087352.0209591
+    },
     "Tsunami": {
       "reason": "",
       "status": "pass",
@@ -295,10 +505,25 @@
       "status": "pass",
       "updated_at": 1781577230.9356234
     },
+    "Volcanic Eruption": {
+      "reason": "Card doesn't deal damage or let me choose mountains to destroy",
+      "status": "fail",
+      "updated_at": 1782019760.0847661
+    },
+    "Wall of Air": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782019118.9229472
+    },
     "Wall of Bone": {
       "reason": "",
       "status": "pass",
       "updated_at": 1781756746.9480946
+    },
+    "Wall of Brambles": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782020890.621666
     },
     "Wall of Ice": {
       "reason": "",
@@ -309,6 +534,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781757313.6477668
+    },
+    "Warp Artifact": {
+      "reason": "Warp Artifact doesn't get attached to the artifact and is instead put in the graveyard.",
+      "status": "fail",
+      "updated_at": 1782087422.1881843
     },
     "Water Elemental": {
       "reason": "",
@@ -334,6 +564,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782008868.629678
+    },
+    "raise dead": {
+      "reason": "Raise Dead doesn't let me choose a target creature in my graveyard",
+      "status": "fail",
+      "updated_at": 1782087485.467451
     }
   }
 }

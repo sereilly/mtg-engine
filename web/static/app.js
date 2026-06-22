@@ -367,6 +367,32 @@ function getValidBlockerAssignments(state = currentState) {
   return assignments;
 }
 
+// Why a proposed (blocker → attacker) assignment is illegal, or "" if it's legal.
+// Mirrors the engine's declare_blockers checks so the player gets immediate
+// feedback as they assign each blocker (CR 509.1b) instead of only on confirm.
+function blockAssignmentRejectionReason(state = currentState, blockerIdx, attackerIdx) {
+  const combat = getCombatState(state);
+  if (!combat || seat !== combat.defending_player_index) return "You aren't the defending player.";
+
+  const attackerSeat = state.current_turn;
+  const defenderSeat = combat.defending_player_index;
+  const defenderBattlefield = state.players?.[defenderSeat]?.battlefield;
+  const attackerBattlefield = state.players?.[attackerSeat]?.battlefield;
+  const blockerCard = Array.isArray(defenderBattlefield) ? defenderBattlefield[blockerIdx] : null;
+  const attackerCard = Array.isArray(attackerBattlefield) ? attackerBattlefield[attackerIdx] : null;
+
+  const isAttacker = Array.isArray(combat.attackers)
+    && combat.attackers.some((a) => Number(a.attacker_index) === Number(attackerIdx));
+  if (!isAttacker) return "That creature isn't attacking.";
+  if (!blockerCard || typeof blockerCard === "string") return "Invalid blocker.";
+  if (!String(blockerCard.type || "").toLowerCase().includes("creature")) return "Only creatures can block.";
+  if (blockerCard.tapped) return `${blockerCard.name} is tapped and can't block.`;
+  if (!canCardBlockAttackerFromPublicState(blockerCard, attackerCard)) {
+    return `${blockerCard.name} can't block ${attackerCard?.name || "that attacker"}.`;
+  }
+  return "";
+}
+
 function getDisplayedAttackerLinks(state = currentState) {
   const combat = getCombatState(state);
   if (!combat) return [];
@@ -2754,10 +2780,16 @@ function renderActivationPrompt() {
   const untapInfo = getUntapLandSelectionInfo();
   const upkeepPayInfo = getUpkeepPayInfo();
   const inCombat = currentState?.current_turn_phase === "combat";
+  const combatForPrompt = getCombatState(currentState);
   const hasValidAttackers = getValidAttackerIndices(currentState).length > 0;
   const hasValidBlockers = getValidBlockerAssignments(currentState).length > 0;
-  const isDeclareAttackersStep = isCombatStep(currentState, "declare_attackers") && hasValidAttackers;
-  const isDeclareBlockersStep = isCombatStep(currentState, "declare_blockers") && hasValidBlockers;
+  // The declaration prompt only owns the panel while the declaration is still
+  // pending. Once attackers/blockers are locked the step becomes a priority
+  // window, so the Priority prompt takes over (CR 508.4 / 509.4).
+  const isDeclareAttackersStep =
+    isCombatStep(currentState, "declare_attackers") && hasValidAttackers && !combatForPrompt?.attackers_locked;
+  const isDeclareBlockersStep =
+    isCombatStep(currentState, "declare_blockers") && hasValidBlockers && !combatForPrompt?.blockers_locked;
   const isCombatDeclarePromptStep = isDeclareAttackersStep || isDeclareBlockersStep;
 
   applyPriorityPromptStyle(panel, currentState);
@@ -2878,7 +2910,18 @@ function renderActivationPrompt() {
       }
     } else if (shouldShowPriority) {
       title.textContent = "Priority";
-      body.textContent = "Take an action (cast a spell, activate an ability, or play a land for turn), or press OK to pass priority.";
+      if (inCombat) {
+        const lockedCombat = getCombatState(currentState);
+        const stage = lockedCombat?.attackers_locked && !lockedCombat?.blockers_locked
+          && isCombatStep(currentState, "declare_attackers")
+          ? "Attackers are declared. "
+          : lockedCombat?.blockers_locked && isCombatStep(currentState, "declare_blockers")
+            ? "Blockers are declared. "
+            : "";
+        body.textContent = `${stage}Cast an instant or activate an ability, or press OK to pass priority.`;
+      } else {
+        body.textContent = "Take an action (cast a spell, activate an ability, or play a land for turn), or press OK to pass priority.";
+      }
     } else if (shouldShowWaitingPriority) {
       title.textContent = `Waiting for ${getOpponentName(currentState)}...`;
       body.textContent = "Opponent has priority.";
@@ -4575,15 +4618,20 @@ function createCardElement(card, options = {}) {
           return;
         }
 
+        // Attacker selection only owns the click before attackers are declared.
+        // After they're locked the step is a priority window, so clicks fall
+        // through to tap/activate.
         if (
           zoneKind === "battlefield" &&
           Number.isInteger(permanentIndex) &&
           isCombatStep(currentState, "declare_attackers") &&
           seat === currentState?.current_turn &&
-          targetSeat === seat
+          targetSeat === seat &&
+          !getCombatState(currentState)?.attackers_locked
         ) {
-          if (!isCardLikelyAttacker(card)) {
-            updateActionHint(`${cardName} is not able to attack right now.`, true);
+          // Only creatures that can legally attack may be selected (CR 508.1a).
+          if (!getValidAttackerIndices(currentState).includes(permanentIndex)) {
+            updateActionHint(`${cardName} can't attack right now.`, true);
             return;
           }
           toggleCombatAttackerDraft(permanentIndex);
@@ -6234,6 +6282,17 @@ async function handleHandCardDropOnBattlefield({ event, targetSeat, targetItem }
         targetItem.seat !== seat &&
         !getCombatState(currentState)?.blockers_locked
       ) {
+        // Validate the block immediately (CR 509.1b) rather than on confirm.
+        const reason = blockAssignmentRejectionReason(
+          currentState,
+          Number(payload.permanentIndex),
+          targetItem.idx,
+        );
+        if (reason) {
+          SFX.onError();
+          updateActionHint(reason, true);
+          return;
+        }
         combatBlockerDraft[Number(payload.permanentIndex)] = targetItem.idx;
         SFX.onMenuToggle(true);
         renderBoard(currentState);
@@ -6290,13 +6349,19 @@ function initBattlefieldCanvas() {
           return;
         }
 
+        // Attacker selection only owns the click while attackers are still being
+        // chosen. Once they're declared (locked) the step is a priority window, so
+        // clicks fall through to tap lands / activate abilities / target spells.
+        const combatStateForClick = getCombatState(currentState);
         if (
           isCombatStep(currentState, "declare_attackers") &&
           seat === currentState.current_turn &&
-          cardSeat === seat
+          cardSeat === seat &&
+          !combatStateForClick?.attackers_locked
         ) {
-          if (!isCardLikelyAttacker(card)) {
-            updateActionHint(`${card.name} is not able to attack right now.`, true);
+          // Only creatures that can legally attack may be selected (CR 508.1a).
+          if (!getValidAttackerIndices(currentState).includes(permanentIndex)) {
+            updateActionHint(`${card.name} can't attack right now.`, true);
             return;
           }
           toggleCombatAttackerDraft(permanentIndex);
@@ -6420,6 +6485,14 @@ function initBattlefieldCanvas() {
       const combat = getCombatState(currentState);
       if (!combat || combat.blockers_locked) {
         updateActionHint("Blockers are already confirmed.", true);
+        return;
+      }
+      // Validate the block as it's assigned (CR 509.1b) rather than waiting for the
+      // OK confirmation, so an illegal block is rejected immediately with a reason.
+      const reason = blockAssignmentRejectionReason(currentState, blockerIdx, attackerIdx);
+      if (reason) {
+        SFX.onError();
+        updateActionHint(reason, true);
         return;
       }
       combatBlockerDraft[blockerIdx] = attackerIdx;

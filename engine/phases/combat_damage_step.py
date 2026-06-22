@@ -161,20 +161,34 @@ class CombatDamageStepMixin:
                 assignment[attacker_idx] = {blocker_idx: assign}
                 continue
 
-            # Multiple blockers: assign lethal in declared order while affordable.
+            # Multiple blockers: assign lethal in declared order (CR 510.1c). A
+            # blocker may receive damage only once every earlier blocker in the
+            # order has been assigned lethal — so the moment the attacker can no
+            # longer afford lethal, it dumps all remaining power on *that* blocker
+            # and assigns nothing to the rest. Assigning a later blocker while an
+            # earlier one is sub-lethal is illegal and the resolver would reject
+            # the whole assignment, deadlocking combat.
             power_left = max(0, attacker.effective_power)
             per_blocker: dict[int, int] = {}
             last_lethal_idx: int | None = None
+            exhausted = False
             for blocker_idx in blockers:
+                if exhausted:
+                    per_blocker[blocker_idx] = 0
+                    continue
                 need = lethal_for(blocker_idx)
                 if need <= power_left:
                     per_blocker[blocker_idx] = need
                     power_left -= need
                     last_lethal_idx = blocker_idx
                 else:
-                    per_blocker[blocker_idx] = 0
-            # Dump leftover power onto the last blocker we killed (now > lethal, still
-            # legal). Tramplers keep the leftover so it spills to the defender instead.
+                    # Can't kill this blocker — assign the remainder here (the legal
+                    # sub-lethal breakpoint) and stop assigning to later blockers.
+                    per_blocker[blocker_idx] = power_left
+                    power_left = 0
+                    exhausted = True
+            # Dump any leftover power onto the last blocker we killed (now > lethal,
+            # still legal). Tramplers keep the leftover so it spills to the defender.
             if power_left > 0 and not has_trample and last_lethal_idx is not None:
                 per_blocker[last_lethal_idx] += power_left
             assignment[attacker_idx] = per_blocker

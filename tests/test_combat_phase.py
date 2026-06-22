@@ -137,6 +137,38 @@ def test_two_combat_damage_steps_with_first_strike():
     assert len(p1.battlefield) == 1  # first striker survived
 
 
+def test_auto_damage_assignment_respects_blocker_order_when_first_is_unkillable():
+    # CR 510.1c: an attacker assigns combat damage to its blockers in order and
+    # may only assign to a later blocker once each earlier blocker has lethal.
+    # The auto-assignment used for AI/quick resolution must honour this even when
+    # the *first* blocker can't be killed but a later one could — otherwise it
+    # produces an illegal {first: 0, later: lethal} split that resolve_combat_damage
+    # rejects, leaving combat_damage_resolved False and deadlocking the step.
+    attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
+    tough_blocker = Permanent(card=_mk_creature("Wall", 0, 3))   # index 0: can't be killed by 2 power
+    frail_blocker = Permanent(card=_mk_creature("Squire", 1, 2))  # index 1: could be killed
+    p1 = PlayerState(name="P1", battlefield=[attacker])
+    p2 = PlayerState(name="P2", battlefield=[tough_blocker, frail_blocker])
+    game = Game(players=[p1, p2])
+
+    _to_declare_attackers(game)
+    game.declare_attackers(0, [0])
+    game.advance_combat_phase()
+    game.declare_blockers(1, {0: 0, 1: 0})  # both creatures block the lone attacker
+    game.advance_combat_phase()  # declare_blockers -> combat_damage (awaits manual assignment)
+    assert game.current_step == "combat_damage"
+    assert game._needs_manual_damage_assignment()
+
+    auto = game._build_auto_damage_assignment()
+    # All damage goes to the first blocker (the legal sub-lethal breakpoint); the
+    # later blocker gets nothing, so the assignment is legal in declared order.
+    assert auto == {0: {0: 2, 1: 0}}
+
+    ok, _ = game.resolve_combat_damage(0, attacker_damage=auto)
+    assert ok
+    assert game.combat_damage_resolved is True
+
+
 def test_two_combat_damage_steps_with_double_strike():
     # 506.1 / 702.4: double strike also causes two combat damage steps. A 1/1
     # double striker blocked by a 2/2 deals 1 in each pass (2 total), killing it,
