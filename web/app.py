@@ -1243,6 +1243,7 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "untap_land_selection": untap_info,
         "upkeep_pay": _build_upkeep_pay_info(session, viewer_seat),
         "optional_trigger": _build_optional_trigger_info(session, viewer_seat),
+        "banding_assignment": _build_banding_assignment_info(session, viewer_seat),
         "island_sanctuary_pending": session.island_sanctuary_pending and viewer_seat == session.current_turn,
         "search_library": search_library_info,
         "reorder_library": reorder_library_info,
@@ -1544,6 +1545,60 @@ def _ai_declare_attackers(session: Session) -> None:
         game.declare_attackers(game.active_player_index, [])
 
 
+def _banding_blocked_attackers(game) -> list[int]:
+    """Attackers blocked by two or more creatures where at least one blocker has
+    banding (controlled by the defending player). CR 702.22j: the defending player,
+    not the active player, chooses how each such attacker's damage is split."""
+    combat = game.get_combat_state()
+    defender_index = combat.get("defending_player_index")
+    if not isinstance(defender_index, int) or not (0 <= defender_index < len(game.players)):
+        return []
+    defender = game.players[defender_index]
+    by_attacker: dict[int, list[int]] = {}
+    for pair in combat.get("blockers", []):
+        by_attacker.setdefault(int(pair["attacker_index"]), []).append(int(pair["blocker_index"]))
+    result = []
+    for attacker_idx, blockers in by_attacker.items():
+        if len(blockers) < 2:
+            continue
+        if any(
+            0 <= b < len(defender.battlefield) and game._creature_has_banding(defender.battlefield[b])
+            for b in blockers
+        ):
+            result.append(attacker_idx)
+    return sorted(result)
+
+
+def _banding_assignment_pending(session: Session) -> bool:
+    """Whether a human defending player still owes a CR 702.22j banding damage
+    assignment for the current combat. While pending, the active player's combat
+    damage must not auto-resolve (it would lock in the wrong split)."""
+    game = session.game
+    if game.current_step != "combat_damage" or game.combat_damage_resolved:
+        return False
+    defender_index = game.combat_defending_player_index
+    if not isinstance(defender_index, int) or _seat_type(session, defender_index) != "human":
+        return False
+    return any(a not in game.combat_banding_damage for a in _banding_blocked_attackers(game))
+
+
+def _build_banding_assignment_info(session: Session, viewer_seat: int | None) -> dict | None:
+    """State block shown to the defending player so they can split the damage of
+    each attacker blocked by one of their banding creatures (CR 702.22j)."""
+    game = session.game
+    if game.current_step != "combat_damage" or game.combat_damage_resolved:
+        return None
+    defender_index = game.combat_defending_player_index
+    if not isinstance(defender_index, int):
+        return None
+    if viewer_seat is not None and viewer_seat != defender_index:
+        return None
+    pending = [a for a in _banding_blocked_attackers(game) if a not in game.combat_banding_damage]
+    if not pending:
+        return None
+    return {"defender_seat": defender_index, "attacker_indices": pending}
+
+
 def _ai_assign_combat_damage(session: Session) -> None:
     """Active-player (AI) assigns combat damage — the turn-based action the engine
     defers to a player when an attacker is blocked by two or more creatures."""
@@ -1551,6 +1606,10 @@ def _ai_assign_combat_damage(session: Session) -> None:
     if game.current_step != "combat_damage" or game.combat_damage_resolved:
         return
     if _seat_type(session, game.active_player_index) != "ai":
+        return
+    # Pause so a human defender can pre-commit their CR 702.22j banding split
+    # before the active AI locks in combat damage.
+    if _banding_assignment_pending(session):
         return
     auto = game._build_auto_damage_assignment()
     game.resolve_combat_damage(game.active_player_index, attacker_damage=auto)
@@ -2400,6 +2459,13 @@ def do_action(session_id: str, req: GameActionRequest):
     elif req.action == "next_phase":
         if req.seat != session.current_turn:
             raise HTTPException(status_code=400, detail="not your turn")
+        # CR 702.22j: a defender's banding damage split is pre-committed before the
+        # active player resolves combat damage — don't let them advance past it.
+        if _banding_assignment_pending(session):
+            raise HTTPException(
+                status_code=400,
+                detail="waiting for the defending player to assign banding combat damage",
+            )
         # CR 508.1/509.1: during the declare attackers/blockers assignment no priority
         # window is open (declaring is a turn-based action). The active player may
         # still advance the turn structure to drive that declaration; outside the
@@ -2457,6 +2523,13 @@ def do_action(session_id: str, req: GameActionRequest):
             raise HTTPException(status_code=400, detail="not your turn")
         if not session.game.has_priority(req.seat):
             raise HTTPException(status_code=400, detail="you do not currently have priority")
+        # CR 702.22j: the defender pre-commits banding-blocked attackers' damage
+        # before the active player resolves; block resolution until they have.
+        if _banding_assignment_pending(session):
+            raise HTTPException(
+                status_code=400,
+                detail="waiting for the defending player to assign banding combat damage",
+            )
         # Distinguish "no assignment given" (None -> engine default/auto) from an
         # explicit empty assignment ({} -> deal nothing). This lets a caller supply
         # only blocker_damage (banding, CR 702.22k) and have attackers deal normally.
@@ -2490,6 +2563,13 @@ def do_action(session_id: str, req: GameActionRequest):
         ok, details = session.game.assign_banding_combat_damage(req.seat, banding_damage)
         if not ok:
             raise HTTPException(status_code=400, detail=details)
+        # The defender has pre-committed their CR 702.22j split. If the attacker is
+        # the AI, it was paused waiting for this — resolve its combat damage now.
+        if (
+            not _banding_assignment_pending(session)
+            and _seat_type(session, session.game.active_player_index) == "ai"
+        ):
+            _ai_assign_combat_damage(session)
 
     elif req.action == "cleanup_select":
         if req.seat != session.current_turn:

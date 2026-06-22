@@ -19,6 +19,12 @@ let combatDragSource = null;
 let combatDamageDraft = {};
 let combatDamageDialogKey = "";
 let combatAttackerDraft = [];
+// Whether the active player is grouping the currently-selected attackers into a
+// single attacking band (CR 702.22c). Sent as `bands` on declare_attackers.
+let combatBandDraft = false;
+// Which assignment the combat-damage dialog is currently editing: the active
+// player's normal split ("attacker") or the defender's banding split ("banding").
+let combatDamageDialogMode = "attacker";
 let combatBlockerDraft = {};
 let combatDraftStepKey = "";
 let combatPromptKey = "";
@@ -232,6 +238,7 @@ function syncCombatDrafts(state = currentState) {
     combatAttackerDraft = (combat?.attackers || []).map((item) => Number(item.attacker_index)).sort((a, b) => a - b);
   } else {
     combatAttackerDraft = [];
+    combatBandDraft = false;
   }
 
   if (isCombatStep(state, "declare_blockers") && seat === combat?.defending_player_index) {
@@ -478,6 +485,49 @@ function renderCombatOverlay(state = currentState) {
 
 function cardHasKeyword(card, keyword) {
   return String(card?.oracle_text || "").toLowerCase().includes(keyword);
+}
+
+// Banding (printed or granted). Prefer the serialized effective-keyword strip so
+// a creature granted banding (Helm of Chatzuk) reads correctly; fall back to the
+// printed reminder text on the card itself.
+function cardHasBanding(card) {
+  if (!card || typeof card !== "object") return false;
+  const kws = Array.isArray(card.keywords) ? card.keywords : [];
+  if (kws.some((k) => String(k).toLowerCase() === "banding")) return true;
+  return String(card.oracle_text || "").toLowerCase().startsWith("banding");
+}
+
+// CR 702.22c: whether the currently-selected attackers can be declared as one
+// legal band — at least two creatures, at least one with banding, and at most one
+// without banding.
+function selectedAttackersCanBand(state) {
+  const battlefield = state?.players?.[state.current_turn]?.battlefield || [];
+  const selected = combatAttackerDraft.filter((i) => i >= 0 && i < battlefield.length);
+  if (selected.length < 2) return false;
+  let banders = 0;
+  let nonbanders = 0;
+  for (const idx of selected) {
+    if (cardHasBanding(battlefield[idx])) banders += 1;
+    else nonbanders += 1;
+  }
+  return banders >= 1 && nonbanders <= 1;
+}
+
+// CR 702.22j: an attacker is "banding-blocked" when at least one of the creatures
+// blocking it has banding — the defending player, not the attacker's controller,
+// then assigns that attacker's combat damage among its blockers.
+function attackerBlockedByBandingClient(state, attackerIdx) {
+  const combat = getCombatState(state);
+  if (!combat) return false;
+  const defenderSeat = Number.isInteger(combat.defending_player_index)
+    ? combat.defending_player_index
+    : 1 - state.current_turn;
+  const defenderBattlefield = state.players?.[defenderSeat]?.battlefield || [];
+  return (combat.blockers || []).some(
+    (pair) =>
+      Number(pair.attacker_index) === attackerIdx &&
+      cardHasBanding(defenderBattlefield[Number(pair.blocker_index)]),
+  );
 }
 
 // Rebuild the damage events of a combat damage resolution from the state that
@@ -2120,14 +2170,21 @@ async function handleCombatPromptOk() {
     }
     const declared = [...combatAttackerDraft];
     const defendingSeat = Number.isInteger(combat.defending_player_index) ? combat.defending_player_index : 1 - seat;
-    await sendAction({
+    const declareBody = {
       seat,
       action: "declare_attackers",
       attacker_indices: declared,
       target_seat: defendingSeat,
-    });
+    };
+    // CR 702.22c: declare the selected attackers as a single band when requested.
+    if (combatBandDraft && selectedAttackersCanBand(state)) {
+      declareBody.bands = [declared];
+    }
+    await sendAction(declareBody);
+    combatBandDraft = false;
     updateActionHint(
-      `Attackers declared (${declared.length}). Players may now cast spells/activate abilities before blockers.`,
+      `Attackers declared (${declared.length})${declareBody.bands ? " as a band" : ""}.` +
+        " Players may now cast spells/activate abilities before blockers.",
     );
     return true;
   }
@@ -5532,6 +5589,29 @@ function renderCombatControls(state) {
       renderBoard(currentState);
     });
     actions.appendChild(alphaStrikeBtn);
+
+    // CR 702.22c: if the selected attackers can form a legal band (≥1 with banding,
+    // ≤1 without), let the player group them so they attack — and are blocked — as
+    // a single band.
+    if (!selectedAttackersCanBand(state)) combatBandDraft = false;
+    if (selectedAttackersCanBand(state)) {
+      const bandBtn = document.createElement("button");
+      bandBtn.type = "button";
+      bandBtn.id = "formBandBtn";
+      bandBtn.className = combatBandDraft ? "active" : "";
+      bandBtn.textContent = combatBandDraft ? "Banding: ON" : "Attack as Band";
+      bandBtn.title = "Group the selected attackers into one band (CR 702.22).";
+      bandBtn.addEventListener("click", () => {
+        combatBandDraft = !combatBandDraft;
+        updateActionHint(
+          combatBandDraft
+            ? "Selected attackers will attack as a band."
+            : "Band grouping cleared.",
+        );
+        renderBoard(currentState);
+      });
+      actions.appendChild(bandBtn);
+    }
   }
 
   if (isCombatStep(state, "declare_blockers") && seat === combat?.defending_player_index) {
@@ -5550,9 +5630,41 @@ function renderCombatControls(state) {
 
   }
 
+  // CR 702.22j: the defending player splits the damage of each attacker blocked by
+  // one of their banding creatures, before the active player resolves.
+  if (
+    isCombatStep(state, "combat_damage") &&
+    state.banding_assignment &&
+    seat === state.banding_assignment.defender_seat &&
+    !combat?.damage_resolved
+  ) {
+    const groups = getDefenderBandingGroups(state);
+    if (groups.length > 0) {
+      const prompt = document.createElement("div");
+      prompt.className = "combat-summary";
+      prompt.textContent =
+        "A banding creature is blocking — you choose how each banded attacker's damage is split.";
+      damagePanel.appendChild(prompt);
+
+      const openBtn = document.createElement("button");
+      openBtn.type = "button";
+      openBtn.textContent = "Assign Banding Damage";
+      openBtn.addEventListener("click", () => openBandingDamageDialog(state));
+      actions.appendChild(openBtn);
+
+      const key = `banding:${getCombatDraftStepKey(state)}`;
+      if (combatDamageDialogKey !== key) {
+        combatDamageDialogKey = key;
+        openBandingDamageDialog(state);
+      }
+      return;
+    }
+  }
+
   if (isCombatStep(state, "combat_damage") && seat === state.current_turn && !combat?.damage_resolved) {
-    // Manual assignment is only needed when an attacker is blocked by 2+ creatures.
-    const groups = getMultiBlockedAttackerGroups(state);
+    // Manual assignment is only needed when an attacker is blocked by 2+ creatures,
+    // excluding those a banding blocker hands to the defender (CR 702.22j).
+    const groups = getAttackerAssignGroups(state);
     if (groups.length === 0) return;
 
     const prompt = document.createElement("div");
@@ -5675,10 +5787,38 @@ function closeCombatDamageDialog() {
   if (modal) modal.classList.add("hidden");
 }
 
+// Multi-blocked attackers the *active player* assigns (everything except those a
+// banding blocker hands to the defender per CR 702.22j).
+function getAttackerAssignGroups(state = currentState) {
+  return getMultiBlockedAttackerGroups(state).filter(
+    (g) => !attackerBlockedByBandingClient(state, g.attackerIdx),
+  );
+}
+
+// Multi-blocked attackers the *defending player* assigns because at least one of
+// their banding creatures is among the blockers (CR 702.22j).
+function getDefenderBandingGroups(state = currentState) {
+  return getMultiBlockedAttackerGroups(state).filter((g) =>
+    attackerBlockedByBandingClient(state, g.attackerIdx),
+  );
+}
+
 function openCombatDamageDialog(state = currentState) {
+  openDamageDialog(state, "attacker");
+}
+
+function openBandingDamageDialog(state = currentState) {
+  openDamageDialog(state, "banding");
+}
+
+// Shared assignment dialog. `mode` selects whose split this is — the active
+// player's normal combat damage ("attacker") or the defending player's banding
+// split ("banding") — which only changes the action that submits it.
+function openDamageDialog(state = currentState, mode = "attacker") {
   const modal = q("combatDamageModal");
   if (!modal) return;
-  const groups = getMultiBlockedAttackerGroups(state);
+  combatDamageDialogMode = mode;
+  const groups = mode === "banding" ? getDefenderBandingGroups(state) : getAttackerAssignGroups(state);
   if (groups.length === 0) {
     closeCombatDamageDialog();
     return;
@@ -5688,24 +5828,31 @@ function openCombatDamageDialog(state = currentState) {
   const needsSeed = groups.filter((g) => !combatDamageDraft[g.attackerIdx]);
   if (needsSeed.length) autoAssignCombatDamage(needsSeed);
 
-  renderCombatDamageDialogBody(groups);
+  renderCombatDamageDialogBody(groups, mode);
   modal.classList.remove("hidden");
 
   const autoBtn = q("combatDamageAutoBtn");
   if (autoBtn) {
     autoBtn.onclick = () => {
       autoAssignCombatDamage(groups);
-      renderCombatDamageDialogBody(groups);
+      renderCombatDamageDialogBody(groups, mode);
     };
   }
   const confirmBtn = q("combatDamageConfirmBtn");
   if (confirmBtn) {
     confirmBtn.onclick = async () => {
       if (groups.some((g) => !validateCombatDamageGroup(g).valid)) return;
+      const assignment = {};
+      for (const g of groups) assignment[g.attackerIdx] = combatDamageDraft[g.attackerIdx] || {};
       try {
         confirmBtn.disabled = true;
-        await sendAction({ seat, action: "assign_combat_damage", attacker_damage: combatDamageDraft });
-        updateActionHint("Combat damage resolved.");
+        if (mode === "banding") {
+          await sendAction({ seat, action: "assign_banding_damage", banding_damage: assignment });
+          updateActionHint("Banding combat damage assigned.");
+        } else {
+          await sendAction({ seat, action: "assign_combat_damage", attacker_damage: assignment });
+          updateActionHint("Combat damage resolved.");
+        }
         closeCombatDamageDialog();
       } catch (e) {
         updateActionHint(e.message, true);
@@ -5718,10 +5865,24 @@ function openCombatDamageDialog(state = currentState) {
 
 // Build the per-attacker assignment UI. Rebuilt on every change so totals and
 // validity stay in sync with combatDamageDraft.
-function renderCombatDamageDialogBody(groups) {
+function renderCombatDamageDialogBody(groups, mode = combatDamageDialogMode) {
   const body = q("combatDamageDialogBody");
   if (!body) return;
   body.innerHTML = "";
+
+  // Banding (CR 702.22j): the defending player is the one splitting the damage,
+  // so retitle the dialog to make that clear.
+  const titleEl = q("combatDamageTitle");
+  const subtitleEl = document.querySelector("#combatDamageModal .modal-subtitle");
+  if (titleEl) {
+    titleEl.textContent = mode === "banding" ? "Assign Banding Damage" : "Assign Combat Damage";
+  }
+  if (subtitleEl) {
+    subtitleEl.textContent =
+      mode === "banding"
+        ? "A creature with banding is blocking, so you (the defender) choose how each attacker's damage is split among its blockers (CR 702.22j)."
+        : "Distribute each attacker's power among the creatures blocking it. The total assigned to a blocker's row cannot exceed the attacker's damage.";
+  }
 
   const cardThumb = (card, sub) => {
     const el = document.createElement("div");
@@ -5781,7 +5942,7 @@ function renderCombatDamageDialogBody(groups) {
       input.addEventListener("input", () => {
         if (!combatDamageDraft[group.attackerIdx]) combatDamageDraft[group.attackerIdx] = {};
         combatDamageDraft[group.attackerIdx][blockerIdx] = Math.max(0, Math.floor(Number(input.value) || 0));
-        renderCombatDamageDialogBody(groups);
+        renderCombatDamageDialogBody(groups, mode);
       });
       col.appendChild(input);
       blockersSide.appendChild(col);
