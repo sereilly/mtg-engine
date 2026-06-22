@@ -1685,10 +1685,13 @@ class BattlefieldCanvas {
     const colorOverride = colorCard && colorCard.color_override;
     if (colorOverride) {
       const COLOR_SWATCH = { W: "#f8f6d8", U: "#3b7fd4", B: "#5a4a5a", R: "#d4452f", G: "#2f9e44", C: "#b8b8b8" };
-      const label = `Color: {${colorOverride}}`;
+      // Render "Color:" followed by the actual mana symbol art (not literal "{U}").
+      const text = "Color:";
       const bh = 13;
+      const symSize = bh - 3;
       ctx.font = `bold ${Math.max(7, bh * 0.62)}px sans-serif`;
-      const bw = Math.min(w - 4, Math.ceil(ctx.measureText(label).width) + 8);
+      const textW = Math.ceil(ctx.measureText(text + " ").width);
+      const bw = Math.min(w - 4, textW + symSize + 10);
       const bx = x + (w - bw) / 2;
       // Sit just below the regeneration badge if present, else at the top.
       const by = y + 2 + (regenCard && Number(regenCard.regeneration_shield) > 0 ? 15 : 0);
@@ -1700,9 +1703,21 @@ class BattlefieldCanvas {
       this._roundRect(ctx, bx, by, bw, bh, 3);
       ctx.stroke();
       ctx.fillStyle = "#ffffff";
-      ctx.textAlign = "center";
+      ctx.textAlign = "left";
       ctx.textBaseline = "middle";
-      ctx.fillText(label, bx + bw / 2, by + bh / 2);
+      ctx.fillText(text, bx + 5, by + bh / 2);
+      const symX = bx + 5 + textW;
+      const symY = by + (bh - symSize) / 2;
+      const symImg = this._loadImage(this._symbolSrc(`{${colorOverride}}`));
+      if (symImg && symImg.complete && symImg.naturalWidth) {
+        ctx.drawImage(symImg, symX, symY, symSize, symSize);
+      } else {
+        // Fallback to a colored dot until the symbol art has loaded.
+        ctx.fillStyle = COLOR_SWATCH[colorOverride] || "#ffffff";
+        ctx.beginPath();
+        ctx.arc(symX + symSize / 2, by + bh / 2, symSize / 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
 
     // ---- Land-type override label ----

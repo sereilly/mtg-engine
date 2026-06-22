@@ -93,6 +93,19 @@ def parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleInst
     return None, "unsupported"
 
 
+def parse_static_coeffects(text: str) -> list[OracleInstruction]:
+    """Static continuous effects that can co-exist with a primary clause and so
+    are missed by ``parse_primary_instruction`` (which returns only the first
+    match). For example Conversion's "All Mountains are Plains." follows an
+    upkeep cost clause that already claims the primary instruction.
+    """
+    instructions: list[OracleInstruction] = []
+    result = global_effects.static_land_type_change(text, False)
+    if result is not None:
+        instructions.append(result[0])
+    return instructions
+
+
 __all__ = [
     "ParseRule",
     "RuleFn",

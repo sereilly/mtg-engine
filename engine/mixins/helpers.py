@@ -27,8 +27,15 @@ class GameHelpersMixin:
                 return idx, permanent
         return None
 
+    def _is_creature(self, permanent: Permanent) -> bool:
+        """A permanent is a creature if its printed type says so or an effect has
+        turned it into one (e.g. Kormus Bell / Living Lands animated lands)."""
+        return permanent.card.primary_type == "creature" or bool(
+            permanent.metadata.get("land_animated")
+        )
+
     def _is_summoning_sick(self, permanent: Permanent) -> bool:
-        if permanent.card.primary_type != "creature":
+        if not self._is_creature(permanent):
             return False
         if self._has_keyword(permanent, "Haste"):
             return False
@@ -54,7 +61,7 @@ class GameHelpersMixin:
                 continue
             for permanent in player.battlefield:
                 if (
-                    permanent.card.primary_type == "creature"
+                    self._is_creature(permanent)
                     and permanent.metadata.get("summoning_sickness_turn") == self.turn - 1
                 ):
                     permanent.metadata["summoning_sickness_turn"] = self.turn
@@ -143,6 +150,14 @@ class GameHelpersMixin:
         """Move a permanent to the graveyard. Tokens (704.5d) cease to exist instead."""
         if "Aura" in permanent.card.type_line:
             self._remove_aura_effects(permanent)
+        # Disintegrate-style replacement: "if it would die this turn, exile it
+        # instead." The creature never reaches the graveyard, so no dies-triggers
+        # fire (CR 614 — the replacement applies as it would leave the battlefield).
+        if permanent.metadata.get("exile_if_dies_this_turn"):
+            if not permanent.metadata.get("is_token", False):
+                player.exile.append(permanent.card)
+            self.log.append(f"{permanent.card.name} was exiled instead of dying")
+            return
         if not permanent.metadata.get("is_token", False):
             player.graveyard.append(permanent.card)
         if permanent.card.primary_type == "creature":
@@ -191,6 +206,21 @@ class GameHelpersMixin:
                     continue
                 program = compile_card_oracle(observer.card)
                 for trig in program.triggered_abilities:
+                    # Sengir Vampire: "Whenever a creature dealt damage by this
+                    # creature this turn dies, put a +1/+1 counter on this creature."
+                    if (
+                        trig.condition.kind == "creature_dealt_damage_by_self_dies"
+                        and trig.instruction is not None
+                        and trig.instruction.kind == "add_counter_to_self"
+                    ):
+                        damagers = dead_permanent.metadata.get("damaged_by_sources_this_turn", [])
+                        if observer in damagers:
+                            observer.power_bonus += int(trig.instruction.payload.get("power", 1))
+                            observer.toughness_bonus += int(trig.instruction.payload.get("toughness", 1))
+                            self.log.append(
+                                f"{observer.card.name} gets a +1/+1 counter ({dead_permanent.card.name} it damaged died)"
+                            )
+                        continue
                     if trig.condition.kind != "creature_dies" or trig.instruction is None:
                         continue
                     instr = trig.instruction

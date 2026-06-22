@@ -300,6 +300,25 @@ class StackCastingMixin:
                 self.log.append(details)
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
 
+        # Northern Paladin: "{W}{W}, {T}: Destroy target black permanent." The
+        # chosen target must satisfy the ability's color/type filter (601.2c) — an
+        # illegal target makes the ability impossible to activate, so it's rejected
+        # before any cost is paid rather than silently fizzling.
+        if ability.instruction.kind == "destroy_target_permanent":
+            color_filter = ability.instruction.payload.get("color_filter")
+            type_filter = ability.instruction.payload.get("type_filter")
+            if (color_filter or type_filter) and isinstance(target_permanent_index, int):
+                bf = target_player.battlefield
+                legal = 0 <= target_permanent_index < len(bf)
+                if legal and color_filter and color_filter not in bf[target_permanent_index].card.colors:
+                    legal = False
+                if legal and type_filter and type_filter not in bf[target_permanent_index].card.type_line.lower():
+                    legal = False
+                if not legal:
+                    details = f"no valid target for {permanent.card.name}"
+                    self.log.append(details)
+                    return SimulationResult(permanent.card.name, False, "unsupported", details)
+
         required_cost = dict(ability.cost.mana)
         requires_tap = ability.cost.requires_tap
         # Abilities with an "{X}" in their cost (e.g. Clockwork Beast's
@@ -729,14 +748,24 @@ class StackCastingMixin:
             # Ward regenerates your own creature; Swords to Plowshares exiles any
             # creature). A specific choice must itself be a creature; otherwise any
             # creature on any battlefield makes the cast legal.
+            blocking_only = bool(primary.payload.get("blocking_only"))
+
+            def _legal_pump_target(p) -> bool:
+                if p.card.primary_type != "creature":
+                    return False
+                # Righteousness only targets a creature that is currently blocking.
+                if blocking_only and not self._is_blocking_creature(p):
+                    return False
+                return True
+
             if isinstance(target_permanent_index, int):
                 battlefield = target.battlefield
-                if not (0 <= target_permanent_index < len(battlefield)) or (
-                    battlefield[target_permanent_index].card.primary_type != "creature"
+                if not (0 <= target_permanent_index < len(battlefield)) or not _legal_pump_target(
+                    battlefield[target_permanent_index]
                 ):
                     return False, f"no valid target for {card.name}"
             elif not any(
-                p.card.primary_type == "creature"
+                _legal_pump_target(p)
                 for pl in self.players
                 for p in pl.battlefield
             ):

@@ -34,7 +34,7 @@ class DeclareAttackersStepMixin:
         unique_indices = sorted(set(attacker_indices))
         required_attackers: list[str] = []
         for idx, attacker in enumerate(controller.battlefield):
-            if attacker.card.primary_type != "creature" or attacker.tapped:
+            if not self._is_creature(attacker) or attacker.tapped:
                 continue
             if idx in unique_indices:
                 continue
@@ -50,7 +50,7 @@ class DeclareAttackersStepMixin:
             if idx < 0 or idx >= len(controller.battlefield):
                 return False, "attacker index out of range"
             attacker = controller.battlefield[idx]
-            if attacker.card.primary_type != "creature":
+            if not self._is_creature(attacker):
                 return False, "only creatures can attack"
             if attacker.tapped:
                 return False, f"{attacker.card.name} is tapped"

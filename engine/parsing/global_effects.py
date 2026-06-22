@@ -33,6 +33,35 @@ def animate_all_forests(text: str, activated: bool) -> RuleResult:
     return None
 
 
+_BASIC_LAND_TYPES = ("mountains", "forests", "islands", "swamps", "plains")
+_STATIC_LAND_TYPE_RE = re.compile(
+    rf"all ({'|'.join(_BASIC_LAND_TYPES)}) are ({'|'.join(_BASIC_LAND_TYPES)})\b"
+)
+# Plains is its own singular; the rest drop the trailing "s".
+_LAND_TYPE_SINGULAR = {
+    "mountains": "mountain",
+    "forests": "forest",
+    "islands": "island",
+    "swamps": "swamp",
+    "plains": "plains",
+}
+
+
+# Static basic-land-type change (e.g. Conversion: "All Mountains are Plains.").
+# The generic land-animation rules above use an "are 1/1 creatures" clause, so a
+# plain "X are Y" form (no "creature") is unambiguous here.
+@parse_rule(1145)
+def static_land_type_change(text: str, activated: bool) -> RuleResult:
+    m = _STATIC_LAND_TYPE_RE.search(text)
+    if m and "creature" not in text:
+        return _instruction(
+            "static_land_type_change",
+            from_type=_LAND_TYPE_SINGULAR[m.group(1)],
+            to_type=_LAND_TYPE_SINGULAR[m.group(2)],
+        ), "spell_pattern"
+    return None
+
+
 @parse_rule(1150)
 def buff_attacking_creatures(text: str, activated: bool) -> RuleResult:
     if "attacking creatures you control get +1/+0" in text:

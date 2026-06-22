@@ -45,6 +45,21 @@ def simulacrum_effect(text: str, activated: bool) -> RuleResult:
     return None
 
 
+@parse_rule(318)
+def deal_x_damage_exile_if_dies(text: str, activated: bool) -> RuleResult:
+    # Disintegrate: "deals X damage to any target. If it's a creature, it can't be
+    # regenerated this turn, and if it would die this turn, exile it instead."
+    if "deals x damage" in text and "if it would die this turn, exile it instead" in text:
+        effect_kind = "activated_damage" if activated else "spell_pattern"
+        return _instruction(
+            "deal_damage",
+            amount="x",
+            no_regen=True,
+            exile_if_dies=True,
+        ), effect_kind
+    return None
+
+
 @parse_rule(320)
 def deal_x_damage(text: str, activated: bool) -> RuleResult:
     if "deals x damage" in text:

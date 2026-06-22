@@ -84,9 +84,23 @@ def redirect_one_damage_to_owner(game: Game, instruction: OracleInstruction, con
 
 @effect_handler("jade_monolith_redirect")
 def jade_monolith_redirect(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Jade Monolith: "The next time a source of your choice would deal damage to
+    target creature this turn, that source deals that damage to you instead."
+
+    The controller chooses the target creature (target_permanent_index on the
+    target player's battlefield). The next damage that creature would take is
+    redirected to the controller.
+    """
     caster = context.caster
     target = context.target
-    target_creature = next((p for p in target.battlefield if p.card.primary_type == "creature"), None)
+    target_creature = None
+    idx = context.target_permanent_index
+    if isinstance(idx, int) and 0 <= idx < len(target.battlefield):
+        candidate = target.battlefield[idx]
+        if candidate.card.primary_type == "creature":
+            target_creature = candidate
+    if target_creature is None:
+        target_creature = next((p for p in target.battlefield if p.card.primary_type == "creature"), None)
     if target_creature is not None:
         caster_idx = game.players.index(caster)
         target_creature.metadata["redirect_damage_to_player"] = caster_idx

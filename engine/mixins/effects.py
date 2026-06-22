@@ -175,6 +175,15 @@ class EffectsMixin:
             permanent.damage_marked += dealt
         return dealt
 
+    def _record_damage_source(self, victim: Permanent, source: Permanent) -> None:
+        """Remember that *source* dealt damage to *victim* this turn, so that a
+        "whenever a creature dealt damage by this creature this turn dies" trigger
+        (e.g. Sengir Vampire) can recognize the kill. References are cleared at
+        cleanup. Sources are deduped by identity."""
+        sources = victim.metadata.setdefault("damaged_by_sources_this_turn", [])
+        if source not in sources:
+            sources.append(source)
+
     def _player_controls_text(self, player: PlayerState, phrase: str) -> bool:
         return any(phrase in perm.card.oracle_text.lower() for perm in player.battlefield)
 

@@ -16,6 +16,11 @@ _EOT_METADATA_KEYS = (
     "pt_switched",
     # Layer 6 "loses flying" effect
     "loses_flying_until_eot",
+    # Disintegrate-style riders that last only "this turn"
+    "cant_be_regenerated_this_turn",
+    "exile_if_dies_this_turn",
+    # Sengir Vampire damage-source tracking (cleared each turn)
+    "damaged_by_sources_this_turn",
 )
 
 # Map: artifact name → (color that triggers it, life gained).

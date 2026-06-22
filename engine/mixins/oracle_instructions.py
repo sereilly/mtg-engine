@@ -238,8 +238,17 @@ class OracleInstructionsMixin:
             _pre_toughness_bonus = target_creature.toughness_bonus
             _pre_meta_keys = set(target_creature.metadata.keys())
 
-            # Handle numeric static buffs/debuffs like "gets +2/+1" or "gets -2/-1"
-            buff_match = re.search(r"gets ([+-]\d+)/([+-]\d+)", text)
+            # Handle numeric static buffs/debuffs like "gets +2/+1" or "gets -2/-1".
+            # Skip "+X/+Y until end of turn" buffs: those come from an *activated*
+            # ability (e.g. Firebreathing "{R}: ... +1/+0 until end of turn",
+            # Blessing "{W}: ... +1/+1 until end of turn") and only apply when the
+            # ability is activated — not when the Aura is attached.
+            buff_match = None
+            for _m in re.finditer(r"gets ([+-]\d+)/([+-]\d+)", text):
+                if text[_m.end():].lstrip().startswith("until end of turn"):
+                    continue
+                buff_match = _m
+                break
             if buff_match:
                 target_creature.power_bonus += int(buff_match.group(1))
                 target_creature.toughness_bonus += int(buff_match.group(2))

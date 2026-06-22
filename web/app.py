@@ -188,10 +188,15 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
                 attached_to_seat = seat_idx
                 break
 
+    # A color override (Thoughtlace/Lifelace) replaces the printed colors entirely.
+    override = perm.metadata.get("color_override")
+    effective_colors = [override] if override else list(perm.card.colors)
+
     return {
         "name": perm.card.name,
         "type": perm.card.type_line,
         "tapped": perm.tapped,
+        "colors": effective_colors,
         "power": perm.effective_power,
         "toughness": perm.effective_toughness,
         "base_power": _printed_stat(perm.card, "power"),

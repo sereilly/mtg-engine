@@ -6068,12 +6068,21 @@ def test_reverse_damage_classifies_supported(all_cards):
 def test_righteousness_pumps_blocking_creature_plus_seven(all_cards):
     righteousness = _get(all_cards, "Righteousness")
     bear = _mk_card("Blocker", "Creature — Bear")
+    attacker = Permanent(card=_grizzly(all_cards))
+    attacker.metadata["summoning_sickness_turn"] = -99
 
-    p1 = PlayerState(name="P1", hand=[righteousness])
+    p1 = PlayerState(name="P1", hand=[righteousness], battlefield=[attacker])
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
     game = Game(players=[p1, p2])
+    # Righteousness can only target a *blocking* creature, so set up a block.
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    game.combat_defending_player_index = 1
+    game.declare_attackers(0, [0], 1)
+    game._set_phase_and_step("combat", "declare_blockers")
+    game.declare_blockers(1, {0: 0})
 
-    result = game.cast_from_hand(0, "Righteousness", target_player_index=1)
+    result = game.cast_from_hand(0, "Righteousness", target_player_index=1, target_permanent_index=0)
 
     assert result.supported
     assert p2.battlefield[0].effective_power == 9
@@ -7581,10 +7590,19 @@ class TestWhiteCards:
     def test_righteousness_buffs_blocking_creature(self, all_cards):
         righteousness = _get(all_cards, "Righteousness")
         bear = _grizzly(all_cards)
+        attacker = Permanent(card=_grizzly(all_cards))
+        attacker.metadata["summoning_sickness_turn"] = -99
 
-        p1 = PlayerState(name="P1", hand=[righteousness])
+        p1 = PlayerState(name="P1", hand=[righteousness], battlefield=[attacker])
         p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
         game = Game(players=[p1, p2])
+        # The target must be a creature that is currently blocking.
+        game.active_player_index = 0
+        game._set_phase_and_step("combat", "declare_attackers")
+        game.combat_defending_player_index = 1
+        game.declare_attackers(0, [0], 1)
+        game._set_phase_and_step("combat", "declare_blockers")
+        game.declare_blockers(1, {0: 0})
 
         before = p2.battlefield[0].effective_toughness
         result = game.cast_from_hand(0, "Righteousness", target_player_index=1, target_permanent_index=0)

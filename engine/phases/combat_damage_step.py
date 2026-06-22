@@ -77,7 +77,9 @@ class CombatDamageStepMixin:
                 if not has_lethal and not has_deathtouch_hit:
                     survivors.append(permanent)
                     continue
-                if permanent.regeneration_shield > 0:
+                if permanent.regeneration_shield > 0 and not permanent.metadata.get(
+                    "cant_be_regenerated_this_turn"
+                ):
                     permanent.regeneration_shield -= 1
                     permanent.damage_marked = 0
                     permanent.tapped = True
@@ -368,6 +370,7 @@ class CombatDamageStepMixin:
                 continue
             dealt = self._mark_damage_on_permanent(attacker, blocker.effective_power)
             if dealt > 0:
+                self._record_damage_source(attacker, blocker)
                 self._fire_dealt_damage_triggers(attacker)
                 if self._has_keyword(blocker, "lifelink"):
                     add_lifelink(defending_index, dealt)
@@ -392,6 +395,8 @@ class CombatDamageStepMixin:
                 continue
             dealt = self._mark_damage_on_permanent(blocker_perm, damage)
             if dealt > 0:
+                if source_attacker is not None:
+                    self._record_damage_source(blocker_perm, source_attacker)
                 self._fire_dealt_damage_triggers(blocker_perm)
                 if source_attacker is not None and self._has_keyword(source_attacker, "lifelink"):
                     add_lifelink(self.active_player_index, dealt)

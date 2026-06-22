@@ -161,6 +161,17 @@ class DeclareBlockersStepMixin:
     def _combat_blockers_for_attacker(self, attacker_idx: int) -> list[int]:
         return [blocker_idx for blocker_idx, a_idx in self.combat_blockers.items() if a_idx == attacker_idx]
 
+    def _is_blocking_creature(self, permanent: Permanent) -> bool:
+        """True if *permanent* is currently blocking an attacker (Righteousness)."""
+        defending_index = self.combat_defending_player_index
+        if not isinstance(defending_index, int) or not (0 <= defending_index < len(self.players)):
+            return False
+        defender = self.players[defending_index]
+        for blocker_idx in self.combat_blockers:
+            if 0 <= blocker_idx < len(defender.battlefield) and defender.battlefield[blocker_idx] is permanent:
+                return True
+        return False
+
     def _apply_band_block_propagation(self) -> None:
         """CR 702.22h/i: when one band member becomes blocked, every other creature
         in that band becomes blocked by the same blocker(s).

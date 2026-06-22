@@ -12,7 +12,10 @@ class PermanentStateMixin:
         caster_index: int,
         target_player_index: int | None,
     ) -> None:
-        if permanent.card.primary_type == "creature":
+        if permanent.card.primary_type in ("creature", "land"):
+            # Lands are stamped too: if a land later becomes a creature (Kormus Bell,
+            # Living Lands) it must respect summoning sickness based on when it came
+            # under control (CR 302.6). The marker is ignored for non-creature lands.
             permanent.metadata["summoning_sickness_turn"] = self.turn
         program = compile_card_oracle(permanent.card)
         text = program.normalized_text
@@ -116,10 +119,42 @@ class PermanentStateMixin:
             return None
         return candidate
 
+    def _refresh_static_land_types(self, all_permanents: list[Permanent]) -> None:
+        """Apply static basic-land-type changes (e.g. Conversion: "All Mountains
+        are Plains."). Recomputed every call so a land reverts to its printed type
+        the moment the source enchantment leaves the battlefield (CR 611.3a/b).
+
+        The applied override is tagged with ``static_land_type_source`` so it can be
+        reverted without clobbering a one-shot override from another effect (e.g.
+        Phantasmal Terrain), which leaves that tag unset.
+        """
+        changes: list[tuple[str, str]] = []
+        for perm in all_permanents:
+            for instr in compile_card_oracle(perm.card).instructions:
+                if instr.kind == "static_land_type_change":
+                    changes.append(
+                        (instr.payload.get("from_type", ""), instr.payload.get("to_type", ""))
+                    )
+        for perm in all_permanents:
+            if perm.card.primary_type != "land":
+                continue
+            new_type = None
+            for from_type, to_type in changes:
+                if from_type and from_type in perm.card.type_line.lower():
+                    new_type = to_type
+                    break
+            if new_type:
+                perm.metadata["land_type_override"] = new_type
+                perm.metadata["static_land_type_source"] = True
+            elif perm.metadata.get("static_land_type_source"):
+                perm.metadata.pop("land_type_override", None)
+                perm.metadata.pop("static_land_type_source", None)
+
     def _refresh_dynamic_creatures(self) -> None:
         all_permanents = [perm for player in self.players for perm in player.battlefield]
         kormus_active = any(perm.card.name == "Kormus Bell" for perm in all_permanents)
         living_lands_active = any(perm.card.name == "Living Lands" for perm in all_permanents)
+        self._refresh_static_land_types(all_permanents)
 
         for player in self.players:
             # Static "Attacking creatures you control get +X/+Y" sources (Orcish
@@ -195,16 +230,32 @@ class PermanentStateMixin:
                         permanent.toughness_bonus += current
                     permanent.metadata["conditional_swamp_bonus"] = current
 
-                if kormus_active and "swamp" in permanent.card.type_line.lower() and permanent.card.primary_type == "land":
+                # Kormus Bell / Living Lands animate basic lands into 1/1 creatures
+                # while the source is on the battlefield. Recomputed every call so
+                # the lands revert the moment the animating enchantment leaves
+                # (CR 611.3a/b).
+                is_animated_swamp = (
+                    kormus_active
+                    and permanent.card.primary_type == "land"
+                    and "swamp" in permanent.card.type_line.lower()
+                )
+                is_animated_forest = (
+                    living_lands_active
+                    and permanent.card.primary_type == "land"
+                    and "forest" in permanent.card.type_line.lower()
+                )
+                if is_animated_swamp or is_animated_forest:
                     permanent.metadata["land_animated"] = True
                     permanent.metadata["absolute_power"] = 1
                     permanent.metadata["absolute_toughness"] = 1
-                    permanent.metadata["color_override"] = "B"
-
-                if living_lands_active and "forest" in permanent.card.type_line.lower() and permanent.card.primary_type == "land":
-                    permanent.metadata["land_animated"] = True
-                    permanent.metadata["absolute_power"] = 1
-                    permanent.metadata["absolute_toughness"] = 1
+                    if is_animated_swamp:
+                        permanent.metadata["color_override"] = "B"
+                elif permanent.metadata.get("land_animated"):
+                    # The animating source is gone: the land is no longer a creature.
+                    permanent.metadata.pop("land_animated", None)
+                    permanent.metadata.pop("absolute_power", None)
+                    permanent.metadata.pop("absolute_toughness", None)
+                    permanent.metadata.pop("color_override", None)
 
     def _has_keyword(self, permanent: Permanent, keyword: str) -> bool:
         lower_keyword = keyword.lower()

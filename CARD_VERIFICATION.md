@@ -4,16 +4,16 @@ Master record of which cards have been manually validated in-game. Generated aut
 
 - Total cards: **290**
 - Passed: **93**
-- Failed: **20**
-- Untested: **177**
+- Failed: **0**
+- Untested: **197**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
 | Air Elemental | ⬜ untested |  |
 | Ancestral Recall | ✅ pass |  |
 | Animate Artifact | ⬜ untested |  |
-| Animate Dead | ❌ fail | The targeting works but the prompt is wrong |
-| Animate Wall | ❌ fail | The targeting prompt should only highlight valid targets (i.e. walls) |
+| Animate Dead | ⬜ untested |  |
+| Animate Wall | ⬜ untested |  |
 | Ankh of Mishra | ⬜ untested |  |
 | Armageddon | ✅ pass |  |
 | Aspect of Wolf | ⬜ untested |  |
@@ -30,7 +30,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Black Vise | ✅ pass |  |
 | Black Ward | ✅ pass |  |
 | Blaze of Glory | ⬜ untested |  |
-| Blessing | ❌ fail | Blessing should only buff the creature if I use the ability, not when I attach the aura |
+| Blessing | ⬜ untested |  |
 | Blue Elemental Blast | ✅ pass |  |
 | Blue Ward | ✅ pass |  |
 | Bog Wraith | ⬜ untested |  |
@@ -53,7 +53,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Conservator | ⬜ untested |  |
 | Contract from Below | ✅ pass |  |
 | Control Magic | ✅ pass |  |
-| Conversion | ❌ fail | Card doesn't work |
+| Conversion | ⬜ untested |  |
 | Copper Tablet | ✅ pass |  |
 | Copy Artifact | ⬜ untested |  |
 | Counterspell | ✅ pass |  |
@@ -73,7 +73,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Demonic Tutor | ⬜ untested |  |
 | Dingus Egg | ✅ pass |  |
 | Disenchant | ⬜ untested |  |
-| Disintegrate | ❌ fail | This card should put the target in exile if it dies this turn, not the graveyard |
+| Disintegrate | ⬜ untested |  |
 | Disrupting Scepter | ⬜ untested |  |
 | Dragon Whelp | ⬜ untested |  |
 | Drain Life | ⬜ untested |  |
@@ -90,10 +90,10 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Farmstead | ⬜ untested |  |
 | Fastbond | ⬜ untested |  |
 | Fear | ⬜ untested |  |
-| Feedback | ❌ fail | I had multiple Feedbacks in play but only 1 of them triggered |
+| Feedback | ⬜ untested |  |
 | Fire Elemental | ✅ pass |  |
 | Fireball | ⬜ untested |  |
-| Firebreathing | ❌ fail | Should not give +1 power by default. Only when I activate the ability |
+| Firebreathing | ⬜ untested |  |
 | Flashfires | ⬜ untested |  |
 | Flight | ⬜ untested |  |
 | Fog | ✅ pass |  |
@@ -131,21 +131,21 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Illusionary Mask | ⬜ untested |  |
 | Instill Energy | ⬜ untested |  |
 | Invisibility | ⬜ untested |  |
-| Iron Star | ❌ fail | I can't use Iron Star's triggered ability. It should prompt me to use it when a player casts a red spell. |
+| Iron Star | ⬜ untested |  |
 | Ironclaw Orcs | ⬜ untested |  |
 | Ironroot Treefolk | ⬜ untested |  |
 | Island | ✅ pass |  |
 | Island Sanctuary | ⬜ untested |  |
 | Ivory Cup | ⬜ untested |  |
-| Jade Monolith | ❌ fail | Doesn't let me choose a source (target spell or permanent) |
+| Jade Monolith | ⬜ untested |  |
 | Jade Statue | ⬜ untested |  |
 | Jayemdae Tome | ✅ pass |  |
 | Juggernaut | ⬜ untested |  |
 | Jump | ⬜ untested |  |
 | Karma | ✅ pass |  |
 | Keldon Warlord | ⬜ untested |  |
-| Kormus Bell | ❌ fail | I'm not able to attack with my lands when Kormus Bell is in play. |
-| Kudzu | ❌ fail | Doesn't let me choose a new target when I tap the enchanted land |
+| Kormus Bell | ⬜ untested |  |
+| Kudzu | ⬜ untested |  |
 | Lance | ⬜ untested |  |
 | Ley Druid | ⬜ untested |  |
 | Library of Leng | ⬜ untested |  |
@@ -155,13 +155,13 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Lifetap | ⬜ untested |  |
 | Lightning Bolt | ✅ pass |  |
 | Living Artifact | ⬜ untested |  |
-| Living Lands | ❌ fail | Living lands did not turn Forests into creatures |
+| Living Lands | ⬜ untested |  |
 | Living Wall | ✅ pass |  |
 | Llanowar Elves | ⬜ untested |  |
 | Lord of Atlantis | ⬜ untested |  |
 | Lord of the Pit | ⬜ untested |  |
 | Lure | ⬜ untested |  |
-| Magical Hack | ❌ fail | Doesn't prompt me to change the color. It should ask me which color I want to change and which color I want to change it to, then replace the text for those colors in the card text and reevaluate the card. |
+| Magical Hack | ⬜ untested |  |
 | Mahamoti Djinn | ✅ pass |  |
 | Mana Flare | ✅ pass |  |
 | Mana Short | ✅ pass |  |
@@ -183,7 +183,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Nettling Imp | ⬜ untested |  |
 | Nevinyrral's Disk | ⬜ untested |  |
 | Nightmare | ⬜ untested |  |
-| Northern Paladin | ❌ fail | Didn't let me choose a target |
+| Northern Paladin | ⬜ untested |  |
 | Obsianus Golem | ⬜ untested |  |
 | Orcish Artillery | ✅ pass |  |
 | Orcish Oriflamme | ⬜ untested |  |
@@ -198,7 +198,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Plague Rats | ⬜ untested |  |
 | Plains | ✅ pass |  |
 | Plateau | ✅ pass |  |
-| Power Leak | ❌ fail | I didn't get a prompt to pay any amount of mana to negate the damage from Power Leak |
+| Power Leak | ⬜ untested |  |
 | Power Sink | ⬜ untested |  |
 | Power Surge | ⬜ untested |  |
 | Prodigal Sorcerer | ✅ pass |  |
@@ -213,7 +213,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Regrowth | ⬜ untested |  |
 | Resurrection | ⬜ untested |  |
 | Reverse Damage | ⬜ untested |  |
-| Righteousness | ❌ fail | It doesn't let me choose a target. Also it should only let me target blocking creatures. |
+| Righteousness | ⬜ untested |  |
 | Roc of Kher Ridges | ✅ pass |  |
 | Rock Hydra | ⬜ untested |  |
 | Rod of Ruin | ⬜ untested |  |
@@ -228,7 +228,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Scryb Sprites | ✅ pass |  |
 | Sea Serpent | ✅ pass |  |
 | Sedge Troll | ⬜ untested |  |
-| Sengir Vampire | ❌ fail | I didn't get a +1/+1 counter for blocking and killing a creature |
+| Sengir Vampire | ⬜ untested |  |
 | Serra Angel | ✅ pass |  |
 | Shanodin Dryads | ⬜ untested |  |
 | Shatter | ⬜ untested |  |
@@ -253,7 +253,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Terror | ⬜ untested |  |
 | The Hive | ✅ pass |  |
 | Thicket Basilisk | ⬜ untested |  |
-| Thoughtlace | ❌ fail | The color label, e.g. Color: {U} should use the mana symbol |
+| Thoughtlace | ⬜ untested |  |
 | Throne of Bone | ⬜ untested |  |
 | Timber Wolves | ⬜ untested |  |
 | Time Vault | ⬜ untested |  |
@@ -273,7 +273,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Verduran Enchantress | ⬜ untested |  |
 | Vesuvan Doppelganger | ⬜ untested |  |
 | Veteran Bodyguard | ⬜ untested |  |
-| Volcanic Eruption | ❌ fail | Card doesn't deal damage or let me choose mountains to destroy |
+| Volcanic Eruption | ⬜ untested |  |
 | Wall of Air | ✅ pass |  |
 | Wall of Bone | ✅ pass |  |
 | Wall of Brambles | ✅ pass |  |
@@ -285,7 +285,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Wall of Wood | ⬜ untested |  |
 | Wanderlust | ⬜ untested |  |
 | War Mammoth | ⬜ untested |  |
-| Warp Artifact | ❌ fail | Warp Artifact doesn't get attached to the artifact and is instead put in the graveyard. |
+| Warp Artifact | ⬜ untested |  |
 | Water Elemental | ✅ pass |  |
 | Weakness | ✅ pass |  |
 | Web | ⬜ untested |  |

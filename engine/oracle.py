@@ -27,7 +27,7 @@ from .oracle_types import (
     _instruction,
     _parse_number_token,
 )
-from .parsing import parse_modal_options, parse_primary_instruction
+from .parsing import parse_modal_options, parse_primary_instruction, parse_static_coeffects
 
 __all__ = [
     "ActivatedAbilityCost",
@@ -674,6 +674,12 @@ def _compile_card_oracle(
         primary_instruction, _ = parse_primary_instruction(normalized_text, activated=False)
         if primary_instruction is not None:
             instructions.append(primary_instruction)
+
+        # Static continuous co-effects (e.g. Conversion's "All Mountains are
+        # Plains.") that follow a primary clause already claimed above.
+        for coeffect in parse_static_coeffects(normalized_text):
+            if coeffect.kind not in {i.kind for i in instructions}:
+                instructions.append(coeffect)
 
         instructions.extend(
             OracleInstruction("spell_pattern", pattern)

@@ -45,6 +45,34 @@ class UpkeepStepMixin:
                 break
         return choices
 
+    def get_upkeep_mana_prevention_triggers(self, player_index: int) -> list[dict]:
+        """Return upkeep triggers where this player may pay any amount of mana to
+        prevent that much damage (Power Leak). The UI prompts for an amount; the
+        chosen value is passed back via ``resolve_upkeep(mana_prevention=...)``.
+        """
+        victim = self.players[player_index]
+        triggers: list[dict] = []
+        for controller in self.players:
+            for permanent in controller.battlefield:
+                if "prevent x of that damage" not in permanent.card.oracle_text.lower():
+                    continue
+                attached = permanent.metadata.get("attached_to")
+                if attached is None or attached not in victim.battlefield:
+                    continue
+                for trig in compile_card_oracle(permanent.card).triggered_abilities:
+                    if (
+                        trig.condition.kind == "upkeep_enchanted_controller"
+                        and trig.instruction is not None
+                        and trig.instruction.kind == "deal_damage"
+                    ):
+                        triggers.append({
+                            "card_name": permanent.card.name,
+                            "kind": "upkeep_pay_to_prevent_damage",
+                            "damage": int(trig.instruction.payload.get("amount", 1)),
+                        })
+                        break
+        return triggers
+
     def _process_mire_cleanups(self, player_index: int) -> None:
         """Drain Cyclopean Tomb's rest-of-game mire-removal obligations.
 
@@ -133,7 +161,7 @@ class UpkeepStepMixin:
             })
         return triggers
 
-    def resolve_upkeep(self, player_index: int, human_choices: dict[str, bool] | None = None, optional_choices: dict[str, bool] | None = None, defer_priority: bool = False) -> None:
+    def resolve_upkeep(self, player_index: int, human_choices: dict[str, bool] | None = None, optional_choices: dict[str, bool] | None = None, defer_priority: bool = False, mana_prevention: dict[str, int] | None = None) -> None:
         phase = "beginning"
         step = "upkeep"
         self._set_phase_and_step(phase, step)
@@ -209,6 +237,24 @@ class UpkeepStepMixin:
                             break
                         amount = int(trig.instruction.payload.get("amount", 1))
                         victim = self.players[player_index]
+                        # Power Leak: "that player may pay any amount of mana. ...
+                        # Prevent X of that damage, where X is the amount of mana
+                        # that player paid this way." The controller may pay up to
+                        # `amount` mana to prevent that much damage.
+                        if "prevent x of that damage" in permanent.card.oracle_text.lower():
+                            requested = 0
+                            if mana_prevention is not None and permanent.card.name in mana_prevention:
+                                requested = max(0, int(mana_prevention[permanent.card.name]))
+                            available = sum(victim.mana_pool.get(s, 0) for s in victim.mana_pool)
+                            paid = min(requested, amount, available)
+                            remaining = paid
+                            for sym in list(victim.mana_pool):
+                                while remaining > 0 and victim.mana_pool.get(sym, 0) > 0:
+                                    victim.mana_pool[sym] -= 1
+                                    remaining -= 1
+                            amount = max(0, amount - paid)
+                            if paid:
+                                self.log.append(f"{victim.name} paid {paid} mana to prevent {paid} damage from {permanent.card.name}")
                         damage = self._deal_damage_to_player(victim, amount)
                         self.log.append(f"{permanent.card.name} dealt {damage} upkeep damage to {victim.name}")
                         break

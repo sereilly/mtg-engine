@@ -107,15 +107,25 @@ def pump_target_creature_until_eot(game: Game, instruction: OracleInstruction, c
     raw_toughness = instruction.payload.get("toughness", 0)
     power_delta = max(0, x_value or 0) if raw_power == "x" else int(raw_power)
     toughness_delta = max(0, x_value or 0) if raw_toughness == "x" else int(raw_toughness)
+    blocking_only = bool(instruction.payload.get("blocking_only"))
+
+    def _eligible(perm: Permanent) -> bool:
+        if perm.card.primary_type != "creature":
+            return False
+        # Righteousness: the target must be a creature that is currently blocking.
+        if blocking_only and not game._is_blocking_creature(perm):
+            return False
+        return True
+
     target_perm: Permanent | None = None
     if context.target_permanent_index is not None and 0 <= context.target_permanent_index < len(target.battlefield):
         candidate = target.battlefield[context.target_permanent_index]
-        if candidate.card.primary_type == "creature":
+        if _eligible(candidate):
             target_perm = candidate
     if target_perm is None:
-        target_perm = next((p for p in target.battlefield if p.card.primary_type == "creature"), None)
+        target_perm = next((p for p in target.battlefield if _eligible(p)), None)
     if target_perm is None:
-        target_perm = next((p for p in caster.battlefield if p.card.primary_type == "creature"), None)
+        target_perm = next((p for p in caster.battlefield if _eligible(p)), None)
     if target_perm is not None:
         target_perm.power_bonus += power_delta
         target_perm.toughness_bonus += toughness_delta

@@ -61,6 +61,14 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
             d = game._deal_damage_to_player(redirect_player, damage)
             game.log.append(f"Jade Monolith redirected {d} damage to {redirect_player.name}")
             return True, "resolved"
+        # Disintegrate-style riders: the damaged creature can't be regenerated
+        # this turn, and if it would die this turn it is exiled instead (a
+        # replacement effect honored by _destroy_marked_creatures / _permanent_to_graveyard).
+        if target_perm.card.primary_type == "creature":
+            if instruction.payload.get("no_regen"):
+                target_perm.metadata["cant_be_regenerated_this_turn"] = True
+            if instruction.payload.get("exile_if_dies"):
+                target_perm.metadata["exile_if_dies_this_turn"] = True
         dealt = game._mark_damage_on_permanent(target_perm, damage)
         effective_toughness = target_perm.effective_toughness
         game.log.append(f"{card.name} dealt {dealt} damage to {target_perm.card.name}")

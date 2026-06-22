@@ -1284,6 +1284,9 @@ function cardRequiresTargetCreature(card) {
     if (t.includes("destroy target") && (/\bcreature\b/.test(t) || /\bwall\b/.test(t))) return true;
     // Pumps/keyword grants (Berserk, Giant Growth, Jump, Howl from Beyond).
     if (t.includes("target creature gets") || t.includes("target creature gains")) return true;
+    // Righteousness: "Target blocking creature gets +7/+7." (The engine enforces
+    // that the chosen creature is actually blocking.)
+    if (t.includes("target blocking creature")) return true;
     // Regenerate a target creature (Death Ward) — may be any player's creature.
     if (t.includes("regenerate target creature")) return true;
     // Exile a target creature (Swords to Plowshares).
@@ -1477,16 +1480,39 @@ function activatedAbilityTargetLandExcludesSwamp(card) {
 function activatedAbilityRequiresTargetCreature(card) {
   if (!card || typeof card === "string") return false;
   // Activated-ability lines that pick a target creature, e.g. Royal Assassin
-  // ("{T}: Destroy target tapped creature.") or Nettling Imp ("{T}: Choose target
-  // non-Wall creature ..."). The player must pick which creature.
+  // ("{T}: Destroy target tapped creature."), Nettling Imp ("{T}: Choose target
+  // non-Wall creature ..."), or Jade Monolith ("{1}: The next time a source of
+  // your choice would deal damage to target creature ..."). Pick which creature.
   const activatedLines = (card.oracle_text || "").split("\n")
     .filter((line) => /^\s*(\{[^}]+\}[,\s]*)+:/.test(line))
     .map((line) => line.toLowerCase());
   return activatedLines.some(
     (line) =>
-      (line.includes("destroy target") || line.includes("choose target")) &&
-      (/\bcreature\b/.test(line) || /\bwall\b/.test(line)),
+      ((line.includes("destroy target") || line.includes("choose target")) &&
+        (/\bcreature\b/.test(line) || /\bwall\b/.test(line))) ||
+      line.includes("damage to target creature"),
   );
+}
+
+// Color word a "destroy target [color] permanent" activated ability is restricted
+// to (Northern Paladin destroys a black permanent), or null when unrestricted.
+function activatedAbilityDestroyPermanentColor(card) {
+  if (!card || typeof card === "string") return null;
+  const activatedLines = (card.oracle_text || "").split("\n")
+    .filter((line) => /^\s*(\{[^}]+\}[,\s]*)+:/.test(line))
+    .map((line) => line.toLowerCase());
+  for (const line of activatedLines) {
+    const m = line.match(/destroy target (white|blue|black|red|green)? ?permanent/);
+    if (m) {
+      return { blue: "U", red: "R", black: "B", green: "G", white: "W" }[m[1]] || null;
+    }
+  }
+  return undefined; // undefined → no such ability at all
+}
+
+function activatedAbilityRequiresTargetPermanent(card) {
+  // Northern Paladin: "{W}{W}, {T}: Destroy target black permanent."
+  return activatedAbilityDestroyPermanentColor(card) !== undefined;
 }
 
 function activatedAbilityRequiresTargetAny(card) {
@@ -1541,7 +1567,13 @@ function cardRequiresManaColorChoice(card) {
 function cardRequiresCastColorChoice(card) {
   if (!card || typeof card === "string") return false;
   const text = (card.oracle_text || "").toLowerCase();
-  return text.includes("replacing all instances of one color word with another");
+  // Sleight of Mind: "replacing all instances of one color word with another."
+  if (text.includes("replacing all instances of one color word with another")) return true;
+  // Magical Hack: "replacing all instances of one basic land type with another."
+  // Each chosen color maps to a basic land type (W=Plains, U=Island, B=Swamp,
+  // R=Mountain, G=Forest), passed to the engine as the new_color.
+  if (text.includes("replacing all instances of one basic land type with another")) return true;
+  return false;
 }
 
 function getDualLandColors(card) {
@@ -1912,7 +1944,13 @@ function isPendingCastTargetValidForCard(card, { targetSeat = null, zoneKind = "
     if (zoneKind !== "battlefield") return false;
     if (!Number.isInteger(permanentIndex)) return false;
     if (!card || typeof card === "string") return false;
-    return String(card.type || "").toLowerCase().includes("creature");
+    if (!String(card.type || "").toLowerCase().includes("creature")) return false;
+    // Animate Wall ("Enchant Wall") may only target Walls, so only those glow.
+    const sourceText = String(pendingCastTarget.card?.oracle_text || "").toLowerCase();
+    if (sourceText.includes("enchant wall")) {
+      return String(card.type || "").toLowerCase().includes("wall");
+    }
+    return true;
   }
 
   if (pendingCastTarget.targetKind === "artifact") {
@@ -1925,6 +1963,14 @@ function isPendingCastTargetValidForCard(card, { targetSeat = null, zoneKind = "
   if (pendingCastTarget.targetKind === "permanent") {
     if (zoneKind !== "battlefield") return false;
     if (!Number.isInteger(permanentIndex)) return false;
+    // Northern Paladin: "Destroy target black permanent." Only permanents of the
+    // required color are legal targets.
+    const colorFilter = pendingCastTarget.activationColorFilter;
+    if (colorFilter) {
+      if (!card || typeof card === "string") return false;
+      const colors = (card.colors || []).map((c) => String(c).toUpperCase());
+      return colors.includes(colorFilter);
+    }
     // Feedback / Power Leak: "Enchant enchantment" — only enchantments are legal
     // targets, so only those should glow (not every permanent).
     const sourceText = String(pendingCastTarget.card?.oracle_text || "").toLowerCase();
@@ -3176,6 +3222,24 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     };
     renderActivationPrompt();
     updateActionHint(`Choose a creature target for ${cardName}'s ability.`);
+    return;
+  }
+
+  // Abilities that destroy a target permanent of a given color (Northern Paladin:
+  // "Destroy target black permanent."): the player chooses which permanent, and
+  // only permanents of the required color are valid.
+  if (activatedAbilityRequiresTargetPermanent(card)) {
+    pendingCastTarget = {
+      card,
+      cardName,
+      targetKind: "permanent",
+      castAction: "activate",
+      sourcePermanentIndex: permanentIndex,
+      activationColorFilter: activatedAbilityDestroyPermanentColor(card),
+    };
+    renderActivationPrompt();
+    renderBoard(currentState);
+    updateActionHint(`Choose a target permanent for ${cardName}'s ability.`);
     return;
   }
 

@@ -12,6 +12,58 @@ if TYPE_CHECKING:
     from ..oracle import OracleInstruction
 
 
+@effect_handler("volcanic_eruption")
+def volcanic_eruption(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Destroy X target Mountains, then deal damage to each creature and each
+    player equal to the number of Mountains put into a graveyard this way."""
+    target = context.target
+    card = context.card
+    x_value = max(0, context.x_value or 0)
+
+    def _is_mountain(perm: Permanent) -> bool:
+        return perm.card.primary_type == "land" and (
+            "mountain" in perm.card.type_line.lower()
+            or perm.metadata.get("land_type_override") == "mountain"
+        )
+
+    # Resolve the chosen Mountains. The UI supplies explicit indices on the target
+    # player's battlefield; fall back to the first X Mountains anywhere for AI/no
+    # explicit choice.
+    chosen: list[tuple[PlayerState, Permanent]] = []
+    raw_idx = context.target_permanent_index
+    indices = raw_idx if isinstance(raw_idx, list) else ([raw_idx] if isinstance(raw_idx, int) else [])
+    for idx in indices:
+        if isinstance(idx, int) and 0 <= idx < len(target.battlefield):
+            perm = target.battlefield[idx]
+            if _is_mountain(perm):
+                chosen.append((target, perm))
+    if not chosen:
+        for player in game.players:
+            for perm in player.battlefield:
+                if _is_mountain(perm) and len(chosen) < x_value:
+                    chosen.append((player, perm))
+
+    chosen = chosen[:x_value]
+    destroyed = 0
+    for owner, perm in chosen:
+        if perm in owner.battlefield and not game._is_indestructible(perm):
+            owner.battlefield.remove(perm)
+            owner.graveyard.append(perm.card)
+            destroyed += 1
+    game.log.append(f"{card.name} destroyed {destroyed} Mountain(s)")
+
+    if destroyed > 0:
+        for player in game.players:
+            game._deal_damage_to_player(player, destroyed)
+        for player in game.players:
+            for perm in list(player.battlefield):
+                if perm.card.primary_type == "creature":
+                    game._mark_damage_on_permanent(perm, destroyed)
+        game._destroy_marked_creatures()
+    game.log.append(f"{card.name} dealt {destroyed} damage to each creature and each player")
+    return True, "resolved"
+
+
 @effect_handler("destroy_all_creatures")
 def destroy_all_creatures(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     bypass_regen = instruction.payload.get("bypass_regeneration", False)

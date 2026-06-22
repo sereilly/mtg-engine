@@ -11,6 +11,16 @@ from .base import RuleResult, parse_rule
 _DESTROY_LAND_TYPE_RE = re.compile(r"destroy all (plains|islands|swamps|mountains|forests)")
 
 
+@parse_rule(515)
+def volcanic_eruption(text: str, activated: bool) -> RuleResult:
+    # Volcanic Eruption: "Destroy X target Mountains. Volcanic Eruption deals
+    # damage to each creature and each player equal to the number of Mountains put
+    # into a graveyard this way."
+    if "destroy x target mountains" in text:
+        return _instruction("volcanic_eruption"), "spell_pattern"
+    return None
+
+
 @parse_rule(520)
 def chaos_orb_flip(text: str, activated: bool) -> RuleResult:
     if "flip it onto the battlefield" in text:

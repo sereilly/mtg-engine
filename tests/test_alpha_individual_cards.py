@@ -225,6 +225,28 @@ def _run_card(card: CardDefinition, all_cards: list[CardDefinition]) -> tuple[Ga
         result = game.cast_from_hand(0, card.name, target_player_index=1)
         return game, p1, p2, before, result
 
+    if card.name == "Righteousness":
+        # "Target blocking creature gets +7/+7." The target must be a creature that
+        # is currently blocking, so set up an attacker (P1) and a blocker (P2).
+        grizzly = next(c for c in all_cards if c.name == "Grizzly Bears")
+        attacker = Permanent(card=grizzly)
+        attacker.metadata["summoning_sickness_turn"] = -99
+        blocker = Permanent(card=grizzly)
+        p1.battlefield.append(attacker)
+        p2.battlefield.append(blocker)
+        attacker_idx = p1.battlefield.index(attacker)
+        blocker_idx = p2.battlefield.index(blocker)
+        game.active_player_index = 0
+        game._set_phase_and_step("combat", "declare_attackers")
+        game.combat_defending_player_index = 1
+        game.declare_attackers(0, [attacker_idx], 1)
+        game._set_phase_and_step("combat", "declare_blockers")
+        game.declare_blockers(1, {blocker_idx: attacker_idx})
+        result = game.cast_from_hand(
+            0, "Righteousness", target_player_index=1, target_permanent_index=blocker_idx
+        )
+        return game, p1, p2, before, result
+
     # Aura spells must declare a legal enchant target when cast (Rule 115.1b)
     aura_target_index = None
     enchant_noun = aura_enchant_noun(card)

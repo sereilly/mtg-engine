@@ -47,6 +47,9 @@ def pump_target_creature_until_eot(text: str, activated: bool) -> RuleResult:
             "pump_target_creature_until_eot",
             power=p_str if p_str == "x" else int(p_str),
             toughness=t_str if t_str == "x" else int(t_str),
+            # Righteousness: "Target blocking creature gets +7/+7." The target is
+            # restricted to a creature that is currently blocking (CR 509.1).
+            blocking_only="target blocking creature" in text,
         ), "spell_pattern"
     return None
 
