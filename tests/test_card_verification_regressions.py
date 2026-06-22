@@ -223,7 +223,15 @@ class TestRagingRiver:
         ok, _ = game.declare_attackers(0, [1], 1)
 
         assert ok
-        # The "whenever one or more creatures you control attack" trigger fired.
+        # CR 508.2: the "whenever one or more creatures you control attack" trigger
+        # is put on the stack (not resolved immediately); the active player gets
+        # priority afterward (CR 508.4).
+        assert any(item.card.name == "Raging River" for item in game.stack)
+        assert river.metadata.get("left_right_division_turn") is None
+        assert game.priority_player_index == game.active_player_index
+
+        # It resolves once players pass priority and the stack is processed.
+        game.resolve_stack()
         assert river.metadata.get("left_right_division_turn") == game.turn
 
     def test_no_trigger_without_attackers(self, cards):

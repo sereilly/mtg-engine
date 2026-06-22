@@ -3,8 +3,9 @@ from __future__ import annotations
 """Declare attackers step (CR 508).
 
 The active player declares attackers (and any attacking bands) as a turn-based
-action, taps non-vigilance attackers, fires attack triggers, then receives
-priority (CR 508.4). Also holds the attack-legality query (``can_attack``),
+action, taps non-vigilance attackers, puts any attack triggers on the stack
+(CR 508.2), then receives priority (CR 508.4) so the triggers resolve as players
+pass. Also holds the attack-legality query (``can_attack``),
 "must attack if able" enforcement, and the banding-declaration validation.
 """
 
@@ -128,33 +129,43 @@ class DeclareAttackersStepMixin:
         return any(i.kind == "must_attack_each_combat" for i in program.instructions)
 
     def _fire_attack_triggers(self, controller_index: int) -> None:
-        """Fire "whenever one or more creatures you control attack" triggers.
+        """Put "whenever one or more creatures you control attack" triggers on the stack.
 
         Covers Raging River and similar enchantments whose ability triggers once
-        when the controller declares one or more attackers (Rule 508.1, 603.2).
+        when the controller declares one or more attackers (CR 508.2/508.4, 603.3).
+        Per CR 508.2 these abilities are placed on the stack as the declare attackers
+        step's turn-based action completes — they don't resolve immediately; the
+        active player then receives priority (the caller opens that window) and the
+        triggers resolve as players pass priority with the stack non-empty.
         """
-        from ..game_types import OracleExecutionContext, OracleStateMachine
+        from ..game_types import StackItem
 
         controller = self.players[controller_index]
         defender_index = self.combat_defending_player_index
-        defender = (
-            self.players[defender_index]
+        target_index = (
+            defender_index
             if isinstance(defender_index, int) and 0 <= defender_index < len(self.players)
-            else controller
+            else controller_index
         )
         for permanent in list(controller.battlefield):
             program = compile_card_oracle(permanent.card)
             for trig in program.triggered_abilities:
                 if trig.condition.kind != "one_or_more_attack" or trig.instruction is None:
                     continue
-                context = OracleExecutionContext(
-                    caster=controller,
-                    target=defender,
-                    card=permanent.card,
-                    source_permanent=permanent,
+                self.stack.append(
+                    StackItem(
+                        card=permanent.card,
+                        caster_index=controller_index,
+                        target_player_index=target_index,
+                        target_permanent_index=None,
+                        x_value=None,
+                        ability_instruction=trig.instruction,
+                        ability_effect_kind=trig.effect_kind,
+                        source_permanent=permanent,
+                        ability_text=trig.source_line,
+                    )
                 )
-                OracleStateMachine(self, context).run(trig.instruction)
-                self.log.append(f"{permanent.card.name} triggered on attack")
+                self.log.append(f"{permanent.card.name} triggered on attack (added to stack)")
 
     # ------------------------------------------------------------------
     # Banding declaration (CR 702.22)
