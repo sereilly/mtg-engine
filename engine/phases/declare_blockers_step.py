@@ -53,6 +53,8 @@ class DeclareBlockersStepMixin:
                 return False, f"{blocker.card.name} is tapped"
             if not self._can_block_attacker(blocker, attacker):
                 return False, f"{blocker.card.name} cannot block {attacker.card.name}"
+            if self._left_right_block_illegal(attacker_idx, blocker_idx, blocker):
+                return False, f"{blocker.card.name} is in the wrong pile to block {attacker.card.name}"
             assignments[blocker_idx] = attacker_idx
 
         # Lure enforcement: every creature that can block a Lure attacker must do so
@@ -84,6 +86,53 @@ class DeclareBlockersStepMixin:
         # declare blockers step), the active player receives priority.
         self.start_priority_window(self.active_player_index)
         return True, "declared blockers"
+
+    def _left_right_block_illegal(self, attacker_idx: int, blocker_idx: int, blocker: Permanent) -> bool:
+        """CR Raging River: an attacker assigned to a pile can only be blocked by a
+        flyer or by a creature in that same pile. Returns True if this block breaks
+        that restriction. A no-op when no left/right division is active."""
+        if not self.combat_left_right_active:
+            return False
+        attacker_side = self.combat_attacker_piles.get(attacker_idx)
+        if attacker_side is None:
+            return False
+        if self._has_keyword(blocker, "flying"):
+            return False  # flyers may block regardless of pile
+        return self.combat_defender_piles.get(blocker_idx) != attacker_side
+
+    def assign_defender_piles(self, defender_index: int, piles: dict[int, str]) -> tuple[bool, str]:
+        """Raging River: the defending player divides their non-flying creatures
+        into a "left" and a "right" pile. ``piles`` maps a battlefield index to the
+        side label. Every non-flying creature must be assigned exactly one side."""
+        if not self.combat_left_right_active:
+            return False, "no left/right division is active"
+        if defender_index != self.combat_left_right_defender_index:
+            return False, "only the defending player may divide their creatures"
+        defender = self.players[defender_index]
+        required = {
+            idx for idx, perm in enumerate(defender.battlefield)
+            if perm.card.primary_type == "creature" and not self._has_keyword(perm, "flying")
+        }
+        chosen = {int(i): str(s).lower() for i, s in piles.items()}
+        if set(chosen) != required or any(s not in ("left", "right") for s in chosen.values()):
+            return False, "every non-flying creature must be assigned to left or right"
+        self.combat_defender_piles = chosen
+        self.log.append(f"{defender.name} divided their creatures into left/right piles")
+        return True, "piles assigned"
+
+    def assign_attacker_piles(self, attacker_index: int, piles: dict[int, str]) -> tuple[bool, str]:
+        """Raging River: the attacking player labels each of their attacking
+        creatures "left" or "right" (the pile it can be blocked from)."""
+        if not self.combat_left_right_active:
+            return False, "no left/right division is active"
+        if attacker_index != self.active_player_index:
+            return False, "only the attacking player may label their attackers"
+        chosen = {int(i): str(s).lower() for i, s in piles.items()}
+        if set(chosen) != set(self.combat_attackers) or any(s not in ("left", "right") for s in chosen.values()):
+            return False, "every attacker must be labeled left or right"
+        self.combat_attacker_piles = chosen
+        self.log.append("Attacker labeled each creature left/right")
+        return True, "attacker piles assigned"
 
     def _can_block_attacker(self, blocker: Permanent, attacker: Permanent) -> bool:
         if attacker.metadata.get("cant_be_blocked_until_eot"):

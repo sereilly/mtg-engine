@@ -153,6 +153,144 @@ class StackCastingMixin:
         self.log.append(f"{caster.name} searched library and put {card.name} into hand")
         return True
 
+    def confirm_discard(self, player_index: int, hand_indices: list[int], to_library: bool = False) -> bool:
+        """Resolve a pending non-random discard (Disrupting Scepter) with the
+        player's chosen cards. ``to_library`` puts them on top of the library
+        instead of the graveyard, but only if Library of Leng allows it."""
+        from ..handlers.zones import _resolve_one_discard
+
+        pending = self.pending_discard
+        if pending is None or pending["player_index"] != player_index:
+            return False
+        count = int(pending["count"])
+        chosen = [i for i in dict.fromkeys(hand_indices)][:count]
+        if len(chosen) != count:
+            return False
+        # Remove in descending order so earlier indices stay valid as we pop.
+        for hand_index in sorted(chosen, reverse=True):
+            if not _resolve_one_discard(self, player_index, hand_index, to_library):
+                return False
+        self.pending_discard = None
+        return True
+
+    def _balance_remove(self, player_index: int, land_indices, creature_indices, hand_indices) -> bool:
+        """Remove the chosen lands/creatures (to graveyard) and hand cards (discard)
+        for one player's Balance plan. Validates the counts against the plan."""
+        pending = self.pending_balance
+        if pending is None:
+            return False
+        plan = pending["plans"].get(player_index)
+        if plan is None:
+            return False
+        player = self.players[player_index]
+        lands = [i for i in dict.fromkeys(land_indices or [])]
+        creatures = [i for i in dict.fromkeys(creature_indices or [])]
+        hand = [i for i in dict.fromkeys(hand_indices or [])]
+        if len(lands) != plan["lands"] or len(creatures) != plan["creatures"] or len(hand) != plan["hand"]:
+            return False
+        # Validate the chosen battlefield indices are the right card type.
+        for i in lands:
+            if not (0 <= i < len(player.battlefield)) or player.battlefield[i].card.primary_type != "land":
+                return False
+        for i in creatures:
+            if not (0 <= i < len(player.battlefield)) or player.battlefield[i].card.primary_type != "creature":
+                return False
+        for i in hand:
+            if not (0 <= i < len(player.hand)):
+                return False
+        # Remove battlefield permanents (highest index first) and hand cards.
+        for i in sorted(set(lands) | set(creatures), reverse=True):
+            perm = player.battlefield.pop(i)
+            self._permanent_to_graveyard(player, perm)
+        for i in sorted(hand, reverse=True):
+            player.graveyard.append(player.hand.pop(i))
+        del pending["plans"][player_index]
+        if not pending["plans"]:
+            self.pending_balance = None
+        self.log.append(f"{player.name} resolved their Balance sacrifices")
+        return True
+
+    def _pay_optional(self, entry: dict) -> None:
+        """Spend the entry's mana cost from its player's pool and gain the life."""
+        player = self.players[entry["player_index"]]
+        remaining = int(entry["cost"])
+        for sym in list(player.mana_pool):
+            while remaining > 0 and player.mana_pool.get(sym, 0) > 0:
+                player.mana_pool[sym] -= 1
+                remaining -= 1
+        if remaining == 0:
+            self._gain_life(player, int(entry["life"]), entry["card_name"])
+
+    def confirm_optional_pay(self, player_index: int, card_name: str | None = None, accept: bool = True) -> bool:
+        """Resolve the first pending optional "pay {1}: gain N life" trigger for a
+        player (the color rods). ``accept`` pays it; otherwise it is declined."""
+        idx = next(
+            (
+                i for i, e in enumerate(self.pending_optional_pays)
+                if e["player_index"] == player_index and (card_name is None or e["card_name"] == card_name)
+            ),
+            None,
+        )
+        if idx is None:
+            return False
+        entry = self.pending_optional_pays.pop(idx)
+        available = sum(self.players[player_index].mana_pool.get(s, 0) for s in self.players[player_index].mana_pool)
+        if accept and available >= int(entry["cost"]):
+            self._pay_optional(entry)
+        else:
+            self.log.append(f"{self.players[player_index].name} declined {entry['card_name']}'s pay-for-life trigger")
+        return True
+
+    def auto_resolve_pending_optional_pays(self, only_player_index: int | None = None) -> None:
+        """Pay every pending optional "pay {1}: gain N life" trigger when able — the
+        deterministic default used for AI players and headless simulation."""
+        remaining: list[dict] = []
+        for entry in self.pending_optional_pays:
+            if only_player_index is not None and entry["player_index"] != only_player_index:
+                remaining.append(entry)
+                continue
+            player = self.players[entry["player_index"]]
+            available = sum(player.mana_pool.get(s, 0) for s in player.mana_pool)
+            if available >= int(entry["cost"]):
+                self._pay_optional(entry)
+        self.pending_optional_pays = remaining
+
+    def confirm_balance(self, player_index: int, land_indices=None, creature_indices=None, hand_indices=None) -> bool:
+        """Resolve one player's Balance plan with their chosen sacrifices/discards."""
+        return self._balance_remove(player_index, land_indices, creature_indices, hand_indices)
+
+    def auto_resolve_pending_balance(self, only_player_index: int | None = None) -> None:
+        """Resolve Balance plans with a default choice (keep the lowest-index
+        permanents/cards). Used for AI players and headless simulation. When
+        ``only_player_index`` is given, resolve just that player's plan."""
+        pending = self.pending_balance
+        if pending is None:
+            return
+        for player_index in list(pending["plans"].keys()):
+            if only_player_index is not None and player_index != only_player_index:
+                continue
+            plan = pending["plans"][player_index]
+            player = self.players[player_index]
+            land_idx = [i for i, p in enumerate(player.battlefield) if p.card.primary_type == "land"][-plan["lands"]:] if plan["lands"] else []
+            creature_idx = [i for i, p in enumerate(player.battlefield) if p.card.primary_type == "creature"][-plan["creatures"]:] if plan["creatures"] else []
+            hand_idx = list(range(len(player.hand)))[-plan["hand"]:] if plan["hand"] else []
+            self._balance_remove(player_index, land_idx, creature_idx, hand_idx)
+
+    def auto_resolve_pending_discard(self) -> None:
+        """Resolve a pending discard with a default choice (the lowest-index cards,
+        kept in the graveyard). Used for AI players and headless simulation."""
+        from ..handlers.zones import _resolve_one_discard
+
+        pending = self.pending_discard
+        if pending is None:
+            return
+        player_index = pending["player_index"]
+        count = int(pending["count"])
+        for _ in range(count):
+            if not _resolve_one_discard(self, player_index, 0, to_library=False):
+                break
+        self.pending_discard = None
+
     def confirm_reorder_library(self, caster_index: int, new_order: list, shuffle: bool = False) -> bool:
         pending = self.pending_reorder_library
         if pending is None or pending["caster_index"] != caster_index:
@@ -263,14 +401,14 @@ class StackCastingMixin:
             if target_stack_item is not None:
                 # A specific spell was chosen — it must itself be a legal target.
                 if target_stack_item not in self.stack or (
-                    color_filter and color_filter not in (target_stack_item.card.colors or [])
+                    color_filter and color_filter not in self._stack_item_colors(target_stack_item)
                 ):
                     details = f"no valid target for {permanent.card.name}"
                     self.log.append(details)
                     return SimulationResult(permanent.card.name, False, "unsupported", details)
             else:
                 has_valid_target = any(
-                    not color_filter or color_filter in (item.card.colors or [])
+                    not color_filter or color_filter in self._stack_item_colors(item)
                     for item in self.stack
                 )
                 if not has_valid_target:
@@ -730,9 +868,9 @@ class StackCastingMixin:
                 # A specific spell was chosen — it must itself be a legal target.
                 if target_stack_item not in self.stack:
                     return False, f"no valid target for {card.name}"
-                if color_filter and color_filter not in target_stack_item.card.colors:
+                if color_filter and color_filter not in self._stack_item_colors(target_stack_item):
                     return False, f"no valid target for {card.name}"
-            elif color_filter and not any(color_filter in item.card.colors for item in self.stack):
+            elif color_filter and not any(color_filter in self._stack_item_colors(item) for item in self.stack):
                 return False, f"no valid target for {card.name}"
 
         elif primary.kind == "bounce_target_creature":
@@ -794,13 +932,34 @@ class StackCastingMixin:
                 return False, f"no valid target for {card.name}"
 
         elif primary.kind == "recolor_target_from_text":
-            any_permanent = any(p.battlefield for p in self.players)
-            if not any_permanent:
-                return False, f"no valid target for {card.name}"
+            # "Target spell or permanent becomes [color]" (the Lace cards). A spell
+            # on the stack is a legal target, as is any permanent on any battlefield.
+            if target_stack_item is not None:
+                if target_stack_item not in self.stack:
+                    return False, f"no valid target for {card.name}"
+            else:
+                any_target = bool(self.stack) or any(p.battlefield for p in self.players)
+                if not any_target:
+                    return False, f"no valid target for {card.name}"
 
-        elif primary.kind in ("return_creature_from_graveyard_to_hand", "reanimate_creature_to_battlefield"):
+        elif primary.kind in (
+            "return_creature_from_graveyard_to_hand",
+            "reanimate_creature_to_battlefield",
+            "reanimate_creature",
+        ):
+            # Raise Dead / Resurrection target a creature card in *your* graveyard,
+            # so an opponent's graveyard is never a legal target. Only enforce the
+            # ownership/index check when the caster made an explicit graveyard pick;
+            # an untargeted cast just needs a creature in the caster's graveyard.
             caster = self.players[caster_index]
-            if not any(c.primary_type == "creature" for c in caster.graveyard):
+            if isinstance(target_permanent_index, int):
+                if target_player_index is not None and target_player_index != caster_index:
+                    return False, f"no valid target for {card.name}"
+                if not (0 <= target_permanent_index < len(caster.graveyard)) or (
+                    caster.graveyard[target_permanent_index].primary_type != "creature"
+                ):
+                    return False, f"no valid target for {card.name}"
+            elif not any(c.primary_type == "creature" for c in caster.graveyard):
                 return False, f"no valid target for {card.name}"
 
         elif primary.kind == "simulacrum_redirect":

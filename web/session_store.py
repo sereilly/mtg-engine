@@ -56,6 +56,11 @@ class Session:
     # Shadow returning from the graveyard), and the answers collected so far.
     optional_trigger_choices: list[dict] = field(default_factory=list)
     optional_trigger_resolved: dict[str, bool] = field(default_factory=dict)
+    # "Pay any amount of mana to prevent that much damage" upkeep triggers (Power
+    # Leak). Each choice carries the card name and the max preventable damage; the
+    # player's chosen amount per card is collected in the resolved map.
+    upkeep_mana_prevention_choices: list[dict] = field(default_factory=list)
+    upkeep_mana_prevention_resolved: dict[str, int] = field(default_factory=dict)
     island_sanctuary_pending: bool = False
     # Debug toggle: when True, the AI declares every legal attacker each combat
     # instead of its normal risk-weighted choice. Set via the in-game Debug Menu.

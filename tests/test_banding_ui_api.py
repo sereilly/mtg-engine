@@ -203,3 +203,70 @@ def test_only_the_defender_may_assign_banding_damage():
         json={"seat": 0, "action": "assign_banding_damage", "banding_damage": {"0": {"0": 3}}},
     )
     assert resp.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# Regression: a human attacking with a band that the opponent blocks must not
+# deadlock combat (Benalish Hero — "the game got stuck passing priority back and
+# forth in a loop"). The propagated single shared blocker (CR 702.22h) has no
+# dialog to present, so the server auto-resolves instead of looping forever.
+# ---------------------------------------------------------------------------
+
+def _new_hva_session() -> str:
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_ai",
+            "host_name": "Host",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 70123,
+        },
+    ).json()
+    return created["session_id"]
+
+
+def test_human_band_attack_blocked_by_ai_does_not_deadlock_combat():
+    sid = _new_hva_session()
+    session = store.get(sid)
+    game = session.game
+    # Human (seat 0) attacks with a band; the AI (seat 1) has one blocker.
+    game.players[0].battlefield = [
+        Permanent(card=_creature("Hero", 1, 1, banding=True)),
+        Permanent(card=_creature("Beater", 3, 3)),
+    ]
+    for perm in game.players[0].battlefield:
+        perm.metadata["summoning_sickness_turn"] = -99
+    game.players[1].battlefield = [Permanent(card=_creature("Blocker", 2, 2))]
+    session.current_turn = 0
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+
+    declared = client.post(
+        f"/api/sessions/{sid}/action",
+        json={
+            "seat": 0,
+            "action": "declare_attackers",
+            "attacker_indices": [0, 1],
+            "target_seat": 1,
+            "bands": [[0, 1]],
+        },
+    )
+    assert declared.status_code == 200, declared.text
+
+    # Drive the turn the way the client does: pass when we hold priority, otherwise
+    # advance the phase. A bounded loop — if the deadlock regresses this never
+    # leaves combat_damage and the assertion below fires instead of hanging.
+    progressed = False
+    for _ in range(15):
+        action = "pass_priority" if game.priority_player_index == 0 else "next_phase"
+        resp = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": action})
+        assert resp.status_code == 200, resp.text
+        if session.current_turn != 0 or game.current_step in ("end", "cleanup"):
+            progressed = True
+            break
+
+    assert progressed, "combat deadlocked at the band block instead of resolving"
+    # The lone blocker took combat damage from the band and died — proof the damage
+    # step actually resolved rather than spinning on priority.
+    assert not any(p.card.name == "Blocker" for p in game.players[1].battlefield)

@@ -114,6 +114,17 @@ class CombatDamageStepMixin:
                 return True
         return False
 
+    def _manual_assignment_has_declared_multiblock(self) -> bool:
+        """True when some attacker is blocked by 2+ *declared* blockers — the case
+        the combat-damage dialog can surface to the active player. Band-propagated
+        blocks (a single shared blocker spread across a band, CR 702.22h) are not
+        included: the dialog has no way to present them, so when that is the only
+        pending assignment the web layer auto-resolves rather than deadlocking."""
+        for attacker_idx in self.combat_attackers:
+            if len(self._combat_blockers_for_attacker(attacker_idx)) >= 2:
+                return True
+        return False
+
     def _build_auto_damage_assignment(self) -> dict[int, dict[int, int]]:
         """Build a sensible default damage assignment for every blocked attacker.
 

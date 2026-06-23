@@ -128,11 +128,39 @@ def reorder_target_library_top(game: Game, instruction: OracleInstruction, conte
 def discard_target_cards(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     target = context.target
     actual = min(int(instruction.payload.get("amount", 0)), len(target.hand))
-    for _ in range(actual):
-        discarded = target.hand.pop(0)
-        target.graveyard.append(discarded)
-    game.log.append(f"{target.name} discarded {actual} cards")
-    return True, "resolved"
+    if actual <= 0:
+        game.log.append(f"{target.name} has no cards to discard")
+        return True, "resolved"
+    # This is a non-random discard ("discards a card"), so the discarding player
+    # chooses which card. Defer to a pending choice; the UI prompts the human and
+    # the AI auto-resolves it. Library of Leng lets them choose top-of-library.
+    player_index = game.players.index(target)
+    game.pending_discard = {
+        "player_index": player_index,
+        "count": actual,
+        "allow_top_of_library": any(p.card.name == "Library of Leng" for p in target.battlefield),
+    }
+    game.log.append(f"{target.name} must choose {actual} card(s) to discard")
+    return True, "pending_discard"
+
+
+def _resolve_one_discard(game: Game, player_index: int, hand_index: int, to_library: bool) -> bool:
+    """Move one chosen card from a player's hand to their graveyard (or, with
+    Library of Leng, the top of their library). Returns False on a bad index."""
+    if not (0 <= player_index < len(game.players)):
+        return False
+    player = game.players[player_index]
+    if not (0 <= hand_index < len(player.hand)):
+        return False
+    card = player.hand.pop(hand_index)
+    allow_top = bool(game.pending_discard and game.pending_discard.get("allow_top_of_library"))
+    if to_library and allow_top:
+        player.library.insert(0, card)
+        game.log.append(f"{player.name} discarded {card.name} to the top of their library (Library of Leng)")
+    else:
+        player.graveyard.append(card)
+        game.log.append(f"{player.name} discarded {card.name}")
+    return True
 
 
 @effect_handler("discard_x_target_cards")

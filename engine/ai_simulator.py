@@ -240,6 +240,9 @@ def run_ai_simulation(cards_path: Path, games: int = 10, seed: int = 1337, max_t
                         x_value=cast_action.x_value,
                     )
                     _resolve_pending_search(game)
+                    game.auto_resolve_pending_discard()
+                    game.auto_resolve_pending_balance()
+                    game.auto_resolve_pending_optional_pays()
                     after = _snap(game)
                     report.interaction_count += 1
                     report.log_lines.append(
@@ -272,6 +275,9 @@ def run_ai_simulation(cards_path: Path, games: int = 10, seed: int = 1337, max_t
                         permanent_index=activation_action.permanent_index,
                     )
                     _resolve_pending_search(game)
+                    game.auto_resolve_pending_discard()
+                    game.auto_resolve_pending_balance()
+                    game.auto_resolve_pending_optional_pays()
                     report.interaction_count += 1
                     report.log_lines.append(
                         f"G{game_index} T{turn} {active_player.name} "

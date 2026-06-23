@@ -10,6 +10,17 @@ let pendingManaColor = null;
 let pendingAutoTap = null;
 // "Choose one —" modal spell awaiting the caster's mode selection.
 let pendingModalChoice = null;
+// A permanent with more than one activated ability (Rock Hydra, Basalt Monolith)
+// awaiting the player's choice of which ability to activate.
+let pendingAbilityChoice = null;
+// Disrupting Scepter discard destination toggle (Library of Leng): false =
+// graveyard, true = top of library. Reset whenever a new discard prompt opens.
+let discardToLibrarySelected = false;
+// Balance: the indices the player has currently picked to sacrifice/discard.
+let balanceSelection = { lands: [], creatures: [], hand: [] };
+// Raging River: in-progress left/right labels, keyed by index, for whichever
+// role (defender division / attacker labeling) the viewer is resolving.
+let ragingRiverSelection = null;
 // Chosen mode index for the cast in progress, injected into the cast action.
 let pendingCastModeIndex = null;
 let debugSearchTimer = null;
@@ -834,8 +845,8 @@ function getAutoPassStateKey(state) {
 }
 
 function hasBlockingPromptForAutoPass(state = currentState) {
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state)) return true;
-  return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice);
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getBalanceSelectInfo(state) || getOptionalPayInfo(state) || getRagingRiverInfo(state)) return true;
+  return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingAbilityChoice);
 }
 
 function shouldAutoPassUntilTurnEnd(state = currentState) {
@@ -1293,10 +1304,18 @@ function cardRequiresTargetGraveyardCreature(card) {
   return false;
 }
 
-function getTargetableGraveyardCreatures(state = currentState) {
+// "from your graveyard" (Resurrection, Raise Dead) restricts targeting to the
+// caster's own graveyard; "in a graveyard" (Animate Dead) allows any graveyard.
+function cardReanimatesOwnGraveyardOnly(card) {
+  if (!card || typeof card === "string") return false;
+  return (card.oracle_text || "").toLowerCase().includes("your graveyard");
+}
+
+function getTargetableGraveyardCreatures(state = currentState, restrictSeat = null) {
   if (!state) return [];
   const result = [];
   for (const targetSeat of [0, 1]) {
+    if (Number.isInteger(restrictSeat) && targetSeat !== restrictSeat) continue;
     const player = state.players?.[targetSeat];
     if (!player || !Array.isArray(player.graveyard)) continue;
     player.graveyard.forEach((card, index) => {
@@ -1311,15 +1330,21 @@ function getTargetableGraveyardCreatures(state = currentState) {
 function startCastGraveyardCreatureTargetPrompt(card, castAction = "cast") {
   const cardName = normalizeCardName(card);
   if (!cardName) return;
-  if (getTargetableGraveyardCreatures().length === 0) {
+  const viewerSeat = Number.isInteger(seat) ? seat : 0;
+  const casterSeat = castAction === "debug_cast_free_opponent" ? 1 - viewerSeat : viewerSeat;
+  const ownGraveyardOnly = cardReanimatesOwnGraveyardOnly(card);
+  const restrictSeat = ownGraveyardOnly ? casterSeat : null;
+  if (getTargetableGraveyardCreatures(currentState, restrictSeat).length === 0) {
     clearPendingHandCast();
-    updateActionHint(`No creature cards in any graveyard for ${cardName}.`, true);
+    updateActionHint(`No creature cards in ${ownGraveyardOnly ? "your" : "any"} graveyard for ${cardName}.`, true);
     return;
   }
-  pendingCastTarget = { card, cardName, targetKind: "graveyard_creature", castAction };
+  pendingCastTarget = { card, cardName, targetKind: "graveyard_creature", castAction, restrictSeat };
   renderActivationPrompt();
   renderBoard(currentState);
-  updateActionHint(`Choose a creature card in a graveyard to reanimate with ${cardName}.`);
+  updateActionHint(
+    `Choose a creature card in ${ownGraveyardOnly ? "your" : "a"} graveyard to reanimate with ${cardName}.`
+  );
 }
 
 function cardRequiresTargetCreature(card) {
@@ -1840,6 +1865,16 @@ function getOptionalTriggerInfo(state = currentState) {
   return info;
 }
 
+function getUpkeepPreventionInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  if (state.current_step !== "upkeep") return null;
+  if (state.current_turn !== seat) return null;
+
+  const info = state.upkeep_mana_prevention;
+  if (!info || !Array.isArray(info.pending) || info.pending.length === 0) return null;
+  return info;
+}
+
 function getIslandSanctuaryInfo(state = currentState) {
   if (!state || seat === null) return null;
   if (state.current_turn !== seat) return null;
@@ -1857,6 +1892,37 @@ function getSearchLibraryInfo(state = currentState) {
   const info = state.search_library;
   if (!info) return null;
   if (info.caster_seat !== seat) return null;
+  return info;
+}
+
+function getDiscardSelectInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.discard_select;
+  if (!info) return null;
+  if (info.player_seat !== seat) return null;
+  return info;
+}
+
+function getBalanceSelectInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.balance_select;
+  if (!info) return null;
+  if (info.player_seat !== seat) return null;
+  return info;
+}
+
+function getOptionalPayInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.optional_pay;
+  if (!info || !Array.isArray(info.pending) || info.pending.length === 0) return null;
+  return info;
+}
+
+function getRagingRiverInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.raging_river;
+  if (!info) return null;
+  if (!Array.isArray(info.divide_creatures) && !Array.isArray(info.label_attackers)) return null;
   return info;
 }
 
@@ -2094,8 +2160,13 @@ function isAnyPromptActive(state = currentState) {
   if (getUntapLandSelectionInfo(state)) return true;
   if (getUpkeepPayInfo(state)) return true;
   if (getOptionalTriggerInfo(state)) return true;
+  if (getUpkeepPreventionInfo(state)) return true;
+  if (getDiscardSelectInfo(state)) return true;
+  if (getBalanceSelectInfo(state)) return true;
+  if (getOptionalPayInfo(state)) return true;
+  if (getRagingRiverInfo(state)) return true;
   if (shouldShowPriorityPrompt(state)) return true;
-  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingAutoTap || pendingModalChoice) return true;
+  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingAutoTap || pendingModalChoice || pendingAbilityChoice) return true;
 
   const hasValidAttackers = getValidAttackerIndices(state).length > 0;
   const hasValidBlockers = getValidBlockerAssignments(state).length > 0;
@@ -2107,7 +2178,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getBalanceSelectInfo(state) || getOptionalPayInfo(state) || getRagingRiverInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -2206,7 +2277,7 @@ async function handleCombatPromptOk() {
 
 async function handlePriorityPromptOk() {
   if (!currentState || seat === null) return false;
-  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice) return false;
+  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingAbilityChoice) return false;
   if (!shouldShowPriorityPrompt(currentState)) return false;
   await sendAction({ seat, action: "pass_priority" });
   updateActionHint("Passed priority.");
@@ -2376,6 +2447,330 @@ function applyOptionalTriggerPrompt(info) {
   if (noEl) {
     noEl.addEventListener("click", async () => {
       await sendAction({ seat, action: "resolve_optional_trigger", card_name: cardName, accept: false });
+    });
+  }
+}
+
+// Power Leak: "you may pay any amount of mana ... prevent X of that damage." The
+// player picks how much mana to pay (0..min(damage, available)); paying that much
+// prevents that much of the Aura's damage.
+function applyUpkeepPreventionPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  const pending = info.pending || [];
+  const current = pending[0];
+  const cardName = current?.card_name || "Unknown";
+  const damage = Math.max(0, Number(current?.damage) || 0);
+  const available = Math.max(0, Number(info.available_mana) || 0);
+  const maxPay = Math.min(damage, available);
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  title.textContent = "Pay to Prevent Damage";
+  body.textContent = `${cardName} deals ${damage} damage to you. Pay mana to prevent that much.`;
+
+  const buttons = [];
+  for (let value = 0; value <= maxPay; value += 1) {
+    buttons.push(
+      `<button type="button" class="prompt-choice-btn" data-prevent-amount="${value}">Pay ${value}</button>`,
+    );
+  }
+  steps.innerHTML = [
+    `<div>Card: ${escapeHtml(cardName)}</div>`,
+    `<div>Damage: ${damage} &nbsp; Available mana: ${available}</div>`,
+    `<div class="prompt-choice-row">${buttons.join("")}</div>`,
+  ].join("");
+
+  steps.querySelectorAll("[data-prevent-amount]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const amount = Number(btn.dataset.preventAmount) || 0;
+      await sendAction({
+        seat,
+        action: "pay_upkeep_prevention",
+        card_name: cardName,
+        amount,
+      });
+    });
+  });
+}
+
+// Disrupting Scepter: the discarding player picks which card to discard. With
+// Library of Leng a destination toggle lets them send it to the top of their
+// library instead of the graveyard.
+function applyDiscardSelectPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  const cards = info.cards || [];
+  const allowTop = !!info.allow_top_of_library;
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  title.textContent = "Discard a Card";
+  const destLabel = allowTop
+    ? discardToLibrarySelected
+      ? "top of your library (Library of Leng)"
+      : "your graveyard"
+    : "your graveyard";
+  body.textContent = `Choose a card to discard to ${destLabel}.`;
+
+  const toggleRow = allowTop
+    ? `<div class="prompt-choice-row"><button type="button" class="prompt-choice-btn" id="discardDestToggle">` +
+      `Destination: ${discardToLibrarySelected ? "Top of Library" : "Graveyard"} (click to switch)</button></div>`
+    : "";
+  const cardButtons = cards
+    .map(
+      (card, idx) =>
+        `<button type="button" class="prompt-choice-btn" data-discard-index="${idx}">${escapeHtml(card.name || "Card")}</button>`,
+    )
+    .join("");
+  steps.innerHTML = [toggleRow, `<div class="prompt-choice-row">${cardButtons}</div>`].join("");
+
+  const toggleEl = document.getElementById("discardDestToggle");
+  if (toggleEl) {
+    toggleEl.addEventListener("click", () => {
+      discardToLibrarySelected = !discardToLibrarySelected;
+      applyDiscardSelectPrompt(info);
+    });
+  }
+  steps.querySelectorAll("[data-discard-index]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const idx = Number(btn.dataset.discardIndex) || 0;
+      const toLibrary = allowTop && discardToLibrarySelected;
+      discardToLibrarySelected = false;
+      await sendAction({
+        seat,
+        action: "discard_confirm",
+        discard_indices: [idx],
+        to_library: toLibrary,
+      });
+    });
+  });
+}
+
+// Balance: the player picks exactly which lands/creatures to sacrifice and which
+// cards to discard down to the lowest counts, with a selected/total readout.
+function applyBalanceSelectPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  const need = {
+    lands: info.lands_to_sacrifice || 0,
+    creatures: info.creatures_to_sacrifice || 0,
+    hand: info.cards_to_discard || 0,
+  };
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  title.textContent = "Balance — Choose Sacrifices";
+  body.textContent = "Pick which of your permanents to sacrifice and cards to discard.";
+
+  function section(label, kind, items, isHand) {
+    if (!need[kind]) return "";
+    const picked = balanceSelection[kind];
+    const rows = items
+      .map((item) => {
+        const idx = isHand ? items.indexOf(item) : item.index;
+        const selected = picked.includes(idx);
+        const name = item.name || "Card";
+        return (
+          `<button type="button" class="prompt-choice-btn${selected ? " selected" : ""}" ` +
+          `data-balance-kind="${kind}" data-balance-index="${idx}">${selected ? "✓ " : ""}${escapeHtml(name)}</button>`
+        );
+      })
+      .join("");
+    return (
+      `<div>${escapeHtml(label)} — selected ${picked.length}/${need[kind]}</div>` +
+      `<div class="prompt-choice-row">${rows}</div>`
+    );
+  }
+
+  const ready =
+    balanceSelection.lands.length === need.lands &&
+    balanceSelection.creatures.length === need.creatures &&
+    balanceSelection.hand.length === need.hand;
+
+  steps.innerHTML = [
+    section(`Sacrifice ${need.lands} land(s)`, "lands", info.lands || [], false),
+    section(`Sacrifice ${need.creatures} creature(s)`, "creatures", info.creatures || [], false),
+    section(`Discard ${need.hand} card(s)`, "hand", info.hand || [], true),
+    `<div class="prompt-choice-row"><button type="button" class="prompt-choice-btn" id="balanceConfirmBtn"${ready ? "" : " disabled"}>Confirm</button></div>`,
+  ].join("");
+
+  steps.querySelectorAll("[data-balance-index]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const kind = btn.dataset.balanceKind;
+      const idx = Number(btn.dataset.balanceIndex);
+      const picked = balanceSelection[kind];
+      const at = picked.indexOf(idx);
+      if (at >= 0) picked.splice(at, 1);
+      else if (picked.length < need[kind]) picked.push(idx);
+      applyBalanceSelectPrompt(info);
+    });
+  });
+
+  const confirmBtn = document.getElementById("balanceConfirmBtn");
+  if (confirmBtn) {
+    confirmBtn.addEventListener("click", async () => {
+      const payload = {
+        seat,
+        action: "balance_confirm",
+        land_indices: balanceSelection.lands.slice(),
+        creature_indices: balanceSelection.creatures.slice(),
+        discard_indices: balanceSelection.hand.slice(),
+      };
+      balanceSelection = { lands: [], creatures: [], hand: [] };
+      await sendAction(payload);
+    });
+  }
+}
+
+// Color rods (Wooden Sphere, …): "Whenever a player casts a [color] spell, you
+// may pay {1}. If you do, gain 1 life." A yes/no decision per pending trigger.
+function applyOptionalPayPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  const pending = info.pending || [];
+  const current = pending[0];
+  const cardName = current?.card_name || "Unknown";
+  const cost = current?.cost ?? 1;
+  const life = current?.life ?? 1;
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  title.textContent = "Pay for Life?";
+  body.textContent = `${cardName}: pay {${cost}} to gain ${life} life?`;
+  steps.innerHTML = [
+    `<div>Card: ${escapeHtml(cardName)}</div>`,
+    `<div>Remaining decisions: ${pending.length}</div>`,
+    `<div class="prompt-choice-row">` +
+      `<button type="button" class="prompt-choice-btn" data-optional-pay="yes">Pay {${cost}}</button>` +
+      `<button type="button" class="prompt-choice-btn" data-optional-pay="no">Decline</button>` +
+      `</div>`,
+  ].join("");
+
+  steps.querySelectorAll("[data-optional-pay]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await sendAction({
+        seat,
+        action: "resolve_optional_pay",
+        card_name: cardName,
+        accept: btn.dataset.optionalPay === "yes",
+      });
+    });
+  });
+}
+
+// Raging River: the defending player divides their non-flying creatures into a
+// "left" and "right" pile; the attacking player labels each attacker with the
+// pile it can be blocked from. The viewer resolves whichever role applies.
+function applyRagingRiverPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  const isDefender = Array.isArray(info.divide_creatures);
+  const items = isDefender ? info.divide_creatures : info.label_attackers;
+
+  // Seed the selection from the current/default piles the first time.
+  if (!ragingRiverSelection) {
+    ragingRiverSelection = {};
+    for (const item of items) ragingRiverSelection[item.index] = item.pile || "left";
+  }
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  title.textContent = "Raging River — Left / Right";
+  body.textContent = isDefender
+    ? "Divide your non-flying creatures into a left and a right pile."
+    : "Choose which pile each of your attackers can be blocked from.";
+
+  const rows = items
+    .map((item) => {
+      const side = ragingRiverSelection[item.index] || "left";
+      return (
+        `<div class="prompt-choice-row">` +
+        `<span>${escapeHtml(item.name || "Creature")}:</span>` +
+        `<button type="button" class="prompt-choice-btn${side === "left" ? " selected" : ""}" data-river-index="${item.index}" data-river-side="left">Left</button>` +
+        `<button type="button" class="prompt-choice-btn${side === "right" ? " selected" : ""}" data-river-index="${item.index}" data-river-side="right">Right</button>` +
+        `</div>`
+      );
+    })
+    .join("");
+  steps.innerHTML = rows + `<div class="prompt-choice-row"><button type="button" class="prompt-choice-btn" id="riverConfirmBtn">Confirm</button></div>`;
+
+  steps.querySelectorAll("[data-river-index]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      ragingRiverSelection[Number(btn.dataset.riverIndex)] = btn.dataset.riverSide;
+      applyRagingRiverPrompt(info);
+    });
+  });
+  const confirmBtn = document.getElementById("riverConfirmBtn");
+  if (confirmBtn) {
+    confirmBtn.addEventListener("click", async () => {
+      const piles = { ...ragingRiverSelection };
+      ragingRiverSelection = null;
+      await sendAction({
+        seat,
+        action: isDefender ? "assign_defender_piles" : "assign_attacker_piles",
+        piles,
+      });
     });
   }
 }
@@ -2943,6 +3338,36 @@ function renderActivationPrompt() {
     return;
   }
 
+  const upkeepPreventionInfo = getUpkeepPreventionInfo();
+  if (upkeepPreventionInfo) {
+    applyUpkeepPreventionPrompt(upkeepPreventionInfo);
+    return;
+  }
+
+  const discardSelectInfo = getDiscardSelectInfo();
+  if (discardSelectInfo) {
+    applyDiscardSelectPrompt(discardSelectInfo);
+    return;
+  }
+
+  const balanceSelectInfo = getBalanceSelectInfo();
+  if (balanceSelectInfo) {
+    applyBalanceSelectPrompt(balanceSelectInfo);
+    return;
+  }
+
+  const optionalPayInfo = getOptionalPayInfo();
+  if (optionalPayInfo) {
+    applyOptionalPayPrompt(optionalPayInfo);
+    return;
+  }
+
+  const ragingRiverInfo = getRagingRiverInfo();
+  if (ragingRiverInfo) {
+    applyRagingRiverPrompt(ragingRiverInfo);
+    return;
+  }
+
   const islandSanctuaryInfo = getIslandSanctuaryInfo();
   if (islandSanctuaryInfo) {
     applyIslandSanctuaryPrompt();
@@ -2997,7 +3422,7 @@ function renderActivationPrompt() {
     return;
   }
 
-  if (!pendingActivation && !pendingCastTarget && !pendingCastX && !pendingManaColor) {
+  if (!pendingActivation && !pendingCastTarget && !pendingCastX && !pendingManaColor && !pendingAbilityChoice) {
     const shouldShowPriority = shouldShowPriorityPrompt(currentState);
     const opponentHasPriority =
       !!currentState &&
@@ -3136,6 +3561,28 @@ function renderActivationPrompt() {
     return;
   }
 
+  if (pendingAbilityChoice) {
+    panel.classList.remove("hidden");
+    okBtn.classList.add("hidden");
+    customRow.classList.add("hidden");
+    title.textContent = `Choose an ability for ${pendingAbilityChoice.cardName}`;
+    body.textContent = "This permanent has more than one activated ability. Pick which one to activate.";
+    steps.innerHTML = [
+      `<div>Card: ${escapeHtml(pendingAbilityChoice.cardName)}</div>`,
+      `<div class="prompt-choice-row">${pendingAbilityChoice.options
+        .map(
+          (opt) =>
+            `<button type="button" class="prompt-choice-btn" data-ability-choice="${opt.index}">` +
+            `${renderSymbolsInline(opt.cost)}: ${escapeHtml(opt.text)}</button>`,
+        )
+        .join("")}</div>`,
+    ].join("");
+    cancelBtn.classList.remove("hidden");
+    cancelBtn.disabled = false;
+    customOkBtn.disabled = true;
+    return;
+  }
+
   if (pendingManaColor) {
     panel.classList.remove("hidden");
     okBtn.classList.add("hidden");
@@ -3210,13 +3657,15 @@ async function attemptPendingActivation() {
   updateActionHint(`Submitting activation for ${pending.cardName}...`);
 
   try {
-    await sendAction({
+    const activateBody = {
       seat,
       action: "activate",
       permanent_name: pending.cardName,
       permanent_index: pending.permanentIndex,
       target_seat: pending.targetSeat,
-    });
+    };
+    if (Number.isInteger(pending.abilityIndex)) activateBody.ability_index = pending.abilityIndex;
+    await sendAction(activateBody);
     updateActionHint(`Activated ${pending.cardName}.`);
   } catch (e) {
     updateActionHint(e.message, true);
@@ -3229,7 +3678,7 @@ async function attemptPendingActivation() {
 // needed) and the engine applies the shield to the stored target.
 function startEmblemActivation(emblemIndex) {
   if (!currentState || seat === null) return;
-  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingAutoTap || pendingModalChoice) {
+  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingAutoTap || pendingModalChoice || pendingAbilityChoice) {
     updateActionHint("Finish the current action first.", true);
     return;
   }
@@ -3254,9 +3703,51 @@ function startEmblemActivation(emblemIndex) {
     });
 }
 
+// Parse the activated-ability lines ("{cost}: effect") of a card's oracle text.
+// Index matches the engine's order of supported activated abilities, so it can be
+// sent back as `ability_index` (Rock Hydra: 0 = {R} prevention, 1 = {R}{R}{R} +1/+1).
+function getActivatedAbilityOptions(card) {
+  if (!card || typeof card === "string") return [];
+  const options = [];
+  let index = 0;
+  for (const line of String(card.oracle_text || "").split("\n")) {
+    const m = line.match(/^\s*((?:\{[^}]+\}[,\s]*)+):\s*(.+)$/);
+    if (m) {
+      options.push({ index, cost: m[1].trim(), text: m[2].trim(), line: line.trim() });
+      index += 1;
+    }
+  }
+  return options;
+}
+
+function resolveAbilityChoice(optionIndex) {
+  if (!pendingAbilityChoice) return;
+  const pending = pendingAbilityChoice;
+  const opt = pending.options.find((o) => o.index === optionIndex);
+  if (!opt) return;
+  pendingAbilityChoice = null;
+  // Recurse with a single-ability synthetic card so the normal target/cost flow
+  // handles just the chosen ability; __abilityIndex is threaded into the action.
+  const singleAbilityCard = { ...pending.card, oracle_text: opt.line, __abilityIndex: opt.index };
+  startActivationPrompt(singleAbilityCard, pending.targetSeat, pending.permanentIndex);
+}
+
 function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   const cardName = normalizeCardName(card);
   if (!cardName) return;
+
+  // Cards with more than one activated ability (Rock Hydra, Basalt Monolith) must
+  // let the player choose which ability to use before paying any cost.
+  if (!Number.isInteger(card?.__abilityIndex)) {
+    const abilityOptions = getActivatedAbilityOptions(card);
+    if (abilityOptions.length >= 2) {
+      pendingAbilityChoice = { card, cardName, targetSeat, permanentIndex, options: abilityOptions };
+      renderActivationPrompt();
+      updateActionHint(`Choose which ability of ${cardName} to activate.`);
+      return;
+    }
+  }
+  const abilityIndex = Number.isInteger(card?.__abilityIndex) ? card.__abilityIndex : null;
 
   // A {T} ability can't be activated while the creature is summoning sick
   // (CR 302.6). When the only way to use the card is a tap ability, don't open a
@@ -3424,13 +3915,15 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
 
   const activationCost = getActivatedAbilityCost(card);
   if (!shouldPromptForActivationCost(activationCost)) {
-    sendAction({
+    const directBody = {
       seat,
       action: "activate",
       permanent_name: cardName,
       permanent_index: permanentIndex,
       target_seat: targetSeat,
-    })
+    };
+    if (Number.isInteger(abilityIndex)) directBody.ability_index = abilityIndex;
+    sendAction(directBody)
       .then(() => updateActionHint(`Activated ${cardName}.`))
       .catch((e) => updateActionHint(e.message, true));
     return;
@@ -3443,6 +3936,7 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     activationCost,
     manaRequirement: parseManaCostSymbols(activationCost),
     awaitingApproval: true,
+    abilityIndex,
   };
   renderActivationPrompt();
   updateActionHint(
@@ -5151,7 +5645,11 @@ function renderZoneCards(containerId, cards, { zoneSeat = null, zoneKind = "" } 
     pendingCastTarget &&
     pendingCastTarget.targetKind === "graveyard_creature" &&
     zoneKind === "graveyard" &&
-    Number.isInteger(zoneSeat);
+    Number.isInteger(zoneSeat) &&
+    // For "your graveyard" cards (Resurrection, Raise Dead) only the caster's own
+    // graveyard cards are valid targets; don't highlight the opponent's.
+    (!Number.isInteger(pendingCastTarget.restrictSeat) ||
+      pendingCastTarget.restrictSeat === zoneSeat);
   // Render with the most recently added card (end of the array) leftmost,
   // while keeping each card's original index for targeting clicks.
   for (let index = cards.length - 1; index >= 0; index--) {
@@ -6339,6 +6837,7 @@ function renderState(state, { skipStaleCheck = false } = {}) {
     pendingCastX = null;
     clearPendingHandCast();
     pendingManaColor = null;
+    pendingAbilityChoice = null;
   }
   if (sessionId !== null) {
     hideSetupPanel();
@@ -7066,6 +7565,7 @@ q("promptCancelBtn").addEventListener("click", () => {
   pendingManaColor = null;
   pendingAutoTap = null;
   pendingModalChoice = null;
+  pendingAbilityChoice = null;
   clearPendingHandCast();
   battlefieldCanvas?.setTargetingKeys([]);
   for (const elementId of ["selfLife", "oppLife", "selfName", "oppName"]) {
@@ -7142,6 +7642,12 @@ q("promptSteps").addEventListener("click", (event) => {
   const manaColorChoice = target.dataset.manaColor;
   if (manaColorChoice && pendingManaColor) {
     resolvePendingManaColor(manaColorChoice);
+    return;
+  }
+
+  const abilityChoice = target.dataset.abilityChoice;
+  if (abilityChoice !== undefined && pendingAbilityChoice) {
+    resolveAbilityChoice(Number(abilityChoice));
   }
 });
 

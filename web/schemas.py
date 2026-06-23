@@ -26,6 +26,7 @@ ActionKind = Literal[
     "pay_upkeep",
     "sacrifice_upkeep",
     "resolve_optional_trigger",
+    "pay_upkeep_prevention",
     "debug_add_to_hand",
     "debug_cast_free",
     "debug_cast_free_opponent",
@@ -33,6 +34,11 @@ ActionKind = Literal[
     "debug_force_ai_attack_all",
     "search_library_confirm",
     "reorder_library_confirm",
+    "discard_confirm",
+    "balance_confirm",
+    "resolve_optional_pay",
+    "assign_defender_piles",
+    "assign_attacker_piles",
     "dismiss_hand_reveal",
     "coin_flip_choose",
     "mulligan_take",
@@ -109,6 +115,17 @@ class GameActionRequest(BaseModel):
     # blocked by a creature with banding, submitted via an assign_banding_damage action.
     banding_damage: dict[int, dict[int, int]] | None = None
     card_order: list[int] | None = None
+    # Disrupting Scepter discard choice: which hand-card indices to discard, and
+    # (Library of Leng) whether to put them on top of the library instead.
+    discard_indices: list[int] | None = None
+    to_library: bool | None = None
+    # Balance: the indices the player chooses to sacrifice/discard — land and
+    # creature indices into their battlefield, plus hand-card indices to discard.
+    land_indices: list[int] | None = None
+    creature_indices: list[int] | None = None
+    # Raging River: map of battlefield/attacker index → "left"/"right" pile label,
+    # sent with assign_defender_piles / assign_attacker_piles.
+    piles: dict[int, str] | None = None
     # Counterspell / Fork: which spell on the stack to target, as a top-first index
     # into the serialized stack (0 = topmost). Converted server-side to an engine
     # stack index.
@@ -122,6 +139,9 @@ class GameActionRequest(BaseModel):
     # Yes/No answer for an optional ("you may") trigger prompt, sent with the
     # `resolve_optional_trigger` action (true = let the trigger happen).
     accept: bool | None = None
+    # Generic numeric amount for prompts that ask for one — e.g. how much mana to
+    # pay with `pay_upkeep_prevention` (Power Leak: prevent that much damage).
+    amount: int | None = Field(default=None, ge=0)
     # Debug toggle (`debug_force_ai_attack_all`): when true, the AI declares every
     # legal attacker each combat instead of its normal risk-weighted selection.
     force_attack_all: bool | None = None

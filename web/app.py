@@ -672,6 +672,8 @@ def _clear_untap_selection(session: Session) -> None:
 
 def _clear_upkeep_pay_choices(session: Session) -> None:
     session.upkeep_pay_choices = []
+    session.upkeep_mana_prevention_choices = []
+    session.upkeep_mana_prevention_resolved = {}
     session.upkeep_resolved_choices = {}
     session.optional_trigger_choices = []
     session.optional_trigger_resolved = {}
@@ -701,9 +703,25 @@ def _optional_trigger_pending(session: Session) -> list[dict]:
     ]
 
 
+def _upkeep_mana_prevention_pending(session: Session) -> list[dict]:
+    """Return 'pay mana to prevent damage' upkeep triggers (Power Leak) still
+    awaiting the player's chosen amount."""
+    if session.game.current_step != "upkeep":
+        return []
+    return [
+        c for c in session.upkeep_mana_prevention_choices
+        if c["card_name"] not in session.upkeep_mana_prevention_resolved
+    ]
+
+
 def _upkeep_decisions_pending(session: Session) -> bool:
-    """True while any upkeep decision (pay-or-sacrifice or optional trigger) is open."""
-    return bool(_upkeep_pay_pending(session) or _optional_trigger_pending(session))
+    """True while any upkeep decision (pay-or-sacrifice, optional trigger, or
+    pay-to-prevent) is open."""
+    return bool(
+        _upkeep_pay_pending(session)
+        or _optional_trigger_pending(session)
+        or _upkeep_mana_prevention_pending(session)
+    )
 
 
 def _gather_upkeep_decisions(session: Session, player_index: int) -> bool:
@@ -715,12 +733,15 @@ def _gather_upkeep_decisions(session: Session, player_index: int) -> bool:
     game = session.game
     pay_choices = game.get_upkeep_pay_triggers(player_index)
     optional_choices = game.get_optional_upkeep_triggers(player_index)
-    if not pay_choices and not optional_choices:
+    prevention_choices = game.get_upkeep_mana_prevention_triggers(player_index)
+    if not pay_choices and not optional_choices and not prevention_choices:
         return False
     session.upkeep_pay_choices = pay_choices
     session.upkeep_resolved_choices = {}
     session.optional_trigger_choices = optional_choices
     session.optional_trigger_resolved = {}
+    session.upkeep_mana_prevention_choices = prevention_choices
+    session.upkeep_mana_prevention_resolved = {}
     game._set_phase_and_step("beginning", "upkeep")
     return True
 
@@ -729,8 +750,14 @@ def _advance_after_upkeep_choices(session: Session) -> None:
     """Called once all upkeep decisions (pay-or-sacrifice and optional) are resolved."""
     choices = dict(session.upkeep_resolved_choices)
     optional = dict(session.optional_trigger_resolved)
+    mana_prevention = dict(session.upkeep_mana_prevention_resolved)
     _clear_upkeep_pay_choices(session)
-    session.game.resolve_upkeep(session.current_turn, human_choices=choices, optional_choices=optional)
+    session.game.resolve_upkeep(
+        session.current_turn,
+        human_choices=choices,
+        optional_choices=optional,
+        mana_prevention=mana_prevention,
+    )
     if _seat_type(session, session.current_turn) == "human" and _has_island_sanctuary(session.game, session.current_turn):
         session.island_sanctuary_pending = True
         return
@@ -762,6 +789,28 @@ def _build_optional_trigger_info(session: Session, viewer_seat: int | None) -> d
         "choices": session.optional_trigger_choices,
         "resolved": session.optional_trigger_resolved,
         "pending": _optional_trigger_pending(session),
+    }
+
+
+def _build_upkeep_mana_prevention_info(session: Session, viewer_seat: int | None) -> dict | None:
+    """Serialize 'pay mana to prevent that much damage' upkeep prompts (Power Leak).
+
+    The viewer chooses an amount (0..damage, capped by available mana); it is sent
+    back via the ``pay_upkeep_prevention`` action."""
+    if not session.upkeep_mana_prevention_choices:
+        return None
+    if viewer_seat != session.current_turn:
+        return None
+    pending = _upkeep_mana_prevention_pending(session)
+    available = 0
+    if 0 <= session.current_turn < len(session.game.players):
+        pool = session.game.players[session.current_turn].mana_pool
+        available = sum(pool.get(s, 0) for s in pool)
+    return {
+        "choices": session.upkeep_mana_prevention_choices,
+        "resolved": session.upkeep_mana_prevention_resolved,
+        "pending": pending,
+        "available_mana": available,
     }
 
 
@@ -1195,6 +1244,60 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
                 "cards": [_serialize_card_summary(card) for card in target.library[:top_count]],
             }
 
+    # Disrupting Scepter: the discarding player chooses which card(s) to discard,
+    # and — with Library of Leng — whether to put them on top of their library.
+    discard_info = None
+    pending_discard = session.game.pending_discard
+    if pending_discard is not None and _seat_type(session, pending_discard["player_index"]) != "ai":
+        discarder_seat = pending_discard["player_index"]
+        if viewer_seat is None or viewer_seat == discarder_seat:
+            discarder = session.game.players[discarder_seat]
+            discard_info = {
+                "player_seat": discarder_seat,
+                "count": pending_discard["count"],
+                "allow_top_of_library": bool(pending_discard.get("allow_top_of_library")),
+                "cards": [_serialize_card_summary(card) for card in discarder.hand],
+            }
+
+    # Balance: surface the viewing player's own sacrifice/discard plan with the
+    # battlefield (lands/creatures) and hand they choose from.
+    balance_info = None
+    pending_balance = session.game.pending_balance
+    if pending_balance is not None:
+        my_plan = None
+        if viewer_seat is not None and _seat_type(session, viewer_seat) != "ai":
+            my_plan = pending_balance["plans"].get(viewer_seat)
+        if my_plan is not None:
+            me_player = session.game.players[viewer_seat]
+            balance_info = {
+                "player_seat": viewer_seat,
+                "lands_to_sacrifice": my_plan["lands"],
+                "creatures_to_sacrifice": my_plan["creatures"],
+                "cards_to_discard": my_plan["hand"],
+                "lands": [
+                    {"index": i, **_serialize_card_summary(p.card)}
+                    for i, p in enumerate(me_player.battlefield)
+                    if p.card.primary_type == "land"
+                ],
+                "creatures": [
+                    {"index": i, **_serialize_card_summary(p.card)}
+                    for i, p in enumerate(me_player.battlefield)
+                    if p.card.primary_type == "creature"
+                ],
+                "hand": [_serialize_card_summary(card) for card in me_player.hand],
+            }
+
+    # Color rods (Wooden Sphere, …): the controller's pending "pay {1}: gain life"
+    # yes/no decisions, shown only to that player.
+    optional_pay_info = None
+    if session.game.pending_optional_pays and viewer_seat is not None:
+        mine = [
+            e for e in session.game.pending_optional_pays
+            if e["player_index"] == viewer_seat and _seat_type(session, viewer_seat) != "ai"
+        ]
+        if mine:
+            optional_pay_info = {"pending": mine}
+
     # Glasses of Urza: surface a revealed hand only to the player who looked.
     hand_reveal_info = None
     pending_reveal = session.game.pending_hand_reveal
@@ -1242,11 +1345,16 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "cleanup_discard": cleanup_info,
         "untap_land_selection": untap_info,
         "upkeep_pay": _build_upkeep_pay_info(session, viewer_seat),
+        "upkeep_mana_prevention": _build_upkeep_mana_prevention_info(session, viewer_seat),
         "optional_trigger": _build_optional_trigger_info(session, viewer_seat),
         "banding_assignment": _build_banding_assignment_info(session, viewer_seat),
+        "raging_river": _build_raging_river_info(session, viewer_seat),
         "island_sanctuary_pending": session.island_sanctuary_pending and viewer_seat == session.current_turn,
         "search_library": search_library_info,
         "reorder_library": reorder_library_info,
+        "discard_select": discard_info,
+        "balance_select": balance_info,
+        "optional_pay": optional_pay_info,
         "hand_reveal": hand_reveal_info,
         "pregame": _build_pregame_info(session, viewer_seat),
     }
@@ -1361,10 +1469,47 @@ def _auto_resolve_ai_pending_reorder(session: Session) -> None:
         game.pending_reorder_library = None
 
 
+def _auto_resolve_ai_pending_discard(session: Session) -> None:
+    """Resolve a pending non-random discard immediately when the discarding player
+    is an AI seat (the human keeps their interactive prompt)."""
+    game = session.game
+    pending = game.pending_discard
+    if pending is None:
+        return
+    if _seat_type(session, pending["player_index"]) != "ai":
+        return
+    game.auto_resolve_pending_discard()
+
+
+def _auto_resolve_ai_pending_balance(session: Session) -> None:
+    """Resolve each AI player's Balance plan; the human keeps their interactive
+    sacrifice/discard choice."""
+    game = session.game
+    pending = game.pending_balance
+    if pending is None:
+        return
+    for player_index in list(pending["plans"].keys()):
+        if _seat_type(session, player_index) == "ai":
+            game.auto_resolve_pending_balance(only_player_index=player_index)
+
+
+def _auto_resolve_ai_pending_optional_pays(session: Session) -> None:
+    """Pay each AI player's pending color-rod "pay {1}: gain life" triggers; the
+    human keeps their yes/no prompt."""
+    game = session.game
+    for entry in list(game.pending_optional_pays):
+        if _seat_type(session, entry["player_index"]) == "ai":
+            game.auto_resolve_pending_optional_pays(only_player_index=entry["player_index"])
+
+
 def _auto_resolve_ai_pending(session: Session) -> None:
-    """Resolve any AI-owned pending choices (library search, library reorder)."""
+    """Resolve any AI-owned pending choices (library search, library reorder,
+    discard, balance, optional pays)."""
     _auto_resolve_ai_pending_search(session)
     _auto_resolve_ai_pending_reorder(session)
+    _auto_resolve_ai_pending_discard(session)
+    _auto_resolve_ai_pending_balance(session)
+    _auto_resolve_ai_pending_optional_pays(session)
 
 
 def _ai_step(session: Session) -> bool:
@@ -1599,6 +1744,39 @@ def _build_banding_assignment_info(session: Session, viewer_seat: int | None) ->
     return {"defender_seat": defender_index, "attacker_indices": pending}
 
 
+def _build_raging_river_info(session: Session, viewer_seat: int | None) -> dict | None:
+    """Raging River: show the defending player the non-flying creatures to divide
+    into left/right piles, and the attacking player their attackers to label.
+    Only surfaced to a human; AI players keep the default seeded division."""
+    game = session.game
+    if not game.combat_left_right_active or game.current_step not in ("declare_attackers", "declare_blockers"):
+        return None
+    if game.combat_damage_resolved:
+        return None
+    if viewer_seat is None or _seat_type(session, viewer_seat) == "ai":
+        return None
+    defender_index = game.combat_left_right_defender_index
+    attacker_index = game.active_player_index
+    info: dict = {"defender_seat": defender_index, "attacker_seat": attacker_index}
+    if viewer_seat == defender_index:
+        defender = game.players[defender_index]
+        info["divide_creatures"] = [
+            {"index": i, **_serialize_card_summary(p.card), "pile": game.combat_defender_piles.get(i)}
+            for i, p in enumerate(defender.battlefield)
+            if p.card.primary_type == "creature" and not game._has_keyword(p, "flying")
+        ]
+    if viewer_seat == attacker_index:
+        attacker = game.players[attacker_index]
+        info["label_attackers"] = [
+            {"index": i, **_serialize_card_summary(attacker.battlefield[i].card), "pile": game.combat_attacker_piles.get(i)}
+            for i in sorted(game.combat_attackers)
+            if 0 <= i < len(attacker.battlefield)
+        ]
+    if "divide_creatures" not in info and "label_attackers" not in info:
+        return None
+    return info
+
+
 def _ai_assign_combat_damage(session: Session) -> None:
     """Active-player (AI) assigns combat damage — the turn-based action the engine
     defers to a player when an attacker is blocked by two or more creatures."""
@@ -1749,6 +1927,23 @@ def _advance_phase(session: Session) -> None:
             # with a sensible default assignment so a multi-blocked attacker (which
             # the engine defers for manual assignment) doesn't deadlock the step.
             _ai_assign_combat_damage(session)
+        elif (
+            step == "combat_damage"
+            and not game.combat_damage_resolved
+            and _seat_type(session, game.active_player_index) == "human"
+            and game._needs_manual_damage_assignment()
+            and not game._manual_assignment_has_declared_multiblock()
+            and not _banding_assignment_pending(session)
+        ):
+            # A human attacker declared a band whose block propagated to a single
+            # shared blocker (CR 702.22h). The combat-damage dialog can only present
+            # attackers with 2+ *declared* blockers, so there is nothing for the
+            # human to assign here — auto-resolve a sensible default instead of
+            # looping forever waiting for an assignment that can never arrive.
+            auto = game._build_auto_damage_assignment()
+            game.resolve_combat_damage(game.active_player_index, attacker_damage=auto)
+            if not game.combat_damage_resolved:
+                game.resolve_combat_damage(game.active_player_index, attacker_damage=auto)
         if step == "declare_attackers" and not game.combat_attackers_locked:
             _ai_declare_attackers(session)
         if step == "declare_blockers":
@@ -2272,11 +2467,15 @@ def do_action(session_id: str, req: GameActionRequest):
     if untap_required > 0 and req.action not in {"untap_select", "untap_confirm", "debug_add_to_hand", "debug_cast_free"}:
         raise HTTPException(status_code=400, detail="select untap lands before other actions")
 
-    if _upkeep_pay_pending(session) and req.action not in {"pay_upkeep", "sacrifice_upkeep", "resolve_optional_trigger", "tap", "activate", "debug_add_to_hand", "debug_cast_free"}:
+    _UPKEEP_DECISION_ACTIONS = {"pay_upkeep", "sacrifice_upkeep", "resolve_optional_trigger", "pay_upkeep_prevention", "tap", "activate", "debug_add_to_hand", "debug_cast_free"}
+    if _upkeep_pay_pending(session) and req.action not in _UPKEEP_DECISION_ACTIONS:
         raise HTTPException(status_code=400, detail="resolve upkeep payment before other actions")
 
-    if _optional_trigger_pending(session) and req.action not in {"resolve_optional_trigger", "pay_upkeep", "sacrifice_upkeep", "tap", "activate", "debug_add_to_hand", "debug_cast_free"}:
+    if _optional_trigger_pending(session) and req.action not in _UPKEEP_DECISION_ACTIONS:
         raise HTTPException(status_code=400, detail="resolve optional trigger before other actions")
+
+    if _upkeep_mana_prevention_pending(session) and req.action not in _UPKEEP_DECISION_ACTIONS:
+        raise HTTPException(status_code=400, detail="resolve upkeep prevention before other actions")
 
     if session.island_sanctuary_pending and req.action not in {"island_sanctuary_skip", "island_sanctuary_draw", "debug_add_to_hand", "debug_cast_free"}:
         raise HTTPException(status_code=400, detail="choose Island Sanctuary draw option before other actions")
@@ -2286,6 +2485,19 @@ def do_action(session_id: str, req: GameActionRequest):
         raise HTTPException(status_code=400, detail="complete library search before other actions")
     if session.game.pending_reorder_library is not None and req.action not in {"reorder_library_confirm", "debug_add_to_hand", "debug_cast_free"}:
         raise HTTPException(status_code=400, detail="complete library reorder before other actions")
+    if session.game.pending_discard is not None and req.action not in {"discard_confirm", "debug_add_to_hand", "debug_cast_free"}:
+        raise HTTPException(status_code=400, detail="complete discard before other actions")
+    if (
+        session.game.pending_balance is not None
+        and req.seat in session.game.pending_balance["plans"]
+        and req.action not in {"balance_confirm", "debug_add_to_hand", "debug_cast_free"}
+    ):
+        raise HTTPException(status_code=400, detail="complete Balance sacrifices before other actions")
+    if (
+        any(e["player_index"] == req.seat for e in session.game.pending_optional_pays)
+        and req.action not in {"resolve_optional_pay", "debug_add_to_hand", "debug_cast_free"}
+    ):
+        raise HTTPException(status_code=400, detail="resolve the pay-for-life trigger before other actions")
 
     if req.action in {
         "cast",
@@ -2722,6 +2934,28 @@ def do_action(session_id: str, req: GameActionRequest):
         if not _upkeep_decisions_pending(session):
             _advance_after_upkeep_choices(session)
 
+    elif req.action == "pay_upkeep_prevention":
+        # Power Leak: "that player may pay any amount of mana ... prevent X of that
+        # damage." The player commits how much mana to pay (0..damage, capped by
+        # available mana); the engine spends it and prevents that much.
+        if req.seat != session.current_turn:
+            raise HTTPException(status_code=400, detail="not your turn")
+        if not _upkeep_mana_prevention_pending(session):
+            raise HTTPException(status_code=400, detail="no upkeep prevention pending")
+        if not req.card_name:
+            raise HTTPException(status_code=400, detail="card_name is required")
+        pending = {c["card_name"]: c for c in _upkeep_mana_prevention_pending(session)}
+        if req.card_name not in pending:
+            raise HTTPException(status_code=400, detail="card not awaiting an upkeep prevention decision")
+        amount = max(0, int(req.amount or 0))
+        controller = session.game.players[req.seat]
+        available = sum(controller.mana_pool.get(s, 0) for s in controller.mana_pool)
+        amount = min(amount, int(pending[req.card_name].get("damage", 0)), available)
+        session.upkeep_mana_prevention_resolved[req.card_name] = amount
+
+        if not _upkeep_decisions_pending(session):
+            _advance_after_upkeep_choices(session)
+
     elif req.action in {"island_sanctuary_skip", "island_sanctuary_draw"}:
         if req.seat != session.current_turn:
             raise HTTPException(status_code=400, detail="not your turn")
@@ -2755,6 +2989,55 @@ def do_action(session_id: str, req: GameActionRequest):
         ok = session.game.confirm_reorder_library(req.seat, req.card_order, shuffle=bool(req.shuffle))
         if not ok:
             raise HTTPException(status_code=400, detail="invalid card order")
+
+    elif req.action == "discard_confirm":
+        pending = session.game.pending_discard
+        if pending is None:
+            raise HTTPException(status_code=400, detail="no discard pending")
+        if req.seat != pending["player_index"]:
+            raise HTTPException(status_code=400, detail="not your discard")
+        if not req.discard_indices:
+            raise HTTPException(status_code=400, detail="discard_indices is required")
+        ok = session.game.confirm_discard(
+            req.seat, list(req.discard_indices), to_library=bool(req.to_library)
+        )
+        if not ok:
+            raise HTTPException(status_code=400, detail="invalid discard selection")
+
+    elif req.action == "resolve_optional_pay":
+        # Color rods (Wooden Sphere, …): "you may pay {1}. If you do, gain life."
+        if not any(
+            e["player_index"] == req.seat for e in session.game.pending_optional_pays
+        ):
+            raise HTTPException(status_code=400, detail="no optional pay pending for you")
+        if req.accept is None:
+            raise HTTPException(status_code=400, detail="accept (true/false) is required")
+        session.game.confirm_optional_pay(req.seat, card_name=req.card_name, accept=bool(req.accept))
+
+    elif req.action == "assign_defender_piles":
+        piles = {int(k): str(v) for k, v in (req.piles or {}).items()}
+        ok, details = session.game.assign_defender_piles(req.seat, piles)
+        if not ok:
+            raise HTTPException(status_code=400, detail=details)
+
+    elif req.action == "assign_attacker_piles":
+        piles = {int(k): str(v) for k, v in (req.piles or {}).items()}
+        ok, details = session.game.assign_attacker_piles(req.seat, piles)
+        if not ok:
+            raise HTTPException(status_code=400, detail=details)
+
+    elif req.action == "balance_confirm":
+        pending = session.game.pending_balance
+        if pending is None or req.seat not in pending["plans"]:
+            raise HTTPException(status_code=400, detail="no balance choice pending for you")
+        ok = session.game.confirm_balance(
+            req.seat,
+            land_indices=req.land_indices or [],
+            creature_indices=req.creature_indices or [],
+            hand_indices=req.discard_indices or [],
+        )
+        if not ok:
+            raise HTTPException(status_code=400, detail="invalid balance selection (wrong number of cards)")
 
     elif req.action == "dismiss_hand_reveal":
         pending = session.game.pending_hand_reveal
@@ -3030,6 +3313,8 @@ def undo_action(session_id: str, seat: int | None = Query(default=None, ge=0, le
     session.upkeep_resolved_choices = snapshot.upkeep_resolved_choices
     session.optional_trigger_choices = snapshot.optional_trigger_choices
     session.optional_trigger_resolved = snapshot.optional_trigger_resolved
+    session.upkeep_mana_prevention_choices = snapshot.upkeep_mana_prevention_choices
+    session.upkeep_mana_prevention_resolved = snapshot.upkeep_mana_prevention_resolved
     session.island_sanctuary_pending = snapshot.island_sanctuary_pending
 
     _notify_session_change(session.id, "undo")

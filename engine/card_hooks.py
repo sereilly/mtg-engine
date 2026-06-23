@@ -62,19 +62,20 @@ def _make_color_rod_hook(trigger_color: str, life_amount: int) -> SpellResolvedH
     def hook(game: Game, controller: PlayerState, permanent: Permanent, resolved_card: CardDefinition) -> None:
         # "Whenever a player casts a [color] spell, you may pay {1}. If you do, you
         # gain 1 life." The life gain is optional and gated on paying {1} (Throne of
-        # Bone, Crystal Rod, Iron Star, Ivory Cup, Wooden Sphere). Pay automatically
-        # when able (deterministic), then gain the life; otherwise nothing happens.
+        # Bone, Crystal Rod, Iron Star, Ivory Cup, Wooden Sphere). Defer to a yes/no
+        # choice: the human is prompted, AI/headless auto-resolves. Only offered when
+        # the controller can actually pay the {1}.
         if trigger_color not in resolved_card.colors:
             return
         available = sum(controller.mana_pool.get(s, 0) for s in controller.mana_pool)
         if available < 1:
             return
-        remaining = 1
-        for sym in list(controller.mana_pool):
-            while remaining > 0 and controller.mana_pool.get(sym, 0) > 0:
-                controller.mana_pool[sym] -= 1
-                remaining -= 1
-        game._gain_life(controller, life_amount, permanent.card.name)
+        game.pending_optional_pays.append({
+            "card_name": permanent.card.name,
+            "player_index": game.players.index(controller),
+            "cost": 1,
+            "life": life_amount,
+        })
 
     return hook
 

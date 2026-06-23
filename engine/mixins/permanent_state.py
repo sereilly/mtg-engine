@@ -61,6 +61,12 @@ class PermanentStateMixin:
                 permanent.metadata["copied_from"] = source.card.name
                 permanent.metadata["absolute_power"] = source.effective_power
                 permanent.metadata["absolute_toughness"] = source.effective_toughness
+                # CR 707.2 / 711.10: a copy gains the copied creature's printed
+                # keyword abilities (first strike, flying, trample, …). Stamp them
+                # so _has_keyword reports them even though permanent.card is still
+                # the copier's own (Clone / Vesuvan Doppelganger) definition.
+                if source.card.keywords:
+                    permanent.metadata["copied_keywords"] = list(source.card.keywords)
 
         # copy-as-enter enchantment
         if "you may have this enchantment enter as a copy of any artifact on the battlefield" in text:
@@ -268,7 +274,13 @@ class PermanentStateMixin:
             return False
         if any(item.lower() == lower_keyword for item in permanent.card.keywords):
             return True
-        if lower_keyword == "flying" and permanent.metadata.get("gains_flying_until_eot", False):
+        # Keywords inherited from a copied creature (Clone / Vesuvan Doppelganger).
+        if any(item.lower() == lower_keyword for item in permanent.metadata.get("copied_keywords", ())):
+            return True
+        if lower_keyword == "flying" and (
+            permanent.metadata.get("gains_flying", False)
+            or permanent.metadata.get("gains_flying_until_eot", False)
+        ):
             return True
         if lower_keyword == "first strike" and permanent.metadata.get("gains_first_strike", False):
             return True

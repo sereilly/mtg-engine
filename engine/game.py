@@ -104,11 +104,34 @@ class Game(
     combat_bands: list[list[int]] = field(default_factory=list)
     combat_band_blocks: dict[int, list[int]] = field(default_factory=dict)
     combat_banding_damage: dict[int, dict[int, int]] = field(default_factory=dict)
+    # Raging River (CR 702 left/right division). When active, each defending player
+    # splits their non-flying creatures into a "left" and a "right" pile, and the
+    # attacking player labels each attacker; an attacker may then only be blocked by
+    # flyers or creatures in the matching pile. ``combat_defender_piles`` maps a
+    # defender creature index → "left"/"right"; ``combat_attacker_piles`` maps an
+    # attacker index → "left"/"right".
+    combat_left_right_active: bool = False
+    combat_left_right_defender_index: int | None = None
+    combat_defender_piles: dict[int, str] = field(default_factory=dict)
+    combat_attacker_piles: dict[int, str] = field(default_factory=dict)
     priority_player_index: int | None = None
     priority_pass_count: int = 0
     untapped_lands_at_turn_start: dict[int, int] = field(default_factory=dict)
     pending_search_library: dict | None = None
     pending_reorder_library: dict | None = None
+    # A non-random "discards a card" effect (Disrupting Scepter) awaiting the
+    # discarding player's choice of which card(s), and — if they control Library of
+    # Leng — whether to put each on top of their library instead of the graveyard.
+    # Shape: {"player_index", "count", "allow_top_of_library"}.
+    pending_discard: dict | None = None
+    # Balance: each player sacrifices lands/creatures and discards down to the
+    # lowest count, choosing which. Shape: {"plans": {player_index: {"lands": n,
+    # "creatures": n, "hand": n}}} where each n is how many to remove of that type.
+    pending_balance: dict | None = None
+    # "You may pay {1}. If you do, gain N life" triggers that fire when a spell
+    # resolves (the color rods: Wooden Sphere, Throne of Bone, …). Each entry is
+    # {"card_name", "player_index", "cost", "life"} awaiting a yes/no decision.
+    pending_optional_pays: list[dict] = field(default_factory=list)
     # Glasses of Urza / Jayemdae-style "look at target player's hand": the most
     # recent reveal, surfaced to the UI as {"viewer_index", "target_index",
     # "card_names"}. Cleared once the viewer dismisses it.

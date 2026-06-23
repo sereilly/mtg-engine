@@ -450,6 +450,7 @@ class TestIronStar:
         game = _game(p1, p2)
         game.cast_from_hand(0, "Lightning Bolt", target_player_index=1)
         game.resolve_stack()
+        game.auto_resolve_pending_optional_pays()  # the controller chooses to pay {1}
         assert p1.life == 21
         assert p1.mana_pool["C"] == 0  # the {1} was paid
 
@@ -461,6 +462,7 @@ class TestIronStar:
         game = _game(p1, p2)
         game.cast_from_hand(1, "Lightning Bolt", target_player_index=0)
         game.resolve_stack()
+        game.auto_resolve_pending_optional_pays()  # the controller chooses to pay {1}
         # P1 took 3 from the bolt but gained 1 from Iron Star (paid {1}).
         assert p1.life == 18
 

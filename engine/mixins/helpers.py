@@ -27,6 +27,14 @@ class GameHelpersMixin:
                 return idx, permanent
         return None
 
+    @staticmethod
+    def _stack_item_colors(item) -> tuple[str, ...]:
+        """Effective color symbols of a spell on the stack, honoring a color
+        change applied by a Lace card (StackItem.new_color)."""
+        if getattr(item, "new_color", None):
+            return (item.new_color,)
+        return tuple(item.card.colors or ())
+
     def _is_creature(self, permanent: Permanent) -> bool:
         """A permanent is a creature if its printed type says so or an effect has
         turned it into one (e.g. Kormus Bell / Living Lands animated lands)."""

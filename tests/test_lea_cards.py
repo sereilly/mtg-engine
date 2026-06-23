@@ -483,6 +483,7 @@ def test_discard_effect():
     game = Game(players=[p1, p2])
 
     game.cast_from_hand(0, "Discard Test", target_player_index=1)
+    game.auto_resolve_pending_discard()  # the discarder picks which card(s)
     assert len(p2.hand) == 1
     assert len(p2.graveyard) == 2
 
@@ -1439,6 +1440,7 @@ def test_balance_equalizes_lands_creatures_and_hand(all_cards):
     game = Game(players=[p1, p2])
 
     result = game.cast_from_hand(0, "Balance", target_player_index=1)
+    game.auto_resolve_pending_balance()  # each player chooses; auto for headless
 
     assert result.supported
     assert sum(1 for perm in p1.battlefield if perm.card.primary_type == "land") == 1
@@ -4138,6 +4140,7 @@ def test_crystal_rod_gains_life_when_controller_casts_blue_spell(all_cards):
     game = Game(players=[p1, p2])
 
     game.cast_from_hand(0, "Blue Bolt")
+    game.auto_resolve_pending_optional_pays()
 
     assert p1.life == 21
 
@@ -4268,6 +4271,9 @@ def test_disrupting_scepter_discards_card(all_cards):
     result = game.activate_permanent_ability(0, "Disrupting Scepter", target_player_index=1)
 
     assert result.supported
+    # The discard now defers to the discarding player's choice; resolve it.
+    assert game.pending_discard is not None
+    assert game.confirm_discard(1, [0])
     assert len(p2.hand) == 2
     assert len(p2.graveyard) == 1
 
@@ -4906,6 +4912,7 @@ def test_iron_star_gains_life_on_red_spell(all_cards):
     game = Game(players=[p1, p2])
 
     game.cast_from_hand(1, "Lightning Bolt", target_player_index=1)
+    game.auto_resolve_pending_optional_pays()
 
     # Iron Star should have triggered: P1 paid {1} and gains 1 life
     assert p1.life == 21
@@ -4947,6 +4954,7 @@ def test_ivory_cup_triggers_on_white_spell(all_cards):
     game = Game(players=[p1, p2])
 
     result = game.cast_from_hand(1, "Healing Salve", target_player_index=1)
+    game.auto_resolve_pending_optional_pays()
 
     assert result.supported
     assert p1.life == 21
@@ -6550,6 +6558,7 @@ def test_throne_of_bone_gains_life_when_black_spell_cast(all_cards):
     game = Game(players=[p1, p2])
 
     game.cast_from_hand(0, "Dark Ritual")
+    game.auto_resolve_pending_optional_pays()
 
     assert p1.life == 21
 
@@ -7174,6 +7183,7 @@ def test_wooden_sphere_gains_life_when_green_spell_cast(all_cards):
     game = Game(players=[p1, p2])
 
     game.cast_from_hand(0, "Giant Growth")
+    game.auto_resolve_pending_optional_pays()
 
     assert p1.life == 21
 
@@ -7470,6 +7480,7 @@ class TestWhiteCards:
         game = Game(players=[p1, p2])
 
         result = game.cast_from_hand(0, "Balance")
+        game.auto_resolve_pending_balance()  # each player chooses; auto for headless
 
         assert result.supported
         p1_lands = sum(1 for p in p1.battlefield if p.card.primary_type == "land")
@@ -8966,6 +8977,7 @@ def test_wooden_sphere_gains_life_on_green_creature_spell(all_cards):
 
     starting_life = p1.life
     game.cast_from_hand(0, "Grizzly Bears")
+    game.auto_resolve_pending_optional_pays()
 
     assert p1.life == starting_life + 1
 

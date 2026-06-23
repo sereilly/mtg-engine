@@ -237,6 +237,7 @@ def test_609_3_discard_two_cards_with_one_in_hand():
     game = Game(players=[p1, p2])
 
     game.cast_from_hand(0, "Mind Rot", target_player_index=1)
+    game.auto_resolve_pending_discard()  # the discarder picks which card(s)
 
     # Target had 1 card; effect tried to discard 2 but could only discard 1
     assert len(p2.hand) == 0
@@ -540,6 +541,7 @@ def test_610_1_discard_cards_is_one_shot():
     game = Game(players=[p1, p2])
 
     game.cast_from_hand(0, "Mind Rot", target_player_index=1)
+    game.auto_resolve_pending_discard()  # the discarder picks which card(s)
 
     # Two cards discarded immediately, one remains
     assert len(p2.hand) == 1
@@ -558,6 +560,7 @@ def test_610_1_discard_cards_do_not_return_after_cleanup():
     game = Game(players=[p1, p2])
 
     game.cast_from_hand(0, "Mind Rot", target_player_index=1)
+    game.auto_resolve_pending_discard()  # the discarder picks which card(s)
     game.resolve_cleanup_step(0)
 
     assert len(p2.hand) == 0

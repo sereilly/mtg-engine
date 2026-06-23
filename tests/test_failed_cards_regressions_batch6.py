@@ -350,6 +350,7 @@ class TestThroneOfBone:
         game = _game(p1, p2)
 
         game.cast_from_hand(1, "Dark Ritual")
+        game.auto_resolve_pending_optional_pays()  # the controller chooses to pay {1}
 
         assert p1.life == 21
         assert p1.mana_pool["C"] == 0  # the {1} was paid

@@ -57,7 +57,7 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
         # Counter the chosen spell if one was targeted, otherwise the top of stack.
         chosen = context.stack_target
         target = chosen if (chosen is not None and chosen in game.stack) else game.stack[-1]
-        if color_filter and color_filter not in (target.card.colors or ()):
+        if color_filter and color_filter not in game._stack_item_colors(target):
             game.log.append(f"{card.name}: {target.card.name} is not color {color_filter}, cannot counter")
             return True, "resolved"
         # Spell Blast: X must equal the target spell's mana value. When no X was

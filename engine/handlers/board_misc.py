@@ -38,34 +38,33 @@ def _token_image_uris(source_card: CardDefinition, token_name: str) -> dict[str,
 
 @effect_handler("balance_resources")
 def balance_resources(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    min_lands = min(sum(1 for perm in player.battlefield if perm.card.primary_type == "land") for player in game.players)
-    min_creatures = min(sum(1 for perm in player.battlefield if perm.card.primary_type == "creature") for player in game.players)
-    min_hand = min(len(player.hand) for player in game.players)
-    for player in game.players:
-        lands_kept = 0
-        creatures_kept = 0
-        survivors: list[Permanent] = []
-        for permanent in player.battlefield:
-            if permanent.card.primary_type == "land":
-                if lands_kept < min_lands:
-                    lands_kept += 1
-                    survivors.append(permanent)
-                else:
-                    player.graveyard.append(permanent.card)
-                continue
-            if permanent.card.primary_type == "creature":
-                if creatures_kept < min_creatures:
-                    creatures_kept += 1
-                    survivors.append(permanent)
-                else:
-                    player.graveyard.append(permanent.card)
-                continue
-            survivors.append(permanent)
-        player.battlefield = survivors
-        while len(player.hand) > min_hand:
-            player.graveyard.append(player.hand.pop(0))
-    game.log.append("Balance normalized lands, creatures, and hands")
-    return True, "resolved"
+    def _count(player, kind):
+        return sum(1 for perm in player.battlefield if perm.card.primary_type == kind)
+
+    min_lands = min(_count(p, "land") for p in game.players)
+    min_creatures = min(_count(p, "creature") for p in game.players)
+    min_hand = min(len(p.hand) for p in game.players)
+
+    # Build the per-player reduction plan. Each player chooses which of their own
+    # lands/creatures to sacrifice and which cards to discard down to these counts;
+    # defer to a pending choice (human is prompted, AI/headless auto-resolves).
+    plans: dict[int, dict] = {}
+    for idx, player in enumerate(game.players):
+        plan = {
+            "lands": max(0, _count(player, "land") - min_lands),
+            "creatures": max(0, _count(player, "creature") - min_creatures),
+            "hand": max(0, len(player.hand) - min_hand),
+        }
+        if plan["lands"] or plan["creatures"] or plan["hand"]:
+            plans[idx] = plan
+
+    if not plans:
+        game.log.append("Balance: nothing to normalize")
+        return True, "resolved"
+
+    game.pending_balance = {"plans": plans}
+    game.log.append("Balance: each player chooses what to sacrifice and discard")
+    return True, "pending_balance"
 
 
 # Mana symbol → the basic land type Magical Hack swaps a land to (CR 305.7). The
@@ -114,8 +113,14 @@ def mark_text_modified(game: Game, instruction: OracleInstruction, context: Orac
 
 @effect_handler("recolor_target_from_text")
 def recolor_target_from_text(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    target = context.target
     symbol = str(instruction.payload.get("target_color", ""))
+    # "Target spell or permanent becomes [color]" — a spell on the stack is a
+    # legal target (the Lace cards). Recolor it via the stack item's color override.
+    if context.stack_target is not None and symbol:
+        context.stack_target.new_color = symbol
+        game.log.append(f"{context.stack_target.card.name} (on the stack) became {symbol}")
+        return True, "resolved"
+    target = context.target
     perm_idx = context.target_permanent_index if isinstance(context.target_permanent_index, int) else None
     changed = game._apply_color_override(target, symbol, target_permanent_index=perm_idx) if symbol else False
     game.log.append("Changed target color" if changed else "No valid permanent to recolor")
@@ -138,6 +143,9 @@ def change_target_land_type(game: Game, instruction: OracleInstruction, context:
     if target_land is not None:
         target_land.metadata["land_type_override"] = str(instruction.payload.get("land_type", "forest"))
         game.log.append(f"{target_land.card.name} became a Forest")
+        # Forest count just changed; recompute characteristic-defining P/T now so
+        # Gaea's Liege reflects the new total immediately (not at the next step).
+        game._refresh_dynamic_creatures()
     else:
         game.log.append("No target land for Forest effect")
     return True, "resolved"

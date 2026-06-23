@@ -463,6 +463,7 @@ class TestWoodenSphere:
         game = _game(p1, p2)
 
         game.cast_from_hand(0, "Giant Growth", target_player_index=0, target_permanent_index=1)
+        game.auto_resolve_pending_optional_pays()  # the controller chooses to pay {1}
 
         assert p1.life == 21
 
