@@ -40,6 +40,12 @@ const BF_PILE_OFFSET_Y = 20;
 const BF_PILE_MAX_FAN = 60;
 // Attached auras fan downward below their target.
 const BF_AURA_OFFSET_Y = 22;
+// An aura enchanting another enchantment is drawn beside its target (shifted
+// right by this much) with a curved connector arrow, rather than stacked over
+// it — stacking would hide the enchantment underneath, which (unlike a
+// creature) has no separate P/T to peek out. Offset is a full card width plus a
+// gap so the two cards sit clearly apart rather than touching.
+const BF_AURA_SIDE_X = BF_CARD_W + 26;
 
 // ---- Automatic camera ----
 const BF_MIN_ZOOM = 0.3;
@@ -274,28 +280,33 @@ class BattlefieldCanvas {
   // Stack helpers
   // ---------------------------------------------------------------------------
 
-  // Return the world-space render position of a card, accounting for stack offset.
+  // Return the world-space render position of a card, accounting for stack
+  // offset. A card is positioned relative to a stack only when it is a NON-base
+  // member (index > 0); a card that is merely a stack base uses its own anchor.
+  // The base position is resolved recursively so an aura attached to another
+  // aura rides wherever that aura actually renders (e.g. fanned up behind the
+  // creature it in turn enchants), not its bare layout slot.
   _renderPos(key) {
     const item = this.cardItems.find((c) => c.key === key);
     if (!item) return null;
-    const stack = this.stacks.find((s) => s.keys.includes(key));
+    const stack = this.stacks.find((s) => s.keys.indexOf(key) > 0);
     if (!stack) return { x: item.x, y: item.y };
     const stackPos = stack.keys.indexOf(key);
-    const baseItem = this.cardItems.find((c) => c.key === stack.keys[0]);
-    if (!baseItem) return { x: item.x, y: item.y };
-    return { x: baseItem.x, y: baseItem.y + stackPos * (stack.offsetY ?? BF_AURA_OFFSET_Y) };
+    const basePos = this._renderPos(stack.keys[0]);
+    if (!basePos) return { x: item.x, y: item.y };
+    return { x: basePos.x + (stack.sideX || 0), y: basePos.y + stackPos * (stack.offsetY ?? BF_AURA_OFFSET_Y) };
   }
 
   // Same as _renderPos but using layout targets instead of animated positions.
   _targetRenderPos(key) {
     const item = this.cardItems.find((c) => c.key === key);
     if (!item) return null;
-    const stack = this.stacks.find((s) => s.keys.includes(key));
+    const stack = this.stacks.find((s) => s.keys.indexOf(key) > 0);
     if (!stack) return { x: item.tx, y: item.ty };
     const stackPos = stack.keys.indexOf(key);
-    const baseItem = this.cardItems.find((c) => c.key === stack.keys[0]);
-    if (!baseItem) return { x: item.tx, y: item.ty };
-    return { x: baseItem.tx, y: baseItem.ty + stackPos * (stack.offsetY ?? BF_AURA_OFFSET_Y) };
+    const basePos = this._targetRenderPos(stack.keys[0]);
+    if (!basePos) return { x: item.tx, y: item.ty };
+    return { x: basePos.x + (stack.sideX || 0), y: basePos.y + stackPos * (stack.offsetY ?? BF_AURA_OFFSET_Y) };
   }
 
   // Get the world-space bounding box of a card for hit testing.
@@ -393,6 +404,11 @@ class BattlefieldCanvas {
     const stackedKeys = new Set(this.stacks.flatMap((s) => s.keys));
     const free = this.cardItems.filter((c) => !stackedKeys.has(c.key));
     const stacked = [];
+    // A card can belong to two stacks at once — an aura enchanting another aura
+    // is both a member of its target's stack and the base of its own — so guard
+    // against pushing it (and thus rendering it) twice. First push wins, which
+    // keeps it behind whatever was drawn before it.
+    const seen = new Set();
     for (const stack of this.stacks) {
       // Aura stacks keep the enchanted permanent at keys[0] and fan the auras
       // UPWARD (keys[last] sits highest on screen). Draw them top-down — the
@@ -405,6 +421,8 @@ class BattlefieldCanvas {
           ? [...stack.keys].reverse()
           : stack.keys;
       for (const k of drawKeys) {
+        if (seen.has(k)) continue;
+        seen.add(k);
         const item = this.cardItems.find((c) => c.key === k);
         if (item) stacked.push(item);
       }
@@ -512,6 +530,7 @@ class BattlefieldCanvas {
     // Attached auras ride their target; their targets keep a dedicated slot.
     const attachedKeys = new Set();
     const auraCounts = new Map(); // targetKey -> number of attachments
+    const attachedTo = new Map(); // childKey -> targetKey
     for (let seatIdx = 0; seatIdx < players.length; seatIdx++) {
       const bf = Array.isArray(players[seatIdx]?.battlefield) ? players[seatIdx].battlefield : [];
       for (let idx = 0; idx < bf.length; idx++) {
@@ -519,8 +538,21 @@ class BattlefieldCanvas {
         if (!card || card.attached_to_index == null) continue;
         const targetKey = `${card.attached_to_seat ?? seatIdx}-${card.attached_to_index}`;
         attachedKeys.add(`${seatIdx}-${idx}`);
+        attachedTo.set(`${seatIdx}-${idx}`, targetKey);
         auraCounts.set(targetKey, (auraCounts.get(targetKey) || 0) + 1);
       }
+    }
+
+    // An aura attached to another enchantment is drawn off to the right (see
+    // _syncAuraStacks). That overhang belongs to whatever permanent actually
+    // occupies a slot — walk each side-attach target up its attachment chain to
+    // the root permanent so the root's slot can reserve the extra width.
+    const needsSideWidth = new Set();
+    for (const targetKey of auraCounts.keys()) {
+      if (!this._isAuraSideTarget(itemByKey.get(targetKey)?.card)) continue;
+      let root = targetKey;
+      while (attachedTo.has(root)) root = attachedTo.get(root);
+      needsSideWidth.add(root);
     }
 
     const piles = [];
@@ -598,6 +630,12 @@ class BattlefieldCanvas {
         const pileFan = g.keys.length >= 2 ? Math.min(BF_PILE_MAX_FAN, (g.keys.length - 1) * BF_PILE_OFFSET_Y) : 0;
         return Math.max(auraFan, pileFan);
       };
+      // Horizontal footprint of a slot: one pitch, plus the side-aura overhang
+      // for any slot that carries a right-set aura so neighbours don't collide.
+      const slotWidth = (g) =>
+        g.keys.length === 1 && needsSideWidth.has(g.keys[0])
+          ? BF_AURA_SIDE_X + BF_SLOT_PITCH_X
+          : BF_SLOT_PITCH_X;
       const bands = bandGroups.map((groupsHere) => {
         const rows = [];
         for (let i = 0; i < groupsHere.length; i += BF_MAX_COLS) {
@@ -617,8 +655,8 @@ class BattlefieldCanvas {
         if (!band.rows.length) continue;
         let rowTop = isViewer ? cursor : cursor - band.height;
         for (const { row, h } of band.rows) {
-          row.forEach((g, col) => {
-            const gx = col * BF_SLOT_PITCH_X;
+          let gx = 0;
+          for (const g of row) {
             for (const k of g.keys) {
               const item = itemByKey.get(k);
               if (item) {
@@ -634,7 +672,8 @@ class BattlefieldCanvas {
                 kind: "pile",
               });
             }
-          });
+            gx += slotWidth(g);
+          }
           rowTop += h + BF_ROW_GAP;
         }
         cursor = isViewer ? cursor + band.height + BF_BAND_GAP : cursor - band.height - BF_BAND_GAP;
@@ -734,9 +773,19 @@ class BattlefieldCanvas {
 
         let stack = this.stacks.find((s) => s.kind === "aura" && s.keys[0] === targetKey);
         if (!stack) {
-          // Negative offset: auras fan UPWARD so they stick out the top of the
-          // enchanted permanent rather than below it.
-          stack = { id: `aura-${targetKey}`, keys: [targetKey], offsetY: -BF_AURA_OFFSET_Y, kind: "aura" };
+          // An aura on another enchantment is set directly to the right of its
+          // target (level with it, no vertical drop) and joined by a curved
+          // arrow; an aura on anything else gets the usual upward fan (negative
+          // offset) so it sticks out the top of the enchanted permanent.
+          const targetItem = this.cardItems.find((c) => c.key === targetKey);
+          const side = this._isAuraSideTarget(targetItem?.card);
+          stack = {
+            id: `aura-${targetKey}`,
+            keys: [targetKey],
+            offsetY: side ? 0 : -BF_AURA_OFFSET_Y,
+            sideX: side ? BF_AURA_SIDE_X : 0,
+            kind: "aura",
+          };
           this.stacks.push(stack);
         }
         if (!stack.keys.includes(auraKey)) stack.keys.push(auraKey);
@@ -750,6 +799,15 @@ class BattlefieldCanvas {
         }
       }
     }
+  }
+
+  // An aura is drawn beside (rather than over) its target when that target is
+  // itself an enchantment with no body to peek out from under a covering card.
+  // An enchantment *creature* keeps the normal upward fan — its P/T still shows
+  // through, exactly like any other enchanted creature.
+  _isAuraSideTarget(card) {
+    const t = String(card?.type || "").toLowerCase();
+    return t.includes("enchantment") && !t.includes("creature");
   }
 
   // ---------------------------------------------------------------------------
@@ -1523,7 +1581,7 @@ class BattlefieldCanvas {
   }
 
   _drawCardFace(ctx, x, y, w, h, card, flags, creatureCard) {
-    const { selected, attacking, hovered, targeting, pileCount, emblem } = flags || {};
+    const { selected, attacking, hovered, targeting, pileCount, emblem, enchantTargetHover } = flags || {};
     const img = card?.image_uri ? this._loadImage(card.image_uri) : null;
     const R = 4;
 
@@ -1569,10 +1627,11 @@ class BattlefieldCanvas {
     else if (attacking) { ctx.shadowColor = "#ff5555"; ctx.shadowBlur = 18 / this.zoom; }
     else if (selected) { ctx.shadowColor = "#ffe040"; ctx.shadowBlur = 14 / this.zoom; }
     else if (targeting) { ctx.shadowColor = "#50ffb0"; ctx.shadowBlur = 16 / this.zoom; }
+    else if (enchantTargetHover) { ctx.shadowColor = "#c06bff"; ctx.shadowBlur = 18 / this.zoom; }
     else if (hovered) { ctx.shadowColor = "#7ec4ff"; ctx.shadowBlur = 10 / this.zoom; }
 
-    ctx.strokeStyle = emblem ? "#ff9933" : attacking ? "#ff5555" : selected ? "#ffe040" : targeting ? "#50ffb0" : hovered ? "#7ec4ff" : "rgba(255,255,255,0.22)";
-    ctx.lineWidth = (emblem || attacking || selected || targeting ? 2.5 : 1) / this.zoom;
+    ctx.strokeStyle = emblem ? "#ff9933" : attacking ? "#ff5555" : selected ? "#ffe040" : targeting ? "#50ffb0" : enchantTargetHover ? "#c06bff" : hovered ? "#7ec4ff" : "rgba(255,255,255,0.22)";
+    ctx.lineWidth = (emblem || attacking || selected || targeting || enchantTargetHover ? 2.5 : 1) / this.zoom;
     this._roundRect(ctx, x, y, w, h, R);
     ctx.stroke();
     ctx.restore();
@@ -1813,6 +1872,10 @@ class BattlefieldCanvas {
       attacking: this.attackingKeys.has(item.key),
       targeting: this.targetingKeys.has(item.key),
       hovered: this.hoveredKey === item.key,
+      // Highlight an enchantment when a side-set aura attached to it is hovered.
+      enchantTargetHover:
+        this.hoveredKey != null &&
+        this.stacks.some((s) => s.sideX && s.keys[0] === item.key && s.keys.indexOf(this.hoveredKey) > 0),
     };
 
     // Topmost (fully visible) card of a pile shows the pile size.
@@ -1892,6 +1955,42 @@ class BattlefieldCanvas {
     ctx.moveTo(fx, fy);
     ctx.lineTo(tx, ty);
     ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(tx, ty);
+    ctx.lineTo(tx - HEAD * Math.cos(angle - ANGLE), ty - HEAD * Math.sin(angle - ANGLE));
+    ctx.lineTo(tx - HEAD * Math.cos(angle + ANGLE), ty - HEAD * Math.sin(angle + ANGLE));
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  // A curved (bowed) connector with an arrowhead at the target end. Used to tie
+  // a side-set aura back to the enchantment it is attached to.
+  _drawCurvedArrow(ctx, fx, fy, tx, ty, color) {
+    const HEAD = 9 / this.zoom;
+    const ANGLE = Math.PI / 6;
+    const dx = tx - fx;
+    const dy = ty - fy;
+    const len = Math.hypot(dx, dy) || 1;
+    // Bow the connector out perpendicular to its direction so it reads as a
+    // curve rather than a straight combat-style line.
+    const bow = Math.min(36, len * 0.4);
+    const cpx = (fx + tx) / 2 + (-dy / len) * bow;
+    const cpy = (fy + ty) / 2 + (dx / len) * bow;
+
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = 2.5 / this.zoom;
+    ctx.globalAlpha = 0.9;
+    ctx.beginPath();
+    ctx.moveTo(fx, fy);
+    ctx.quadraticCurveTo(cpx, cpy, tx, ty);
+    ctx.stroke();
+    // Arrowhead aligned with the curve's tangent at the target (pointing from
+    // the control point toward the endpoint).
+    const angle = Math.atan2(ty - cpy, tx - cpx);
     ctx.beginPath();
     ctx.moveTo(tx, ty);
     ctx.lineTo(tx - HEAD * Math.cos(angle - ANGLE), ty - HEAD * Math.sin(angle - ANGLE));
@@ -2068,6 +2167,45 @@ class BattlefieldCanvas {
     // ---- Draw the viewer's emblem tokens (orange-bordered ability markers) ----
     for (const item of this.emblemItems) {
       this._drawEmblem(ctx, item);
+    }
+
+    // ---- Aura→enchantment connectors (auras set beside their target) ----
+    for (const stack of this.stacks) {
+      if (!stack.sideX || stack.keys.length < 2) continue;
+      const targetKey = stack.keys[0];
+      const tPos = this._renderPos(targetKey);
+      if (!tPos) continue;
+      // When the target enchantment is itself fanned up behind a creature, only
+      // its top edge shows; aim the arrow there (and inset only slightly on that
+      // end) so it clearly points at the enchantment rather than the creature
+      // sitting on top of it. Otherwise aim at the card's center.
+      const tItem = this.cardItems.find((c) => c.key === targetKey);
+      const targetBehind =
+        !tItem?.card?.tapped &&
+        this.stacks.some((s) => s.kind === "aura" && !s.sideX && s.keys.indexOf(targetKey) > 0);
+      const tc = targetBehind
+        ? { x: tPos.x + BF_CARD_W / 2, y: tPos.y + BF_CARD_H * 0.11 }
+        : this._cardCenter(targetKey);
+      if (!tc) continue;
+      for (let i = 1; i < stack.keys.length; i++) {
+        const fc = this._cardCenter(stack.keys[i]);
+        if (!fc) continue;
+        // Inset the aura end to its facing edge so the arrow spans the gap; inset
+        // the target end only a little when aiming at the exposed top sliver.
+        const dx = tc.x - fc.x;
+        const dy = tc.y - fc.y;
+        const d = Math.hypot(dx, dy) || 1;
+        const fromInset = BF_CARD_W * 0.46;
+        const toInset = targetBehind ? 6 : BF_CARD_W * 0.46;
+        this._drawCurvedArrow(
+          ctx,
+          fc.x + (dx / d) * fromInset,
+          fc.y + (dy / d) * fromInset,
+          tc.x - (dx / d) * toInset,
+          tc.y - (dy / d) * toInset,
+          "#caa6ff"
+        );
+      }
     }
 
     // ---- Combat arrows ----

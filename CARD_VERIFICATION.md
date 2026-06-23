@@ -3,9 +3,9 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **290**
-- Passed: **107**
-- Failed: **0**
-- Untested: **183**
+- Passed: **116**
+- Failed: **13**
+- Untested: **161**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -19,10 +19,10 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Aspect of Wolf | ⬜ untested |  |
 | Bad Moon | ⬜ untested |  |
 | Badlands | ⬜ untested |  |
-| Balance | ⬜ untested |  |
+| Balance | ❌ fail | Balance should give me a prompt to let me choose which creatures and lands get destroyed. The prompt should show the number selected/total for each type. |
 | Basalt Monolith | ✅ pass |  |
 | Bayou | ⬜ untested |  |
-| Benalish Hero | ⬜ untested |  |
+| Benalish Hero | ❌ fail | The AI blocked my creature attacking in a band and the game got stuck passing priority back and forth in a loop |
 | Berserk | ⬜ untested |  |
 | Birds of Paradise | ✅ pass |  |
 | Black Knight | ✅ pass |  |
@@ -41,7 +41,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Celestial Prism | ✅ pass |  |
 | Channel | ⬜ untested |  |
 | Chaos Orb | ⬜ untested |  |
-| Chaoslace | ⬜ untested |  |
+| Chaoslace | ❌ fail | This card should also be able to target spells on the stack |
 | Circle of Protection: Blue | ⬜ untested |  |
 | Circle of Protection: Green | ⬜ untested |  |
 | Circle of Protection: Red | ⬜ untested |  |
@@ -64,7 +64,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Cursed Land | ✅ pass |  |
 | Cyclopean Tomb | ✅ pass |  |
 | Dark Ritual | ✅ pass |  |
-| Darkpact | ⬜ untested |  |
+| Darkpact | ✅ pass |  |
 | Death Ward | ✅ pass |  |
 | Deathgrip | ✅ pass |  |
 | Deathlace | ⬜ untested |  |
@@ -74,7 +74,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Dingus Egg | ✅ pass |  |
 | Disenchant | ⬜ untested |  |
 | Disintegrate | ⬜ untested |  |
-| Disrupting Scepter | ⬜ untested |  |
+| Disrupting Scepter | ❌ fail | I didn't get to choose the card to discard |
 | Dragon Whelp | ⬜ untested |  |
 | Drain Life | ⬜ untested |  |
 | Drain Power | ⬜ untested |  |
@@ -90,12 +90,12 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Farmstead | ⬜ untested |  |
 | Fastbond | ⬜ untested |  |
 | Fear | ⬜ untested |  |
-| Feedback | ⬜ untested |  |
+| Feedback | ✅ pass |  |
 | Fire Elemental | ✅ pass |  |
 | Fireball | ⬜ untested |  |
 | Firebreathing | ✅ pass |  |
-| Flashfires | ⬜ untested |  |
-| Flight | ⬜ untested |  |
+| Flashfires | ✅ pass |  |
+| Flight | ❌ fail | Doesn't grant Flying keyword to enchanted creature |
 | Fog | ✅ pass |  |
 | Force of Nature | ⬜ untested |  |
 | Forcefield | ⬜ untested |  |
@@ -103,10 +103,10 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Fork | ⬜ untested |  |
 | Frozen Shade | ⬜ untested |  |
 | Fungusaur | ⬜ untested |  |
-| Gaea's Liege | ⬜ untested |  |
+| Gaea's Liege | ❌ fail | When I turn a swamp into a forest it doesn't update Gaea's power and toughness until the next step. It should happen as soon as the ability resolves |
 | Gauntlet of Might | ✅ pass |  |
 | Giant Growth | ✅ pass |  |
-| Giant Spider | ⬜ untested |  |
+| Giant Spider | ✅ pass |  |
 | Glasses of Urza | ⬜ untested |  |
 | Gloom | ⬜ untested |  |
 | Goblin Balloon Brigade | ✅ pass |  |
@@ -148,7 +148,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Kudzu | ⬜ untested |  |
 | Lance | ⬜ untested |  |
 | Ley Druid | ⬜ untested |  |
-| Library of Leng | ⬜ untested |  |
+| Library of Leng | ❌ fail | I didn't get the option of discarding to the top of my library after using disrupting scepter on myself |
 | Lich | ⬜ untested |  |
 | Lifeforce | ⬜ untested |  |
 | Lifelace | ⬜ untested |  |
@@ -198,24 +198,24 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Plague Rats | ⬜ untested |  |
 | Plains | ✅ pass |  |
 | Plateau | ✅ pass |  |
-| Power Leak | ⬜ untested |  |
+| Power Leak | ❌ fail | I didn't get any prompt |
 | Power Sink | ⬜ untested |  |
 | Power Surge | ⬜ untested |  |
 | Prodigal Sorcerer | ✅ pass |  |
 | Psionic Blast | ✅ pass |  |
 | Psychic Venom | ✅ pass |  |
 | Purelace | ⬜ untested |  |
-| Raging River | ⬜ untested |  |
+| Raging River | ❌ fail | Ability triggered but opponent (AI) didn't divide their creatures into "left" and "right" piles and I didn't get to assign my attackers to each pile |
 | Raise Dead | ⬜ untested |  |
 | Red Elemental Blast | ✅ pass |  |
 | Red Ward | ✅ pass |  |
 | Regeneration | ✅ pass |  |
 | Regrowth | ⬜ untested |  |
-| Resurrection | ⬜ untested |  |
+| Resurrection | ❌ fail | It shouldn't let me target cards in my opponent's graveyard. Also it should highlight all valid targets in the graveyard. |
 | Reverse Damage | ⬜ untested |  |
 | Righteousness | ⬜ untested |  |
 | Roc of Kher Ridges | ✅ pass |  |
-| Rock Hydra | ⬜ untested |  |
+| Rock Hydra | ❌ fail | Rock Hydra has 2 activated abilities. It should let me choose which one to activate when I click on the card. Validate with UI test |
 | Rod of Ruin | ✅ pass |  |
 | Royal Assassin | ⬜ untested |  |
 | Sacrifice | ⬜ untested |  |
@@ -231,7 +231,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Sengir Vampire | ⬜ untested |  |
 | Serra Angel | ✅ pass |  |
 | Shanodin Dryads | ⬜ untested |  |
-| Shatter | ⬜ untested |  |
+| Shatter | ✅ pass |  |
 | Shivan Dragon | ✅ pass |  |
 | Simulacrum | ⬜ untested |  |
 | Sinkhole | ⬜ untested |  |
@@ -267,11 +267,11 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Twiddle | ⬜ untested |  |
 | Two-Headed Giant of Foriys | ⬜ untested |  |
 | Underground Sea | ⬜ untested |  |
-| Unholy Strength | ⬜ untested |  |
+| Unholy Strength | ✅ pass |  |
 | Unsummon | ⬜ untested |  |
 | Uthden Troll | ⬜ untested |  |
 | Verduran Enchantress | ⬜ untested |  |
-| Vesuvan Doppelganger | ⬜ untested |  |
+| Vesuvan Doppelganger | ❌ fail | I copied a creature with first strike but it didn't copy the keywords |
 | Veteran Bodyguard | ⬜ untested |  |
 | Volcanic Eruption | ⬜ untested |  |
 | Wall of Air | ✅ pass |  |
@@ -283,19 +283,19 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Wall of Swords | ✅ pass |  |
 | Wall of Water | ⬜ untested |  |
 | Wall of Wood | ⬜ untested |  |
-| Wanderlust | ⬜ untested |  |
+| Wanderlust | ✅ pass |  |
 | War Mammoth | ⬜ untested |  |
 | Warp Artifact | ⬜ untested |  |
 | Water Elemental | ✅ pass |  |
 | Weakness | ✅ pass |  |
 | Web | ⬜ untested |  |
 | Wheel of Fortune | ✅ pass |  |
-| White Knight | ⬜ untested |  |
+| White Knight | ✅ pass |  |
 | White Ward | ✅ pass |  |
 | Wild Growth | ⬜ untested |  |
-| Will-o'-the-Wisp | ⬜ untested |  |
+| Will-o'-the-Wisp | ✅ pass |  |
 | Winter Orb | ⬜ untested |  |
-| Wooden Sphere | ⬜ untested |  |
+| Wooden Sphere | ❌ fail | I don't get a prompt when a green spell is cast |
 | Word of Command | ⬜ untested |  |
 | Wrath of God | ✅ pass |  |
 | Zombie Master | ⬜ untested |  |
