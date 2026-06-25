@@ -12,92 +12,109 @@ browser game UI (`web/static/`). The board is drawn on an HTML canvas
 
 **Paths below are relative to the repo root** (`c:\Users\qwv48_66yef5i\Desktop\Magic`).
 
-The agent harness for the browser is
-[.claude/skills/run-magic/driver.py](.claude/skills/run-magic/driver.py) — a
-small Python script built on [Playwright](https://playwright.dev/python/), which
-is installed in the workspace venv (`playwright` + its bundled Chromium). It runs
-headless and manages its own browser, so no system Chrome/Edge is required.
+The browser is driven with **`playwright-cli`** (Microsoft's Playwright CLI) — see
+the [playwright-cli skill](../playwright-cli/SKILL.md) for the full command
+reference. It manages its own headless Chromium and runs as a persistent daemon:
+every `playwright-cli` invocation talks to the **same default browser session**
+until you `close` it, so you drive the app one command at a time across separate
+shell calls. This skill documents only the LEA-specific launch + flow on top of it.
 
 ## Prerequisites (verified on Windows 11 / PowerShell)
 
-- Python venv already present at `.venv\` with the web deps. Confirm:
+- Python venv at `.venv\` with the web deps. Confirm:
   ```powershell
-  .\.venv\Scripts\python.exe -m pip list | Select-String "fastapi|uvicorn|starlette|pydantic|playwright"
+  .\.venv\Scripts\python.exe -m pip list | Select-String "fastapi|uvicorn|starlette|pydantic"
   ```
-  Expected: fastapi 0.136.x, uvicorn 0.47.x, starlette 1.1.x, pydantic 2.13.x,
-  playwright 1.60.x.
-- Playwright's Chromium browser installed (one-time, already done in this
-  environment). If `driver.py` reports a missing browser, install it with:
+  Expected: fastapi 0.136.x, uvicorn 0.47.x, starlette 1.1.x, pydantic 2.13.x.
+- `playwright-cli` installed globally (one-time):
   ```powershell
-  .\.venv\Scripts\python.exe -m playwright install chromium
+  npm install -g @playwright/cli@latest
+  playwright-cli --version    # -> 0.1.x
   ```
+  If the command is not found, the npm global bin (`%APPDATA%\npm`) isn't on
+  PATH — add it, or call the shim directly: `& "$env:APPDATA\npm\playwright-cli.cmd" ...`.
+  `playwright-cli` downloads its own Chromium on first use, so no system
+  Chrome/Edge is required.
 
 ## Run (agent path) — START HERE
 
-### 1. Launch the server in the background
+### 1. Launch the server (detached, survives across shell calls)
+
+Each PowerShell tool call is its own process, so a `Start-Job` server dies when
+that call returns. Launch it **detached** with `Start-Process` so it keeps
+running while you drive the browser in later calls:
 
 ```powershell
-Start-Job -Name mtg -ScriptBlock { Set-Location "c:\Users\qwv48_66yef5i\Desktop\Magic"; & ".\.venv\Scripts\python.exe" -m uvicorn web.app:app --host 127.0.0.1 --port 8010 *>&1 | Out-File "c:\Users\qwv48_66yef5i\Desktop\Magic\logs\skill_server.log" }
-Start-Sleep -Seconds 4
+$root = "c:\Users\qwv48_66yef5i\Desktop\Magic"
+if (-not (Test-Path "$root\logs")) { New-Item -ItemType Directory -Force "$root\logs" | Out-Null }
+$p = Start-Process -FilePath "$root\.venv\Scripts\python.exe" `
+  -ArgumentList "-m","uvicorn","web.app:app","--host","127.0.0.1","--port","8010" `
+  -WorkingDirectory $root `
+  -RedirectStandardOutput "$root\logs\skill_server.log" `
+  -RedirectStandardError  "$root\logs\skill_server.err.log" `
+  -WindowStyle Hidden -PassThru
+Start-Sleep -Seconds 5
 (Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8010/ -TimeoutSec 5).StatusCode   # -> 200
+"server PID $($p.Id)"   # note this to stop it later
 ```
 
-### 2. Drive the browser with the driver
+### 2. Drive the browser with playwright-cli
 
-Run the driver with the venv python. Paths below are relative to the repo root.
+`playwright-cli` commands accept CSS selectors directly. Use `--raw eval` to read
+a value out of the live page (prints just the result). The full menu→game flow:
 
 ```powershell
-Set-Location "c:\Users\qwv48_66yef5i\Desktop\Magic"
-$py = ".\.venv\Scripts\python.exe"
-$drv = ".claude\skills\run-magic\driver.py"
+$pw = "playwright-cli"   # or "$env:APPDATA\npm\playwright-cli.cmd" if not on PATH
+$shots = "c:\Users\qwv48_66yef5i\Desktop\Magic\.claude\skills\run-magic\shots"
 
-# Screenshot the home menu.
-& $py $drv shot http://127.0.0.1:8010/ .claude/skills/run-magic/shots/home.png
+& $pw open "http://127.0.0.1:8010/"
+& $pw --raw eval "document.title"                         # -> "Magic LEA Web App"
 
-# Read any value out of the live page (prints JSON).
-& $py $drv eval http://127.0.0.1:8010/ "document.title"        # -> "Magic LEA Web App"
+# Home -> Host Game page (selectors are stable element ids from index.html).
+& $pw click "#homeHostBtn"
+& $pw --raw eval "!document.querySelector('#hostGamePage').classList.contains('hidden')"   # -> true
 
-# Full scripted flow: Home -> Host Game -> Create Session (human vs AI),
-# then screenshot the live board. Prints progress + the in-game prompt.
-& $py $drv flow .claude/skills/run-magic/shots/flow.png
+# Mode <select> defaults to human_vs_ai; create the session.
+& $pw click "#startBtn"
+Start-Sleep -Seconds 4    # session creation hits the API and deals opening hands
+
+# Prove the game is live (the board is canvas-rendered, so check panels/canvas, not .card).
+& $pw --raw eval "!document.querySelector('#boardPanel').classList.contains('hidden')"     # -> true
+& $pw --raw eval "!!document.querySelector('#battlefieldCanvasWrap canvas')"               # -> true
+& $pw --raw eval "document.querySelector('#promptTitle')?.textContent"                     # e.g. "You won the coin flip!"
+
+& $pw screenshot --filename="$shots\flow.png"
+& $pw close
 ```
 
-`flow` output on success (exit 0):
-```
-home shown: True
-host page: True
-board visible: True
-prompt: Keep or Mulligan?
-canvas: True
-saved .claude/skills/run-magic/shots/flow.png
-```
-(The exact `prompt` text varies with the pregame state — e.g. a coin-flip or
-mulligan prompt. What matters is `board visible: True` and `canvas: True`.)
-
-Screenshots land in `.claude/skills/run-magic/shots/`. **Open the PNG and look
-at it** — `flow.png` should show the game board (life totals, mana pool, stack
-panel, phase rail), not the menu.
+**Open the PNG and look at it** — `flow.png` should show the game board (life
+totals, mana pool, Stack panel, Current Prompt, phase rail), not the menu. The
+exact prompt text varies with the pregame state (coin flip or mulligan); what
+matters is the board panel and canvas being present.
 
 ### 3. Stop the server
 
 ```powershell
-Stop-Job -Name mtg; Remove-Job -Name mtg
+Stop-Process -Id <PID>        # the PID printed in step 1
+# or, if you lost it:
+Get-Process python | Where-Object { $_.Path -like "*Magic*venv*" } | Stop-Process -Force
 ```
 
-### Driver subcommands
+### Common driving commands
 
-Invoke as `& $py $drv <command> ...` (with `$py`/`$drv` set as above).
+Invoke as `& $pw <command> ...` (with `$pw` set as above). See the
+[playwright-cli skill](../playwright-cli/SKILL.md) for the complete list.
 
-| Command | What it does |
+| Goal | Command |
 |---|---|
-| `driver.py shot <url> <out.png>` | Navigate, settle, screenshot |
-| `driver.py eval <url> "<jsExpr>"` | Navigate, print JSON of `jsExpr` evaluated in the page |
-| `driver.py evalshot <url> "<jsExpr>" <out.png>` | Navigate, run `jsExpr`, then screenshot |
-| `driver.py click <url> <selector> <out.png>` | Navigate, click a selector, screenshot |
-| `driver.py flow <out.png>` | Full menu→game flow, screenshot the live board |
-
-Env: `APP_URL` (default `http://127.0.0.1:8010`), `HEADED=1` (visible window
-instead of headless).
+| Navigate / settle | `playwright-cli open <url>` (or `goto <url>` if already open) |
+| Read a page value | `playwright-cli --raw eval "<jsExpr>"` |
+| Read an element attr | `playwright-cli eval "el => el.textContent" "<selector>"` |
+| Click | `playwright-cli click "<selector>"` |
+| Screenshot to file | `playwright-cli screenshot --filename="<out.png>"` |
+| Accessibility snapshot | `playwright-cli snapshot` (menu only — see canvas gotcha) |
+| Inspect console / network | `playwright-cli console` / `playwright-cli requests` |
+| Close the browser | `playwright-cli close` |
 
 ## Direct invocation (no browser) — drive the engine / API
 
@@ -127,16 +144,17 @@ Invoke-WebRequest -UseBasicParsing -Method Post "http://127.0.0.1:8010/api/sessi
 `README.md` documents `uvicorn ... --host 0.0.0.0 --port 8010`, then open
 `http://127.0.0.1:8010/` in a real browser and click through the menu. That
 foreground form blocks the shell and is only useful with a human at a real
-browser — for agents use the background-job + driver path above.
+browser — for agents use the detached-server + playwright-cli path above.
 
 ## Gotchas
 
 - **The battlefield is canvas-rendered.** `web/static/battlefield-canvas.js`
   paints cards/permanents onto a `<canvas>`. DOM selectors like `.card` find
   **nothing** on the board — `document.querySelectorAll(".card").length` is 0
-  even mid-game. To assert the game is live, check
-  `#battlefieldCanvasWrap canvas` exists, or read panel text like `#promptTitle`
-  / life totals, or query the JSON API (`/api/sessions/{id}/state`).
+  even mid-game, and `playwright-cli snapshot` won't list cards. To assert the
+  game is live, check `#battlefieldCanvasWrap canvas` exists, or read panel text
+  like `#promptTitle` / life totals, or query the JSON API
+  (`/api/sessions/{id}/state`).
 - **Session `mode` must be a literal.** The API rejects `"ai"` with HTTP 422 —
   valid values are exactly `human_vs_ai`, `ai_vs_ai`, `human_vs_human`.
 - **The menu flow auto-runs the coin flip.** Clicking "Create Session"
@@ -147,15 +165,18 @@ browser — for agents use the background-job + driver path above.
 - **Real menu selectors** (from `web/static/index.html`): `#homeHostBtn` →
   `#hostGamePage`, the `#mode` `<select>`, `#startBtn` ("Create Session"),
   board container `#boardPanel` (loses its `hidden` class when the game starts).
-- **Each driver run launches its own Playwright Chromium** in a fresh context
-  and closes it on exit, so multiple `driver.py` runs don't collide; nothing to
-  clean up.
+- **playwright-cli is a persistent daemon.** Commands share one default browser
+  session across invocations until `close`/`close-all`. Start each fresh run
+  with `playwright-cli close-all` if a stale session may be lingering. Session
+  artifacts (snapshots, console logs) land in `.playwright-cli/` — gitignored.
 
 ## Troubleshooting
 
 | Symptom | Fix |
 |---|---|
-| `driver.py` prints `ERROR ...Executable doesn't exist...` | Playwright's Chromium isn't installed. Run `.\.venv\Scripts\python.exe -m playwright install chromium`. |
-| `flow` shows `board visible: False` (exit 1) | Server not running or wrong port. Confirm step 1 returned `200` and `APP_URL` matches. |
+| `playwright-cli: command not found` | npm global bin not on PATH. Add `%APPDATA%\npm`, or call `& "$env:APPDATA\npm\playwright-cli.cmd" ...`. |
+| `eval` / page shows title `127.0.0.1` or `ERR_CONNECTION_REFUSED` | The server isn't running (a `Start-Job` server dies with its shell). Relaunch detached via step 1; confirm `200`. |
+| `playwright-cli` reports a missing/undownloaded browser | First run downloads Chromium automatically; re-run, or `npx playwright install chromium`. |
+| `board visible: false` after Create Session | Increase the post-`#startBtn` settle (3–5 s); session creation deals opening hands and can be slow on first run. |
 | API returns 422 on session create | Use a valid `mode` literal (see Gotchas), not `"ai"`. |
-| `shot`/`flow` PNG shows the menu, not the board | Increase the post-`Create Session` settle in `driver.py` (`flow` waits 3500 ms); session creation deals opening hands and can be slow on first run. |
+| screenshot PNG shows the menu, not the board | The flow didn't reach the board — confirm `#startBtn` was clicked and the settle elapsed before `screenshot`. |

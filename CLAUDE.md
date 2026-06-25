@@ -30,10 +30,11 @@ python scripts/simulate_ai_games.py   # AI-vs-AI batch; deterministic per seed
 python scripts/support_report.py      # per-category card-support coverage
 ```
 
-To **launch and drive the running web app** (screenshots, scripted UI flow via a
-headless Playwright browser driver), use the `/run-magic` skill at
-`.claude/skills/run-magic/` — the board is canvas-rendered, so DOM selectors
-won't find cards; that skill documents the working harness.
+To **launch and drive the running web app** (screenshots, scripted UI flow), use
+the `/run-magic` skill at `.claude/skills/run-magic/` — it drives the browser
+with `playwright-cli` (see the `playwright-cli` skill for the general command
+reference). The board is canvas-rendered, so DOM selectors won't find cards; that
+skill documents the working harness.
 
 ## Engine architecture
 

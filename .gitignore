@@ -30,3 +30,9 @@ pip-wheel-metadata/
 # Misc
 .DS_Store
 *.log
+
+# playwright-cli session artifacts (snapshots, console logs, traces)
+.playwright-cli/
+
+# Local server logs (run-magic skill)
+logs/
