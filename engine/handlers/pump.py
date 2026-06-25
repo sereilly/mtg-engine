@@ -24,7 +24,12 @@ def berserk_pump(game: Game, instruction: OracleInstruction, context: OracleExec
         target_perm = next((p for p in target.battlefield if p.card.primary_type == "creature"), None)
     if target_perm is not None:
         boost = target_perm.effective_power
+        # "+X/+0 until end of turn" — apply now and track it so cleanup removes it
+        # if the creature survives (Berserk only destroys it if it attacked).
         target_perm.power_bonus += boost
+        target_perm.metadata["temporary_power_bonus_until_eot"] = int(
+            target_perm.metadata.get("temporary_power_bonus_until_eot", 0)
+        ) + boost
         target_perm.metadata["gains_trample_until_eot"] = True
         game.log.append(f"{card.name} pumped {target_perm.card.name} by +{boost}/+0 and granted trample")
     else:

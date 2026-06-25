@@ -4,6 +4,7 @@ _MANA_SYMBOLS = ("W", "U", "B", "R", "G", "C")
 _EOT_METADATA_KEYS = (
     "gains_flying_until_eot",
     "gains_banding_until_eot",
+    "gains_trample_until_eot",
     "cant_be_blocked_until_eot",
     "must_attack_until_eot",
     "destroy_if_did_not_attack_eot",

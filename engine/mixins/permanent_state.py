@@ -290,6 +290,11 @@ class PermanentStateMixin:
             return True
         if lower_keyword == "haste" and permanent.metadata.get("gains_haste", False):
             return True
+        if lower_keyword == "trample" and (
+            permanent.metadata.get("gains_trample", False)
+            or permanent.metadata.get("gains_trample_until_eot", False)
+        ):
+            return True
         if lower_keyword == "deathtouch" and permanent.metadata.get("has_deathtouch", False):
             return True
         # Fall back to oracle program static lines (e.g. test cards that put keyword in oracle_text)

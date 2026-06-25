@@ -15,20 +15,10 @@
       "status": "pass",
       "updated_at": 1781475506.7830067
     },
-    "Balance": {
-      "reason": "Balance should give me a prompt to let me choose which creatures and lands get destroyed. The prompt should show the number selected/total for each type.",
-      "status": "fail",
-      "updated_at": 1782177383.6807973
-    },
     "Basalt Monolith": {
       "reason": "",
       "status": "pass",
       "updated_at": 1781843411.049817
-    },
-    "Benalish Hero": {
-      "reason": "The AI blocked my creature attacking in a band and the game got stuck passing priority back and forth in a loop",
-      "status": "fail",
-      "updated_at": 1782190657.6488292
     },
     "Birds of Paradise": {
       "reason": "",
@@ -79,11 +69,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782105893.8562238
-    },
-    "Chaoslace": {
-      "reason": "This card should also be able to target spells on the stack",
-      "status": "fail",
-      "updated_at": 1782191246.6880362
     },
     "Clone": {
       "reason": "",
@@ -160,11 +145,6 @@
       "status": "pass",
       "updated_at": 1782018807.0121405
     },
-    "Disrupting Scepter": {
-      "reason": "I didn't get to choose the card to discard",
-      "status": "fail",
-      "updated_at": 1782189924.4773865
-    },
     "Drudge Skeletons": {
       "reason": "",
       "status": "pass",
@@ -210,11 +190,6 @@
       "status": "pass",
       "updated_at": 1782190503.49171
     },
-    "Flight": {
-      "reason": "Doesn't grant Flying keyword to enchanted creature",
-      "status": "fail",
-      "updated_at": 1782191114.623952
-    },
     "Fog": {
       "reason": "",
       "status": "pass",
@@ -224,11 +199,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781503124.4112332
-    },
-    "Gaea's Liege": {
-      "reason": "When I turn a swamp into a forest it doesn't update Gaea's power and toughness until the next step. It should happen as soon as the ability resolves",
-      "status": "fail",
-      "updated_at": 1782178778.6137083
     },
     "Gauntlet of Might": {
       "reason": "",
@@ -314,11 +284,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782008813.4584646
-    },
-    "Library of Leng": {
-      "reason": "I didn't get the option of discarding to the top of my library after using disrupting scepter on myself",
-      "status": "fail",
-      "updated_at": 1782189981.7394922
     },
     "Lightning Bolt": {
       "reason": "",
@@ -410,11 +375,6 @@
       "status": "pass",
       "updated_at": 1781931114.369114
     },
-    "Power Leak": {
-      "reason": "I didn't get any prompt",
-      "status": "fail",
-      "updated_at": 1782190462.8478944
-    },
     "Prodigal Sorcerer": {
       "reason": "",
       "status": "pass",
@@ -429,11 +389,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781410771.1947188
-    },
-    "Raging River": {
-      "reason": "Ability triggered but opponent (AI) didn't divide their creatures into \"left\" and \"right\" piles and I didn't get to assign my attackers to each pile",
-      "status": "fail",
-      "updated_at": 1782189807.3112745
     },
     "Red Elemental Blast": {
       "reason": "",
@@ -450,20 +405,10 @@
       "status": "pass",
       "updated_at": 1782019199.2218683
     },
-    "Resurrection": {
-      "reason": "It shouldn't let me target cards in my opponent's graveyard. Also it should highlight all valid targets in the graveyard.",
-      "status": "fail",
-      "updated_at": 1782190922.1900756
-    },
     "Roc of Kher Ridges": {
       "reason": "",
       "status": "pass",
       "updated_at": 1781997960.0992842
-    },
-    "Rock Hydra": {
-      "reason": "Rock Hydra has 2 activated abilities. It should let me choose which one to activate when I click on the card. Validate with UI test",
-      "status": "fail",
-      "updated_at": 1782191065.7545211
     },
     "Rod of Ruin": {
       "reason": "",
@@ -565,11 +510,6 @@
       "status": "pass",
       "updated_at": 1782190359.588932
     },
-    "Vesuvan Doppelganger": {
-      "reason": "I copied a creature with first strike but it didn't copy the keywords",
-      "status": "fail",
-      "updated_at": 1782190805.1672752
-    },
     "Wall of Air": {
       "reason": "",
       "status": "pass",
@@ -635,20 +575,10 @@
       "status": "pass",
       "updated_at": 1782178493.830383
     },
-    "Wooden Sphere": {
-      "reason": "I don't get a prompt when a green spell is cast",
-      "status": "fail",
-      "updated_at": 1782177179.070797
-    },
     "Wrath of God": {
       "reason": "",
       "status": "pass",
       "updated_at": 1782008868.629678
-    },
-    "raise dead": {
-      "reason": "Raise Dead doesn't let me choose a target creature in my graveyard",
-      "status": "fail",
-      "updated_at": 1782087485.467451
     }
   }
 }
