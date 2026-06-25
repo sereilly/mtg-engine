@@ -158,6 +158,12 @@ def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
     if not legal_attackers_list:
         return []
 
+    # Creatures that must attack if able (Siren's Call, Lure-style "attacks each
+    # combat if able", etc.) are non-negotiable: declare_attackers rejects any
+    # declaration that omits them, so they must be in the result regardless of
+    # the profitability heuristic below.
+    forced = [idx for idx in legal_attackers_list if game._must_attack_if_able(player.battlefield[idx])]
+
     opponent_blockers = [
         perm
         for perm in opponent.battlefield
@@ -166,8 +172,10 @@ def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
     if not opponent_blockers:
         return legal_attackers_list
 
-    chosen = []
+    chosen = list(forced)
     for idx in legal_attackers_list:
+        if idx in chosen:
+            continue
         attacker = player.battlefield[idx]
         best_defender_score = max(
             _score_block_pair(blocker, attacker) for blocker in opponent_blockers
@@ -180,7 +188,7 @@ def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
     if sum(player.battlefield[i].effective_power for i in legal_attackers_list) >= opponent.life:
         return legal_attackers_list
 
-    return chosen
+    return sorted(chosen)
 
 
 def choose_combat_blockers(game: Game, defending_player_index: int) -> dict[int, int]:

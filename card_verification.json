@@ -75,6 +75,11 @@
       "status": "pass",
       "updated_at": 1782105893.8562238
     },
+    "Chaos Orb": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782364304.0696912
+    },
     "Circle of Protection: Red": {
       "reason": "It doesn't let me choose a source.",
       "status": "fail",
@@ -159,6 +164,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782018807.0121405
+    },
+    "Disenchant": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782364062.7009046
     },
     "Drudge Skeletons": {
       "reason": "",
@@ -515,6 +525,16 @@
       "status": "pass",
       "updated_at": 1781585859.2176287
     },
+    "Sinkhole": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782364315.7092376
+    },
+    "Siren's Call": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782364012.382203
+    },
     "Stasis": {
       "reason": "",
       "status": "pass",
@@ -569,6 +589,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781577230.9356234
+    },
+    "Underground Sea": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782364240.6447637
     },
     "Unholy Strength": {
       "reason": "",

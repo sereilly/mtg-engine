@@ -3,9 +3,9 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **290**
-- Passed: **125**
+- Passed: **130**
 - Failed: **5**
-- Untested: **160**
+- Untested: **155**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -40,7 +40,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Castle | ⬜ untested |  |
 | Celestial Prism | ✅ pass |  |
 | Channel | ⬜ untested |  |
-| Chaos Orb | ⬜ untested |  |
+| Chaos Orb | ✅ pass |  |
 | Chaoslace | ⬜ untested |  |
 | Circle of Protection: Blue | ⬜ untested |  |
 | Circle of Protection: Green | ⬜ untested |  |
@@ -72,7 +72,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Demonic Hordes | ⬜ untested |  |
 | Demonic Tutor | ⬜ untested |  |
 | Dingus Egg | ✅ pass |  |
-| Disenchant | ⬜ untested |  |
+| Disenchant | ✅ pass |  |
 | Disintegrate | ⬜ untested |  |
 | Disrupting Scepter | ⬜ untested |  |
 | Dragon Whelp | ⬜ untested |  |
@@ -234,8 +234,8 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Shatter | ✅ pass |  |
 | Shivan Dragon | ✅ pass |  |
 | Simulacrum | ⬜ untested |  |
-| Sinkhole | ⬜ untested |  |
-| Siren's Call | ⬜ untested |  |
+| Sinkhole | ✅ pass |  |
+| Siren's Call | ✅ pass |  |
 | Sleight of Mind | ⬜ untested |  |
 | Smoke | ⬜ untested |  |
 | Sol Ring | ⬜ untested |  |
@@ -266,7 +266,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Tunnel | ✅ pass |  |
 | Twiddle | ⬜ untested |  |
 | Two-Headed Giant of Foriys | ⬜ untested |  |
-| Underground Sea | ⬜ untested |  |
+| Underground Sea | ✅ pass |  |
 | Unholy Strength | ✅ pass |  |
 | Unsummon | ⬜ untested |  |
 | Uthden Troll | ⬜ untested |  |

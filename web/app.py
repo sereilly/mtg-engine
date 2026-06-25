@@ -1687,7 +1687,14 @@ def _ai_declare_attackers(session: Session) -> None:
         attacker_indices = choose_attackers(game, game.active_player_index)
     ok, _ = game.declare_attackers(game.active_player_index, attacker_indices)
     if not ok:
-        game.declare_attackers(game.active_player_index, [])
+        # The chosen set was rejected (e.g. it omitted a creature that must attack
+        # if able). Attacking with every legal attacker is always a valid superset:
+        # it includes every forced creature, and a forced creature that can't
+        # legally attack is never required. Declaring [] would fail identically.
+        fallback = legal_attackers(game, game.active_player_index)
+        ok, _ = game.declare_attackers(game.active_player_index, fallback)
+        if not ok:
+            game.declare_attackers(game.active_player_index, [])
 
 
 def _banding_blocked_attackers(game) -> list[int]:

@@ -649,6 +649,31 @@ def test_creature_that_had_to_attack_must_be_declared():
     assert ok
 
 
+def test_ai_choose_attackers_includes_forced_creatures():
+    # Regression: Siren's Call (and other "must attack if able" effects) set
+    # must_attack_until_eot on the active player's creatures. The AI's
+    # choose_attackers heuristic would otherwise hold a 2/2 back from a wall it
+    # can't profitably attack into, producing a declaration that declare_attackers
+    # rejects — and the [] fallback fails identically, hanging declare_attackers.
+    from engine.ai_policy import choose_attackers
+
+    forced = Permanent(card=_mk_creature("Grizzly Bears", 2, 2))
+    forced.metadata["must_attack_until_eot"] = True
+    wall = Permanent(card=_mk_creature("Wall of Stone", 0, 8, "Defender"))
+    p1 = PlayerState(name="AI", battlefield=[forced])
+    p2 = PlayerState(name="P2", battlefield=[wall])
+    game = Game(players=[p1, p2])
+
+    _to_declare_attackers(game)
+    assert game._must_attack_if_able(forced) is True
+
+    chosen = choose_attackers(game, 0)
+    assert 0 in chosen, "forced creature must be chosen even when attacking is unprofitable"
+
+    ok, _ = game.declare_attackers(0, chosen)
+    assert ok
+
+
 def test_creature_did_not_have_to_attack_even_if_only_legal_attacker():
     # 506.6: a creature did not "have to attack" if no effect required it, even if
     # there were no other legal attacks. An ordinary creature may hold back.
