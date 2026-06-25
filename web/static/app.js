@@ -334,7 +334,6 @@ function canCardBlockAttackerFromPublicState(blockerCard, attackerCard) {
   if (!attackerCard || typeof attackerCard === "string") return false;
 
   const attackerText = String(attackerCard.oracle_text || "").toLowerCase();
-  const blockerText = String(blockerCard.oracle_text || "").toLowerCase();
   const blockerType = String(blockerCard.type || "").toLowerCase();
 
   if (
@@ -345,15 +344,34 @@ function canCardBlockAttackerFromPublicState(blockerCard, attackerCard) {
     return false;
   }
 
-  const attackerHasFlying = attackerText.includes("flying");
-  const blockerHasFlying = blockerText.includes("flying");
-  const blockerHasReach = blockerText.includes("reach");
+  // Flying/reach must come from the creature's effective keywords (serialized by
+  // _effective_keywords), not the oracle text: a card like Goblin Balloon Brigade
+  // only reads "gains flying" — substring-matching its text would treat it as a
+  // permanent flyer even when its ability hasn't been activated.
+  const attackerHasFlying = cardHasEffectiveKeyword(attackerCard, "flying");
+  const blockerHasFlying = cardHasEffectiveKeyword(blockerCard, "flying");
+  const blockerHasReach = cardHasEffectiveKeyword(blockerCard, "reach");
   if (attackerHasFlying && !(blockerHasFlying || blockerHasReach)) {
     return false;
   }
 
   if (attackerText.includes("can't be blocked by walls") && blockerType.includes("wall")) {
     return false;
+  }
+
+  // "Can't block creatures with power/toughness N or greater" (e.g. Ironclaw
+  // Orcs). Parsed generically so any threshold and either stat works; mirrors
+  // _can_block_attacker in declare_blockers_step.py.
+  const blockerText = String(blockerCard.oracle_text || "").toLowerCase();
+  const blockRestriction = blockerText.match(
+    /can't block creatures with (power|toughness) (\d+) or greater/
+  );
+  if (blockRestriction) {
+    const stat = blockRestriction[1] === "toughness" ? "toughness" : "power";
+    const threshold = Number(blockRestriction[2]);
+    if ((Number(attackerCard[stat]) || 0) >= threshold) {
+      return false;
+    }
   }
 
   return true;
@@ -500,6 +518,18 @@ function renderCombatOverlay(state = currentState) {
 
 function cardHasKeyword(card, keyword) {
   return String(card?.oracle_text || "").toLowerCase().includes(keyword);
+}
+
+// Whether a creature currently has a keyword, read from the effective-keyword
+// strip the server serializes (granted/removed keywords already applied). Use
+// this for current-state checks like flying — unlike cardHasKeyword, it won't be
+// fooled by oracle text that merely mentions a keyword it can grant (e.g. Goblin
+// Balloon Brigade's "{R}: gains flying").
+function cardHasEffectiveKeyword(card, keyword) {
+  if (!card || typeof card !== "object") return false;
+  const kws = Array.isArray(card.keywords) ? card.keywords : [];
+  const target = String(keyword).toLowerCase();
+  return kws.some((k) => String(k).toLowerCase() === target);
 }
 
 // Banding (printed or granted). Prefer the serialized effective-keyword strip so
