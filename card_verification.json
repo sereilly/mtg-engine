@@ -310,6 +310,11 @@
       "status": "pass",
       "updated_at": 1782008813.4584646
     },
+    "Ley Druid": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782361609.6198592
+    },
     "Lightning Bolt": {
       "reason": "",
       "status": "pass",
@@ -434,6 +439,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781410771.1947188
+    },
+    "Raise Dead": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782363471.1071694
     },
     "Red Elemental Blast": {
       "reason": "",

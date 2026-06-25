@@ -430,6 +430,20 @@ h2.targeting-valid {
   cursor: pointer;
 }
 
+/* Graveyard creature cards that are legal targets for a reanimation spell
+   (Raise Dead, Resurrection, Animate Dead) glow gold while the cast prompt is
+   open. renderZoneCards puts `targeting-valid` on the `.card-wrapper`
+   (createCardElement always wraps the `.card`), so the glow is applied to the
+   inner `.card` to follow its rounded shape. Mirrors the gold targeting
+   language used by life pills and headers. */
+.card-wrapper.targeting-valid {
+  cursor: pointer;
+}
+.card-wrapper.targeting-valid .card {
+  border-color: rgba(255, 224, 64, 0.9);
+  animation: target-pill-glow 1.1s ease-in-out infinite;
+}
+
 .life-pill.life-flash-gain {
   animation: life-gain-flash 480ms ease-out;
 }

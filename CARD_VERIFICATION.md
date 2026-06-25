@@ -3,9 +3,9 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **290**
-- Passed: **123**
+- Passed: **125**
 - Failed: **5**
-- Untested: **162**
+- Untested: **160**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -147,7 +147,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Kormus Bell | ⬜ untested |  |
 | Kudzu | ⬜ untested |  |
 | Lance | ⬜ untested |  |
-| Ley Druid | ⬜ untested |  |
+| Ley Druid | ✅ pass |  |
 | Library of Leng | ⬜ untested |  |
 | Lich | ⬜ untested |  |
 | Lifeforce | ⬜ untested |  |
@@ -206,7 +206,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Psychic Venom | ✅ pass |  |
 | Purelace | ⬜ untested |  |
 | Raging River | ⬜ untested |  |
-| Raise Dead | ⬜ untested |  |
+| Raise Dead | ✅ pass |  |
 | Red Elemental Blast | ✅ pass |  |
 | Red Ward | ✅ pass |  |
 | Regeneration | ✅ pass |  |
