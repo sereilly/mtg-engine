@@ -3,9 +3,9 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **290**
-- Passed: **116**
-- Failed: **0**
-- Untested: **174**
+- Passed: **123**
+- Failed: **5**
+- Untested: **162**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -18,7 +18,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Armageddon | ✅ pass |  |
 | Aspect of Wolf | ⬜ untested |  |
 | Bad Moon | ⬜ untested |  |
-| Badlands | ⬜ untested |  |
+| Badlands | ✅ pass |  |
 | Balance | ⬜ untested |  |
 | Basalt Monolith | ✅ pass |  |
 | Bayou | ⬜ untested |  |
@@ -44,9 +44,9 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Chaoslace | ⬜ untested |  |
 | Circle of Protection: Blue | ⬜ untested |  |
 | Circle of Protection: Green | ⬜ untested |  |
-| Circle of Protection: Red | ⬜ untested |  |
+| Circle of Protection: Red | ❌ fail | It doesn't let me choose a source. |
 | Circle of Protection: White | ⬜ untested |  |
-| Clockwork Beast | ⬜ untested |  |
+| Clockwork Beast | ✅ pass |  |
 | Clone | ✅ pass |  |
 | Cockatrice | ⬜ untested |  |
 | Consecrate Land | ✅ pass |  |
@@ -101,7 +101,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Forcefield | ⬜ untested |  |
 | Forest | ✅ pass |  |
 | Fork | ⬜ untested |  |
-| Frozen Shade | ⬜ untested |  |
+| Frozen Shade | ✅ pass |  |
 | Fungusaur | ⬜ untested |  |
 | Gaea's Liege | ⬜ untested |  |
 | Gauntlet of Might | ✅ pass |  |
@@ -127,7 +127,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Hurricane | ✅ pass |  |
 | Hypnotic Specter | ⬜ untested |  |
 | Ice Storm | ✅ pass |  |
-| Icy Manipulator | ⬜ untested |  |
+| Icy Manipulator | ❌ fail | Doesn't let me choose a target |
 | Illusionary Mask | ⬜ untested |  |
 | Instill Energy | ⬜ untested |  |
 | Invisibility | ⬜ untested |  |
@@ -160,7 +160,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Llanowar Elves | ⬜ untested |  |
 | Lord of Atlantis | ⬜ untested |  |
 | Lord of the Pit | ⬜ untested |  |
-| Lure | ⬜ untested |  |
+| Lure | ❌ fail | When Lure is attached to an opponent (AI) creature it skips my block step entirely |
 | Magical Hack | ⬜ untested |  |
 | Mahamoti Djinn | ✅ pass |  |
 | Mana Flare | ✅ pass |  |
@@ -174,7 +174,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Mons's Goblin Raiders | ✅ pass |  |
 | Mountain | ⬜ untested |  |
 | Mox Emerald | ✅ pass |  |
-| Mox Jet | ⬜ untested |  |
+| Mox Jet | ✅ pass |  |
 | Mox Pearl | ⬜ untested |  |
 | Mox Ruby | ✅ pass |  |
 | Mox Sapphire | ⬜ untested |  |
@@ -182,13 +182,13 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Nether Shadow | ✅ pass |  |
 | Nettling Imp | ⬜ untested |  |
 | Nevinyrral's Disk | ⬜ untested |  |
-| Nightmare | ⬜ untested |  |
+| Nightmare | ✅ pass |  |
 | Northern Paladin | ✅ pass |  |
 | Obsianus Golem | ⬜ untested |  |
 | Orcish Artillery | ✅ pass |  |
 | Orcish Oriflamme | ⬜ untested |  |
 | Paralyze | ⬜ untested |  |
-| Pearled Unicorn | ⬜ untested |  |
+| Pearled Unicorn | ✅ pass |  |
 | Personal Incarnation | ⬜ untested |  |
 | Pestilence | ✅ pass |  |
 | Phantasmal Forces | ⬜ untested |  |
@@ -217,7 +217,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Roc of Kher Ridges | ✅ pass |  |
 | Rock Hydra | ⬜ untested |  |
 | Rod of Ruin | ✅ pass |  |
-| Royal Assassin | ⬜ untested |  |
+| Royal Assassin | ❌ fail | I should only be able to target tapped creatures. Only highlight tapped creatures and error if I click an untapped creature |
 | Sacrifice | ⬜ untested |  |
 | Samite Healer | ✅ pass |  |
 | Savannah | ✅ pass |  |
@@ -260,7 +260,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Time Walk | ✅ pass |  |
 | Timetwister | ✅ pass |  |
 | Tranquility | ✅ pass |  |
-| Tropical Island | ⬜ untested |  |
+| Tropical Island | ✅ pass |  |
 | Tsunami | ✅ pass |  |
 | Tundra | ✅ pass |  |
 | Tunnel | ✅ pass |  |
@@ -271,7 +271,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Unsummon | ⬜ untested |  |
 | Uthden Troll | ⬜ untested |  |
 | Verduran Enchantress | ⬜ untested |  |
-| Vesuvan Doppelganger | ⬜ untested |  |
+| Vesuvan Doppelganger | ❌ fail | I copied lord of atlantis but didn't get the merfolk effects even though it becomes a merfolk itself |
 | Veteran Bodyguard | ⬜ untested |  |
 | Volcanic Eruption | ⬜ untested |  |
 | Wall of Air | ✅ pass |  |

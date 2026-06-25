@@ -15,6 +15,11 @@
       "status": "pass",
       "updated_at": 1781475506.7830067
     },
+    "Badlands": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782357709.591038
+    },
     "Basalt Monolith": {
       "reason": "",
       "status": "pass",
@@ -69,6 +74,16 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782105893.8562238
+    },
+    "Circle of Protection: Red": {
+      "reason": "It doesn't let me choose a source.",
+      "status": "fail",
+      "updated_at": 1782358013.6575308
+    },
+    "Clockwork Beast": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782358241.838283
     },
     "Clone": {
       "reason": "",
@@ -200,6 +215,11 @@
       "status": "pass",
       "updated_at": 1781503124.4112332
     },
+    "Frozen Shade": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782358389.1359606
+    },
     "Gauntlet of Might": {
       "reason": "",
       "status": "pass",
@@ -270,6 +290,11 @@
       "status": "pass",
       "updated_at": 1782009230.2792885
     },
+    "Icy Manipulator": {
+      "reason": "Doesn't let me choose a target",
+      "status": "fail",
+      "updated_at": 1782358476.291859
+    },
     "Island": {
       "reason": "",
       "status": "pass",
@@ -294,6 +319,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782085905.4015296
+    },
+    "Lure": {
+      "reason": "When Lure is attached to an opponent (AI) creature it skips my block step entirely",
+      "status": "fail",
+      "updated_at": 1782358635.884448
     },
     "Mahamoti Djinn": {
       "reason": "",
@@ -335,6 +365,11 @@
       "status": "pass",
       "updated_at": 1782021412.5865803
     },
+    "Mox Jet": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782357665.8624346
+    },
     "Mox Ruby": {
       "reason": "",
       "status": "pass",
@@ -345,6 +380,11 @@
       "status": "pass",
       "updated_at": 1781667960.3270679
     },
+    "Nightmare": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782358516.6641526
+    },
     "Northern Paladin": {
       "reason": "",
       "status": "pass",
@@ -354,6 +394,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781586499.052248
+    },
+    "Pearled Unicorn": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782358756.4484005
     },
     "Pestilence": {
       "reason": "",
@@ -414,6 +459,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782107895.8262937
+    },
+    "Royal Assassin": {
+      "reason": "I should only be able to target tapped creatures. Only highlight tapped creatures and error if I click an untapped creature",
+      "status": "fail",
+      "updated_at": 1782358340.972344
     },
     "Samite Healer": {
       "reason": "",
@@ -490,6 +540,11 @@
       "status": "pass",
       "updated_at": 1782087352.0209591
     },
+    "Tropical Island": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782357654.2899704
+    },
     "Tsunami": {
       "reason": "",
       "status": "pass",
@@ -509,6 +564,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782190359.588932
+    },
+    "Vesuvan Doppelganger": {
+      "reason": "I copied lord of atlantis but didn't get the merfolk effects even though it becomes a merfolk itself",
+      "status": "fail",
+      "updated_at": 1782358099.8687842
     },
     "Wall of Air": {
       "reason": "",

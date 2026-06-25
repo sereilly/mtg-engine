@@ -3584,6 +3584,12 @@ function renderActivationPrompt() {
   }
 
   if (pendingManaColor) {
+    // The dual-land choice is presented as an on-board mana fan, not a modal;
+    // keep the prompt panel out of the way while the fan is up.
+    if (pendingManaColor.fan) {
+      panel.classList.add("hidden");
+      return;
+    }
     panel.classList.remove("hidden");
     okBtn.classList.add("hidden");
     customRow.classList.add("hidden");
@@ -3901,13 +3907,22 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
 
   const dualColors = getDualLandColors(card);
   if (dualColors) {
+    const colorOptions = MANA_COLOR_OPTIONS.filter((o) => dualColors.includes(o.symbol));
     pendingManaColor = {
       cardName,
       permanentIndex,
       targetSeat,
       oracleText: card.oracle_text || "",
-      colorOptions: MANA_COLOR_OPTIONS.filter((o) => dualColors.includes(o.symbol)),
+      colorOptions,
+      // `fan` routes the choice to the on-board mana fan rather than the modal;
+      // renderActivationPrompt keeps the prompt panel hidden while it's set.
+      fan: true,
     };
+    // Pop the mana symbols out of the land itself (the viewer controls it, so
+    // its canvas key is `${seat}-${permanentIndex}`) and let the player click one.
+    if (battlefieldCanvas && seat !== null) {
+      battlefieldCanvas.showManaFan(`${seat}-${permanentIndex}`, colorOptions);
+    }
     renderActivationPrompt();
     updateActionHint(`Choose a mana color for ${cardName}.`);
     return;
@@ -6838,6 +6853,7 @@ function renderState(state, { skipStaleCheck = false } = {}) {
     clearPendingHandCast();
     pendingManaColor = null;
     pendingAbilityChoice = null;
+    battlefieldCanvas?.hideManaFan();
   }
   if (sessionId !== null) {
     hideSetupPanel();
@@ -7216,6 +7232,21 @@ function initBattlefieldCanvas() {
       if (source) showCardPreview(source);
     },
 
+    // The player clicked a wedge of the land mana fan — submit the chosen color
+    // through the same path the modal used.
+    onManaFanPick(symbol) {
+      resolvePendingManaColor(symbol);
+    },
+
+    // The player clicked away from the fan to dismiss it without choosing.
+    onManaFanCancel() {
+      if (pendingManaColor && pendingManaColor.fan) {
+        pendingManaColor = null;
+        renderActivationPrompt();
+        updateActionHint("Mana color choice canceled.");
+      }
+    },
+
     onHandCardDrop(info) {
       handleHandCardDropOnBattlefield(info).catch((e) => updateActionHint(e.message, true));
     },
@@ -7567,6 +7598,7 @@ q("promptCancelBtn").addEventListener("click", () => {
   pendingModalChoice = null;
   pendingAbilityChoice = null;
   clearPendingHandCast();
+  battlefieldCanvas?.hideManaFan();
   battlefieldCanvas?.setTargetingKeys([]);
   for (const elementId of ["selfLife", "oppLife", "selfName", "oppName"]) {
     q(elementId)?.classList.remove("targeting-valid");
@@ -7666,6 +7698,7 @@ q("endTurnBtn").addEventListener("click", async () => {
     pendingCastTarget = null;
     pendingCastX = null;
     pendingManaColor = null;
+    battlefieldCanvas?.hideManaFan();
     const isSelfTurn = !!currentState && seat !== null && currentState.current_turn === seat;
     autoPassTurnEndEnabled = true;
     autoPassMode = isSelfTurn ? "self" : "opponent";

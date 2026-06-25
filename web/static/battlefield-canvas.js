@@ -9,6 +9,13 @@
 
 const BF_CARD_W = 80;
 const BF_CARD_H = 112;
+// Glow tint for each mana symbol's wedge in the land mana-choice fan.
+const BF_MANA_GLOW = { W: "#f4eec6", U: "#4a90d9", B: "#9a6bbf", R: "#e0483b", G: "#46b95f", C: "#c2c6cf" };
+// Mana fan layout (world units / ms).
+const BF_MANA_FAN_RADIUS = 84;   // distance the symbols travel out from the card center
+const BF_MANA_FAN_SYM_R = 18;    // radius of each circular mana token
+const BF_MANA_FAN_POP_MS = 300;  // per-symbol pop-out duration
+const BF_MANA_FAN_STAGGER = 50;  // delay between successive symbols popping
 // Hover hit-box (world units) for the shield badge at a card's top-left corner.
 const SHIELD_BADGE_HIT = 24;
 
@@ -150,6 +157,12 @@ class BattlefieldCanvas {
     this.fxAnims = [];
     this.suppressedKeys = new Set();
 
+    // Active mana-color chooser: when a land that taps for more than one color
+    // is activated, its mana symbols pop out of the card in a fan and the
+    // player clicks one. null when no choice is pending.
+    // { key, colors: [{symbol,label}], start, hovered }
+    this.manaFan = null;
+
     // Combat damage fx timeline (punches, chevrons, beams, recoils, tickers)
     // and the per-key world-space render offsets the punches/recoils produce.
     this.combatFx = [];
@@ -177,6 +190,10 @@ class BattlefieldCanvas {
     // shield badge on a permanent is hovered (null when the hover ends).
     this.onShieldHover = callbacks.onShieldHover || null;
     this.hoveredShieldKey = null;
+    // Fires with the chosen mana symbol ("G") when the player clicks a wedge of
+    // the mana fan, or with no args when they click away to dismiss it.
+    this.onManaFanPick = callbacks.onManaFanPick || null;
+    this.onManaFanCancel = callbacks.onManaFanCancel || null;
 
     // emblemItems: [{index, emblem, x, y, w, h}] — the viewer's own non-card
     // activated abilities granted until end of turn (Guardian Angel). Drawn as
@@ -1404,6 +1421,8 @@ class BattlefieldCanvas {
     if (this._priorityPulseSide()) moving = true;
     // Flyers bob and tilt continuously, so keep the frame loop alive for them.
     if (!moving && this.cardItems.some((it) => _isFlyer(it.card))) moving = true;
+    // The mana fan pops, pulses and bobs — keep redrawing while it's open.
+    if (this.manaFan) moving = true;
     if (moving) this.needsRedraw = true;
   }
 
@@ -2011,6 +2030,147 @@ class BattlefieldCanvas {
       : { x: pos.x + BF_CARD_W / 2, y: pos.y + BF_CARD_H / 2 };
   }
 
+  // ---------------------------------------------------------------------------
+  // Mana-color fan (dual/multi land tap choice)
+  // ---------------------------------------------------------------------------
+
+  // Open the fan over the given battlefield card. `colors` is an ordered list of
+  // { symbol, label } the land can produce; each becomes a clickable wedge.
+  showManaFan(key, colors) {
+    if (!key || !Array.isArray(colors) || colors.length === 0) return;
+    this.manaFan = { key, colors: colors.slice(), start: performance.now(), hovered: -1 };
+    this.needsRedraw = true;
+  }
+
+  hideManaFan() {
+    if (!this.manaFan) return;
+    this.manaFan = null;
+    this.needsRedraw = true;
+  }
+
+  isManaFanOpen() {
+    return !!this.manaFan;
+  }
+
+  // World-space layout of the fan: the card center plus, for each color, the
+  // resting center of its token. Symbols fan upward in an arc above the card.
+  // Returns null if the source card is no longer on the battlefield.
+  _manaFanLayout() {
+    if (!this.manaFan) return null;
+    const center = this._cardCenter(this.manaFan.key);
+    if (!center) return null;
+    const colors = this.manaFan.colors;
+    const n = colors.length;
+    const up = -Math.PI / 2;
+    const spread = Math.min(Math.PI * 0.92, Math.max(0.5, (n - 1) * 0.5));
+    const items = colors.map((c, i) => {
+      const a = n === 1 ? up : up - spread / 2 + (spread * i) / (n - 1);
+      return {
+        symbol: c.symbol,
+        label: c.label,
+        x: center.x + BF_MANA_FAN_RADIUS * Math.cos(a),
+        y: center.y + BF_MANA_FAN_RADIUS * Math.sin(a),
+      };
+    });
+    return { center, items };
+  }
+
+  // Index of the fan wedge under a world point, or -1.
+  _manaFanHitIndex(wx, wy) {
+    const layout = this._manaFanLayout();
+    if (!layout) return -1;
+    const r = BF_MANA_FAN_SYM_R * 1.12;
+    for (let i = 0; i < layout.items.length; i++) {
+      const it = layout.items[i];
+      if ((wx - it.x) ** 2 + (wy - it.y) ** 2 <= r * r) return i;
+    }
+    return -1;
+  }
+
+  _drawManaFan(ctx, now) {
+    const fan = this.manaFan;
+    if (!fan) return;
+    const layout = this._manaFanLayout();
+    if (!layout) {
+      // The source land left the battlefield mid-choice — abandon the fan.
+      this.manaFan = null;
+      if (this.onManaFanCancel) this.onManaFanCancel();
+      return;
+    }
+    const elapsed = now - fan.start;
+
+    // A soft pulsing tether ring around the source card sells the connection.
+    const pulse = 0.5 + 0.5 * Math.sin(now / 320);
+    ctx.save();
+    ctx.strokeStyle = `rgba(126,196,255,${0.25 + 0.2 * pulse})`;
+    ctx.lineWidth = 2 / this.zoom;
+    ctx.beginPath();
+    ctx.arc(layout.center.x, layout.center.y, BF_CARD_W * 0.46, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+
+    layout.items.forEach((it, i) => {
+      const p = Math.max(0, Math.min(1, (elapsed - i * BF_MANA_FAN_STAGGER) / BF_MANA_FAN_POP_MS));
+      if (p <= 0) return;
+      const e = _easeOutBack(p);
+      // Travel out from the card center as it pops.
+      const cx = _lerp(layout.center.x, it.x, Math.min(1, e));
+      const cy = _lerp(layout.center.y, it.y, Math.min(1, e));
+      const hovered = i === fan.hovered;
+      const bob = hovered ? Math.sin(now / 220) * 0.8 : 0;
+      const r = BF_MANA_FAN_SYM_R * (0.2 + 0.8 * Math.min(1, e)) * (hovered ? 1.16 : 1);
+      const glow = BF_MANA_GLOW[it.symbol] || "#c2c6cf";
+
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, p * 1.4);
+
+      // Outer glow + dark token backing.
+      ctx.shadowColor = glow;
+      ctx.shadowBlur = (hovered ? 22 : 12) / this.zoom;
+      ctx.fillStyle = "rgba(10,16,26,0.92)";
+      ctx.beginPath();
+      ctx.arc(cx, cy - bob, r, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Colored rim.
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = glow;
+      ctx.lineWidth = (hovered ? 3 : 2) / this.zoom;
+      ctx.beginPath();
+      ctx.arc(cx, cy - bob, r, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // The mana symbol art, clipped inside the token.
+      const img = this._loadImage(this._symbolSrc(`{${it.symbol}}`));
+      if (img) {
+        const s = r * 1.5;
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(cx, cy - bob, r * 0.86, 0, Math.PI * 2);
+        ctx.clip();
+        ctx.drawImage(img, cx - s / 2, cy - bob - s / 2, s, s);
+        ctx.restore();
+      }
+      ctx.restore();
+
+      // Color name beneath the hovered wedge.
+      if (hovered && it.label) {
+        ctx.save();
+        ctx.font = `600 ${12 / this.zoom}px sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+        const ty = cy - bob + r + 6 / this.zoom;
+        const tw = ctx.measureText(it.label).width;
+        const pad = 5 / this.zoom;
+        ctx.fillStyle = "rgba(12,20,32,0.85)";
+        ctx.fillRect(cx - tw / 2 - pad, ty - 2 / this.zoom, tw + pad * 2, 16 / this.zoom);
+        ctx.fillStyle = glow;
+        ctx.fillText(it.label, cx, ty);
+        ctx.restore();
+      }
+    });
+  }
+
   // Soft contact shadow cast on the table beneath a floating (flying) card. A
   // rounded rectangle that echoes the card's own footprint; the higher it
   // floats, the larger, softer and fainter the shadow gets.
@@ -2231,6 +2391,9 @@ class BattlefieldCanvas {
 
     // ---- Spell stack zone and cast/resolve animations (drawn on top) ----
     this._drawStackAndFx(ctx);
+
+    // ---- Mana-color fan, above everything so its wedges are clickable ----
+    this._drawManaFan(ctx, performance.now());
 
     ctx.restore(); // camera
   }
@@ -2579,6 +2742,18 @@ class BattlefieldCanvas {
     const { x: cx, y: cy } = this._pageToCanvas(event.clientX, event.clientY);
     const world = this.canvasToWorld(cx, cy);
 
+    // The mana fan is modal while open: it captures every press, so a wedge
+    // picks a color and a press anywhere else dismisses it.
+    if (this.manaFan) {
+      this.pressState = {
+        manaFan: true,
+        manaFanIndex: this._manaFanHitIndex(world.x, world.y),
+        startCX: cx, startCY: cy, currentCX: cx, currentCY: cy,
+        cancelled: false,
+      };
+      return;
+    }
+
     // Floating stack cards draw above the battlefield, so they win the press.
     const stackHit = this._hitTestStack(world.x, world.y);
     if (stackHit) {
@@ -2666,6 +2841,18 @@ class BattlefieldCanvas {
       return;
     }
 
+    // The mana fan, while open, owns hover: highlight the wedge under the
+    // cursor and suppress card/stack hover beneath it.
+    if (this.manaFan) {
+      const idx = this._manaFanHitIndex(world.x, world.y);
+      if (idx !== this.manaFan.hovered) {
+        this.manaFan.hovered = idx;
+        this.needsRedraw = true;
+      }
+      this.canvas.style.cursor = idx >= 0 ? "pointer" : "default";
+      return;
+    }
+
     // Hover — the floating stack cascade sits above battlefield cards.
     const stackHit = this._updateStackHover(world.x, world.y);
 
@@ -2705,6 +2892,15 @@ class BattlefieldCanvas {
     const ps = this.pressState;
     this.pressState = null;
     this.needsRedraw = true;
+
+    if (ps.manaFan) {
+      if (ps.cancelled) return; // dragged off — leave the fan open
+      const symbol = ps.manaFanIndex >= 0 ? this.manaFan?.colors[ps.manaFanIndex]?.symbol : null;
+      this.hideManaFan();
+      if (symbol && this.onManaFanPick) this.onManaFanPick(symbol);
+      else if (this.onManaFanCancel) this.onManaFanCancel();
+      return;
+    }
 
     if (ps.combatDrag) {
       // Blocker assignment: find attacker under cursor
@@ -2791,6 +2987,13 @@ function _easeInCubic(t) {
 
 function _easeInQuad(t) {
   return t * t;
+}
+
+// Overshoot ease for the mana symbols springing out of the card.
+function _easeOutBack(t) {
+  const c1 = 1.70158;
+  const c3 = c1 + 1;
+  return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
 }
 
 // ---- Combat fx helpers ----
