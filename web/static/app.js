@@ -337,7 +337,11 @@ function canCardBlockAttackerFromPublicState(blockerCard, attackerCard) {
   const blockerText = String(blockerCard.oracle_text || "").toLowerCase();
   const blockerType = String(blockerCard.type || "").toLowerCase();
 
-  if (attackerText.includes("can't be blocked") && !attackerText.includes("except")) {
+  if (
+    attackerText.includes("can't be blocked") &&
+    !attackerText.includes("except") &&
+    !attackerText.includes("can't be blocked by")
+  ) {
     return false;
   }
 

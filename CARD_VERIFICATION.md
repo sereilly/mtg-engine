@@ -3,9 +3,9 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **290**
-- Passed: **130**
+- Passed: **131**
 - Failed: **5**
-- Untested: **155**
+- Untested: **154**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -140,7 +140,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Jade Monolith | ⬜ untested |  |
 | Jade Statue | ⬜ untested |  |
 | Jayemdae Tome | ✅ pass |  |
-| Juggernaut | ⬜ untested |  |
+| Juggernaut | ✅ pass |  |
 | Jump | ⬜ untested |  |
 | Karma | ✅ pass |  |
 | Keldon Warlord | ⬜ untested |  |
