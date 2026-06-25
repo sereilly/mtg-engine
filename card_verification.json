@@ -430,6 +430,11 @@
       "status": "pass",
       "updated_at": 1781586546.701313
     },
+    "Plague Rats": {
+      "reason": "Power and toughness doesn't reduce when another plague rats dies",
+      "status": "fail",
+      "updated_at": 1782404420.4071994
+    },
     "Plains": {
       "reason": "",
       "status": "pass",

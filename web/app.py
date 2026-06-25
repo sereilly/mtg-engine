@@ -265,27 +265,49 @@ def _mode_target_kind(instruction) -> str:
     return "player"
 
 
-def _serialize_modes(card) -> list[dict]:
-    """Selectable modes of a "Choose one —" modal spell, or [] when not modal."""
+def _mode_target_flags(instruction) -> dict:
+    """Extra target filters for a modal mode (e.g. a colour-restricted destroy),
+    passed to the legality enumerator so each mode highlights the right targets."""
+    if instruction is not None and instruction.kind == "destroy_target_permanent":
+        color_filter = instruction.payload.get("color_filter")
+        if color_filter:
+            return {"color_filter": color_filter}
+    return {}
+
+
+def _serialize_modes(card, game: Game | None = None, caster_index: int | None = None) -> list[dict]:
+    """Selectable modes of a "Choose one —" modal spell, or [] when not modal.
+
+    When ``game``/``caster_index`` are supplied (the viewer's own hand), each mode
+    also carries the backend-computed ``valid_targets`` for its target kind so the
+    UI can highlight legal targets after a mode is chosen."""
     program = compile_card_oracle(card)
     if not program.modes:
         return []
-    return [
-        {
+    modes = []
+    for index, mode in enumerate(program.modes):
+        kind = _mode_target_kind(mode.instruction)
+        entry = {
             "index": index,
             "label": mode.label,
             "supported": mode.supported,
-            "target_kind": _mode_target_kind(mode.instruction),
+            "target_kind": kind,
         }
-        for index, mode in enumerate(program.modes)
-    ]
+        if game is not None and caster_index is not None and kind not in ("none",):
+            entry["valid_targets"] = game.enumerate_targets_for_kind(
+                caster_index, card, kind, **_mode_target_flags(mode.instruction)
+            )
+        else:
+            entry["valid_targets"] = []
+        modes.append(entry)
+    return modes
 
 
-def _serialize_card(card) -> dict:
+def _serialize_card(card, game: Game | None = None, caster_index: int | None = None) -> dict:
     image_uris = card.raw.get("image_uris") if isinstance(card.raw, dict) else None
     image_uri = image_uris.get("normal") if isinstance(image_uris, dict) else None
     large_image_uri = image_uris.get("large") if isinstance(image_uris, dict) else None
-    return {
+    serialized = {
         "name": card.name,
         "type": card.type_line,
         "mana_cost": card.mana_cost,
@@ -293,8 +315,13 @@ def _serialize_card(card) -> dict:
         "image_uri": image_uri,
         "large_image_uri": large_image_uri,
         "colors": list(card.colors),
-        "modes": _serialize_modes(card),
+        "modes": _serialize_modes(card, game, caster_index),
     }
+    # The viewer's own hand cards carry a backend-computed target spec (kind +
+    # enumerated legal targets) so the UI never re-derives targeting from text.
+    if game is not None and caster_index is not None:
+        serialized["target_spec"] = game.cast_target_spec(caster_index, card)
+    return serialized
 
 
 def _serialize_card_summary(card) -> dict:
@@ -555,9 +582,17 @@ def _serialize_player(
     playable_hand_indices: list[int] | None = None,
 ) -> dict:
     if viewer_seat == seat:
-        hand = [_serialize_card(card) for card in player.hand]
+        hand = [_serialize_card(card, game, seat) for card in player.hand]
     else:
         hand = ["<hidden>"] * len(player.hand)
+
+    battlefield = [_serialize_permanent(perm, game) for perm in player.battlefield]
+    # The viewer's own permanents carry the target spec for their activated ability
+    # (kind + legal targets) so the UI can drive activation targeting from backend
+    # data rather than parsing the ability text client-side.
+    if viewer_seat == seat:
+        for idx, perm_dict in enumerate(battlefield):
+            perm_dict["target_spec"] = game.activation_target_spec(seat, idx)
 
     return {
         "name": player.name,
@@ -576,7 +611,7 @@ def _serialize_player(
         "library_count": len(player.library),
         "graveyard": [_serialize_card(card) for card in player.graveyard],
         "exile": [_serialize_card(card) for card in player.exile],
-        "battlefield": [_serialize_permanent(perm, game) for perm in player.battlefield],
+        "battlefield": battlefield,
         "emblems": _serialize_emblems(player),
         "mana_pool": _serialize_mana_pool(player),
         "playable_hand_indices": playable_hand_indices if viewer_seat == seat else [],
@@ -1312,6 +1347,21 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
                 "cards": [_serialize_card_summary(card) for card in revealed.hand],
             }
 
+    # Combat legality: which creatures may legally attack (declare-attackers step)
+    # and every legal blocker→attacker pairing (declare-blockers step), computed by
+    # the engine so the UI offers exactly the assignments the engine would accept.
+    combat_state = session.game.get_combat_state()
+    game = session.game
+    if game.current_turn_phase == "combat" and game.current_step == "declare_attackers":
+        combat_state["legal_attacker_indices"] = game.legal_attacker_indices(game.active_player_index)
+    else:
+        combat_state["legal_attacker_indices"] = []
+    defender_index = game.combat_defending_player_index
+    if defender_index is not None:
+        combat_state["legal_blocker_assignments"] = game.legal_blocker_assignments(defender_index)
+    else:
+        combat_state["legal_blocker_assignments"] = []
+
     return {
         "session_id": session.id,
         "mode": session.mode,
@@ -1338,7 +1388,7 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
             ),
         ],
         "stack": [_serialize_stack_item(item, session.game) for item in reversed(session.game.stack)],
-        "combat": session.game.get_combat_state(),
+        "combat": combat_state,
         "log": session.game.log,
         "winner": win,
         "rematch": _build_rematch_info(session, viewer_seat),
@@ -2273,6 +2323,27 @@ async def stream_session_events(session_id: str):
 def get_state(session_id: str, seat: int | None = Query(default=None, ge=0, le=1)):
     session = _require_session(session_id)
     return _serialize_state(session, viewer_seat=seat)
+
+
+@app.get("/api/sessions/{session_id}/card_target_spec")
+def get_card_target_spec(
+    session_id: str,
+    card_name: str = Query(...),
+    seat: int = Query(..., ge=0, le=1),
+):
+    """The cast target spec (kind + enumerated legal targets) for a card cast by
+    ``seat`` in this session. Hand cards already carry this in the serialized
+    state; this lets the debug "cast for free" flow — whose card comes from a
+    session-less catalog search — drive the same backend-authoritative targeting."""
+    session = _require_session(session_id)
+    card = CARD_BY_NAME.get(card_name.strip().casefold())
+    if card is None:
+        raise HTTPException(status_code=404, detail="card not found")
+    return {
+        "name": card.name,
+        "target_spec": session.game.cast_target_spec(seat, card),
+        "modes": _serialize_modes(card, session.game, seat),
+    }
 
 
 def _lookup_card_for_raw_state(name: str):

@@ -15,6 +15,7 @@ from .mixins import (
     EffectsMixin,
     GameHelpersMixin,
 )
+from .legality import LegalityMixin
 # Per-phase and per-step turn-structure logic (CR 500–514) lives in engine.phases,
 # one mixin class per phase/step. See engine/phases/__init__.py for the taxonomy.
 from .phases import (
@@ -64,6 +65,7 @@ class Game(
     PermanentStateMixin,
     EffectsMixin,
     GameHelpersMixin,
+    LegalityMixin,
 ):
     players: list[PlayerState]
     enforce_mana_costs: bool = False

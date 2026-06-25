@@ -720,6 +720,37 @@ class StackCastingMixin:
         )
         return SimulationResult(card.name, True, classification.effect_kind, "resolved")
 
+    def _destroy_target_legal(self, payload: dict, perm: Permanent) -> bool:
+        """Whether *perm* satisfies a ``destroy_target_permanent`` instruction's
+        target filters (type/subtype/colour/tapped + exclusions). Shared by cast
+        validation and the legality enumerator so a destroy ability (Royal
+        Assassin's "target tapped creature", Northern Paladin's "target black
+        permanent") offers exactly the permanents it can legally destroy."""
+        type_filter = payload.get("type_filter")
+        subtype_filter = payload.get("subtype_filter")
+        color_filter = payload.get("color_filter")
+        tapped_only = payload.get("tapped_only", False)
+        exclude_colors = payload.get("exclude_colors") or []
+        exclude_types = payload.get("exclude_types") or []
+
+        if type_filter:
+            if type_filter == "artifact_or_enchantment":
+                if perm.card.primary_type not in ("artifact", "enchantment"):
+                    return False
+            elif type_filter not in perm.card.type_line.lower():
+                return False
+        if subtype_filter and subtype_filter not in perm.card.type_line.lower():
+            return False
+        if tapped_only and not perm.tapped:
+            return False
+        if color_filter and color_filter not in perm.card.colors:
+            return False
+        if exclude_colors and any(c in perm.card.colors for c in exclude_colors):
+            return False
+        if exclude_types and any(t in perm.card.type_line.lower() for t in exclude_types):
+            return False
+        return True
+
     def _validate_cast_targets(
         self,
         card: CardDefinition,
@@ -816,47 +847,22 @@ class StackCastingMixin:
                 return False, f"{chosen.card.name} is an illegal target for {card.name}"
 
         if primary.kind == "destroy_target_permanent":
-            type_filter = primary.payload.get("type_filter")
-            color_filter = primary.payload.get("color_filter")
-            subtype_filter = primary.payload.get("subtype_filter")
-            tapped_only = primary.payload.get("tapped_only", False)
-            exclude_colors = primary.payload.get("exclude_colors") or []
-            exclude_types = primary.payload.get("exclude_types") or []
-
-            def _type_matches(p, tf):
-                if not tf:
-                    return True
-                if tf == "artifact_or_enchantment":
-                    return p.card.primary_type in ("artifact", "enchantment")
-                return tf in p.card.type_line.lower()
-
-            def _is_legal(p):
-                if not _type_matches(p, type_filter):
-                    return False
-                if subtype_filter and subtype_filter not in p.card.type_line.lower():
-                    return False
-                if tapped_only and not p.tapped:
-                    return False
-                if color_filter and color_filter not in p.card.colors:
-                    return False
-                if exclude_colors and any(c in p.card.colors for c in exclude_colors):
-                    return False
-                if exclude_types and any(t in p.card.type_line.lower() for t in exclude_types):
-                    return False
-                return True
-
             if isinstance(target_permanent_index, int):
                 # A specific target was chosen — it must itself be legal (601.2c).
                 battlefield = target.battlefield
-                if not (0 <= target_permanent_index < len(battlefield)) or not _is_legal(
-                    battlefield[target_permanent_index]
+                if not (0 <= target_permanent_index < len(battlefield)) or not self._destroy_target_legal(
+                    primary.payload, battlefield[target_permanent_index]
                 ):
                     return False, f"no valid target for {card.name}"
             else:
                 # No specific choice: destruction can target a permanent controlled
                 # by anyone, so a legal target on the caster's own battlefield (e.g.
                 # Disenchant on one's own artifact) is enough to make the cast legal.
-                has_target = any(_is_legal(p) for pl in self.players for p in pl.battlefield)
+                has_target = any(
+                    self._destroy_target_legal(primary.payload, p)
+                    for pl in self.players
+                    for p in pl.battlefield
+                )
                 if not has_target:
                     return False, f"no valid target for {card.name}"
 

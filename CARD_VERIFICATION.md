@@ -4,8 +4,8 @@ Master record of which cards have been manually validated in-game. Generated aut
 
 - Total cards: **290**
 - Passed: **131**
-- Failed: **5**
-- Untested: **154**
+- Failed: **6**
+- Untested: **153**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -195,7 +195,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Phantasmal Terrain | ⬜ untested |  |
 | Phantom Monster | ✅ pass |  |
 | Pirate Ship | ⬜ untested |  |
-| Plague Rats | ⬜ untested |  |
+| Plague Rats | ❌ fail | Power and toughness doesn't reduce when another plague rats dies |
 | Plains | ✅ pass |  |
 | Plateau | ✅ pass |  |
 | Power Leak | ⬜ untested |  |

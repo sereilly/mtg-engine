@@ -274,160 +274,49 @@ function toggleCombatAttackerDraft(permanentIndex) {
   }
 }
 
-function isCardLikelyAttacker(card) {
-  if (!card || typeof card === "string") return false;
-  if (card.summoning_sick) return false;
-  return String(card.type || "").toLowerCase().includes("creature") && !card.tapped;
-}
-
-function canCardAttackDefenderFromPublicState(card, defenderBattlefield) {
-  if (!isCardLikelyAttacker(card)) return false;
-
-  const text = String(card.oracle_text || "").toLowerCase();
-  const hasDefender = text.includes("defender");
-  const canIgnoreDefender = text.includes("can attack as though it didn't have defender");
-  if (hasDefender && !canIgnoreDefender) return false;
-
-  // Filter activated-ability lines before checking static restrictions
-  const nonActivatedLines = (card.oracle_text || "").split("\n")
-    .filter((line) => !/^\s*(\{[^}]+\}[,\s]*)+:/.test(line))
-    .map((line) => line.toLowerCase());
-  if (nonActivatedLines.some((line) => line.includes("can't attack"))) return false;
-
-  if (text.includes("can't attack unless defending player controls an island")) {
-    const defenderControlsIsland = Array.isArray(defenderBattlefield)
-      ? defenderBattlefield.some((perm) => String(perm?.type || "").toLowerCase().includes("island"))
-      : false;
-    if (!defenderControlsIsland) return false;
-  }
-
-  return true;
-}
-
+// Combat legality is computed authoritatively by the backend (engine/legality.py)
+// and shipped on the serialized combat state. The frontend only reads those lists
+// — it no longer re-derives attack/block legality from oracle text.
 function getValidAttackerIndices(state = currentState) {
   if (!state || !isCombatStep(state, "declare_attackers") || seat !== state.current_turn) return [];
-
   const combat = getCombatState(state);
-  const attackerSeat = state.current_turn;
-  const defenderSeat = Number.isInteger(combat?.defending_player_index)
-    ? combat.defending_player_index
-    : 1 - attackerSeat;
-
-  const attackerPlayer = state.players?.[attackerSeat];
-  const defenderPlayer = state.players?.[defenderSeat];
-  const attackerBattlefield = Array.isArray(attackerPlayer?.battlefield) ? attackerPlayer.battlefield : [];
-  const defenderBattlefield = Array.isArray(defenderPlayer?.battlefield) ? defenderPlayer.battlefield : [];
-
-  return attackerBattlefield
-    .map((card, index) => ({ card, index }))
-    .filter(({ card }) => canCardAttackDefenderFromPublicState(card, defenderBattlefield))
-    .map(({ index }) => index);
-}
-
-function isCardLikelyBlocker(card) {
-  if (!card || typeof card === "string") return false;
-  return String(card.type || "").toLowerCase().includes("creature") && !card.tapped;
-}
-
-function canCardBlockAttackerFromPublicState(blockerCard, attackerCard) {
-  if (!isCardLikelyBlocker(blockerCard)) return false;
-  if (!attackerCard || typeof attackerCard === "string") return false;
-
-  const attackerText = String(attackerCard.oracle_text || "").toLowerCase();
-  const blockerType = String(blockerCard.type || "").toLowerCase();
-
-  if (
-    attackerText.includes("can't be blocked") &&
-    !attackerText.includes("except") &&
-    !attackerText.includes("can't be blocked by")
-  ) {
-    return false;
-  }
-
-  // Flying/reach must come from the creature's effective keywords (serialized by
-  // _effective_keywords), not the oracle text: a card like Goblin Balloon Brigade
-  // only reads "gains flying" — substring-matching its text would treat it as a
-  // permanent flyer even when its ability hasn't been activated.
-  const attackerHasFlying = cardHasEffectiveKeyword(attackerCard, "flying");
-  const blockerHasFlying = cardHasEffectiveKeyword(blockerCard, "flying");
-  const blockerHasReach = cardHasEffectiveKeyword(blockerCard, "reach");
-  if (attackerHasFlying && !(blockerHasFlying || blockerHasReach)) {
-    return false;
-  }
-
-  if (attackerText.includes("can't be blocked by walls") && blockerType.includes("wall")) {
-    return false;
-  }
-
-  // "Can't block creatures with power/toughness N or greater" (e.g. Ironclaw
-  // Orcs). Parsed generically so any threshold and either stat works; mirrors
-  // _can_block_attacker in declare_blockers_step.py.
-  const blockerText = String(blockerCard.oracle_text || "").toLowerCase();
-  const blockRestriction = blockerText.match(
-    /can't block creatures with (power|toughness) (\d+) or greater/
-  );
-  if (blockRestriction) {
-    const stat = blockRestriction[1] === "toughness" ? "toughness" : "power";
-    const threshold = Number(blockRestriction[2]);
-    if ((Number(attackerCard[stat]) || 0) >= threshold) {
-      return false;
-    }
-  }
-
-  return true;
+  const indices = Array.isArray(combat?.legal_attacker_indices) ? combat.legal_attacker_indices : [];
+  return indices.map(Number).filter((idx) => Number.isInteger(idx) && idx >= 0);
 }
 
 function getValidBlockerAssignments(state = currentState) {
   if (!state || !isCombatStep(state, "declare_blockers")) return [];
   const combat = getCombatState(state);
   if (!combat || seat !== combat.defending_player_index) return [];
-
-  const attackerSeat = state.current_turn;
-  const defenderSeat = combat.defending_player_index;
-  const attackerPlayer = state.players?.[attackerSeat];
-  const defenderPlayer = state.players?.[defenderSeat];
-  const attackerBattlefield = Array.isArray(attackerPlayer?.battlefield) ? attackerPlayer.battlefield : [];
-  const defenderBattlefield = Array.isArray(defenderPlayer?.battlefield) ? defenderPlayer.battlefield : [];
-  const attackerIndices = Array.isArray(combat.attackers)
-    ? combat.attackers.map((item) => Number(item.attacker_index)).filter((idx) => Number.isInteger(idx) && idx >= 0)
-    : [];
-
-  const assignments = [];
-  for (let blockerIndex = 0; blockerIndex < defenderBattlefield.length; blockerIndex += 1) {
-    const blockerCard = defenderBattlefield[blockerIndex];
-    if (!isCardLikelyBlocker(blockerCard)) continue;
-    for (const attackerIndex of attackerIndices) {
-      const attackerCard = attackerBattlefield[attackerIndex];
-      if (!attackerCard) continue;
-      if (!canCardBlockAttackerFromPublicState(blockerCard, attackerCard)) continue;
-      assignments.push({ blocker_index: blockerIndex, attacker_index: attackerIndex });
-    }
-  }
-
-  return assignments;
+  const pairs = Array.isArray(combat.legal_blocker_assignments) ? combat.legal_blocker_assignments : [];
+  return pairs
+    .map((p) => ({ blocker_index: Number(p.blocker_index), attacker_index: Number(p.attacker_index) }))
+    .filter((p) => Number.isInteger(p.blocker_index) && Number.isInteger(p.attacker_index));
 }
 
 // Why a proposed (blocker → attacker) assignment is illegal, or "" if it's legal.
-// Mirrors the engine's declare_blockers checks so the player gets immediate
-// feedback as they assign each blocker (CR 509.1b) instead of only on confirm.
+// The legality itself comes from the engine's legal_blocker_assignments list; the
+// extra checks below only produce a friendlier message for the common cases.
 function blockAssignmentRejectionReason(state = currentState, blockerIdx, attackerIdx) {
   const combat = getCombatState(state);
   if (!combat || seat !== combat.defending_player_index) return "You aren't the defending player.";
 
-  const attackerSeat = state.current_turn;
-  const defenderSeat = combat.defending_player_index;
-  const defenderBattlefield = state.players?.[defenderSeat]?.battlefield;
-  const attackerBattlefield = state.players?.[attackerSeat]?.battlefield;
-  const blockerCard = Array.isArray(defenderBattlefield) ? defenderBattlefield[blockerIdx] : null;
-  const attackerCard = Array.isArray(attackerBattlefield) ? attackerBattlefield[attackerIdx] : null;
-
   const isAttacker = Array.isArray(combat.attackers)
     && combat.attackers.some((a) => Number(a.attacker_index) === Number(attackerIdx));
   if (!isAttacker) return "That creature isn't attacking.";
+
+  const defenderBattlefield = state.players?.[combat.defending_player_index]?.battlefield;
+  const blockerCard = Array.isArray(defenderBattlefield) ? defenderBattlefield[blockerIdx] : null;
   if (!blockerCard || typeof blockerCard === "string") return "Invalid blocker.";
   if (!String(blockerCard.type || "").toLowerCase().includes("creature")) return "Only creatures can block.";
   if (blockerCard.tapped) return `${blockerCard.name} is tapped and can't block.`;
-  if (!canCardBlockAttackerFromPublicState(blockerCard, attackerCard)) {
+
+  const legal = getValidBlockerAssignments(state).some(
+    (p) => p.blocker_index === Number(blockerIdx) && p.attacker_index === Number(attackerIdx)
+  );
+  if (!legal) {
+    const attackerBattlefield = state.players?.[state.current_turn]?.battlefield;
+    const attackerCard = Array.isArray(attackerBattlefield) ? attackerBattlefield[attackerIdx] : null;
     return `${blockerCard.name} can't block ${attackerCard?.name || "that attacker"}.`;
   }
   return "";
@@ -518,18 +407,6 @@ function renderCombatOverlay(state = currentState) {
 
 function cardHasKeyword(card, keyword) {
   return String(card?.oracle_text || "").toLowerCase().includes(keyword);
-}
-
-// Whether a creature currently has a keyword, read from the effective-keyword
-// strip the server serializes (granted/removed keywords already applied). Use
-// this for current-state checks like flying — unlike cardHasKeyword, it won't be
-// fooled by oracle text that merely mentions a keyword it can grant (e.g. Goblin
-// Balloon Brigade's "{R}: gains flying").
-function cardHasEffectiveKeyword(card, keyword) {
-  if (!card || typeof card !== "object") return false;
-  const kws = Array.isArray(card.keywords) ? card.keywords : [];
-  const target = String(keyword).toLowerCase();
-  return kws.some((k) => String(k).toLowerCase() === target);
 }
 
 // Banding (printed or granted). Prefer the serialized effective-keyword strip so
@@ -1308,72 +1185,98 @@ function hasXCost(card) {
   return !!card && typeof card !== "string" && (card.mana_cost || "").toUpperCase().includes("{X}");
 }
 
-function cardRequiresTargetPlayer(card) {
-  if (!card || typeof card === "string") return false;
-  const lines = (card.oracle_text || "").split("\n");
-  const nonActivatedLines = lines.filter((line) => !/^\s*(\{[^}]+\}[,\s]*)+:/.test(line));
-  return nonActivatedLines.some((line) => line.toLowerCase().includes("target player"));
+// ---------------------------------------------------------------------------
+// Targeting: the backend (engine/legality.py) classifies what each spell/ability
+// targets and enumerates every legal target, shipping a `target_spec` on each
+// hand card (its cast target) and each of the viewer's own permanents (its
+// activated-ability target). The frontend no longer parses oracle text for any
+// of this — these predicates and helpers just read the supplied spec.
+// ---------------------------------------------------------------------------
+
+const EMPTY_TARGET_SPEC = { kind: "none", requires_target: false, valid_targets: [] };
+
+// The backend target spec for a hand card (cast) or a permanent (activation).
+function targetSpecOf(card) {
+  if (!card || typeof card !== "object") return EMPTY_TARGET_SPEC;
+  return card.target_spec || EMPTY_TARGET_SPEC;
 }
 
-function cardRequiresTargetLand(card) {
-  if (!card || typeof card === "string") return false;
-  const lines = (card.oracle_text || "").split("\n");
-  // Exclude activated ability lines (format: "{cost}: effect") — those trigger on activation, not cast
-  const nonActivatedLines = lines.filter((line) => !/^\s*(\{[^}]+\}[,\s]*)+:/.test(line));
-  return nonActivatedLines.some((line) => {
-    const t = line.toLowerCase();
-    return t.includes("target land") || t.includes("enchant land");
-  });
+function specKind(card) {
+  return targetSpecOf(card).kind;
 }
 
-function cardRequiresTargetGraveyardCreature(card) {
-  if (!card || typeof card === "string") return false;
-  const text = (card.oracle_text || "").toLowerCase();
-  // Animate Dead and similar reanimation Auras enchant a creature card in a
-  // graveyard, chosen as the spell's target when it is cast (Rule 601.2c).
-  if (text.includes("enchant creature card in a graveyard")) return true;
-  // Resurrection / Raise Dead: "Return target creature card from ... graveyard".
-  // The player must choose which creature card in a graveyard to target.
-  if (text.includes("target creature card") && text.includes("graveyard")) return true;
-  return false;
+function specHasTargets(card) {
+  return (targetSpecOf(card).valid_targets || []).length > 0;
 }
 
-// "from your graveyard" (Resurrection, Raise Dead) restricts targeting to the
-// caster's own graveyard; "in a graveyard" (Animate Dead) allows any graveyard.
-function cardReanimatesOwnGraveyardOnly(card) {
-  if (!card || typeof card === "string") return false;
-  return (card.oracle_text || "").toLowerCase().includes("your graveyard");
-}
-
-function getTargetableGraveyardCreatures(state = currentState, restrictSeat = null) {
-  if (!state) return [];
-  const result = [];
-  for (const targetSeat of [0, 1]) {
-    if (Number.isInteger(restrictSeat) && targetSeat !== restrictSeat) continue;
-    const player = state.players?.[targetSeat];
-    if (!player || !Array.isArray(player.graveyard)) continue;
-    player.graveyard.forEach((card, index) => {
-      if (String(card.type || "").toLowerCase().includes("creature")) {
-        result.push({ targetSeat, index, cardName: card.name || "Creature" });
-      }
-    });
+// Index a backend `valid_targets` list into the lookup structures the UI uses to
+// validate clicks and highlight targets: permanent canvas keys ("seat-index"),
+// targetable player seats, top-first stack indices, and graveyard descriptors.
+function indexValidTargets(validTargets) {
+  const validKeys = new Set();
+  const validPlayerSeats = new Set();
+  const validStackIndices = new Set();
+  const validGraveyard = [];
+  for (const t of (validTargets || [])) {
+    if (!t) continue;
+    if (t.kind === "permanent" && t.key) validKeys.add(t.key);
+    else if (t.kind === "player" && Number.isInteger(t.seat)) validPlayerSeats.add(t.seat);
+    else if (t.kind === "stack" && Number.isInteger(t.stack_index)) validStackIndices.add(t.stack_index);
+    else if (t.kind === "graveyard") validGraveyard.push(t);
   }
-  return result;
+  return { validTargets: validTargets || [], validKeys, validPlayerSeats, validStackIndices, validGraveyard };
 }
+
+// Base fields (target kind + indexed legal-target sets) shared by every pending
+// target prompt. `validTargetsOverride` is used for a chosen modal mode, whose
+// legal targets live on the mode rather than the card's cast spec.
+function pendingTargetFields(card, validTargetsOverride = null) {
+  const vt = validTargetsOverride ?? (targetSpecOf(card).valid_targets || []);
+  return indexValidTargets(vt);
+}
+
+// --- Cast-time target predicates (read the hand card's cast spec) ---
+function cardRequiresTargetPlayer(card) { return specKind(card) === "player"; }
+function cardRequiresTargetLand(card) { return specKind(card) === "land"; }
+function cardRequiresTargetGraveyardCreature(card) { return specKind(card) === "graveyard_creature"; }
+function cardReanimatesOwnGraveyardOnly(card) { return !!targetSpecOf(card).own_graveyard_only; }
+function cardRequiresTargetCreature(card) {
+  const s = targetSpecOf(card);
+  return s.kind === "creature" && !s.optional;
+}
+// Clone / Copy Artifact: an *optional* copy choice, offered only when something is
+// available to copy (the backend leaves valid_targets empty otherwise).
+function cardOffersCopyCreatureChoice(card) {
+  const s = targetSpecOf(card);
+  return s.kind === "creature" && !!s.optional && (s.valid_targets || []).length > 0;
+}
+function cardOffersCopyArtifactChoice(card) {
+  const s = targetSpecOf(card);
+  return s.kind === "artifact" && !!s.optional && (s.valid_targets || []).length > 0;
+}
+function cardRequiresTargetPermanent(card) { return specKind(card) === "permanent"; }
+function cardRequiresTargetArtifact(card) {
+  const s = targetSpecOf(card);
+  return s.kind === "artifact" && !s.optional;
+}
+function cardRequiresTargetAny(card) { return specKind(card) === "any"; }
+function cardRequiresDividedDamage(card) { return specKind(card) === "divided"; }
+function cardRequiresTargetStackSpell(card) { return specKind(card) === "stack"; }
 
 function startCastGraveyardCreatureTargetPrompt(card, castAction = "cast") {
   const cardName = normalizeCardName(card);
   if (!cardName) return;
-  const viewerSeat = Number.isInteger(seat) ? seat : 0;
-  const casterSeat = castAction === "debug_cast_free_opponent" ? 1 - viewerSeat : viewerSeat;
-  const ownGraveyardOnly = cardReanimatesOwnGraveyardOnly(card);
-  const restrictSeat = ownGraveyardOnly ? casterSeat : null;
-  if (getTargetableGraveyardCreatures(currentState, restrictSeat).length === 0) {
+  const spec = targetSpecOf(card);
+  const ownGraveyardOnly = !!spec.own_graveyard_only;
+  if ((spec.valid_targets || []).length === 0) {
     clearPendingHandCast();
     updateActionHint(`No creature cards in ${ownGraveyardOnly ? "your" : "any"} graveyard for ${cardName}.`, true);
     return;
   }
-  pendingCastTarget = { card, cardName, targetKind: "graveyard_creature", castAction, restrictSeat };
+  pendingCastTarget = {
+    card, cardName, targetKind: "graveyard_creature", castAction,
+    ...pendingTargetFields(card),
+  };
   renderActivationPrompt();
   renderBoard(currentState);
   updateActionHint(
@@ -1381,171 +1284,19 @@ function startCastGraveyardCreatureTargetPrompt(card, castAction = "cast") {
   );
 }
 
-function cardRequiresTargetCreature(card) {
-  if (!card || typeof card === "string") return false;
-  const text = (card.oracle_text || "").toLowerCase();
-  if (text.includes("enchant creature card in a graveyard")) return false;
-  const lines = (card.oracle_text || "").split("\n");
-  const nonActivatedLines = lines.filter((line) => !/^\s*(\{[^}]+\}[,\s]*)+:/.test(line));
-  return nonActivatedLines.some((line) => {
-    const t = line.toLowerCase();
-    // "target creature card" refers to a graveyard card (Raise Dead, Resurrection),
-    // not a battlefield creature — not a battlefield target prompt.
-    if (t.includes("target creature card")) return false;
-    if (t.includes("enchant creature") || t.includes("enchant wall")) return true;
-    // Spells that destroy a target creature (incl. Walls): Terror, Tunnel, etc.
-    if (t.includes("destroy target") && (/\bcreature\b/.test(t) || /\bwall\b/.test(t))) return true;
-    // Pumps/keyword grants (Berserk, Giant Growth, Jump, Howl from Beyond).
-    if (t.includes("target creature gets") || t.includes("target creature gains")) return true;
-    // Righteousness: "Target blocking creature gets +7/+7." (The engine enforces
-    // that the chosen creature is actually blocking.)
-    if (t.includes("target blocking creature")) return true;
-    // Regenerate a target creature (Death Ward) — may be any player's creature.
-    if (t.includes("regenerate target creature")) return true;
-    // Exile a target creature (Swords to Plowshares).
-    if (t.includes("exile target creature")) return true;
-    // Direct damage to a target creature (Simulacrum).
-    if (t.includes("damage to target creature")) return true;
-    // Bounce: "Return target creature to its owner's hand" (Unsummon). Can target
-    // any player's creature, so the player must choose which.
-    if (t.includes("return target creature")) return true;
-    return false;
-  });
+// Whether a serialized stack item (at top-first array index `arrayIndex`) is a
+// legal target for the in-progress spell-target prompt — membership in the
+// backend-supplied set of legal stack indices.
+function isStackItemValidCastTarget(item, arrayIndex) {
+  if (!pendingCastTarget || pendingCastTarget.targetKind !== "stack") return false;
+  return !!pendingCastTarget.validStackIndices && pendingCastTarget.validStackIndices.has(Number(arrayIndex));
 }
 
-// Clone-style permanents that may "enter as a copy of any creature on the
-// battlefield". The copy is optional, so it's only a prompt when a creature
-// exists to copy; otherwise the spell is cast as-is.
-function cardOffersCopyCreatureChoice(card) {
-  if (!card || typeof card === "string") return false;
-  return (card.oracle_text || "")
-    .toLowerCase()
-    .includes("enter as a copy of any creature on the battlefield");
-}
-
-// Copy Artifact: "You may have this enchantment enter as a copy of any artifact
-// on the battlefield." The copy is optional, so it's only a prompt when an
-// artifact exists to copy; otherwise the enchantment enters as itself.
-function cardOffersCopyArtifactChoice(card) {
-  if (!card || typeof card === "string") return false;
-  return (card.oracle_text || "")
-    .toLowerCase()
-    .includes("enter as a copy of any artifact on the battlefield");
-}
-
-function cardRequiresTargetPermanent(card) {
-  if (!card || typeof card === "string") return false;
-  const lines = (card.oracle_text || "").split("\n");
-  const nonActivatedLines = lines.filter((line) => !/^\s*(\{[^}]+\}[,\s]*)+:/.test(line));
-  return nonActivatedLines.some((line) => {
-    const t = line.toLowerCase();
-    if (t.includes("target spell or permanent")) return true;
-    if (t.includes("target permanent") && !t.includes("target land") && !t.includes("target creature")) return true;
-    // Disenchant: "Destroy target artifact or enchantment" — either type, either side.
-    if (t.includes("destroy target artifact or enchantment")) return true;
-    // Power Leak: an Aura that enchants an enchantment (chosen on cast).
-    if (t.includes("enchant enchantment")) return true;
-    return false;
-  });
-}
-
-function cardRequiresTargetArtifact(card) {
-  if (!card || typeof card === "string") return false;
-  const lines = (card.oracle_text || "").split("\n");
-  const nonActivatedLines = lines.filter((line) => !/^\s*(\{[^}]+\}[,\s]*)+:/.test(line));
-  return nonActivatedLines.some((line) => {
-    const t = line.toLowerCase();
-    if (t.includes("enchant artifact")) return true;
-    // Shatter / Steal Artifact: "Destroy target artifact" / "Gain control of
-    // target artifact" — but not "artifact or enchantment" (handled as permanent).
-    if (t.includes("target artifact") && !t.includes("artifact or enchantment")) return true;
-    return false;
-  });
-}
-
-function cardRequiresTargetAny(card) {
-  if (!card || typeof card === "string") return false;
-  const lines = (card.oracle_text || "").split("\n");
-  // Exclude activated ability lines (format: "{cost}: effect") — those trigger on activation, not cast
-  const nonActivatedLines = lines.filter((line) => !/^\s*(\{[^}]+\}[,\s]*)+:/.test(line));
-  return nonActivatedLines.some((line) => line.toLowerCase().includes("any target"));
-}
-
-// Fireball-style spells: "X damage divided ... among any number of targets". The
-// player picks any number of targets (creatures and/or a player's face) and X,
-// and the spell costs {1} more per target beyond the first.
-function cardRequiresDividedDamage(card) {
-  if (!card || typeof card === "string") return false;
-  const t = (card.oracle_text || "").toLowerCase();
-  return t.includes("divided") && t.includes("among any number of targets");
-}
-
-// Spells that target another spell on the stack (Counterspell, Fork, the colored
-// Blasts, Spell Blast). The player chooses which spell on the stack to target.
-function cardRequiresTargetStackSpell(card) {
-  if (!card || typeof card === "string") return false;
-  const lines = (card.oracle_text || "").split("\n");
-  const nonActivatedLines = lines.filter((line) => !/^\s*(\{[^}]+\}[,\s]*)+:/.test(line));
-  return nonActivatedLines.some((line) => {
-    const t = line.toLowerCase();
-    return t.includes("counter target") || (t.includes("copy target") && t.includes("spell"));
-  });
-}
-
-// Color word the spell-target prompt is restricted to (Blue/Red Elemental Blast),
-// or null when any spell is a legal target.
-function stackSpellTargetColorFilter(card) {
-  const text = (card.oracle_text || "").toLowerCase();
-  const m = text.match(/counter target (\w+) spell/);
-  if (!m) return null;
-  return { blue: "U", red: "R", black: "B", green: "G", white: "W" }[m[1]] || null;
-}
-
-// True when the spell can only copy instants/sorceries (Fork).
-function stackSpellTargetInstantSorceryOnly(card) {
-  return (card.oracle_text || "").toLowerCase().includes("copy target instant or sorcery spell");
-}
-
-// Whether a serialized stack item is a legal target for the in-progress
-// spell-target cast prompt.
-function isStackItemValidCastTarget(item) {
-  if (!item || !pendingCastTarget || pendingCastTarget.targetKind !== "stack") return false;
-  if (item.type !== "spell") return false;  // only spells, not activated/triggered abilities
-  const card = pendingCastTarget.card;
-  const cardType = String(item.card?.type || "").toLowerCase();
-  if (stackSpellTargetInstantSorceryOnly(card) &&
-      !(cardType.includes("instant") || cardType.includes("sorcery"))) {
-    return false;
-  }
-  const colorFilter = stackSpellTargetColorFilter(card);
-  if (colorFilter) {
-    const colors = (item.card?.colors || []).map((c) => String(c).toUpperCase());
-    // Fall back to a color-identity check if explicit colors aren't serialized.
-    if (!colors.includes(colorFilter)) return false;
-  }
-  return true;
-}
-
-// Battlefield permanents that are legal targets for the in-progress cast prompt,
-// returned as "seat-permanentIndex" canvas keys. Covers every battlefield target
-// kind (creature/land/artifact/permanent/any) so the canvas can highlight them —
-// e.g. Control Magic ("Enchant creature") highlights every creature. Player-only
-// targets are highlighted on the life/name elements instead, not here.
-function getTargetablePermanentKeysForPrompt(state = currentState) {
-  if (!state || !pendingCastTarget) return [];
-  if (pendingCastTarget.targetKind === "player") return [];
-  const keys = [];
-  for (const targetSeat of [0, 1]) {
-    const player = state.players?.[targetSeat];
-    if (!player || !Array.isArray(player.battlefield)) continue;
-    for (const [permanentIndex, permanent] of player.battlefield.entries()) {
-      if (!permanent) continue;
-      if (isPendingCastTargetValidForCard(permanent, { targetSeat, zoneKind: "battlefield", permanentIndex })) {
-        keys.push(`${targetSeat}-${permanentIndex}`);
-      }
-    }
-  }
-  return keys;
+// Battlefield permanents that are legal targets for the in-progress prompt, as
+// "seat-index" canvas keys — straight from the backend's enumerated target list.
+function getTargetablePermanentKeysForPrompt() {
+  if (!pendingCastTarget || !pendingCastTarget.validKeys) return [];
+  return [...pendingCastTarget.validKeys];
 }
 
 function activatedAbilityTargetsSelf(card) {
@@ -1565,111 +1316,23 @@ function activatedAbilityTargetsSelf(card) {
   );
 }
 
-// Matches "target land" plus qualified variants like "target non-Swamp land"
-// (Cyclopean Tomb) — any run of adjective words between "target" and "land".
-const TARGET_LAND_RE = /target (?:[\w-]+ )*land\b/;
-
-function activatedAbilityRequiresTargetLand(card) {
-  if (!card || typeof card === "string") return false;
-  // Activated-ability lines (format: "{cost}: effect") that act on a target land,
-  // e.g. Gaea's Liege: "{T}: Target land becomes a Forest...", or Cyclopean Tomb:
-  // "{2}, {T}: Put a mire counter on target non-Swamp land...".
-  const activatedLines = (card.oracle_text || "").split("\n")
-    .filter((line) => /^\s*(\{[^}]+\}[,\s]*)+:/.test(line))
-    .map((line) => line.toLowerCase());
-  return activatedLines.some((line) => TARGET_LAND_RE.test(line));
-}
-
-function activatedAbilityTargetLandExcludesSwamp(card) {
-  // Cyclopean Tomb targets a "non-Swamp land" — Swamps aren't legal targets, so
-  // they shouldn't be offered as choices.
-  if (!card || typeof card === "string") return false;
-  const activatedLines = (card.oracle_text || "").split("\n")
-    .filter((line) => /^\s*(\{[^}]+\}[,\s]*)+:/.test(line))
-    .map((line) => line.toLowerCase());
-  return activatedLines.some((line) => TARGET_LAND_RE.test(line) && line.includes("non-swamp land"));
-}
-
-function activatedAbilityRequiresTargetCreature(card) {
-  if (!card || typeof card === "string") return false;
-  // Activated-ability lines that pick a target creature, e.g. Royal Assassin
-  // ("{T}: Destroy target tapped creature."), Nettling Imp ("{T}: Choose target
-  // non-Wall creature ..."), or Jade Monolith ("{1}: The next time a source of
-  // your choice would deal damage to target creature ..."). Pick which creature.
-  const activatedLines = (card.oracle_text || "").split("\n")
-    .filter((line) => /^\s*(\{[^}]+\}[,\s]*)+:/.test(line))
-    .map((line) => line.toLowerCase());
-  return activatedLines.some(
-    (line) =>
-      ((line.includes("destroy target") || line.includes("choose target")) &&
-        (/\bcreature\b/.test(line) || /\bwall\b/.test(line))) ||
-      line.includes("damage to target creature"),
-  );
-}
-
-// Color word a "destroy target [color] permanent" activated ability is restricted
-// to (Northern Paladin destroys a black permanent), or null when unrestricted.
+// --- Activated-ability target predicates (read the permanent's activation spec) ---
+function activatedAbilityRequiresTargetLand(card) { return specKind(card) === "land"; }
+function activatedAbilityTargetLandExcludesSwamp(card) { return !!targetSpecOf(card).exclude_swamp; }
+function activatedAbilityRequiresTargetCreature(card) { return specKind(card) === "creature"; }
+// Colour a "destroy target [colour] permanent" ability is restricted to, null for
+// an uncoloured "destroy target permanent", or undefined when there's no such
+// ability — preserving the original tri-state the callers depend on.
 function activatedAbilityDestroyPermanentColor(card) {
-  if (!card || typeof card === "string") return null;
-  const activatedLines = (card.oracle_text || "").split("\n")
-    .filter((line) => /^\s*(\{[^}]+\}[,\s]*)+:/.test(line))
-    .map((line) => line.toLowerCase());
-  for (const line of activatedLines) {
-    const m = line.match(/destroy target (white|blue|black|red|green)? ?permanent/);
-    if (m) {
-      return { blue: "U", red: "R", black: "B", green: "G", white: "W" }[m[1]] || null;
-    }
-  }
-  return undefined; // undefined → no such ability at all
+  const s = targetSpecOf(card);
+  if (s.kind !== "permanent") return undefined;
+  return s.color_filter ?? null;
 }
-
-function activatedAbilityRequiresTargetPermanent(card) {
-  // Northern Paladin: "{W}{W}, {T}: Destroy target black permanent."
-  return activatedAbilityDestroyPermanentColor(card) !== undefined;
-}
-
-function activatedAbilityRequiresTargetAny(card) {
-  if (!card || typeof card === "string") return false;
-  // Activated abilities that deal damage to "any target" (Orcish Artillery, Rod of
-  // Ruin, Prodigal Sorcerer). The player picks a creature or a player's face.
-  const activatedLines = (card.oracle_text || "").split("\n")
-    .filter((line) => /^\s*(\{[^}]+\}[,\s]*)+:/.test(line))
-    .map((line) => line.toLowerCase());
-  return activatedLines.some((line) => line.includes("any target"));
-}
-
-function activatedAbilityRequiresTargetPlayer(card) {
-  if (!card || typeof card === "string") return false;
-  // Activated abilities that look at a target player's hand (Glasses of Urza).
-  const activatedLines = (card.oracle_text || "").split("\n")
-    .filter((line) => /^\s*(\{[^}]+\}[,\s]*)+:/.test(line))
-    .map((line) => line.toLowerCase());
-  return activatedLines.some((line) => line.includes("target player"));
-}
-
-function activatedAbilityRequiresTargetCreatureGrant(card) {
-  if (!card || typeof card === "string") return false;
-  // Activated abilities that grant a keyword/pump to a target creature, e.g.
-  // Stone Giant: "{T}: Target creature you control ... gains flying ..." or
-  // Helm of Chatzuk: "{0}: Target creature gains banding until end of turn."
-  // (Destroy-target abilities are handled by activatedAbilityRequiresTargetCreature.)
-  const activatedLines = (card.oracle_text || "").split("\n")
-    .filter((line) => /^\s*(\{[^}]+\}[,\s]*)+:/.test(line))
-    .map((line) => line.toLowerCase());
-  return activatedLines.some(
-    (line) => line.includes("target creature") && (line.includes("gains") || line.includes("gets")),
-  );
-}
-
-function activatedAbilityRequiresTargetStackSpell(card) {
-  if (!card || typeof card === "string") return false;
-  // Activated abilities that counter a spell on the stack, e.g. Deathgrip:
-  // "{B}{B}: Counter target green spell." The player chooses which spell.
-  const activatedLines = (card.oracle_text || "").split("\n")
-    .filter((line) => /^\s*(\{[^}]+\}[,\s]*)+:/.test(line))
-    .map((line) => line.toLowerCase());
-  return activatedLines.some((line) => line.includes("counter target") && line.includes("spell"));
-}
+function activatedAbilityRequiresTargetPermanent(card) { return specKind(card) === "permanent"; }
+function activatedAbilityRequiresTargetAny(card) { return specKind(card) === "any"; }
+function activatedAbilityRequiresTargetPlayer(card) { return specKind(card) === "player"; }
+function activatedAbilityRequiresTargetCreatureGrant(card) { return specKind(card) === "creature"; }
+function activatedAbilityRequiresTargetStackSpell(card) { return specKind(card) === "stack"; }
 
 function cardRequiresManaColorChoice(card) {
   if (!card || typeof card === "string") return false;
@@ -1994,163 +1657,23 @@ function getOpponentDefaultTargetSeat(cardName) {
   return seat;
 }
 
-function getTargetableLandsForPrompt(state = currentState, forCard = null) {
-  if (!state) return [];
-
-  // An Aura whose text grants "can't be enchanted by other Auras" (Consecrate
-  // Land) makes the enchanted land an illegal target for any other Aura.
-  const castingAura = !!forCard && String(forCard.type || "").toLowerCase().includes("aura");
-
-  const result = [];
-  for (const targetSeat of [0, 1]) {
-    const player = state.players?.[targetSeat];
-    if (!player || !Array.isArray(player.battlefield)) continue;
-    for (const [permanentIndex, permanent] of player.battlefield.entries()) {
-      if (!permanent || !String(permanent.type || "").toLowerCase().includes("land")) continue;
-      if (castingAura && permanent.cant_be_enchanted_by_auras) continue;
-      result.push({
-        targetSeat,
-        permanentIndex,
-        cardName: permanent.name || "Land",
-        ownerName: player.name || `Seat ${targetSeat}`,
-      });
-    }
-  }
-  return result;
-}
-
-function getTargetableCreaturesForPrompt(state = currentState) {
-  if (!state) return [];
-  const result = [];
-  for (const targetSeat of [0, 1]) {
-    const player = state.players?.[targetSeat];
-    if (!player || !Array.isArray(player.battlefield)) continue;
-    for (const [permanentIndex, permanent] of player.battlefield.entries()) {
-      if (!permanent || !String(permanent.type || "").toLowerCase().includes("creature")) continue;
-      result.push({ targetSeat, permanentIndex, cardName: permanent.name || "Creature", ownerName: player.name || `Seat ${targetSeat}` });
-    }
-  }
-  return result;
-}
-
-function getTargetablePermanentsForPrompt(state = currentState) {
-  if (!state) return [];
-  const result = [];
-  for (const targetSeat of [0, 1]) {
-    const player = state.players?.[targetSeat];
-    if (!player || !Array.isArray(player.battlefield)) continue;
-    for (const [permanentIndex, permanent] of player.battlefield.entries()) {
-      if (!permanent) continue;
-      result.push({ targetSeat, permanentIndex, cardName: permanent.name || "Permanent", ownerName: player.name || `Seat ${targetSeat}` });
-    }
-  }
-  return result;
-}
-
-function getTargetableArtifactsForPrompt(state = currentState) {
-  if (!state) return [];
-  const result = [];
-  for (const targetSeat of [0, 1]) {
-    const player = state.players?.[targetSeat];
-    if (!player || !Array.isArray(player.battlefield)) continue;
-    for (const [permanentIndex, permanent] of player.battlefield.entries()) {
-      if (!permanent || !String(permanent.type || "").toLowerCase().includes("artifact")) continue;
-      result.push({ targetSeat, permanentIndex, cardName: permanent.name || "Artifact", ownerName: player.name || `Seat ${targetSeat}` });
-    }
-  }
-  return result;
-}
-
+// Whether a clicked target (battlefield permanent or player) is legal for the
+// in-progress prompt. Legality is the backend's: membership in the enumerated
+// valid-target sets attached to pendingCastTarget — no type/colour/text checks.
 function isPendingCastTargetValidForCard(card, { targetSeat = null, zoneKind = "", permanentIndex = null } = {}) {
   if (!pendingCastTarget) return false;
   if (!Number.isInteger(targetSeat)) return false;
   if (!zoneKind) return false;
 
+  // Player targets ("target player", "any target", divided face) are validated by
+  // seat against the backend's targetable-player set, regardless of which zone
+  // element (life pill / name) was clicked.
   if (pendingCastTarget.targetKind === "player") {
-    return zoneKind === "hand" || zoneKind === "battlefield";
+    return !!pendingCastTarget.validPlayerSeats && pendingCastTarget.validPlayerSeats.has(targetSeat);
   }
 
-  if (pendingCastTarget.targetKind === "land") {
-    if (zoneKind !== "battlefield") return false;
-    if (!Number.isInteger(permanentIndex)) return false;
-    if (!card || typeof card === "string") return false;
-    if (!String(card.type || "").toLowerCase().includes("land")) return false;
-    // A land that "can't be enchanted by other Auras" (Consecrate Land) is not a
-    // legal target for another Aura — but stays targetable by non-Aura effects.
-    if (
-      card.cant_be_enchanted_by_auras &&
-      String(pendingCastTarget.card?.type || "").toLowerCase().includes("aura")
-    ) {
-      return false;
-    }
-    // "target non-Swamp land" (Cyclopean Tomb): exclude printed Swamps and lands
-    // already turned into Swamps by a mire counter.
-    if (pendingCastTarget.excludeSwamp) {
-      const isSwamp =
-        String(card.type || "").toLowerCase().includes("swamp") ||
-        card.land_type_override === "swamp";
-      if (isSwamp) return false;
-    }
-    return true;
-  }
-
-  if (pendingCastTarget.targetKind === "creature") {
-    if (zoneKind !== "battlefield") return false;
-    if (!Number.isInteger(permanentIndex)) return false;
-    if (!card || typeof card === "string") return false;
-    if (!String(card.type || "").toLowerCase().includes("creature")) return false;
-    // Animate Wall ("Enchant Wall") may only target Walls, so only those glow.
-    const sourceText = String(pendingCastTarget.card?.oracle_text || "").toLowerCase();
-    if (sourceText.includes("enchant wall")) {
-      return String(card.type || "").toLowerCase().includes("wall");
-    }
-    return true;
-  }
-
-  if (pendingCastTarget.targetKind === "artifact") {
-    if (zoneKind !== "battlefield") return false;
-    if (!Number.isInteger(permanentIndex)) return false;
-    if (!card || typeof card === "string") return false;
-    return String(card.type || "").toLowerCase().includes("artifact");
-  }
-
-  if (pendingCastTarget.targetKind === "permanent") {
-    if (zoneKind !== "battlefield") return false;
-    if (!Number.isInteger(permanentIndex)) return false;
-    // Northern Paladin: "Destroy target black permanent." Only permanents of the
-    // required color are legal targets.
-    const colorFilter = pendingCastTarget.activationColorFilter;
-    if (colorFilter) {
-      if (!card || typeof card === "string") return false;
-      const colors = (card.colors || []).map((c) => String(c).toUpperCase());
-      return colors.includes(colorFilter);
-    }
-    // Feedback / Power Leak: "Enchant enchantment" — only enchantments are legal
-    // targets, so only those should glow (not every permanent).
-    const sourceText = String(pendingCastTarget.card?.oracle_text || "").toLowerCase();
-    if (sourceText.includes("enchant enchantment")) {
-      if (!card || typeof card === "string") return false;
-      return String(card.type || "").toLowerCase().includes("enchantment");
-    }
-    return true;
-  }
-
-  if (pendingCastTarget.targetKind === "any") {
-    if (zoneKind !== "battlefield") return false;
-    if (!Number.isInteger(permanentIndex)) return false;
-    if (!card || typeof card === "string") return false;
-    const type = String(card.type || "").toLowerCase();
-    return type.includes("creature") || type.includes("planeswalker");
-  }
-
-  if (pendingCastTarget.targetKind === "divided") {
-    if (zoneKind !== "battlefield") return false;
-    if (!Number.isInteger(permanentIndex)) return false;
-    if (!card || typeof card === "string") return false;
-    return String(card.type || "").toLowerCase().includes("creature");
-  }
-
-  return false;
+  if (zoneKind !== "battlefield" || !Number.isInteger(permanentIndex)) return false;
+  return !!pendingCastTarget.validKeys && pendingCastTarget.validKeys.has(`${targetSeat}-${permanentIndex}`);
 }
 
 function findCardInCurrentHand(cardName) {
@@ -3800,17 +3323,16 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
 
   // Activated abilities that destroy a target creature (e.g. Royal Assassin)
   // must let the player choose which creature before the ability is activated.
+  // The permanent's activation target_spec supplies the kind and legal targets.
   if (activatedAbilityRequiresTargetCreature(card)) {
-    if (getTargetableCreaturesForPrompt().length === 0) {
+    const fields = pendingTargetFields(card);
+    if (fields.validKeys.size === 0) {
       updateActionHint(`No valid creature targets in play for ${cardName}.`, true);
       return;
     }
     pendingCastTarget = {
-      card,
-      cardName,
-      targetKind: "creature",
-      castAction: "activate",
-      sourcePermanentIndex: permanentIndex,
+      card, cardName, targetKind: "creature", castAction: "activate",
+      sourcePermanentIndex: permanentIndex, ...fields,
     };
     renderActivationPrompt();
     updateActionHint(`Choose a creature target for ${cardName}'s ability.`);
@@ -3818,16 +3340,17 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   }
 
   // Abilities that destroy a target permanent of a given color (Northern Paladin:
-  // "Destroy target black permanent."): the player chooses which permanent, and
-  // only permanents of the required color are valid.
+  // "Destroy target black permanent."): the backend already restricts the legal
+  // targets to the required colour.
   if (activatedAbilityRequiresTargetPermanent(card)) {
+    const fields = pendingTargetFields(card);
+    if (fields.validKeys.size === 0) {
+      updateActionHint(`No valid permanent targets in play for ${cardName}.`, true);
+      return;
+    }
     pendingCastTarget = {
-      card,
-      cardName,
-      targetKind: "permanent",
-      castAction: "activate",
-      sourcePermanentIndex: permanentIndex,
-      activationColorFilter: activatedAbilityDestroyPermanentColor(card),
+      card, cardName, targetKind: "permanent", castAction: "activate",
+      sourcePermanentIndex: permanentIndex, ...fields,
     };
     renderActivationPrompt();
     renderBoard(currentState);
@@ -3835,24 +3358,18 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     return;
   }
 
-  // Abilities that untap a target land (Ley Druid, Gaea's Liege): the player
-  // chooses which land before the ability is activated.
+  // Abilities that untap/affect a target land (Ley Druid, Gaea's Liege, Cyclopean
+  // Tomb's non-Swamp land): the backend already excludes illegal lands.
   if (activatedAbilityRequiresTargetLand(card)) {
-    const excludeSwamp = activatedAbilityTargetLandExcludesSwamp(card);
-    if (excludeSwamp && getTargetableLandsForPrompt().every((l) => {
-      const perm = currentState?.players?.[l.targetSeat]?.battlefield?.[l.permanentIndex];
-      return perm && (String(perm.type || "").toLowerCase().includes("swamp") || perm.land_type_override === "swamp");
-    })) {
-      updateActionHint(`No valid non-Swamp land targets in play for ${cardName}.`, true);
+    const fields = pendingTargetFields(card);
+    if (fields.validKeys.size === 0) {
+      const noun = activatedAbilityTargetLandExcludesSwamp(card) ? "non-Swamp land" : "land";
+      updateActionHint(`No valid ${noun} targets in play for ${cardName}.`, true);
       return;
     }
     pendingCastTarget = {
-      card,
-      cardName,
-      targetKind: "land",
-      castAction: "activate",
-      sourcePermanentIndex: permanentIndex,
-      excludeSwamp,
+      card, cardName, targetKind: "land", castAction: "activate",
+      sourcePermanentIndex: permanentIndex, ...fields,
     };
     renderActivationPrompt();
     renderBoard(currentState);
@@ -3863,16 +3380,14 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   // Abilities that grant a keyword/pump to a target creature (Stone Giant,
   // Helm of Chatzuk): the player chooses which creature.
   if (activatedAbilityRequiresTargetCreatureGrant(card)) {
-    if (getTargetableCreaturesForPrompt().length === 0) {
+    const fields = pendingTargetFields(card);
+    if (fields.validKeys.size === 0) {
       updateActionHint(`No valid creature targets in play for ${cardName}.`, true);
       return;
     }
     pendingCastTarget = {
-      card,
-      cardName,
-      targetKind: "creature",
-      castAction: "activate",
-      sourcePermanentIndex: permanentIndex,
+      card, cardName, targetKind: "creature", castAction: "activate",
+      sourcePermanentIndex: permanentIndex, ...fields,
     };
     renderActivationPrompt();
     renderBoard(currentState);
@@ -3884,11 +3399,8 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   // chooses which spell.
   if (activatedAbilityRequiresTargetStackSpell(card)) {
     pendingCastTarget = {
-      card,
-      cardName,
-      targetKind: "stack",
-      castAction: "activate",
-      sourcePermanentIndex: permanentIndex,
+      card, cardName, targetKind: "stack", castAction: "activate",
+      sourcePermanentIndex: permanentIndex, ...pendingTargetFields(card),
     };
     renderActivationPrompt();
     renderBoard(currentState);
@@ -3900,11 +3412,8 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   // choose a creature or a player's face before the ability is activated.
   if (activatedAbilityRequiresTargetAny(card)) {
     pendingCastTarget = {
-      card,
-      cardName,
-      targetKind: "any",
-      castAction: "activate",
-      sourcePermanentIndex: permanentIndex,
+      card, cardName, targetKind: "any", castAction: "activate",
+      sourcePermanentIndex: permanentIndex, ...pendingTargetFields(card),
     };
     renderActivationPrompt();
     renderBoard(currentState);
@@ -3916,11 +3425,8 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   // hand to look at.
   if (activatedAbilityRequiresTargetPlayer(card)) {
     pendingCastTarget = {
-      card,
-      cardName,
-      targetKind: "player",
-      castAction: "activate",
-      sourcePermanentIndex: permanentIndex,
+      card, cardName, targetKind: "player", castAction: "activate",
+      sourcePermanentIndex: permanentIndex, ...pendingTargetFields(card),
     };
     renderActivationPrompt();
     updateActionHint(`Choose whose hand to look at with ${cardName}: click a player's life pill.`);
@@ -4075,30 +3581,30 @@ function chooseModalMode(index) {
   pendingCastModeIndex = index;
   renderActivationPrompt();
   updateActionHint(`${choice.cardName} — ${mode.label}.`);
-  dispatchModalCast(choice.card, choice.castAction, mode.target_kind);
+  dispatchModalCast(choice.card, choice.castAction, mode.target_kind, mode.valid_targets);
 }
 
 // Route a chosen mode to the targeting prompt its effect needs, or cast directly
 // when the mode targets nothing.
-function dispatchModalCast(card, castAction, targetKind) {
+function dispatchModalCast(card, castAction, targetKind, validTargets = null) {
   switch (targetKind) {
     case "creature":
-      startCastCreatureTargetPrompt(card, castAction);
+      startCastCreatureTargetPrompt(card, castAction, validTargets);
       return;
     case "artifact":
-      startCastArtifactTargetPrompt(card, castAction);
+      startCastArtifactTargetPrompt(card, castAction, validTargets);
       return;
     case "permanent":
-      startCastPermanentTargetPrompt(card, castAction);
+      startCastPermanentTargetPrompt(card, castAction, validTargets);
       return;
     case "stack":
-      startCastStackSpellPrompt(card, castAction);
+      startCastStackSpellPrompt(card, castAction, validTargets);
       return;
     case "any":
-      startCastAnyTargetPrompt(card, castAction);
+      startCastAnyTargetPrompt(card, castAction, validTargets);
       return;
     case "player":
-      startCastTargetPrompt(card, castAction);
+      startCastTargetPrompt(card, castAction, validTargets);
       return;
     default:
       break; // "none" — no target to choose.
@@ -4118,7 +3624,11 @@ function dispatchModalCast(card, castAction, targetKind) {
     });
 }
 
-function startCastTargetPrompt(card, castAction = "cast") {
+// Each start function takes the card and (for a chosen modal mode) the mode's
+// own legal-target list; otherwise it reads the card's cast target_spec. The
+// backend-supplied valid targets are indexed onto pendingCastTarget so clicks and
+// highlights validate against them — no client-side legality remains here.
+function startCastTargetPrompt(card, castAction = "cast", validTargets = null) {
   const cardName = normalizeCardName(card);
   if (!cardName) return;
 
@@ -4127,96 +3637,81 @@ function startCastTargetPrompt(card, castAction = "cast") {
     cardName,
     targetKind: "player",
     castAction,
+    ...pendingTargetFields(card, validTargets),
   };
   renderActivationPrompt();
   updateActionHint(`Choose a target for ${cardName}.`);
 }
 
-function startCastLandTargetPrompt(card, castAction = "cast") {
+function startCastLandTargetPrompt(card, castAction = "cast", validTargets = null) {
   const cardName = normalizeCardName(card);
   if (!cardName) return;
 
-  if (getTargetableLandsForPrompt(currentState, card).length === 0) {
+  const fields = pendingTargetFields(card, validTargets);
+  if (fields.validKeys.size === 0) {
     clearPendingHandCast();
     updateActionHint(`No valid land targets in play for ${cardName}.`, true);
     return;
   }
 
-  pendingCastTarget = {
-    card,
-    cardName,
-    targetKind: "land",
-    castAction,
-  };
+  pendingCastTarget = { card, cardName, targetKind: "land", castAction, ...fields };
   renderActivationPrompt();
   renderBoard(currentState);
   updateActionHint(`Choose a land target for ${cardName}.`);
 }
 
-function startCastCreatureTargetPrompt(card, castAction = "cast") {
+function startCastCreatureTargetPrompt(card, castAction = "cast", validTargets = null) {
   const cardName = normalizeCardName(card);
   if (!cardName) return;
 
-  if (getTargetableCreaturesForPrompt().length === 0) {
+  const fields = pendingTargetFields(card, validTargets);
+  if (fields.validKeys.size === 0) {
     clearPendingHandCast();
     updateActionHint(`No valid creature targets in play for ${cardName}.`, true);
     return;
   }
 
-  pendingCastTarget = {
-    card,
-    cardName,
-    targetKind: "creature",
-    castAction,
-  };
+  pendingCastTarget = { card, cardName, targetKind: "creature", castAction, ...fields };
   renderActivationPrompt();
   renderBoard(currentState);
   updateActionHint(`Choose a creature target for ${cardName}.`);
 }
 
-function startCastPermanentTargetPrompt(card, castAction = "cast") {
+function startCastPermanentTargetPrompt(card, castAction = "cast", validTargets = null) {
   const cardName = normalizeCardName(card);
   if (!cardName) return;
 
-  if (getTargetablePermanentsForPrompt().length === 0) {
+  const fields = pendingTargetFields(card, validTargets);
+  if (fields.validKeys.size === 0) {
     clearPendingHandCast();
     updateActionHint(`No valid permanent targets in play for ${cardName}.`, true);
     return;
   }
 
-  pendingCastTarget = {
-    card,
-    cardName,
-    targetKind: "permanent",
-    castAction,
-  };
+  pendingCastTarget = { card, cardName, targetKind: "permanent", castAction, ...fields };
   renderActivationPrompt();
   renderBoard(currentState);
   updateActionHint(`Choose a target permanent for ${cardName}.`);
 }
 
-function startCastArtifactTargetPrompt(card, castAction = "cast") {
+function startCastArtifactTargetPrompt(card, castAction = "cast", validTargets = null) {
   const cardName = normalizeCardName(card);
   if (!cardName) return;
 
-  if (getTargetableArtifactsForPrompt().length === 0) {
+  const fields = pendingTargetFields(card, validTargets);
+  if (fields.validKeys.size === 0) {
     clearPendingHandCast();
     updateActionHint(`No valid artifact targets in play for ${cardName}.`, true);
     return;
   }
 
-  pendingCastTarget = {
-    card,
-    cardName,
-    targetKind: "artifact",
-    castAction,
-  };
+  pendingCastTarget = { card, cardName, targetKind: "artifact", castAction, ...fields };
   renderActivationPrompt();
   renderBoard(currentState);
   updateActionHint(`Choose an artifact target for ${cardName}.`);
 }
 
-function startCastAnyTargetPrompt(card, castAction = "cast") {
+function startCastAnyTargetPrompt(card, castAction = "cast", validTargets = null) {
   const cardName = normalizeCardName(card);
   if (!cardName) return;
 
@@ -4225,6 +3720,7 @@ function startCastAnyTargetPrompt(card, castAction = "cast") {
     cardName,
     targetKind: "any",
     castAction,
+    ...pendingTargetFields(card, validTargets),
   };
   renderActivationPrompt();
   renderBoard(currentState);
@@ -4234,7 +3730,7 @@ function startCastAnyTargetPrompt(card, castAction = "cast") {
 // Fireball-style "divided among any number of targets" cast flow. The player
 // accumulates targets (creatures on one side, or a single player's face),
 // confirms, then chooses X — the extra targets are taxed {1} each.
-function startCastDividedPrompt(card, castAction = "cast") {
+function startCastDividedPrompt(card, castAction = "cast", validTargets = null) {
   const cardName = normalizeCardName(card);
   if (!cardName) return;
   pendingCastTarget = {
@@ -4244,6 +3740,7 @@ function startCastDividedPrompt(card, castAction = "cast") {
     targetKind: "divided",
     dividedTargets: [], // [{ seat, idx }] creatures, all on one seat
     dividedFaceSeat: null, // a player's face when chosen instead of creatures
+    ...pendingTargetFields(card, validTargets),
   };
   renderActivationPrompt();
   renderBoard(currentState);
@@ -4335,22 +3832,17 @@ function startCastDividedXPrompt(card, cardName, resolved, extraTargetTax, castA
   updateActionHint(`Choose X for ${cardName} — damage split among ${count} target${count === 1 ? "" : "s"}.`);
 }
 
-function startCastStackSpellPrompt(card, castAction = "cast") {
+function startCastStackSpellPrompt(card, castAction = "cast", validTargets = null) {
   const cardName = normalizeCardName(card);
   if (!cardName) return;
 
-  pendingCastTarget = {
-    card,
-    cardName,
-    targetKind: "stack",
-    castAction,
-  };
-  const validCount = (_currentStack || []).filter(isStackItemValidCastTarget).length;
-  if (validCount === 0) {
+  const fields = pendingTargetFields(card, validTargets);
+  if (fields.validStackIndices.size === 0) {
     clearPendingHandCast();
     updateActionHint(`No valid spell on the stack for ${cardName} to target.`, true);
     return;
   }
+  pendingCastTarget = { card, cardName, targetKind: "stack", castAction, ...fields };
   renderActivationPrompt();
   renderStack(currentState ? currentState.stack : _currentStack);
   updateActionHint(`Choose a spell on the stack for ${cardName} to target (glowing).`);
@@ -4483,6 +3975,12 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
 function handlePlayerTargetClick(targetSeat) {
   if (!pendingCastTarget) return;
   if (!Number.isInteger(targetSeat)) return;
+  // The backend enumerates which players are legal targets; reject a face the
+  // server didn't mark targetable.
+  if (pendingCastTarget.validPlayerSeats && !pendingCastTarget.validPlayerSeats.has(targetSeat)) {
+    updateActionHint("That player isn't a valid target for the pending spell.", true);
+    return;
+  }
   if (pendingCastTarget.targetKind === "divided") {
     setDividedFaceTarget(targetSeat);
     return;
@@ -4687,6 +4185,24 @@ async function fetchCardByName(cardName) {
   return cards.find((card) => String(card.name || "").toLowerCase() === lowered) || null;
 }
 
+// Catalog-search cards (the debug "cast for free" flow) carry no target spec —
+// it's session/caster-dependent. Fetch the backend-computed cast spec for the
+// given caster so the same targeting cascade hand cards use applies here too.
+async function attachCardTargetSpec(card, casterSeat) {
+  if (!card || !sessionId || !Number.isInteger(casterSeat)) return card;
+  try {
+    const url = `/api/sessions/${sessionId}/card_target_spec?card_name=${encodeURIComponent(card.name)}&seat=${casterSeat}`;
+    const resp = await fetch(url);
+    if (!resp.ok) return card;
+    const payload = await resp.json();
+    card.target_spec = payload.target_spec;
+    if (Array.isArray(payload.modes)) card.modes = payload.modes;
+  } catch {
+    /* leave the card without a spec — the cascade falls through to a no-target cast */
+  }
+  return card;
+}
+
 async function addDebugCardToHand() {
   if (!sessionId || seat === null) {
     updateDebugStatus("Create or join a session first.", "error");
@@ -4722,7 +4238,7 @@ async function castDebugCardForFree() {
     return;
   }
 
-  const card = await fetchCardByName(cardName);
+  const card = await attachCardTargetSpec(await fetchCardByName(cardName), seat);
   const resolvedCardName = normalizeCardName(card) || cardName;
   pendingCastModeIndex = null;
 
@@ -4749,13 +4265,13 @@ async function castDebugCardForFree() {
     return;
   }
 
-  if (card && cardOffersCopyCreatureChoice(card) && getTargetableCreaturesForPrompt().length > 0) {
+  if (card && cardOffersCopyCreatureChoice(card)) {
     startCastCreatureTargetPrompt(card, "debug_cast_free");
     updateDebugStatus(`Choose a creature for ${resolvedCardName} to copy.`, "success");
     return;
   }
 
-  if (card && cardOffersCopyArtifactChoice(card) && getTargetableArtifactsForPrompt().length > 0) {
+  if (card && cardOffersCopyArtifactChoice(card)) {
     startCastArtifactTargetPrompt(card, "debug_cast_free");
     updateDebugStatus(`Choose an artifact for ${resolvedCardName} to copy.`, "success");
     return;
@@ -4822,7 +4338,9 @@ async function castDebugCardForFreeAsOpponent() {
     return;
   }
 
-  const card = await fetchCardByName(cardName);
+  // The opponent variant casts as the other seat, so enumerate targets from that
+  // caster's perspective.
+  const card = await attachCardTargetSpec(await fetchCardByName(cardName), 1 - seat);
   const resolvedCardName = normalizeCardName(card) || cardName;
   pendingCastModeIndex = null;
 
@@ -4849,13 +4367,13 @@ async function castDebugCardForFreeAsOpponent() {
     return;
   }
 
-  if (card && cardOffersCopyCreatureChoice(card) && getTargetableCreaturesForPrompt().length > 0) {
+  if (card && cardOffersCopyCreatureChoice(card)) {
     startCastCreatureTargetPrompt(card, "debug_cast_free_opponent");
     updateDebugStatus(`Choose a creature for ${resolvedCardName} to copy (as opponent).`, "success");
     return;
   }
 
-  if (card && cardOffersCopyArtifactChoice(card) && getTargetableArtifactsForPrompt().length > 0) {
+  if (card && cardOffersCopyArtifactChoice(card)) {
     startCastArtifactTargetPrompt(card, "debug_cast_free_opponent");
     updateDebugStatus(`Choose an artifact for ${resolvedCardName} to copy (as opponent).`, "success");
     return;
@@ -5327,16 +4845,12 @@ function createCardElement(card, options = {}) {
         }
 
         // Activated abilities that act on a target land (e.g. Gaea's Liege)
-        // let the player pick which land in play to affect.
+        // let the player pick which land in play to affect. The backend supplies
+        // the legal lands (already excluding Swamps for Cyclopean Tomb, etc.).
         if (activatedAbilityRequiresTargetLand(card)) {
-          const excludeSwamp = activatedAbilityTargetLandExcludesSwamp(card);
-          const validLands = getTargetableLandsForPrompt().filter((l) => {
-            if (!excludeSwamp) return true;
-            const perm = currentState?.players?.[l.targetSeat]?.battlefield?.[l.permanentIndex];
-            return perm && !(String(perm.type || "").toLowerCase().includes("swamp") || perm.land_type_override === "swamp");
-          });
-          if (validLands.length === 0) {
-            const noun = excludeSwamp ? "non-Swamp land" : "land";
+          const fields = pendingTargetFields(card);
+          if (fields.validKeys.size === 0) {
+            const noun = activatedAbilityTargetLandExcludesSwamp(card) ? "non-Swamp land" : "land";
             updateActionHint(`No valid ${noun} targets in play for ${cardName}.`, true);
             return;
           }
@@ -5346,7 +4860,7 @@ function createCardElement(card, options = {}) {
             targetKind: "land",
             castAction: "activate",
             sourcePermanentIndex: permanentIndex,
-            excludeSwamp,
+            ...fields,
           };
           renderActivationPrompt();
           updateActionHint(`Choose a target land for ${cardName}'s ability.`);
@@ -5434,12 +4948,12 @@ function createCardElement(card, options = {}) {
           return;
         }
 
-        if (cardOffersCopyCreatureChoice(card) && getTargetableCreaturesForPrompt().length > 0) {
+        if (cardOffersCopyCreatureChoice(card)) {
           startCastCreatureTargetPrompt(card);
           return;
         }
 
-        if (cardOffersCopyArtifactChoice(card) && getTargetableArtifactsForPrompt().length > 0) {
+        if (cardOffersCopyArtifactChoice(card)) {
           startCastArtifactTargetPrompt(card);
           return;
         }
@@ -5694,17 +5208,19 @@ function renderZoneCards(containerId, cards, { zoneSeat = null, zoneKind = "" } 
     pendingCastTarget &&
     pendingCastTarget.targetKind === "graveyard_creature" &&
     zoneKind === "graveyard" &&
-    Number.isInteger(zoneSeat) &&
-    // For "your graveyard" cards (Resurrection, Raise Dead) only the caster's own
-    // graveyard cards are valid targets; don't highlight the opponent's.
-    (!Number.isInteger(pendingCastTarget.restrictSeat) ||
-      pendingCastTarget.restrictSeat === zoneSeat);
+    Number.isInteger(zoneSeat);
+  // The backend enumerates the legal graveyard targets (already restricting to the
+  // caster's own graveyard for "from your graveyard" cards); a card is targetable
+  // only if its (seat, index) appears there.
+  const validGraveyard = pendingCastTarget?.validGraveyard || [];
+  const isValidGraveyardTarget = (index) =>
+    validGraveyard.some((t) => t.seat === zoneSeat && t.index === index);
   // Render with the most recently added card (end of the array) leftmost,
   // while keeping each card's original index for targeting clicks.
   for (let index = cards.length - 1; index >= 0; index--) {
     const card = cards[index];
     const el = createCardElement(card, { compact: true, showManaCost: false });
-    if (graveyardTargeting && String(card.type || "").toLowerCase().includes("creature")) {
+    if (graveyardTargeting && isValidGraveyardTarget(index)) {
       el.classList.add("targeting-valid");
       el.style.cursor = "pointer";
       el.addEventListener("click", () => resolvePendingCastTarget(zoneSeat, index));
@@ -5943,7 +5459,7 @@ function selectStackSpellTarget(arrayIndex) {
   const pending = pendingCastTarget;
   if (!pending || pending.targetKind !== "stack") return;
   const item = _currentStack[arrayIndex];
-  if (!item || !isStackItemValidCastTarget(item)) return;
+  if (!item || !isStackItemValidCastTarget(item, arrayIndex)) return;
 
   pendingCastTarget = null;
   renderActivationPrompt();
@@ -6041,7 +5557,7 @@ function renderStack(stack) {
     if (choosingStackTarget) {
       // While targeting a spell on the stack (Counterspell, Fork), clicking a
       // legal spell chooses it as the target instead of toggling a hold.
-      const valid = isStackItemValidCastTarget(item);
+      const valid = isStackItemValidCastTarget(item, arrayIndex);
       box.classList.toggle("stack-targetable", valid);
       if (valid) {
         box.addEventListener("click", () => selectStackSpellTarget(arrayIndex));
@@ -6680,18 +6196,18 @@ function renderBoard(state) {
     }
     battlefieldCanvas.setSelectedKeys([...selfSelectedKeys, ...allSelectedKeys]);
 
-    battlefieldCanvas.setTargetingKeys(getTargetablePermanentKeysForPrompt(state));
+    battlefieldCanvas.setTargetingKeys(getTargetablePermanentKeysForPrompt());
   }
 
-  const highlightPlayerFaces = !!(
-    pendingCastTarget &&
-    (pendingCastTarget.targetKind === "any" ||
-      pendingCastTarget.targetKind === "player" ||
-      pendingCastTarget.targetKind === "divided")
-  );
-  for (const elementId of ["selfLife", "oppLife", "selfName", "oppName"]) {
-    q(elementId)?.classList.toggle("targeting-valid", highlightPlayerFaces);
-  }
+  // Highlight only the player faces the backend marked as legal targets for the
+  // pending spell/ability (each seat appears in validPlayerSeats or it doesn't).
+  const validPlayerSeats = pendingCastTarget?.validPlayerSeats;
+  const highlightSelfFace = !!(validPlayerSeats && validPlayerSeats.has(viewerSeat));
+  const highlightOppFace = !!(validPlayerSeats && validPlayerSeats.has(oppSeat));
+  q("selfLife")?.classList.toggle("targeting-valid", highlightSelfFace);
+  q("selfName")?.classList.toggle("targeting-valid", highlightSelfFace);
+  q("oppLife")?.classList.toggle("targeting-valid", highlightOppFace);
+  q("oppName")?.classList.toggle("targeting-valid", highlightOppFace);
 
   q("selfDeckCount").textContent = me.library_count;
   q("selfGraveCount").textContent = me.graveyard.length;
@@ -7034,8 +6550,8 @@ async function handleHandCardDropOnBattlefield({ event, targetSeat, targetItem }
       if (card && cardRequiresTargetGraveyardCreature(card)) { startCastGraveyardCreatureTargetPrompt(card); return; }
       if (card && cardRequiresTargetLand(card)) { startCastLandTargetPrompt(card); return; }
       if (card && cardRequiresTargetArtifact(card)) { startCastArtifactTargetPrompt(card); return; }
-      if (card && cardOffersCopyCreatureChoice(card) && getTargetableCreaturesForPrompt().length > 0) { startCastCreatureTargetPrompt(card); return; }
-      if (card && cardOffersCopyArtifactChoice(card) && getTargetableArtifactsForPrompt().length > 0) { startCastArtifactTargetPrompt(card); return; }
+      if (card && cardOffersCopyCreatureChoice(card)) { startCastCreatureTargetPrompt(card); return; }
+      if (card && cardOffersCopyArtifactChoice(card)) { startCastArtifactTargetPrompt(card); return; }
       if (card && cardRequiresTargetCreature(card)) { startCastCreatureTargetPrompt(card); return; }
       if (card && cardRequiresTargetPermanent(card)) { startCastPermanentTargetPrompt(card); return; }
       if (card && cardRequiresTargetStackSpell(card)) { startCastStackSpellPrompt(card); return; }
