@@ -5,6 +5,11 @@
       "status": "pass",
       "updated_at": 1782005045.2563467
     },
+    "Animate Wall": {
+      "reason": "I shouldn't be able to continue attacking with the defender after this enchantment has been removed",
+      "status": "fail",
+      "updated_at": 1782542027.5600104
+    },
     "Ankh of Mishra": {
       "reason": "",
       "status": "pass",
@@ -15,6 +20,11 @@
       "status": "pass",
       "updated_at": 1781475506.7830067
     },
+    "Bad Moon": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782543633.8458672
+    },
     "Badlands": {
       "reason": "",
       "status": "pass",
@@ -24,6 +34,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781843411.049817
+    },
+    "Benalish Hero": {
+      "reason": "When creatures are banded together it should show a visual purple line connecting the banded cards and when I hover over them it should highlight all the cards that are part of that band in purple",
+      "status": "fail",
+      "updated_at": 1782543925.2056103
     },
     "Birds of Paradise": {
       "reason": "",
@@ -65,10 +80,30 @@
       "status": "pass",
       "updated_at": 1781761307.1950977
     },
+    "Bog Wraith": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782540614.1288104
+    },
     "Braingeyser": {
       "reason": "",
       "status": "pass",
       "updated_at": 1782020824.069998
+    },
+    "Burrowing": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782542361.3458302
+    },
+    "Camouflage": {
+      "reason": "Card doesn't work",
+      "status": "fail",
+      "updated_at": 1782544496.2789314
+    },
+    "Castle": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782544295.8578253
     },
     "Celestial Prism": {
       "reason": "",
@@ -84,6 +119,11 @@
       "reason": "It doesn't let me choose a source.",
       "status": "fail",
       "updated_at": 1782358013.6575308
+    },
+    "Circle of Protection: White": {
+      "reason": "Doesn't let me choose a source",
+      "status": "fail",
+      "updated_at": 1782543600.7480133
     },
     "Clockwork Beast": {
       "reason": "",
@@ -130,6 +170,11 @@
       "status": "pass",
       "updated_at": 1782019848.6426058
     },
+    "Crusade": {
+      "reason": "Doesn't buff creatures that were turned to white with purelace",
+      "status": "fail",
+      "updated_at": 1782542612.9388998
+    },
     "Cursed Land": {
       "reason": "",
       "status": "pass",
@@ -160,6 +205,11 @@
       "status": "pass",
       "updated_at": 1782105511.172316
     },
+    "Deathlace": {
+      "reason": "Same issue as purelace",
+      "status": "fail",
+      "updated_at": 1782542790.084675
+    },
     "Dingus Egg": {
       "reason": "",
       "status": "pass",
@@ -169,6 +219,16 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782364062.7009046
+    },
+    "Disrupting Scepter": {
+      "reason": "The discard a card prompt should let me click a card in hand. Don't list the cards as buttons in the prompt",
+      "status": "fail",
+      "updated_at": 1782543777.8573432
+    },
+    "Drain Power": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782543981.2815964
     },
     "Drudge Skeletons": {
       "reason": "",
@@ -195,6 +255,16 @@
       "status": "pass",
       "updated_at": 1782022287.5750093
     },
+    "False Orders": {
+      "reason": "Didn't let me choose a target",
+      "status": "fail",
+      "updated_at": 1782544428.5579176
+    },
+    "Farmstead": {
+      "reason": "I didn't get a prompt on my upkeep",
+      "status": "fail",
+      "updated_at": 1782542988.830896
+    },
     "Feedback": {
       "reason": "",
       "status": "pass",
@@ -220,6 +290,11 @@
       "status": "pass",
       "updated_at": 1781455588.34887
     },
+    "Force of Nature": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782540724.534931
+    },
     "Forest": {
       "reason": "",
       "status": "pass",
@@ -229,6 +304,16 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782358389.1359606
+    },
+    "Fungusaur": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782543228.3974519
+    },
+    "Gaea's Liege": {
+      "reason": "When it dies, the lands that were turned into forests by this card should no longer have that effect",
+      "status": "fail",
+      "updated_at": 1782541879.2802114
     },
     "Gauntlet of Might": {
       "reason": "",
@@ -244,6 +329,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782178605.8299546
+    },
+    "Glasses of Urza": {
+      "reason": "The window for looking at my opponent's hand should also have a card preview when I hover over a card",
+      "status": "fail",
+      "updated_at": 1782542896.9600568
     },
     "Goblin Balloon Brigade": {
       "reason": "",
@@ -270,6 +360,11 @@
       "status": "pass",
       "updated_at": 1781461708.2940688
     },
+    "Hill Giant": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782544666.9248512
+    },
     "Holy Armor": {
       "reason": "",
       "status": "pass",
@@ -279,6 +374,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782086222.825565
+    },
+    "Howl from Beyond": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782544620.617502
     },
     "Howling Mine": {
       "reason": "",
@@ -305,10 +405,20 @@
       "status": "fail",
       "updated_at": 1782358476.291859
     },
+    "Ironroot Treefolk": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782543112.5394018
+    },
     "Island": {
       "reason": "",
       "status": "pass",
       "updated_at": 1781378704.6242044
+    },
+    "Ivory Cup": {
+      "reason": "I should get a prompt when a white spell is cast",
+      "status": "fail",
+      "updated_at": 1782543390.2063448
     },
     "Jayemdae Tome": {
       "reason": "",
@@ -340,6 +450,11 @@
       "status": "pass",
       "updated_at": 1782085905.4015296
     },
+    "Llanowar Elves": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782544325.311722
+    },
     "Lure": {
       "reason": "When Lure is attached to an opponent (AI) creature it skips my block step entirely",
       "status": "fail",
@@ -359,6 +474,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781585587.1657355
+    },
+    "Mana Vault": {
+      "reason": "Missing prompt for \"At the beginning of your upkeep, you may pay {4}. If you do, untap this artifact.\"",
+      "status": "fail",
+      "updated_at": 1782542527.1944366
     },
     "Manabarbs": {
       "reason": "",
@@ -390,10 +510,25 @@
       "status": "pass",
       "updated_at": 1782357665.8624346
     },
+    "Mox Pearl": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782542999.1891875
+    },
     "Mox Ruby": {
       "reason": "",
       "status": "pass",
       "updated_at": 1782023053.8073714
+    },
+    "Mox Sapphire": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782540531.3900843
+    },
+    "Natural Selection": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782542402.284975
     },
     "Nether Shadow": {
       "reason": "",
@@ -410,6 +545,11 @@
       "status": "pass",
       "updated_at": 1782107544.2623038
     },
+    "Obsianus Golem": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782542915.6789494
+    },
     "Orcish Artillery": {
       "reason": "",
       "status": "pass",
@@ -424,6 +564,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781757064.6528566
+    },
+    "Phantasmal Terrain": {
+      "reason": "I should get to choose the basic land type",
+      "status": "fail",
+      "updated_at": 1782541395.7210343
     },
     "Phantom Monster": {
       "reason": "",
@@ -460,6 +605,11 @@
       "status": "pass",
       "updated_at": 1781410771.1947188
     },
+    "Purelace": {
+      "reason": "Should be able to target both permanents and spells",
+      "status": "fail",
+      "updated_at": 1782540832.7749786
+    },
     "Raise Dead": {
       "reason": "",
       "status": "pass",
@@ -480,6 +630,11 @@
       "status": "pass",
       "updated_at": 1782019199.2218683
     },
+    "Resurrection": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782541428.6675277
+    },
     "Roc of Kher Ridges": {
       "reason": "",
       "status": "pass",
@@ -494,6 +649,11 @@
       "reason": "I should only be able to target tapped creatures. Only highlight tapped creatures and error if I click an untapped creature",
       "status": "fail",
       "updated_at": 1782358340.972344
+    },
+    "Sacrifice": {
+      "reason": "I should get to choose which of my creatures to sacrifice",
+      "status": "fail",
+      "updated_at": 1782542220.7315862
     },
     "Samite Healer": {
       "reason": "",
@@ -520,10 +680,20 @@
       "status": "pass",
       "updated_at": 1782086581.6832159
     },
+    "Sengir Vampire": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782542731.2588892
+    },
     "Serra Angel": {
       "reason": "",
       "status": "pass",
       "updated_at": 1782016549.60368
+    },
+    "Shanodin Dryads": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782544682.857972
     },
     "Shatter": {
       "reason": "",
@@ -545,10 +715,25 @@
       "status": "pass",
       "updated_at": 1782364012.382203
     },
+    "Smoke": {
+      "reason": "I should get a prompt to choose which creature to untap",
+      "status": "fail",
+      "updated_at": 1782540995.384977
+    },
     "Stasis": {
       "reason": "",
       "status": "pass",
       "updated_at": 1781410889.892921
+    },
+    "Stone Giant": {
+      "reason": "I should not be able to select invalid targets",
+      "status": "fail",
+      "updated_at": 1782543309.602218
+    },
+    "Stone Rain": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782542113.9793565
     },
     "Stream of Life": {
       "reason": "",
@@ -560,10 +745,20 @@
       "status": "pass",
       "updated_at": 1782021420.3454254
     },
+    "Terror": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782543411.8995888
+    },
     "The Hive": {
       "reason": "",
       "status": "pass",
       "updated_at": 1781670012.8092935
+    },
+    "Throne of Bone": {
+      "reason": "Optional Triggered abilities should go on the stack",
+      "status": "fail",
+      "updated_at": 1782541624.7543035
     },
     "Time Walk": {
       "reason": "",
@@ -609,6 +804,16 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782190359.588932
+    },
+    "Unsummon": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782544634.319353
+    },
+    "Uthden Troll": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782544338.6868098
     },
     "Vesuvan Doppelganger": {
       "reason": "I copied lord of atlantis but didn't get the merfolk effects even though it becomes a merfolk itself",
@@ -675,10 +880,25 @@
       "status": "pass",
       "updated_at": 1781761323.133161
     },
+    "Wild Growth": {
+      "reason": "Same problem as animate wall. After removing the enchantment I should no longer get the bonus mana",
+      "status": "fail",
+      "updated_at": 1782542099.028434
+    },
     "Will-o'-the-Wisp": {
       "reason": "",
       "status": "pass",
       "updated_at": 1782178493.830383
+    },
+    "Winter Orb": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782544251.2775307
+    },
+    "Word of Command": {
+      "reason": "Card doesn't work",
+      "status": "fail",
+      "updated_at": 1782544567.9407024
     },
     "Wrath of God": {
       "reason": "",

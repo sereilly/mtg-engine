@@ -3,9 +3,9 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **290**
-- Passed: **131**
-- Failed: **6**
-- Untested: **153**
+- Passed: **154**
+- Failed: **27**
+- Untested: **109**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -13,16 +13,16 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Ancestral Recall | ✅ pass |  |
 | Animate Artifact | ⬜ untested |  |
 | Animate Dead | ⬜ untested |  |
-| Animate Wall | ⬜ untested |  |
+| Animate Wall | ❌ fail | I shouldn't be able to continue attacking with the defender after this enchantment has been removed |
 | Ankh of Mishra | ✅ pass |  |
 | Armageddon | ✅ pass |  |
 | Aspect of Wolf | ⬜ untested |  |
-| Bad Moon | ⬜ untested |  |
+| Bad Moon | ✅ pass |  |
 | Badlands | ✅ pass |  |
 | Balance | ⬜ untested |  |
 | Basalt Monolith | ✅ pass |  |
 | Bayou | ⬜ untested |  |
-| Benalish Hero | ⬜ untested |  |
+| Benalish Hero | ❌ fail | When creatures are banded together it should show a visual purple line connecting the banded cards and when I hover over them it should highlight all the cards that are part of that band in purple |
 | Berserk | ⬜ untested |  |
 | Birds of Paradise | ✅ pass |  |
 | Black Knight | ✅ pass |  |
@@ -33,11 +33,11 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Blessing | ✅ pass |  |
 | Blue Elemental Blast | ✅ pass |  |
 | Blue Ward | ✅ pass |  |
-| Bog Wraith | ⬜ untested |  |
+| Bog Wraith | ✅ pass |  |
 | Braingeyser | ✅ pass |  |
-| Burrowing | ⬜ untested |  |
-| Camouflage | ⬜ untested |  |
-| Castle | ⬜ untested |  |
+| Burrowing | ✅ pass |  |
+| Camouflage | ❌ fail | Card doesn't work |
+| Castle | ✅ pass |  |
 | Celestial Prism | ✅ pass |  |
 | Channel | ⬜ untested |  |
 | Chaos Orb | ✅ pass |  |
@@ -45,7 +45,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Circle of Protection: Blue | ⬜ untested |  |
 | Circle of Protection: Green | ⬜ untested |  |
 | Circle of Protection: Red | ❌ fail | It doesn't let me choose a source. |
-| Circle of Protection: White | ⬜ untested |  |
+| Circle of Protection: White | ❌ fail | Doesn't let me choose a source |
 | Clockwork Beast | ✅ pass |  |
 | Clone | ✅ pass |  |
 | Cockatrice | ⬜ untested |  |
@@ -59,7 +59,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Counterspell | ✅ pass |  |
 | Craw Wurm | ✅ pass |  |
 | Creature Bond | ✅ pass |  |
-| Crusade | ⬜ untested |  |
+| Crusade | ❌ fail | Doesn't buff creatures that were turned to white with purelace |
 | Crystal Rod | ⬜ untested |  |
 | Cursed Land | ✅ pass |  |
 | Cyclopean Tomb | ✅ pass |  |
@@ -67,17 +67,17 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Darkpact | ✅ pass |  |
 | Death Ward | ✅ pass |  |
 | Deathgrip | ✅ pass |  |
-| Deathlace | ⬜ untested |  |
+| Deathlace | ❌ fail | Same issue as purelace |
 | Demonic Attorney | ⬜ untested |  |
 | Demonic Hordes | ⬜ untested |  |
 | Demonic Tutor | ⬜ untested |  |
 | Dingus Egg | ✅ pass |  |
 | Disenchant | ✅ pass |  |
 | Disintegrate | ⬜ untested |  |
-| Disrupting Scepter | ⬜ untested |  |
+| Disrupting Scepter | ❌ fail | The discard a card prompt should let me click a card in hand. Don't list the cards as buttons in the prompt |
 | Dragon Whelp | ⬜ untested |  |
 | Drain Life | ⬜ untested |  |
-| Drain Power | ⬜ untested |  |
+| Drain Power | ✅ pass |  |
 | Drudge Skeletons | ✅ pass |  |
 | Dwarven Demolition Team | ⬜ untested |  |
 | Dwarven Warriors | ⬜ untested |  |
@@ -86,8 +86,8 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Earthquake | ✅ pass |  |
 | Elvish Archers | ✅ pass |  |
 | Evil Presence | ✅ pass |  |
-| False Orders | ⬜ untested |  |
-| Farmstead | ⬜ untested |  |
+| False Orders | ❌ fail | Didn't let me choose a target |
+| Farmstead | ❌ fail | I didn't get a prompt on my upkeep |
 | Fastbond | ⬜ untested |  |
 | Fear | ⬜ untested |  |
 | Feedback | ✅ pass |  |
@@ -97,17 +97,17 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Flashfires | ✅ pass |  |
 | Flight | ⬜ untested |  |
 | Fog | ✅ pass |  |
-| Force of Nature | ⬜ untested |  |
+| Force of Nature | ✅ pass |  |
 | Forcefield | ⬜ untested |  |
 | Forest | ✅ pass |  |
 | Fork | ⬜ untested |  |
 | Frozen Shade | ✅ pass |  |
-| Fungusaur | ⬜ untested |  |
-| Gaea's Liege | ⬜ untested |  |
+| Fungusaur | ✅ pass |  |
+| Gaea's Liege | ❌ fail | When it dies, the lands that were turned into forests by this card should no longer have that effect |
 | Gauntlet of Might | ✅ pass |  |
 | Giant Growth | ✅ pass |  |
 | Giant Spider | ✅ pass |  |
-| Glasses of Urza | ⬜ untested |  |
+| Glasses of Urza | ❌ fail | The window for looking at my opponent's hand should also have a card preview when I hover over a card |
 | Gloom | ⬜ untested |  |
 | Goblin Balloon Brigade | ✅ pass |  |
 | Goblin King | ⬜ untested |  |
@@ -118,10 +118,10 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Guardian Angel | ⬜ untested |  |
 | Healing Salve | ✅ pass |  |
 | Helm of Chatzuk | ⬜ untested |  |
-| Hill Giant | ⬜ untested |  |
+| Hill Giant | ✅ pass |  |
 | Holy Armor | ✅ pass |  |
 | Holy Strength | ✅ pass |  |
-| Howl from Beyond | ⬜ untested |  |
+| Howl from Beyond | ✅ pass |  |
 | Howling Mine | ✅ pass |  |
 | Hurloon Minotaur | ✅ pass |  |
 | Hurricane | ✅ pass |  |
@@ -133,10 +133,10 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Invisibility | ⬜ untested |  |
 | Iron Star | ⬜ untested |  |
 | Ironclaw Orcs | ⬜ untested |  |
-| Ironroot Treefolk | ⬜ untested |  |
+| Ironroot Treefolk | ✅ pass |  |
 | Island | ✅ pass |  |
 | Island Sanctuary | ⬜ untested |  |
-| Ivory Cup | ⬜ untested |  |
+| Ivory Cup | ❌ fail | I should get a prompt when a white spell is cast |
 | Jade Monolith | ⬜ untested |  |
 | Jade Statue | ⬜ untested |  |
 | Jayemdae Tome | ✅ pass |  |
@@ -157,7 +157,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Living Artifact | ⬜ untested |  |
 | Living Lands | ⬜ untested |  |
 | Living Wall | ✅ pass |  |
-| Llanowar Elves | ⬜ untested |  |
+| Llanowar Elves | ✅ pass |  |
 | Lord of Atlantis | ⬜ untested |  |
 | Lord of the Pit | ⬜ untested |  |
 | Lure | ❌ fail | When Lure is attached to an opponent (AI) creature it skips my block step entirely |
@@ -165,7 +165,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Mahamoti Djinn | ✅ pass |  |
 | Mana Flare | ✅ pass |  |
 | Mana Short | ✅ pass |  |
-| Mana Vault | ⬜ untested |  |
+| Mana Vault | ❌ fail | Missing prompt for "At the beginning of your upkeep, you may pay {4}. If you do, untap this artifact." |
 | Manabarbs | ✅ pass |  |
 | Meekstone | ⬜ untested |  |
 | Merfolk of the Pearl Trident | ✅ pass |  |
@@ -175,16 +175,16 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Mountain | ⬜ untested |  |
 | Mox Emerald | ✅ pass |  |
 | Mox Jet | ✅ pass |  |
-| Mox Pearl | ⬜ untested |  |
+| Mox Pearl | ✅ pass |  |
 | Mox Ruby | ✅ pass |  |
-| Mox Sapphire | ⬜ untested |  |
-| Natural Selection | ⬜ untested |  |
+| Mox Sapphire | ✅ pass |  |
+| Natural Selection | ✅ pass |  |
 | Nether Shadow | ✅ pass |  |
 | Nettling Imp | ⬜ untested |  |
 | Nevinyrral's Disk | ⬜ untested |  |
 | Nightmare | ✅ pass |  |
 | Northern Paladin | ✅ pass |  |
-| Obsianus Golem | ⬜ untested |  |
+| Obsianus Golem | ✅ pass |  |
 | Orcish Artillery | ✅ pass |  |
 | Orcish Oriflamme | ⬜ untested |  |
 | Paralyze | ⬜ untested |  |
@@ -192,7 +192,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Personal Incarnation | ⬜ untested |  |
 | Pestilence | ✅ pass |  |
 | Phantasmal Forces | ⬜ untested |  |
-| Phantasmal Terrain | ⬜ untested |  |
+| Phantasmal Terrain | ❌ fail | I should get to choose the basic land type |
 | Phantom Monster | ✅ pass |  |
 | Pirate Ship | ⬜ untested |  |
 | Plague Rats | ❌ fail | Power and toughness doesn't reduce when another plague rats dies |
@@ -204,21 +204,21 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Prodigal Sorcerer | ✅ pass |  |
 | Psionic Blast | ✅ pass |  |
 | Psychic Venom | ✅ pass |  |
-| Purelace | ⬜ untested |  |
+| Purelace | ❌ fail | Should be able to target both permanents and spells |
 | Raging River | ⬜ untested |  |
 | Raise Dead | ✅ pass |  |
 | Red Elemental Blast | ✅ pass |  |
 | Red Ward | ✅ pass |  |
 | Regeneration | ✅ pass |  |
 | Regrowth | ⬜ untested |  |
-| Resurrection | ⬜ untested |  |
+| Resurrection | ✅ pass |  |
 | Reverse Damage | ⬜ untested |  |
 | Righteousness | ⬜ untested |  |
 | Roc of Kher Ridges | ✅ pass |  |
 | Rock Hydra | ⬜ untested |  |
 | Rod of Ruin | ✅ pass |  |
 | Royal Assassin | ❌ fail | I should only be able to target tapped creatures. Only highlight tapped creatures and error if I click an untapped creature |
-| Sacrifice | ⬜ untested |  |
+| Sacrifice | ❌ fail | I should get to choose which of my creatures to sacrifice |
 | Samite Healer | ✅ pass |  |
 | Savannah | ✅ pass |  |
 | Savannah Lions | ✅ pass |  |
@@ -228,33 +228,33 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Scryb Sprites | ✅ pass |  |
 | Sea Serpent | ✅ pass |  |
 | Sedge Troll | ⬜ untested |  |
-| Sengir Vampire | ⬜ untested |  |
+| Sengir Vampire | ✅ pass |  |
 | Serra Angel | ✅ pass |  |
-| Shanodin Dryads | ⬜ untested |  |
+| Shanodin Dryads | ✅ pass |  |
 | Shatter | ✅ pass |  |
 | Shivan Dragon | ✅ pass |  |
 | Simulacrum | ⬜ untested |  |
 | Sinkhole | ✅ pass |  |
 | Siren's Call | ✅ pass |  |
 | Sleight of Mind | ⬜ untested |  |
-| Smoke | ⬜ untested |  |
+| Smoke | ❌ fail | I should get a prompt to choose which creature to untap |
 | Sol Ring | ⬜ untested |  |
 | Soul Net | ⬜ untested |  |
 | Spell Blast | ⬜ untested |  |
 | Stasis | ✅ pass |  |
 | Steal Artifact | ⬜ untested |  |
-| Stone Giant | ⬜ untested |  |
-| Stone Rain | ⬜ untested |  |
+| Stone Giant | ❌ fail | I should not be able to select invalid targets |
+| Stone Rain | ✅ pass |  |
 | Stream of Life | ✅ pass |  |
 | Sunglasses of Urza | ⬜ untested |  |
 | Swamp | ✅ pass |  |
 | Swords to Plowshares | ⬜ untested |  |
 | Taiga | ⬜ untested |  |
-| Terror | ⬜ untested |  |
+| Terror | ✅ pass |  |
 | The Hive | ✅ pass |  |
 | Thicket Basilisk | ⬜ untested |  |
 | Thoughtlace | ⬜ untested |  |
-| Throne of Bone | ⬜ untested |  |
+| Throne of Bone | ❌ fail | Optional Triggered abilities should go on the stack |
 | Timber Wolves | ⬜ untested |  |
 | Time Vault | ⬜ untested |  |
 | Time Walk | ✅ pass |  |
@@ -268,8 +268,8 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Two-Headed Giant of Foriys | ⬜ untested |  |
 | Underground Sea | ✅ pass |  |
 | Unholy Strength | ✅ pass |  |
-| Unsummon | ⬜ untested |  |
-| Uthden Troll | ⬜ untested |  |
+| Unsummon | ✅ pass |  |
+| Uthden Troll | ✅ pass |  |
 | Verduran Enchantress | ⬜ untested |  |
 | Vesuvan Doppelganger | ❌ fail | I copied lord of atlantis but didn't get the merfolk effects even though it becomes a merfolk itself |
 | Veteran Bodyguard | ⬜ untested |  |
@@ -292,10 +292,10 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Wheel of Fortune | ✅ pass |  |
 | White Knight | ✅ pass |  |
 | White Ward | ✅ pass |  |
-| Wild Growth | ⬜ untested |  |
+| Wild Growth | ❌ fail | Same problem as animate wall. After removing the enchantment I should no longer get the bonus mana |
 | Will-o'-the-Wisp | ✅ pass |  |
-| Winter Orb | ⬜ untested |  |
+| Winter Orb | ✅ pass |  |
 | Wooden Sphere | ⬜ untested |  |
-| Word of Command | ⬜ untested |  |
+| Word of Command | ❌ fail | Card doesn't work |
 | Wrath of God | ✅ pass |  |
 | Zombie Master | ⬜ untested |  |
