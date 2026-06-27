@@ -1,9 +1,24 @@
 {
   "results": {
+    "Air Elemental": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782590075.2882295
+    },
     "Ancestral Recall": {
       "reason": "",
       "status": "pass",
       "updated_at": 1782005045.2563467
+    },
+    "Animate Artifact": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782592645.308917
+    },
+    "Animate Dead": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782583946.9919634
     },
     "Animate Wall": {
       "reason": "I shouldn't be able to continue attacking with the defender after this enchantment has been removed",
@@ -20,6 +35,11 @@
       "status": "pass",
       "updated_at": 1781475506.7830067
     },
+    "Aspect of Wolf": {
+      "reason": "The stats should be re-evaulated as a state based action so that when I play additional forests or turn a land into a forest it updates correctly",
+      "status": "fail",
+      "updated_at": 1782587337.392058
+    },
     "Bad Moon": {
       "reason": "",
       "status": "pass",
@@ -30,15 +50,30 @@
       "status": "pass",
       "updated_at": 1782357709.591038
     },
+    "Balance": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782586836.468382
+    },
     "Basalt Monolith": {
       "reason": "",
       "status": "pass",
       "updated_at": 1781843411.049817
     },
+    "Bayou": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782598699.9781644
+    },
     "Benalish Hero": {
       "reason": "When creatures are banded together it should show a visual purple line connecting the banded cards and when I hover over them it should highlight all the cards that are part of that band in purple",
       "status": "fail",
       "updated_at": 1782543925.2056103
+    },
+    "Berserk": {
+      "reason": "Creature didn't get destroyed after attacking. Also I was able to cast the card after the combat damage step which is not allowed.",
+      "status": "fail",
+      "updated_at": 1782600717.9834213
     },
     "Birds of Paradise": {
       "reason": "",
@@ -64,6 +99,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781761302.7020597
+    },
+    "Blaze of Glory": {
+      "reason": "Didn't let me choose a target",
+      "status": "fail",
+      "updated_at": 1782589483.7548892
     },
     "Blessing": {
       "reason": "",
@@ -110,10 +150,30 @@
       "status": "pass",
       "updated_at": 1782105893.8562238
     },
+    "Channel": {
+      "reason": "Needs an emblem card that I can use to activate the ability",
+      "status": "fail",
+      "updated_at": 1782587189.5371726
+    },
     "Chaos Orb": {
       "reason": "",
       "status": "pass",
       "updated_at": 1782364304.0696912
+    },
+    "Chaoslace": {
+      "reason": "Same issue as purelace",
+      "status": "fail",
+      "updated_at": 1782584822.5824187
+    },
+    "Circle of Protection: Blue": {
+      "reason": "Doesn't let me choose a target",
+      "status": "fail",
+      "updated_at": 1782588648.7730322
+    },
+    "Circle of Protection: Green": {
+      "reason": "Doesn't let me choose a source",
+      "status": "fail",
+      "updated_at": 1782590504.0492678
     },
     "Circle of Protection: Red": {
       "reason": "It doesn't let me choose a source.",
@@ -135,10 +195,20 @@
       "status": "pass",
       "updated_at": 1782020378.44773
     },
+    "Cockatrice": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782601599.96855
+    },
     "Consecrate Land": {
       "reason": "",
       "status": "pass",
       "updated_at": 1782001418.1112854
+    },
+    "Conservator": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782585989.1609933
     },
     "Contract from Below": {
       "reason": "",
@@ -150,10 +220,20 @@
       "status": "pass",
       "updated_at": 1781394074.1245754
     },
+    "Conversion": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782588327.3270977
+    },
     "Copper Tablet": {
       "reason": "",
       "status": "pass",
       "updated_at": 1782019908.8105206
+    },
+    "Copy Artifact": {
+      "reason": "Doesn't copy the target artifact",
+      "status": "fail",
+      "updated_at": 1782600006.7704363
     },
     "Counterspell": {
       "reason": "",
@@ -174,6 +254,11 @@
       "reason": "Doesn't buff creatures that were turned to white with purelace",
       "status": "fail",
       "updated_at": 1782542612.9388998
+    },
+    "Crystal Rod": {
+      "reason": "Didn't get a prompt",
+      "status": "fail",
+      "updated_at": 1782592527.994352
     },
     "Cursed Land": {
       "reason": "",
@@ -210,6 +295,21 @@
       "status": "fail",
       "updated_at": 1782542790.084675
     },
+    "Demonic Attorney": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782588353.7862113
+    },
+    "Demonic Hordes": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782597891.6225786
+    },
+    "Demonic Tutor": {
+      "reason": "Deck didn't shuffle after searching",
+      "status": "fail",
+      "updated_at": 1782601280.7214406
+    },
     "Dingus Egg": {
       "reason": "",
       "status": "pass",
@@ -220,10 +320,25 @@
       "status": "pass",
       "updated_at": 1782364062.7009046
     },
+    "Disintegrate": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782588292.1932251
+    },
     "Disrupting Scepter": {
-      "reason": "The discard a card prompt should let me click a card in hand. Don't list the cards as buttons in the prompt",
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782591684.9327972
+    },
+    "Dragon Whelp": {
+      "reason": "The creature should have been destroyed at the end of the turn since I used its ability 4 times",
       "status": "fail",
-      "updated_at": 1782543777.8573432
+      "updated_at": 1782599022.5886817
+    },
+    "Drain Life": {
+      "reason": "Didn't gain life",
+      "status": "fail",
+      "updated_at": 1782591274.9258578
     },
     "Drain Power": {
       "reason": "",
@@ -235,10 +350,25 @@
       "status": "pass",
       "updated_at": 1781761361.8322399
     },
+    "Dwarven Demolition Team": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782591066.0827997
+    },
+    "Dwarven Warriors": {
+      "reason": "Didn't let me target a creature",
+      "status": "fail",
+      "updated_at": 1782599344.2344365
+    },
     "Earth Elemental": {
       "reason": "",
       "status": "pass",
       "updated_at": 1782021280.9004796
+    },
+    "Earthbind": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782592013.6183333
     },
     "Earthquake": {
       "reason": "",
@@ -265,6 +395,16 @@
       "status": "fail",
       "updated_at": 1782542988.830896
     },
+    "Fastbond": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782590211.6931474
+    },
+    "Fear": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782601605.4447415
+    },
     "Feedback": {
       "reason": "",
       "status": "pass",
@@ -274,6 +414,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781756819.3621137
+    },
+    "Fireball": {
+      "reason": "I get an error saying all targets must be on the same side even though I should be able to choose any target(s)",
+      "status": "fail",
+      "updated_at": 1782584616.2549808
     },
     "Firebreathing": {
       "reason": "",
@@ -285,6 +430,11 @@
       "status": "pass",
       "updated_at": 1782190503.49171
     },
+    "Flight": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782586086.2205951
+    },
     "Fog": {
       "reason": "",
       "status": "pass",
@@ -295,10 +445,20 @@
       "status": "pass",
       "updated_at": 1782540724.534931
     },
+    "Forcefield": {
+      "reason": "It should prompt me to choose an unblocked creature",
+      "status": "fail",
+      "updated_at": 1782599197.9328413
+    },
     "Forest": {
       "reason": "",
       "status": "pass",
       "updated_at": 1781503124.4112332
+    },
+    "Fork": {
+      "reason": "Fork should prompt me to choose a (different) target",
+      "status": "fail",
+      "updated_at": 1782600382.145417
     },
     "Frozen Shade": {
       "reason": "",
@@ -335,10 +495,20 @@
       "status": "fail",
       "updated_at": 1782542896.9600568
     },
+    "Gloom": {
+      "reason": "The additional cost isn't reflected in the pay mana prompt ui",
+      "status": "fail",
+      "updated_at": 1782600990.6982932
+    },
     "Goblin Balloon Brigade": {
       "reason": "",
       "status": "pass",
       "updated_at": 1781411321.368721
+    },
+    "Goblin King": {
+      "reason": "It's not giving other goblins mountainwalk",
+      "status": "fail",
+      "updated_at": 1782591150.5506227
     },
     "Granite Gargoyle": {
       "reason": "",
@@ -355,10 +525,25 @@
       "status": "pass",
       "updated_at": 1781761314.0411894
     },
+    "Grizzly Bears": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782584958.9327466
+    },
+    "Guardian Angel": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782590169.0233815
+    },
     "Healing Salve": {
       "reason": "",
       "status": "pass",
       "updated_at": 1781461708.2940688
+    },
+    "Helm of Chatzuk": {
+      "reason": "Doesn't give banding to the target creature.",
+      "status": "fail",
+      "updated_at": 1782600080.2019947
     },
     "Hill Giant": {
       "reason": "",
@@ -395,6 +580,11 @@
       "status": "pass",
       "updated_at": 1781393631.596616
     },
+    "Hypnotic Specter": {
+      "reason": "Taking damage didn't trigger discarding a random card",
+      "status": "fail",
+      "updated_at": 1782583905.7597816
+    },
     "Ice Storm": {
       "reason": "",
       "status": "pass",
@@ -404,6 +594,31 @@
       "reason": "Doesn't let me choose a target",
       "status": "fail",
       "updated_at": 1782358476.291859
+    },
+    "Illusionary Mask": {
+      "reason": "Didn't prompt me to choose a card in my hand",
+      "status": "fail",
+      "updated_at": 1782600800.6545534
+    },
+    "Instill Energy": {
+      "reason": "I should only be able to activate this ability once per turn",
+      "status": "fail",
+      "updated_at": 1782600292.4859757
+    },
+    "Invisibility": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782590614.42178
+    },
+    "Iron Star": {
+      "reason": "No prompt",
+      "status": "fail",
+      "updated_at": 1782600898.0350516
+    },
+    "Ironclaw Orcs": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782589976.640266
     },
     "Ironroot Treefolk": {
       "reason": "",
@@ -415,10 +630,25 @@
       "status": "pass",
       "updated_at": 1781378704.6242044
     },
+    "Island Sanctuary": {
+      "reason": "I'm not able to choose an option in the prompt",
+      "status": "fail",
+      "updated_at": 1782590303.868989
+    },
     "Ivory Cup": {
       "reason": "I should get a prompt when a white spell is cast",
       "status": "fail",
       "updated_at": 1782543390.2063448
+    },
+    "Jade Monolith": {
+      "reason": "Ability didn't redirect damage when I blocked a creature",
+      "status": "fail",
+      "updated_at": 1782584526.6430843
+    },
+    "Jade Statue": {
+      "reason": "Ability doesn't work",
+      "status": "fail",
+      "updated_at": 1782586458.9844146
     },
     "Jayemdae Tome": {
       "reason": "",
@@ -430,20 +660,80 @@
       "status": "pass",
       "updated_at": 1782364896.8247042
     },
+    "Jump": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782599240.7461662
+    },
     "Karma": {
       "reason": "",
       "status": "pass",
       "updated_at": 1782008813.4584646
+    },
+    "Keldon Warlord": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782590997.0348485
+    },
+    "Kormus Bell": {
+      "reason": "I don't see the power and toughness on the swamp creature. I also can't declare them as attackers",
+      "status": "fail",
+      "updated_at": 1782584132.2019818
+    },
+    "Kudzu": {
+      "reason": "I should get to choose the next target when the land is destroyed",
+      "status": "fail",
+      "updated_at": 1782585947.904026
+    },
+    "Lance": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782591087.8997903
     },
     "Ley Druid": {
       "reason": "",
       "status": "pass",
       "updated_at": 1782361609.6198592
     },
+    "Library of Leng": {
+      "reason": "Didn't get a prompt when dicarding",
+      "status": "fail",
+      "updated_at": 1782591897.3669372
+    },
+    "Lich": {
+      "reason": "I didn't get to choose which permanents to sacrifice",
+      "status": "fail",
+      "updated_at": 1782592209.885521
+    },
+    "Lifeforce": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782600887.3605483
+    },
+    "Lifelace": {
+      "reason": "Same issue as purelace",
+      "status": "fail",
+      "updated_at": 1782592335.19959
+    },
+    "Lifetap": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782592385.3517802
+    },
     "Lightning Bolt": {
       "reason": "",
       "status": "pass",
       "updated_at": 1782005004.5772283
+    },
+    "Living Artifact": {
+      "reason": "I'm not getting the vitality counters when I'm dealt damage. Also, all counters should be visually represented somehow",
+      "status": "fail",
+      "updated_at": 1782584229.6406097
+    },
+    "Living Lands": {
+      "reason": "Unable to attack with forests",
+      "status": "fail",
+      "updated_at": 1782587452.6095092
     },
     "Living Wall": {
       "reason": "",
@@ -455,10 +745,25 @@
       "status": "pass",
       "updated_at": 1782544325.311722
     },
+    "Lord of Atlantis": {
+      "reason": "It isn't giving other merfolk islandwalk",
+      "status": "fail",
+      "updated_at": 1782585098.7901177
+    },
+    "Lord of the Pit": {
+      "reason": "I didn't get to choose a creature to sacrifice",
+      "status": "fail",
+      "updated_at": 1782601463.2355175
+    },
     "Lure": {
       "reason": "When Lure is attached to an opponent (AI) creature it skips my block step entirely",
       "status": "fail",
       "updated_at": 1782358635.884448
+    },
+    "Magical Hack": {
+      "reason": "I wasn't able to change swampwalk to islandwalk. Also the ability should not change the color of the card.",
+      "status": "fail",
+      "updated_at": 1782584733.5638328
     },
     "Mahamoti Djinn": {
       "reason": "",
@@ -485,10 +790,20 @@
       "status": "pass",
       "updated_at": 1782107912.8393338
     },
+    "Meekstone": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782586064.367578
+    },
     "Merfolk of the Pearl Trident": {
       "reason": "",
       "status": "pass",
       "updated_at": 1781378762.2991576
+    },
+    "Mesa Pegasus": {
+      "reason": "same Banding issues",
+      "status": "fail",
+      "updated_at": 1782601401.906366
     },
     "Mind Twist": {
       "reason": "",
@@ -499,6 +814,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782006692.2706053
+    },
+    "Mountain": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782599285.728398
     },
     "Mox Emerald": {
       "reason": "",
@@ -535,6 +855,16 @@
       "status": "pass",
       "updated_at": 1781667960.3270679
     },
+    "Nettling Imp": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782601218.3129344
+    },
+    "Nevinyrral's Disk": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782590370.9698598
+    },
     "Nightmare": {
       "reason": "",
       "status": "pass",
@@ -555,15 +885,35 @@
       "status": "pass",
       "updated_at": 1781586499.052248
     },
+    "Orcish Oriflamme": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782584976.5671804
+    },
+    "Paralyze": {
+      "reason": "I didn't get a prompt to pay 4 to untap my creature",
+      "status": "fail",
+      "updated_at": 1782586408.6534677
+    },
     "Pearled Unicorn": {
       "reason": "",
       "status": "pass",
       "updated_at": 1782358756.4484005
     },
+    "Personal Incarnation": {
+      "reason": "Damage prevention ability didn't work",
+      "status": "fail",
+      "updated_at": 1782592614.4772518
+    },
     "Pestilence": {
       "reason": "",
       "status": "pass",
       "updated_at": 1781757064.6528566
+    },
+    "Phantasmal Forces": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782591330.2038229
     },
     "Phantasmal Terrain": {
       "reason": "I should get to choose the basic land type",
@@ -574,6 +924,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781586546.701313
+    },
+    "Pirate Ship": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782590943.0049446
     },
     "Plague Rats": {
       "reason": "Power and toughness doesn't reduce when another plague rats dies",
@@ -589,6 +944,21 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781931114.369114
+    },
+    "Power Leak": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782592116.6137974
+    },
+    "Power Sink": {
+      "reason": "It didn't prompt the targeted player to pay X to prevent the spell from being countered",
+      "status": "fail",
+      "updated_at": 1782598955.609432
+    },
+    "Power Surge": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782587670.902289
     },
     "Prodigal Sorcerer": {
       "reason": "",
@@ -610,6 +980,11 @@
       "status": "fail",
       "updated_at": 1782540832.7749786
     },
+    "Raging River": {
+      "reason": "Got stuck on the raging river prompt when the opponent had no blockers",
+      "status": "fail",
+      "updated_at": 1782590764.0507822
+    },
     "Raise Dead": {
       "reason": "",
       "status": "pass",
@@ -630,15 +1005,35 @@
       "status": "pass",
       "updated_at": 1782019199.2218683
     },
+    "Regrowth": {
+      "reason": "Doesn't let me choose a target",
+      "status": "fail",
+      "updated_at": 1782589895.372867
+    },
     "Resurrection": {
       "reason": "",
       "status": "pass",
       "updated_at": 1782541428.6675277
     },
+    "Reverse Damage": {
+      "reason": "Doesn't let me choose a target",
+      "status": "fail",
+      "updated_at": 1782584892.265415
+    },
+    "Righteousness": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782597780.5635235
+    },
     "Roc of Kher Ridges": {
       "reason": "",
       "status": "pass",
       "updated_at": 1781997960.0992842
+    },
+    "Rock Hydra": {
+      "reason": "I should be able to activate the first ability at any time. Only the second ability has an upkeep restriction",
+      "status": "fail",
+      "updated_at": 1782601387.0066957
     },
     "Rod of Ruin": {
       "reason": "",
@@ -670,6 +1065,21 @@
       "status": "pass",
       "updated_at": 1782006702.9532018
     },
+    "Scathe Zombies": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782586144.231241
+    },
+    "Scavenging Ghoul": {
+      "reason": "I can use the card ability but I can't see the corpse counters on the card",
+      "status": "fail",
+      "updated_at": 1782599518.0480435
+    },
+    "Scrubland": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782586473.3431985
+    },
     "Scryb Sprites": {
       "reason": "",
       "status": "pass",
@@ -679,6 +1089,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782086581.6832159
+    },
+    "Sedge Troll": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782586190.182135
     },
     "Sengir Vampire": {
       "reason": "",
@@ -705,6 +1120,11 @@
       "status": "pass",
       "updated_at": 1781585859.2176287
     },
+    "Simulacrum": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782586756.7506638
+    },
     "Sinkhole": {
       "reason": "",
       "status": "pass",
@@ -715,15 +1135,40 @@
       "status": "pass",
       "updated_at": 1782364012.382203
     },
+    "Sleight of Mind": {
+      "reason": "I tried changing the text of lifeforce to let me use its ability counter red spells but it didn't work",
+      "status": "fail",
+      "updated_at": 1782601707.3989358
+    },
     "Smoke": {
       "reason": "I should get a prompt to choose which creature to untap",
       "status": "fail",
       "updated_at": 1782540995.384977
     },
+    "Sol Ring": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782586858.7362761
+    },
+    "Soul Net": {
+      "reason": "I should get a prompt when a creature dies",
+      "status": "fail",
+      "updated_at": 1782585904.3105838
+    },
+    "Spell Blast": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782599426.231112
+    },
     "Stasis": {
       "reason": "",
       "status": "pass",
       "updated_at": 1781410889.892921
+    },
+    "Steal Artifact": {
+      "reason": "When Steal Artifact is destroyed, control of the artifact should go back to its owner",
+      "status": "fail",
+      "updated_at": 1782586549.5823672
     },
     "Stone Giant": {
       "reason": "I should not be able to select invalid targets",
@@ -740,10 +1185,25 @@
       "status": "pass",
       "updated_at": 1782018447.4809692
     },
+    "Sunglasses of Urza": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782597950.5790997
+    },
     "Swamp": {
       "reason": "",
       "status": "pass",
       "updated_at": 1782021420.3454254
+    },
+    "Swords to Plowshares": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782586131.826179
+    },
+    "Taiga": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782592454.1705534
     },
     "Terror": {
       "reason": "",
@@ -755,10 +1215,30 @@
       "status": "pass",
       "updated_at": 1781670012.8092935
     },
+    "Thicket Basilisk": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782587023.8502285
+    },
+    "Thoughtlace": {
+      "reason": "same issue as purelace",
+      "status": "fail",
+      "updated_at": 1782587142.7952132
+    },
     "Throne of Bone": {
       "reason": "Optional Triggered abilities should go on the stack",
       "status": "fail",
       "updated_at": 1782541624.7543035
+    },
+    "Timber Wolves": {
+      "reason": "Same banding issues",
+      "status": "fail",
+      "updated_at": 1782600021.5579014
+    },
+    "Time Vault": {
+      "reason": "I should get a prompt at the beginning of my turn",
+      "status": "fail",
+      "updated_at": 1782599960.167687
     },
     "Time Walk": {
       "reason": "",
@@ -795,6 +1275,16 @@
       "status": "pass",
       "updated_at": 1781577230.9356234
     },
+    "Twiddle": {
+      "reason": "Doesn't give me a prompt to tap or untap",
+      "status": "fail",
+      "updated_at": 1782600106.6426456
+    },
+    "Two-Headed Giant of Foriys": {
+      "reason": "I should be able to block an additional creature but the UI doesn't support it",
+      "status": "fail",
+      "updated_at": 1782586936.924413
+    },
     "Underground Sea": {
       "reason": "",
       "status": "pass",
@@ -815,10 +1305,25 @@
       "status": "pass",
       "updated_at": 1782544338.6868098
     },
+    "Verduran Enchantress": {
+      "reason": "it says may draw a card so I should get a prompt asking me if I want to draw",
+      "status": "fail",
+      "updated_at": 1782598799.6459575
+    },
     "Vesuvan Doppelganger": {
       "reason": "I copied lord of atlantis but didn't get the merfolk effects even though it becomes a merfolk itself",
       "status": "fail",
       "updated_at": 1782358099.8687842
+    },
+    "Veteran Bodyguard": {
+      "reason": "Ability didn't work",
+      "status": "fail",
+      "updated_at": 1782589408.716092
+    },
+    "Volcanic Eruption": {
+      "reason": "It should let me choose which mountains to destroy",
+      "status": "fail",
+      "updated_at": 1782588488.5306256
     },
     "Wall of Air": {
       "reason": "",
@@ -835,6 +1340,11 @@
       "status": "pass",
       "updated_at": 1782020890.621666
     },
+    "Wall of Fire": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782592447.7802558
+    },
     "Wall of Ice": {
       "reason": "",
       "status": "pass",
@@ -850,10 +1360,30 @@
       "status": "pass",
       "updated_at": 1781757313.6477668
     },
+    "Wall of Water": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782601732.6330385
+    },
+    "Wall of Wood": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782586350.9347615
+    },
     "Wanderlust": {
       "reason": "",
       "status": "pass",
       "updated_at": 1782178527.2426567
+    },
+    "War Mammoth": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782590190.9304833
+    },
+    "Warp Artifact": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782587233.2222805
     },
     "Water Elemental": {
       "reason": "",
@@ -864,6 +1394,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781761495.226897
+    },
+    "Web": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782584783.5423143
     },
     "Wheel of Fortune": {
       "reason": "",
@@ -895,6 +1430,11 @@
       "status": "pass",
       "updated_at": 1782544251.2775307
     },
+    "Wooden Sphere": {
+      "reason": "didn't get prompt",
+      "status": "fail",
+      "updated_at": 1782597764.3066866
+    },
     "Word of Command": {
       "reason": "Card doesn't work",
       "status": "fail",
@@ -904,6 +1444,26 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782008868.629678
+    },
+    "Zombie Master": {
+      "reason": "ability doesn't work",
+      "status": "fail",
+      "updated_at": 1782591439.597292
+    },
+    "fear": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782599981.0474155
+    },
+    "fork": {
+      "reason": "I wasn't able to choose new targets for the copied spell. I tested with lightning bolt",
+      "status": "fail",
+      "updated_at": 1782590836.1616764
+    },
+    "righteousness": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782592304.132458
     }
   }
 }
