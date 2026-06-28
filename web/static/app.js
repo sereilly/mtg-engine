@@ -769,7 +769,7 @@ function getAutoPassStateKey(state) {
 }
 
 function hasBlockingPromptForAutoPass(state = currentState) {
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getBalanceSelectInfo(state) || getOptionalPayInfo(state) || getLandTypeChoiceInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getRagingRiverInfo(state) || getIslandSanctuaryInfo(state)) return true;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getBalanceSelectInfo(state) || getOptionalPayInfo(state) || getLandTypeChoiceInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getRagingRiverInfo(state) || getIslandSanctuaryInfo(state)) return true;
   return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingAbilityChoice);
 }
 
@@ -1657,6 +1657,13 @@ function getFaceDownCastInfo(state = currentState) {
   return info;
 }
 
+function getTimeVaultInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.time_vault;
+  if (!info || !Array.isArray(info.permanents) || info.permanents.length === 0) return null;
+  return info;
+}
+
 function getRagingRiverInfo(state = currentState) {
   if (!state || seat === null) return null;
   const info = state.raging_river;
@@ -1766,6 +1773,7 @@ function isAnyPromptActive(state = currentState) {
   if (getLandTypeChoiceInfo(state)) return true;
   if (getKudzuReattachInfo(state)) return true;
   if (getFaceDownCastInfo(state)) return true;
+  if (getTimeVaultInfo(state)) return true;
   if (getRagingRiverInfo(state)) return true;
   if (shouldShowPriorityPrompt(state)) return true;
   if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingAutoTap || pendingModalChoice || pendingAbilityChoice) return true;
@@ -1780,7 +1788,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getBalanceSelectInfo(state) || getOptionalPayInfo(state) || getLandTypeChoiceInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getRagingRiverInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getBalanceSelectInfo(state) || getOptionalPayInfo(state) || getLandTypeChoiceInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getRagingRiverInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -2399,6 +2407,45 @@ function applyKudzuReattachPrompt(info) {
         action: "kudzu_reattach_confirm",
         target_permanent_index: Number(btn.dataset.kudzuLand),
       });
+    });
+  });
+}
+
+// Time Vault: "If you would begin your turn while this is tapped, you may skip
+// that turn instead. If you do, untap it." A begin-of-turn yes/no decision.
+function applyTimeVaultPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  const name = info.permanents[0] || "Time Vault";
+  title.textContent = "Skip your turn?";
+  body.textContent = `Skip this turn to untap ${name}?`;
+  steps.innerHTML =
+    `<div class="prompt-choice-row">` +
+    `<button type="button" class="prompt-choice-btn" data-tv="skip">Skip turn &amp; untap ${escapeHtml(name)}</button>` +
+    `<button type="button" class="prompt-choice-btn" data-tv="decline">Take my turn</button>` +
+    `</div>`;
+
+  steps.querySelectorAll("[data-tv]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      if (btn.dataset.tv === "skip") {
+        await sendAction({ seat, action: "time_vault_skip", card_name: name });
+      } else {
+        await sendAction({ seat, action: "time_vault_decline" });
+      }
     });
   });
 }
@@ -3066,6 +3113,12 @@ function renderActivationPrompt() {
       applyMulliganBottomPrompt(pregameInfo);
       return;
     }
+  }
+
+  const timeVaultInfo = getTimeVaultInfo();
+  if (timeVaultInfo) {
+    applyTimeVaultPrompt(timeVaultInfo);
+    return;
   }
 
   if (cleanupDiscard) {

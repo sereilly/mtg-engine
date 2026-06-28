@@ -52,6 +52,24 @@ class BeginningPhaseMixin:
         )
         return True
 
+    def untap_for_skip(self, player_index: int, permanent_name: str) -> bool:
+        """Untap a tapped "skip your turn to untap" permanent (Time Vault) WITHOUT
+        scheduling a future skip — the caller skips the current turn instead. This
+        is the web-turn-flow counterpart to :meth:`skip_turn_to_untap` (which marks
+        a future skip for headless callers)."""
+        if permanent_name not in self.get_begin_turn_untap_options(player_index):
+            return False
+        player = self.players[player_index]
+        permanent = next(
+            (p for p in player.battlefield if p.card.name == permanent_name and p.tapped),
+            None,
+        )
+        if permanent is None:
+            return False
+        permanent.tapped = False
+        self.log.append(f"{player.name} skipped their turn to untap {permanent_name}")
+        return True
+
     def close_beginning_step(self) -> None:
         """Close a deferred upkeep/draw step (counterpart to close_end_step)."""
         phase = self.current_turn_phase

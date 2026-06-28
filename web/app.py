@@ -1066,6 +1066,22 @@ def _begin_turn(session: Session, player_index: int, defer_untap_selection: bool
     game.active_player_index = player_index
     game.lands_played_this_turn[player_index] = 0
 
+    # Time Vault: "If you would begin your turn while this is tapped, you may skip
+    # that turn instead. If you do, untap it." Prompt a human controller at the very
+    # start of their turn (once); the AI never skips. Resolved via the
+    # time_vault_skip / time_vault_decline actions.
+    if (
+        defer_untap_selection
+        and session.time_vault_resolved_turn != game.turn
+        and _seat_type(session, player_index) == "human"
+    ):
+        options = game.get_begin_turn_untap_options(player_index)
+        if options:
+            game._set_phase_and_step("beginning", "untap")
+            session.time_vault_pending = list(options)
+            return False
+    session.time_vault_pending = []
+
     if defer_untap_selection:
         options = game.get_untap_land_selection_options(player_index)
         if options:
@@ -1437,6 +1453,16 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
             ],
         }
 
+    # Time Vault: the begin-of-turn "skip your turn to untap" decision, shown only
+    # to the active human player while they decide.
+    time_vault_info = None
+    if (
+        session.time_vault_pending
+        and viewer_seat == session.current_turn
+        and _seat_type(session, session.current_turn) != "ai"
+    ):
+        time_vault_info = {"permanents": list(session.time_vault_pending)}
+
     # Illusionary Mask: the controller chooses which hand creature (mana value
     # within X) to cast face down as a 2/2. Surfaced only to that (human) player.
     face_down_cast_info = None
@@ -1535,6 +1561,7 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "land_type_choice": land_type_choice_info,
         "kudzu_reattach": kudzu_reattach_info,
         "face_down_cast": face_down_cast_info,
+        "time_vault": time_vault_info,
         "pregame": _build_pregame_info(session, viewer_seat),
     }
 
@@ -3319,6 +3346,25 @@ def do_action(session_id: str, req: GameActionRequest):
         ok = session.game.confirm_face_down_cast(req.seat, hand_index)
         if not ok:
             raise HTTPException(status_code=400, detail="invalid face-down cast selection")
+
+    elif req.action == "time_vault_skip":
+        # Time Vault: skip the turn you are beginning to untap the artifact.
+        if req.seat != session.current_turn or not session.time_vault_pending:
+            raise HTTPException(status_code=400, detail="no Time Vault skip is pending for you")
+        name = req.card_name or (session.time_vault_pending[0] if session.time_vault_pending else None)
+        if not name or not session.game.untap_for_skip(req.seat, name):
+            raise HTTPException(status_code=400, detail="cannot skip to untap that permanent")
+        session.time_vault_resolved_turn = session.game.turn
+        session.time_vault_pending = []
+        _start_next_turn(session)  # the skipped player's turn does not run
+
+    elif req.action == "time_vault_decline":
+        # Decline the skip and take the turn normally.
+        if req.seat != session.current_turn:
+            raise HTTPException(status_code=400, detail="not your turn")
+        session.time_vault_resolved_turn = session.game.turn
+        session.time_vault_pending = []
+        _begin_turn(session, req.seat, defer_untap_selection=True)
 
     elif req.action == "assign_defender_piles":
         piles = {int(k): str(v) for k, v in (req.piles or {}).items()}

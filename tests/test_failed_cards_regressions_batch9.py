@@ -772,3 +772,27 @@ class TestIllusionaryMask:
         assert not any(p.metadata.get("face_down") for p in p1.battlefield)
         assert len(p1.hand) == 1
         assert game.pending_face_down_cast is None
+
+
+# ---------------------------------------------------------------------------
+# Time Vault — "If you would begin your turn while this is tapped, you may skip
+# that turn to untap it." untap_for_skip untaps WITHOUT scheduling a future skip
+# (the web turn flow skips the current turn), unlike skip_turn_to_untap.
+# ---------------------------------------------------------------------------
+
+class TestTimeVaultUntapForSkip:
+    def test_untaps_without_scheduling_a_future_skip(self, cards):
+        vault = Permanent(card=cards["Time Vault"])
+        vault.tapped = True
+        p1 = PlayerState(name="P1", battlefield=[vault])
+        game = _game(p1, PlayerState(name="P2"))
+        assert game.get_begin_turn_untap_options(0) == ["Time Vault"]
+        assert game.untap_for_skip(0, "Time Vault") is True
+        assert vault.tapped is False
+        assert game.skip_turn_counts.get(0, 0) == 0  # no future-turn skip queued
+
+    def test_rejected_when_untapped(self, cards):
+        vault = Permanent(card=cards["Time Vault"])  # already untapped
+        p1 = PlayerState(name="P1", battlefield=[vault])
+        game = _game(p1, PlayerState(name="P2"))
+        assert game.untap_for_skip(0, "Time Vault") is False

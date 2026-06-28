@@ -62,6 +62,12 @@ class Session:
     upkeep_mana_prevention_choices: list[dict] = field(default_factory=list)
     upkeep_mana_prevention_resolved: dict[str, int] = field(default_factory=dict)
     island_sanctuary_pending: bool = False
+    # Time Vault: the begin-of-turn "skip your turn to untap" decision. Holds the
+    # permanent names offering the skip while the human decides; cleared once they
+    # skip or decline. `time_vault_resolved_turn` records the turn already decided
+    # so the prompt isn't re-shown after a decline.
+    time_vault_pending: list[str] = field(default_factory=list)
+    time_vault_resolved_turn: int | None = None
     # Debug toggle: when True, the AI declares every legal attacker each combat
     # instead of its normal risk-weighted choice. Set via the in-game Debug Menu.
     force_ai_attack_all: bool = False

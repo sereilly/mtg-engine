@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 
 from engine import load_cards
 from engine.models import Permanent
+import web.app as webapp
 from web.app import app, store
 
 client = TestClient(app)
@@ -247,3 +248,44 @@ def test_illusionary_mask_prompts_eligible_hand_creatures():
     fd = [p for p in game.players[0].battlefield if p.metadata.get("face_down")]
     assert len(fd) == 1
     assert game.pending_face_down_cast is None
+
+
+def _time_vault_session():
+    sid, session, game = _session()
+    vault = Permanent(card=_CARDS["Time Vault"])
+    vault.tapped = True
+    game.players[0].battlefield = [vault]
+    webapp._begin_turn(session, 0, defer_untap_selection=True)
+    return sid, session, game, vault
+
+
+def test_time_vault_prompt_surfaces_and_skip_advances_turn():
+    sid, session, game, vault = _time_vault_session()
+    state = client.get(f"/api/sessions/{sid}/state", params={"seat": 0}).json()
+    assert state["time_vault"] == {"permanents": ["Time Vault"]}
+
+    turn_before = game.turn
+    resp = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "time_vault_skip", "card_name": "Time Vault"},
+    )
+    assert resp.status_code == 200
+    assert vault.tapped is False             # untapped
+    assert game.turn > turn_before           # the turn was skipped (advanced)
+    assert game.skip_turn_counts.get(0, 0) == 0  # no double-skip
+    assert session.time_vault_pending == []
+
+
+def test_time_vault_decline_keeps_turn_and_leaves_it_tapped():
+    sid, session, game, vault = _time_vault_session()
+    resp = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "time_vault_decline"})
+    assert resp.status_code == 200
+    assert vault.tapped is True               # not untapped
+    assert session.time_vault_pending == []
+    assert session.current_turn == 0          # still this player's turn
+
+
+def test_time_vault_prompt_hidden_from_opponent():
+    sid, session, game, vault = _time_vault_session()
+    state = client.get(f"/api/sessions/{sid}/state", params={"seat": 1}).json()
+    assert state["time_vault"] is None

@@ -38,7 +38,7 @@ in `web/schemas.py` + dispatch ~3050, render in `app.js`). **Every new pending
 choice needs an AI/headless auto-resolver** (determinism).
 
 ### Upkeep / untap optional-pay prompts
-- **Time Vault** — web surfacing of the already-implemented `get_begin_turn_untap_options`/`skip_turn_to_untap` (no web call today): pause `_begin_turn`, serialize, add skip/decline actions + app.js prompt.
+- **Time Vault** — **done**. `_begin_turn` pauses for a human controlling a tapped Time Vault, serializing a `time_vault` prompt. New engine `untap_for_skip` untaps WITHOUT scheduling a future skip (unlike `skip_turn_to_untap`), so the `time_vault_skip` action untaps + advances to the next turn (the current turn is genuinely skipped, no double-skip); `time_vault_decline` resumes the turn. app.js prompt + a per-turn `time_vault_resolved_turn` guard. Test-guarded (`batch9::TestTimeVaultUntapForSkip` + 3 `test_batch9_ui_api` flow tests).
 
 ### Pending-choice (engine auto-resolves a choice today)
 - **Lich** — core works and is now test-guarded (`batch9::TestLichSacrifice`): N damage sacrifices N nontoken permanents, game-losing ones last. *Remaining enhancement only:* `pending_sacrifice` + `confirm_sacrifice` so a human picks which (keep the "can't → lose" path).
