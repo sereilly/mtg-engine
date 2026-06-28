@@ -92,22 +92,38 @@ def mark_text_modified(game: Game, instruction: OracleInstruction, context: Orac
     if target_perm is not None:
         target_perm.metadata["text_modified"] = True
 
-    symbol = (context.new_color or "").upper()
-    # Magical Hack on a land swaps one basic land type for another, changing the
-    # mana it produces (Forest → Island taps for blue). This replaces the land's
-    # type, not its color, so set a land-type override rather than a color override.
-    if target_perm is not None and target_perm.card.primary_type == "land" and symbol in _SYMBOL_TO_LAND_TYPE:
-        new_type = _SYMBOL_TO_LAND_TYPE[symbol]
-        target_perm.metadata["land_type_override"] = new_type
-        game.log.append(f"{card.name} changed {target_perm.card.name} into a {new_type.title()}")
+    mode = instruction.payload.get("mode")
+    new_symbol = (context.new_color or "").upper()
+    old_symbol = (context.old_color or "").upper()
+
+    # Magical Hack: replace one basic land type with another. On a land this swaps
+    # the land type (and the mana it makes); on a creature it remaps that landwalk
+    # (swampwalk → islandwalk). It does NOT change the permanent's color.
+    if mode == "land_type":
+        new_type = _SYMBOL_TO_LAND_TYPE.get(new_symbol)
+        if target_perm is not None and new_type:
+            if target_perm.card.primary_type == "land":
+                target_perm.metadata["land_type_override"] = new_type
+                game.log.append(f"{card.name} changed {target_perm.card.name} into a {new_type.title()}")
+            elif target_perm.card.primary_type == "creature":
+                old_type = _SYMBOL_TO_LAND_TYPE.get(old_symbol)
+                if old_type:
+                    target_perm.metadata[f"has_{new_type}walk"] = True
+                    target_perm.metadata[f"lost_{old_type}walk"] = True
+                    game.log.append(f"{card.name} changed {old_type}walk to {new_type}walk on {target_perm.card.name}")
         return True, "resolved"
 
-    # Otherwise (spell or non-land permanent) apply a color override when one was chosen.
-    if symbol:
-        game._apply_color_override(target, symbol, target_permanent_index=perm_idx)
-        game.log.append(f"{card.name} changed target's color to {symbol}")
-    else:
-        game.log.append(f"{card.name} applied a text change effect")
+    # Sleight of Mind: replace one color word with another in the target's text.
+    # Stored as a per-permanent remap consumed where the engine reads that text's
+    # color (e.g. protection from <color>). It does NOT recolor the permanent.
+    if mode == "color_word":
+        if target_perm is not None and old_symbol and new_symbol:
+            remap = target_perm.metadata.setdefault("color_word_remap", {})
+            remap[old_symbol] = new_symbol
+            game.log.append(f"{card.name} changed {old_symbol} text to {new_symbol} on {target_perm.card.name}")
+        return True, "resolved"
+
+    game.log.append(f"{card.name} applied a text change effect")
     return True, "resolved"
 
 

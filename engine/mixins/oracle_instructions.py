@@ -31,6 +31,7 @@ class OracleInstructionsMixin:
         new_color: str | None = None,
         stack_target=None,
         mode_index: int | None = None,
+        old_color: str | None = None,
     ) -> None:
         instruction = self._select_executable_instruction(card, mode_index)
         if instruction is None:
@@ -57,6 +58,7 @@ class OracleInstructionsMixin:
                 target_permanent_index=target_permanent_index,
                 x_value=x_value,
                 new_color=new_color,
+                old_color=old_color,
                 stack_target=stack_target,
             ),
         )

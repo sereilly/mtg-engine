@@ -255,6 +255,9 @@ class DeclareBlockersStepMixin:
             has_walk = attacker.metadata.get(f"has_{walk}") or any(
                 kw.lower() == walk for kw in attacker.card.keywords
             )
+            # Magical Hack can remap a landwalk word away (swampwalk -> islandwalk).
+            if attacker.metadata.get(f"lost_{walk}"):
+                has_walk = False
             if not has_walk:
                 continue
             for perm in defender.battlefield:

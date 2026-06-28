@@ -55,6 +55,7 @@ class StackCastingMixin:
         new_color: str | None = None,
         target_stack_index: int | None = None,
         mode_index: int | None = None,
+        old_color: str | None = None,
     ) -> SimulationResult:
         queued = self.queue_from_hand(
             caster_index,
@@ -65,6 +66,7 @@ class StackCastingMixin:
             new_color=new_color,
             target_stack_index=target_stack_index,
             mode_index=mode_index,
+            old_color=old_color,
         )
         if not queued.supported:
             return queued
@@ -660,6 +662,7 @@ class StackCastingMixin:
         new_color: str | None = None,
         target_stack_index: int | None = None,
         mode_index: int | None = None,
+        old_color: str | None = None,
     ) -> SimulationResult:
         caster = self.players[caster_index]
         try:
@@ -798,6 +801,7 @@ class StackCastingMixin:
                     target_stack_name=target_stack_name_val,
                     target_stack_item=target_stack_item_val,
                     new_color=new_color,
+                    old_color=old_color,
                     chosen_mode_index=mode_index,
                 )
             )
@@ -1247,6 +1251,7 @@ class StackCastingMixin:
             new_color=item.new_color,
             stack_target=item.target_stack_item,
             chosen_mode_index=item.chosen_mode_index,
+            old_color=item.old_color,
         )
         return True
 
@@ -1261,6 +1266,7 @@ class StackCastingMixin:
         new_color: str | None = None,
         stack_target=None,
         chosen_mode_index: int | None = None,
+        old_color: str | None = None,
     ) -> None:
         caster = self.players[caster_index]
         primary_type = card.primary_type
@@ -1328,6 +1334,7 @@ class StackCastingMixin:
             new_color=new_color,
             stack_target=stack_target,
             mode_index=chosen_mode_index,
+            old_color=old_color,
         )
         self._apply_spell_resolved_triggers(caster_index, card)
         self._apply_self_resolved_hook(caster_index, card, target_idx, target_permanent_index)

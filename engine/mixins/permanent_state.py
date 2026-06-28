@@ -396,6 +396,11 @@ class PermanentStateMixin:
                 symbol = _COLOR_WORD_TO_SYMBOL.get(key[len("protection_from_"):])
                 if symbol:
                     colors.add(symbol)
+        # Sleight of Mind: a color-word remap on this permanent replaces the color
+        # words in its text, so "protection from blue" becomes "protection from red".
+        remap = permanent.metadata.get("color_word_remap")
+        if remap:
+            colors = {remap.get(c, c) for c in colors}
         return colors
 
     def _is_protected_from(self, victim: Permanent, source: Permanent) -> bool:

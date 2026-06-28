@@ -12,6 +12,13 @@ from .base import RuleResult, parse_rule
 @parse_rule(480)
 def mark_text_modified(text: str, activated: bool) -> RuleResult:
     if "change the text of target spell or permanent by replacing all instances of one" in text:
+        # Magical Hack swaps a basic land type; Sleight of Mind swaps a color word.
+        # The mode decides whether the handler remaps land types/landwalk or stores
+        # a color-word remap — neither recolors the target permanent.
+        if "basic land type" in text:
+            return _instruction("mark_text_modified", mode="land_type"), "spell_pattern"
+        if "color word" in text:
+            return _instruction("mark_text_modified", mode="color_word"), "spell_pattern"
         return _instruction("mark_text_modified"), "spell_pattern"
     return None
 

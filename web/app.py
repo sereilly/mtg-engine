@@ -2775,6 +2775,7 @@ def do_action(session_id: str, req: GameActionRequest):
             new_color=req.mana_color,
             target_stack_index=engine_stack_index,
             mode_index=req.mode_index,
+            old_color=req.old_color,
         )
         if not result.supported:
             raise HTTPException(status_code=400, detail=result.details)

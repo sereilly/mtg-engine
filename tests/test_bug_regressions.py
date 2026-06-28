@@ -310,16 +310,17 @@ def test_bug5_banding_granted_to_chosen_target(all_cards):
 
 
 # ---------------------------------------------------------------------------
-# Bug 6: Sleight of Mind — unable to choose a replacement color.
+# Bug 6: Sleight of Mind — replaces a color WORD in the target's text.
 #
-# Root cause: `mark_text_modified` only marked `text_modified = True` with no
-# actual color change. Fix: thread `new_color` through StackItem →
-# OracleExecutionContext and call `_apply_color_override` in the handler.
+# It changes "all instances of one color word with another" (e.g. "protection
+# from blue" -> "protection from red"); it must NOT recolor the permanent. The
+# from/to words are threaded through the cast path (old_color/new_color) and the
+# handler stores a per-permanent color_word_remap consumed at color read sites.
 # ---------------------------------------------------------------------------
 
-def test_bug6_sleight_of_mind_applies_color_override(all_cards):
-    """Bug 6 regression: casting Sleight of Mind with new_color must change the
-    target permanent's color via color_override metadata."""
+def test_bug6_sleight_of_mind_stores_color_word_remap(all_cards):
+    """Casting Sleight of Mind with old_color/new_color stores a color-word remap
+    on the target (and does not recolor it)."""
     sleight = _get(all_cards, "Sleight of Mind")
     blue_enchantment = _mk_card(
         "Blue Ward",
@@ -337,14 +338,15 @@ def test_bug6_sleight_of_mind_applies_color_override(all_cards):
         "Sleight of Mind",
         target_player_index=1,
         target_permanent_index=0,
+        old_color="U",
         new_color="R",
     )
 
     assert result.supported
-    # The target permanent should have its color overridden to Red
-    assert p2.battlefield[0].metadata.get("color_override") == "R", (
-        "Bug 6 regression: color_override must be set to new_color"
-    )
+    perm = p2.battlefield[0]
+    assert perm.metadata.get("color_word_remap") == {"U": "R"}
+    # It must NOT recolor the permanent (the old, incorrect behavior).
+    assert perm.metadata.get("color_override") is None
 
 
 def test_bug6_sleight_of_mind_without_color_resolves_gracefully(all_cards):

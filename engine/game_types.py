@@ -35,6 +35,9 @@ class StackItem:
     target_stack_item: "StackItem | None" = None
     ability_text: str | None = None
     new_color: str | None = None
+    # The "from" color/land-type word for a text-change spell (Magical Hack /
+    # Sleight of Mind): the word being replaced. new_color is the replacement.
+    old_color: str | None = None
     # Chosen mode of a "Choose one —" modal spell, as an index into the card's
     # compiled OracleProgram.modes. None for non-modal spells (resolve mode 0).
     chosen_mode_index: int | None = None
@@ -50,6 +53,8 @@ class OracleExecutionContext:
     x_value: int | None = None
     source_permanent: Permanent | None = None
     new_color: str | None = None
+    # The "from" word for a text-change spell (Magical Hack / Sleight of Mind).
+    old_color: str | None = None
     # The chosen target spell/ability on the stack (Counterspell, Fork).
     stack_target: "StackItem | None" = None
 

@@ -572,6 +572,47 @@ class TestMagicalHackLand:
         game.tap_land_for_mana(1, "Forest", chosen_color="U", permanent_index=0)
         assert p2.mana_pool.get("U") == 1
 
+    def test_remaps_creature_landwalk(self, cards):
+        # Bog Wraith has Swampwalk; Magical Hack swamp (B) -> island (U) makes it
+        # islandwalk instead, and it no longer has swampwalk.
+        wraith = Permanent(card=cards["Bog Wraith"])
+        wraith.metadata["summoning_sickness_turn"] = -99
+        blocker = Permanent(card=cards["Grizzly Bears"])
+        island = Permanent(card=cards["Island"])
+        swamp = Permanent(card=cards["Swamp"])
+        p1 = PlayerState(name="P1", hand=[cards["Magical Hack"]], battlefield=[wraith])
+        p2 = PlayerState(name="P2", battlefield=[blocker, island, swamp])
+        game = _game(p1, p2)
+        assert game._attacker_has_active_landwalk(wraith, blocker) is True  # swampwalk vs Swamp
+        game.cast_from_hand(0, "Magical Hack", target_player_index=0, target_permanent_index=0, old_color="B", new_color="U")
+        assert wraith.metadata.get("lost_swampwalk") is True
+        assert wraith.metadata.get("has_islandwalk") is True
+        # Still unblockable via the Island (islandwalk now), but...
+        assert game._attacker_has_active_landwalk(wraith, blocker) is True
+        # ...with the Island gone, swampwalk no longer applies (it was remapped).
+        p2.battlefield.remove(island)
+        assert game._attacker_has_active_landwalk(wraith, blocker) is False
+
+
+# ---------------------------------------------------------------------------
+# Sleight of Mind — "replace all instances of one color word with another." It
+# stores a per-permanent color-word remap (consumed where the engine reads that
+# text's colors, e.g. protection) rather than recoloring the permanent.
+# ---------------------------------------------------------------------------
+
+class TestSleightOfMind:
+    def test_remaps_protection_color(self, cards):
+        # Black Knight has "protection from white"; change white (W) -> red (R).
+        bk = Permanent(card=cards["Black Knight"])
+        p1 = PlayerState(name="P1", hand=[cards["Sleight of Mind"]])
+        p2 = PlayerState(name="P2", battlefield=[bk])
+        game = _game(p1, p2)
+        assert game._protection_colors(bk) == {"W"}
+        game.cast_from_hand(0, "Sleight of Mind", target_player_index=1, target_permanent_index=0, old_color="W", new_color="R")
+        assert bk.metadata.get("color_word_remap") == {"W": "R"}
+        assert game._protection_colors(bk) == {"R"}     # protection from red now
+        assert bk.metadata.get("color_override") is None  # not recolored
+
 
 # ---------------------------------------------------------------------------
 # Two-Headed Giant of Foriys — "This creature can block an additional creature

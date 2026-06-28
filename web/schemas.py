@@ -104,6 +104,11 @@ class GameActionRequest(BaseModel):
     x_value: int | None = Field(default=None, ge=0)
     hand_index: int | None = Field(default=None, ge=0)
     mana_color: Literal["W", "U", "B", "R", "G", "C"] | None = None
+    # Text-change spells (Magical Hack / Sleight of Mind): the "from" word to
+    # replace. `mana_color` carries the "to" word. Both are color symbols (a basic
+    # land type is addressed by its color: W=plains, U=island, B=swamp, R=mountain,
+    # G=forest).
+    old_color: Literal["W", "U", "B", "R", "G"] | None = None
     attacker_indices: list[int] | None = None
     # Banding (CR 702.22c): attacking bands, each a list of attacker battlefield
     # indices, declared alongside attacker_indices in a declare_attackers action.
