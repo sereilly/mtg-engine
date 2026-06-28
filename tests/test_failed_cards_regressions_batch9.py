@@ -471,3 +471,60 @@ class TestLibraryOfLengDiscards:
         assert len(p1.hand) == 7
         assert len(p1.library) == 1   # the discarded card went on top, not to the yard
         assert p1.graveyard == []
+
+
+# ---------------------------------------------------------------------------
+# Fork — "Copy target instant or sorcery spell, except that the copy is red. You
+# may choose new targets for the copy." The copy resolves with the original's
+# targets (keeping targets is legal; the optional retarget is unmodeled).
+# ---------------------------------------------------------------------------
+
+class TestForkCopiesSpell:
+    def test_fork_copies_a_targeted_burn_spell(self, cards):
+        p1 = PlayerState(name="P1", hand=[cards["Lightning Bolt"], cards["Fork"]])
+        p2 = PlayerState(name="P2", life=20)
+        game = _game(p1, p2)
+        game.queue_from_hand(0, "Lightning Bolt", target_player_index=1)
+        game.queue_from_hand(0, "Fork", target_player_index=1, target_stack_index=0)
+        assert len(game.stack) == 2
+        while game.stack:
+            game.resolve_top_of_stack()
+        # 3 from the Bolt + 3 from the Fork copy (same target).
+        assert p2.life == 14
+
+
+# ---------------------------------------------------------------------------
+# Power Sink — "Counter target spell unless its controller pays {X}." The core
+# works: the spell is countered when its controller can't pay {X}. (The pay-or-be-
+# countered prompt to a human is an unmodeled enhancement; AI auto-pays when able.)
+# ---------------------------------------------------------------------------
+
+class TestPowerSinkCounters:
+    def test_counters_when_controller_cannot_pay(self, cards):
+        p1 = PlayerState(name="P1", hand=[cards["Power Sink"]])
+        p2 = PlayerState(name="P2", hand=[cards["Lightning Bolt"]])  # empty mana pool
+        game = _game(p1, p2)
+        game.queue_from_hand(1, "Lightning Bolt", target_player_index=0)
+        game.queue_from_hand(0, "Power Sink", target_player_index=1, target_stack_index=0, x_value=3)
+        while game.stack:
+            game.resolve_top_of_stack()
+        assert any(c.name == "Lightning Bolt" for c in p2.graveyard)  # countered
+
+
+# ---------------------------------------------------------------------------
+# Lich — "Whenever you're dealt damage, sacrifice that many nontoken permanents."
+# The core works: N damage sacrifices N nontoken permanents (game-losing ones
+# last). The interactive choice of which permanents is an unmodeled enhancement.
+# ---------------------------------------------------------------------------
+
+class TestLichSacrifice:
+    def test_damage_sacrifices_that_many_nontoken_permanents(self, cards):
+        lich = Permanent(card=cards["Lich"])
+        a = Permanent(card=cards["Grizzly Bears"])
+        b = Permanent(card=cards["Hill Giant"])
+        p1 = PlayerState(name="P1", battlefield=[a, b, lich], life=20)
+        game = _game(p1, PlayerState(name="P2"))
+        before = len(p1.battlefield)
+        game._deal_damage_to_player(p1, 2)
+        assert before - len(p1.battlefield) == 2  # two nontoken permanents sacrificed
+        assert lich in p1.battlefield              # Lich (game-losing) sacrificed last

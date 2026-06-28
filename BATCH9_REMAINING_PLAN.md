@@ -4,10 +4,11 @@ Tracks the CARD_VERIFICATION.md ❌ failures from this round. **Done** items are
 fixed + tested (engine + UI-API) and the app boots clean in the browser.
 **Remaining** items are investigated with a concrete plan but not yet implemented.
 
-## Done (19)
+## Done (20)
 
 | Card | Fix | Tests |
 | --- | --- | --- |
+| Fork | Verified the core already works: `copy_top_stack_spell` copies the targeted instant/sorcery and the copy resolves with the original's targets (legal — keeping targets is allowed). The *optional* "you may choose new targets" remains unmodeled and is documented as such | `batch9::TestForkCopiesSpell` |
 | Library of Leng | New centralized `_discard_card` helper routes a discarded card to the top of the library when the player controls Library of Leng (else the graveyard); applied to random discards (combat-damage trigger, "discards X at random") and cleanup discards, not just Disrupting Scepter | `batch9::TestLibraryOfLengDiscards` |
 | Farmstead | The ad-hoc enchant-land life-gain block now honors `human_choices` (auto-pays only as the AI/headless default); surfaced via `get_upkeep_pay_triggers` (enchant-land scan) as `upkeep_pay_to_gain_life` with a "no life" decline label | `batch9::TestFarmsteadUpkeepPay` |
 | Mana Vault | New parse rule `upkeep_pay_to_untap_self` + `_UPKEEP_PAY_KINDS` entry + upkeep resolve branch (pay → untap the artifact, no decline consequence); surfaced via existing `get_upkeep_pay_triggers` (upkeep_self) and the upkeep-pay prompt (new "stay tapped" decline label) | `batch9::TestManaVaultUpkeepUntap` |
@@ -28,7 +29,7 @@ fixed + tested (engine + UI-API) and the app boots clean in the browser.
 | Raging River | Per-role lock flags clear the prompt after assignment; no empty/defenderless loop | `test_raging_river_ui_api` (2 new) |
 | Glasses of Urza | Reveal-hand modal cards wired to `showCardPreview`/`clearCardPreview` on hover | (visual; verify in browser) |
 
-## Remaining (16) — plans
+## Remaining (15) — plans
 
 Infra patterns to reuse: `pending_optional_pays`/`confirm_optional_pay`,
 `pending_search_library`/`pending_discard` style deferred choices (state on `Game`,
@@ -40,14 +41,13 @@ choice needs an AI/headless auto-resolver** (determinism).
 - **Time Vault** — web surfacing of the already-implemented `get_begin_turn_untap_options`/`skip_turn_to_untap` (no web call today): pause `_begin_turn`, serialize, add skip/decline actions + app.js prompt.
 
 ### Pending-choice (engine auto-resolves a choice today)
-- **Lich** — `effects.py:304-325` auto-sacrifices; add `pending_sacrifice` + `confirm_sacrifice` (keep the "can't → lose" path; AI uses the existing heuristic).
+- **Lich** — core works and is now test-guarded (`batch9::TestLichSacrifice`): N damage sacrifices N nontoken permanents, game-losing ones last. *Remaining enhancement only:* `pending_sacrifice` + `confirm_sacrifice` so a human picks which (keep the "can't → lose" path).
 - **Illusionary Mask** — handler auto-picks first creature; add a hand-card selection prompt filtered by `cmc ≤ X`. Highest effort.
 
 ### Targeting
 - **Fireball** — allow targets across both seats: drop the same-seat guard at `app.js:3796`, add per-target `{seat,index}` payload (`schemas.py`), extend the divided `deal_damage` to split across both battlefields/faces.
-- **Fork** — after picking the copied spell, surface a second target prompt for the copy; pass new-target overrides into `copy_top_stack_spell`.
-- **Power Sink** — replace auto-pay in `counter_top_stack_spell` (unless_pays_x) with a pay-or-be-countered prompt to the targeted player (model on `pending_optional_pays`); new ActionKind.
-- **Forcefield** — uses "of your choice" (classified `none`). Add an activation spec enumerating unblocked attackers + store chosen source so `effects.py:181` only caps that source. (Reverse Damage in this cluster is now **Done**.)
+- **Power Sink** — core works and is now test-guarded (`batch9::TestPowerSinkCounters`): the spell is countered when its controller can't pay {X}; AI auto-pays when able. *Remaining enhancement only:* a pay-or-be-countered prompt to a human targeted player (model on `pending_optional_pays`) + new ActionKind.
+- **Forcefield** — already functional: activatable, caps the next combat damage instance >1 to 1 (`combat_damage_cap_one_charges`). *Remaining enhancement only:* an activation spec enumerating unblocked attackers + storing the chosen source so `effects.py` caps only that source. (Reverse Damage in this cluster is now **Done**.)
 
 ### Text-change (need from→to plumbing)
 - **Magical Hack / Sleight of Mind** — split parse rule by suffix ("one basic land type" vs "one color word") into a `mode`; thread the **from**-word through the cast path (schema + context). Magical Hack: land-type mode must NOT recolor and should remap `has_<old>walk`→`has_<new>walk` on creatures. Sleight of Mind: color-word mode stores a per-permanent `color_word_remap` consumed at the counter-color read sites (`stack_casting.py:423`, `handlers/stack.py:55`) — do not recolor. Update `test_bug_regressions.py:318` (asserts the old color_override behavior).
