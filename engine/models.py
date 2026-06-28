@@ -155,6 +155,11 @@ class PlayerState:
     # ("prevent that damage"), then is consumed. Cleared during cleanup.
     color_prevention_shields: list[str] = field(default_factory=list)
     combat_damage_cap_one_charges: int = 0
+    # Forcefield: "The next time an unblocked creature of your choice would deal
+    # combat damage to you this turn, prevent all but 1 of that damage." Each entry
+    # is a chosen attacking Permanent; the next damage from it to this player is
+    # capped to 1, then the entry is consumed. Cleared at end of combat / cleanup.
+    forcefield_capped_sources: list = field(default_factory=list)
     # Reverse Damage: "The next time a source of your choice would deal damage to
     # you this turn, prevent that damage. You gain life equal to the damage
     # prevented this way." Each charge prevents the entire next damage event to

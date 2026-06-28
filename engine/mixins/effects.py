@@ -178,6 +178,11 @@ class EffectsMixin:
         return tuple(getattr(card, "colors", ()) or ())
 
     def _prevent_damage(self, target: PlayerState, damage: int, source=None) -> int:
+        # Forcefield: prevent all but 1 of the next combat damage from the chosen
+        # unblocked attacker (source-specific, consumed once).
+        if damage > 1 and source is not None and source in target.forcefield_capped_sources:
+            target.forcefield_capped_sources.remove(source)
+            damage = 1
         if damage > 1 and target.combat_damage_cap_one_charges > 0:
             target.combat_damage_cap_one_charges -= 1
             damage = 1

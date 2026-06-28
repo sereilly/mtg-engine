@@ -197,6 +197,13 @@ def _land_excludes_swamp(card: CardDefinition) -> bool:
     return "non-swamp land" in (card.oracle_text or "").lower()
 
 
+def _cast_requires_target_mountains(card: CardDefinition) -> bool:
+    # Volcanic Eruption: "Destroy X target Mountains." The controller picks the X
+    # Mountains to destroy (X = how many are chosen).
+    t = (card.oracle_text or "").lower()
+    return "destroy" in t and "target mountain" in t
+
+
 def _classify_cast(card: CardDefinition) -> dict:
     """Return ``{"kind": ..., **flags}`` for the spell's cast-time target, mirroring
     the client cascade order. Modal "Choose one —" spells are reported as ``modal``
@@ -205,6 +212,10 @@ def _classify_cast(card: CardDefinition) -> dict:
         return {"kind": "graveyard_creature", "own_graveyard_only": True, "any_card": True}
     if _cast_requires_graveyard_creature(card):
         return {"kind": "graveyard_creature", "own_graveyard_only": _reanimates_own_graveyard_only(card)}
+    if _cast_requires_target_mountains(card):
+        # A multi-target land selection: the player picks the Mountains and X equals
+        # the number chosen, so the divided flow skips its separate X prompt.
+        return {"kind": "divided", "land_filter": "mountain", "x_equals_targets": True}
     if _cast_requires_land(card):
         return {"kind": "land", "exclude_swamp": _land_excludes_swamp(card)}
     if _cast_requires_artifact(card):
@@ -334,7 +345,15 @@ def _ability_target_instruction(card: CardDefinition):
     return None
 
 
+def _activated_requires_unblocked_attacker(card: CardDefinition) -> bool:
+    # Forcefield: "an unblocked creature of your choice would deal combat damage to
+    # you" — the controller picks one of the unblocked attackers.
+    return any("unblocked creature of your choice" in line for line in _activated_lines(card))
+
+
 def _classify_activation(card: CardDefinition) -> dict:
+    if _activated_requires_unblocked_attacker(card):
+        return {"kind": "creature", "unblocked_attacker": True}
     cop_color = _activated_color_protection_source(card)
     if cop_color is not None:
         # The chosen source can be a permanent of that color on any battlefield, or
@@ -467,8 +486,9 @@ class LegalityMixin:
             return perms + self._enumerate_stack_targets(card, spec)
 
         targets: list[dict] = []
-        # Player faces are legal for player-targeted, "any target", and divided spells.
-        if kind in ("player", "any", "divided"):
+        # Player faces are legal for player-targeted, "any target", and divided
+        # spells — but not a divided land selection (Volcanic Eruption's Mountains).
+        if kind in ("player", "any", "divided") and not spec.get("land_filter"):
             for seat in range(len(self.players)):
                 targets.append({"kind": "player", "seat": seat})
             if kind == "player":
@@ -534,10 +554,20 @@ class LegalityMixin:
     def _permanent_matches_target_kind(self, perm: Permanent, kind: str, spec: dict, casting_aura: bool) -> bool:
         type_line = perm.card.type_line.lower()
         if kind in ("creature", "any", "divided"):
+            # Volcanic Eruption: a divided spell that targets Mountains, not creatures.
+            land_filter = spec.get("land_filter")
+            if land_filter:
+                if perm.card.primary_type != "land":
+                    return False
+                override = str(perm.metadata.get("land_type_override", "")).lower()
+                return land_filter in type_line or override == land_filter
             if perm.card.primary_type != "creature":
                 return False
             if spec.get("enchant_wall"):
                 return "wall" in type_line
+            # Forcefield: only unblocked attacking creatures are legal choices.
+            if spec.get("unblocked_attacker") and not (perm.attacking and not perm.blocked):
+                return False
             return True
         if kind == "artifact":
             return "artifact" in type_line

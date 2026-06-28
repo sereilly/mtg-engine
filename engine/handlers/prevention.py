@@ -99,8 +99,21 @@ def grant_reverse_damage_shield(game: Game, instruction: OracleInstruction, cont
 @effect_handler("grant_forcefield_shield")
 def grant_forcefield_shield(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     caster = context.caster
-    caster.combat_damage_cap_one_charges += 1
-    game.log.append("Forcefield shield granted")
+    # Honor the chosen unblocked attacker so only that creature's combat damage is
+    # capped to 1. Fall back to a generic "next combat damage" cap for AI/headless
+    # activations that supply no target.
+    chosen = None
+    idx = context.target_permanent_index
+    if isinstance(idx, int) and context.target is not None and 0 <= idx < len(context.target.battlefield):
+        candidate = context.target.battlefield[idx]
+        if candidate.card.primary_type == "creature":
+            chosen = candidate
+    if chosen is not None:
+        caster.forcefield_capped_sources.append(chosen)
+        game.log.append(f"Forcefield will prevent all but 1 combat damage from {chosen.card.name}")
+    else:
+        caster.combat_damage_cap_one_charges += 1
+        game.log.append("Forcefield shield granted")
     return True, "resolved"
 
 

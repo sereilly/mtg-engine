@@ -31,6 +31,7 @@ class EndOfCombatStepMixin:
         self.combat_damage_prevented_until_eot = False
         for player in self.players:
             player.combat_damage_cap_one_charges = 0
+            player.forcefield_capped_sources = []
         self._reset_combat_state(clear_damage_marked=False)
         if self._receives_priority(step):
             self._resolve_priority_window()

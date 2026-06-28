@@ -323,3 +323,45 @@ def test_word_of_command_hidden_from_target():
     game.cast_from_hand(0, "Word of Command", target_player_index=1)
     state = client.get(f"/api/sessions/{sid}/state", params={"seat": 1}).json()
     assert state["word_of_command"] is None
+
+
+def test_volcanic_eruption_hand_card_offers_mountain_multiselect():
+    # The hand card carries a divided/mountain cast spec so the UI runs the
+    # multi-select; casting with chosen indices destroys exactly those Mountains.
+    sid, session, game = _session()
+    game.players[0].battlefield = [
+        Permanent(card=_CARDS["Mountain"]),
+        Permanent(card=_CARDS["Mountain"]),
+        Permanent(card=_CARDS["Forest"]),
+    ]
+    game.players[0].hand = [_CARDS["Volcanic Eruption"]]
+    game.players[0].life = 20
+    game.players[1].life = 20
+    game.enforce_mana_costs = False
+
+    state = client.get(f"/api/sessions/{sid}/state", params={"seat": 0}).json()
+    ve = next(c for c in state["players"][0]["hand"] if c["name"] == "Volcanic Eruption")
+    spec = ve["target_spec"]
+    assert spec["kind"] == "divided" and spec["land_filter"] == "mountain"
+    assert spec["x_equals_targets"] is True
+    assert {(t["seat"], t["index"]) for t in spec["valid_targets"]} == {(0, 0), (0, 1)}
+
+    resp = client.post(
+        f"/api/sessions/{sid}/action",
+        json={
+            "seat": 0,
+            "action": "cast",
+            "card_name": "Volcanic Eruption",
+            "target_seat": 0,
+            "target_permanent_indices": [0, 1],
+            "x_value": 2,
+        },
+    )
+    assert resp.status_code == 200
+    # The spell is queued with the chosen Mountains; resolve the stack to apply it.
+    item = game.stack[-1]
+    assert item.target_permanent_index == [0, 1] and item.x_value == 2
+    game.resolve_stack()
+    names = [p.card.name for p in game.players[0].battlefield]
+    assert names == ["Forest"]            # both Mountains destroyed, Forest kept
+    assert game.players[0].life == 18 and game.players[1].life == 18

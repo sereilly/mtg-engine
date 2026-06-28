@@ -4116,8 +4116,11 @@ function startCastDividedPrompt(card, castAction = "cast", validTargets = null) 
   };
   renderActivationPrompt();
   renderBoard(currentState);
+  const landFilter = targetSpecOf(card)?.land_filter;
   updateActionHint(
-    `Choose targets for ${cardName}: click creatures to split the damage among them, or click a player's life pill to hit their face. Then confirm.`,
+    landFilter
+      ? `Choose the ${landFilter}s for ${cardName} to destroy (click each), then confirm.`
+      : `Choose targets for ${cardName}: click creatures to split the damage among them, or click a player's life pill to hit their face. Then confirm.`,
   );
 }
 
@@ -4130,7 +4133,10 @@ function dividedTargetCount() {
 function dividedTargetsHint() {
   const n = dividedTargetCount();
   if (n === 0) return "No targets chosen yet.";
-  const extra = n > 1 ? ` (+${n - 1} mana for the extra target${n - 1 === 1 ? "" : "s"})` : "";
+  // The per-target mana tax only applies to Fireball-style splits, not to a
+  // count-based selection (Volcanic Eruption, where X = the number chosen).
+  const xEqualsTargets = !!targetSpecOf(pendingCastTarget?.card)?.x_equals_targets;
+  const extra = !xEqualsTargets && n > 1 ? ` (+${n - 1} mana for the extra target${n - 1 === 1 ? "" : "s"})` : "";
   return `${n} target${n === 1 ? "" : "s"} chosen${extra}.`;
 }
 
@@ -4175,10 +4181,29 @@ function confirmDividedTargets() {
       ? { targetSeat: p.dividedFaceSeat, indices: null }
       : { targetSeat: p.dividedTargets[0].seat, indices: p.dividedTargets.map((t) => t.idx) };
   const { card, cardName, castAction } = p;
+  // Volcanic Eruption: X equals the number of chosen targets (Mountains), so there
+  // is no separate X prompt — cast straight away with x_value = the count.
+  const xEqualsTargets = !!targetSpecOf(card)?.x_equals_targets;
   pendingCastTarget = null;
   battlefieldCanvas?.setTargetingKeys([]);
   for (const elementId of ["selfLife", "oppLife", "selfName", "oppName"]) {
     q(elementId)?.classList.remove("targeting-valid");
+  }
+  if (xEqualsTargets && Array.isArray(resolved.indices)) {
+    const body = {
+      seat,
+      action: castAction || "cast",
+      card_name: cardName,
+      target_seat: resolved.targetSeat,
+      target_permanent_indices: resolved.indices,
+      x_value: resolved.indices.length,
+    };
+    updateActionHint(`Casting ${cardName} (X = ${resolved.indices.length})...`);
+    sendAction(body)
+      .then(() => updateActionHint(`Cast ${cardName}.`))
+      .catch((e) => updateActionHint(e.message, true))
+      .finally(() => clearPendingHandCast());
+    return;
   }
   startCastDividedXPrompt(card, cardName, resolved, n - 1, castAction || "cast");
 }

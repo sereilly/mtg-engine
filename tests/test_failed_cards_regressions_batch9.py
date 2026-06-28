@@ -839,3 +839,74 @@ class TestWordOfCommand:
         assert p1.life == 20
         assert len(p1.hand) == 1
         assert game.pending_word_of_command is None
+
+
+# ---------------------------------------------------------------------------
+# Forcefield — "{1}: The next time an unblocked creature of your choice would deal
+# combat damage to you this turn, prevent all but 1 of that damage." The
+# activation now targets the chosen unblocked attacker (was a generic cap).
+# ---------------------------------------------------------------------------
+
+class TestForcefield:
+    def _combat(self, cards):
+        ff = Permanent(card=cards["Forcefield"])
+        attacker = Permanent(card=cards["Hill Giant"])  # 3/3
+        attacker.metadata["summoning_sickness_turn"] = -99
+        # Seat 0 = attacker (active), seat 1 = Forcefield controller (defender).
+        p_att = PlayerState(name="Attacker", battlefield=[attacker], life=20)
+        p_def = PlayerState(name="Defender", battlefield=[ff], life=20)
+        game = _game(p_att, p_def)
+        game.active_player_index = 0
+        game._set_phase_and_step("combat", "declare_attackers")
+        game.combat_defending_player_index = 1
+        game.declare_attackers(0, [0])
+        game.advance_combat_phase()       # -> declare_blockers
+        game.declare_blockers(1, {})      # Hill Giant unblocked
+        return game, p_def, attacker
+
+    def test_activation_enumerates_only_unblocked_attackers(self, cards):
+        game, _, _ = self._combat(cards)
+        spec = game.activation_target_spec(1, 0)  # Forcefield is p_def's index 0
+        assert spec["kind"] == "creature" and spec["requires_target"]
+        keys = {(t["seat"], t["index"]) for t in spec["valid_targets"]}
+        assert keys == {(0, 0)}  # the unblocked Hill Giant
+
+    def test_caps_chosen_attacker_combat_damage_to_one(self, cards):
+        game, p_def, attacker = self._combat(cards)
+        game.activate_permanent_ability(
+            1, "Forcefield", permanent_index=0, target_player_index=0, target_permanent_index=0
+        )
+        assert attacker in p_def.forcefield_capped_sources
+        game._set_phase_and_step("combat", "combat_damage")
+        game.resolve_combat_damage(0)
+        assert p_def.life == 19  # Hill Giant's 3 prevented down to 1
+
+
+# ---------------------------------------------------------------------------
+# Volcanic Eruption — "Destroy X target Mountains." The caster now chooses which
+# Mountains (cast spec is a Mountain multi-select where X = the number chosen).
+# ---------------------------------------------------------------------------
+
+class TestVolcanicEruption:
+    def test_cast_spec_enumerates_mountains(self, cards):
+        ve = cards["Volcanic Eruption"]
+        m1, m2 = Permanent(card=cards["Mountain"]), Permanent(card=cards["Mountain"])
+        forest = Permanent(card=cards["Forest"])
+        p0 = PlayerState(name="P0", hand=[ve], battlefield=[m1, m2, forest], life=20)
+        game = _game(p0, PlayerState(name="P1"))
+        spec = game.cast_target_spec(0, ve)
+        assert spec["kind"] == "divided"
+        assert spec["land_filter"] == "mountain"
+        assert spec["x_equals_targets"] is True
+        keys = {(t["seat"], t["index"]) for t in spec["valid_targets"]}
+        assert keys == {(0, 0), (0, 1)}  # only the two Mountains (not the Forest)
+
+    def test_destroys_only_chosen_mountains(self, cards):
+        m1, m2, m3 = (Permanent(card=cards["Mountain"]) for _ in range(3))
+        p0 = PlayerState(name="P0", hand=[cards["Volcanic Eruption"]], battlefield=[m1, m2, m3], life=20)
+        p1 = PlayerState(name="P1", life=20)
+        game = _game(p0, p1)
+        # Choose two of the three Mountains; X = 2.
+        game.cast_from_hand(0, "Volcanic Eruption", target_player_index=0, target_permanent_index=[0, 1], x_value=2)
+        assert len(p0.battlefield) == 1  # one Mountain survives
+        assert p0.life == 18 and p1.life == 18  # 2 damage to each player
