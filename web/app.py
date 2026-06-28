@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 import random
+import re
 import socket
 from collections import defaultdict
 from pathlib import Path
@@ -233,7 +234,20 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         # A color-changing effect (e.g. Lifelace: "Target ... becomes green.")
         # records the new color so the UI can label the recolored permanent.
         "color_override": perm.metadata.get("color_override"),
+        # Corpse counters (Scavenging Ghoul) so the canvas can render them. Folded
+        # into a generic ``counters`` map so future counter types render for free.
+        "corpse_counters": int(perm.metadata.get("corpse_counters", 0)),
+        "counters": _serialize_counters(perm),
     }
+
+
+def _serialize_counters(perm) -> dict:
+    """A name->count map of the counters worth rendering on a card face."""
+    counters: dict[str, int] = {}
+    corpse = int(perm.metadata.get("corpse_counters", 0))
+    if corpse:
+        counters["corpse"] = corpse
+    return counters
 
 
 # Maps an effect instruction kind to the client target-prompt kind a modal mode
@@ -306,14 +320,45 @@ def _serialize_modes(card, game: Game | None = None, caster_index: int | None = 
     return modes
 
 
+def _apply_generic_tax_to_cost(cost_text: str, tax: int) -> str:
+    """Fold ``tax`` extra generic mana into a printed cost string (e.g. Gloom's
+    +{3} on white spells: '{W}' -> '{3}{W}', '{3}{R}' -> '{6}{R}')."""
+    if tax <= 0:
+        return cost_text
+    tokens = re.findall(r"\{([^}]+)\}", cost_text or "")
+    generic_idx = next((i for i, t in enumerate(tokens) if t.isdigit()), None)
+    if generic_idx is not None:
+        tokens[generic_idx] = str(int(tokens[generic_idx]) + tax)
+    else:
+        tokens = [str(tax)] + tokens
+    return "".join("{" + t + "}" for t in tokens)
+
+
+def _gloom_white_tax(card, game: Game | None) -> int:
+    """The extra generic mana Gloom adds to a white spell's cost (0 otherwise)."""
+    if game is None or "W" not in card.colors:
+        return 0
+    has_gloom = any(perm.card.name == "Gloom" for p in game.players for perm in p.battlefield)
+    return 3 if has_gloom else 0
+
+
 def _serialize_card(card, game: Game | None = None, caster_index: int | None = None) -> dict:
     image_uris = card.raw.get("image_uris") if isinstance(card.raw, dict) else None
     image_uri = image_uris.get("normal") if isinstance(image_uris, dict) else None
     large_image_uri = image_uris.get("large") if isinstance(image_uris, dict) else None
+    # Cost increasers (Gloom) are applied at payment time by the engine; reflect
+    # them in the cost the UI shows and auto-taps for, so the pay-mana prompt
+    # matches what the player actually pays. ``printed_mana_cost`` keeps the
+    # unmodified printed value for reference.
+    tax = _gloom_white_tax(card, game)
+    effective_cost = _apply_generic_tax_to_cost(card.mana_cost, tax)
     serialized = {
         "name": card.name,
         "type": card.type_line,
-        "mana_cost": card.mana_cost,
+        "mana_cost": effective_cost,
+        "printed_mana_cost": card.mana_cost,
+        "effective_mana_cost": effective_cost,
+        "cost_increased": tax > 0,
         "oracle_text": card.oracle_text,
         "image_uri": image_uri,
         "large_image_uri": large_image_uri,
@@ -574,6 +619,28 @@ def _serialize_emblems(player: PlayerState) -> list[dict]:
                 "image_uri": image_uri,
                 "large_image_uri": large_image_uri,
             })
+    # Channel: "Until end of turn, any time you could activate a mana ability, you
+    # may pay 1 life. If you do, add {C}." A synthetic emblem the controller clicks
+    # to spend life for colorless mana while the effect is active.
+    if player.channel_active_until_eot:
+        source = CARD_BY_NAME.get("channel")
+        image_uris = source.raw.get("image_uris") if source and isinstance(source.raw, dict) else None
+        image_uri = image_uris.get("normal") if isinstance(image_uris, dict) else None
+        large_image_uri = image_uris.get("large") if isinstance(image_uris, dict) else None
+        emblems.append({
+            "kind": "channel",
+            "index": -1,  # not an activate_emblem index; the client uses channel_mana
+            "label": "Pay 1 life: add {C}",
+            "name": "Channel",
+            "source": "Channel",
+            "type": "Emblem — Channel",
+            "oracle_text": (
+                "Until end of turn, any time you could activate a mana ability, you "
+                "may pay 1 life. If you do, add {C}."
+            ),
+            "image_uri": image_uri,
+            "large_image_uri": large_image_uri,
+        })
     return emblems
 
 
@@ -1236,7 +1303,7 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
             idx
             for idx in sorted(set(session.untap_candidate_indices))
             if 0 <= idx < len(session.game.players[viewer_seat].battlefield)
-            and session.game.players[viewer_seat].battlefield[idx].card.primary_type == "land"
+            and session.game.players[viewer_seat].battlefield[idx].card.primary_type in ("land", "creature")
             and session.game.players[viewer_seat].battlefield[idx].tapped
         ]
         session.untap_candidate_indices = valid_candidates
@@ -1336,6 +1403,40 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         if mine:
             optional_pay_info = {"pending": mine}
 
+    # Phantasmal Terrain: the controller chooses the enchanted land's basic land
+    # type. Surface the prompt only to that (human) player.
+    land_type_choice_info = None
+    pending_land_type = session.game.pending_land_type_choice
+    if (
+        pending_land_type is not None
+        and viewer_seat is not None
+        and pending_land_type["player_index"] == viewer_seat
+        and _seat_type(session, viewer_seat) != "ai"
+    ):
+        land_type_choice_info = {
+            "card_name": pending_land_type["card_name"],
+            "options": ["plains", "island", "swamp", "mountain", "forest"],
+        }
+
+    # Kudzu: after the enchanted land is destroyed, its controller chooses which
+    # land to re-enchant. Surface the candidate lands only to that (human) player.
+    kudzu_reattach_info = None
+    pending_kudzu = session.game.pending_kudzu_reattach
+    if (
+        pending_kudzu is not None
+        and viewer_seat is not None
+        and pending_kudzu["player_index"] == viewer_seat
+        and _seat_type(session, viewer_seat) != "ai"
+    ):
+        owner = session.game.players[pending_kudzu["player_index"]]
+        kudzu_reattach_info = {
+            "lands": [
+                {"index": i, "name": p.card.name}
+                for i, p in enumerate(owner.battlefield)
+                if p.card.primary_type == "land"
+            ],
+        }
+
     # Glasses of Urza: surface a revealed hand only to the player who looked.
     hand_reveal_info = None
     pending_reveal = session.game.pending_hand_reveal
@@ -1409,6 +1510,8 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "balance_select": balance_info,
         "optional_pay": optional_pay_info,
         "hand_reveal": hand_reveal_info,
+        "land_type_choice": land_type_choice_info,
+        "kudzu_reattach": kudzu_reattach_info,
         "pregame": _build_pregame_info(session, viewer_seat),
     }
 
@@ -1555,6 +1658,31 @@ def _auto_resolve_ai_pending_optional_pays(session: Session) -> None:
             game.auto_resolve_pending_optional_pays(only_player_index=entry["player_index"])
 
 
+def _auto_resolve_ai_pending_land_type(session: Session) -> None:
+    """Keep the provisional default (island) for an AI Phantasmal Terrain; only a
+    human controller gets to pick the basic land type."""
+    game = session.game
+    pending = game.pending_land_type_choice
+    if pending is not None and _seat_type(session, pending["player_index"]) == "ai":
+        game.confirm_land_type(pending["player_index"], "island")
+
+
+def _auto_resolve_ai_pending_kudzu(session: Session) -> None:
+    """Re-attach an AI's Kudzu to its first available land (deterministic)."""
+    game = session.game
+    pending = game.pending_kudzu_reattach
+    if pending is not None and _seat_type(session, pending["player_index"]) == "ai":
+        owner = game.players[pending["player_index"]]
+        idx = next(
+            (i for i, p in enumerate(owner.battlefield) if p.card.primary_type == "land"),
+            None,
+        )
+        if idx is None:
+            game.pending_kudzu_reattach = None
+        else:
+            game.confirm_kudzu_reattach(pending["player_index"], idx)
+
+
 def _auto_resolve_ai_pending(session: Session) -> None:
     """Resolve any AI-owned pending choices (library search, library reorder,
     discard, balance, optional pays)."""
@@ -1563,6 +1691,8 @@ def _auto_resolve_ai_pending(session: Session) -> None:
     _auto_resolve_ai_pending_discard(session)
     _auto_resolve_ai_pending_balance(session)
     _auto_resolve_ai_pending_optional_pays(session)
+    _auto_resolve_ai_pending_land_type(session)
+    _auto_resolve_ai_pending_kudzu(session)
 
 
 def _ai_step(session: Session) -> bool:
@@ -1818,20 +1948,25 @@ def _build_raging_river_info(session: Session, viewer_seat: int | None) -> dict 
     defender_index = game.combat_left_right_defender_index
     attacker_index = game.active_player_index
     info: dict = {"defender_seat": defender_index, "attacker_seat": attacker_index}
-    if viewer_seat == defender_index:
+    if viewer_seat == defender_index and not game.combat_left_right_defender_locked:
         defender = game.players[defender_index]
-        info["divide_creatures"] = [
+        divide = [
             {"index": i, **_serialize_card_summary(p.card), "pile": game.combat_defender_piles.get(i)}
             for i, p in enumerate(defender.battlefield)
             if p.card.primary_type == "creature" and not game._has_keyword(p, "flying")
         ]
-    if viewer_seat == attacker_index:
+        # No non-flying creatures to divide → nothing to decide, don't prompt.
+        if divide:
+            info["divide_creatures"] = divide
+    if viewer_seat == attacker_index and not game.combat_left_right_attacker_locked:
         attacker = game.players[attacker_index]
-        info["label_attackers"] = [
+        label = [
             {"index": i, **_serialize_card_summary(attacker.battlefield[i].card), "pile": game.combat_attacker_piles.get(i)}
             for i in sorted(game.combat_attackers)
             if 0 <= i < len(attacker.battlefield)
         ]
+        if label:
+            info["label_attackers"] = label
     if "divide_creatures" not in info and "label_attackers" not in info:
         return None
     return info
@@ -2660,6 +2795,7 @@ def do_action(session_id: str, req: GameActionRequest):
                 permanent.card.name,
                 chosen_color=req.mana_color or "G",
                 permanent_index=permanent_index,
+                defer_kudzu_choice=_seat_type(session, req.seat) != "ai",
             )
         else:
             tapped = session.game.tap_permanent(
@@ -2685,6 +2821,7 @@ def do_action(session_id: str, req: GameActionRequest):
                 permanent.card.name,
                 chosen_color=req.mana_color or "G",
                 permanent_index=permanent_index,
+                defer_kudzu_choice=_seat_type(session, req.seat) != "ai",
             )
             if not tapped:
                 raise HTTPException(status_code=400, detail="failed to tap land for mana")
@@ -2936,10 +3073,22 @@ def do_action(session_id: str, req: GameActionRequest):
 
         selected = sorted(set(session.untap_selected_indices))
         if len(selected) > required:
-            raise HTTPException(status_code=400, detail="selected too many lands to untap")
+            raise HTTPException(status_code=400, detail="selected too many permanents to untap")
 
+        # Split the chosen battlefield indices by type — Winter Orb constrains lands,
+        # Smoke constrains creatures — and hand each list to the untap resolver. Only
+        # pass a (possibly empty) selection for a constrained type; an unconstrained
+        # type stays None so it untaps freely.
+        options = session.game.get_untap_land_selection_options(session.current_turn) or {}
+        battlefield = session.game.players[session.current_turn].battlefield
+        selected_lands = [i for i in selected if 0 <= i < len(battlefield) and battlefield[i].card.primary_type == "land"]
+        selected_creatures = [i for i in selected if 0 <= i < len(battlefield) and battlefield[i].card.primary_type == "creature"]
         try:
-            session.game.resolve_untap_step(session.current_turn, selected_land_indices=selected)
+            session.game.resolve_untap_step(
+                session.current_turn,
+                selected_land_indices=selected_lands if options.get("land_max") is not None else None,
+                selected_creature_indices=selected_creatures if options.get("creature_max") is not None else None,
+            )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -3094,6 +3243,22 @@ def do_action(session_id: str, req: GameActionRequest):
         if req.accept is None:
             raise HTTPException(status_code=400, detail="accept (true/false) is required")
         session.game.confirm_optional_pay(req.seat, card_name=req.card_name, accept=bool(req.accept))
+
+    elif req.action == "land_type_confirm":
+        # Phantasmal Terrain: the controller picks the enchanted land's basic type.
+        if not req.land_type:
+            raise HTTPException(status_code=400, detail="land_type is required")
+        ok = session.game.confirm_land_type(req.seat, req.land_type)
+        if not ok:
+            raise HTTPException(status_code=400, detail="no land-type choice pending for you")
+
+    elif req.action == "kudzu_reattach_confirm":
+        # Kudzu: the controller picks which land to re-enchant (battlefield index).
+        if req.target_permanent_index is None:
+            raise HTTPException(status_code=400, detail="target_permanent_index is required")
+        ok = session.game.confirm_kudzu_reattach(req.seat, req.target_permanent_index)
+        if not ok:
+            raise HTTPException(status_code=400, detail="invalid Kudzu reattach selection")
 
     elif req.action == "assign_defender_piles":
         piles = {int(k): str(v) for k, v in (req.piles or {}).items()}

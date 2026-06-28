@@ -423,7 +423,11 @@ class TestVerduranEnchantress:
 
         game.cast_from_hand(0, "Bad Moon")  # an enchantment spell
 
-        assert len(p1.hand) == 1  # drew one card off casting the enchantment
+        # "you may draw a card" is an optional yes/no prompt now: queued, not auto.
+        assert any(e["card_name"] == "Verduran Enchantress" for e in game.pending_optional_pays)
+        assert len(p1.hand) == 0
+        game.confirm_optional_pay(0, "Verduran Enchantress", accept=True)
+        assert len(p1.hand) == 1  # drew one card off accepting
 
     def test_does_not_draw_on_a_noncreature_nonenchantment_spell(self, cards):
         enchantress = Permanent(card=cards["Verduran Enchantress"])

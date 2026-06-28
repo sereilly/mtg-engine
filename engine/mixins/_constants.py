@@ -64,4 +64,10 @@ _UPKEEP_PAY_KINDS = {
     "upkeep_pay_or_sacrifice_self",
     "upkeep_pay_or_deal_damage_to_controller",
     "upkeep_pay_or_tap_and_sacrifice_opponent_land",
+    # Optional pays with no decline consequence — pay to untap (Mana Vault /
+    # Basalt Monolith untap themselves; Paralyze untaps the enchanted creature)
+    # or pay for life (Farmstead's granted enchant-land upkeep ability).
+    "upkeep_pay_to_untap_self",
+    "upkeep_pay_to_untap_enchanted",
+    "upkeep_pay_to_gain_life",
 }

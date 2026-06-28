@@ -68,6 +68,9 @@ def left_right_combat_division(game: Game, instruction: OracleInstruction, conte
         context.source_permanent.metadata["left_right_division_turn"] = game.turn
     game.combat_left_right_active = True
     game.combat_left_right_defender_index = game.combat_defending_player_index
+    # A fresh attack re-opens both players' pile decisions.
+    game.combat_left_right_defender_locked = False
+    game.combat_left_right_attacker_locked = False
 
     # Seed a sensible default division so AI/headless combat still resolves: the
     # defending player's non-flying creatures alternate left/right, and every
@@ -156,9 +159,18 @@ def grant_unblockable_to_low_power_target(game: Game, instruction: OracleInstruc
 
 @effect_handler("grant_banding_to_target")
 def grant_banding_to_target(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    caster = context.caster
-    # Banding is granted to one of the controller's own creatures, not the opponent's.
-    target_creature = next((perm for perm in caster.battlefield if perm.card.primary_type == "creature"), None)
+    # Helm of Chatzuk: "{1}, {T}: Target creature gains banding until end of turn."
+    # Honor the chosen target (any creature, on either battlefield); fall back to
+    # the first creature only when no explicit target was supplied (AI/headless).
+    target = context.target
+    idx = context.target_permanent_index
+    target_creature = None
+    if isinstance(idx, int) and 0 <= idx < len(target.battlefield):
+        candidate = target.battlefield[idx]
+        if candidate.card.primary_type == "creature":
+            target_creature = candidate
+    if target_creature is None:
+        target_creature = next((perm for perm in target.battlefield if perm.card.primary_type == "creature"), None)
     if target_creature is None:
         game.log.append("No valid creature target for banding effect")
         return False, "no valid creature target for banding effect"

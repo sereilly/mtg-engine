@@ -37,6 +37,8 @@ ActionKind = Literal[
     "discard_confirm",
     "balance_confirm",
     "resolve_optional_pay",
+    "land_type_confirm",
+    "kudzu_reattach_confirm",
     "assign_defender_piles",
     "assign_attacker_piles",
     "dismiss_hand_reveal",
@@ -126,6 +128,9 @@ class GameActionRequest(BaseModel):
     # Raging River: map of battlefield/attacker index → "left"/"right" pile label,
     # sent with assign_defender_piles / assign_attacker_piles.
     piles: dict[int, str] | None = None
+    # Phantasmal Terrain: the basic land type the controller chose for the
+    # enchanted land, sent with `land_type_confirm`.
+    land_type: Literal["plains", "island", "swamp", "mountain", "forest"] | None = None
     # Counterspell / Fork: which spell on the stack to target, as a top-first index
     # into the serialized stack (0 = topmost). Converted server-side to an engine
     # stack index.

@@ -158,6 +158,7 @@ class TurnManagementMixin:
         chosen_color: str = "G",
         permanent_index: int | None = None,
         kudzu_reattach_index: int | None = None,
+        defer_kudzu_choice: bool = False,
     ) -> bool:
         player = self.players[player_index]
         resolved = self._find_controlled_permanent(player, land_name, permanent_index)
@@ -229,12 +230,23 @@ class TurnManagementMixin:
                 and player.battlefield[kudzu_reattach_index].card.primary_type == "land"
             ):
                 new_land = player.battlefield[kudzu_reattach_index]
-            if new_land is None:
-                new_land = next((p for p in player.battlefield if p.card.primary_type == "land"), None)
-            if new_land is not None:
-                aura.metadata["attached_to"] = new_land
-                new_land.metadata["attached_aura"] = aura
-                self.log.append(f"Kudzu attached to {new_land.card.name}")
+            # A human controller picks the land to re-enchant: defer when no choice
+            # was supplied and there is a land to move to. Headless/AI play keeps the
+            # deterministic "first other land" default below.
+            if new_land is None and defer_kudzu_choice and any(
+                p.card.primary_type == "land" for p in player.battlefield
+            ):
+                self.pending_kudzu_reattach = {
+                    "player_index": player_index,
+                    "aura": aura,
+                }
+            else:
+                if new_land is None:
+                    new_land = next((p for p in player.battlefield if p.card.primary_type == "land"), None)
+                if new_land is not None:
+                    aura.metadata["attached_to"] = new_land
+                    new_land.metadata["attached_aura"] = aura
+                    self.log.append(f"Kudzu attached to {new_land.card.name}")
 
         # Aura attached to this land: fire enchanted_land_tapped triggers (e.g. Psychic Venom)
         attached_aura = land.metadata.get("attached_aura")

@@ -164,6 +164,14 @@ def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
     # the profitability heuristic below.
     forced = [idx for idx in legal_attackers_list if game._must_attack_if_able(player.battlefield[idx])]
 
+    # A creature enchanted with Lure ("All creatures able to block it do so") is
+    # only worth attacking with if it actually gets declared. Treat it as forced
+    # so the AI doesn't decline to attack with it (which would skip the defender's
+    # block step entirely from the human's perspective).
+    for idx in legal_attackers_list:
+        if idx not in forced and player.battlefield[idx].metadata.get("lure_active"):
+            forced.append(idx)
+
     opponent_blockers = [
         perm
         for perm in opponent.battlefield

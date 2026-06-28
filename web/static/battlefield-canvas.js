@@ -1730,6 +1730,28 @@ class BattlefieldCanvas {
       ctx.fillText(String(dmgCard.damage_marked), x + 2 + bw / 2, y + h - bh / 2 - 2);
     }
 
+    // ---- Corpse counter badge (Scavenging Ghoul) ----
+    // Counters the card accumulates (corpse counters) shown bottom-right so the
+    // player can see how many regenerations they have banked.
+    const counterCard = creatureCard || card;
+    const corpseCount = counterCard && Number(counterCard.corpse_counters);
+    if (corpseCount > 0) {
+      const bw = 22, bh = 13;
+      const bx = x + w - bw - 2, by = y + h - bh - 2;
+      ctx.fillStyle = "rgba(60,40,70,0.92)";
+      this._roundRect(ctx, bx, by, bw, bh, 3);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(180,140,220,0.9)";
+      ctx.lineWidth = 1;
+      this._roundRect(ctx, bx, by, bw, bh, 3);
+      ctx.stroke();
+      ctx.fillStyle = "#f0e6ff";
+      ctx.font = `bold ${Math.max(8, bh * 0.7)}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("☠" + corpseCount, bx + bw / 2, by + bh / 2);
+    }
+
     // ---- Damage-prevention shield badge ----
     // A shield with the remaining prevention value (Healing Salve / Samite Healer
     // on a creature, …). Sits at the top-left; hovering it previews the source.

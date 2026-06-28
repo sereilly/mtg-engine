@@ -36,6 +36,26 @@ def upkeep_pay_or_sacrifice_self(text: str, activated: bool) -> RuleResult:
     return None
 
 
+# Mana Vault / Basalt Monolith: "you may pay {N}. If you do, untap this artifact."
+# An optional pay during your own upkeep that untaps the source permanent.
+@parse_rule(22)
+def upkeep_pay_to_untap_self(text: str, activated: bool) -> RuleResult:
+    if "may pay" in text and ("untap this artifact" in text or "untap this permanent" in text):
+        mana = _extract_mana_cost_from_text(text)
+        return _instruction("upkeep_pay_to_untap_self", mana=mana), "upkeep_effect"
+    return None
+
+
+# Paralyze: "that player may pay {N}. If the player does, untap the creature." An
+# optional pay during the enchanted creature's controller's upkeep.
+@parse_rule(24)
+def upkeep_pay_to_untap_enchanted(text: str, activated: bool) -> RuleResult:
+    if "may pay" in text and ("untap the creature" in text or "untap enchanted creature" in text):
+        mana = _extract_mana_cost_from_text(text)
+        return _instruction("upkeep_pay_to_untap_enchanted", mana=mana), "upkeep_effect"
+    return None
+
+
 # "this creature/artifact deals N damage to you unless you pay {X}..." (Force of Nature)
 @parse_rule(30)
 def upkeep_pay_or_deal_damage_to_controller(text: str, activated: bool) -> RuleResult:

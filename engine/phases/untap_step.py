@@ -11,6 +11,10 @@ Meekstone, Time Vault-style "doesn't untap" text, and Island Sanctuary cleanup.
 
 class UntapStepMixin:
     def get_untap_land_selection_options(self, player_index: int) -> dict[str, object] | None:
+        """Untap-step selection constraints the controller must resolve: Winter Orb
+        limits untapping to one *land*, Smoke to one *creature*. Returns combined
+        candidate battlefield indices and the total number that may be untapped
+        among the constrained types, or None if nothing is constrained."""
         player = self.players[player_index]
         all_permanents = [perm for pl in self.players for perm in pl.battlefield]
 
@@ -20,24 +24,45 @@ class UntapStepMixin:
         max_untap_lands = 999
         if any(perm.card.name == "Winter Orb" and not perm.tapped for perm in all_permanents):
             max_untap_lands = 1
+        max_untap_creatures = 999
+        if any(perm.card.name == "Smoke" for perm in all_permanents):
+            max_untap_creatures = 1
 
-        if max_untap_lands >= 999:
-            return None
-
-        candidate_indices = [
-            idx
-            for idx, permanent in enumerate(player.battlefield)
-            if permanent.card.primary_type == "land" and permanent.tapped
+        land_candidates = [
+            idx for idx, p in enumerate(player.battlefield)
+            if p.card.primary_type == "land" and p.tapped
         ]
-        if len(candidate_indices) <= max_untap_lands:
+        creature_candidates = [
+            idx for idx, p in enumerate(player.battlefield)
+            if p.card.primary_type == "creature" and p.tapped
+        ]
+        land_constrained = max_untap_lands < 999 and len(land_candidates) > max_untap_lands
+        creature_constrained = max_untap_creatures < 999 and len(creature_candidates) > max_untap_creatures
+        if not land_constrained and not creature_constrained:
             return None
+
+        candidate_indices: list[int] = []
+        max_count = 0
+        if land_constrained:
+            candidate_indices += land_candidates
+            max_count += max_untap_lands
+        if creature_constrained:
+            candidate_indices += creature_candidates
+            max_count += max_untap_creatures
 
         return {
-            "max_count": max_untap_lands,
-            "candidate_indices": candidate_indices,
+            "max_count": max_count,
+            "candidate_indices": sorted(candidate_indices),
+            "land_max": max_untap_lands if land_constrained else None,
+            "creature_max": max_untap_creatures if creature_constrained else None,
         }
 
-    def resolve_untap_step(self, player_index: int, selected_land_indices: list[int] | None = None) -> int:
+    def resolve_untap_step(
+        self,
+        player_index: int,
+        selected_land_indices: list[int] | None = None,
+        selected_creature_indices: list[int] | None = None,
+    ) -> int:
         phase = "beginning"
         step = "untap"
         self._set_phase_and_step(phase, step)
@@ -84,6 +109,25 @@ class UntapStepMixin:
             if max_untap_lands < 999 and len(selected_lands) > max_untap_lands:
                 raise ValueError(f"cannot untap more than {max_untap_lands} land(s)")
 
+        # Smoke: the controller chooses which creature(s) to untap (CR 502 with a
+        # "can't untap more than one" constraint). Absent a choice (AI/headless),
+        # the loop below untaps the first eligible creatures up to the cap.
+        selected_creatures: set[int] | None = None
+        if selected_creature_indices is not None:
+            selected_creatures = set()
+            for idx in selected_creature_indices:
+                if idx < 0 or idx >= len(player.battlefield):
+                    raise ValueError("selected creature index out of range")
+                permanent = player.battlefield[idx]
+                if permanent.card.primary_type != "creature":
+                    raise ValueError("selected permanent is not a creature")
+                if not permanent.tapped:
+                    continue
+                selected_creatures.add(idx)
+
+            if max_untap_creatures < 999 and len(selected_creatures) > max_untap_creatures:
+                raise ValueError(f"cannot untap more than {max_untap_creatures} creature(s)")
+
         meekstone_active = any(perm.card.name == "Meekstone" for perm in all_permanents)
 
         untapped = 0
@@ -100,6 +144,9 @@ class UntapStepMixin:
 
             if permanent.card.primary_type == "creature":
                 if meekstone_active and permanent.effective_power >= 3:
+                    continue
+                # Honor the controller's Smoke selection when one was supplied.
+                if selected_creatures is not None and idx not in selected_creatures:
                     continue
                 if creatures_untapped >= max_untap_creatures:
                     continue

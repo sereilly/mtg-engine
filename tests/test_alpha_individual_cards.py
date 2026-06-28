@@ -462,8 +462,10 @@ def _assert_supported_effect(card: CardDefinition, game: Game, p1: PlayerState, 
         return
 
     if "target creature gains banding until end of turn" in text:
-        # Bug 5 fix: banding is granted to the controller's own creatures, not the opponent's.
-        assert any(perm.metadata.get("gains_banding_until_eot") for perm in p1.battlefield)
+        # Helm of Chatzuk grants banding to the *chosen* target creature. The
+        # harness activates with target_player_index=1, so the targeted player's
+        # creature is the one that gains banding.
+        assert any(perm.metadata.get("gains_banding_until_eot") for perm in p2.battlefield)
         return
 
     if "target creature with power 2 or less can't be blocked this turn" in text:

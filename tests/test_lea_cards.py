@@ -1087,6 +1087,11 @@ def test_verduran_enchantress_draw_trigger(all_cards):
     result = game.cast_from_hand(0, "Blessing", target_player_index=0, target_permanent_index=0)
 
     assert result.supported
+    # "you may draw a card" — the draw is now an optional yes/no prompt rather than
+    # an automatic draw, so it is queued and not yet drawn.
+    assert any(e["card_name"] == "Verduran Enchantress" for e in game.pending_optional_pays)
+    assert len(p1.hand) == 0
+    game.confirm_optional_pay(0, "Verduran Enchantress", accept=True)
     assert len(p1.hand) == 1
 
 def test_fog_sets_combat_damage_prevention(all_cards):

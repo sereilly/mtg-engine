@@ -43,6 +43,54 @@ class UpkeepStepMixin:
                     "damage": int(trig.instruction.payload.get("damage", 0)),
                 })
                 break
+
+        # Paralyze-style auras: "At the beginning of the upkeep of enchanted
+        # creature's controller, that player may pay {N}. If they do, untap the
+        # creature." The aura may be controlled by either player, so scan every
+        # battlefield for one whose enchanted creature this player controls.
+        for owner in self.players:
+            for permanent in owner.battlefield:
+                attached = permanent.metadata.get("attached_to")
+                if attached is None or attached not in controller.battlefield:
+                    continue
+                for trig in compile_card_oracle(permanent.card).triggered_abilities:
+                    if (
+                        trig.instruction is not None
+                        and trig.condition.kind == "upkeep_enchanted_controller"
+                        and trig.instruction.kind == "upkeep_pay_to_untap_enchanted"
+                    ):
+                        choices.append({
+                            "card_name": permanent.card.name,
+                            "mana": trig.instruction.payload.get("mana", {}),
+                            "kind": trig.instruction.kind,
+                            "damage": 0,
+                        })
+                        break
+
+        # Farmstead-style enchant-land grants: "Enchanted land has 'At the beginning
+        # of your upkeep, you may pay {N}. If you do, you gain X life.'" The enchanted
+        # land's controller (player_index) may pay for the life.
+        for owner in self.players:
+            for permanent in owner.battlefield:
+                if permanent.card.primary_type != "enchantment":
+                    continue
+                attached = permanent.metadata.get("attached_to")
+                if attached is None or attached not in controller.battlefield:
+                    continue
+                text = compile_card_oracle(permanent.card).normalized_text
+                if not text.startswith("enchant land") or "you may pay" not in text or "you gain" not in text:
+                    continue
+                pay_match = re.search(r"you may pay ((?:\{[wubrgc]\})+)", text)
+                mana: dict[str, int] = {}
+                if pay_match:
+                    for sym in re.findall(r"\{([wubrg])\}", pay_match.group(1)):
+                        mana[sym.upper()] = mana.get(sym.upper(), 0) + 1
+                choices.append({
+                    "card_name": permanent.card.name,
+                    "mana": mana,
+                    "kind": "upkeep_pay_to_gain_life",
+                    "damage": 0,
+                })
         return choices
 
     def get_upkeep_mana_prevention_triggers(self, player_index: int) -> list[dict]:
@@ -291,6 +339,57 @@ class UpkeepStepMixin:
                             self.log.append(f"{permanent.card.name} dealt {damage_amt} upkeep damage to {controller.name}")
                         break
 
+                    if cond == "upkeep_self" and kind == "upkeep_pay_to_untap_self":
+                        # Mana Vault / Basalt Monolith: "you may pay {N}. If you do,
+                        # untap this artifact." No consequence on decline; the
+                        # beneficial default (AI/headless) untaps when affordable.
+                        mana = trig.instruction.payload.get("mana", {})
+                        if human_choices is not None and permanent.card.name in human_choices:
+                            paid = human_choices[permanent.card.name]
+                        else:
+                            paid = all(
+                                controller.mana_pool.get(sym, 0) >= count
+                                for sym, count in mana.items()
+                                if sym != "generic"
+                            )
+                        if paid and permanent.tapped:
+                            for sym, count in mana.items():
+                                if sym != "generic":
+                                    controller.mana_pool[sym] = controller.mana_pool.get(sym, 0) - count
+                            permanent.tapped = False
+                            self.log.append(f"{controller.name} paid to untap {permanent.card.name}")
+                        break
+
+                    if cond == "upkeep_enchanted_controller" and kind == "upkeep_pay_to_untap_enchanted":
+                        # Paralyze: "that player may pay {N}. If the player does, untap
+                        # the creature." The enchanted creature's controller decides.
+                        attached = permanent.metadata.get("attached_to")
+                        if attached is None:
+                            break
+                        attached_controller_idx = next(
+                            (i for i, p in enumerate(self.players) if attached in p.battlefield),
+                            None,
+                        )
+                        if attached_controller_idx != player_index:
+                            break
+                        payer = self.players[player_index]
+                        mana = trig.instruction.payload.get("mana", {})
+                        if human_choices is not None and permanent.card.name in human_choices:
+                            paid = human_choices[permanent.card.name]
+                        else:
+                            paid = all(
+                                payer.mana_pool.get(sym, 0) >= count
+                                for sym, count in mana.items()
+                                if sym != "generic"
+                            )
+                        if paid and attached.tapped:
+                            for sym, count in mana.items():
+                                if sym != "generic":
+                                    payer.mana_pool[sym] = payer.mana_pool.get(sym, 0) - count
+                            attached.tapped = False
+                            self.log.append(f"{payer.name} paid to untap {attached.card.name}")
+                        break
+
                     if cond == "upkeep_self" and kind == "upkeep_pay_or_tap_and_sacrifice_opponent_land":
                         mana = trig.instruction.payload.get("mana", {})
                         if human_choices is not None and permanent.card.name in human_choices:
@@ -452,9 +551,14 @@ class UpkeepStepMixin:
                     cost: dict[str, int] = {}
                     for sym in re.findall(r"\{([WUBRG])\}", cost_str):
                         cost[sym] = cost.get(sym, 0) + 1
-                    # Auto-pay if controller has enough
                     can_pay = all(gainer.mana_pool.get(sym, 0) >= cnt for sym, cnt in cost.items())
-                    if can_pay:
+                    # Honor a human's decision (from the upkeep-pay prompt) when given;
+                    # otherwise auto-pay when able (beneficial default for AI/headless).
+                    if human_choices is not None and permanent.card.name in human_choices:
+                        wants_pay = bool(human_choices[permanent.card.name])
+                    else:
+                        wants_pay = can_pay
+                    if wants_pay and can_pay:
                         for sym, cnt in cost.items():
                             gainer.mana_pool[sym] -= cnt
                         paid = True

@@ -36,6 +36,21 @@ def prevent_next_n_damage(text: str, activated: bool) -> RuleResult:
     return None
 
 
+# Reverse Damage: "The next time a source of your choice would deal damage to you
+# this turn, prevent that damage. You gain life equal to the damage prevented this
+# way." A spell (not activated) — distinct from the Circle of Protection shield in
+# that it gains life equal to the prevented damage and is colorless (any source).
+@parse_rule(745)
+def reverse_damage_shield(text: str, activated: bool) -> RuleResult:
+    if (
+        not activated
+        and "would deal damage to you this turn, prevent that damage" in text
+        and "gain life equal to the damage prevented" in text
+    ):
+        return _instruction("grant_reverse_damage_shield"), "spell_pattern"
+    return None
+
+
 # Circle of Protection style: "The next time a red source of your choice would deal
 # damage to you this turn, prevent that damage." The controller chooses a source of
 # the named color; the color is captured so the UI can prompt for that source.

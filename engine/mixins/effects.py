@@ -183,6 +183,17 @@ class EffectsMixin:
             damage = 1
         if damage <= 0:
             return damage
+        # Reverse Damage: the next damage event to the player is fully prevented and
+        # the player gains that much life. One charge per spell, consumed here.
+        if target.reverse_damage_charges > 0:
+            target.reverse_damage_charges -= 1
+            if target.reverse_damage_charges <= 0:
+                target.damage_prevention_source = None
+            self.log.append(
+                f"Reverse Damage prevented {damage} damage to {target.name}"
+            )
+            self._gain_life(target, damage, source_name="Reverse Damage")
+            return 0
         # Circle of Protection: a color-scoped shield prevents the whole next damage
         # event from a source of that color ("prevent that damage").
         if target.color_prevention_shields:

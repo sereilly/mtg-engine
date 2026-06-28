@@ -173,6 +173,47 @@ class StackCastingMixin:
         self.pending_discard = None
         return True
 
+    _BASIC_LAND_TYPES = ("plains", "island", "swamp", "mountain", "forest")
+
+    def confirm_land_type(self, player_index: int, land_type: str) -> bool:
+        """Resolve a pending Phantasmal Terrain choice with the controller's chosen
+        basic land type, overriding the provisional default on the enchanted land."""
+        pending = self.pending_land_type_choice
+        if pending is None or pending["player_index"] != player_index:
+            return False
+        land_type = str(land_type or "").strip().lower()
+        if land_type not in self._BASIC_LAND_TYPES:
+            return False
+        owner = self.players[pending["land_owner_index"]]
+        idx = pending["land_index"]
+        if 0 <= idx < len(owner.battlefield):
+            land = owner.battlefield[idx]
+            land.metadata["land_type_override"] = land_type
+            self.log.append(
+                f"{pending['card_name']}: enchanted land becomes a {land_type.title()}"
+            )
+        self.pending_land_type_choice = None
+        return True
+
+    def confirm_kudzu_reattach(self, player_index: int, land_index: int) -> bool:
+        """Resolve a pending Kudzu reattach by moving the detached Aura onto the
+        controller's chosen land."""
+        pending = self.pending_kudzu_reattach
+        if pending is None or pending["player_index"] != player_index:
+            return False
+        player = self.players[player_index]
+        if not (0 <= land_index < len(player.battlefield)):
+            return False
+        new_land = player.battlefield[land_index]
+        if new_land.card.primary_type != "land":
+            return False
+        aura = pending["aura"]
+        aura.metadata["attached_to"] = new_land
+        new_land.metadata["attached_aura"] = aura
+        self.log.append(f"Kudzu attached to {new_land.card.name}")
+        self.pending_kudzu_reattach = None
+        return True
+
     def _balance_remove(self, player_index: int, land_indices, creature_indices, hand_indices) -> bool:
         """Remove the chosen lands/creatures (to graveyard) and hand cards (discard)
         for one player's Balance plan. Validates the counts against the plan."""
@@ -229,6 +270,12 @@ class StackCastingMixin:
         """Spend the entry's generic mana cost (floating mana first, then by tapping
         untapped lands) from its player and gain the life if fully paid."""
         player = self.players[entry["player_index"]]
+        # A free optional "you may draw a card" rider (Verduran Enchantress): no
+        # cost to pay, just draw on accept.
+        if entry.get("draw"):
+            drawn = player.draw(int(entry["draw"]))
+            self.log.append(f"{player.name} drew {drawn} card(s) from {entry['card_name']}")
+            return
         remaining = int(entry["cost"])
         for sym in list(player.mana_pool):
             while remaining > 0 and player.mana_pool.get(sym, 0) > 0:
@@ -410,10 +457,13 @@ class StackCastingMixin:
             return SimulationResult(permanent.card.name, False, "unsupported", "ability not implemented")
 
         if ability.instruction.kind == "grant_banding_to_target":
-            # Banding grants go to the controller's own creatures, not the opponent's.
-            target_idx = controller_index
-            target_player = self.players[target_idx]
-            has_valid_target = any(perm.card.primary_type == "creature" for perm in target_player.battlefield)
+            # Helm of Chatzuk targets any creature (the chosen target_player; falls
+            # back to any creature on the battlefield when no target was supplied).
+            has_valid_target = any(
+                perm.card.primary_type == "creature"
+                for player in self.players
+                for perm in player.battlefield
+            )
             if not has_valid_target:
                 details = "no valid creature target for banding effect"
                 self.log.append("No valid creature target for banding effect")
@@ -452,17 +502,22 @@ class StackCastingMixin:
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
             permanent.metadata["corpse_counters"] = corpse_counters - 1
 
+        # Per-ability timing restrictions are scoped to the *selected* ability's
+        # own clause, not the whole card. Rock Hydra's "Activate only during your
+        # upkeep" sits on its {R}{R}{R} pump line only, so its {R} prevention
+        # ability (ability_index 0) must stay usable at any time.
+        ability_lower = (ability.source_line or permanent.card.oracle_text).lower()
+
         # "Activate only during your upkeep." (Cyclopean Tomb, the Clockwork
-        # creatures). The ability is legal only while it's the controller's own
-        # upkeep step.
-        if "activate only during your upkeep" in permanent.card.oracle_text.lower():
+        # creatures, Rock Hydra's pump). Legal only on the controller's own upkeep.
+        if "activate only during your upkeep" in ability_lower:
             if not (self.current_step == "upkeep" and self.active_player_index == controller_index):
                 details = f"{permanent.card.name} can only be activated during your upkeep"
                 self.log.append(details)
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
 
         # "Activate only during your turn and only once each turn." (Instill Energy)
-        oracle_lower = permanent.card.oracle_text.lower()
+        oracle_lower = ability_lower
         if "only during your turn" in oracle_lower and self.active_player_index != controller_index:
             details = f"{permanent.card.name} can only be activated during your turn"
             self.log.append(details)

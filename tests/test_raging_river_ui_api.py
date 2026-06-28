@@ -86,6 +86,43 @@ def test_assigning_piles_via_the_api():
     assert game.combat_attacker_piles == {1: "left"}
 
 
+def test_attacker_prompt_clears_after_assignment():
+    """Reported FAILED: "Got stuck on the raging river prompt." After both players
+    commit their piles the prompt must stop re-appearing (the seeded default piles
+    otherwise made it look perpetually pending)."""
+    sid, session, game = _session()
+    # Defender commits, then attacker commits.
+    client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 1, "action": "assign_defender_piles", "piles": {"0": "left", "1": "right"}},
+    )
+    client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "assign_attacker_piles", "piles": {"1": "left"}},
+    )
+    attacker_view = client.get(f"/api/sessions/{sid}/state", params={"seat": 0}).json()["raging_river"]
+    defender_view = client.get(f"/api/sessions/{sid}/state", params={"seat": 1}).json()["raging_river"]
+    assert attacker_view is None
+    assert defender_view is None
+
+
+def test_no_prompt_when_defender_has_no_nonflying_creatures():
+    """With no creatures to divide, the defender should never be prompted, and the
+    attacker prompt should clear once they label — no infinite prompt loop."""
+    sid, session, game = _session()
+    game.players[1].battlefield = []  # remove the defender's would-be blockers
+    # The defender has nothing to divide -> no prompt for them.
+    defender_view = client.get(f"/api/sessions/{sid}/state", params={"seat": 1}).json()["raging_river"]
+    assert defender_view is None
+    # The attacker still labels, then their prompt clears.
+    client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "assign_attacker_piles", "piles": {"1": "left"}},
+    )
+    attacker_view = client.get(f"/api/sessions/{sid}/state", params={"seat": 0}).json()["raging_river"]
+    assert attacker_view is None
+
+
 def test_wrong_pile_block_is_rejected_after_assignment():
     sid, session, game = _session()
     client.post(

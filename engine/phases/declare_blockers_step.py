@@ -117,6 +117,7 @@ class DeclareBlockersStepMixin:
         if set(chosen) != required or any(s not in ("left", "right") for s in chosen.values()):
             return False, "every non-flying creature must be assigned to left or right"
         self.combat_defender_piles = chosen
+        self.combat_left_right_defender_locked = True
         self.log.append(f"{defender.name} divided their creatures into left/right piles")
         return True, "piles assigned"
 
@@ -131,6 +132,7 @@ class DeclareBlockersStepMixin:
         if set(chosen) != set(self.combat_attackers) or any(s not in ("left", "right") for s in chosen.values()):
             return False, "every attacker must be labeled left or right"
         self.combat_attacker_piles = chosen
+        self.combat_left_right_attacker_locked = True
         self.log.append("Attacker labeled each creature left/right")
         return True, "attacker piles assigned"
 

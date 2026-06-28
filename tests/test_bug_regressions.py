@@ -282,8 +282,10 @@ def test_bug5_banding_granted_to_casters_own_creature(all_cards):
     assert not p2.battlefield[0].metadata.get("gains_banding_until_eot")
 
 
-def test_bug5_banding_not_granted_to_opponent(all_cards):
-    """Activating Helm of Chatzuk must NOT grant banding to the opponent's creature."""
+def test_bug5_banding_granted_to_chosen_target(all_cards):
+    """Helm of Chatzuk ("Target creature gains banding") grants banding to the
+    creature actually chosen — including one the controller owns — rather than
+    silently picking the controller's first creature."""
     helm = _get(all_cards, "Helm of Chatzuk")
     own_bear = _mk_card("My Bear", "Creature — Bear")
     opp_bear = _mk_card("Their Bear", "Creature — Bear")
@@ -294,17 +296,17 @@ def test_bug5_banding_not_granted_to_opponent(all_cards):
     )
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=opp_bear)])
     game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
 
-    # The old bug used target_player_index to route banding to the opponent
-    result = game.activate_permanent_ability(0, "Helm of Chatzuk", target_player_index=1)
+    # Target the controller's own creature explicitly.
+    result = game.activate_permanent_ability(
+        0, "Helm of Chatzuk", target_player_index=0, target_permanent_index=1
+    )
 
     assert result.supported
-    # Banding should still go to P1's bear (the controller's own creature)
     assert p1.battlefield[1].metadata.get("gains_banding_until_eot") is True
-    # Opponent's creature should NOT have banding
-    assert not p2.battlefield[0].metadata.get("gains_banding_until_eot"), (
-        "Bug 5 regression: banding must not be granted to opponent"
-    )
+    # The other creature was not the chosen target, so it has no banding.
+    assert not p2.battlefield[0].metadata.get("gains_banding_until_eot")
 
 
 # ---------------------------------------------------------------------------

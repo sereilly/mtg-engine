@@ -114,6 +114,10 @@ class Game(
     # attacker index → "left"/"right".
     combat_left_right_active: bool = False
     combat_left_right_defender_index: int | None = None
+    # Set once each player commits their piles, so the web prompt stops re-showing
+    # (otherwise the seeded default piles make the prompt look perpetually pending).
+    combat_left_right_defender_locked: bool = False
+    combat_left_right_attacker_locked: bool = False
     combat_defender_piles: dict[int, str] = field(default_factory=dict)
     combat_attacker_piles: dict[int, str] = field(default_factory=dict)
     priority_player_index: int | None = None
@@ -138,6 +142,17 @@ class Game(
     # recent reveal, surfaced to the UI as {"viewer_index", "target_index",
     # "card_names"}. Cleared once the viewer dismisses it.
     pending_hand_reveal: dict | None = None
+    # Phantasmal Terrain: "As this Aura enters, choose a basic land type." Awaiting
+    # the controller's choice of which basic land type the enchanted land becomes.
+    # Shape: {"player_index", "card_name", "land_owner_index", "land_index"}. A
+    # provisional default ("island") is applied immediately so headless/AI play is
+    # deterministic; a human may override it via confirm_land_type.
+    pending_land_type_choice: dict | None = None
+    # Kudzu: "That land's controller may attach this Aura to a land of their
+    # choice." After the enchanted land is destroyed, a human controller picks the
+    # land to re-enchant. Shape: {"player_index", "aura"} (the detached Permanent).
+    # AI/headless play re-attaches deterministically without arming this.
+    pending_kudzu_reattach: dict | None = None
     # 610.3: tracks creatures exiled "until end of turn" — (owner_player_index, card)
     exile_until_eot: list[tuple[int, CardDefinition]] = field(default_factory=list)
     # 104.4: True when the game ends in a draw for all players

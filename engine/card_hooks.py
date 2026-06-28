@@ -37,10 +37,18 @@ LeaveBattlefieldHook = Callable[["Game", "PlayerState", "Permanent"], None]
 
 
 def _verduran_enchantress(game: Game, controller: PlayerState, permanent: Permanent, cast_card: CardDefinition) -> None:
+    # "Whenever you cast an enchantment spell, you may draw a card." The draw is
+    # optional: defer to a yes/no prompt (human is asked; AI/headless auto-draws).
     if cast_card.primary_type != "enchantment":
         return
-    drawn = controller.draw(1)
-    game.log.append(f"Verduran Enchantress trigger: {controller.name} drew {drawn} card")
+    game.pending_optional_pays.append({
+        "card_name": permanent.card.name,
+        "player_index": game.players.index(controller),
+        "cost": 0,
+        "life": 0,
+        "draw": 1,
+        "prompt": "Draw a card?",
+    })
 
 
 ON_SPELL_CAST: dict[str, SpellCastHook] = {

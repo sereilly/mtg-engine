@@ -390,8 +390,16 @@ class OracleInstructionsMixin:
             if "enchanted land is a swamp" in text:
                 target_land.metadata["land_type_override"] = "swamp"
             elif "enchanted land is the chosen type" in text:
-                # Phantasmal Terrain: simulation defaults to island (blue enchantment)
+                # Phantasmal Terrain: "choose a basic land type." Apply a provisional
+                # default (island) so headless/AI play stays deterministic, then arm a
+                # pending choice so a human controller can pick the actual type.
                 target_land.metadata["land_type_override"] = "island"
+                self.pending_land_type_choice = {
+                    "player_index": caster_index,
+                    "card_name": aura_permanent.card.name,
+                    "land_owner_index": target_idx,
+                    "land_index": target_player.battlefield.index(target_land),
+                }
             self.log.append(f"{aura_permanent.card.name} enchants {target_land.card.name}")
         elif text.startswith("enchant wall"):
             target_wall = None

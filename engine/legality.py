@@ -317,7 +317,11 @@ def _activated_requires_player(card: CardDefinition) -> bool:
 # restriction than the text-derived kind (a tapped/coloured destroy, a non-Wall
 # attack mark). The enumerator gates candidates through these so an ability offers
 # exactly what it could legally affect, matching its resolution.
-_FILTERABLE_ABILITY_KINDS = {"destroy_target_permanent", "mark_non_wall_target_to_attack"}
+_FILTERABLE_ABILITY_KINDS = {
+    "destroy_target_permanent",
+    "mark_non_wall_target_to_attack",
+    "grant_flying_and_delayed_destruction",
+}
 
 
 def _ability_target_instruction(card: CardDefinition):
@@ -430,18 +434,21 @@ class LegalityMixin:
         player = self.players[controller_index]
         if not (0 <= permanent_index < len(player.battlefield)):
             return {"kind": "none", "requires_target": False, "valid_targets": []}
-        card = player.battlefield[permanent_index].card
+        source_permanent = player.battlefield[permanent_index]
+        card = source_permanent.card
         spec = _classify_activation(card)
         spec["requires_target"] = spec["kind"] != "none"
         spec["valid_targets"] = self._enumerate_targets(
             controller_index, card, spec, for_cast=False,
             ability_instruction=_ability_target_instruction(card),
+            source_permanent=source_permanent,
         )
         return spec
 
     # -- Target enumeration ------------------------------------------------
     def _enumerate_targets(
-        self, caster_index: int, card: CardDefinition, spec: dict, *, for_cast: bool, ability_instruction=None
+        self, caster_index: int, card: CardDefinition, spec: dict, *, for_cast: bool,
+        ability_instruction=None, source_permanent=None,
     ) -> list[dict]:
         kind = spec["kind"]
         if kind in ("none", "modal"):
@@ -484,7 +491,11 @@ class LegalityMixin:
                     # Apply the activated ability's own target restriction (e.g.
                     # Royal Assassin's tapped-only, Nettling Imp's non-Wall) so it
                     # offers only what it could legally affect at resolution.
-                    if ability_instruction is not None and not self._ability_target_legal(ability_instruction, perm):
+                    if ability_instruction is not None and not self._ability_target_legal(
+                        ability_instruction, perm,
+                        candidate_seat=seat, controller_index=caster_index,
+                        source_permanent=source_permanent,
+                    ):
                         continue
                 targets.append({
                     "kind": "permanent",
@@ -499,13 +510,25 @@ class LegalityMixin:
             targets += self._enumerate_stack_targets(card, {"stack_color_filter": spec.get("color_filter")})
         return targets
 
-    def _ability_target_legal(self, instruction, perm: Permanent) -> bool:
+    def _ability_target_legal(
+        self, instruction, perm: Permanent, *,
+        candidate_seat=None, controller_index=None, source_permanent=None,
+    ) -> bool:
         """Whether *perm* satisfies an activated ability instruction's own target
         restriction (beyond the text-derived kind)."""
         if instruction.kind == "destroy_target_permanent":
             return self._destroy_target_legal(instruction.payload, perm)
         if instruction.kind == "mark_non_wall_target_to_attack":
             return perm.card.primary_type == "creature" and "wall" not in perm.card.type_line.lower()
+        if instruction.kind == "grant_flying_and_delayed_destruction":
+            # Stone Giant: "Target creature you control with toughness less than
+            # this creature's power." Only the activating player's creatures with
+            # toughness below the source's power are legal.
+            if candidate_seat is not None and controller_index is not None and candidate_seat != controller_index:
+                return False
+            if source_permanent is not None and perm.effective_toughness >= source_permanent.effective_power:
+                return False
+            return perm.card.primary_type == "creature"
         return True
 
     def _permanent_matches_target_kind(self, perm: Permanent, kind: str, spec: dict, casting_aura: bool) -> bool:

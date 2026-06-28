@@ -55,6 +55,7 @@ class CleanupStepMixin:
             player.damage_prevention_color = None
             player.color_prevention_shields = []
             player.combat_damage_cap_one_charges = 0
+            player.reverse_damage_charges = 0
             player.channel_active_until_eot = False
             player.prevent_one_damage_emblems = []
             for permanent in player.battlefield:

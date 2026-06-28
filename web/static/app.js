@@ -756,7 +756,7 @@ function getAutoPassStateKey(state) {
 }
 
 function hasBlockingPromptForAutoPass(state = currentState) {
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getBalanceSelectInfo(state) || getOptionalPayInfo(state) || getRagingRiverInfo(state)) return true;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getBalanceSelectInfo(state) || getOptionalPayInfo(state) || getLandTypeChoiceInfo(state) || getKudzuReattachInfo(state) || getRagingRiverInfo(state) || getIslandSanctuaryInfo(state)) return true;
   return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingAbilityChoice);
 }
 
@@ -1623,6 +1623,20 @@ function getOptionalPayInfo(state = currentState) {
   return info;
 }
 
+function getLandTypeChoiceInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.land_type_choice;
+  if (!info || !Array.isArray(info.options) || info.options.length === 0) return null;
+  return info;
+}
+
+function getKudzuReattachInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.kudzu_reattach;
+  if (!info || !Array.isArray(info.lands) || info.lands.length === 0) return null;
+  return info;
+}
+
 function getRagingRiverInfo(state = currentState) {
   if (!state || seat === null) return null;
   const info = state.raging_river;
@@ -1729,6 +1743,8 @@ function isAnyPromptActive(state = currentState) {
   if (getDiscardSelectInfo(state)) return true;
   if (getBalanceSelectInfo(state)) return true;
   if (getOptionalPayInfo(state)) return true;
+  if (getLandTypeChoiceInfo(state)) return true;
+  if (getKudzuReattachInfo(state)) return true;
   if (getRagingRiverInfo(state)) return true;
   if (shouldShowPriorityPrompt(state)) return true;
   if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingAutoTap || pendingModalChoice || pendingAbilityChoice) return true;
@@ -1743,7 +1759,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getBalanceSelectInfo(state) || getOptionalPayInfo(state) || getRagingRiverInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getBalanceSelectInfo(state) || getOptionalPayInfo(state) || getLandTypeChoiceInfo(state) || getKudzuReattachInfo(state) || getRagingRiverInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -1933,6 +1949,12 @@ function applyUpkeepPayPrompt(upkeepInfo) {
     declineLabel = `Take ${dmg} damage`;
   } else if (kind === "upkeep_pay_or_tap_and_sacrifice_opponent_land") {
     declineLabel = "Don't pay (tap & sacrifice a land)";
+  } else if (kind === "upkeep_pay_to_untap_self" || kind === "upkeep_pay_to_untap_enchanted") {
+    // No consequence — declining just leaves the permanent tapped.
+    declineLabel = "Don't pay (stay tapped)";
+  } else if (kind === "upkeep_pay_to_gain_life") {
+    // No consequence — declining just forgoes the life gain (Farmstead).
+    declineLabel = "Don't pay (no life)";
   } else {
     declineLabel = `Sacrifice ${escapeHtml(cardName)}`;
   }
@@ -2241,6 +2263,8 @@ function applyOptionalPayPrompt(info) {
   const cardName = current?.card_name || "Unknown";
   const cost = current?.cost ?? 1;
   const life = current?.life ?? 1;
+  // A free "you may draw a card" rider (Verduran Enchantress) has no mana cost.
+  const isDraw = !!current?.draw;
 
   panel.classList.remove("hidden");
   okBtn.classList.add("hidden");
@@ -2249,13 +2273,16 @@ function applyOptionalPayPrompt(info) {
   cancelBtn.disabled = true;
   customOkBtn.disabled = true;
 
-  title.textContent = "Pay for Life?";
-  body.textContent = `${cardName}: pay {${cost}} to gain ${life} life?`;
+  const acceptLabel = isDraw ? `Draw ${current.draw} card${current.draw > 1 ? "s" : ""}` : `Pay {${cost}}`;
+  title.textContent = isDraw ? "Optional Draw" : "Pay for Life?";
+  body.textContent = isDraw
+    ? `${cardName}: ${current.prompt || "Draw a card?"}`
+    : `${cardName}: pay {${cost}} to gain ${life} life?`;
   steps.innerHTML = [
     `<div>Card: ${escapeHtml(cardName)}</div>`,
     `<div>Remaining decisions: ${pending.length}</div>`,
     `<div class="prompt-choice-row">` +
-      `<button type="button" class="prompt-choice-btn" data-optional-pay="yes">Pay {${cost}}</button>` +
+      `<button type="button" class="prompt-choice-btn" data-optional-pay="yes">${escapeHtml(acceptLabel)}</button>` +
       `<button type="button" class="prompt-choice-btn" data-optional-pay="no">Decline</button>` +
       `</div>`,
   ].join("");
@@ -2267,6 +2294,89 @@ function applyOptionalPayPrompt(info) {
         action: "resolve_optional_pay",
         card_name: cardName,
         accept: btn.dataset.optionalPay === "yes",
+      });
+    });
+  });
+}
+
+// Phantasmal Terrain: "As this Aura enters, choose a basic land type." The
+// controller picks one of the five basic land types for the enchanted land.
+function applyLandTypeChoicePrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  const cardName = info.card_name || "Phantasmal Terrain";
+  title.textContent = "Choose a basic land type";
+  body.textContent = `${cardName}: the enchanted land becomes the chosen type.`;
+  const buttons = info.options
+    .map(
+      (type) =>
+        `<button type="button" class="prompt-choice-btn" data-land-type="${escapeHtml(type)}">` +
+        `${escapeHtml(type.charAt(0).toUpperCase() + type.slice(1))}</button>`
+    )
+    .join("");
+  steps.innerHTML = `<div class="prompt-choice-column">${buttons}</div>`;
+
+  steps.querySelectorAll("[data-land-type]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await sendAction({
+        seat,
+        action: "land_type_confirm",
+        land_type: btn.dataset.landType,
+      });
+    });
+  });
+}
+
+// Kudzu: "That land's controller may attach this Aura to a land of their choice."
+// After the enchanted land is destroyed, the controller picks a new land.
+function applyKudzuReattachPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  title.textContent = "Kudzu — choose a land";
+  body.textContent = "Attach Kudzu to a land of your choice.";
+  const buttons = info.lands
+    .map(
+      (land) =>
+        `<button type="button" class="prompt-choice-btn" data-kudzu-land="${land.index}">` +
+        `${escapeHtml(land.name)}</button>`
+    )
+    .join("");
+  steps.innerHTML = `<div class="prompt-choice-column">${buttons}</div>`;
+
+  steps.querySelectorAll("[data-kudzu-land]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await sendAction({
+        seat,
+        action: "kudzu_reattach_confirm",
+        target_permanent_index: Number(btn.dataset.kudzuLand),
       });
     });
   });
@@ -2659,13 +2769,19 @@ function renderHandRevealModal(info) {
   const grid = document.getElementById("handRevealGrid");
   if (grid) {
     grid.innerHTML = cards
-      .map((card) => {
+      .map((card, i) => {
         const inner = card.image_uri
           ? `<img src="${escapeHtml(card.image_uri)}" alt="${escapeHtml(card.name)}" loading="lazy" />`
           : `<div class="library-card-text-placeholder">${escapeHtml(card.name)}</div>`;
-        return `<div class="library-card-choice">${inner}<div class="library-card-choice-name">${escapeHtml(card.name)}</div></div>`;
+        return `<div class="library-card-choice" data-reveal-index="${i}">${inner}<div class="library-card-choice-name">${escapeHtml(card.name)}</div></div>`;
       })
       .join("");
+    // Hover preview, mirroring the board/stack card-preview behavior.
+    grid.querySelectorAll("[data-reveal-index]").forEach((el) => {
+      const card = cards[Number(el.dataset.revealIndex)];
+      el.addEventListener("mouseenter", () => showCardPreview(card));
+      el.addEventListener("mouseleave", () => clearCardPreview());
+    });
   }
 
   const continueBtn = document.getElementById("handRevealContinueBtn");
@@ -2924,6 +3040,18 @@ function renderActivationPrompt() {
   const optionalPayInfo = getOptionalPayInfo();
   if (optionalPayInfo) {
     applyOptionalPayPrompt(optionalPayInfo);
+    return;
+  }
+
+  const landTypeChoiceInfo = getLandTypeChoiceInfo();
+  if (landTypeChoiceInfo) {
+    applyLandTypeChoicePrompt(landTypeChoiceInfo);
+    return;
+  }
+
+  const kudzuReattachInfo = getKudzuReattachInfo();
+  if (kudzuReattachInfo) {
+    applyKudzuReattachPrompt(kudzuReattachInfo);
     return;
   }
 
@@ -3274,6 +3402,38 @@ function startEmblemActivation(emblemIndex) {
       }
       updateActionHint(e.message, true);
     });
+}
+
+// Channel emblem: "any time you could activate a mana ability, you may pay 1 life.
+// If you do, add {C}." Prompt for how many life to pay (default 1) and add that
+// many {C}. Needs priority, like any mana ability used at instant speed here.
+function startChannelMana() {
+  if (!currentState || seat === null) return;
+  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingAutoTap || pendingModalChoice || pendingAbilityChoice) {
+    updateActionHint("Finish the current action first.", true);
+    return;
+  }
+  if (currentState.priority_player !== seat) {
+    SFX.onError();
+    updateActionHint("You can only use Channel when you have priority.", true);
+    return;
+  }
+  const me = currentState.players?.[seat];
+  const maxLife = Math.max(1, (me?.life ?? 1) - 1);
+  const raw = window.prompt(`Pay how much life for {C}? (1–${maxLife})`, "1");
+  if (raw === null) {
+    updateActionHint("Channel canceled.");
+    return;
+  }
+  const amount = Math.floor(Number(raw));
+  if (!Number.isFinite(amount) || amount < 1) {
+    updateActionHint("Enter a positive number of life to pay.", true);
+    return;
+  }
+  updateActionHint(`Channeling ${amount} life for {C}...`);
+  sendAction({ seat, action: "channel_mana", x_value: amount })
+    .then(() => updateActionHint(`Added ${amount} {C} via Channel.`))
+    .catch((e) => updateActionHint(e.message, true));
 }
 
 // Parse the activated-ability lines ("{cost}: effect") of a card's oracle text.
@@ -4828,7 +4988,7 @@ function createCardElement(card, options = {}) {
           const nextInfo = getUntapLandSelectionInfo(currentState);
           const selectedCount = Number(nextInfo?.selected_count || 0);
           const maxCount = Number(nextInfo?.max_count || 0);
-          updateActionHint(`Untap selection: ${selectedCount}/${maxCount} land(s) selected.`);
+          updateActionHint(`Untap selection: ${selectedCount}/${maxCount} permanent(s) selected.`);
           return;
         }
 
@@ -6795,6 +6955,10 @@ function initBattlefieldCanvas() {
     },
 
     onEmblemClick({ index, emblem }) {
+      if (emblem?.kind === "channel") {
+        startChannelMana();
+        return;
+      }
       startEmblemActivation(typeof emblem?.index === "number" ? emblem.index : index);
     },
 

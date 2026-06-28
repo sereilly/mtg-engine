@@ -85,6 +85,17 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
     return True, "resolved"
 
 
+@effect_handler("grant_reverse_damage_shield")
+def grant_reverse_damage_shield(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Reverse Damage: arm a one-shot shield that prevents the entire next damage
+    event to the caster and gains them that much life."""
+    caster = context.caster
+    caster.reverse_damage_charges += 1
+    caster.damage_prevention_source = context.card.name if context.card else None
+    game.log.append(f"{caster.name} armed a Reverse Damage shield")
+    return True, "resolved"
+
+
 @effect_handler("grant_forcefield_shield")
 def grant_forcefield_shield(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     caster = context.caster
