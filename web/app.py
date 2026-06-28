@@ -1437,6 +1437,28 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
             ],
         }
 
+    # Illusionary Mask: the controller chooses which hand creature (mana value
+    # within X) to cast face down as a 2/2. Surfaced only to that (human) player.
+    face_down_cast_info = None
+    pending_fd = session.game.pending_face_down_cast
+    if (
+        pending_fd is not None
+        and viewer_seat is not None
+        and pending_fd["player_index"] == viewer_seat
+        and _seat_type(session, viewer_seat) != "ai"
+    ):
+        owner = session.game.players[pending_fd["player_index"]]
+        max_cmc = int(pending_fd.get("max_cmc", 0))
+        face_down_cast_info = {
+            "card_name": pending_fd["card_name"],
+            "max_cmc": max_cmc,
+            "choices": [
+                {"hand_index": i, "name": c.name, "cmc": int(c.cmc or 0)}
+                for i, c in enumerate(owner.hand)
+                if c.primary_type == "creature" and int(c.cmc or 0) <= max_cmc
+            ],
+        }
+
     # Glasses of Urza: surface a revealed hand only to the player who looked.
     hand_reveal_info = None
     pending_reveal = session.game.pending_hand_reveal
@@ -1512,6 +1534,7 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "hand_reveal": hand_reveal_info,
         "land_type_choice": land_type_choice_info,
         "kudzu_reattach": kudzu_reattach_info,
+        "face_down_cast": face_down_cast_info,
         "pregame": _build_pregame_info(session, viewer_seat),
     }
 
@@ -1683,6 +1706,23 @@ def _auto_resolve_ai_pending_kudzu(session: Session) -> None:
             game.confirm_kudzu_reattach(pending["player_index"], idx)
 
 
+def _auto_resolve_ai_pending_face_down(session: Session) -> None:
+    """Cast an AI's Illusionary Mask face-down creature — the first eligible hand
+    creature (mana value within X). Determinism for headless play."""
+    game = session.game
+    pending = game.pending_face_down_cast
+    if pending is None or _seat_type(session, pending["player_index"]) != "ai":
+        return
+    player = game.players[pending["player_index"]]
+    max_cmc = int(pending.get("max_cmc", 0))
+    idx = next(
+        (i for i, c in enumerate(player.hand)
+         if c.primary_type == "creature" and int(c.cmc or 0) <= max_cmc),
+        None,
+    )
+    game.confirm_face_down_cast(pending["player_index"], idx if idx is not None else -1)
+
+
 def _auto_resolve_ai_pending(session: Session) -> None:
     """Resolve any AI-owned pending choices (library search, library reorder,
     discard, balance, optional pays)."""
@@ -1693,6 +1733,7 @@ def _auto_resolve_ai_pending(session: Session) -> None:
     _auto_resolve_ai_pending_optional_pays(session)
     _auto_resolve_ai_pending_land_type(session)
     _auto_resolve_ai_pending_kudzu(session)
+    _auto_resolve_ai_pending_face_down(session)
 
 
 def _ai_step(session: Session) -> bool:
@@ -3265,6 +3306,19 @@ def do_action(session_id: str, req: GameActionRequest):
         ok = session.game.confirm_kudzu_reattach(req.seat, req.target_permanent_index)
         if not ok:
             raise HTTPException(status_code=400, detail="invalid Kudzu reattach selection")
+
+    elif req.action == "face_down_cast_confirm":
+        # Illusionary Mask: the controller picks a hand creature to cast face down,
+        # or declines (accept=False / no hand_index).
+        if req.accept is False:
+            hand_index = -1
+        elif req.hand_index is None:
+            raise HTTPException(status_code=400, detail="hand_index is required")
+        else:
+            hand_index = req.hand_index
+        ok = session.game.confirm_face_down_cast(req.seat, hand_index)
+        if not ok:
+            raise HTTPException(status_code=400, detail="invalid face-down cast selection")
 
     elif req.action == "assign_defender_piles":
         piles = {int(k): str(v) for k, v in (req.piles or {}).items()}

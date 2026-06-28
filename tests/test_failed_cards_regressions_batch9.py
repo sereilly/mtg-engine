@@ -728,3 +728,47 @@ class TestCamouflage:
         game.advance_combat_phase()  # at declare_blockers -> camouflage resolves
         assert game.combat_blockers_locked is True
         assert game.combat_blockers  # blocks were auto-assigned
+
+
+# ---------------------------------------------------------------------------
+# Illusionary Mask — "{X}: cast a creature card whose cost X could pay, face down
+# as a 2/2." The controller now chooses which eligible creature (mana value <= X),
+# instead of the handler auto-picking the first creature.
+# ---------------------------------------------------------------------------
+
+class TestIllusionaryMask:
+    def _game(self, cards, hand):
+        mask = Permanent(card=cards["Illusionary Mask"])
+        p1 = PlayerState(name="P1", hand=list(hand), battlefield=[mask])
+        game = _game(p1, PlayerState(name="P2"))
+        return game, p1
+
+    def test_activation_arms_choice_filtered_by_x(self, cards):
+        game, p1 = self._game(cards, [cards["Grizzly Bears"], cards["Force of Nature"]])
+        game.activate_permanent_ability(0, "Illusionary Mask", permanent_index=0, x_value=3)
+        assert game.pending_face_down_cast is not None
+        assert game.pending_face_down_cast["max_cmc"] == 3
+
+    def test_confirm_casts_chosen_creature_face_down(self, cards):
+        game, p1 = self._game(cards, [cards["Grizzly Bears"], cards["Force of Nature"]])
+        game.activate_permanent_ability(0, "Illusionary Mask", permanent_index=0, x_value=3)
+        assert game.confirm_face_down_cast(0, 0) is True  # Grizzly Bears (cmc 2)
+        fd = [p for p in p1.battlefield if p.metadata.get("face_down")]
+        assert len(fd) == 1
+        assert fd[0].effective_power == 2 and fd[0].effective_toughness == 2
+        assert fd[0].metadata["face_down_real_card"].name == "Grizzly Bears"
+        assert [c.name for c in p1.hand] == ["Force of Nature"]
+        assert game.pending_face_down_cast is None
+
+    def test_ineligible_creature_rejected(self, cards):
+        game, p1 = self._game(cards, [cards["Force of Nature"]])  # cmc 8 > X
+        game.activate_permanent_ability(0, "Illusionary Mask", permanent_index=0, x_value=3)
+        assert game.pending_face_down_cast is None  # nothing eligible -> no prompt
+
+    def test_decline_casts_nothing(self, cards):
+        game, p1 = self._game(cards, [cards["Grizzly Bears"]])
+        game.activate_permanent_ability(0, "Illusionary Mask", permanent_index=0, x_value=3)
+        assert game.confirm_face_down_cast(0, -1) is True  # decline
+        assert not any(p.metadata.get("face_down") for p in p1.battlefield)
+        assert len(p1.hand) == 1
+        assert game.pending_face_down_cast is None

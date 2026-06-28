@@ -769,7 +769,7 @@ function getAutoPassStateKey(state) {
 }
 
 function hasBlockingPromptForAutoPass(state = currentState) {
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getBalanceSelectInfo(state) || getOptionalPayInfo(state) || getLandTypeChoiceInfo(state) || getKudzuReattachInfo(state) || getRagingRiverInfo(state) || getIslandSanctuaryInfo(state)) return true;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getBalanceSelectInfo(state) || getOptionalPayInfo(state) || getLandTypeChoiceInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getRagingRiverInfo(state) || getIslandSanctuaryInfo(state)) return true;
   return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingAbilityChoice);
 }
 
@@ -1650,6 +1650,13 @@ function getKudzuReattachInfo(state = currentState) {
   return info;
 }
 
+function getFaceDownCastInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.face_down_cast;
+  if (!info || !Array.isArray(info.choices) || info.choices.length === 0) return null;
+  return info;
+}
+
 function getRagingRiverInfo(state = currentState) {
   if (!state || seat === null) return null;
   const info = state.raging_river;
@@ -1758,6 +1765,7 @@ function isAnyPromptActive(state = currentState) {
   if (getOptionalPayInfo(state)) return true;
   if (getLandTypeChoiceInfo(state)) return true;
   if (getKudzuReattachInfo(state)) return true;
+  if (getFaceDownCastInfo(state)) return true;
   if (getRagingRiverInfo(state)) return true;
   if (shouldShowPriorityPrompt(state)) return true;
   if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingAutoTap || pendingModalChoice || pendingAbilityChoice) return true;
@@ -1772,7 +1780,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getBalanceSelectInfo(state) || getOptionalPayInfo(state) || getLandTypeChoiceInfo(state) || getKudzuReattachInfo(state) || getRagingRiverInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getBalanceSelectInfo(state) || getOptionalPayInfo(state) || getLandTypeChoiceInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getRagingRiverInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -2393,6 +2401,55 @@ function applyKudzuReattachPrompt(info) {
       });
     });
   });
+}
+
+// Illusionary Mask: "{X}: cast a creature card whose cost X could pay, face down
+// as a 2/2." The controller picks an eligible hand creature, or declines.
+function applyFaceDownCastPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  title.textContent = "Illusionary Mask — cast face down";
+  body.textContent = `Choose a creature (mana value ≤ ${info.max_cmc}) to cast face down as a 2/2.`;
+  const buttons = info.choices
+    .map(
+      (c) =>
+        `<button type="button" class="prompt-choice-btn" data-fd-hand="${c.hand_index}">` +
+        `${escapeHtml(c.name)} (${c.cmc})</button>`
+    )
+    .join("");
+  steps.innerHTML =
+    `<div class="prompt-choice-column">${buttons}` +
+    `<button type="button" class="prompt-choice-btn" data-fd-decline="1">Decline</button></div>`;
+
+  steps.querySelectorAll("[data-fd-hand]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await sendAction({
+        seat,
+        action: "face_down_cast_confirm",
+        hand_index: Number(btn.dataset.fdHand),
+      });
+    });
+  });
+  const declineBtn = steps.querySelector("[data-fd-decline]");
+  if (declineBtn) {
+    declineBtn.addEventListener("click", async () => {
+      await sendAction({ seat, action: "face_down_cast_confirm", accept: false });
+    });
+  }
 }
 
 // Raging River: the defending player divides their non-flying creatures into a
@@ -3065,6 +3122,12 @@ function renderActivationPrompt() {
   const kudzuReattachInfo = getKudzuReattachInfo();
   if (kudzuReattachInfo) {
     applyKudzuReattachPrompt(kudzuReattachInfo);
+    return;
+  }
+
+  const faceDownCastInfo = getFaceDownCastInfo();
+  if (faceDownCastInfo) {
+    applyFaceDownCastPrompt(faceDownCastInfo);
     return;
   }
 

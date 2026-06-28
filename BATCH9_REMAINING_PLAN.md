@@ -42,7 +42,7 @@ choice needs an AI/headless auto-resolver** (determinism).
 
 ### Pending-choice (engine auto-resolves a choice today)
 - **Lich** — core works and is now test-guarded (`batch9::TestLichSacrifice`): N damage sacrifices N nontoken permanents, game-losing ones last. *Remaining enhancement only:* `pending_sacrifice` + `confirm_sacrifice` so a human picks which (keep the "can't → lose" path).
-- **Illusionary Mask** — handler auto-picks first creature; add a hand-card selection prompt filtered by `cmc ≤ X`. Highest effort.
+- **Illusionary Mask** — **done** (engine + web): the `{X}` ability arms `pending_face_down_cast` (max_cmc = X); `confirm_face_down_cast` casts the chosen hand creature (mana value ≤ X) face down as a 2/2, keeping the real card (`face_down_real_card`), or declines. AI auto-resolver picks the first eligible; web serializes the eligible hand creatures + `face_down_cast_confirm` ActionKind + app.js prompt. Test-guarded (`batch9::TestIllusionaryMask` + `test_batch9_ui_api`). *Remaining (optional):* the "turned face up when it deals/takes damage or becomes tapped" reveal.
 
 ### Targeting
 - **Fireball** — core works and is test-guarded (`batch9::TestFireballDividedDamage`): X is divided evenly among targets on one battlefield. *Remaining enhancement only:* allow targets across both seats — drop the same-seat guard at `app.js:3796`, add per-target `{seat,index}` payload (`schemas.py`), extend the divided `deal_damage` to split across both battlefields/faces.

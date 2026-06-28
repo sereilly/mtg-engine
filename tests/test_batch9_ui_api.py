@@ -219,3 +219,31 @@ def test_no_channel_emblem_when_inactive():
     state = client.get(f"/api/sessions/{sid}/state", params={"seat": 0}).json()
     emblems = state["players"][0]["emblems"]
     assert not any(e["kind"] == "channel" for e in emblems)
+
+
+def test_illusionary_mask_prompts_eligible_hand_creatures():
+    # Illusionary Mask: the controller is offered hand creatures within X to cast
+    # face down. Force of Nature (cmc 8) is filtered out at X=3.
+    sid, session, game = _session()
+    mask = Permanent(card=_CARDS["Illusionary Mask"])
+    game.players[0].battlefield = [mask]
+    game.players[0].hand = [_CARDS["Grizzly Bears"], _CARDS["Force of Nature"]]
+    game.enforce_mana_costs = False
+    game.activate_permanent_ability(0, "Illusionary Mask", permanent_index=0, x_value=3)
+
+    state = client.get(f"/api/sessions/{sid}/state", params={"seat": 0}).json()
+    info = state["face_down_cast"]
+    assert info is not None
+    assert info["max_cmc"] == 3
+    names = {c["name"] for c in info["choices"]}
+    assert names == {"Grizzly Bears"}  # Force of Nature (cmc 8) excluded
+
+    hand_index = next(c["hand_index"] for c in info["choices"] if c["name"] == "Grizzly Bears")
+    resp = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "face_down_cast_confirm", "hand_index": hand_index},
+    )
+    assert resp.status_code == 200
+    fd = [p for p in game.players[0].battlefield if p.metadata.get("face_down")]
+    assert len(fd) == 1
+    assert game.pending_face_down_cast is None

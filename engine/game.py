@@ -160,6 +160,10 @@ class Game(
     # land to re-enchant. Shape: {"player_index", "aura"} (the detached Permanent).
     # AI/headless play re-attaches deterministically without arming this.
     pending_kudzu_reattach: dict | None = None
+    # Illusionary Mask: "{X}: you may cast a creature card whose cost X could pay,
+    # face down as a 2/2." Awaiting the controller's choice of which hand creature.
+    # Shape: {"player_index", "max_cmc", "card_name"}. The controller may decline.
+    pending_face_down_cast: dict | None = None
     # 610.3: tracks creatures exiled "until end of turn" — (owner_player_index, card)
     exile_until_eot: list[tuple[int, CardDefinition]] = field(default_factory=list)
     # 104.4: True when the game ends in a draw for all players

@@ -4840,9 +4840,12 @@ def test_illusionary_mask_activation_creates_face_down_creature(all_cards):
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
 
-    result = game.activate_permanent_ability(0, "Illusionary Mask", target_player_index=1)
-
+    # Activate with X large enough to pay Grizzly Bears (cmc 2), then choose it.
+    result = game.activate_permanent_ability(0, "Illusionary Mask", target_player_index=1, x_value=2)
     assert result.supported
+    assert game.pending_face_down_cast is not None
+    assert game.confirm_face_down_cast(0, 0) is True
+
     face_down = next(
         (perm for perm in p1.battlefield if perm.metadata.get("face_down")),
         None,

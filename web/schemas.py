@@ -39,6 +39,7 @@ ActionKind = Literal[
     "resolve_optional_pay",
     "land_type_confirm",
     "kudzu_reattach_confirm",
+    "face_down_cast_confirm",
     "assign_defender_piles",
     "assign_attacker_piles",
     "dismiss_hand_reveal",

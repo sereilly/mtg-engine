@@ -266,31 +266,21 @@ def create_wasp_token(game: Game, instruction: OracleInstruction, context: Oracl
 
 @effect_handler("cast_face_down_creature")
 def cast_face_down_creature(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Illusionary Mask: arm a pending choice for the controller to pick a creature
+    card in hand whose mana cost X could pay (cmc <= X), to cast face down as a 2/2.
+    The actual cast happens in confirm_face_down_cast; the choice is optional."""
     caster = context.caster
     card = context.card
     controller_index = game.players.index(caster)
-    creature_card = next(
-        (c for c in caster.hand if c.primary_type == "creature"),
-        None,
-    )
-    if creature_card is None:
-        game.log.append(f"{card.name}: no creature in hand to cast face-down")
+    max_cmc = max(0, int(context.x_value or 0))
+    eligible = [c for c in caster.hand if c.primary_type == "creature" and int(c.cmc or 0) <= max_cmc]
+    if not eligible:
+        game.log.append(f"{card.name}: no eligible creature in hand to cast face-down (X={max_cmc})")
         return True, "resolved"
-    caster.hand.remove(creature_card)
-    face_down = CardDefinition(
-        name=creature_card.name,
-        mana_cost="",
-        cmc=0.0,
-        type_line="Creature",
-        oracle_text="",
-        colors=(),
-        color_identity=(),
-        keywords=(),
-        produced_mana=(),
-        raw={"name": creature_card.name, "type_line": "Creature", "power": "2", "toughness": "2"},
-    )
-    perm = Permanent(card=face_down)
-    perm.metadata["face_down"] = True
-    game._put_permanent_onto_battlefield(controller_index, perm, None)
-    game.log.append(f"{card.name} cast {creature_card.name} face-down as a 2/2 creature")
+    game.pending_face_down_cast = {
+        "player_index": controller_index,
+        "max_cmc": max_cmc,
+        "card_name": card.name,
+    }
+    game.log.append(f"{card.name}: choose a creature (mana value <= {max_cmc}) to cast face down")
     return True, "resolved"

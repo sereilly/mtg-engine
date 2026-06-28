@@ -216,6 +216,45 @@ class StackCastingMixin:
         self.pending_kudzu_reattach = None
         return True
 
+    def confirm_face_down_cast(self, player_index: int, hand_index: int | None) -> bool:
+        """Resolve a pending Illusionary Mask face-down cast. ``hand_index`` < 0 (or
+        None) declines (the choice is "you may"). Otherwise the chosen creature card
+        (mana value <= the pending max) is cast face down as a 2/2, keeping the real
+        card so it can later be turned face up."""
+        pending = self.pending_face_down_cast
+        if pending is None or pending["player_index"] != player_index:
+            return False
+        player = self.players[player_index]
+        if hand_index is None or hand_index < 0:
+            self.pending_face_down_cast = None
+            return True
+        if not (0 <= hand_index < len(player.hand)):
+            return False
+        creature_card = player.hand[hand_index]
+        max_cmc = int(pending.get("max_cmc", 0))
+        if creature_card.primary_type != "creature" or int(creature_card.cmc or 0) > max_cmc:
+            return False
+        player.hand.pop(hand_index)
+        face_down = CardDefinition(
+            name=creature_card.name,
+            mana_cost="",
+            cmc=0.0,
+            type_line="Creature",
+            oracle_text="",
+            colors=(),
+            color_identity=(),
+            keywords=(),
+            produced_mana=(),
+            raw={"name": creature_card.name, "type_line": "Creature", "power": "2", "toughness": "2"},
+        )
+        perm = Permanent(card=face_down)
+        perm.metadata["face_down"] = True
+        perm.metadata["face_down_real_card"] = creature_card
+        self._put_permanent_onto_battlefield(player_index, perm, None)
+        self.log.append(f"Illusionary Mask cast {creature_card.name} face down as a 2/2")
+        self.pending_face_down_cast = None
+        return True
+
     def _balance_remove(self, player_index: int, land_indices, creature_indices, hand_indices) -> bool:
         """Remove the chosen lands/creatures (to graveyard) and hand cards (discard)
         for one player's Balance plan. Validates the counts against the plan."""
