@@ -9,6 +9,7 @@ block propagation (CR 702.22h), and the Rampage/Flanking combat buffs that fire
 when a creature becomes blocked.
 """
 
+import random
 import re
 
 from ..models import Permanent, PlayerState
@@ -100,6 +101,50 @@ class DeclareBlockersStepMixin:
         # declare blockers step), the active player receives priority.
         self.start_priority_window(self.active_player_index)
         return True, "declared blockers"
+
+    def is_camouflage_active(self) -> bool:
+        """True when Camouflage was cast this turn, so the defender's blocks are
+        assigned by random pile instead of chosen."""
+        return self.camouflage_active_turn == self.turn
+
+    def resolve_camouflage_blocking(self, defender_index: int) -> tuple[bool, str]:
+        """Camouflage replaces the declare-blockers step: the defending player's
+        creatures are divided into a number of piles equal to the attackers
+        attacking them, each pile is assigned to a different attacker at random, and
+        every creature in a pile that can block its assigned attacker does so (CR;
+        piles may be empty). Uses the module RNG, so a seeded run is reproducible."""
+        if self.current_turn_phase != "combat" or self.current_step != "declare_blockers":
+            return False, "blockers can only be declared during declare_blockers"
+        if defender_index != self.combat_defending_player_index:
+            return False, "only defending player may declare blockers"
+        defender = self.players[defender_index]
+        attacker_controller = self.players[self.active_player_index]
+        attackers = [a for a, d in self.combat_attackers.items() if d == defender_index]
+        if not attackers:
+            return self.declare_blockers(defender_index, {})
+
+        candidates = [
+            idx for idx, perm in enumerate(defender.battlefield)
+            if perm.card.primary_type == "creature" and not perm.tapped
+        ]
+        random.shuffle(candidates)
+        # Round-robin the creatures into one pile per attacker, then randomly map
+        # piles to attackers.
+        piles: list[list[int]] = [[] for _ in attackers]
+        for i, blocker_idx in enumerate(candidates):
+            piles[i % len(piles)].append(blocker_idx)
+        shuffled_attackers = list(attackers)
+        random.shuffle(shuffled_attackers)
+
+        assignment: dict[int, list[int]] = {}
+        for pile, attacker_idx in zip(piles, shuffled_attackers):
+            attacker = attacker_controller.battlefield[attacker_idx]
+            for blocker_idx in pile:
+                blocker = defender.battlefield[blocker_idx]
+                if self._can_block_attacker(blocker, attacker):
+                    assignment.setdefault(blocker_idx, []).append(attacker_idx)
+        self.log.append(f"Camouflage assigned {len(assignment)} random blocker(s)")
+        return self.declare_blockers(defender_index, assignment)
 
     def _left_right_block_illegal(self, attacker_idx: int, blocker_idx: int, blocker: Permanent) -> bool:
         """CR Raging River: an attacker assigned to a pile can only be blocked by a

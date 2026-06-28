@@ -88,6 +88,19 @@ class CombatPhaseMixin:
             self._prune_combat_state()
             attacker_name = self.players[self.active_player_index].name
             self.log.append(f"{attacker_name} has no valid attackers; declare attackers step skipped")
+        # Camouflage replaces the declare-blockers step: the defender's blocks are
+        # assigned at random by pile rather than chosen. Auto-resolve here (for both
+        # human and AI defenders) instead of waiting for a manual declaration.
+        if (
+            self.current_step == "declare_blockers"
+            and not self.combat_blockers_locked
+            and self.combat_attackers
+            and self.is_camouflage_active()
+        ):
+            defender_index = self.combat_defending_player_index
+            if isinstance(defender_index, int):
+                self.resolve_camouflage_blocking(defender_index)
+            return
         if self.current_step == "declare_blockers" and not self.combat_blockers_locked:
             defender_index = self.combat_defending_player_index
             if isinstance(defender_index, int) and not self._has_any_legal_block(defender_index):

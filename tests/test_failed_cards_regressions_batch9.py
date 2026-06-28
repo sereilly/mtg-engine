@@ -23,6 +23,8 @@ from pathlib import Path
 
 import pytest
 
+import random
+
 from engine import Game, PlayerState, load_cards
 from engine.models import Permanent
 from engine.ai_policy import choose_attackers
@@ -636,3 +638,52 @@ class TestTwoHeadedGiantDoubleBlock:
         ok, msg = game.declare_blockers(1, {0: [0, 1, 2]})
         assert not ok
         assert "cannot block that many" in msg
+
+
+# ---------------------------------------------------------------------------
+# Camouflage — replaces the declare-blockers step with random pile assignment.
+# The defender's creatures are divided into piles (one per attacker), randomly
+# assigned, and block their assigned attacker if able (seeded RNG = reproducible).
+# ---------------------------------------------------------------------------
+
+class TestCamouflage:
+    def _combat(self, cards):
+        a1 = Permanent(card=cards["Grizzly Bears"])
+        a2 = Permanent(card=cards["Hill Giant"])
+        for a in (a1, a2):
+            a.metadata["summoning_sickness_turn"] = -99
+        d1 = Permanent(card=cards["Grizzly Bears"])
+        d2 = Permanent(card=cards["Gray Ogre"])
+        p1 = PlayerState(name="P1", battlefield=[a1, a2], life=20)
+        p2 = PlayerState(name="P2", battlefield=[d1, d2], life=20)
+        game = _game(p1, p2)
+        game.active_player_index = 0
+        game._set_phase_and_step("combat", "declare_attackers")
+        game.combat_defending_player_index = 1
+        game.declare_attackers(0, [0, 1])
+        game.advance_combat_phase()  # -> declare_blockers
+        game.camouflage_active_turn = game.turn
+        return game
+
+    def test_assigns_random_blocks_and_is_deterministic(self, cards):
+        game = self._combat(cards)
+        random.seed(42)
+        ok, _ = game.resolve_camouflage_blocking(1)
+        assert ok
+        first = dict(game.combat_blockers)
+        assert first  # some creature was assigned to block
+        # Each blocker blocks exactly one attacker (single pile membership).
+        assert all(len(atks) == 1 for atks in first.values())
+
+        game2 = self._combat(cards)
+        random.seed(42)
+        game2.resolve_camouflage_blocking(1)
+        assert game2.combat_blockers == first  # reproducible under the same seed
+
+    def test_auto_resolves_when_active_on_advance(self, cards):
+        game = self._combat(cards)
+        random.seed(5)
+        assert game.is_camouflage_active()
+        game.advance_combat_phase()  # at declare_blockers -> camouflage resolves
+        assert game.combat_blockers_locked is True
+        assert game.combat_blockers  # blocks were auto-assigned

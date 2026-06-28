@@ -109,6 +109,10 @@ class Game(
     combat_bands: list[list[int]] = field(default_factory=list)
     combat_band_blocks: dict[int, list[int]] = field(default_factory=dict)
     combat_banding_damage: dict[int, dict[int, int]] = field(default_factory=dict)
+    # Camouflage: set to the turn number when cast. While it matches the current
+    # turn, the defending player's blocks are assigned randomly by pile (CR — the
+    # spell replaces the declare-blockers step) instead of chosen.
+    camouflage_active_turn: int | None = None
     # Raging River (CR 702 left/right division). When active, each defending player
     # splits their non-flying creatures into a "left" and a "right" pile, and the
     # attacking player labels each attacker; an attacker may then only be blocked by

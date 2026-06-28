@@ -44,6 +44,9 @@ def grant_unlimited_blocking(game: Game, instruction: OracleInstruction, context
 @effect_handler("randomize_blockers")
 def randomize_blockers(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     card = context.card
+    # Camouflage: mark this turn so the defending player's blocks are assigned by
+    # random pile (resolve_camouflage_blocking) rather than chosen this combat.
+    game.camouflage_active_turn = game.turn
     game.log.append(f"{card.name} set up random pile blocking this turn")
     return True, "resolved"
 
