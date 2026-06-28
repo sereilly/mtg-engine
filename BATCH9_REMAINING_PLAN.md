@@ -4,10 +4,11 @@ Tracks the CARD_VERIFICATION.md ❌ failures from this round. **Done** items are
 fixed + tested (engine + UI-API) and the app boots clean in the browser.
 **Remaining** items are investigated with a concrete plan but not yet implemented.
 
-## Done (18)
+## Done (19)
 
 | Card | Fix | Tests |
 | --- | --- | --- |
+| Library of Leng | New centralized `_discard_card` helper routes a discarded card to the top of the library when the player controls Library of Leng (else the graveyard); applied to random discards (combat-damage trigger, "discards X at random") and cleanup discards, not just Disrupting Scepter | `batch9::TestLibraryOfLengDiscards` |
 | Farmstead | The ad-hoc enchant-land life-gain block now honors `human_choices` (auto-pays only as the AI/headless default); surfaced via `get_upkeep_pay_triggers` (enchant-land scan) as `upkeep_pay_to_gain_life` with a "no life" decline label | `batch9::TestFarmsteadUpkeepPay` |
 | Mana Vault | New parse rule `upkeep_pay_to_untap_self` + `_UPKEEP_PAY_KINDS` entry + upkeep resolve branch (pay → untap the artifact, no decline consequence); surfaced via existing `get_upkeep_pay_triggers` (upkeep_self) and the upkeep-pay prompt (new "stay tapped" decline label) | `batch9::TestManaVaultUpkeepUntap` |
 | Paralyze | New parse rule `upkeep_pay_to_untap_enchanted` + resolve branch keyed on `upkeep_enchanted_controller` via `attached_to` (pay → untap enchanted creature); `get_upkeep_pay_triggers` extended to scan all battlefields for auras enchanting this player's creature | `batch9::TestParalyzeUpkeepUntap` |
@@ -27,7 +28,7 @@ fixed + tested (engine + UI-API) and the app boots clean in the browser.
 | Raging River | Per-role lock flags clear the prompt after assignment; no empty/defenderless loop | `test_raging_river_ui_api` (2 new) |
 | Glasses of Urza | Reveal-hand modal cards wired to `showCardPreview`/`clearCardPreview` on hover | (visual; verify in browser) |
 
-## Remaining (17) — plans
+## Remaining (16) — plans
 
 Infra patterns to reuse: `pending_optional_pays`/`confirm_optional_pay`,
 `pending_search_library`/`pending_discard` style deferred choices (state on `Game`,
@@ -40,7 +41,6 @@ choice needs an AI/headless auto-resolver** (determinism).
 
 ### Pending-choice (engine auto-resolves a choice today)
 - **Lich** — `effects.py:304-325` auto-sacrifices; add `pending_sacrifice` + `confirm_sacrifice` (keep the "can't → lose" path; AI uses the existing heuristic).
-- **Library of Leng** — centralize discards through `_resolve_one_discard`/`pending_discard` with `allow_top_of_library` for all discard sources (random, cleanup, damage), not just Disrupting Scepter.
 - **Illusionary Mask** — handler auto-picks first creature; add a hand-card selection prompt filtered by `cmc ≤ X`. Highest effort.
 
 ### Targeting

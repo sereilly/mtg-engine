@@ -172,7 +172,7 @@ def discard_x_target_cards(game: Game, instruction: OracleInstruction, context: 
     indices = random.sample(range(len(target.hand)), actual)
     for i in sorted(indices, reverse=True):
         discarded = target.hand.pop(i)
-        target.graveyard.append(discarded)
+        game._discard_card(target, discarded)  # Library of Leng -> top of library
     game.log.append(f"{target.name} discarded {actual} cards at random")
     return True, "resolved"
 

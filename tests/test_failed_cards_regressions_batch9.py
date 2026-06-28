@@ -438,3 +438,36 @@ class TestFarmsteadUpkeepPay:
         game, p1 = self._game(cards)
         game.resolve_upkeep(0)  # no human_choices -> beneficial default
         assert p1.life == 21
+
+
+# ---------------------------------------------------------------------------
+# Library of Leng — "If an effect causes you to discard a card, put it on top of
+# your library instead of into your graveyard." Previously only Disrupting Scepter
+# honored this; now random and cleanup discards route through the same helper.
+# ---------------------------------------------------------------------------
+
+class TestLibraryOfLengDiscards:
+    def test_helper_routes_to_top_of_library_with_leng(self, cards):
+        leng = Permanent(card=cards["Library of Leng"])
+        p1 = PlayerState(name="P1", battlefield=[leng], library=[cards["Plains"]])
+        game = _game(p1, PlayerState(name="P2"))
+        game._discard_card(p1, cards["Forest"])
+        assert p1.library[0].name == "Forest"   # kept on top
+        assert p1.graveyard == []
+
+    def test_helper_routes_to_graveyard_without_leng(self, cards):
+        p1 = PlayerState(name="P1", library=[])
+        game = _game(p1, PlayerState(name="P2"))
+        game._discard_card(p1, cards["Forest"])
+        assert [c.name for c in p1.graveyard] == ["Forest"]
+        assert p1.library == []
+
+    def test_cleanup_discard_goes_to_top_with_leng(self, cards):
+        leng = Permanent(card=cards["Library of Leng"])
+        hand = [cards["Forest"]] * 8  # one over the max hand size of 7
+        p1 = PlayerState(name="P1", battlefield=[leng], hand=list(hand), library=[])
+        game = _game(p1, PlayerState(name="P2"))
+        game.resolve_cleanup_step(0)  # auto-discards the excess
+        assert len(p1.hand) == 7
+        assert len(p1.library) == 1   # the discarded card went on top, not to the yard
+        assert p1.graveyard == []

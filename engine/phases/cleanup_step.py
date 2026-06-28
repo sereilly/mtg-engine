@@ -38,14 +38,14 @@ class CleanupStepMixin:
                         raise ValueError("cleanup discard index out of range")
                     for hand_index in sorted(unique_indices, reverse=True):
                         discarded = active_player.hand.pop(hand_index)
-                        active_player.graveyard.append(discarded)
+                        self._discard_card(active_player, discarded)
                     self.log.append(f"{active_player.name} discarded {excess} card(s) in cleanup")
                 elif defer_discard_selection:
                     cleanup_completed = False
                 else:
                     for _ in range(excess):
                         discarded = active_player.hand.pop(0)
-                        active_player.graveyard.append(discarded)
+                        self._discard_card(active_player, discarded)
                     self.log.append(f"{active_player.name} discarded {excess} card(s) in cleanup")
 
         self.combat_damage_prevented_until_eot = False

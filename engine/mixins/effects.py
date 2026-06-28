@@ -44,7 +44,7 @@ class EffectsMixin:
             if instr.kind == "opponent_discards_random_card_on_damage":
                 if defending_player.hand:
                     discarded = defending_player.hand.pop(random.randrange(len(defending_player.hand)))
-                    defending_player.graveyard.append(discarded)
+                    self._discard_card(defending_player, discarded)
                     self.log.append(
                         f"{attacker.card.name}: {defending_player.name} discards {discarded.name} at random"
                     )
@@ -269,6 +269,20 @@ class EffectsMixin:
 
     def _player_controls_text(self, player: PlayerState, phrase: str) -> bool:
         return any(phrase in perm.card.oracle_text.lower() for perm in player.battlefield)
+
+    def _discard_card(self, player: PlayerState, card) -> None:
+        """Move a discarded card to the graveyard, or — if the player controls
+        Library of Leng — to the top of their library instead (CR 701.8e
+        replacement). Use for random/forced discards (combat damage, "discards X
+        cards at random") where the player can't pick the card but Library of Leng
+        still lets them keep it; the top-of-library route is the beneficial default."""
+        if any(perm.card.name == "Library of Leng" for perm in player.battlefield):
+            player.library.insert(0, card)
+            self.log.append(
+                f"{player.name} discarded {card.name} to the top of their library (Library of Leng)"
+            )
+        else:
+            player.graveyard.append(card)
 
     def _gain_life(self, target: PlayerState, amount: int, source_name: str | None = None) -> None:
         """Apply a life gain, honoring 'If you would gain life, draw that many cards
