@@ -4,8 +4,8 @@ Master record of which cards have been manually validated in-game. Generated aut
 
 - Total cards: **290**
 - Passed: **206**
-- Failed: **35**
-- Untested: **49**
+- Failed: **2**
+- Untested: **82**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -22,7 +22,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Balance | ✅ pass |  |
 | Basalt Monolith | ✅ pass |  |
 | Bayou | ✅ pass |  |
-| Benalish Hero | ❌ fail | When creatures are banded together it should show a visual purple line connecting the banded cards and when I hover over them it should highlight all the cards that are part of that band in purple |
+| Benalish Hero | ⬜ untested |  |
 | Berserk | ⬜ untested |  |
 | Birds of Paradise | ✅ pass |  |
 | Black Knight | ✅ pass |  |
@@ -36,10 +36,10 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Bog Wraith | ✅ pass |  |
 | Braingeyser | ✅ pass |  |
 | Burrowing | ✅ pass |  |
-| Camouflage | ❌ fail | Card doesn't work |
+| Camouflage | ⬜ untested |  |
 | Castle | ✅ pass |  |
 | Celestial Prism | ✅ pass |  |
-| Channel | ❌ fail | Needs an emblem card that I can use to activate the ability |
+| Channel | ⬜ untested |  |
 | Chaos Orb | ✅ pass |  |
 | Chaoslace | ⬜ untested |  |
 | Circle of Protection: Blue | ⬜ untested |  |
@@ -87,12 +87,12 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Elvish Archers | ✅ pass |  |
 | Evil Presence | ✅ pass |  |
 | False Orders | ⬜ untested |  |
-| Farmstead | ❌ fail | I didn't get a prompt on my upkeep |
+| Farmstead | ⬜ untested |  |
 | Fastbond | ✅ pass |  |
 | Fear | ✅ pass |  |
 | Feedback | ✅ pass |  |
 | Fire Elemental | ✅ pass |  |
-| Fireball | ❌ fail | I get an error saying all targets must be on the same side even though I should be able to choose any target(s) |
+| Fireball | ⬜ untested |  |
 | Firebreathing | ✅ pass |  |
 | Flashfires | ✅ pass |  |
 | Flight | ✅ pass |  |
@@ -100,15 +100,15 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Force of Nature | ✅ pass |  |
 | Forcefield | ❌ fail | It should prompt me to choose an unblocked creature |
 | Forest | ✅ pass |  |
-| Fork | ❌ fail | Fork should prompt me to choose a (different) target |
+| Fork | ⬜ untested |  |
 | Frozen Shade | ✅ pass |  |
 | Fungusaur | ✅ pass |  |
 | Gaea's Liege | ⬜ untested |  |
 | Gauntlet of Might | ✅ pass |  |
 | Giant Growth | ✅ pass |  |
 | Giant Spider | ✅ pass |  |
-| Glasses of Urza | ❌ fail | The window for looking at my opponent's hand should also have a card preview when I hover over a card |
-| Gloom | ❌ fail | The additional cost isn't reflected in the pay mana prompt ui |
+| Glasses of Urza | ⬜ untested |  |
+| Gloom | ⬜ untested |  |
 | Goblin Balloon Brigade | ✅ pass |  |
 | Goblin King | ⬜ untested |  |
 | Granite Gargoyle | ✅ pass |  |
@@ -117,7 +117,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Grizzly Bears | ✅ pass |  |
 | Guardian Angel | ✅ pass |  |
 | Healing Salve | ✅ pass |  |
-| Helm of Chatzuk | ❌ fail | Doesn't give banding to the target creature. |
+| Helm of Chatzuk | ⬜ untested |  |
 | Hill Giant | ✅ pass |  |
 | Holy Armor | ✅ pass |  |
 | Holy Strength | ✅ pass |  |
@@ -128,14 +128,14 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Hypnotic Specter | ⬜ untested |  |
 | Ice Storm | ✅ pass |  |
 | Icy Manipulator | ⬜ untested |  |
-| Illusionary Mask | ❌ fail | Didn't prompt me to choose a card in my hand |
+| Illusionary Mask | ⬜ untested |  |
 | Instill Energy | ⬜ untested |  |
 | Invisibility | ✅ pass |  |
 | Iron Star | ⬜ untested |  |
 | Ironclaw Orcs | ✅ pass |  |
 | Ironroot Treefolk | ✅ pass |  |
 | Island | ✅ pass |  |
-| Island Sanctuary | ❌ fail | I'm not able to choose an option in the prompt |
+| Island Sanctuary | ⬜ untested |  |
 | Ivory Cup | ⬜ untested |  |
 | Jade Monolith | ⬜ untested |  |
 | Jade Statue | ⬜ untested |  |
@@ -145,11 +145,11 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Karma | ✅ pass |  |
 | Keldon Warlord | ✅ pass |  |
 | Kormus Bell | ⬜ untested |  |
-| Kudzu | ❌ fail | I should get to choose the next target when the land is destroyed |
+| Kudzu | ⬜ untested |  |
 | Lance | ✅ pass |  |
 | Ley Druid | ✅ pass |  |
-| Library of Leng | ❌ fail | Didn't get a prompt when dicarding |
-| Lich | ❌ fail | I didn't get to choose which permanents to sacrifice |
+| Library of Leng | ⬜ untested |  |
+| Lich | ⬜ untested |  |
 | Lifeforce | ✅ pass |  |
 | Lifelace | ⬜ untested |  |
 | Lifetap | ✅ pass |  |
@@ -160,16 +160,16 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Llanowar Elves | ✅ pass |  |
 | Lord of Atlantis | ⬜ untested |  |
 | Lord of the Pit | ⬜ untested |  |
-| Lure | ❌ fail | When Lure is attached to an opponent (AI) creature it skips my block step entirely |
-| Magical Hack | ❌ fail | I wasn't able to change swampwalk to islandwalk. Also the ability should not change the color of the card. |
+| Lure | ⬜ untested |  |
+| Magical Hack | ⬜ untested |  |
 | Mahamoti Djinn | ✅ pass |  |
 | Mana Flare | ✅ pass |  |
 | Mana Short | ✅ pass |  |
-| Mana Vault | ❌ fail | Missing prompt for "At the beginning of your upkeep, you may pay {4}. If you do, untap this artifact." |
+| Mana Vault | ⬜ untested |  |
 | Manabarbs | ✅ pass |  |
 | Meekstone | ✅ pass |  |
 | Merfolk of the Pearl Trident | ✅ pass |  |
-| Mesa Pegasus | ❌ fail | same Banding issues |
+| Mesa Pegasus | ⬜ untested |  |
 | Mind Twist | ✅ pass |  |
 | Mons's Goblin Raiders | ✅ pass |  |
 | Mountain | ✅ pass |  |
@@ -187,35 +187,35 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Obsianus Golem | ✅ pass |  |
 | Orcish Artillery | ✅ pass |  |
 | Orcish Oriflamme | ✅ pass |  |
-| Paralyze | ❌ fail | I didn't get a prompt to pay 4 to untap my creature |
+| Paralyze | ⬜ untested |  |
 | Pearled Unicorn | ✅ pass |  |
 | Personal Incarnation | ⬜ untested |  |
 | Pestilence | ✅ pass |  |
 | Phantasmal Forces | ✅ pass |  |
-| Phantasmal Terrain | ❌ fail | I should get to choose the basic land type |
+| Phantasmal Terrain | ⬜ untested |  |
 | Phantom Monster | ✅ pass |  |
 | Pirate Ship | ✅ pass |  |
 | Plague Rats | ⬜ untested |  |
 | Plains | ✅ pass |  |
 | Plateau | ✅ pass |  |
 | Power Leak | ✅ pass |  |
-| Power Sink | ❌ fail | It didn't prompt the targeted player to pay X to prevent the spell from being countered |
+| Power Sink | ⬜ untested |  |
 | Power Surge | ✅ pass |  |
 | Prodigal Sorcerer | ✅ pass |  |
 | Psionic Blast | ✅ pass |  |
 | Psychic Venom | ✅ pass |  |
 | Purelace | ⬜ untested |  |
-| Raging River | ❌ fail | Got stuck on the raging river prompt when the opponent had no blockers |
+| Raging River | ⬜ untested |  |
 | Raise Dead | ✅ pass |  |
 | Red Elemental Blast | ✅ pass |  |
 | Red Ward | ✅ pass |  |
 | Regeneration | ✅ pass |  |
 | Regrowth | ⬜ untested |  |
 | Resurrection | ✅ pass |  |
-| Reverse Damage | ❌ fail | Doesn't let me choose a target |
+| Reverse Damage | ⬜ untested |  |
 | Righteousness | ✅ pass |  |
 | Roc of Kher Ridges | ✅ pass |  |
-| Rock Hydra | ❌ fail | I should be able to activate the first ability at any time. Only the second ability has an upkeep restriction |
+| Rock Hydra | ⬜ untested |  |
 | Rod of Ruin | ✅ pass |  |
 | Royal Assassin | ⬜ untested |  |
 | Sacrifice | ⬜ untested |  |
@@ -223,7 +223,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Savannah | ✅ pass |  |
 | Savannah Lions | ✅ pass |  |
 | Scathe Zombies | ✅ pass |  |
-| Scavenging Ghoul | ❌ fail | I can use the card ability but I can't see the corpse counters on the card |
+| Scavenging Ghoul | ⬜ untested |  |
 | Scrubland | ✅ pass |  |
 | Scryb Sprites | ✅ pass |  |
 | Sea Serpent | ✅ pass |  |
@@ -236,14 +236,14 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Simulacrum | ✅ pass |  |
 | Sinkhole | ✅ pass |  |
 | Siren's Call | ✅ pass |  |
-| Sleight of Mind | ❌ fail | I tried changing the text of lifeforce to let me use its ability counter red spells but it didn't work |
-| Smoke | ❌ fail | I should get a prompt to choose which creature to untap |
+| Sleight of Mind | ⬜ untested |  |
+| Smoke | ⬜ untested |  |
 | Sol Ring | ✅ pass |  |
 | Soul Net | ⬜ untested |  |
 | Spell Blast | ✅ pass |  |
 | Stasis | ✅ pass |  |
 | Steal Artifact | ⬜ untested |  |
-| Stone Giant | ❌ fail | I should not be able to select invalid targets |
+| Stone Giant | ⬜ untested |  |
 | Stone Rain | ✅ pass |  |
 | Stream of Life | ✅ pass |  |
 | Sunglasses of Urza | ✅ pass |  |
@@ -255,8 +255,8 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Thicket Basilisk | ✅ pass |  |
 | Thoughtlace | ⬜ untested |  |
 | Throne of Bone | ⬜ untested |  |
-| Timber Wolves | ❌ fail | Same banding issues |
-| Time Vault | ❌ fail | I should get a prompt at the beginning of my turn |
+| Timber Wolves | ⬜ untested |  |
+| Time Vault | ⬜ untested |  |
 | Time Walk | ✅ pass |  |
 | Timetwister | ✅ pass |  |
 | Tranquility | ✅ pass |  |
@@ -265,12 +265,12 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Tundra | ✅ pass |  |
 | Tunnel | ✅ pass |  |
 | Twiddle | ⬜ untested |  |
-| Two-Headed Giant of Foriys | ❌ fail | I should be able to block an additional creature but the UI doesn't support it |
+| Two-Headed Giant of Foriys | ⬜ untested |  |
 | Underground Sea | ✅ pass |  |
 | Unholy Strength | ✅ pass |  |
 | Unsummon | ✅ pass |  |
 | Uthden Troll | ✅ pass |  |
-| Verduran Enchantress | ❌ fail | it says may draw a card so I should get a prompt asking me if I want to draw |
+| Verduran Enchantress | ⬜ untested |  |
 | Vesuvan Doppelganger | ⬜ untested |  |
 | Veteran Bodyguard | ⬜ untested |  |
 | Volcanic Eruption | ❌ fail | It should let me choose which mountains to destroy |
@@ -296,6 +296,6 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Will-o'-the-Wisp | ✅ pass |  |
 | Winter Orb | ✅ pass |  |
 | Wooden Sphere | ⬜ untested |  |
-| Word of Command | ❌ fail | Card doesn't work |
+| Word of Command | ⬜ untested |  |
 | Wrath of God | ✅ pass |  |
 | Zombie Master | ⬜ untested |  |

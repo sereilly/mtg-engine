@@ -55,11 +55,6 @@
       "status": "pass",
       "updated_at": 1782598699.9781644
     },
-    "Benalish Hero": {
-      "reason": "When creatures are banded together it should show a visual purple line connecting the banded cards and when I hover over them it should highlight all the cards that are part of that band in purple",
-      "status": "fail",
-      "updated_at": 1782543925.2056103
-    },
     "Birds of Paradise": {
       "reason": "",
       "status": "pass",
@@ -115,11 +110,6 @@
       "status": "pass",
       "updated_at": 1782542361.3458302
     },
-    "Camouflage": {
-      "reason": "Card doesn't work",
-      "status": "fail",
-      "updated_at": 1782544496.2789314
-    },
     "Castle": {
       "reason": "",
       "status": "pass",
@@ -129,11 +119,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782105893.8562238
-    },
-    "Channel": {
-      "reason": "Needs an emblem card that I can use to activate the ability",
-      "status": "fail",
-      "updated_at": 1782587189.5371726
     },
     "Chaos Orb": {
       "reason": "",
@@ -300,11 +285,6 @@
       "status": "pass",
       "updated_at": 1782022287.5750093
     },
-    "Farmstead": {
-      "reason": "I didn't get a prompt on my upkeep",
-      "status": "fail",
-      "updated_at": 1782542988.830896
-    },
     "Fastbond": {
       "reason": "",
       "status": "pass",
@@ -324,11 +304,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781756819.3621137
-    },
-    "Fireball": {
-      "reason": "I get an error saying all targets must be on the same side even though I should be able to choose any target(s)",
-      "status": "fail",
-      "updated_at": 1782584616.2549808
     },
     "Firebreathing": {
       "reason": "",
@@ -365,11 +340,6 @@
       "status": "pass",
       "updated_at": 1781503124.4112332
     },
-    "Fork": {
-      "reason": "Fork should prompt me to choose a (different) target",
-      "status": "fail",
-      "updated_at": 1782600382.145417
-    },
     "Frozen Shade": {
       "reason": "",
       "status": "pass",
@@ -394,16 +364,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782178605.8299546
-    },
-    "Glasses of Urza": {
-      "reason": "The window for looking at my opponent's hand should also have a card preview when I hover over a card",
-      "status": "fail",
-      "updated_at": 1782542896.9600568
-    },
-    "Gloom": {
-      "reason": "The additional cost isn't reflected in the pay mana prompt ui",
-      "status": "fail",
-      "updated_at": 1782600990.6982932
     },
     "Goblin Balloon Brigade": {
       "reason": "",
@@ -439,11 +399,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781461708.2940688
-    },
-    "Helm of Chatzuk": {
-      "reason": "Doesn't give banding to the target creature.",
-      "status": "fail",
-      "updated_at": 1782600080.2019947
     },
     "Hill Giant": {
       "reason": "",
@@ -485,11 +440,6 @@
       "status": "pass",
       "updated_at": 1782009230.2792885
     },
-    "Illusionary Mask": {
-      "reason": "Didn't prompt me to choose a card in my hand",
-      "status": "fail",
-      "updated_at": 1782600800.6545534
-    },
     "Invisibility": {
       "reason": "",
       "status": "pass",
@@ -509,11 +459,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781378704.6242044
-    },
-    "Island Sanctuary": {
-      "reason": "I'm not able to choose an option in the prompt",
-      "status": "fail",
-      "updated_at": 1782590303.868989
     },
     "Jayemdae Tome": {
       "reason": "",
@@ -540,11 +485,6 @@
       "status": "pass",
       "updated_at": 1782590997.0348485
     },
-    "Kudzu": {
-      "reason": "I should get to choose the next target when the land is destroyed",
-      "status": "fail",
-      "updated_at": 1782585947.904026
-    },
     "Lance": {
       "reason": "",
       "status": "pass",
@@ -554,16 +494,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782361609.6198592
-    },
-    "Library of Leng": {
-      "reason": "Didn't get a prompt when dicarding",
-      "status": "fail",
-      "updated_at": 1782591897.3669372
-    },
-    "Lich": {
-      "reason": "I didn't get to choose which permanents to sacrifice",
-      "status": "fail",
-      "updated_at": 1782592209.885521
     },
     "Lifeforce": {
       "reason": "",
@@ -590,16 +520,6 @@
       "status": "pass",
       "updated_at": 1782544325.311722
     },
-    "Lure": {
-      "reason": "When Lure is attached to an opponent (AI) creature it skips my block step entirely",
-      "status": "fail",
-      "updated_at": 1782358635.884448
-    },
-    "Magical Hack": {
-      "reason": "I wasn't able to change swampwalk to islandwalk. Also the ability should not change the color of the card.",
-      "status": "fail",
-      "updated_at": 1782584733.5638328
-    },
     "Mahamoti Djinn": {
       "reason": "",
       "status": "pass",
@@ -615,11 +535,6 @@
       "status": "pass",
       "updated_at": 1781585587.1657355
     },
-    "Mana Vault": {
-      "reason": "Missing prompt for \"At the beginning of your upkeep, you may pay {4}. If you do, untap this artifact.\"",
-      "status": "fail",
-      "updated_at": 1782542527.1944366
-    },
     "Manabarbs": {
       "reason": "",
       "status": "pass",
@@ -634,11 +549,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781378762.2991576
-    },
-    "Mesa Pegasus": {
-      "reason": "same Banding issues",
-      "status": "fail",
-      "updated_at": 1782601401.906366
     },
     "Mind Twist": {
       "reason": "",
@@ -725,11 +635,6 @@
       "status": "pass",
       "updated_at": 1782584976.5671804
     },
-    "Paralyze": {
-      "reason": "I didn't get a prompt to pay 4 to untap my creature",
-      "status": "fail",
-      "updated_at": 1782586408.6534677
-    },
     "Pearled Unicorn": {
       "reason": "",
       "status": "pass",
@@ -744,11 +649,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782591330.2038229
-    },
-    "Phantasmal Terrain": {
-      "reason": "I should get to choose the basic land type",
-      "status": "fail",
-      "updated_at": 1782541395.7210343
     },
     "Phantom Monster": {
       "reason": "",
@@ -775,11 +675,6 @@
       "status": "pass",
       "updated_at": 1782592116.6137974
     },
-    "Power Sink": {
-      "reason": "It didn't prompt the targeted player to pay X to prevent the spell from being countered",
-      "status": "fail",
-      "updated_at": 1782598955.609432
-    },
     "Power Surge": {
       "reason": "",
       "status": "pass",
@@ -799,11 +694,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781410771.1947188
-    },
-    "Raging River": {
-      "reason": "Got stuck on the raging river prompt when the opponent had no blockers",
-      "status": "fail",
-      "updated_at": 1782590764.0507822
     },
     "Raise Dead": {
       "reason": "",
@@ -830,11 +720,6 @@
       "status": "pass",
       "updated_at": 1782541428.6675277
     },
-    "Reverse Damage": {
-      "reason": "Doesn't let me choose a target",
-      "status": "fail",
-      "updated_at": 1782584892.265415
-    },
     "Righteousness": {
       "reason": "",
       "status": "pass",
@@ -844,11 +729,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781997960.0992842
-    },
-    "Rock Hydra": {
-      "reason": "I should be able to activate the first ability at any time. Only the second ability has an upkeep restriction",
-      "status": "fail",
-      "updated_at": 1782601387.0066957
     },
     "Rod of Ruin": {
       "reason": "",
@@ -874,11 +754,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782586144.231241
-    },
-    "Scavenging Ghoul": {
-      "reason": "I can use the card ability but I can't see the corpse counters on the card",
-      "status": "fail",
-      "updated_at": 1782599518.0480435
     },
     "Scrubland": {
       "reason": "",
@@ -940,16 +815,6 @@
       "status": "pass",
       "updated_at": 1782364012.382203
     },
-    "Sleight of Mind": {
-      "reason": "I tried changing the text of lifeforce to let me use its ability counter red spells but it didn't work",
-      "status": "fail",
-      "updated_at": 1782601707.3989358
-    },
-    "Smoke": {
-      "reason": "I should get a prompt to choose which creature to untap",
-      "status": "fail",
-      "updated_at": 1782540995.384977
-    },
     "Sol Ring": {
       "reason": "",
       "status": "pass",
@@ -964,11 +829,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781410889.892921
-    },
-    "Stone Giant": {
-      "reason": "I should not be able to select invalid targets",
-      "status": "fail",
-      "updated_at": 1782543309.602218
     },
     "Stone Rain": {
       "reason": "",
@@ -1015,16 +875,6 @@
       "status": "pass",
       "updated_at": 1782587023.8502285
     },
-    "Timber Wolves": {
-      "reason": "Same banding issues",
-      "status": "fail",
-      "updated_at": 1782600021.5579014
-    },
-    "Time Vault": {
-      "reason": "I should get a prompt at the beginning of my turn",
-      "status": "fail",
-      "updated_at": 1782599960.167687
-    },
     "Time Walk": {
       "reason": "",
       "status": "pass",
@@ -1060,11 +910,6 @@
       "status": "pass",
       "updated_at": 1781577230.9356234
     },
-    "Two-Headed Giant of Foriys": {
-      "reason": "I should be able to block an additional creature but the UI doesn't support it",
-      "status": "fail",
-      "updated_at": 1782586936.924413
-    },
     "Underground Sea": {
       "reason": "",
       "status": "pass",
@@ -1084,11 +929,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782544338.6868098
-    },
-    "Verduran Enchantress": {
-      "reason": "it says may draw a card so I should get a prompt asking me if I want to draw",
-      "status": "fail",
-      "updated_at": 1782598799.6459575
     },
     "Volcanic Eruption": {
       "reason": "It should let me choose which mountains to destroy",
@@ -1194,11 +1034,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782544251.2775307
-    },
-    "Word of Command": {
-      "reason": "Card doesn't work",
-      "status": "fail",
-      "updated_at": 1782544567.9407024
     },
     "Wrath of God": {
       "reason": "",
