@@ -330,11 +330,6 @@
       "status": "pass",
       "updated_at": 1782540724.534931
     },
-    "Forcefield": {
-      "reason": "It should prompt me to choose an unblocked creature",
-      "status": "fail",
-      "updated_at": 1782599197.9328413
-    },
     "Forest": {
       "reason": "",
       "status": "pass",
@@ -930,11 +925,6 @@
       "status": "pass",
       "updated_at": 1782544338.6868098
     },
-    "Volcanic Eruption": {
-      "reason": "It should let me choose which mountains to destroy",
-      "status": "fail",
-      "updated_at": 1782588488.5306256
-    },
     "Wall of Air": {
       "reason": "",
       "status": "pass",
@@ -1039,21 +1029,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782008868.629678
-    },
-    "fear": {
-      "reason": "",
-      "status": "pass",
-      "updated_at": 1782599981.0474155
-    },
-    "fork": {
-      "reason": "I wasn't able to choose new targets for the copied spell. I tested with lightning bolt",
-      "status": "fail",
-      "updated_at": 1782590836.1616764
-    },
-    "righteousness": {
-      "reason": "",
-      "status": "pass",
-      "updated_at": 1782592304.132458
     }
   }
 }

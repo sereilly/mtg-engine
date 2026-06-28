@@ -4,8 +4,8 @@ Master record of which cards have been manually validated in-game. Generated aut
 
 - Total cards: **290**
 - Passed: **206**
-- Failed: **2**
-- Untested: **82**
+- Failed: **0**
+- Untested: **84**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -98,7 +98,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Flight | ✅ pass |  |
 | Fog | ✅ pass |  |
 | Force of Nature | ✅ pass |  |
-| Forcefield | ❌ fail | It should prompt me to choose an unblocked creature |
+| Forcefield | ⬜ untested |  |
 | Forest | ✅ pass |  |
 | Fork | ⬜ untested |  |
 | Frozen Shade | ✅ pass |  |
@@ -273,7 +273,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Verduran Enchantress | ⬜ untested |  |
 | Vesuvan Doppelganger | ⬜ untested |  |
 | Veteran Bodyguard | ⬜ untested |  |
-| Volcanic Eruption | ❌ fail | It should let me choose which mountains to destroy |
+| Volcanic Eruption | ⬜ untested |  |
 | Wall of Air | ✅ pass |  |
 | Wall of Bone | ✅ pass |  |
 | Wall of Brambles | ✅ pass |  |
