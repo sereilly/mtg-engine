@@ -149,9 +149,9 @@ def test_bug3_cop_activation_protects_controller(all_cards):
     result = game.activate_permanent_ability(0, "Circle of Protection: Red", target_player_index=0)
 
     assert result.supported
-    # Prevention must be on P1 (the controller), NOT on P2
-    assert p1.damage_prevention_pool == 1
-    assert p2.damage_prevention_pool == 0
+    # The color-scoped shield must be on P1 (the controller), NOT on P2
+    assert p1.color_prevention_shields == ["R"]
+    assert p2.color_prevention_shields == []
 
 
 def test_bug3_cop_activation_does_not_protect_opponent(all_cards):
@@ -165,8 +165,8 @@ def test_bug3_cop_activation_does_not_protect_opponent(all_cards):
     # Even if target_player_index is explicitly the opponent, shield goes to controller
     game.activate_permanent_ability(0, "Circle of Protection: White", target_player_index=1)
 
-    assert p1.damage_prevention_pool == 1, "Controller should have prevention"
-    assert p2.damage_prevention_pool == 0, "Opponent must NOT have prevention (bug 3 guard)"
+    assert p1.color_prevention_shields == ["W"], "Controller should have prevention"
+    assert p2.color_prevention_shields == [], "Opponent must NOT have prevention (bug 3 guard)"
 
 
 # ---------------------------------------------------------------------------

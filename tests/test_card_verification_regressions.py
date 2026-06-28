@@ -315,6 +315,9 @@ class TestSoulNet:
         before = p1.life
         game._permanent_to_graveyard(p2, dying)
 
+        # Soul Net's "you may pay {1}" is an optional choice now — accept it.
+        assert game.pending_optional_pays
+        game.confirm_optional_pay(0, "Soul Net", accept=True)
         assert p1.life == before + 1
         assert p1.mana_pool["C"] == 0  # the {1} was paid
 
@@ -676,8 +679,9 @@ class TestCopyArtifact:
         game.resolve_stack()
 
         assert result.supported
-        copy = next(p for p in p1.battlefield if p.card.name == "Copy Artifact")
-        assert copy.metadata.get("copied_from") == "Sol Ring"
+        copy = next(p for p in p1.battlefield if p.metadata.get("copied_from") == "Sol Ring")
+        assert copy.card.name == "Sol Ring"  # became a copy of the chosen artifact
+        assert "enchantment" in copy.card.type_line.lower()
 
 
 # ---------------------------------------------------------------------------

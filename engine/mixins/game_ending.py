@@ -43,6 +43,12 @@ class GameEndingMixin:
         while changed:
             changed = False
 
+            # Recompute continuous effects (611.3a) before evaluating SBAs so that
+            # characteristic-defining and lord P/T reflect the current board — e.g.
+            # when a Plague Rats dies the others shrink immediately, and any creature
+            # that drops to lethal/0 toughness as a result dies in the same pass.
+            self._recompute_continuous_effects()
+
             # 704.5a: player with 0 or less life loses the game
             for player in self.players:
                 if not player.lost and player.life <= 0:

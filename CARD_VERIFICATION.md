@@ -4,8 +4,8 @@ Master record of which cards have been manually validated in-game. Generated aut
 
 - Total cards: **290**
 - Passed: **206**
-- Failed: **84**
-- Untested: **0**
+- Failed: **35**
+- Untested: **49**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -13,23 +13,23 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Ancestral Recall | ✅ pass |  |
 | Animate Artifact | ✅ pass |  |
 | Animate Dead | ✅ pass |  |
-| Animate Wall | ❌ fail | I shouldn't be able to continue attacking with the defender after this enchantment has been removed |
+| Animate Wall | ⬜ untested |  |
 | Ankh of Mishra | ✅ pass |  |
 | Armageddon | ✅ pass |  |
-| Aspect of Wolf | ❌ fail | The stats should be re-evaulated as a state based action so that when I play additional forests or turn a land into a forest it updates correctly |
+| Aspect of Wolf | ⬜ untested |  |
 | Bad Moon | ✅ pass |  |
 | Badlands | ✅ pass |  |
 | Balance | ✅ pass |  |
 | Basalt Monolith | ✅ pass |  |
 | Bayou | ✅ pass |  |
 | Benalish Hero | ❌ fail | When creatures are banded together it should show a visual purple line connecting the banded cards and when I hover over them it should highlight all the cards that are part of that band in purple |
-| Berserk | ❌ fail | Creature didn't get destroyed after attacking. Also I was able to cast the card after the combat damage step which is not allowed. |
+| Berserk | ⬜ untested |  |
 | Birds of Paradise | ✅ pass |  |
 | Black Knight | ✅ pass |  |
 | Black Lotus | ✅ pass |  |
 | Black Vise | ✅ pass |  |
 | Black Ward | ✅ pass |  |
-| Blaze of Glory | ❌ fail | Didn't let me choose a target |
+| Blaze of Glory | ⬜ untested |  |
 | Blessing | ✅ pass |  |
 | Blue Elemental Blast | ✅ pass |  |
 | Blue Ward | ✅ pass |  |
@@ -41,11 +41,11 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Celestial Prism | ✅ pass |  |
 | Channel | ❌ fail | Needs an emblem card that I can use to activate the ability |
 | Chaos Orb | ✅ pass |  |
-| Chaoslace | ❌ fail | Same issue as purelace |
-| Circle of Protection: Blue | ❌ fail | Doesn't let me choose a target |
-| Circle of Protection: Green | ❌ fail | Doesn't let me choose a source |
-| Circle of Protection: Red | ❌ fail | It doesn't let me choose a source. |
-| Circle of Protection: White | ❌ fail | Doesn't let me choose a source |
+| Chaoslace | ⬜ untested |  |
+| Circle of Protection: Blue | ⬜ untested |  |
+| Circle of Protection: Green | ⬜ untested |  |
+| Circle of Protection: Red | ⬜ untested |  |
+| Circle of Protection: White | ⬜ untested |  |
 | Clockwork Beast | ✅ pass |  |
 | Clone | ✅ pass |  |
 | Cockatrice | ✅ pass |  |
@@ -55,38 +55,38 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Control Magic | ✅ pass |  |
 | Conversion | ✅ pass |  |
 | Copper Tablet | ✅ pass |  |
-| Copy Artifact | ❌ fail | Doesn't copy the target artifact |
+| Copy Artifact | ⬜ untested |  |
 | Counterspell | ✅ pass |  |
 | Craw Wurm | ✅ pass |  |
 | Creature Bond | ✅ pass |  |
-| Crusade | ❌ fail | Doesn't buff creatures that were turned to white with purelace |
-| Crystal Rod | ❌ fail | Didn't get a prompt |
+| Crusade | ⬜ untested |  |
+| Crystal Rod | ⬜ untested |  |
 | Cursed Land | ✅ pass |  |
 | Cyclopean Tomb | ✅ pass |  |
 | Dark Ritual | ✅ pass |  |
 | Darkpact | ✅ pass |  |
 | Death Ward | ✅ pass |  |
 | Deathgrip | ✅ pass |  |
-| Deathlace | ❌ fail | Same issue as purelace |
+| Deathlace | ⬜ untested |  |
 | Demonic Attorney | ✅ pass |  |
 | Demonic Hordes | ✅ pass |  |
-| Demonic Tutor | ❌ fail | Deck didn't shuffle after searching |
+| Demonic Tutor | ⬜ untested |  |
 | Dingus Egg | ✅ pass |  |
 | Disenchant | ✅ pass |  |
 | Disintegrate | ✅ pass |  |
 | Disrupting Scepter | ✅ pass |  |
-| Dragon Whelp | ❌ fail | The creature should have been destroyed at the end of the turn since I used its ability 4 times |
-| Drain Life | ❌ fail | Didn't gain life |
+| Dragon Whelp | ⬜ untested |  |
+| Drain Life | ⬜ untested |  |
 | Drain Power | ✅ pass |  |
 | Drudge Skeletons | ✅ pass |  |
 | Dwarven Demolition Team | ✅ pass |  |
-| Dwarven Warriors | ❌ fail | Didn't let me target a creature |
+| Dwarven Warriors | ⬜ untested |  |
 | Earth Elemental | ✅ pass |  |
 | Earthbind | ✅ pass |  |
 | Earthquake | ✅ pass |  |
 | Elvish Archers | ✅ pass |  |
 | Evil Presence | ✅ pass |  |
-| False Orders | ❌ fail | Didn't let me choose a target |
+| False Orders | ⬜ untested |  |
 | Farmstead | ❌ fail | I didn't get a prompt on my upkeep |
 | Fastbond | ✅ pass |  |
 | Fear | ✅ pass |  |
@@ -103,14 +103,14 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Fork | ❌ fail | Fork should prompt me to choose a (different) target |
 | Frozen Shade | ✅ pass |  |
 | Fungusaur | ✅ pass |  |
-| Gaea's Liege | ❌ fail | When it dies, the lands that were turned into forests by this card should no longer have that effect |
+| Gaea's Liege | ⬜ untested |  |
 | Gauntlet of Might | ✅ pass |  |
 | Giant Growth | ✅ pass |  |
 | Giant Spider | ✅ pass |  |
 | Glasses of Urza | ❌ fail | The window for looking at my opponent's hand should also have a card preview when I hover over a card |
 | Gloom | ❌ fail | The additional cost isn't reflected in the pay mana prompt ui |
 | Goblin Balloon Brigade | ✅ pass |  |
-| Goblin King | ❌ fail | It's not giving other goblins mountainwalk |
+| Goblin King | ⬜ untested |  |
 | Granite Gargoyle | ✅ pass |  |
 | Gray Ogre | ✅ pass |  |
 | Green Ward | ✅ pass |  |
@@ -125,41 +125,41 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Howling Mine | ✅ pass |  |
 | Hurloon Minotaur | ✅ pass |  |
 | Hurricane | ✅ pass |  |
-| Hypnotic Specter | ❌ fail | Taking damage didn't trigger discarding a random card |
+| Hypnotic Specter | ⬜ untested |  |
 | Ice Storm | ✅ pass |  |
-| Icy Manipulator | ❌ fail | Doesn't let me choose a target |
+| Icy Manipulator | ⬜ untested |  |
 | Illusionary Mask | ❌ fail | Didn't prompt me to choose a card in my hand |
-| Instill Energy | ❌ fail | I should only be able to activate this ability once per turn |
+| Instill Energy | ⬜ untested |  |
 | Invisibility | ✅ pass |  |
-| Iron Star | ❌ fail | No prompt |
+| Iron Star | ⬜ untested |  |
 | Ironclaw Orcs | ✅ pass |  |
 | Ironroot Treefolk | ✅ pass |  |
 | Island | ✅ pass |  |
 | Island Sanctuary | ❌ fail | I'm not able to choose an option in the prompt |
-| Ivory Cup | ❌ fail | I should get a prompt when a white spell is cast |
-| Jade Monolith | ❌ fail | Ability didn't redirect damage when I blocked a creature |
-| Jade Statue | ❌ fail | Ability doesn't work |
+| Ivory Cup | ⬜ untested |  |
+| Jade Monolith | ⬜ untested |  |
+| Jade Statue | ⬜ untested |  |
 | Jayemdae Tome | ✅ pass |  |
 | Juggernaut | ✅ pass |  |
 | Jump | ✅ pass |  |
 | Karma | ✅ pass |  |
 | Keldon Warlord | ✅ pass |  |
-| Kormus Bell | ❌ fail | I don't see the power and toughness on the swamp creature. I also can't declare them as attackers |
+| Kormus Bell | ⬜ untested |  |
 | Kudzu | ❌ fail | I should get to choose the next target when the land is destroyed |
 | Lance | ✅ pass |  |
 | Ley Druid | ✅ pass |  |
 | Library of Leng | ❌ fail | Didn't get a prompt when dicarding |
 | Lich | ❌ fail | I didn't get to choose which permanents to sacrifice |
 | Lifeforce | ✅ pass |  |
-| Lifelace | ❌ fail | Same issue as purelace |
+| Lifelace | ⬜ untested |  |
 | Lifetap | ✅ pass |  |
 | Lightning Bolt | ✅ pass |  |
-| Living Artifact | ❌ fail | I'm not getting the vitality counters when I'm dealt damage. Also, all counters should be visually represented somehow |
-| Living Lands | ❌ fail | Unable to attack with forests |
+| Living Artifact | ⬜ untested |  |
+| Living Lands | ⬜ untested |  |
 | Living Wall | ✅ pass |  |
 | Llanowar Elves | ✅ pass |  |
-| Lord of Atlantis | ❌ fail | It isn't giving other merfolk islandwalk |
-| Lord of the Pit | ❌ fail | I didn't get to choose a creature to sacrifice |
+| Lord of Atlantis | ⬜ untested |  |
+| Lord of the Pit | ⬜ untested |  |
 | Lure | ❌ fail | When Lure is attached to an opponent (AI) creature it skips my block step entirely |
 | Magical Hack | ❌ fail | I wasn't able to change swampwalk to islandwalk. Also the ability should not change the color of the card. |
 | Mahamoti Djinn | ✅ pass |  |
@@ -189,13 +189,13 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Orcish Oriflamme | ✅ pass |  |
 | Paralyze | ❌ fail | I didn't get a prompt to pay 4 to untap my creature |
 | Pearled Unicorn | ✅ pass |  |
-| Personal Incarnation | ❌ fail | Damage prevention ability didn't work |
+| Personal Incarnation | ⬜ untested |  |
 | Pestilence | ✅ pass |  |
 | Phantasmal Forces | ✅ pass |  |
 | Phantasmal Terrain | ❌ fail | I should get to choose the basic land type |
 | Phantom Monster | ✅ pass |  |
 | Pirate Ship | ✅ pass |  |
-| Plague Rats | ❌ fail | Power and toughness doesn't reduce when another plague rats dies |
+| Plague Rats | ⬜ untested |  |
 | Plains | ✅ pass |  |
 | Plateau | ✅ pass |  |
 | Power Leak | ✅ pass |  |
@@ -204,21 +204,21 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Prodigal Sorcerer | ✅ pass |  |
 | Psionic Blast | ✅ pass |  |
 | Psychic Venom | ✅ pass |  |
-| Purelace | ❌ fail | Should be able to target both permanents and spells |
+| Purelace | ⬜ untested |  |
 | Raging River | ❌ fail | Got stuck on the raging river prompt when the opponent had no blockers |
 | Raise Dead | ✅ pass |  |
 | Red Elemental Blast | ✅ pass |  |
 | Red Ward | ✅ pass |  |
 | Regeneration | ✅ pass |  |
-| Regrowth | ❌ fail | Doesn't let me choose a target |
+| Regrowth | ⬜ untested |  |
 | Resurrection | ✅ pass |  |
 | Reverse Damage | ❌ fail | Doesn't let me choose a target |
 | Righteousness | ✅ pass |  |
 | Roc of Kher Ridges | ✅ pass |  |
 | Rock Hydra | ❌ fail | I should be able to activate the first ability at any time. Only the second ability has an upkeep restriction |
 | Rod of Ruin | ✅ pass |  |
-| Royal Assassin | ❌ fail | I should only be able to target tapped creatures. Only highlight tapped creatures and error if I click an untapped creature |
-| Sacrifice | ❌ fail | I should get to choose which of my creatures to sacrifice |
+| Royal Assassin | ⬜ untested |  |
+| Sacrifice | ⬜ untested |  |
 | Samite Healer | ✅ pass |  |
 | Savannah | ✅ pass |  |
 | Savannah Lions | ✅ pass |  |
@@ -239,10 +239,10 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Sleight of Mind | ❌ fail | I tried changing the text of lifeforce to let me use its ability counter red spells but it didn't work |
 | Smoke | ❌ fail | I should get a prompt to choose which creature to untap |
 | Sol Ring | ✅ pass |  |
-| Soul Net | ❌ fail | I should get a prompt when a creature dies |
+| Soul Net | ⬜ untested |  |
 | Spell Blast | ✅ pass |  |
 | Stasis | ✅ pass |  |
-| Steal Artifact | ❌ fail | When Steal Artifact is destroyed, control of the artifact should go back to its owner |
+| Steal Artifact | ⬜ untested |  |
 | Stone Giant | ❌ fail | I should not be able to select invalid targets |
 | Stone Rain | ✅ pass |  |
 | Stream of Life | ✅ pass |  |
@@ -253,8 +253,8 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Terror | ✅ pass |  |
 | The Hive | ✅ pass |  |
 | Thicket Basilisk | ✅ pass |  |
-| Thoughtlace | ❌ fail | same issue as purelace |
-| Throne of Bone | ❌ fail | Optional Triggered abilities should go on the stack |
+| Thoughtlace | ⬜ untested |  |
+| Throne of Bone | ⬜ untested |  |
 | Timber Wolves | ❌ fail | Same banding issues |
 | Time Vault | ❌ fail | I should get a prompt at the beginning of my turn |
 | Time Walk | ✅ pass |  |
@@ -264,15 +264,15 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Tsunami | ✅ pass |  |
 | Tundra | ✅ pass |  |
 | Tunnel | ✅ pass |  |
-| Twiddle | ❌ fail | Doesn't give me a prompt to tap or untap |
+| Twiddle | ⬜ untested |  |
 | Two-Headed Giant of Foriys | ❌ fail | I should be able to block an additional creature but the UI doesn't support it |
 | Underground Sea | ✅ pass |  |
 | Unholy Strength | ✅ pass |  |
 | Unsummon | ✅ pass |  |
 | Uthden Troll | ✅ pass |  |
 | Verduran Enchantress | ❌ fail | it says may draw a card so I should get a prompt asking me if I want to draw |
-| Vesuvan Doppelganger | ❌ fail | I copied lord of atlantis but didn't get the merfolk effects even though it becomes a merfolk itself |
-| Veteran Bodyguard | ❌ fail | Ability didn't work |
+| Vesuvan Doppelganger | ⬜ untested |  |
+| Veteran Bodyguard | ⬜ untested |  |
 | Volcanic Eruption | ❌ fail | It should let me choose which mountains to destroy |
 | Wall of Air | ✅ pass |  |
 | Wall of Bone | ✅ pass |  |
@@ -292,10 +292,10 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Wheel of Fortune | ✅ pass |  |
 | White Knight | ✅ pass |  |
 | White Ward | ✅ pass |  |
-| Wild Growth | ❌ fail | Same problem as animate wall. After removing the enchantment I should no longer get the bonus mana |
+| Wild Growth | ⬜ untested |  |
 | Will-o'-the-Wisp | ✅ pass |  |
 | Winter Orb | ✅ pass |  |
-| Wooden Sphere | ❌ fail | didn't get prompt |
+| Wooden Sphere | ⬜ untested |  |
 | Word of Command | ❌ fail | Card doesn't work |
 | Wrath of God | ✅ pass |  |
-| Zombie Master | ❌ fail | ability doesn't work |
+| Zombie Master | ⬜ untested |  |

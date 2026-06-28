@@ -31,6 +31,9 @@ def berserk_pump(game: Game, instruction: OracleInstruction, context: OracleExec
             target_perm.metadata.get("temporary_power_bonus_until_eot", 0)
         ) + boost
         target_perm.metadata["gains_trample_until_eot"] = True
+        # "At the beginning of the next end step, destroy that creature if it
+        # attacked this turn." Mark it; the end step checks attacked_this_turn.
+        target_perm.metadata["destroy_if_attacked_eot"] = True
         game.log.append(f"{card.name} pumped {target_perm.card.name} by +{boost}/+0 and granted trample")
     else:
         game.log.append(f"{card.name}: no valid creature target")

@@ -8,6 +8,7 @@ _EOT_METADATA_KEYS = (
     "cant_be_blocked_until_eot",
     "must_attack_until_eot",
     "destroy_if_did_not_attack_eot",
+    "destroy_if_attacked_eot",
     "attacked_this_turn",
     "redirect_one_damage_to_owner_until_eot",
     # Layer 7b temporary set effects (613.4b)
@@ -22,6 +23,8 @@ _EOT_METADATA_KEYS = (
     "exile_if_dies_this_turn",
     # Sengir Vampire damage-source tracking (cleared each turn)
     "damaged_by_sources_this_turn",
+    # Dragon Whelp firebreathing activation counter ("four or more times this turn")
+    "pump_activation_count",
 )
 
 # Map: artifact name → (color that triggers it, life gained).

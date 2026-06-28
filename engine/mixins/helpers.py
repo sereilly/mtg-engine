@@ -37,9 +37,12 @@ class GameHelpersMixin:
 
     def _is_creature(self, permanent: Permanent) -> bool:
         """A permanent is a creature if its printed type says so or an effect has
-        turned it into one (e.g. Kormus Bell / Living Lands animated lands)."""
-        return permanent.card.primary_type == "creature" or bool(
-            permanent.metadata.get("land_animated")
+        turned it into one (e.g. Kormus Bell / Living Lands animated lands, or
+        Jade Statue animated until end of combat)."""
+        return (
+            permanent.card.primary_type == "creature"
+            or bool(permanent.metadata.get("land_animated"))
+            or bool(permanent.metadata.get("animate_until_end_of_combat"))
         )
 
     def _is_summoning_sick(self, permanent: Permanent) -> bool:
@@ -159,6 +162,21 @@ class GameHelpersMixin:
             attached.card = pre_animate_card
         if attached.metadata.get("attached_aura") is aura:
             attached.metadata.pop("attached_aura", None)
+        # Control effects (Control Magic, Steal Artifact) revert when the Aura leaves
+        # — return the stolen permanent to its original controller (CR 611.3 / 805.4a).
+        stolen = aura.metadata.get("stolen_permanent")
+        owner_index = aura.metadata.get("stolen_owner_index")
+        if stolen is not None and isinstance(owner_index, int) and 0 <= owner_index < len(self.players):
+            for player in self.players:
+                if stolen in player.battlefield:
+                    if player is not self.players[owner_index]:
+                        player.battlefield.remove(stolen)
+                        self.players[owner_index].battlefield.append(stolen)
+                        self.log.append(
+                            f"{stolen.card.name} returns to {self.players[owner_index].name}'s control "
+                            f"({aura.card.name} left the battlefield)"
+                        )
+                    break
 
     def _permanent_to_graveyard(self, player: PlayerState, permanent: Permanent) -> None:
         """Move a permanent to the graveyard. Tokens (704.5d) cease to exist instead."""
@@ -240,22 +258,27 @@ class GameHelpersMixin:
                     instr = trig.instruction
                     obs_text = observer.card.oracle_text.lower()
                     pay_match = re.search(r"you may pay \{(\d+)\}", obs_text)
-                    if pay_match:
-                        needed = int(pay_match.group(1))
-                        available = sum(controller.mana_pool.get(s, 0) for s in controller.mana_pool)
-                        if available < needed:
-                            continue  # chose not to / unable to pay
-                        remaining = needed
-                        for sym in list(controller.mana_pool):
-                            while remaining > 0 and controller.mana_pool.get(sym, 0) > 0:
-                                controller.mana_pool[sym] -= 1
-                                remaining -= 1
                     if instr.kind == "target_gains_life":
                         amount = int(instr.payload.get("amount", 1))
-                        self._gain_life(controller, amount, observer.card.name)
-                        self.log.append(
-                            f"{observer.card.name} trigger: {controller.name} gained {amount} life ({dead_permanent.card.name} died)"
-                        )
+                        if pay_match:
+                            # Soul Net: "Whenever a creature dies, you may pay {1}. If
+                            # you do, gain 1 life." Defer to a yes/no prompt (the human
+                            # is asked; AI/headless auto-resolves), offered only when
+                            # the controller could pay — by floating mana or a land tap.
+                            cost = int(pay_match.group(1))
+                            if self._player_can_pay_generic(controller, cost):
+                                self.pending_optional_pays.append({
+                                    "card_name": observer.card.name,
+                                    "player_index": self.players.index(controller),
+                                    "cost": cost,
+                                    "life": amount,
+                                })
+                        else:
+                            self._gain_life(controller, amount, observer.card.name)
+                            self.log.append(
+                                f"{observer.card.name} trigger: {controller.name} gained {amount} life "
+                                f"({dead_permanent.card.name} died)"
+                            )
                     break
 
     def _put_permanent_onto_battlefield(

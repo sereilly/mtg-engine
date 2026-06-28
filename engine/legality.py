@@ -74,6 +74,15 @@ def _cast_requires_graveyard_creature(card: CardDefinition) -> bool:
     return False
 
 
+def _cast_requires_graveyard_card(card: CardDefinition) -> bool:
+    """Regrowth: "Return target card from your graveyard to your hand." Targets any
+    card in a graveyard, not just a creature card."""
+    text = (card.oracle_text or "").lower()
+    return "target card from your graveyard" in text or (
+        "target card" in text and "graveyard" in text and "creature card" not in text
+    )
+
+
 def _cast_requires_land(card: CardDefinition) -> bool:
     return any("target land" in t or "enchant land" in t for t in _cast_lines(card))
 
@@ -82,6 +91,10 @@ def _cast_requires_artifact(card: CardDefinition) -> bool:
     for t in _cast_lines(card):
         if "enchant artifact" in t:
             return True
+        # "target artifact, creature, or land" (Twiddle) is any permanent, not an
+        # artifact-only target — let it fall through to the permanent classification.
+        if "target artifact, creature, or land" in t:
+            continue
         if "target artifact" in t and "artifact or enchantment" not in t:
             return True
     return False
@@ -117,12 +130,20 @@ def _cast_requires_creature(card: CardDefinition) -> bool:
             return True
         if "return target creature" in t:
             return True
+        # Catch-all for any other "target creature" spell (Blaze of Glory's "target
+        # creature ... can block", False Orders' "remove target creature from
+        # combat", …). "target creature card" was already skipped above.
+        if "target creature" in t and "target artifact, creature, or land" not in t:
+            return True
     return False
 
 
 def _cast_requires_permanent(card: CardDefinition) -> bool:
     for t in _cast_lines(card):
         if "target spell or permanent" in t:
+            return True
+        # "target artifact, creature, or land" (Twiddle) is any permanent.
+        if "target artifact, creature, or land" in t:
             return True
         if "target permanent" in t and "target land" not in t and "target creature" not in t:
             return True
@@ -131,6 +152,14 @@ def _cast_requires_permanent(card: CardDefinition) -> bool:
         if "enchant enchantment" in t:
             return True
     return False
+
+
+def _cast_requires_spell_or_permanent(card: CardDefinition) -> bool:
+    # The "lace" recolor spells ("Target spell or permanent becomes <color>") may
+    # target either a permanent on the battlefield or a spell on the stack. The
+    # text-change spells ("change the text of target spell or permanent") keep the
+    # plain "permanent" classification — their own flows handle them.
+    return any("target spell or permanent becomes" in t for t in _cast_lines(card))
 
 
 def _cast_requires_stack_spell(card: CardDefinition) -> bool:
@@ -172,6 +201,8 @@ def _classify_cast(card: CardDefinition) -> dict:
     """Return ``{"kind": ..., **flags}`` for the spell's cast-time target, mirroring
     the client cascade order. Modal "Choose one —" spells are reported as ``modal``
     so the UI runs its mode-choice flow (each mode carries its own spec)."""
+    if _cast_requires_graveyard_card(card):
+        return {"kind": "graveyard_creature", "own_graveyard_only": True, "any_card": True}
     if _cast_requires_graveyard_creature(card):
         return {"kind": "graveyard_creature", "own_graveyard_only": _reanimates_own_graveyard_only(card)}
     if _cast_requires_land(card):
@@ -184,6 +215,8 @@ def _classify_cast(card: CardDefinition) -> dict:
         return {"kind": "artifact", "optional": True}
     if _cast_requires_creature(card):
         return {"kind": "creature", "enchant_wall": "enchant wall" in (card.oracle_text or "").lower()}
+    if _cast_requires_spell_or_permanent(card):
+        return {"kind": "spell_or_permanent"}
     if _cast_requires_permanent(card):
         return {"kind": "permanent", "enchant_enchantment": "enchant enchantment" in (card.oracle_text or "").lower()}
     if _cast_requires_stack_spell(card):
@@ -215,12 +248,40 @@ def _activated_destroy_permanent_color(card: CardDefinition):
     return False
 
 
+def _activated_color_protection_source(card: CardDefinition):
+    """Circle of Protection: "{cost}: The next time a <color> source of your choice
+    would deal damage to you this turn, prevent that damage." Returns the color
+    symbol of the source the controller chooses, or None when no such ability."""
+    for line in _activated_lines(card):
+        m = re.search(r"a (white|blue|black|red|green) source of your choice would deal damage to you", line)
+        if m:
+            return _COLOR_WORD_TO_SYMBOL.get(m.group(1))
+    return None
+
+
 def _activated_requires_creature(card: CardDefinition) -> bool:
     for line in _activated_lines(card):
+        if "target artifact, creature, or land" in line:
+            continue  # any-permanent target (Icy Manipulator), handled separately
         if (("destroy target" in line or "choose target" in line)
                 and (re.search(r"\bcreature\b", line) or re.search(r"\bwall\b", line))):
             return True
         if "damage to target creature" in line:
+            return True
+        # Catch-all for any other "target creature" ability (Dwarven Warriors'
+        # "target creature ... can't be blocked", etc.).
+        if "target creature" in line:
+            return True
+    return False
+
+
+def _activated_requires_permanent(card: CardDefinition) -> bool:
+    # "Tap target artifact, creature, or land" (Icy Manipulator) targets any
+    # permanent; "target permanent" abilities likewise.
+    for line in _activated_lines(card):
+        if "target artifact, creature, or land" in line:
+            return True
+        if "target permanent" in line:
             return True
     return False
 
@@ -270,8 +331,16 @@ def _ability_target_instruction(card: CardDefinition):
 
 
 def _classify_activation(card: CardDefinition) -> dict:
+    cop_color = _activated_color_protection_source(card)
+    if cop_color is not None:
+        # The chosen source can be a permanent of that color on any battlefield, or
+        # a spell of that color on the stack. also_stack folds stack spells into the
+        # permanent-target prompt (the engine matches prevention by color).
+        return {"kind": "permanent", "color_filter": cop_color, "also_stack": True}
     if _activated_requires_creature(card):
         return {"kind": "creature"}
+    if _activated_requires_permanent(card):
+        return {"kind": "permanent"}
     color = _activated_destroy_permanent_color(card)
     if color is not False:
         return {"kind": "permanent", "color_filter": color}
@@ -301,7 +370,8 @@ class LegalityMixin:
         return [
             idx
             for idx, perm in enumerate(player.battlefield)
-            if perm.card.primary_type == "creature"
+            # _is_creature so animated lands (Kormus Bell, Living Lands) are offered.
+            if self._is_creature(perm)
             and not perm.tapped
             and not self._is_summoning_sick(perm)
             and self.can_attack(perm, opponent_index)
@@ -380,6 +450,14 @@ class LegalityMixin:
             return self._enumerate_graveyard_creatures(caster_index, spec)
         if kind == "stack":
             return self._enumerate_stack_targets(card, spec)
+        if kind == "spell_or_permanent":
+            # Lace recolor: legal on any permanent on the battlefield or any spell
+            # on the stack. Enumerate both and concatenate.
+            perms = self._enumerate_targets(
+                caster_index, card, {**spec, "kind": "permanent"},
+                for_cast=for_cast, ability_instruction=ability_instruction,
+            )
+            return perms + self._enumerate_stack_targets(card, spec)
 
         targets: list[dict] = []
         # Player faces are legal for player-targeted, "any target", and divided spells.
@@ -415,6 +493,10 @@ class LegalityMixin:
                     "key": f"{seat}-{idx}",
                     "name": perm.card.name,
                 })
+        # Circle of Protection: the chosen source may also be a spell of the named
+        # color on the stack — fold those into the same target list.
+        if spec.get("also_stack"):
+            targets += self._enumerate_stack_targets(card, {"stack_color_filter": spec.get("color_filter")})
         return targets
 
     def _ability_target_legal(self, instruction, perm: Permanent) -> bool:
@@ -457,11 +539,12 @@ class LegalityMixin:
 
     def _enumerate_graveyard_creatures(self, caster_index: int, spec: dict) -> list[dict]:
         targets: list[dict] = []
+        any_card = spec.get("any_card")
         for seat, player in enumerate(self.players):
             if spec.get("own_graveyard_only") and seat != caster_index:
                 continue
             for idx, card in enumerate(player.graveyard):
-                if card.primary_type == "creature":
+                if any_card or card.primary_type == "creature":
                     targets.append({"kind": "graveyard", "seat": seat, "index": idx, "name": card.name})
         return targets
 

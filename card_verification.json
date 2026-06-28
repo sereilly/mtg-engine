@@ -20,11 +20,6 @@
       "status": "pass",
       "updated_at": 1782583946.9919634
     },
-    "Animate Wall": {
-      "reason": "I shouldn't be able to continue attacking with the defender after this enchantment has been removed",
-      "status": "fail",
-      "updated_at": 1782542027.5600104
-    },
     "Ankh of Mishra": {
       "reason": "",
       "status": "pass",
@@ -34,11 +29,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781475506.7830067
-    },
-    "Aspect of Wolf": {
-      "reason": "The stats should be re-evaulated as a state based action so that when I play additional forests or turn a land into a forest it updates correctly",
-      "status": "fail",
-      "updated_at": 1782587337.392058
     },
     "Bad Moon": {
       "reason": "",
@@ -70,11 +60,6 @@
       "status": "fail",
       "updated_at": 1782543925.2056103
     },
-    "Berserk": {
-      "reason": "Creature didn't get destroyed after attacking. Also I was able to cast the card after the combat damage step which is not allowed.",
-      "status": "fail",
-      "updated_at": 1782600717.9834213
-    },
     "Birds of Paradise": {
       "reason": "",
       "status": "pass",
@@ -99,11 +84,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781761302.7020597
-    },
-    "Blaze of Glory": {
-      "reason": "Didn't let me choose a target",
-      "status": "fail",
-      "updated_at": 1782589483.7548892
     },
     "Blessing": {
       "reason": "",
@@ -160,31 +140,6 @@
       "status": "pass",
       "updated_at": 1782364304.0696912
     },
-    "Chaoslace": {
-      "reason": "Same issue as purelace",
-      "status": "fail",
-      "updated_at": 1782584822.5824187
-    },
-    "Circle of Protection: Blue": {
-      "reason": "Doesn't let me choose a target",
-      "status": "fail",
-      "updated_at": 1782588648.7730322
-    },
-    "Circle of Protection: Green": {
-      "reason": "Doesn't let me choose a source",
-      "status": "fail",
-      "updated_at": 1782590504.0492678
-    },
-    "Circle of Protection: Red": {
-      "reason": "It doesn't let me choose a source.",
-      "status": "fail",
-      "updated_at": 1782358013.6575308
-    },
-    "Circle of Protection: White": {
-      "reason": "Doesn't let me choose a source",
-      "status": "fail",
-      "updated_at": 1782543600.7480133
-    },
     "Clockwork Beast": {
       "reason": "",
       "status": "pass",
@@ -230,11 +185,6 @@
       "status": "pass",
       "updated_at": 1782019908.8105206
     },
-    "Copy Artifact": {
-      "reason": "Doesn't copy the target artifact",
-      "status": "fail",
-      "updated_at": 1782600006.7704363
-    },
     "Counterspell": {
       "reason": "",
       "status": "pass",
@@ -249,16 +199,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782019848.6426058
-    },
-    "Crusade": {
-      "reason": "Doesn't buff creatures that were turned to white with purelace",
-      "status": "fail",
-      "updated_at": 1782542612.9388998
-    },
-    "Crystal Rod": {
-      "reason": "Didn't get a prompt",
-      "status": "fail",
-      "updated_at": 1782592527.994352
     },
     "Cursed Land": {
       "reason": "",
@@ -290,11 +230,6 @@
       "status": "pass",
       "updated_at": 1782105511.172316
     },
-    "Deathlace": {
-      "reason": "Same issue as purelace",
-      "status": "fail",
-      "updated_at": 1782542790.084675
-    },
     "Demonic Attorney": {
       "reason": "",
       "status": "pass",
@@ -304,11 +239,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782597891.6225786
-    },
-    "Demonic Tutor": {
-      "reason": "Deck didn't shuffle after searching",
-      "status": "fail",
-      "updated_at": 1782601280.7214406
     },
     "Dingus Egg": {
       "reason": "",
@@ -330,16 +260,6 @@
       "status": "pass",
       "updated_at": 1782591684.9327972
     },
-    "Dragon Whelp": {
-      "reason": "The creature should have been destroyed at the end of the turn since I used its ability 4 times",
-      "status": "fail",
-      "updated_at": 1782599022.5886817
-    },
-    "Drain Life": {
-      "reason": "Didn't gain life",
-      "status": "fail",
-      "updated_at": 1782591274.9258578
-    },
     "Drain Power": {
       "reason": "",
       "status": "pass",
@@ -354,11 +274,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782591066.0827997
-    },
-    "Dwarven Warriors": {
-      "reason": "Didn't let me target a creature",
-      "status": "fail",
-      "updated_at": 1782599344.2344365
     },
     "Earth Elemental": {
       "reason": "",
@@ -384,11 +299,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782022287.5750093
-    },
-    "False Orders": {
-      "reason": "Didn't let me choose a target",
-      "status": "fail",
-      "updated_at": 1782544428.5579176
     },
     "Farmstead": {
       "reason": "I didn't get a prompt on my upkeep",
@@ -470,11 +380,6 @@
       "status": "pass",
       "updated_at": 1782543228.3974519
     },
-    "Gaea's Liege": {
-      "reason": "When it dies, the lands that were turned into forests by this card should no longer have that effect",
-      "status": "fail",
-      "updated_at": 1782541879.2802114
-    },
     "Gauntlet of Might": {
       "reason": "",
       "status": "pass",
@@ -504,11 +409,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781411321.368721
-    },
-    "Goblin King": {
-      "reason": "It's not giving other goblins mountainwalk",
-      "status": "fail",
-      "updated_at": 1782591150.5506227
     },
     "Granite Gargoyle": {
       "reason": "",
@@ -580,40 +480,20 @@
       "status": "pass",
       "updated_at": 1781393631.596616
     },
-    "Hypnotic Specter": {
-      "reason": "Taking damage didn't trigger discarding a random card",
-      "status": "fail",
-      "updated_at": 1782583905.7597816
-    },
     "Ice Storm": {
       "reason": "",
       "status": "pass",
       "updated_at": 1782009230.2792885
-    },
-    "Icy Manipulator": {
-      "reason": "Doesn't let me choose a target",
-      "status": "fail",
-      "updated_at": 1782358476.291859
     },
     "Illusionary Mask": {
       "reason": "Didn't prompt me to choose a card in my hand",
       "status": "fail",
       "updated_at": 1782600800.6545534
     },
-    "Instill Energy": {
-      "reason": "I should only be able to activate this ability once per turn",
-      "status": "fail",
-      "updated_at": 1782600292.4859757
-    },
     "Invisibility": {
       "reason": "",
       "status": "pass",
       "updated_at": 1782590614.42178
-    },
-    "Iron Star": {
-      "reason": "No prompt",
-      "status": "fail",
-      "updated_at": 1782600898.0350516
     },
     "Ironclaw Orcs": {
       "reason": "",
@@ -634,21 +514,6 @@
       "reason": "I'm not able to choose an option in the prompt",
       "status": "fail",
       "updated_at": 1782590303.868989
-    },
-    "Ivory Cup": {
-      "reason": "I should get a prompt when a white spell is cast",
-      "status": "fail",
-      "updated_at": 1782543390.2063448
-    },
-    "Jade Monolith": {
-      "reason": "Ability didn't redirect damage when I blocked a creature",
-      "status": "fail",
-      "updated_at": 1782584526.6430843
-    },
-    "Jade Statue": {
-      "reason": "Ability doesn't work",
-      "status": "fail",
-      "updated_at": 1782586458.9844146
     },
     "Jayemdae Tome": {
       "reason": "",
@@ -674,11 +539,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782590997.0348485
-    },
-    "Kormus Bell": {
-      "reason": "I don't see the power and toughness on the swamp creature. I also can't declare them as attackers",
-      "status": "fail",
-      "updated_at": 1782584132.2019818
     },
     "Kudzu": {
       "reason": "I should get to choose the next target when the land is destroyed",
@@ -710,11 +570,6 @@
       "status": "pass",
       "updated_at": 1782600887.3605483
     },
-    "Lifelace": {
-      "reason": "Same issue as purelace",
-      "status": "fail",
-      "updated_at": 1782592335.19959
-    },
     "Lifetap": {
       "reason": "",
       "status": "pass",
@@ -725,16 +580,6 @@
       "status": "pass",
       "updated_at": 1782005004.5772283
     },
-    "Living Artifact": {
-      "reason": "I'm not getting the vitality counters when I'm dealt damage. Also, all counters should be visually represented somehow",
-      "status": "fail",
-      "updated_at": 1782584229.6406097
-    },
-    "Living Lands": {
-      "reason": "Unable to attack with forests",
-      "status": "fail",
-      "updated_at": 1782587452.6095092
-    },
     "Living Wall": {
       "reason": "",
       "status": "pass",
@@ -744,16 +589,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782544325.311722
-    },
-    "Lord of Atlantis": {
-      "reason": "It isn't giving other merfolk islandwalk",
-      "status": "fail",
-      "updated_at": 1782585098.7901177
-    },
-    "Lord of the Pit": {
-      "reason": "I didn't get to choose a creature to sacrifice",
-      "status": "fail",
-      "updated_at": 1782601463.2355175
     },
     "Lure": {
       "reason": "When Lure is attached to an opponent (AI) creature it skips my block step entirely",
@@ -900,11 +735,6 @@
       "status": "pass",
       "updated_at": 1782358756.4484005
     },
-    "Personal Incarnation": {
-      "reason": "Damage prevention ability didn't work",
-      "status": "fail",
-      "updated_at": 1782592614.4772518
-    },
     "Pestilence": {
       "reason": "",
       "status": "pass",
@@ -929,11 +759,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782590943.0049446
-    },
-    "Plague Rats": {
-      "reason": "Power and toughness doesn't reduce when another plague rats dies",
-      "status": "fail",
-      "updated_at": 1782404420.4071994
     },
     "Plains": {
       "reason": "",
@@ -975,11 +800,6 @@
       "status": "pass",
       "updated_at": 1781410771.1947188
     },
-    "Purelace": {
-      "reason": "Should be able to target both permanents and spells",
-      "status": "fail",
-      "updated_at": 1782540832.7749786
-    },
     "Raging River": {
       "reason": "Got stuck on the raging river prompt when the opponent had no blockers",
       "status": "fail",
@@ -1004,11 +824,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782019199.2218683
-    },
-    "Regrowth": {
-      "reason": "Doesn't let me choose a target",
-      "status": "fail",
-      "updated_at": 1782589895.372867
     },
     "Resurrection": {
       "reason": "",
@@ -1039,16 +854,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782107895.8262937
-    },
-    "Royal Assassin": {
-      "reason": "I should only be able to target tapped creatures. Only highlight tapped creatures and error if I click an untapped creature",
-      "status": "fail",
-      "updated_at": 1782358340.972344
-    },
-    "Sacrifice": {
-      "reason": "I should get to choose which of my creatures to sacrifice",
-      "status": "fail",
-      "updated_at": 1782542220.7315862
     },
     "Samite Healer": {
       "reason": "",
@@ -1150,11 +955,6 @@
       "status": "pass",
       "updated_at": 1782586858.7362761
     },
-    "Soul Net": {
-      "reason": "I should get a prompt when a creature dies",
-      "status": "fail",
-      "updated_at": 1782585904.3105838
-    },
     "Spell Blast": {
       "reason": "",
       "status": "pass",
@@ -1164,11 +964,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781410889.892921
-    },
-    "Steal Artifact": {
-      "reason": "When Steal Artifact is destroyed, control of the artifact should go back to its owner",
-      "status": "fail",
-      "updated_at": 1782586549.5823672
     },
     "Stone Giant": {
       "reason": "I should not be able to select invalid targets",
@@ -1220,16 +1015,6 @@
       "status": "pass",
       "updated_at": 1782587023.8502285
     },
-    "Thoughtlace": {
-      "reason": "same issue as purelace",
-      "status": "fail",
-      "updated_at": 1782587142.7952132
-    },
-    "Throne of Bone": {
-      "reason": "Optional Triggered abilities should go on the stack",
-      "status": "fail",
-      "updated_at": 1782541624.7543035
-    },
     "Timber Wolves": {
       "reason": "Same banding issues",
       "status": "fail",
@@ -1275,11 +1060,6 @@
       "status": "pass",
       "updated_at": 1781577230.9356234
     },
-    "Twiddle": {
-      "reason": "Doesn't give me a prompt to tap or untap",
-      "status": "fail",
-      "updated_at": 1782600106.6426456
-    },
     "Two-Headed Giant of Foriys": {
       "reason": "I should be able to block an additional creature but the UI doesn't support it",
       "status": "fail",
@@ -1309,16 +1089,6 @@
       "reason": "it says may draw a card so I should get a prompt asking me if I want to draw",
       "status": "fail",
       "updated_at": 1782598799.6459575
-    },
-    "Vesuvan Doppelganger": {
-      "reason": "I copied lord of atlantis but didn't get the merfolk effects even though it becomes a merfolk itself",
-      "status": "fail",
-      "updated_at": 1782358099.8687842
-    },
-    "Veteran Bodyguard": {
-      "reason": "Ability didn't work",
-      "status": "fail",
-      "updated_at": 1782589408.716092
     },
     "Volcanic Eruption": {
       "reason": "It should let me choose which mountains to destroy",
@@ -1415,11 +1185,6 @@
       "status": "pass",
       "updated_at": 1781761323.133161
     },
-    "Wild Growth": {
-      "reason": "Same problem as animate wall. After removing the enchantment I should no longer get the bonus mana",
-      "status": "fail",
-      "updated_at": 1782542099.028434
-    },
     "Will-o'-the-Wisp": {
       "reason": "",
       "status": "pass",
@@ -1430,11 +1195,6 @@
       "status": "pass",
       "updated_at": 1782544251.2775307
     },
-    "Wooden Sphere": {
-      "reason": "didn't get prompt",
-      "status": "fail",
-      "updated_at": 1782597764.3066866
-    },
     "Word of Command": {
       "reason": "Card doesn't work",
       "status": "fail",
@@ -1444,11 +1204,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782008868.629678
-    },
-    "Zombie Master": {
-      "reason": "ability doesn't work",
-      "status": "fail",
-      "updated_at": 1782591439.597292
     },
     "fear": {
       "reason": "",

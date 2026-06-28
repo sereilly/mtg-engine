@@ -150,6 +150,10 @@ class PlayerState:
     # Color symbol of the source a Circle of Protection shield is set against
     # (e.g. "R" for Circle of Protection: Red), for UI display.
     damage_prevention_color: str | None = None
+    # Circle of Protection shields: one color symbol per active shield. Each
+    # prevents the entire next damage event from a source of that color this turn
+    # ("prevent that damage"), then is consumed. Cleared during cleanup.
+    color_prevention_shields: list[str] = field(default_factory=list)
     combat_damage_cap_one_charges: int = 0
     has_no_max_hand_size: bool = False
     can_spend_white_as_red: bool = False

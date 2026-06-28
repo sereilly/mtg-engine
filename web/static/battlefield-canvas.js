@@ -1686,7 +1686,8 @@ class BattlefieldCanvas {
     // ---- P/T badge ----
     // If creatureCard is provided, show its P/T on this card (enchantment on top of creature).
     const ptCard = creatureCard || card;
-    if (ptCard && typeof ptCard.power === "number" && typeof ptCard.toughness === "number" && String(ptCard.type || "").toLowerCase().includes("creature")) {
+    const ptIsCreature = !!(ptCard && (ptCard.is_creature || String(ptCard.type || "").toLowerCase().includes("creature")));
+    if (ptCard && typeof ptCard.power === "number" && typeof ptCard.toughness === "number" && ptIsCreature) {
       const bw = 26, bh = 13;
       const bx = x + w - bw - 2, by = y + h - bh - 2;
       ctx.fillStyle = "rgba(0,0,0,0.78)";

@@ -210,14 +210,38 @@ class StackCastingMixin:
         self.log.append(f"{player.name} resolved their Balance sacrifices")
         return True
 
+    def _player_can_pay_generic(self, player, amount: int) -> bool:
+        """Whether *player* can pay a generic cost of ``amount`` — counting both
+        floating mana and untapped mana-producing lands. (The "you may pay {1}"
+        rod/cup triggers fire on any player's spell, when the controller usually
+        has no floating mana and must tap a land.)"""
+        floating = sum(player.mana_pool.values())
+        if floating >= amount:
+            return True
+        untapped_land_mana = sum(
+            1
+            for perm in player.battlefield
+            if perm.card.primary_type == "land" and not perm.tapped and perm.effective_produced_mana
+        )
+        return floating + untapped_land_mana >= amount
+
     def _pay_optional(self, entry: dict) -> None:
-        """Spend the entry's mana cost from its player's pool and gain the life."""
+        """Spend the entry's generic mana cost (floating mana first, then by tapping
+        untapped lands) from its player and gain the life if fully paid."""
         player = self.players[entry["player_index"]]
         remaining = int(entry["cost"])
         for sym in list(player.mana_pool):
             while remaining > 0 and player.mana_pool.get(sym, 0) > 0:
                 player.mana_pool[sym] -= 1
                 remaining -= 1
+        # Tap untapped lands to cover any generic remainder ({1}).
+        if remaining > 0:
+            for perm in player.battlefield:
+                if remaining <= 0:
+                    break
+                if perm.card.primary_type == "land" and not perm.tapped and perm.effective_produced_mana:
+                    perm.tapped = True
+                    remaining -= 1
         if remaining == 0:
             self._gain_life(player, int(entry["life"]), entry["card_name"])
 
@@ -234,8 +258,7 @@ class StackCastingMixin:
         if idx is None:
             return False
         entry = self.pending_optional_pays.pop(idx)
-        available = sum(self.players[player_index].mana_pool.get(s, 0) for s in self.players[player_index].mana_pool)
-        if accept and available >= int(entry["cost"]):
+        if accept and self._player_can_pay_generic(self.players[player_index], int(entry["cost"])):
             self._pay_optional(entry)
         else:
             self.log.append(f"{self.players[player_index].name} declined {entry['card_name']}'s pay-for-life trigger")
@@ -438,6 +461,18 @@ class StackCastingMixin:
                 self.log.append(details)
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
 
+        # "Activate only during your turn and only once each turn." (Instill Energy)
+        oracle_lower = permanent.card.oracle_text.lower()
+        if "only during your turn" in oracle_lower and self.active_player_index != controller_index:
+            details = f"{permanent.card.name} can only be activated during your turn"
+            self.log.append(details)
+            return SimulationResult(permanent.card.name, False, "unsupported", details)
+        once_each_turn = "once each turn" in oracle_lower
+        if once_each_turn and permanent.metadata.get("ability_used_turn") == self.turn:
+            details = f"{permanent.card.name}'s ability can only be activated once each turn"
+            self.log.append(details)
+            return SimulationResult(permanent.card.name, False, "unsupported", details)
+
         # Northern Paladin: "{W}{W}, {T}: Destroy target black permanent." The
         # chosen target must satisfy the ability's color/type filter (601.2c) — an
         # illegal target makes the ability impossible to activate, so it's rejected
@@ -485,6 +520,10 @@ class StackCastingMixin:
                 self.log.append(details)
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
             permanent.tapped = True
+
+        # All guards/costs passed — mark a "once each turn" ability as used.
+        if once_each_turn:
+            permanent.metadata["ability_used_turn"] = self.turn
 
         instruction = ability.instruction
         if (

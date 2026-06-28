@@ -59,6 +59,12 @@ class PermanentStateMixin:
                 )
             if source is not None:
                 permanent.metadata["copied_from"] = source.card.name
+                # CR 707.2: a copy takes on the copied creature's copiable values —
+                # including its types/subtypes and abilities. Keep the source card so
+                # subtype checks and static abilities (e.g. copying Lord of Atlantis:
+                # the copy is a Merfolk and itself grants islandwalk to other Merfolk)
+                # resolve against the copied creature, not the copier's own card.
+                permanent.metadata["copied_card"] = source.card
                 permanent.metadata["absolute_power"] = source.effective_power
                 permanent.metadata["absolute_toughness"] = source.effective_toughness
                 # CR 707.2 / 711.10: a copy gains the copied creature's printed
@@ -84,10 +90,31 @@ class PermanentStateMixin:
                     None,
                 )
             if source is not None:
-                permanent.metadata["copied_from"] = source.card.name
-                if "power" in source.card.raw and str(source.card.raw.get("power", "")).isdigit():
+                # CR 707.2 / 706.10c: become a copy of the artifact (its name, types,
+                # abilities, produced mana) "except it's an enchantment in addition to
+                # its other types." Replace this permanent's card so it actually has
+                # the copied artifact's behavior (e.g. Sol Ring taps for mana).
+                src = source.card
+                src_type = src.type_line
+                new_type = src_type if "enchantment" in src_type.lower() else (src_type + " Enchantment").strip()
+                copied_card = CardDefinition(
+                    name=src.name,
+                    mana_cost=src.mana_cost,
+                    cmc=src.cmc,
+                    type_line=new_type,
+                    oracle_text=src.oracle_text,
+                    colors=src.colors,
+                    color_identity=src.color_identity,
+                    keywords=src.keywords,
+                    produced_mana=src.produced_mana,
+                    raw=dict(src.raw) if isinstance(src.raw, dict) else src.raw,
+                )
+                permanent.card = copied_card
+                permanent.metadata["copied_from"] = src.name
+                permanent.metadata["copied_card"] = src
+                if "power" in src.raw and str(src.raw.get("power", "")).isdigit():
                     permanent.metadata["absolute_power"] = source.effective_power
-                if "toughness" in source.card.raw and str(source.card.raw.get("toughness", "")).isdigit():
+                if "toughness" in src.raw and str(src.raw.get("toughness", "")).isdigit():
                     permanent.metadata["absolute_toughness"] = source.effective_toughness
 
         if any(instr.kind == "spell_pattern" and instr.value == "you have no maximum hand size" for instr in program.instructions) or "you have no maximum hand size" in text:
@@ -156,11 +183,44 @@ class PermanentStateMixin:
                 perm.metadata.pop("land_type_override", None)
                 perm.metadata.pop("static_land_type_source", None)
 
+    def _refresh_aspect_of_wolf(self) -> None:
+        """Aspect of Wolf: enchanted creature gets +X/+Y where X/Y are half the
+        aura controller's Forest count (down/up). Recomputed continuously so it
+        tracks Forests entering/leaving the battlefield (CR 611.3a). Clear the
+        previous deltas, then reapply from every Aspect of Wolf still attached."""
+        for player in self.players:
+            for perm in player.battlefield:
+                prev = perm.metadata.pop("aspect_of_wolf_bonus", None)
+                if prev:
+                    perm.power_bonus -= int(prev[0])
+                    perm.toughness_bonus -= int(prev[1])
+        for controller in self.players:
+            forests = sum(
+                1
+                for perm in controller.battlefield
+                if perm.card.primary_type == "land"
+                and (
+                    "forest" in perm.card.type_line.lower()
+                    or perm.metadata.get("land_type_override") == "forest"
+                )
+            )
+            x, y = forests // 2, (forests + 1) // 2
+            for aura in controller.battlefield:
+                if "half the number of forests you control" not in aura.card.oracle_text.lower():
+                    continue
+                creature = aura.metadata.get("attached_to")
+                if creature is None or creature.card.primary_type != "creature":
+                    continue
+                creature.power_bonus += x
+                creature.toughness_bonus += y
+                creature.metadata["aspect_of_wolf_bonus"] = (x, y)
+
     def _refresh_dynamic_creatures(self) -> None:
         all_permanents = [perm for player in self.players for perm in player.battlefield]
         kormus_active = any(perm.card.name == "Kormus Bell" for perm in all_permanents)
         living_lands_active = any(perm.card.name == "Living Lands" for perm in all_permanents)
         self._refresh_static_land_types(all_permanents)
+        self._refresh_aspect_of_wolf()
 
         for player in self.players:
             # Static "Attacking creatures you control get +X/+Y" sources (Orcish
@@ -396,10 +456,15 @@ class PermanentStateMixin:
             if flag not in tracked:
                 tracked.append(flag)
 
+        # A copy uses the copied creature's copiable card (types + abilities), so
+        # lord static abilities and subtype checks resolve against it (CR 707.2).
+        def _eff_card(perm: Permanent):
+            return perm.metadata.get("copied_card") or perm.card
+
         # Step 2: Re-apply static buffs from every permanent currently on battlefield
         for ctrl_player in self.players:
             for source_perm in ctrl_player.battlefield:
-                prog = compile_card_oracle(source_perm.card)
+                prog = compile_card_oracle(_eff_card(source_perm))
                 for instr in prog.instructions:
                     if instr.kind == "buff_creatures_global":
                         color_sym = instr.payload.get("color")
@@ -458,10 +523,39 @@ class PermanentStateMixin:
                             for target_perm in player.battlefield:
                                 if target_perm.card.primary_type != "creature":
                                     continue
-                                if subtype not in target_perm.card.type_line.lower():
+                                if subtype not in _eff_card(target_perm).type_line.lower():
                                     continue
                                 if target_perm is source_perm:  # "other"
                                     continue
                                 _add_static_buff(target_perm, power, toughness)
+                                for walk in granted_walks:
+                                    _grant_lord_walk(target_perm, walk)
+
+                    # "Other [Subtype] ... have <landwalk>" with no +X/+X buff
+                    # (Zombie Master: "Other Zombie creatures have swampwalk").
+                    elif (
+                        instr.kind == "static_line"
+                        and instr.value.startswith("other ")
+                        and " have " in instr.value
+                        and any(w in instr.value for w in
+                                ("islandwalk", "mountainwalk", "swampwalk", "forestwalk", "plainswalk"))
+                    ):
+                        sub_match = re.search(r"other (\w+?)s?\b", instr.value)
+                        if not sub_match:
+                            continue
+                        subtype = sub_match.group(1).lower()
+                        granted_walks = [
+                            w
+                            for w in ("islandwalk", "mountainwalk", "swampwalk", "forestwalk", "plainswalk")
+                            if w in instr.value
+                        ]
+                        for player in self.players:
+                            for target_perm in player.battlefield:
+                                if target_perm.card.primary_type != "creature":
+                                    continue
+                                if subtype not in _eff_card(target_perm).type_line.lower():
+                                    continue
+                                if target_perm is source_perm:  # "other"
+                                    continue
                                 for walk in granted_walks:
                                     _grant_lord_walk(target_perm, walk)

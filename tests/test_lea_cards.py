@@ -1372,7 +1372,7 @@ def test_circle_of_protection_activation_sets_prevention(all_cards):
     result = game.activate_permanent_ability(0, "Circle of Protection: Blue", target_player_index=0)
 
     assert result.supported
-    assert p1.damage_prevention_pool == 1
+    assert p1.color_prevention_shields == ["U"]
 
 def test_conversion_sacrifices_on_upkeep_without_white_mana(all_cards):
     conversion = _get(all_cards, "Conversion")
@@ -1938,8 +1938,12 @@ def test_clone_and_fork_classify_supported(all_cards):
 def test_gaeas_liege_activation_turns_land_into_forest(all_cards):
     liege = _get(all_cards, "Gaea's Liege")
     plains = _get(all_cards, "Plains")
+    forest = _get(all_cards, "Forest")
 
-    p1 = PlayerState(name="P1", battlefield=[Permanent(card=liege)])
+    # Gaea's Liege's P/T equals the Forests its controller controls, so give P1 a
+    # Forest — otherwise it is 0/0 and dies as a state-based action (and its land
+    # effect would end with it).
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=liege), Permanent(card=forest)])
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=plains)])
     game = Game(players=[p1, p2])
 
@@ -2049,8 +2053,11 @@ def test_copy_artifact_copies_artifact_on_entry(all_cards):
     result = game.cast_from_hand(0, "Copy Artifact", target_player_index=1)
 
     assert result.supported
-    perm = next(perm for perm in p1.battlefield if perm.card.name == "Copy Artifact")
-    assert perm.metadata.get("copied_from") == "Black Lotus"
+    # Copy Artifact becomes a copy of the artifact (its name/types/abilities),
+    # except it's also an Enchantment.
+    perm = next(perm for perm in p1.battlefield if perm.metadata.get("copied_from") == "Black Lotus")
+    assert perm.card.name == "Black Lotus"
+    assert "enchantment" in perm.card.type_line.lower()
 
 def test_loader_reads_cards(lea_path):
     cards = load_cards(lea_path)
@@ -3903,7 +3910,7 @@ def test_circle_of_protection_green_activation_sets_prevention(all_cards):
     result = game.activate_permanent_ability(0, "Circle of Protection: Green", target_player_index=0)
 
     assert result.supported
-    assert p1.damage_prevention_pool == 1
+    assert p1.color_prevention_shields == ["G"]
 
 
 def test_circle_of_protection_red_activation_sets_prevention(all_cards):
@@ -3915,7 +3922,7 @@ def test_circle_of_protection_red_activation_sets_prevention(all_cards):
     result = game.activate_permanent_ability(0, "Circle of Protection: Red", target_player_index=0)
 
     assert result.supported
-    assert p1.damage_prevention_pool == 1
+    assert p1.color_prevention_shields == ["R"]
 
 
 def test_circle_of_protection_white_activation_sets_prevention(all_cards):
@@ -3927,7 +3934,7 @@ def test_circle_of_protection_white_activation_sets_prevention(all_cards):
     result = game.activate_permanent_ability(0, "Circle of Protection: White", target_player_index=0)
 
     assert result.supported
-    assert p1.damage_prevention_pool == 1
+    assert p1.color_prevention_shields == ["W"]
 
 
 def test_consecrate_land_grants_indestructible_to_enchanted_land(all_cards):
@@ -7504,7 +7511,7 @@ class TestWhiteCards:
         result = game.activate_permanent_ability(0, "Circle of Protection: White", target_player_index=0)
 
         assert result.supported
-        assert p1.damage_prevention_pool >= 1
+        assert p1.color_prevention_shields == ["W"]
 
     def test_crusade_buffs_white_creatures(self, all_cards):
         crusade = _get(all_cards, "Crusade")
@@ -8951,7 +8958,10 @@ def test_gaeas_liege_activation_targets_chosen_land(all_cards):
     liege = _get(all_cards, "Gaea's Liege")
     plains = _get(all_cards, "Plains")
     island = _get(all_cards, "Island")
-    p1 = PlayerState(name="P1", battlefield=[Permanent(card=liege)])
+    forest = _get(all_cards, "Forest")
+    # Give P1 a Forest so Gaea's Liege is 1/1 and survives (otherwise it is 0/0,
+    # dies as an SBA, and the Forest-conversion it created would end with it).
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=liege), Permanent(card=forest)])
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=plains), Permanent(card=island)])
     game = Game(players=[p1, p2])
 

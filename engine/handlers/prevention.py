@@ -48,18 +48,34 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
     # CoP-style abilities say "prevent damage to you" — protection_kind="color"
     # means the caster/controller is always the beneficiary. Conservator-style
     # abilities ("...dealt to you this turn") set to_self=True for the same reason.
-    if instruction.payload.get("protection_kind") == "color" or instruction.payload.get("to_self"):
-        caster.damage_prevention_pool += amount
-        caster.damage_prevention_source = source_name
-        # Circle of Protection: remember the chosen source's color so the UI can
-        # show which color (red/blue/…) the shield is set against.
-        prevention_color = instruction.payload.get("prevention_color")
+    prevention_color = instruction.payload.get("prevention_color")
+    if instruction.payload.get("protection_kind") == "color":
+        # Circle of Protection: "The next time a <color> source of your choice
+        # would deal damage to you this turn, prevent that damage." Each activation
+        # arms one color-scoped shield that prevents the entire next damage event
+        # from a source of that color (CR 615) — distinct from the generic numeric
+        # prevention pool so it only stops matching-colored damage.
+        for _ in range(max(1, amount)):
+            caster.color_prevention_shields.append(prevention_color)
         if prevention_color:
             caster.damage_prevention_color = prevention_color
+        caster.damage_prevention_source = source_name
+        # The chosen source (if the controller picked a specific permanent) is
+        # recorded only for the log; matching is by color.
+        chosen = None
+        idx = context.target_permanent_index
+        if isinstance(idx, int) and context.target is not None and 0 <= idx < len(context.target.battlefield):
+            chosen = context.target.battlefield[idx].card.name
         game.log.append(
-            f"{caster.name} gains prevention shield for {amount} damage"
-            + (f" from a {prevention_color} source" if prevention_color else "")
+            f"{caster.name} sets a Circle of Protection shield against "
+            + (f"{chosen} (a {prevention_color} source)" if chosen else f"a {prevention_color} source")
         )
+        return True, "resolved"
+
+    if instruction.payload.get("to_self"):
+        caster.damage_prevention_pool += amount
+        caster.damage_prevention_source = source_name
+        game.log.append(f"{caster.name} gains prevention shield for {amount} damage")
         return True, "resolved"
 
     # "Prevent the next N damage that would be dealt to any target" (Healing

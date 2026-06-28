@@ -161,7 +161,7 @@ class UpkeepStepMixin:
             })
         return triggers
 
-    def resolve_upkeep(self, player_index: int, human_choices: dict[str, bool] | None = None, optional_choices: dict[str, bool] | None = None, defer_priority: bool = False, mana_prevention: dict[str, int] | None = None) -> None:
+    def resolve_upkeep(self, player_index: int, human_choices: dict[str, bool] | None = None, optional_choices: dict[str, bool] | None = None, defer_priority: bool = False, mana_prevention: dict[str, int] | None = None, sacrifice_choices: dict[str, int] | None = None) -> None:
         phase = "beginning"
         step = "upkeep"
         self._set_phase_and_step(phase, step)
@@ -320,14 +320,27 @@ class UpkeepStepMixin:
                         break
 
                     if cond == "upkeep_self" and kind == "upkeep_sacrifice_other_creature_or_deal_damage":
-                        other_idx = next(
-                            (
-                                i
-                                for i, perm in enumerate(controller.battlefield)
-                                if perm is not permanent and perm.card.primary_type == "creature"
-                            ),
-                            None,
-                        )
+                        # Lord of the Pit: the controller chooses which other creature
+                        # to sacrifice. Honor an explicit choice (battlefield index);
+                        # otherwise auto-pick the first eligible creature.
+                        chosen_idx = sacrifice_choices.get(permanent.card.name) if sacrifice_choices else None
+                        other_idx = None
+                        if (
+                            isinstance(chosen_idx, int)
+                            and 0 <= chosen_idx < len(controller.battlefield)
+                            and controller.battlefield[chosen_idx] is not permanent
+                            and controller.battlefield[chosen_idx].card.primary_type == "creature"
+                        ):
+                            other_idx = chosen_idx
+                        if other_idx is None:
+                            other_idx = next(
+                                (
+                                    i
+                                    for i, perm in enumerate(controller.battlefield)
+                                    if perm is not permanent and perm.card.primary_type == "creature"
+                                ),
+                                None,
+                            )
                         if other_idx is not None:
                             sacrificed = controller.battlefield.pop(other_idx)
                             controller.graveyard.append(sacrificed.card)

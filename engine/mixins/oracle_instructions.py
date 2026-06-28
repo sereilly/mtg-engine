@@ -253,24 +253,11 @@ class OracleInstructionsMixin:
                 target_creature.power_bonus += int(buff_match.group(1))
                 target_creature.toughness_bonus += int(buff_match.group(2))
 
-            # Handle Aspect of Wolf style dynamic buff text:
-            # "Enchanted creature gets +X/+Y, where X is half the number of Forests you control, rounded down, and Y is half the number of Forests you control, rounded up."
-            # Compute forest count controlled by the aura's controller (caster_index)
-            if "half the number of forests you control" in text:
-                caster_controller = self.players[caster_index]
-                forests = sum(
-                    1
-                    for perm in caster_controller.battlefield
-                    if perm.card.primary_type == "land"
-                    and (
-                        "forest" in perm.card.type_line.lower()
-                        or perm.metadata.get("land_type_override") == "forest"
-                    )
-                )
-                x = forests // 2
-                y = (forests + 1) // 2
-                target_creature.power_bonus += int(x)
-                target_creature.toughness_bonus += int(y)
+            # Aspect of Wolf: "Enchanted creature gets +X/+Y, where X is half the
+            # number of Forests you control (rounded down) and Y is half (rounded
+            # up)." This is a characteristic-defining continuous value, recomputed in
+            # _refresh_dynamic_creatures so it tracks Forests entering/leaving (CR
+            # 611.3a) rather than being locked in at cast time. No flat bonus here.
 
             # Landwalk/protection patterns are recognized in the compiled program;
             # fall back to normalized-text checks for logging when necessary.
@@ -363,6 +350,10 @@ class OracleInstructionsMixin:
                 if target_creature in target_player.battlefield:
                     target_player.battlefield.remove(target_creature)
                     self.players[caster_index].battlefield.append(target_creature)
+                    # Remember the original controller so control reverts when the
+                    # Aura leaves the battlefield (CR 611.3 / 805.4a).
+                    aura_permanent.metadata["stolen_permanent"] = target_creature
+                    aura_permanent.metadata["stolen_owner_index"] = self.players.index(target_player)
                     self.log.append(f"{aura_permanent.card.name} took control of {target_creature.card.name}")
 
             # Record what continuous effects this Aura granted so they can be undone
@@ -418,6 +409,10 @@ class OracleInstructionsMixin:
                 aura_permanent.metadata["attached_to"] = target_wall
                 target_wall.metadata["attached_aura"] = aura_permanent
                 target_wall.metadata["can_attack_as_though_no_defender"] = True
+                # Record the granted flag so it is undone when the Aura leaves
+                # (CR 611.3 — the Wall stops being able to attack). Otherwise the
+                # Wall could keep attacking after Animate Wall is removed.
+                aura_permanent.metadata["aura_granted_meta"] = ["can_attack_as_though_no_defender"]
                 self.log.append(f"{target_wall.card.name} can attack as though it didn't have defender")
         elif text.startswith("enchant artifact"):
             # Attach this Aura to the specified artifact (or first artifact found)
@@ -445,6 +440,10 @@ class OracleInstructionsMixin:
                 if target_artifact in target_player.battlefield:
                     target_player.battlefield.remove(target_artifact)
                     self.players[caster_index].battlefield.append(target_artifact)
+                    # Remember the original controller so control reverts when the
+                    # Aura leaves the battlefield (CR 611.3 / 805.4a).
+                    aura_permanent.metadata["stolen_permanent"] = target_artifact
+                    aura_permanent.metadata["stolen_owner_index"] = self.players.index(target_player)
                     self.log.append(f"{aura_permanent.card.name} took control of {target_artifact.card.name}")
 
             # Only animate if this Aura explicitly makes the artifact a creature (e.g. Animate Artifact)

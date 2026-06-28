@@ -432,6 +432,9 @@ class TestSoulNet:
         game._permanent_to_graveyard(p1, bear)
         p1.battlefield.remove(bear)
 
+        # Soul Net's "you may pay {1}" is now an optional choice — accept it.
+        assert game.pending_optional_pays
+        game.confirm_optional_pay(0, "Soul Net", accept=True)
         assert p1.life == 21
 
     def test_no_life_gain_when_the_cost_cannot_be_paid(self, cards):
@@ -482,12 +485,13 @@ class TestCircleOfProtectionRed:
         result = game.activate_permanent_ability(0, "Circle of Protection: Red", permanent_index=0)
 
         assert result.supported
-        assert p1.damage_prevention_pool >= 1
+        # CoP arms a color-scoped shield (not the generic numeric prevention pool).
+        assert p1.color_prevention_shields == ["R"]
 
         before = p1.life
         game.cast_from_hand(1, "Lightning Bolt", target_player_index=0)
-        # The prevention shield soaks the first point of damage from the red source.
-        assert p1.life > before - 3
+        # The shield prevents the entire next damage event from a red source.
+        assert p1.life == before
 
 
 # ---------------------------------------------------------------------------

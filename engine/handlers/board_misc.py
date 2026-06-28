@@ -143,6 +143,13 @@ def change_target_land_type(game: Game, instruction: OracleInstruction, context:
     if target_land is not None:
         target_land.metadata["land_type_override"] = str(instruction.payload.get("land_type", "forest"))
         game.log.append(f"{target_land.card.name} became a Forest")
+        # "...until this creature leaves the battlefield." Track the lands this
+        # source forested so the revert hook can undo them when it leaves (CR 611.3).
+        source = context.source_permanent
+        if source is not None:
+            forested = source.metadata.setdefault("forested_lands", [])
+            if target_land not in forested:
+                forested.append(target_land)
         # Forest count just changed; recompute characteristic-defining P/T now so
         # Gaea's Liege reflects the new total immediately (not at the next step).
         game._refresh_dynamic_creatures()

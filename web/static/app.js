@@ -1254,7 +1254,12 @@ function cardOffersCopyArtifactChoice(card) {
   const s = targetSpecOf(card);
   return s.kind === "artifact" && !!s.optional && (s.valid_targets || []).length > 0;
 }
-function cardRequiresTargetPermanent(card) { return specKind(card) === "permanent"; }
+function cardRequiresTargetPermanent(card) {
+  const k = specKind(card);
+  return k === "permanent" || k === "spell_or_permanent";
+}
+// Lace recolor spells target a permanent OR a spell on the stack.
+function cardRequiresTargetSpellOrPermanent(card) { return specKind(card) === "spell_or_permanent"; }
 function cardRequiresTargetArtifact(card) {
   const s = targetSpecOf(card);
   return s.kind === "artifact" && !s.optional;
@@ -1288,7 +1293,10 @@ function startCastGraveyardCreatureTargetPrompt(card, castAction = "cast") {
 // legal target for the in-progress spell-target prompt — membership in the
 // backend-supplied set of legal stack indices.
 function isStackItemValidCastTarget(item, arrayIndex) {
-  if (!pendingCastTarget || pendingCastTarget.targetKind !== "stack") return false;
+  if (!pendingCastTarget) return false;
+  // "stack" prompts target spells only; "spell_or_permanent" (lace) prompts allow
+  // either a permanent or a stack spell, flagged via alsoStack.
+  if (pendingCastTarget.targetKind !== "stack" && !pendingCastTarget.alsoStack) return false;
   return !!pendingCastTarget.validStackIndices && pendingCastTarget.validStackIndices.has(Number(arrayIndex));
 }
 
@@ -3046,7 +3054,9 @@ function renderActivationPrompt() {
       const isEnchantEnchantment = String(pendingCastTarget.card?.oracle_text || "")
         .toLowerCase()
         .includes("enchant enchantment");
-      body.textContent = isEnchantEnchantment
+      body.textContent = pendingCastTarget.alsoStack
+        ? "Click a permanent on the battlefield, or a glowing spell on the stack, to choose the target."
+        : isEnchantEnchantment
         ? "Click a glowing enchantment on the battlefield to choose the target."
         : "Click any permanent on the battlefield to choose the target.";
       steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
@@ -3344,17 +3354,24 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   // targets to the required colour.
   if (activatedAbilityRequiresTargetPermanent(card)) {
     const fields = pendingTargetFields(card);
-    if (fields.validKeys.size === 0) {
-      updateActionHint(`No valid permanent targets in play for ${cardName}.`, true);
+    // Circle of Protection's "source of your choice" may be a permanent or a spell
+    // on the stack (also_stack), so it stays activatable when only a stack source exists.
+    const alsoStack = !!targetSpecOf(card).also_stack;
+    if (fields.validKeys.size === 0 && !(alsoStack && fields.validStackIndices.size > 0)) {
+      updateActionHint(`No valid source for ${cardName} — nothing of that color to prevent.`, true);
       return;
     }
     pendingCastTarget = {
-      card, cardName, targetKind: "permanent", castAction: "activate",
+      card, cardName, targetKind: "permanent", castAction: "activate", alsoStack,
       sourcePermanentIndex: permanentIndex, ...fields,
     };
     renderActivationPrompt();
     renderBoard(currentState);
-    updateActionHint(`Choose a target permanent for ${cardName}'s ability.`);
+    updateActionHint(
+      alsoStack
+        ? `Choose the source for ${cardName}: click a matching-color permanent or a spell on the stack.`
+        : `Choose a target permanent for ${cardName}'s ability.`,
+    );
     return;
   }
 
@@ -3682,16 +3699,23 @@ function startCastPermanentTargetPrompt(card, castAction = "cast", validTargets 
   if (!cardName) return;
 
   const fields = pendingTargetFields(card, validTargets);
-  if (fields.validKeys.size === 0) {
+  // Lace recolor ("target spell or permanent") may also hit a spell on the stack,
+  // so it stays castable when there are no permanents but there is a stack target.
+  const alsoStack = cardRequiresTargetSpellOrPermanent(card);
+  if (fields.validKeys.size === 0 && !(alsoStack && fields.validStackIndices.size > 0)) {
     clearPendingHandCast();
     updateActionHint(`No valid permanent targets in play for ${cardName}.`, true);
     return;
   }
 
-  pendingCastTarget = { card, cardName, targetKind: "permanent", castAction, ...fields };
+  pendingCastTarget = { card, cardName, targetKind: "permanent", alsoStack, castAction, ...fields };
   renderActivationPrompt();
   renderBoard(currentState);
-  updateActionHint(`Choose a target permanent for ${cardName}.`);
+  updateActionHint(
+    alsoStack
+      ? `Choose a target for ${cardName}: click a permanent on the battlefield, or a spell on the stack.`
+      : `Choose a target permanent for ${cardName}.`,
+  );
 }
 
 function startCastArtifactTargetPrompt(card, castAction = "cast", validTargets = null) {
@@ -5457,7 +5481,7 @@ function toggleStackClickHold(arrayIndex) {
 
 function selectStackSpellTarget(arrayIndex) {
   const pending = pendingCastTarget;
-  if (!pending || pending.targetKind !== "stack") return;
+  if (!pending || (pending.targetKind !== "stack" && !pending.alsoStack)) return;
   const item = _currentStack[arrayIndex];
   if (!item || !isStackItemValidCastTarget(item, arrayIndex)) return;
 
@@ -5527,7 +5551,8 @@ function renderStack(stack) {
     return;
   }
 
-  const choosingStackTarget = !!pendingCastTarget && pendingCastTarget.targetKind === "stack";
+  const choosingStackTarget = !!pendingCastTarget
+    && (pendingCastTarget.targetKind === "stack" || pendingCastTarget.alsoStack);
 
   zone.innerHTML = "";
   stack.forEach((item, arrayIndex) => {

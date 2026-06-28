@@ -67,8 +67,10 @@ def _make_color_rod_hook(trigger_color: str, life_amount: int) -> SpellResolvedH
         # the controller can actually pay the {1}.
         if trigger_color not in resolved_card.colors:
             return
-        available = sum(controller.mana_pool.get(s, 0) for s in controller.mana_pool)
-        if available < 1:
+        # Offer the prompt whenever the controller could pay {1} — by floating mana
+        # or by tapping a land (the trigger fires on any player's spell, so the
+        # controller usually has no floating mana yet).
+        if not game._player_can_pay_generic(controller, 1):
             return
         game.pending_optional_pays.append({
             "card_name": permanent.card.name,
@@ -159,7 +161,24 @@ def _consecrate_land_leaves(game: Game, owner: PlayerState, permanent: Permanent
         land.metadata.pop("attached_aura", None)
 
 
+def _gaeas_liege_leaves(game: Game, owner: PlayerState, permanent: Permanent) -> None:
+    # "{T}: Target land becomes a Forest until this creature leaves the
+    # battlefield." When Gaea's Liege leaves, the lands it forested revert to
+    # their printed type (CR 611.3 — the duration ends).
+    reverted = 0
+    for land in permanent.metadata.get("forested_lands", []) or []:
+        if land.metadata.get("land_type_override") == "forest":
+            land.metadata.pop("land_type_override", None)
+            reverted += 1
+    if reverted:
+        game.log.append(
+            f"{permanent.card.name} left the battlefield; {reverted} land(s) reverted from Forest"
+        )
+    game._refresh_dynamic_creatures()
+
+
 ON_LEAVE_BATTLEFIELD: dict[str, LeaveBattlefieldHook] = {
     "Cyclopean Tomb": _cyclopean_tomb_leaves,
     "Consecrate Land": _consecrate_land_leaves,
+    "Gaea's Liege": _gaeas_liege_leaves,
 }

@@ -197,6 +197,9 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         "type": perm.card.type_line,
         "tapped": perm.tapped,
         "colors": effective_colors,
+        # True for printed creatures and for animated lands (Kormus Bell / Living
+        # Lands) so the UI shows their P/T and lets them be declared as attackers.
+        "is_creature": game._is_creature(perm),
         "power": perm.effective_power,
         "toughness": perm.effective_toughness,
         "base_power": _printed_stat(perm.card, "power"),

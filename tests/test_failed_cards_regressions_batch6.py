@@ -186,7 +186,8 @@ class TestCircleOfProtectionRed:
         result = game.activate_permanent_ability(0, "Circle of Protection: Red", permanent_index=0)
 
         assert result.supported
-        assert p1.damage_prevention_pool >= 1
+        # CoP arms a color-scoped shield, not the generic numeric prevention pool.
+        assert p1.color_prevention_shields == ["R"]
         # The color of the chosen source is recorded so the UI can show/prompt it.
         assert p1.damage_prevention_color == "R"
 

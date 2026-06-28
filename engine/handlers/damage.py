@@ -28,7 +28,7 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         n = len(indices)
         if n == 0:
             # No valid creature targets; treat as player damage
-            damage = game._deal_damage_to_player(target, damage)
+            damage = game._deal_damage_to_player(target, damage, source=card)
             game.log.append(f"{target.name} took {damage} damage")
             return True, "resolved"
         per_target = damage // n if n > 0 else 0
@@ -79,7 +79,7 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         elif dealt > 0:
             game._fire_dealt_damage_triggers(target_perm)
     else:
-        damage = game._deal_damage_to_player(target, damage)
+        damage = game._deal_damage_to_player(target, damage, source=source_permanent or card)
         if source_permanent is not None:
             game.log.append(f"{card.name} dealt {damage} damage")
         else:
@@ -127,7 +127,7 @@ def deal_damage_each_creature_and_player(game: Game, instruction: OracleInstruct
     card = context.card
     amount = int(instruction.payload.get("amount", 1))
     for player in game.players:
-        game._deal_damage_to_player(player, amount)
+        game._deal_damage_to_player(player, amount, source=card)
     dead: list[tuple[PlayerState, Permanent]] = []
     for player in game.players:
         for perm in player.battlefield:
@@ -161,9 +161,9 @@ def deal_damage_and_self_damage(game: Game, instruction: OracleInstruction, cont
             # shields can replace (CR 704.5g / 701.15).
             game._destroy_marked_creatures()
     else:
-        damage = game._deal_damage_to_player(target, amount)
+        damage = game._deal_damage_to_player(target, amount, source=card)
         game.log.append(f"{card.name} dealt {damage} damage to {target.name}")
-    self_damage = game._deal_damage_to_player(caster, self_damage)
+    self_damage = game._deal_damage_to_player(caster, self_damage, source=card)
     game.log.append(f"{card.name} dealt {self_damage} damage to {caster.name} (self-damage)")
     return True, "resolved"
 
@@ -176,7 +176,22 @@ def deal_damage_and_gain_life(game: Game, instruction: OracleInstruction, contex
     x_value = context.x_value
     amount = instruction.payload.get("amount", 0)
     damage = max(0, x_value or 0) if amount == "x" else int(amount)
-    damage = game._deal_damage_to_player(target, damage)
+    target_perm_idx = context.target_permanent_index
+    # Drain Life is an "any target" spell — it may hit a creature. Deal to the
+    # chosen creature and gain life equal to the damage actually dealt (capped by
+    # its toughness, mirroring the card's life-gain limit).
+    if isinstance(target_perm_idx, int) and 0 <= target_perm_idx < len(target.battlefield):
+        target_perm = target.battlefield[target_perm_idx]
+        if target_perm.card.primary_type == "creature":
+            dealt = game._mark_damage_on_permanent(target_perm, damage)
+            game.log.append(f"{card.name} dealt {dealt} damage to {target_perm.card.name}")
+            if target_perm.damage_marked >= target_perm.effective_toughness:
+                game._destroy_marked_creatures()
+            elif dealt > 0:
+                game._fire_dealt_damage_triggers(target_perm)
+            game._gain_life(caster, dealt, card.name)
+            return True, "resolved"
+    damage = game._deal_damage_to_player(target, damage, source=card)
     game.log.append(f"{card.name} dealt {damage} damage to {target.name}")
     game._gain_life(caster, damage, card.name)
     return True, "resolved"
@@ -190,7 +205,7 @@ def earthquake_damage(game: Game, instruction: OracleInstruction, context: Oracl
     damage = max(0, x_value or 0) if amount == "x" else int(amount)
     # Deal damage to each player
     for player in game.players:
-        game._deal_damage_to_player(player, damage)
+        game._deal_damage_to_player(player, damage, source=card)
     # Deal damage to each creature without flying on every battlefield
     for player in game.players:
         for perm in list(player.battlefield):
@@ -216,7 +231,7 @@ def hurricane_damage(game: Game, instruction: OracleInstruction, context: Oracle
     amount = instruction.payload.get("amount", 0)
     damage = max(0, x_value or 0) if amount == "x" else int(amount)
     for player in game.players:
-        game._deal_damage_to_player(player, damage)
+        game._deal_damage_to_player(player, damage, source=card)
     for player in game.players:
         for perm in list(player.battlefield):
             if perm.card.primary_type != "creature":

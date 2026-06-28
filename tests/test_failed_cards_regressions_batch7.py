@@ -117,11 +117,14 @@ class TestGaeasLiege:
     def test_pt_updates_immediately_when_a_land_becomes_a_forest(self, cards):
         liege = _nosick(Permanent(card=cards["Gaea's Liege"]))
         swamp = Permanent(card=cards["Swamp"])
-        p1 = PlayerState(name="P1", battlefield=[liege, swamp])
+        # Gaea's Liege's toughness equals the Forests its controller controls, so
+        # give P1 one Forest — otherwise it is 0/0 and dies as a state-based action.
+        forest = Permanent(card=cards["Forest"])
+        p1 = PlayerState(name="P1", battlefield=[liege, swamp, forest])
         p2 = PlayerState(name="P2")
         game = _game(p1, p2)
         game._refresh_dynamic_creatures()
-        assert liege.effective_power == 0  # no Forests yet
+        assert liege.effective_power == 1  # one Forest
 
         result = game.activate_permanent_ability(
             0, "Gaea's Liege", target_player_index=0, target_permanent_index=1
@@ -130,9 +133,10 @@ class TestGaeasLiege:
 
         assert result.supported
         assert swamp.metadata.get("land_type_override") == "forest"
-        # The bug: the count was stale until the next step. It must be current now.
-        assert liege.effective_power == 1
-        assert liege.effective_toughness == 1
+        # The bug: the count was stale until the next step. It must be current now
+        # (two Forests: the original plus the swamp just converted).
+        assert liege.effective_power == 2
+        assert liege.effective_toughness == 2
 
 
 # ---------------------------------------------------------------------------

@@ -273,7 +273,7 @@ class CombatDamageStepMixin:
 
         # (defending_idx, blocker_idx, damage, attacker_idx)
         attacker_damage_events: list[tuple[int, int, int, int]] = []
-        defender_damage_events: list[tuple[int, int]] = []
+        defender_damage_events: list[tuple[int, int, Permanent]] = []
         # CR 702.15b: damage dealt by a source with lifelink gains its controller
         # that much life. Accumulated per controller and applied after all combat
         # damage is dealt this step (the life-gain events happen simultaneously).
@@ -304,9 +304,9 @@ class CombatDamageStepMixin:
                 # to the defending player unless it has trample.
                 if attacker.blocked and not self._has_keyword(attacker, "trample"):
                     continue
-                damage = self._prevent_damage(defender, power_left)
+                damage = self._prevent_damage(defender, power_left, source=attacker)
                 if damage > 0:
-                    defender_damage_events.append((defending_index, damage))
+                    defender_damage_events.append((defending_index, damage, attacker))
                     if self._has_keyword(attacker, "lifelink"):
                         add_lifelink(self.active_player_index, damage)
                 continue
@@ -349,9 +349,9 @@ class CombatDamageStepMixin:
             if assigned_total > attacker.effective_power:
                 return False, "assigned combat damage exceeds attacker power"
             if self._has_keyword(attacker, "trample") and power_left > 0 and not self.combat_damage_prevented_until_eot:
-                trample_damage = self._prevent_damage(defender, power_left)
+                trample_damage = self._prevent_damage(defender, power_left, source=attacker)
                 if trample_damage > 0:
-                    defender_damage_events.append((defending_index, trample_damage))
+                    defender_damage_events.append((defending_index, trample_damage, attacker))
                     if self._has_keyword(attacker, "lifelink"):
                         add_lifelink(self.active_player_index, trample_damage)
 
@@ -416,11 +416,33 @@ class CombatDamageStepMixin:
                 if self._has_keyword(source_attacker, "deathtouch"):
                     blocker_perm.metadata["received_deathtouch"] = True
 
-        total_player_damage = sum(dmg for _, dmg in defender_damage_events)
-        for _, damage in defender_damage_events:
+        total_player_damage = sum(dmg for _, dmg, _ in defender_damage_events)
+        for _, damage, source_attacker in defender_damage_events:
             # Prevention was already applied when the event was recorded.
+            # Veteran Bodyguard: "As long as this creature is untapped, all damage
+            # that would be dealt to you by unblocked creatures is dealt to this
+            # creature instead." Redirect the whole event to it (CR 614 replacement).
+            bodyguard = next(
+                (
+                    p
+                    for p in defender.battlefield
+                    if not p.tapped
+                    and "all damage that would be dealt to you by unblocked creatures is dealt to this creature instead"
+                    in p.card.oracle_text.lower()
+                ),
+                None,
+            )
+            if bodyguard is not None:
+                self._mark_damage_on_permanent(bodyguard, damage)
+                self.log.append(
+                    f"{bodyguard.card.name} takes {damage} damage instead of {defender.name} (redirect)"
+                )
+                continue
             defender.life -= damage
             self._on_player_dealt_damage(defender, damage)
+            # Attacker "deals damage to a player/opponent" triggers (Hypnotic Specter).
+            if source_attacker is not None:
+                self._fire_combat_damage_to_player_triggers(source_attacker, defender)
 
         # CR 702.15b: apply lifelink life gain for damage dealt this step.
         for controller_index, amount in lifelink_gain.items():

@@ -391,6 +391,9 @@ def test_603_2_dies_trigger_fires_when_a_creature_dies():
     game._permanent_to_graveyard(p1, bear_perm)
     p1.battlefield.remove(bear_perm)
 
+    # The optional "you may pay" rider defers to a yes/no choice; accept it.
+    assert game.pending_optional_pays
+    game.confirm_optional_pay(0, "Soul Web", accept=True)
     assert p1.life == 21  # paid {2}, gained 1 life
 
 

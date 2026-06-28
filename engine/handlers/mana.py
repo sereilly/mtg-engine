@@ -55,7 +55,8 @@ def drain_target_lands_mana(game: Game, instruction: OracleInstruction, context:
 @effect_handler("sacrifice_creature_for_black_mana")
 def sacrifice_creature_for_black_mana(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     caster = context.caster
-    sacrificed = game._sacrifice_creature_for_mana(caster)
+    chosen = context.target_permanent_index if isinstance(context.target_permanent_index, int) else None
+    sacrificed = game._sacrifice_creature_for_mana(caster, chosen_index=chosen)
     if sacrificed is not None:
         caster.mana_pool["B"] += int(sacrificed.cmc)
         game.log.append(f"{caster.name} sacrificed {sacrificed.name} for {int(sacrificed.cmc)} black mana")

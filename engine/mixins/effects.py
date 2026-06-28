@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 import re
 
 from ..models import CardDefinition, Permanent, PlayerState
@@ -23,6 +24,30 @@ class EffectsMixin:
                     f"{aura.card.name} dealt {damage} damage to {controller.name} (death of {dead_permanent.card.name})"
                 )
                 break
+
+    def _fire_combat_damage_to_player_triggers(self, attacker: Permanent, defending_player: PlayerState) -> None:
+        """Fire an attacker's "whenever this creature deals (combat) damage to a
+        player/opponent" triggers (e.g. Hypnotic Specter — the defending player
+        discards a card at random)."""
+        program = compile_card_oracle(attacker.card)
+        for trig in program.triggered_abilities:
+            if trig.condition.kind not in (
+                "creature_deals_damage",
+                "hypnotic_specter_deals_damage",
+                "deals_damage_to_player",
+                "creature_deals_combat_damage",
+            ):
+                continue
+            instr = trig.instruction
+            if instr is None:
+                continue
+            if instr.kind == "opponent_discards_random_card_on_damage":
+                if defending_player.hand:
+                    discarded = defending_player.hand.pop(random.randrange(len(defending_player.hand)))
+                    defending_player.graveyard.append(discarded)
+                    self.log.append(
+                        f"{attacker.card.name}: {defending_player.name} discards {discarded.name} at random"
+                    )
 
     def _fire_dealt_damage_triggers(self, permanent: Permanent) -> None:
         """Fire 'whenever this creature is dealt damage' triggers (e.g. Fungusaur)."""
@@ -141,11 +166,37 @@ class EffectsMixin:
                 return True
         return False
 
-    def _prevent_damage(self, target: PlayerState, damage: int) -> int:
+    def _source_colors(self, source) -> tuple[str, ...]:
+        """Color symbols of a damage source — a Permanent (honoring a color
+        override), a CardDefinition (spell), or None."""
+        if source is None:
+            return ()
+        meta = getattr(source, "metadata", None)
+        if isinstance(meta, dict) and meta.get("color_override"):
+            return (str(meta["color_override"]),)
+        card = getattr(source, "card", source)
+        return tuple(getattr(card, "colors", ()) or ())
+
+    def _prevent_damage(self, target: PlayerState, damage: int, source=None) -> int:
         if damage > 1 and target.combat_damage_cap_one_charges > 0:
             target.combat_damage_cap_one_charges -= 1
             damage = 1
-        if damage <= 0 or target.damage_prevention_pool <= 0:
+        if damage <= 0:
+            return damage
+        # Circle of Protection: a color-scoped shield prevents the whole next damage
+        # event from a source of that color ("prevent that damage").
+        if target.color_prevention_shields:
+            for color in self._source_colors(source):
+                if color in target.color_prevention_shields:
+                    target.color_prevention_shields.remove(color)
+                    if not target.color_prevention_shields:
+                        target.damage_prevention_color = None
+                        target.damage_prevention_source = None
+                    self.log.append(
+                        f"Circle of Protection prevented {damage} damage to {target.name} from a {color} source"
+                    )
+                    return 0
+        if target.damage_prevention_pool <= 0:
             return damage
         prevented = min(damage, target.damage_prevention_pool)
         target.damage_prevention_pool -= prevented
@@ -170,6 +221,27 @@ class EffectsMixin:
     def _mark_damage_on_permanent(self, permanent, amount: int) -> int:
         """Mark *amount* damage on a creature after applying its prevention pool.
         Returns the damage actually marked (0 if fully prevented)."""
+        # Jade Monolith: "The next time a source would deal damage to target
+        # creature this turn, that source deals that damage to you instead." Redirect
+        # the whole instance to the chosen player (works for combat damage too).
+        redirect_idx = permanent.metadata.pop("redirect_damage_to_player", None)
+        if redirect_idx is not None and isinstance(redirect_idx, int) and 0 <= redirect_idx < len(self.players) and amount > 0:
+            self._deal_damage_to_player(self.players[redirect_idx], amount)
+            self.log.append(
+                f"Damage to {permanent.card.name} redirected to {self.players[redirect_idx].name} (Jade Monolith)"
+            )
+            return 0
+        # Personal Incarnation: "The next 1 damage that would be dealt to this
+        # creature this turn is dealt to its owner instead." Redirect one point per
+        # charge before the rest is marked (CR 614 replacement effect).
+        redirect = int(permanent.metadata.get("redirect_one_damage_to_owner_until_eot", 0))
+        if redirect > 0 and amount > 0:
+            permanent.metadata["redirect_one_damage_to_owner_until_eot"] = redirect - 1
+            owner = next((p for p in self.players if permanent in p.battlefield), None)
+            if owner is not None:
+                self._deal_damage_to_player(owner, 1)
+                self.log.append(f"1 damage redirected from {permanent.card.name} to {owner.name}")
+            amount -= 1
         dealt = self._prevent_permanent_damage(permanent, amount)
         if dealt > 0:
             permanent.damage_marked += dealt
@@ -203,10 +275,12 @@ class EffectsMixin:
         target.life += amount
         self.log.append(f"{target.name} gained {amount} life{source} ({before} -> {target.life})")
 
-    def _deal_damage_to_player(self, target: PlayerState, amount: int) -> int:
+    def _deal_damage_to_player(self, target: PlayerState, amount: int, source=None) -> int:
         """Apply damage to a player (after prevention) and fire 'whenever you're
-        dealt damage' triggers (e.g. Lich). Returns the damage actually dealt."""
-        damage = self._prevent_damage(target, amount)
+        dealt damage' triggers (e.g. Lich). ``source`` (a Permanent or spell
+        CardDefinition) lets color-scoped prevention (Circle of Protection) match
+        the source's color. Returns the damage actually dealt."""
+        damage = self._prevent_damage(target, amount, source=source)
         if damage > 0:
             target.life -= damage
             self._on_player_dealt_damage(target, damage)
@@ -216,6 +290,17 @@ class EffectsMixin:
         # Track total damage dealt to each player this turn (Simulacrum, etc.).
         if damage > 0:
             target.damage_taken_this_turn += damage
+        # Living Artifact: "Whenever you're dealt damage, put that many vitality
+        # counters on this Aura." Counters accumulate on the enchantment so its
+        # upkeep ability can later trade them for life (and the UI can show them).
+        if damage > 0:
+            for perm in target.battlefield:
+                if "put that many vitality counters" in perm.card.oracle_text.lower():
+                    perm.metadata["vitality_counters"] = int(perm.metadata.get("vitality_counters", 0)) + damage
+                    self.log.append(
+                        f"{perm.card.name} got {damage} vitality counter(s) "
+                        f"(now {perm.metadata['vitality_counters']})"
+                    )
         if not self._player_controls_text(
             target, "whenever you're dealt damage, sacrifice that many nontoken permanents"
         ):
@@ -314,7 +399,17 @@ class EffectsMixin:
                 return True
         return False
 
-    def _sacrifice_creature_for_mana(self, caster: PlayerState) -> CardDefinition | None:
+    def _sacrifice_creature_for_mana(self, caster: PlayerState, chosen_index: int | None = None) -> CardDefinition | None:
+        # Sacrifice: the caster chooses which creature to sacrifice for the cost.
+        # Honor an explicit choice; otherwise sacrifice the first creature.
+        if (
+            isinstance(chosen_index, int)
+            and 0 <= chosen_index < len(caster.battlefield)
+            and caster.battlefield[chosen_index].card.primary_type == "creature"
+        ):
+            removed = caster.battlefield.pop(chosen_index)
+            caster.graveyard.append(removed.card)
+            return removed.card
         for idx, permanent in enumerate(caster.battlefield):
             if permanent.card.primary_type == "creature":
                 removed = caster.battlefield.pop(idx)
