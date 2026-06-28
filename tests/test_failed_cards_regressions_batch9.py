@@ -528,3 +528,44 @@ class TestLichSacrifice:
         game._deal_damage_to_player(p1, 2)
         assert before - len(p1.battlefield) == 2  # two nontoken permanents sacrificed
         assert lich in p1.battlefield              # Lich (game-losing) sacrificed last
+
+
+# ---------------------------------------------------------------------------
+# Fireball — "deals X damage divided evenly, rounded down, among any number of
+# targets." The core works for targets on one battlefield (the common case);
+# splitting across both seats' battlefields/faces is the remaining enhancement.
+# ---------------------------------------------------------------------------
+
+class TestFireballDividedDamage:
+    def test_divides_evenly_among_creatures_on_one_side(self, cards):
+        p1 = PlayerState(name="P1", hand=[cards["Fireball"]])
+        b1 = Permanent(card=cards["Grizzly Bears"])
+        b2 = Permanent(card=cards["Hill Giant"])
+        p2 = PlayerState(name="P2", battlefield=[b1, b2], life=20)
+        game = _game(p1, p2)
+        game.queue_from_hand(0, "Fireball", target_player_index=1, target_permanent_index=[0, 1], x_value=4)
+        while game.stack:
+            game.resolve_top_of_stack()
+        assert b1.damage_marked == 2 and b2.damage_marked == 2  # 4 split evenly
+
+
+# ---------------------------------------------------------------------------
+# Magical Hack — "replace all instances of one basic land type with another."
+# The core works on lands: the enchanted/changed land's type override updates and
+# it produces the new color of mana. (Landwalk remap on creatures + not recoloring
+# non-lands are the remaining enhancements.)
+# ---------------------------------------------------------------------------
+
+class TestMagicalHackLand:
+    def test_changes_land_type_and_mana(self, cards):
+        forest = Permanent(card=cards["Forest"])
+        p1 = PlayerState(name="P1", hand=[cards["Magical Hack"]])
+        p2 = PlayerState(name="P2", battlefield=[forest])
+        game = _game(p1, p2)
+        game.queue_from_hand(0, "Magical Hack", target_player_index=1, target_permanent_index=0, new_color="U")
+        while game.stack:
+            game.resolve_top_of_stack()
+        assert forest.metadata.get("land_type_override") == "island"
+        # And it now taps for blue rather than green.
+        game.tap_land_for_mana(1, "Forest", chosen_color="U", permanent_index=0)
+        assert p2.mana_pool.get("U") == 1
