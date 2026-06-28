@@ -207,6 +207,9 @@ class BattlefieldCanvas {
     this.attackingKeys = new Set();
     this.targetingKeys = new Set();
     this.combatArrows = [];
+    // Attacking bands (CR 702.22): each entry is a list of {seat, idx} members
+    // drawn connected by a purple link so the player can see the band grouping.
+    this.combatBands = [];
     this.hoveredKey = null;
     // Floating stack-card interaction: index into stackVisuals (= serialized
     // stack index) currently hovered, and the index click-locked for priority
@@ -1440,6 +1443,23 @@ class BattlefieldCanvas {
     this.needsRedraw = true;
   }
 
+  setCombatBands(bands) {
+    // bands: [[{seat, idx}, ...], ...] — attacking bands to draw as a connected group.
+    this.combatBands = Array.isArray(bands) ? bands : [];
+    this.needsRedraw = true;
+  }
+
+  // Is the given card key part of the band the hovered card belongs to? Used to
+  // group-highlight a band when any of its members is hovered.
+  _bandKeysForHover() {
+    if (!this.hoveredKey || !this.combatBands.length) return null;
+    for (const band of this.combatBands) {
+      const keys = band.map((m) => `${m.seat}-${m.idx}`);
+      if (keys.includes(this.hoveredKey)) return new Set(keys);
+    }
+    return null;
+  }
+
   // Returns all {seat, idx} pairs in the same stack as the given card, or just the card if not stacked.
   getStackMembers(seat, idx) {
     const key = `${seat}-${idx}`;
@@ -2398,6 +2418,35 @@ class BattlefieldCanvas {
       if (fc && tc) {
         this._drawArrow(ctx, fc.x, fc.y, tc.x, tc.y, arrow.kind === "blocker" ? "#48b0ff" : "#ff6060");
       }
+    }
+
+    // ---- Attacking bands (CR 702.22): purple links connecting band members ----
+    for (const band of this.combatBands) {
+      const centers = band
+        .map((m) => this._cardCenter(`${m.seat}-${m.idx}`))
+        .filter(Boolean);
+      if (centers.length < 2) continue;
+      const hoverKeys = this._bandKeysForHover();
+      const isHoveredBand = hoverKeys && band.some((m) => hoverKeys.has(`${m.seat}-${m.idx}`));
+      ctx.save();
+      ctx.strokeStyle = isHoveredBand ? "#d090ff" : "#9a4fd0";
+      ctx.lineWidth = (isHoveredBand ? 3.5 : 2.25) / this.zoom;
+      ctx.setLineDash([8 / this.zoom, 5 / this.zoom]);
+      ctx.shadowColor = "#9a4fd0";
+      ctx.shadowBlur = (isHoveredBand ? 16 : 8) / this.zoom;
+      ctx.beginPath();
+      ctx.moveTo(centers[0].x, centers[0].y);
+      for (let i = 1; i < centers.length; i++) ctx.lineTo(centers[i].x, centers[i].y);
+      ctx.stroke();
+      // A small filled node at each member to read as a "band".
+      ctx.setLineDash([]);
+      for (const c of centers) {
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, (isHoveredBand ? 5 : 3.5) / this.zoom, 0, Math.PI * 2);
+        ctx.fillStyle = isHoveredBand ? "#d090ff" : "#9a4fd0";
+        ctx.fill();
+      }
+      ctx.restore();
     }
 
     // ---- Live blocker-assignment drag arrow ----

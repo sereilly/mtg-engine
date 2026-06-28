@@ -54,7 +54,7 @@ choice needs an AI/headless auto-resolver** (determinism).
 
 ### Combat / UI
 - **Two-Headed Giant of Foriys** — engine + API **done** and test-guarded (`batch9::TestTwoHeadedGiantDoubleBlock`): `combat_blockers` is now `dict[int,list[int]]`, `declare_blockers` accepts int-or-list and enforces a per-creature block limit (`_max_blocks_for`, +1 per "can block an additional creature"); damage resolves correctly (blocker takes damage from each attacker, deals to one). The `blocker_pairs` schema/dispatch accept lists. *Remaining:* the frontend `combatBlockerDraft` is still single-attacker (~8 canvas sites + a serialized per-blocker `max_blocks`) — needed for a human to declare the double-block in-game.
-- **Banding visuals** (Benalish Hero / Mesa Pegasus / Timber Wolves) — `state.combat.bands` already serialized; pass to the canvas and draw purple connecting lines + hover group-highlight.
+- **Banding visuals** (Benalish Hero / Mesa Pegasus / Timber Wolves) — **done**: `renderCombatOverlay` feeds `state.combat.bands` (verified to serialize on band declaration) to a new canvas `setCombatBands`; the draw pass connects band members with a dashed purple link + node dots and group-highlights the band on hover (`_bandKeysForHover`). Zero engine risk; recommend a live screenshot in a banding combat to confirm placement.
 - **Camouflage** — handler is a stub; implement random pile partition/assignment using the left/right pile infra (seeded RNG for determinism).
 - **Word of Command** — stub discards first card; needs reveal + hand-selection + opponent-controlled cast. Large; recommend a phased MVP.
 

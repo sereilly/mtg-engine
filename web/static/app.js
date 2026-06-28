@@ -401,6 +401,19 @@ function renderCombatOverlay(state = currentState) {
     }
   }
 
+  // Attacking bands (Benalish Hero / Mesa Pegasus / Timber Wolves, …): connect the
+  // declared band members with a purple link so the grouping is visible.
+  const bands = [];
+  if (combat && Array.isArray(combat.bands)) {
+    const activeSeat = state.current_turn;
+    for (const band of combat.bands) {
+      if (Array.isArray(band) && band.length >= 2) {
+        bands.push(band.map((idx) => ({ seat: activeSeat, idx: Number(idx) })));
+      }
+    }
+  }
+  battlefieldCanvas.setCombatBands(bands);
+
   battlefieldCanvas.setCombatArrows(arrows);
   battlefieldCanvas.setAttackingKeys(attackingKeys);
 }
