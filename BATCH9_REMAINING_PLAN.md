@@ -29,7 +29,14 @@ fixed + tested (engine + UI-API) and the app boots clean in the browser.
 | Raging River | Per-role lock flags clear the prompt after assignment; no empty/defenderless loop | `test_raging_river_ui_api` (2 new) |
 | Glasses of Urza | Reveal-hand modal cards wired to `showCardPreview`/`clearCardPreview` on hover | (visual; verify in browser) |
 
-## Remaining (15) — plans
+## Remaining (0 cards — optional enhancements only)
+
+Every card originally in this section is now implemented and test-guarded (see the
+**done** notes inline below). What is left are the optional enhancements called
+out per card: the human-facing UI slices (Two-Headed Giant multi-block draft,
+Camouflage pile selection, Magical Hack/Sleight of Mind from/to picker, Fireball
+cross-seat targeting, Word of Command forced-spell target choice) and the
+Illusionary Mask face-up reveal. None are required for the cards to function.
 
 Infra patterns to reuse: `pending_optional_pays`/`confirm_optional_pay`,
 `pending_search_library`/`pending_discard` style deferred choices (state on `Game`,
@@ -56,7 +63,7 @@ choice needs an AI/headless auto-resolver** (determinism).
 - **Two-Headed Giant of Foriys** — engine + API **done** and test-guarded (`batch9::TestTwoHeadedGiantDoubleBlock`): `combat_blockers` is now `dict[int,list[int]]`, `declare_blockers` accepts int-or-list and enforces a per-creature block limit (`_max_blocks_for`, +1 per "can block an additional creature"); damage resolves correctly (blocker takes damage from each attacker, deals to one). The `blocker_pairs` schema/dispatch accept lists. *Remaining:* the frontend `combatBlockerDraft` is still single-attacker (~8 canvas sites + a serialized per-blocker `max_blocks`) — needed for a human to declare the double-block in-game.
 - **Banding visuals** (Benalish Hero / Mesa Pegasus / Timber Wolves) — **done**: `renderCombatOverlay` feeds `state.combat.bands` (verified to serialize on band declaration) to a new canvas `setCombatBands`; the draw pass connects band members with a dashed purple link + node dots and group-highlights the band on hover (`_bandKeysForHover`). Zero engine risk; recommend a live screenshot in a banding combat to confirm placement.
 - **Camouflage** — **done** (engine): `randomize_blockers` sets `camouflage_active_turn`; a new `resolve_camouflage_blocking` divides the defender's untapped creatures round-robin into one pile per attacker, randomly maps piles to attackers (module RNG → reproducible under a seed), and blocks each assigned attacker if able. `advance_combat_phase` auto-resolves it (human + AI) when active, gated so normal combat is untouched. Test-guarded (`batch9::TestCamouflage`). *Remaining:* a human-defender UI to choose pile membership (the headless model piles all untapped creatures).
-- **Word of Command** — stub discards first card; needs reveal + hand-selection + opponent-controlled cast. Large; recommend a phased MVP.
+- **Word of Command** — **done** (MVP): the stub that discarded the first card is replaced. `peek_hand_and_force_play` arms `pending_word_of_command` (revealing the target's hand to the caster); `confirm_word_of_command` makes the target play the caster's chosen card via `queue_from_hand` as the target, or declines. Wired end-to-end (AI auto-resolver forces the first card; `word_of_command_confirm` ActionKind + app.js prompt). Test-guarded (`batch9::TestWordOfCommand` + `test_batch9_ui_api`; existing `test_lea_cards` updated). *Remaining (optional):* let the caster also choose the **forced spell's targets** (MVP defaults the forced spell to target the forced player) and model "you control that player" for multi-step plays.
 
 ## Notes
 - CARD_VERIFICATION.md is generated via the in-game Debug Menu — do **not** hand-edit; re-verify fixed cards there.

@@ -1613,8 +1613,10 @@ def test_word_of_command_forces_play_from_hand(all_cards):
     game = Game(players=[p1, p2])
 
     result = game.cast_from_hand(0, "Word of Command", target_player_index=1)
-
     assert result.supported
+    # The caster looks at the target's hand and chooses which card to force.
+    assert game.pending_word_of_command is not None
+    assert game.confirm_word_of_command(0, 0) is True
     assert len(p2.hand) == 0
     assert any(card.name == "Victim Spell" for card in p2.graveyard)
 

@@ -769,7 +769,7 @@ function getAutoPassStateKey(state) {
 }
 
 function hasBlockingPromptForAutoPass(state = currentState) {
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getBalanceSelectInfo(state) || getOptionalPayInfo(state) || getLandTypeChoiceInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getRagingRiverInfo(state) || getIslandSanctuaryInfo(state)) return true;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getBalanceSelectInfo(state) || getOptionalPayInfo(state) || getLandTypeChoiceInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getIslandSanctuaryInfo(state)) return true;
   return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingAbilityChoice);
 }
 
@@ -1664,6 +1664,13 @@ function getTimeVaultInfo(state = currentState) {
   return info;
 }
 
+function getWordOfCommandInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.word_of_command;
+  if (!info || !Array.isArray(info.choices) || info.choices.length === 0) return null;
+  return info;
+}
+
 function getRagingRiverInfo(state = currentState) {
   if (!state || seat === null) return null;
   const info = state.raging_river;
@@ -1774,6 +1781,7 @@ function isAnyPromptActive(state = currentState) {
   if (getKudzuReattachInfo(state)) return true;
   if (getFaceDownCastInfo(state)) return true;
   if (getTimeVaultInfo(state)) return true;
+  if (getWordOfCommandInfo(state)) return true;
   if (getRagingRiverInfo(state)) return true;
   if (shouldShowPriorityPrompt(state)) return true;
   if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingAutoTap || pendingModalChoice || pendingAbilityChoice) return true;
@@ -1788,7 +1796,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getBalanceSelectInfo(state) || getOptionalPayInfo(state) || getLandTypeChoiceInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getRagingRiverInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getBalanceSelectInfo(state) || getOptionalPayInfo(state) || getLandTypeChoiceInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -2409,6 +2417,51 @@ function applyKudzuReattachPrompt(info) {
       });
     });
   });
+}
+
+// Word of Command: "Look at target opponent's hand and choose a card; that player
+// plays it." The caster picks which of the revealed cards to force (or declines).
+function applyWordOfCommandPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  title.textContent = "Word of Command";
+  body.textContent = `Choose a card from ${info.target_name}'s hand for them to play.`;
+  const buttons = info.choices
+    .map(
+      (c) =>
+        `<button type="button" class="prompt-choice-btn" data-woc-hand="${c.hand_index}">` +
+        `${escapeHtml(c.name)}</button>`
+    )
+    .join("");
+  steps.innerHTML =
+    `<div class="prompt-choice-column">${buttons}` +
+    `<button type="button" class="prompt-choice-btn" data-woc-decline="1">Decline</button></div>`;
+
+  steps.querySelectorAll("[data-woc-hand]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await sendAction({ seat, action: "word_of_command_confirm", hand_index: Number(btn.dataset.wocHand) });
+    });
+  });
+  const declineBtn = steps.querySelector("[data-woc-decline]");
+  if (declineBtn) {
+    declineBtn.addEventListener("click", async () => {
+      await sendAction({ seat, action: "word_of_command_confirm", accept: false });
+    });
+  }
 }
 
 // Time Vault: "If you would begin your turn while this is tapped, you may skip
@@ -3181,6 +3234,12 @@ function renderActivationPrompt() {
   const faceDownCastInfo = getFaceDownCastInfo();
   if (faceDownCastInfo) {
     applyFaceDownCastPrompt(faceDownCastInfo);
+    return;
+  }
+
+  const wordOfCommandInfo = getWordOfCommandInfo();
+  if (wordOfCommandInfo) {
+    applyWordOfCommandPrompt(wordOfCommandInfo);
     return;
   }
 

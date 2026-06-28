@@ -164,6 +164,10 @@ class Game(
     # face down as a 2/2." Awaiting the controller's choice of which hand creature.
     # Shape: {"player_index", "max_cmc", "card_name"}. The controller may decline.
     pending_face_down_cast: dict | None = None
+    # Word of Command: "Look at target opponent's hand and choose a card; that
+    # player plays it." Awaiting the caster's choice of which of the target's cards
+    # to force. Shape: {"caster_index", "target_index", "card_name", "hand"}.
+    pending_word_of_command: dict | None = None
     # 610.3: tracks creatures exiled "until end of turn" — (owner_player_index, card)
     exile_until_eot: list[tuple[int, CardDefinition]] = field(default_factory=list)
     # 104.4: True when the game ends in a draw for all players

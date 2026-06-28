@@ -255,6 +255,33 @@ class StackCastingMixin:
         self.pending_face_down_cast = None
         return True
 
+    def confirm_word_of_command(self, caster_index: int, hand_index: int | None) -> bool:
+        """Resolve a pending Word of Command: the target player plays the caster's
+        chosen card from their hand, if able. ``hand_index`` < 0 (or None) declines.
+
+        MVP: the forced spell defaults its target to the forced player themselves
+        (so e.g. their burn/removal is turned on them). Caster-chosen targets for
+        the forced spell are a future enhancement."""
+        pending = self.pending_word_of_command
+        if pending is None or pending["caster_index"] != caster_index:
+            return False
+        target_index = pending["target_index"]
+        target = self.players[target_index]
+        self.pending_word_of_command = None
+        if hand_index is None or hand_index < 0:
+            return True  # declined — nothing is played
+        if not (0 <= hand_index < len(target.hand)):
+            return False
+        card_name = target.hand[hand_index].name
+        result = self.queue_from_hand(target_index, card_name, target_player_index=target_index)
+        if result.supported and self.stack:
+            self.resolve_stack()
+        if result.supported:
+            self.log.append(f"Word of Command: {target.name} was forced to play {card_name}")
+        else:
+            self.log.append(f"Word of Command: {target.name} could not play {card_name} ({result.details})")
+        return True
+
     def _balance_remove(self, player_index: int, land_indices, creature_indices, hand_indices) -> bool:
         """Remove the chosen lands/creatures (to graveyard) and hand cards (discard)
         for one player's Balance plan. Validates the counts against the plan."""

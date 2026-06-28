@@ -42,6 +42,7 @@ ActionKind = Literal[
     "face_down_cast_confirm",
     "time_vault_skip",
     "time_vault_decline",
+    "word_of_command_confirm",
     "assign_defender_piles",
     "assign_attacker_piles",
     "dismiss_hand_reveal",

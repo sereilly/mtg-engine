@@ -263,15 +263,25 @@ def exile_creature_gain_life_equal_to_power(game: Game, instruction: OracleInstr
 
 @effect_handler("peek_hand_and_force_play")
 def peek_hand_and_force_play(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Word of Command: the caster looks at the target's hand and chooses a card
+    for that player to play. Arms a pending choice resolved by
+    confirm_word_of_command (which plays the chosen card as the target). Also
+    surfaces the revealed hand so the UI can show it to the caster."""
     target = context.target
+    caster = context.caster
     card = context.card
-    seen = len(target.hand)
-    if target.hand:
-        played = target.hand.pop(0)
-        target.graveyard.append(played)
-        game.log.append(f"{card.name} forced {target.name} to play {played.name}")
-    else:
-        game.log.append(f"{card.name} looked at {target.name}'s hand ({seen} cards)")
+    if not target.hand:
+        game.log.append(f"{card.name}: {target.name} has no cards to play")
+        return True, "resolved"
+    caster_index = game.players.index(caster)
+    target_index = game.players.index(target)
+    game.pending_word_of_command = {
+        "caster_index": caster_index,
+        "target_index": target_index,
+        "card_name": card.name,
+        "hand": [c.name for c in target.hand],
+    }
+    game.log.append(f"{card.name}: {caster.name} looks at {target.name}'s hand to choose a card to force")
     return True, "resolved"
 
 

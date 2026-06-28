@@ -289,3 +289,37 @@ def test_time_vault_prompt_hidden_from_opponent():
     sid, session, game, vault = _time_vault_session()
     state = client.get(f"/api/sessions/{sid}/state", params={"seat": 1}).json()
     assert state["time_vault"] is None
+
+
+def test_word_of_command_caster_picks_card_to_force():
+    # Word of Command: the caster sees the opponent's hand and forces a card.
+    sid, session, game = _session()
+    game.players[0].hand = [_CARDS["Word of Command"]]
+    game.players[1].hand = [_CARDS["Lightning Bolt"], _CARDS["Grizzly Bears"]]
+    game.players[1].life = 20
+    game.enforce_mana_costs = False
+    game.cast_from_hand(0, "Word of Command", target_player_index=1)
+
+    state = client.get(f"/api/sessions/{sid}/state", params={"seat": 0}).json()
+    info = state["word_of_command"]
+    assert info is not None
+    assert {c["name"] for c in info["choices"]} == {"Lightning Bolt", "Grizzly Bears"}
+
+    bolt_index = next(c["hand_index"] for c in info["choices"] if c["name"] == "Lightning Bolt")
+    resp = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "word_of_command_confirm", "hand_index": bolt_index},
+    )
+    assert resp.status_code == 200
+    assert game.players[1].life == 17       # forced to bolt themselves
+    assert game.pending_word_of_command is None
+
+
+def test_word_of_command_hidden_from_target():
+    sid, session, game = _session()
+    game.players[0].hand = [_CARDS["Word of Command"]]
+    game.players[1].hand = [_CARDS["Lightning Bolt"]]
+    game.enforce_mana_costs = False
+    game.cast_from_hand(0, "Word of Command", target_player_index=1)
+    state = client.get(f"/api/sessions/{sid}/state", params={"seat": 1}).json()
+    assert state["word_of_command"] is None

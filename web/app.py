@@ -1453,6 +1453,22 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
             ],
         }
 
+    # Word of Command: the caster looks at the target's hand and chooses a card to
+    # force. Surfaced only to the (human) caster.
+    word_of_command_info = None
+    pending_woc = session.game.pending_word_of_command
+    if (
+        pending_woc is not None
+        and viewer_seat is not None
+        and pending_woc["caster_index"] == viewer_seat
+        and _seat_type(session, viewer_seat) != "ai"
+    ):
+        target = session.game.players[pending_woc["target_index"]]
+        word_of_command_info = {
+            "target_name": target.name,
+            "choices": [{"hand_index": i, "name": c.name} for i, c in enumerate(target.hand)],
+        }
+
     # Time Vault: the begin-of-turn "skip your turn to untap" decision, shown only
     # to the active human player while they decide.
     time_vault_info = None
@@ -1562,6 +1578,7 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "kudzu_reattach": kudzu_reattach_info,
         "face_down_cast": face_down_cast_info,
         "time_vault": time_vault_info,
+        "word_of_command": word_of_command_info,
         "pregame": _build_pregame_info(session, viewer_seat),
     }
 
@@ -1750,6 +1767,17 @@ def _auto_resolve_ai_pending_face_down(session: Session) -> None:
     game.confirm_face_down_cast(pending["player_index"], idx if idx is not None else -1)
 
 
+def _auto_resolve_ai_pending_word_of_command(session: Session) -> None:
+    """Resolve an AI caster's Word of Command — force the first card in the target's
+    hand (deterministic for headless play)."""
+    game = session.game
+    pending = game.pending_word_of_command
+    if pending is None or _seat_type(session, pending["caster_index"]) != "ai":
+        return
+    target = game.players[pending["target_index"]]
+    game.confirm_word_of_command(pending["caster_index"], 0 if target.hand else -1)
+
+
 def _auto_resolve_ai_pending(session: Session) -> None:
     """Resolve any AI-owned pending choices (library search, library reorder,
     discard, balance, optional pays)."""
@@ -1761,6 +1789,7 @@ def _auto_resolve_ai_pending(session: Session) -> None:
     _auto_resolve_ai_pending_land_type(session)
     _auto_resolve_ai_pending_kudzu(session)
     _auto_resolve_ai_pending_face_down(session)
+    _auto_resolve_ai_pending_word_of_command(session)
 
 
 def _ai_step(session: Session) -> bool:
@@ -3365,6 +3394,19 @@ def do_action(session_id: str, req: GameActionRequest):
         session.time_vault_resolved_turn = session.game.turn
         session.time_vault_pending = []
         _begin_turn(session, req.seat, defer_untap_selection=True)
+
+    elif req.action == "word_of_command_confirm":
+        # Word of Command: the caster forces the target to play the chosen card
+        # (accept=False / no hand_index declines).
+        if req.accept is False:
+            hand_index = -1
+        elif req.hand_index is None:
+            raise HTTPException(status_code=400, detail="hand_index is required")
+        else:
+            hand_index = req.hand_index
+        ok = session.game.confirm_word_of_command(req.seat, hand_index)
+        if not ok:
+            raise HTTPException(status_code=400, detail="no Word of Command pending for you")
 
     elif req.action == "assign_defender_piles":
         piles = {int(k): str(v) for k, v in (req.piles or {}).items()}

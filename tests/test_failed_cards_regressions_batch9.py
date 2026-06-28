@@ -796,3 +796,46 @@ class TestTimeVaultUntapForSkip:
         p1 = PlayerState(name="P1", battlefield=[vault])
         game = _game(p1, PlayerState(name="P2"))
         assert game.untap_for_skip(0, "Time Vault") is False
+
+
+# ---------------------------------------------------------------------------
+# Word of Command — "Look at target opponent's hand and choose a card; that
+# player plays it." The caster now chooses which card (and the target plays it)
+# instead of the old stub that discarded the first card. MVP: the forced spell
+# defaults to targeting the forced player.
+# ---------------------------------------------------------------------------
+
+class TestWordOfCommand:
+    def test_arms_choice_and_forces_chosen_card(self, cards):
+        p0 = PlayerState(name="P0", hand=[cards["Word of Command"]], life=20)
+        p1 = PlayerState(name="P1", hand=[cards["Lightning Bolt"], cards["Grizzly Bears"]], life=20)
+        game = _game(p0, p1)
+        game.cast_from_hand(0, "Word of Command", target_player_index=1)
+        pending = game.pending_word_of_command
+        assert pending is not None
+        assert pending["hand"] == ["Lightning Bolt", "Grizzly Bears"]
+        # Force the opponent's Lightning Bolt — it defaults to hitting themselves.
+        assert game.confirm_word_of_command(0, 0) is True
+        assert p1.life == 17
+        assert [c.name for c in p1.hand] == ["Grizzly Bears"]
+        assert game.pending_word_of_command is None
+
+    def test_forced_creature_enters_under_target_control(self, cards):
+        p0 = PlayerState(name="P0", hand=[cards["Word of Command"]], life=20)
+        p1 = PlayerState(name="P1", hand=[cards["Grizzly Bears"]], life=20)
+        game = _game(p0, p1)
+        game.cast_from_hand(0, "Word of Command", target_player_index=1)
+        game.confirm_word_of_command(0, 0)
+        # The forced creature is played onto the target's own battlefield.
+        assert any(p.card.name == "Grizzly Bears" for p in p1.battlefield)
+        assert not any(p.card.name == "Grizzly Bears" for p in p0.battlefield)
+
+    def test_decline_plays_nothing(self, cards):
+        p0 = PlayerState(name="P0", hand=[cards["Word of Command"]], life=20)
+        p1 = PlayerState(name="P1", hand=[cards["Lightning Bolt"]], life=20)
+        game = _game(p0, p1)
+        game.cast_from_hand(0, "Word of Command", target_player_index=1)
+        assert game.confirm_word_of_command(0, -1) is True
+        assert p1.life == 20
+        assert len(p1.hand) == 1
+        assert game.pending_word_of_command is None
