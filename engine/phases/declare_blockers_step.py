@@ -27,7 +27,14 @@ _LANDWALK_TO_LAND_TYPE = {
 
 
 class DeclareBlockersStepMixin:
-    def declare_blockers(self, controller_index: int, blocker_to_attacker: dict[int, int]) -> tuple[bool, str]:
+    def _max_blocks_for(self, blocker: Permanent) -> int:
+        """How many attackers this creature may block at once (CR 509.1b). Normally
+        1; each "can block an additional creature" grant (Two-Headed Giant of
+        Foriys) adds one."""
+        text = blocker.card.oracle_text.lower()
+        return 1 + text.count("can block an additional creature")
+
+    def declare_blockers(self, controller_index: int, blocker_to_attacker: dict[int, int | list[int]]) -> tuple[bool, str]:
         if self.current_turn_phase != "combat" or self.current_step != "declare_blockers":
             return False, "blockers can only be declared during declare_blockers"
         if self.combat_defending_player_index is None:
@@ -38,24 +45,31 @@ class DeclareBlockersStepMixin:
         self._prune_combat_state()
         defender = self.players[controller_index]
         attacker_controller = self.players[self.active_player_index]
-        assignments: dict[int, int] = {}
+        assignments: dict[int, list[int]] = {}
 
-        for blocker_idx, attacker_idx in blocker_to_attacker.items():
+        for blocker_idx, raw_attackers in blocker_to_attacker.items():
+            # A blocker may be assigned one attacker (the common case) or several
+            # (a creature that can block additional creatures).
+            attacker_indices = raw_attackers if isinstance(raw_attackers, (list, tuple, set)) else [raw_attackers]
+            attacker_indices = [int(a) for a in attacker_indices]
             if blocker_idx < 0 or blocker_idx >= len(defender.battlefield):
                 return False, "blocker index out of range"
-            if attacker_idx not in self.combat_attackers:
-                return False, "blocker assigned to non-attacker"
             blocker = defender.battlefield[blocker_idx]
-            attacker = attacker_controller.battlefield[attacker_idx]
             if blocker.card.primary_type != "creature":
                 return False, "only creatures can block"
             if blocker.tapped:
                 return False, f"{blocker.card.name} is tapped"
-            if not self._can_block_attacker(blocker, attacker):
-                return False, f"{blocker.card.name} cannot block {attacker.card.name}"
-            if self._left_right_block_illegal(attacker_idx, blocker_idx, blocker):
-                return False, f"{blocker.card.name} is in the wrong pile to block {attacker.card.name}"
-            assignments[blocker_idx] = attacker_idx
+            if len(set(attacker_indices)) > self._max_blocks_for(blocker):
+                return False, f"{blocker.card.name} cannot block that many creatures"
+            for attacker_idx in dict.fromkeys(attacker_indices):  # dedupe, keep order
+                if attacker_idx not in self.combat_attackers:
+                    return False, "blocker assigned to non-attacker"
+                attacker = attacker_controller.battlefield[attacker_idx]
+                if not self._can_block_attacker(blocker, attacker):
+                    return False, f"{blocker.card.name} cannot block {attacker.card.name}"
+                if self._left_right_block_illegal(attacker_idx, blocker_idx, blocker):
+                    return False, f"{blocker.card.name} is in the wrong pile to block {attacker.card.name}"
+                assignments.setdefault(blocker_idx, []).append(attacker_idx)
 
         # Lure enforcement: every creature that can block a Lure attacker must do so
         for attacker_idx in self.combat_attackers:
@@ -210,7 +224,7 @@ class DeclareBlockersStepMixin:
         return False
 
     def _combat_blockers_for_attacker(self, attacker_idx: int) -> list[int]:
-        return [blocker_idx for blocker_idx, a_idx in self.combat_blockers.items() if a_idx == attacker_idx]
+        return [blocker_idx for blocker_idx, a_idxs in self.combat_blockers.items() if attacker_idx in a_idxs]
 
     def _is_blocking_creature(self, permanent: Permanent) -> bool:
         """True if *permanent* is currently blocking an attacker (Righteousness)."""
@@ -312,18 +326,20 @@ class DeclareBlockersStepMixin:
             )
 
         # A blocker that blocks an attacker (509.3a "Whenever this creature blocks").
-        for blocker_idx, attacker_idx in self.combat_blockers.items():
+        # A creature blocking several attackers fires once per attacker it blocks.
+        for blocker_idx, attacker_idxs in self.combat_blockers.items():
             if blocker_idx < 0 or blocker_idx >= len(defender.battlefield):
                 continue
             blocker = defender.battlefield[blocker_idx]
-            if 0 <= attacker_idx < len(attacker_controller.battlefield):
-                queue_trigger(
-                    blocker,
-                    controller_index,
-                    attacker_controller.battlefield[attacker_idx],
-                    self.active_player_index,
-                    attacker_idx,
-                )
+            for attacker_idx in attacker_idxs:
+                if 0 <= attacker_idx < len(attacker_controller.battlefield):
+                    queue_trigger(
+                        blocker,
+                        controller_index,
+                        attacker_controller.battlefield[attacker_idx],
+                        self.active_player_index,
+                        attacker_idx,
+                    )
 
         # An attacker that becomes blocked (509.3c/509.3d "becomes blocked").
         for attacker_idx in self.combat_attackers:

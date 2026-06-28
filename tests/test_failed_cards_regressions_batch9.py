@@ -569,3 +569,70 @@ class TestMagicalHackLand:
         # And it now taps for blue rather than green.
         game.tap_land_for_mana(1, "Forest", chosen_color="U", permanent_index=0)
         assert p2.mana_pool.get("U") == 1
+
+
+# ---------------------------------------------------------------------------
+# Two-Headed Giant of Foriys — "This creature can block an additional creature
+# each combat." The blocker model now maps a blocker to a list of attackers so
+# one creature can block two, taking damage from both and dealing to one.
+# ---------------------------------------------------------------------------
+
+class TestTwoHeadedGiantDoubleBlock:
+    def _combat(self, cards):
+        b1 = Permanent(card=cards["Grizzly Bears"])
+        b2 = Permanent(card=cards["Grizzly Bears"])
+        for b in (b1, b2):
+            b.metadata["summoning_sickness_turn"] = -99
+        thg = Permanent(card=cards["Two-Headed Giant of Foriys"])
+        p1 = PlayerState(name="P1", battlefield=[b1, b2], life=20)
+        p2 = PlayerState(name="P2", battlefield=[thg], life=20)
+        game = _game(p1, p2)
+        game.active_player_index = 0
+        game._set_phase_and_step("combat", "declare_attackers")
+        game.combat_defending_player_index = 1
+        game.declare_attackers(0, [0, 1])
+        game.advance_combat_phase()  # -> declare_blockers
+        return game, p1, p2, b1, b2, thg
+
+    def test_blocks_two_attackers_and_resolves_damage(self, cards):
+        game, p1, p2, b1, b2, thg = self._combat(cards)
+        ok, _ = game.declare_blockers(1, {0: [0, 1]})
+        assert ok
+        assert game.combat_blockers == {0: [0, 1]}
+        game._set_phase_and_step("combat", "combat_damage")
+        game.resolve_combat_damage(0)
+        # Both bears are blocked, so no damage reaches the player.
+        assert p2.life == 20
+        # The Giant takes 2 + 2 = 4 and dies; it deals its 4 to one bear (kills it).
+        assert thg not in p2.battlefield
+        survivors = [b for b in (b1, b2) if b in p1.battlefield]
+        assert len(survivors) == 1
+
+    def test_ordinary_creature_cannot_block_two(self, cards):
+        game, p1, p2, b1, b2, thg = self._combat(cards)
+        # A vanilla Grizzly Bears on defense may only block one attacker.
+        ordinary = Permanent(card=cards["Grizzly Bears"])
+        p2.battlefield.append(ordinary)
+        game._prune_combat_state()
+        ok, msg = game.declare_blockers(1, {1: [0, 1]})  # index 1 = the ordinary bear
+        assert not ok
+        assert "cannot block that many" in msg
+
+    def test_giant_cannot_block_three(self, cards):
+        b1 = Permanent(card=cards["Grizzly Bears"])
+        b2 = Permanent(card=cards["Grizzly Bears"])
+        b3 = Permanent(card=cards["Grizzly Bears"])
+        for b in (b1, b2, b3):
+            b.metadata["summoning_sickness_turn"] = -99
+        thg = Permanent(card=cards["Two-Headed Giant of Foriys"])
+        p1 = PlayerState(name="P1", battlefield=[b1, b2, b3], life=20)
+        p2 = PlayerState(name="P2", battlefield=[thg], life=20)
+        game = _game(p1, p2)
+        game.active_player_index = 0
+        game._set_phase_and_step("combat", "declare_attackers")
+        game.combat_defending_player_index = 1
+        game.declare_attackers(0, [0, 1, 2])
+        game.advance_combat_phase()
+        ok, msg = game.declare_blockers(1, {0: [0, 1, 2]})
+        assert not ok
+        assert "cannot block that many" in msg

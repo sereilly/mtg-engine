@@ -108,7 +108,9 @@ class GameActionRequest(BaseModel):
     # Banding (CR 702.22c): attacking bands, each a list of attacker battlefield
     # indices, declared alongside attacker_indices in a declare_attackers action.
     bands: list[list[int]] | None = None
-    blocker_pairs: dict[int, int] | None = None
+    # Maps a blocker's battlefield index to the attacker it blocks. A value may be
+    # a list when one creature blocks several attackers (Two-Headed Giant of Foriys).
+    blocker_pairs: dict[int, int | list[int]] | None = None
     attacker_damage: dict[int, dict[int, int]] | None = None
     # Banding (CR 702.22k): how a shared blocker's damage is routed among the band
     # members it blocks — maps blocker battlefield index to the chosen attacker index.

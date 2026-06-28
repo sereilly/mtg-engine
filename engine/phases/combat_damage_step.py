@@ -355,19 +355,27 @@ class CombatDamageStepMixin:
                     if self._has_keyword(attacker, "lifelink"):
                         add_lifelink(self.active_player_index, trample_damage)
 
-        for blocker_idx, attacker_idx in sorted(self.combat_blockers.items()):
+        for blocker_idx, attacker_idxs in sorted(self.combat_blockers.items()):
             if blocker_idx < 0 or blocker_idx >= len(defender.battlefield):
                 continue
-            if attacker_idx < 0 or attacker_idx >= len(attacker_controller.battlefield):
+            if not attacker_idxs:
                 continue
+            # A blocker deals its combat damage to one of the creatures it blocks
+            # (CR 510.1c, defender's choice; default the first). A creature blocking
+            # several attackers (Two-Headed Giant of Foriys) still deals once.
+            attacker_idx = attacker_idxs[0]
             # CR 702.22k: a blocker blocking a band (which always contains a creature
             # with banding) deals its damage where the *active* player chooses among
-            # the band members it blocks. Default: the creature it explicitly blocked.
+            # the band members it blocks. Also lets the defender pick which blocked
+            # attacker a multi-block creature damages.
             band = self._attacker_band(attacker_idx)
-            if band and blocker_damage and blocker_idx in blocker_damage:
+            if blocker_damage and blocker_idx in blocker_damage:
                 chosen = blocker_damage[blocker_idx]
-                if chosen in band and 0 <= chosen < len(attacker_controller.battlefield):
+                allowed = chosen in attacker_idxs or (band and chosen in band)
+                if allowed and 0 <= chosen < len(attacker_controller.battlefield):
                     attacker_idx = chosen
+            if attacker_idx < 0 or attacker_idx >= len(attacker_controller.battlefield):
+                continue
             blocker = defender.battlefield[blocker_idx]
             attacker = attacker_controller.battlefield[attacker_idx]
             if blocker.effective_power <= 0:

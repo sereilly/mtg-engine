@@ -222,16 +222,16 @@ class CombatPhaseMixin:
             valid_attackers[attacker_idx] = defending_idx
         self.combat_attackers = valid_attackers
 
-        valid_blockers: dict[int, int] = {}
-        for blocker_idx, attacker_idx in self.combat_blockers.items():
+        valid_blockers: dict[int, list[int]] = {}
+        for blocker_idx, attacker_idxs in self.combat_blockers.items():
             if blocker_idx < 0 or blocker_idx >= len(defender.battlefield):
                 continue
             blocker = defender.battlefield[blocker_idx]
             if blocker.card.primary_type != "creature":
                 continue
-            if attacker_idx not in self.combat_attackers:
-                continue
-            valid_blockers[blocker_idx] = attacker_idx
+            kept = [a for a in attacker_idxs if a in self.combat_attackers]
+            if kept:
+                valid_blockers[blocker_idx] = kept
         self.combat_blockers = valid_blockers
 
         # Preserve "was ever blocked" state: once a creature is blocked it stays
@@ -256,13 +256,15 @@ class CombatPhaseMixin:
             attacker.attacking = True
             attacker.defending_player_index = defending_idx
             attacker.blocked = was_blocked.get(attacker_idx, False) or any(
-                value == attacker_idx for value in self.combat_blockers.values()
+                attacker_idx in atks for atks in self.combat_blockers.values()
             )
 
-        for blocker_idx, attacker_idx in self.combat_blockers.items():
+        for blocker_idx, attacker_idxs in self.combat_blockers.items():
             blocker = defender.battlefield[blocker_idx]
             blocker.blocking_attacker_controller = self.active_player_index
-            blocker.blocking_attacker_index = attacker_idx
+            # `blocking_attacker_index` holds a single representative attacker (the
+            # first) for the common one-block case; multi-block uses combat_blockers.
+            blocker.blocking_attacker_index = attacker_idxs[0] if attacker_idxs else None
 
         # CR 702.22h: propagate band blocks (no-op when no bands were declared).
         # Recomputed here so the propagated "blocked" status survives every prune.
@@ -278,7 +280,11 @@ class CombatPhaseMixin:
         return {
             "defending_player_index": self.combat_defending_player_index,
             "attackers": [{"attacker_index": k, "defending_player_index": v} for k, v in sorted(self.combat_attackers.items())],
-            "blockers": [{"blocker_index": k, "attacker_index": v} for k, v in sorted(self.combat_blockers.items())],
+            "blockers": [
+                {"blocker_index": k, "attacker_index": a}
+                for k, atks in sorted(self.combat_blockers.items())
+                for a in atks
+            ],
             "damage_resolved": self.combat_damage_resolved,
             "first_strike_done": self.combat_first_strike_done,
             "attackers_locked": self.combat_attackers_locked,

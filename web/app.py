@@ -2943,7 +2943,12 @@ def do_action(session_id: str, req: GameActionRequest):
         # the active player priority once blockers are declared (CR 509.4), so the
         # AI's turn can resume / the attacker may respond.
         raw_pairs = req.blocker_pairs or {}
-        blocker_pairs = {int(k): int(v) for k, v in raw_pairs.items()}
+        # A value may be a single attacker index or a list (one creature blocking
+        # several attackers — Two-Headed Giant of Foriys). Normalize to lists.
+        blocker_pairs = {
+            int(k): [int(a) for a in (v if isinstance(v, list) else [v])]
+            for k, v in raw_pairs.items()
+        }
         ok, details = session.game.declare_blockers(req.seat, blocker_pairs)
         if not ok:
             raise HTTPException(status_code=400, detail=details)

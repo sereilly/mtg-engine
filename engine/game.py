@@ -92,7 +92,10 @@ class Game(
     skip_step_counts: dict[str, int] = field(default_factory=dict)
     combat_damage_prevented_until_eot: bool = False
     combat_attackers: dict[int, int] = field(default_factory=dict)
-    combat_blockers: dict[int, int] = field(default_factory=dict)
+    # Maps a blocker's battlefield index to the list of attacker indices it blocks.
+    # Almost always one attacker; a creature that "can block an additional creature"
+    # (Two-Headed Giant of Foriys) may block more (CR 509.1b).
+    combat_blockers: dict[int, list[int]] = field(default_factory=dict)
     combat_defending_player_index: int | None = None
     combat_damage_resolved: bool = False
     combat_first_strike_done: bool = False

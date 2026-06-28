@@ -381,7 +381,7 @@ def test_blocker_leaving_battlefield_is_removed_from_combat():
     game.declare_attackers(0, [0])
     game.advance_combat_phase()
     game.declare_blockers(1, {0: 0})
-    assert game.combat_blockers == {0: 0}
+    assert game.combat_blockers == {0: [0]}
 
     p2.battlefield.remove(blocker)
     game._prune_combat_state()
@@ -461,7 +461,7 @@ def test_506_4b_tapping_declared_blocker_keeps_it_in_combat():
     blocker.tapped = True
     game._prune_combat_state()
 
-    assert game.combat_blockers == {0: 0}
+    assert game.combat_blockers == {0: [0]}
     assert blocker.blocking_attacker_index == 0
 
     # The blocker still deals its damage to the attacker (3/3 takes 2, survives).

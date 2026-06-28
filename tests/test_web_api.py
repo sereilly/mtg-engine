@@ -1942,7 +1942,7 @@ def test_ai_resolves_combat_damage_for_multi_blocked_attacker():
     # double-blocked attacker, sitting on an unresolved combat_damage step.
     game.combat_defending_player_index = 0
     game.combat_attackers = {0: 0}
-    game.combat_blockers = {0: 0, 1: 0}
+    game.combat_blockers = {0: [0], 1: [0]}
     game.combat_attackers_locked = True
     game.combat_blockers_locked = True
     game.combat_damage_resolved = False
