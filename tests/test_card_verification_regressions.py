@@ -314,6 +314,9 @@ class TestSoulNet:
 
         before = p1.life
         game._permanent_to_graveyard(p2, dying)
+        # The dies-trigger goes on the stack (CR 603.3); its pay-prompt is raised when
+        # it resolves, not at fire time.
+        game.resolve_stack()
 
         # Soul Net's "you may pay {1}" is an optional choice now — accept it.
         assert game.pending_optional_pays
@@ -330,8 +333,42 @@ class TestSoulNet:
 
         before = p1.life
         game._permanent_to_graveyard(p2, dying)
+        game.resolve_stack()
 
         assert p1.life == before
+
+    def test_trigger_stays_on_stack_until_pay_prompt_submitted(self, cards):
+        # Reported bug: in a human game the Soul Net ability left the stack before
+        # the pay-prompt was answered. In the priority path the ability must stay on
+        # the stack (CR 603.3) until the player submits the "you may pay {1}" choice.
+        net = Permanent(card=cards["Soul Net"])
+        swamp = Permanent(card=cards["Swamp"])  # untapped land to pay the {1}
+        victim = Permanent(card=cards["Grizzly Bears"])
+        p1 = PlayerState(name="P1", battlefield=[net, swamp], life=20)
+        p2 = PlayerState(name="P2", battlefield=[victim])
+        game = _game(p1, p2)
+        game.active_player_index = 0
+
+        p2.battlefield.remove(victim)
+        game._permanent_to_graveyard(p2, victim)
+        assert any(it.card.name == "Soul Net" for it in game.stack)
+
+        # Both players pass priority with the trigger on the stack.
+        game.start_priority_window(0)
+        game.pass_priority(0)
+        result = game.pass_priority(1)
+
+        # The ability is held on the stack, the prompt is raised, no life gained yet.
+        assert result == "awaiting_choice"
+        assert any(it.card.name == "Soul Net" for it in game.stack)
+        assert any(e["card_name"] == "Soul Net" for e in game.pending_optional_pays)
+        assert p1.life == 20
+        assert game.priority_player_index == 0  # the controller chooses
+
+        # Submitting the prompt resolves the ability and removes it from the stack.
+        game.confirm_optional_pay(0, "Soul Net", accept=True)
+        assert not any(it.card.name == "Soul Net" for it in game.stack)
+        assert p1.life == 21 and swamp.tapped
 
 
 # ---------------------------------------------------------------------------

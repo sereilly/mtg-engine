@@ -544,6 +544,8 @@ class TestOptionalTriggersAndCombatDamage:
         game = _game(p1, p2)
         p2.battlefield.remove(victim)
         game._permanent_to_graveyard(p2, victim)
+        # The dies-trigger goes on the stack; its pay-prompt is raised on resolution.
+        game.resolve_stack()
         assert any(e["card_name"] == "Soul Net" for e in game.pending_optional_pays)
         game.confirm_optional_pay(0, "Soul Net", accept=True)
         assert p1.life == 21

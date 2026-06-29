@@ -221,6 +221,39 @@ class TestReverseDamage:
         game._deal_damage_to_player(p1, 3)
         assert p1.life == 22
 
+    def test_cast_spec_offers_source_of_choice(self, cards):
+        # The caster picks "a source of your choice": any permanent on any
+        # battlefield, or a spell on the stack (also_stack).
+        bear = Permanent(card=cards["Grizzly Bears"])
+        p1 = PlayerState(name="P1", hand=[cards["Reverse Damage"]])
+        p2 = PlayerState(name="P2", battlefield=[bear])
+        game = _game(p1, p2)
+        spec = game.cast_target_spec(0, cards["Reverse Damage"])
+        assert spec["kind"] == "permanent"
+        assert spec.get("source_of_choice") is True
+        assert spec.get("also_stack") is True
+        # The opponent's creature is enumerated as a legal source choice.
+        assert any(t["key"] == "1-0" for t in spec["valid_targets"])
+
+    def test_chosen_permanent_source_only_prevents_that_source(self, cards):
+        attacker = Permanent(card=cards["Hill Giant"])
+        other = Permanent(card=cards["Grizzly Bears"])
+        p1 = PlayerState(name="P1", hand=[cards["Reverse Damage"]], life=20)
+        p2 = PlayerState(name="P2", battlefield=[attacker, other])
+        game = _game(p1, p2)
+        # Choose the Hill Giant (seat 1, index 0) as the source.
+        game.cast_from_hand(0, "Reverse Damage", target_player_index=1, target_permanent_index=0)
+        assert p1.reverse_damage_sources == [attacker]
+        assert p1.reverse_damage_charges == 0
+        # Damage from a different source is NOT prevented.
+        game._prevent_damage(p1, 2, source=other)
+        assert p1.reverse_damage_sources == [attacker]
+        # Damage from the chosen source is prevented and gained as life.
+        remaining = game._prevent_damage(p1, 4, source=attacker)
+        assert remaining == 0
+        assert p1.life == 24
+        assert p1.reverse_damage_sources == []
+
 
 # ---------------------------------------------------------------------------
 # Phantasmal Terrain — "of your choice"/"chosen type" hardcoded island. The

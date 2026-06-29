@@ -4,11 +4,14 @@ import random
 import re
 
 from ..models import CardDefinition, Permanent, PlayerState
-from ..oracle import compile_card_oracle, lex_oracle_text
+from ..oracle import OracleInstruction, compile_card_oracle, lex_oracle_text
 
 class EffectsMixin:
     def _trigger_aura_death_effects(self, dead_permanent: Permanent, controller: PlayerState) -> None:
-        """Fire death-trigger aura effects for a creature that just left the battlefield."""
+        """Put an Aura's death-trigger effect onto the stack when the creature it
+        enchants leaves the battlefield (e.g. an Aura that deals damage equal to the
+        creature's toughness). The toughness is captured now (the creature is gone by
+        resolution); the trigger resolves off the stack (CR 603.3)."""
         aura = dead_permanent.metadata.get("attached_aura")
         if aura is None:
             return
@@ -16,20 +19,29 @@ class EffectsMixin:
         text = prog.normalized_text
         if not text.startswith("enchant creature"):
             return
+        controller_index = self.players.index(controller)
         for trig in prog.triggered_abilities:
             if trig.condition.kind == "dies" and trig.condition.trigger == "when":
                 toughness = dead_permanent.effective_toughness
-                damage = self._deal_damage_to_player(controller, toughness)
-                self.log.append(
-                    f"{aura.card.name} dealt {damage} damage to {controller.name} (death of {dead_permanent.card.name})"
+                self._enqueue_triggered_ability(
+                    controller_index=controller_index,
+                    card=aura.card,
+                    instruction=OracleInstruction("deal_damage_to_player", None, {}),
+                    effect_kind="triggered_damage",
+                    ability_text=trig.source_line,
+                    trigger_context={"victim_player_index": controller_index, "amount": toughness},
                 )
                 break
 
     def _fire_combat_damage_to_player_triggers(self, attacker: Permanent, defending_player: PlayerState) -> None:
-        """Fire an attacker's "whenever this creature deals (combat) damage to a
-        player/opponent" triggers (e.g. Hypnotic Specter — the defending player
-        discards a card at random)."""
+        """Put an attacker's "whenever this creature deals (combat) damage to a
+        player/opponent" triggers (e.g. Hypnotic Specter) onto the stack. They resolve
+        through the post-combat priority window (CR 603.3), like attack/block triggers.
+        The defending player is captured in trigger_context."""
         program = compile_card_oracle(attacker.card)
+        controller_index = self._controller_index_of(attacker)
+        defending_index = self.players.index(defending_player)
+        events: list[dict] = []
         for trig in program.triggered_abilities:
             if trig.condition.kind not in (
                 "creature_deals_damage",
@@ -42,23 +54,42 @@ class EffectsMixin:
             if instr is None:
                 continue
             if instr.kind == "opponent_discards_random_card_on_damage":
-                if defending_player.hand:
-                    discarded = defending_player.hand.pop(random.randrange(len(defending_player.hand)))
-                    self._discard_card(defending_player, discarded)
-                    self.log.append(
-                        f"{attacker.card.name}: {defending_player.name} discards {discarded.name} at random"
-                    )
+                events.append({
+                    "controller_index": controller_index,
+                    "source_permanent": attacker,
+                    "instruction": instr,
+                    "effect_kind": trig.effect_kind,
+                    "ability_text": trig.source_line,
+                    "trigger_context": {"defending_player_index": defending_index},
+                })
+        self._enqueue_triggered_batch(events)
 
     def _fire_dealt_damage_triggers(self, permanent: Permanent) -> None:
-        """Fire 'whenever this creature is dealt damage' triggers (e.g. Fungusaur)."""
+        """Put 'whenever this creature is dealt damage' triggers (e.g. Fungusaur) onto
+        the stack; they resolve off the stack (CR 603.3) rather than inline."""
         program = compile_card_oracle(permanent.card)
+        controller_index = self._controller_index_of(permanent)
+        events: list[dict] = []
         for trig in program.triggered_abilities:
             if trig.condition.kind != "creature_dealt_damage" or trig.instruction is None:
                 continue
             if trig.instruction.kind == "add_counter_to_self":
-                permanent.power_bonus += int(trig.instruction.payload.get("power", 1))
-                permanent.toughness_bonus += int(trig.instruction.payload.get("toughness", 1))
-                self.log.append(f"{permanent.card.name} gets a +1/+1 counter (dealt damage)")
+                events.append({
+                    "controller_index": controller_index,
+                    "source_permanent": permanent,
+                    "instruction": trig.instruction,
+                    "effect_kind": trig.effect_kind,
+                    "ability_text": trig.source_line,
+                })
+        self._enqueue_triggered_batch(events)
+
+    def _controller_index_of(self, permanent: Permanent) -> int:
+        """Index of the player who currently controls *permanent* (0 if not found —
+        e.g. a permanent already removed from the battlefield)."""
+        for i, player in enumerate(self.players):
+            if permanent in player.battlefield:
+                return i
+        return 0
 
     def _is_indestructible(self, permanent: Permanent) -> bool:
         """CR 700.4: a permanent with indestructible can't be destroyed by 'destroy'
@@ -177,6 +208,23 @@ class EffectsMixin:
         card = getattr(source, "card", source)
         return tuple(getattr(card, "colors", ()) or ())
 
+    def _match_reverse_damage_source(self, target: PlayerState, source):
+        """The chosen Reverse Damage source matching this damage's source, or None.
+        A chosen permanent matches the dealing Permanent by identity; a chosen spell
+        matches by its CardDefinition (the same object the spell deals damage with)."""
+        if source is None or not target.reverse_damage_sources:
+            return None
+        source_card = getattr(source, "card", source)
+        for chosen in target.reverse_damage_sources:
+            if chosen is source or chosen is source_card:
+                return chosen
+        return None
+
+    def _clear_reverse_damage_badge(self, target: PlayerState) -> None:
+        # Drop the life-pill shield badge once no Reverse Damage shield remains.
+        if not target.reverse_damage_sources and target.reverse_damage_charges <= 0:
+            target.damage_prevention_source = None
+
     def _prevent_damage(self, target: PlayerState, damage: int, source=None) -> int:
         # Forcefield: prevent all but 1 of the next combat damage from the chosen
         # unblocked attacker (source-specific, consumed once).
@@ -188,15 +236,21 @@ class EffectsMixin:
             damage = 1
         if damage <= 0:
             return damage
-        # Reverse Damage: the next damage event to the player is fully prevented and
-        # the player gains that much life. One charge per spell, consumed here.
+        # Reverse Damage: the next damage event from the chosen source ("a source of
+        # your choice") is fully prevented and the player gains that much life. A
+        # chosen source (permanent or spell) matches by identity; a generic charge
+        # (no source picked) shields the next event from any source. Consumed here.
+        matched = self._match_reverse_damage_source(target, source)
+        if matched is not None:
+            target.reverse_damage_sources.remove(matched)
+            self._clear_reverse_damage_badge(target)
+            self.log.append(f"Reverse Damage prevented {damage} damage to {target.name}")
+            self._gain_life(target, damage, source_name="Reverse Damage")
+            return 0
         if target.reverse_damage_charges > 0:
             target.reverse_damage_charges -= 1
-            if target.reverse_damage_charges <= 0:
-                target.damage_prevention_source = None
-            self.log.append(
-                f"Reverse Damage prevented {damage} damage to {target.name}"
-            )
+            self._clear_reverse_damage_badge(target)
+            self.log.append(f"Reverse Damage prevented {damage} damage to {target.name}")
             self._gain_life(target, damage, source_name="Reverse Damage")
             return 0
         # Circle of Protection: a color-scoped shield prevents the whole next damage
@@ -464,27 +518,45 @@ class EffectsMixin:
         return False
 
     def _process_land_enters(self, land_controller_index: int) -> None:
+        """Put "whenever a land enters the battlefield, deal 2 damage" triggers onto
+        the stack; they resolve off the stack (CR 603.3)."""
+        events: list[dict] = []
         for controller in self.players:
+            controller_index = self.players.index(controller)
             for permanent in controller.battlefield:
                 program = compile_card_oracle(permanent.card)
                 if not any(t.condition.kind == "land_enters" for t in program.triggered_abilities):
                     continue
-                victim = self.players[land_controller_index]
-                damage = self._deal_damage_to_player(victim, 2)
-                self.log.append(f"{permanent.card.name} triggered for {damage} damage")
+                events.append({
+                    "controller_index": controller_index,
+                    "source_permanent": permanent,
+                    "instruction": OracleInstruction("deal_damage_to_player", None, {}),
+                    "effect_kind": "triggered_damage",
+                    "trigger_context": {"victim_player_index": land_controller_index, "amount": 2},
+                })
+        self._enqueue_triggered_batch(events)
 
     def _process_land_dies(self, land_controller_index: int) -> None:
-        """Fire land_dies triggered abilities (e.g. Dingus Egg) when a land is put into a graveyard."""
+        """Put land_dies triggered abilities (e.g. Dingus Egg) onto the stack when a
+        land is put into a graveyard; they resolve off the stack (CR 603.3)."""
+        events: list[dict] = []
         for controller in self.players:
+            controller_index = self.players.index(controller)
             for permanent in list(controller.battlefield):
                 program = compile_card_oracle(permanent.card)
                 for trig in program.triggered_abilities:
                     if trig.condition.kind != "land_dies" or trig.instruction is None:
                         continue
-                    victim = self.players[land_controller_index]
                     amount = int(trig.instruction.payload.get("amount", 2))
-                    damage = self._deal_damage_to_player(victim, amount)
-                    self.log.append(f"{permanent.card.name} triggered for {damage} damage")
+                    events.append({
+                        "controller_index": controller_index,
+                        "source_permanent": permanent,
+                        "instruction": OracleInstruction("deal_damage_to_player", None, {}),
+                        "effect_kind": "triggered_damage",
+                        "ability_text": trig.source_line,
+                        "trigger_context": {"victim_player_index": land_controller_index, "amount": amount},
+                    })
+        self._enqueue_triggered_batch(events)
 
     def _fastbond_count(self, player_index: int) -> int:
         if player_index < 0 or player_index >= len(self.players):

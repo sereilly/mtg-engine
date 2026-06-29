@@ -3,9 +3,9 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **290**
-- Passed: **213**
+- Passed: **214**
 - Failed: **4**
-- Untested: **73**
+- Untested: **72**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -100,7 +100,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Force of Nature | ✅ pass |  |
 | Forcefield | ⬜ untested |  |
 | Forest | ✅ pass |  |
-| Fork | ⬜ untested |  |
+| Fork | ✅ pass |  |
 | Frozen Shade | ✅ pass |  |
 | Fungusaur | ✅ pass |  |
 | Gaea's Liege | ⬜ untested |  |

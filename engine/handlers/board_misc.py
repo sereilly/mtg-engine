@@ -11,6 +11,42 @@ if TYPE_CHECKING:
     from ..oracle import OracleInstruction
 
 
+@effect_handler("add_corpse_counters_for_each_creature_died")
+def add_corpse_counters_for_each_creature_died(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Scavenging Ghoul: "At the beginning of each end step, put a corpse counter on
+    this creature for each creature that died this turn." Resolves off the stack; the
+    death count is captured in trigger_context at fire time."""
+    source = context.source_permanent
+    count = int((context.trigger_context or {}).get("count", 0))
+    if source is None or count <= 0:
+        return True, "resolved"
+    source.metadata["corpse_counters"] = int(source.metadata.get("corpse_counters", 0)) + count
+    game.log.append(f"{source.card.name} gets {count} corpse counter(s)")
+    return True, "resolved"
+
+
+@effect_handler("sacrifice_if_no_creatures")
+def sacrifice_if_no_creatures(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Pestilence-style: "At the beginning of the end step, if there are no creatures
+    on the battlefield, sacrifice this." Resolves off the stack; the intervening-if is
+    re-checked at resolution (CR 603.4)."""
+    source = context.source_permanent
+    if source is None:
+        return True, "resolved"
+    has_creatures = any(
+        p.card.primary_type == "creature" for pl in game.players for p in pl.battlefield
+    )
+    if has_creatures:
+        return True, "resolved"
+    for pl in game.players:
+        if source in pl.battlefield:
+            pl.battlefield.remove(source)
+            pl.graveyard.append(source.card)
+            game.log.append(f"{source.card.name} sacrificed at end step (no creatures)")
+            break
+    return True, "resolved"
+
+
 def _token_image_uris(source_card: CardDefinition, token_name: str) -> dict[str, str] | None:
     """Resolve a token's Scryfall image URLs from its creating card's ``all_parts``.
 

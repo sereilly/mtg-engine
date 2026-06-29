@@ -4074,9 +4074,10 @@ function startCastPermanentTargetPrompt(card, castAction = "cast", validTargets 
   if (!cardName) return;
 
   const fields = pendingTargetFields(card, validTargets);
-  // Lace recolor ("target spell or permanent") may also hit a spell on the stack,
-  // so it stays castable when there are no permanents but there is a stack target.
-  const alsoStack = cardRequiresTargetSpellOrPermanent(card);
+  // Lace recolor ("target spell or permanent") and "source of your choice" prevention
+  // (Reverse Damage, marked with also_stack) may pick a permanent OR a spell on the
+  // stack, so they stay castable when there are no permanents but there is a stack target.
+  const alsoStack = cardRequiresTargetSpellOrPermanent(card) || !!targetSpecOf(card).also_stack;
   if (fields.validKeys.size === 0 && !(alsoStack && fields.validStackIndices.size > 0)) {
     clearPendingHandCast();
     updateActionHint(`No valid permanent targets in play for ${cardName}.`, true);

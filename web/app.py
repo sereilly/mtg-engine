@@ -541,7 +541,7 @@ def _serialize_stack_item(item, game: Game) -> dict:
     if item.target_player_index is not None and 0 <= item.target_player_index < len(game.players):
         if item.card.primary_type in ("instant", "sorcery"):
             target_name = game.players[item.target_player_index].name
-    item_type = "ability" if item.ability_instruction is not None else "spell"
+    item_type = "ability" if (item.ability_instruction is not None or item.hook_key is not None) else "spell"
     is_triggered = bool(item.ability_effect_kind and item.ability_effect_kind.startswith("triggered_"))
     label = item.card.name if item_type == "spell" else f"{item.card.name} ability"
 
@@ -1416,8 +1416,11 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
     # yes/no decisions, shown only to that player.
     optional_pay_info = None
     if session.game.pending_optional_pays and viewer_seat is not None:
+        # Strip private keys (e.g. the linked stack-item reference, which isn't
+        # JSON-serializable) before sending the prompt to the client.
         mine = [
-            e for e in session.game.pending_optional_pays
+            {k: v for k, v in e.items() if not k.startswith("_")}
+            for e in session.game.pending_optional_pays
             if e["player_index"] == viewer_seat and _seat_type(session, viewer_seat) != "ai"
         ]
         if mine:
@@ -1912,6 +1915,21 @@ def _run_priority_exchange(session: Session, acting_seat: int) -> None:
     while True:
         _auto_resolve_ai_pending(session)
         _auto_advance_after_all_passed(session, result)
+
+        if result == "awaiting_choice":
+            # A triggered ability paused on the stack for an optional "you may pay /
+            # draw" choice (Soul Net, the color Rods, Verduran Enchantress). An AI
+            # chooser's pay was auto-resolved by _auto_resolve_ai_pending above (the
+            # ability left the stack), so keep resolving by passing priority again on
+            # the AI's behalf. A human chooser keeps the prompt — stop and surface it.
+            chooser = session.game.priority_player_index
+            human_pending = any(
+                e["player_index"] == chooser for e in session.game.pending_optional_pays
+            )
+            if not human_pending and chooser is not None and _seat_type(session, chooser) == "ai":
+                result = session.game.pass_priority(chooser)
+                continue
+            break
 
         ai_priority_seat = session.game.priority_player_index
         if (

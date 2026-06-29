@@ -431,6 +431,8 @@ class TestSoulNet:
 
         game._permanent_to_graveyard(p1, bear)
         p1.battlefield.remove(bear)
+        # The dies-trigger resolves off the stack; its pay-prompt is raised then.
+        game.resolve_stack()
 
         # Soul Net's "you may pay {1}" is now an optional choice — accept it.
         assert game.pending_optional_pays
@@ -446,6 +448,7 @@ class TestSoulNet:
 
         game._permanent_to_graveyard(p1, bear)
         p1.battlefield.remove(bear)
+        game.resolve_stack()
 
         assert p1.life == 20
 

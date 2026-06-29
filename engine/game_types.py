@@ -44,6 +44,15 @@ class StackItem:
     # A copy of a spell (Fork): it resolves like the original but ceases to exist
     # afterward rather than going to a graveyard, and was never cast from a hand.
     is_copy: bool = False
+    # For a triggered ability on the stack: event data captured at fire time that the
+    # effect handler reads at resolution (e.g. the dead creature's name, the damage
+    # amount, the player who was dealt damage, an optional-pay cost).
+    trigger_context: dict | None = None
+    # A resolve-time, name-keyed hook (Rod/Cup/Sphere, Verduran Enchantress, Guardian
+    # Angel). When set, resolution dispatches to TRIGGER_HOOKS[hook_key] instead of an
+    # OracleInstruction, passing hook_event as the captured event payload.
+    hook_key: str | None = None
+    hook_event: dict | None = None
 
 
 @dataclass
@@ -60,6 +69,9 @@ class OracleExecutionContext:
     old_color: str | None = None
     # The chosen target spell/ability on the stack (Counterspell, Fork).
     stack_target: "StackItem | None" = None
+    # Event data captured when a triggered ability fired, read by its effect handler
+    # at resolution (see StackItem.trigger_context).
+    trigger_context: dict | None = None
 
 
 class OracleStateMachine:

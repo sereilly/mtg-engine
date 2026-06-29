@@ -37,18 +37,27 @@ LeaveBattlefieldHook = Callable[["Game", "PlayerState", "Permanent"], None]
 
 
 def _verduran_enchantress(game: Game, controller: PlayerState, permanent: Permanent, cast_card: CardDefinition) -> None:
-    # "Whenever you cast an enchantment spell, you may draw a card." The draw is
-    # optional: defer to a yes/no prompt (human is asked; AI/headless auto-draws).
+    # "Whenever you cast an enchantment spell, you may draw a card." The trigger goes
+    # on the stack (CR 603.3); when it resolves, the optional draw is offered (a yes/no
+    # prompt — human is asked; AI/headless auto-draws). Only fires for enchantments.
     if cast_card.primary_type != "enchantment":
         return
-    game.pending_optional_pays.append({
-        "card_name": permanent.card.name,
-        "player_index": game.players.index(controller),
-        "cost": 0,
-        "life": 0,
-        "draw": 1,
-        "prompt": "Draw a card?",
-    })
+    controller_index = game.players.index(controller)
+    game._enqueue_triggered_ability(
+        controller_index=controller_index,
+        source_permanent=permanent,
+        effect_kind="triggered_draw",
+        ability_text="Whenever you cast an enchantment spell, you may draw a card.",
+        hook_key="optional_pay",
+        hook_event={
+            "card_name": permanent.card.name,
+            "player_index": controller_index,
+            "cost": 0,
+            "life": 0,
+            "draw": 1,
+            "prompt": "Draw a card?",
+        },
+    )
 
 
 ON_SPELL_CAST: dict[str, SpellCastHook] = {
@@ -69,23 +78,26 @@ COLOR_ROD_TRIGGERS: dict[str, tuple[str, int]] = {
 def _make_color_rod_hook(trigger_color: str, life_amount: int) -> SpellResolvedHook:
     def hook(game: Game, controller: PlayerState, permanent: Permanent, resolved_card: CardDefinition) -> None:
         # "Whenever a player casts a [color] spell, you may pay {1}. If you do, you
-        # gain 1 life." The life gain is optional and gated on paying {1} (Throne of
-        # Bone, Crystal Rod, Iron Star, Ivory Cup, Wooden Sphere). Defer to a yes/no
-        # choice: the human is prompted, AI/headless auto-resolves. Only offered when
-        # the controller can actually pay the {1}.
+        # gain 1 life." (Throne of Bone, Crystal Rod, Iron Star, Ivory Cup, Wooden
+        # Sphere). The trigger goes on the stack (CR 603.3); when it resolves, the
+        # optional "pay {1}: gain life" is offered — but only if the controller can
+        # actually pay (checked at resolution, in _resolve_optional_pay_trigger).
         if trigger_color not in resolved_card.colors:
             return
-        # Offer the prompt whenever the controller could pay {1} — by floating mana
-        # or by tapping a land (the trigger fires on any player's spell, so the
-        # controller usually has no floating mana yet).
-        if not game._player_can_pay_generic(controller, 1):
-            return
-        game.pending_optional_pays.append({
-            "card_name": permanent.card.name,
-            "player_index": game.players.index(controller),
-            "cost": 1,
-            "life": life_amount,
-        })
+        controller_index = game.players.index(controller)
+        game._enqueue_triggered_ability(
+            controller_index=controller_index,
+            source_permanent=permanent,
+            effect_kind="triggered_gain_life",
+            ability_text="Whenever a player casts a spell of the chosen color, you may pay {1}. If you do, gain 1 life.",
+            hook_key="optional_pay",
+            hook_event={
+                "card_name": permanent.card.name,
+                "player_index": controller_index,
+                "cost": 1,
+                "life": life_amount,
+            },
+        )
 
     return hook
 
@@ -189,4 +201,50 @@ ON_LEAVE_BATTLEFIELD: dict[str, LeaveBattlefieldHook] = {
     "Cyclopean Tomb": _cyclopean_tomb_leaves,
     "Consecrate Land": _consecrate_land_leaves,
     "Gaea's Liege": _gaeas_liege_leaves,
+}
+
+
+# --------------------------------------------------------------------------
+# Resolve-time trigger hooks
+# --------------------------------------------------------------------------
+# A triggered ability whose effect is a name-keyed hook is put on the stack like
+# any other trigger. When it resolves, resolve_top_of_stack dispatches to
+# TRIGGER_HOOKS[stack_item.hook_key], passing the StackItem; the handler reads
+# stack_item.hook_event (captured when the trigger fired) and runs the effect.
+# This is how the Rod/Cup/Sphere cycle and Verduran Enchantress raise their
+# "you may pay {1} / draw a card" prompts at resolution rather than at fire time.
+
+TriggerStackHook = Callable[["Game", "StackItem"], None]
+
+
+def _resolve_optional_pay_trigger(game: Game, item: StackItem) -> None:
+    """Resolve a deferred "you may pay {N}: gain life" / "you may draw a card"
+    trigger (the color Rods, Verduran Enchantress). The pay/draw prompt is registered
+    here — at resolution — so it appears only after the trigger leaves the stack,
+    matching the Soul Net death-trigger behavior. A paid rider (Rods) is offered only
+    when the controller can actually pay the {N}; a free rider (Verduran's draw) is
+    always offered."""
+    ev = item.hook_event or {}
+    player_index = ev.get("player_index")
+    if player_index is None or not (0 <= player_index < len(game.players)):
+        return
+    cost = int(ev.get("cost", 0))
+    if cost > 0 and not game._player_can_pay_generic(game.players[player_index], cost):
+        return
+    entry: dict = {
+        "card_name": ev["card_name"],
+        "player_index": player_index,
+        "cost": cost,
+        "life": int(ev.get("life", 0)),
+    }
+    if "draw" in ev:
+        entry["draw"] = ev["draw"]
+    if "prompt" in ev:
+        entry["prompt"] = ev["prompt"]
+    game.pending_optional_pays.append(entry)
+
+
+# hook_key → resolver.
+TRIGGER_HOOKS: dict[str, TriggerStackHook] = {
+    "optional_pay": _resolve_optional_pay_trigger,
 }

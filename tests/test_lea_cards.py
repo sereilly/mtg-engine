@@ -4190,6 +4190,8 @@ def test_creature_bond_deals_damage_when_enchanted_creature_dies(all_cards):
 
     # Destroy the enchanted creature; P2 (controller) should take damage equal to toughness (2)
     game._destroy_target_permanent(p2, type_filter="creature")
+    # The Aura's death trigger goes on the stack and resolves off it (CR 603.3).
+    game.resolve_stack()
 
     assert p2.life == 18
 
@@ -5740,6 +5742,8 @@ def test_pestilence_sacrificed_at_end_step_when_no_creatures(all_cards):
     game = Game(players=[p1, p2])
 
     game.resolve_end_step(0)
+    # The end-step trigger goes on the stack and resolves off it (CR 603.3).
+    game.resolve_stack()
 
     assert not any(p.card.name == "Pestilence" for p in p1.battlefield)
     assert any(card.name == "Pestilence" for card in p1.graveyard)
@@ -8841,6 +8845,8 @@ def test_scavenging_ghoul_corpse_counters_and_regeneration(all_cards):
 
     # ...so at the end step the Ghoul gets a corpse counter
     game.resolve_end_step(0)
+    # The end-step trigger goes on the stack and resolves off it (CR 603.3).
+    game.resolve_stack()
     assert ghoul_perm.metadata.get("corpse_counters") == 1
 
     # "Remove a corpse counter from this creature: Regenerate this creature."

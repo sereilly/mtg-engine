@@ -144,6 +144,23 @@ def discard_target_cards(game: Game, instruction: OracleInstruction, context: Or
     return True, "pending_discard"
 
 
+@effect_handler("opponent_discards_random_card_on_damage")
+def opponent_discards_random_card_on_damage(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Hypnotic Specter: "Whenever this creature deals damage to a player, that
+    player discards a card at random." Resolves off the stack; the player who took
+    the damage is carried in ``trigger_context``."""
+    tctx = context.trigger_context or {}
+    idx = tctx.get("defending_player_index")
+    if idx is None or not (0 <= idx < len(game.players)):
+        return True, "resolved"
+    defending = game.players[idx]
+    if defending.hand:
+        discarded = defending.hand.pop(random.randrange(len(defending.hand)))
+        game._discard_card(defending, discarded)
+        game.log.append(f"{context.card.name}: {defending.name} discards {discarded.name} at random")
+    return True, "resolved"
+
+
 def _resolve_one_discard(game: Game, player_index: int, hand_index: int, to_library: bool) -> bool:
     """Move one chosen card from a player's hand to their graveyard (or, with
     Library of Leng, the top of their library). Returns False on a bad index."""

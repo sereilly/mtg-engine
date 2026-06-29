@@ -87,12 +87,34 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
 
 @effect_handler("grant_reverse_damage_shield")
 def grant_reverse_damage_shield(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    """Reverse Damage: arm a one-shot shield that prevents the entire next damage
-    event to the caster and gains them that much life."""
+    """Reverse Damage: arm a one-shot shield against "a source of your choice".
+
+    The caster picks the source — a permanent on any battlefield (chosen via
+    target_permanent_index) or a spell on the stack (the threatening burn spell,
+    chosen via stack_target). Only damage from that source is prevented and gained
+    as life. With no chosen source (AI / headless casts), fall back to a generic
+    charge that shields the entire next damage event from any source.
+    """
     caster = context.caster
-    caster.reverse_damage_charges += 1
+    chosen = None
+    if context.stack_target is not None:
+        # A spell on the stack: match later by its card identity (the same
+        # CardDefinition the spell deals damage with when it resolves).
+        chosen = context.stack_target.card
+    else:
+        idx = context.target_permanent_index
+        if isinstance(idx, int) and context.target is not None and 0 <= idx < len(context.target.battlefield):
+            chosen = context.target.battlefield[idx]
+    if chosen is not None:
+        caster.reverse_damage_sources.append(chosen)
+        source_card = getattr(chosen, "card", chosen)
+        game.log.append(
+            f"{caster.name} armed a Reverse Damage shield against {getattr(source_card, 'name', 'a source')}"
+        )
+    else:
+        caster.reverse_damage_charges += 1
+        game.log.append(f"{caster.name} armed a Reverse Damage shield")
     caster.damage_prevention_source = context.card.name if context.card else None
-    game.log.append(f"{caster.name} armed a Reverse Damage shield")
     return True, "resolved"
 
 

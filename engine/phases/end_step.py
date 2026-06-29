@@ -47,41 +47,60 @@ class EndStepMixin:
         for name in destroyed_names:
             self.log.append(f"{name} was destroyed at end step")
 
-        # Scavenging Ghoul: "At the beginning of each end step, put a corpse
-        # counter on this creature for each creature that died this turn."
+        # "At the beginning of the end step" triggered abilities go on the stack
+        # (CR 603.3) and resolve through the end-step priority window opened below.
+        events: list[dict] = []
+
+        # Scavenging Ghoul: "...put a corpse counter on this creature for each
+        # creature that died this turn." The death count is captured now (it resets
+        # next turn) and read by the handler at resolution.
         died = getattr(self, "creatures_died_this_turn", 0)
         if died:
             for controller in self.players:
+                controller_index = self.players.index(controller)
                 for permanent in controller.battlefield:
                     prog = compile_card_oracle(permanent.card)
-                    if any(
-                        t.condition.kind == "end_step"
-                        and t.instruction is not None
-                        and t.instruction.kind == "add_corpse_counters_for_each_creature_died"
-                        for t in prog.triggered_abilities
-                    ):
-                        permanent.metadata["corpse_counters"] = (
-                            int(permanent.metadata.get("corpse_counters", 0)) + died
-                        )
-                        self.log.append(f"{permanent.card.name} gets {died} corpse counter(s)")
+                    for trig in prog.triggered_abilities:
+                        if (
+                            trig.condition.kind == "end_step"
+                            and trig.instruction is not None
+                            and trig.instruction.kind == "add_corpse_counters_for_each_creature_died"
+                        ):
+                            events.append({
+                                "controller_index": controller_index,
+                                "source_permanent": permanent,
+                                "instruction": trig.instruction,
+                                "effect_kind": trig.effect_kind,
+                                "ability_text": trig.source_line,
+                                "trigger_context": {"count": died},
+                            })
+                            break
 
-        # Pestilence-style: "At the beginning of the end step, if no creatures on the battlefield, sacrifice"
+        # Pestilence-style: "...if there are no creatures on the battlefield,
+        # sacrifice this." The intervening-if is re-checked when the trigger resolves.
         all_perms = [p for pl in self.players for p in pl.battlefield]
         has_creatures = any(p.card.primary_type == "creature" for p in all_perms)
         if not has_creatures:
             for controller in self.players:
-                to_sacrifice: list[Permanent] = []
+                controller_index = self.players.index(controller)
                 for permanent in controller.battlefield:
                     prog = compile_card_oracle(permanent.card)
-                    if any(
-                        t.condition.kind == "end_step" and t.instruction is not None and t.instruction.kind == "sacrifice_if_no_creatures"
-                        for t in prog.triggered_abilities
-                    ):
-                        to_sacrifice.append(permanent)
-                for permanent in to_sacrifice:
-                    controller.battlefield.remove(permanent)
-                    controller.graveyard.append(permanent.card)
-                    self.log.append(f"{permanent.card.name} sacrificed at end step (no creatures)")
+                    for trig in prog.triggered_abilities:
+                        if (
+                            trig.condition.kind == "end_step"
+                            and trig.instruction is not None
+                            and trig.instruction.kind == "sacrifice_if_no_creatures"
+                        ):
+                            events.append({
+                                "controller_index": controller_index,
+                                "source_permanent": permanent,
+                                "instruction": trig.instruction,
+                                "effect_kind": trig.effect_kind,
+                                "ability_text": trig.source_line,
+                            })
+                            break
+
+        self._enqueue_triggered_batch(events)
 
         if self._receives_priority(step):
             self.start_priority_window(self.active_player_index)

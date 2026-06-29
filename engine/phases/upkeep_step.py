@@ -10,7 +10,7 @@ enchant-land upkeep effects, and graveyard-recursion upkeep triggers.
 import re
 
 from ..models import Permanent
-from ..oracle import compile_card_oracle
+from ..oracle import OracleInstruction, compile_card_oracle
 from ..mixins._constants import _UPKEEP_PAY_KINDS
 
 
@@ -215,6 +215,23 @@ class UpkeepStepMixin:
         self._set_phase_and_step(phase, step)
         self._on_step_or_phase_begin(phase, step)
         self._process_mire_cleanups(player_index)
+        # Non-interactive "at the beginning of upkeep" triggers (fixed upkeep damage)
+        # are collected here and put on the stack (CR 603.3); they resolve through the
+        # upkeep priority window. The pay-or-consequence triggers below stay inline
+        # because their interactive prompt protocol (human_choices / mana_prevention /
+        # sacrifice_choices) is driven directly by the web layer.
+        upkeep_events: list[dict] = []
+
+        def _enqueue_upkeep_damage(perm, controller_idx, victim_idx, amount, source_line=None):
+            upkeep_events.append({
+                "controller_index": controller_idx,
+                "source_permanent": perm,
+                "instruction": OracleInstruction("deal_damage_to_player", None, {}),
+                "effect_kind": "triggered_damage",
+                "ability_text": source_line,
+                "trigger_context": {"victim_player_index": victim_idx, "amount": int(amount)},
+            })
+
         for controller in self.players:
             for permanent in controller.battlefield:
                 program = compile_card_oracle(permanent.card)
@@ -255,9 +272,9 @@ class UpkeepStepMixin:
                             amount = self.untapped_lands_at_turn_start.get(player_index, 0)
                         else:
                             amount = int(raw_amount)
-                        victim = self.players[player_index]
-                        damage = self._deal_damage_to_player(victim, amount)
-                        self.log.append(f"{permanent.card.name} dealt {damage} upkeep damage to {victim.name}")
+                        _enqueue_upkeep_damage(
+                            permanent, self.players.index(controller), player_index, amount, trig.source_line
+                        )
                         break
 
                     if cond == "upkeep_each" and kind == "deal_damage_equal_to_swamps":
@@ -267,8 +284,9 @@ class UpkeepStepMixin:
                             if "swamp" in perm.card.type_line.lower()
                             or perm.metadata.get("land_type_override") == "swamp"
                         )
-                        damage = self._deal_damage_to_player(victim, swamp_count)
-                        self.log.append(f"{permanent.card.name} dealt {damage} damage to {victim.name} ({swamp_count} swamps)")
+                        _enqueue_upkeep_damage(
+                            permanent, self.players.index(controller), player_index, swamp_count, trig.source_line
+                        )
                         break
 
                     if cond == "upkeep_enchanted_controller" and kind == "deal_damage":
@@ -314,8 +332,9 @@ class UpkeepStepMixin:
                         victim = self.players[player_index]
                         damage = max(0, len(victim.hand) - 4)
                         if damage > 0:
-                            damage = self._deal_damage_to_player(victim, damage)
-                        self.log.append(f"{permanent.card.name} dealt {damage} upkeep damage")
+                            _enqueue_upkeep_damage(
+                                permanent, self.players.index(controller), player_index, damage, trig.source_line
+                            )
                         break
 
                     if cond == "upkeep_self" and kind == "upkeep_pay_or_deal_damage_to_controller":
@@ -517,9 +536,7 @@ class UpkeepStepMixin:
                 if instr is None:
                     continue
                 amount = int(instr.payload.get("amount", 1))
-                victim = self.players[player_index]
-                damage = self._deal_damage_to_player(victim, amount)
-                self.log.append(f"{permanent.card.name} dealt {damage} upkeep damage to {victim.name}")
+                _enqueue_upkeep_damage(permanent, self.players.index(controller), player_index, amount)
 
         # Handle enchant-land auras with optional upkeep life gain (e.g. Farmstead)
         for controller in self.players:
@@ -589,5 +606,9 @@ class UpkeepStepMixin:
             self.log.append(
                 f"{owner.name} returned {card.name} to the battlefield from the graveyard"
             )
+
+        # Put the collected non-interactive upkeep triggers on the stack in APNAP
+        # order; they resolve through the upkeep priority window opened below.
+        self._enqueue_triggered_batch(upkeep_events)
 
         self._close_or_defer_step(phase, step, defer_priority)

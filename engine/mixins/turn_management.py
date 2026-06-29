@@ -270,6 +270,11 @@ class TurnManagementMixin:
                 player.mana_pool[extra] = player.mana_pool.get(extra, 0) + 1
                 self.log.append(f"{attached_aura.card.name}: {player.name} added an additional {{{extra}}}")
 
+        # "Whenever a player taps a land for mana" triggers (Manabarbs, Psychic
+        # Venom). These deliberately resolve inline rather than on the stack: a land is
+        # tapped for mana mid-cost-payment, before the spell being paid for is even on
+        # the stack, so enqueuing here would order the trigger under that spell. Stack
+        # routing would require deferring these across the cost-payment/cast boundary.
         for controller in self.players:
             for perm in controller.battlefield:
                 prog = compile_card_oracle(perm.card)

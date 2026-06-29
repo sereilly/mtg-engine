@@ -154,6 +154,18 @@ def _cast_requires_permanent(card: CardDefinition) -> bool:
     return False
 
 
+def _cast_requires_source_of_choice(card: CardDefinition) -> bool:
+    # Reverse Damage: "The next time a source of your choice would deal damage to
+    # you this turn, prevent that damage. You gain life equal to the damage
+    # prevented this way." The caster picks any source — a permanent on any
+    # battlefield or a spell on the stack (folded in via also_stack).
+    t = (card.oracle_text or "").lower()
+    return (
+        "source of your choice would deal damage to you this turn, prevent that damage" in t
+        and "gain life equal to the damage prevented" in t
+    )
+
+
 def _cast_requires_spell_or_permanent(card: CardDefinition) -> bool:
     # The "lace" recolor spells ("Target spell or permanent becomes <color>") may
     # target either a permanent on the battlefield or a spell on the stack. The
@@ -224,6 +236,11 @@ def _classify_cast(card: CardDefinition) -> dict:
         return {"kind": "creature", "optional": True}
     if _cast_offers_copy_artifact(card):
         return {"kind": "artifact", "optional": True}
+    if _cast_requires_source_of_choice(card):
+        # "A source of your choice" (any color): pick any permanent or stack spell.
+        # The engine prevents only damage from the chosen source (matched by
+        # identity), so no color filter is applied.
+        return {"kind": "permanent", "source_of_choice": True, "also_stack": True}
     if _cast_requires_creature(card):
         return {"kind": "creature", "enchant_wall": "enchant wall" in (card.oracle_text or "").lower()}
     if _cast_requires_spell_or_permanent(card):

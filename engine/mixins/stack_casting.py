@@ -71,8 +71,9 @@ class StackCastingMixin:
         if not queued.supported:
             return queued
 
-        self.resolve_stack()
-        self.check_state_based_actions()
+        # Resolve the spell, then drain any triggers it (or the deaths it causes)
+        # put on the stack, interleaving state-based-action checks (CR 704.3/603.3).
+        self._settle()
         self.clear_priority_window()
         return SimulationResult(queued.card_name, True, queued.effect_kind, "resolved")
 
@@ -102,8 +103,7 @@ class StackCastingMixin:
         if not queued.supported:
             return queued
         if queued.details == "queued":
-            self.resolve_stack()
-            self.check_state_based_actions()
+            self._settle()
             self.clear_priority_window()
             return SimulationResult(queued.card_name, True, queued.effect_kind, "resolved")
         return queued
@@ -377,7 +377,18 @@ class StackCastingMixin:
             self._pay_optional(entry)
         else:
             self.log.append(f"{self.players[player_index].name} declined {entry['card_name']}'s pay-for-life trigger")
+        # The trigger ability that raised this prompt was held on the stack (human
+        # priority path); now that the choice is made, it leaves the stack.
+        self._remove_optional_pay_stack_item(entry)
         return True
+
+    def _remove_optional_pay_stack_item(self, entry: dict) -> None:
+        """Remove the triggered-ability stack object an optional-pay prompt was linked
+        to, now that the prompt has been answered. No-op for entries created on the
+        headless/auto path (where the ability already left the stack)."""
+        stack_item = entry.get("_stack_item")
+        if stack_item is not None and stack_item in self.stack:
+            self.stack.remove(stack_item)
 
     def auto_resolve_pending_optional_pays(self, only_player_index: int | None = None) -> None:
         """Pay every pending optional "pay {1}: gain N life" trigger when able — the
@@ -391,6 +402,7 @@ class StackCastingMixin:
             available = sum(player.mana_pool.get(s, 0) for s in player.mana_pool)
             if available >= int(entry["cost"]):
                 self._pay_optional(entry)
+            self._remove_optional_pay_stack_item(entry)
         self.pending_optional_pays = remaining
 
     def confirm_balance(self, player_index: int, land_indices=None, creature_indices=None, hand_indices=None) -> bool:
@@ -1274,15 +1286,135 @@ class StackCastingMixin:
         player.mana_pool = temp
         return True
 
+    def _enqueue_triggered_ability(
+        self,
+        *,
+        controller_index: int,
+        source_permanent: Permanent | None = None,
+        card: CardDefinition | None = None,
+        instruction: OracleInstruction | None = None,
+        effect_kind: str | None = None,
+        ability_text: str | None = None,
+        target_player_index: int | None = None,
+        target_permanent_index: int | None = None,
+        trigger_context: dict | None = None,
+        hook_key: str | None = None,
+        hook_event: dict | None = None,
+    ) -> None:
+        """Put a single triggered ability onto the stack as a StackItem (CR 603.3).
+
+        Mirrors the attack/block trigger model (declare_attackers_step._fire_attack_triggers).
+        The trigger resolves later through resolve_top_of_stack — never inline at the
+        moment it fires. ``card`` defaults to the source permanent's card (used as the
+        stack object's display name)."""
+        stack_card = card if card is not None else (source_permanent.card if source_permanent is not None else None)
+        if stack_card is None:
+            return
+        self.stack.append(
+            StackItem(
+                card=stack_card,
+                caster_index=controller_index,
+                target_player_index=target_player_index,
+                target_permanent_index=target_permanent_index,
+                x_value=None,
+                ability_instruction=instruction,
+                ability_effect_kind=effect_kind,
+                source_permanent=source_permanent,
+                ability_text=ability_text,
+                trigger_context=trigger_context,
+                hook_key=hook_key,
+                hook_event=hook_event,
+            )
+        )
+
+    def _enqueue_triggered_batch(self, events: list[dict]) -> None:
+        """Put a batch of triggered abilities that fired from one event onto the stack
+        in APNAP order (CR 603.3b): the active player's triggers are enqueued first
+        (so they resolve last), then each other player's in turn order. Each player's
+        own triggers keep their collection (battlefield-scan) order. The sort key is
+        total and index-tie-broken, so enqueue order is fully seed-deterministic."""
+        if not events:
+            return
+        n = len(self.players)
+        active = self.active_player_index if self.active_player_index is not None else 0
+
+        def _key(indexed):
+            order, event = indexed
+            controller = int(event["controller_index"])
+            turn_distance = (controller - active) % n if n else 0
+            return (turn_distance, controller, order)
+
+        for _, event in sorted(enumerate(events), key=_key):
+            self._enqueue_triggered_ability(**event)
+
+    # Upper bound on resolve/SBA cycles in one _settle() call. A genuine infinite
+    # loop (a pathological card pool) is bounded here so the seeded simulator can
+    # never hang; we log and break rather than raise.
+    MAX_SETTLE_ITERS = 2000
+
+    def _settle(self) -> None:
+        """Run state-based actions, then resolve the stack one item at a time,
+        re-checking SBAs between each resolution (CR 704.3 + 603.3). Triggers that
+        fire during an SBA check are enqueued (never resolved) there, so this loop
+        is what actually drains them in the headless/AI path. Terminates when the
+        stack is empty and SBAs report no further change."""
+        iterations = 0
+        while True:
+            self.check_state_based_actions()
+            if not self.stack:
+                break
+            self.resolve_top_of_stack()
+            iterations += 1
+            if iterations > self.MAX_SETTLE_ITERS:
+                self.log.append(
+                    f"_settle aborted after {self.MAX_SETTLE_ITERS} iterations (possible loop)"
+                )
+                break
+
     def resolve_stack(self) -> None:
         while self.stack:
             self.resolve_top_of_stack()
 
-    def resolve_top_of_stack(self) -> bool:
+    def resolve_top_of_stack(self, pause_for_choices: bool = False) -> bool:
+        """Resolve (and remove) the top stack object. Returns True if an object was
+        resolved, False if the stack was empty.
+
+        ``pause_for_choices`` is used by the human priority path (pass_priority): when
+        a triggered ability resolves into an optional "you may pay {N} / draw" choice
+        (Soul Net, the color Rods, Verduran Enchantress), the ability is kept on the
+        stack and its pay-prompt is linked to it, so the ability stays visible on the
+        stack until the player submits the prompt (CR 603.3 — the choice is made as the
+        ability resolves). confirm_optional_pay / auto_resolve_pending_optional_pays
+        then removes the ability from the stack. Headless/auto paths leave this False,
+        so the ability resolves and pops immediately (the pending pay is auto-resolved
+        by the caller, preserving deterministic behavior)."""
         if not self.stack:
             return False
 
         item = self.stack.pop()
+        pays_before = len(self.pending_optional_pays)
+        self._run_stack_item_resolution(item)
+        if pause_for_choices and len(self.pending_optional_pays) > pays_before:
+            # The ability raised an optional pay/draw choice — keep it on the stack
+            # until the choice is submitted (the only effect so far is registering the
+            # prompt; the life gain / draw happens on confirm). Link each new prompt
+            # entry to this stack item so confirming it removes the ability.
+            self.stack.append(item)
+            for entry in self.pending_optional_pays[pays_before:]:
+                entry["_stack_item"] = item
+        return True
+
+    def _run_stack_item_resolution(self, item: StackItem) -> None:
+        # A triggered ability with a name-keyed resolve-time hook (Rod/Cup/Sphere,
+        # Verduran Enchantress, Guardian Angel deferred onto the stack).
+        if item.hook_key is not None:
+            from ..card_hooks import TRIGGER_HOOKS
+
+            handler = TRIGGER_HOOKS.get(item.hook_key)
+            if handler is not None:
+                handler(self, item)
+                self.log.append(f"{item.card.name} ability resolved")
+            return
         if item.ability_instruction is not None:
             caster = self.players[item.caster_index]
             target_idx = item.target_player_index if item.target_player_index is not None else (1 - item.caster_index)
@@ -1297,6 +1429,7 @@ class StackCastingMixin:
                     x_value=item.x_value,
                     source_permanent=item.source_permanent,
                     stack_target=item.target_stack_item,
+                    trigger_context=item.trigger_context,
                 ),
             )
             supported, details = state_machine.run(item.ability_instruction)
@@ -1304,7 +1437,7 @@ class StackCastingMixin:
                 self.log.append(f"{item.card.name} ability resolved")
             else:
                 self.log.append(f"{item.card.name} ability fizzled: {details}")
-            return True
+            return
 
         # A copy of an instant/sorcery (Fork) resolves like the original but is a
         # token spell: it ceases to exist afterward (no graveyard) and was never
@@ -1325,7 +1458,7 @@ class StackCastingMixin:
                 old_color=item.old_color,
             )
             self.log.append(f"{item.card.name} (copy) resolved")
-            return True
+            return
 
         classification = classify_card(item.card)
         self._resolve_card(
@@ -1340,7 +1473,7 @@ class StackCastingMixin:
             chosen_mode_index=item.chosen_mode_index,
             old_color=item.old_color,
         )
-        return True
+        return
 
     def _resolve_card(
         self,

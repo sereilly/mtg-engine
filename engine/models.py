@@ -164,7 +164,14 @@ class PlayerState:
     # you this turn, prevent that damage. You gain life equal to the damage
     # prevented this way." Each charge prevents the entire next damage event to
     # the player and gains that much life, then is consumed. Cleared at cleanup.
+    # This is the generic fallback used when no specific source was chosen (AI /
+    # headless casts); a human pick is recorded in reverse_damage_sources instead.
     reverse_damage_charges: int = 0
+    # Reverse Damage with a chosen "source of your choice": the specific Permanent
+    # or spell (a CardDefinition) the caster picked. Only damage from a matching
+    # source is prevented and converted to life, then the entry is consumed.
+    # Cleared at cleanup.
+    reverse_damage_sources: list = field(default_factory=list)
     has_no_max_hand_size: bool = False
     can_spend_white_as_red: bool = False
     channel_active_until_eot: bool = False

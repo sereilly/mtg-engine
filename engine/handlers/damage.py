@@ -87,6 +87,24 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
     return True, "resolved"
 
 
+@effect_handler("deal_damage_to_player")
+def deal_damage_to_player(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """A triggered ability that deals a fixed amount of damage to a player, resolving
+    off the stack. Used by triggers that previously dealt damage inline at fire time:
+    Dingus Egg (land dies), the land-enters 2-damage trigger, and Aura death damage.
+    The victim and amount are carried in ``trigger_context`` so a synthetic instruction
+    (no parsed payload) is enough."""
+    tctx = context.trigger_context or {}
+    victim_idx = tctx.get("victim_player_index")
+    amount = int(tctx.get("amount", 0))
+    if victim_idx is None or not (0 <= victim_idx < len(game.players)) or amount <= 0:
+        return True, "resolved"
+    victim = game.players[victim_idx]
+    dealt = game._deal_damage_to_player(victim, amount, source=context.source_permanent)
+    game.log.append(f"{context.card.name} dealt {dealt} damage to {victim.name}")
+    return True, "resolved"
+
+
 @effect_handler("simulacrum_redirect")
 def simulacrum_redirect(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     # Simulacrum: caster gains life equal to the damage dealt to them this turn,

@@ -390,6 +390,8 @@ def test_603_2_dies_trigger_fires_when_a_creature_dies():
 
     game._permanent_to_graveyard(p1, bear_perm)
     p1.battlefield.remove(bear_perm)
+    # The dies-trigger goes on the stack and raises its pay-prompt on resolution.
+    game.resolve_stack()
 
     # The optional "you may pay" rider defers to a yes/no choice; accept it.
     assert game.pending_optional_pays

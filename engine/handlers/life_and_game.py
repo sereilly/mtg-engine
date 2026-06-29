@@ -67,6 +67,28 @@ def target_loses_life(game: Game, instruction: OracleInstruction, context: Oracl
 def target_gains_life(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     card = context.card
     x_value = context.x_value
+    # Soul Net-style death trigger resolving off the stack: "Whenever a creature
+    # dies, you may pay {N}. If you do, gain N life." The trigger's controller is the
+    # caster. When it carries an optional-pay cost, the pay-prompt is raised here at
+    # resolution (not at fire time) — so no life is gained until the player answers,
+    # via _pay_optional / confirm_optional_pay. With no cost, the controller just
+    # gains the life on resolution.
+    tctx = context.trigger_context
+    if tctx is not None and "life" in tctx:
+        controller = context.caster
+        life = int(tctx.get("life", 0))
+        cost = tctx.get("optional_pay_cost")
+        if cost is not None:
+            if game._player_can_pay_generic(controller, int(cost)):
+                game.pending_optional_pays.append({
+                    "card_name": card.name,
+                    "player_index": game.players.index(controller),
+                    "cost": int(cost),
+                    "life": life,
+                })
+            return True, "resolved"
+        game._gain_life(controller, life, card.name)
+        return True, "resolved"
     amount = instruction.payload.get("amount", 0)
     # "You gain N life" affects the controller; "target player gains N life"
     # affects the chosen target (CR 115.10b). Default to target for legacy

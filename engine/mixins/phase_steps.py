@@ -68,7 +68,19 @@ class PhaseStepsMixin:
         # All players have passed in succession.
         self.priority_pass_count = 0
         if self.stack:
-            self.resolve_top_of_stack()
+            self.resolve_top_of_stack(pause_for_choices=True)
+            # A triggered ability that resolved into an optional "you may pay {N} /
+            # draw" choice (Soul Net, the color Rods, Verduran Enchantress) is kept on
+            # the stack until the choice is submitted (CR 603.3). Hand priority to the
+            # player who must choose; the ability leaves the stack when they answer
+            # (confirm_optional_pay) or the AI auto-resolves it.
+            paused = next(
+                (e for e in self.pending_optional_pays if e.get("_stack_item") in self.stack),
+                None,
+            )
+            if paused is not None:
+                self.priority_player_index = paused["player_index"]
+                return "awaiting_choice"
             # 704.3: state-based actions are checked before any player would
             # receive priority after a spell or ability resolves (e.g. an Aura
             # now illegally attached is put into its owner's graveyard).

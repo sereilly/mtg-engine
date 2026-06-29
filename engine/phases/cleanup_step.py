@@ -57,6 +57,7 @@ class CleanupStepMixin:
             player.combat_damage_cap_one_charges = 0
             player.forcefield_capped_sources = []
             player.reverse_damage_charges = 0
+            player.reverse_damage_sources = []
             player.channel_active_until_eot = False
             player.prevent_one_damage_emblems = []
             for permanent in player.battlefield:

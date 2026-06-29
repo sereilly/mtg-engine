@@ -278,6 +278,9 @@ class TestSengirVampire:
         game.declare_blockers(0, {0: 0})
         game._set_phase_and_step("combat", "combat_damage")
         game.resolve_combat_damage(1)
+        # The dies-trigger (Sengir's +1/+1 counter) goes on the stack after combat
+        # damage and resolves when priority passes (CR 603.3).
+        game.resolve_stack()
 
         assert giant not in p2.battlefield  # Sengir killed it
         assert (sengir.effective_power, sengir.effective_toughness) == (5, 5)

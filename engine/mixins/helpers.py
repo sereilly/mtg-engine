@@ -226,13 +226,19 @@ class GameHelpersMixin:
             leave_hook(self, player, permanent)
 
     def _fire_creature_dies_triggers(self, dead_permanent: Permanent) -> None:
-        """Fire "whenever a creature dies" triggers (e.g. Soul Net).
+        """Put "whenever a creature dies" triggers (e.g. Soul Net) onto the stack.
 
-        Observers may be controlled by any player. For "you may pay {N}" optional
-        triggers the controller pays automatically when able (deterministic), then
-        applies the rider effect (Rule 603.2, 603.3).
+        Observers may be controlled by any player. Triggers are enqueued here (in
+        APNAP order) and resolve later through the stack — never inline (CR 603.3).
+        Soul Net's "you may pay {N}" is offered when its trigger resolves, so no life
+        is gained until the player answers the pay-prompt. Sengir Vampire's
+        "creature dealt damage by this creature dies" condition is evaluated now (at
+        fire time) because the dead permanent is gone by the time the trigger
+        resolves; it is enqueued only when it qualifies.
         """
+        events: list[dict] = []
         for controller in self.players:
+            controller_index = self.players.index(controller)
             for observer in list(controller.battlefield):
                 if observer is dead_permanent:
                     continue
@@ -247,11 +253,13 @@ class GameHelpersMixin:
                     ):
                         damagers = dead_permanent.metadata.get("damaged_by_sources_this_turn", [])
                         if observer in damagers:
-                            observer.power_bonus += int(trig.instruction.payload.get("power", 1))
-                            observer.toughness_bonus += int(trig.instruction.payload.get("toughness", 1))
-                            self.log.append(
-                                f"{observer.card.name} gets a +1/+1 counter ({dead_permanent.card.name} it damaged died)"
-                            )
+                            events.append({
+                                "controller_index": controller_index,
+                                "source_permanent": observer,
+                                "instruction": trig.instruction,
+                                "effect_kind": trig.effect_kind,
+                                "ability_text": trig.source_line,
+                            })
                         continue
                     if trig.condition.kind != "creature_dies" or trig.instruction is None:
                         continue
@@ -260,26 +268,19 @@ class GameHelpersMixin:
                     pay_match = re.search(r"you may pay \{(\d+)\}", obs_text)
                     if instr.kind == "target_gains_life":
                         amount = int(instr.payload.get("amount", 1))
+                        ctx: dict = {"life": amount, "dead_name": dead_permanent.card.name}
                         if pay_match:
-                            # Soul Net: "Whenever a creature dies, you may pay {1}. If
-                            # you do, gain 1 life." Defer to a yes/no prompt (the human
-                            # is asked; AI/headless auto-resolves), offered only when
-                            # the controller could pay — by floating mana or a land tap.
-                            cost = int(pay_match.group(1))
-                            if self._player_can_pay_generic(controller, cost):
-                                self.pending_optional_pays.append({
-                                    "card_name": observer.card.name,
-                                    "player_index": self.players.index(controller),
-                                    "cost": cost,
-                                    "life": amount,
-                                })
-                        else:
-                            self._gain_life(controller, amount, observer.card.name)
-                            self.log.append(
-                                f"{observer.card.name} trigger: {controller.name} gained {amount} life "
-                                f"({dead_permanent.card.name} died)"
-                            )
+                            ctx["optional_pay_cost"] = int(pay_match.group(1))
+                        events.append({
+                            "controller_index": controller_index,
+                            "source_permanent": observer,
+                            "instruction": instr,
+                            "effect_kind": "triggered_target_gains_life",
+                            "ability_text": trig.source_line,
+                            "trigger_context": ctx,
+                        })
                     break
+        self._enqueue_triggered_batch(events)
 
     def _put_permanent_onto_battlefield(
         self,
