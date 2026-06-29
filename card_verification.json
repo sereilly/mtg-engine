@@ -275,6 +275,11 @@
       "status": "pass",
       "updated_at": 1782591684.9327972
     },
+    "Dragon Whelp": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782693770.4119496
+    },
     "Drain Power": {
       "reason": "",
       "status": "pass",
@@ -864,6 +869,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781410889.892921
+    },
+    "Steal Artifact": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782693812.4380178
     },
     "Stone Rain": {
       "reason": "",

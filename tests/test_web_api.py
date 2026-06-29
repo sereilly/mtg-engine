@@ -1683,6 +1683,94 @@ def test_cast_targeted_spell_succeeds_after_mana_tapped():
 
 
 # ---------------------------------------------------------------------------
+# Fork: the copy goes on the stack and may be given new targets, driven through
+# the real HTTP cast action the UI sends (stack target + a new permanent target).
+# ---------------------------------------------------------------------------
+
+
+def test_fork_serializes_copies_spell_flag_in_hand():
+    """A Fork in hand carries copies_spell=True so the UI runs the copy-retarget
+    flow; a plain counterspell does not."""
+    from engine.card_loader import load_cards as _load
+
+    cards = {c.name: c for c in _load("lea_cards.json")}
+    created = client.post(
+        "/api/sessions",
+        json={"mode": "human_vs_human", "host_colors": 2, "guest_colors": 2, "seed": 51001},
+    ).json()
+    sid = created["session_id"]
+    client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
+    session = store.get(sid)
+    session.game.players[0].hand = [cards["Fork"], cards["Counterspell"]]
+
+    hand = client.get(f"/api/sessions/{sid}/state?seat=0").json()["players"][0]["hand"]
+    fork = next(c for c in hand if c["name"] == "Fork")
+    counter = next(c for c in hand if c["name"] == "Counterspell")
+    assert fork["target_spec"]["kind"] == "stack"
+    assert fork["target_spec"]["copies_spell"] is True
+    assert counter["target_spec"].get("copies_spell") is False
+
+
+def test_fork_copy_retargets_to_a_second_creature_via_http():
+    """Cast Giant Growth on one creature, then Fork it and retarget the copy to a
+    second creature — the exact two action bodies the UI sends. Both creatures end
+    up buffed, proving the copy is an independent spell with its own target."""
+    from engine.card_loader import load_cards as _load
+    from engine.models import Permanent
+
+    cards = {c.name: c for c in _load("lea_cards.json")}
+    created = client.post(
+        "/api/sessions",
+        json={"mode": "human_vs_human", "host_colors": 2, "guest_colors": 2, "seed": 51002},
+    ).json()
+    sid = created["session_id"]
+    client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
+    session = store.get(sid)
+    session.game.enforce_mana_costs = False
+
+    bears_a = Permanent(card=cards["Grizzly Bears"])
+    bears_b = Permanent(card=cards["Grizzly Bears"])
+    session.game.players[0].battlefield = [bears_a, bears_b]
+    session.game.players[0].hand = [cards["Giant Growth"], cards["Fork"]]
+
+    # 1) Cast Giant Growth on bears_a (seat 0, permanent_index 0).
+    gg = client.post(
+        f"/api/sessions/{sid}/action",
+        json={
+            "seat": 0, "action": "cast", "card_name": "Giant Growth",
+            "target_seat": 0, "permanent_index": 0,
+        },
+    )
+    assert gg.status_code == 200
+    assert len(gg.json()["stack"]) == 1
+
+    # 2) Cast Fork: copy the spell at stack index 0 (Giant Growth) and choose
+    #    bears_b (permanent_index 1) as the copy's new target.
+    fork = client.post(
+        f"/api/sessions/{sid}/action",
+        json={
+            "seat": 0, "action": "cast", "card_name": "Fork",
+            "target_stack_index": 0, "target_seat": 0, "permanent_index": 1,
+        },
+    )
+    assert fork.status_code == 200
+    assert len(fork.json()["stack"]) == 2  # Giant Growth + Fork
+
+    # Resolve everything by passing priority back and forth.
+    for _ in range(12):
+        if not store.get(sid).game.stack:
+            break
+        _pass_priority(sid, 0)
+        _pass_priority(sid, 1)
+
+    game = store.get(sid).game
+    assert not game.stack
+    # Original Giant Growth buffed bears_a; the Fork copy buffed bears_b.
+    assert game.players[0].battlefield[0].effective_power == 5
+    assert game.players[0].battlefield[1].effective_power == 5
+
+
+# ---------------------------------------------------------------------------
 # Bug regression: hold priority during opponent's (AI) turn
 # ---------------------------------------------------------------------------
 

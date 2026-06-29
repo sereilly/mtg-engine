@@ -1306,6 +1306,27 @@ class StackCastingMixin:
                 self.log.append(f"{item.card.name} ability fizzled: {details}")
             return True
 
+        # A copy of an instant/sorcery (Fork) resolves like the original but is a
+        # token spell: it ceases to exist afterward (no graveyard) and was never
+        # cast, so it skips the cast/graveyard bookkeeping in _resolve_card.
+        if item.is_copy and item.card.primary_type in ("instant", "sorcery"):
+            caster = self.players[item.caster_index]
+            target_idx = item.target_player_index if item.target_player_index is not None else (1 - item.caster_index)
+            target = self.players[target_idx] if 0 <= target_idx < len(self.players) else caster
+            self._apply_spell_text(
+                caster,
+                target,
+                item.card,
+                target_permanent_index=item.target_permanent_index,
+                x_value=item.x_value,
+                new_color=item.new_color,
+                stack_target=item.target_stack_item,
+                mode_index=item.chosen_mode_index,
+                old_color=item.old_color,
+            )
+            self.log.append(f"{item.card.name} (copy) resolved")
+            return True
+
         classification = classify_card(item.card)
         self._resolve_card(
             caster_index=item.caster_index,

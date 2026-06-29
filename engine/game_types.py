@@ -41,6 +41,9 @@ class StackItem:
     # Chosen mode of a "Choose one —" modal spell, as an index into the card's
     # compiled OracleProgram.modes. None for non-modal spells (resolve mode 0).
     chosen_mode_index: int | None = None
+    # A copy of a spell (Fork): it resolves like the original but ceases to exist
+    # afterward rather than going to a graveyard, and was never cast from a hand.
+    is_copy: bool = False
 
 
 @dataclass

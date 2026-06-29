@@ -235,6 +235,10 @@ def _classify_cast(card: CardDefinition) -> dict:
             "kind": "stack",
             "stack_color_filter": _stack_spell_color_filter(card),
             "stack_instant_sorcery_only": _stack_instant_sorcery_only(card),
+            # Fork copies the chosen spell and lets the caster "choose new targets
+            # for the copy", so the UI runs a second target prompt after the spell
+            # is chosen rather than sending the cast immediately.
+            "copies_spell": "copy target" in (card.oracle_text or "").lower(),
         }
     if _cast_requires_divided(card):
         return {"kind": "divided"}

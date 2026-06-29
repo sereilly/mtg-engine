@@ -3,9 +3,9 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **290**
-- Passed: **211**
+- Passed: **213**
 - Failed: **4**
-- Untested: **75**
+- Untested: **73**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -75,7 +75,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Disenchant | ✅ pass |  |
 | Disintegrate | ✅ pass |  |
 | Disrupting Scepter | ✅ pass |  |
-| Dragon Whelp | ⬜ untested |  |
+| Dragon Whelp | ✅ pass |  |
 | Drain Life | ⬜ untested |  |
 | Drain Power | ✅ pass |  |
 | Drudge Skeletons | ✅ pass |  |
@@ -242,7 +242,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Soul Net | ⬜ untested |  |
 | Spell Blast | ✅ pass |  |
 | Stasis | ✅ pass |  |
-| Steal Artifact | ⬜ untested |  |
+| Steal Artifact | ✅ pass |  |
 | Stone Giant | ⬜ untested |  |
 | Stone Rain | ✅ pass |  |
 | Stream of Life | ✅ pass |  |

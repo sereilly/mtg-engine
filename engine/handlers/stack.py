@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..card_hooks import ON_SPELL_COUNTERED
+from ..game_types import StackItem
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -13,10 +14,11 @@ if TYPE_CHECKING:
 
 @effect_handler("copy_top_stack_spell")
 def copy_top_stack_spell(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    # Fork: "Copy target instant or sorcery spell..." Copy the chosen spell if one
-    # was targeted, otherwise the topmost instant or sorcery on the stack (Fork
-    # itself has already been popped to resolve). The copy keeps the original's
-    # targets (Fork lets you choose new ones, which the simulation does not model).
+    # Fork: "Copy target instant or sorcery spell... You may choose new targets for
+    # the copy." Copy the chosen spell if one was targeted, otherwise the topmost
+    # instant or sorcery on the stack (Fork itself has already been popped to
+    # resolve). The copy is put onto the stack under Fork's controller so it
+    # resolves independently, and gets new targets if the Fork caster chose them.
     caster = context.caster
     card = context.card
     copied = None
@@ -31,21 +33,34 @@ def copy_top_stack_spell(game: Game, instruction: OracleInstruction, context: Or
     if copied is None:
         game.log.append(f"{card.name} resolved with no instant or sorcery spell to copy")
         return True, "resolved"
-    copy_target_idx = (
-        copied.target_player_index
-        if copied.target_player_index is not None
-        else (1 - copied.caster_index)
+
+    caster_index = game.players.index(caster)
+    # "You may choose new targets for the copy." When the Fork caster supplied a
+    # new target (a creature/permanent index, optionally on a specific player),
+    # the copy uses it; otherwise the copy keeps the original spell's targets.
+    if context.target_permanent_index is not None:
+        new_target_player_index = game.players.index(context.target) if context.target is not None else copied.target_player_index
+        new_target_permanent_index = context.target_permanent_index
+    else:
+        new_target_player_index = copied.target_player_index
+        new_target_permanent_index = copied.target_permanent_index
+
+    game.stack.append(
+        StackItem(
+            card=copied.card,
+            caster_index=caster_index,
+            target_player_index=new_target_player_index,
+            target_permanent_index=new_target_permanent_index,
+            x_value=copied.x_value,
+            new_color=copied.new_color,
+            old_color=copied.old_color,
+            chosen_mode_index=copied.chosen_mode_index,
+            target_stack_item=copied.target_stack_item,
+            target_stack_name=copied.target_stack_name,
+            is_copy=True,
+        )
     )
-    copy_target = game.players[copy_target_idx] if 0 <= copy_target_idx < len(game.players) else caster
-    game._apply_spell_text(
-        caster,
-        copy_target,
-        copied.card,
-        target_permanent_index=copied.target_permanent_index,
-        x_value=copied.x_value,
-        mode_index=copied.chosen_mode_index,
-    )
-    game.log.append(f"{card.name} copied {copied.card.name}")
+    game.log.append(f"{card.name} copied {copied.card.name} (copy put on the stack)")
     return True, "resolved"
 
 

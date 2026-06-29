@@ -4266,10 +4266,73 @@ function startCastStackSpellPrompt(card, castAction = "cast", validTargets = nul
     updateActionHint(`No valid spell on the stack for ${cardName} to target.`, true);
     return;
   }
-  pendingCastTarget = { card, cardName, targetKind: "stack", castAction, ...fields };
+  pendingCastTarget = {
+    card, cardName, targetKind: "stack", castAction,
+    // Fork copies the chosen spell and lets the caster pick new targets for the
+    // copy, so selecting the spell starts a second target prompt rather than
+    // casting immediately.
+    copiesSpell: !!targetSpecOf(card).copies_spell,
+    ...fields,
+  };
   renderActivationPrompt();
   renderStack(currentState ? currentState.stack : _currentStack);
   updateActionHint(`Choose a spell on the stack for ${cardName} to target (glowing).`);
+}
+
+// Fork second step: after the spell to copy is chosen, offer the caster a new
+// target for the copy (when the copied spell targets a permanent), then send the
+// cast carrying both the copied-spell index and the chosen target. A copied spell
+// that targets a player or nothing simply keeps its original targets.
+const _FORK_RETARGET_KINDS = new Set(["creature", "permanent", "artifact", "land"]);
+
+async function startForkCopyRetarget(forkPending, stackArrayIndex, copiedItem) {
+  const copiedName = copiedItem?.card?.name || "the spell";
+  const copiedCard = await attachCardTargetSpec(await fetchCardByName(copiedName), seat);
+  const spec = copiedCard ? targetSpecOf(copiedCard) : EMPTY_TARGET_SPEC;
+  const fields = indexValidTargets(spec.valid_targets || []);
+  if (!_FORK_RETARGET_KINDS.has(spec.kind) || fields.validKeys.size === 0) {
+    // Nothing to retarget — copy keeps the original spell's targets.
+    sendForkCopyCast(forkPending, stackArrayIndex, null, null, copiedName);
+    return;
+  }
+  pendingCastTarget = {
+    card: forkPending.card,
+    cardName: forkPending.cardName,
+    targetKind: spec.kind === "creature" ? "creature" : "permanent",
+    castAction: forkPending.castAction,
+    forkStackIndex: stackArrayIndex,
+    copyTargetName: copiedName,
+    ...fields,
+  };
+  renderActivationPrompt();
+  renderBoard(currentState);
+  updateActionHint(`Choose a new target for the copy of ${copiedName} (click the original to keep it).`);
+}
+
+function sendForkCopyCast(forkPending, stackArrayIndex, targetSeat, permanentIndex, copiedName) {
+  const body = {
+    seat,
+    action: forkPending.castAction || "cast",
+    card_name: forkPending.cardName,
+    target_stack_index: stackArrayIndex,
+  };
+  if (Number.isInteger(targetSeat)) body.target_seat = targetSeat;
+  if (Number.isInteger(permanentIndex)) body.permanent_index = permanentIndex;
+  updateActionHint(`Casting ${forkPending.cardName} (copying ${copiedName})...`);
+  sendAction(body)
+    .then(() => {
+      updateActionHint(`Cast ${forkPending.cardName}.`);
+      clearPendingHandCast();
+    })
+    .catch((e) => {
+      if (e.message && e.message.toLowerCase().startsWith("insufficient mana")) {
+        pendingAutoTap = { card: forkPending.card, cardName: forkPending.cardName, actionBody: body };
+        renderActivationPrompt();
+        return;
+      }
+      clearPendingHandCast();
+      updateActionHint(e.message, true);
+    });
 }
 
 function startCastXPrompt(card, targetSeat, targetPermanentIndex = null, castAction = "cast", targetStackIndex = null) {
@@ -4325,6 +4388,13 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
     q(elementId)?.classList.remove("targeting-valid");
   }
   renderActivationPrompt();
+
+  // Fork copy retarget: the chosen permanent becomes the copy's new target. Send
+  // the Fork cast carrying both the copied-spell index and the new target.
+  if (Number.isInteger(pending.forkStackIndex)) {
+    sendForkCopyCast(pending, pending.forkStackIndex, selectedTarget, selectedPermanentIndex, pending.copyTargetName);
+    return;
+  }
 
   // Activated ability targeting a permanent (e.g. Gaea's Liege targeting a land):
   // send an "activate" action with the chosen target permanent rather than a cast.
@@ -5887,6 +5957,13 @@ function selectStackSpellTarget(arrayIndex) {
 
   pendingCastTarget = null;
   renderActivationPrompt();
+
+  // Fork: after choosing the spell to copy, run a second prompt to let the caster
+  // choose new targets for the copy before the cast is sent.
+  if (pending.copiesSpell && pending.castAction !== "activate") {
+    startForkCopyRetarget(pending, arrayIndex, item);
+    return;
+  }
 
   // Activated ability that counters a target spell (Deathgrip): send an
   // "activate" action identifying the source permanent and the chosen spell.

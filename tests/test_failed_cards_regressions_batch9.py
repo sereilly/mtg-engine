@@ -477,8 +477,8 @@ class TestLibraryOfLengDiscards:
 
 # ---------------------------------------------------------------------------
 # Fork — "Copy target instant or sorcery spell, except that the copy is red. You
-# may choose new targets for the copy." The copy resolves with the original's
-# targets (keeping targets is legal; the optional retarget is unmodeled).
+# may choose new targets for the copy." The copy is put onto the stack (it
+# resolves independently of the original) and may keep or change the targets.
 # ---------------------------------------------------------------------------
 
 class TestForkCopiesSpell:
@@ -488,11 +488,46 @@ class TestForkCopiesSpell:
         game = _game(p1, p2)
         game.queue_from_hand(0, "Lightning Bolt", target_player_index=1)
         game.queue_from_hand(0, "Fork", target_player_index=1, target_stack_index=0)
+        # The copy goes onto the stack: Bolt, Fork, then (after Fork resolves) the
+        # copy. Resolving Fork should leave a copy on the stack above the original.
         assert len(game.stack) == 2
+        game.resolve_top_of_stack()  # Fork resolves -> copy placed on the stack
+        assert len(game.stack) == 2  # original Bolt + its copy
+        assert game.stack[-1].is_copy and game.stack[-1].card.name == "Lightning Bolt"
         while game.stack:
             game.resolve_top_of_stack()
         # 3 from the Bolt + 3 from the Fork copy (same target).
         assert p2.life == 14
+        # The copy is a token spell — it ceases to exist, so only the one real
+        # Lightning Bolt ends up in a graveyard.
+        bolts_in_graveyards = sum(
+            1 for pl in game.players for c in pl.graveyard if c.name == "Lightning Bolt"
+        )
+        assert bolts_in_graveyards == 1
+
+    def test_fork_copy_can_choose_a_new_target(self, cards):
+        # Giant Growth targets bears_a; Fork copies it but retargets the copy to
+        # bears_b. Both creatures end up buffed.
+        bears_a = Permanent(card=cards["Grizzly Bears"])
+        bears_b = Permanent(card=cards["Grizzly Bears"])
+        p1 = PlayerState(
+            name="P1",
+            hand=[cards["Giant Growth"], cards["Fork"]],
+            battlefield=[bears_a, bears_b],
+            life=20,
+        )
+        p2 = PlayerState(name="P2", life=20)
+        game = _game(p1, p2)
+        game.queue_from_hand(0, "Giant Growth", target_player_index=0, target_permanent_index=0)
+        # Fork copies Giant Growth (stack index 0) but chooses bears_b for the copy.
+        game.queue_from_hand(
+            0, "Fork", target_stack_index=0, target_player_index=0, target_permanent_index=1
+        )
+        while game.stack:
+            game.resolve_top_of_stack()
+        # Both creatures got +3/+3: the original on bears_a, the copy on bears_b.
+        assert bears_a.effective_power == 5
+        assert bears_b.effective_power == 5
 
 
 # ---------------------------------------------------------------------------
