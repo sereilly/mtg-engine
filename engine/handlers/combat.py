@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 from typing import TYPE_CHECKING
 
 from .registry import effect_handler
@@ -76,22 +77,22 @@ def left_right_combat_division(game: Game, instruction: OracleInstruction, conte
     game.combat_left_right_attacker_locked = False
 
     # Seed a sensible default division so AI/headless combat still resolves: the
-    # defending player's non-flying creatures alternate left/right, and every
-    # attacker defaults to "left". The UI lets both players override these before
-    # blocks are declared (assign_defender_piles / assign_attacker_piles).
+    # defending player's non-flying creatures are split into left/right at random,
+    # and every attacker defaults to "left". This doubles as the AI's actual choice
+    # (an AI defender "chooses randomly"); a human overrides it via the UI before
+    # blocks are declared (assign_defender_piles / assign_attacker_piles). The
+    # module RNG is seeded in AI simulations, so a seeded run stays reproducible.
     defender_index = game.combat_defending_player_index
     if isinstance(defender_index, int) and 0 <= defender_index < len(game.players):
         defender = game.players[defender_index]
         game.combat_defender_piles = {}
-        side_toggle = 0
         for idx, perm in enumerate(defender.battlefield):
             if perm.card.primary_type != "creature":
                 continue
             if game._has_keyword(perm, "flying"):
                 continue  # flyers are in neither pile (they may block anything)
-            game.combat_defender_piles[idx] = "left" if side_toggle % 2 == 0 else "right"
-            side_toggle += 1
-    game.combat_attacker_piles = {idx: "left" for idx in game.combat_attackers}
+            game.combat_defender_piles[idx] = random.choice(("left", "right"))
+    game.combat_attacker_piles = {idx: random.choice(("left", "right")) for idx in game.combat_attackers}
     game.log.append(f"{card.name} established left/right combat division")
     return True, "resolved"
 

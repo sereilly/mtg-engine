@@ -3,9 +3,9 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **290**
-- Passed: **206**
-- Failed: **0**
-- Untested: **84**
+- Passed: **211**
+- Failed: **4**
+- Untested: **75**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -29,7 +29,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Black Lotus | ✅ pass |  |
 | Black Vise | ✅ pass |  |
 | Black Ward | ✅ pass |  |
-| Blaze of Glory | ⬜ untested |  |
+| Blaze of Glory | ❌ fail | I'm not able to choose multiple creatures to block with the UI |
 | Blessing | ✅ pass |  |
 | Blue Elemental Blast | ✅ pass |  |
 | Blue Ward | ✅ pass |  |
@@ -39,13 +39,13 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Camouflage | ⬜ untested |  |
 | Castle | ✅ pass |  |
 | Celestial Prism | ✅ pass |  |
-| Channel | ⬜ untested |  |
+| Channel | ❌ fail | Do not use the window prompt API. use the in-game prompt dialog |
 | Chaos Orb | ✅ pass |  |
 | Chaoslace | ⬜ untested |  |
-| Circle of Protection: Blue | ⬜ untested |  |
-| Circle of Protection: Green | ⬜ untested |  |
-| Circle of Protection: Red | ⬜ untested |  |
-| Circle of Protection: White | ⬜ untested |  |
+| Circle of Protection: Blue | ✅ pass |  |
+| Circle of Protection: Green | ✅ pass |  |
+| Circle of Protection: Red | ✅ pass |  |
+| Circle of Protection: White | ✅ pass |  |
 | Clockwork Beast | ✅ pass |  |
 | Clone | ✅ pass |  |
 | Cockatrice | ✅ pass |  |
@@ -131,7 +131,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Illusionary Mask | ⬜ untested |  |
 | Instill Energy | ⬜ untested |  |
 | Invisibility | ✅ pass |  |
-| Iron Star | ⬜ untested |  |
+| Iron Star | ❌ fail | prompt is missing 1 generic mana image |
 | Ironclaw Orcs | ✅ pass |  |
 | Ironroot Treefolk | ✅ pass |  |
 | Island | ✅ pass |  |
@@ -205,7 +205,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Psionic Blast | ✅ pass |  |
 | Psychic Venom | ✅ pass |  |
 | Purelace | ⬜ untested |  |
-| Raging River | ⬜ untested |  |
+| Raging River | ✅ pass |  |
 | Raise Dead | ✅ pass |  |
 | Red Elemental Blast | ✅ pass |  |
 | Red Ward | ✅ pass |  |
@@ -264,7 +264,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Tsunami | ✅ pass |  |
 | Tundra | ✅ pass |  |
 | Tunnel | ✅ pass |  |
-| Twiddle | ⬜ untested |  |
+| Twiddle | ❌ fail | I can't use twiddle to tap an opponent's land |
 | Two-Headed Giant of Foriys | ⬜ untested |  |
 | Underground Sea | ✅ pass |  |
 | Unholy Strength | ✅ pass |  |

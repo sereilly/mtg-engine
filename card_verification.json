@@ -80,6 +80,11 @@
       "status": "pass",
       "updated_at": 1781761302.7020597
     },
+    "Blaze of Glory": {
+      "reason": "I'm not able to choose multiple creatures to block with the UI",
+      "status": "fail",
+      "updated_at": 1782690669.3701363
+    },
     "Blessing": {
       "reason": "",
       "status": "pass",
@@ -120,10 +125,35 @@
       "status": "pass",
       "updated_at": 1782105893.8562238
     },
+    "Channel": {
+      "reason": "Do not use the window prompt API. use the in-game prompt dialog",
+      "status": "fail",
+      "updated_at": 1782690290.5261998
+    },
     "Chaos Orb": {
       "reason": "",
       "status": "pass",
       "updated_at": 1782364304.0696912
+    },
+    "Circle of Protection: Blue": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782690845.724498
+    },
+    "Circle of Protection: Green": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782690851.9292188
+    },
+    "Circle of Protection: Red": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782690856.1514704
+    },
+    "Circle of Protection: White": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782690859.9471323
     },
     "Clockwork Beast": {
       "reason": "",
@@ -440,6 +470,11 @@
       "status": "pass",
       "updated_at": 1782590614.42178
     },
+    "Iron Star": {
+      "reason": "prompt is missing 1 generic mana image",
+      "status": "fail",
+      "updated_at": 1782690745.459252
+    },
     "Ironclaw Orcs": {
       "reason": "",
       "status": "pass",
@@ -690,6 +725,11 @@
       "status": "pass",
       "updated_at": 1781410771.1947188
     },
+    "Raging River": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782693690.498816
+    },
     "Raise Dead": {
       "reason": "",
       "status": "pass",
@@ -904,6 +944,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781577230.9356234
+    },
+    "Twiddle": {
+      "reason": "I can't use twiddle to tap an opponent's land",
+      "status": "fail",
+      "updated_at": 1782690336.126632
     },
     "Underground Sea": {
       "reason": "",

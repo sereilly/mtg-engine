@@ -306,6 +306,16 @@ class CombatPhaseMixin:
             # blockers added by band propagation (702.22h).
             "bands": [list(band) for band in self.combat_bands],
             "band_blocks": {k: list(v) for k, v in self.combat_band_blocks.items()},
+            # Raging River (CR 702 left/right division). Exposed for the UI so it can
+            # draw each creature's pile and rearrange the board into left/right sides.
+            # ``defender_piles`` keys are battlefield indices of the defending player;
+            # ``attacker_piles`` keys are battlefield indices of the active player.
+            "left_right_active": self.combat_left_right_active,
+            "left_right_defender_index": self.combat_left_right_defender_index,
+            "defender_piles": {int(k): v for k, v in self.combat_defender_piles.items()},
+            "attacker_piles": {int(k): v for k, v in self.combat_attacker_piles.items()},
+            "defender_piles_locked": self.combat_left_right_defender_locked,
+            "attacker_piles_locked": self.combat_left_right_attacker_locked,
         }
 
     def creature_attacking_alone(self, permanent: Permanent) -> bool:

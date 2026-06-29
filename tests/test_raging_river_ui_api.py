@@ -56,16 +56,28 @@ def _session():
     return sid, session, game
 
 
-def test_both_players_are_prompted_to_assign_piles():
+def test_players_are_prompted_to_assign_piles_in_sequence():
+    """The defending player divides first; the attacker is only prompted to label
+    their creatures once the defender has committed their piles."""
     sid, session, game = _session()
 
-    attacker_view = client.get(f"/api/sessions/{sid}/state", params={"seat": 0}).json()["raging_river"]
-    assert attacker_view is not None
-    assert [a["index"] for a in attacker_view["label_attackers"]] == [1]
-
+    # Defender is prompted to divide their non-flying creatures right away.
     defender_view = client.get(f"/api/sessions/{sid}/state", params={"seat": 1}).json()["raging_river"]
     assert defender_view is not None
     assert {c["index"] for c in defender_view["divide_creatures"]} == {0, 1}
+
+    # The attacker is NOT yet prompted — they wait for the defender to finish.
+    attacker_view = client.get(f"/api/sessions/{sid}/state", params={"seat": 0}).json()["raging_river"]
+    assert attacker_view is None
+
+    # Once the defender divides, the attacker gets their labeling prompt.
+    client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 1, "action": "assign_defender_piles", "piles": {"0": "left", "1": "right"}},
+    )
+    attacker_view = client.get(f"/api/sessions/{sid}/state", params={"seat": 0}).json()["raging_river"]
+    assert attacker_view is not None
+    assert [a["index"] for a in attacker_view["label_attackers"]] == [1]
 
 
 def test_assigning_piles_via_the_api():

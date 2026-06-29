@@ -1293,6 +1293,10 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
     if win is not None:
         session.status = "finished"
 
+    # Settle any AI player's Raging River left/right division so the human's
+    # prompt sequencing (defender first, then attacker) can advance.
+    _ai_resolve_raging_river(session)
+
     cleanup_info = None
     cleanup_required = _cleanup_discard_requirement(session)
     untap_required = _untap_land_selection_requirement(session)
@@ -2045,17 +2049,24 @@ def _build_raging_river_info(session: Session, viewer_seat: int | None) -> dict 
     defender_index = game.combat_left_right_defender_index
     attacker_index = game.active_player_index
     info: dict = {"defender_seat": defender_index, "attacker_seat": attacker_index}
-    if viewer_seat == defender_index and not game.combat_left_right_defender_locked:
+
+    # Non-flying defender creatures that must be divided into a left/right pile.
+    divide = []
+    if isinstance(defender_index, int) and 0 <= defender_index < len(game.players):
         defender = game.players[defender_index]
         divide = [
             {"index": i, **_serialize_card_summary(p.card), "pile": game.combat_defender_piles.get(i)}
             for i, p in enumerate(defender.battlefield)
             if p.card.primary_type == "creature" and not game._has_keyword(p, "flying")
         ]
-        # No non-flying creatures to divide → nothing to decide, don't prompt.
-        if divide:
-            info["divide_creatures"] = divide
-    if viewer_seat == attacker_index and not game.combat_left_right_attacker_locked:
+    # The defender chooses first; the attacker is gated until they finish. With no
+    # non-flying creatures to divide there's nothing to decide, so the defender is
+    # immediately "done" and the attacker may proceed.
+    defender_done = game.combat_left_right_defender_locked or not divide
+
+    if viewer_seat == defender_index and not game.combat_left_right_defender_locked and divide:
+        info["divide_creatures"] = divide
+    if viewer_seat == attacker_index and defender_done and not game.combat_left_right_attacker_locked:
         attacker = game.players[attacker_index]
         label = [
             {"index": i, **_serialize_card_summary(attacker.battlefield[i].card), "pile": game.combat_attacker_piles.get(i)}
@@ -2067,6 +2078,45 @@ def _build_raging_river_info(session: Session, viewer_seat: int | None) -> dict 
     if "divide_creatures" not in info and "label_attackers" not in info:
         return None
     return info
+
+
+def _ai_resolve_raging_river(session: Session) -> None:
+    """Finalize Raging River's left/right division for any AI player so the human
+    flow can proceed. An AI defender keeps its random seeded piles and locks them
+    (it "chooses randomly"); an AI attacker locks its labels once the defender has
+    finished. Idempotent — safe to call on every state build."""
+    game = session.game
+    if not game.combat_left_right_active or game.combat_damage_resolved:
+        return
+    if game.current_step not in ("declare_attackers", "declare_blockers"):
+        return
+    defender_index = game.combat_left_right_defender_index
+    attacker_index = game.active_player_index
+
+    divide_count = 0
+    if isinstance(defender_index, int) and 0 <= defender_index < len(game.players):
+        divide_count = sum(
+            1
+            for p in game.players[defender_index].battlefield
+            if p.card.primary_type == "creature" and not game._has_keyword(p, "flying")
+        )
+
+    if (
+        isinstance(defender_index, int)
+        and not game.combat_left_right_defender_locked
+        and divide_count > 0
+        and _seat_type(session, defender_index) == "ai"
+    ):
+        game.combat_left_right_defender_locked = True
+        game.log.append(f"{game.players[defender_index].name} randomly divided their creatures left/right")
+
+    defender_done = game.combat_left_right_defender_locked or divide_count == 0
+    if (
+        defender_done
+        and not game.combat_left_right_attacker_locked
+        and _seat_type(session, attacker_index) == "ai"
+    ):
+        game.combat_left_right_attacker_locked = True
 
 
 def _ai_assign_combat_damage(session: Session) -> None:

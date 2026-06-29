@@ -18,9 +18,13 @@ let pendingAbilityChoice = null;
 let discardToLibrarySelected = false;
 // Balance: the indices the player has currently picked to sacrifice/discard.
 let balanceSelection = { lands: [], creatures: [], hand: [] };
-// Raging River: in-progress left/right labels, keyed by index, for whichever
-// role (defender division / attacker labeling) the viewer is resolving.
+// Raging River: in-progress left/right labels, keyed by creature index, for
+// whichever role (defender division / attacker labeling) the viewer is resolving.
+// Each creature starts unset; once every creature has a side the choice submits.
 let ragingRiverSelection = null;
+// Identity of the prompt the in-progress selection belongs to ("seat:idx,idx").
+// When it changes (new role / new creatures), the tentative selection is reset.
+let ragingRiverPromptSig = null;
 // Chosen mode index for the cast in progress, injected into the cast action.
 let pendingCastModeIndex = null;
 let debugSearchTimer = null;
@@ -416,6 +420,18 @@ function renderCombatOverlay(state = currentState) {
 
   battlefieldCanvas.setCombatArrows(arrows);
   battlefieldCanvas.setAttackingKeys(attackingKeys);
+
+  // Raging River (CR 702): left/right piles + the viewer's Left/Right buttons.
+  battlefieldCanvas.setRagingRiver(buildRagingRiverCanvasData(state));
+  const riverInfo = getRagingRiverInfo(state);
+  if (riverInfo) {
+    const isDefender = Array.isArray(riverInfo.divide_creatures);
+    updateActionHint(
+      isDefender
+        ? "Raging River: tap Left or Right above each of your creatures to divide them."
+        : "Raging River: tap Left or Right above each attacker to choose its pile."
+    );
+  }
 }
 
 function cardHasKeyword(card, keyword) {
@@ -2553,70 +2569,83 @@ function applyFaceDownCastPrompt(info) {
 }
 
 // Raging River: the defending player divides their non-flying creatures into a
-// "left" and "right" pile; the attacking player labels each attacker with the
-// pile it can be blocked from. The viewer resolves whichever role applies.
-function applyRagingRiverPrompt(info) {
-  const panel = q("activationPanel");
-  const title = q("promptTitle");
-  const body = q("promptBody");
-  const steps = q("promptSteps");
-  const cancelBtn = q("promptCancelBtn");
-  const okBtn = q("promptOkBtn");
-  const customRow = q("promptCustomRow");
-  const customOkBtn = q("promptCustomOkBtn");
+// "left" and "right" pile; the attacking player then labels each attacker with the
+// pile it can be blocked from. Both are resolved with Left/Right buttons drawn over
+// each creature on the board (not a modal). This builds the state the canvas needs:
+// committed piles for both players (for the divider + side badges) and the viewer's
+// own pending choice (the buttons). Returns null when no division is active.
+function buildRagingRiverCanvasData(state) {
+  const combat = getCombatState(state);
+  if (!combat || !combat.left_right_active) return null;
+  const defenderSeat = combat.left_right_defender_index;
+  const attackerSeat = state.current_turn;
+  const data = {
+    active: true,
+    defenderSeat,
+    attackerSeat,
+    defenderPiles: combat.defender_piles || {},
+    attackerPiles: combat.attacker_piles || {},
+    defenderLocked: !!combat.defender_piles_locked,
+    attackerLocked: !!combat.attacker_piles_locked,
+    prompt: null,
+  };
 
+  const info = getRagingRiverInfo(state);
+  if (info) {
+    const isDefender = Array.isArray(info.divide_creatures);
+    const items = isDefender ? info.divide_creatures : info.label_attackers;
+    const promptSeat = isDefender ? defenderSeat : attackerSeat;
+    const sig = `${promptSeat}:${items.map((it) => it.index).join(",")}`;
+    // Start fresh (every creature unset) whenever the prompt changes, so the
+    // player explicitly assigns each creature rather than accepting a default.
+    if (ragingRiverPromptSig !== sig) {
+      ragingRiverPromptSig = sig;
+      ragingRiverSelection = {};
+    }
+    data.prompt = {
+      seat: promptSeat,
+      role: isDefender ? "defender" : "attacker",
+      items: items.map((it) => ({ idx: it.index, name: it.name })),
+      selection: ragingRiverSelection || {},
+    };
+  } else {
+    ragingRiverPromptSig = null;
+    ragingRiverSelection = null;
+  }
+  return data;
+}
+
+// Apply one Left/Right button click (from the canvas) to the viewer's pending
+// Raging River choice. Once every prompted creature has a side, submit the pile
+// assignment; otherwise re-render so the new selection shows immediately.
+function handleRagingRiverPileClick({ idx, side }) {
+  if (!currentState || seat === null) return;
+  const info = getRagingRiverInfo(currentState);
+  if (!info) return;
   const isDefender = Array.isArray(info.divide_creatures);
   const items = isDefender ? info.divide_creatures : info.label_attackers;
+  if (!items.some((it) => it.index === idx)) return;
+  if (!ragingRiverSelection) ragingRiverSelection = {};
+  ragingRiverSelection[idx] = side;
 
-  // Seed the selection from the current/default piles the first time.
-  if (!ragingRiverSelection) {
-    ragingRiverSelection = {};
-    for (const item of items) ragingRiverSelection[item.index] = item.pile || "left";
-  }
-
-  panel.classList.remove("hidden");
-  okBtn.classList.add("hidden");
-  customRow.classList.add("hidden");
-  cancelBtn.classList.add("hidden");
-  cancelBtn.disabled = true;
-  customOkBtn.disabled = true;
-
-  title.textContent = "Raging River — Left / Right";
-  body.textContent = isDefender
-    ? "Divide your non-flying creatures into a left and a right pile."
-    : "Choose which pile each of your attackers can be blocked from.";
-
-  const rows = items
-    .map((item) => {
-      const side = ragingRiverSelection[item.index] || "left";
-      return (
-        `<div class="prompt-choice-row">` +
-        `<span>${escapeHtml(item.name || "Creature")}:</span>` +
-        `<button type="button" class="prompt-choice-btn${side === "left" ? " selected" : ""}" data-river-index="${item.index}" data-river-side="left">Left</button>` +
-        `<button type="button" class="prompt-choice-btn${side === "right" ? " selected" : ""}" data-river-index="${item.index}" data-river-side="right">Right</button>` +
-        `</div>`
-      );
-    })
-    .join("");
-  steps.innerHTML = rows + `<div class="prompt-choice-row"><button type="button" class="prompt-choice-btn" id="riverConfirmBtn">Confirm</button></div>`;
-
-  steps.querySelectorAll("[data-river-index]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      ragingRiverSelection[Number(btn.dataset.riverIndex)] = btn.dataset.riverSide;
-      applyRagingRiverPrompt(info);
-    });
-  });
-  const confirmBtn = document.getElementById("riverConfirmBtn");
-  if (confirmBtn) {
-    confirmBtn.addEventListener("click", async () => {
-      const piles = { ...ragingRiverSelection };
-      ragingRiverSelection = null;
-      await sendAction({
-        seat,
-        action: isDefender ? "assign_defender_piles" : "assign_attacker_piles",
-        piles,
-      });
-    });
+  const allChosen = items.every(
+    (it) => ragingRiverSelection[it.index] === "left" || ragingRiverSelection[it.index] === "right"
+  );
+  if (allChosen) {
+    const piles = {};
+    for (const it of items) piles[it.index] = ragingRiverSelection[it.index];
+    ragingRiverSelection = null;
+    ragingRiverPromptSig = null;
+    sendAction({
+      seat,
+      action: isDefender ? "assign_defender_piles" : "assign_attacker_piles",
+      piles,
+    }).catch((e) => updateActionHint(e.message, true));
+  } else {
+    renderBoard(currentState);
+    updateActionHint(
+      `Raging River: assign each creature to Left or Right (${Object.keys(ragingRiverSelection).length}/${items.length} chosen).`
+    );
   }
 }
 
@@ -3243,11 +3272,9 @@ function renderActivationPrompt() {
     return;
   }
 
-  const ragingRiverInfo = getRagingRiverInfo();
-  if (ragingRiverInfo) {
-    applyRagingRiverPrompt(ragingRiverInfo);
-    return;
-  }
+  // Raging River is resolved with Left/Right buttons drawn directly on the board
+  // (see renderRagingRiver / onRiverPileClick), not through the modal panel — so
+  // it deliberately has no dispatch branch here.
 
   const islandSanctuaryInfo = getIslandSanctuaryInfo();
   if (islandSanctuaryInfo) {
@@ -7201,6 +7228,11 @@ function initBattlefieldCanvas() {
 
     onHandCardDrop(info) {
       handleHandCardDropOnBattlefield(info).catch((e) => updateActionHint(e.message, true));
+    },
+
+    // Raging River: a Left/Right button drawn above a creature was clicked.
+    onRiverPileClick(choice) {
+      handleRagingRiverPileClick(choice);
     },
 
     onBlockerAssign({ blockerIdx, attackerIdx }) {

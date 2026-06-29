@@ -194,6 +194,17 @@ class BattlefieldCanvas {
     // the mana fan, or with no args when they click away to dismiss it.
     this.onManaFanPick = callbacks.onManaFanPick || null;
     this.onManaFanCancel = callbacks.onManaFanCancel || null;
+    // Fires with {seat, idx, side} when a Raging River Left/Right button drawn
+    // above a creature is clicked.
+    this.onRiverPileClick = callbacks.onRiverPileClick || null;
+
+    // Raging River left/right division state pushed from the app each render:
+    // { active, defenderSeat, attackerSeat, defenderPiles, attackerPiles,
+    //   defenderLocked, attackerLocked, prompt }. `prompt` (when set) is the
+    //   viewer's own pending choice: { seat, role, items:[{idx,name}], selection }.
+    this.river = null;
+    // World-space rects of the currently drawn Left/Right buttons, for hit-testing.
+    this._riverButtonRects = [];
 
     // emblemItems: [{index, emblem, x, y, w, h}] — the viewer's own non-card
     // activated abilities granted until end of turn (Guardian Angel). Drawn as
@@ -1449,6 +1460,90 @@ class BattlefieldCanvas {
     this.needsRedraw = true;
   }
 
+  // Push Raging River's left/right division state. Re-applies the pile-split
+  // layout (once a side's piles are locked, its creatures cluster left/right).
+  setRagingRiver(river) {
+    this.river = river && river.active ? river : null;
+    this._applyRiverLayout();
+    // Cards may have moved into left/right clusters — refit so none clip offscreen.
+    this._updateCameraTarget();
+    this.needsRedraw = true;
+  }
+
+  // The locked pile side ("left"/"right") for a creature, or null when its
+  // controller hasn't committed yet (so it isn't badged/rearranged early).
+  _riverSideForKey(seat, idx) {
+    const r = this.river;
+    if (!r) return null;
+    if (seat === r.defenderSeat && r.defenderLocked) {
+      const s = r.defenderPiles?.[idx];
+      if (s) return s;
+    }
+    if (seat === r.attackerSeat && r.attackerLocked) {
+      const s = r.attackerPiles?.[idx];
+      if (s) return s;
+    }
+    return null;
+  }
+
+  // Rearrange each player's committed creatures into a left cluster and a right
+  // cluster (CR 702 Raging River). Runs after _layoutBoard, overriding the
+  // horizontal slot of every piled creature; vertical band position is kept.
+  _applyRiverLayout() {
+    this._riverClusters = [];
+    const r = this.river;
+    if (!r || !r.active) return;
+    const sides = [
+      { seat: r.defenderSeat, piles: r.defenderPiles, locked: r.defenderLocked },
+      { seat: r.attackerSeat, piles: r.attackerPiles, locked: r.attackerLocked },
+    ];
+    for (const { seat, piles, locked } of sides) {
+      if (!locked || !piles || !Number.isInteger(seat)) continue;
+      const entries = Object.entries(piles)
+        .map(([idx, side]) => ({ key: `${seat}-${Number(idx)}`, side }))
+        .filter((e) => this.cardItems.some((c) => c.key === e.key));
+      if (!entries.length) continue;
+      // Anchor the split around where these creatures already sit so the camera
+      // barely moves: average their current layout target.
+      let sumX = 0;
+      let sumY = 0;
+      for (const e of entries) {
+        const it = this.cardItems.find((c) => c.key === e.key);
+        sumX += it.tx;
+        sumY += it.ty;
+      }
+      const center = sumX / entries.length + BF_CARD_W / 2;
+      const rowY = sumY / entries.length;
+      const lefts = entries.filter((e) => e.side === "left");
+      const rights = entries.filter((e) => e.side === "right");
+      const gap = BF_SLOT_PITCH_X; // clear divider channel between the two piles
+      lefts.forEach((e, i) => {
+        const it = this.cardItems.find((c) => c.key === e.key);
+        // Last "left" creature hugs the divider; earlier ones extend further left.
+        it.tx = center - gap / 2 - (lefts.length - i) * BF_SLOT_PITCH_X;
+        it.ty = rowY;
+      });
+      rights.forEach((e, i) => {
+        const it = this.cardItems.find((c) => c.key === e.key);
+        it.tx = center + gap / 2 + i * BF_SLOT_PITCH_X;
+        it.ty = rowY;
+      });
+      this._riverClusters.push({
+        seat,
+        center,
+        rowY,
+        leftKeys: lefts.map((e) => e.key),
+        rightKeys: rights.map((e) => e.key),
+      });
+      // Break apart identity piles that now straddle the divider so each member
+      // renders at its own spot rather than fanning from a single anchor.
+      const movedKeys = new Set(entries.map((e) => e.key));
+      this.stacks = this.stacks.filter(
+        (s) => s.kind !== "pile" || !s.keys.some((k) => movedKeys.has(k))
+      );
+    }
+  }
+
   // Is the given card key part of the band the hovered card belongs to? Used to
   // group-highlight a band when any of its members is hovered.
   _bandKeysForHover() {
@@ -2449,6 +2544,9 @@ class BattlefieldCanvas {
       ctx.restore();
     }
 
+    // ---- Raging River: pile dividers, side badges, and Left/Right buttons ----
+    this._drawRiver(ctx);
+
     // ---- Live blocker-assignment drag arrow ----
     if (this.pressState?.combatDrag) {
       const fc = this._cardCenter(this.pressState.key);
@@ -2468,6 +2566,135 @@ class BattlefieldCanvas {
     this._drawManaFan(ctx, performance.now());
 
     ctx.restore(); // camera
+  }
+
+  // Raging River (CR 702): draw the left/right divider + side badges for committed
+  // piles, and the Left/Right choice buttons above the viewer's pending creatures.
+  // Runs inside the camera transform so everything sits in world space.
+  _drawRiver(ctx) {
+    this._riverButtonRects = [];
+    const r = this.river;
+    if (!r || !r.active) return;
+
+    // --- Divider channel + LEFT/RIGHT captions for each committed cluster ---
+    for (const cl of this._riverClusters || []) {
+      const keys = [...cl.leftKeys, ...cl.rightKeys];
+      let top = Infinity;
+      let bot = -Infinity;
+      for (const k of keys) {
+        const pos = this._renderPos(k);
+        if (!pos) continue;
+        const b = this._boundsAt(k, pos);
+        top = Math.min(top, b.y);
+        bot = Math.max(bot, b.y + b.h);
+      }
+      if (!isFinite(top)) continue;
+      top -= 16;
+      bot += 10;
+      ctx.save();
+      ctx.strokeStyle = "rgba(120,180,255,0.5)";
+      ctx.lineWidth = 2 / this.zoom;
+      ctx.setLineDash([10 / this.zoom, 7 / this.zoom]);
+      ctx.beginPath();
+      ctx.moveTo(cl.center, top);
+      ctx.lineTo(cl.center, bot);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.font = `700 ${13 / this.zoom}px sans-serif`;
+      ctx.textBaseline = "bottom";
+      if (cl.leftKeys.length) {
+        ctx.textAlign = "right";
+        ctx.fillStyle = "#7fb6ff";
+        ctx.fillText("◄ LEFT", cl.center - 12 / this.zoom, top - 2 / this.zoom);
+      }
+      if (cl.rightKeys.length) {
+        ctx.textAlign = "left";
+        ctx.fillStyle = "#ffce6b";
+        ctx.fillText("RIGHT ►", cl.center + 12 / this.zoom, top - 2 / this.zoom);
+      }
+      ctx.restore();
+    }
+
+    // --- Per-creature side badges for committed piles ---
+    for (const item of this.cardItems) {
+      const side = this._riverSideForKey(item.seat, item.idx);
+      if (!side) continue;
+      const pos = this._renderPos(item.key);
+      if (!pos) continue;
+      const b = this._boundsAt(item.key, pos);
+      this._drawRiverBadge(ctx, b.x + b.w / 2, b.y + 11 / this.zoom, side);
+    }
+
+    // --- Left/Right choice buttons above the viewer's own pending creatures ---
+    const prompt = r.prompt;
+    if (prompt && Array.isArray(prompt.items)) {
+      for (const it of prompt.items) {
+        const key = `${prompt.seat}-${it.idx}`;
+        const pos = this._renderPos(key);
+        if (!pos) continue;
+        const b = this._boundsAt(key, pos);
+        const chosen = prompt.selection ? prompt.selection[it.idx] : null;
+        const bh = 26 / this.zoom;
+        const by = b.y - bh - 10 / this.zoom;
+        const halfW = (b.w - 6 / this.zoom) / 2;
+        const leftRect = { key, seat: prompt.seat, idx: it.idx, side: "left", x: b.x, y: by, w: halfW, h: bh };
+        const rightRect = { key, seat: prompt.seat, idx: it.idx, side: "right", x: b.x + b.w - halfW, y: by, w: halfW, h: bh };
+        this._drawRiverButton(ctx, leftRect, "◄ L", chosen === "left", "#4a90d9");
+        this._drawRiverButton(ctx, rightRect, "R ►", chosen === "right", "#e0a23b");
+        this._riverButtonRects.push(leftRect, rightRect);
+      }
+    }
+  }
+
+  _drawRiverBadge(ctx, cx, cy, side) {
+    const isLeft = side === "left";
+    const label = isLeft ? "LEFT" : "RIGHT";
+    const color = isLeft ? "#3f7fce" : "#d2912f";
+    ctx.save();
+    ctx.font = `700 ${10 / this.zoom}px sans-serif`;
+    const tw = ctx.measureText(label).width;
+    const padX = 6 / this.zoom;
+    const w = tw + padX * 2;
+    const h = 15 / this.zoom;
+    ctx.fillStyle = color;
+    ctx.shadowColor = "rgba(0,0,0,0.55)";
+    ctx.shadowBlur = 4 / this.zoom;
+    this._roundRect(ctx, cx - w / 2, cy - h / 2, w, h, 4 / this.zoom);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, cx, cy + 0.5 / this.zoom);
+    ctx.restore();
+  }
+
+  _drawRiverButton(ctx, rect, label, selected, color) {
+    ctx.save();
+    ctx.fillStyle = selected ? color : "rgba(16,24,36,0.94)";
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2 / this.zoom;
+    ctx.shadowColor = "rgba(0,0,0,0.6)";
+    ctx.shadowBlur = 6 / this.zoom;
+    this._roundRect(ctx, rect.x, rect.y, rect.w, rect.h, 5 / this.zoom);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.stroke();
+    ctx.fillStyle = selected ? "#0b1118" : color;
+    ctx.font = `700 ${13 / this.zoom}px sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, rect.x + rect.w / 2, rect.y + rect.h / 2 + 0.5 / this.zoom);
+    ctx.restore();
+  }
+
+  // Hit-test the Raging River Left/Right buttons (world coords). Returns the
+  // matching button rect (with seat/idx/side) or null.
+  _hitTestRiverButton(wx, wy) {
+    for (const b of this._riverButtonRects) {
+      if (wx >= b.x && wx <= b.x + b.w && wy >= b.y && wy <= b.y + b.h) return b;
+    }
+    return null;
   }
 
   _drawCombatFx(ctx, now) {
@@ -2826,6 +3053,18 @@ class BattlefieldCanvas {
       return;
     }
 
+    // Raging River Left/Right buttons float above their creature and win the press.
+    const riverHit = this._hitTestRiverButton(world.x, world.y);
+    if (riverHit) {
+      this.pressState = {
+        riverButton: { seat: riverHit.seat, idx: riverHit.idx, side: riverHit.side },
+        key: null, seat: null, idx: null, card: null,
+        startCX: cx, startCY: cy, currentCX: cx, currentCY: cy,
+        combatDrag: false, cancelled: false,
+      };
+      return;
+    }
+
     // Floating stack cards draw above the battlefield, so they win the press.
     const stackHit = this._hitTestStack(world.x, world.y);
     if (stackHit) {
@@ -2925,6 +3164,12 @@ class BattlefieldCanvas {
       return;
     }
 
+    // Raging River buttons sit above their creature and take pointer priority.
+    if (this._hitTestRiverButton(world.x, world.y)) {
+      this.canvas.style.cursor = "pointer";
+      return;
+    }
+
     // Hover — the floating stack cascade sits above battlefield cards.
     const stackHit = this._updateStackHover(world.x, world.y);
 
@@ -2987,6 +3232,11 @@ class BattlefieldCanvas {
       ) {
         this.onBlockerAssign({ blockerIdx: ps.idx, attackerIdx: target.idx });
       }
+      return;
+    }
+
+    if (!ps.cancelled && ps.riverButton) {
+      if (this.onRiverPileClick) this.onRiverPileClick(ps.riverButton);
       return;
     }
 

@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/test_failed_cards_regressions_batch9.py tests/test_batch9_ui_api.py -q)"
+    ]
+  }
+}
