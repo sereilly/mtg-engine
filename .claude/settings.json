@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(./.venv/Scripts/python.exe -m pytest tests/test_failed_cards_regressions_batch9.py tests/test_batch9_ui_api.py -q)",
-      "Bash(./.venv/Scripts/python.exe -m pytest -q -k \"soul_net or sengir or SoulNet or Sengir or soul net\")"
+      "Bash(./.venv/Scripts/python.exe -m pytest -q -k \"soul_net or sengir or SoulNet or Sengir or soul net\")",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m pytest tests/test_combat_phase.py -q)"
     ]
   }
 }

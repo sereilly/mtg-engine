@@ -3,9 +3,9 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **290**
-- Passed: **214**
-- Failed: **4**
-- Untested: **72**
+- Passed: **224**
+- Failed: **11**
+- Untested: **55**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -41,7 +41,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Celestial Prism | ✅ pass |  |
 | Channel | ❌ fail | Do not use the window prompt API. use the in-game prompt dialog |
 | Chaos Orb | ✅ pass |  |
-| Chaoslace | ⬜ untested |  |
+| Chaoslace | ✅ pass |  |
 | Circle of Protection: Blue | ✅ pass |  |
 | Circle of Protection: Green | ✅ pass |  |
 | Circle of Protection: Red | ✅ pass |  |
@@ -70,7 +70,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Deathlace | ⬜ untested |  |
 | Demonic Attorney | ✅ pass |  |
 | Demonic Hordes | ✅ pass |  |
-| Demonic Tutor | ⬜ untested |  |
+| Demonic Tutor | ✅ pass |  |
 | Dingus Egg | ✅ pass |  |
 | Disenchant | ✅ pass |  |
 | Disintegrate | ✅ pass |  |
@@ -86,8 +86,8 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Earthquake | ✅ pass |  |
 | Elvish Archers | ✅ pass |  |
 | Evil Presence | ✅ pass |  |
-| False Orders | ⬜ untested |  |
-| Farmstead | ⬜ untested |  |
+| False Orders | ❌ fail | I can choose a target but nothing happens after that |
+| Farmstead | ✅ pass |  |
 | Fastbond | ✅ pass |  |
 | Fear | ✅ pass |  |
 | Feedback | ✅ pass |  |
@@ -98,19 +98,19 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Flight | ✅ pass |  |
 | Fog | ✅ pass |  |
 | Force of Nature | ✅ pass |  |
-| Forcefield | ⬜ untested |  |
+| Forcefield | ✅ pass |  |
 | Forest | ✅ pass |  |
 | Fork | ✅ pass |  |
 | Frozen Shade | ✅ pass |  |
 | Fungusaur | ✅ pass |  |
-| Gaea's Liege | ⬜ untested |  |
+| Gaea's Liege | ✅ pass |  |
 | Gauntlet of Might | ✅ pass |  |
 | Giant Growth | ✅ pass |  |
 | Giant Spider | ✅ pass |  |
 | Glasses of Urza | ⬜ untested |  |
 | Gloom | ⬜ untested |  |
 | Goblin Balloon Brigade | ✅ pass |  |
-| Goblin King | ⬜ untested |  |
+| Goblin King | ❌ fail | Doesn't give other goblins mountainwalk |
 | Granite Gargoyle | ✅ pass |  |
 | Gray Ogre | ✅ pass |  |
 | Green Ward | ✅ pass |  |
@@ -127,7 +127,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Hurricane | ✅ pass |  |
 | Hypnotic Specter | ⬜ untested |  |
 | Ice Storm | ✅ pass |  |
-| Icy Manipulator | ⬜ untested |  |
+| Icy Manipulator | ✅ pass |  |
 | Illusionary Mask | ⬜ untested |  |
 | Instill Energy | ⬜ untested |  |
 | Invisibility | ✅ pass |  |
@@ -158,9 +158,9 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Living Lands | ⬜ untested |  |
 | Living Wall | ✅ pass |  |
 | Llanowar Elves | ✅ pass |  |
-| Lord of Atlantis | ⬜ untested |  |
+| Lord of Atlantis | ❌ fail | It's not giving other merfolk islandwalk |
 | Lord of the Pit | ⬜ untested |  |
-| Lure | ⬜ untested |  |
+| Lure | ✅ pass |  |
 | Magical Hack | ⬜ untested |  |
 | Mahamoti Djinn | ✅ pass |  |
 | Mana Flare | ✅ pass |  |
@@ -187,19 +187,19 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Obsianus Golem | ✅ pass |  |
 | Orcish Artillery | ✅ pass |  |
 | Orcish Oriflamme | ✅ pass |  |
-| Paralyze | ⬜ untested |  |
+| Paralyze | ❌ fail | Show the mana icons instead of {generic}{generic}{generic}{generic} in the prompt |
 | Pearled Unicorn | ✅ pass |  |
-| Personal Incarnation | ⬜ untested |  |
+| Personal Incarnation | ✅ pass |  |
 | Pestilence | ✅ pass |  |
 | Phantasmal Forces | ✅ pass |  |
 | Phantasmal Terrain | ⬜ untested |  |
 | Phantom Monster | ✅ pass |  |
 | Pirate Ship | ✅ pass |  |
-| Plague Rats | ⬜ untested |  |
+| Plague Rats | ✅ pass |  |
 | Plains | ✅ pass |  |
 | Plateau | ✅ pass |  |
 | Power Leak | ✅ pass |  |
-| Power Sink | ⬜ untested |  |
+| Power Sink | ❌ fail | I didn't get a prompt to pay mana to stop the spell from getting countered |
 | Power Surge | ✅ pass |  |
 | Prodigal Sorcerer | ✅ pass |  |
 | Psionic Blast | ✅ pass |  |
@@ -218,7 +218,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Rock Hydra | ⬜ untested |  |
 | Rod of Ruin | ✅ pass |  |
 | Royal Assassin | ⬜ untested |  |
-| Sacrifice | ⬜ untested |  |
+| Sacrifice | ❌ fail | Sacrifice costs should let me choose a creature I control |
 | Samite Healer | ✅ pass |  |
 | Savannah | ✅ pass |  |
 | Savannah Lions | ✅ pass |  |
@@ -239,7 +239,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Sleight of Mind | ⬜ untested |  |
 | Smoke | ⬜ untested |  |
 | Sol Ring | ✅ pass |  |
-| Soul Net | ⬜ untested |  |
+| Soul Net | ✅ pass |  |
 | Spell Blast | ✅ pass |  |
 | Stasis | ✅ pass |  |
 | Steal Artifact | ✅ pass |  |
@@ -255,7 +255,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Thicket Basilisk | ✅ pass |  |
 | Thoughtlace | ⬜ untested |  |
 | Throne of Bone | ⬜ untested |  |
-| Timber Wolves | ⬜ untested |  |
+| Timber Wolves | ❌ fail | I didn't get to choose how the blocker's combat is assigned to the band. It should show a dialog where I can assign damage |
 | Time Vault | ⬜ untested |  |
 | Time Walk | ✅ pass |  |
 | Timetwister | ✅ pass |  |

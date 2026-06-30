@@ -130,10 +130,11 @@ class CombatDamageStepMixin:
 
         Single-blocked attackers assign their full power to that blocker (only
         lethal for tramplers, so the remainder can trample through). Multi-blocked
-        attackers assign lethal to each blocker in declared order and dump any
-        leftover power onto the last blocker that received lethal — this keeps the
-        assignment legal (the resolver rejects a positive-but-sub-lethal amount)
-        while still killing as many blockers as the attacker can.
+        attackers assign lethal to each blocker in index order and dump any leftover
+        power onto the last blocker that received lethal. This is only a heuristic
+        for the AI / auto-resolve path — it maximizes how many blockers die. The
+        resolver no longer requires lethal-in-order (CR 510.1c), so a human attacker
+        may freely override this with any legal division.
         """
         if not self.combat_attackers:
             return {}
@@ -174,13 +175,11 @@ class CombatDamageStepMixin:
                 assignment[attacker_idx] = {blocker_idx: assign}
                 continue
 
-            # Multiple blockers: assign lethal in declared order (CR 510.1c). A
-            # blocker may receive damage only once every earlier blocker in the
-            # order has been assigned lethal — so the moment the attacker can no
-            # longer afford lethal, it dumps all remaining power on *that* blocker
-            # and assigns nothing to the rest. Assigning a later blocker while an
-            # earlier one is sub-lethal is illegal and the resolver would reject
-            # the whole assignment, deadlocking combat.
+            # Multiple blockers: walk them in index order assigning lethal to each
+            # until the attacker runs out of power, then dump the remainder on the
+            # last blocker that received lethal. This kills as many blockers as the
+            # attacker's power allows. It's just the default — any non-negative
+            # division summing to <= power is legal (CR 510.1c).
             power_left = max(0, attacker.effective_power)
             per_blocker: dict[int, int] = {}
             last_lethal_idx: int | None = None
@@ -317,13 +316,16 @@ class CombatDamageStepMixin:
                 requested = self.combat_banding_damage[attacker_idx]
             else:
                 requested = attacker_damage.get(attacker_idx, {})
+            has_trample = self._has_keyword(attacker, "trample")
             assigned_total = 0
             block_order = sorted(blockers)
-            # CR 510.1c: with multiple blockers ordered by the attacker, a blocker
-            # may be assigned combat damage only if every earlier blocker in the
-            # order has been assigned lethal damage. A single (or the last) blocker
-            # carries no such constraint and may receive any amount, even sub-lethal.
-            sublethal_blocker_seen = False
+            # CR 510.1c: a creature blocked by two or more creatures assigns its
+            # combat damage divided among them however its controller chooses.
+            # There is no damage-assignment order and no requirement to assign
+            # lethal to one blocker before another — that pre-2017 rule is gone.
+            # The only constraints (CR 510.1e) are non-negative per-blocker amounts
+            # whose total doesn't exceed the attacker's power, checked below.
+            trample_underlethal = False
             for blocker_idx in block_order:
                 if blocker_idx >= len(defender.battlefield):
                     continue
@@ -336,11 +338,10 @@ class CombatDamageStepMixin:
                     return False, "combat damage assignment cannot be negative"
                 if requested_damage > power_left:
                     return False, "assigned combat damage exceeds attacker power"
-                if not self._has_keyword(attacker, "trample"):
-                    if sublethal_blocker_seen and requested_damage > 0:
-                        return False, "must assign lethal to each blocker in order"
-                    if requested_damage < lethal:
-                        sublethal_blocker_seen = True
+                # CR 702.19e: a trampler may assign excess to the defending player
+                # only once each blocker has been assigned at least lethal damage.
+                if has_trample and requested_damage < lethal:
+                    trample_underlethal = True
                 assigned_total += requested_damage
                 power_left -= requested_damage
                 if requested_damage > 0:
@@ -348,7 +349,9 @@ class CombatDamageStepMixin:
 
             if assigned_total > attacker.effective_power:
                 return False, "assigned combat damage exceeds attacker power"
-            if self._has_keyword(attacker, "trample") and power_left > 0 and not self.combat_damage_prevented_until_eot:
+            if has_trample and power_left > 0 and trample_underlethal:
+                return False, "trample requires lethal damage assigned to each blocker"
+            if has_trample and power_left > 0 and not self.combat_damage_prevented_until_eot:
                 trample_damage = self._prevent_damage(defender, power_left, source=attacker)
                 if trample_damage > 0:
                     defender_damage_events.append((defending_index, trample_damage, attacker))

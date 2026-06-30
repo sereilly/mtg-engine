@@ -137,13 +137,14 @@ def test_two_combat_damage_steps_with_first_strike():
     assert len(p1.battlefield) == 1  # first striker survived
 
 
-def test_auto_damage_assignment_respects_blocker_order_when_first_is_unkillable():
-    # CR 510.1c: an attacker assigns combat damage to its blockers in order and
-    # may only assign to a later blocker once each earlier blocker has lethal.
-    # The auto-assignment used for AI/quick resolution must honour this even when
-    # the *first* blocker can't be killed but a later one could — otherwise it
-    # produces an illegal {first: 0, later: lethal} split that resolve_combat_damage
-    # rejects, leaving combat_damage_resolved False and deadlocking the step.
+def test_auto_damage_assignment_dumps_power_on_first_blocker_when_unkillable():
+    # The auto-assignment heuristic walks blockers in index order, assigning lethal
+    # to each until power runs out, then dumps the remainder on the last blocker it
+    # could afford. Here the 2-power attacker can't kill the 0/3 wall in index 0, so
+    # all 2 damage lands there and the later blocker gets nothing. This is only the
+    # default for AI/quick resolution — under CR 510.1c the attacker could legally
+    # instead put both damage on the frail blocker (see the free-division tests
+    # below); the heuristic just doesn't bother optimizing kills across the order.
     attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
     tough_blocker = Permanent(card=_mk_creature("Wall", 0, 3))   # index 0: can't be killed by 2 power
     frail_blocker = Permanent(card=_mk_creature("Squire", 1, 2))  # index 1: could be killed
@@ -160,13 +161,129 @@ def test_auto_damage_assignment_respects_blocker_order_when_first_is_unkillable(
     assert game._needs_manual_damage_assignment()
 
     auto = game._build_auto_damage_assignment()
-    # All damage goes to the first blocker (the legal sub-lethal breakpoint); the
-    # later blocker gets nothing, so the assignment is legal in declared order.
     assert auto == {0: {0: 2, 1: 0}}
 
     ok, _ = game.resolve_combat_damage(0, attacker_damage=auto)
     assert ok
     assert game.combat_damage_resolved is True
+
+
+def test_multi_block_attacker_may_divide_damage_freely():
+    # CR 510.1c: a creature blocked by two or more creatures divides its combat
+    # damage among them however its controller chooses — there is no damage
+    # assignment order and no requirement to assign lethal to an earlier blocker
+    # before a later one. A 4/4 blocked by two 3/3s may put 3 on the second blocker
+    # and only 1 (sub-lethal) on the first, killing the second and sparing the first.
+    attacker = Permanent(card=_mk_creature("Ogre", 4, 4))
+    blocker_a = Permanent(card=_mk_creature("Bear A", 3, 3))  # index 0
+    blocker_b = Permanent(card=_mk_creature("Bear B", 3, 3))  # index 1
+    p1 = PlayerState(name="P1", battlefield=[attacker])
+    p2 = PlayerState(name="P2", battlefield=[blocker_a, blocker_b])
+    game = Game(players=[p1, p2])
+
+    _to_declare_attackers(game)
+    game.declare_attackers(0, [0])
+    game.advance_combat_phase()
+    game.declare_blockers(1, {0: 0, 1: 0})
+    game.advance_combat_phase()
+    assert game.current_step == "combat_damage"
+
+    # 1 to the index-0 blocker (sub-lethal), 3 to the index-1 blocker (lethal).
+    # The pre-2017 "lethal in order" rule would have rejected this; CR 510.1c allows it.
+    ok, _ = game.resolve_combat_damage(0, attacker_damage={0: {0: 1, 1: 3}})
+    assert ok
+    assert game.combat_damage_resolved is True
+    names = [perm.card.name for perm in p2.battlefield]
+    assert "Bear B" not in names  # took 3, died
+    assert "Bear A" in names      # took only 1, survived
+
+
+def test_multi_block_attacker_may_spread_sublethal_to_all():
+    # CR 510.1c, continued: the division need not be lethal to anyone. A 4/4 may
+    # split 2/2 across two 3/3 blockers, killing neither — a legal assignment.
+    attacker = Permanent(card=_mk_creature("Ogre", 4, 4))
+    blocker_a = Permanent(card=_mk_creature("Bear A", 3, 3))
+    blocker_b = Permanent(card=_mk_creature("Bear B", 3, 3))
+    p1 = PlayerState(name="P1", battlefield=[attacker])
+    p2 = PlayerState(name="P2", battlefield=[blocker_a, blocker_b])
+    game = Game(players=[p1, p2])
+
+    _to_declare_attackers(game)
+    game.declare_attackers(0, [0])
+    game.advance_combat_phase()
+    game.declare_blockers(1, {0: 0, 1: 0})
+    game.advance_combat_phase()
+
+    ok, _ = game.resolve_combat_damage(0, attacker_damage={0: {0: 2, 1: 2}})
+    assert ok
+    assert len(p2.battlefield) == 2  # neither blocker took lethal
+
+
+def test_multi_block_assignment_cannot_exceed_power():
+    # CR 510.1e: the total assignment may not exceed the attacker's power.
+    attacker = Permanent(card=_mk_creature("Ogre", 4, 4))
+    blocker_a = Permanent(card=_mk_creature("Bear A", 3, 3))
+    blocker_b = Permanent(card=_mk_creature("Bear B", 3, 3))
+    p1 = PlayerState(name="P1", battlefield=[attacker])
+    p2 = PlayerState(name="P2", battlefield=[blocker_a, blocker_b])
+    game = Game(players=[p1, p2])
+
+    _to_declare_attackers(game)
+    game.declare_attackers(0, [0])
+    game.advance_combat_phase()
+    game.declare_blockers(1, {0: 0, 1: 0})
+    game.advance_combat_phase()
+
+    ok, msg = game.resolve_combat_damage(0, attacker_damage={0: {0: 3, 1: 3}})
+    assert not ok
+    assert "exceeds attacker power" in msg
+
+
+def test_trample_over_multiple_blockers_requires_lethal_before_spillover():
+    # CR 702.19e: a trampler assigns excess to the defending player only after each
+    # blocker is assigned at least lethal damage. A 6/6 trampler blocked by a 3/3
+    # and a 1/1 may assign 3 + 1 (lethal to both) and trample the remaining 2 to the
+    # player, killing both blockers.
+    attacker = Permanent(card=_mk_creature("Trampler", 6, 6, "Trample"))
+    blocker_a = Permanent(card=_mk_creature("Bear", 3, 3))   # index 0
+    blocker_b = Permanent(card=_mk_creature("Goblin", 1, 1))  # index 1
+    p1 = PlayerState(name="P1", battlefield=[attacker])
+    p2 = PlayerState(name="P2", battlefield=[blocker_a, blocker_b])
+    game = Game(players=[p1, p2])
+
+    _to_declare_attackers(game)
+    game.declare_attackers(0, [0])
+    game.advance_combat_phase()
+    game.declare_blockers(1, {0: 0, 1: 0})
+    game.advance_combat_phase()
+
+    ok, _ = game.resolve_combat_damage(0, attacker_damage={0: {0: 3, 1: 1}})
+    assert ok
+    assert len(p2.battlefield) == 0   # both blockers died
+    assert p2.life == 18              # 2 trampled through
+
+
+def test_trample_cannot_spill_over_without_lethal_to_each_blocker():
+    # CR 702.19e: assigning sub-lethal to a blocker while still trampling damage to
+    # the player is illegal. A 6/6 trampler may not assign {2, 3} (the 3/3 gets only
+    # 2) and trample the last point through.
+    attacker = Permanent(card=_mk_creature("Trampler", 6, 6, "Trample"))
+    blocker_a = Permanent(card=_mk_creature("Bear A", 3, 3))
+    blocker_b = Permanent(card=_mk_creature("Bear B", 3, 3))
+    p1 = PlayerState(name="P1", battlefield=[attacker])
+    p2 = PlayerState(name="P2", battlefield=[blocker_a, blocker_b])
+    game = Game(players=[p1, p2])
+
+    _to_declare_attackers(game)
+    game.declare_attackers(0, [0])
+    game.advance_combat_phase()
+    game.declare_blockers(1, {0: 0, 1: 0})
+    game.advance_combat_phase()
+
+    ok, msg = game.resolve_combat_damage(0, attacker_damage={0: {0: 2, 1: 3}})
+    assert not ok
+    assert "lethal" in msg
+    assert p2.life == 20  # nothing trampled through
 
 
 def test_two_combat_damage_steps_with_double_strike():
