@@ -5798,7 +5798,12 @@ def test_phantasmal_terrain_overrides_enchanted_land_type(all_cards):
     result = game.cast_from_hand(0, "Phantasmal Terrain", target_player_index=1, target_permanent_index=0)
 
     assert result.supported
-    assert p2.battlefield[0].metadata.get("land_type_override") is not None
+    # The land type is not changed until the controller finishes the basic-land-type
+    # choice (the spell does not resolve the change before the prompt is answered).
+    assert p2.battlefield[0].metadata.get("land_type_override") is None
+    assert game.pending_land_type_choice is not None
+    assert game.confirm_land_type(0, "swamp") is True
+    assert p2.battlefield[0].metadata.get("land_type_override") == "swamp"
 
 
 def test_phantom_monster_classifies_supported(all_cards):

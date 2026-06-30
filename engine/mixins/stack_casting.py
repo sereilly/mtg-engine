@@ -197,6 +197,59 @@ class StackCastingMixin:
         self.pending_land_type_choice = None
         return True
 
+    def confirm_mana_payment(self, player_index: int, pay: bool) -> bool:
+        """Resolve a pending Power Sink payment (CR 701.x / "unless its controller
+        pays {X}"). The targeted spell's controller pays {X} from their mana pool to
+        keep their spell, or declines (or can't afford it) and the spell is countered
+        with Power Sink's rider applied."""
+        pending = self.pending_mana_payment
+        if pending is None or pending["player_index"] != player_index:
+            return False
+        self._resolve_mana_payment(bool(pay))
+        return True
+
+    def _auto_resolve_mana_payment(self) -> None:
+        """Deterministic headless/AI resolution of a pending Power Sink payment: pay
+        from the controller's mana pool if able, otherwise let the spell be
+        countered. Keeps seeded simulations and the headless resolve path unchanged."""
+        pending = self.pending_mana_payment
+        if pending is None:
+            return
+        controller = self.players[pending["player_index"]]
+        available = sum(controller.mana_pool.get(s, 0) for s in controller.mana_pool)
+        self._resolve_mana_payment(available >= int(pending["amount"]))
+
+    def _resolve_mana_payment(self, pay: bool) -> None:
+        pending = self.pending_mana_payment
+        if pending is None:
+            return
+        controller = self.players[pending["player_index"]]
+        amount = int(pending["amount"])
+        target = pending.get("stack_item")
+        counter_card = pending.get("counter_card")
+        available = sum(controller.mana_pool.get(s, 0) for s in controller.mana_pool)
+        if pay and available >= amount:
+            remaining = amount
+            for sym in list(controller.mana_pool):
+                while remaining > 0 and controller.mana_pool.get(sym, 0) > 0:
+                    controller.mana_pool[sym] -= 1
+                    remaining -= 1
+            name = target.card.name if target is not None else "the spell"
+            self.log.append(f"{controller.name} paid {{{amount}}}; {name} is not countered")
+        else:
+            # Declined or unable to pay: the spell is countered and Power Sink's rider
+            # (tap all the controller's lands, drain their mana) applies.
+            if target is not None and target in self.stack:
+                self.stack.remove(target)
+                controller.graveyard.append(target.card)
+                self.log.append(f"{pending['card_name']} countered {target.card.name}")
+                if counter_card is not None:
+                    from ..card_hooks import ON_SPELL_COUNTERED
+                    hook = ON_SPELL_COUNTERED.get(pending["card_name"])
+                    if hook is not None:
+                        hook(self, counter_card, target)
+        self.pending_mana_payment = None
+
     def confirm_kudzu_reattach(self, player_index: int, land_index: int) -> bool:
         """Resolve a pending Kudzu reattach by moving the detached Aura onto the
         controller's chosen land."""
@@ -1394,6 +1447,13 @@ class StackCastingMixin:
         item = self.stack.pop()
         pays_before = len(self.pending_optional_pays)
         self._run_stack_item_resolution(item)
+        # Power Sink armed a pending "pay {X} or be countered" for the targeted
+        # spell's controller. On the human priority path leave it for the prompt;
+        # headless/AI resolves it deterministically (pay if able, else countered).
+        if self.pending_mana_payment is not None and self.pending_mana_payment.get("_new"):
+            self.pending_mana_payment.pop("_new", None)
+            if not pause_for_choices:
+                self._auto_resolve_mana_payment()
         if pause_for_choices and len(self.pending_optional_pays) > pays_before:
             # The ability raised an optional pay/draw choice — keep it on the stack
             # until the choice is submitted (the only effect so far is registering the

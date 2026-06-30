@@ -48,7 +48,9 @@ def untap_target_land(game: Game, instruction: OracleInstruction, context: Oracl
 @effect_handler("untap_target_permanent")
 def untap_target_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     target = context.target
-    untapped = game._tap_or_untap_target(target, make_tapped=False)
+    untapped = game._tap_or_untap_target(
+        target, make_tapped=False, target_permanent_index=context.target_permanent_index
+    )
     game.log.append("Untapped target permanent" if untapped else "No valid permanent to untap")
     return True, "resolved"
 
@@ -69,8 +71,30 @@ def untap_enchanted_creature(game: Game, instruction: OracleInstruction, context
 @effect_handler("tap_target_permanent")
 def tap_target_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     target = context.target
-    tapped = game._tap_or_untap_target(target, make_tapped=True)
+    tapped = game._tap_or_untap_target(
+        target, make_tapped=True, target_permanent_index=context.target_permanent_index
+    )
     game.log.append("Tapped target permanent" if tapped else "No valid permanent to tap")
+    return True, "resolved"
+
+
+@effect_handler("tap_or_untap_target")
+def tap_or_untap_target(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    # Twiddle: toggle the chosen permanent's tapped state (tap an untapped one,
+    # untap a tapped one). Honor the explicitly chosen permanent on either
+    # battlefield; fall back to the first permanent for AI/headless play.
+    target = context.target
+    idx = context.target_permanent_index
+    perm = None
+    if isinstance(idx, int) and 0 <= idx < len(target.battlefield):
+        perm = target.battlefield[idx]
+    elif target.battlefield:
+        perm = target.battlefield[0]
+    if perm is None:
+        game.log.append("No valid permanent to tap or untap")
+        return True, "resolved"
+    perm.tapped = not perm.tapped
+    game.log.append(f"{'Tapped' if perm.tapped else 'Untapped'} {perm.card.name}")
     return True, "resolved"
 
 

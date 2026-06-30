@@ -13,6 +13,8 @@ let pendingModalChoice = null;
 // A permanent with more than one activated ability (Rock Hydra, Basalt Monolith)
 // awaiting the player's choice of which ability to activate.
 let pendingAbilityChoice = null;
+// Channel emblem awaiting the player's choice of how much life to pay for {C}.
+let pendingChannel = null;
 // Disrupting Scepter discard destination toggle (Library of Leng): false =
 // graveyard, true = top of library. Reset whenever a new discard prompt opens.
 let discardToLibrarySelected = false;
@@ -41,6 +43,9 @@ let combatBandDraft = false;
 // player's normal split ("attacker") or the defender's banding split ("banding").
 let combatDamageDialogMode = "attacker";
 let combatBlockerDraft = {};
+// CR 702.22k: the active player's choice of which band member each creature
+// blocking their band damages. Maps blocker_idx -> chosen attacker (band member).
+let combatBandBlockerDraft = {};
 let combatDraftStepKey = "";
 let combatPromptKey = "";
 let previousLifeBySeat = {};
@@ -259,10 +264,30 @@ function syncCombatDrafts(state = currentState) {
   if (isCombatStep(state, "declare_blockers") && seat === combat?.defending_player_index) {
     combatBlockerDraft = {};
     for (const pair of combat?.blockers || []) {
-      combatBlockerDraft[Number(pair.blocker_index)] = Number(pair.attacker_index);
+      const b = Number(pair.blocker_index);
+      (combatBlockerDraft[b] = combatBlockerDraft[b] || []).push(Number(pair.attacker_index));
     }
   } else {
     combatBlockerDraft = {};
+  }
+}
+
+// Assign a blocker to an attacker in the draft. A creature that can block more than
+// one attacker (Two-Headed Giant of Foriys, or a Blaze of Glory grant) toggles the
+// attacker in its list; an ordinary blocker holds a single attacker (reassigning
+// replaces it). Values are always arrays of attacker indices.
+function assignBlockerDraft(blockerIdx, attackerIdx) {
+  const b = Number(blockerIdx);
+  const a = Number(attackerIdx);
+  const defender = getCombatState(currentState)?.defending_player_index;
+  const blockerCard = currentState?.players?.[defender]?.battlefield?.[b];
+  const canMultiple = !!(blockerCard && typeof blockerCard !== "string" && blockerCard.can_block_multiple);
+  const current = Array.isArray(combatBlockerDraft[b]) ? combatBlockerDraft[b] : [];
+  if (canMultiple) {
+    combatBlockerDraft[b] = current.includes(a) ? current.filter((x) => x !== a) : [...current, a];
+    if (combatBlockerDraft[b].length === 0) delete combatBlockerDraft[b];
+  } else {
+    combatBlockerDraft[b] = [a];
   }
 }
 
@@ -345,10 +370,12 @@ function getDisplayedBlockerLinks(state = currentState) {
   const combat = getCombatState(state);
   if (!combat) return [];
   if (isCombatStep(state, "declare_blockers") && seat === combat.defending_player_index && !combat.blockers_locked) {
-    return Object.entries(combatBlockerDraft).map(([blockerIndex, attackerIndex]) => ({
-      blocker_index: Number(blockerIndex),
-      attacker_index: Number(attackerIndex),
-    }));
+    return Object.entries(combatBlockerDraft).flatMap(([blockerIndex, attackerIndices]) =>
+      (Array.isArray(attackerIndices) ? attackerIndices : [attackerIndices]).map((attackerIndex) => ({
+        blocker_index: Number(blockerIndex),
+        attacker_index: Number(attackerIndex),
+      })),
+    );
   }
   return combat.blockers || [];
 }
@@ -785,8 +812,8 @@ function getAutoPassStateKey(state) {
 }
 
 function hasBlockingPromptForAutoPass(state = currentState) {
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getBalanceSelectInfo(state) || getOptionalPayInfo(state) || getLandTypeChoiceInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getIslandSanctuaryInfo(state)) return true;
-  return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingAbilityChoice);
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getBalanceSelectInfo(state) || getOptionalPayInfo(state) || getLandTypeChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getIslandSanctuaryInfo(state)) return true;
+  return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingAbilityChoice || pendingChannel);
 }
 
 function shouldAutoPassUntilTurnEnd(state = currentState) {
@@ -1659,6 +1686,13 @@ function getLandTypeChoiceInfo(state = currentState) {
   return info;
 }
 
+function getManaPaymentInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.mana_payment;
+  if (!info) return null;
+  return info;
+}
+
 function getKudzuReattachInfo(state = currentState) {
   if (!state || seat === null) return null;
   const info = state.kudzu_reattach;
@@ -1794,13 +1828,15 @@ function isAnyPromptActive(state = currentState) {
   if (getBalanceSelectInfo(state)) return true;
   if (getOptionalPayInfo(state)) return true;
   if (getLandTypeChoiceInfo(state)) return true;
+  if (getManaPaymentInfo(state)) return true;
+  if (getBandBlockerInfo(state)) return true;
   if (getKudzuReattachInfo(state)) return true;
   if (getFaceDownCastInfo(state)) return true;
   if (getTimeVaultInfo(state)) return true;
   if (getWordOfCommandInfo(state)) return true;
   if (getRagingRiverInfo(state)) return true;
   if (shouldShowPriorityPrompt(state)) return true;
-  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingAutoTap || pendingModalChoice || pendingAbilityChoice) return true;
+  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingAutoTap || pendingModalChoice || pendingAbilityChoice || pendingChannel) return true;
 
   const hasValidAttackers = getValidAttackerIndices(state).length > 0;
   const hasValidBlockers = getValidBlockerAssignments(state).length > 0;
@@ -1812,7 +1848,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getBalanceSelectInfo(state) || getOptionalPayInfo(state) || getLandTypeChoiceInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getBalanceSelectInfo(state) || getOptionalPayInfo(state) || getLandTypeChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -1911,7 +1947,7 @@ async function handleCombatPromptOk() {
 
 async function handlePriorityPromptOk() {
   if (!currentState || seat === null) return false;
-  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingAbilityChoice) return false;
+  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingAbilityChoice || pendingChannel) return false;
   if (!shouldShowPriorityPrompt(currentState)) return false;
   await sendAction({ seat, action: "pass_priority" });
   updateActionHint("Passed priority.");
@@ -1973,9 +2009,18 @@ function applyUntapPrompt(untapInfo) {
 
 function manaObjectToSymbolString(mana) {
   if (!mana || typeof mana !== "object") return "?";
-  return Object.entries(mana)
-    .flatMap(([sym, count]) => Array(Number(count)).fill(`{${sym}}`))
-    .join("");
+  const parts = [];
+  // Generic mana renders as a single numeric symbol ({4}), not four {generic}
+  // tokens — the symbol map only has numeric icons, so {generic} would fall back
+  // to literal text in the prompt.
+  const generic = Number(mana.generic || 0);
+  if (generic > 0) parts.push(`{${generic}}`);
+  for (const [sym, count] of Object.entries(mana)) {
+    if (sym === "generic") continue;
+    const n = Number(count) || 0;
+    for (let i = 0; i < n; i += 1) parts.push(`{${sym}}`);
+  }
+  return parts.join("") || "{0}";
 }
 
 function applyUpkeepPayPrompt(upkeepInfo) {
@@ -2326,16 +2371,22 @@ function applyOptionalPayPrompt(info) {
   cancelBtn.disabled = true;
   customOkBtn.disabled = true;
 
-  const acceptLabel = isDraw ? `Draw ${current.draw} card${current.draw > 1 ? "s" : ""}` : `Pay {${cost}}`;
+  // Render the generic cost as a mana icon ({1}) rather than literal "{1}" text.
+  const costSymbols = renderSymbolsInline(`{${cost}}`);
+  const acceptLabel = isDraw
+    ? escapeHtml(`Draw ${current.draw} card${current.draw > 1 ? "s" : ""}`)
+    : `Pay ${costSymbols}`;
   title.textContent = isDraw ? "Optional Draw" : "Pay for Life?";
-  body.textContent = isDraw
-    ? `${cardName}: ${current.prompt || "Draw a card?"}`
-    : `${cardName}: pay {${cost}} to gain ${life} life?`;
+  if (isDraw) {
+    body.textContent = `${cardName}: ${current.prompt || "Draw a card?"}`;
+  } else {
+    setSymbolsHtml(body, `${cardName}: pay {${cost}} to gain ${life} life?`);
+  }
   steps.innerHTML = [
     `<div>Card: ${escapeHtml(cardName)}</div>`,
     `<div>Remaining decisions: ${pending.length}</div>`,
     `<div class="prompt-choice-row">` +
-      `<button type="button" class="prompt-choice-btn" data-optional-pay="yes">${escapeHtml(acceptLabel)}</button>` +
+      `<button type="button" class="prompt-choice-btn" data-optional-pay="yes">${acceptLabel}</button>` +
       `<button type="button" class="prompt-choice-btn" data-optional-pay="no">Decline</button>` +
       `</div>`,
   ].join("");
@@ -2392,6 +2443,57 @@ function applyLandTypeChoicePrompt(info) {
       });
     });
   });
+}
+
+// Power Sink: "Counter target spell unless its controller pays {X}." The targeted
+// spell's controller taps lands to fill their pool, then pays {X} to keep their
+// spell or declines (and it is countered, tapping their lands and draining mana).
+function applyManaPaymentPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  const cardName = info.card_name || "Power Sink";
+  const spellName = info.spell_name || "your spell";
+  const costSymbols = renderSymbolsInline(`{${Number(info.amount) || 0}}`);
+  title.textContent = "Pay or be countered";
+  setSymbolsHtml(
+    body,
+    `${cardName} counters ${spellName} unless you pay {${Number(info.amount) || 0}}. ` +
+      `Tap lands to generate mana, then pay or decline.`,
+  );
+  const payBtn = `<button type="button" class="prompt-choice-btn" id="manaPayBtn">Pay ${costSymbols}</button>`;
+  const declineBtn = `<button type="button" class="prompt-choice-btn" id="manaDeclineBtn">Don't pay (${escapeHtml(spellName)} is countered)</button>`;
+  steps.innerHTML = [
+    `<div>Spell: ${escapeHtml(spellName)}</div>`,
+    `<div>Cost to keep it: ${costSymbols}</div>`,
+    `<div class="prompt-choice-row">${payBtn}${declineBtn}</div>`,
+  ].join("");
+
+  const payEl = document.getElementById("manaPayBtn");
+  const declineEl = document.getElementById("manaDeclineBtn");
+  if (payEl) {
+    payEl.addEventListener("click", async () => {
+      await sendAction({ seat, action: "confirm_mana_payment", accept: true });
+    });
+  }
+  if (declineEl) {
+    declineEl.addEventListener("click", async () => {
+      await sendAction({ seat, action: "confirm_mana_payment", accept: false });
+    });
+  }
 }
 
 // Kudzu: "That land's controller may attach this Aura to a land of their choice."
@@ -3254,6 +3356,12 @@ function renderActivationPrompt() {
     return;
   }
 
+  const manaPaymentInfo = getManaPaymentInfo();
+  if (manaPaymentInfo) {
+    applyManaPaymentPrompt(manaPaymentInfo);
+    return;
+  }
+
   const kudzuReattachInfo = getKudzuReattachInfo();
   if (kudzuReattachInfo) {
     applyKudzuReattachPrompt(kudzuReattachInfo);
@@ -3445,6 +3553,33 @@ function renderActivationPrompt() {
     return;
   }
 
+  if (pendingChannel) {
+    panel.classList.remove("hidden");
+    okBtn.classList.add("hidden");
+    title.textContent = "Channel";
+    setSymbolsHtml(body, "Pay 1 life per {C}. Choose how much life to pay.");
+    const maxBtn = Math.min(Number(pendingChannel.maxLife || 1), 10);
+    const choiceButtons = [];
+    for (let value = 1; value <= maxBtn; value += 1) {
+      choiceButtons.push(`<button type="button" class="prompt-choice-btn" data-channel-life="${value}">${value}</button>`);
+    }
+    choiceButtons.push('<button type="button" class="prompt-choice-btn" data-channel-life="custom">Custom...</button>');
+    steps.innerHTML = [
+      `<div>Max life payable: ${pendingChannel.maxLife}</div>`,
+      `<div>Each life adds ${renderSymbolsInline("{C}")}.</div>`,
+      `<div class="prompt-choice-row">${choiceButtons.join("")}</div>`,
+    ].join("");
+    customRow.classList.toggle("hidden", !pendingChannel.awaitingCustomValue);
+    customValue.max = String(pendingChannel.maxLife);
+    customValue.min = "1";
+    customValue.value = String(Math.min(Math.max(Number(customValue.value || 1), 1), pendingChannel.maxLife));
+    okBtn.disabled = true;
+    cancelBtn.classList.remove("hidden");
+    cancelBtn.disabled = false;
+    customOkBtn.disabled = !pendingChannel.awaitingCustomValue;
+    return;
+  }
+
   if (pendingCastX) {
     panel.classList.remove("hidden");
     okBtn.classList.add("hidden");
@@ -3594,7 +3729,7 @@ async function attemptPendingActivation() {
 // needed) and the engine applies the shield to the stored target.
 function startEmblemActivation(emblemIndex) {
   if (!currentState || seat === null) return;
-  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingAutoTap || pendingModalChoice || pendingAbilityChoice) {
+  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingAutoTap || pendingModalChoice || pendingAbilityChoice || pendingChannel) {
     updateActionHint("Finish the current action first.", true);
     return;
   }
@@ -3624,7 +3759,7 @@ function startEmblemActivation(emblemIndex) {
 // many {C}. Needs priority, like any mana ability used at instant speed here.
 function startChannelMana() {
   if (!currentState || seat === null) return;
-  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingAutoTap || pendingModalChoice || pendingAbilityChoice) {
+  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingAutoTap || pendingModalChoice || pendingAbilityChoice || pendingChannel) {
     updateActionHint("Finish the current action first.", true);
     return;
   }
@@ -3635,19 +3770,25 @@ function startChannelMana() {
   }
   const me = currentState.players?.[seat];
   const maxLife = Math.max(1, (me?.life ?? 1) - 1);
-  const raw = window.prompt(`Pay how much life for {C}? (1–${maxLife})`, "1");
-  if (raw === null) {
-    updateActionHint("Channel canceled.");
+  // Use the in-game prompt dialog (not window.prompt): pick how much life to pay.
+  pendingChannel = { maxLife, awaitingCustomValue: false };
+  renderActivationPrompt();
+  updateActionHint("Choose how much life to pay for {C} via Channel.");
+}
+
+function resolveChannel(amount) {
+  if (!pendingChannel) return;
+  const maxLife = Number(pendingChannel.maxLife || 1);
+  const value = Math.floor(Number(amount));
+  if (!Number.isFinite(value) || value < 1 || value > maxLife) {
+    updateActionHint(`Choose between 1 and ${maxLife} life to pay.`, true);
     return;
   }
-  const amount = Math.floor(Number(raw));
-  if (!Number.isFinite(amount) || amount < 1) {
-    updateActionHint("Enter a positive number of life to pay.", true);
-    return;
-  }
-  updateActionHint(`Channeling ${amount} life for {C}...`);
-  sendAction({ seat, action: "channel_mana", x_value: amount })
-    .then(() => updateActionHint(`Added ${amount} {C} via Channel.`))
+  pendingChannel = null;
+  renderActivationPrompt();
+  updateActionHint(`Channeling ${value} life for {C}...`);
+  sendAction({ seat, action: "channel_mana", x_value: value })
+    .then(() => updateActionHint(`Added ${value} {C} via Channel.`))
     .catch((e) => updateActionHint(e.message, true));
 }
 
@@ -6227,6 +6368,34 @@ function renderCombatControls(state) {
     }
   }
 
+  // CR 702.22k: a creature is blocking the active player's band — they choose which
+  // band member it damages, before the normal attacker assignment.
+  if (
+    isCombatStep(state, "combat_damage") &&
+    seat === state.current_turn &&
+    getBandBlockerInfo(state) &&
+    !combat?.damage_resolved
+  ) {
+    const prompt = document.createElement("div");
+    prompt.className = "combat-summary";
+    prompt.textContent =
+      "A creature is blocking your band — choose which creature in the band it damages.";
+    damagePanel.appendChild(prompt);
+
+    const openBtn = document.createElement("button");
+    openBtn.type = "button";
+    openBtn.textContent = "Assign Band Blocker Damage";
+    openBtn.addEventListener("click", () => openBandBlockerDialog(state));
+    actions.appendChild(openBtn);
+
+    const key = `bandblock:${getCombatDraftStepKey(state)}`;
+    if (combatDamageDialogKey !== key) {
+      combatDamageDialogKey = key;
+      openBandBlockerDialog(state);
+    }
+    return;
+  }
+
   if (isCombatStep(state, "combat_damage") && seat === state.current_turn && !combat?.damage_resolved) {
     // Manual assignment is only needed when an attacker is blocked by 2+ creatures,
     // excluding those a banding blocker hands to the defender (CR 702.22j).
@@ -6351,6 +6520,126 @@ function validateCombatDamageGroup(group) {
 function closeCombatDamageDialog() {
   const modal = q("combatDamageModal");
   if (modal) modal.classList.add("hidden");
+}
+
+// CR 702.22k: the active player chooses which band member each creature blocking
+// their band damages. Surfaced to the active player as state.band_blocker_assignment.
+function getBandBlockerInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.band_blocker_assignment;
+  if (!info || !Array.isArray(info.blockers) || info.blockers.length === 0) return null;
+  if (seat !== info.attacker_seat) return null;
+  return info;
+}
+
+function openBandBlockerDialog(state = currentState) {
+  const info = getBandBlockerInfo(state);
+  const modal = q("combatDamageModal");
+  if (!info || !modal) {
+    closeCombatDamageDialog();
+    return;
+  }
+  const combat = getCombatState(state);
+  const attackerBf = state.players?.[state.current_turn]?.battlefield || [];
+  const defenderBf = state.players?.[combat?.defending_player_index]?.battlefield || [];
+
+  // Default each blocker to the first band member it blocks (the engine's default).
+  for (const b of info.blockers) {
+    if (combatBandBlockerDraft[b.blocker_idx] === undefined) {
+      combatBandBlockerDraft[b.blocker_idx] = b.member_indices[0];
+    }
+  }
+
+  const titleEl = q("combatDamageTitle");
+  const subtitleEl = document.querySelector("#combatDamageModal .modal-subtitle");
+  if (titleEl) titleEl.textContent = "Assign Band Blocker Damage";
+  if (subtitleEl) {
+    subtitleEl.textContent =
+      "A creature is blocking your band, so you (the attacking player) choose which " +
+      "creature in the band it damages (CR 702.22k).";
+  }
+
+  const cardThumb = (card, sub) => {
+    const el = document.createElement("div");
+    el.className = "cda-card";
+    const pt = `${Number(card?.power) || 0}/${Number(card?.toughness) || 0}`;
+    const art = card?.image_uri
+      ? `<img src="${escapeHtml(card.image_uri)}" alt="${escapeHtml(card.name || "")}" loading="lazy" />`
+      : `<div class="cda-card-placeholder">${escapeHtml(card?.name || "")}</div>`;
+    el.innerHTML =
+      `${art}<div class="cda-card-name">${escapeHtml(card?.name || "")}</div>` +
+      `<div class="cda-card-pt">${pt}</div>` +
+      (sub ? `<div class="cda-card-sub">${escapeHtml(sub)}</div>` : "");
+    return el;
+  };
+
+  const render = () => {
+    const body = q("combatDamageDialogBody");
+    if (!body) return;
+    body.innerHTML = "";
+    for (const b of info.blockers) {
+      const blockerCard = defenderBf[b.blocker_idx];
+      const section = document.createElement("div");
+      section.className = "cda-attacker";
+
+      const left = document.createElement("div");
+      left.className = "cda-attacker-side";
+      left.appendChild(cardThumb(blockerCard, `deals ${Number(blockerCard?.power) || 0}`));
+      section.appendChild(left);
+
+      const arrow = document.createElement("div");
+      arrow.className = "cda-arrow";
+      arrow.textContent = "→";
+      section.appendChild(arrow);
+
+      const targets = document.createElement("div");
+      targets.className = "cda-blockers";
+      for (const m of b.member_indices) {
+        const memberCard = attackerBf[m];
+        const choice = document.createElement("button");
+        choice.type = "button";
+        choice.className =
+          "cda-target-btn" + (combatBandBlockerDraft[b.blocker_idx] === m ? " selected" : "");
+        choice.appendChild(cardThumb(memberCard));
+        choice.addEventListener("click", () => {
+          combatBandBlockerDraft[b.blocker_idx] = m;
+          render();
+        });
+        targets.appendChild(choice);
+      }
+      section.appendChild(targets);
+      body.appendChild(section);
+    }
+  };
+
+  render();
+  modal.classList.remove("hidden");
+
+  const autoBtn = q("combatDamageAutoBtn");
+  if (autoBtn) {
+    autoBtn.onclick = () => {
+      for (const b of info.blockers) combatBandBlockerDraft[b.blocker_idx] = b.member_indices[0];
+      render();
+    };
+  }
+  const confirmBtn = q("combatDamageConfirmBtn");
+  if (confirmBtn) {
+    confirmBtn.onclick = async () => {
+      const blockerDamage = {};
+      for (const b of info.blockers) blockerDamage[b.blocker_idx] = combatBandBlockerDraft[b.blocker_idx];
+      try {
+        confirmBtn.disabled = true;
+        await sendAction({ seat, action: "assign_combat_damage", blocker_damage: blockerDamage });
+        updateActionHint("Band blocker damage assigned.");
+        combatBandBlockerDraft = {};
+        closeCombatDamageDialog();
+      } catch (e) {
+        updateActionHint(e.message, true);
+      } finally {
+        confirmBtn.disabled = false;
+      }
+    };
+  }
 }
 
 // Multi-blocked attackers the *active player* assigns (everything except those a
@@ -6692,9 +6981,11 @@ function renderBoard(state) {
       for (const idx of combatAttackerDraft) selfSelectedKeys.push(`${viewerSeat}-${idx}`);
     } else if (isCombatStep(state, "declare_blockers") && seat === combat?.defending_player_index && seat === viewerSeat) {
       for (const idx of Object.keys(combatBlockerDraft)) selfSelectedKeys.push(`${viewerSeat}-${Number(idx)}`);
-      // Highlight targeted attackers on opponent side
+      // Highlight targeted attackers on opponent side (a blocker may target several).
       if (seat !== oppSeat) {
-        for (const idx of Object.values(combatBlockerDraft)) allSelectedKeys.push(`${oppSeat}-${Number(idx)}`);
+        for (const list of Object.values(combatBlockerDraft)) {
+          for (const idx of (Array.isArray(list) ? list : [list])) allSelectedKeys.push(`${oppSeat}-${Number(idx)}`);
+        }
       }
     }
     battlefieldCanvas.setSelectedKeys([...selfSelectedKeys, ...allSelectedKeys]);
@@ -6889,6 +7180,7 @@ function renderState(state, { skipStaleCheck = false } = {}) {
   syncCombatDrafts(state);
   if (!isCombatStep(state, "combat_damage") || getCombatState(state)?.damage_resolved) {
     combatDamageDraft = {};
+    combatBandBlockerDraft = {};
     combatDamageDialogKey = "";
     closeCombatDamageDialog();
   }
@@ -6992,10 +7284,11 @@ function handleCanvasCardContextMenu({ seat: targetSeat, idx: permanentIndex, ca
         delete combatBlockerDraft[permanentIndex];
       }
       if (targetSeat === currentState.current_turn) {
-        for (const [blockerIdx, attackerIdx] of Object.entries(combatBlockerDraft)) {
-          if (Number(attackerIdx) === permanentIndex) {
-            delete combatBlockerDraft[Number(blockerIdx)];
-          }
+        for (const [blockerIdx, attackerIndices] of Object.entries(combatBlockerDraft)) {
+          const remaining = (Array.isArray(attackerIndices) ? attackerIndices : [attackerIndices])
+            .filter((a) => Number(a) !== permanentIndex);
+          if (remaining.length === 0) delete combatBlockerDraft[Number(blockerIdx)];
+          else combatBlockerDraft[Number(blockerIdx)] = remaining;
         }
       }
       SFX.onMenuToggle(false);
@@ -7101,7 +7394,7 @@ async function handleHandCardDropOnBattlefield({ event, targetSeat, targetItem }
           updateActionHint(reason, true);
           return;
         }
-        combatBlockerDraft[Number(payload.permanentIndex)] = targetItem.idx;
+        assignBlockerDraft(Number(payload.permanentIndex), targetItem.idx);
         SFX.onMenuToggle(true);
         renderBoard(currentState);
         updateActionHint("Blocker link added. Press OK when done declaring blockers.");
@@ -7327,7 +7620,7 @@ function initBattlefieldCanvas() {
         updateActionHint(reason, true);
         return;
       }
-      combatBlockerDraft[blockerIdx] = attackerIdx;
+      assignBlockerDraft(blockerIdx, attackerIdx);
       renderBoard(currentState);
       updateActionHint("Blocker assigned. Press OK when done.");
     },
@@ -7659,6 +7952,7 @@ q("promptCancelBtn").addEventListener("click", () => {
   pendingAutoTap = null;
   pendingModalChoice = null;
   pendingAbilityChoice = null;
+  pendingChannel = null;
   clearPendingHandCast();
   battlefieldCanvas?.hideManaFan();
   battlefieldCanvas?.setTargetingKeys([]);
@@ -7698,6 +7992,10 @@ q("promptOkBtn").addEventListener("click", async () => {
 });
 
 q("promptCustomOkBtn").addEventListener("click", () => {
+  if (pendingChannel) {
+    resolveChannel(Number(q("promptCustomValue")?.value));
+    return;
+  }
   resolvePendingCastX();
 });
 
@@ -7730,6 +8028,17 @@ q("promptSteps").addEventListener("click", (event) => {
       return;
     }
     resolvePendingCastX(Number(choice));
+    return;
+  }
+
+  const channelLife = target.dataset.channelLife;
+  if (channelLife !== undefined && pendingChannel) {
+    if (channelLife === "custom") {
+      pendingChannel.awaitingCustomValue = true;
+      renderActivationPrompt();
+      return;
+    }
+    resolveChannel(Number(channelLife));
     return;
   }
 

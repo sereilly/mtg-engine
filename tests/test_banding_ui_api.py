@@ -226,7 +226,10 @@ def _new_hva_session() -> str:
     return created["session_id"]
 
 
-def test_human_band_attack_blocked_by_ai_does_not_deadlock_combat():
+def test_human_band_attack_blocked_by_ai_prompts_for_band_blocker_damage():
+    """CR 702.22k: when a creature blocks the human's band, the active player is
+    prompted to choose which band member it damages (rather than the engine silently
+    auto-resolving). Submitting that choice resolves combat without deadlocking."""
     sid = _new_hva_session()
     session = store.get(sid)
     game = session.game
@@ -254,19 +257,37 @@ def test_human_band_attack_blocked_by_ai_does_not_deadlock_combat():
     )
     assert declared.status_code == 200, declared.text
 
-    # Drive the turn the way the client does: pass when we hold priority, otherwise
-    # advance the phase. A bounded loop — if the deadlock regresses this never
-    # leaves combat_damage and the assertion below fires instead of hanging.
-    progressed = False
+    # Drive to the combat damage step the way the client does. The band-blocker
+    # assignment should now be pending for the active player instead of auto-resolving.
     for _ in range(15):
+        if game.current_step == "combat_damage" and not game.combat_damage_resolved:
+            break
         action = "pass_priority" if game.priority_player_index == 0 else "next_phase"
         resp = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": action})
         assert resp.status_code == 200, resp.text
-        if session.current_turn != 0 or game.current_step in ("end", "cleanup"):
-            progressed = True
-            break
 
-    assert progressed, "combat deadlocked at the band block instead of resolving"
-    # The lone blocker took combat damage from the band and died — proof the damage
-    # step actually resolved rather than spinning on priority.
-    assert not any(p.card.name == "Blocker" for p in game.players[1].battlefield)
+    assert game.current_step == "combat_damage"
+    assert not game.combat_damage_resolved, "should wait for the 702.22k choice, not auto-resolve"
+
+    state = _state(sid, 0)
+    info = state["band_blocker_assignment"]
+    assert info is not None
+    assert info["attacker_seat"] == 0
+    blockers = info["blockers"]
+    assert len(blockers) == 1
+    assert blockers[0]["blocker_idx"] == 0
+    assert sorted(blockers[0]["member_indices"]) == [0, 1]
+    # Hidden from the opponent.
+    assert _state(sid, 1)["band_blocker_assignment"] is None
+
+    # Active player routes the Blocker's 2 damage onto the Hero (band member 0),
+    # so the Beater survives. The band's 1+3 still kills the Blocker.
+    resolved = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "assign_combat_damage", "blocker_damage": {"0": 0}},
+    )
+    assert resolved.status_code == 200, resolved.text
+    assert game.combat_damage_resolved
+    assert not any(p.card.name == "Hero" for p in game.players[0].battlefield)   # took the 2
+    assert any(p.card.name == "Beater" for p in game.players[0].battlefield)     # saved
+    assert not any(p.card.name == "Blocker" for p in game.players[1].battlefield)  # 1+3 lethal

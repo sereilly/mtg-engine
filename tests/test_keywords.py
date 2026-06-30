@@ -826,6 +826,84 @@ def test_702_22c_band_member_must_be_an_attacker():
     assert not ok
 
 
+# --- 702.22d: all creatures in a band attack the same player -----------------
+
+
+def test_702_22d_band_members_attack_the_same_player():
+    bander = Permanent(card=_mk_bander("Bander"))
+    ally = Permanent(card=_mk_creature("Ally", 2, 2))
+    game, _, _ = _game([bander, ally], [])
+    _to_declare_attackers(game)
+    ok, msg = game.declare_attackers(0, [0, 1], bands=[[0, 1]])
+    assert ok, msg
+    # combat_attackers maps each attacker to its single defending player; both band
+    # members share it (the engine declares a band against one defender).
+    assert set(game.combat_attackers.values()) == {1}
+
+
+# --- 702.22e: a band lasts the rest of combat even if banding is removed ------
+
+
+def test_702_22e_band_persists_after_banding_is_removed():
+    # The bander has banding only via a temporary grant; once declared, the band
+    # must keep functioning even after the grant is gone (block still propagates).
+    bander = Permanent(card=_mk_creature("Bander", 1, 1))
+    bander.metadata["gains_banding_until_eot"] = True
+    ally = Permanent(card=_mk_creature("Ally", 2, 2))
+    blocker = Permanent(card=_mk_creature("Blocker", 3, 3))
+    game, p1, _ = _game([bander, ally], [blocker])
+    _to_declare_attackers(game)
+    assert game.declare_attackers(0, [0, 1], bands=[[0, 1]])[0]
+    # Banding is stripped after the band is announced (702.22e).
+    bander.metadata.pop("gains_banding_until_eot", None)
+    game.advance_combat_phase()  # declare_blockers
+    assert game.combat_bands == [[0, 1]]            # band still recorded
+    assert game.declare_blockers(1, {0: 0})[0]       # block only the ally
+    assert p1.battlefield[0].blocked is True          # bander also blocked (702.22h)
+    assert p1.battlefield[1].blocked is True
+
+
+# --- 702.22f: an attacker removed from combat is removed from its band --------
+
+
+def test_702_22f_removed_member_is_dropped_from_band():
+    b1 = Permanent(card=_mk_bander("B1"))
+    b2 = Permanent(card=_mk_bander("B2"))
+    b3 = Permanent(card=_mk_bander("B3"))
+    game, _, _ = _game([b1, b2, b3], [])
+    _to_declare_attackers(game)
+    assert game.declare_attackers(0, [0, 1, 2], bands=[[0, 1, 2]])[0]
+    # Member at index 2 leaves combat; pruning drops it from the band (702.22f).
+    game.combat_attackers.pop(2, None)
+    game._prune_combat_state()
+    assert game.combat_bands == [[0, 1]]
+
+
+def test_702_22f_band_dissolves_when_it_falls_below_two_members():
+    bander = Permanent(card=_mk_bander("Bander"))
+    ally = Permanent(card=_mk_creature("Ally", 2, 2))
+    game, _, _ = _game([bander, ally], [])
+    _to_declare_attackers(game)
+    assert game.declare_attackers(0, [0, 1], bands=[[0, 1]])[0]
+    game.combat_attackers.pop(1, None)  # the ally leaves combat
+    game._prune_combat_state()
+    assert game.combat_bands == []  # a one-member "band" is no longer a band
+
+
+# --- 702.22g: banding doesn't share or grant abilities -----------------------
+
+
+def test_702_22g_banding_does_not_share_abilities():
+    flyer = Permanent(card=_mk_creature("Flyer", 2, 2, keywords=("Flying",)))
+    bander = Permanent(card=_mk_bander("Bander"))
+    game, _, _ = _game([flyer, bander], [])
+    _to_declare_attackers(game)
+    assert game.declare_attackers(0, [0, 1], bands=[[0, 1]])[0]
+    # The bander is in a band with a flyer but does NOT gain flying (702.22g).
+    assert game._has_keyword(flyer, "flying") is True
+    assert game._has_keyword(bander, "flying") is False
+
+
 # --- 702.22h/i: blocking one band member blocks the whole band ---------------
 
 

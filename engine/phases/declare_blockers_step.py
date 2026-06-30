@@ -31,7 +31,10 @@ class DeclareBlockersStepMixin:
     def _max_blocks_for(self, blocker: Permanent) -> int:
         """How many attackers this creature may block at once (CR 509.1b). Normally
         1; each "can block an additional creature" grant (Two-Headed Giant of
-        Foriys) adds one."""
+        Foriys) adds one. Blaze of Glory grants "can block any number of creatures",
+        modeled as effectively unlimited."""
+        if blocker.metadata.get("can_block_any_number_until_eot"):
+            return 1_000_000
         text = blocker.card.oracle_text.lower()
         return 1 + text.count("can block an additional creature")
 

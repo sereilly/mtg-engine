@@ -86,25 +86,33 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
                 )
                 return True, "resolved"
         # Power Sink: "Counter target spell unless its controller pays {X}." The
-        # targeted spell's controller may pay {X} (X chosen by Power Sink's caster)
-        # to keep their spell. Paid automatically from the pool when able
-        # (deterministic). Paying {0} always succeeds, so X=0 counters nothing.
+        # targeted spell's controller is asked to pay {X} (X chosen by Power Sink's
+        # caster) to keep their spell. Rather than auto-paying, arm a pending mana
+        # payment: the target spell stays on the stack while its controller decides
+        # (a human taps lands and pays/declines via the prompt; headless/AI play is
+        # auto-resolved deterministically). Paying {0} always succeeds, so X=0 never
+        # counters — resolve that immediately without a prompt.
         if instruction.payload.get("unless_pays_x"):
             cost = max(0, int(context.x_value or 0))
-            spell_controller = game.players[target.caster_index]
-            available = sum(spell_controller.mana_pool.get(s, 0) for s in spell_controller.mana_pool)
-            if available >= cost:
-                remaining = cost
-                for sym in list(spell_controller.mana_pool):
-                    while remaining > 0 and spell_controller.mana_pool.get(sym, 0) > 0:
-                        spell_controller.mana_pool[sym] -= 1
-                        remaining -= 1
+            if cost == 0:
                 game.log.append(
-                    f"{spell_controller.name} paid {{{cost}}}; {target.card.name} is not countered by {card.name}"
+                    f"{game.players[target.caster_index].name} pays {{0}}; "
+                    f"{target.card.name} is not countered by {card.name}"
                 )
                 return True, "resolved"
-            # Couldn't pay: spell is countered and the rider (tap lands, drain mana)
-            # applies via the ON_SPELL_COUNTERED hook below.
+            game.pending_mana_payment = {
+                "player_index": target.caster_index,
+                "amount": cost,
+                "card_name": card.name,
+                "counter_card": card,
+                "stack_item": target,
+                "_new": True,
+            }
+            game.log.append(
+                f"{card.name}: {game.players[target.caster_index].name} must pay "
+                f"{{{cost}}} or {target.card.name} is countered"
+            )
+            return True, "resolved"
 
         game.stack.remove(target)
         countered = target

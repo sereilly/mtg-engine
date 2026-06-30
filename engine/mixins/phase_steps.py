@@ -81,6 +81,11 @@ class PhaseStepsMixin:
             if paused is not None:
                 self.priority_player_index = paused["player_index"]
                 return "awaiting_choice"
+            # Power Sink: the targeted spell stays on the stack while its controller
+            # is asked to pay {X}. Hand them priority so they can tap lands and pay.
+            if self.pending_mana_payment is not None:
+                self.priority_player_index = self.pending_mana_payment["player_index"]
+                return "awaiting_choice"
             # 704.3: state-based actions are checked before any player would
             # receive priority after a spell or ability resolves (e.g. an Aura
             # now illegally attached is put into its owner's graveyard).

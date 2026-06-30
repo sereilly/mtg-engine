@@ -4,8 +4,8 @@ Master record of which cards have been manually validated in-game. Generated aut
 
 - Total cards: **290**
 - Passed: **224**
-- Failed: **11**
-- Untested: **55**
+- Failed: **0**
+- Untested: **66**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -29,7 +29,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Black Lotus | ✅ pass |  |
 | Black Vise | ✅ pass |  |
 | Black Ward | ✅ pass |  |
-| Blaze of Glory | ❌ fail | I'm not able to choose multiple creatures to block with the UI |
+| Blaze of Glory | ⬜ untested |  |
 | Blessing | ✅ pass |  |
 | Blue Elemental Blast | ✅ pass |  |
 | Blue Ward | ✅ pass |  |
@@ -39,7 +39,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Camouflage | ⬜ untested |  |
 | Castle | ✅ pass |  |
 | Celestial Prism | ✅ pass |  |
-| Channel | ❌ fail | Do not use the window prompt API. use the in-game prompt dialog |
+| Channel | ⬜ untested |  |
 | Chaos Orb | ✅ pass |  |
 | Chaoslace | ✅ pass |  |
 | Circle of Protection: Blue | ✅ pass |  |
@@ -86,7 +86,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Earthquake | ✅ pass |  |
 | Elvish Archers | ✅ pass |  |
 | Evil Presence | ✅ pass |  |
-| False Orders | ❌ fail | I can choose a target but nothing happens after that |
+| False Orders | ⬜ untested |  |
 | Farmstead | ✅ pass |  |
 | Fastbond | ✅ pass |  |
 | Fear | ✅ pass |  |
@@ -110,7 +110,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Glasses of Urza | ⬜ untested |  |
 | Gloom | ⬜ untested |  |
 | Goblin Balloon Brigade | ✅ pass |  |
-| Goblin King | ❌ fail | Doesn't give other goblins mountainwalk |
+| Goblin King | ⬜ untested |  |
 | Granite Gargoyle | ✅ pass |  |
 | Gray Ogre | ✅ pass |  |
 | Green Ward | ✅ pass |  |
@@ -131,7 +131,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Illusionary Mask | ⬜ untested |  |
 | Instill Energy | ⬜ untested |  |
 | Invisibility | ✅ pass |  |
-| Iron Star | ❌ fail | prompt is missing 1 generic mana image |
+| Iron Star | ⬜ untested |  |
 | Ironclaw Orcs | ✅ pass |  |
 | Ironroot Treefolk | ✅ pass |  |
 | Island | ✅ pass |  |
@@ -158,7 +158,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Living Lands | ⬜ untested |  |
 | Living Wall | ✅ pass |  |
 | Llanowar Elves | ✅ pass |  |
-| Lord of Atlantis | ❌ fail | It's not giving other merfolk islandwalk |
+| Lord of Atlantis | ⬜ untested |  |
 | Lord of the Pit | ⬜ untested |  |
 | Lure | ✅ pass |  |
 | Magical Hack | ⬜ untested |  |
@@ -187,7 +187,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Obsianus Golem | ✅ pass |  |
 | Orcish Artillery | ✅ pass |  |
 | Orcish Oriflamme | ✅ pass |  |
-| Paralyze | ❌ fail | Show the mana icons instead of {generic}{generic}{generic}{generic} in the prompt |
+| Paralyze | ⬜ untested |  |
 | Pearled Unicorn | ✅ pass |  |
 | Personal Incarnation | ✅ pass |  |
 | Pestilence | ✅ pass |  |
@@ -199,7 +199,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Plains | ✅ pass |  |
 | Plateau | ✅ pass |  |
 | Power Leak | ✅ pass |  |
-| Power Sink | ❌ fail | I didn't get a prompt to pay mana to stop the spell from getting countered |
+| Power Sink | ⬜ untested |  |
 | Power Surge | ✅ pass |  |
 | Prodigal Sorcerer | ✅ pass |  |
 | Psionic Blast | ✅ pass |  |
@@ -218,7 +218,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Rock Hydra | ⬜ untested |  |
 | Rod of Ruin | ✅ pass |  |
 | Royal Assassin | ⬜ untested |  |
-| Sacrifice | ❌ fail | Sacrifice costs should let me choose a creature I control |
+| Sacrifice | ⬜ untested |  |
 | Samite Healer | ✅ pass |  |
 | Savannah | ✅ pass |  |
 | Savannah Lions | ✅ pass |  |
@@ -255,7 +255,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Thicket Basilisk | ✅ pass |  |
 | Thoughtlace | ⬜ untested |  |
 | Throne of Bone | ⬜ untested |  |
-| Timber Wolves | ❌ fail | I didn't get to choose how the blocker's combat is assigned to the band. It should show a dialog where I can assign damage |
+| Timber Wolves | ⬜ untested |  |
 | Time Vault | ⬜ untested |  |
 | Time Walk | ✅ pass |  |
 | Timetwister | ✅ pass |  |
@@ -264,7 +264,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Tsunami | ✅ pass |  |
 | Tundra | ✅ pass |  |
 | Tunnel | ✅ pass |  |
-| Twiddle | ❌ fail | I can't use twiddle to tap an opponent's land |
+| Twiddle | ⬜ untested |  |
 | Two-Headed Giant of Foriys | ⬜ untested |  |
 | Underground Sea | ✅ pass |  |
 | Unholy Strength | ✅ pass |  |

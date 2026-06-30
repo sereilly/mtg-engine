@@ -151,10 +151,18 @@ class Game(
     pending_hand_reveal: dict | None = None
     # Phantasmal Terrain: "As this Aura enters, choose a basic land type." Awaiting
     # the controller's choice of which basic land type the enchanted land becomes.
-    # Shape: {"player_index", "card_name", "land_owner_index", "land_index"}. A
-    # provisional default ("island") is applied immediately so headless/AI play is
-    # deterministic; a human may override it via confirm_land_type.
+    # Shape: {"player_index", "card_name", "land_owner_index", "land_index"}. The
+    # land type is NOT changed until the choice is confirmed (confirm_land_type), so
+    # the spell never visibly resolves the change before the prompt is answered; an
+    # AI controller's choice is auto-resolved deterministically by the web layer.
     pending_land_type_choice: dict | None = None
+    # Power Sink: "Counter target spell unless its controller pays {X}." After Power
+    # Sink resolves, the targeted spell stays on the stack while its controller is
+    # asked to pay {X} (tap lands, then pay or decline). Shape: {"player_index",
+    # "amount", "card_name" (the counter spell), "stack_item" (the target spell)}.
+    # Headless/AI play auto-resolves this deterministically (pay if able, else the
+    # spell is countered and the rider applies).
+    pending_mana_payment: dict | None = None
     # Kudzu: "That land's controller may attach this Aura to a land of their
     # choice." After the enchanted land is destroyed, a human controller picks the
     # land to re-enchant. Shape: {"player_index", "aura"} (the detached Permanent).

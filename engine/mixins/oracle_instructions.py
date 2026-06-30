@@ -392,10 +392,12 @@ class OracleInstructionsMixin:
             if "enchanted land is a swamp" in text:
                 target_land.metadata["land_type_override"] = "swamp"
             elif "enchanted land is the chosen type" in text:
-                # Phantasmal Terrain: "choose a basic land type." Apply a provisional
-                # default (island) so headless/AI play stays deterministic, then arm a
-                # pending choice so a human controller can pick the actual type.
-                target_land.metadata["land_type_override"] = "island"
+                # Phantasmal Terrain: "As this Aura enters, choose a basic land type."
+                # The land's type is NOT changed yet — we arm a pending choice and the
+                # controller picks the type (a human via the prompt, an AI via the
+                # auto-resolver). Only then is land_type_override set (confirm_land_type),
+                # so the spell never visibly "resolves" the land change before the
+                # player finishes the choice.
                 self.pending_land_type_choice = {
                     "player_index": caster_index,
                     "card_name": aura_permanent.card.name,

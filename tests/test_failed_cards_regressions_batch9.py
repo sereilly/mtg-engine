@@ -269,9 +269,11 @@ class TestPhantasmalTerrain:
         game.cast_from_hand(0, "Phantasmal Terrain", target_player_index=1, target_permanent_index=0)
         return game, land
 
-    def test_arms_pending_choice_with_provisional_default(self, cards):
+    def test_arms_pending_choice_without_changing_land_yet(self, cards):
+        # The land's type must NOT change until the controller finishes the choice
+        # (the reported bug: the spell resolved the land change before the prompt).
         game, land = self._setup(cards)
-        assert land.metadata.get("land_type_override") == "island"
+        assert land.metadata.get("land_type_override") is None
         assert game.pending_land_type_choice is not None
         assert game.pending_land_type_choice["player_index"] == 0
 

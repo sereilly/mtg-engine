@@ -108,6 +108,14 @@ def _cast_offers_copy_artifact(card: CardDefinition) -> bool:
     return "enter as a copy of any artifact on the battlefield" in (card.oracle_text or "").lower()
 
 
+def _cast_requires_sacrifice_creature(card: CardDefinition) -> bool:
+    # Sacrifice: "As an additional cost to cast this spell, sacrifice a creature."
+    # The caster chooses which of their own creatures to sacrifice for the cost.
+    return "as an additional cost to cast this spell, sacrifice a creature" in (
+        card.oracle_text or ""
+    ).lower()
+
+
 def _cast_requires_creature(card: CardDefinition) -> bool:
     if "enchant creature card in a graveyard" in (card.oracle_text or "").lower():
         return False
@@ -241,6 +249,11 @@ def _classify_cast(card: CardDefinition) -> dict:
         # The engine prevents only damage from the chosen source (matched by
         # identity), so no color filter is applied.
         return {"kind": "permanent", "source_of_choice": True, "also_stack": True}
+    if _cast_requires_sacrifice_creature(card):
+        # The "creature" the player picks is their own, sacrificed as a cost — so
+        # the UI runs its creature-target flow but only the caster's creatures are
+        # offered (own_only), and the handler sacrifices the chosen one.
+        return {"kind": "creature", "own_only": True, "sacrifice_cost": True}
     if _cast_requires_creature(card):
         return {"kind": "creature", "enchant_wall": "enchant wall" in (card.oracle_text or "").lower()}
     if _cast_requires_spell_or_permanent(card):
@@ -517,6 +530,9 @@ class LegalityMixin:
 
         casting_aura = "aura" in _type_line(card)
         for seat, player in enumerate(self.players):
+            # A sacrifice cost (Sacrifice) only offers the caster's own creatures.
+            if spec.get("own_only") and seat != caster_index:
+                continue
             for idx, perm in enumerate(player.battlefield):
                 if not self._permanent_matches_target_kind(perm, kind, spec, casting_aura):
                     continue

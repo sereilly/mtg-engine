@@ -912,6 +912,24 @@ h2.targeting-valid {
   gap: 6px;
 }
 
+/* CR 702.22k: pick which band member a blocker damages. */
+.cda-target-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  background: transparent;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.cda-target-btn.selected {
+  border-color: #5db0ff;
+  background: rgba(93, 176, 255, 0.15);
+}
+
 .cda-card {
   width: 92px;
   display: flex;

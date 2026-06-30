@@ -80,11 +80,6 @@
       "status": "pass",
       "updated_at": 1781761302.7020597
     },
-    "Blaze of Glory": {
-      "reason": "I'm not able to choose multiple creatures to block with the UI",
-      "status": "fail",
-      "updated_at": 1782690669.3701363
-    },
     "Blessing": {
       "reason": "",
       "status": "pass",
@@ -124,11 +119,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782105893.8562238
-    },
-    "Channel": {
-      "reason": "Do not use the window prompt API. use the in-game prompt dialog",
-      "status": "fail",
-      "updated_at": 1782690290.5261998
     },
     "Chaos Orb": {
       "reason": "",
@@ -330,11 +320,6 @@
       "status": "pass",
       "updated_at": 1782022287.5750093
     },
-    "False Orders": {
-      "reason": "I can choose a target but nothing happens after that",
-      "status": "fail",
-      "updated_at": 1782797974.1481142
-    },
     "Farmstead": {
       "reason": "",
       "status": "pass",
@@ -435,11 +420,6 @@
       "status": "pass",
       "updated_at": 1781411321.368721
     },
-    "Goblin King": {
-      "reason": "Doesn't give other goblins mountainwalk",
-      "status": "fail",
-      "updated_at": 1782796450.0533698
-    },
     "Granite Gargoyle": {
       "reason": "",
       "status": "pass",
@@ -520,11 +500,6 @@
       "status": "pass",
       "updated_at": 1782590614.42178
     },
-    "Iron Star": {
-      "reason": "prompt is missing 1 generic mana image",
-      "status": "fail",
-      "updated_at": 1782690745.459252
-    },
     "Ironclaw Orcs": {
       "reason": "",
       "status": "pass",
@@ -599,11 +574,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782544325.311722
-    },
-    "Lord of Atlantis": {
-      "reason": "It's not giving other merfolk islandwalk",
-      "status": "fail",
-      "updated_at": 1782797132.6816187
     },
     "Lure": {
       "reason": "",
@@ -725,11 +695,6 @@
       "status": "pass",
       "updated_at": 1782584976.5671804
     },
-    "Paralyze": {
-      "reason": "Show the mana icons instead of {generic}{generic}{generic}{generic} in the prompt",
-      "status": "fail",
-      "updated_at": 1782796760.0504918
-    },
     "Pearled Unicorn": {
       "reason": "",
       "status": "pass",
@@ -779,11 +744,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782592116.6137974
-    },
-    "Power Sink": {
-      "reason": "I didn't get a prompt to pay mana to stop the spell from getting countered",
-      "status": "fail",
-      "updated_at": 1782796254.2106013
     },
     "Power Surge": {
       "reason": "",
@@ -849,11 +809,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782107895.8262937
-    },
-    "Sacrifice": {
-      "reason": "Sacrifice costs should let me choose a creature I control",
-      "status": "fail",
-      "updated_at": 1782797625.0340965
     },
     "Samite Healer": {
       "reason": "",
@@ -1005,11 +960,6 @@
       "status": "pass",
       "updated_at": 1782587023.8502285
     },
-    "Timber Wolves": {
-      "reason": "I didn't get to choose how the blocker's combat is assigned to the band. It should show a dialog where I can assign damage",
-      "status": "fail",
-      "updated_at": 1782797041.0439317
-    },
     "Time Walk": {
       "reason": "",
       "status": "pass",
@@ -1044,11 +994,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781577230.9356234
-    },
-    "Twiddle": {
-      "reason": "I can't use twiddle to tap an opponent's land",
-      "status": "fail",
-      "updated_at": 1782690336.126632
     },
     "Underground Sea": {
       "reason": "",

@@ -34,6 +34,17 @@ def untap_target_land(text: str, activated: bool) -> RuleResult:
     return None
 
 
+@parse_rule(705)
+def tap_or_untap_target(text: str, activated: bool) -> RuleResult:
+    # Twiddle: "You may tap or untap target artifact, creature, or land." The
+    # caster chooses tap or untap; we toggle the chosen permanent's tapped state,
+    # which is the only meaningful choice in every situation (choosing the no-op
+    # direction is never useful). Must out-rank the tap-only / untap-only rules.
+    if "tap or untap target" in text:
+        return _instruction("tap_or_untap_target"), "spell_pattern"
+    return None
+
+
 @parse_rule(710)
 def untap_target(text: str, activated: bool) -> RuleResult:
     if "untap target" in text:

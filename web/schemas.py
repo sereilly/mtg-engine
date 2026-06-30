@@ -38,6 +38,7 @@ ActionKind = Literal[
     "balance_confirm",
     "resolve_optional_pay",
     "land_type_confirm",
+    "confirm_mana_payment",
     "kudzu_reattach_confirm",
     "face_down_cast_confirm",
     "time_vault_skip",

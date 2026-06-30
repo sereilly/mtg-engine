@@ -208,6 +208,10 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         "mana_cost": perm.card.mana_cost,
         "oracle_text": perm.card.oracle_text,
         "keywords": _effective_keywords(perm, game),
+        # True when this creature may block more than one attacker at once
+        # (Two-Headed Giant of Foriys, or Blaze of Glory's "block any number"),
+        # so the UI lets the player assign it to several attackers.
+        "can_block_multiple": game._is_creature(perm) and game._max_blocks_for(perm) > 1,
         "image_uri": image_uri,
         "large_image_uri": large_image_uri,
         "attacking": perm.attacking,
@@ -1441,6 +1445,23 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
             "options": ["plains", "island", "swamp", "mountain", "forest"],
         }
 
+    # Power Sink: the targeted spell's controller is asked to pay {X} (tap lands,
+    # then pay or decline) or their spell is countered. Surface to that human only.
+    mana_payment_info = None
+    pending_pay = session.game.pending_mana_payment
+    if (
+        pending_pay is not None
+        and viewer_seat is not None
+        and pending_pay["player_index"] == viewer_seat
+        and _seat_type(session, viewer_seat) != "ai"
+    ):
+        target_item = pending_pay.get("stack_item")
+        mana_payment_info = {
+            "card_name": pending_pay["card_name"],
+            "amount": int(pending_pay["amount"]),
+            "spell_name": target_item.card.name if target_item is not None else None,
+        }
+
     # Kudzu: after the enchanted land is destroyed, its controller chooses which
     # land to re-enchant. Surface the candidate lands only to that (human) player.
     kudzu_reattach_info = None
@@ -1573,6 +1594,7 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "upkeep_mana_prevention": _build_upkeep_mana_prevention_info(session, viewer_seat),
         "optional_trigger": _build_optional_trigger_info(session, viewer_seat),
         "banding_assignment": _build_banding_assignment_info(session, viewer_seat),
+        "band_blocker_assignment": _build_band_blocker_assignment_info(session, viewer_seat),
         "raging_river": _build_raging_river_info(session, viewer_seat),
         "island_sanctuary_pending": session.island_sanctuary_pending and viewer_seat == session.current_turn,
         "search_library": search_library_info,
@@ -1582,6 +1604,7 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "optional_pay": optional_pay_info,
         "hand_reveal": hand_reveal_info,
         "land_type_choice": land_type_choice_info,
+        "mana_payment": mana_payment_info,
         "kudzu_reattach": kudzu_reattach_info,
         "face_down_cast": face_down_cast_info,
         "time_vault": time_vault_info,
@@ -1741,6 +1764,15 @@ def _auto_resolve_ai_pending_land_type(session: Session) -> None:
         game.confirm_land_type(pending["player_index"], "island")
 
 
+def _auto_resolve_ai_pending_mana_payment(session: Session) -> None:
+    """Resolve an AI controller's Power Sink payment deterministically: pay {X} from
+    its mana pool if able, otherwise let the spell be countered."""
+    game = session.game
+    pending = game.pending_mana_payment
+    if pending is not None and _seat_type(session, pending["player_index"]) == "ai":
+        game._auto_resolve_mana_payment()
+
+
 def _auto_resolve_ai_pending_kudzu(session: Session) -> None:
     """Re-attach an AI's Kudzu to its first available land (deterministic)."""
     game = session.game
@@ -1794,6 +1826,7 @@ def _auto_resolve_ai_pending(session: Session) -> None:
     _auto_resolve_ai_pending_balance(session)
     _auto_resolve_ai_pending_optional_pays(session)
     _auto_resolve_ai_pending_land_type(session)
+    _auto_resolve_ai_pending_mana_payment(session)
     _auto_resolve_ai_pending_kudzu(session)
     _auto_resolve_ai_pending_face_down(session)
     _auto_resolve_ai_pending_word_of_command(session)
@@ -2053,6 +2086,68 @@ def _build_banding_assignment_info(session: Session, viewer_seat: int | None) ->
     return {"defender_seat": defender_index, "attacker_indices": pending}
 
 
+def _band_blocker_assignments(game) -> list[dict]:
+    """CR 702.22k: every blocker that is blocking an attacking band (which always
+    contains a creature with banding). For each such blocker, the ACTIVE player —
+    not the defender — chooses which band member it damages. Returns
+    [{"blocker_idx", "member_indices": [...]}] with the band members (2+) it blocks."""
+    if not game.combat_bands:
+        return []
+    active_index = game.active_player_index
+    defender_index = game.combat_defending_player_index
+    if not isinstance(defender_index, int) or not (0 <= defender_index < len(game.players)):
+        return []
+    active = game.players[active_index]
+    defender = game.players[defender_index]
+    result: list[dict] = []
+    seen: set[int] = set()
+    for band in game.combat_bands:
+        members = [m for m in band if 0 <= m < len(active.battlefield)]
+        if len(members) < 2:
+            continue
+        blockers: set[int] = set()
+        for member in members:
+            blockers.update(game._attacker_all_blockers(member))
+        for b in sorted(blockers):
+            if b in seen or not (0 <= b < len(defender.battlefield)):
+                continue
+            blocker = defender.battlefield[b]
+            if blocker.card.primary_type != "creature" or blocker.effective_power <= 0:
+                continue
+            seen.add(b)
+            result.append({"blocker_idx": b, "member_indices": members})
+    return result
+
+
+def _band_blocker_assignment_pending(session: Session) -> bool:
+    """Whether a human active player still owes a CR 702.22k band-blocker damage
+    assignment. While pending, combat damage must not auto-resolve."""
+    game = session.game
+    if game.current_step != "combat_damage" or game.combat_damage_resolved:
+        return False
+    if _seat_type(session, game.active_player_index) != "human":
+        return False
+    return bool(_band_blocker_assignments(game))
+
+
+def _build_band_blocker_assignment_info(session: Session, viewer_seat: int | None) -> dict | None:
+    """State block shown to the active player so they can choose which band member
+    each creature blocking their band damages (CR 702.22k)."""
+    game = session.game
+    if game.current_step != "combat_damage" or game.combat_damage_resolved:
+        return None
+    active_index = game.active_player_index
+    if viewer_seat is not None and viewer_seat != active_index:
+        return None
+    # The defender resolves their CR 702.22j split first, mirroring the engine order.
+    if _banding_assignment_pending(session):
+        return None
+    blockers = _band_blocker_assignments(game)
+    if not blockers:
+        return None
+    return {"attacker_seat": active_index, "blockers": blockers}
+
+
 def _build_raging_river_info(session: Session, viewer_seat: int | None) -> dict | None:
     """Raging River: show the defending player the non-flying creatures to divide
     into left/right piles, and the attacking player their attackers to label.
@@ -2294,12 +2389,14 @@ def _advance_phase(session: Session) -> None:
             and game._needs_manual_damage_assignment()
             and not game._manual_assignment_has_declared_multiblock()
             and not _banding_assignment_pending(session)
+            and not _band_blocker_assignment_pending(session)
         ):
             # A human attacker declared a band whose block propagated to a single
-            # shared blocker (CR 702.22h). The combat-damage dialog can only present
-            # attackers with 2+ *declared* blockers, so there is nothing for the
-            # human to assign here — auto-resolve a sensible default instead of
-            # looping forever waiting for an assignment that can never arrive.
+            # shared blocker (CR 702.22h), but no band member has banding to route
+            # (so there is no CR 702.22k choice) — auto-resolve a sensible default
+            # instead of looping forever waiting for an assignment that can't arrive.
+            # When there IS a 702.22k choice, _band_blocker_assignment_pending keeps
+            # this from firing so the active player's dialog can resolve it instead.
             auto = game._build_auto_damage_assignment()
             game.resolve_combat_damage(game.active_player_index, attacker_damage=auto)
             if not game.combat_damage_resolved:
@@ -3422,6 +3519,15 @@ def do_action(session_id: str, req: GameActionRequest):
         ok = session.game.confirm_land_type(req.seat, req.land_type)
         if not ok:
             raise HTTPException(status_code=400, detail="no land-type choice pending for you")
+
+    elif req.action == "confirm_mana_payment":
+        # Power Sink: the targeted spell's controller pays {X} to keep their spell,
+        # or declines and it is countered. They tap lands to fill their pool first.
+        if req.accept is None:
+            raise HTTPException(status_code=400, detail="accept (true/false) is required")
+        ok = session.game.confirm_mana_payment(req.seat, bool(req.accept))
+        if not ok:
+            raise HTTPException(status_code=400, detail="no mana payment pending for you")
 
     elif req.action == "kudzu_reattach_confirm":
         # Kudzu: the controller picks which land to re-enchant (battlefield index).

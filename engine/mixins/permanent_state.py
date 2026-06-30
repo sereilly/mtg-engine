@@ -332,6 +332,15 @@ class PermanentStateMixin:
             or permanent.metadata.get("loses_flying_until_eot", False)
         ):
             return False
+        # Landwalk granted by a lord (Goblin King's mountainwalk, Lord of Atlantis's
+        # islandwalk) is tracked as a ``has_<walk>`` metadata flag; a Magical Hack
+        # remap can take a landwalk away via ``lost_<walk>``. Honor both so the
+        # keyword shows on the creature's strip and drives block legality alike.
+        if lower_keyword in ("islandwalk", "mountainwalk", "swampwalk", "forestwalk", "plainswalk"):
+            if permanent.metadata.get(f"lost_{lower_keyword}"):
+                return False
+            if permanent.metadata.get(f"has_{lower_keyword}"):
+                return True
         if any(item.lower() == lower_keyword for item in permanent.card.keywords):
             return True
         # Keywords inherited from a copied creature (Clone / Vesuvan Doppelganger).
@@ -357,10 +366,14 @@ class PermanentStateMixin:
             return True
         if lower_keyword == "deathtouch" and permanent.metadata.get("has_deathtouch", False):
             return True
-        # Fall back to oracle program static lines (e.g. test cards that put keyword in oracle_text)
+        # Fall back to oracle program static lines (e.g. test cards that put keyword in oracle_text).
+        # A lord line ("Other Merfolk ... have islandwalk") grants the keyword to
+        # OTHER creatures, not to the lord itself, so it must not match here.
         program = compile_card_oracle(permanent.card)
         return any(
-            i.kind in ("keyword_line", "static_line") and lower_keyword in i.value
+            i.kind in ("keyword_line", "static_line")
+            and lower_keyword in i.value
+            and not i.value.startswith("other ")
             for i in program.instructions
         )
 

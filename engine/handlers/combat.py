@@ -33,12 +33,26 @@ def delayed_destroy_blocked_or_blocker(game: Game, instruction: OracleInstructio
 
 @effect_handler("grant_unlimited_blocking")
 def grant_unlimited_blocking(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    # Blaze of Glory: "Target creature defending player controls can block any number
+    # of creatures this turn. It blocks each attacking creature this turn if able."
+    # Honor the chosen creature; fall back to the first only for AI/headless play.
     target = context.target
     card = context.card
-    blocker = next((perm for perm in target.battlefield if perm.card.primary_type == "creature"), None)
+    idx = context.target_permanent_index
+    blocker = None
+    if isinstance(idx, int) and 0 <= idx < len(target.battlefield):
+        if target.battlefield[idx].card.primary_type == "creature":
+            blocker = target.battlefield[idx]
+    if blocker is None:
+        blocker = next((perm for perm in target.battlefield if perm.card.primary_type == "creature"), None)
     if blocker is not None:
+        # Lets it block any number of attackers (_max_blocks_for) and requires it to
+        # block each attacker it can (enforced when blocks are declared).
+        blocker.metadata["can_block_any_number_until_eot"] = True
         blocker.metadata["must_block_all_until_eot"] = True
-    game.log.append(f"{card.name} created a forced blocking assignment")
+        game.log.append(f"{card.name}: {blocker.card.name} can block any number of creatures this turn")
+    else:
+        game.log.append(f"{card.name} found no creature to grant unlimited blocking")
     return True, "resolved"
 
 
@@ -54,12 +68,47 @@ def randomize_blockers(game: Game, instruction: OracleInstruction, context: Orac
 
 @effect_handler("remove_creature_from_combat")
 def remove_creature_from_combat(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    # False Orders: "Remove target creature defending player controls from combat.
+    # Creatures it was blocking that had become blocked by only that creature this
+    # combat become unblocked." Honor the chosen blocker; fall back to the first
+    # creature only when no explicit target was supplied (AI/headless).
     target = context.target
     card = context.card
-    removed = next((perm for perm in target.battlefield if perm.card.primary_type == "creature"), None)
-    if removed is not None:
-        removed.metadata["removed_from_combat"] = True
-    game.log.append(f"{card.name} removed a blocker from combat")
+    idx = context.target_permanent_index
+    removed_index: int | None = None
+    if isinstance(idx, int) and 0 <= idx < len(target.battlefield):
+        if target.battlefield[idx].card.primary_type == "creature":
+            removed_index = idx
+    if removed_index is None:
+        removed_index = next(
+            (i for i, perm in enumerate(target.battlefield) if perm.card.primary_type == "creature"),
+            None,
+        )
+    if removed_index is None:
+        game.log.append(f"{card.name} had no creature to remove from combat")
+        return True, "resolved"
+
+    removed = target.battlefield[removed_index]
+    removed.metadata["removed_from_combat"] = True
+
+    # If this creature is currently blocking, take it out of combat: drop it as a
+    # blocker and unblock any attacker whose only blocker it was.
+    target_player_index = game.players.index(target)
+    if target_player_index == game.combat_defending_player_index and removed_index in game.combat_blockers:
+        freed_attackers = list(game.combat_blockers.get(removed_index, []))
+        game.combat_blockers.pop(removed_index, None)
+        game.combat_band_blocks.pop(removed_index, None)
+        removed.blocking_attacker_controller = None
+        removed.blocking_attacker_index = None
+        active = game.players[game.active_player_index]
+        for a_idx in freed_attackers:
+            still_blocked = any(a_idx in atks for atks in game.combat_blockers.values())
+            if not still_blocked and 0 <= a_idx < len(active.battlefield):
+                active.battlefield[a_idx].blocked = False
+        # CR 702.22h: band block propagation is recomputed from combat_blockers.
+        game._apply_band_block_propagation()
+
+    game.log.append(f"{card.name} removed {removed.card.name} from combat")
     return True, "resolved"
 
 

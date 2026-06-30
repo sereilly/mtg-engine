@@ -235,6 +235,15 @@ class CombatPhaseMixin:
             valid_attackers[attacker_idx] = defending_idx
         self.combat_attackers = valid_attackers
 
+        # CR 702.22f: an attacking creature removed from combat is removed from its
+        # band. Drop departed members; a band that falls below two members is no
+        # longer a band (it leaves no banding interaction for the rest of combat).
+        if self.combat_bands:
+            pruned_bands = [
+                [m for m in band if m in self.combat_attackers] for band in self.combat_bands
+            ]
+            self.combat_bands = [band for band in pruned_bands if len(band) >= 2]
+
         valid_blockers: dict[int, list[int]] = {}
         for blocker_idx, attacker_idxs in self.combat_blockers.items():
             if blocker_idx < 0 or blocker_idx >= len(defender.battlefield):

@@ -174,7 +174,16 @@ class EffectsMixin:
 
         return None
 
-    def _tap_or_untap_target(self, target: PlayerState, make_tapped: bool) -> bool:
+    def _tap_or_untap_target(
+        self, target: PlayerState, make_tapped: bool, target_permanent_index: int | None = None
+    ) -> bool:
+        # Honor an explicitly chosen permanent (Twiddle: "tap or untap target
+        # artifact, creature, or land" — the player picks which one, on either
+        # battlefield). Fall back to the first permanent only when no explicit
+        # choice was supplied (AI/headless).
+        if isinstance(target_permanent_index, int) and 0 <= target_permanent_index < len(target.battlefield):
+            target.battlefield[target_permanent_index].tapped = make_tapped
+            return True
         for permanent in target.battlefield:
             permanent.tapped = make_tapped
             return True
