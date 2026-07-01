@@ -20,6 +20,7 @@ class GameSnapshot:
     optional_trigger_choices: list[dict] = field(default_factory=list)
     optional_trigger_resolved: dict[str, bool] = field(default_factory=dict)
     island_sanctuary_pending: bool = False
+    pending_post_sacrifice: tuple[str, int] | None = None
 
 
 class GameHistory:
@@ -42,6 +43,7 @@ class GameHistory:
                 optional_trigger_choices=list(session.optional_trigger_choices),
                 optional_trigger_resolved=dict(session.optional_trigger_resolved),
                 island_sanctuary_pending=session.island_sanctuary_pending,
+                pending_post_sacrifice=session.pending_post_sacrifice,
             )
         )
 

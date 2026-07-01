@@ -398,24 +398,16 @@ class EffectsMixin:
             target, "whenever you're dealt damage, sacrifice that many nontoken permanents"
         ):
             return
-        for _ in range(damage):
-            candidates = [
-                perm for perm in target.battlefield if not perm.metadata.get("is_token", False)
-            ]
-            if not candidates:
-                target.lost = True
-                self.log.append(
-                    f"{target.name} couldn't sacrifice a nontoken permanent and lost the game (Lich)"
-                )
-                return
-            # Sacrifice permanents whose death would lose the game (e.g. Lich itself) last.
-            choice = min(
-                candidates,
-                key=lambda perm: "you lose the game" in perm.card.oracle_text.lower(),
-            )
-            target.battlefield.remove(choice)
-            self._permanent_to_graveyard(target, choice)
-            self.log.append(f"{target.name} sacrificed {choice.card.name} (Lich)")
+        # CR 701.16b: the sacrificing player chooses which nontoken permanents to
+        # give up (a human is prompted; AI/headless resolves inline). "If you can't,
+        # you lose the game." Multiple damage events this step accumulate the count.
+        self.arm_forced_sacrifice(
+            self.players.index(target),
+            damage,
+            filter="nontoken",
+            reason="Lich",
+            on_short={"kind": "lose"},
+        )
 
     def _add_mana_from_text(self, controller: PlayerState, text: str, preferred_color: str | None = None) -> None:
         # Prefer lexing the oracle text for mana symbols

@@ -20,6 +20,9 @@ let pendingChannel = null;
 let discardToLibrarySelected = false;
 // Balance: the indices the player has currently picked to sacrifice/discard.
 let balanceSelection = { lands: [], creatures: [], hand: [] };
+// Forced sacrifice (Lich): the battlefield indices the player has currently
+// picked to sacrifice.
+let sacrificeSelection = [];
 // Raging River: in-progress left/right labels, keyed by creature index, for
 // whichever role (defender division / attacker labeling) the viewer is resolving.
 // Each creature starts unset; once every creature has a side the choice submits.
@@ -869,7 +872,7 @@ function combatDamageAssignmentPending(state = currentState) {
 }
 
 function hasBlockingPromptForAutoPass(state = currentState) {
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getBalanceSelectInfo(state) || getOptionalPayInfo(state) || getLandTypeChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getLandTypeChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
   return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingAbilityChoice || pendingChannel);
 }
 
@@ -1729,6 +1732,15 @@ function getBalanceSelectInfo(state = currentState) {
   return info;
 }
 
+function getSacrificeSelectInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.sacrifice_select;
+  if (!info) return null;
+  if (info.player_seat !== seat) return null;
+  if (!Array.isArray(info.permanents) || info.permanents.length === 0) return null;
+  return info;
+}
+
 function getOptionalPayInfo(state = currentState) {
   if (!state || seat === null) return null;
   const info = state.optional_pay;
@@ -1905,7 +1917,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getBalanceSelectInfo(state) || getOptionalPayInfo(state) || getLandTypeChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getLandTypeChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -2396,6 +2408,79 @@ function applyBalanceSelectPrompt(info) {
         discard_indices: balanceSelection.hand.slice(),
       };
       balanceSelection = { lands: [], creatures: [], hand: [] };
+      await sendAction(payload);
+    });
+  }
+}
+
+// Forced sacrifice (Lich: "sacrifice that many nontoken permanents"): the player
+// picks exactly `count` of their own permanents. The valid permanents are also
+// highlighted on the battlefield canvas (see setTargetingKeys in the render loop).
+function applySacrificeSelectPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  const permanents = info.permanents || [];
+  const validIndices = new Set(permanents.map((p) => p.index));
+  // Drop any stale picks that are no longer valid permanents.
+  sacrificeSelection = sacrificeSelection.filter((i) => validIndices.has(i));
+  const need = Math.min(info.count || 0, permanents.length);
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  title.textContent = `${info.reason || "Sacrifice"} — Choose Sacrifices`;
+  body.textContent = `Choose ${need} permanent(s) to sacrifice.`;
+
+  const rows = permanents
+    .map((p) => {
+      const selected = sacrificeSelection.includes(p.index);
+      const name = p.name || "Permanent";
+      return (
+        `<button type="button" class="prompt-choice-btn${selected ? " selected" : ""}" ` +
+        `data-sacrifice-index="${p.index}">${selected ? "✓ " : ""}${escapeHtml(name)}</button>`
+      );
+    })
+    .join("");
+
+  const ready = sacrificeSelection.length === need;
+  steps.innerHTML = [
+    `<div>Selected ${sacrificeSelection.length}/${need}</div>`,
+    `<div class="prompt-choice-row">${rows}</div>`,
+    `<div class="prompt-choice-row"><button type="button" class="prompt-choice-btn" id="sacrificeConfirmBtn"${ready ? "" : " disabled"}>Confirm</button></div>`,
+  ].join("");
+
+  steps.querySelectorAll("[data-sacrifice-index]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const idx = Number(btn.dataset.sacrificeIndex);
+      const at = sacrificeSelection.indexOf(idx);
+      if (at >= 0) sacrificeSelection.splice(at, 1);
+      else if (sacrificeSelection.length < need) sacrificeSelection.push(idx);
+      applySacrificeSelectPrompt(info);
+      // Reflect the new picks as selected on the canvas immediately.
+      battlefieldCanvas?.setSelectedKeys(sacrificeSelection.map((i) => `${seat}-${i}`));
+    });
+  });
+
+  const confirmBtn = document.getElementById("sacrificeConfirmBtn");
+  if (confirmBtn) {
+    confirmBtn.addEventListener("click", async () => {
+      const payload = {
+        seat,
+        action: "sacrifice_confirm",
+        sacrifice_indices: sacrificeSelection.slice(),
+      };
+      sacrificeSelection = [];
       await sendAction(payload);
     });
   }
@@ -3398,6 +3483,12 @@ function renderActivationPrompt() {
   const balanceSelectInfo = getBalanceSelectInfo();
   if (balanceSelectInfo) {
     applyBalanceSelectPrompt(balanceSelectInfo);
+    return;
+  }
+
+  const sacrificeSelectInfo = getSacrificeSelectInfo();
+  if (sacrificeSelectInfo) {
+    applySacrificeSelectPrompt(sacrificeSelectInfo);
     return;
   }
 
@@ -7082,9 +7173,17 @@ function renderBoard(state) {
         }
       }
     }
+    // Forced sacrifice (Lich): highlight every valid permanent as a target and
+    // mark the ones the player has picked so far as selected.
+    const sacrificeInfo = getSacrificeSelectInfo(state);
+    let targetingKeys = getTargetablePermanentKeysForPrompt();
+    if (sacrificeInfo) {
+      targetingKeys = (sacrificeInfo.permanents || []).map((p) => `${sacrificeInfo.player_seat}-${p.index}`);
+      for (const idx of sacrificeSelection) selfSelectedKeys.push(`${sacrificeInfo.player_seat}-${idx}`);
+    }
     battlefieldCanvas.setSelectedKeys([...selfSelectedKeys, ...allSelectedKeys]);
 
-    battlefieldCanvas.setTargetingKeys(getTargetablePermanentKeysForPrompt());
+    battlefieldCanvas.setTargetingKeys(targetingKeys);
   }
 
   // Highlight only the player faces the backend marked as legal targets for the
@@ -7541,6 +7640,24 @@ function initBattlefieldCanvas() {
               updateActionHint(`Untap selection: ${nextInfo?.selected_count ?? "?"}/${nextInfo?.max_count ?? "?"} land(s) selected.`);
             })
             .catch((e) => updateActionHint(e.message, true));
+          return;
+        }
+
+        // Forced sacrifice (Lich): clicking a highlighted own permanent toggles it
+        // in the selection, mirroring the prompt panel's buttons.
+        const sacrificeInfo = getSacrificeSelectInfo(currentState);
+        if (sacrificeInfo && cardSeat === seat) {
+          const validIndices = new Set((sacrificeInfo.permanents || []).map((p) => p.index));
+          if (!validIndices.has(permanentIndex)) {
+            updateActionHint(`${card.name} can't be sacrificed.`, true);
+            return;
+          }
+          const need = Math.min(sacrificeInfo.count || 0, validIndices.size);
+          const at = sacrificeSelection.indexOf(permanentIndex);
+          if (at >= 0) sacrificeSelection.splice(at, 1);
+          else if (sacrificeSelection.length < need) sacrificeSelection.push(permanentIndex);
+          applySacrificeSelectPrompt(sacrificeInfo);
+          battlefieldCanvas?.setSelectedKeys(sacrificeSelection.map((i) => `${seat}-${i}`));
           return;
         }
 

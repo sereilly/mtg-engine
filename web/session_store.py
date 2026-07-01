@@ -62,6 +62,11 @@ class Session:
     upkeep_mana_prevention_choices: list[dict] = field(default_factory=list)
     upkeep_mana_prevention_resolved: dict[str, int] = field(default_factory=dict)
     island_sanctuary_pending: bool = False
+    # Lord of the Pit: a mandatory upkeep sacrifice pauses the beginning phase for
+    # the human to choose which creature. This records (marker, player_index) so
+    # the post-sacrifice resume (draw step + main phase) can finish the phase once
+    # the choice is confirmed. None when no such pause is outstanding.
+    pending_post_sacrifice: tuple[str, int] | None = None
     # Time Vault: the begin-of-turn "skip your turn to untap" decision. Holds the
     # permanent names offering the skip while the human decides; cleared once they
     # skip or decline. `time_vault_resolved_turn` records the turn already decided

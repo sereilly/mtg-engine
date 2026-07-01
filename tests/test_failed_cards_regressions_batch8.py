@@ -492,7 +492,11 @@ class TestSacrificeChoice:
         giant = Permanent(card=cards["Hill Giant"])
         p1 = PlayerState(name="P1", battlefield=[lotp, grizzly, giant], life=20)
         game = _game(p1, PlayerState(name="P2"))
-        game.resolve_upkeep(0, sacrifice_choices={"Lord of the Pit": 2})  # choose Hill Giant
+        # A human controller is prompted (shares Lich's interactive sacrifice) and
+        # picks the Hill Giant (index 2).
+        game.interactive_seats = {0}
+        game.resolve_upkeep(0)
+        assert game.confirm_sacrifice(0, [2]) is True
         names = [p.card.name for p in p1.battlefield]
         assert "Hill Giant" not in names
         assert "Grizzly Bears" in names and "Lord of the Pit" in names

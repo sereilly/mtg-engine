@@ -651,6 +651,118 @@ def test_modal_spell_resolves_chosen_mode_via_action():
     assert state["players"][0]["life"] == 17, "Prevention mode should not gain life"
 
 
+def test_forced_sacrifice_prompts_human_and_honors_choice():
+    """Lich: when a human is dealt damage, the sacrifice is deferred to an
+    interactive prompt that lists valid permanents, and the player's chosen
+    permanent is the one sacrificed (not an engine-picked default)."""
+    created = client.post(
+        "/api/sessions",
+        json={"mode": "human_vs_human", "seed": 9911},
+    ).json()
+    sid = created["session_id"]
+    session = store.get(sid)
+
+    lich = _mk_card(
+        name="Lich Test",
+        mana_cost="{B}",
+        type_line="Enchantment",
+        oracle_text=(
+            "Whenever you're dealt damage, sacrifice that many nontoken permanents. "
+            "If you can't, you lose the game."
+        ),
+    )
+    p0 = session.game.players[0]
+    a = _mk_creature_card("Bear A", 2, 2)
+    b = _mk_creature_card("Bear B", 3, 3)
+    p0.battlefield = [Permanent(card=a), Permanent(card=b), Permanent(card=lich)]
+
+    # Deal 1 damage to the human; the engine arms an interactive prompt instead of
+    # auto-sacrificing (both seats are human in this mode).
+    session.game.interactive_seats = {0}
+    session.game._deal_damage_to_player(p0, 1)
+    assert len(p0.battlefield) == 3  # nothing sacrificed yet
+
+    state = client.get(f"/api/sessions/{sid}/state?seat=0").json()
+    prompt = state["sacrifice_select"]
+    assert prompt is not None
+    assert prompt["player_seat"] == 0
+    assert prompt["count"] == 1
+    # Every valid (nontoken) permanent is offered so the UI can list/highlight them.
+    offered = {p["index"] for p in prompt["permanents"]}
+    assert offered == {0, 1, 2}
+
+    # Other actions are blocked until the sacrifice is resolved.
+    blocked = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "pass_priority"},
+    )
+    assert blocked.status_code == 400
+
+    # The player elects to sacrifice the Lich itself (index 2).
+    confirm = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "sacrifice_confirm", "sacrifice_indices": [2]},
+    )
+    assert confirm.status_code == 200
+    names = [c["name"] for c in confirm.json()["players"][0]["battlefield"]]
+    assert "Lich Test" not in names
+    assert "Bear A" in names and "Bear B" in names
+    assert store.get(sid).game.pending_sacrifice is None
+
+
+def test_lord_of_the_pit_upkeep_sacrifice_pauses_then_resumes_turn():
+    """Lord of the Pit's mandatory upkeep sacrifice pauses the beginning phase for
+    the human to choose which creature; confirming resumes the turn into the main
+    phase with the chosen creature sacrificed."""
+    created = client.post(
+        "/api/sessions",
+        json={"mode": "human_vs_human", "seed": 4242},
+    ).json()
+    sid = created["session_id"]
+    session = store.get(sid)
+
+    lord = _mk_creature_card(
+        "Lord of the Pit Test", 7, 7,
+        oracle_text=(
+            "Flying, trample\n"
+            "At the beginning of your upkeep, sacrifice a creature other than this "
+            "creature. If you can't, this creature deals 7 damage to you."
+        ),
+    )
+    bear = _mk_creature_card("Bear", 2, 2)
+    session.game.active_player_index = 0
+    session.current_turn = 0
+    session.game.players[0].battlefield = [Permanent(card=lord), Permanent(card=bear)]
+
+    # Drive the upkeep exactly as _begin_turn does for a human controller.
+    session.game.interactive_seats = {0}
+    session.game.resolve_upkeep(0)
+    assert session.game.pending_sacrifice is not None
+    session.pending_post_sacrifice = ("begin_turn", 0)
+    session.game._set_phase_and_step("beginning", "upkeep")
+
+    # The prompt offers only the OTHER creature (the Lord excludes itself).
+    state = client.get(f"/api/sessions/{sid}/state?seat=0").json()
+    prompt = state["sacrifice_select"]
+    assert prompt is not None
+    assert [p["name"] for p in prompt["permanents"]] == ["Bear"]
+    assert prompt["reason"] == "Lord of the Pit Test"
+
+    # Confirm: the Bear is sacrificed and the turn resumes into the main phase.
+    confirm = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "sacrifice_confirm", "sacrifice_indices": [1]},
+    )
+    assert confirm.status_code == 200
+    payload = confirm.json()
+    names = [c["name"] for c in payload["players"][0]["battlefield"]]
+    assert "Bear" not in names
+    assert "Lord of the Pit Test" in names
+    assert payload["current_turn_phase"] == "precombat_main"
+    assert store.get(sid).game.pending_sacrifice is None
+    assert store.get(sid).pending_post_sacrifice is None
+
+
 def test_activate_emblem_grants_prevention_and_requires_priority():
     """The Guardian Angel emblem is activatable via the activate_emblem action,
     gated on priority, and grants a prevention shield to the chosen target."""

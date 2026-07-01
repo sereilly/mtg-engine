@@ -585,8 +585,9 @@ class TestPowerSinkCounters:
 
 # ---------------------------------------------------------------------------
 # Lich — "Whenever you're dealt damage, sacrifice that many nontoken permanents."
-# The core works: N damage sacrifices N nontoken permanents (game-losing ones
-# last). The interactive choice of which permanents is an unmodeled enhancement.
+# Non-interactive (AI/headless) play sacrifices N nontoken permanents with a
+# deterministic heuristic (game-losing ones kept last). A human seat instead gets
+# an interactive prompt (pending_sacrifice) and chooses which permanents to give up.
 # ---------------------------------------------------------------------------
 
 class TestLichSacrifice:
@@ -600,6 +601,116 @@ class TestLichSacrifice:
         game._deal_damage_to_player(p1, 2)
         assert before - len(p1.battlefield) == 2  # two nontoken permanents sacrificed
         assert lich in p1.battlefield              # Lich (game-losing) sacrificed last
+
+    def test_interactive_seat_defers_to_a_prompt(self, cards):
+        lich = Permanent(card=cards["Lich"])
+        a = Permanent(card=cards["Grizzly Bears"])
+        b = Permanent(card=cards["Hill Giant"])
+        p1 = PlayerState(name="P1", battlefield=[a, b, lich], life=20)
+        game = _game(p1, PlayerState(name="P2"))
+        game.interactive_seats = {0}
+        game._deal_damage_to_player(p1, 2)
+        # Nothing sacrificed yet: the player is prompted to choose.
+        assert len(p1.battlefield) == 3
+        assert game.pending_sacrifice["player_index"] == 0
+        assert game.pending_sacrifice["count"] == 2
+        assert game.pending_sacrifice["reason"] == "Lich"
+        assert game.pending_sacrifice["filter"] == "nontoken"
+
+    def test_player_choice_is_honored(self, cards):
+        lich = Permanent(card=cards["Lich"])
+        a = Permanent(card=cards["Grizzly Bears"])
+        b = Permanent(card=cards["Hill Giant"])
+        p1 = PlayerState(name="P1", battlefield=[a, b, lich], life=20)
+        game = _game(p1, PlayerState(name="P2"))
+        game.interactive_seats = {0}
+        game._deal_damage_to_player(p1, 1)
+        # The player elects to sacrifice Lich itself (index 2) rather than a creature.
+        assert game.confirm_sacrifice(0, [2]) is True
+        assert lich not in p1.battlefield
+        assert a in p1.battlefield and b in p1.battlefield
+        assert game.pending_sacrifice is None
+
+    def test_repeated_damage_accumulates_count(self, cards):
+        lich = Permanent(card=cards["Lich"])
+        a = Permanent(card=cards["Grizzly Bears"])
+        b = Permanent(card=cards["Hill Giant"])
+        p1 = PlayerState(name="P1", battlefield=[a, b, lich], life=20)
+        game = _game(p1, PlayerState(name="P2"))
+        game.interactive_seats = {0}
+        game._deal_damage_to_player(p1, 1)
+        game._deal_damage_to_player(p1, 1)  # e.g. two combat damage events this step
+        assert game.pending_sacrifice["count"] == 2
+
+    def test_wrong_count_is_rejected(self, cards):
+        lich = Permanent(card=cards["Lich"])
+        a = Permanent(card=cards["Grizzly Bears"])
+        b = Permanent(card=cards["Hill Giant"])
+        p1 = PlayerState(name="P1", battlefield=[a, b, lich], life=20)
+        game = _game(p1, PlayerState(name="P2"))
+        game.interactive_seats = {0}
+        game._deal_damage_to_player(p1, 2)
+        assert game.confirm_sacrifice(0, [0]) is False  # must choose exactly 2
+        assert len(p1.battlefield) == 3                 # unchanged, still pending
+        assert game.pending_sacrifice is not None
+
+    def test_too_few_permanents_loses_the_game(self, cards):
+        lich = Permanent(card=cards["Lich"])
+        a = Permanent(card=cards["Grizzly Bears"])
+        p1 = PlayerState(name="P1", battlefield=[a, lich], life=20)
+        game = _game(p1, PlayerState(name="P2"))
+        game.interactive_seats = {0}
+        game._deal_damage_to_player(p1, 3)  # owes 3, only 2 nontoken permanents
+        assert game.confirm_sacrifice(0, [0, 1]) is True
+        assert p1.lost is True
+
+
+# ---------------------------------------------------------------------------
+# Lord of the Pit — "At the beginning of your upkeep, sacrifice a creature other
+# than this creature. If you can't, this creature deals 7 damage to you." Shares
+# Lich's interactive sacrifice: a human picks which creature; AI/headless picks
+# inline; with no other creature the 7-damage consequence applies instead.
+# ---------------------------------------------------------------------------
+
+class TestLordOfThePitSacrifice:
+    def test_ai_sacrifices_another_creature_inline(self, cards):
+        lord = Permanent(card=cards["Lord of the Pit"])
+        bear = Permanent(card=cards["Grizzly Bears"])
+        p1 = PlayerState(name="P1", battlefield=[lord, bear], life=20)
+        game = _game(p1, PlayerState(name="P2"))
+        game.resolve_upkeep(0)  # no interactive seats → resolve inline
+        assert bear not in p1.battlefield
+        assert lord in p1.battlefield
+        assert p1.life == 20  # no damage taken
+
+    def test_human_is_prompted_and_choice_honored(self, cards):
+        lord = Permanent(card=cards["Lord of the Pit"])
+        bear = Permanent(card=cards["Grizzly Bears"])
+        giant = Permanent(card=cards["Hill Giant"])
+        p1 = PlayerState(name="P1", battlefield=[lord, bear, giant], life=20)
+        game = _game(p1, PlayerState(name="P2"))
+        game.interactive_seats = {0}
+        game.resolve_upkeep(0)
+        # Prompt lists only the OTHER creatures (Lord of the Pit excludes itself).
+        assert game.pending_sacrifice is not None
+        state = game.pending_sacrifice_state()
+        assert set(state["valid_indices"]) == {1, 2}
+        assert state["count"] == 1
+        # Player chooses the Hill Giant (index 2).
+        assert game.confirm_sacrifice(0, [2]) is True
+        assert giant not in p1.battlefield
+        assert bear in p1.battlefield and lord in p1.battlefield
+
+    def test_no_other_creature_deals_damage(self, cards):
+        lord = Permanent(card=cards["Lord of the Pit"])
+        p1 = PlayerState(name="P1", battlefield=[lord], life=20)
+        game = _game(p1, PlayerState(name="P2"))
+        game.interactive_seats = {0}
+        game.resolve_upkeep(0)
+        # No creature to sacrifice → no prompt, take 7 damage instead.
+        assert game.pending_sacrifice is None
+        assert p1.life == 13
+        assert lord in p1.battlefield
 
 
 # ---------------------------------------------------------------------------

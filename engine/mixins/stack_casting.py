@@ -494,6 +494,174 @@ class StackCastingMixin:
                 break
         self.pending_discard = None
 
+    # -- Forced sacrifice of the player's choice (Lich, Lord of the Pit) ---------
+    #
+    # A single mechanism drives every "sacrifice a permanent you choose" effect so
+    # they behave uniformly. ``arm_forced_sacrifice`` either arms an interactive
+    # prompt (human seat) or resolves the sacrifice inline with a deterministic
+    # heuristic (AI / headless). ``pending_sacrifice`` shape:
+    #   {"player_index", "count", "filter", "exclude", "reason", "on_short"}
+    # where ``filter`` is "nontoken" or "creature", ``exclude`` is a Permanent that
+    # can't be chosen (Lord of the Pit excludes itself), and ``on_short`` is the
+    # effect applied when the player owes more sacrifices than they can make
+    # (None, {"kind": "lose"}, or {"kind": "damage", "amount": N}).
+
+    def _sacrifice_candidate_indices(self, player, filter: str, exclude=None) -> list[int]:
+        """Battlefield indices of ``player``'s permanents eligible for a forced
+        sacrifice under ``filter`` (excluding ``exclude`` if given)."""
+        out: list[int] = []
+        for i, perm in enumerate(player.battlefield):
+            if exclude is not None and perm is exclude:
+                continue
+            if filter == "nontoken" and perm.metadata.get("is_token", False):
+                continue
+            if filter == "creature" and perm.card.primary_type != "creature":
+                continue
+            out.append(i)
+        return out
+
+    def _apply_sacrifice_shortfall(self, player_index: int, owed: int, on_short, reason: str) -> None:
+        """Apply the consequence for a player who can't sacrifice all they owe."""
+        if not on_short or owed <= 0:
+            return
+        player = self.players[player_index]
+        if on_short.get("kind") == "lose":
+            player.lost = True
+            self.log.append(
+                f"{player.name} couldn't sacrifice a nontoken permanent and lost the game ({reason})"
+            )
+        elif on_short.get("kind") == "damage":
+            dealt = self._deal_damage_to_player(player, int(on_short.get("amount", 0)))
+            self.log.append(f"{reason} dealt {dealt} damage to {player.name}")
+
+    def _resolve_sacrifice_inline(self, player_index: int, count: int, filter: str, exclude, reason: str, on_short) -> None:
+        """Sacrifice ``count`` of the player's permanents with the deterministic
+        heuristic (permanents whose death loses the game are kept for last)."""
+        player = self.players[player_index]
+        for _ in range(count):
+            valid = self._sacrifice_candidate_indices(player, filter, exclude)
+            if not valid:
+                self._apply_sacrifice_shortfall(player_index, 1, on_short, reason)
+                return
+            idx = min(
+                valid,
+                key=lambda i: "you lose the game" in player.battlefield[i].card.oracle_text.lower(),
+            )
+            perm = player.battlefield.pop(idx)
+            self._permanent_to_graveyard(player, perm)
+            self.log.append(f"{player.name} sacrificed {perm.card.name} ({reason})")
+
+    def arm_forced_sacrifice(
+        self,
+        player_index: int,
+        count: int,
+        *,
+        filter: str = "nontoken",
+        exclude=None,
+        reason: str = "Sacrifice",
+        on_short=None,
+    ) -> None:
+        """Force a player to sacrifice ``count`` permanents matching ``filter``.
+        A human seat is prompted to choose which (``pending_sacrifice``); AI /
+        headless play resolves it inline. Multiple calls to the same player during
+        one step accumulate onto the existing prompt (e.g. two combat-damage
+        events feeding Lich)."""
+        player = self.players[player_index]
+        valid = self._sacrifice_candidate_indices(player, filter, exclude)
+        if not valid:
+            self._apply_sacrifice_shortfall(player_index, count, on_short, reason)
+            return
+        if player_index in self.interactive_seats and (
+            self.pending_sacrifice is None
+            or (
+                self.pending_sacrifice.get("player_index") == player_index
+                and self.pending_sacrifice.get("filter", "nontoken") == filter
+                and self.pending_sacrifice.get("exclude") is exclude
+            )
+        ):
+            if self.pending_sacrifice is not None:
+                self.pending_sacrifice["count"] += count
+            else:
+                self.pending_sacrifice = {
+                    "player_index": player_index,
+                    "count": count,
+                    "filter": filter,
+                    "exclude": exclude,
+                    "reason": reason,
+                    "on_short": on_short,
+                }
+            return
+        self._resolve_sacrifice_inline(player_index, count, filter, exclude, reason, on_short)
+
+    def pending_sacrifice_state(self) -> dict | None:
+        """The active sacrifice prompt as valid battlefield indices + count, or
+        None. Used by the web layer to render/highlight the choice."""
+        pending = self.pending_sacrifice
+        if pending is None:
+            return None
+        player = self.players[pending["player_index"]]
+        valid = self._sacrifice_candidate_indices(
+            player, pending.get("filter", "nontoken"), pending.get("exclude")
+        )
+        return {
+            "player_index": pending["player_index"],
+            "valid_indices": valid,
+            "count": min(int(pending["count"]), len(valid)),
+            "reason": pending.get("reason", "Sacrifice"),
+        }
+
+    def confirm_sacrifice(self, player_index: int, indices: list[int]) -> bool:
+        """Resolve the pending forced sacrifice with the player's chosen battlefield
+        indices. Requires exactly ``min(count, eligible permanents)`` distinct
+        eligible permanents; if the player owed more than they could sacrifice, the
+        shortfall consequence applies (Lich loses; Lord of the Pit deals damage)."""
+        pending = self.pending_sacrifice
+        if pending is None or pending.get("player_index") != player_index:
+            return False
+        player = self.players[player_index]
+        filter = pending.get("filter", "nontoken")
+        exclude = pending.get("exclude")
+        valid = self._sacrifice_candidate_indices(player, filter, exclude)
+        count = int(pending["count"])
+        need = min(count, len(valid))
+        chosen = list(dict.fromkeys(indices or []))
+        if len(chosen) != need or any(i not in valid for i in chosen):
+            return False
+        reason = pending.get("reason", "sacrifice")
+        # Remove highest index first so the earlier indices stay valid mid-loop.
+        removed: list[str] = []
+        for i in sorted(chosen, reverse=True):
+            perm = player.battlefield.pop(i)
+            self._permanent_to_graveyard(player, perm)
+            removed.append(perm.card.name)
+        for name in reversed(removed):
+            self.log.append(f"{player.name} sacrificed {name} ({reason})")
+        self.pending_sacrifice = None
+        if count > len(valid):
+            self._apply_sacrifice_shortfall(player_index, count - len(valid), pending.get("on_short"), reason)
+        self.check_state_based_actions()
+        return True
+
+    def auto_resolve_pending_sacrifice(self, only_player_index: int | None = None) -> None:
+        """Resolve a pending forced sacrifice inline with the deterministic
+        heuristic. Used for AI seats and headless simulation."""
+        pending = self.pending_sacrifice
+        if pending is None:
+            return
+        player_index = pending["player_index"]
+        if only_player_index is not None and player_index != only_player_index:
+            return
+        self.pending_sacrifice = None
+        self._resolve_sacrifice_inline(
+            player_index,
+            int(pending["count"]),
+            pending.get("filter", "nontoken"),
+            pending.get("exclude"),
+            pending.get("reason", "sacrifice"),
+            pending.get("on_short"),
+        )
+        self.check_state_based_actions()
+
     def confirm_reorder_library(self, caster_index: int, new_order: list, shuffle: bool = False) -> bool:
         pending = self.pending_reorder_library
         if pending is None or pending["caster_index"] != caster_index:

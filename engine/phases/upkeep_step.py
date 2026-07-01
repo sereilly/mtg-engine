@@ -438,35 +438,19 @@ class UpkeepStepMixin:
                         break
 
                     if cond == "upkeep_self" and kind == "upkeep_sacrifice_other_creature_or_deal_damage":
-                        # Lord of the Pit: the controller chooses which other creature
-                        # to sacrifice. Honor an explicit choice (battlefield index);
-                        # otherwise auto-pick the first eligible creature.
-                        chosen_idx = sacrifice_choices.get(permanent.card.name) if sacrifice_choices else None
-                        other_idx = None
-                        if (
-                            isinstance(chosen_idx, int)
-                            and 0 <= chosen_idx < len(controller.battlefield)
-                            and controller.battlefield[chosen_idx] is not permanent
-                            and controller.battlefield[chosen_idx].card.primary_type == "creature"
-                        ):
-                            other_idx = chosen_idx
-                        if other_idx is None:
-                            other_idx = next(
-                                (
-                                    i
-                                    for i, perm in enumerate(controller.battlefield)
-                                    if perm is not permanent and perm.card.primary_type == "creature"
-                                ),
-                                None,
-                            )
-                        if other_idx is not None:
-                            sacrificed = controller.battlefield.pop(other_idx)
-                            controller.graveyard.append(sacrificed.card)
-                            self.log.append(f"{controller.name} sacrificed {sacrificed.card.name} for {permanent.card.name}")
-                        else:
-                            alt_damage = int(trig.instruction.payload.get("damage", 0))
-                            alt_damage = self._deal_damage_to_player(controller, alt_damage)
-                            self.log.append(f"{permanent.card.name} dealt {alt_damage} upkeep damage to {controller.name}")
+                        # Lord of the Pit: "sacrifice a creature other than this
+                        # creature. If you can't, this creature deals N damage to
+                        # you." The controller chooses which other creature (a human
+                        # is prompted; AI/headless picks inline). With no other
+                        # creature, the damage consequence applies instead.
+                        self.arm_forced_sacrifice(
+                            self.players.index(controller),
+                            1,
+                            filter="creature",
+                            exclude=permanent,
+                            reason=permanent.card.name,
+                            on_short={"kind": "damage", "amount": int(trig.instruction.payload.get("damage", 0))},
+                        )
                         break
 
                     if cond == "upkeep_self" and kind == "upkeep_pay_or_sacrifice_self":

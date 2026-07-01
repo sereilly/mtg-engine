@@ -921,11 +921,12 @@ def _advance_after_upkeep_choices(session: Session) -> None:
         optional_choices=optional,
         mana_prevention=mana_prevention,
     )
-    if _seat_type(session, session.current_turn) == "human" and _has_island_sanctuary(session.game, session.current_turn):
-        session.island_sanctuary_pending = True
+    # Lord of the Pit: a mandatory upkeep sacrifice armed an interactive choice.
+    # Pause here; the sacrifice_confirm handler resumes _finish_beginning_phase.
+    if session.game.pending_sacrifice is not None:
+        session.pending_post_sacrifice = ("begin_turn", session.current_turn)
         return
-    session.game.resolve_draw_step(session.current_turn)
-    session.game._enter_main_phase(precombat=True)
+    _finish_beginning_phase(session, session.current_turn)
 
 
 def _build_upkeep_pay_info(session: Session, viewer_seat: int | None) -> dict | None:
@@ -1171,6 +1172,20 @@ def _begin_turn(session: Session, player_index: int, defer_untap_selection: bool
         return True
 
     game.resolve_upkeep(player_index)
+    # Lord of the Pit: a mandatory upkeep sacrifice armed an interactive choice.
+    # Pause the beginning phase here; the human confirms, then _finish_beginning_phase
+    # runs from the sacrifice_confirm handler.
+    if game.pending_sacrifice is not None:
+        session.pending_post_sacrifice = ("begin_turn", player_index)
+        return False
+    return _finish_beginning_phase(session, player_index)
+
+
+def _finish_beginning_phase(session: Session, player_index: int) -> bool:
+    """Run the draw step and enter the main phase after upkeep has resolved,
+    honoring Island Sanctuary and the phase-rail draw-step holds. Shared by
+    _begin_turn and the post-sacrifice (Lord of the Pit) resume."""
+    game = session.game
     if _seat_type(session, player_index) == "human" and _has_island_sanctuary(game, player_index):
         session.island_sanctuary_pending = True
         return False
@@ -1470,6 +1485,28 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
                 "hand": [_serialize_card_summary(card) for card in me_player.hand],
             }
 
+    # Forced sacrifice (Lich, Lord of the Pit): surface the sacrificing player's
+    # choice of which permanent(s) to sacrifice, with every eligible permanent (so
+    # the UI can list and highlight them). Shown only to that (human) player.
+    sacrifice_info = None
+    sacrifice_state = session.game.pending_sacrifice_state()
+    if sacrifice_state is not None:
+        sac_seat = sacrifice_state["player_index"]
+        if (
+            (viewer_seat is None or viewer_seat == sac_seat)
+            and _seat_type(session, sac_seat) != "ai"
+        ):
+            sac_player = session.game.players[sac_seat]
+            sacrifice_info = {
+                "player_seat": sac_seat,
+                "count": sacrifice_state["count"],
+                "reason": sacrifice_state["reason"],
+                "permanents": [
+                    {"index": i, **_serialize_card_summary(sac_player.battlefield[i].card)}
+                    for i in sacrifice_state["valid_indices"]
+                ],
+            }
+
     # Color rods (Wooden Sphere, …): the controller's pending "pay {1}: gain life"
     # yes/no decisions, shown only to that player.
     optional_pay_info = None
@@ -1655,6 +1692,7 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "reorder_library": reorder_library_info,
         "discard_select": discard_info,
         "balance_select": balance_info,
+        "sacrifice_select": sacrifice_info,
         "optional_pay": optional_pay_info,
         "hand_reveal": hand_reveal_info,
         "land_type_choice": land_type_choice_info,
@@ -1831,6 +1869,17 @@ def _auto_resolve_ai_pending_balance(session: Session) -> None:
             game.auto_resolve_pending_balance(only_player_index=player_index)
 
 
+def _auto_resolve_ai_pending_sacrifice(session: Session) -> None:
+    """Resolve an AI player's forced sacrifice (Lich) with the deterministic
+    heuristic; a human keeps their interactive choice of which permanent(s)."""
+    game = session.game
+    pending = game.pending_sacrifice
+    if pending is None:
+        return
+    if _seat_type(session, pending["player_index"]) == "ai":
+        game.auto_resolve_pending_sacrifice()
+
+
 def _auto_resolve_ai_pending_optional_pays(session: Session) -> None:
     """Pay each AI player's pending color-rod "pay {1}: gain life" triggers; the
     human keeps their yes/no prompt."""
@@ -1909,6 +1958,7 @@ def _auto_resolve_ai_pending(session: Session) -> None:
     _auto_resolve_ai_pending_reorder(session)
     _auto_resolve_ai_pending_discard(session)
     _auto_resolve_ai_pending_balance(session)
+    _auto_resolve_ai_pending_sacrifice(session)
     _auto_resolve_ai_pending_optional_pays(session)
     _auto_resolve_ai_pending_land_type(session)
     _auto_resolve_ai_pending_mana_payment(session)
@@ -2999,6 +3049,13 @@ def do_action(session_id: str, req: GameActionRequest):
 
     seat_type = _seat_type(session, req.seat)
 
+    # Keep the engine's set of human-controlled seats current, so forced-sacrifice
+    # effects (Lich) dealt to a human during this action defer to an interactive
+    # prompt instead of auto-resolving.
+    session.game.interactive_seats = {
+        s for s in range(len(session.game.players)) if _seat_type(session, s) == "human"
+    }
+
     # Remember the human's phase-rail hold-priority preferences so the AI can stop
     # at them even on steps (turn start, end step) it would otherwise resolve itself.
     if req.stop_steps is not None:
@@ -3056,6 +3113,12 @@ def do_action(session_id: str, req: GameActionRequest):
         and req.action not in {"balance_confirm", "debug_add_to_hand", "debug_cast_free"}
     ):
         raise HTTPException(status_code=400, detail="complete Balance sacrifices before other actions")
+    if (
+        session.game.pending_sacrifice is not None
+        and req.seat == session.game.pending_sacrifice["player_index"]
+        and req.action not in {"sacrifice_confirm", "debug_add_to_hand", "debug_cast_free"}
+    ):
+        raise HTTPException(status_code=400, detail="complete forced sacrifice before other actions")
     if (
         any(e["player_index"] == req.seat for e in session.game.pending_optional_pays)
         and req.action not in {"resolve_optional_pay", "debug_add_to_hand", "debug_cast_free"}
@@ -3671,6 +3734,21 @@ def do_action(session_id: str, req: GameActionRequest):
         if not ok:
             raise HTTPException(status_code=400, detail="invalid balance selection (wrong number of cards)")
 
+    elif req.action == "sacrifice_confirm":
+        pending = session.game.pending_sacrifice
+        if pending is None or req.seat != pending["player_index"]:
+            raise HTTPException(status_code=400, detail="no sacrifice pending for you")
+        ok = session.game.confirm_sacrifice(req.seat, list(req.sacrifice_indices or []))
+        if not ok:
+            raise HTTPException(status_code=400, detail="invalid sacrifice selection")
+        # Lord of the Pit: if this sacrifice paused the beginning phase, resume it
+        # (draw step + main phase) now that the choice is made.
+        if session.pending_post_sacrifice is not None and session.game.pending_sacrifice is None:
+            marker, pidx = session.pending_post_sacrifice
+            session.pending_post_sacrifice = None
+            if marker == "begin_turn":
+                _finish_beginning_phase(session, pidx)
+
     elif req.action == "dismiss_hand_reveal":
         pending = session.game.pending_hand_reveal
         if pending is not None and req.seat == pending["viewer_index"]:
@@ -3934,6 +4012,7 @@ def undo_action(session_id: str, seat: int | None = Query(default=None, ge=0, le
     session.upkeep_mana_prevention_choices = snapshot.upkeep_mana_prevention_choices
     session.upkeep_mana_prevention_resolved = snapshot.upkeep_mana_prevention_resolved
     session.island_sanctuary_pending = snapshot.island_sanctuary_pending
+    session.pending_post_sacrifice = snapshot.pending_post_sacrifice
 
     _notify_session_change(session.id, "undo")
     return _serialize_state(session, viewer_seat=seat)

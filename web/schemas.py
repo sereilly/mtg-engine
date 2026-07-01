@@ -36,6 +36,7 @@ ActionKind = Literal[
     "reorder_library_confirm",
     "discard_confirm",
     "balance_confirm",
+    "sacrifice_confirm",
     "resolve_optional_pay",
     "land_type_confirm",
     "confirm_mana_payment",
@@ -137,6 +138,9 @@ class GameActionRequest(BaseModel):
     # creature indices into their battlefield, plus hand-card indices to discard.
     land_indices: list[int] | None = None
     creature_indices: list[int] | None = None
+    # Forced sacrifice (Lich): the battlefield indices the player chooses to
+    # sacrifice, sent with `sacrifice_confirm`.
+    sacrifice_indices: list[int] | None = None
     # Raging River: map of battlefield/attacker index → "left"/"right" pile label,
     # sent with assign_defender_piles / assign_attacker_piles.
     piles: dict[int, str] | None = None

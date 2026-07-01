@@ -141,6 +141,15 @@ class Game(
     # lowest count, choosing which. Shape: {"plans": {player_index: {"lands": n,
     # "creatures": n, "hand": n}}} where each n is how many to remove of that type.
     pending_balance: dict | None = None
+    # A forced sacrifice (Lich: "sacrifice that many nontoken permanents") awaiting
+    # the sacrificing player's choice of which permanent(s). Shape: {"player_index",
+    # "count", "reason"}. Only armed for seats in ``interactive_seats`` (human
+    # players); AI/headless play resolves the sacrifice inline with a deterministic
+    # heuristic (permanents whose death loses the game are kept for last).
+    pending_sacrifice: dict | None = None
+    # Seats (0/1) controlled by a human, set by the web layer each action. Empty in
+    # headless/AI play, so forced sacrifices there resolve inline without a prompt.
+    interactive_seats: set[int] = field(default_factory=set)
     # "You may pay {1}. If you do, gain N life" triggers that fire when a spell
     # resolves (the color rods: Wooden Sphere, Throne of Bone, …). Each entry is
     # {"card_name", "player_index", "cost", "life"} awaiting a yes/no decision.
