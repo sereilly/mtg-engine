@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from ..card_hooks import ON_SELF_RESOLVED, ON_SPELL_CAST, ON_SPELL_RESOLVED
+from ..card_hooks import ON_SELF_RESOLVED, ON_SPELL_CAST, ON_SPELL_CAST_ANY
 from ..game_types import OracleExecutionContext, OracleStateMachine
 from ..handlers import EFFECT_HANDLERS
 from ..models import CardDefinition, Permanent, PlayerState
@@ -72,13 +72,15 @@ class OracleInstructionsMixin:
             if cast_hook is not None:
                 cast_hook(self, caster, permanent, card)
 
-    def _apply_spell_resolved_triggers(self, caster_index: int, card: CardDefinition) -> None:
-        """Fire permanent triggers that respond to a spell resolving (e.g. Crystal Rod)."""
+    def _apply_spell_cast_any_triggers(self, caster_index: int, card: CardDefinition) -> None:
+        """Fire "whenever a player casts a [color] spell" triggers on any player's
+        battlefield (the Rod/Cup/Sphere cycle). Called as the spell is put on the
+        stack so the trigger goes on the stack above it (CR 603.3)."""
         for controller in self.players:
             for permanent in controller.battlefield:
-                resolved_hook = ON_SPELL_RESOLVED.get(permanent.card.name)
-                if resolved_hook is not None:
-                    resolved_hook(self, controller, permanent, card)
+                cast_hook = ON_SPELL_CAST_ANY.get(permanent.card.name)
+                if cast_hook is not None:
+                    cast_hook(self, controller, permanent, card)
 
     def _apply_self_resolved_hook(
         self,

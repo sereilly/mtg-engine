@@ -9,8 +9,12 @@ lets the card pool grow without touching the core rules code.
 Hook registries:
 - ON_SPELL_CAST       — fired when a player casts a spell, once per permanent
                         that player controls whose name is registered.
-- ON_SPELL_RESOLVED   — fired after a spell resolves, once per permanent on any
-                        battlefield whose name is registered.
+- ON_SPELL_CAST_ANY   — fired when *any* player casts a spell (as the spell is put
+                        on the stack, CR 603.3), once per permanent on any
+                        battlefield whose name is registered. Used by "whenever a
+                        player casts a [color] spell" triggers (the Rod/Cup/Sphere
+                        cycle) so their trigger goes on the stack above the spell
+                        and resolves while the spell is still on the stack.
 - ON_SELF_RESOLVED    — fired when the named instant/sorcery itself resolves
                         (keyed by the resolving card's own name), for bespoke
                         effects the single compiled instruction can't express.
@@ -30,7 +34,7 @@ if TYPE_CHECKING:
     from .models import CardDefinition, Permanent, PlayerState
 
 SpellCastHook = Callable[["Game", "PlayerState", "Permanent", "CardDefinition"], None]
-SpellResolvedHook = Callable[["Game", "PlayerState", "Permanent", "CardDefinition"], None]
+SpellCastAnyHook = Callable[["Game", "PlayerState", "Permanent", "CardDefinition"], None]
 SelfResolvedHook = Callable[["Game", "PlayerState", "CardDefinition", int, "int | None"], None]
 SpellCounteredHook = Callable[["Game", "CardDefinition", "StackItem"], None]
 LeaveBattlefieldHook = Callable[["Game", "PlayerState", "Permanent"], None]
@@ -75,14 +79,16 @@ COLOR_ROD_TRIGGERS: dict[str, tuple[str, int]] = {
 }
 
 
-def _make_color_rod_hook(trigger_color: str, life_amount: int) -> SpellResolvedHook:
-    def hook(game: Game, controller: PlayerState, permanent: Permanent, resolved_card: CardDefinition) -> None:
+def _make_color_rod_hook(trigger_color: str, life_amount: int) -> SpellCastAnyHook:
+    def hook(game: Game, controller: PlayerState, permanent: Permanent, cast_card: CardDefinition) -> None:
         # "Whenever a player casts a [color] spell, you may pay {1}. If you do, you
         # gain 1 life." (Throne of Bone, Crystal Rod, Iron Star, Ivory Cup, Wooden
-        # Sphere). The trigger goes on the stack (CR 603.3); when it resolves, the
-        # optional "pay {1}: gain life" is offered — but only if the controller can
-        # actually pay (checked at resolution, in _resolve_optional_pay_trigger).
-        if trigger_color not in resolved_card.colors:
+        # Sphere). The trigger fires as the spell is put on the stack and goes on the
+        # stack above it (CR 603.3), so it resolves while the triggering spell is
+        # still on the stack. When it resolves, the optional "pay {1}: gain life" is
+        # offered — but only if the controller can actually pay (checked at
+        # resolution, in _resolve_optional_pay_trigger).
+        if trigger_color not in cast_card.colors:
             return
         controller_index = game.players.index(controller)
         game._enqueue_triggered_ability(
@@ -102,7 +108,7 @@ def _make_color_rod_hook(trigger_color: str, life_amount: int) -> SpellResolvedH
     return hook
 
 
-ON_SPELL_RESOLVED: dict[str, SpellResolvedHook] = {
+ON_SPELL_CAST_ANY: dict[str, SpellCastAnyHook] = {
     name: _make_color_rod_hook(color, amount) for name, (color, amount) in COLOR_ROD_TRIGGERS.items()
 }
 

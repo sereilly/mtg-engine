@@ -173,6 +173,42 @@ def _shield_source_payload(source_name: str | None) -> dict | None:
     }
 
 
+# A text-changing spell rewrites a word in the target's oracle text: Sleight of
+# Mind swaps a color word (stored as a symbol->symbol color_word_remap), Magical
+# Hack swaps a basic land type / landwalk. These maps turn the stored symbols
+# back into the printed words so the UI can show the change.
+_SYMBOL_TO_COLOR_WORD = {"W": "white", "U": "blue", "B": "black", "R": "red", "G": "green"}
+_SYMBOL_TO_LAND_TYPE = {"W": "plains", "U": "island", "B": "swamp", "R": "mountain", "G": "forest"}
+
+
+def _text_change_replacements(perm: Permanent) -> list[dict]:
+    """Word-level oracle-text edits applied to this permanent by a text-changing
+    spell, as ``{"from": old_word, "to": new_word}`` entries. The UI renders the
+    old word struck through and the new word in gold. Covers Sleight of Mind
+    (color words) and Magical Hack (landwalk remapped on a creature)."""
+    changes: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+
+    def add(old: str | None, new: str | None) -> None:
+        if old and new and old != new and (old, new) not in seen:
+            seen.add((old, new))
+            changes.append({"from": old, "to": new})
+
+    for old_sym, new_sym in (perm.metadata.get("color_word_remap") or {}).items():
+        add(_SYMBOL_TO_COLOR_WORD.get(old_sym), _SYMBOL_TO_COLOR_WORD.get(new_sym))
+
+    # Magical Hack on a creature remaps a landwalk word (e.g. swampwalk -> islandwalk),
+    # tracked as paired has_<new>walk / lost_<old>walk markers.
+    gained = [k[len("has_"):] for k, v in perm.metadata.items()
+              if k.startswith("has_") and k.endswith("walk") and v]
+    lost = [k[len("lost_"):] for k, v in perm.metadata.items()
+            if k.startswith("lost_") and k.endswith("walk") and v]
+    for old_walk, new_walk in zip(lost, gained):
+        add(old_walk, new_walk)
+
+    return changes
+
+
 def _serialize_permanent(perm: Permanent, game: Game) -> dict:
     image_uris = perm.card.raw.get("image_uris") if isinstance(perm.card.raw, dict) else None
     image_uri = image_uris.get("normal") if isinstance(image_uris, dict) else None
@@ -207,6 +243,9 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         "base_toughness": _printed_stat(perm.card, "toughness"),
         "mana_cost": perm.card.mana_cost,
         "oracle_text": perm.card.oracle_text,
+        # Word-level edits from a text-changing spell (Sleight of Mind / Magical
+        # Hack) so the UI can strike the old word and show the new word in gold.
+        "text_changes": _text_change_replacements(perm),
         "keywords": _effective_keywords(perm, game),
         # True when this creature may block more than one attacker at once
         # (Two-Headed Giant of Foriys, or Blaze of Glory's "block any number"),
@@ -215,6 +254,10 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         "image_uri": image_uri,
         "large_image_uri": large_image_uri,
         "attacking": perm.attacking,
+        # True when this creature can't be blocked by any creature (Dwarven
+        # Warriors' granted "can't be blocked this turn", or inherent unblockable
+        # text) — the UI tags it and renders it translucent.
+        "unblockable": game.is_unblockable(perm),
         "defending_player_index": perm.defending_player_index,
         "blocked": perm.blocked,
         "blocking_attacker_controller": perm.blocking_attacker_controller,
@@ -571,11 +614,22 @@ def _serialize_stack_item(item, game: Game) -> dict:
             if source_permanent_index is not None:
                 break
 
+    # A Lace card (Lifelace, Chaoslace, …) that targeted this spell on the stack
+    # recolored it, recorded on the stack item as ``new_color`` (the effective
+    # color the engine reads via _stack_item_colors). Surface it as color_override
+    # so the canvas badges the floating stack card exactly like a recolored
+    # permanent, and swap the displayed colors to match "becomes [color]".
+    serialized_card = _serialize_card(item.card)
+    if item.new_color:
+        serialized_card["color_override"] = item.new_color
+        serialized_card["colors"] = [item.new_color]
+
     return {
         "type": item_type,
         "is_triggered": is_triggered,
         "label": label,
-        "card": _serialize_card(item.card),
+        "card": serialized_card,
+        "color_override": item.new_color,
         "caster_index": item.caster_index,
         "caster_name": game.players[item.caster_index].name,
         "target_player_index": item.target_player_index,
@@ -3669,6 +3723,10 @@ def do_action(session_id: str, req: GameActionRequest):
                 target_permanent_index=req.permanent_index,
                 x_value=x_value,
                 mode_index=req.mode_index,
+                # Text-change spells (Sleight of Mind / Magical Hack) carry the
+                # from/to words; forward them so a free cast stores the remap too.
+                new_color=req.mana_color,
+                old_color=req.old_color,
             )
         finally:
             session.game.enforce_mana_costs = original_enforce_mana_costs
@@ -3716,6 +3774,8 @@ def do_action(session_id: str, req: GameActionRequest):
                 target_permanent_index=req.permanent_index,
                 x_value=x_value,
                 mode_index=req.mode_index,
+                new_color=req.mana_color,
+                old_color=req.old_color,
             )
         finally:
             session.game.enforce_mana_costs = original_enforce_mana_costs

@@ -796,6 +796,174 @@ class TestLifelace:
         data = _serialize_permanent(target, game)
         assert data["color_override"] == "G"
 
+    def test_recolored_spell_on_stack_is_serialized_with_color_override(self, cards):
+        # Reported FAILED: "There is no visual indicator of the spell becoming
+        # green in the UI. I targeted a lightning bolt on the stack." Lifelace
+        # recolors a spell on the stack (StackItem.new_color); the serialized
+        # stack item must expose that as color_override so the canvas badges the
+        # floating stack card the same way it badges a recolored permanent.
+        from web.app import _serialize_stack_item
+
+        p1 = PlayerState(name="P1", hand=[cards["Lightning Bolt"], cards["Lifelace"]])
+        p2 = PlayerState(name="P2")
+        game = _game(p1, p2)
+        game.active_player_index = 0
+        game._set_phase_and_step("precombat_main", "main")
+
+        game.queue_from_hand(0, "Lightning Bolt", target_player_index=1)
+        game.queue_from_hand(0, "Lifelace", target_stack_index=0)  # target the bolt
+        game.resolve_top_of_stack()  # resolve Lifelace → recolors the bolt
+
+        bolt_item = game.stack[0]
+        assert bolt_item.card.name == "Lightning Bolt"
+        assert bolt_item.new_color == "G"
+        data = _serialize_stack_item(bolt_item, game)
+        assert data["color_override"] == "G"
+        assert data["card"]["color_override"] == "G"
+        assert data["card"]["colors"] == ["G"]
+
+
+# ---------------------------------------------------------------------------
+# Ivory Cup — "The spell that triggers Ivory Cup should remain on the stack
+# until Ivory Cup's trigger fully resolves." (CR 603.3)
+# ---------------------------------------------------------------------------
+
+class TestIvoryCup:
+    def test_trigger_goes_on_stack_above_the_triggering_spell(self, cards):
+        # "Whenever a player casts a white spell, you may pay {1}. If you do, you
+        # gain 1 life." The trigger must fire as the white spell is cast and sit
+        # on the stack ABOVE it, so it resolves while the triggering spell is
+        # still on the stack — not after that spell has already resolved.
+        cup = Permanent(card=cards["Ivory Cup"])
+        p1 = PlayerState(name="P1", battlefield=[cup], life=20)
+        p2 = PlayerState(name="P2", hand=[cards["Healing Salve"]], life=20)
+        game = _game(p1, p2)
+
+        game.queue_from_hand(1, "Healing Salve", target_player_index=1)
+
+        # Bottom-first: the triggering white spell stays on the stack, with Ivory
+        # Cup's trigger enqueued above it (resolves first).
+        assert [it.card.name for it in game.stack] == ["Healing Salve", "Ivory Cup"]
+        assert game.stack[-1].hook_key == "optional_pay"
+        assert game.stack[0].card.name == "Healing Salve"
+
+    def test_non_white_spell_does_not_trigger(self, cards):
+        cup = Permanent(card=cards["Ivory Cup"])
+        p1 = PlayerState(name="P1", battlefield=[cup], life=20)
+        p2 = PlayerState(name="P2", hand=[cards["Lightning Bolt"]], life=20)
+        game = _game(p1, p2)
+
+        game.queue_from_hand(1, "Lightning Bolt", target_player_index=0)
+        assert [it.card.name for it in game.stack] == ["Lightning Bolt"]
+
+    def test_controller_gains_life_when_paying(self, cards):
+        cup = Permanent(card=cards["Ivory Cup"])
+        p1 = PlayerState(name="P1", battlefield=[cup], life=20)
+        p1.mana_pool["C"] = 1  # to pay Ivory Cup's optional {1}
+        p2 = PlayerState(name="P2", hand=[cards["Healing Salve"]], life=20)
+        game = _game(p1, p2)
+
+        game.cast_from_hand(1, "Healing Salve", target_player_index=1)
+        game.auto_resolve_pending_optional_pays()
+
+        assert p1.life == 21
+
+
+# ---------------------------------------------------------------------------
+# Dwarven Warriors — "Activated ability should highlight valid targets."
+# "{T}: Target creature with power 2 or less can't be blocked this turn."
+# ---------------------------------------------------------------------------
+
+class TestDwarvenWarriors:
+    def _dwarves(self, card: CardDefinition) -> Permanent:
+        perm = Permanent(card=card)
+        perm.metadata["summoning_sickness_turn"] = -99  # may use its tap ability
+        return perm
+
+    def test_activation_target_spec_only_offers_power_2_or_less(self, cards):
+        # The UI highlights exactly the permanents in the activation target spec's
+        # valid_targets, so that list must exclude creatures with power > 2.
+        dw = self._dwarves(cards["Dwarven Warriors"])
+        small = Permanent(card=cards["Grizzly Bears"])  # 2/2 → legal
+        big = Permanent(card=cards["Hill Giant"])       # 3/3 → illegal
+        p1 = PlayerState(name="P1", battlefield=[dw, small], life=20)
+        p2 = PlayerState(name="P2", battlefield=[big], life=20)
+        game = _game(p1, p2)
+
+        spec = game.activation_target_spec(0, 0)
+        assert spec["kind"] == "creature"
+        assert spec["requires_target"] is True
+        names = {t["name"] for t in spec["valid_targets"]}
+        assert "Grizzly Bears" in names
+        assert "Hill Giant" not in names  # power 3 is not a legal target
+
+    def test_serialized_permanent_carries_the_target_spec(self, cards):
+        # The activation target spec rides on the viewer's own serialized
+        # permanents; the UI reads valid_targets from there to build highlights.
+        from web.app import _serialize_player
+
+        dw = self._dwarves(cards["Dwarven Warriors"])
+        small = Permanent(card=cards["Grizzly Bears"])
+        p1 = PlayerState(name="P1", battlefield=[dw, small], life=20)
+        p2 = PlayerState(name="P2", life=20)
+        game = _game(p1, p2)
+
+        data = _serialize_player(game.players[0], 0, 0, game)
+        spec = data["battlefield"][0]["target_spec"]
+        assert spec["kind"] == "creature"
+        keys = {t["key"] for t in spec["valid_targets"]}
+        assert "0-1" in keys  # Grizzly Bears is highlightable
+
+    def test_resolution_honors_the_chosen_target(self, cards):
+        # Two eligible creatures: the effect must land on the one the player
+        # chose, not merely the first eligible creature in play.
+        dw = self._dwarves(cards["Dwarven Warriors"])
+        first = Permanent(card=cards["Grizzly Bears"])   # index 1, power 2
+        second = Permanent(card=cards["Scryb Sprites"])  # index 2, power 1
+        p1 = PlayerState(name="P1", battlefield=[dw, first, second], life=20)
+        p2 = PlayerState(name="P2", life=20)
+        game = _game(p1, p2)
+
+        game.activate_permanent_ability(
+            0, "Dwarven Warriors", target_player_index=0, target_permanent_index=2
+        )
+        assert second.metadata.get("cant_be_blocked_until_eot") is True
+        assert first.metadata.get("cant_be_blocked_until_eot") is None
+
+    def test_granted_unblockable_is_serialized_for_the_ui(self, cards):
+        # The UI tags and fades an unblockable creature; that state rides on the
+        # serialized permanent's ``unblockable`` flag, driven by is_unblockable.
+        from web.app import _serialize_permanent
+
+        dw = self._dwarves(cards["Dwarven Warriors"])
+        bear = Permanent(card=cards["Grizzly Bears"])
+        p1 = PlayerState(name="P1", battlefield=[dw, bear], life=20)
+        p2 = PlayerState(name="P2", life=20)
+        game = _game(p1, p2)
+
+        assert game.is_unblockable(bear) is False
+        assert _serialize_permanent(bear, game)["unblockable"] is False
+
+        game.activate_permanent_ability(
+            0, "Dwarven Warriors", target_player_index=0, target_permanent_index=1
+        )
+        assert game.is_unblockable(bear) is True
+        assert _serialize_permanent(bear, game)["unblockable"] is True
+
+    def test_non_creature_and_evasive_creatures_are_not_unblockable(self, cards):
+        # A land isn't a creature, and conditional evasion (flying) is not the same
+        # as unblockable — some creature could still block it.
+        from web.app import _serialize_permanent
+
+        land = Permanent(card=cards["Forest"])
+        flyer = Permanent(card=cards["Air Elemental"])  # has flying, still blockable
+        p1 = PlayerState(name="P1", battlefield=[land, flyer], life=20)
+        game = _game(p1, PlayerState(name="P2", life=20))
+
+        assert game.is_unblockable(land) is False
+        assert game.is_unblockable(flyer) is False
+        assert _serialize_permanent(flyer, game)["unblockable"] is False
+
 
 # ---------------------------------------------------------------------------
 # Wanderlust — "upkeep trigger isn't working"

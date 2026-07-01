@@ -1644,6 +1644,60 @@ def test_sleight_of_mind_marks_target_text_modified(all_cards):
     assert result.supported
     assert p2.battlefield[0].metadata.get("text_modified") is True
 
+def test_sleight_of_mind_retargets_lifeforce_counter_to_red(all_cards):
+    # Sleight of Mind changes Lifeforce's "Counter target black spell" to
+    # "Counter target red spell"; Lifeforce can then counter a Lightning Bolt.
+    sleight = _get(all_cards, "Sleight of Mind")
+    lifeforce = _get(all_cards, "Lifeforce")
+    lightning_bolt = _get(all_cards, "Lightning Bolt")
+
+    p1 = PlayerState(name="P1", hand=[sleight], battlefield=[Permanent(card=lifeforce)])
+    p2 = PlayerState(name="P2", hand=[lightning_bolt])
+    game = Game(players=[p1, p2])
+
+    # Change Lifeforce's text: black -> red.
+    result = game.cast_from_hand(
+        0,
+        "Sleight of Mind",
+        target_player_index=0,
+        target_permanent_index=0,
+        old_color="B",
+        new_color="R",
+    )
+    assert result.supported
+    lifeforce_perm = p1.battlefield[0]
+    assert lifeforce_perm.metadata.get("color_word_remap") == {"B": "R"}
+
+    # P2 casts Lightning Bolt (a red spell); Lifeforce can now counter it.
+    game.queue_from_hand(1, "Lightning Bolt", target_player_index=0)
+    result = game.activate_permanent_ability(0, "Lifeforce", target_player_index=0)
+
+    assert result.supported
+    assert not game.stack
+    assert any(card.name == "Lightning Bolt" for card in p2.graveyard)
+
+
+def test_sleight_of_mind_lifeforce_no_longer_counters_black(all_cards):
+    # After black -> red, Lifeforce may no longer counter a black spell.
+    sleight = _get(all_cards, "Sleight of Mind")
+    lifeforce = _get(all_cards, "Lifeforce")
+    black_knight = _get(all_cards, "Black Knight")
+
+    p1 = PlayerState(name="P1", hand=[sleight], battlefield=[Permanent(card=lifeforce)])
+    p2 = PlayerState(name="P2", hand=[black_knight])
+    game = Game(players=[p1, p2])
+
+    game.cast_from_hand(
+        0, "Sleight of Mind", target_player_index=0, target_permanent_index=0,
+        old_color="B", new_color="R",
+    )
+    game.queue_from_hand(1, "Black Knight")
+    result = game.queue_permanent_ability(0, "Lifeforce", target_player_index=0)
+
+    assert not result.supported
+    assert any(item.card.name == "Black Knight" for item in game.stack)
+
+
 def test_blaze_of_glory_sets_forced_blocking_marker(all_cards):
     blaze = _get(all_cards, "Blaze of Glory")
     bear = _mk_card("Bear", "Creature — Bear")

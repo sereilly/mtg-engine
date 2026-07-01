@@ -366,6 +366,7 @@ _FILTERABLE_ABILITY_KINDS = {
     "destroy_target_permanent",
     "mark_non_wall_target_to_attack",
     "grant_flying_and_delayed_destruction",
+    "grant_unblockable_to_low_power_target",
 }
 
 
@@ -418,6 +419,21 @@ class LegalityMixin:
     """Backend legality queries surfaced to the web UI. Composed onto ``Game``."""
 
     # -- Combat ------------------------------------------------------------
+    def is_unblockable(self, perm: Permanent) -> bool:
+        """Whether *perm* is a creature that can't be blocked by ANY creature —
+        i.e. genuinely unblockable, not merely evasive. Dwarven Warriors' granted
+        "can't be blocked this turn" (``cant_be_blocked_until_eot``) and any inherent
+        "can't be blocked" text qualify; conditional evasion (flying, fear, landwalk,
+        "except by Walls") does not, since some creature could still block it. The UI
+        reads this to tag and fade the creature."""
+        if not self._is_creature(perm):
+            return False
+        if perm.metadata.get("cant_be_blocked_until_eot"):
+            return True
+        return any(
+            i.kind == "cant_be_blocked" for i in compile_card_oracle(perm.card).instructions
+        )
+
     def legal_attacker_indices(self, attacker_index: int) -> list[int]:
         """Battlefield indices of creatures that may legally be declared as
         attackers this turn — untapped, not summoning sick, and allowed to attack
@@ -490,6 +506,13 @@ class LegalityMixin:
         source_permanent = player.battlefield[permanent_index]
         card = source_permanent.card
         spec = _classify_activation(card)
+        # A Sleight of Mind text change on this permanent retargets a color-word
+        # counter (Lifeforce black -> red), so the UI must offer the new color's
+        # spells rather than the printed one's.
+        if spec.get("stack_color_filter"):
+            spec["stack_color_filter"] = self._remap_color_filter(
+                source_permanent, spec["stack_color_filter"]
+            )
         spec["requires_target"] = spec["kind"] != "none"
         spec["valid_targets"] = self._enumerate_targets(
             controller_index, card, spec, for_cast=False,
@@ -577,6 +600,11 @@ class LegalityMixin:
             return self._destroy_target_legal(instruction.payload, perm)
         if instruction.kind == "mark_non_wall_target_to_attack":
             return perm.card.primary_type == "creature" and "wall" not in perm.card.type_line.lower()
+        if instruction.kind == "grant_unblockable_to_low_power_target":
+            # Dwarven Warriors: "Target creature with power 2 or less can't be
+            # blocked this turn." Only creatures with effective power ≤ 2 are legal,
+            # so the UI highlights exactly those.
+            return perm.card.primary_type == "creature" and perm.effective_power <= 2
         if instruction.kind == "grant_flying_and_delayed_destruction":
             # Stone Giant: "Target creature you control with toughness less than
             # this creature's power." Only the activating player's creatures with

@@ -67,7 +67,9 @@ def copy_top_stack_spell(game: Game, instruction: OracleInstruction, context: Or
 @effect_handler("counter_top_stack_spell")
 def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     card = context.card
-    color_filter = instruction.payload.get("color_filter")
+    color_filter = game._remap_color_filter(
+        context.source_permanent, instruction.payload.get("color_filter")
+    )
     if game.stack:
         # Counter the chosen spell if one was targeted, otherwise the top of stack.
         chosen = context.stack_target

@@ -603,7 +603,9 @@ class StackCastingMixin:
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
 
         if ability.instruction.kind == "counter_top_stack_spell":
-            color_filter = ability.instruction.payload.get("color_filter")
+            color_filter = self._remap_color_filter(
+                permanent, ability.instruction.payload.get("color_filter")
+            )
             if target_stack_item is not None:
                 # A specific spell was chosen — it must itself be a legal target.
                 if target_stack_item not in self.stack or (
@@ -937,6 +939,11 @@ class StackCastingMixin:
                 )
             )
             self.log.append(f"{card.name} added to stack")
+            # "Whenever a player casts a [color] spell" triggers (Rod/Cup/Sphere)
+            # fire now, as the spell is put on the stack, and go on the stack above
+            # it (CR 603.3) — so the trigger resolves while the triggering spell is
+            # still on the stack, not after it has already resolved.
+            self._apply_spell_cast_any_triggers(caster_index, card)
             return SimulationResult(card.name, True, classification.effect_kind, "queued")
 
         self._resolve_card(
@@ -1594,11 +1601,6 @@ class StackCastingMixin:
                             damage = self._deal_damage_to_player(caster, fastbond_count)
                             self.log.append(f"Fastbond dealt {damage} damage to {caster.name}")
                 self._process_land_enters(caster_index)
-            else:
-                # A resolving permanent spell (creature/artifact/enchantment) is
-                # still a spell that was cast, so it triggers "whenever a player
-                # casts a [color] spell" effects like the Rod/Cup/Sphere cycle.
-                self._apply_spell_resolved_triggers(caster_index, card)
             return
 
         # Sorceries and instants resolve immediately in this basic engine.
@@ -1616,7 +1618,6 @@ class StackCastingMixin:
             mode_index=chosen_mode_index,
             old_color=old_color,
         )
-        self._apply_spell_resolved_triggers(caster_index, card)
         self._apply_self_resolved_hook(caster_index, card, target_idx, target_permanent_index)
         caster.graveyard.append(card)
         self.log.append(f"{card.name} resolved and moved to graveyard")

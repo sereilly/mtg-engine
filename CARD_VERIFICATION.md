@@ -3,9 +3,9 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **290**
-- Passed: **224**
+- Passed: **226**
 - Failed: **0**
-- Untested: **66**
+- Untested: **64**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -13,7 +13,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Ancestral Recall | ✅ pass |  |
 | Animate Artifact | ✅ pass |  |
 | Animate Dead | ✅ pass |  |
-| Animate Wall | ⬜ untested |  |
+| Animate Wall | ✅ pass |  |
 | Ankh of Mishra | ✅ pass |  |
 | Armageddon | ✅ pass |  |
 | Aspect of Wolf | ⬜ untested |  |
@@ -236,7 +236,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Simulacrum | ✅ pass |  |
 | Sinkhole | ✅ pass |  |
 | Siren's Call | ✅ pass |  |
-| Sleight of Mind | ⬜ untested |  |
+| Sleight of Mind | ✅ pass |  |
 | Smoke | ⬜ untested |  |
 | Sol Ring | ✅ pass |  |
 | Soul Net | ✅ pass |  |

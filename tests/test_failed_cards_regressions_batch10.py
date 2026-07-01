@@ -205,8 +205,10 @@ class TestLandwalkLordsEntryOrder:
 
 # ---------------------------------------------------------------------------
 # Wooden Sphere — "The trigger should stay on the stack until I make a choice."
-# Its optional-pay trigger is enqueued and, when resolved on the human priority
-# path, stays on the stack until the controller answers the pay prompt.
+# Its "whenever a player casts a green spell" trigger fires as the spell is cast
+# and goes on the stack ABOVE the triggering spell (CR 603.3), so it resolves
+# while the triggering spell is still on the stack, then stays on the stack until
+# the controller answers the pay prompt.
 # ---------------------------------------------------------------------------
 
 class TestWoodenSphereTriggerStaysOnStack:
@@ -223,16 +225,17 @@ class TestWoodenSphereTriggerStaysOnStack:
         game.active_player_index = 0
         game._set_phase_and_step("precombat_main", "main")
         assert game.queue_from_hand(0, "Llanowar Elves").supported
+        # The trigger fires at cast time and sits on the stack ABOVE the triggering
+        # spell, which remains on the stack beneath it (CR 603.3).
+        assert [it.hook_key for it in game.stack] == [None, "optional_pay"]
+        assert game.stack[0].card.name == "Llanowar Elves"
         game.note_priority_action_taken(0)
-        # First priority round resolves Llanowar Elves and enqueues the trigger.
+        # Both players pass: the trigger (top of stack) resolves and pauses on the
+        # stack for the pay prompt — Llanowar Elves is still on the stack below it.
         game.pass_priority(0)
-        game.pass_priority(1)
-        assert [it.hook_key for it in game.stack] == ["optional_pay"]
-        # Second round resolves the trigger, which pauses on the stack for the pay.
-        game.pass_priority(game.priority_player_index)
-        result = game.pass_priority(game.priority_player_index)
+        result = game.pass_priority(1)
         assert result == "awaiting_choice"
-        assert game.stack and game.stack[-1].card.name == "Wooden Sphere"
+        assert [it.card.name for it in game.stack] == ["Llanowar Elves", "Wooden Sphere"]
         assert game.pending_optional_pays
         assert game.pending_optional_pays[0]["player_index"] == 0
 

@@ -2304,3 +2304,72 @@ def test_fresh_game_coin_flip_is_not_a_loser_choice():
     pregame = client.get(f"/api/sessions/{sid}/state?seat=0").json()["pregame"]
     assert pregame["phase"] == "coin_flip"
     assert pregame["is_loser_choice"] is False
+
+
+def _hvh_no_pregame() -> str:
+    """A live human_vs_human session with both seats joined and no pregame, so
+    raw-state can seat an exact board and actions run immediately."""
+    created = client.post(
+        "/api/sessions",
+        json={"mode": "human_vs_human", "host_name": "P1", "host_colors": 2,
+              "enable_pregame": False},
+    ).json()
+    sid = created["session_id"]
+    client.post(f"/api/sessions/{sid}/join", json={"guest_name": "P2"})
+    return sid
+
+
+def test_sleight_of_mind_cast_via_api_changes_lifeforce_and_counters_red_spell():
+    """End-to-end web flow for the reported bug: casting Sleight of Mind must send
+    BOTH the from-word (old_color) and to-word (mana_color). Storing the color-word
+    remap lets Lifeforce's 'Counter target black spell' become red and counter a
+    Lightning Bolt — and the changed word is surfaced via ``text_changes``."""
+    sid = _hvh_no_pregame()
+    raw = {
+        "turn_number": 3, "current_turn": 0,
+        "current_turn_phase": "precombat_main", "current_step": "precombat_main",
+        "priority_player": 0, "priority_pass_count": 0,
+        "players": [
+            {"name": "P1", "life": 20, "mana_pool": {"U": 5, "G": 5},
+             "hand": [{"name": "Sleight of Mind"}],
+             "battlefield": [{"name": "Lifeforce"}], "graveyard": [], "exile": []},
+            {"name": "P2", "life": 20, "mana_pool": {"R": 5},
+             "hand": [{"name": "Lightning Bolt"}],
+             "battlefield": [], "graveyard": [], "exile": []},
+        ],
+    }
+    assert client.post(f"/api/sessions/{sid}/raw-state", json={"state": raw}).status_code == 200
+
+    # Cast Sleight of Mind on our own Lifeforce: black -> red (from + to colors).
+    cast = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "cast", "card_name": "Sleight of Mind",
+              "target_seat": 0, "permanent_index": 0, "old_color": "B", "mana_color": "R"},
+    )
+    assert cast.status_code == 200, cast.text
+    _resolve_top_stack(sid, first_pass_seat=0)
+
+    lifeforce = client.get(f"/api/sessions/{sid}/state?seat=0").json()["players"][0]["battlefield"][0]
+    assert lifeforce["name"] == "Lifeforce"
+    # The UI reads this to strike the old word and gild the new one.
+    assert lifeforce["text_changes"] == [{"from": "black", "to": "red"}]
+
+    # Seat 1 casts Lightning Bolt (needs priority first), then seat 0 counters it.
+    client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "pass_priority"})
+    bolt = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 1, "action": "cast", "card_name": "Lightning Bolt", "target_seat": 0},
+    )
+    assert bolt.status_code == 200, bolt.text
+    client.post(f"/api/sessions/{sid}/action", json={"seat": 1, "action": "pass_priority"})
+    counter = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "activate", "permanent_name": "Lifeforce",
+              "permanent_index": 0, "target_seat": 1, "target_stack_index": 0},
+    )
+    assert counter.status_code == 200, counter.text
+    _resolve_top_stack(sid, first_pass_seat=0)
+
+    final = client.get(f"/api/sessions/{sid}/state?seat=0").json()
+    assert final["stack"] == []
+    assert "Lightning Bolt" in [c["name"] for c in final["players"][1]["graveyard"]]

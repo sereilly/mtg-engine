@@ -35,6 +35,21 @@ class GameHelpersMixin:
             return (item.new_color,)
         return tuple(item.card.colors or ())
 
+    @staticmethod
+    def _remap_color_filter(permanent, color_filter):
+        """Apply a Sleight of Mind color-word remap to a color-word filter baked
+        into ``permanent``'s compiled ability. Lifeforce's '{G}: Counter target
+        black spell' compiles ``color_filter='B'`` once per process; changing its
+        text to "red" stores ``color_word_remap={'B': 'R'}`` on the permanent, so
+        the effective filter becomes 'R'. Returns ``color_filter`` unchanged when
+        the permanent has no remap for it."""
+        if not color_filter or permanent is None:
+            return color_filter
+        remap = permanent.metadata.get("color_word_remap")
+        if remap:
+            return remap.get(color_filter, color_filter)
+        return color_filter
+
     def _is_creature(self, permanent: Permanent) -> bool:
         """A permanent is a creature if its printed type says so or an effect has
         turned it into one (e.g. Kormus Bell / Living Lands animated lands, or

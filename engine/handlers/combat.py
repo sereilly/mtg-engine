@@ -198,10 +198,20 @@ def force_active_player_creatures_to_attack(game: Game, instruction: OracleInstr
 @effect_handler("grant_unblockable_to_low_power_target")
 def grant_unblockable_to_low_power_target(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     target = context.target
-    target_creature = next(
-        (perm for perm in target.battlefield if perm.card.primary_type == "creature" and perm.effective_power <= 2),
-        None,
-    )
+    # Honor the specifically chosen creature (the player picked one in the UI);
+    # fall back to the first eligible creature only for AI/headless casts with no
+    # explicit target. Either way the "power 2 or less" restriction is enforced.
+    idx = context.target_permanent_index
+    target_creature = None
+    if isinstance(idx, int) and 0 <= idx < len(target.battlefield):
+        candidate = target.battlefield[idx]
+        if candidate.card.primary_type == "creature" and candidate.effective_power <= 2:
+            target_creature = candidate
+    if target_creature is None:
+        target_creature = next(
+            (perm for perm in target.battlefield if perm.card.primary_type == "creature" and perm.effective_power <= 2),
+            None,
+        )
     if target_creature is not None:
         target_creature.metadata["cant_be_blocked_until_eot"] = True
         game.log.append(f"{target_creature.card.name} can't be blocked this turn")

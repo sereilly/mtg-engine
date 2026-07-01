@@ -668,6 +668,46 @@ function setSymbolsHtml(element, text, symbolClass = "mtg-symbol-inline") {
   element.innerHTML = renderSymbolsInline(text, symbolClass);
 }
 
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Copy the capitalization of `source` onto `target` for the leading letter, so
+// "Black" -> "Red" (not "red") when a text-change edit is rendered mid-sentence.
+function matchLeadingCase(source, target) {
+  if (source && target && source[0] === source[0].toUpperCase() && source[0] !== source[0].toLowerCase()) {
+    return target[0].toUpperCase() + target.slice(1);
+  }
+  return target;
+}
+
+// Render oracle text, but where a text-changing spell (Sleight of Mind / Magical
+// Hack) edited a word, show the original struck through followed by the new word
+// in gold. `changes` is a list of {from, to} word replacements.
+function renderOracleTextWithChanges(text, changes, symbolClass = "mtg-symbol-inline") {
+  const base = String(text || "");
+  const edits = Array.isArray(changes) ? changes.filter((c) => c && c.from && c.to) : [];
+  if (edits.length === 0) {
+    return renderSymbolsInline(base, symbolClass);
+  }
+  const pattern = new RegExp(`\\b(${edits.map((c) => escapeRegExp(c.from)).join("|")})\\b`, "gi");
+  let html = "";
+  let lastIndex = 0;
+  for (const match of base.matchAll(pattern)) {
+    const index = match.index || 0;
+    const matched = match[0];
+    const edit = edits.find((c) => c.from.toLowerCase() === matched.toLowerCase());
+    if (!edit) continue;
+    html += renderSymbolsInline(base.slice(lastIndex, index), symbolClass);
+    const replacement = matchLeadingCase(matched, edit.to);
+    html += `<span class="text-changed-old">${escapeHtml(matched)}</span> `;
+    html += `<span class="text-changed-new">${escapeHtml(replacement)}</span>`;
+    lastIndex = index + matched.length;
+  }
+  html += renderSymbolsInline(base.slice(lastIndex), symbolClass);
+  return html;
+}
+
 function formatManaSymbolsHtml(counts) {
   const parts = [];
   for (const symbol of ["W", "U", "B", "R", "G", "C"]) {
@@ -811,8 +851,25 @@ function getAutoPassStateKey(state) {
   return `${state.turn_number || 0}:${state.current_turn}:${state.current_turn_phase}:${state.current_step}:${state.priority_player}:${stackSize}:${logSize}:${combat?.attackers_locked ? 1 : 0}:${combat?.blockers_locked ? 1 : 0}`;
 }
 
+// True when the current seat still owes a combat-damage assignment this step —
+// a multi-blocked attacker's damage split (CR 510.1c) or the defending player's
+// banding split (CR 702.22j). Combat damage can't resolve until it's submitted,
+// so the server holds priority on that seat; the auto-pass helpers must treat it
+// as a blocking prompt or they loop forever passing priority into a step that
+// won't advance. (Band-blocker assignment, CR 702.22k, is covered separately by
+// getBandBlockerInfo below.)
+function combatDamageAssignmentPending(state = currentState) {
+  if (!state || seat === null) return false;
+  const combat = getCombatState(state);
+  if (!combat || !isCombatStep(state, "combat_damage") || combat.damage_resolved) return false;
+  if (state.banding_assignment && seat === state.banding_assignment.defender_seat
+      && getDefenderBandingGroups(state).length > 0) return true;
+  if (seat === state.current_turn && getAttackerAssignGroups(state).length > 0) return true;
+  return false;
+}
+
 function hasBlockingPromptForAutoPass(state = currentState) {
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getBalanceSelectInfo(state) || getOptionalPayInfo(state) || getLandTypeChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getIslandSanctuaryInfo(state)) return true;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getBalanceSelectInfo(state) || getOptionalPayInfo(state) || getLandTypeChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
   return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingAbilityChoice || pendingChannel);
 }
 
@@ -3639,8 +3696,14 @@ function renderActivationPrompt() {
     okBtn.classList.add("hidden");
     customRow.classList.add("hidden");
     if (pendingManaColor.kind === "cast") {
-      title.textContent = `Choose replacement color for ${pendingManaColor.cardName}`;
-      body.textContent = "Select the new color to replace the color word in the target.";
+      const noun = pendingManaColor.isLandType ? "land type" : "color word";
+      if (pendingManaColor.step === "from") {
+        title.textContent = `Choose the ${noun} to replace in ${pendingManaColor.cardName}'s target`;
+        body.textContent = `Select the current ${noun} named in the target's text.`;
+      } else {
+        title.textContent = `Choose the new ${noun} for ${pendingManaColor.cardName}`;
+        body.textContent = `Select the ${noun} to replace it with.`;
+      }
     } else {
       title.textContent = `Choose mana color for ${pendingManaColor.cardName}`;
       body.textContent = "Select the mana color this ability should generate.";
@@ -3861,6 +3924,7 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
       sourcePermanentIndex: permanentIndex, ...fields,
     };
     renderActivationPrompt();
+    renderBoard(currentState);
     updateActionHint(`Choose a creature target for ${cardName}'s ability.`);
     return;
   }
@@ -4045,11 +4109,23 @@ function resolvePendingManaColor(manaColor) {
   renderActivationPrompt();
 
   if (pending.kind === "cast") {
-    const actionBody = { ...pending.castActionBody, mana_color: manaColor };
-    updateActionHint(`Casting ${pending.cardName} with color ${manaColor}...`);
+    // First pick is the "from" word; re-prompt for the "to" word before casting.
+    if (pending.step === "from") {
+      pendingManaColor = { ...pending, step: "to", fromColor: manaColor };
+      renderActivationPrompt();
+      const noun = pending.isLandType ? "land type" : "color";
+      updateActionHint(`Now choose the replacement ${noun} for ${pending.cardName}.`);
+      return;
+    }
+    const actionBody = {
+      ...pending.castActionBody,
+      old_color: pending.fromColor,
+      mana_color: manaColor,
+    };
+    updateActionHint(`Casting ${pending.cardName} (${pending.fromColor} → ${manaColor})...`);
     sendAction(actionBody)
       .then(() => {
-        updateActionHint(`Cast ${pending.cardName} replacing color with ${manaColor}.`);
+        updateActionHint(`Cast ${pending.cardName}: replaced ${pending.fromColor} with ${manaColor}.`);
         clearPendingHandCast();
       })
       .catch((e) => {
@@ -4580,14 +4656,24 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
   };
 
   if (cardRequiresCastColorChoice(pending.card)) {
+    // Text-change spells (Sleight of Mind / Magical Hack) replace one word with
+    // another, so two colors are chosen: the "from" word to replace, then the
+    // "to" word. Both are sent (old_color + mana_color); collecting only one
+    // leaves old_color unset and the engine stores no remap.
+    const isLandType = /basic land type/.test((pending.card.oracle_text || "").toLowerCase());
     pendingManaColor = {
       kind: "cast",
+      step: "from",
+      fromColor: null,
+      isLandType,
       cardName: pending.cardName,
       castActionBody: actionBody,
       oracleText: pending.card.oracle_text || "",
     };
     renderActivationPrompt();
-    updateActionHint(`Choose a replacement color for ${pending.cardName}.`);
+    updateActionHint(
+      `Choose the ${isLandType ? "land type" : "color word"} to replace in ${pending.cardName}'s target.`,
+    );
     return;
   }
 
@@ -5265,7 +5351,15 @@ function showCardPreview(card) {
   // a creature that gained Flying — or lost it to Earthbind — reads correctly.
   const keywordLabel = keywords.length ? `Keywords: ${keywords.join(", ")}` : "";
   const sicknessLabel = typeof card === "object" && card?.summoning_sick ? "Summoning Sickness" : "";
-  setSymbolsHtml(q("cardPreviewText"), [keywordLabel, previewText, sicknessLabel].filter(Boolean).join("\n"));
+  // A text-changing spell (Sleight of Mind / Magical Hack) records per-word edits
+  // so the oracle text can show the old word struck through and the new one in gold.
+  const textChanges = typeof card === "object" && Array.isArray(card?.text_changes) ? card.text_changes : [];
+  const sections = [];
+  if (keywordLabel) sections.push(renderSymbolsInline(keywordLabel));
+  if (previewText) sections.push(renderOracleTextWithChanges(previewText, textChanges));
+  if (sicknessLabel) sections.push(renderSymbolsInline(sicknessLabel));
+  const previewEl = q("cardPreviewText");
+  if (previewEl) previewEl.innerHTML = sections.join("<br>");
 
   if (!largeImageUri) {
     q("cardPreview").classList.add("empty-preview");

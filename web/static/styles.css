@@ -1553,6 +1553,18 @@ h2.targeting-valid {
   line-height: 1.45;
 }
 
+/* A word rewritten by a text-changing spell (Sleight of Mind / Magical Hack):
+   the original is struck through, the replacement shown in gold. */
+.text-changed-old {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+.text-changed-new {
+  color: #e6c15a;
+  font-weight: 600;
+}
+
 .mtg-symbol {
   display: inline-block;
   object-fit: contain;

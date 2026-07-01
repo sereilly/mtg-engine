@@ -1719,6 +1719,12 @@ class BattlefieldCanvas {
     const img = card?.image_uri ? this._loadImage(card.image_uri) : null;
     const R = 4;
 
+    // A genuinely unblockable creature (Dwarven Warriors' "can't be blocked this
+    // turn", or inherent unblockable text) is rendered translucent — as if it can
+    // slip through blockers — with an "Unblockable" tag below.
+    const unblockableCard = creatureCard || card;
+    const isUnblockable = !!(unblockableCard && unblockableCard.unblockable);
+
     ctx.save();
 
     // ---- Drop shadow onto the table ----
@@ -1735,6 +1741,8 @@ class BattlefieldCanvas {
     ctx.save();
     this._roundRect(ctx, x, y, w, h, R);
     ctx.clip();
+    // Fade the face so the table shows through — the "phasing" unblockable look.
+    if (isUnblockable) ctx.globalAlpha = 0.5;
     if (img) {
       ctx.drawImage(img, x, y, w, h);
     } else {
@@ -1994,6 +2002,33 @@ class BattlefieldCanvas {
       this._roundRect(ctx, bx, by, bw, bh, 3);
       ctx.stroke();
       ctx.fillStyle = "#f2f4f8";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(label, bx + bw / 2, by + bh / 2);
+    }
+
+    // ---- Unblockable badge ----
+    // An ethereal cyan "Unblockable" tag, stacked below any top badges so it
+    // never overlaps them. Pairs with the translucent face applied above.
+    if (isUnblockable) {
+      const label = "Unblockable";
+      const bh = 13;
+      ctx.font = `bold ${Math.max(7, bh * 0.62)}px sans-serif`;
+      const bw = Math.min(w - 4, Math.ceil(ctx.measureText(label).width) + 8);
+      const bx = x + (w - bw) / 2;
+      let by = y + 2;
+      if (pileCount >= 2) by += 16;
+      if (landOverride && String(card.type || "").toLowerCase().includes("land")) by += 15;
+      if (indestructibleCard && indestructibleCard.is_indestructible) by += 15;
+      if (colorOverride) by += 15;
+      ctx.fillStyle = "rgba(24,86,104,0.9)";
+      this._roundRect(ctx, bx, by, bw, bh, 3);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(120,224,255,0.95)";
+      ctx.lineWidth = 1;
+      this._roundRect(ctx, bx, by, bw, bh, 3);
+      ctx.stroke();
+      ctx.fillStyle = "#d6f6ff";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(label, bx + bw / 2, by + bh / 2);
