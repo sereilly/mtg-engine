@@ -1673,6 +1673,37 @@ def _default_target(card_name: str, caster_index: int) -> int:
     return 1 - caster_index
 
 
+def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
+    """Queue a spell from ``seat``'s hand using every targeting field on the
+    request, so the normal ``cast`` action and the debug free-cast paths share
+    one code path and can never drift on which parameters they forward (colors
+    for text-change spells, the chosen stack target, modal mode, X, multi-target
+    lists). Callers prepare ``x_value`` and, for the free casts, inject the card
+    into hand and toggle ``enforce_mana_costs`` around this call."""
+    engine_stack_index = None
+    if req.target_stack_index is not None:
+        # The client sends a top-first stack index; the engine stack is bottom-first.
+        engine_stack_index = len(game.stack) - 1 - req.target_stack_index
+    # Fireball-style multi-target spells send a list; it wins over permanent_index.
+    permanent_target = (
+        req.target_permanent_indices
+        if req.target_permanent_indices is not None
+        else req.permanent_index
+    )
+    target = req.target_seat if req.target_seat is not None else _default_target(card_name, seat)
+    return game.queue_from_hand(
+        seat,
+        card_name,
+        target_player_index=target,
+        target_permanent_index=permanent_target,
+        x_value=x_value,
+        new_color=req.mana_color,
+        target_stack_index=engine_stack_index,
+        mode_index=req.mode_index,
+        old_color=req.old_color,
+    )
+
+
 def _find_card_in_hand(player: PlayerState, card_name: str):
     return next((card for card in player.hand if card.name == card_name), None)
 
@@ -3069,29 +3100,8 @@ def do_action(session_id: str, req: GameActionRequest):
             if session.game.stack:
                 raise HTTPException(status_code=400, detail="can only cast this card when stack is empty")
 
-        target = req.target_seat if req.target_seat is not None else _default_target(req.card_name, req.seat)
-        # The client sends a top-first stack index (0 = topmost). The engine stack
-        # is bottom-first, so convert before queueing.
-        engine_stack_index = None
-        if req.target_stack_index is not None:
-            engine_stack_index = len(session.game.stack) - 1 - req.target_stack_index
-        # Fireball-style multi-target spells send a list of indices; it takes
-        # precedence over the single permanent_index.
-        permanent_target = (
-            req.target_permanent_indices
-            if req.target_permanent_indices is not None
-            else req.permanent_index
-        )
-        result = session.game.queue_from_hand(
-            req.seat,
-            req.card_name,
-            target_player_index=target,
-            target_permanent_index=permanent_target,
-            x_value=req.x_value,
-            new_color=req.mana_color,
-            target_stack_index=engine_stack_index,
-            mode_index=req.mode_index,
-            old_color=req.old_color,
+        result = _queue_spell_from_request(
+            session.game, req.seat, req.card_name, req, x_value=req.x_value,
         )
         if not result.supported:
             raise HTTPException(status_code=400, detail=result.details)
@@ -3710,24 +3720,14 @@ def do_action(session_id: str, req: GameActionRequest):
 
         player = session.game.players[req.seat]
         player.hand.append(card)
-        target = req.target_seat if req.target_seat is not None else _default_target(card.name, req.seat)
         x_value = req.x_value if req.x_value is not None else (0 if "{X}" in (card.mana_cost or "") else None)
 
+        # Cast through the shared cast plumbing (same targeting/colors/mode as a
+        # real hand cast); the only difference is mana isn't enforced for a free cast.
         original_enforce_mana_costs = session.game.enforce_mana_costs
         try:
             session.game.enforce_mana_costs = False
-            result = session.game.queue_from_hand(
-                req.seat,
-                card.name,
-                target_player_index=target,
-                target_permanent_index=req.permanent_index,
-                x_value=x_value,
-                mode_index=req.mode_index,
-                # Text-change spells (Sleight of Mind / Magical Hack) carry the
-                # from/to words; forward them so a free cast stores the remap too.
-                new_color=req.mana_color,
-                old_color=req.old_color,
-            )
+            result = _queue_spell_from_request(session.game, req.seat, card.name, req, x_value=x_value)
         finally:
             session.game.enforce_mana_costs = original_enforce_mana_costs
 
@@ -3755,7 +3755,6 @@ def do_action(session_id: str, req: GameActionRequest):
 
         opponent = session.game.players[opponent_seat]
         opponent.hand.append(card)
-        target = req.target_seat if req.target_seat is not None else _default_target(card.name, opponent_seat)
         x_value = req.x_value if req.x_value is not None else (0 if "{X}" in (card.mana_cost or "") else None)
 
         # Debug exception: casting for the opponent is allowed even on your own turn,
@@ -3767,16 +3766,7 @@ def do_action(session_id: str, req: GameActionRequest):
         original_enforce_mana_costs = session.game.enforce_mana_costs
         try:
             session.game.enforce_mana_costs = False
-            result = session.game.queue_from_hand(
-                opponent_seat,
-                card.name,
-                target_player_index=target,
-                target_permanent_index=req.permanent_index,
-                x_value=x_value,
-                mode_index=req.mode_index,
-                new_color=req.mana_color,
-                old_color=req.old_color,
-            )
+            result = _queue_spell_from_request(session.game, opponent_seat, card.name, req, x_value=x_value)
         finally:
             session.game.enforce_mana_costs = original_enforce_mana_costs
 

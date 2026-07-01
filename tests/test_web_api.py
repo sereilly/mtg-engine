@@ -2373,3 +2373,35 @@ def test_sleight_of_mind_cast_via_api_changes_lifeforce_and_counters_red_spell()
     final = client.get(f"/api/sessions/{sid}/state?seat=0").json()
     assert final["stack"] == []
     assert "Lightning Bolt" in [c["name"] for c in final["players"][1]["graveyard"]]
+
+
+def test_debug_cast_free_forwards_text_change_colors():
+    """The Debug 'cast for free' path must forward a text-change spell's from/to
+    words, exactly like a real hand cast. Regression: it dropped them, so casting
+    Sleight of Mind for free stored no remap and logged no change."""
+    sid = _hvh_no_pregame()
+    raw = {
+        "turn_number": 3, "current_turn": 0,
+        "current_turn_phase": "precombat_main", "current_step": "precombat_main",
+        "priority_player": 0, "priority_pass_count": 0,
+        "players": [
+            {"name": "P1", "life": 20, "mana_pool": {},
+             "hand": [], "battlefield": [{"name": "Lifeforce"}], "graveyard": [], "exile": []},
+            {"name": "P2", "life": 20, "mana_pool": {},
+             "hand": [], "battlefield": [], "graveyard": [], "exile": []},
+        ],
+    }
+    assert client.post(f"/api/sessions/{sid}/raw-state", json={"state": raw}).status_code == 200
+
+    free_cast = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "debug_cast_free", "card_name": "Sleight of Mind",
+              "target_seat": 0, "permanent_index": 0, "old_color": "B", "mana_color": "R"},
+    )
+    assert free_cast.status_code == 200, free_cast.text
+    _resolve_top_stack(sid, first_pass_seat=0)
+
+    state = client.get(f"/api/sessions/{sid}/state?seat=0").json()
+    lifeforce = state["players"][0]["battlefield"][0]
+    assert lifeforce["text_changes"] == [{"from": "black", "to": "red"}]
+    assert any("changed B text to R" in line for line in state["log"])
