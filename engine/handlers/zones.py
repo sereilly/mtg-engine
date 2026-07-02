@@ -231,12 +231,12 @@ def exile_target_creature_until_eot(game: Game, instruction: OracleInstruction, 
     exiled_perm: Permanent | None = None
     if isinstance(target_perm_idx, int) and 0 <= target_perm_idx < len(target.battlefield):
         candidate = target.battlefield[target_perm_idx]
-        if candidate.card.primary_type == "creature":
+        if candidate.is_creature:
             exiled_perm = candidate
             target.battlefield.pop(target_perm_idx)
     if exiled_perm is None:
         for idx, perm in enumerate(target.battlefield):
-            if perm.card.primary_type == "creature":
+            if perm.is_creature:
                 exiled_perm = perm
                 target.battlefield.pop(idx)
                 break
@@ -259,12 +259,12 @@ def exile_creature_gain_life_equal_to_power(game: Game, instruction: OracleInstr
     exiled_perm: Permanent | None = None
     if isinstance(target_perm_idx, int) and 0 <= target_perm_idx < len(target.battlefield):
         candidate = target.battlefield[target_perm_idx]
-        if candidate.card.primary_type == "creature":
+        if candidate.is_creature:
             exiled_perm = candidate
             target.battlefield.pop(target_perm_idx)
     if exiled_perm is None:
         for idx, perm in enumerate(target.battlefield):
-            if perm.card.primary_type == "creature":
+            if perm.is_creature:
                 exiled_perm = perm
                 target.battlefield.pop(idx)
                 break

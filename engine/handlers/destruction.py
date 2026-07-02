@@ -26,17 +26,26 @@ def volcanic_eruption(game: Game, instruction: OracleInstruction, context: Oracl
             or perm.metadata.get("land_type_override") == "mountain"
         )
 
-    # Resolve the chosen Mountains. The UI supplies explicit indices on the target
-    # player's battlefield; fall back to the first X Mountains anywhere for AI/no
-    # explicit choice.
+    # Resolve the chosen Mountains. The UI supplies either a cross-seat divided
+    # list (Mountains may be chosen on both battlefields at once) or explicit
+    # indices on the target player's battlefield; fall back to the first X
+    # Mountains anywhere for AI/no explicit choice.
     chosen: list[tuple[PlayerState, Permanent]] = []
+    if context.divided_targets:
+        for seat, index in context.divided_targets:
+            if index is None or not (0 <= seat < len(game.players)):
+                continue
+            player = game.players[seat]
+            if 0 <= index < len(player.battlefield) and _is_mountain(player.battlefield[index]):
+                chosen.append((player, player.battlefield[index]))
     raw_idx = context.target_permanent_index
     indices = raw_idx if isinstance(raw_idx, list) else ([raw_idx] if isinstance(raw_idx, int) else [])
-    for idx in indices:
-        if isinstance(idx, int) and 0 <= idx < len(target.battlefield):
-            perm = target.battlefield[idx]
-            if _is_mountain(perm):
-                chosen.append((target, perm))
+    if not chosen:
+        for idx in indices:
+            if isinstance(idx, int) and 0 <= idx < len(target.battlefield):
+                perm = target.battlefield[idx]
+                if _is_mountain(perm):
+                    chosen.append((target, perm))
     if not chosen:
         for player in game.players:
             for perm in player.battlefield:
@@ -57,8 +66,8 @@ def volcanic_eruption(game: Game, instruction: OracleInstruction, context: Oracl
             game._deal_damage_to_player(player, destroyed)
         for player in game.players:
             for perm in list(player.battlefield):
-                if perm.card.primary_type == "creature":
-                    game._mark_damage_on_permanent(perm, destroyed)
+                if perm.is_creature:
+                    game._mark_damage_on_permanent(perm, destroyed, source=card)
         game._destroy_marked_creatures()
     game.log.append(f"{card.name} dealt {destroyed} damage to each creature and each player")
     return True, "resolved"
@@ -70,13 +79,13 @@ def destroy_all_creatures(game: Game, instruction: OracleInstruction, context: O
     for player in game.players:
         survivors: list[Permanent] = []
         for permanent in player.battlefield:
-            if permanent.card.primary_type == "creature" and game._is_indestructible(permanent):
+            if permanent.is_creature and game._is_indestructible(permanent):
                 survivors.append(permanent)
-            elif permanent.card.primary_type == "creature" and not bypass_regen and permanent.regeneration_shield > 0:
+            elif permanent.is_creature and not bypass_regen and permanent.regeneration_shield > 0:
                 permanent.regeneration_shield -= 1
                 permanent.tapped = True
                 survivors.append(permanent)
-            elif permanent.card.primary_type == "creature":
+            elif permanent.is_creature:
                 game._permanent_to_graveyard(player, permanent)
             else:
                 survivors.append(permanent)

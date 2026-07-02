@@ -19,6 +19,15 @@ _COLOR_WORD_TO_SYMBOL: dict[str, str] = {
     "green": "G",
 }
 
+_X_SPEND_COLOR_RE = re.compile(r"spend only (white|blue|black|red|green) mana on x")
+
+
+def x_spend_color_from_text(text: str) -> str | None:
+    """The single color that may be spent on X ("Spend only black mana on X."
+    — Drain Life), as a mana symbol, or None when X is unrestricted."""
+    match = _X_SPEND_COLOR_RE.search(text.lower())
+    return _COLOR_WORD_TO_SYMBOL[match.group(1)] if match else None
+
 
 @dataclass(frozen=True)
 class OracleToken:

@@ -401,8 +401,24 @@ class TestManaVaultUpkeepUntap:
 
     def test_accept_untaps_it(self, cards):
         game, mv = self._game(cards)
+        game.players[0].mana_pool["B"] = 4
         game.resolve_upkeep(0, human_choices={"Mana Vault": True})
         assert mv.tapped is False
+        assert sum(game.players[0].mana_pool.values()) == 0  # the {4} was genuinely spent
+
+    def test_accept_without_mana_does_not_untap(self, cards):
+        # Choosing "pay {4}" with an empty pool and no lands must not untap for free.
+        game, mv = self._game(cards)
+        game.resolve_upkeep(0, human_choices={"Mana Vault": True})
+        assert mv.tapped is True
+
+    def test_accept_taps_lands_to_cover_the_cost(self, cards):
+        game, mv = self._game(cards)
+        lands = [Permanent(card=cards["Swamp"]) for _ in range(4)]
+        game.players[0].battlefield.extend(lands)
+        game.resolve_upkeep(0, human_choices={"Mana Vault": True})
+        assert mv.tapped is False
+        assert all(land.tapped for land in lands)
 
 
 class TestParalyzeUpkeepUntap:
@@ -429,8 +445,16 @@ class TestParalyzeUpkeepUntap:
 
     def test_accept_untaps_creature(self, cards):
         game, bear = self._game(cards)
+        game.players[0].mana_pool["G"] = 4
         game.resolve_upkeep(0, human_choices={"Paralyze": True})
         assert bear.tapped is False
+        assert sum(game.players[0].mana_pool.values()) == 0  # the {4} was genuinely spent
+
+    def test_accept_without_mana_does_not_untap(self, cards):
+        # Choosing "pay {4}" with an empty pool and no lands must not untap for free.
+        game, bear = self._game(cards)
+        game.resolve_upkeep(0, human_choices={"Paralyze": True})
+        assert bear.tapped is True
 
 
 # ---------------------------------------------------------------------------

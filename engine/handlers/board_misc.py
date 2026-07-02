@@ -34,7 +34,7 @@ def sacrifice_if_no_creatures(game: Game, instruction: OracleInstruction, contex
     if source is None:
         return True, "resolved"
     has_creatures = any(
-        p.card.primary_type == "creature" for pl in game.players for p in pl.battlefield
+        p.is_creature for pl in game.players for p in pl.battlefield
     )
     if has_creatures:
         return True, "resolved"
@@ -137,16 +137,47 @@ def mark_text_modified(game: Game, instruction: OracleInstruction, context: Orac
     # (swampwalk → islandwalk). It does NOT change the permanent's color.
     if mode == "land_type":
         new_type = _SYMBOL_TO_LAND_TYPE.get(new_symbol)
+        old_type = _SYMBOL_TO_LAND_TYPE.get(old_symbol)
         if target_perm is not None and new_type:
             if target_perm.card.primary_type == "land":
+                # The replaced word must actually appear in the land's current
+                # type (its override, if one is already in effect, else the
+                # printed type line) — replacing an absent word is a no-op.
+                current_type = str(
+                    target_perm.metadata.get("land_type_override") or target_perm.card.type_line
+                ).lower()
+                if old_type is not None and old_type not in current_type:
+                    game.log.append(
+                        f"{card.name} had no effect: {target_perm.card.name} has no {old_type.title()} land type"
+                    )
+                    return True, "resolved"
                 target_perm.metadata["land_type_override"] = new_type
                 game.log.append(f"{card.name} changed {target_perm.card.name} into a {new_type.title()}")
-            elif target_perm.card.primary_type == "creature":
-                old_type = _SYMBOL_TO_LAND_TYPE.get(old_symbol)
-                if old_type:
-                    target_perm.metadata[f"has_{new_type}walk"] = True
-                    target_perm.metadata[f"lost_{old_type}walk"] = True
-                    game.log.append(f"{card.name} changed {old_type}walk to {new_type}walk on {target_perm.card.name}")
+            elif target_perm.is_creature:
+                # Magical Hack rewrites existing words: the old land type must
+                # actually appear in the creature's printed text. That covers a
+                # printed landwalk (Bog Wraith's "Swampwalk") AND a land word
+                # inside a granted ability (Goblin King's "Other Goblins get
+                # +1/+1 and have mountainwalk.") — but never grants islandwalk
+                # from nothing (White Knight).
+                printed_text = (target_perm.card.oracle_text or "").lower()
+                if old_type and old_type in printed_text:
+                    # Word-level remap: read wherever the engine interprets this
+                    # card's text (lord walk grants) and shown by the UI as a
+                    # struck-out/replacement text edit.
+                    remap = target_perm.metadata.setdefault("land_word_remap", {})
+                    remap[old_type] = new_type
+                    # A landwalk the creature itself has also swaps as a keyword.
+                    if game._has_keyword(target_perm, f"{old_type}walk"):
+                        target_perm.metadata[f"has_{new_type}walk"] = True
+                        target_perm.metadata[f"lost_{old_type}walk"] = True
+                    game.log.append(f"{card.name} changed {old_type} to {new_type} in {target_perm.card.name}'s text")
+                    game._recalculate_lord_buffs()
+                else:
+                    game.log.append(
+                        f"{card.name} had no effect: {target_perm.card.name} has no"
+                        f" {old_type.title() if old_type else 'matching'} land type in its text"
+                    )
         return True, "resolved"
 
     # Sleight of Mind: replace one color word with another in the target's text.

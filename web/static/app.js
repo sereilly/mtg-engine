@@ -1219,16 +1219,25 @@ async function maybeAutoStepAi(state = currentState) {
   }
 }
 
+// Oracle text plus any abilities granted by another permanent's static effect
+// (Zombie Master's '{B}: Regenerate this permanent.') — the activation flow
+// treats granted lines exactly like printed ones.
+function activatedAbilityText(card) {
+  if (!card || typeof card === "string") return "";
+  const granted = Array.isArray(card.granted_abilities) ? card.granted_abilities : [];
+  return [(card.oracle_text || "").trim(), ...granted].filter(Boolean).join("\n");
+}
+
 function hasActivatedAbility(card) {
   if (!card || typeof card === "string") return false;
-  const text = (card.oracle_text || "").trim();
+  const text = activatedAbilityText(card);
   if (!text) return false;
   return /\{t\}|:\s*/i.test(text);
 }
 
 function getActivatedAbilityCost(card) {
   if (!card || typeof card === "string") return "";
-  const text = (card.oracle_text || "").trim();
+  const text = activatedAbilityText(card);
   if (!text) return "";
 
   for (const rawLine of text.split("\n")) {
@@ -1476,21 +1485,51 @@ function cardRequiresCastColorChoice(card) {
   return false;
 }
 
+const LAND_TYPE_BY_SYMBOL = { W: "plains", U: "island", B: "swamp", R: "mountain", G: "forest" };
+
+// Magical Hack replaces an existing basic land type word — the "from" choices
+// are limited to land words actually present on the target (its land type,
+// override, oracle text or granted/printed landwalk keywords).
+function landWordOptionsForTarget(perm) {
+  if (!perm || typeof perm === "string") return [];
+  const haystack = [
+    perm.land_type_override || "",
+    perm.type || "",
+    perm.oracle_text || "",
+    ...(Array.isArray(perm.keywords) ? perm.keywords : []),
+  ]
+    .join(" ")
+    .toLowerCase();
+  return MANA_COLOR_OPTIONS.filter((o) => haystack.includes(LAND_TYPE_BY_SYMBOL[o.symbol]));
+}
+
 function getDualLandColors(card) {
   if (!card || typeof card === "string") return null;
   const produced = Array.isArray(card.produced_mana) ? card.produced_mana.map((s) => s.toUpperCase()) : [];
   return produced.length >= 2 ? produced : null;
 }
 
-function getMaxAffordableX(manaPool, manaCost) {
+function xSpendColorForCard(card) {
+  // "Spend only black mana on X." (Drain Life) — X may only be paid in one color.
+  if (!card || typeof card === "string") return null;
+  const m = (card.oracle_text || "").toLowerCase().match(/spend only (white|blue|black|red|green) mana on x/);
+  if (!m) return null;
+  return { white: "W", blue: "U", black: "B", red: "R", green: "G" }[m[1]] || null;
+}
+
+function getMaxAffordableX(manaPool, manaCost, card = null) {
   const pool = manaPool || {};
   const cost = parseManaCostSymbols(manaCost || "");
+  const xColor = xSpendColorForCard(card);
   const totalMana = MANA_ORDER.reduce((sum, symbol) => sum + Number(pool[symbol] || 0), 0);
   const fixedCost = cost.W + cost.U + cost.B + cost.R + cost.G + cost.C + cost.generic;
   const maxPossible = Math.max(0, totalMana - fixedCost);
 
   for (let candidate = maxPossible; candidate >= 0; candidate -= 1) {
-    if (manaPoolCanPayCost(pool, { ...cost, generic: cost.generic + candidate })) {
+    const trial = xColor
+      ? { ...cost, [xColor]: (cost[xColor] || 0) + candidate }
+      : { ...cost, generic: cost.generic + candidate };
+    if (manaPoolCanPayCost(pool, trial)) {
       return candidate;
     }
   }
@@ -2132,12 +2171,16 @@ function applyUpkeepPayPrompt(upkeepInfo) {
   title.textContent = "Upkeep Payment Required";
   body.textContent = `${cardName} requires a payment at the beginning of your upkeep. Tap lands to generate mana, then pay or decline.`;
 
-  const payBtn = `<button type="button" class="prompt-choice-btn" id="upkeepPayBtn">Pay ${renderSymbolsInline(manaStr)}</button>`;
+  // Server-computed affordability (pool + untapped mana lands): a payment the
+  // engine would reject is greyed out instead of offered.
+  const canPay = upkeepInfo.can_pay?.[cardName] !== false;
+  const payBtn = `<button type="button" class="prompt-choice-btn" id="upkeepPayBtn"${canPay ? "" : " disabled"}>Pay ${renderSymbolsInline(manaStr)}</button>`;
   const sacBtn = `<button type="button" class="prompt-choice-btn" id="upkeepSacBtn">${declineLabel}</button>`;
   const remaining = pending.length;
   steps.innerHTML = [
     `<div>Card: ${escapeHtml(cardName)}</div>`,
     `<div>Cost: ${renderSymbolsInline(manaStr)}</div>`,
+    canPay ? "" : `<div class="prompt-warning">Not enough mana to pay.</div>`,
     `<div>Remaining decisions: ${remaining}</div>`,
     `<div class="prompt-choice-row">${payBtn}${sacBtn}</div>`,
   ].join("");
@@ -2183,14 +2226,43 @@ function applyOptionalTriggerPrompt(info) {
   title.textContent = "Optional Trigger";
   body.textContent = promptText;
 
+  // A target-bearing trigger (Vesuvan Doppelganger's upkeep re-copy) lists the
+  // legal creatures as buttons — picking one accepts the trigger with that
+  // target; plain triggers keep the simple Yes button.
+  const needsTarget = !!current?.needs_target;
+  const validTargets = Array.isArray(current?.valid_targets) ? current.valid_targets : [];
+  const targetButtons = validTargets
+    .map(
+      (t, i) =>
+        `<button type="button" class="prompt-choice-btn optional-trigger-target-btn" data-ti="${i}">${escapeHtml(
+          t.name || "creature",
+        )} (${t.seat === seat ? "yours" : "opponent's"})</button>`,
+    )
+    .join("");
   const yesBtn = `<button type="button" class="prompt-choice-btn" id="optionalTriggerYesBtn">Yes</button>`;
   const noBtn = `<button type="button" class="prompt-choice-btn" id="optionalTriggerNoBtn">No</button>`;
   steps.innerHTML = [
     `<div>Card: ${escapeHtml(cardName)}</div>`,
     `<div>Remaining decisions: ${pending.length}</div>`,
-    `<div class="prompt-choice-row">${yesBtn}${noBtn}</div>`,
+    needsTarget
+      ? `<div>Choose the creature to copy, or decline:</div><div class="prompt-choice-row">${targetButtons}</div><div class="prompt-choice-row">${noBtn}</div>`
+      : `<div class="prompt-choice-row">${yesBtn}${noBtn}</div>`,
   ].join("");
 
+  for (const btn of steps.querySelectorAll(".optional-trigger-target-btn")) {
+    btn.addEventListener("click", async () => {
+      const t = validTargets[Number(btn.dataset.ti)];
+      if (!t) return;
+      await sendAction({
+        seat,
+        action: "resolve_optional_trigger",
+        card_name: cardName,
+        accept: true,
+        target_seat: t.seat,
+        target_permanent_index: t.index,
+      });
+    });
+  }
   const yesEl = document.getElementById("optionalTriggerYesBtn");
   const noEl = document.getElementById("optionalTriggerNoBtn");
   if (yesEl) {
@@ -3732,7 +3804,11 @@ function renderActivationPrompt() {
     panel.classList.remove("hidden");
     okBtn.classList.add("hidden");
     title.textContent = `Choose X for ${pendingCastX.cardName}`;
-    body.textContent = `You have ${pendingCastX.maxX} mana available for X after paying the colored cost.`;
+    const xColor = xSpendColorForCard(pendingCastX.card);
+    const xColorName = xColor ? { W: "white", U: "blue", B: "black", R: "red", G: "green" }[xColor] : null;
+    body.textContent = xColorName
+      ? `You have ${pendingCastX.maxX} ${xColorName} mana available for X (only ${xColorName} mana may be spent on X).`
+      : `You have ${pendingCastX.maxX} mana available for X after paying the colored cost.`;
     const choiceButtons = [];
     for (let value = 0; value <= pendingCastX.maxX; value += 1) {
       choiceButtons.push(`<button type="button" class="prompt-choice-btn" data-x-choice="${value}">${value}</button>`);
@@ -3953,7 +4029,7 @@ function getActivatedAbilityOptions(card) {
   if (!card || typeof card === "string") return [];
   const options = [];
   let index = 0;
-  for (const line of String(card.oracle_text || "").split("\n")) {
+  for (const line of activatedAbilityText(card).split("\n")) {
     const m = line.match(/^\s*((?:\{[^}]+\}[,\s]*)+):\s*(.+)$/);
     if (m) {
       options.push({ index, cost: m[1].trim(), text: m[2].trim(), line: line.trim() });
@@ -4201,8 +4277,10 @@ function resolvePendingManaColor(manaColor) {
 
   if (pending.kind === "cast") {
     // First pick is the "from" word; re-prompt for the "to" word before casting.
+    // The "from" list may be limited to words present on the target; the "to"
+    // replacement can be any land type/color again.
     if (pending.step === "from") {
-      pendingManaColor = { ...pending, step: "to", fromColor: manaColor };
+      pendingManaColor = { ...pending, step: "to", fromColor: manaColor, colorOptions: undefined };
       renderActivationPrompt();
       const noun = pending.isLandType ? "land type" : "color";
       updateActionHint(`Now choose the replacement ${noun} for ${pending.cardName}.`);
@@ -4446,8 +4524,8 @@ function startCastDividedPrompt(card, castAction = "cast", validTargets = null) 
     cardName,
     castAction,
     targetKind: "divided",
-    dividedTargets: [], // [{ seat, idx }] creatures, all on one seat
-    dividedFaceSeat: null, // a player's face when chosen instead of creatures
+    dividedTargets: [], // [{ seat, idx }] creatures — any mix across both seats
+    dividedFaces: [], // [seat, ...] player faces — combinable with creatures
     ...pendingTargetFields(card, validTargets),
   };
   renderActivationPrompt();
@@ -4456,14 +4534,14 @@ function startCastDividedPrompt(card, castAction = "cast", validTargets = null) 
   updateActionHint(
     landFilter
       ? `Choose the ${landFilter}s for ${cardName} to destroy (click each), then confirm.`
-      : `Choose targets for ${cardName}: click creatures to split the damage among them, or click a player's life pill to hit their face. Then confirm.`,
+      : `Choose targets for ${cardName}: click any mix of creatures (either side) and/or player life pills to split the damage among them. Then confirm.`,
   );
 }
 
 function dividedTargetCount() {
   const p = pendingCastTarget;
   if (!p || p.targetKind !== "divided") return 0;
-  return p.dividedFaceSeat !== null ? 1 : p.dividedTargets.length;
+  return p.dividedTargets.length + (p.dividedFaces?.length || 0);
 }
 
 function dividedTargetsHint() {
@@ -4479,13 +4557,21 @@ function dividedTargetsHint() {
 function toggleDividedCreatureTarget(targetSeat, permanentIndex) {
   const p = pendingCastTarget;
   if (!p || p.targetKind !== "divided") return;
-  // Choosing a creature clears any face selection (the engine splits damage
-  // among creatures on one battlefield, or sends it all to one face).
-  p.dividedFaceSeat = null;
-  if (p.dividedTargets.length && p.dividedTargets[0].seat !== targetSeat) {
-    updateActionHint("All creature targets must be on the same side.", true);
+  // Only server-enumerated targets are selectable: Fireball offers creatures on
+  // both sides, Volcanic Eruption offers Mountains only — clicking anything
+  // else is rejected instead of silently added.
+  if (p.validKeys && !p.validKeys.has(`${targetSeat}-${permanentIndex}`)) {
+    const landFilter = targetSpecOf(p.card)?.land_filter;
+    updateActionHint(
+      landFilter
+        ? `${p.cardName} targets ${landFilter}s — click a ${landFilter}.`
+        : "That permanent isn't a valid target for the pending spell.",
+      true,
+    );
     return;
   }
+  // Any mix of valid targets on both sides (and player faces) is legal — the
+  // damage is divided evenly among everything chosen.
   const existing = p.dividedTargets.findIndex((t) => t.seat === targetSeat && t.idx === permanentIndex);
   if (existing >= 0) p.dividedTargets.splice(existing, 1);
   else p.dividedTargets.push({ seat: targetSeat, idx: permanentIndex });
@@ -4497,8 +4583,11 @@ function toggleDividedCreatureTarget(targetSeat, permanentIndex) {
 function setDividedFaceTarget(targetSeat) {
   const p = pendingCastTarget;
   if (!p || p.targetKind !== "divided") return;
-  p.dividedTargets = [];
-  p.dividedFaceSeat = targetSeat;
+  if (!Array.isArray(p.dividedFaces)) p.dividedFaces = [];
+  // Clicking a face toggles it; faces combine freely with creature targets.
+  const existing = p.dividedFaces.indexOf(targetSeat);
+  if (existing >= 0) p.dividedFaces.splice(existing, 1);
+  else p.dividedFaces.push(targetSeat);
   renderActivationPrompt();
   renderBoard(currentState);
   updateActionHint(dividedTargetsHint());
@@ -4512,10 +4601,11 @@ function confirmDividedTargets() {
     updateActionHint("Choose at least one target first.", true);
     return;
   }
-  const resolved =
-    p.dividedFaceSeat !== null
-      ? { targetSeat: p.dividedFaceSeat, indices: null }
-      : { targetSeat: p.dividedTargets[0].seat, indices: p.dividedTargets.map((t) => t.idx) };
+  // The full cross-seat target list: creatures as {seat, index}, faces as {seat}.
+  const dividedPayload = [
+    ...p.dividedTargets.map((t) => ({ seat: t.seat, index: t.idx })),
+    ...(p.dividedFaces || []).map((faceSeat) => ({ seat: faceSeat })),
+  ];
   const { card, cardName, castAction } = p;
   // Volcanic Eruption: X equals the number of chosen targets (Mountains), so there
   // is no separate X prompt — cast straight away with x_value = the count.
@@ -4525,34 +4615,33 @@ function confirmDividedTargets() {
   for (const elementId of ["selfLife", "oppLife", "selfName", "oppName"]) {
     q(elementId)?.classList.remove("targeting-valid");
   }
-  if (xEqualsTargets && Array.isArray(resolved.indices)) {
+  if (xEqualsTargets) {
     const body = {
       seat,
       action: castAction || "cast",
       card_name: cardName,
-      target_seat: resolved.targetSeat,
-      target_permanent_indices: resolved.indices,
-      x_value: resolved.indices.length,
+      divided_targets: dividedPayload,
+      x_value: dividedPayload.length,
     };
-    updateActionHint(`Casting ${cardName} (X = ${resolved.indices.length})...`);
+    updateActionHint(`Casting ${cardName} (X = ${dividedPayload.length})...`);
     sendAction(body)
       .then(() => updateActionHint(`Cast ${cardName}.`))
       .catch((e) => updateActionHint(e.message, true))
       .finally(() => clearPendingHandCast());
     return;
   }
-  startCastDividedXPrompt(card, cardName, resolved, n - 1, castAction || "cast");
+  startCastDividedXPrompt(card, cardName, dividedPayload, n - 1, castAction || "cast");
 }
 
-function startCastDividedXPrompt(card, cardName, resolved, extraTargetTax, castAction = "cast") {
-  const baseMax = getMaxAffordableX(getCurrentPlayerState()?.mana_pool, card.mana_cost || "");
+function startCastDividedXPrompt(card, cardName, dividedPayload, extraTargetTax, castAction = "cast") {
+  const baseMax = getMaxAffordableX(getCurrentPlayerState()?.mana_pool, card.mana_cost || "", card);
   pendingCastX = {
     kind: "cast_x",
     card,
     cardName,
-    targetSeat: resolved.targetSeat,
+    targetSeat: null,
     targetPermanentIndex: null,
-    dividedIndices: resolved.indices, // null => all damage to the chosen face
+    dividedPayload, // [{seat, index}] creatures + [{seat}] faces, both sides
     extraTargetTax,
     castAction,
     manaRequirement: parseManaCostSymbols(card.mana_cost || ""),
@@ -4561,7 +4650,7 @@ function startCastDividedXPrompt(card, cardName, resolved, extraTargetTax, castA
     awaitingCustomValue: false,
   };
   renderActivationPrompt();
-  const count = resolved.indices ? resolved.indices.length : 1;
+  const count = dividedPayload.length;
   updateActionHint(`Choose X for ${cardName} — damage split among ${count} target${count === 1 ? "" : "s"}.`);
 }
 
@@ -4657,7 +4746,7 @@ function startCastXPrompt(card, targetSeat, targetPermanentIndex = null, castAct
     targetStackIndex,
     castAction,
     manaRequirement: parseManaCostSymbols(card.mana_cost || ""),
-    maxX: getMaxAffordableX(getCurrentPlayerState()?.mana_pool, card.mana_cost || ""),
+    maxX: getMaxAffordableX(getCurrentPlayerState()?.mana_pool, card.mana_cost || "", card),
     awaitingCustomValue: false,
   };
   renderActivationPrompt();
@@ -4708,14 +4797,56 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
   // Activated ability targeting a permanent (e.g. Gaea's Liege targeting a land):
   // send an "activate" action with the chosen target permanent rather than a cast.
   if (pending.castAction === "activate") {
-    const activateBody = {
-      seat,
-      action: "activate",
-      permanent_name: pending.cardName,
-      permanent_index: pending.sourcePermanentIndex,
-      target_seat: selectedTarget,
-      target_permanent_index: selectedPermanentIndex,
-    };
+    // Jade Monolith: after the creature is chosen, a second prompt picks the
+    // damage source ("a source of your choice") before the ability is sent.
+    const spec = targetSpecOf(pending.card);
+    if (spec?.requires_source && !pending.__sourceStage) {
+      // The source may be any permanent on either battlefield OR a spell on
+      // the stack — both come enumerated in source_targets.
+      const sourceTargets = spec.source_targets || [];
+      if (!sourceTargets.length) {
+        updateActionHint(`No damage source available for ${pending.cardName}.`, true);
+        return;
+      }
+      pendingCastTarget = {
+        card: pending.card,
+        cardName: pending.cardName,
+        targetKind: "permanent",
+        castAction: "activate",
+        alsoStack: true,
+        sourcePermanentIndex: pending.sourcePermanentIndex,
+        __sourceStage: true,
+        chosenTargetSeat: selectedTarget,
+        chosenTargetIndex: selectedPermanentIndex,
+        ...pendingTargetFields(pending.card, sourceTargets),
+      };
+      renderActivationPrompt();
+      renderBoard(currentState);
+      renderStack(_currentStack);
+      updateActionHint(
+        `Now choose the damage source for ${pending.cardName}: click a permanent or a spell on the stack.`,
+      );
+      return;
+    }
+    const activateBody = pending.__sourceStage
+      ? {
+          seat,
+          action: "activate",
+          permanent_name: pending.cardName,
+          permanent_index: pending.sourcePermanentIndex,
+          target_seat: pending.chosenTargetSeat,
+          target_permanent_index: pending.chosenTargetIndex,
+          source_seat: selectedTarget,
+          source_permanent_index: selectedPermanentIndex,
+        }
+      : {
+          seat,
+          action: "activate",
+          permanent_name: pending.cardName,
+          permanent_index: pending.sourcePermanentIndex,
+          target_seat: selectedTarget,
+          target_permanent_index: selectedPermanentIndex,
+        };
     updateActionHint(`Activating ${pending.cardName}...`);
     sendAction(activateBody)
       .then(() => updateActionHint(`Activated ${pending.cardName}.`))
@@ -4752,6 +4883,21 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
     // "to" word. Both are sent (old_color + mana_color); collecting only one
     // leaves old_color unset and the engine stores no remap.
     const isLandType = /basic land type/.test((pending.card.oracle_text || "").toLowerCase());
+    let fromOptions = null;
+    if (isLandType && Number.isInteger(selectedTarget) && Number.isInteger(selectedPermanentIndex)) {
+      const targetPerm = currentState?.players?.[selectedTarget]?.battlefield?.[selectedPermanentIndex];
+      if (targetPerm && typeof targetPerm !== "string") {
+        fromOptions = landWordOptionsForTarget(targetPerm);
+        if (!fromOptions.length) {
+          clearPendingHandCast();
+          updateActionHint(
+            `${targetPerm.name} has no basic land type in its text for ${pending.cardName} to replace.`,
+            true,
+          );
+          return;
+        }
+      }
+    }
     pendingManaColor = {
       kind: "cast",
       step: "from",
@@ -4760,6 +4906,7 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
       cardName: pending.cardName,
       castActionBody: actionBody,
       oracleText: pending.card.oracle_text || "",
+      colorOptions: fromOptions || undefined,
     };
     renderActivationPrompt();
     updateActionHint(
@@ -4828,17 +4975,18 @@ function resolvePendingCastX(xValue) {
     seat,
     action: pending.castAction || "cast",
     card_name: pending.cardName,
-    target_seat: pending.targetSeat,
     x_value: selectedX,
   };
-  // Fireball-style casts carry a list of split targets; Power Sink carries the
-  // index of the spell on the stack it counters; everything else carries a single
-  // permanent index (or none, for a face/player target).
+  // Fireball-style casts carry the cross-seat divided target list; Power Sink
+  // carries the index of the spell on the stack it counters; everything else
+  // carries a single permanent index (or none, for a face/player target).
   if (Number.isInteger(pending.targetStackIndex)) {
+    body.target_seat = pending.targetSeat;
     body.target_stack_index = pending.targetStackIndex;
-  } else if (Array.isArray(pending.dividedIndices)) {
-    body.target_permanent_indices = pending.dividedIndices;
+  } else if (Array.isArray(pending.dividedPayload)) {
+    body.divided_targets = pending.dividedPayload;
   } else {
+    body.target_seat = pending.targetSeat;
     body.permanent_index = pending.targetPermanentIndex;
   }
 
@@ -6295,14 +6443,27 @@ function selectStackSpellTarget(arrayIndex) {
   // Activated ability that counters a target spell (Deathgrip): send an
   // "activate" action identifying the source permanent and the chosen spell.
   if (pending.castAction === "activate") {
+    // Jade Monolith's second stage: the clicked stack spell is the chosen
+    // damage SOURCE — send it alongside the already-chosen creature target.
+    const body = pending.__sourceStage
+      ? {
+          seat,
+          action: "activate",
+          permanent_name: pending.cardName,
+          permanent_index: pending.sourcePermanentIndex,
+          target_seat: pending.chosenTargetSeat,
+          target_permanent_index: pending.chosenTargetIndex,
+          source_stack_index: arrayIndex,
+        }
+      : {
+          seat,
+          action: "activate",
+          permanent_name: pending.cardName,
+          permanent_index: pending.sourcePermanentIndex,
+          target_stack_index: arrayIndex,
+        };
     updateActionHint(`Activating ${pending.cardName} at ${item.card?.name || "spell"}...`);
-    sendAction({
-      seat,
-      action: "activate",
-      permanent_name: pending.cardName,
-      permanent_index: pending.sourcePermanentIndex,
-      target_stack_index: arrayIndex,
-    })
+    sendAction(body)
       .then(() => updateActionHint(`Activated ${pending.cardName}.`))
       .catch((e) => updateActionHint(e.message, true));
     return;

@@ -58,21 +58,7 @@ class PermanentStateMixin:
                     None,
                 )
             if source is not None:
-                permanent.metadata["copied_from"] = source.card.name
-                # CR 707.2: a copy takes on the copied creature's copiable values —
-                # including its types/subtypes and abilities. Keep the source card so
-                # subtype checks and static abilities (e.g. copying Lord of Atlantis:
-                # the copy is a Merfolk and itself grants islandwalk to other Merfolk)
-                # resolve against the copied creature, not the copier's own card.
-                permanent.metadata["copied_card"] = source.card
-                permanent.metadata["absolute_power"] = source.effective_power
-                permanent.metadata["absolute_toughness"] = source.effective_toughness
-                # CR 707.2 / 711.10: a copy gains the copied creature's printed
-                # keyword abilities (first strike, flying, trample, …). Stamp them
-                # so _has_keyword reports them even though permanent.card is still
-                # the copier's own (Clone / Vesuvan Doppelganger) definition.
-                if source.card.keywords:
-                    permanent.metadata["copied_keywords"] = list(source.card.keywords)
+                self._apply_creature_copy(permanent, source)
 
         # copy-as-enter enchantment
         if "you may have this enchantment enter as a copy of any artifact on the battlefield" in text:
@@ -128,6 +114,51 @@ class PermanentStateMixin:
             life_loss = controller.life
             controller.life -= life_loss
             self.log.append(f"{permanent.card.name}: {controller.name} lost {life_loss} life on entry")
+
+    def _apply_creature_copy(self, permanent: Permanent, source: Permanent) -> None:
+        """Make *permanent* a copy of *source* (CR 707.2): P/T, types/abilities
+        (via ``copied_card``) and printed keywords. Used both when a copier
+        enters (Clone / Vesuvan Doppelganger) and when Vesuvan's upkeep ability
+        re-copies a different creature.
+
+        Color is copied only when the copier's own text doesn't exclude it —
+        Vesuvan's "except it doesn't copy that creature's color" keeps it blue.
+        """
+        copier_text = compile_card_oracle(permanent.card).normalized_text
+        permanent.metadata["copied_from"] = source.card.name
+        # CR 707.2: a copy takes on the copied creature's copiable values —
+        # including its types/subtypes and abilities. Keep the source card so
+        # subtype checks and static abilities (e.g. copying Lord of Atlantis:
+        # the copy is a Merfolk and itself grants islandwalk to other Merfolk)
+        # resolve against the copied creature, not the copier's own card.
+        permanent.metadata["copied_card"] = source.card
+        # Copiable P/T is the PRINTED value (or what the source itself copied) —
+        # never counters, auras or lord buffs on the source (CR 707.2). Static
+        # buffs then re-apply dynamically to the copy based on its own qualities.
+        permanent.metadata["absolute_power"] = int(
+            source.metadata.get("absolute_power", source._base_stat("power"))
+        )
+        permanent.metadata["absolute_toughness"] = int(
+            source.metadata.get("absolute_toughness", source._base_stat("toughness"))
+        )
+        # CR 707.2 / 711.10: a copy gains the copied creature's printed
+        # keyword abilities (first strike, flying, trample, …). Stamp them
+        # so _has_keyword reports them even though permanent.card is still
+        # the copier's own (Clone / Vesuvan Doppelganger) definition.
+        if source.card.keywords:
+            permanent.metadata["copied_keywords"] = list(source.card.keywords)
+        else:
+            permanent.metadata.pop("copied_keywords", None)
+        if "doesn't copy that creature's color" in copier_text:
+            permanent.metadata.pop("copied_colors", None)
+        else:
+            permanent.metadata["copied_colors"] = list(source.card.colors)
+        # Vesuvan Doppelganger's granted upkeep ability ("you may have this
+        # creature become a copy of target creature ... and it has this
+        # ability") persists across every re-copy.
+        if "become a copy of target creature" in copier_text:
+            permanent.metadata["may_recopy_each_upkeep"] = True
+        self._recalculate_lord_buffs()
 
     def _resolve_copy_target(self, permanent: Permanent, primary_type: str) -> Permanent | None:
         """Return the player-chosen permanent for a "copy as it enters" effect.
@@ -378,10 +409,18 @@ class PermanentStateMixin:
         )
 
     def _effective_colors(self, permanent: Permanent) -> set[str]:
-        """The color symbols a permanent currently has (honoring color overrides)."""
+        """The color symbols a permanent currently has (honoring color overrides
+        and copied colors)."""
         override = permanent.metadata.get("color_override")
         if override:
             return {override}
+        # A copy takes the copied creature's color (Clone) — unless the copier
+        # excludes it ("except it doesn't copy that creature's color", Vesuvan
+        # Doppelganger), in which case copied_colors is never recorded and the
+        # copier's own printed color (blue) shows through.
+        copied_colors = permanent.metadata.get("copied_colors")
+        if copied_colors is not None:
+            return set(copied_colors)
         return set(permanent.card.colors)
 
     def _protection_colors(self, permanent: Permanent) -> set[str]:
@@ -458,6 +497,10 @@ class PermanentStateMixin:
                 if lord_walks:
                     for flag in lord_walks:
                         perm.metadata.pop(flag, None)
+                # A lord-granted activated ability (Zombie Master's regenerate)
+                # ends when the lord leaves, exactly like lord-granted landwalk.
+                if perm.metadata.pop("_lord_granted_regen", None):
+                    perm.metadata.pop("granted_regen_ability", None)
 
         def _add_static_buff(perm: Permanent, power: int, toughness: int) -> None:
             perm.metadata["static_buff_power"] = (
@@ -479,6 +522,15 @@ class PermanentStateMixin:
         def _eff_card(perm: Permanent):
             return perm.metadata.get("copied_card") or perm.card
 
+        # A Magical Hack land-word swap on the lord itself rewrites the walks its
+        # text grants (mountainwalk -> islandwalk on Goblin King makes other
+        # Goblins islandwalkers).
+        def _remap_walks(source_perm: Permanent, walks: list[str]) -> list[str]:
+            remap = source_perm.metadata.get("land_word_remap") or {}
+            if not remap:
+                return walks
+            return [f"{remap.get(w[: -len('walk')], w[: -len('walk')])}walk" for w in walks]
+
         # Step 2: Re-apply static buffs from every permanent currently on battlefield
         for ctrl_player in self.players:
             for source_perm in ctrl_player.battlefield:
@@ -493,9 +545,9 @@ class PermanentStateMixin:
                             for target_perm in tp.battlefield:
                                 if target_perm.card.primary_type != "creature":
                                     continue
-                                actual_colors = set(target_perm.card.colors)
-                                if "color_override" in target_perm.metadata:
-                                    actual_colors = {target_perm.metadata["color_override"]}
+                                # Honors color overrides (Lace) and copied colors
+                                # (Clone), and keeps Vesuvan Doppelganger blue.
+                                actual_colors = self._effective_colors(target_perm)
                                 if color_sym and color_sym not in actual_colors:
                                     continue
                                 _add_static_buff(target_perm, power, toughness)
@@ -532,11 +584,11 @@ class PermanentStateMixin:
                         power = int(lord_match.group(2))
                         toughness = int(lord_match.group(3))
                         rest = lord_match.group(4).lower()
-                        granted_walks = [
+                        granted_walks = _remap_walks(source_perm, [
                             w
                             for w in ("islandwalk", "mountainwalk", "swampwalk", "forestwalk", "plainswalk")
                             if w in rest
-                        ]
+                        ])
                         for player in self.players:
                             for target_perm in player.battlefield:
                                 if target_perm.card.primary_type != "creature":
@@ -549,24 +601,30 @@ class PermanentStateMixin:
                                 for walk in granted_walks:
                                     _grant_lord_walk(target_perm, walk)
 
-                    # "Other [Subtype] ... have <landwalk>" with no +X/+X buff
-                    # (Zombie Master: "Other Zombie creatures have swampwalk").
+                    # "Other [Subtype] ... have <landwalk / activated ability>"
+                    # with no +X/+X buff (Zombie Master: "Other Zombie creatures
+                    # have swampwalk." / 'Other Zombies have "{B}: Regenerate
+                    # this permanent."').
                     elif (
                         instr.kind == "static_line"
                         and instr.value.startswith("other ")
                         and " have " in instr.value
-                        and any(w in instr.value for w in
-                                ("islandwalk", "mountainwalk", "swampwalk", "forestwalk", "plainswalk"))
+                        and (
+                            "regenerate this permanent" in instr.value
+                            or any(w in instr.value for w in
+                                   ("islandwalk", "mountainwalk", "swampwalk", "forestwalk", "plainswalk"))
+                        )
                     ):
                         sub_match = re.search(r"other (\w+?)s?\b", instr.value)
                         if not sub_match:
                             continue
                         subtype = sub_match.group(1).lower()
-                        granted_walks = [
+                        granted_walks = _remap_walks(source_perm, [
                             w
                             for w in ("islandwalk", "mountainwalk", "swampwalk", "forestwalk", "plainswalk")
                             if w in instr.value
-                        ]
+                        ])
+                        grants_regen = "regenerate this permanent" in instr.value
                         for player in self.players:
                             for target_perm in player.battlefield:
                                 if target_perm.card.primary_type != "creature":
@@ -577,3 +635,6 @@ class PermanentStateMixin:
                                     continue
                                 for walk in granted_walks:
                                     _grant_lord_walk(target_perm, walk)
+                                if grants_regen:
+                                    target_perm.metadata["granted_regen_ability"] = True
+                                    target_perm.metadata["_lord_granted_regen"] = True

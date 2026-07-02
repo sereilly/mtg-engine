@@ -7,12 +7,15 @@ from ..classifier import CardClassification, classify_card
 from ..game_types import OracleExecutionContext, OracleStateMachine, SimulationResult, StackItem
 from ..models import CardDefinition, Permanent, PlayerState
 from ..oracle import OracleInstruction, _COLOR_WORD_TO_SYMBOL, compile_card_oracle, lex_oracle_text
+from ..oracle_types import x_spend_color_from_text
 from ._constants import _MANA_SYMBOLS
 
 # Maps an "enchant X" noun to a predicate matching legal battlefield targets.
+# "creature" uses Permanent.is_creature so animated lands (Kormus Bell / Living
+# Lands) accept creature Auras while they are creatures.
 _ENCHANT_TARGET_MATCHERS = {
     "artifact": lambda perm: "artifact" in perm.card.type_line.lower(),
-    "creature": lambda perm: perm.card.primary_type == "creature",
+    "creature": lambda perm: perm.is_creature,
     "land": lambda perm: perm.card.primary_type == "land",
     "enchantment": lambda perm: "enchantment" in perm.card.type_line.lower(),
     "wall": lambda perm: "wall" in perm.card.type_line.lower(),
@@ -56,6 +59,7 @@ class StackCastingMixin:
         target_stack_index: int | None = None,
         mode_index: int | None = None,
         old_color: str | None = None,
+        divided_targets: list[tuple[int, int | None]] | None = None,
     ) -> SimulationResult:
         queued = self.queue_from_hand(
             caster_index,
@@ -67,6 +71,7 @@ class StackCastingMixin:
             target_stack_index=target_stack_index,
             mode_index=mode_index,
             old_color=old_color,
+            divided_targets=divided_targets,
         )
         if not queued.supported:
             return queued
@@ -88,6 +93,9 @@ class StackCastingMixin:
         target_stack_index: int | None = None,
         ability_index: int | None = None,
         x_value: int | None = None,
+        source_seat: int | None = None,
+        source_permanent_index: int | None = None,
+        source_stack_index: int | None = None,
     ) -> SimulationResult:
         queued = self.queue_permanent_ability(
             controller_index,
@@ -99,6 +107,9 @@ class StackCastingMixin:
             target_stack_index=target_stack_index,
             ability_index=ability_index,
             x_value=x_value,
+            source_seat=source_seat,
+            source_permanent_index=source_permanent_index,
+            source_stack_index=source_stack_index,
         )
         if not queued.supported:
             return queued
@@ -130,7 +141,7 @@ class StackCastingMixin:
         # ability has no legal target and does nothing.
         if isinstance(target_perm_idx, int):
             if not (0 <= target_perm_idx < len(target_player.battlefield)
-                    and target_player.battlefield[target_perm_idx].card.primary_type == "creature"):
+                    and target_player.battlefield[target_perm_idx].is_creature):
                 return SimulationResult(label, False, "unsupported", "emblem target is no longer in play")
 
         if self.enforce_mana_costs:
@@ -694,6 +705,9 @@ class StackCastingMixin:
         target_stack_index: int | None = None,
         ability_index: int | None = None,
         x_value: int | None = None,
+        source_seat: int | None = None,
+        source_permanent_index: int | None = None,
+        source_stack_index: int | None = None,
     ) -> SimulationResult:
         controller = self.players[controller_index]
         resolved = self._find_controlled_permanent(controller, permanent_name, permanent_index)
@@ -710,6 +724,17 @@ class StackCastingMixin:
         target_stack_item = None
         if target_stack_index is not None and 0 <= target_stack_index < len(self.stack):
             target_stack_item = self.stack[target_stack_index]
+
+        # "A source of your choice" (Jade Monolith): a chosen battlefield
+        # permanent, or a spell on the stack (its card stands in for the source).
+        chosen_source = None
+        if source_seat is not None and source_permanent_index is not None:
+            if 0 <= source_seat < len(self.players):
+                source_bf = self.players[source_seat].battlefield
+                if 0 <= source_permanent_index < len(source_bf):
+                    chosen_source = source_bf[source_permanent_index]
+        elif source_stack_index is not None and 0 <= source_stack_index < len(self.stack):
+            chosen_source = self.stack[source_stack_index].card
 
 
 
@@ -750,7 +775,14 @@ class StackCastingMixin:
 
         if ability is None or ability.instruction is None:
             # Zombie Master grants other Zombies '{B}: Regenerate this permanent.'
+            # The granted ability still costs {B} to activate.
             if permanent.metadata.get("granted_regen_ability"):
+                if self.enforce_mana_costs and not self._pay_mana_cost(
+                    controller, self._parse_mana_cost("{B}", x_value=0)
+                ):
+                    details = f"insufficient mana to activate {permanent.card.name}"
+                    self.log.append(details)
+                    return SimulationResult(permanent.card.name, False, "unsupported", details)
                 permanent.regeneration_shield += 1
                 self.log.append(f"{permanent.card.name} regenerates (ability granted by lord)")
                 return SimulationResult(permanent.card.name, True, "activated_regenerate", "resolved")
@@ -761,7 +793,7 @@ class StackCastingMixin:
             # Helm of Chatzuk targets any creature (the chosen target_player; falls
             # back to any creature on the battlefield when no target was supplied).
             has_valid_target = any(
-                perm.card.primary_type == "creature"
+                perm.is_creature
                 for player in self.players
                 for perm in player.battlefield
             )
@@ -932,6 +964,7 @@ class StackCastingMixin:
                 ability_text=ability.source_line,
                 target_stack_item=target_stack_item,
                 target_stack_name=target_stack_item.card.name if target_stack_item is not None else None,
+                chosen_source=chosen_source,
             )
         )
         self.log.append(f"{permanent.card.name} ability added to stack")
@@ -964,6 +997,7 @@ class StackCastingMixin:
         target_stack_index: int | None = None,
         mode_index: int | None = None,
         old_color: str | None = None,
+        divided_targets: list[tuple[int, int | None]] | None = None,
     ) -> SimulationResult:
         caster = self.players[caster_index]
         try:
@@ -1055,24 +1089,47 @@ class StackCastingMixin:
             self.log.append(target_reason)
             return SimulationResult(card.name, False, classification.effect_kind, target_reason)
 
+        # A divided spell's cross-seat target list: sanity-check every entry so a
+        # stale battlefield index can't crash resolution.
+        if divided_targets is not None:
+            cleaned: list[tuple[int, int | None]] = []
+            for entry in divided_targets:
+                seat, index = entry
+                if not (isinstance(seat, int) and 0 <= seat < len(self.players)):
+                    return SimulationResult(card.name, False, classification.effect_kind, "invalid divided target seat")
+                if index is not None and not (
+                    isinstance(index, int) and 0 <= index < len(self.players[seat].battlefield)
+                ):
+                    return SimulationResult(card.name, False, classification.effect_kind, "invalid divided target")
+                cleaned.append((seat, index))
+            divided_targets = cleaned or None
+
         # Fireball-style spells cost {1} more to cast for each target beyond the
-        # first. Count the chosen targets (a list of creature indices, or a
-        # single creature/player) and tax the extras as generic mana.
+        # first. Count the chosen targets (the cross-seat divided list, a list of
+        # creature indices, or a single creature/player) and tax the extras as
+        # generic mana.
         if "costs {1} more to cast for each target beyond the first" in card.oracle_text.lower():
-            if isinstance(target_permanent_index, list):
+            if divided_targets is not None:
+                num_targets = len(divided_targets)
+            elif isinstance(target_permanent_index, list):
                 num_targets = len([i for i in target_permanent_index if isinstance(i, int)])
             else:
                 num_targets = 1
             extra_generic_tax += max(0, num_targets - 1)
 
+        x_color = x_spend_color_from_text(card.oracle_text)
         resolved_x_value = x_value
         if resolved_x_value is None and "{X}" in card.mana_cost.upper():
-            resolved_x_value = self._infer_x_value(caster, card.mana_cost, extra_generic_tax)
+            resolved_x_value = self._infer_x_value(caster, card.mana_cost, extra_generic_tax, x_color=x_color)
 
         if self.enforce_mana_costs and card.primary_type != "land":
-            cost = self._parse_mana_cost(card.mana_cost, x_value=resolved_x_value, extra_generic=extra_generic_tax)
+            cost = self._parse_mana_cost(
+                card.mana_cost, x_value=resolved_x_value, extra_generic=extra_generic_tax, x_color=x_color
+            )
             if not self._pay_mana_cost(caster, cost):
                 details = f"insufficient mana for {card.name}"
+                if x_color is not None:
+                    details = f"insufficient mana for {card.name} (X can be paid only with {x_color} mana)"
                 self.log.append(details)
                 return SimulationResult(card.name, False, classification.effect_kind, details)
 
@@ -1099,6 +1156,7 @@ class StackCastingMixin:
                     target_player_index=target_player_index,
                     target_permanent_index=target_permanent_index,
                     x_value=resolved_x_value,
+                    divided_targets=divided_targets,
                     target_stack_name=target_stack_name_val,
                     target_stack_item=target_stack_item_val,
                     new_color=new_color,
@@ -1108,10 +1166,12 @@ class StackCastingMixin:
             )
             self.log.append(f"{card.name} added to stack")
             # "Whenever a player casts a [color] spell" triggers (Rod/Cup/Sphere)
+            # and "whenever you cast an X spell" triggers (Verduran Enchantress)
             # fire now, as the spell is put on the stack, and go on the stack above
             # it (CR 603.3) — so the trigger resolves while the triggering spell is
             # still on the stack, not after it has already resolved.
             self._apply_spell_cast_any_triggers(caster_index, card)
+            self._apply_cast_triggers(caster_index, card)
             return SimulationResult(card.name, True, classification.effect_kind, "queued")
 
         self._resolve_card(
@@ -1247,7 +1307,7 @@ class StackCastingMixin:
         # cast time, mirroring the resolution-time check, so it is never offered.
         if isinstance(target_permanent_index, int) and 0 <= target_permanent_index < len(target.battlefield):
             chosen = target.battlefield[target_permanent_index]
-            if chosen.card.primary_type == "creature" and not self._can_be_targeted(chosen, card):
+            if chosen.is_creature and not self._can_be_targeted(chosen, card):
                 return False, f"{chosen.card.name} is an illegal target for {card.name}"
 
         if primary.kind == "destroy_target_permanent":
@@ -1291,11 +1351,11 @@ class StackCastingMixin:
             if isinstance(target_permanent_index, int):
                 battlefield = target.battlefield
                 if not (0 <= target_permanent_index < len(battlefield)) or (
-                    battlefield[target_permanent_index].card.primary_type != "creature"
+                    not battlefield[target_permanent_index].is_creature
                 ):
                     return False, f"no valid target for {card.name}"
             elif not any(
-                p.card.primary_type == "creature"
+                p.is_creature
                 for pl in self.players
                 for p in pl.battlefield
             ):
@@ -1317,7 +1377,7 @@ class StackCastingMixin:
             blocking_only = bool(primary.payload.get("blocking_only"))
 
             def _legal_pump_target(p) -> bool:
-                if p.card.primary_type != "creature":
+                if not p.is_creature:
                     return False
                 # Righteousness only targets a creature that is currently blocking.
                 if blocking_only and not self._is_blocking_creature(p):
@@ -1383,10 +1443,10 @@ class StackCastingMixin:
                     return False, f"no valid target for {card.name}"
                 battlefield = caster.battlefield
                 if not (0 <= target_permanent_index < len(battlefield)) or (
-                    battlefield[target_permanent_index].card.primary_type != "creature"
+                    not battlefield[target_permanent_index].is_creature
                 ):
                     return False, f"no valid target for {card.name}"
-            elif not any(p.card.primary_type == "creature" for p in caster.battlefield):
+            elif not any(p.is_creature for p in caster.battlefield):
                 return False, f"no valid target for {card.name}"
 
         elif primary.kind == "copy_top_stack_spell":
@@ -1400,7 +1460,9 @@ class StackCastingMixin:
 
         return True, "valid"
 
-    def _infer_x_value(self, player: PlayerState, mana_cost: str, extra_generic: int = 0) -> int:
+    def _infer_x_value(
+        self, player: PlayerState, mana_cost: str, extra_generic: int = 0, x_color: str | None = None
+    ) -> int:
         required = self._parse_mana_cost(mana_cost, x_value=0, extra_generic=extra_generic)
         temp = {symbol: player.mana_pool.get(symbol, 0) for symbol in ("W", "U", "B", "R", "G", "C")}
 
@@ -1442,9 +1504,18 @@ class StackCastingMixin:
         if available_generic < required["generic"]:
             return 0
 
+        if x_color in {"W", "U", "B", "R", "G", "C"}:
+            # X may only be paid in one color: reserve it by covering the generic
+            # part from the other colors first.
+            other_available = available_generic - max(0, temp.get(x_color, 0))
+            generic_from_x_color = max(0, required["generic"] - other_available)
+            return max(0, temp.get(x_color, 0) - generic_from_x_color)
+
         return available_generic - required["generic"]
 
-    def _parse_mana_cost(self, mana_cost: str, x_value: int | None, extra_generic: int = 0) -> dict[str, int]:
+    def _parse_mana_cost(
+        self, mana_cost: str, x_value: int | None, extra_generic: int = 0, x_color: str | None = None
+    ) -> dict[str, int]:
         required = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0, "generic": max(0, extra_generic)}
         if not mana_cost:
             return required
@@ -1454,7 +1525,12 @@ class StackCastingMixin:
                 required["generic"] += int(token)
                 continue
             if token == "X":
-                required["generic"] += max(0, x_value or 0)
+                # "Spend only black mana on X" (Drain Life): the X portion is a
+                # colored requirement, not generic payable from anything.
+                if x_color in {"W", "U", "B", "R", "G", "C"}:
+                    required[x_color] += max(0, x_value or 0)
+                else:
+                    required["generic"] += max(0, x_value or 0)
                 continue
             if token in {"W", "U", "B", "R", "G", "C"}:
                 required[token] += 1
@@ -1665,6 +1741,7 @@ class StackCastingMixin:
                     source_permanent=item.source_permanent,
                     stack_target=item.target_stack_item,
                     trigger_context=item.trigger_context,
+                    chosen_source=item.chosen_source,
                 ),
             )
             supported, details = state_machine.run(item.ability_instruction)
@@ -1707,6 +1784,7 @@ class StackCastingMixin:
             stack_target=item.target_stack_item,
             chosen_mode_index=item.chosen_mode_index,
             old_color=item.old_color,
+            divided_targets=item.divided_targets,
         )
         return
 
@@ -1722,6 +1800,7 @@ class StackCastingMixin:
         stack_target=None,
         chosen_mode_index: int | None = None,
         old_color: str | None = None,
+        divided_targets: list[tuple[int, int | None]] | None = None,
     ) -> None:
         caster = self.players[caster_index]
         primary_type = card.primary_type
@@ -1758,7 +1837,6 @@ class StackCastingMixin:
                 self.log.append(f"{card.name} had no legal target and was put into {caster.name}'s graveyard")
                 self._refresh_dynamic_creatures()
                 return
-            self._apply_cast_triggers(caster_index, card)
             self._refresh_dynamic_creatures()
             if primary_type == "land":
                 if self.enforce_mana_costs:
@@ -1785,6 +1863,7 @@ class StackCastingMixin:
             stack_target=stack_target,
             mode_index=chosen_mode_index,
             old_color=old_color,
+            divided_targets=divided_targets,
         )
         self._apply_self_resolved_hook(caster_index, card, target_idx, target_permanent_index)
         caster.graveyard.append(card)

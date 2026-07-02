@@ -18,10 +18,10 @@ def berserk_pump(game: Game, instruction: OracleInstruction, context: OracleExec
     target_perm: Permanent | None = None
     if context.target_permanent_index is not None and 0 <= context.target_permanent_index < len(target.battlefield):
         candidate = target.battlefield[context.target_permanent_index]
-        if candidate.card.primary_type == "creature":
+        if candidate.is_creature:
             target_perm = candidate
     if target_perm is None:
-        target_perm = next((p for p in target.battlefield if p.card.primary_type == "creature"), None)
+        target_perm = next((p for p in target.battlefield if p.is_creature), None)
     if target_perm is not None:
         boost = target_perm.effective_power
         # "+X/+0 until end of turn" — apply now and track it so cleanup removes it
@@ -118,7 +118,7 @@ def pump_target_creature_until_eot(game: Game, instruction: OracleInstruction, c
     blocking_only = bool(instruction.payload.get("blocking_only"))
 
     def _eligible(perm: Permanent) -> bool:
-        if perm.card.primary_type != "creature":
+        if not perm.is_creature:
             return False
         # Righteousness: the target must be a creature that is currently blocking.
         if blocking_only and not game._is_blocking_creature(perm):
@@ -160,7 +160,7 @@ def buff_creatures_global(game: Game, instruction: OracleInstruction, context: O
     target_players = game.players if instruction.payload.get("all") else [caster]
     for player in target_players:
         for perm in list(player.battlefield):
-            if perm.card.primary_type != "creature":
+            if not perm.is_creature:
                 continue
             actual_colors = set(perm.card.colors)
             if "color_override" in perm.metadata:
@@ -188,12 +188,12 @@ def switch_pt(game: Game, instruction: OracleInstruction, context: OracleExecuti
     target_perm: Permanent | None = None
     if context.target_permanent_index is not None and 0 <= context.target_permanent_index < len(target.battlefield):
         candidate = target.battlefield[context.target_permanent_index]
-        if candidate.card.primary_type == "creature":
+        if candidate.is_creature:
             target_perm = candidate
     if target_perm is None:
-        target_perm = next((p for p in target.battlefield if p.card.primary_type == "creature"), None)
+        target_perm = next((p for p in target.battlefield if p.is_creature), None)
     if target_perm is None:
-        target_perm = next((p for p in caster.battlefield if p.card.primary_type == "creature"), None)
+        target_perm = next((p for p in caster.battlefield if p.is_creature), None)
     if target_perm is not None:
         target_perm.metadata["pt_switched"] = not target_perm.metadata.get("pt_switched", False)
         game.log.append(f"{card.name} switched power/toughness of {target_perm.card.name}")
@@ -211,12 +211,12 @@ def become_pt_until_eot(game: Game, instruction: OracleInstruction, context: Ora
     target_perm = None
     if context.target_permanent_index is not None and 0 <= context.target_permanent_index < len(target.battlefield):
         candidate = target.battlefield[context.target_permanent_index]
-        if candidate.card.primary_type == "creature":
+        if candidate.is_creature:
             target_perm = candidate
     if target_perm is None:
-        target_perm = next((p for p in target.battlefield if p.card.primary_type == "creature"), None)
+        target_perm = next((p for p in target.battlefield if p.is_creature), None)
     if target_perm is None:
-        target_perm = next((p for p in caster.battlefield if p.card.primary_type == "creature"), None)
+        target_perm = next((p for p in caster.battlefield if p.is_creature), None)
     if target_perm is not None:
         target_perm.metadata["absolute_power_until_eot"] = new_power
         target_perm.metadata["absolute_toughness_until_eot"] = new_toughness
@@ -274,10 +274,10 @@ def grant_target_flying_until_eot(game: Game, instruction: OracleInstruction, co
     target_creature = None
     if target_perm_idx is not None and 0 <= target_perm_idx < len(target.battlefield):
         candidate = target.battlefield[target_perm_idx]
-        if candidate.card.primary_type == "creature":
+        if candidate.is_creature:
             target_creature = candidate
     if target_creature is None:
-        target_creature = next((p for p in target.battlefield if p.card.primary_type == "creature"), None)
+        target_creature = next((p for p in target.battlefield if p.is_creature), None)
     if target_creature is not None:
         target_creature.metadata["gains_flying_until_eot"] = True
         game.log.append(f"{target_creature.card.name} gains flying until end of turn from {card.name}")
@@ -293,7 +293,7 @@ def grant_flying_and_delayed_destruction(game: Game, instruction: OracleInstruct
 
     def _is_legal(perm) -> bool:
         return (
-            perm.card.primary_type == "creature"
+            perm.is_creature
             and perm.effective_toughness < source_permanent.effective_power
         )
 

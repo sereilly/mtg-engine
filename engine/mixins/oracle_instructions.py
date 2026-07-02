@@ -32,6 +32,7 @@ class OracleInstructionsMixin:
         stack_target=None,
         mode_index: int | None = None,
         old_color: str | None = None,
+        divided_targets: list[tuple[int, int | None]] | None = None,
     ) -> None:
         instruction = self._select_executable_instruction(card, mode_index)
         if instruction is None:
@@ -43,7 +44,7 @@ class OracleInstructionsMixin:
         # does nothing (608.3b — removed from the stack with no effect).
         if isinstance(target_permanent_index, int) and 0 <= target_permanent_index < len(target.battlefield):
             chosen = target.battlefield[target_permanent_index]
-            if chosen.card.primary_type == "creature" and not self._can_be_targeted(chosen, card):
+            if chosen.is_creature and not self._can_be_targeted(chosen, card):
                 self.log.append(
                     f"{card.name} does nothing: {chosen.card.name} is an illegal target"
                 )
@@ -57,6 +58,7 @@ class OracleInstructionsMixin:
                 card=card,
                 target_permanent_index=target_permanent_index,
                 x_value=x_value,
+                divided_targets=divided_targets,
                 new_color=new_color,
                 old_color=old_color,
                 stack_target=stack_target,
@@ -132,25 +134,11 @@ class OracleInstructionsMixin:
                 return
 
             # Zombie Master style: "Other Zombie creatures have swampwalk." /
-            # 'Other Zombies have "{B}: Regenerate this permanent."'
+            # 'Other Zombies have "{B}: Regenerate this permanent."' Recalculated
+            # dynamically so the grants reach Zombies entering later and end when
+            # the lord leaves the battlefield (611.3a/611.3b).
             if instr.kind == "static_line" and instr.value.startswith("other ") and " have " in instr.value:
-                lord_match = re.search(r"other (\w+?)s?(?: creatures?)? have (.+)", instr.value)
-                if lord_match:
-                    subtype = lord_match.group(1).lower()
-                    granted = lord_match.group(2).lower()
-                    for player in self.players:
-                        for permanent in player.battlefield:
-                            if permanent.card.primary_type != "creature":
-                                continue
-                            if subtype not in permanent.card.type_line.lower():
-                                continue
-                            if permanent.card is source:
-                                continue
-                            for walk_word in ("swampwalk", "mountainwalk", "islandwalk", "forestwalk", "plainswalk"):
-                                if walk_word in granted:
-                                    permanent.metadata[f"has_{walk_word}"] = True
-                            if "regenerate this permanent" in granted:
-                                permanent.metadata["granted_regen_ability"] = True
+                self._recalculate_lord_buffs()
                 continue
 
     def _apply_aura_effect(
@@ -225,11 +213,11 @@ class OracleInstructionsMixin:
             if isinstance(target_permanent_index, int):
                 if 0 <= target_permanent_index < len(target_player.battlefield):
                     candidate = target_player.battlefield[target_permanent_index]
-                    if candidate.card.primary_type == "creature":
+                    if candidate.is_creature:
                         target_creature = candidate
             else:
                 target_creature = next(
-                    (perm for perm in target_player.battlefield if perm.card.primary_type == "creature"),
+                    (perm for perm in target_player.battlefield if perm.is_creature),
                     None,
                 )
             if not target_creature:
@@ -339,7 +327,7 @@ class OracleInstructionsMixin:
                     or target_creature.metadata.get("gains_flying_until_eot")
                 )
                 if has_flying:
-                    self._mark_damage_on_permanent(target_creature, 2)
+                    self._mark_damage_on_permanent(target_creature, 2, source=aura_permanent)
                     target_creature.metadata["loses_flying"] = True
                     self.log.append(f"{aura_permanent.card.name} dealt 2 damage to {target_creature.card.name} and stripped flying")
 

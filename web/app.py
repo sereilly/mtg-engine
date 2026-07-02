@@ -197,6 +197,13 @@ def _text_change_replacements(perm: Permanent) -> list[dict]:
     for old_sym, new_sym in (perm.metadata.get("color_word_remap") or {}).items():
         add(_SYMBOL_TO_COLOR_WORD.get(old_sym), _SYMBOL_TO_COLOR_WORD.get(new_sym))
 
+    # Magical Hack's land-word swap: every instance of the old basic land type
+    # in the card's text is replaced — both the bare word ("Mountain") and its
+    # landwalk compound ("mountainwalk", e.g. inside Goblin King's grant line).
+    for old_word, new_word in (perm.metadata.get("land_word_remap") or {}).items():
+        add(old_word, new_word)
+        add(f"{old_word}walk", f"{new_word}walk")
+
     # Magical Hack on a creature remaps a landwalk word (e.g. swampwalk -> islandwalk),
     # tracked as paired has_<new>walk / lost_<old>walk markers.
     gained = [k[len("has_"):] for k, v in perm.metadata.items()
@@ -225,9 +232,11 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
                 attached_to_seat = seat_idx
                 break
 
-    # A color override (Thoughtlace/Lifelace) replaces the printed colors entirely.
-    override = perm.metadata.get("color_override")
-    effective_colors = [override] if override else list(perm.card.colors)
+    # A color override (Thoughtlace/Lifelace) replaces the printed colors
+    # entirely; a copied color (Clone) replaces them too, while Vesuvan
+    # Doppelganger's "doesn't copy that creature's color" keeps its own blue.
+    # game._effective_colors honors all three.
+    effective_colors = sorted(game._effective_colors(perm))
 
     return {
         "name": perm.card.name,
@@ -285,6 +294,17 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         # into a generic ``counters`` map so future counter types render for free.
         "corpse_counters": int(perm.metadata.get("corpse_counters", 0)),
         "counters": _serialize_counters(perm),
+        # Activated abilities granted by another permanent's static ability
+        # (Zombie Master's '{B}: Regenerate this permanent.'), which the printed
+        # oracle text doesn't show — the UI needs these to offer activation.
+        "granted_abilities": (
+            ["{B}: Regenerate this permanent."]
+            if perm.metadata.get("granted_regen_ability")
+            else []
+        ),
+        # Name of the creature this permanent is a copy of (Clone / Vesuvan
+        # Doppelganger), so the UI can badge the copy.
+        "copied_from": perm.metadata.get("copied_from"),
     }
 
 
@@ -702,6 +722,30 @@ def _serialize_emblems(player: PlayerState) -> list[dict]:
     return emblems
 
 
+def _hand_revealed_to_viewer(game: Game, viewer_seat: int | None, seat: int) -> bool:
+    """Whether an in-progress effect reveals *seat*'s hand to *viewer_seat*:
+    a pending hand reveal (Glasses of Urza) whose viewer is this seat, or a
+    pending Word of Command whose caster is this seat. While one is active the
+    target's hand serializes face-up for that viewer only."""
+    if viewer_seat is None:
+        return False
+    reveal = game.pending_hand_reveal
+    if (
+        reveal is not None
+        and reveal.get("viewer_index") == viewer_seat
+        and reveal.get("target_index") == seat
+    ):
+        return True
+    woc = game.pending_word_of_command
+    if (
+        woc is not None
+        and woc.get("caster_index") == viewer_seat
+        and woc.get("target_index") == seat
+    ):
+        return True
+    return False
+
+
 def _serialize_player(
     player: PlayerState,
     viewer_seat: int | None,
@@ -711,6 +755,11 @@ def _serialize_player(
 ) -> dict:
     if viewer_seat == seat:
         hand = [_serialize_card(card, game, seat) for card in player.hand]
+    elif _hand_revealed_to_viewer(game, viewer_seat, seat):
+        # An active reveal (Glasses of Urza's look, Word of Command's forced-play
+        # choice) lets the viewer see this player's actual cards, so the opponent
+        # hand fan renders real card faces instead of card backs.
+        hand = [_serialize_card(card) for card in player.hand]
     else:
         hand = ["<hidden>"] * len(player.hand)
 
@@ -840,6 +889,7 @@ def _clear_upkeep_pay_choices(session: Session) -> None:
     session.upkeep_resolved_choices = {}
     session.optional_trigger_choices = []
     session.optional_trigger_resolved = {}
+    session.optional_trigger_targets = {}
 
 
 def _has_island_sanctuary(game, player_index: int) -> bool:
@@ -903,6 +953,7 @@ def _gather_upkeep_decisions(session: Session, player_index: int) -> bool:
     session.upkeep_resolved_choices = {}
     session.optional_trigger_choices = optional_choices
     session.optional_trigger_resolved = {}
+    session.optional_trigger_targets = {}
     session.upkeep_mana_prevention_choices = prevention_choices
     session.upkeep_mana_prevention_resolved = {}
     game._set_phase_and_step("beginning", "upkeep")
@@ -913,6 +964,7 @@ def _advance_after_upkeep_choices(session: Session) -> None:
     """Called once all upkeep decisions (pay-or-sacrifice and optional) are resolved."""
     choices = dict(session.upkeep_resolved_choices)
     optional = dict(session.optional_trigger_resolved)
+    recopy_targets = dict(session.optional_trigger_targets)
     mana_prevention = dict(session.upkeep_mana_prevention_resolved)
     _clear_upkeep_pay_choices(session)
     session.game.resolve_upkeep(
@@ -920,6 +972,7 @@ def _advance_after_upkeep_choices(session: Session) -> None:
         human_choices=choices,
         optional_choices=optional,
         mana_prevention=mana_prevention,
+        recopy_targets=recopy_targets,
     )
     # Lord of the Pit: a mandatory upkeep sacrifice armed an interactive choice.
     # Pause here; the sacrifice_confirm handler resumes _finish_beginning_phase.
@@ -936,10 +989,20 @@ def _build_upkeep_pay_info(session: Session, viewer_seat: int | None) -> dict | 
     if viewer_seat != session.current_turn:
         return None
     pending = _upkeep_pay_pending(session)
+    # Per-card affordability (pool + untapped mana lands) so the UI can disable
+    # the pay button instead of offering a payment that would be rejected.
+    can_pay: dict[str, bool] = {}
+    if 0 <= session.current_turn < len(session.game.players):
+        payer = session.game.players[session.current_turn]
+        can_pay = {
+            c["card_name"]: session.game.can_pay_upkeep_mana(payer, c.get("mana") or {})
+            for c in session.upkeep_pay_choices
+        }
     return {
         "choices": session.upkeep_pay_choices,
         "resolved": session.upkeep_resolved_choices,
         "pending": pending,
+        "can_pay": can_pay,
     }
 
 
@@ -1729,6 +1792,13 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
         else req.permanent_index
     )
     target = req.target_seat if req.target_seat is not None else _default_target(card_name, seat)
+    # Cross-seat divided targets (Fireball): (seat, index|None) pairs; an index
+    # of None is that player's face.
+    divided = (
+        [(entry.seat, entry.index) for entry in req.divided_targets]
+        if req.divided_targets
+        else None
+    )
     return game.queue_from_hand(
         seat,
         card_name,
@@ -1739,6 +1809,7 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
         target_stack_index=engine_stack_index,
         mode_index=req.mode_index,
         old_color=req.old_color,
+        divided_targets=divided,
     )
 
 
@@ -2305,7 +2376,7 @@ def _build_raging_river_info(session: Session, viewer_seat: int | None) -> dict 
         divide = [
             {"index": i, **_serialize_card_summary(p.card), "pile": game.combat_defender_piles.get(i)}
             for i, p in enumerate(defender.battlefield)
-            if p.card.primary_type == "creature" and not game._has_keyword(p, "flying")
+            if game._is_creature(p) and not game._has_keyword(p, "flying")
         ]
     # The defender chooses first; the attacker is gated until they finish. With no
     # non-flying creatures to divide there's nothing to decide, so the defender is
@@ -2346,7 +2417,7 @@ def _ai_resolve_raging_river(session: Session) -> None:
         divide_count = sum(
             1
             for p in game.players[defender_index].battlefield
-            if p.card.primary_type == "creature" and not game._has_keyword(p, "flying")
+            if game._is_creature(p) and not game._has_keyword(p, "flying")
         )
 
     if (
@@ -3224,6 +3295,11 @@ def do_action(session_id: str, req: GameActionRequest):
             engine_stack_index = None
             if req.target_stack_index is not None:
                 engine_stack_index = len(session.game.stack) - 1 - req.target_stack_index
+            # "A source of your choice" (Jade Monolith): a chosen stack spell's
+            # index arrives top-first; convert like target_stack_index.
+            engine_source_stack_index = None
+            if req.source_stack_index is not None:
+                engine_source_stack_index = len(session.game.stack) - 1 - req.source_stack_index
             result = session.game.queue_permanent_ability(
                 req.seat,
                 permanent.card.name,
@@ -3234,6 +3310,9 @@ def do_action(session_id: str, req: GameActionRequest):
                 target_stack_index=engine_stack_index,
                 ability_index=req.ability_index,
                 x_value=req.x_value,
+                source_seat=req.source_seat,
+                source_permanent_index=req.source_permanent_index,
+                source_stack_index=engine_source_stack_index,
             )
             if not result.supported:
                 raise HTTPException(status_code=400, detail=result.details)
@@ -3514,9 +3593,8 @@ def do_action(session_id: str, req: GameActionRequest):
 
         choice = pending[req.card_name]
         controller = session.game.players[req.seat]
-        for sym, count in choice["mana"].items():
-            if sym != "generic" and controller.mana_pool.get(sym, 0) < count:
-                raise HTTPException(status_code=400, detail=f"not enough {sym} mana to pay upkeep for {req.card_name}")
+        if not session.game.can_pay_upkeep_mana(controller, choice.get("mana") or {}):
+            raise HTTPException(status_code=400, detail=f"not enough mana to pay upkeep for {req.card_name}")
 
         session.upkeep_resolved_choices[req.card_name] = True
 
@@ -3553,6 +3631,20 @@ def do_action(session_id: str, req: GameActionRequest):
         pending = {c["card_name"]: c for c in _optional_trigger_pending(session)}
         if req.card_name not in pending:
             raise HTTPException(status_code=400, detail="card not awaiting an optional trigger decision")
+
+        # A target-bearing optional trigger (Vesuvan Doppelganger's re-copy)
+        # requires the chosen creature alongside an accept.
+        choice = pending[req.card_name]
+        if choice.get("needs_target") and req.accept:
+            if req.target_seat is None or req.target_permanent_index is None:
+                raise HTTPException(status_code=400, detail="this trigger requires a target choice")
+            valid = {
+                (t.get("seat"), t.get("index"))
+                for t in choice.get("valid_targets", [])
+            }
+            if (req.target_seat, req.target_permanent_index) not in valid:
+                raise HTTPException(status_code=400, detail="invalid target for this trigger")
+            session.optional_trigger_targets[req.card_name] = (req.target_seat, req.target_permanent_index)
 
         session.optional_trigger_resolved[req.card_name] = bool(req.accept)
 

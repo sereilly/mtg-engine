@@ -24,7 +24,7 @@ def apply_prevention_shield(
     if (
         isinstance(target_permanent_index, int)
         and 0 <= target_permanent_index < len(target.battlefield)
-        and target.battlefield[target_permanent_index].card.primary_type == "creature"
+        and target.battlefield[target_permanent_index].is_creature
     ):
         permanent = target.battlefield[target_permanent_index]
         permanent.damage_prevention_pool += amount
@@ -128,7 +128,7 @@ def grant_forcefield_shield(game: Game, instruction: OracleInstruction, context:
     idx = context.target_permanent_index
     if isinstance(idx, int) and context.target is not None and 0 <= idx < len(context.target.battlefield):
         candidate = context.target.battlefield[idx]
-        if candidate.card.primary_type == "creature":
+        if candidate.is_creature:
             chosen = candidate
     if chosen is not None:
         caster.forcefield_capped_sources.append(chosen)
@@ -158,8 +158,10 @@ def jade_monolith_redirect(game: Game, instruction: OracleInstruction, context: 
     target creature this turn, that source deals that damage to you instead."
 
     The controller chooses the target creature (target_permanent_index on the
-    target player's battlefield). The next damage that creature would take is
-    redirected to the controller.
+    target player's battlefield) AND the damage source (context.chosen_source: a
+    battlefield permanent or a stack spell's card). The next damage that source
+    would deal to the creature is redirected to the controller; with no recorded
+    source choice (AI/legacy activations) any source's damage is redirected.
     """
     caster = context.caster
     target = context.target
@@ -167,12 +169,21 @@ def jade_monolith_redirect(game: Game, instruction: OracleInstruction, context: 
     idx = context.target_permanent_index
     if isinstance(idx, int) and 0 <= idx < len(target.battlefield):
         candidate = target.battlefield[idx]
-        if candidate.card.primary_type == "creature":
+        if candidate.is_creature:
             target_creature = candidate
     if target_creature is None:
-        target_creature = next((p for p in target.battlefield if p.card.primary_type == "creature"), None)
+        target_creature = next((p for p in target.battlefield if p.is_creature), None)
     if target_creature is not None:
         caster_idx = game.players.index(caster)
         target_creature.metadata["redirect_damage_to_player"] = caster_idx
-        game.log.append(f"Jade Monolith marks {target_creature.card.name} for damage redirect to {caster.name}")
+        if context.chosen_source is not None:
+            target_creature.metadata["redirect_damage_source"] = context.chosen_source
+            source_name = getattr(getattr(context.chosen_source, "card", context.chosen_source), "name", "source")
+            game.log.append(
+                f"Jade Monolith marks {target_creature.card.name} for damage redirect to {caster.name}"
+                f" (source: {source_name})"
+            )
+        else:
+            target_creature.metadata.pop("redirect_damage_source", None)
+            game.log.append(f"Jade Monolith marks {target_creature.card.name} for damage redirect to {caster.name}")
     return True, "resolved"

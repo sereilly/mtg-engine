@@ -79,6 +79,19 @@ class Permanent:
         return self.card.produced_mana
 
     @property
+    def is_creature(self) -> bool:
+        """Whether this permanent is currently a creature: printed as one, or a
+        land animated into one (Kormus Bell / Living Lands set ``land_animated``),
+        or an artifact animated until end of combat (Jade Statue). Targeting,
+        combat, and creature-only effects must use this rather than the printed
+        ``card.primary_type`` so animated permanents behave as creatures."""
+        return (
+            self.card.primary_type == "creature"
+            or bool(self.metadata.get("land_animated"))
+            or bool(self.metadata.get("animate_until_end_of_combat"))
+        )
+
+    @property
     def effective_power(self) -> int:
         # Layer 7d: power/toughness switch — return pre-switch toughness as power
         if self.metadata.get("pt_switched"):

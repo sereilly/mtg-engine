@@ -8,6 +8,7 @@ from .game import Game
 from .mixins.stack_casting import aura_enchant_noun, permanent_matches_enchant_noun
 from .models import CardDefinition, Permanent, PlayerState
 from .oracle import OracleInstruction, compile_card_oracle
+from .oracle_types import x_spend_color_from_text
 
 _MANA_SYMBOLS = ("W", "U", "B", "R", "G", "C")
 
@@ -61,7 +62,12 @@ def choose_cast_action(game: Game, player_index: int) -> CastAction | None:
         tap_indices: tuple[int, ...] = ()
 
         if game.enforce_mana_costs and card.primary_type != "land":
-            required = game._parse_mana_cost(card.mana_cost, x_value=x_value, extra_generic=_extra_generic_tax(game, card))
+            required = game._parse_mana_cost(
+                card.mana_cost,
+                x_value=x_value,
+                extra_generic=_extra_generic_tax(game, card),
+                x_color=x_spend_color_from_text(card.oracle_text),
+            )
             plan = _plan_taps_for_cost(player, required)
             if plan is None:
                 continue
@@ -284,7 +290,12 @@ def choose_combat_instant_cast_action(game: Game, player_index: int) -> CastActi
         tap_indices: tuple[int, ...] = ()
 
         if game.enforce_mana_costs:
-            required = game._parse_mana_cost(card.mana_cost, x_value=x_value, extra_generic=_extra_generic_tax(game, card))
+            required = game._parse_mana_cost(
+                card.mana_cost,
+                x_value=x_value,
+                extra_generic=_extra_generic_tax(game, card),
+                x_color=x_spend_color_from_text(card.oracle_text),
+            )
             plan = _plan_taps_for_cost(player, required)
             if plan is None:
                 continue
@@ -382,7 +393,10 @@ def _score_tutor_choice(game: Game, player_index: int, card: CardDefinition) -> 
     elif game.enforce_mana_costs:
         pool = _preview_pool_with_all_untapped_lands(player)
         required = game._parse_mana_cost(
-            card.mana_cost, x_value=x_value if x_value is not None else 0, extra_generic=_extra_generic_tax(game, card)
+            card.mana_cost,
+            x_value=x_value if x_value is not None else 0,
+            extra_generic=_extra_generic_tax(game, card),
+            x_color=x_spend_color_from_text(card.oracle_text),
         )
         if _can_pay_cost(pool, required, player.can_spend_white_as_red):
             score += 3.0  # castable as soon as it reaches hand
@@ -769,8 +783,9 @@ def _max_affordable_x(game: Game, player: PlayerState, card: CardDefinition) -> 
     pool = _preview_pool_with_all_untapped_lands(player)
     extra_tax = _extra_generic_tax(game, card)
 
+    x_color = x_spend_color_from_text(card.oracle_text)
     for x_value in range(15, -1, -1):
-        required = game._parse_mana_cost(card.mana_cost, x_value=x_value, extra_generic=extra_tax)
+        required = game._parse_mana_cost(card.mana_cost, x_value=x_value, extra_generic=extra_tax, x_color=x_color)
         if _can_pay_cost(pool, required, player.can_spend_white_as_red):
             return x_value
     return 0

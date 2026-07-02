@@ -95,6 +95,13 @@ class JoinSessionRequest(BaseModel):
     guest_colors: int = Field(default=2, ge=1, le=5)
 
 
+class DividedTargetRef(BaseModel):
+    # One target of a divided spell: a permanent (seat + battlefield index) or a
+    # player's face (index omitted).
+    seat: int = Field(ge=0, le=1)
+    index: int | None = Field(default=None, ge=0)
+
+
 class GameActionRequest(BaseModel):
     seat: int = Field(ge=0, le=1)
     action: ActionKind
@@ -106,7 +113,18 @@ class GameActionRequest(BaseModel):
     # of battlefield indices (on target_seat) the damage is split among. Takes
     # precedence over the single permanent_index when present.
     target_permanent_indices: list[int] | None = Field(default=None)
+    # Cross-seat divided targets (Fireball / Volcanic Eruption): any mix of
+    # permanents and player faces on both sides. Each entry names a seat and,
+    # for a permanent, its battlefield index; index None targets that player's
+    # face. Takes precedence over target_permanent_indices/target_seat.
+    divided_targets: list[DividedTargetRef] | None = Field(default=None)
     target_seat: int | None = Field(default=None, ge=0, le=1)
+    # "A source of your choice" (Jade Monolith): the chosen damage source — a
+    # battlefield permanent (source_seat + source_permanent_index) or a spell on
+    # the stack (source_stack_index, top-first like target_stack_index).
+    source_seat: int | None = Field(default=None, ge=0, le=1)
+    source_permanent_index: int | None = Field(default=None, ge=0)
+    source_stack_index: int | None = Field(default=None, ge=0)
     # Which of the acting player's emblems to activate (activate_emblem action).
     emblem_index: int | None = Field(default=None, ge=0)
     x_value: int | None = Field(default=None, ge=0)

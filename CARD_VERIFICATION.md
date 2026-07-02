@@ -3,9 +3,9 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **290**
-- Passed: **233**
-- Failed: **8**
-- Untested: **49**
+- Passed: **259**
+- Failed: **10**
+- Untested: **21**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -16,14 +16,14 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Animate Wall | ✅ pass |  |
 | Ankh of Mishra | ✅ pass |  |
 | Armageddon | ✅ pass |  |
-| Aspect of Wolf | ⬜ untested |  |
+| Aspect of Wolf | ✅ pass |  |
 | Bad Moon | ✅ pass |  |
 | Badlands | ✅ pass |  |
 | Balance | ✅ pass |  |
 | Basalt Monolith | ✅ pass |  |
 | Bayou | ✅ pass |  |
-| Benalish Hero | ⬜ untested |  |
-| Berserk | ⬜ untested |  |
+| Benalish Hero | ❌ fail | When a band is blocked, the attacker gets to choose how all damage from the blocking creatures is assigned. |
+| Berserk | ❌ fail | I was able to cast this after combat damage step, which is not allowed. |
 | Birds of Paradise | ✅ pass |  |
 | Black Knight | ✅ pass |  |
 | Black Lotus | ✅ pass |  |
@@ -60,7 +60,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Craw Wurm | ✅ pass |  |
 | Creature Bond | ✅ pass |  |
 | Crusade | ✅ pass |  |
-| Crystal Rod | ⬜ untested |  |
+| Crystal Rod | ✅ pass |  |
 | Cursed Land | ✅ pass |  |
 | Cyclopean Tomb | ✅ pass |  |
 | Dark Ritual | ✅ pass |  |
@@ -76,7 +76,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Disintegrate | ✅ pass |  |
 | Disrupting Scepter | ✅ pass |  |
 | Dragon Whelp | ✅ pass |  |
-| Drain Life | ❌ fail | I was able to spend blue mana on X even though the card says "Spend only black mana on X" |
+| Drain Life | ✅ pass |  |
 | Drain Power | ✅ pass |  |
 | Drudge Skeletons | ✅ pass |  |
 | Dwarven Demolition Team | ✅ pass |  |
@@ -92,7 +92,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Fear | ✅ pass |  |
 | Feedback | ✅ pass |  |
 | Fire Elemental | ✅ pass |  |
-| Fireball | ❌ fail | I'm getting an error saying all creature targets must be on the same side but I should be able to target any combination of creatures or player I want |
+| Fireball | ✅ pass |  |
 | Firebreathing | ✅ pass |  |
 | Flashfires | ✅ pass |  |
 | Flight | ✅ pass |  |
@@ -107,7 +107,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Gauntlet of Might | ✅ pass |  |
 | Giant Growth | ✅ pass |  |
 | Giant Spider | ✅ pass |  |
-| Glasses of Urza | ⬜ untested |  |
+| Glasses of Urza | ✅ pass |  |
 | Gloom | ⬜ untested |  |
 | Goblin Balloon Brigade | ✅ pass |  |
 | Goblin King | ✅ pass |  |
@@ -117,7 +117,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Grizzly Bears | ✅ pass |  |
 | Guardian Angel | ✅ pass |  |
 | Healing Salve | ✅ pass |  |
-| Helm of Chatzuk | ⬜ untested |  |
+| Helm of Chatzuk | ❌ fail | Activated ability doesn't give banding |
 | Hill Giant | ✅ pass |  |
 | Holy Armor | ✅ pass |  |
 | Holy Strength | ✅ pass |  |
@@ -125,47 +125,47 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Howling Mine | ✅ pass |  |
 | Hurloon Minotaur | ✅ pass |  |
 | Hurricane | ✅ pass |  |
-| Hypnotic Specter | ⬜ untested |  |
+| Hypnotic Specter | ✅ pass |  |
 | Ice Storm | ✅ pass |  |
 | Icy Manipulator | ✅ pass |  |
-| Illusionary Mask | ⬜ untested |  |
-| Instill Energy | ⬜ untested |  |
+| Illusionary Mask | ❌ fail | Doesn't work when I have more than 1 creature in hand |
+| Instill Energy | ✅ pass |  |
 | Invisibility | ✅ pass |  |
 | Iron Star | ✅ pass |  |
 | Ironclaw Orcs | ✅ pass |  |
 | Ironroot Treefolk | ✅ pass |  |
 | Island | ✅ pass |  |
-| Island Sanctuary | ⬜ untested |  |
+| Island Sanctuary | ✅ pass |  |
 | Ivory Cup | ✅ pass |  |
-| Jade Monolith | ❌ fail | I should get 2 targeting prompts. One for the creature and one for the source. |
+| Jade Monolith | ✅ pass |  |
 | Jade Statue | ✅ pass |  |
 | Jayemdae Tome | ✅ pass |  |
 | Juggernaut | ✅ pass |  |
 | Jump | ✅ pass |  |
 | Karma | ✅ pass |  |
 | Keldon Warlord | ✅ pass |  |
-| Kormus Bell | ⬜ untested |  |
+| Kormus Bell | ✅ pass |  |
 | Kudzu | ⬜ untested |  |
 | Lance | ✅ pass |  |
 | Ley Druid | ✅ pass |  |
 | Library of Leng | ⬜ untested |  |
 | Lich | ⬜ untested |  |
 | Lifeforce | ✅ pass |  |
-| Lifelace | ⬜ untested |  |
+| Lifelace | ✅ pass |  |
 | Lifetap | ✅ pass |  |
 | Lightning Bolt | ✅ pass |  |
-| Living Artifact | ⬜ untested |  |
-| Living Lands | ⬜ untested |  |
+| Living Artifact | ❌ fail | I can't see how many vitality counters the card has. Make sure the card display the number of counters it has and also make sure they aren't rendered behind the card this card is attached to. |
+| Living Lands | ❌ fail | I made my forests into creature but they didn't deal any damage when they attacked despite being 1/1s |
 | Living Wall | ✅ pass |  |
 | Llanowar Elves | ✅ pass |  |
-| Lord of Atlantis | ⬜ untested |  |
+| Lord of Atlantis | ✅ pass |  |
 | Lord of the Pit | ✅ pass |  |
 | Lure | ✅ pass |  |
-| Magical Hack | ❌ fail | I was able to give islandwalk to white knight even though it doesn't have any landwalk keywords |
+| Magical Hack | ✅ pass |  |
 | Mahamoti Djinn | ✅ pass |  |
 | Mana Flare | ✅ pass |  |
 | Mana Short | ✅ pass |  |
-| Mana Vault | ❌ fail | I was able to choose the pay 4 option without having mana available |
+| Mana Vault | ✅ pass |  |
 | Manabarbs | ✅ pass |  |
 | Meekstone | ✅ pass |  |
 | Merfolk of the Pearl Trident | ✅ pass |  |
@@ -187,30 +187,30 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Obsianus Golem | ✅ pass |  |
 | Orcish Artillery | ✅ pass |  |
 | Orcish Oriflamme | ✅ pass |  |
-| Paralyze | ⬜ untested |  |
+| Paralyze | ✅ pass |  |
 | Pearled Unicorn | ✅ pass |  |
 | Personal Incarnation | ✅ pass |  |
 | Pestilence | ✅ pass |  |
 | Phantasmal Forces | ✅ pass |  |
-| Phantasmal Terrain | ⬜ untested |  |
+| Phantasmal Terrain | ❌ fail | The land should go back to its original type after the aura is removed |
 | Phantom Monster | ✅ pass |  |
 | Pirate Ship | ✅ pass |  |
 | Plague Rats | ✅ pass |  |
 | Plains | ✅ pass |  |
 | Plateau | ✅ pass |  |
 | Power Leak | ✅ pass |  |
-| Power Sink | ⬜ untested |  |
+| Power Sink | ✅ pass |  |
 | Power Surge | ✅ pass |  |
 | Prodigal Sorcerer | ✅ pass |  |
 | Psionic Blast | ✅ pass |  |
 | Psychic Venom | ✅ pass |  |
-| Purelace | ⬜ untested |  |
+| Purelace | ✅ pass |  |
 | Raging River | ✅ pass |  |
 | Raise Dead | ✅ pass |  |
 | Red Elemental Blast | ✅ pass |  |
 | Red Ward | ✅ pass |  |
 | Regeneration | ✅ pass |  |
-| Regrowth | ⬜ untested |  |
+| Regrowth | ❌ fail | Regrowth should not make me target a player. The prompt should just tell me to target a card in my graveyard |
 | Resurrection | ✅ pass |  |
 | Reverse Damage | ⬜ untested |  |
 | Righteousness | ✅ pass |  |
@@ -237,7 +237,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Sinkhole | ✅ pass |  |
 | Siren's Call | ✅ pass |  |
 | Sleight of Mind | ✅ pass |  |
-| Smoke | ⬜ untested |  |
+| Smoke | ❌ fail | Smoke's prompt text is wrong. It should tell me to target a creature, not a land. Also it should highlight all valid untap targets. |
 | Sol Ring | ✅ pass |  |
 | Soul Net | ✅ pass |  |
 | Spell Blast | ✅ pass |  |
@@ -253,10 +253,10 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Terror | ✅ pass |  |
 | The Hive | ✅ pass |  |
 | Thicket Basilisk | ✅ pass |  |
-| Thoughtlace | ⬜ untested |  |
+| Thoughtlace | ✅ pass |  |
 | Throne of Bone | ⬜ untested |  |
 | Timber Wolves | ⬜ untested |  |
-| Time Vault | ⬜ untested |  |
+| Time Vault | ✅ pass |  |
 | Time Walk | ✅ pass |  |
 | Timetwister | ✅ pass |  |
 | Tranquility | ✅ pass |  |
@@ -264,16 +264,16 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Tsunami | ✅ pass |  |
 | Tundra | ✅ pass |  |
 | Tunnel | ✅ pass |  |
-| Twiddle | ⬜ untested |  |
+| Twiddle | ✅ pass |  |
 | Two-Headed Giant of Foriys | ⬜ untested |  |
 | Underground Sea | ✅ pass |  |
 | Unholy Strength | ✅ pass |  |
 | Unsummon | ✅ pass |  |
 | Uthden Troll | ✅ pass |  |
-| Verduran Enchantress | ❌ fail | The enchantment triggering this card should stay on the stack until the trigger has resolved |
-| Vesuvan Doppelganger | ⬜ untested |  |
-| Veteran Bodyguard | ⬜ untested |  |
-| Volcanic Eruption | ❌ fail | Says all targets must be on the same side |
+| Verduran Enchantress | ✅ pass |  |
+| Vesuvan Doppelganger | ❌ fail | When I copy a card it should also copy all activated and triggered abilities |
+| Veteran Bodyguard | ✅ pass |  |
+| Volcanic Eruption | ✅ pass |  |
 | Wall of Air | ✅ pass |  |
 | Wall of Bone | ✅ pass |  |
 | Wall of Brambles | ✅ pass |  |
@@ -292,10 +292,10 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Wheel of Fortune | ✅ pass |  |
 | White Knight | ✅ pass |  |
 | White Ward | ✅ pass |  |
-| Wild Growth | ⬜ untested |  |
+| Wild Growth | ✅ pass |  |
 | Will-o'-the-Wisp | ✅ pass |  |
 | Winter Orb | ✅ pass |  |
-| Wooden Sphere | ⬜ untested |  |
+| Wooden Sphere | ✅ pass |  |
 | Word of Command | ⬜ untested |  |
 | Wrath of God | ✅ pass |  |
-| Zombie Master | ❌ fail | It should give a {B}: regenerate activated ability to other zombies |
+| Zombie Master | ✅ pass |  |

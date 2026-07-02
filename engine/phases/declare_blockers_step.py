@@ -59,7 +59,7 @@ class DeclareBlockersStepMixin:
             if blocker_idx < 0 or blocker_idx >= len(defender.battlefield):
                 return False, "blocker index out of range"
             blocker = defender.battlefield[blocker_idx]
-            if blocker.card.primary_type != "creature":
+            if not blocker.is_creature:
                 return False, "only creatures can block"
             if blocker.tapped:
                 return False, f"{blocker.card.name} is tapped"
@@ -83,7 +83,7 @@ class DeclareBlockersStepMixin:
             if not attacker.metadata.get("lure_active"):
                 continue
             for blocker_idx, blocker in enumerate(defender.battlefield):
-                if blocker.card.primary_type != "creature" or blocker.tapped:
+                if not blocker.is_creature or blocker.tapped:
                     continue
                 if not self._can_block_attacker(blocker, attacker):
                     continue
@@ -128,7 +128,7 @@ class DeclareBlockersStepMixin:
 
         candidates = [
             idx for idx, perm in enumerate(defender.battlefield)
-            if perm.card.primary_type == "creature" and not perm.tapped
+            if perm.is_creature and not perm.tapped
         ]
         random.shuffle(candidates)
         # Round-robin the creatures into one pile per attacker, then randomly map
@@ -173,7 +173,7 @@ class DeclareBlockersStepMixin:
         defender = self.players[defender_index]
         required = {
             idx for idx, perm in enumerate(defender.battlefield)
-            if perm.card.primary_type == "creature" and not self._has_keyword(perm, "flying")
+            if perm.is_creature and not self._has_keyword(perm, "flying")
         }
         chosen = {int(i): str(s).lower() for i, s in piles.items()}
         if set(chosen) != required or any(s not in ("left", "right") for s in chosen.values()):
@@ -218,7 +218,7 @@ class DeclareBlockersStepMixin:
         attacker_has_fear = self._has_keyword(attacker, "fear")
         if attacker_has_fear:
             # artifact creatures can block (type_line contains 'artifact' and primary_type is creature)
-            is_artifact_creature = blocker.card.primary_type == "creature" and "artifact" in blocker.card.type_line.lower()
+            is_artifact_creature = blocker.is_creature and "artifact" in blocker.card.type_line.lower()
             # black creatures can block (color contains 'B')
             is_black_creature = "B" in blocker.card.colors
             if not (is_artifact_creature or is_black_creature):

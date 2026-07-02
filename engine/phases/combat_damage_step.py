@@ -64,7 +64,7 @@ class CombatDamageStepMixin:
         for player in self.players:
             survivors: list[Permanent] = []
             for permanent in player.battlefield:
-                if permanent.card.primary_type != "creature":
+                if not permanent.is_creature:
                     survivors.append(permanent)
                     continue
                 # 704.5g: lethal damage; 704.5h: any damage from deathtouch source
@@ -390,7 +390,7 @@ class CombatDamageStepMixin:
             # CR 702.16e: damage from a source of the protected quality is prevented.
             if self._is_protected_from(attacker, blocker):
                 continue
-            dealt = self._mark_damage_on_permanent(attacker, blocker.effective_power)
+            dealt = self._mark_damage_on_permanent(attacker, blocker.effective_power, source=blocker)
             if dealt > 0:
                 self._record_damage_source(attacker, blocker)
                 self._fire_dealt_damage_triggers(attacker)
@@ -415,7 +415,7 @@ class CombatDamageStepMixin:
             # CR 702.16e: protection prevents damage from the protected quality.
             if source_attacker is not None and self._is_protected_from(blocker_perm, source_attacker):
                 continue
-            dealt = self._mark_damage_on_permanent(blocker_perm, damage)
+            dealt = self._mark_damage_on_permanent(blocker_perm, damage, source=source_attacker)
             if dealt > 0:
                 if source_attacker is not None:
                     self._record_damage_source(blocker_perm, source_attacker)
@@ -444,7 +444,7 @@ class CombatDamageStepMixin:
                 None,
             )
             if bodyguard is not None:
-                self._mark_damage_on_permanent(bodyguard, damage)
+                self._mark_damage_on_permanent(bodyguard, damage, source=source_attacker)
                 self.log.append(
                     f"{bodyguard.card.name} takes {damage} damage instead of {defender.name} (redirect)"
                 )

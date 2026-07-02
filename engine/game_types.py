@@ -26,6 +26,10 @@ class StackItem:
     # target_permanent_index may be a single int or a list of ints for multi-target spells
     target_permanent_index: int | list[int] | None
     x_value: int | None
+    # Divided-damage spells (Fireball): the full cross-seat target list as
+    # (seat, battlefield_index) pairs; a (seat, None) entry is that player's face.
+    # Takes precedence over target_player_index/target_permanent_index.
+    divided_targets: list[tuple[int, int | None]] | None = None
     ability_instruction: OracleInstruction | None = None
     ability_effect_kind: str | None = None
     source_permanent: Permanent | None = None
@@ -53,6 +57,9 @@ class StackItem:
     # OracleInstruction, passing hook_event as the captured event payload.
     hook_key: str | None = None
     hook_event: dict | None = None
+    # "A source of your choice" (Jade Monolith): the chosen damage source — a
+    # battlefield Permanent or a stack spell's CardDefinition.
+    chosen_source: object | None = None
 
 
 @dataclass
@@ -63,6 +70,9 @@ class OracleExecutionContext:
     # target_permanent_index may be a single int or a list of ints for multi-target spells
     target_permanent_index: int | list[int] | None = None
     x_value: int | None = None
+    # Divided-damage spells (Fireball): cross-seat (seat, index|None) target list;
+    # a None index is that player's face. See StackItem.divided_targets.
+    divided_targets: list[tuple[int, int | None]] | None = None
     source_permanent: Permanent | None = None
     new_color: str | None = None
     # The "from" word for a text-change spell (Magical Hack / Sleight of Mind).
@@ -72,6 +82,9 @@ class OracleExecutionContext:
     # Event data captured when a triggered ability fired, read by its effect handler
     # at resolution (see StackItem.trigger_context).
     trigger_context: dict | None = None
+    # "A source of your choice" (Jade Monolith): the chosen damage source — a
+    # battlefield Permanent or a stack spell's CardDefinition.
+    chosen_source: object | None = None
 
 
 class OracleStateMachine:

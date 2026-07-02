@@ -196,12 +196,12 @@ class EffectsMixin:
         # creature" — the player picks which one). Fall back to the first creature.
         if isinstance(target_permanent_index, int) and 0 <= target_permanent_index < len(target.battlefield):
             chosen = target.battlefield[target_permanent_index]
-            if chosen.card.primary_type == "creature":
+            if chosen.is_creature:
                 chosen.regeneration_shield += 1
                 return True
             return False
         for permanent in target.battlefield:
-            if permanent.card.primary_type == "creature":
+            if permanent.is_creature:
                 permanent.regeneration_shield += 1
                 return True
         return False
@@ -297,19 +297,39 @@ class EffectsMixin:
             self.log.append(f"Prevented {prevented} damage to {permanent.card.name}")
         return damage - prevented
 
-    def _mark_damage_on_permanent(self, permanent, amount: int) -> int:
+    def _damage_source_matches(self, chosen, source) -> bool:
+        """Whether an incoming damage *source* is the *chosen* one (Jade Monolith's
+        "a source of your choice"). No recorded choice matches anything (legacy /
+        AI activations); an unknown incoming source never consumes a specific
+        choice — the shield keeps waiting for its source."""
+        if chosen is None:
+            return True
+        if source is None:
+            return False
+        if chosen is source:
+            return True
+        chosen_card = getattr(chosen, "card", chosen)
+        source_card = getattr(source, "card", source)
+        return chosen_card is source_card
+
+    def _mark_damage_on_permanent(self, permanent, amount: int, source=None) -> int:
         """Mark *amount* damage on a creature after applying its prevention pool.
         Returns the damage actually marked (0 if fully prevented)."""
-        # Jade Monolith: "The next time a source would deal damage to target
-        # creature this turn, that source deals that damage to you instead." Redirect
-        # the whole instance to the chosen player (works for combat damage too).
-        redirect_idx = permanent.metadata.pop("redirect_damage_to_player", None)
+        # Jade Monolith: "The next time a source of your choice would deal damage
+        # to target creature this turn, that source deals that damage to you
+        # instead." Redirect the whole instance to the chosen player (works for
+        # combat damage too) — but only when the damage comes from the chosen source.
+        redirect_idx = permanent.metadata.get("redirect_damage_to_player")
         if redirect_idx is not None and isinstance(redirect_idx, int) and 0 <= redirect_idx < len(self.players) and amount > 0:
-            self._deal_damage_to_player(self.players[redirect_idx], amount)
-            self.log.append(
-                f"Damage to {permanent.card.name} redirected to {self.players[redirect_idx].name} (Jade Monolith)"
-            )
-            return 0
+            chosen_source = permanent.metadata.get("redirect_damage_source")
+            if self._damage_source_matches(chosen_source, source):
+                permanent.metadata.pop("redirect_damage_to_player", None)
+                permanent.metadata.pop("redirect_damage_source", None)
+                self._deal_damage_to_player(self.players[redirect_idx], amount)
+                self.log.append(
+                    f"Damage to {permanent.card.name} redirected to {self.players[redirect_idx].name} (Jade Monolith)"
+                )
+                return 0
         # Personal Incarnation: "The next 1 damage that would be dealt to this
         # creature this turn is dealt to its owner instead." Redirect one point per
         # charge before the rest is marked (CR 614 replacement effect).
@@ -473,12 +493,12 @@ class EffectsMixin:
             target.battlefield
         ):
             candidate = target.battlefield[target_permanent_index]
-            if candidate.card.primary_type == "creature":
+            if candidate.is_creature:
                 target.hand.append(candidate.card)
                 target.battlefield.pop(target_permanent_index)
                 return True
         for idx, permanent in enumerate(target.battlefield):
-            if permanent.card.primary_type == "creature":
+            if permanent.is_creature:
                 target.hand.append(permanent.card)
                 target.battlefield.pop(idx)
                 return True
@@ -490,13 +510,13 @@ class EffectsMixin:
         if (
             isinstance(chosen_index, int)
             and 0 <= chosen_index < len(caster.battlefield)
-            and caster.battlefield[chosen_index].card.primary_type == "creature"
+            and caster.battlefield[chosen_index].is_creature
         ):
             removed = caster.battlefield.pop(chosen_index)
             caster.graveyard.append(removed.card)
             return removed.card
         for idx, permanent in enumerate(caster.battlefield):
-            if permanent.card.primary_type == "creature":
+            if permanent.is_creature:
                 removed = caster.battlefield.pop(idx)
                 caster.graveyard.append(removed.card)
                 return removed.card

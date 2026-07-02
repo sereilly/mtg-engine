@@ -15,6 +15,44 @@ from ..mixins._constants import _UPKEEP_PAY_KINDS
 
 
 class UpkeepStepMixin:
+    def can_pay_upkeep_mana(self, player, mana: dict[str, int]) -> bool:
+        """Whether *player* can cover an upkeep cost: colored pips from floating
+        mana, the generic part from what's left plus untapped mana-producing
+        lands (the player gets the chance to tap during upkeep)."""
+        colored = {sym: n for sym, n in mana.items() if sym != "generic" and n > 0}
+        if any(player.mana_pool.get(sym, 0) < n for sym, n in colored.items()):
+            return False
+        generic = int(mana.get("generic", 0) or 0)
+        if generic <= 0:
+            return True
+        floating_left = sum(player.mana_pool.values()) - sum(colored.values())
+        untapped_land_mana = sum(
+            1
+            for perm in player.battlefield
+            if perm.card.primary_type == "land" and not perm.tapped and perm.effective_produced_mana
+        )
+        return floating_left + untapped_land_mana >= generic
+
+    def _spend_upkeep_mana(self, player, mana: dict[str, int]) -> None:
+        """Spend an upkeep cost validated by ``can_pay_upkeep_mana``: colored
+        pips from the pool, then the generic part from floating mana and by
+        tapping untapped mana-producing lands."""
+        for sym, count in mana.items():
+            if sym != "generic" and count > 0:
+                player.mana_pool[sym] = player.mana_pool.get(sym, 0) - count
+        remaining = int(mana.get("generic", 0) or 0)
+        for sym in list(player.mana_pool):
+            while remaining > 0 and player.mana_pool.get(sym, 0) > 0:
+                player.mana_pool[sym] -= 1
+                remaining -= 1
+        if remaining > 0:
+            for perm in player.battlefield:
+                if remaining <= 0:
+                    break
+                if perm.card.primary_type == "land" and not perm.tapped and perm.effective_produced_mana:
+                    perm.tapped = True
+                    remaining -= 1
+
     def get_upkeep_pay_triggers(self, player_index: int) -> list[dict]:
         """Return pay-or-consequence upkeep triggers that the player must decide on.
 
@@ -207,9 +245,34 @@ class UpkeepStepMixin:
                 "kind": "upkeep_return_self_from_graveyard",
                 "prompt": f"Return {card.name} to the battlefield from your graveyard?",
             })
+        # Vesuvan Doppelganger's granted ability: "At the beginning of your
+        # upkeep, you may have this creature become a copy of target creature."
+        # Carries a creature-target choice alongside the yes/no.
+        for perm_index, perm in enumerate(self.players[player_index].battlefield):
+            if not perm.metadata.get("may_recopy_each_upkeep"):
+                continue
+            if perm.card.name in seen:
+                continue
+            valid_targets = [
+                {"kind": "permanent", "seat": s, "index": i, "name": p.card.name}
+                for s, player in enumerate(self.players)
+                for i, p in enumerate(player.battlefield)
+                if p is not perm and self._is_creature(p)
+            ]
+            if not valid_targets:
+                continue
+            seen.add(perm.card.name)
+            triggers.append({
+                "card_name": perm.card.name,
+                "kind": "upkeep_recopy",
+                "prompt": f"Have {perm.card.name} become a copy of a different creature?",
+                "needs_target": "creature",
+                "valid_targets": valid_targets,
+                "permanent_index": perm_index,
+            })
         return triggers
 
-    def resolve_upkeep(self, player_index: int, human_choices: dict[str, bool] | None = None, optional_choices: dict[str, bool] | None = None, defer_priority: bool = False, mana_prevention: dict[str, int] | None = None, sacrifice_choices: dict[str, int] | None = None) -> None:
+    def resolve_upkeep(self, player_index: int, human_choices: dict[str, bool] | None = None, optional_choices: dict[str, bool] | None = None, defer_priority: bool = False, mana_prevention: dict[str, int] | None = None, sacrifice_choices: dict[str, int] | None = None, recopy_targets: dict[str, tuple[int, int]] | None = None) -> None:
         phase = "beginning"
         step = "upkeep"
         self._set_phase_and_step(phase, step)
@@ -362,19 +425,16 @@ class UpkeepStepMixin:
                         # Mana Vault / Basalt Monolith: "you may pay {N}. If you do,
                         # untap this artifact." No consequence on decline; the
                         # beneficial default (AI/headless) untaps when affordable.
+                        # A human accept is honored only when the cost is actually
+                        # payable — choosing "pay" with no mana must not untap for free.
                         mana = trig.instruction.payload.get("mana", {})
                         if human_choices is not None and permanent.card.name in human_choices:
                             paid = human_choices[permanent.card.name]
                         else:
-                            paid = all(
-                                controller.mana_pool.get(sym, 0) >= count
-                                for sym, count in mana.items()
-                                if sym != "generic"
-                            )
+                            paid = True
+                        paid = paid and self.can_pay_upkeep_mana(controller, mana)
                         if paid and permanent.tapped:
-                            for sym, count in mana.items():
-                                if sym != "generic":
-                                    controller.mana_pool[sym] = controller.mana_pool.get(sym, 0) - count
+                            self._spend_upkeep_mana(controller, mana)
                             permanent.tapped = False
                             self.log.append(f"{controller.name} paid to untap {permanent.card.name}")
                         break
@@ -396,15 +456,10 @@ class UpkeepStepMixin:
                         if human_choices is not None and permanent.card.name in human_choices:
                             paid = human_choices[permanent.card.name]
                         else:
-                            paid = all(
-                                payer.mana_pool.get(sym, 0) >= count
-                                for sym, count in mana.items()
-                                if sym != "generic"
-                            )
+                            paid = True
+                        paid = paid and self.can_pay_upkeep_mana(payer, mana)
                         if paid and attached.tapped:
-                            for sym, count in mana.items():
-                                if sym != "generic":
-                                    payer.mana_pool[sym] = payer.mana_pool.get(sym, 0) - count
+                            self._spend_upkeep_mana(payer, mana)
                             attached.tapped = False
                             self.log.append(f"{payer.name} paid to untap {attached.card.name}")
                         break
@@ -590,6 +645,29 @@ class UpkeepStepMixin:
             self.log.append(
                 f"{owner.name} returned {card.name} to the battlefield from the graveyard"
             )
+
+        # Vesuvan Doppelganger's upkeep re-copy: apply an accepted choice to the
+        # player-chosen creature. Declined (or target-less) prompts do nothing;
+        # AI/headless runs (optional_choices is None) keep the current copy.
+        for perm in list(owner.battlefield):
+            if not perm.metadata.get("may_recopy_each_upkeep"):
+                continue
+            if optional_choices is None or not optional_choices.get(perm.card.name, False):
+                continue
+            chosen = (recopy_targets or {}).get(perm.card.name)
+            source = None
+            if chosen is not None:
+                seat, index = chosen
+                if 0 <= seat < len(self.players) and 0 <= index < len(self.players[seat].battlefield):
+                    candidate = self.players[seat].battlefield[index]
+                    if candidate is not perm and self._is_creature(candidate):
+                        source = candidate
+            if source is None:
+                self.log.append(f"{perm.card.name}: no valid creature chosen to copy")
+                continue
+            self._apply_creature_copy(perm, source)
+            self.log.append(f"{perm.card.name} becomes a copy of {source.card.name}")
+            self._refresh_dynamic_creatures()
 
         # Put the collected non-interactive upkeep triggers on the stack in APNAP
         # order; they resolve through the upkeep priority window opened below.

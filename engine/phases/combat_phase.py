@@ -25,7 +25,7 @@ class CombatPhaseMixin:
 
         attacker_player = self.players[attacker_index]
         for attacker in attacker_player.battlefield:
-            if attacker.card.primary_type != "creature":
+            if not attacker.is_creature:
                 continue
             if attacker.tapped:
                 continue
@@ -46,7 +46,7 @@ class CombatPhaseMixin:
         defender = self.players[defender_index]
         attacker_controller = self.players[self.active_player_index]
         for blocker in defender.battlefield:
-            if blocker.card.primary_type != "creature" or blocker.tapped:
+            if not blocker.is_creature or blocker.tapped:
                 continue
             for attacker_idx in self.combat_attackers:
                 if attacker_idx < 0 or attacker_idx >= len(attacker_controller.battlefield):
@@ -230,7 +230,10 @@ class CombatPhaseMixin:
             if attacker_idx < 0 or attacker_idx >= len(active.battlefield):
                 continue
             attacker = active.battlefield[attacker_idx]
-            if attacker.card.primary_type != "creature":
+            # is_creature, not the printed type: pruning by printed type silently
+            # removed animated lands (Kormus Bell / Living Lands) from combat
+            # right after they were legally declared as attackers.
+            if not attacker.is_creature:
                 continue
             valid_attackers[attacker_idx] = defending_idx
         self.combat_attackers = valid_attackers
@@ -249,7 +252,7 @@ class CombatPhaseMixin:
             if blocker_idx < 0 or blocker_idx >= len(defender.battlefield):
                 continue
             blocker = defender.battlefield[blocker_idx]
-            if blocker.card.primary_type != "creature":
+            if not blocker.is_creature:
                 continue
             kept = [a for a in attacker_idxs if a in self.combat_attackers]
             if kept:

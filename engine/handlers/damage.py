@@ -22,6 +22,40 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
     amount = instruction.payload.get("amount", 0)
     damage = max(0, x_value or 0) if amount == "x" else int(amount)
     target_perm_idx = context.target_permanent_index
+    # Fireball's cross-seat divided list: any mix of creatures and player faces
+    # on both sides, each dealt damage // n ("divided evenly, rounded down").
+    if context.divided_targets:
+        entries = [
+            (seat, index)
+            for seat, index in context.divided_targets
+            if 0 <= seat < len(game.players)
+            and (index is None or 0 <= index < len(game.players[seat].battlefield))
+        ]
+        n = len(entries)
+        if n == 0:
+            game.log.append(f"{card.name} had no remaining targets")
+            return True, "resolved"
+        per_target = damage // n
+        # Creatures first (highest index first so removals can't shift earlier
+        # indices), then faces.
+        for seat, index in sorted(
+            (e for e in entries if e[1] is not None), key=lambda e: e[1], reverse=True
+        ):
+            target_perm = game.players[seat].battlefield[index]
+            dealt = game._mark_damage_on_permanent(target_perm, per_target, source=source_permanent or card)
+            game.log.append(f"{card.name} dealt {dealt} damage to {target_perm.card.name}")
+            if dealt > 0 and target_perm.damage_marked < target_perm.effective_toughness:
+                game._fire_dealt_damage_triggers(target_perm)
+        for seat, index in entries:
+            if index is not None:
+                continue
+            face = game.players[seat]
+            dealt = game._deal_damage_to_player(face, per_target, source=card)
+            game.log.append(f"{card.name} dealt {dealt} damage to {face.name}")
+        # Lethal damage destroys as a state-based action, which regeneration
+        # shields can replace (CR 704.5g / 701.15).
+        game._destroy_marked_creatures()
+        return True, "resolved"
     # Support multiple target indices for spells like Fireball
     if isinstance(target_perm_idx, list):
         indices = [i for i in target_perm_idx if isinstance(i, int) and 0 <= i < len(target.battlefield)]
@@ -34,7 +68,7 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         per_target = damage // n if n > 0 else 0
         for idx in sorted(indices, reverse=True):
             target_perm = target.battlefield[idx]
-            dealt = game._mark_damage_on_permanent(target_perm, per_target)
+            dealt = game._mark_damage_on_permanent(target_perm, per_target, source=source_permanent or card)
             game.log.append(f"{card.name} dealt {dealt} damage to {target_perm.card.name}")
             if dealt > 0 and target_perm.damage_marked < target_perm.effective_toughness:
                 game._fire_dealt_damage_triggers(target_perm)
@@ -55,21 +89,17 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
                     f"{card.name}: '{target_perm.card.name}' is not a valid 'any target' target (115.4)"
                 )
                 return True, "resolved"
-        redirect_idx = target_perm.metadata.pop("redirect_damage_to_player", None)
-        if redirect_idx is not None and 0 <= redirect_idx < len(game.players):
-            redirect_player = game.players[redirect_idx]
-            d = game._deal_damage_to_player(redirect_player, damage)
-            game.log.append(f"Jade Monolith redirected {d} damage to {redirect_player.name}")
-            return True, "resolved"
+        # A Jade Monolith redirect (source-aware) is handled inside
+        # _mark_damage_on_permanent so combat and spell damage share one path.
         # Disintegrate-style riders: the damaged creature can't be regenerated
         # this turn, and if it would die this turn it is exiled instead (a
         # replacement effect honored by _destroy_marked_creatures / _permanent_to_graveyard).
-        if target_perm.card.primary_type == "creature":
+        if target_perm.is_creature:
             if instruction.payload.get("no_regen"):
                 target_perm.metadata["cant_be_regenerated_this_turn"] = True
             if instruction.payload.get("exile_if_dies"):
                 target_perm.metadata["exile_if_dies_this_turn"] = True
-        dealt = game._mark_damage_on_permanent(target_perm, damage)
+        dealt = game._mark_damage_on_permanent(target_perm, damage, source=source_permanent or card)
         effective_toughness = target_perm.effective_toughness
         game.log.append(f"{card.name} dealt {dealt} damage to {target_perm.card.name}")
         if target_perm.damage_marked >= effective_toughness:
@@ -120,16 +150,16 @@ def simulacrum_redirect(game: Game, instruction: OracleInstruction, context: Ora
     target_perm = None
     if isinstance(target_perm_idx, int) and 0 <= target_perm_idx < len(caster.battlefield):
         candidate = caster.battlefield[target_perm_idx]
-        if candidate.card.primary_type == "creature":
+        if candidate.is_creature:
             target_perm = candidate
     if target_perm is None:
-        target_perm = next((p for p in caster.battlefield if p.card.primary_type == "creature"), None)
+        target_perm = next((p for p in caster.battlefield if p.is_creature), None)
 
     if target_perm is None:
         game.log.append(f"{card.name}: no creature to deal damage to")
         return True, "resolved"
 
-    dealt = game._mark_damage_on_permanent(target_perm, amount)
+    dealt = game._mark_damage_on_permanent(target_perm, amount, source=card)
     game.log.append(f"{card.name} dealt {dealt} damage to {target_perm.card.name} and {caster.name} gained {amount} life")
     if dealt > 0 and target_perm.damage_marked >= target_perm.effective_toughness:
         # Lethal damage destroys as a state-based action, which regeneration
@@ -149,8 +179,8 @@ def deal_damage_each_creature_and_player(game: Game, instruction: OracleInstruct
     dead: list[tuple[PlayerState, Permanent]] = []
     for player in game.players:
         for perm in player.battlefield:
-            if perm.card.primary_type == "creature":
-                game._mark_damage_on_permanent(perm, amount)
+            if perm.is_creature:
+                game._mark_damage_on_permanent(perm, amount, source=card)
                 if perm.damage_marked >= perm.effective_toughness:
                     dead.append((player, perm))
     for player, perm in dead:
@@ -172,7 +202,7 @@ def deal_damage_and_self_damage(game: Game, instruction: OracleInstruction, cont
     target_perm_idx = context.target_permanent_index
     if isinstance(target_perm_idx, int) and 0 <= target_perm_idx < len(target.battlefield):
         target_perm = target.battlefield[target_perm_idx]
-        dealt = game._mark_damage_on_permanent(target_perm, amount)
+        dealt = game._mark_damage_on_permanent(target_perm, amount, source=card)
         game.log.append(f"{card.name} dealt {dealt} damage to {target_perm.card.name}")
         if target_perm.damage_marked >= target_perm.effective_toughness:
             # Lethal damage destroys as a state-based action, which regeneration
@@ -200,8 +230,8 @@ def deal_damage_and_gain_life(game: Game, instruction: OracleInstruction, contex
     # its toughness, mirroring the card's life-gain limit).
     if isinstance(target_perm_idx, int) and 0 <= target_perm_idx < len(target.battlefield):
         target_perm = target.battlefield[target_perm_idx]
-        if target_perm.card.primary_type == "creature":
-            dealt = game._mark_damage_on_permanent(target_perm, damage)
+        if target_perm.is_creature:
+            dealt = game._mark_damage_on_permanent(target_perm, damage, source=card)
             game.log.append(f"{card.name} dealt {dealt} damage to {target_perm.card.name}")
             if target_perm.damage_marked >= target_perm.effective_toughness:
                 game._destroy_marked_creatures()
@@ -227,7 +257,7 @@ def earthquake_damage(game: Game, instruction: OracleInstruction, context: Oracl
     # Deal damage to each creature without flying on every battlefield
     for player in game.players:
         for perm in list(player.battlefield):
-            if perm.card.primary_type != "creature":
+            if not perm.is_creature:
                 continue
             has_flying = (
                 "Flying" in perm.card.keywords
@@ -236,7 +266,7 @@ def earthquake_damage(game: Game, instruction: OracleInstruction, context: Oracl
             )
             if has_flying:
                 continue
-            game._mark_damage_on_permanent(perm, damage)
+            game._mark_damage_on_permanent(perm, damage, source=card)
     game._destroy_marked_creatures()
     game.log.append(f"{card.name} dealt {damage} earthquake damage to each non-flying creature and each player")
     return True, "resolved"
@@ -252,7 +282,7 @@ def hurricane_damage(game: Game, instruction: OracleInstruction, context: Oracle
         game._deal_damage_to_player(player, damage, source=card)
     for player in game.players:
         for perm in list(player.battlefield):
-            if perm.card.primary_type != "creature":
+            if not perm.is_creature:
                 continue
             has_flying = (
                 "Flying" in perm.card.keywords
@@ -261,7 +291,7 @@ def hurricane_damage(game: Game, instruction: OracleInstruction, context: Oracle
             )
             if not has_flying:
                 continue
-            game._mark_damage_on_permanent(perm, damage)
+            game._mark_damage_on_permanent(perm, damage, source=card)
     game._destroy_marked_creatures()
     game.log.append(f"{card.name} dealt {damage} hurricane damage to each flying creature and each player")
     return True, "resolved"

@@ -54,11 +54,7 @@ class GameHelpersMixin:
         """A permanent is a creature if its printed type says so or an effect has
         turned it into one (e.g. Kormus Bell / Living Lands animated lands, or
         Jade Statue animated until end of combat)."""
-        return (
-            permanent.card.primary_type == "creature"
-            or bool(permanent.metadata.get("land_animated"))
-            or bool(permanent.metadata.get("animate_until_end_of_combat"))
-        )
+        return permanent.is_creature
 
     def _is_summoning_sick(self, permanent: Permanent) -> bool:
         if not self._is_creature(permanent):

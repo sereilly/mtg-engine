@@ -41,10 +41,10 @@ def grant_unlimited_blocking(game: Game, instruction: OracleInstruction, context
     idx = context.target_permanent_index
     blocker = None
     if isinstance(idx, int) and 0 <= idx < len(target.battlefield):
-        if target.battlefield[idx].card.primary_type == "creature":
+        if target.battlefield[idx].is_creature:
             blocker = target.battlefield[idx]
     if blocker is None:
-        blocker = next((perm for perm in target.battlefield if perm.card.primary_type == "creature"), None)
+        blocker = next((perm for perm in target.battlefield if perm.is_creature), None)
     if blocker is not None:
         # Lets it block any number of attackers (_max_blocks_for) and requires it to
         # block each attacker it can (enforced when blocks are declared).
@@ -77,11 +77,11 @@ def remove_creature_from_combat(game: Game, instruction: OracleInstruction, cont
     idx = context.target_permanent_index
     removed_index: int | None = None
     if isinstance(idx, int) and 0 <= idx < len(target.battlefield):
-        if target.battlefield[idx].card.primary_type == "creature":
+        if target.battlefield[idx].is_creature:
             removed_index = idx
     if removed_index is None:
         removed_index = next(
-            (i for i, perm in enumerate(target.battlefield) if perm.card.primary_type == "creature"),
+            (i for i, perm in enumerate(target.battlefield) if perm.is_creature),
             None,
         )
     if removed_index is None:
@@ -136,7 +136,7 @@ def left_right_combat_division(game: Game, instruction: OracleInstruction, conte
         defender = game.players[defender_index]
         game.combat_defender_piles = {}
         for idx, perm in enumerate(defender.battlefield):
-            if perm.card.primary_type != "creature":
+            if not perm.is_creature:
                 continue
             if game._has_keyword(perm, "flying"):
                 continue  # flyers are in neither pile (they may block anything)
@@ -160,7 +160,7 @@ def mark_non_wall_target_to_attack(game: Game, instruction: OracleInstruction, c
         (
             perm
             for perm in target.battlefield
-            if perm.card.primary_type == "creature" and "wall" not in perm.card.type_line.lower()
+            if perm.is_creature and "wall" not in perm.card.type_line.lower()
         ),
         None,
     )
@@ -178,7 +178,7 @@ def force_active_player_creatures_to_attack(game: Game, instruction: OracleInstr
     active = game.players[game.active_player_index]
     marked: list[str] = []
     for permanent in active.battlefield:
-        if permanent.card.primary_type != "creature":
+        if not permanent.is_creature:
             continue
         permanent.metadata["must_attack_until_eot"] = True
         is_wall = "wall" in permanent.card.type_line.lower()
@@ -205,11 +205,11 @@ def grant_unblockable_to_low_power_target(game: Game, instruction: OracleInstruc
     target_creature = None
     if isinstance(idx, int) and 0 <= idx < len(target.battlefield):
         candidate = target.battlefield[idx]
-        if candidate.card.primary_type == "creature" and candidate.effective_power <= 2:
+        if candidate.is_creature and candidate.effective_power <= 2:
             target_creature = candidate
     if target_creature is None:
         target_creature = next(
-            (perm for perm in target.battlefield if perm.card.primary_type == "creature" and perm.effective_power <= 2),
+            (perm for perm in target.battlefield if perm.is_creature and perm.effective_power <= 2),
             None,
         )
     if target_creature is not None:
@@ -230,10 +230,10 @@ def grant_banding_to_target(game: Game, instruction: OracleInstruction, context:
     target_creature = None
     if isinstance(idx, int) and 0 <= idx < len(target.battlefield):
         candidate = target.battlefield[idx]
-        if candidate.card.primary_type == "creature":
+        if candidate.is_creature:
             target_creature = candidate
     if target_creature is None:
-        target_creature = next((perm for perm in target.battlefield if perm.card.primary_type == "creature"), None)
+        target_creature = next((perm for perm in target.battlefield if perm.is_creature), None)
     if target_creature is None:
         game.log.append("No valid creature target for banding effect")
         return False, "no valid creature target for banding effect"

@@ -56,6 +56,9 @@ class Session:
     # Shadow returning from the graveyard), and the answers collected so far.
     optional_trigger_choices: list[dict] = field(default_factory=list)
     optional_trigger_resolved: dict[str, bool] = field(default_factory=dict)
+    # Target chosen alongside an accepted optional trigger (Vesuvan Doppelganger's
+    # upkeep re-copy): card name -> (seat, battlefield index).
+    optional_trigger_targets: dict[str, tuple[int, int]] = field(default_factory=dict)
     # "Pay any amount of mana to prevent that much damage" upkeep triggers (Power
     # Leak). Each choice carries the card name and the max preventable damage; the
     # player's chosen amount per card is collected in the resolved map.
@@ -317,6 +320,7 @@ class SessionStore:
         session.upkeep_resolved_choices = {}
         session.optional_trigger_choices = []
         session.optional_trigger_resolved = {}
+        session.optional_trigger_targets = {}
         session.island_sanctuary_pending = False
         session.force_ai_attack_all = False
         session.history = GameHistory()

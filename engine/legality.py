@@ -386,6 +386,16 @@ def _activated_requires_unblocked_attacker(card: CardDefinition) -> bool:
     return any("unblocked creature of your choice" in line for line in _activated_lines(card))
 
 
+def _activated_requires_source_and_creature(card: CardDefinition) -> bool:
+    # Jade Monolith: "The next time a source of your choice would deal damage to
+    # target creature this turn, that source deals that damage to you instead."
+    # Two choices: the creature (primary target) and the damage source.
+    return any(
+        "a source of your choice would deal damage to target creature" in line
+        for line in _activated_lines(card)
+    )
+
+
 def _classify_activation(card: CardDefinition) -> dict:
     if _activated_requires_unblocked_attacker(card):
         return {"kind": "creature", "unblocked_attacker": True}
@@ -395,6 +405,9 @@ def _classify_activation(card: CardDefinition) -> dict:
         # a spell of that color on the stack. also_stack folds stack spells into the
         # permanent-target prompt (the engine matches prevention by color).
         return {"kind": "permanent", "color_filter": cop_color, "also_stack": True}
+    if _activated_requires_source_and_creature(card):
+        # Before the generic creature check, which would otherwise swallow it.
+        return {"kind": "creature", "requires_source": True}
     if _activated_requires_creature(card):
         return {"kind": "creature"}
     if _activated_requires_permanent(card):
@@ -462,7 +475,8 @@ class LegalityMixin:
         attacker_controller = self.players[self.active_player_index]
         pairs: list[dict[str, int]] = []
         for blocker_idx, blocker in enumerate(defender.battlefield):
-            if blocker.card.primary_type != "creature" or blocker.tapped:
+            # is_creature so animated lands (Kormus Bell, Living Lands) may block.
+            if not blocker.is_creature or blocker.tapped:
                 continue
             for attacker_idx in self.combat_attackers:
                 if attacker_idx < 0 or attacker_idx >= len(attacker_controller.battlefield):
@@ -519,6 +533,13 @@ class LegalityMixin:
             ability_instruction=_ability_target_instruction(card),
             source_permanent=source_permanent,
         )
+        # Jade Monolith's second choice — the damage source: any permanent on
+        # either battlefield or any spell on the stack.
+        if spec.get("requires_source"):
+            spec["source_targets"] = self._enumerate_targets(
+                controller_index, card, {"kind": "permanent", "also_stack": True},
+                for_cast=False,
+            )
         return spec
 
     # -- Target enumeration ------------------------------------------------
@@ -599,12 +620,12 @@ class LegalityMixin:
         if instruction.kind == "destroy_target_permanent":
             return self._destroy_target_legal(instruction.payload, perm)
         if instruction.kind == "mark_non_wall_target_to_attack":
-            return perm.card.primary_type == "creature" and "wall" not in perm.card.type_line.lower()
+            return perm.is_creature and "wall" not in perm.card.type_line.lower()
         if instruction.kind == "grant_unblockable_to_low_power_target":
             # Dwarven Warriors: "Target creature with power 2 or less can't be
             # blocked this turn." Only creatures with effective power ≤ 2 are legal,
             # so the UI highlights exactly those.
-            return perm.card.primary_type == "creature" and perm.effective_power <= 2
+            return perm.is_creature and perm.effective_power <= 2
         if instruction.kind == "grant_flying_and_delayed_destruction":
             # Stone Giant: "Target creature you control with toughness less than
             # this creature's power." Only the activating player's creatures with
@@ -613,7 +634,7 @@ class LegalityMixin:
                 return False
             if source_permanent is not None and perm.effective_toughness >= source_permanent.effective_power:
                 return False
-            return perm.card.primary_type == "creature"
+            return perm.is_creature
         return True
 
     def _permanent_matches_target_kind(self, perm: Permanent, kind: str, spec: dict, casting_aura: bool) -> bool:
@@ -626,7 +647,9 @@ class LegalityMixin:
                     return False
                 override = str(perm.metadata.get("land_type_override", "")).lower()
                 return land_filter in type_line or override == land_filter
-            if perm.card.primary_type != "creature":
+            # is_creature so animated lands (Kormus Bell / Living Lands) are legal
+            # targets for creature-targeting spells, abilities, and Auras.
+            if not perm.is_creature:
                 return False
             if spec.get("enchant_wall"):
                 return "wall" in type_line
