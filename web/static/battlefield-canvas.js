@@ -60,6 +60,16 @@ const BF_MAX_ZOOM = 1.15;
 const BF_FIT_PADDING = 44; // world-space padding around the fitted bounding box
 const BF_CAM_EASE = 0.16; // per-frame easing toward the camera target
 const BF_CARD_EASE = 0.22; // per-frame easing of cards toward their slots
+// The DOM hand fans overlay the top/bottom of the stage, so the camera must
+// not park cards under them (a full board would otherwise hide the viewer's
+// land row behind their hand). Screen-space bands, measured from the stage
+// edges, that the fit treats as unusable while the matching hand has cards.
+const BF_HAND_RESERVE_BOTTOM = 190; // viewer hand fan (150px cards, tilted)
+const BF_HAND_RESERVE_TOP = 120; // opponent hand fan (75px card backs)
+// With no hand to dodge, still keep a small strip clear for the player
+// info pills that sit over the stage edges.
+const BF_EDGE_RESERVE_BOTTOM = 40;
+const BF_EDGE_RESERVE_TOP = 64;
 
 // ---- Stack zone & spell animations ----
 // Spells on the stack render as enlarged cards in a cascade on the right side
@@ -1356,9 +1366,29 @@ class BattlefieldCanvas {
 
     // Visible (non-overscan) part of the tilted canvas, in canvas coordinates.
     const vx = ((this.cssW || 0) * (1 - 1 / BF_OVERSCAN_X)) / 2;
-    const vy = ((this.cssH || 0) * (1 - 1 / BF_OVERSCAN_Y)) / 2;
     const vw = (this.cssW || 0) / BF_OVERSCAN_X;
-    const vh = (this.cssH || 0) / BF_OVERSCAN_Y;
+    // Vertically, project the stage edges onto the table plane exactly, after
+    // trimming the screen bands covered by the DOM hand fans — otherwise a
+    // 3-row board parks the viewer's land row underneath their hand.
+    let vy = ((this.cssH || 0) * (1 - 1 / BF_OVERSCAN_Y)) / 2;
+    let vh = (this.cssH || 0) / BF_OVERSCAN_Y;
+    const stage = this.canvas.parentElement?.getBoundingClientRect();
+    if (stage && stage.width > 0 && stage.height > 0) {
+      const players = this.currentState?.players || [];
+      const handCount = (seat) => {
+        const p = players[seat];
+        return p?.hand_count ?? (Array.isArray(p?.hand) ? p.hand.length : 0);
+      };
+      const topReserve = handCount(1 - this.viewerSeat) > 0 ? BF_HAND_RESERVE_TOP : BF_EDGE_RESERVE_TOP;
+      const bottomReserve = handCount(this.viewerSeat) > 0 ? BF_HAND_RESERVE_BOTTOM : BF_EDGE_RESERVE_BOTTOM;
+      const cx = stage.left + stage.width / 2;
+      const topY = this._pageToCanvas(cx, stage.top + topReserve).y;
+      const bottomY = this._pageToCanvas(cx, stage.bottom - bottomReserve).y;
+      if (bottomY > topY) {
+        vy = topY;
+        vh = bottomY - topY;
+      }
+    }
     if (vw <= 0 || vh <= 0) return;
 
     const zoom = Math.max(BF_MIN_ZOOM, Math.min(BF_MAX_ZOOM, vw / bw, vh / bh));

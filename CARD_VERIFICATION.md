@@ -3,9 +3,9 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **290**
-- Passed: **226**
-- Failed: **0**
-- Untested: **64**
+- Passed: **233**
+- Failed: **8**
+- Untested: **49**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -59,7 +59,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Counterspell | ✅ pass |  |
 | Craw Wurm | ✅ pass |  |
 | Creature Bond | ✅ pass |  |
-| Crusade | ⬜ untested |  |
+| Crusade | ✅ pass |  |
 | Crystal Rod | ⬜ untested |  |
 | Cursed Land | ✅ pass |  |
 | Cyclopean Tomb | ✅ pass |  |
@@ -67,7 +67,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Darkpact | ✅ pass |  |
 | Death Ward | ✅ pass |  |
 | Deathgrip | ✅ pass |  |
-| Deathlace | ⬜ untested |  |
+| Deathlace | ✅ pass |  |
 | Demonic Attorney | ✅ pass |  |
 | Demonic Hordes | ✅ pass |  |
 | Demonic Tutor | ✅ pass |  |
@@ -76,7 +76,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Disintegrate | ✅ pass |  |
 | Disrupting Scepter | ✅ pass |  |
 | Dragon Whelp | ✅ pass |  |
-| Drain Life | ⬜ untested |  |
+| Drain Life | ❌ fail | I was able to spend blue mana on X even though the card says "Spend only black mana on X" |
 | Drain Power | ✅ pass |  |
 | Drudge Skeletons | ✅ pass |  |
 | Dwarven Demolition Team | ✅ pass |  |
@@ -92,7 +92,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Fear | ✅ pass |  |
 | Feedback | ✅ pass |  |
 | Fire Elemental | ✅ pass |  |
-| Fireball | ⬜ untested |  |
+| Fireball | ❌ fail | I'm getting an error saying all creature targets must be on the same side but I should be able to target any combination of creatures or player I want |
 | Firebreathing | ✅ pass |  |
 | Flashfires | ✅ pass |  |
 | Flight | ✅ pass |  |
@@ -110,7 +110,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Glasses of Urza | ⬜ untested |  |
 | Gloom | ⬜ untested |  |
 | Goblin Balloon Brigade | ✅ pass |  |
-| Goblin King | ⬜ untested |  |
+| Goblin King | ✅ pass |  |
 | Granite Gargoyle | ✅ pass |  |
 | Gray Ogre | ✅ pass |  |
 | Green Ward | ✅ pass |  |
@@ -131,14 +131,14 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Illusionary Mask | ⬜ untested |  |
 | Instill Energy | ⬜ untested |  |
 | Invisibility | ✅ pass |  |
-| Iron Star | ⬜ untested |  |
+| Iron Star | ✅ pass |  |
 | Ironclaw Orcs | ✅ pass |  |
 | Ironroot Treefolk | ✅ pass |  |
 | Island | ✅ pass |  |
 | Island Sanctuary | ⬜ untested |  |
-| Ivory Cup | ⬜ untested |  |
-| Jade Monolith | ⬜ untested |  |
-| Jade Statue | ⬜ untested |  |
+| Ivory Cup | ✅ pass |  |
+| Jade Monolith | ❌ fail | I should get 2 targeting prompts. One for the creature and one for the source. |
+| Jade Statue | ✅ pass |  |
 | Jayemdae Tome | ✅ pass |  |
 | Juggernaut | ✅ pass |  |
 | Jump | ✅ pass |  |
@@ -159,13 +159,13 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Living Wall | ✅ pass |  |
 | Llanowar Elves | ✅ pass |  |
 | Lord of Atlantis | ⬜ untested |  |
-| Lord of the Pit | ⬜ untested |  |
+| Lord of the Pit | ✅ pass |  |
 | Lure | ✅ pass |  |
-| Magical Hack | ⬜ untested |  |
+| Magical Hack | ❌ fail | I was able to give islandwalk to white knight even though it doesn't have any landwalk keywords |
 | Mahamoti Djinn | ✅ pass |  |
 | Mana Flare | ✅ pass |  |
 | Mana Short | ✅ pass |  |
-| Mana Vault | ⬜ untested |  |
+| Mana Vault | ❌ fail | I was able to choose the pay 4 option without having mana available |
 | Manabarbs | ✅ pass |  |
 | Meekstone | ✅ pass |  |
 | Merfolk of the Pearl Trident | ✅ pass |  |
@@ -270,10 +270,10 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Unholy Strength | ✅ pass |  |
 | Unsummon | ✅ pass |  |
 | Uthden Troll | ✅ pass |  |
-| Verduran Enchantress | ⬜ untested |  |
+| Verduran Enchantress | ❌ fail | The enchantment triggering this card should stay on the stack until the trigger has resolved |
 | Vesuvan Doppelganger | ⬜ untested |  |
 | Veteran Bodyguard | ⬜ untested |  |
-| Volcanic Eruption | ⬜ untested |  |
+| Volcanic Eruption | ❌ fail | Says all targets must be on the same side |
 | Wall of Air | ✅ pass |  |
 | Wall of Bone | ✅ pass |  |
 | Wall of Brambles | ✅ pass |  |
@@ -298,4 +298,4 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Wooden Sphere | ⬜ untested |  |
 | Word of Command | ⬜ untested |  |
 | Wrath of God | ✅ pass |  |
-| Zombie Master | ⬜ untested |  |
+| Zombie Master | ❌ fail | It should give a {B}: regenerate activated ability to other zombies |

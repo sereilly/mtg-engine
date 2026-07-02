@@ -44,6 +44,8 @@ ActionKind = Literal[
     "face_down_cast_confirm",
     "time_vault_skip",
     "time_vault_decline",
+    "island_sanctuary_skip",
+    "island_sanctuary_draw",
     "word_of_command_confirm",
     "assign_defender_piles",
     "assign_attacker_piles",

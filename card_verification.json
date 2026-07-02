@@ -215,6 +215,11 @@
       "status": "pass",
       "updated_at": 1782019848.6426058
     },
+    "Crusade": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782957008.385291
+    },
     "Cursed Land": {
       "reason": "",
       "status": "pass",
@@ -244,6 +249,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782105511.172316
+    },
+    "Deathlace": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782958758.4311402
     },
     "Demonic Attorney": {
       "reason": "",
@@ -284,6 +294,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782693770.4119496
+    },
+    "Drain Life": {
+      "reason": "I was able to spend blue mana on X even though the card says \"Spend only black mana on X\"",
+      "status": "fail",
+      "updated_at": 1782958159.8846445
     },
     "Drain Power": {
       "reason": "",
@@ -349,6 +364,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781756819.3621137
+    },
+    "Fireball": {
+      "reason": "I'm getting an error saying all creature targets must be on the same side but I should be able to target any combination of creatures or player I want",
+      "status": "fail",
+      "updated_at": 1782957300.8500297
     },
     "Firebreathing": {
       "reason": "",
@@ -424,6 +444,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781411321.368721
+    },
+    "Goblin King": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782957382.565658
     },
     "Granite Gargoyle": {
       "reason": "",
@@ -505,6 +530,11 @@
       "status": "pass",
       "updated_at": 1782590614.42178
     },
+    "Iron Star": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782957062.2178416
+    },
     "Ironclaw Orcs": {
       "reason": "",
       "status": "pass",
@@ -519,6 +549,21 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781378704.6242044
+    },
+    "Ivory Cup": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782958376.952582
+    },
+    "Jade Monolith": {
+      "reason": "I should get 2 targeting prompts. One for the creature and one for the source.",
+      "status": "fail",
+      "updated_at": 1782958349.4058392
+    },
+    "Jade Statue": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782957764.093408
     },
     "Jayemdae Tome": {
       "reason": "",
@@ -580,10 +625,20 @@
       "status": "pass",
       "updated_at": 1782544325.311722
     },
+    "Lord of the Pit": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1782957169.0863905
+    },
     "Lure": {
       "reason": "",
       "status": "pass",
       "updated_at": 1782798227.813784
+    },
+    "Magical Hack": {
+      "reason": "I was able to give islandwalk to white knight even though it doesn't have any landwalk keywords",
+      "status": "fail",
+      "updated_at": 1782958037.6419077
     },
     "Mahamoti Djinn": {
       "reason": "",
@@ -599,6 +654,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781585587.1657355
+    },
+    "Mana Vault": {
+      "reason": "I was able to choose the pay 4 option without having mana available",
+      "status": "fail",
+      "updated_at": 1782957910.1665266
     },
     "Manabarbs": {
       "reason": "",
@@ -1025,6 +1085,16 @@
       "status": "pass",
       "updated_at": 1782544338.6868098
     },
+    "Verduran Enchantress": {
+      "reason": "The enchantment triggering this card should stay on the stack until the trigger has resolved",
+      "status": "fail",
+      "updated_at": 1782958636.8161082
+    },
+    "Volcanic Eruption": {
+      "reason": "Says all targets must be on the same side",
+      "status": "fail",
+      "updated_at": 1782958698.3377855
+    },
     "Wall of Air": {
       "reason": "",
       "status": "pass",
@@ -1129,6 +1199,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782008868.629678
+    },
+    "Zombie Master": {
+      "reason": "It should give a {B}: regenerate activated ability to other zombies",
+      "status": "fail",
+      "updated_at": 1782958231.3258476
     }
   }
 }
