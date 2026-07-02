@@ -49,7 +49,7 @@ class EndOfCombatStepMixin:
         )
         for player in self.players:
             for permanent in player.battlefield:
-                program = compile_card_oracle(permanent.card)
+                program = compile_card_oracle(permanent.effective_card)
                 if not any(clockwork_line == line for line in program.static_lines):
                     continue
                 attacked_or_blocked = permanent.metadata.get(

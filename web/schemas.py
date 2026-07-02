@@ -146,6 +146,9 @@ class GameActionRequest(BaseModel):
     # Banding (CR 702.22k): how a shared blocker's damage is routed among the band
     # members it blocks — maps blocker battlefield index to the chosen attacker index.
     blocker_damage: dict[int, int] | None = None
+    # Banding (CR 702.22j/k): the attacking player's full DIVISION of each band
+    # blocker's damage — maps blocker battlefield index to {band member: damage}.
+    blocker_damage_split: dict[int, dict[int, int]] | None = None
     # Banding (CR 702.22j): the defending player's damage assignment for attackers
     # blocked by a creature with banding, submitted via an assign_banding_damage action.
     banding_damage: dict[int, dict[int, int]] | None = None

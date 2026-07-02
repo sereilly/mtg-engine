@@ -59,7 +59,7 @@ class EndStepMixin:
             for controller in self.players:
                 controller_index = self.players.index(controller)
                 for permanent in controller.battlefield:
-                    prog = compile_card_oracle(permanent.card)
+                    prog = compile_card_oracle(permanent.effective_card)
                     for trig in prog.triggered_abilities:
                         if (
                             trig.condition.kind == "end_step"
@@ -84,7 +84,7 @@ class EndStepMixin:
             for controller in self.players:
                 controller_index = self.players.index(controller)
                 for permanent in controller.battlefield:
-                    prog = compile_card_oracle(permanent.card)
+                    prog = compile_card_oracle(permanent.effective_card)
                     for trig in prog.triggered_abilities:
                         if (
                             trig.condition.kind == "end_step"

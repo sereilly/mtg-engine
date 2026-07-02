@@ -89,7 +89,7 @@ class GameEndingMixin:
             for player in self.players:
                 survivors_ss: list[Permanent] = []
                 for perm in player.battlefield:
-                    program = compile_card_oracle(perm.card)
+                    program = compile_card_oracle(perm.effective_card)
                     needs_island = any(
                         trig.condition.kind == "no_islands"
                         and trig.instruction is not None

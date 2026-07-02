@@ -205,7 +205,7 @@ class GameHelpersMixin:
             player.graveyard.append(permanent.card)
         if permanent.card.primary_type == "creature":
             self.creatures_died_this_turn = getattr(self, "creatures_died_this_turn", 0) + 1
-            program = compile_card_oracle(permanent.card)
+            program = compile_card_oracle(permanent.effective_card)
             for trig in program.triggered_abilities:
                 if (
                     trig.condition.kind == "dies"

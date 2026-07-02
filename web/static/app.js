@@ -1398,9 +1398,12 @@ function startCastGraveyardCreatureTargetPrompt(card, castAction = "cast") {
   if (!cardName) return;
   const spec = targetSpecOf(card);
   const ownGraveyardOnly = !!spec.own_graveyard_only;
+  // Regrowth targets ANY card in the graveyard (any_card), not only creatures.
+  const noun = spec.any_card ? "card" : "creature card";
+  const verb = spec.any_card ? "return" : "reanimate";
   if ((spec.valid_targets || []).length === 0) {
     clearPendingHandCast();
-    updateActionHint(`No creature cards in ${ownGraveyardOnly ? "your" : "any"} graveyard for ${cardName}.`, true);
+    updateActionHint(`No ${noun}s in ${ownGraveyardOnly ? "your" : "any"} graveyard for ${cardName}.`, true);
     return;
   }
   pendingCastTarget = {
@@ -1410,7 +1413,7 @@ function startCastGraveyardCreatureTargetPrompt(card, castAction = "cast") {
   renderActivationPrompt();
   renderBoard(currentState);
   updateActionHint(
-    `Choose a creature card in ${ownGraveyardOnly ? "your" : "a"} graveyard to reanimate with ${cardName}.`
+    `Choose a ${noun} in ${ownGraveyardOnly ? "your" : "a"} graveyard to ${verb} with ${cardName}.`
   );
 }
 
@@ -2100,15 +2103,30 @@ function applyUntapPrompt(untapInfo) {
   const maxCount = Number(untapInfo.max_count || 0);
   const selectedCount = Number(untapInfo.selected_count || 0);
 
+  // Name the constrained type(s): Winter Orb restricts lands, Smoke restricts
+  // creatures, and both can be active at once.
+  const landConstrained = untapInfo.land_max != null;
+  const creatureConstrained = untapInfo.creature_max != null;
+  const noun = landConstrained && creatureConstrained
+    ? "lands and creatures"
+    : creatureConstrained
+    ? "creatures"
+    : "lands";
+  const nounTitle = landConstrained && creatureConstrained
+    ? "Permanents"
+    : creatureConstrained
+    ? "Creatures"
+    : "Lands";
+
   panel.classList.remove("hidden");
   okBtn.classList.remove("hidden");
   customRow.classList.add("hidden");
-  title.textContent = "Choose Lands to Untap";
-  body.textContent = "Select tapped lands to untap, then press OK.";
+  title.textContent = `Choose ${nounTitle} to Untap`;
+  body.textContent = `Select tapped ${noun} (highlighted) to untap, then press OK.`;
   steps.innerHTML = [
-    `<div>Maximum lands: ${maxCount}</div>`,
+    `<div>Maximum ${noun}: ${maxCount}</div>`,
     `<div>Selected: ${selectedCount}</div>`,
-    "<div>Action: click your tapped lands to toggle selection.</div>",
+    `<div>Action: click your highlighted tapped ${noun} to toggle selection.</div>`,
   ].join("");
   cancelBtn.disabled = true;
   okBtn.disabled = false;
@@ -3752,6 +3770,15 @@ function renderActivationPrompt() {
     } else if (pendingCastTarget.targetKind === "stack") {
       body.textContent = "Click a glowing spell on the stack to choose which one to target.";
       steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
+    } else if (pendingCastTarget.targetKind === "graveyard_creature") {
+      // Regrowth targets any card; Animate Dead / Resurrection a creature card.
+      // Never fall through to the player-select fallback — the target is always
+      // a card in a graveyard, not a player.
+      const spec = targetSpecOf(pendingCastTarget.card);
+      const noun = spec?.any_card ? "card" : "creature card";
+      const where = spec?.own_graveyard_only ? "your graveyard" : "a graveyard";
+      body.textContent = `Click a glowing ${noun} in ${where} to choose the target.`;
+      steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
     } else {
       const players = Array.isArray(currentState?.players) ? currentState.players : [];
       const targetButtons = players
@@ -4233,6 +4260,30 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   }
 
   const activationCost = getActivatedAbilityCost(card);
+
+  // "{X}" activation costs (Illusionary Mask, Clockwork Beast) need an X chosen
+  // before the ability is sent — without it the engine receives X = 0 and e.g.
+  // Illusionary Mask finds no castable creature regardless of the hand.
+  if (/\{x\}/i.test(activationCost)) {
+    pendingCastX = {
+      kind: "cast_x",
+      card,
+      cardName,
+      targetSeat,
+      targetPermanentIndex: null,
+      targetStackIndex: null,
+      castAction: "activate",
+      activatePermanentIndex: permanentIndex,
+      activateAbilityIndex: abilityIndex,
+      manaRequirement: parseManaCostSymbols(activationCost),
+      maxX: getMaxAffordableX(getCurrentPlayerState()?.mana_pool, activationCost, null),
+      awaitingCustomValue: false,
+    };
+    renderActivationPrompt();
+    updateActionHint(`Choose X for ${cardName}'s ability.`);
+    return;
+  }
+
   if (!shouldPromptForActivationCost(activationCost)) {
     const directBody = {
       seat,
@@ -4969,7 +5020,8 @@ function resolvePendingCastX(xValue) {
   const pending = pendingCastX;
   pendingCastX = null;
   renderActivationPrompt();
-  updateActionHint(`Casting ${pending.cardName} with X = ${selectedX}...`);
+  const verb = pending.castAction === "activate" ? "Activating" : "Casting";
+  updateActionHint(`${verb} ${pending.cardName} with X = ${selectedX}...`);
 
   const body = {
     seat,
@@ -4979,8 +5031,16 @@ function resolvePendingCastX(xValue) {
   };
   // Fireball-style casts carry the cross-seat divided target list; Power Sink
   // carries the index of the spell on the stack it counters; everything else
-  // carries a single permanent index (or none, for a face/player target).
-  if (Number.isInteger(pending.targetStackIndex)) {
+  // carries a single permanent index (or none, for a face/player target). An
+  // "{X}" activated ability (Illusionary Mask) routes to the activate action
+  // with the source permanent instead of a hand card.
+  if (pending.castAction === "activate") {
+    delete body.card_name;
+    body.permanent_name = pending.cardName;
+    body.permanent_index = pending.activatePermanentIndex;
+    if (Number.isInteger(pending.activateAbilityIndex)) body.ability_index = pending.activateAbilityIndex;
+    body.target_seat = pending.targetSeat;
+  } else if (Number.isInteger(pending.targetStackIndex)) {
     body.target_seat = pending.targetSeat;
     body.target_stack_index = pending.targetStackIndex;
   } else if (Array.isArray(pending.dividedPayload)) {
@@ -4991,7 +5051,9 @@ function resolvePendingCastX(xValue) {
   }
 
   sendAction(body)
-    .then(() => updateActionHint(`Cast ${pending.cardName} with X = ${selectedX}.`))
+    .then(() => updateActionHint(
+      `${pending.castAction === "activate" ? "Activated" : "Cast"} ${pending.cardName} with X = ${selectedX}.`,
+    ))
     .catch((e) => updateActionHint(e.message, true))
     .finally(() => clearPendingHandCast());
 }
@@ -6844,15 +6906,18 @@ function autoAssignCombatDamage(groups) {
 
 // Validate one attacker's assignment against the engine's rules so we can guide
 // the player before they submit (CR 510.1c lethal-in-order, total <= power).
-function validateCombatDamageGroup(group) {
+// In "banding" mode the defending player divides the damage however they choose —
+// CR 702.22j is an explicit exception to 510.1c — so only the power ceiling applies.
+function validateCombatDamageGroup(group, mode = combatDamageDialogMode) {
   const draft = combatDamageDraft[group.attackerIdx] || {};
   let total = 0;
   let sublethalSeen = false;
   let violation = null;
+  const freeDivision = group.trample || mode === "banding";
   for (const { blockerIdx, lethal } of group.blockers) {
     const value = Math.max(0, Number(draft[blockerIdx]) || 0);
     total += value;
-    if (!group.trample) {
+    if (!freeDivision) {
       if (sublethalSeen && value > 0) {
         violation = "Assign lethal to each blocker in order before the next.";
       }
@@ -6889,10 +6954,15 @@ function openBandBlockerDialog(state = currentState) {
   const attackerBf = state.players?.[state.current_turn]?.battlefield || [];
   const defenderBf = state.players?.[combat?.defending_player_index]?.battlefield || [];
 
-  // Default each blocker to the first band member it blocks (the engine's default).
+  // Default: the blocker's full power on the first band member it blocks (the
+  // engine's default). Draft maps blocker_idx -> {member_idx: damage} so the
+  // attacking player can divide the damage freely (CR 702.22j/k).
   for (const b of info.blockers) {
-    if (combatBandBlockerDraft[b.blocker_idx] === undefined) {
-      combatBandBlockerDraft[b.blocker_idx] = b.member_indices[0];
+    if (!combatBandBlockerDraft[b.blocker_idx] || typeof combatBandBlockerDraft[b.blocker_idx] !== "object") {
+      const power = Number(defenderBf[b.blocker_idx]?.power) || 0;
+      const split = {};
+      b.member_indices.forEach((m, i) => { split[m] = i === 0 ? power : 0; });
+      combatBandBlockerDraft[b.blocker_idx] = split;
     }
   }
 
@@ -6901,8 +6971,8 @@ function openBandBlockerDialog(state = currentState) {
   if (titleEl) titleEl.textContent = "Assign Band Blocker Damage";
   if (subtitleEl) {
     subtitleEl.textContent =
-      "A creature is blocking your band, so you (the attacking player) choose which " +
-      "creature in the band it damages (CR 702.22k).";
+      "A creature is blocking your band, so you (the attacking player) choose how " +
+      "its combat damage is divided among the band (CR 702.22j).";
   }
 
   const cardThumb = (card, sub) => {
@@ -6938,22 +7008,38 @@ function openBandBlockerDialog(state = currentState) {
       arrow.textContent = "→";
       section.appendChild(arrow);
 
+      const power = Number(blockerCard?.power) || 0;
+      const split = combatBandBlockerDraft[b.blocker_idx] || {};
+      const assigned = b.member_indices.reduce((sum, m) => sum + (Number(split[m]) || 0), 0);
+
       const targets = document.createElement("div");
       targets.className = "cda-blockers";
       for (const m of b.member_indices) {
         const memberCard = attackerBf[m];
-        const choice = document.createElement("button");
-        choice.type = "button";
-        choice.className =
-          "cda-target-btn" + (combatBandBlockerDraft[b.blocker_idx] === m ? " selected" : "");
-        choice.appendChild(cardThumb(memberCard));
-        choice.addEventListener("click", () => {
-          combatBandBlockerDraft[b.blocker_idx] = m;
+        const cell = document.createElement("div");
+        cell.className = "cda-target-btn" + ((Number(split[m]) || 0) > 0 ? " selected" : "");
+        cell.appendChild(cardThumb(memberCard));
+        const input = document.createElement("input");
+        input.type = "number";
+        input.min = "0";
+        input.max = String(power);
+        input.value = String(Number(split[m]) || 0);
+        input.className = "cda-input";
+        input.addEventListener("change", () => {
+          const v = Math.max(0, Math.min(power, Number(input.value) || 0));
+          combatBandBlockerDraft[b.blocker_idx] = { ...split, [m]: v };
           render();
         });
-        targets.appendChild(choice);
+        cell.appendChild(input);
+        targets.appendChild(cell);
       }
       section.appendChild(targets);
+
+      const totalNote = document.createElement("div");
+      totalNote.className = "cda-card-sub";
+      totalNote.textContent = `Assigned ${assigned} of ${power}`;
+      if (assigned > power) totalNote.style.color = "#e16d70";
+      section.appendChild(totalNote);
       body.appendChild(section);
     }
   };
@@ -6964,18 +7050,33 @@ function openBandBlockerDialog(state = currentState) {
   const autoBtn = q("combatDamageAutoBtn");
   if (autoBtn) {
     autoBtn.onclick = () => {
-      for (const b of info.blockers) combatBandBlockerDraft[b.blocker_idx] = b.member_indices[0];
+      for (const b of info.blockers) {
+        const power = Number(defenderBf[b.blocker_idx]?.power) || 0;
+        const split = {};
+        b.member_indices.forEach((m, i) => { split[m] = i === 0 ? power : 0; });
+        combatBandBlockerDraft[b.blocker_idx] = split;
+      }
       render();
     };
   }
   const confirmBtn = q("combatDamageConfirmBtn");
   if (confirmBtn) {
     confirmBtn.onclick = async () => {
-      const blockerDamage = {};
-      for (const b of info.blockers) blockerDamage[b.blocker_idx] = combatBandBlockerDraft[b.blocker_idx];
+      const blockerDamageSplit = {};
+      for (const b of info.blockers) {
+        const power = Number(defenderBf[b.blocker_idx]?.power) || 0;
+        const split = combatBandBlockerDraft[b.blocker_idx] || {};
+        const total = b.member_indices.reduce((sum, m) => sum + (Number(split[m]) || 0), 0);
+        if (total > power) {
+          updateActionHint(`Assigned damage exceeds a blocker's power (${total} > ${power}).`, true);
+          return;
+        }
+        blockerDamageSplit[b.blocker_idx] = {};
+        for (const m of b.member_indices) blockerDamageSplit[b.blocker_idx][m] = Number(split[m]) || 0;
+      }
       try {
         confirmBtn.disabled = true;
-        await sendAction({ seat, action: "assign_combat_damage", blocker_damage: blockerDamage });
+        await sendAction({ seat, action: "assign_combat_damage", blocker_damage_split: blockerDamageSplit });
         updateActionHint("Band blocker damage assigned.");
         combatBandBlockerDraft = {};
         closeCombatDamageDialog();
@@ -7042,7 +7143,7 @@ function openDamageDialog(state = currentState, mode = "attacker") {
   const confirmBtn = q("combatDamageConfirmBtn");
   if (confirmBtn) {
     confirmBtn.onclick = async () => {
-      if (groups.some((g) => !validateCombatDamageGroup(g).valid)) return;
+      if (groups.some((g) => !validateCombatDamageGroup(g, mode).valid)) return;
       const assignment = {};
       for (const g of groups) assignment[g.attackerIdx] = combatDamageDraft[g.attackerIdx] || {};
       try {
@@ -7102,7 +7203,7 @@ function renderCombatDamageDialogBody(groups, mode = combatDamageDialogMode) {
 
   let allValid = true;
   for (const group of groups) {
-    const result = validateCombatDamageGroup(group);
+    const result = validateCombatDamageGroup(group, mode);
     if (!result.valid) allValid = false;
 
     const section = document.createElement("div");
@@ -7341,6 +7442,11 @@ function renderBoard(state) {
     if (sacrificeInfo) {
       targetingKeys = (sacrificeInfo.permanents || []).map((p) => `${sacrificeInfo.player_seat}-${p.index}`);
       for (const idx of sacrificeSelection) selfSelectedKeys.push(`${sacrificeInfo.player_seat}-${idx}`);
+    }
+    // Constrained untap selection (Winter Orb / Smoke): highlight every
+    // candidate so the player can see exactly which permanents may be untapped.
+    if (untapInfo && seat === viewerSeat) {
+      targetingKeys = (untapInfo.candidate_indices || []).map((idx) => `${viewerSeat}-${idx}`);
     }
     battlefieldCanvas.setSelectedKeys([...selfSelectedKeys, ...allSelectedKeys]);
 

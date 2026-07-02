@@ -98,7 +98,7 @@ class DeclareAttackersStepMixin:
         if self._is_summoning_sick(attacker):
             return False
 
-        program = compile_card_oracle(attacker.card)
+        program = compile_card_oracle(attacker.effective_card)
         instr_kinds = {i.kind for i in program.instructions}
 
         if "cant_attack_without_island" in instr_kinds:
@@ -125,7 +125,7 @@ class DeclareAttackersStepMixin:
     def _must_attack_if_able(self, attacker: Permanent) -> bool:
         if attacker.metadata.get("must_attack_until_eot"):
             return True
-        program = compile_card_oracle(attacker.card)
+        program = compile_card_oracle(attacker.effective_card)
         return any(i.kind == "must_attack_each_combat" for i in program.instructions)
 
     def _fire_attack_triggers(self, controller_index: int) -> None:
@@ -148,7 +148,7 @@ class DeclareAttackersStepMixin:
             else controller_index
         )
         for permanent in list(controller.battlefield):
-            program = compile_card_oracle(permanent.card)
+            program = compile_card_oracle(permanent.effective_card)
             for trig in program.triggered_abilities:
                 if trig.condition.kind != "one_or_more_attack" or trig.instruction is None:
                     continue

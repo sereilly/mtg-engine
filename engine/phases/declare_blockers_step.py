@@ -202,7 +202,7 @@ class DeclareBlockersStepMixin:
         if attacker.metadata.get("cant_be_blocked_until_eot"):
             return False
 
-        attacker_program = compile_card_oracle(attacker.card)
+        attacker_program = compile_card_oracle(attacker.effective_card)
         attacker_kinds = {i.kind for i in attacker_program.instructions}
 
         if "cant_be_blocked" in attacker_kinds:
@@ -237,7 +237,7 @@ class DeclareBlockersStepMixin:
             return False
 
         # Ironclaw Orcs: blocker can't block creatures with power 2 or greater
-        blocker_program = compile_card_oracle(blocker.card)
+        blocker_program = compile_card_oracle(blocker.effective_card)
         if any(i.kind == "cant_block_power_2_or_greater" for i in blocker_program.instructions):
             if attacker.effective_power >= 2:
                 return False
@@ -337,7 +337,7 @@ class DeclareBlockersStepMixin:
         attacker_controller = self.players[self.active_player_index]
 
         def block_destroy_instruction(perm: Permanent):
-            program = compile_card_oracle(perm.card)
+            program = compile_card_oracle(perm.effective_card)
             for trig in program.triggered_abilities:
                 if (
                     trig.condition.kind == "cockatrice_blocks_or_blocked"

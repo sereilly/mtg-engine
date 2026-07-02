@@ -375,13 +375,23 @@ class OracleInstructionsMixin:
                 return
             aura_permanent.metadata["attached_to"] = target_land
             target_land.metadata["attached_aura"] = aura_permanent
+            # Record every metadata key this Aura grants so _remove_aura_effects
+            # undoes it when the Aura leaves (CR 611.3) — e.g. Phantasmal Terrain /
+            # Evil Presence's land-type change reverts to the printed type.
+            granted_meta: list[str] = []
             if "indestructible" in text:
                 target_land.metadata["is_indestructible"] = True
+                granted_meta.append("is_indestructible")
             if "can't be enchanted by other auras" in text:
                 target_land.metadata["cant_be_enchanted_by_auras"] = True
+                granted_meta.append("cant_be_enchanted_by_auras")
             if "enchanted land is a swamp" in text:
                 target_land.metadata["land_type_override"] = "swamp"
+                # The type change ends with the Aura, even though the override may
+                # be (re)set later for the chosen-type variant (confirm_land_type).
+                granted_meta.append("land_type_override")
             elif "enchanted land is the chosen type" in text:
+                granted_meta.append("land_type_override")
                 # Phantasmal Terrain: "As this Aura enters, choose a basic land type."
                 # The land's type is NOT changed yet — we arm a pending choice and the
                 # controller picks the type (a human via the prompt, an AI via the
@@ -394,6 +404,8 @@ class OracleInstructionsMixin:
                     "land_owner_index": target_idx,
                     "land_index": target_player.battlefield.index(target_land),
                 }
+            if granted_meta:
+                aura_permanent.metadata["aura_granted_meta"] = granted_meta
             self.log.append(f"{aura_permanent.card.name} enchants {target_land.card.name}")
         elif text.startswith("enchant wall"):
             target_wall = None

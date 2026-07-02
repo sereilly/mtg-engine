@@ -444,7 +444,7 @@ class LegalityMixin:
         if perm.metadata.get("cant_be_blocked_until_eot"):
             return True
         return any(
-            i.kind == "cant_be_blocked" for i in compile_card_oracle(perm.card).instructions
+            i.kind == "cant_be_blocked" for i in compile_card_oracle(perm.effective_card).instructions
         )
 
     def legal_attacker_indices(self, attacker_index: int) -> list[int]:
@@ -518,7 +518,9 @@ class LegalityMixin:
         if not (0 <= permanent_index < len(player.battlefield)):
             return {"kind": "none", "requires_target": False, "valid_targets": []}
         source_permanent = player.battlefield[permanent_index]
-        card = source_permanent.card
+        # effective_card so a copy (Clone / Vesuvan Doppelganger) offers the
+        # copied creature's activated abilities (CR 707.2).
+        card = source_permanent.effective_card
         spec = _classify_activation(card)
         # A Sleight of Mind text change on this permanent retargets a color-word
         # counter (Lifeforce black -> red), so the UI must offer the new color's

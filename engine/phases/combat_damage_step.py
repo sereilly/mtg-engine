@@ -211,6 +211,7 @@ class CombatDamageStepMixin:
         controller_index: int,
         attacker_damage: dict[int, dict[int, int]] | None = None,
         blocker_damage: dict[int, int] | None = None,
+        blocker_damage_split: dict[int, dict[int, int]] | None = None,
     ) -> tuple[bool, str]:
         if self.current_turn_phase != "combat" or self.current_step != "combat_damage":
             return False, "combat damage can only be resolved during combat_damage"
@@ -244,6 +245,32 @@ class CombatDamageStepMixin:
         # blocker_damage (CR 702.22k) and still have attackers deal normally.
         if attacker_damage is None:
             attacker_damage = self._build_auto_damage_assignment()
+
+        # CR 702.22j/k: the active player may DIVIDE a band-blocking creature's
+        # damage among the band members it blocks (blocker_damage_split maps
+        # blocker_idx -> {band member -> damage}). Validate every split up front —
+        # the blocker loop below mutates state as it goes, so a bad entry must be
+        # rejected before any damage is marked.
+        if blocker_damage_split:
+            for b_idx, split in blocker_damage_split.items():
+                if not (0 <= b_idx < len(defender.battlefield)):
+                    return False, "blocker index out of range"
+                if b_idx not in self.combat_blockers:
+                    return False, "that creature is not blocking"
+                split_blocker = defender.battlefield[b_idx]
+                allowed = set(self.combat_blockers.get(b_idx, ()))
+                for blocked_attacker in self.combat_blockers.get(b_idx, ()):
+                    allowed |= set(self._attacker_band(blocked_attacker) or ())
+                total = 0
+                for member_idx, amount in split.items():
+                    amount = int(amount)
+                    if amount < 0:
+                        return False, "blocker damage cannot be negative"
+                    if amount > 0 and member_idx not in allowed:
+                        return False, "blocker damage assigned to a creature it isn't blocking"
+                    total += amount
+                if total > split_blocker.effective_power:
+                    return False, "assigned blocker damage exceeds blocker power"
 
         # CR 510.5: there is a separate first-strike combat damage step if any
         # attacking or blocking creature has first strike or double strike — this
@@ -362,6 +389,34 @@ class CombatDamageStepMixin:
             if blocker_idx < 0 or blocker_idx >= len(defender.battlefield):
                 continue
             if not attacker_idxs:
+                continue
+            # CR 702.22j/k: an explicit division of this blocker's damage among the
+            # band members it blocks (validated above) wins over the single-target
+            # default. Each portion is dealt separately, honoring protection.
+            split = (blocker_damage_split or {}).get(blocker_idx)
+            if split:
+                blocker = defender.battlefield[blocker_idx]
+                if blocker.effective_power <= 0:
+                    continue
+                if run_first_pass and not participates_in_first_strike(blocker):
+                    continue
+                if not run_first_pass and has_first_strike_pass and not participates_in_second_strike(blocker):
+                    continue
+                for member_idx, amount in sorted(split.items()):
+                    amount = int(amount)
+                    if amount <= 0 or not (0 <= member_idx < len(attacker_controller.battlefield)):
+                        continue
+                    member = attacker_controller.battlefield[member_idx]
+                    if self._is_protected_from(member, blocker):
+                        continue
+                    dealt = self._mark_damage_on_permanent(member, amount, source=blocker)
+                    if dealt > 0:
+                        self._record_damage_source(member, blocker)
+                        self._fire_dealt_damage_triggers(member)
+                        if self._has_keyword(blocker, "lifelink"):
+                            add_lifelink(defending_index, dealt)
+                    if self._has_keyword(blocker, "deathtouch"):
+                        member.metadata["received_deathtouch"] = True
                 continue
             # A blocker deals its combat damage to one of the creatures it blocks
             # (CR 510.1c, defender's choice; default the first). A creature blocking

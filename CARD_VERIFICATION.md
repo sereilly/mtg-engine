@@ -3,9 +3,9 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **290**
-- Passed: **259**
-- Failed: **10**
-- Untested: **21**
+- Passed: **260**
+- Failed: **2**
+- Untested: **28**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -22,8 +22,8 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Balance | ✅ pass |  |
 | Basalt Monolith | ✅ pass |  |
 | Bayou | ✅ pass |  |
-| Benalish Hero | ❌ fail | When a band is blocked, the attacker gets to choose how all damage from the blocking creatures is assigned. |
-| Berserk | ❌ fail | I was able to cast this after combat damage step, which is not allowed. |
+| Benalish Hero | ✅ pass |  |
+| Berserk | ⬜ untested |  |
 | Birds of Paradise | ✅ pass |  |
 | Black Knight | ✅ pass |  |
 | Black Lotus | ✅ pass |  |
@@ -117,7 +117,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Grizzly Bears | ✅ pass |  |
 | Guardian Angel | ✅ pass |  |
 | Healing Salve | ✅ pass |  |
-| Helm of Chatzuk | ❌ fail | Activated ability doesn't give banding |
+| Helm of Chatzuk | ⬜ untested |  |
 | Hill Giant | ✅ pass |  |
 | Holy Armor | ✅ pass |  |
 | Holy Strength | ✅ pass |  |
@@ -128,7 +128,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Hypnotic Specter | ✅ pass |  |
 | Ice Storm | ✅ pass |  |
 | Icy Manipulator | ✅ pass |  |
-| Illusionary Mask | ❌ fail | Doesn't work when I have more than 1 creature in hand |
+| Illusionary Mask | ⬜ untested |  |
 | Instill Energy | ✅ pass |  |
 | Invisibility | ✅ pass |  |
 | Iron Star | ✅ pass |  |
@@ -144,7 +144,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Jump | ✅ pass |  |
 | Karma | ✅ pass |  |
 | Keldon Warlord | ✅ pass |  |
-| Kormus Bell | ✅ pass |  |
+| Kormus Bell | ⬜ untested |  |
 | Kudzu | ⬜ untested |  |
 | Lance | ✅ pass |  |
 | Ley Druid | ✅ pass |  |
@@ -154,8 +154,8 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Lifelace | ✅ pass |  |
 | Lifetap | ✅ pass |  |
 | Lightning Bolt | ✅ pass |  |
-| Living Artifact | ❌ fail | I can't see how many vitality counters the card has. Make sure the card display the number of counters it has and also make sure they aren't rendered behind the card this card is attached to. |
-| Living Lands | ❌ fail | I made my forests into creature but they didn't deal any damage when they attacked despite being 1/1s |
+| Living Artifact | ⬜ untested |  |
+| Living Lands | ✅ pass |  |
 | Living Wall | ✅ pass |  |
 | Llanowar Elves | ✅ pass |  |
 | Lord of Atlantis | ✅ pass |  |
@@ -192,7 +192,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Personal Incarnation | ✅ pass |  |
 | Pestilence | ✅ pass |  |
 | Phantasmal Forces | ✅ pass |  |
-| Phantasmal Terrain | ❌ fail | The land should go back to its original type after the aura is removed |
+| Phantasmal Terrain | ⬜ untested |  |
 | Phantom Monster | ✅ pass |  |
 | Pirate Ship | ✅ pass |  |
 | Plague Rats | ✅ pass |  |
@@ -210,9 +210,9 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Red Elemental Blast | ✅ pass |  |
 | Red Ward | ✅ pass |  |
 | Regeneration | ✅ pass |  |
-| Regrowth | ❌ fail | Regrowth should not make me target a player. The prompt should just tell me to target a card in my graveyard |
+| Regrowth | ⬜ untested |  |
 | Resurrection | ✅ pass |  |
-| Reverse Damage | ⬜ untested |  |
+| Reverse Damage | ❌ fail | Effect didn't work |
 | Righteousness | ✅ pass |  |
 | Roc of Kher Ridges | ✅ pass |  |
 | Rock Hydra | ⬜ untested |  |
@@ -237,7 +237,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Sinkhole | ✅ pass |  |
 | Siren's Call | ✅ pass |  |
 | Sleight of Mind | ✅ pass |  |
-| Smoke | ❌ fail | Smoke's prompt text is wrong. It should tell me to target a creature, not a land. Also it should highlight all valid untap targets. |
+| Smoke | ❌ fail | when I select more than 1 creature with smoke out I get the error "already selected maximum untap lands". It should say creatures instead |
 | Sol Ring | ✅ pass |  |
 | Soul Net | ✅ pass |  |
 | Spell Blast | ✅ pass |  |
@@ -271,7 +271,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Unsummon | ✅ pass |  |
 | Uthden Troll | ✅ pass |  |
 | Verduran Enchantress | ✅ pass |  |
-| Vesuvan Doppelganger | ❌ fail | When I copy a card it should also copy all activated and triggered abilities |
+| Vesuvan Doppelganger | ⬜ untested |  |
 | Veteran Bodyguard | ✅ pass |  |
 | Volcanic Eruption | ✅ pass |  |
 | Wall of Air | ✅ pass |  |

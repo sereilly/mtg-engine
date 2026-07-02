@@ -117,6 +117,35 @@ class TestAnimatedLandTargeting:
         assert any(t["seat"] == 0 and t["index"] == 1 for t in spec["valid_targets"])
 
 
+class TestAnimatedLandTypeOverride:
+    def test_kormus_bell_animates_land_overridden_to_swamp(self, cards):
+        # Evil Presence makes the enchanted land a Swamp (replacing its printed
+        # type, CR 305.7) — Kormus Bell must then animate it.
+        bell = Permanent(card=cards["Kormus Bell"])
+        mountain = _nosick(Permanent(card=cards["Mountain"]))
+        p1 = PlayerState(name="P1", battlefield=[bell, mountain], hand=[cards["Evil Presence"]])
+        p2 = PlayerState(name="P2")
+        game = _game(p1, p2)
+        result = game.cast_from_hand(0, "Evil Presence", target_player_index=0, target_permanent_index=1)
+        assert result.supported
+        assert mountain.metadata.get("land_type_override") == "swamp"
+        game._refresh_dynamic_creatures()
+        assert mountain.metadata.get("land_animated") is True
+        assert (mountain.effective_power, mountain.effective_toughness) == (1, 1)
+
+    def test_kormus_bell_does_not_animate_swamp_overridden_away(self, cards):
+        # The reverse: a printed Swamp whose type was replaced with a non-Swamp
+        # type is no longer a Swamp, so Kormus Bell must NOT animate it.
+        bell = Permanent(card=cards["Kormus Bell"])
+        swamp = _nosick(Permanent(card=cards["Swamp"]))
+        swamp.metadata["land_type_override"] = "mountain"
+        p1 = PlayerState(name="P1", battlefield=[bell, swamp])
+        p2 = PlayerState(name="P2")
+        game = _game(p1, p2)
+        game._refresh_dynamic_creatures()
+        assert swamp.metadata.get("land_animated") is not True
+
+
 class TestAnimatedLandCombat:
     def test_animated_swamp_declares_as_attacker(self, cards):
         game, p1, p2, swamp = _animated_swamp_game(cards)

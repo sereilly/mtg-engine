@@ -194,7 +194,7 @@ class PermanentStateMixin:
         """
         changes: list[tuple[str, str]] = []
         for perm in all_permanents:
-            for instr in compile_card_oracle(perm.card).instructions:
+            for instr in compile_card_oracle(perm.effective_card).instructions:
                 if instr.kind == "static_land_type_change":
                     changes.append(
                         (instr.payload.get("from_type", ""), instr.payload.get("to_type", ""))
@@ -261,7 +261,7 @@ class PermanentStateMixin:
             attacking_buff_power = 0
             attacking_buff_toughness = 0
             for perm in player.battlefield:
-                for instr in compile_card_oracle(perm.card).instructions:
+                for instr in compile_card_oracle(perm.effective_card).instructions:
                     if instr.kind == "buff_attacking_creatures":
                         attacking_buff_power += int(instr.payload.get("power", 0))
                         attacking_buff_toughness += int(instr.payload.get("toughness", 0))
@@ -285,7 +285,7 @@ class PermanentStateMixin:
             )
 
             for permanent in player.battlefield:
-                prog = compile_card_oracle(permanent.card)
+                prog = compile_card_oracle(permanent.effective_card)
                 instr_kinds = {instr.kind for instr in prog.instructions}
 
                 if "dynamic_pt_non_wall_creatures" in instr_kinds:
@@ -330,16 +330,22 @@ class PermanentStateMixin:
                 # Kormus Bell / Living Lands animate basic lands into 1/1 creatures
                 # while the source is on the battlefield. Recomputed every call so
                 # the lands revert the moment the animating enchantment leaves
-                # (CR 611.3a/b).
+                # (CR 611.3a/b). A land-type override (Evil Presence / Phantasmal
+                # Terrain) REPLACES the printed type (CR 305.7), so an overridden
+                # land animates by its override, not its printed type line.
+                land_override = str(permanent.metadata.get("land_type_override", "")).lower()
+                effective_land_types = (
+                    land_override if land_override else permanent.card.type_line.lower()
+                )
                 is_animated_swamp = (
                     kormus_active
                     and permanent.card.primary_type == "land"
-                    and "swamp" in permanent.card.type_line.lower()
+                    and "swamp" in effective_land_types
                 )
                 is_animated_forest = (
                     living_lands_active
                     and permanent.card.primary_type == "land"
-                    and "forest" in permanent.card.type_line.lower()
+                    and "forest" in effective_land_types
                 )
                 if is_animated_swamp or is_animated_forest:
                     permanent.metadata["land_animated"] = True
@@ -395,12 +401,16 @@ class PermanentStateMixin:
             or permanent.metadata.get("gains_trample_until_eot", False)
         ):
             return True
+        # Banding granted by an activated ability (Helm of Chatzuk) — must show on
+        # the keyword strip and drive band declaration like printed banding.
+        if lower_keyword == "banding" and permanent.metadata.get("gains_banding_until_eot", False):
+            return True
         if lower_keyword == "deathtouch" and permanent.metadata.get("has_deathtouch", False):
             return True
         # Fall back to oracle program static lines (e.g. test cards that put keyword in oracle_text).
         # A lord line ("Other Merfolk ... have islandwalk") grants the keyword to
         # OTHER creatures, not to the lord itself, so it must not match here.
-        program = compile_card_oracle(permanent.card)
+        program = compile_card_oracle(permanent.effective_card)
         return any(
             i.kind in ("keyword_line", "static_line")
             and lower_keyword in i.value
@@ -432,7 +442,7 @@ class PermanentStateMixin:
         single color (e.g. Black Knight's "protection from white").
         """
         colors: set[str] = set()
-        program = compile_card_oracle(permanent.card)
+        program = compile_card_oracle(permanent.effective_card)
         for instr in program.instructions:
             if instr.kind == "static_line" and instr.value.startswith("protection from "):
                 clause = instr.value[len("protection from "):].strip()

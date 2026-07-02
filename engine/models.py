@@ -79,6 +79,17 @@ class Permanent:
         return self.card.produced_mana
 
     @property
+    def effective_card(self) -> "CardDefinition":
+        """The card whose printed characteristics this permanent currently has.
+
+        A copy (Clone / Vesuvan Doppelganger) keeps its own ``card`` (so the
+        copier's identity, upkeep re-copy prompt, and name-keyed flows still
+        work) but takes the copied creature's copiable values — including its
+        activated and triggered abilities (CR 707.2). Ability compilation and
+        serialization must read this, not ``card``."""
+        return self.metadata.get("copied_card") or self.card
+
+    @property
     def is_creature(self) -> bool:
         """Whether this permanent is currently a creature: printed as one, or a
         land animated into one (Kormus Bell / Living Lands set ``land_animated``),

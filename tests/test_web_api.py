@@ -1474,6 +1474,67 @@ def test_next_phase_ai_defender_auto_declares_blockers_and_advances_when_no_inst
     assert payload["combat"]["blockers_locked"] is True
 
 
+def test_next_phase_holds_post_block_priority_when_stop_flagged():
+    """Regression: a human attacker with the declare-blockers stop flagged on the
+    phase rail must receive the CR 509.4 priority window after the AI defender
+    declares blockers (to cast combat tricks), instead of the server skipping
+    straight through combat damage."""
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_ai",
+            "host_name": "Host",
+            "guest_name": "AI",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 99202,
+        },
+    ).json()
+    sid = created["session_id"]
+
+    session = store.get(sid)
+    attacker = _mk_creature_card("Attacker", 3, 3)
+    blocker = _mk_creature_card("Blocker", 2, 2)
+    session.game.players[0].battlefield = [Permanent(card=attacker)]
+    session.game.players[1].battlefield = [Permanent(card=blocker)]
+    session.current_turn = 0
+    session.game.active_player_index = 0
+    session.game.current_turn_phase = "combat"
+    session.game.current_step = "declare_attackers"
+    session.game.current_phase = "combat"
+
+    declared = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "declare_attackers", "attacker_indices": [0], "target_seat": 1},
+    )
+    assert declared.status_code == 200
+
+    to_blockers = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "next_phase", "self_stop_steps": ["declare_blockers"]},
+    )
+    assert to_blockers.status_code == 200
+    assert to_blockers.json()["current_step"] == "declare_blockers"
+
+    ai_block = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "next_phase", "self_stop_steps": ["declare_blockers"]},
+    )
+    assert ai_block.status_code == 200
+    payload = ai_block.json()
+    # Blocks are declared, but the step must NOT advance: the attacker holds
+    # priority so they can respond to the blocks.
+    assert payload["current_step"] == "declare_blockers"
+    assert payload["combat"]["blockers_locked"] is True
+    assert payload["priority_player"] == 0
+
+    # Passing through the window (a later next_phase) advances combat normally.
+    advanced = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "next_phase", "self_stop_steps": ["declare_blockers"]},
+    )
+    assert advanced.status_code == 200
+    assert advanced.json()["current_step"] == "end_of_combat"
 
 
 def test_human_defender_can_declare_blockers_while_ai_attacker_holds_priority():

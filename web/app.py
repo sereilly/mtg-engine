@@ -251,7 +251,9 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         "base_power": _printed_stat(perm.card, "power"),
         "base_toughness": _printed_stat(perm.card, "toughness"),
         "mana_cost": perm.card.mana_cost,
-        "oracle_text": perm.card.oracle_text,
+        # A copy (Clone / Vesuvan Doppelganger) shows — and the UI activates —
+        # the copied card's abilities, so its text is the effective text.
+        "oracle_text": perm.effective_card.oracle_text,
         # Word-level edits from a text-changing spell (Sleight of Mind / Magical
         # Hack) so the UI can strike the old word and show the new word in gold.
         "text_changes": _text_change_replacements(perm),
@@ -314,6 +316,9 @@ def _serialize_counters(perm) -> dict:
     corpse = int(perm.metadata.get("corpse_counters", 0))
     if corpse:
         counters["corpse"] = corpse
+    vitality = int(perm.metadata.get("vitality_counters", 0))
+    if vitality:
+        counters["vitality"] = vitality
     return counters
 
 
@@ -1469,11 +1474,17 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
             valid_selected = valid_selected[:untap_required]
         session.untap_selected_indices = valid_selected
         session.untap_required_lands = untap_required
+        # Which permanent types are constrained (Winter Orb → lands, Smoke →
+        # creatures) so the prompt can name the right type instead of always
+        # saying "lands".
+        untap_options = session.game.get_untap_land_selection_options(session.current_turn) or {}
         untap_info = {
             "max_count": untap_required,
             "candidate_indices": valid_candidates,
             "selected_indices": valid_selected,
             "selected_count": len(valid_selected),
+            "land_max": untap_options.get("land_max"),
+            "creature_max": untap_options.get("creature_max"),
         }
 
     search_library_info = None
@@ -2636,6 +2647,18 @@ def _advance_phase(session: Session) -> None:
                             x_value=instant_action.x_value,
                         )
                         return
+                    # CR 509.4: declaring blockers opened a priority window for the
+                    # active player. When a human attacker flagged the declare-blockers
+                    # stop on the phase rail, hold here so they can respond to the
+                    # blocks (combat tricks, block triggers on the stack) instead of
+                    # skipping straight to combat damage; the client advances again
+                    # once they pass priority or hit Next Phase.
+                    if (
+                        game.combat_attackers
+                        and game.priority_player_index is not None
+                        and _self_should_hold(session, "declare_blockers")
+                    ):
+                        return
         game.advance_combat_phase()
         return
     if phase == "postcombat_main":
@@ -3449,8 +3472,19 @@ def do_action(session_id: str, req: GameActionRequest):
             if req.blocker_damage
             else None
         )
+        blocker_damage_split = (
+            {
+                int(b): {int(m): int(v) for m, v in split.items()}
+                for b, split in req.blocker_damage_split.items()
+            }
+            if req.blocker_damage_split
+            else None
+        )
         ok, details = session.game.resolve_combat_damage(
-            req.seat, attacker_damage=attacker_damage, blocker_damage=blocker_damage
+            req.seat,
+            attacker_damage=attacker_damage,
+            blocker_damage=blocker_damage,
+            blocker_damage_split=blocker_damage_split,
         )
         if not ok:
             raise HTTPException(status_code=400, detail=details)

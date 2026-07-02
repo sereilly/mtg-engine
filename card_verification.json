@@ -66,14 +66,9 @@
       "updated_at": 1782598699.9781644
     },
     "Benalish Hero": {
-      "reason": "When a band is blocked, the attacker gets to choose how all damage from the blocking creatures is assigned.",
-      "status": "fail",
-      "updated_at": 1782970042.8944705
-    },
-    "Berserk": {
-      "reason": "I was able to cast this after combat damage step, which is not allowed.",
-      "status": "fail",
-      "updated_at": 1782972593.6853619
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1783012863.297725
     },
     "Birds of Paradise": {
       "reason": "",
@@ -505,11 +500,6 @@
       "status": "pass",
       "updated_at": 1781461708.2940688
     },
-    "Helm of Chatzuk": {
-      "reason": "Activated ability doesn't give banding",
-      "status": "fail",
-      "updated_at": 1782972348.6716807
-    },
     "Hill Giant": {
       "reason": "",
       "status": "pass",
@@ -559,11 +549,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782797423.653214
-    },
-    "Illusionary Mask": {
-      "reason": "Doesn't work when I have more than 1 creature in hand",
-      "status": "fail",
-      "updated_at": 1782969797.0945382
     },
     "Instill Energy": {
       "reason": "",
@@ -640,11 +625,6 @@
       "status": "pass",
       "updated_at": 1782590997.0348485
     },
-    "Kormus Bell": {
-      "reason": "",
-      "status": "pass",
-      "updated_at": 1782970109.340321
-    },
     "Lance": {
       "reason": "",
       "status": "pass",
@@ -675,15 +655,10 @@
       "status": "pass",
       "updated_at": 1782005004.5772283
     },
-    "Living Artifact": {
-      "reason": "I can't see how many vitality counters the card has. Make sure the card display the number of counters it has and also make sure they aren't rendered behind the card this card is attached to.",
-      "status": "fail",
-      "updated_at": 1782970876.8042116
-    },
     "Living Lands": {
-      "reason": "I made my forests into creature but they didn't deal any damage when they attacked despite being 1/1s",
-      "status": "fail",
-      "updated_at": 1782972902.4116483
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1783012989.7665067
     },
     "Living Wall": {
       "reason": "",
@@ -860,11 +835,6 @@
       "status": "pass",
       "updated_at": 1782591330.2038229
     },
-    "Phantasmal Terrain": {
-      "reason": "The land should go back to its original type after the aura is removed",
-      "status": "fail",
-      "updated_at": 1782972030.4258165
-    },
     "Phantom Monster": {
       "reason": "",
       "status": "pass",
@@ -950,15 +920,15 @@
       "status": "pass",
       "updated_at": 1782019199.2218683
     },
-    "Regrowth": {
-      "reason": "Regrowth should not make me target a player. The prompt should just tell me to target a card in my graveyard",
-      "status": "fail",
-      "updated_at": 1782970697.256604
-    },
     "Resurrection": {
       "reason": "",
       "status": "pass",
       "updated_at": 1782541428.6675277
+    },
+    "Reverse Damage": {
+      "reason": "Effect didn't work",
+      "status": "fail",
+      "updated_at": 1783013038.3676991
     },
     "Righteousness": {
       "reason": "",
@@ -1061,9 +1031,9 @@
       "updated_at": 1782922471.4433315
     },
     "Smoke": {
-      "reason": "Smoke's prompt text is wrong. It should tell me to target a creature, not a land. Also it should highlight all valid untap targets.",
+      "reason": "when I select more than 1 creature with smoke out I get the error \"already selected maximum untap lands\". It should say creatures instead",
       "status": "fail",
-      "updated_at": 1782971698.927809
+      "updated_at": 1783013181.631562
     },
     "Sol Ring": {
       "reason": "",
@@ -1209,11 +1179,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782965316.38657
-    },
-    "Vesuvan Doppelganger": {
-      "reason": "When I copy a card it should also copy all activated and triggered abilities",
-      "status": "fail",
-      "updated_at": 1782970758.9799287
     },
     "Veteran Bodyguard": {
       "reason": "",

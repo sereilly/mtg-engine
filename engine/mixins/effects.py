@@ -38,7 +38,7 @@ class EffectsMixin:
         player/opponent" triggers (e.g. Hypnotic Specter) onto the stack. They resolve
         through the post-combat priority window (CR 603.3), like attack/block triggers.
         The defending player is captured in trigger_context."""
-        program = compile_card_oracle(attacker.card)
+        program = compile_card_oracle(attacker.effective_card)
         controller_index = self._controller_index_of(attacker)
         defending_index = self.players.index(defending_player)
         events: list[dict] = []
@@ -67,7 +67,7 @@ class EffectsMixin:
     def _fire_dealt_damage_triggers(self, permanent: Permanent) -> None:
         """Put 'whenever this creature is dealt damage' triggers (e.g. Fungusaur) onto
         the stack; they resolve off the stack (CR 603.3) rather than inline."""
-        program = compile_card_oracle(permanent.card)
+        program = compile_card_oracle(permanent.effective_card)
         controller_index = self._controller_index_of(permanent)
         events: list[dict] = []
         for trig in program.triggered_abilities:
@@ -545,7 +545,7 @@ class EffectsMixin:
         for controller in self.players:
             controller_index = self.players.index(controller)
             for permanent in controller.battlefield:
-                program = compile_card_oracle(permanent.card)
+                program = compile_card_oracle(permanent.effective_card)
                 if not any(t.condition.kind == "land_enters" for t in program.triggered_abilities):
                     continue
                 events.append({
@@ -564,7 +564,7 @@ class EffectsMixin:
         for controller in self.players:
             controller_index = self.players.index(controller)
             for permanent in list(controller.battlefield):
-                program = compile_card_oracle(permanent.card)
+                program = compile_card_oracle(permanent.effective_card)
                 for trig in program.triggered_abilities:
                     if trig.condition.kind != "land_dies" or trig.instruction is None:
                         continue

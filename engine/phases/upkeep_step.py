@@ -62,7 +62,7 @@ class UpkeepStepMixin:
         controller = self.players[player_index]
         choices: list[dict] = []
         for permanent in controller.battlefield:
-            program = compile_card_oracle(permanent.card)
+            program = compile_card_oracle(permanent.effective_card)
             for trig in program.triggered_abilities:
                 if trig.instruction is None:
                     continue
@@ -91,7 +91,7 @@ class UpkeepStepMixin:
                 attached = permanent.metadata.get("attached_to")
                 if attached is None or attached not in controller.battlefield:
                     continue
-                for trig in compile_card_oracle(permanent.card).triggered_abilities:
+                for trig in compile_card_oracle(permanent.effective_card).triggered_abilities:
                     if (
                         trig.instruction is not None
                         and trig.condition.kind == "upkeep_enchanted_controller"
@@ -115,7 +115,7 @@ class UpkeepStepMixin:
                 attached = permanent.metadata.get("attached_to")
                 if attached is None or attached not in controller.battlefield:
                     continue
-                text = compile_card_oracle(permanent.card).normalized_text
+                text = compile_card_oracle(permanent.effective_card).normalized_text
                 if not text.startswith("enchant land") or "you may pay" not in text or "you gain" not in text:
                     continue
                 pay_match = re.search(r"you may pay ((?:\{[wubrgc]\})+)", text)
@@ -145,7 +145,7 @@ class UpkeepStepMixin:
                 attached = permanent.metadata.get("attached_to")
                 if attached is None or attached not in victim.battlefield:
                     continue
-                for trig in compile_card_oracle(permanent.card).triggered_abilities:
+                for trig in compile_card_oracle(permanent.effective_card).triggered_abilities:
                     if (
                         trig.condition.kind == "upkeep_enchanted_controller"
                         and trig.instruction is not None
@@ -297,7 +297,7 @@ class UpkeepStepMixin:
 
         for controller in self.players:
             for permanent in controller.battlefield:
-                program = compile_card_oracle(permanent.card)
+                program = compile_card_oracle(permanent.effective_card)
                 for trig in program.triggered_abilities:
                     if trig.instruction is None:
                         continue
@@ -557,7 +557,7 @@ class UpkeepStepMixin:
             for permanent in controller.battlefield:
                 if permanent.card.primary_type != "enchantment":
                     continue
-                prog = compile_card_oracle(permanent.card)
+                prog = compile_card_oracle(permanent.effective_card)
                 text = prog.normalized_text
                 if not text.startswith("enchant land"):
                     continue
@@ -582,7 +582,7 @@ class UpkeepStepMixin:
             for permanent in controller.battlefield:
                 if permanent.card.primary_type != "enchantment":
                     continue
-                prog = compile_card_oracle(permanent.card)
+                prog = compile_card_oracle(permanent.effective_card)
                 text = prog.normalized_text
                 if not text.startswith("enchant land"):
                     continue

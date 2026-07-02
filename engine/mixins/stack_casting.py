@@ -715,7 +715,7 @@ class StackCastingMixin:
             raise ValueError(f"Permanent not found: {permanent_name}")
         _, permanent = resolved
 
-        program = compile_card_oracle(permanent.card)
+        program = compile_card_oracle(permanent.effective_card)
         target_idx = target_player_index if target_player_index is not None else (1 - controller_index)
         target_player = self.players[target_idx]
 
@@ -1059,6 +1059,22 @@ class StackCastingMixin:
             )
             if not before_blockers:
                 details = "can only be cast during combat before blockers are declared"
+                self.log.append(details)
+                return SimulationResult(card.name, False, classification.effect_kind, details)
+
+        # Berserk: "Cast this spell only before the combat damage step." Illegal
+        # once the turn has reached the combat damage step — during it, after it
+        # (end of combat, postcombat main), or in the ending phase.
+        if "cast this spell only before the combat damage step" in card.oracle_text.lower():
+            past_combat_damage = (
+                self.current_turn_phase in ("postcombat_main", "ending")
+                or (
+                    self.current_turn_phase == "combat"
+                    and self.current_step in ("combat_damage", "end_of_combat")
+                )
+            )
+            if past_combat_damage:
+                details = "can only be cast before the combat damage step"
                 self.log.append(details)
                 return SimulationResult(card.name, False, classification.effect_kind, details)
 

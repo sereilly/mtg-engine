@@ -1883,26 +1883,47 @@ class BattlefieldCanvas {
       ctx.fillText(String(dmgCard.damage_marked), x + 2 + bw / 2, y + h - bh / 2 - 2);
     }
 
-    // ---- Corpse counter badge (Scavenging Ghoul) ----
-    // Counters the card accumulates (corpse counters) shown bottom-right so the
-    // player can see how many regenerations they have banked.
-    const counterCard = creatureCard || card;
-    const corpseCount = counterCard && Number(counterCard.corpse_counters);
-    if (corpseCount > 0) {
+    // ---- Counter badges (corpse, vitality, …) ----
+    // Every counter type in the serialized `counters` map gets a badge so the
+    // player can see the card's banked counters (Scavenging Ghoul's corpse
+    // counters, Living Artifact's vitality counters). Normally bottom-right;
+    // for an aura fanned behind its enchanted permanent only the top strip of
+    // the card is visible, so its badges anchor top-right instead of being
+    // hidden under the base card (flags.occludedAuraMember).
+    const counterEntries = [];
+    const counterMap = card && card.counters;
+    if (counterMap && typeof counterMap === "object" && Object.keys(counterMap).length) {
+      for (const [kind, n] of Object.entries(counterMap)) {
+        if (Number(n) > 0) counterEntries.push([kind, Number(n)]);
+      }
+    } else if (card && Number(card.corpse_counters) > 0) {
+      counterEntries.push(["corpse", Number(card.corpse_counters)]);
+    }
+    if (counterEntries.length) {
+      const styles = {
+        corpse: { icon: "☠", fill: "rgba(60,40,70,0.92)", stroke: "rgba(180,140,220,0.9)", text: "#f0e6ff" },
+        vitality: { icon: "❤", fill: "rgba(30,70,40,0.92)", stroke: "rgba(130,220,150,0.9)", text: "#e6ffe9" },
+      };
+      const fallbackStyle = { icon: "●", fill: "rgba(40,50,70,0.92)", stroke: "rgba(150,180,220,0.9)", text: "#e8f0ff" };
       const bw = 22, bh = 13;
-      const bx = x + w - bw - 2, by = y + h - bh - 2;
-      ctx.fillStyle = "rgba(60,40,70,0.92)";
-      this._roundRect(ctx, bx, by, bw, bh, 3);
-      ctx.fill();
-      ctx.strokeStyle = "rgba(180,140,220,0.9)";
-      ctx.lineWidth = 1;
-      this._roundRect(ctx, bx, by, bw, bh, 3);
-      ctx.stroke();
-      ctx.fillStyle = "#f0e6ff";
-      ctx.font = `bold ${Math.max(8, bh * 0.7)}px sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText("☠" + corpseCount, bx + bw / 2, by + bh / 2);
+      const atTop = !!(flags && flags.occludedAuraMember);
+      counterEntries.forEach(([kind, count], i) => {
+        const s = styles[kind] || fallbackStyle;
+        const bx = x + w - bw - 2;
+        const by = atTop ? y + 2 + i * (bh + 2) : y + h - bh - 2 - i * (bh + 2);
+        ctx.fillStyle = s.fill;
+        this._roundRect(ctx, bx, by, bw, bh, 3);
+        ctx.fill();
+        ctx.strokeStyle = s.stroke;
+        ctx.lineWidth = 1;
+        this._roundRect(ctx, bx, by, bw, bh, 3);
+        ctx.stroke();
+        ctx.fillStyle = s.text;
+        ctx.font = `bold ${Math.max(8, bh * 0.7)}px sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(s.icon + count, bx + bw / 2, by + bh / 2);
+      });
     }
 
     // ---- Damage-prevention shield badge ----
@@ -2103,6 +2124,12 @@ class BattlefieldCanvas {
     // Topmost (fully visible) card of a pile shows the pile size.
     const pile = this.stacks.find((s) => s.kind === "pile" && s.keys.length >= 2 && s.keys[s.keys.length - 1] === item.key);
     if (pile) flags.pileCount = pile.keys.length;
+
+    // An aura fanned upward behind its enchanted permanent is occluded except
+    // for its top strip — badges (counters) must anchor there to stay visible.
+    flags.occludedAuraMember = this.stacks.some(
+      (s) => s.kind === "aura" && !s.sideX && s.keys.indexOf(item.key) > 0
+    );
 
     // If this is the topmost card in an aura stack, show the bottom creature's P/T and damage on it.
     let creatureCard = null;

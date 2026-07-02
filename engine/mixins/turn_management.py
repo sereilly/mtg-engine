@@ -277,7 +277,7 @@ class TurnManagementMixin:
         # routing would require deferring these across the cost-payment/cast boundary.
         for controller in self.players:
             for perm in controller.battlefield:
-                prog = compile_card_oracle(perm.card)
+                prog = compile_card_oracle(perm.effective_card)
                 for trig in prog.triggered_abilities:
                     if trig.condition.kind == "land_tapped_for_mana" and trig.instruction is not None:
                         amount = int(trig.instruction.payload.get("amount", 1))
