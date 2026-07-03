@@ -57,7 +57,8 @@ def volcanic_eruption(game: Game, instruction: OracleInstruction, context: Oracl
     for owner, perm in chosen:
         if perm in owner.battlefield and not game._is_indestructible(perm):
             owner.battlefield.remove(perm)
-            owner.graveyard.append(perm.card)
+            game._permanent_to_graveyard(owner, perm)
+            game._process_land_dies(game.players.index(owner))
             destroyed += 1
     game.log.append(f"{card.name} destroyed {destroyed} Mountain(s)")
 
