@@ -18,31 +18,34 @@ class EndStepMixin:
         step = "end"
         self._set_phase_and_step(phase, step)
         self._on_step_or_phase_begin(phase, step)
+        def _delayed_eot_removal(permanent: Permanent) -> bool:
+            # Nettling Imp / Siren's Call: destroy creatures that were
+            # required to attack this turn but didn't.
+            did_not_attack = permanent.metadata.get(
+                "destroy_if_did_not_attack_eot"
+            ) and not permanent.metadata.get("attacked_this_turn")
+            # Berserk: "destroy that creature if it attacked this turn."
+            berserk_attacked = permanent.metadata.get(
+                "destroy_if_attacked_eot"
+            ) and permanent.metadata.get("attacked_this_turn")
+            # Dragon Whelp / Berserk set a delayed end-of-turn destruction.
+            return bool(
+                permanent.metadata.get("destroy_at_next_end_step")
+                or permanent.metadata.get("sacrifice_at_next_end_step")
+                or did_not_attack
+                or berserk_attacked
+            )
+
+        # Regeneration is deliberately not offered here: the flags conflate
+        # sacrifices (never replaceable by regeneration, CR 701.15e) with
+        # destructions; separating them is a rules feature, not cleanup.
         destroyed_names: list[str] = []
         for controller in self.players:
-            survivors: list[Permanent] = []
-            for permanent in controller.battlefield:
-                # Nettling Imp / Siren's Call: destroy creatures that were
-                # required to attack this turn but didn't.
-                did_not_attack = permanent.metadata.get(
-                    "destroy_if_did_not_attack_eot"
-                ) and not permanent.metadata.get("attacked_this_turn")
-                # Berserk: "destroy that creature if it attacked this turn."
-                berserk_attacked = permanent.metadata.get(
-                    "destroy_if_attacked_eot"
-                ) and permanent.metadata.get("attacked_this_turn")
-                # Dragon Whelp / Berserk set a delayed end-of-turn destruction.
-                if (
-                    permanent.metadata.get("destroy_at_next_end_step")
-                    or permanent.metadata.get("sacrifice_at_next_end_step")
-                    or did_not_attack
-                    or berserk_attacked
-                ):
-                    controller.graveyard.append(permanent.card)
-                    destroyed_names.append(permanent.card.name)
-                else:
-                    survivors.append(permanent)
-            controller.battlefield = survivors
+            for permanent in self._destroy_swept_permanents(
+                controller, _delayed_eot_removal,
+                allow_regeneration=False, respect_indestructible=False,
+            ):
+                destroyed_names.append(permanent.card.name)
 
         for name in destroyed_names:
             self.log.append(f"{name} was destroyed at end step")
