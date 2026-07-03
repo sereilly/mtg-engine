@@ -8,11 +8,7 @@ than asserted against absent functionality.
 
 from __future__ import annotations
 
-from pathlib import Path
-
-import pytest
-
-from engine import Game, load_cards
+from engine import Game
 from engine.models import CardDefinition, Permanent, PlayerState
 
 
@@ -54,11 +50,6 @@ def _to_declare_blockers(game: Game, attacker_indices: list[int]) -> None:
     assert ok, msg
     game.advance_combat_phase()  # declare_blockers
     assert game.current_step == "declare_blockers"
-
-
-@pytest.fixture(scope="module")
-def all_cards():
-    return load_cards(Path(__file__).resolve().parent.parent / "lea_cards.json")
 
 
 def _get(all_cards, name: str) -> CardDefinition:
@@ -159,7 +150,9 @@ def test_509_1b_flying_attacker_can_be_blocked_by_flier_or_reach():
 
     ok, _ = game.declare_blockers(1, {0: 0})
     assert ok
-    assert game.combat_blockers == {0: 0}
+    # combat_blockers maps blocker index -> list of blocked attacker indices
+    # (a creature may block several attackers, CR 509.1b / _max_blocks_for).
+    assert game.combat_blockers == {0: [0]}
 
 
 def test_509_1b_evasion_abilities_are_cumulative():
@@ -430,9 +423,14 @@ def test_509_3_block_trigger_does_not_fire_for_unblocked_attacker(all_cards):
 
 
 def test_509_3a_blocking_basilisk_regeneration_saves_the_blocked_creature(all_cards):
-    """End-of-combat destruction honors regeneration shields like any destroy."""
+    """End-of-combat destruction honors regeneration shields like any destroy.
+
+    The attacker is a 1/3 so the Basilisk's 2 combat damage is not lethal —
+    otherwise the single shield would be consumed replacing the lethal-damage
+    destruction (CR 701.19a: one shield replaces one destruction event) and the
+    end-of-combat destroy would still kill it."""
     basilisk = Permanent(card=_get(all_cards, "Thicket Basilisk"))
-    attacker = Permanent(card=_mk_creature("Tough Guy", 1, 1), regeneration_shield=1)
+    attacker = Permanent(card=_mk_creature("Tough Guy", 1, 3), regeneration_shield=1)
     p1 = PlayerState(name="P1", battlefield=[attacker])
     p2 = PlayerState(name="P2", battlefield=[basilisk])
     game = Game(players=[p1, p2])
