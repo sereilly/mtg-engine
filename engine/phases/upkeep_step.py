@@ -11,6 +11,7 @@ import re
 
 from ..models import Permanent
 from ..oracle import OracleInstruction, compile_card_oracle
+from ..trigger_utils import iter_triggered_abilities, matching_triggers
 from ..mixins._constants import _UPKEEP_PAY_KINDS
 
 
@@ -61,26 +62,21 @@ class UpkeepStepMixin:
         """
         controller = self.players[player_index]
         choices: list[dict] = []
-        for permanent in controller.battlefield:
-            program = compile_card_oracle(permanent.effective_card)
-            for trig in program.triggered_abilities:
-                if trig.instruction is None:
-                    continue
-                if trig.condition.kind != "upkeep_self":
-                    continue
-                if trig.instruction.kind not in _UPKEEP_PAY_KINDS:
-                    continue
-                mana: dict[str, int] = trig.instruction.payload.get("mana", {})
-                choices.append({
-                    "card_name": permanent.card.name,
-                    "mana": mana,
-                    "kind": trig.instruction.kind,
-                    # "unless you pay" alternative consequence, used to label the
-                    # decline button (e.g. Force of Nature deals 8 damage; it is
-                    # not a sacrifice).
-                    "damage": int(trig.instruction.payload.get("damage", 0)),
-                })
-                break
+        for _idx, permanent, trig in iter_triggered_abilities(
+            self,
+            condition_kinds={"upkeep_self"},
+            instruction_kinds=_UPKEEP_PAY_KINDS,
+            players=[controller],
+        ):
+            choices.append({
+                "card_name": permanent.card.name,
+                "mana": trig.instruction.payload.get("mana", {}),
+                "kind": trig.instruction.kind,
+                # "unless you pay" alternative consequence, used to label the
+                # decline button (e.g. Force of Nature deals 8 damage; it is
+                # not a sacrifice).
+                "damage": int(trig.instruction.payload.get("damage", 0)),
+            })
 
         # Paralyze-style auras: "At the beginning of the upkeep of enchanted
         # creature's controller, that player may pay {N}. If they do, untap the
@@ -91,19 +87,18 @@ class UpkeepStepMixin:
                 attached = permanent.metadata.get("attached_to")
                 if attached is None or attached not in controller.battlefield:
                     continue
-                for trig in compile_card_oracle(permanent.effective_card).triggered_abilities:
-                    if (
-                        trig.instruction is not None
-                        and trig.condition.kind == "upkeep_enchanted_controller"
-                        and trig.instruction.kind == "upkeep_pay_to_untap_enchanted"
-                    ):
-                        choices.append({
-                            "card_name": permanent.card.name,
-                            "mana": trig.instruction.payload.get("mana", {}),
-                            "kind": trig.instruction.kind,
-                            "damage": 0,
-                        })
-                        break
+                trig = next(matching_triggers(
+                    permanent.effective_card,
+                    condition_kinds={"upkeep_enchanted_controller"},
+                    instruction_kinds={"upkeep_pay_to_untap_enchanted"},
+                ), None)
+                if trig is not None:
+                    choices.append({
+                        "card_name": permanent.card.name,
+                        "mana": trig.instruction.payload.get("mana", {}),
+                        "kind": trig.instruction.kind,
+                        "damage": 0,
+                    })
 
         # Farmstead-style enchant-land grants: "Enchanted land has 'At the beginning
         # of your upkeep, you may pay {N}. If you do, you gain X life.'" The enchanted
@@ -145,18 +140,17 @@ class UpkeepStepMixin:
                 attached = permanent.metadata.get("attached_to")
                 if attached is None or attached not in victim.battlefield:
                     continue
-                for trig in compile_card_oracle(permanent.effective_card).triggered_abilities:
-                    if (
-                        trig.condition.kind == "upkeep_enchanted_controller"
-                        and trig.instruction is not None
-                        and trig.instruction.kind == "deal_damage"
-                    ):
-                        triggers.append({
-                            "card_name": permanent.card.name,
-                            "kind": "upkeep_pay_to_prevent_damage",
-                            "damage": int(trig.instruction.payload.get("amount", 1)),
-                        })
-                        break
+                trig = next(matching_triggers(
+                    permanent.effective_card,
+                    condition_kinds={"upkeep_enchanted_controller"},
+                    instruction_kinds={"deal_damage"},
+                ), None)
+                if trig is not None:
+                    triggers.append({
+                        "card_name": permanent.card.name,
+                        "kind": "upkeep_pay_to_prevent_damage",
+                        "damage": int(trig.instruction.payload.get("amount", 1)),
+                    })
         return triggers
 
     def _process_mire_cleanups(self, player_index: int) -> None:
@@ -204,19 +198,14 @@ class UpkeepStepMixin:
         owner = self.players[player_index]
         candidates = []
         for grave_index, card in enumerate(owner.graveyard):
-            program = compile_card_oracle(card)
-            instr = next(
-                (
-                    trig.instruction
-                    for trig in program.triggered_abilities
-                    if trig.instruction is not None
-                    and trig.instruction.kind == "upkeep_return_self_from_graveyard"
-                    and trig.condition.kind == "upkeep_self"
-                ),
-                None,
-            )
-            if instr is None:
+            trig = next(matching_triggers(
+                card,
+                condition_kinds={"upkeep_self"},
+                instruction_kinds={"upkeep_return_self_from_graveyard"},
+            ), None)
+            if trig is None:
                 continue
+            instr = trig.instruction
             creatures_above = sum(
                 1
                 for above in owner.graveyard[grave_index + 1:]

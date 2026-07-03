@@ -5,6 +5,7 @@ import re
 
 from ..models import CardDefinition, Permanent, PlayerState
 from ..oracle import OracleInstruction, compile_card_oracle, lex_oracle_text
+from ..trigger_utils import iter_triggered_abilities, make_trigger_event, matching_triggers
 
 class EffectsMixin:
     def _trigger_aura_death_effects(self, dead_permanent: Permanent, controller: PlayerState) -> None:
@@ -38,49 +39,38 @@ class EffectsMixin:
         player/opponent" triggers (e.g. Hypnotic Specter) onto the stack. They resolve
         through the post-combat priority window (CR 603.3), like attack/block triggers.
         The defending player is captured in trigger_context."""
-        program = compile_card_oracle(attacker.effective_card)
         controller_index = self._controller_index_of(attacker)
         defending_index = self.players.index(defending_player)
-        events: list[dict] = []
-        for trig in program.triggered_abilities:
-            if trig.condition.kind not in (
-                "creature_deals_damage",
-                "hypnotic_specter_deals_damage",
-                "deals_damage_to_player",
-                "creature_deals_combat_damage",
-            ):
-                continue
-            instr = trig.instruction
-            if instr is None:
-                continue
-            if instr.kind == "opponent_discards_random_card_on_damage":
-                events.append({
-                    "controller_index": controller_index,
-                    "source_permanent": attacker,
-                    "instruction": instr,
-                    "effect_kind": trig.effect_kind,
-                    "ability_text": trig.source_line,
-                    "trigger_context": {"defending_player_index": defending_index},
-                })
+        events = [
+            make_trigger_event(
+                controller_index, attacker, trig,
+                trigger_context={"defending_player_index": defending_index},
+            )
+            for trig in matching_triggers(
+                attacker.effective_card,
+                condition_kinds={
+                    "creature_deals_damage",
+                    "hypnotic_specter_deals_damage",
+                    "deals_damage_to_player",
+                    "creature_deals_combat_damage",
+                },
+                instruction_kinds={"opponent_discards_random_card_on_damage"},
+            )
+        ]
         self._enqueue_triggered_batch(events)
 
     def _fire_dealt_damage_triggers(self, permanent: Permanent) -> None:
         """Put 'whenever this creature is dealt damage' triggers (e.g. Fungusaur) onto
         the stack; they resolve off the stack (CR 603.3) rather than inline."""
-        program = compile_card_oracle(permanent.effective_card)
         controller_index = self._controller_index_of(permanent)
-        events: list[dict] = []
-        for trig in program.triggered_abilities:
-            if trig.condition.kind != "creature_dealt_damage" or trig.instruction is None:
-                continue
-            if trig.instruction.kind == "add_counter_to_self":
-                events.append({
-                    "controller_index": controller_index,
-                    "source_permanent": permanent,
-                    "instruction": trig.instruction,
-                    "effect_kind": trig.effect_kind,
-                    "ability_text": trig.source_line,
-                })
+        events = [
+            make_trigger_event(controller_index, permanent, trig)
+            for trig in matching_triggers(
+                permanent.effective_card,
+                condition_kinds={"creature_dealt_damage"},
+                instruction_kinds={"add_counter_to_self"},
+            )
+        ]
         self._enqueue_triggered_batch(events)
 
     def _controller_index_of(self, permanent: Permanent) -> int:
@@ -583,42 +573,37 @@ class EffectsMixin:
     def _process_land_enters(self, land_controller_index: int) -> None:
         """Put "whenever a land enters the battlefield, deal 2 damage" triggers onto
         the stack; they resolve off the stack (CR 603.3)."""
-        events: list[dict] = []
-        for controller in self.players:
-            controller_index = self.players.index(controller)
-            for permanent in controller.battlefield:
-                program = compile_card_oracle(permanent.effective_card)
-                if not any(t.condition.kind == "land_enters" for t in program.triggered_abilities):
-                    continue
-                events.append({
-                    "controller_index": controller_index,
-                    "source_permanent": permanent,
-                    "instruction": OracleInstruction("deal_damage_to_player", None, {}),
-                    "effect_kind": "triggered_damage",
-                    "trigger_context": {"victim_player_index": land_controller_index, "amount": 2},
-                })
+        events = [
+            make_trigger_event(
+                controller_index, permanent, trig,
+                instruction=OracleInstruction("deal_damage_to_player", None, {}),
+                effect_kind="triggered_damage",
+                ability_text=None,
+                trigger_context={"victim_player_index": land_controller_index, "amount": 2},
+            )
+            for controller_index, permanent, trig in iter_triggered_abilities(
+                self, condition_kinds={"land_enters"}
+            )
+        ]
         self._enqueue_triggered_batch(events)
 
     def _process_land_dies(self, land_controller_index: int) -> None:
         """Put land_dies triggered abilities (e.g. Dingus Egg) onto the stack when a
         land is put into a graveyard; they resolve off the stack (CR 603.3)."""
-        events: list[dict] = []
-        for controller in self.players:
-            controller_index = self.players.index(controller)
-            for permanent in list(controller.battlefield):
-                program = compile_card_oracle(permanent.effective_card)
-                for trig in program.triggered_abilities:
-                    if trig.condition.kind != "land_dies" or trig.instruction is None:
-                        continue
-                    amount = int(trig.instruction.payload.get("amount", 2))
-                    events.append({
-                        "controller_index": controller_index,
-                        "source_permanent": permanent,
-                        "instruction": OracleInstruction("deal_damage_to_player", None, {}),
-                        "effect_kind": "triggered_damage",
-                        "ability_text": trig.source_line,
-                        "trigger_context": {"victim_player_index": land_controller_index, "amount": amount},
-                    })
+        events = [
+            make_trigger_event(
+                controller_index, permanent, trig,
+                instruction=OracleInstruction("deal_damage_to_player", None, {}),
+                effect_kind="triggered_damage",
+                trigger_context={
+                    "victim_player_index": land_controller_index,
+                    "amount": int(trig.instruction.payload.get("amount", 2)),
+                },
+            )
+            for controller_index, permanent, trig in iter_triggered_abilities(
+                self, condition_kinds={"land_dies"}, first_match_only=False
+            )
+        ]
         self._enqueue_triggered_batch(events)
 
     def _fastbond_count(self, player_index: int) -> int:

@@ -4,6 +4,7 @@ import re
 
 from ..models import CardDefinition, Permanent, PlayerState
 from ..oracle import compile_card_oracle
+from ..trigger_utils import matching_triggers
 
 class GameEndingMixin:
     def concede(self, player_index: int) -> None:
@@ -89,13 +90,11 @@ class GameEndingMixin:
             for player in self.players:
                 survivors_ss: list[Permanent] = []
                 for perm in player.battlefield:
-                    program = compile_card_oracle(perm.effective_card)
-                    needs_island = any(
-                        trig.condition.kind == "no_islands"
-                        and trig.instruction is not None
-                        and trig.instruction.kind == "sacrifice_self"
-                        for trig in program.triggered_abilities
-                    )
+                    needs_island = next(matching_triggers(
+                        perm.effective_card,
+                        condition_kinds={"no_islands"},
+                        instruction_kinds={"sacrifice_self"},
+                    ), None) is not None
                     if needs_island and not any(
                         p.card.primary_type == "land"
                         and (

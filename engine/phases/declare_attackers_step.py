@@ -11,6 +11,7 @@ pass. Also holds the attack-legality query (``can_attack``),
 
 from ..models import Permanent, PlayerState
 from ..oracle import compile_card_oracle
+from ..trigger_utils import matching_triggers
 
 
 class DeclareAttackersStepMixin:
@@ -150,10 +151,9 @@ class DeclareAttackersStepMixin:
             else controller_index
         )
         for permanent in list(controller.battlefield):
-            program = compile_card_oracle(permanent.effective_card)
-            for trig in program.triggered_abilities:
-                if trig.condition.kind != "one_or_more_attack" or trig.instruction is None:
-                    continue
+            for trig in matching_triggers(
+                permanent.effective_card, condition_kinds={"one_or_more_attack"}
+            ):
                 self.stack.append(
                     StackItem(
                         card=permanent.card,

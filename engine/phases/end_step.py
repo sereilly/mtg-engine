@@ -9,7 +9,7 @@ creatures" triggers. The active player then receives priority.
 """
 
 from ..models import Permanent
-from ..oracle import compile_card_oracle
+from ..trigger_utils import iter_triggered_abilities, make_trigger_event
 
 
 class EndStepMixin:
@@ -56,49 +56,26 @@ class EndStepMixin:
         # next turn) and read by the handler at resolution.
         died = getattr(self, "creatures_died_this_turn", 0)
         if died:
-            for controller in self.players:
-                controller_index = self.players.index(controller)
-                for permanent in controller.battlefield:
-                    prog = compile_card_oracle(permanent.effective_card)
-                    for trig in prog.triggered_abilities:
-                        if (
-                            trig.condition.kind == "end_step"
-                            and trig.instruction is not None
-                            and trig.instruction.kind == "add_corpse_counters_for_each_creature_died"
-                        ):
-                            events.append({
-                                "controller_index": controller_index,
-                                "source_permanent": permanent,
-                                "instruction": trig.instruction,
-                                "effect_kind": trig.effect_kind,
-                                "ability_text": trig.source_line,
-                                "trigger_context": {"count": died},
-                            })
-                            break
+            for controller_index, permanent, trig in iter_triggered_abilities(
+                self,
+                condition_kinds={"end_step"},
+                instruction_kinds={"add_corpse_counters_for_each_creature_died"},
+            ):
+                events.append(make_trigger_event(
+                    controller_index, permanent, trig, trigger_context={"count": died}
+                ))
 
         # Pestilence-style: "...if there are no creatures on the battlefield,
         # sacrifice this." The intervening-if is re-checked when the trigger resolves.
         all_perms = [p for pl in self.players for p in pl.battlefield]
         has_creatures = any(p.is_creature for p in all_perms)
         if not has_creatures:
-            for controller in self.players:
-                controller_index = self.players.index(controller)
-                for permanent in controller.battlefield:
-                    prog = compile_card_oracle(permanent.effective_card)
-                    for trig in prog.triggered_abilities:
-                        if (
-                            trig.condition.kind == "end_step"
-                            and trig.instruction is not None
-                            and trig.instruction.kind == "sacrifice_if_no_creatures"
-                        ):
-                            events.append({
-                                "controller_index": controller_index,
-                                "source_permanent": permanent,
-                                "instruction": trig.instruction,
-                                "effect_kind": trig.effect_kind,
-                                "ability_text": trig.source_line,
-                            })
-                            break
+            for controller_index, permanent, trig in iter_triggered_abilities(
+                self,
+                condition_kinds={"end_step"},
+                instruction_kinds={"sacrifice_if_no_creatures"},
+            ):
+                events.append(make_trigger_event(controller_index, permanent, trig))
 
         self._enqueue_triggered_batch(events)
 

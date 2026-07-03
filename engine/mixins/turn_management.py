@@ -5,6 +5,7 @@ import re
 
 from ..game_types import SimulationResult
 from ..oracle import compile_card_oracle
+from ..trigger_utils import iter_triggered_abilities
 
 class TurnManagementMixin:
     def select_starting_player(
@@ -291,13 +292,11 @@ class TurnManagementMixin:
         # tapped for mana mid-cost-payment, before the spell being paid for is even on
         # the stack, so enqueuing here would order the trigger under that spell. Stack
         # routing would require deferring these across the cost-payment/cast boundary.
-        for controller in self.players:
-            for perm in controller.battlefield:
-                prog = compile_card_oracle(perm.effective_card)
-                for trig in prog.triggered_abilities:
-                    if trig.condition.kind == "land_tapped_for_mana" and trig.instruction is not None:
-                        amount = int(trig.instruction.payload.get("amount", 1))
-                        damage = self._deal_damage_to_player(player, amount, source=perm)
-                        self.log.append(f"{perm.card.name} triggered: {player.name} took {damage} damage")
+        for _idx, perm, trig in iter_triggered_abilities(
+            self, condition_kinds={"land_tapped_for_mana"}, first_match_only=False
+        ):
+            amount = int(trig.instruction.payload.get("amount", 1))
+            damage = self._deal_damage_to_player(player, amount, source=perm)
+            self.log.append(f"{perm.card.name} triggered: {player.name} took {damage} damage")
 
         return True

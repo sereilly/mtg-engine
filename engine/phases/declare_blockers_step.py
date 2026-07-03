@@ -14,6 +14,7 @@ import re
 
 from ..models import Permanent, PlayerState
 from ..oracle import compile_card_oracle
+from ..trigger_utils import matching_triggers
 
 # Landwalk keyword → the basic land subtype the defender must control for the
 # attacker to be unblockable (CR 702.14). Sourced from the attacker's printed
@@ -427,15 +428,12 @@ class DeclareBlockersStepMixin:
         attacker_controller = self.players[self.active_player_index]
 
         def block_destroy_instruction(perm: Permanent):
-            program = compile_card_oracle(perm.effective_card)
-            for trig in program.triggered_abilities:
-                if (
-                    trig.condition.kind == "cockatrice_blocks_or_blocked"
-                    and trig.instruction is not None
-                    and trig.instruction.kind == "delayed_destroy_blocked_or_blocker"
-                ):
-                    return trig.instruction, trig.source_line
-            return None, None
+            trig = next(matching_triggers(
+                perm.effective_card,
+                condition_kinds={"cockatrice_blocks_or_blocked"},
+                instruction_kinds={"delayed_destroy_blocked_or_blocker"},
+            ), None)
+            return (trig.instruction, trig.source_line) if trig is not None else (None, None)
 
         def queue_trigger(
             source: Permanent,

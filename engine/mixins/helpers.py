@@ -5,6 +5,7 @@ import re
 from ..card_hooks import ON_LEAVE_BATTLEFIELD
 from ..models import CardDefinition, Permanent, PlayerState
 from ..oracle import compile_card_oracle
+from ..trigger_utils import make_trigger_event, matching_triggers
 from ._constants import _MANA_SYMBOLS, _NO_PRIORITY_STEPS
 
 class GameHelpersMixin:
@@ -207,19 +208,16 @@ class GameHelpersMixin:
         # Living Lands) dying counts as a creature death (Scavenging Ghoul).
         if permanent.is_creature:
             self.creatures_died_this_turn = getattr(self, "creatures_died_this_turn", 0) + 1
-            program = compile_card_oracle(permanent.effective_card)
-            for trig in program.triggered_abilities:
-                if (
-                    trig.condition.kind == "dies"
-                    and trig.instruction is not None
-                    and trig.instruction.kind == "owner_loses_half_life"
-                ):
-                    loss = max(0, (player.life + 1) // 2)
-                    player.life -= loss
-                    self.log.append(
-                        f"{permanent.card.name} died: {player.name} loses {loss} life (half, rounded up)"
-                    )
-                    break
+            if next(matching_triggers(
+                permanent.effective_card,
+                condition_kinds={"dies"},
+                instruction_kinds={"owner_loses_half_life"},
+            ), None) is not None:
+                loss = max(0, (player.life + 1) // 2)
+                player.life -= loss
+                self.log.append(
+                    f"{permanent.card.name} died: {player.name} loses {loss} life (half, rounded up)"
+                )
         text = permanent.card.oracle_text.lower()
         if (
             "when this enchantment is put into a graveyard from the battlefield, you lose the game"
@@ -266,13 +264,7 @@ class GameHelpersMixin:
                     ):
                         damagers = dead_permanent.metadata.get("damaged_by_sources_this_turn", [])
                         if observer in damagers:
-                            events.append({
-                                "controller_index": controller_index,
-                                "source_permanent": observer,
-                                "instruction": trig.instruction,
-                                "effect_kind": trig.effect_kind,
-                                "ability_text": trig.source_line,
-                            })
+                            events.append(make_trigger_event(controller_index, observer, trig))
                         continue
                     if trig.condition.kind != "creature_dies" or trig.instruction is None:
                         continue
@@ -284,14 +276,11 @@ class GameHelpersMixin:
                         ctx: dict = {"life": amount, "dead_name": dead_permanent.card.name}
                         if pay_match:
                             ctx["optional_pay_cost"] = int(pay_match.group(1))
-                        events.append({
-                            "controller_index": controller_index,
-                            "source_permanent": observer,
-                            "instruction": instr,
-                            "effect_kind": "triggered_target_gains_life",
-                            "ability_text": trig.source_line,
-                            "trigger_context": ctx,
-                        })
+                        events.append(make_trigger_event(
+                            controller_index, observer, trig,
+                            effect_kind="triggered_target_gains_life",
+                            trigger_context=ctx,
+                        ))
                     break
         self._enqueue_triggered_batch(events)
 
