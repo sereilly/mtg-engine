@@ -19,7 +19,6 @@ All Python runs through the workspace venv (Windows / PowerShell):
 python -m pytest                                  # full suite
 python -m pytest tests/test_web_api.py -q         # one file
 python -m pytest tests/test_lea_cards.py::test_name -q   # one test
-python find_untested.py                           # LEA cards lacking a dedicated functional test
 
 # Web server (browser game UI)
 python -m uvicorn web.app:app --host 127.0.0.1 --port 8010   # then open http://127.0.0.1:8010/

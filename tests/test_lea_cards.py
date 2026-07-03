@@ -1,19 +1,4 @@
-# Auto-generated LEA card presence tests
 from __future__ import annotations
-
-from typing import List
-
-
-def _card_names(cards) -> List[str]:
-    return [c.name for c in cards]
-
-
-def _make_test(name, idx):
-    def test_func(all_cards):
-        names = _card_names(all_cards)
-        assert name in names
-    test_func.__name__ = f"test_lea_card_presence_{idx}"
-    return test_func
 
 import pytest
 

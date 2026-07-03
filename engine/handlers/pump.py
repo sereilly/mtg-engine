@@ -179,51 +179,6 @@ def buff_creatures_global(game: Game, instruction: OracleInstruction, context: O
     return True, "resolved"
 
 
-# switch_pt: switches a target creature's power and toughness (613.4d)
-@effect_handler("switch_pt")
-def switch_pt(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    caster = context.caster
-    target = context.target
-    card = context.card
-    target_perm: Permanent | None = None
-    if context.target_permanent_index is not None and 0 <= context.target_permanent_index < len(target.battlefield):
-        candidate = target.battlefield[context.target_permanent_index]
-        if candidate.is_creature:
-            target_perm = candidate
-    if target_perm is None:
-        target_perm = next((p for p in target.battlefield if p.is_creature), None)
-    if target_perm is None:
-        target_perm = next((p for p in caster.battlefield if p.is_creature), None)
-    if target_perm is not None:
-        target_perm.metadata["pt_switched"] = not target_perm.metadata.get("pt_switched", False)
-        game.log.append(f"{card.name} switched power/toughness of {target_perm.card.name}")
-    return True, "resolved"
-
-
-# become_pt_until_eot: sets absolute power/toughness (layer 7b) until EOT
-@effect_handler("become_pt_until_eot")
-def become_pt_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    caster = context.caster
-    target = context.target
-    card = context.card
-    new_power = int(instruction.payload.get("power", 0))
-    new_toughness = int(instruction.payload.get("toughness", 0))
-    target_perm = None
-    if context.target_permanent_index is not None and 0 <= context.target_permanent_index < len(target.battlefield):
-        candidate = target.battlefield[context.target_permanent_index]
-        if candidate.is_creature:
-            target_perm = candidate
-    if target_perm is None:
-        target_perm = next((p for p in target.battlefield if p.is_creature), None)
-    if target_perm is None:
-        target_perm = next((p for p in caster.battlefield if p.is_creature), None)
-    if target_perm is not None:
-        target_perm.metadata["absolute_power_until_eot"] = new_power
-        target_perm.metadata["absolute_toughness_until_eot"] = new_toughness
-        game.log.append(f"{card.name} set {target_perm.card.name} to {new_power}/{new_toughness} until EOT")
-    return True, "resolved"
-
-
 @effect_handler("add_variable_power_counters_to_self")
 def add_variable_power_counters_to_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     # Clockwork Beast: "{X}, {T}: Put up to X +1/+0 counters on this creature.
