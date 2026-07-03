@@ -77,19 +77,9 @@ def volcanic_eruption(game: Game, instruction: OracleInstruction, context: Oracl
 def destroy_all_creatures(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     bypass_regen = instruction.payload.get("bypass_regeneration", False)
     for player in game.players:
-        survivors: list[Permanent] = []
-        for permanent in player.battlefield:
-            if permanent.is_creature and game._is_indestructible(permanent):
-                survivors.append(permanent)
-            elif permanent.is_creature and not bypass_regen and permanent.regeneration_shield > 0:
-                permanent.regeneration_shield -= 1
-                permanent.tapped = True
-                survivors.append(permanent)
-            elif permanent.is_creature:
-                game._permanent_to_graveyard(player, permanent)
-            else:
-                survivors.append(permanent)
-        player.battlefield = survivors
+        game._destroy_swept_permanents(
+            player, lambda p: p.is_creature, allow_regeneration=not bypass_regen
+        )
     game.log.append("All creatures were destroyed")
     return True, "resolved"
 
@@ -97,27 +87,13 @@ def destroy_all_creatures(game: Game, instruction: OracleInstruction, context: O
 @effect_handler("destroy_all_artifacts_creatures_enchantments")
 def destroy_all_artifacts_creatures_enchantments(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     for player in game.players:
-        survivors: list[Permanent] = []
-        for permanent in player.battlefield:
-            # has_type/is_creature so copies keep all their types (a Copy
-            # Artifact copy is an Artifact Enchantment) and animated lands
-            # count as creatures.
-            matches = (
-                permanent.is_creature
-                or permanent.has_type("artifact")
-                or permanent.has_type("enchantment")
-            )
-            if matches and game._is_indestructible(permanent):
-                survivors.append(permanent)
-            elif permanent.is_creature and permanent.regeneration_shield > 0:
-                permanent.regeneration_shield -= 1
-                permanent.tapped = True
-                survivors.append(permanent)
-            elif matches:
-                game._permanent_to_graveyard(player, permanent)
-            else:
-                survivors.append(permanent)
-        player.battlefield = survivors
+        # has_type/is_creature so copies keep all their types (a Copy
+        # Artifact copy is an Artifact Enchantment) and animated lands
+        # count as creatures.
+        game._destroy_swept_permanents(
+            player,
+            lambda p: p.is_creature or p.has_type("artifact") or p.has_type("enchantment"),
+        )
     game.log.append("All artifacts, creatures, and enchantments were destroyed")
     return True, "resolved"
 
@@ -125,13 +101,9 @@ def destroy_all_artifacts_creatures_enchantments(game: Game, instruction: Oracle
 @effect_handler("destroy_all_enchantments")
 def destroy_all_enchantments(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     for player in game.players:
-        survivors: list[Permanent] = []
-        for permanent in player.battlefield:
-            if permanent.has_type("enchantment") and not game._is_indestructible(permanent):
-                game._permanent_to_graveyard(player, permanent)
-            else:
-                survivors.append(permanent)
-        player.battlefield = survivors
+        game._destroy_swept_permanents(
+            player, lambda p: p.has_type("enchantment"), allow_regeneration=False
+        )
     game.log.append("All enchantments were destroyed")
     return True, "resolved"
 
@@ -139,13 +111,9 @@ def destroy_all_enchantments(game: Game, instruction: OracleInstruction, context
 @effect_handler("destroy_all_lands")
 def destroy_all_lands(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     for player in game.players:
-        survivors: list[Permanent] = []
-        for permanent in player.battlefield:
-            if permanent.card.primary_type == "land" and not game._is_indestructible(permanent):
-                game._permanent_to_graveyard(player, permanent)
-            else:
-                survivors.append(permanent)
-        player.battlefield = survivors
+        game._destroy_swept_permanents(
+            player, lambda p: p.card.primary_type == "land", allow_regeneration=False
+        )
     game.log.append("All lands were destroyed")
     return True, "resolved"
 
@@ -153,17 +121,16 @@ def destroy_all_lands(game: Game, instruction: OracleInstruction, context: Oracl
 @effect_handler("destroy_all_lands_of_type")
 def destroy_all_lands_of_type(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     land_type = str(instruction.payload.get("land_type", "")).lower().rstrip("s")
+
+    def _matches(perm: Permanent) -> bool:
+        if perm.card.primary_type != "land":
+            return False
+        # Printed or overridden land type
+        perm_type_line = (perm.metadata.get("land_type_override") or perm.card.type_line or "").lower()
+        return land_type in perm_type_line
+
     for player in game.players:
-        survivors: list[Permanent] = []
-        for permanent in player.battlefield:
-            if permanent.card.primary_type == "land" and not game._is_indestructible(permanent):
-                # Determine printed or overridden land type
-                perm_type_line = (permanent.metadata.get("land_type_override") or permanent.card.type_line or "").lower()
-                if land_type in perm_type_line:
-                    game._permanent_to_graveyard(player, permanent)
-                    continue
-            survivors.append(permanent)
-        player.battlefield = survivors
+        game._destroy_swept_permanents(player, _matches, allow_regeneration=False)
     game.log.append(f"All {land_type}s were destroyed")
     return True, "resolved"
 

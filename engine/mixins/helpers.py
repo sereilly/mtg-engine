@@ -236,6 +236,45 @@ class GameHelpersMixin:
         if leave_hook is not None:
             leave_hook(self, player, permanent)
 
+    def _destroy_swept_permanents(
+        self,
+        player: PlayerState,
+        matches,
+        *,
+        allow_regeneration: bool = True,
+        respect_indestructible: bool = True,
+        on_regenerate=None,
+        on_destroy=None,
+    ) -> list[Permanent]:
+        """Destroy every permanent on *player*'s battlefield that ``matches``,
+        rebuilding the battlefield in place. Indestructible permanents survive
+        (when respected); a creature's regeneration shield is consumed instead of
+        destruction (when allowed). Each destruction routes through
+        ``_permanent_to_graveyard`` while the permanent is still listed, matching
+        the sweep loops this consolidates. Returns the destroyed permanents."""
+        survivors: list[Permanent] = []
+        destroyed: list[Permanent] = []
+        for permanent in player.battlefield:
+            if not matches(permanent):
+                survivors.append(permanent)
+                continue
+            if respect_indestructible and self._is_indestructible(permanent):
+                survivors.append(permanent)
+                continue
+            if allow_regeneration and permanent.is_creature and permanent.regeneration_shield > 0:
+                permanent.regeneration_shield -= 1
+                permanent.tapped = True
+                if on_regenerate is not None:
+                    on_regenerate(permanent)
+                survivors.append(permanent)
+                continue
+            self._permanent_to_graveyard(player, permanent)
+            if on_destroy is not None:
+                on_destroy(permanent)
+            destroyed.append(permanent)
+        player.battlefield = survivors
+        return destroyed
+
     def _fire_creature_dies_triggers(self, dead_permanent: Permanent) -> None:
         """Put "whenever a creature dies" triggers (e.g. Soul Net) onto the stack.
 

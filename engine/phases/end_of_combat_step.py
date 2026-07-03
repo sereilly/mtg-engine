@@ -75,24 +75,23 @@ class EndOfCombatStepMixin:
         Used by Cockatrice / Thicket Basilisk (see _fire_block_triggers). Honors
         regeneration shields like any other destruction.
         """
+        def _on_regenerate(permanent: Permanent) -> None:
+            permanent.damage_marked = 0
+            self.log.append(f"{permanent.card.name} regenerated")
+
         any_died = False
         for player in self.players:
-            survivors: list[Permanent] = []
-            for permanent in player.battlefield:
-                if not permanent.metadata.pop("destroy_at_end_of_combat", False):
-                    survivors.append(permanent)
-                    continue
-                if permanent.regeneration_shield > 0:
-                    permanent.regeneration_shield -= 1
-                    permanent.tapped = True
-                    permanent.damage_marked = 0
-                    survivors.append(permanent)
-                    self.log.append(f"{permanent.card.name} regenerated")
-                    continue
-                self._permanent_to_graveyard(player, permanent)
+            def _on_destroy(permanent: Permanent, player=player) -> None:
                 self._trigger_aura_death_effects(permanent, player)
                 self.log.append(f"{permanent.card.name} was destroyed at end of combat")
-                any_died = True
-            player.battlefield = survivors
+
+            destroyed = self._destroy_swept_permanents(
+                player,
+                lambda p: p.metadata.pop("destroy_at_end_of_combat", False),
+                respect_indestructible=False,
+                on_regenerate=_on_regenerate,
+                on_destroy=_on_destroy,
+            )
+            any_died = any_died or bool(destroyed)
         if any_died:
             self._recalculate_lord_buffs()

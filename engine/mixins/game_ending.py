@@ -116,34 +116,40 @@ class GameEndingMixin:
                 player.graveyard = [c for c in player.graveyard if not getattr(c, "_is_token", False)]
 
             # 704.5f: creature with toughness 0 or less → graveyard (regeneration cannot replace)
+            def _zero_toughness(perm: Permanent) -> bool:
+                raw_t = str(perm.card.raw.get("toughness", "0"))
+                has_fixed_toughness = raw_t.lstrip("-").isdigit()
+                has_dynamic_toughness = not has_fixed_toughness and "absolute_toughness" not in perm.metadata
+                return perm.card.primary_type == "creature" and not has_dynamic_toughness and perm.effective_toughness <= 0
+
             for player in self.players:
-                survivors: list[Permanent] = []
-                for perm in player.battlefield:
-                    raw_t = str(perm.card.raw.get("toughness", "0"))
-                    has_fixed_toughness = raw_t.lstrip("-").isdigit()
-                    has_dynamic_toughness = not has_fixed_toughness and "absolute_toughness" not in perm.metadata
-                    if perm.card.primary_type == "creature" and not has_dynamic_toughness and perm.effective_toughness <= 0:
-                        self._permanent_to_graveyard(player, perm)
-                        self.log.append(f"{perm.card.name} died (704.5f: toughness {perm.effective_toughness})")
-                        self._trigger_aura_death_effects(perm, player)
-                        changed = True
-                    else:
-                        survivors.append(perm)
-                player.battlefield = survivors
+                def _on_destroy_5f(perm: Permanent, player=player) -> None:
+                    self.log.append(f"{perm.card.name} died (704.5f: toughness {perm.effective_toughness})")
+                    self._trigger_aura_death_effects(perm, player)
+
+                if self._destroy_swept_permanents(
+                    player, _zero_toughness,
+                    allow_regeneration=False, respect_indestructible=False,
+                    on_destroy=_on_destroy_5f,
+                ):
+                    changed = True
 
             # 704.5i: planeswalker with 0 loyalty → graveyard
+            def _zero_loyalty(perm: Permanent) -> bool:
+                if "Planeswalker" not in perm.card.type_line:
+                    return False
+                loyalty = perm.metadata.get("loyalty")
+                return loyalty is not None and loyalty <= 0
+
             for player in self.players:
-                survivors = []
-                for perm in player.battlefield:
-                    if "Planeswalker" in perm.card.type_line:
-                        loyalty = perm.metadata.get("loyalty")
-                        if loyalty is not None and loyalty <= 0:
-                            self._permanent_to_graveyard(player, perm)
-                            self.log.append(f"{perm.card.name} went to graveyard (704.5i: 0 loyalty)")
-                            changed = True
-                            continue
-                    survivors.append(perm)
-                player.battlefield = survivors
+                if self._destroy_swept_permanents(
+                    player, _zero_loyalty,
+                    allow_regeneration=False, respect_indestructible=False,
+                    on_destroy=lambda perm: self.log.append(
+                        f"{perm.card.name} went to graveyard (704.5i: 0 loyalty)"
+                    ),
+                ):
+                    changed = True
 
             # 704.5j: legend rule — same player controlling two legendaries with same name
             for player in self.players:
@@ -176,30 +182,32 @@ class GameEndingMixin:
                 changed = True
 
             # 704.5m: Aura/Role not attached to a legal object → graveyard
+            def _illegally_attached(perm: Permanent) -> bool:
+                if "Aura" not in perm.card.type_line and "Role" not in perm.card.type_line:
+                    return False
+                if "attached_to" not in perm.metadata:
+                    # Manually placed without tracking — skip 704.5m
+                    return False
+                attached_to = perm.metadata.get("attached_to")
+                if attached_to is None:
+                    return True
+                return not any(attached_to in p.battlefield for p in self.players)
+
+            def _on_destroy_5m(perm: Permanent) -> None:
+                reason = (
+                    "unattached aura"
+                    if perm.metadata.get("attached_to") is None
+                    else "enchanted object left battlefield"
+                )
+                self.log.append(f"{perm.card.name} put into graveyard (704.5m: {reason})")
+
             for player in self.players:
-                survivors = []
-                for perm in player.battlefield:
-                    if "Aura" not in perm.card.type_line and "Role" not in perm.card.type_line:
-                        survivors.append(perm)
-                        continue
-                    if "attached_to" not in perm.metadata:
-                        # Manually placed without tracking — skip 704.5m
-                        survivors.append(perm)
-                        continue
-                    attached_to = perm.metadata.get("attached_to")
-                    if attached_to is None:
-                        self._permanent_to_graveyard(player, perm)
-                        self.log.append(f"{perm.card.name} put into graveyard (704.5m: unattached aura)")
-                        changed = True
-                        continue
-                    on_bf = any(attached_to in p.battlefield for p in self.players)
-                    if not on_bf:
-                        self._permanent_to_graveyard(player, perm)
-                        self.log.append(f"{perm.card.name} put into graveyard (704.5m: enchanted object left battlefield)")
-                        changed = True
-                        continue
-                    survivors.append(perm)
-                player.battlefield = survivors
+                if self._destroy_swept_permanents(
+                    player, _illegally_attached,
+                    allow_regeneration=False, respect_indestructible=False,
+                    on_destroy=_on_destroy_5m,
+                ):
+                    changed = True
 
             # An Aura attached to a permanent that "can't be enchanted by other
             # Auras" (Consecrate Land) is illegally attached and is put into its
@@ -314,19 +322,21 @@ class GameEndingMixin:
                             changed = True
 
             # 704.5s: Saga at or past final chapter → sacrifice
+            def _saga_done(perm: Permanent) -> bool:
+                if "Saga" not in perm.card.type_line:
+                    return False
+                final = perm.metadata.get("final_chapter", 0)
+                return final > 0 and perm.metadata.get("lore_counters", 0) >= final
+
             for player in self.players:
-                survivors = []
-                for perm in player.battlefield:
-                    if "Saga" in perm.card.type_line:
-                        lore = perm.metadata.get("lore_counters", 0)
-                        final = perm.metadata.get("final_chapter", 0)
-                        if final > 0 and lore >= final:
-                            self._permanent_to_graveyard(player, perm)
-                            self.log.append(f"{perm.card.name} sacrificed (704.5s: Saga reached final chapter)")
-                            changed = True
-                            continue
-                    survivors.append(perm)
-                player.battlefield = survivors
+                if self._destroy_swept_permanents(
+                    player, _saga_done,
+                    allow_regeneration=False, respect_indestructible=False,
+                    on_destroy=lambda perm: self.log.append(
+                        f"{perm.card.name} sacrificed (704.5s: Saga reached final chapter)"
+                    ),
+                ):
+                    changed = True
 
             # 704.5y: Role rule — per creature per controller, keep only the most recent Role
             for player in self.players:
