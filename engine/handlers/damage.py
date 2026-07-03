@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..models import Permanent, PlayerState
+from ..models import Permanent
 from ._common import apply_damage_to_creature, resolve_amount, resolve_target_permanent
 from .registry import effect_handler
 
@@ -161,20 +161,7 @@ def simulacrum_redirect(game: Game, instruction: OracleInstruction, context: Ora
 def deal_damage_each_creature_and_player(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     card = context.card
     amount = int(instruction.payload.get("amount", 1))
-    for player in game.players:
-        game._deal_damage_to_player(player, amount, source=card)
-    dead: list[tuple[PlayerState, Permanent]] = []
-    for player in game.players:
-        for perm in player.battlefield:
-            if perm.is_creature:
-                game._mark_damage_on_permanent(perm, amount, source=card)
-                if perm.damage_marked >= perm.effective_toughness:
-                    dead.append((player, perm))
-    for player, perm in dead:
-        if perm in player.battlefield:
-            player.battlefield.remove(perm)
-            player.graveyard.append(perm.card)
-            game.log.append(f"{perm.card.name} died from {card.name}")
+    _mass_damage_players_and_creatures(game, card, amount, lambda perm: True)
     game.log.append(f"{card.name} dealt {amount} damage to each creature and each player")
     return True, "resolved"
 
