@@ -1784,6 +1784,7 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "band_blocker_assignment": _build_band_blocker_assignment_info(session, viewer_seat),
         "multiblock_blocker_assignment": _build_multiblock_assignment_info(session, viewer_seat),
         "raging_river": _build_raging_river_info(session, viewer_seat),
+        "camouflage": _build_camouflage_info(session, viewer_seat),
         "island_sanctuary_pending": session.island_sanctuary_pending and viewer_seat == session.current_turn,
         "search_library": search_library_info,
         "reorder_library": reorder_library_info,
@@ -2517,6 +2518,39 @@ def _build_raging_river_info(session: Session, viewer_seat: int | None) -> dict 
     return info
 
 
+def _build_camouflage_info(session: Session, viewer_seat: int | None) -> dict | None:
+    """Camouflage: prompt the human defending player to divide their untapped
+    creatures into numbered piles (one per attacker; piles may be empty and
+    creatures may be left out). The engine then matches each pile to a different
+    attacker at random. An AI defender gets random piles instead (_advance_step)."""
+    game = session.game
+    if game.current_turn_phase != "combat" or game.current_step != "declare_blockers":
+        return None
+    if not game.is_camouflage_active() or game.combat_blockers_locked:
+        return None
+    defender_index = game.combat_defending_player_index
+    if not isinstance(defender_index, int) or viewer_seat != defender_index:
+        return None
+    if _seat_type(session, viewer_seat) == "ai":
+        return None
+    attackers = [a for a, d in game.combat_attackers.items() if d == defender_index]
+    if not attackers:
+        return None
+    defender = game.players[defender_index]
+    creatures = [
+        {"index": i, **_serialize_card_summary(p.card)}
+        for i, p in enumerate(defender.battlefield)
+        if p.is_creature and not p.tapped
+    ]
+    if not creatures:
+        return None
+    return {
+        "defender_seat": defender_index,
+        "pile_count": len(attackers),
+        "divide_creatures": creatures,
+    }
+
+
 def _ai_resolve_raging_river(session: Session) -> None:
     """Finalize Raging River's left/right division for any AI player so the human
     flow can proceed. An AI defender keeps its random seeded piles and locks them
@@ -2745,10 +2779,15 @@ def _advance_phase(session: Session) -> None:
             defender_index = combat_state.get("defending_player_index")
             if isinstance(defender_index, int) and _seat_type(session, defender_index) == "ai":
                 if not combat_state.get("blockers_locked", False):
-                    blocker_pairs = choose_combat_blockers(game, defender_index)
-                    ok, _ = game.declare_blockers(defender_index, blocker_pairs)
-                    if not ok and blocker_pairs:
-                        ok, _ = game.declare_blockers(defender_index, {})
+                    if game.is_camouflage_active() and combat_state.get("attackers"):
+                        # Camouflage: the AI defender divides its creatures into
+                        # random piles instead of declaring chosen blocks.
+                        ok, _ = game.resolve_camouflage_blocking(defender_index)
+                    else:
+                        blocker_pairs = choose_combat_blockers(game, defender_index)
+                        ok, _ = game.declare_blockers(defender_index, blocker_pairs)
+                        if not ok and blocker_pairs:
+                            ok, _ = game.declare_blockers(defender_index, {})
                     if not ok:
                         # Safety valve: never let AI declaration failures deadlock combat progression.
                         game.combat_blockers = {}
@@ -4038,6 +4077,18 @@ def do_action(session_id: str, req: GameActionRequest):
     elif req.action == "assign_attacker_piles":
         piles = {int(k): str(v) for k, v in (req.piles or {}).items()}
         ok, details = session.game.assign_attacker_piles(req.seat, piles)
+        if not ok:
+            raise HTTPException(status_code=400, detail=details)
+
+    elif req.action == "assign_camouflage_piles":
+        # Camouflage: the defending player's chosen division of their creatures
+        # into piles (0-based pile numbers, one pile per attacker). Piles are then
+        # matched to attackers at random by the engine.
+        camo_piles: dict[int, int | list[int]] = {
+            int(k): ([int(p) for p in v] if isinstance(v, list) else int(v))
+            for k, v in (req.camouflage_piles or {}).items()
+        }
+        ok, details = session.game.assign_camouflage_piles(req.seat, camo_piles)
         if not ok:
             raise HTTPException(status_code=400, detail=details)
 

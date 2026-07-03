@@ -88,9 +88,11 @@ class CombatPhaseMixin:
             self._prune_combat_state()
             attacker_name = self.players[self.active_player_index].name
             self.log.append(f"{attacker_name} has no valid attackers; declare attackers step skipped")
-        # Camouflage replaces the declare-blockers step: the defender's blocks are
-        # assigned at random by pile rather than chosen. Auto-resolve here (for both
-        # human and AI defenders) instead of waiting for a manual declaration.
+        # Camouflage replaces the declare-blockers step: the defending player
+        # divides their creatures into piles (assign_camouflage_piles), which are
+        # then matched to attackers at random. Wait for that choice like a normal
+        # blocker declaration; with no untapped creatures there is nothing to
+        # divide, so resolve the (empty) piles immediately.
         if (
             self.current_step == "declare_blockers"
             and not self.combat_blockers_locked
@@ -99,6 +101,9 @@ class CombatPhaseMixin:
         ):
             defender_index = self.combat_defending_player_index
             if isinstance(defender_index, int):
+                defender = self.players[defender_index]
+                if any(p.is_creature and not p.tapped for p in defender.battlefield):
+                    return  # awaiting the defender's pile assignment
                 self.resolve_camouflage_blocking(defender_index)
             return
         if self.current_step == "declare_blockers" and not self.combat_blockers_locked:
@@ -315,6 +320,9 @@ class CombatPhaseMixin:
             "first_strike_done": self.combat_first_strike_done,
             "attackers_locked": self.combat_attackers_locked,
             "blockers_locked": self.combat_blockers_locked,
+            # Camouflage (cast during this turn's declare-attackers step): the
+            # defender assigns piles instead of declaring blockers.
+            "camouflage_active": self.is_camouflage_active(),
             # Banding (CR 702.22): declared attacking bands and the per-attacker
             # blockers added by band propagation (702.22h).
             "bands": [list(band) for band in self.combat_bands],

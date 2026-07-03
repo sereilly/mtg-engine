@@ -216,6 +216,15 @@ class BattlefieldCanvas {
     // World-space rects of the currently drawn Left/Right buttons, for hit-testing.
     this._riverButtonRects = [];
 
+    // Fires with {seat, idx, pile} when a Camouflage pile button drawn above a
+    // creature is clicked (`pile` is a 0-based pile number or "none").
+    this.onCamouflagePileClick = callbacks.onCamouflagePileClick || null;
+    // Camouflage division state pushed from the app each render:
+    // { active, seat, pileCount, items:[{idx,name}], selection }.
+    this.camouflage = null;
+    // World-space rects of the currently drawn pile buttons, for hit-testing.
+    this._camoButtonRects = [];
+
     // emblemItems: [{index, emblem, x, y, w, h}] — the viewer's own non-card
     // activated abilities granted until end of turn (Guardian Angel). Drawn as
     // card-like tokens with a glowing orange border to mark them as abilities.
@@ -1500,6 +1509,13 @@ class BattlefieldCanvas {
     this.needsRedraw = true;
   }
 
+  // Push Camouflage's pending pile division (numbered buttons above the
+  // defending player's untapped creatures), or null when none is pending.
+  setCamouflage(camouflage) {
+    this.camouflage = camouflage && camouflage.active ? camouflage : null;
+    this.needsRedraw = true;
+  }
+
   // The locked pile side ("left"/"right") for a creature, or null when its
   // controller hasn't committed yet (so it isn't badged/rearranged early).
   _riverSideForKey(seat, idx) {
@@ -2646,6 +2662,7 @@ class BattlefieldCanvas {
 
     // ---- Raging River: pile dividers, side badges, and Left/Right buttons ----
     this._drawRiver(ctx);
+    this._drawCamouflage(ctx);
 
     // ---- Live blocker-assignment drag arrow ----
     if (this.pressState?.combatDrag) {
@@ -2792,6 +2809,54 @@ class BattlefieldCanvas {
   // matching button rect (with seat/idx/side) or null.
   _hitTestRiverButton(wx, wy) {
     for (const b of this._riverButtonRects) {
+      if (wx >= b.x && wx <= b.x + b.w && wy >= b.y && wy <= b.y + b.h) return b;
+    }
+    return null;
+  }
+
+  // Camouflage: draw a row of pile buttons (✕ = no pile, then 1..N) above each
+  // of the defending player's untapped creatures. Runs inside the camera
+  // transform so everything sits in world space.
+  _drawCamouflage(ctx) {
+    this._camoButtonRects = [];
+    const c = this.camouflage;
+    if (!c || !c.active || !Array.isArray(c.items)) return;
+
+    const options = ["none"];
+    for (let p = 0; p < c.pileCount; p++) options.push(p);
+    for (const it of c.items) {
+      const key = `${c.seat}-${it.idx}`;
+      const pos = this._renderPos(key);
+      if (!pos) continue;
+      const b = this._boundsAt(key, pos);
+      const chosen = c.selection ? c.selection[it.idx] : undefined;
+      const bh = 26 / this.zoom;
+      const by = b.y - bh - 10 / this.zoom;
+      const gap = 4 / this.zoom;
+      // Keep every button tappable even with many piles: let the row overflow
+      // the card horizontally (centered) rather than shrink below a floor.
+      const minW = 24 / this.zoom;
+      const bw = Math.max(minW, (b.w - gap * (options.length - 1)) / options.length);
+      const rowW = bw * options.length + gap * (options.length - 1);
+      const startX = b.x + b.w / 2 - rowW / 2;
+      options.forEach((opt, i) => {
+        const rect = {
+          key, seat: c.seat, idx: it.idx, pile: opt,
+          x: startX + i * (bw + gap), y: by, w: bw, h: bh,
+        };
+        const isNone = opt === "none";
+        const label = isNone ? "✕" : String(opt + 1);
+        const color = isNone ? "#8b95a5" : _CAMO_PILE_COLORS[opt % _CAMO_PILE_COLORS.length];
+        this._drawRiverButton(ctx, rect, label, chosen === opt, color);
+        this._camoButtonRects.push(rect);
+      });
+    }
+  }
+
+  // Hit-test the Camouflage pile buttons (world coords). Returns the matching
+  // button rect (with seat/idx/pile) or null.
+  _hitTestCamoButton(wx, wy) {
+    for (const b of this._camoButtonRects) {
       if (wx >= b.x && wx <= b.x + b.w && wy >= b.y && wy <= b.y + b.h) return b;
     }
     return null;
@@ -3165,6 +3230,18 @@ class BattlefieldCanvas {
       return;
     }
 
+    // Camouflage pile buttons likewise float above their creature.
+    const camoHit = this._hitTestCamoButton(world.x, world.y);
+    if (camoHit) {
+      this.pressState = {
+        camoButton: { seat: camoHit.seat, idx: camoHit.idx, pile: camoHit.pile },
+        key: null, seat: null, idx: null, card: null,
+        startCX: cx, startCY: cy, currentCX: cx, currentCY: cy,
+        combatDrag: false, cancelled: false,
+      };
+      return;
+    }
+
     // Floating stack cards draw above the battlefield, so they win the press.
     const stackHit = this._hitTestStack(world.x, world.y);
     if (stackHit) {
@@ -3340,6 +3417,11 @@ class BattlefieldCanvas {
       return;
     }
 
+    if (!ps.cancelled && ps.camoButton) {
+      if (this.onCamouflagePileClick) this.onCamouflagePileClick(ps.camoButton);
+      return;
+    }
+
     if (!ps.cancelled && ps.stackIndex != null) {
       if (this.onStackCardClick) {
         this.onStackCardClick({ index: ps.stackIndex, item: this.stackVisuals[ps.stackIndex]?.item || null });
@@ -3422,6 +3504,9 @@ function _easeOutBack(t) {
 
 // Draw order within a frame: ghosts under everything, text on top.
 const _COMBAT_FX_DRAW_ORDER = { ghost: 0, beam: 1, hit: 2, chevron: 3, toughness: 4 };
+
+// Camouflage pile-button colors, one per pile number (cycled past six piles).
+const _CAMO_PILE_COLORS = ["#4a90d9", "#e0a23b", "#5cb85c", "#c95fc9", "#d9534f", "#3ac0c0"];
 
 // Out-and-back envelope for punches/recoils: fast strike out (the first
 // `out` fraction of the duration), then a smooth settle back to rest.

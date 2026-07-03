@@ -887,9 +887,10 @@ class TestTwoHeadedGiantDoubleBlock:
 
 
 # ---------------------------------------------------------------------------
-# Camouflage — replaces the declare-blockers step with random pile assignment.
-# The defender's creatures are divided into piles (one per attacker), randomly
-# assigned, and block their assigned attacker if able (seeded RNG = reproducible).
+# Camouflage — replaces the declare-blockers step: the defending player divides
+# their creatures into piles (one per attacker, piles may be empty), each pile is
+# matched to a different attacker at random, and every pile member that can block
+# its attacker does so (seeded RNG = reproducible).
 # ---------------------------------------------------------------------------
 
 class TestCamouflage:
@@ -926,13 +927,63 @@ class TestCamouflage:
         game2.resolve_camouflage_blocking(1)
         assert game2.combat_blockers == first  # reproducible under the same seed
 
-    def test_auto_resolves_when_active_on_advance(self, cards):
+    def test_advance_waits_for_defender_pile_choice(self, cards):
         game = self._combat(cards)
-        random.seed(5)
         assert game.is_camouflage_active()
-        game.advance_combat_phase()  # at declare_blockers -> camouflage resolves
+        game.advance_combat_phase()  # defender has untapped creatures: wait
+        assert game.current_step == "declare_blockers"
+        assert game.combat_blockers_locked is False
+
+    def test_advance_auto_resolves_with_no_untapped_creatures(self, cards):
+        game = self._combat(cards)
+        for perm in game.players[1].battlefield:
+            perm.tapped = True
+        random.seed(5)
+        game.advance_combat_phase()  # nothing to divide: resolves empty piles
         assert game.combat_blockers_locked is True
-        assert game.combat_blockers  # blocks were auto-assigned
+        assert game.combat_blockers == {}
+
+    def test_defender_chooses_piles_random_attacker_matching(self, cards):
+        game = self._combat(cards)
+        random.seed(3)
+        # Both creatures into pile 0; pile 1 stays empty. Exactly one attacker
+        # (chosen at random) ends up blocked by both creatures.
+        ok, msg = game.assign_camouflage_piles(1, {0: 0, 1: 0})
+        assert ok, msg
+        assert game.combat_blockers_locked is True
+        blocked_attackers = {a for atks in game.combat_blockers.values() for a in atks}
+        assert len(blocked_attackers) == 1
+        assert sorted(game.combat_blockers) == [0, 1]
+
+    def test_empty_piles_mean_no_blocks(self, cards):
+        game = self._combat(cards)
+        random.seed(3)
+        ok, msg = game.assign_camouflage_piles(1, {})
+        assert ok, msg
+        assert game.combat_blockers_locked is True
+        assert game.combat_blockers == {}
+
+    def test_normal_declare_blockers_rejected_while_active(self, cards):
+        game = self._combat(cards)
+        ok, msg = game.declare_blockers(1, {0: 0})
+        assert not ok
+        assert "Camouflage" in msg
+
+    def test_pile_number_out_of_range_rejected(self, cards):
+        game = self._combat(cards)
+        ok, msg = game.assign_camouflage_piles(1, {0: 5})
+        assert not ok
+        assert "pile numbers" in msg
+
+    def test_ordinary_creature_cannot_sit_in_two_piles(self, cards):
+        game = self._combat(cards)
+        ok, msg = game.assign_camouflage_piles(1, {0: [0, 1]})
+        assert not ok
+        assert "cannot be put into that many piles" in msg
+
+    def test_no_legal_blocker_assignments_while_active(self, cards):
+        game = self._combat(cards)
+        assert game.legal_blocker_assignments(1) == []
 
 
 # ---------------------------------------------------------------------------

@@ -51,6 +51,7 @@ ActionKind = Literal[
     "word_of_command_confirm",
     "assign_defender_piles",
     "assign_attacker_piles",
+    "assign_camouflage_piles",
     "dismiss_hand_reveal",
     "coin_flip_choose",
     "mulligan_take",
@@ -169,6 +170,10 @@ class GameActionRequest(BaseModel):
     # Raging River: map of battlefield/attacker index → "left"/"right" pile label,
     # sent with assign_defender_piles / assign_attacker_piles.
     piles: dict[int, str] | None = None
+    # Camouflage: map of the defender's battlefield index → 0-based pile number(s)
+    # (a list only for a creature that can block additional creatures), sent with
+    # assign_camouflage_piles. Creatures left out go into no pile.
+    camouflage_piles: dict[int, int | list[int]] | None = None
     # Phantasmal Terrain: the basic land type the controller chose for the
     # enchanted land, sent with `land_type_confirm`.
     land_type: Literal["plains", "island", "swamp", "mountain", "forest"] | None = None

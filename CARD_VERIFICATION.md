@@ -3,9 +3,9 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **290**
-- Passed: **289**
+- Passed: **290**
 - Failed: **0**
-- Untested: **1**
+- Untested: **0**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -36,7 +36,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Bog Wraith | ✅ pass |  |
 | Braingeyser | ✅ pass |  |
 | Burrowing | ✅ pass |  |
-| Camouflage | ⬜ untested |  |
+| Camouflage | ✅ pass |  |
 | Castle | ✅ pass |  |
 | Celestial Prism | ✅ pass |  |
 | Channel | ✅ pass |  |

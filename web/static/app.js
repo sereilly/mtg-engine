@@ -27,6 +27,12 @@ let sacrificeSelection = [];
 // whichever role (defender division / attacker labeling) the viewer is resolving.
 // Each creature starts unset; once every creature has a side the choice submits.
 let ragingRiverSelection = null;
+// Camouflage: in-progress pile choices for the defending player, keyed by
+// creature index. Values are a 0-based pile number or "none" (kept out of every
+// pile). Once every untapped creature has a choice, the piles submit.
+let camouflageSelection = null;
+// Identity of the Camouflage prompt the selection belongs to; reset on change.
+let camouflagePromptSig = null;
 // Identity of the prompt the in-progress selection belongs to ("seat:idx,idx").
 // When it changes (new role / new creatures), the tentative selection is reset.
 let ragingRiverPromptSig = null;
@@ -335,6 +341,9 @@ function getValidBlockerAssignments(state = currentState) {
 function blockAssignmentRejectionReason(state = currentState, blockerIdx, attackerIdx) {
   const combat = getCombatState(state);
   if (!combat || seat !== combat.defending_player_index) return "You aren't the defending player.";
+  if (combat.camouflage_active) {
+    return "Camouflage: use the pile buttons above your creatures — piles block random attackers.";
+  }
 
   const isAttacker = Array.isArray(combat.attackers)
     && combat.attackers.some((a) => Number(a.attacker_index) === Number(attackerIdx));
@@ -467,6 +476,16 @@ function renderCombatOverlay(state = currentState) {
       isDefender
         ? "Raging River: tap Left or Right above each of your creatures to divide them."
         : "Raging River: tap Left or Right above each attacker to choose its pile."
+    );
+  }
+
+  // Camouflage: numbered pile buttons above the defender's untapped creatures.
+  battlefieldCanvas.setCamouflage(buildCamouflageCanvasData(state));
+  const camoInfo = getCamouflageInfo(state);
+  if (camoInfo) {
+    updateActionHint(
+      `Camouflage: assign each of your creatures a pile (1–${camoInfo.pile_count}) or ✕ for none. ` +
+        "Each pile blocks a random attacker."
     );
   }
 }
@@ -880,7 +899,7 @@ function combatDamageAssignmentPending(state = currentState) {
 }
 
 function hasBlockingPromptForAutoPass(state = currentState) {
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getLandTypeChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getLandTypeChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
   return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingAbilityChoice || pendingChannel);
 }
 
@@ -932,7 +951,13 @@ async function maybeAutoPassUntilTurnEnd(state = currentState) {
     }
 
     if (isCombatStep(state, "declare_blockers") && seat === combat?.defending_player_index && !combat?.blockers_locked) {
-      await sendAction({ seat, action: "declare_blockers", blocker_pairs: {} });
+      // Camouflage replaces blocker declaration with pile assignment; an empty
+      // division (every creature out of the piles) is the "no blocks" equivalent.
+      if (combat?.camouflage_active) {
+        await sendAction({ seat, action: "assign_camouflage_piles", camouflage_piles: {} });
+      } else {
+        await sendAction({ seat, action: "declare_blockers", blocker_pairs: {} });
+      }
       return;
     }
 
@@ -1071,7 +1096,13 @@ async function maybeAutoPassDisabledPhase(state = currentState) {
       return;
     }
     if (isCombatStep(state, "declare_blockers") && seat === combat?.defending_player_index && !combat?.blockers_locked) {
-      await sendAction({ seat, action: "declare_blockers", blocker_pairs: {} });
+      // Camouflage replaces blocker declaration with pile assignment; an empty
+      // division (every creature out of the piles) is the "no blocks" equivalent.
+      if (combat?.camouflage_active) {
+        await sendAction({ seat, action: "assign_camouflage_piles", camouflage_piles: {} });
+      } else {
+        await sendAction({ seat, action: "declare_blockers", blocker_pairs: {} });
+      }
       return;
     }
     await sendAction({ seat, action: "pass_priority" });
@@ -1108,6 +1139,17 @@ async function maybeAutoAdvanceCombatDeclaration(state = currentState) {
   ) {
     const defendingSeat = Number.isInteger(combat.defending_player_index) ? combat.defending_player_index : 1 - seat;
     actionBody = { seat, action: "declare_attackers", attacker_indices: [], target_seat: defendingSeat };
+  } else if (
+    isCombatStep(state, "declare_blockers") &&
+    seat === combat.defending_player_index &&
+    !combat.blockers_locked &&
+    combat.camouflage_active
+  ) {
+    // Camouflage: the numbered pile buttons are the affordance; auto-submit an
+    // empty division only when there is nothing left to divide.
+    if (!getCamouflageInfo(state)) {
+      actionBody = { seat, action: "assign_camouflage_piles", camouflage_piles: {} };
+    }
   } else if (
     isCombatStep(state, "declare_blockers") &&
     seat === combat.defending_player_index &&
@@ -1856,6 +1898,16 @@ function getRagingRiverInfo(state = currentState) {
   return info;
 }
 
+// Camouflage: the defending player's pending pile division. Server-built, only
+// present for the human defender while blocks are unlocked and creatures remain.
+function getCamouflageInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.camouflage;
+  if (!info || info.defender_seat !== seat) return null;
+  if (!Array.isArray(info.divide_creatures) || info.divide_creatures.length === 0) return null;
+  return info;
+}
+
 function getReorderLibraryInfo(state = currentState) {
   if (!state || seat === null) return null;
   const info = state.reorder_library;
@@ -1964,6 +2016,7 @@ function isAnyPromptActive(state = currentState) {
   if (getTimeVaultInfo(state)) return true;
   if (getWordOfCommandInfo(state)) return true;
   if (getRagingRiverInfo(state)) return true;
+  if (getCamouflageInfo(state)) return true;
   if (shouldShowPriorityPrompt(state)) return true;
   if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingAutoTap || pendingModalChoice || pendingAbilityChoice || pendingChannel) return true;
 
@@ -1977,7 +2030,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getLandTypeChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getLandTypeChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -3043,6 +3096,69 @@ function handleRagingRiverPileClick({ idx, side }) {
     renderBoard(currentState);
     updateActionHint(
       `Raging River: assign each creature to Left or Right (${Object.keys(ragingRiverSelection).length}/${items.length} chosen).`
+    );
+  }
+}
+
+// Camouflage: the defending player divides their untapped creatures into
+// numbered piles (one per attacker); each pile is then matched to a random
+// attacker by the engine. Resolved with numbered buttons drawn over each
+// creature on the board (mirroring the Raging River flow). Returns the state
+// the canvas needs, or null when no Camouflage division is pending.
+function buildCamouflageCanvasData(state) {
+  const info = getCamouflageInfo(state);
+  if (!info) {
+    camouflagePromptSig = null;
+    camouflageSelection = null;
+    return null;
+  }
+  const items = info.divide_creatures;
+  const sig = `${info.defender_seat}:${info.pile_count}:${items.map((it) => it.index).join(",")}`;
+  // Start fresh (every creature unset) whenever the prompt changes, so the
+  // player explicitly assigns each creature rather than accepting a default.
+  if (camouflagePromptSig !== sig) {
+    camouflagePromptSig = sig;
+    camouflageSelection = {};
+  }
+  return {
+    active: true,
+    seat: info.defender_seat,
+    pileCount: Number(info.pile_count) || 1,
+    items: items.map((it) => ({ idx: it.index, name: it.name })),
+    selection: camouflageSelection || {},
+  };
+}
+
+// Apply one Camouflage pile-button click (from the canvas). `pile` is a 0-based
+// pile number or "none". Once every prompted creature has a choice, submit the
+// division; otherwise re-render so the new selection shows immediately.
+function handleCamouflagePileClick({ idx, pile }) {
+  if (!currentState || seat === null) return;
+  const info = getCamouflageInfo(currentState);
+  if (!info) return;
+  const items = info.divide_creatures;
+  if (!items.some((it) => it.index === idx)) return;
+  if (!camouflageSelection) camouflageSelection = {};
+  camouflageSelection[idx] = pile;
+
+  const allChosen = items.every((it) => camouflageSelection[it.index] !== undefined);
+  if (allChosen) {
+    const piles = {};
+    for (const it of items) {
+      const chosen = camouflageSelection[it.index];
+      if (chosen !== "none") piles[it.index] = chosen;
+    }
+    camouflageSelection = null;
+    camouflagePromptSig = null;
+    sendAction({ seat, action: "assign_camouflage_piles", camouflage_piles: piles }).catch((e) =>
+      updateActionHint(e.message, true)
+    );
+  } else {
+    renderBoard(currentState);
+    updateActionHint(
+      `Camouflage: assign each creature a pile number or ✕ for none ` +
+        `(${Object.keys(camouflageSelection).length}/${items.length} chosen). ` +
+        "Each pile blocks a random attacker."
     );
   }
 }
@@ -8347,6 +8463,11 @@ function initBattlefieldCanvas() {
     // Raging River: a Left/Right button drawn above a creature was clicked.
     onRiverPileClick(choice) {
       handleRagingRiverPileClick(choice);
+    },
+
+    // Camouflage: a numbered pile button drawn above a creature was clicked.
+    onCamouflagePileClick(choice) {
+      handleCamouflagePileClick(choice);
     },
 
     onBlockerAssign({ blockerIdx, attackerIdx }) {

@@ -471,6 +471,10 @@ class LegalityMixin:
             return []
         if self.combat_defending_player_index != defender_index:
             return []
+        # Camouflage replaces blocker declaration with pile assignment, so there
+        # are no individually declarable blocker→attacker pairs this combat.
+        if self.is_camouflage_active() and self.combat_attackers:
+            return []
         defender = self.players[defender_index]
         attacker_controller = self.players[self.active_player_index]
         pairs: list[dict[str, int]] = []

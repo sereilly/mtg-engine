@@ -38,13 +38,24 @@ class DeclareBlockersStepMixin:
         text = blocker.card.oracle_text.lower()
         return 1 + text.count("can block an additional creature")
 
-    def declare_blockers(self, controller_index: int, blocker_to_attacker: dict[int, int | list[int]]) -> tuple[bool, str]:
+    def declare_blockers(
+        self,
+        controller_index: int,
+        blocker_to_attacker: dict[int, int | list[int]],
+        *,
+        _camouflage_resolution: bool = False,
+    ) -> tuple[bool, str]:
         if self.current_turn_phase != "combat" or self.current_step != "declare_blockers":
             return False, "blockers can only be declared during declare_blockers"
         if self.combat_defending_player_index is None:
             return False, "no defending player set"
         if controller_index != self.combat_defending_player_index:
             return False, "only defending player may declare blockers"
+        # Camouflage replaces the declare-blockers turn-based action: blocks come
+        # from the defender's piles (assign_camouflage_piles / the random AI
+        # fallback), never from a normal declaration.
+        if self.is_camouflage_active() and not _camouflage_resolution and self.combat_attackers:
+            return False, "Camouflage is active: divide your creatures into piles instead of declaring blockers"
 
         self._prune_combat_state()
         defender = self.players[controller_index]
@@ -75,8 +86,10 @@ class DeclareBlockersStepMixin:
                     return False, f"{blocker.card.name} is in the wrong pile to block {attacker.card.name}"
                 assignments.setdefault(blocker_idx, []).append(attacker_idx)
 
-        # Lure enforcement: every creature that can block a Lure attacker must do so
-        for attacker_idx in self.combat_attackers:
+        # Lure enforcement: every creature that can block a Lure attacker must do so.
+        # Skipped for Camouflage resolutions: blocks then come from random pile
+        # assignment, not a declaration, so blocking requirements don't constrain it.
+        for attacker_idx in self.combat_attackers if not _camouflage_resolution else ():
             if attacker_idx >= len(attacker_controller.battlefield):
                 continue
             attacker = attacker_controller.battlefield[attacker_idx]
@@ -92,8 +105,8 @@ class DeclareBlockersStepMixin:
 
         # Blaze of Glory enforcement: the marked creature "blocks each attacking
         # creature this turn if able" — every attacker it can legally block must
-        # be among its assignments.
-        for blocker_idx, blocker in enumerate(defender.battlefield):
+        # be among its assignments. Also skipped for Camouflage resolutions.
+        for blocker_idx, blocker in enumerate(defender.battlefield if not _camouflage_resolution else ()):
             if not blocker.metadata.get("must_block_all_until_eot"):
                 continue
             if not blocker.is_creature or blocker.tapped:
@@ -129,36 +142,84 @@ class DeclareBlockersStepMixin:
         return True, "declared blockers"
 
     def is_camouflage_active(self) -> bool:
-        """True when Camouflage was cast this turn, so the defender's blocks are
-        assigned by random pile instead of chosen."""
+        """True when Camouflage was cast this turn, so the defender's blocks come
+        from piles randomly matched to attackers instead of declared blocks."""
         return self.camouflage_active_turn == self.turn
 
+    def assign_camouflage_piles(
+        self, defender_index: int, piles: dict[int, int | list[int]]
+    ) -> tuple[bool, str]:
+        """Camouflage: the defending player divides any number of their untapped
+        creatures into piles — one pile per attacker; piles may be empty and
+        creatures may be left out. ``piles`` maps a battlefield index to the pile
+        number(s) (0-based) it goes into; a creature that can block additional
+        creatures may sit in that many piles. Each pile is then matched to a
+        different attacker at random, and every pile member that can block its
+        attacker does so."""
+        if self.current_turn_phase != "combat" or self.current_step != "declare_blockers":
+            return False, "piles can only be assigned during declare_blockers"
+        if not self.is_camouflage_active():
+            return False, "Camouflage is not active"
+        if defender_index != self.combat_defending_player_index:
+            return False, "only the defending player may assign piles"
+        if self.combat_blockers_locked:
+            return False, "blockers are already locked in"
+        self._prune_combat_state()
+        defender = self.players[defender_index]
+        attackers = [a for a, d in self.combat_attackers.items() if d == defender_index]
+        if not attackers:
+            return self.declare_blockers(defender_index, {}, _camouflage_resolution=True)
+
+        pile_lists: list[list[int]] = [[] for _ in attackers]
+        for raw_idx, raw_piles in piles.items():
+            blocker_idx = int(raw_idx)
+            pile_numbers = raw_piles if isinstance(raw_piles, (list, tuple, set)) else [raw_piles]
+            distinct = sorted({int(p) for p in pile_numbers})
+            if blocker_idx < 0 or blocker_idx >= len(defender.battlefield):
+                return False, "creature index out of range"
+            blocker = defender.battlefield[blocker_idx]
+            if not blocker.is_creature:
+                return False, "only creatures can be put into piles"
+            if blocker.tapped:
+                return False, f"{blocker.card.name} is tapped"
+            if any(p < 0 or p >= len(pile_lists) for p in distinct):
+                return False, f"pile numbers must be between 0 and {len(pile_lists) - 1}"
+            if len(distinct) > self._max_blocks_for(blocker):
+                return False, f"{blocker.card.name} cannot be put into that many piles"
+            for pile_number in distinct:
+                pile_lists[pile_number].append(blocker_idx)
+        return self._resolve_camouflage_piles(defender_index, pile_lists)
+
     def resolve_camouflage_blocking(self, defender_index: int) -> tuple[bool, str]:
-        """Camouflage replaces the declare-blockers step: the defending player's
-        creatures are divided into a number of piles equal to the attackers
-        attacking them, each pile is assigned to a different attacker at random, and
-        every creature in a pile that can block its assigned attacker does so (CR;
-        piles may be empty). Uses the module RNG, so a seeded run is reproducible."""
+        """Camouflage with a non-choosing (AI) defender: divide the untapped
+        creatures into random piles (round-robin over a shuffle), then resolve the
+        random pile→attacker matching. Uses the module RNG, so a seeded run is
+        reproducible."""
         if self.current_turn_phase != "combat" or self.current_step != "declare_blockers":
             return False, "blockers can only be declared during declare_blockers"
         if defender_index != self.combat_defending_player_index:
             return False, "only defending player may declare blockers"
         defender = self.players[defender_index]
-        attacker_controller = self.players[self.active_player_index]
         attackers = [a for a, d in self.combat_attackers.items() if d == defender_index]
         if not attackers:
-            return self.declare_blockers(defender_index, {})
+            return self.declare_blockers(defender_index, {}, _camouflage_resolution=True)
 
         candidates = [
             idx for idx, perm in enumerate(defender.battlefield)
             if perm.is_creature and not perm.tapped
         ]
         random.shuffle(candidates)
-        # Round-robin the creatures into one pile per attacker, then randomly map
-        # piles to attackers.
         piles: list[list[int]] = [[] for _ in attackers]
         for i, blocker_idx in enumerate(candidates):
             piles[i % len(piles)].append(blocker_idx)
+        return self._resolve_camouflage_piles(defender_index, piles)
+
+    def _resolve_camouflage_piles(self, defender_index: int, piles: list[list[int]]) -> tuple[bool, str]:
+        """Match each Camouflage pile to a different attacker at random; every pile
+        member that can legally block its matched attacker becomes a blocker."""
+        defender = self.players[defender_index]
+        attacker_controller = self.players[self.active_player_index]
+        attackers = [a for a, d in self.combat_attackers.items() if d == defender_index]
         shuffled_attackers = list(attackers)
         random.shuffle(shuffled_attackers)
 
@@ -167,10 +228,16 @@ class DeclareBlockersStepMixin:
             attacker = attacker_controller.battlefield[attacker_idx]
             for blocker_idx in pile:
                 blocker = defender.battlefield[blocker_idx]
-                if self._can_block_attacker(blocker, attacker):
-                    assignment.setdefault(blocker_idx, []).append(attacker_idx)
-        self.log.append(f"Camouflage assigned {len(assignment)} random blocker(s)")
-        return self.declare_blockers(defender_index, assignment)
+                if not self._can_block_attacker(blocker, attacker):
+                    continue
+                if self._left_right_block_illegal(attacker_idx, blocker_idx, blocker):
+                    continue
+                assignment.setdefault(blocker_idx, []).append(attacker_idx)
+        self.log.append(
+            f"Camouflage matched {len(piles)} pile(s) to attackers at random: "
+            f"{len(assignment)} creature(s) block"
+        )
+        return self.declare_blockers(defender_index, assignment, _camouflage_resolution=True)
 
     def _left_right_block_illegal(self, attacker_idx: int, blocker_idx: int, blocker: Permanent) -> bool:
         """CR Raging River: an attacker assigned to a pile can only be blocked by a
