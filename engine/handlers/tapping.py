@@ -94,6 +94,8 @@ def tap_or_untap_target(game: Game, instruction: OracleInstruction, context: Ora
         game.log.append("No valid permanent to tap or untap")
         return True, "resolved"
     perm.tapped = not perm.tapped
+    if perm.tapped:
+        game._turn_face_up(perm)
     game.log.append(f"{'Tapped' if perm.tapped else 'Untapped'} {perm.card.name}")
     return True, "resolved"
 

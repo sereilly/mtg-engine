@@ -109,6 +109,10 @@ class Game(
     combat_bands: list[list[int]] = field(default_factory=list)
     combat_band_blocks: dict[int, list[int]] = field(default_factory=dict)
     combat_banding_damage: dict[int, dict[int, int]] = field(default_factory=dict)
+    # ``combat_multiblock_damage`` is the defending player's pre-committed division
+    # of a blocker's combat damage among the 2+ attackers it blocks (CR 510.1d,
+    # Two-Headed Giant of Foriys). Maps blocker index -> {attacker index: damage}.
+    combat_multiblock_damage: dict[int, dict[int, int]] = field(default_factory=dict)
     # Camouflage: set to the turn number when cast. While it matches the current
     # turn, the defending player's blocks are assigned randomly by pile (CR — the
     # spell replaces the declare-blockers step) instead of chosen.

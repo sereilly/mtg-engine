@@ -78,6 +78,19 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
         game.log.append(f"{caster.name} gains prevention shield for {amount} damage")
         return True, "resolved"
 
+    # Rock Hydra: "{R}: Prevent the next 1 damage that would be dealt to this
+    # creature this turn." The shield protects the ability's own source
+    # permanent, never the (defaulted) target.
+    if instruction.payload.get("to_source"):
+        source_perm = context.source_permanent
+        if source_perm is not None:
+            source_perm.damage_prevention_pool += amount
+            source_perm.damage_prevention_source = source_name
+            game.log.append(
+                f"{source_perm.card.name} gains prevention shield for {amount} damage"
+            )
+        return True, "resolved"
+
     # "Prevent the next N damage that would be dealt to any target" (Healing
     # Salve's prevention mode, Samite Healer, …): the target may be a creature,
     # in which case the shield protects that creature rather than its controller.

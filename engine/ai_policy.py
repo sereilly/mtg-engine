@@ -205,7 +205,7 @@ def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
     return sorted(chosen)
 
 
-def choose_combat_blockers(game: Game, defending_player_index: int) -> dict[int, int]:
+def choose_combat_blockers(game: Game, defending_player_index: int) -> dict[int, int | list[int]]:
     combat = game.get_combat_state()
     if game.current_turn_phase != "combat" or game.current_step != "declare_blockers":
         return {}
@@ -269,6 +269,22 @@ def choose_combat_blockers(game: Game, defending_player_index: int) -> dict[int,
             continue
         assignments[blocker_idx] = attacker_idx
         used_blockers.add(blocker_idx)
+
+    # Blaze of Glory: a creature marked "blocks each attacking creature this
+    # turn if able" must be assigned every attacker it can legally block —
+    # declare_blockers rejects anything less.
+    for blocker_idx in available_blockers:
+        blocker = defender.battlefield[blocker_idx]
+        if not blocker.metadata.get("must_block_all_until_eot"):
+            continue
+        must = [
+            attacker_idx
+            for attacker_idx in attackers
+            if 0 <= attacker_idx < len(attacker_player.battlefield)
+            and game._can_block_attacker(blocker, attacker_player.battlefield[attacker_idx])
+        ]
+        if must:
+            assignments[blocker_idx] = must
 
     return assignments
 

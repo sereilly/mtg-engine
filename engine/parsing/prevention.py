@@ -18,7 +18,8 @@ def prevent_next_x_damage(text: str, activated: bool) -> RuleResult:
         # "dealt to you" means the activating player, not a chosen target
         # (e.g. Conservator). Otherwise the shield goes to the designated target.
         to_self = "would be dealt to you" in text
-        return _instruction("grant_prevention_shield", amount="x", to_self=to_self), effect_kind
+        to_source = "would be dealt to this creature" in text or "would be dealt to this permanent" in text
+        return _instruction("grant_prevention_shield", amount="x", to_self=to_self, to_source=to_source), effect_kind
     return None
 
 
@@ -30,9 +31,11 @@ def prevent_next_n_damage(text: str, activated: bool) -> RuleResult:
         effect_kind = "activated_prevent" if activated else "spell_pattern"
         # Conservator: "Prevent the next 2 damage that would be dealt to you this
         # turn." — "you" is the ability's controller, so the shield is granted to
-        # the caster, not to the default (opponent) target.
+        # the caster, not to the default (opponent) target. Rock Hydra:
+        # "...dealt to this creature" — the shield protects the source permanent.
         to_self = "would be dealt to you" in text
-        return _instruction("grant_prevention_shield", amount=amount, to_self=to_self), effect_kind
+        to_source = "would be dealt to this creature" in text or "would be dealt to this permanent" in text
+        return _instruction("grant_prevention_shield", amount=amount, to_self=to_self, to_source=to_source), effect_kind
     return None
 
 

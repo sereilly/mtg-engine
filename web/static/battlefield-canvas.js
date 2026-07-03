@@ -1840,7 +1840,9 @@ class BattlefieldCanvas {
     // If creatureCard is provided, show its P/T on this card (enchantment on top of creature).
     const ptCard = creatureCard || card;
     const ptIsCreature = !!(ptCard && (ptCard.is_creature || String(ptCard.type || "").toLowerCase().includes("creature")));
+    let ptBadgeDrawn = false;
     if (ptCard && typeof ptCard.power === "number" && typeof ptCard.toughness === "number" && ptIsCreature) {
+      ptBadgeDrawn = true;
       const bw = 26, bh = 13;
       const bx = x + w - bw - 2, by = y + h - bh - 2;
       ctx.fillStyle = "rgba(0,0,0,0.78)";
@@ -1907,10 +1909,16 @@ class BattlefieldCanvas {
       const fallbackStyle = { icon: "●", fill: "rgba(40,50,70,0.92)", stroke: "rgba(150,180,220,0.9)", text: "#e8f0ff" };
       const bw = 22, bh = 13;
       const atTop = !!(flags && flags.occludedAuraMember);
+      // When a P/T badge occupies the bottom-right corner, start the counter
+      // stack one slot higher so counters never cover the power/toughness
+      // (Scavenging Ghoul's corpse counters).
+      const counterBaseSlot = ptBadgeDrawn && !atTop ? 1 : 0;
       counterEntries.forEach(([kind, count], i) => {
         const s = styles[kind] || fallbackStyle;
         const bx = x + w - bw - 2;
-        const by = atTop ? y + 2 + i * (bh + 2) : y + h - bh - 2 - i * (bh + 2);
+        const by = atTop
+          ? y + 2 + i * (bh + 2)
+          : y + h - bh - 2 - (i + counterBaseSlot) * (bh + 2);
         ctx.fillStyle = s.fill;
         this._roundRect(ctx, bx, by, bw, bh, 3);
         ctx.fill();

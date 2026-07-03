@@ -19,6 +19,7 @@ ActionKind = Literal[
     "declare_blockers",
     "assign_combat_damage",
     "assign_banding_damage",
+    "assign_multiblock_damage",
     "ai_step",
     "cleanup_select",
     "untap_select",

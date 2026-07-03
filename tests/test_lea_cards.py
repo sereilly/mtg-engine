@@ -2115,10 +2115,12 @@ def test_copy_artifact_copies_artifact_on_entry(all_cards):
 
     assert result.supported
     # Copy Artifact becomes a copy of the artifact (its name/types/abilities),
-    # except it's also an Enchantment.
+    # except it's also an Enchantment. The copy is an overlay: the underlying
+    # card stays Copy Artifact so it reverts when it changes zones.
     perm = next(perm for perm in p1.battlefield if perm.metadata.get("copied_from") == "Black Lotus")
-    assert perm.card.name == "Black Lotus"
-    assert "enchantment" in perm.card.type_line.lower()
+    assert perm.effective_card.name == "Black Lotus"
+    assert "enchantment" in perm.effective_card.type_line.lower()
+    assert perm.card.name == "Copy Artifact"
 
 def test_loader_reads_cards(lea_path):
     cards = load_cards(lea_path)

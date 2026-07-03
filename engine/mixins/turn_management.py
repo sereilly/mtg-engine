@@ -255,7 +255,7 @@ class TurnManagementMixin:
             for trig in aura_prog.triggered_abilities:
                 if trig.condition.kind == "enchanted_land_tapped" and trig.instruction is not None:
                     amount = int(trig.instruction.payload.get("amount", 0))
-                    damage = self._deal_damage_to_player(player, amount)
+                    damage = self._deal_damage_to_player(player, amount, source=attached_aura)
                     self.log.append(f"{attached_aura.card.name} dealt {damage} damage to {player.name}")
             # Wild Growth: "Whenever enchanted land is tapped for mana, its controller
             # adds an additional {G}." The "for mana" phrasing isn't compiled as a
@@ -281,7 +281,7 @@ class TurnManagementMixin:
                 for trig in prog.triggered_abilities:
                     if trig.condition.kind == "land_tapped_for_mana" and trig.instruction is not None:
                         amount = int(trig.instruction.payload.get("amount", 1))
-                        damage = self._deal_damage_to_player(player, amount)
+                        damage = self._deal_damage_to_player(player, amount, source=perm)
                         self.log.append(f"{perm.card.name} triggered: {player.name} took {damage} damage")
 
         return True

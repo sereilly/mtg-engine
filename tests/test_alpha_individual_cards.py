@@ -401,9 +401,16 @@ def _assert_supported_effect(card: CardDefinition, game: Game, p1: PlayerState, 
         return
 
     if "prevent the next" in text and result.effect_kind == "activated_prevent":
+        # "dealt to this creature" (Rock Hydra) shields the source permanent;
+        # otherwise a player pool grows.
         assert (
             p1.damage_prevention_pool > before.p1_prevention
             or p2.damage_prevention_pool > before.p2_prevention
+            or any(
+                perm.damage_prevention_pool > 0
+                for player in (p1, p2)
+                for perm in player.battlefield
+            )
         )
         return
 

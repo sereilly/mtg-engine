@@ -76,7 +76,9 @@ class Permanent:
             for land_type, symbol in _LAND_TYPE_MANA.items():
                 if land_type in override:
                     return (symbol,)
-        return self.card.produced_mana
+        # A copy (Copy Artifact of a Mox / Sol Ring) produces the copied
+        # card's mana, so read the effective card rather than the copier's own.
+        return self.effective_card.produced_mana
 
     @property
     def effective_card(self) -> "CardDefinition":

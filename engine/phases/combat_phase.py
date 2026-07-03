@@ -187,6 +187,7 @@ class CombatPhaseMixin:
         self.combat_bands = []
         self.combat_band_blocks = {}
         self.combat_banding_damage = {}
+        self.combat_multiblock_damage = {}
         self.combat_left_right_active = False
         self.combat_left_right_defender_index = None
         self.combat_defender_piles = {}

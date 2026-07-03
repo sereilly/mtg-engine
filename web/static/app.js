@@ -49,6 +49,9 @@ let combatBlockerDraft = {};
 // CR 702.22k: the active player's choice of which band member each creature
 // blocking their band damages. Maps blocker_idx -> chosen attacker (band member).
 let combatBandBlockerDraft = {};
+// CR 510.1d: the defending player's division of a multi-blocking creature's
+// damage (Two-Headed Giant of Foriys). Maps blocker_idx -> {attacker_idx: damage}.
+let combatMultiblockDraft = {};
 let combatDraftStepKey = "";
 let combatPromptKey = "";
 let previousLifeBySeat = {};
@@ -340,7 +343,11 @@ function blockAssignmentRejectionReason(state = currentState, blockerIdx, attack
   const defenderBattlefield = state.players?.[combat.defending_player_index]?.battlefield;
   const blockerCard = Array.isArray(defenderBattlefield) ? defenderBattlefield[blockerIdx] : null;
   if (!blockerCard || typeof blockerCard === "string") return "Invalid blocker.";
-  if (!String(blockerCard.type || "").toLowerCase().includes("creature")) return "Only creatures can block.";
+  // is_creature is the engine's effective view — an animated land (Kormus Bell /
+  // Living Lands) is a creature even though its printed type line has no "creature".
+  const blockerIsCreature = blockerCard.is_creature
+    || String(blockerCard.type || "").toLowerCase().includes("creature");
+  if (!blockerIsCreature) return "Only creatures can block.";
   if (blockerCard.tapped) return `${blockerCard.name} is tapped and can't block.`;
 
   const legal = getValidBlockerAssignments(state).some(
@@ -868,11 +875,12 @@ function combatDamageAssignmentPending(state = currentState) {
   if (state.banding_assignment && seat === state.banding_assignment.defender_seat
       && getDefenderBandingGroups(state).length > 0) return true;
   if (seat === state.current_turn && getAttackerAssignGroups(state).length > 0) return true;
+  if (getMultiblockInfo(state)) return true;
   return false;
 }
 
 function hasBlockingPromptForAutoPass(state = currentState) {
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getLandTypeChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getLandTypeChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
   return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingAbilityChoice || pendingChannel);
 }
 
@@ -1941,6 +1949,7 @@ function isAnyPromptActive(state = currentState) {
   if (getLandTypeChoiceInfo(state)) return true;
   if (getManaPaymentInfo(state)) return true;
   if (getBandBlockerInfo(state)) return true;
+  if (getMultiblockInfo(state)) return true;
   if (getKudzuReattachInfo(state)) return true;
   if (getFaceDownCastInfo(state)) return true;
   if (getTimeVaultInfo(state)) return true;
@@ -1959,7 +1968,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getLandTypeChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getLandTypeChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -3676,7 +3685,7 @@ function renderActivationPrompt() {
     return;
   }
 
-  if (!pendingActivation && !pendingCastTarget && !pendingCastX && !pendingManaColor && !pendingAbilityChoice) {
+  if (!pendingActivation && !pendingCastTarget && !pendingCastX && !pendingManaColor && !pendingAbilityChoice && !pendingChannel) {
     const shouldShowPriority = shouldShowPriorityPrompt(currentState);
     const opponentHasPriority =
       !!currentState &&
@@ -6776,6 +6785,34 @@ function renderCombatControls(state) {
     }
   }
 
+  // CR 510.1d: the defending player divides a multi-blocking creature's damage
+  // (Two-Headed Giant of Foriys) before combat damage resolves.
+  if (
+    isCombatStep(state, "combat_damage") &&
+    seat === combat?.defending_player_index &&
+    getMultiblockInfo(state) &&
+    !combat?.damage_resolved
+  ) {
+    const prompt = document.createElement("div");
+    prompt.className = "combat-summary";
+    prompt.textContent =
+      "Your creature is blocking multiple attackers — choose how its damage is divided.";
+    damagePanel.appendChild(prompt);
+
+    const openBtn = document.createElement("button");
+    openBtn.type = "button";
+    openBtn.textContent = "Divide Blocker Damage";
+    openBtn.addEventListener("click", () => openMultiblockDamageDialog(state));
+    actions.appendChild(openBtn);
+
+    const key = `multiblock:${getCombatDraftStepKey(state)}`;
+    if (combatDamageDialogKey !== key) {
+      combatDamageDialogKey = key;
+      openMultiblockDamageDialog(state);
+    }
+    return;
+  }
+
   // CR 702.22k: a creature is blocking the active player's band — they choose which
   // band member it damages, before the normal attacker assignment.
   if (
@@ -6905,26 +6942,32 @@ function autoAssignCombatDamage(groups) {
 }
 
 // Validate one attacker's assignment against the engine's rules so we can guide
-// the player before they submit (CR 510.1c lethal-in-order, total <= power).
-// In "banding" mode the defending player divides the damage however they choose —
-// CR 702.22j is an explicit exception to 510.1c — so only the power ceiling applies.
+// the player before they submit. CR 510.1c: the attacker assigns ALL its combat
+// damage, divided among its blockers however the assigning player chooses (there
+// is no lethal-in-order requirement in the current rules), so the total must
+// equal its power. A trampler may assign less to the blockers — the remainder
+// tramples through to the player — but only once every blocker is assigned at
+// least lethal damage (CR 702.19e). The same totals apply in "banding" mode,
+// where the defender divides the damage instead (CR 702.22j).
 function validateCombatDamageGroup(group, mode = combatDamageDialogMode) {
   const draft = combatDamageDraft[group.attackerIdx] || {};
   let total = 0;
-  let sublethalSeen = false;
-  let violation = null;
-  const freeDivision = group.trample || mode === "banding";
+  let underLethal = false;
   for (const { blockerIdx, lethal } of group.blockers) {
     const value = Math.max(0, Number(draft[blockerIdx]) || 0);
     total += value;
-    if (!freeDivision) {
-      if (sublethalSeen && value > 0) {
-        violation = "Assign lethal to each blocker in order before the next.";
-      }
-      if (value < lethal) sublethalSeen = true;
+    if (value < lethal) underLethal = true;
+  }
+  let violation = null;
+  if (total > group.power) {
+    violation = "Assigned damage exceeds the attacker's power.";
+  } else if (total < group.power) {
+    if (!group.trample) {
+      violation = `Assign all ${group.power} damage among the blockers.`;
+    } else if (underLethal) {
+      violation = "Trample: assign lethal to every blocker before letting damage through.";
     }
   }
-  if (total > group.power) violation = "Assigned damage exceeds the attacker's power.";
   return { total, violation, valid: !violation };
 }
 
@@ -7038,7 +7081,9 @@ function openBandBlockerDialog(state = currentState) {
       const totalNote = document.createElement("div");
       totalNote.className = "cda-card-sub";
       totalNote.textContent = `Assigned ${assigned} of ${power}`;
-      if (assigned > power) totalNote.style.color = "#e16d70";
+      // CR 510.1c: the blocker assigns ALL its combat damage — flag any total
+      // that isn't exactly its power.
+      if (assigned !== power) totalNote.style.color = "#e16d70";
       section.appendChild(totalNote);
       body.appendChild(section);
     }
@@ -7067,8 +7112,8 @@ function openBandBlockerDialog(state = currentState) {
         const power = Number(defenderBf[b.blocker_idx]?.power) || 0;
         const split = combatBandBlockerDraft[b.blocker_idx] || {};
         const total = b.member_indices.reduce((sum, m) => sum + (Number(split[m]) || 0), 0);
-        if (total > power) {
-          updateActionHint(`Assigned damage exceeds a blocker's power (${total} > ${power}).`, true);
+        if (total !== power) {
+          updateActionHint(`Assign all of the blocker's damage (${total} of ${power} assigned).`, true);
           return;
         }
         blockerDamageSplit[b.blocker_idx] = {};
@@ -7079,6 +7124,163 @@ function openBandBlockerDialog(state = currentState) {
         await sendAction({ seat, action: "assign_combat_damage", blocker_damage_split: blockerDamageSplit });
         updateActionHint("Band blocker damage assigned.");
         combatBandBlockerDraft = {};
+        closeCombatDamageDialog();
+      } catch (e) {
+        updateActionHint(e.message, true);
+      } finally {
+        confirmBtn.disabled = false;
+      }
+    };
+  }
+}
+
+// CR 510.1d: the defending player divides a multi-blocking creature's combat
+// damage among the attackers it blocks (Two-Headed Giant of Foriys). Surfaced to
+// the defender as state.multiblock_blocker_assignment.
+function getMultiblockInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.multiblock_blocker_assignment;
+  if (!info || !Array.isArray(info.blockers) || info.blockers.length === 0) return null;
+  if (seat !== info.defender_seat) return null;
+  return info;
+}
+
+function openMultiblockDamageDialog(state = currentState) {
+  const info = getMultiblockInfo(state);
+  const modal = q("combatDamageModal");
+  if (!info || !modal) {
+    closeCombatDamageDialog();
+    return;
+  }
+  const attackerBf = state.players?.[state.current_turn]?.battlefield || [];
+  const defenderBf = state.players?.[info.defender_seat]?.battlefield || [];
+
+  // Default: the blocker's full power on the first attacker it blocks (the
+  // engine's default). Draft maps blocker_idx -> {attacker_idx: damage}.
+  for (const b of info.blockers) {
+    if (!combatMultiblockDraft[b.blocker_idx] || typeof combatMultiblockDraft[b.blocker_idx] !== "object") {
+      const power = Number(defenderBf[b.blocker_idx]?.power) || 0;
+      const split = {};
+      b.attacker_indices.forEach((a, i) => { split[a] = i === 0 ? power : 0; });
+      combatMultiblockDraft[b.blocker_idx] = split;
+    }
+  }
+
+  const titleEl = q("combatDamageTitle");
+  const subtitleEl = document.querySelector("#combatDamageModal .modal-subtitle");
+  if (titleEl) titleEl.textContent = "Divide Blocker Damage";
+  if (subtitleEl) {
+    subtitleEl.textContent =
+      "Your creature is blocking more than one attacker, so you choose how " +
+      "its combat damage is divided among them (CR 510.1d).";
+  }
+
+  const cardThumb = (card, sub) => {
+    const el = document.createElement("div");
+    el.className = "cda-card";
+    const pt = `${Number(card?.power) || 0}/${Number(card?.toughness) || 0}`;
+    const art = card?.image_uri
+      ? `<img src="${escapeHtml(card.image_uri)}" alt="${escapeHtml(card.name || "")}" loading="lazy" />`
+      : `<div class="cda-card-placeholder">${escapeHtml(card?.name || "")}</div>`;
+    el.innerHTML =
+      `${art}<div class="cda-card-name">${escapeHtml(card?.name || "")}</div>` +
+      `<div class="cda-card-pt">${pt}</div>` +
+      (sub ? `<div class="cda-card-sub">${escapeHtml(sub)}</div>` : "");
+    return el;
+  };
+
+  const render = () => {
+    const body = q("combatDamageDialogBody");
+    if (!body) return;
+    body.innerHTML = "";
+    for (const b of info.blockers) {
+      const blockerCard = defenderBf[b.blocker_idx];
+      const section = document.createElement("div");
+      section.className = "cda-attacker";
+
+      const left = document.createElement("div");
+      left.className = "cda-attacker-side";
+      left.appendChild(cardThumb(blockerCard, `deals ${Number(blockerCard?.power) || 0}`));
+      section.appendChild(left);
+
+      const arrow = document.createElement("div");
+      arrow.className = "cda-arrow";
+      arrow.textContent = "→";
+      section.appendChild(arrow);
+
+      const power = Number(blockerCard?.power) || 0;
+      const split = combatMultiblockDraft[b.blocker_idx] || {};
+      const assigned = b.attacker_indices.reduce((sum, a) => sum + (Number(split[a]) || 0), 0);
+
+      const targets = document.createElement("div");
+      targets.className = "cda-blockers";
+      for (const a of b.attacker_indices) {
+        const attackerCard = attackerBf[a];
+        const cell = document.createElement("div");
+        cell.className = "cda-target-btn" + ((Number(split[a]) || 0) > 0 ? " selected" : "");
+        cell.appendChild(cardThumb(attackerCard));
+        const input = document.createElement("input");
+        input.type = "number";
+        input.min = "0";
+        input.max = String(power);
+        input.value = String(Number(split[a]) || 0);
+        input.className = "cda-input";
+        input.addEventListener("change", () => {
+          const v = Math.max(0, Math.min(power, Number(input.value) || 0));
+          combatMultiblockDraft[b.blocker_idx] = { ...split, [a]: v };
+          render();
+        });
+        cell.appendChild(input);
+        targets.appendChild(cell);
+      }
+      section.appendChild(targets);
+
+      const totalNote = document.createElement("div");
+      totalNote.className = "cda-card-sub";
+      totalNote.textContent = `Assigned ${assigned} of ${power}`;
+      // CR 510.1d: the blocker assigns ALL its combat damage — flag any total
+      // that isn't exactly its power.
+      if (assigned !== power) totalNote.style.color = "#e16d70";
+      section.appendChild(totalNote);
+      body.appendChild(section);
+    }
+  };
+
+  render();
+  modal.classList.remove("hidden");
+
+  const autoBtn = q("combatDamageAutoBtn");
+  if (autoBtn) {
+    autoBtn.onclick = () => {
+      for (const b of info.blockers) {
+        const power = Number(defenderBf[b.blocker_idx]?.power) || 0;
+        const split = {};
+        b.attacker_indices.forEach((a, i) => { split[a] = i === 0 ? power : 0; });
+        combatMultiblockDraft[b.blocker_idx] = split;
+      }
+      render();
+    };
+  }
+  const confirmBtn = q("combatDamageConfirmBtn");
+  if (confirmBtn) {
+    confirmBtn.onclick = async () => {
+      const blockerDamageSplit = {};
+      for (const b of info.blockers) {
+        const power = Number(defenderBf[b.blocker_idx]?.power) || 0;
+        const split = combatMultiblockDraft[b.blocker_idx] || {};
+        const total = b.attacker_indices.reduce((sum, a) => sum + (Number(split[a]) || 0), 0);
+        if (total !== power) {
+          updateActionHint(`Assign all of the blocker's damage (${total} of ${power} assigned).`, true);
+          return;
+        }
+        blockerDamageSplit[b.blocker_idx] = {};
+        for (const a of b.attacker_indices) blockerDamageSplit[b.blocker_idx][a] = Number(split[a]) || 0;
+      }
+      try {
+        confirmBtn.disabled = true;
+        await sendAction({ seat, action: "assign_multiblock_damage", blocker_damage_split: blockerDamageSplit });
+        updateActionHint("Blocker damage divided.");
+        combatMultiblockDraft = {};
         closeCombatDamageDialog();
       } catch (e) {
         updateActionHint(e.message, true);
@@ -7255,7 +7457,7 @@ function renderCombatDamageDialogBody(groups, mode = combatDamageDialogMode) {
     const footer = document.createElement("div");
     footer.className = "cda-attacker-footer";
     const totalEl = document.createElement("span");
-    totalEl.className = "cda-total" + (result.total > group.power ? " cda-total-over" : "");
+    totalEl.className = "cda-total" + (result.valid ? "" : " cda-total-over");
     totalEl.textContent = `Assigned ${result.total} / ${group.power}`;
     footer.appendChild(totalEl);
     if (result.violation) {
@@ -7641,6 +7843,7 @@ function renderState(state, { skipStaleCheck = false } = {}) {
   if (!isCombatStep(state, "combat_damage") || getCombatState(state)?.damage_resolved) {
     combatDamageDraft = {};
     combatBandBlockerDraft = {};
+    combatMultiblockDraft = {};
     combatDamageDialogKey = "";
     closeCombatDamageDialog();
   }

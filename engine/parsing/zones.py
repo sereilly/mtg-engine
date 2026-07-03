@@ -126,7 +126,9 @@ def peek_hand_and_force_play(text: str, activated: bool) -> RuleResult:
 @parse_rule(620)
 def return_creature_from_graveyard_to_hand(text: str, activated: bool) -> RuleResult:
     if "from your graveyard to your hand" in text:
-        return _instruction("return_creature_from_graveyard_to_hand"), "spell_pattern"
+        # Raise Dead: "target CREATURE card"; Regrowth: "target card" — any type.
+        any_card = "creature card" not in text
+        return _instruction("return_creature_from_graveyard_to_hand", any_card=any_card), "spell_pattern"
     return None
 
 

@@ -50,14 +50,77 @@ class CombatDamageStepMixin:
         """
         if defender_index != self.combat_defending_player_index:
             return False, "only the defending player may assign banding damage"
-        for attacker_idx in attacker_damage:
+        attacker_controller = self.players[self.active_player_index]
+        for attacker_idx, split in attacker_damage.items():
+            attacker_idx = int(attacker_idx)
             if not self._attacker_blocked_by_banding(attacker_idx):
                 return False, "attacker is not blocked by a creature with banding"
+            if not (0 <= attacker_idx < len(attacker_controller.battlefield)):
+                return False, "attacker index out of range"
+            attacker = attacker_controller.battlefield[attacker_idx]
+            total = 0
+            for amount in split.values():
+                amount = int(amount)
+                if amount < 0:
+                    return False, "combat damage assignment cannot be negative"
+                total += amount
+            power = max(0, attacker.effective_power)
+            if total > power:
+                return False, "assigned combat damage exceeds attacker power"
+            # CR 702.22j: the defender divides ALL the attacker's combat damage
+            # among its blockers. Only a trampler may hold some back (the
+            # remainder tramples through to the defending player, CR 702.19e).
+            if total < power and not self._has_keyword(attacker, "trample"):
+                return False, "all of the attacker's combat damage must be assigned"
         self.combat_banding_damage = {
             int(a): {int(b): int(v) for b, v in dmg.items()}
             for a, dmg in attacker_damage.items()
         }
         return True, "banding damage assignment recorded"
+
+    def assign_multiblock_blocker_damage(
+        self,
+        defender_index: int,
+        blocker_damage_split: dict[int, dict[int, int]],
+    ) -> tuple[bool, str]:
+        """CR 510.1d: the defending player pre-commits how each of their creatures
+        that blocks two or more attackers (Two-Headed Giant of Foriys) divides its
+        combat damage among them.
+
+        Stored and consumed by :meth:`resolve_combat_damage` when the resolving
+        caller supplies no explicit ``blocker_damage_split`` for that blocker.
+        """
+        if defender_index != self.combat_defending_player_index:
+            return False, "only the defending player may divide blocker damage"
+        defender = self.players[defender_index]
+        for b_idx, split in blocker_damage_split.items():
+            b_idx = int(b_idx)
+            if not (0 <= b_idx < len(defender.battlefield)):
+                return False, "blocker index out of range"
+            attackers = set(self.combat_blockers.get(b_idx, ()))
+            if len(attackers) < 2:
+                return False, "that creature is not blocking multiple attackers"
+            blocker = defender.battlefield[b_idx]
+            total = 0
+            for a_idx, amount in split.items():
+                amount = int(amount)
+                if amount < 0:
+                    return False, "blocker damage cannot be negative"
+                if amount > 0 and int(a_idx) not in attackers:
+                    return False, "blocker damage assigned to a creature it isn't blocking"
+                total += amount
+            power = max(0, blocker.effective_power)
+            if total > power:
+                return False, "assigned blocker damage exceeds blocker power"
+            # CR 510.1d: the blocker assigns ALL its combat damage among the
+            # attackers it blocks — dividing less than its power is illegal.
+            if total < power:
+                return False, "blocker must assign all of its combat damage"
+        self.combat_multiblock_damage = {
+            int(b): {int(a): int(v) for a, v in split.items()}
+            for b, split in blocker_damage_split.items()
+        }
+        return True, "blocker damage division recorded"
 
     def _destroy_marked_creatures(self) -> None:
         any_died = False
@@ -102,15 +165,20 @@ class CombatDamageStepMixin:
     def _needs_manual_damage_assignment(self) -> bool:
         """Return True when combat damage needs a player's assignment choice.
 
-        That is any blocked attacker with 2+ blockers, or any attacking band whose
+        That is any blocked attacker with 2+ blockers, any attacking band whose
         block propagated (CR 702.22h) so the active player must choose where each
-        shared blocker's damage goes (702.22k). Pure non-banding combat is
-        unaffected, so AI auto-resolution keeps working unchanged.
+        shared blocker's damage goes (702.22k), or any blocker blocking 2+
+        attackers (Two-Headed Giant of Foriys) whose controller may divide its
+        damage (CR 510.1d). Pure non-banding combat is unaffected, so AI
+        auto-resolution keeps working unchanged.
         """
         if self.combat_band_blocks:
             return True
         for attacker_idx in self.combat_attackers:
             if len(self._attacker_all_blockers(attacker_idx)) >= 2:
+                return True
+        for attacker_idxs in self.combat_blockers.values():
+            if len(set(attacker_idxs)) >= 2:
                 return True
         return False
 
@@ -269,8 +337,13 @@ class CombatDamageStepMixin:
                     if amount > 0 and member_idx not in allowed:
                         return False, "blocker damage assigned to a creature it isn't blocking"
                     total += amount
-                if total > split_blocker.effective_power:
+                power = max(0, split_blocker.effective_power)
+                if total > power:
                     return False, "assigned blocker damage exceeds blocker power"
+                # CR 510.1c/702.22j: the blocker assigns ALL its combat damage —
+                # a division totalling less than its power is illegal.
+                if total < power:
+                    return False, "blocker must assign all of its combat damage"
 
         # CR 510.5: there is a separate first-strike combat damage step if any
         # attacking or blocking creature has first strike or double strike — this
@@ -393,7 +466,11 @@ class CombatDamageStepMixin:
             # CR 702.22j/k: an explicit division of this blocker's damage among the
             # band members it blocks (validated above) wins over the single-target
             # default. Each portion is dealt separately, honoring protection.
+            # Falls back to the defender's pre-committed CR 510.1d division for a
+            # creature blocking multiple attackers (Two-Headed Giant of Foriys).
             split = (blocker_damage_split or {}).get(blocker_idx)
+            if split is None:
+                split = self.combat_multiblock_damage.get(blocker_idx)
             if split:
                 blocker = defender.battlefield[blocker_idx]
                 if blocker.effective_power <= 0:

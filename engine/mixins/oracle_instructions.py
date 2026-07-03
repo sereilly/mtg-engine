@@ -334,6 +334,7 @@ class OracleInstructionsMixin:
             # Paralyze: tap enchanted creature on enter and mark it as prevented from untapping
             if "tap enchanted creature" in text and "doesn't untap during its controller's untap step" in text:
                 target_creature.tapped = True
+                self._turn_face_up(target_creature)
                 target_creature.metadata["aura_prevents_untap"] = True
                 self.log.append(f"{aura_permanent.card.name} tapped {target_creature.card.name} and prevents it from untapping")
 

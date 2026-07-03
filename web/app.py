@@ -1760,6 +1760,7 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "optional_trigger": _build_optional_trigger_info(session, viewer_seat),
         "banding_assignment": _build_banding_assignment_info(session, viewer_seat),
         "band_blocker_assignment": _build_band_blocker_assignment_info(session, viewer_seat),
+        "multiblock_blocker_assignment": _build_multiblock_assignment_info(session, viewer_seat),
         "raging_river": _build_raging_river_info(session, viewer_seat),
         "island_sanctuary_pending": session.island_sanctuary_pending and viewer_seat == session.current_turn,
         "search_library": search_library_info,
@@ -2155,6 +2156,15 @@ def _auto_advance_after_all_passed(session: Session, pass_result: str | None) ->
     if pass_result != "all_passed_empty":
         return
 
+    # A human caster still owes the Word of Command card choice — the game must
+    # not advance past it (an AI caster's choice was already auto-resolved).
+    pending_woc = session.game.pending_word_of_command
+    if (
+        pending_woc is not None
+        and _seat_type(session, pending_woc.get("caster_index")) == "human"
+    ):
+        return
+
     # Advance turn structure automatically after both players pass with an empty stack.
     _advance_phase(session)
 
@@ -2365,6 +2375,67 @@ def _build_band_blocker_assignment_info(session: Session, viewer_seat: int | Non
     return {"attacker_seat": active_index, "blockers": blockers}
 
 
+def _multiblock_blocker_splits(game) -> list[dict]:
+    """CR 510.1d: every defender creature blocking 2+ attackers whose combat
+    damage the defending player may divide among them (Two-Headed Giant of
+    Foriys). Blockers blocking an attacking band are excluded — the ACTIVE
+    player assigns those (CR 702.22k, the band-blocker flow)."""
+    defender_index = game.combat_defending_player_index
+    if not isinstance(defender_index, int) or not (0 <= defender_index < len(game.players)):
+        return []
+    defender = game.players[defender_index]
+    band_blockers = {entry["blocker_idx"] for entry in _band_blocker_assignments(game)}
+    result: list[dict] = []
+    for b_idx, attacker_idxs in sorted(game.combat_blockers.items()):
+        if b_idx in band_blockers or not (0 <= b_idx < len(defender.battlefield)):
+            continue
+        attackers = sorted(set(attacker_idxs))
+        if len(attackers) < 2:
+            continue
+        blocker = defender.battlefield[b_idx]
+        if not blocker.is_creature or blocker.effective_power <= 0:
+            continue
+        result.append({"blocker_idx": b_idx, "attacker_indices": attackers})
+    return result
+
+
+def _multiblock_split_pending(session: Session) -> bool:
+    """Whether a human defending player still owes a CR 510.1d division for a
+    creature blocking multiple attackers. While pending, combat damage must not
+    auto-resolve."""
+    game = session.game
+    if game.current_step != "combat_damage" or game.combat_damage_resolved:
+        return False
+    defender_index = game.combat_defending_player_index
+    if not isinstance(defender_index, int) or _seat_type(session, defender_index) != "human":
+        return False
+    return any(
+        entry["blocker_idx"] not in game.combat_multiblock_damage
+        for entry in _multiblock_blocker_splits(game)
+    )
+
+
+def _build_multiblock_assignment_info(session: Session, viewer_seat: int | None) -> dict | None:
+    """State block shown to the defending player so they can divide a
+    multi-blocking creature's combat damage among the attackers it blocks."""
+    game = session.game
+    if game.current_step != "combat_damage" or game.combat_damage_resolved:
+        return None
+    defender_index = game.combat_defending_player_index
+    if not isinstance(defender_index, int):
+        return None
+    if viewer_seat is not None and viewer_seat != defender_index:
+        return None
+    blockers = [
+        entry
+        for entry in _multiblock_blocker_splits(game)
+        if entry["blocker_idx"] not in game.combat_multiblock_damage
+    ]
+    if not blockers:
+        return None
+    return {"defender_seat": defender_index, "blockers": blockers}
+
+
 def _build_raging_river_info(session: Session, viewer_seat: int | None) -> dict | None:
     """Raging River: show the defending player the non-flying creatures to divide
     into left/right piles, and the attacking player their attackers to label.
@@ -2458,8 +2529,10 @@ def _ai_assign_combat_damage(session: Session) -> None:
     if _seat_type(session, game.active_player_index) != "ai":
         return
     # Pause so a human defender can pre-commit their CR 702.22j banding split
-    # before the active AI locks in combat damage.
+    # or CR 510.1d multi-block division before the active AI locks in combat damage.
     if _banding_assignment_pending(session):
+        return
+    if _multiblock_split_pending(session):
         return
     auto = game._build_auto_damage_assignment()
     game.resolve_combat_damage(game.active_player_index, attacker_damage=auto)
@@ -2555,6 +2628,14 @@ def _advance_ai_turn(session: Session) -> None:
 
 def _advance_phase(session: Session) -> None:
     game = session.game
+    # A human caster still owes the Word of Command card choice; hold the turn
+    # structure until they confirm (the choice happens while the spell resolves).
+    pending_woc = game.pending_word_of_command
+    if (
+        pending_woc is not None
+        and _seat_type(session, pending_woc.get("caster_index")) == "human"
+    ):
+        return
     phase = game.current_turn_phase
     step = game.current_step
 
@@ -2607,6 +2688,7 @@ def _advance_phase(session: Session) -> None:
             and not game._manual_assignment_has_declared_multiblock()
             and not _banding_assignment_pending(session)
             and not _band_blocker_assignment_pending(session)
+            and not _multiblock_split_pending(session)
         ):
             # A human attacker declared a band whose block propagated to a single
             # shared blocker (CR 702.22h), but no band member has banding to route
@@ -3218,6 +3300,12 @@ def do_action(session_id: str, req: GameActionRequest):
         and req.action not in {"resolve_optional_pay", "debug_add_to_hand", "debug_cast_free"}
     ):
         raise HTTPException(status_code=400, detail="resolve the pay-for-life trigger before other actions")
+    if (
+        session.game.pending_word_of_command is not None
+        and session.game.pending_word_of_command.get("caster_index") == req.seat
+        and req.action not in {"word_of_command_confirm", "debug_add_to_hand", "debug_cast_free"}
+    ):
+        raise HTTPException(status_code=400, detail="choose the Word of Command card before other actions")
 
     if req.action in {
         "cast",
@@ -3229,6 +3317,7 @@ def do_action(session_id: str, req: GameActionRequest):
         "declare_blockers",
         "assign_combat_damage",
         "assign_banding_damage",
+        "assign_multiblock_damage",
         "untap_select",
         "untap_confirm",
     } and seat_type != "human":
@@ -3457,6 +3546,13 @@ def do_action(session_id: str, req: GameActionRequest):
                 status_code=400,
                 detail="waiting for the defending player to assign banding combat damage",
             )
+        # CR 510.1d: likewise a defender's multi-block division (Two-Headed Giant
+        # of Foriys) is pre-committed before combat damage resolves.
+        if _multiblock_split_pending(session):
+            raise HTTPException(
+                status_code=400,
+                detail="waiting for the defending player to divide blocker combat damage",
+            )
         # Distinguish "no assignment given" (None -> engine default/auto) from an
         # explicit empty assignment ({} -> deal nothing). This lets a caller supply
         # only blocker_damage (banding, CR 702.22k) and have attackers deal normally.
@@ -3505,6 +3601,27 @@ def do_action(session_id: str, req: GameActionRequest):
         # the AI, it was paused waiting for this — resolve its combat damage now.
         if (
             not _banding_assignment_pending(session)
+            and _seat_type(session, session.game.active_player_index) == "ai"
+        ):
+            _ai_assign_combat_damage(session)
+
+    elif req.action == "assign_multiblock_damage":
+        # CR 510.1d: the defending player pre-commits how each of their creatures
+        # blocking multiple attackers (Two-Headed Giant of Foriys) divides its
+        # combat damage among them.
+        split_raw = req.blocker_damage_split or {}
+        blocker_split = {
+            int(b): {int(a): int(v) for a, v in split.items()}
+            for b, split in split_raw.items()
+        }
+        ok, details = session.game.assign_multiblock_blocker_damage(req.seat, blocker_split)
+        if not ok:
+            raise HTTPException(status_code=400, detail=details)
+        # If the attacker is the AI, it was paused waiting for this division —
+        # resolve its combat damage now.
+        if (
+            not _multiblock_split_pending(session)
+            and not _banding_assignment_pending(session)
             and _seat_type(session, session.game.active_player_index) == "ai"
         ):
             _ai_assign_combat_damage(session)
@@ -3561,8 +3678,26 @@ def do_action(session_id: str, req: GameActionRequest):
         if req.permanent_index in selected:
             selected = [idx for idx in selected if idx != req.permanent_index]
         else:
+            # Enforce the per-type cap first (Winter Orb constrains lands, Smoke
+            # constrains creatures) so the error names the constrained type
+            # rather than the combined total.
+            options = session.game.get_untap_land_selection_options(session.current_turn) or {}
+            battlefield = session.game.players[session.current_turn].battlefield
+
+            def _ptype(idx: int) -> str:
+                return battlefield[idx].card.primary_type if 0 <= idx < len(battlefield) else ""
+
+            new_type = _ptype(req.permanent_index)
+            type_max = {"land": options.get("land_max"), "creature": options.get("creature_max")}.get(new_type)
+            if type_max is not None:
+                already = sum(1 for idx in selected if _ptype(idx) == new_type)
+                if already >= int(type_max):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"already selected maximum untap {new_type}s",
+                    )
             if len(selected) >= required:
-                raise HTTPException(status_code=400, detail="already selected maximum untap lands")
+                raise HTTPException(status_code=400, detail="already selected maximum untap permanents")
             selected.append(req.permanent_index)
             selected = sorted(set(selected))
 

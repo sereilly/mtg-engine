@@ -988,6 +988,22 @@ def test_702_22j_defender_assigns_banding_blocked_attacker_damage_to_save_a_bloc
     assert all(p.card.name != "Ogre" for p in p1.battlefield)     # Ogre took 1+2=3
 
 
+def test_702_22j_defender_must_assign_all_of_the_attackers_damage():
+    attacker = Permanent(card=_mk_creature("Ogre", 3, 3))
+    bander = Permanent(card=_mk_bander("Bander", 1, 1))
+    chump = Permanent(card=_mk_creature("Chump", 2, 2))
+    game, _, _ = _game([attacker], [bander, chump])
+    _to_declare_blockers(game, [0])
+    game.declare_blockers(1, {0: 0, 1: 0})
+    game.advance_combat_phase()
+
+    # CR 702.22j: the defender divides ALL of the Ogre's 3 combat damage —
+    # committing only 2 of it is illegal (CR 510.1e).
+    ok, msg = game.assign_banding_combat_damage(1, {0: {0: 1, 1: 1}})
+    assert not ok
+    assert "all" in msg
+
+
 def test_702_22j_only_the_defending_player_may_assign_banding_damage():
     attacker = Permanent(card=_mk_creature("Ogre", 3, 3))
     bander = Permanent(card=_mk_bander("Bander", 1, 1))

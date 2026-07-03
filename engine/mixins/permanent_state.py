@@ -78,9 +78,12 @@ class PermanentStateMixin:
             if source is not None:
                 # CR 707.2 / 706.10c: become a copy of the artifact (its name, types,
                 # abilities, produced mana) "except it's an enchantment in addition to
-                # its other types." Replace this permanent's card so it actually has
-                # the copied artifact's behavior (e.g. Sol Ring taps for mana).
-                src = source.card
+                # its other types." Like the creature copiers (Clone / Vesuvan
+                # Doppelganger) the copy is a runtime overlay: ``permanent.card``
+                # stays Copy Artifact and ``copied_card`` carries the copied
+                # characteristics, so the overlay evaporates when the permanent
+                # changes zones and the card reverts to Copy Artifact.
+                src = source.effective_card
                 src_type = src.type_line
                 new_type = src_type if "enchantment" in src_type.lower() else (src_type + " Enchantment").strip()
                 copied_card = CardDefinition(
@@ -95,9 +98,12 @@ class PermanentStateMixin:
                     produced_mana=src.produced_mana,
                     raw=dict(src.raw) if isinstance(src.raw, dict) else src.raw,
                 )
-                permanent.card = copied_card
                 permanent.metadata["copied_from"] = src.name
-                permanent.metadata["copied_card"] = src
+                permanent.metadata["copied_card"] = copied_card
+                if src.keywords:
+                    permanent.metadata["copied_keywords"] = list(src.keywords)
+                if src.colors:
+                    permanent.metadata["copied_colors"] = list(src.colors)
                 if "power" in src.raw and str(src.raw.get("power", "")).isdigit():
                     permanent.metadata["absolute_power"] = source.effective_power
                 if "toughness" in src.raw and str(src.raw.get("toughness", "")).isdigit():

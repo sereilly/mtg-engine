@@ -225,7 +225,8 @@ class EffectsMixin:
             return None
         source_card = getattr(source, "card", source)
         for chosen in target.reverse_damage_sources:
-            if chosen is source or chosen is source_card:
+            chosen_card = getattr(chosen, "card", chosen)
+            if chosen is source or chosen is source_card or chosen_card is source_card:
                 return chosen
         return None
 
@@ -312,9 +313,28 @@ class EffectsMixin:
         source_card = getattr(source, "card", source)
         return chosen_card is source_card
 
+    def _turn_face_up(self, permanent) -> None:
+        """Illusionary Mask: a face-down creature is turned face up any time it
+        would deal damage, damage would be dealt to it, or it becomes tapped.
+        Restores the real card stashed at cast time (P/T, types, abilities)."""
+        metadata = getattr(permanent, "metadata", None)
+        if not metadata or not metadata.get("face_down"):
+            return
+        real = metadata.pop("face_down_real_card", None)
+        metadata.pop("face_down", None)
+        if real is not None:
+            permanent.card = real
+            self.log.append(f"{real.name} was turned face up")
+            self._recalculate_lord_buffs()
+
     def _mark_damage_on_permanent(self, permanent, amount: int, source=None) -> int:
         """Mark *amount* damage on a creature after applying its prevention pool.
         Returns the damage actually marked (0 if fully prevented)."""
+        # Illusionary Mask: turn a face-down creature face up when damage would
+        # be dealt to it or it would deal damage (before prevention, CR 613/614).
+        if amount > 0:
+            self._turn_face_up(permanent)
+            self._turn_face_up(source)
         # Jade Monolith: "The next time a source of your choice would deal damage
         # to target creature this turn, that source deals that damage to you
         # instead." Redirect the whole instance to the chosen player (works for
@@ -393,6 +413,10 @@ class EffectsMixin:
         dealt damage' triggers (e.g. Lich). ``source`` (a Permanent or spell
         CardDefinition) lets color-scoped prevention (Circle of Protection) match
         the source's color. Returns the damage actually dealt."""
+        # Illusionary Mask: a face-down creature that would deal damage (e.g.
+        # unblocked combat damage to a player) is turned face up first.
+        if amount > 0:
+            self._turn_face_up(source)
         damage = self._prevent_damage(target, amount, source=source)
         if damage > 0:
             target.life -= damage

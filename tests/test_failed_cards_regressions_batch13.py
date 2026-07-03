@@ -413,6 +413,14 @@ class TestBandBlockerDamageSplit:
         ok, msg = game.resolve_combat_damage(0, blocker_damage_split={0: {5: 2}})
         assert not ok
 
+    def test_split_assigning_less_than_blocker_power_is_rejected(self, cards):
+        game, p1, p2 = self._banded_combat(cards)
+        # CR 510.1c: the 4-power blocker must assign ALL its combat damage — a
+        # split totalling only 3 is illegal.
+        ok, msg = game.resolve_combat_damage(0, blocker_damage_split={0: {0: 2, 1: 1}})
+        assert not ok
+        assert "all" in msg
+
     def test_split_via_web_action(self, cards):
         created = client.post(
             "/api/sessions",

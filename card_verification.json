@@ -70,6 +70,11 @@
       "status": "pass",
       "updated_at": 1783012863.297725
     },
+    "Berserk": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1783034651.0844011
+    },
     "Birds of Paradise": {
       "reason": "",
       "status": "pass",
@@ -94,6 +99,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781761302.7020597
+    },
+    "Blaze of Glory": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1783040115.5705063
     },
     "Blessing": {
       "reason": "",
@@ -134,6 +144,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782105893.8562238
+    },
+    "Channel": {
+      "reason": "I should be able to pay my entire life pool for channel's ability, even if it kills me",
+      "status": "fail",
+      "updated_at": 1783040541.294566
     },
     "Chaos Orb": {
       "reason": "",
@@ -209,6 +224,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782019908.8105206
+    },
+    "Copy Artifact": {
+      "reason": "Copy artifact should be an enchantment in addition to whatever it's copying. so it if copies an artifact is should be an artifact enchantment for example",
+      "status": "fail",
+      "updated_at": 1783041174.0318294
     },
     "Counterspell": {
       "reason": "",
@@ -330,6 +350,11 @@
       "status": "pass",
       "updated_at": 1782591066.0827997
     },
+    "Dwarven Warriors": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1783035419.6641004
+    },
     "Earth Elemental": {
       "reason": "",
       "status": "pass",
@@ -354,6 +379,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782022287.5750093
+    },
+    "False Orders": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1783032783.0064707
     },
     "Farmstead": {
       "reason": "",
@@ -460,6 +490,11 @@
       "status": "pass",
       "updated_at": 1782970579.0597835
     },
+    "Gloom": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1783040762.756918
+    },
     "Goblin Balloon Brigade": {
       "reason": "",
       "status": "pass",
@@ -499,6 +534,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781461708.2940688
+    },
+    "Helm of Chatzuk": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1783034152.3388038
     },
     "Hill Giant": {
       "reason": "",
@@ -549,6 +589,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782797423.653214
+    },
+    "Illusionary Mask": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1783041095.545866
     },
     "Instill Energy": {
       "reason": "",
@@ -625,6 +670,16 @@
       "status": "pass",
       "updated_at": 1782590997.0348485
     },
+    "Kormus Bell": {
+      "reason": "I'm not able to destroy swamps with lightning bolt when Kormus bell is out. Swamps should be treated as creatures for all purposes",
+      "status": "fail",
+      "updated_at": 1783040323.1013074
+    },
+    "Kudzu": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1783034080.3751044
+    },
     "Lance": {
       "reason": "",
       "status": "pass",
@@ -634,6 +689,16 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782361609.6198592
+    },
+    "Library of Leng": {
+      "reason": "The effect is optional, add a prompt",
+      "status": "fail",
+      "updated_at": 1783039852.9073727
+    },
+    "Lich": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1783034556.4376652
     },
     "Lifeforce": {
       "reason": "",
@@ -654,6 +719,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782005004.5772283
+    },
+    "Living Artifact": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1783039561.5467165
     },
     "Living Lands": {
       "reason": "",
@@ -724,6 +794,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781378762.2991576
+    },
+    "Mesa Pegasus": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1783032573.8577373
     },
     "Mind Twist": {
       "reason": "",
@@ -835,6 +910,11 @@
       "status": "pass",
       "updated_at": 1782591330.2038229
     },
+    "Phantasmal Terrain": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1783034127.5439024
+    },
     "Phantom Monster": {
       "reason": "",
       "status": "pass",
@@ -920,15 +1000,20 @@
       "status": "pass",
       "updated_at": 1782019199.2218683
     },
+    "Regrowth": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1783039708.1276677
+    },
     "Resurrection": {
       "reason": "",
       "status": "pass",
       "updated_at": 1782541428.6675277
     },
     "Reverse Damage": {
-      "reason": "Effect didn't work",
-      "status": "fail",
-      "updated_at": 1783013038.3676991
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1783041006.6960363
     },
     "Righteousness": {
       "reason": "",
@@ -940,10 +1025,25 @@
       "status": "pass",
       "updated_at": 1781997960.0992842
     },
+    "Rock Hydra": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1783039671.2048757
+    },
     "Rod of Ruin": {
       "reason": "",
       "status": "pass",
       "updated_at": 1782107895.8262937
+    },
+    "Royal Assassin": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1783035466.1467454
+    },
+    "Sacrifice": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1783033355.0060937
     },
     "Samite Healer": {
       "reason": "",
@@ -964,6 +1064,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782586144.231241
+    },
+    "Scavenging Ghoul": {
+      "reason": "The effect is triggering even when no creatures died during the turn",
+      "status": "fail",
+      "updated_at": 1783039401.8187306
     },
     "Scrubland": {
       "reason": "",
@@ -1031,9 +1136,9 @@
       "updated_at": 1782922471.4433315
     },
     "Smoke": {
-      "reason": "when I select more than 1 creature with smoke out I get the error \"already selected maximum untap lands\". It should say creatures instead",
-      "status": "fail",
-      "updated_at": 1783013181.631562
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1783040693.1469417
     },
     "Sol Ring": {
       "reason": "",
@@ -1059,6 +1164,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782693812.4380178
+    },
+    "Stone Giant": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1783032682.1049523
     },
     "Stone Rain": {
       "reason": "",
@@ -1110,6 +1220,16 @@
       "status": "pass",
       "updated_at": 1782970431.8393688
     },
+    "Throne of Bone": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1783032438.4964213
+    },
+    "Timber Wolves": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1783034176.3582156
+    },
     "Time Vault": {
       "reason": "",
       "status": "pass",
@@ -1155,6 +1275,11 @@
       "status": "pass",
       "updated_at": 1782971507.6627817
     },
+    "Two-Headed Giant of Foriys": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1783040874.3107207
+    },
     "Underground Sea": {
       "reason": "",
       "status": "pass",
@@ -1179,6 +1304,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782965316.38657
+    },
+    "Vesuvan Doppelganger": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1783032410.04514
     },
     "Veteran Bodyguard": {
       "reason": "",
@@ -1300,6 +1430,11 @@
       "status": "pass",
       "updated_at": 1782971951.679814
     },
+    "Word of Command": {
+      "reason": "Card should stay on the stack until I finish the prompt",
+      "status": "fail",
+      "updated_at": 1783041226.2424786
+    },
     "Wrath of God": {
       "reason": "",
       "status": "pass",
@@ -1309,6 +1444,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782965491.067869
+    },
+    "gloom": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1783040462.1862319
     }
   }
 }

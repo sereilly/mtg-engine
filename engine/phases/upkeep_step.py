@@ -245,6 +245,21 @@ class UpkeepStepMixin:
                 "kind": "upkeep_return_self_from_graveyard",
                 "prompt": f"Return {card.name} to the battlefield from your graveyard?",
             })
+        # Living Artifact: "At the beginning of your upkeep, you may remove a
+        # vitality counter from this Aura. If you do, you gain 1 life."
+        for perm in self.players[player_index].battlefield:
+            if "you may remove a vitality counter" not in perm.card.oracle_text.lower():
+                continue
+            if int(perm.metadata.get("vitality_counters", 0)) <= 0:
+                continue
+            if perm.card.name in seen:
+                continue
+            seen.add(perm.card.name)
+            triggers.append({
+                "card_name": perm.card.name,
+                "kind": "upkeep_remove_vitality_counter",
+                "prompt": f"Remove a vitality counter from {perm.card.name} to gain 1 life?",
+            })
         # Vesuvan Doppelganger's granted ability: "At the beginning of your
         # upkeep, you may have this creature become a copy of target creature."
         # Carries a creature-target choice alongside the yes/no.
@@ -384,7 +399,7 @@ class UpkeepStepMixin:
                             amount = max(0, amount - paid)
                             if paid:
                                 self.log.append(f"{victim.name} paid {paid} mana to prevent {paid} damage from {permanent.card.name}")
-                        damage = self._deal_damage_to_player(victim, amount)
+                        damage = self._deal_damage_to_player(victim, amount, source=permanent)
                         self.log.append(f"{permanent.card.name} dealt {damage} upkeep damage to {victim.name}")
                         break
 
@@ -417,7 +432,7 @@ class UpkeepStepMixin:
                                     controller.mana_pool[sym] = controller.mana_pool.get(sym, 0) - count
                             self.log.append(f"{controller.name} paid upkeep for {permanent.card.name}")
                         else:
-                            damage_amt = self._deal_damage_to_player(controller, damage_amt)
+                            damage_amt = self._deal_damage_to_player(controller, damage_amt, source=permanent)
                             self.log.append(f"{permanent.card.name} dealt {damage_amt} upkeep damage to {controller.name}")
                         break
 
@@ -530,8 +545,16 @@ class UpkeepStepMixin:
                         break
 
                     if cond == "upkeep_self" and kind == "target_gains_life":
+                        # Living Artifact: "you MAY remove a vitality counter ...
+                        # If you do, you gain 1 life." Honor the player's yes/no
+                        # (surfaced by get_optional_upkeep_triggers); AI/headless
+                        # runs (optional_choices is None) take the beneficial default.
                         counters = int(permanent.metadata.get("vitality_counters", 0))
-                        if counters > 0:
+                        if optional_choices is None:
+                            accepted = True
+                        else:
+                            accepted = bool(optional_choices.get(permanent.card.name, False))
+                        if counters > 0 and accepted:
                             permanent.metadata["vitality_counters"] = counters - 1
                             self.log.append(f"{permanent.card.name}: {controller.name} removed a vitality counter")
                             self._gain_life(controller, 1, permanent.card.name)

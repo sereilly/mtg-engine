@@ -717,8 +717,8 @@ class TestCopyArtifact:
 
         assert result.supported
         copy = next(p for p in p1.battlefield if p.metadata.get("copied_from") == "Sol Ring")
-        assert copy.card.name == "Sol Ring"  # became a copy of the chosen artifact
-        assert "enchantment" in copy.card.type_line.lower()
+        assert copy.effective_card.name == "Sol Ring"  # became a copy of the chosen artifact
+        assert "enchantment" in copy.effective_card.type_line.lower()
 
 
 # ---------------------------------------------------------------------------

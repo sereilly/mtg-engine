@@ -894,6 +894,21 @@ class StackCastingMixin:
         # the printed symbols, where X is the amount the player chose.
         if x_value and "{x}" in (ability.source_line or "").lower():
             required_cost["generic"] = required_cost.get("generic", 0) + int(x_value)
+        # Gloom's second clause: "Activated abilities of white enchantments cost
+        # {3} more to activate." (The white-spell cast tax is applied separately
+        # in cast_from_hand.)
+        source_card = permanent.effective_card
+        if (
+            "enchantment" in source_card.type_line.lower()
+            and "W" in source_card.colors
+            and any(
+                perm.card.name == "Gloom"
+                for player in self.players
+                for perm in player.battlefield
+            )
+        ):
+            required_cost["generic"] = required_cost.get("generic", 0) + 3
+            self.log.append(f"{permanent.card.name}'s ability is taxed by Gloom")
         if self.enforce_mana_costs and any(required_cost.values()):
             if not self._pay_mana_cost(controller, required_cost):
                 details = f"insufficient mana to activate {permanent.card.name}"
@@ -983,6 +998,7 @@ class StackCastingMixin:
             return False
 
         permanent.tapped = True
+        self._turn_face_up(permanent)
         self.log.append(f"{controller.name} tapped {permanent_name}")
         return True
 
@@ -1434,18 +1450,23 @@ class StackCastingMixin:
             "reanimate_creature",
         ):
             # Raise Dead / Resurrection target a creature card in *your* graveyard,
-            # so an opponent's graveyard is never a legal target. Only enforce the
-            # ownership/index check when the caster made an explicit graveyard pick;
-            # an untargeted cast just needs a creature in the caster's graveyard.
+            # so an opponent's graveyard is never a legal target. Regrowth targets
+            # "target card" — any type (any_card in the parsed payload). Only
+            # enforce the ownership/index check when the caster made an explicit
+            # graveyard pick; an untargeted cast just needs a legal card there.
             caster = self.players[caster_index]
+            any_card = bool(primary.payload.get("any_card"))
             if isinstance(target_permanent_index, int):
                 if target_player_index is not None and target_player_index != caster_index:
                     return False, f"no valid target for {card.name}"
                 if not (0 <= target_permanent_index < len(caster.graveyard)) or (
-                    caster.graveyard[target_permanent_index].primary_type != "creature"
+                    not any_card
+                    and caster.graveyard[target_permanent_index].primary_type != "creature"
                 ):
                     return False, f"no valid target for {card.name}"
-            elif not any(c.primary_type == "creature" for c in caster.graveyard):
+            elif not any(
+                any_card or c.primary_type == "creature" for c in caster.graveyard
+            ):
                 return False, f"no valid target for {card.name}"
 
         elif primary.kind == "simulacrum_redirect":

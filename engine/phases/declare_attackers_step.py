@@ -70,6 +70,7 @@ class DeclareAttackersStepMixin:
         self.combat_bands = validated_bands
         self.combat_band_blocks = {}
         self.combat_banding_damage = {}
+        self.combat_multiblock_damage = {}
         self.combat_damage_resolved = False
         self.combat_first_strike_done = False
         self.combat_attackers_locked = True
@@ -81,6 +82,7 @@ class DeclareAttackersStepMixin:
             # CR 702.20b: attacking doesn't cause a creature with vigilance to tap.
             if not self._has_keyword(attacker, "vigilance"):
                 attacker.tapped = True
+                self._turn_face_up(attacker)
             attacker.metadata["attacked_this_turn"] = True
 
         self._prune_combat_state()

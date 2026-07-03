@@ -475,10 +475,10 @@ class TestMiscEngineFixes:
         game.cast_from_hand(0, "Copy Artifact", target_player_index=0, target_permanent_index=0)
         copy = next(p for p in p1.battlefield if p is not sol and p.metadata.get("copied_from") == "Sol Ring")
         # It copies the artifact's name, abilities and produced mana, and is also an Enchantment.
-        assert copy.card.name == "Sol Ring"
-        assert "enchantment" in copy.card.type_line.lower()
-        assert "artifact" in copy.card.type_line.lower()
-        assert tuple(copy.card.produced_mana) == tuple(cards["Sol Ring"].produced_mana)
+        assert copy.effective_card.name == "Sol Ring"
+        assert "enchantment" in copy.effective_card.type_line.lower()
+        assert "artifact" in copy.effective_card.type_line.lower()
+        assert tuple(copy.effective_produced_mana) == tuple(cards["Sol Ring"].produced_mana)
 
 
 # ---------------------------------------------------------------------------

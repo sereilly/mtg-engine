@@ -90,6 +90,29 @@ class DeclareBlockersStepMixin:
                 if blocker_idx not in assignments:
                     return False, f"{blocker.card.name} must block {attacker.card.name} due to Lure"
 
+        # Blaze of Glory enforcement: the marked creature "blocks each attacking
+        # creature this turn if able" — every attacker it can legally block must
+        # be among its assignments.
+        for blocker_idx, blocker in enumerate(defender.battlefield):
+            if not blocker.metadata.get("must_block_all_until_eot"):
+                continue
+            if not blocker.is_creature or blocker.tapped:
+                continue
+            assigned = set(assignments.get(blocker_idx, []))
+            for attacker_idx in self.combat_attackers:
+                if attacker_idx >= len(attacker_controller.battlefield):
+                    continue
+                attacker = attacker_controller.battlefield[attacker_idx]
+                if not self._can_block_attacker(blocker, attacker):
+                    continue
+                if self._left_right_block_illegal(attacker_idx, blocker_idx, blocker):
+                    continue
+                if attacker_idx not in assigned:
+                    return False, (
+                        f"{blocker.card.name} must block {attacker.card.name} "
+                        "(Blaze of Glory)"
+                    )
+
         self.combat_blockers = assignments
         self.combat_blockers_locked = True
         for blocker_idx in assignments:

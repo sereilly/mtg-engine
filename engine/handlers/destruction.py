@@ -63,7 +63,7 @@ def volcanic_eruption(game: Game, instruction: OracleInstruction, context: Oracl
 
     if destroyed > 0:
         for player in game.players:
-            game._deal_damage_to_player(player, destroyed)
+            game._deal_damage_to_player(player, destroyed, source=card)
         for player in game.players:
             for perm in list(player.battlefield):
                 if perm.is_creature:

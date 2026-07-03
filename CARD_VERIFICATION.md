@@ -3,9 +3,9 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **290**
-- Passed: **260**
-- Failed: **2**
-- Untested: **28**
+- Passed: **283**
+- Failed: **6**
+- Untested: **1**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -23,13 +23,13 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Basalt Monolith | ✅ pass |  |
 | Bayou | ✅ pass |  |
 | Benalish Hero | ✅ pass |  |
-| Berserk | ⬜ untested |  |
+| Berserk | ✅ pass |  |
 | Birds of Paradise | ✅ pass |  |
 | Black Knight | ✅ pass |  |
 | Black Lotus | ✅ pass |  |
 | Black Vise | ✅ pass |  |
 | Black Ward | ✅ pass |  |
-| Blaze of Glory | ⬜ untested |  |
+| Blaze of Glory | ✅ pass |  |
 | Blessing | ✅ pass |  |
 | Blue Elemental Blast | ✅ pass |  |
 | Blue Ward | ✅ pass |  |
@@ -39,7 +39,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Camouflage | ⬜ untested |  |
 | Castle | ✅ pass |  |
 | Celestial Prism | ✅ pass |  |
-| Channel | ⬜ untested |  |
+| Channel | ❌ fail | I should be able to pay my entire life pool for channel's ability, even if it kills me |
 | Chaos Orb | ✅ pass |  |
 | Chaoslace | ✅ pass |  |
 | Circle of Protection: Blue | ✅ pass |  |
@@ -55,7 +55,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Control Magic | ✅ pass |  |
 | Conversion | ✅ pass |  |
 | Copper Tablet | ✅ pass |  |
-| Copy Artifact | ⬜ untested |  |
+| Copy Artifact | ❌ fail | Copy artifact should be an enchantment in addition to whatever it's copying. so it if copies an artifact is should be an artifact enchantment for example |
 | Counterspell | ✅ pass |  |
 | Craw Wurm | ✅ pass |  |
 | Creature Bond | ✅ pass |  |
@@ -80,13 +80,13 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Drain Power | ✅ pass |  |
 | Drudge Skeletons | ✅ pass |  |
 | Dwarven Demolition Team | ✅ pass |  |
-| Dwarven Warriors | ⬜ untested |  |
+| Dwarven Warriors | ✅ pass |  |
 | Earth Elemental | ✅ pass |  |
 | Earthbind | ✅ pass |  |
 | Earthquake | ✅ pass |  |
 | Elvish Archers | ✅ pass |  |
 | Evil Presence | ✅ pass |  |
-| False Orders | ⬜ untested |  |
+| False Orders | ✅ pass |  |
 | Farmstead | ✅ pass |  |
 | Fastbond | ✅ pass |  |
 | Fear | ✅ pass |  |
@@ -108,7 +108,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Giant Growth | ✅ pass |  |
 | Giant Spider | ✅ pass |  |
 | Glasses of Urza | ✅ pass |  |
-| Gloom | ⬜ untested |  |
+| Gloom | ✅ pass |  |
 | Goblin Balloon Brigade | ✅ pass |  |
 | Goblin King | ✅ pass |  |
 | Granite Gargoyle | ✅ pass |  |
@@ -117,7 +117,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Grizzly Bears | ✅ pass |  |
 | Guardian Angel | ✅ pass |  |
 | Healing Salve | ✅ pass |  |
-| Helm of Chatzuk | ⬜ untested |  |
+| Helm of Chatzuk | ✅ pass |  |
 | Hill Giant | ✅ pass |  |
 | Holy Armor | ✅ pass |  |
 | Holy Strength | ✅ pass |  |
@@ -128,7 +128,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Hypnotic Specter | ✅ pass |  |
 | Ice Storm | ✅ pass |  |
 | Icy Manipulator | ✅ pass |  |
-| Illusionary Mask | ⬜ untested |  |
+| Illusionary Mask | ✅ pass |  |
 | Instill Energy | ✅ pass |  |
 | Invisibility | ✅ pass |  |
 | Iron Star | ✅ pass |  |
@@ -144,17 +144,17 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Jump | ✅ pass |  |
 | Karma | ✅ pass |  |
 | Keldon Warlord | ✅ pass |  |
-| Kormus Bell | ⬜ untested |  |
-| Kudzu | ⬜ untested |  |
+| Kormus Bell | ❌ fail | I'm not able to destroy swamps with lightning bolt when Kormus bell is out. Swamps should be treated as creatures for all purposes |
+| Kudzu | ✅ pass |  |
 | Lance | ✅ pass |  |
 | Ley Druid | ✅ pass |  |
-| Library of Leng | ⬜ untested |  |
-| Lich | ⬜ untested |  |
+| Library of Leng | ❌ fail | The effect is optional, add a prompt |
+| Lich | ✅ pass |  |
 | Lifeforce | ✅ pass |  |
 | Lifelace | ✅ pass |  |
 | Lifetap | ✅ pass |  |
 | Lightning Bolt | ✅ pass |  |
-| Living Artifact | ⬜ untested |  |
+| Living Artifact | ✅ pass |  |
 | Living Lands | ✅ pass |  |
 | Living Wall | ✅ pass |  |
 | Llanowar Elves | ✅ pass |  |
@@ -169,7 +169,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Manabarbs | ✅ pass |  |
 | Meekstone | ✅ pass |  |
 | Merfolk of the Pearl Trident | ✅ pass |  |
-| Mesa Pegasus | ⬜ untested |  |
+| Mesa Pegasus | ✅ pass |  |
 | Mind Twist | ✅ pass |  |
 | Mons's Goblin Raiders | ✅ pass |  |
 | Mountain | ✅ pass |  |
@@ -192,7 +192,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Personal Incarnation | ✅ pass |  |
 | Pestilence | ✅ pass |  |
 | Phantasmal Forces | ✅ pass |  |
-| Phantasmal Terrain | ⬜ untested |  |
+| Phantasmal Terrain | ✅ pass |  |
 | Phantom Monster | ✅ pass |  |
 | Pirate Ship | ✅ pass |  |
 | Plague Rats | ✅ pass |  |
@@ -210,20 +210,20 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Red Elemental Blast | ✅ pass |  |
 | Red Ward | ✅ pass |  |
 | Regeneration | ✅ pass |  |
-| Regrowth | ⬜ untested |  |
+| Regrowth | ✅ pass |  |
 | Resurrection | ✅ pass |  |
-| Reverse Damage | ❌ fail | Effect didn't work |
+| Reverse Damage | ✅ pass |  |
 | Righteousness | ✅ pass |  |
 | Roc of Kher Ridges | ✅ pass |  |
-| Rock Hydra | ⬜ untested |  |
+| Rock Hydra | ✅ pass |  |
 | Rod of Ruin | ✅ pass |  |
-| Royal Assassin | ⬜ untested |  |
-| Sacrifice | ⬜ untested |  |
+| Royal Assassin | ✅ pass |  |
+| Sacrifice | ✅ pass |  |
 | Samite Healer | ✅ pass |  |
 | Savannah | ✅ pass |  |
 | Savannah Lions | ✅ pass |  |
 | Scathe Zombies | ✅ pass |  |
-| Scavenging Ghoul | ⬜ untested |  |
+| Scavenging Ghoul | ❌ fail | The effect is triggering even when no creatures died during the turn |
 | Scrubland | ✅ pass |  |
 | Scryb Sprites | ✅ pass |  |
 | Sea Serpent | ✅ pass |  |
@@ -237,13 +237,13 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Sinkhole | ✅ pass |  |
 | Siren's Call | ✅ pass |  |
 | Sleight of Mind | ✅ pass |  |
-| Smoke | ❌ fail | when I select more than 1 creature with smoke out I get the error "already selected maximum untap lands". It should say creatures instead |
+| Smoke | ✅ pass |  |
 | Sol Ring | ✅ pass |  |
 | Soul Net | ✅ pass |  |
 | Spell Blast | ✅ pass |  |
 | Stasis | ✅ pass |  |
 | Steal Artifact | ✅ pass |  |
-| Stone Giant | ⬜ untested |  |
+| Stone Giant | ✅ pass |  |
 | Stone Rain | ✅ pass |  |
 | Stream of Life | ✅ pass |  |
 | Sunglasses of Urza | ✅ pass |  |
@@ -254,8 +254,8 @@ Master record of which cards have been manually validated in-game. Generated aut
 | The Hive | ✅ pass |  |
 | Thicket Basilisk | ✅ pass |  |
 | Thoughtlace | ✅ pass |  |
-| Throne of Bone | ⬜ untested |  |
-| Timber Wolves | ⬜ untested |  |
+| Throne of Bone | ✅ pass |  |
+| Timber Wolves | ✅ pass |  |
 | Time Vault | ✅ pass |  |
 | Time Walk | ✅ pass |  |
 | Timetwister | ✅ pass |  |
@@ -265,13 +265,13 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Tundra | ✅ pass |  |
 | Tunnel | ✅ pass |  |
 | Twiddle | ✅ pass |  |
-| Two-Headed Giant of Foriys | ⬜ untested |  |
+| Two-Headed Giant of Foriys | ✅ pass |  |
 | Underground Sea | ✅ pass |  |
 | Unholy Strength | ✅ pass |  |
 | Unsummon | ✅ pass |  |
 | Uthden Troll | ✅ pass |  |
 | Verduran Enchantress | ✅ pass |  |
-| Vesuvan Doppelganger | ⬜ untested |  |
+| Vesuvan Doppelganger | ✅ pass |  |
 | Veteran Bodyguard | ✅ pass |  |
 | Volcanic Eruption | ✅ pass |  |
 | Wall of Air | ✅ pass |  |
@@ -296,6 +296,6 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Will-o'-the-Wisp | ✅ pass |  |
 | Winter Orb | ✅ pass |  |
 | Wooden Sphere | ✅ pass |  |
-| Word of Command | ⬜ untested |  |
+| Word of Command | ❌ fail | Card should stay on the stack until I finish the prompt |
 | Wrath of God | ✅ pass |  |
 | Zombie Master | ✅ pass |  |
