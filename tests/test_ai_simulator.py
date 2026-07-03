@@ -7,6 +7,7 @@ from engine.ai_simulator import run_ai_simulation
 from engine.models import Permanent
 
 
+@pytest.mark.slow
 def test_ai_simulator_runs_without_issues_for_two_games():
     report = run_ai_simulation(
         cards_path=Path("lea_cards.json"),
@@ -54,6 +55,7 @@ def test_prodigal_sorcerer_summoning_sickness_clears_after_turn(all_cards):
     assert p2.life == 19
 
 
+@pytest.mark.slow
 def test_prodigal_sorcerer_deals_damage_in_simulation():
     """Regression: Prodigal Sorcerer must deal damage once summoning sickness clears."""
     report = run_ai_simulation(
@@ -73,6 +75,7 @@ def test_prodigal_sorcerer_deals_damage_in_simulation():
     )
 
 
+@pytest.mark.slow
 def test_simulation_stops_when_player_loses_via_empty_library():
     """Regression: game loop must exit when player.lost is set, not only on life loss.
 
@@ -108,6 +111,7 @@ def test_simulation_stops_when_player_loses_via_empty_library():
             )
 
 
+@pytest.mark.slow
 def test_ancestral_recall_never_self_causes_library_loss():
     """Regression: AI must not self-cast Ancestral Recall when library has < 3 cards.
 
