@@ -17,8 +17,10 @@ All Python runs through the workspace venv (Windows / PowerShell):
 ```powershell
 # Tests (pytest.ini sets testpaths=tests, addopts=-q)
 python -m pytest                                  # full suite
+python -m pytest -m "not slow"                    # skip the AI-simulation batch tests
 python -m pytest tests/test_web_api.py -q         # one file
 python -m pytest tests/test_lea_cards.py::test_name -q   # one test
+python -m pytest tests/regressions -q             # in-game bug regressions (batched by fix round)
 
 # Web server (browser game UI)
 python -m uvicorn web.app:app --host 127.0.0.1 --port 8010   # then open http://127.0.0.1:8010/
