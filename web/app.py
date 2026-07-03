@@ -152,18 +152,18 @@ def _printed_stat(card, key: str) -> int | None:
     return int(text) if text.isdigit() else None
 
 
-def _shield_source_payload(source_name: str | None) -> dict | None:
-    """A card-preview payload for the effect that granted a damage-prevention
-    shield, so the UI can show its art when the shield badge is hovered. Returns
-    None when there is no recorded source."""
-    if not source_name:
-        return None
-    card = CARD_BY_NAME.get(source_name.casefold())
-    if card is None:
-        return {"name": source_name}
+def _card_image_uris(card) -> tuple[str | None, str | None]:
+    """The (normal, large) Scryfall image URIs from the card's raw payload."""
     image_uris = card.raw.get("image_uris") if isinstance(card.raw, dict) else None
-    image_uri = image_uris.get("normal") if isinstance(image_uris, dict) else None
-    large_image_uri = image_uris.get("large") if isinstance(image_uris, dict) else None
+    if not isinstance(image_uris, dict):
+        return None, None
+    return image_uris.get("normal"), image_uris.get("large")
+
+
+def _card_preview(card) -> dict:
+    """The base card-preview dict shared by every card serialization: identity,
+    rules text, and art. Callers extend it with context-specific fields."""
+    image_uri, large_image_uri = _card_image_uris(card)
     return {
         "name": card.name,
         "type": card.type_line,
@@ -173,12 +173,23 @@ def _shield_source_payload(source_name: str | None) -> dict | None:
     }
 
 
+def _shield_source_payload(source_name: str | None) -> dict | None:
+    """A card-preview payload for the effect that granted a damage-prevention
+    shield, so the UI can show its art when the shield badge is hovered. Returns
+    None when there is no recorded source."""
+    if not source_name:
+        return None
+    card = CARD_BY_NAME.get(source_name.casefold())
+    if card is None:
+        return {"name": source_name}
+    return _card_preview(card)
+
+
 # A text-changing spell rewrites a word in the target's oracle text: Sleight of
 # Mind swaps a color word (stored as a symbol->symbol color_word_remap), Magical
 # Hack swaps a basic land type / landwalk. These maps turn the stored symbols
 # back into the printed words so the UI can show the change.
 _SYMBOL_TO_COLOR_WORD = {"W": "white", "U": "blue", "B": "black", "R": "red", "G": "green"}
-_SYMBOL_TO_LAND_TYPE = {"W": "plains", "U": "island", "B": "swamp", "R": "mountain", "G": "forest"}
 
 
 def _text_change_replacements(perm: Permanent) -> list[dict]:
@@ -217,9 +228,7 @@ def _text_change_replacements(perm: Permanent) -> list[dict]:
 
 
 def _serialize_permanent(perm: Permanent, game: Game) -> dict:
-    image_uris = perm.card.raw.get("image_uris") if isinstance(perm.card.raw, dict) else None
-    image_uri = image_uris.get("normal") if isinstance(image_uris, dict) else None
-    large_image_uri = image_uris.get("large") if isinstance(image_uris, dict) else None
+    image_uri, large_image_uri = _card_image_uris(perm.card)
 
     # Resolve aura attachment: find the battlefield index and seat of the attached target
     attached_to = perm.metadata.get("attached_to")
@@ -417,28 +426,21 @@ def _gloom_white_tax(card, game: Game | None) -> int:
 
 
 def _serialize_card(card, game: Game | None = None, caster_index: int | None = None) -> dict:
-    image_uris = card.raw.get("image_uris") if isinstance(card.raw, dict) else None
-    image_uri = image_uris.get("normal") if isinstance(image_uris, dict) else None
-    large_image_uri = image_uris.get("large") if isinstance(image_uris, dict) else None
     # Cost increasers (Gloom) are applied at payment time by the engine; reflect
     # them in the cost the UI shows and auto-taps for, so the pay-mana prompt
     # matches what the player actually pays. ``printed_mana_cost`` keeps the
     # unmodified printed value for reference.
     tax = _gloom_white_tax(card, game)
     effective_cost = _apply_generic_tax_to_cost(card.mana_cost, tax)
-    serialized = {
-        "name": card.name,
-        "type": card.type_line,
+    serialized = _card_preview(card)
+    serialized.update({
         "mana_cost": effective_cost,
         "printed_mana_cost": card.mana_cost,
         "effective_mana_cost": effective_cost,
         "cost_increased": tax > 0,
-        "oracle_text": card.oracle_text,
-        "image_uri": image_uri,
-        "large_image_uri": large_image_uri,
         "colors": list(card.colors),
         "modes": _serialize_modes(card, game, caster_index),
-    }
+    })
     # The viewer's own hand cards carry a backend-computed target spec (kind +
     # enumerated legal targets) so the UI never re-derives targeting from text.
     if game is not None and caster_index is not None:
@@ -447,16 +449,12 @@ def _serialize_card(card, game: Game | None = None, caster_index: int | None = N
 
 
 def _serialize_card_summary(card) -> dict:
-    image_uris = card.raw.get("image_uris") if isinstance(card.raw, dict) else None
-    image_uri = image_uris.get("normal") if isinstance(image_uris, dict) else None
-    return {
-        "name": card.name,
-        "type": card.type_line,
+    serialized = _card_preview(card)
+    serialized.update({
         "mana_cost": card.mana_cost,
-        "oracle_text": card.oracle_text,
-        "image_uri": image_uri,
         "modes": _serialize_modes(card),
-    }
+    })
+    return serialized
 
 
 def _search_cards(query: str, limit: int, *, untested_only: bool = False) -> list[dict]:
@@ -683,9 +681,7 @@ def _serialize_emblems(player: PlayerState) -> list[dict]:
     entries = player.prevent_one_damage_emblems
     if entries:
         source = CARD_BY_NAME.get("guardian angel")
-        image_uris = source.raw.get("image_uris") if source and isinstance(source.raw, dict) else None
-        image_uri = image_uris.get("normal") if isinstance(image_uris, dict) else None
-        large_image_uri = image_uris.get("large") if isinstance(image_uris, dict) else None
+        image_uri, large_image_uri = _card_image_uris(source) if source else (None, None)
         # The granted ability's reminder text — {1} renders as the mana symbol in
         # the preview, and names the fixed target ("that permanent or player").
         ability_text = (
@@ -709,9 +705,7 @@ def _serialize_emblems(player: PlayerState) -> list[dict]:
     # to spend life for colorless mana while the effect is active.
     if player.channel_active_until_eot:
         source = CARD_BY_NAME.get("channel")
-        image_uris = source.raw.get("image_uris") if source and isinstance(source.raw, dict) else None
-        image_uri = image_uris.get("normal") if isinstance(image_uris, dict) else None
-        large_image_uri = image_uris.get("large") if isinstance(image_uris, dict) else None
+        image_uri, large_image_uri = _card_image_uris(source) if source else (None, None)
         emblems.append({
             "kind": "channel",
             "index": -1,  # not an activate_emblem index; the client uses channel_mana
