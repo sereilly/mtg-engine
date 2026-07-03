@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 
 from ..oracle_types import _instruction
-from .base import RuleResult, parse_rule
+from .base import RuleResult, activated_kind, parse_rule
 
 _PUMP_TARGET_X_RE = re.compile(r"target (?:blocking )?creature gets \+(x|\d+)/\+(x|\d+) until end of turn")
 _PUMP_ENCHANTED_RE = re.compile(r"enchanted creature gets \+(-?\d+)/\+(-?\d+)")
@@ -33,7 +33,7 @@ def berserk_pump(text: str, activated: bool) -> RuleResult:
 @parse_rule(590)
 def grant_target_flying_until_eot(text: str, activated: bool) -> RuleResult:
     if "target creature gains flying until end of turn" in text:
-        ek = "activated_keyword" if activated else "spell_pattern"
+        ek = activated_kind(activated, "keyword")
         return _instruction("grant_target_flying_until_eot"), ek
     return None
 
@@ -54,25 +54,16 @@ def pump_target_creature_until_eot(text: str, activated: bool) -> RuleResult:
     return None
 
 
-@parse_rule(810)
-def pump_self_power(text: str, activated: bool) -> RuleResult:
-    if activated and "this creature gets +1/+0 until end of turn" in text:
-        return _instruction("pump_self", power=1, toughness=0), "activated_pump"
-    return None
+def _register_pump_self(order: int, power: int, toughness: int) -> None:
+    @parse_rule(order, name=f"pump_self_{power}_{toughness}")
+    def _rule(text: str, activated: bool) -> RuleResult:
+        if activated and f"this creature gets +{power}/+{toughness} until end of turn" in text:
+            return _instruction("pump_self", power=power, toughness=toughness), "activated_pump"
+        return None
 
 
-@parse_rule(820)
-def pump_self_toughness(text: str, activated: bool) -> RuleResult:
-    if activated and "this creature gets +0/+1 until end of turn" in text:
-        return _instruction("pump_self", power=0, toughness=1), "activated_pump"
-    return None
-
-
-@parse_rule(830)
-def pump_self_both(text: str, activated: bool) -> RuleResult:
-    if activated and "this creature gets +1/+1 until end of turn" in text:
-        return _instruction("pump_self", power=1, toughness=1), "activated_pump"
-    return None
+for _order, _power, _toughness in ((810, 1, 0), (820, 0, 1), (830, 1, 1)):
+    _register_pump_self(_order, _power, _toughness)
 
 
 # Activated pump that applies to the enchanted creature (e.g. Firebreathing)

@@ -3,21 +3,21 @@
 from __future__ import annotations
 
 from ..oracle_types import _instruction
-from .base import RuleResult, parse_rule
+from .base import RuleResult, activated_kind, parse_rule
 
 
 # Dwarven Warriors: make small creature unblockable
 @parse_rule(120)
 def grant_unblockable_to_low_power_target(text: str, activated: bool) -> RuleResult:
     if "target creature with power 2 or less can't be blocked this turn" in text:
-        return _instruction("grant_unblockable_to_low_power_target"), "activated_evasion" if activated else "spell_pattern"
+        return _instruction("grant_unblockable_to_low_power_target"), activated_kind(activated, "evasion")
     return None
 
 
 @parse_rule(230)
 def grant_unlimited_blocking(text: str, activated: bool) -> RuleResult:
     if "target creature defending player controls can block any number of creatures this turn" in text:
-        effect_kind = "activated_keyword" if activated else "spell_pattern"
+        effect_kind = activated_kind(activated, "keyword")
         return _instruction("grant_unlimited_blocking"), effect_kind
     return None
 
@@ -32,7 +32,7 @@ def randomize_blockers(text: str, activated: bool) -> RuleResult:
 @parse_rule(250)
 def remove_creature_from_combat(text: str, activated: bool) -> RuleResult:
     if "remove target creature defending player controls from combat" in text:
-        effect_kind = "activated_combat" if activated else "spell_pattern"
+        effect_kind = activated_kind(activated, "combat")
         return _instruction("remove_creature_from_combat"), effect_kind
     return None
 

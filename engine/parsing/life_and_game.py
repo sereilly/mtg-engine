@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 
 from ..oracle_types import _instruction
-from .base import RuleResult, parse_rule
+from .base import RuleResult, activated_kind, parse_rule
 
 _LOSE_LIFE_RE = re.compile(r"target player loses (\d+) life")
 _GAIN_LIFE_RE = re.compile(r"gains? (\d+) life")
@@ -75,7 +75,7 @@ def target_gains_n_life(text: str, activated: bool) -> RuleResult:
     if "gain" in text and "life" in text:
         gain_match = _GAIN_LIFE_RE.search(text)
         if gain_match:
-            effect_kind = "activated_gain_life" if activated else "spell_pattern"
+            effect_kind = activated_kind(activated, "gain_life")
             return _instruction(
                 "target_gains_life",
                 amount=int(gain_match.group(1)),

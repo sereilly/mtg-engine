@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from ..oracle_types import _instruction
-from .base import RuleResult, parse_rule
+from .base import RuleResult, activated_kind, parse_rule
 
 
 @parse_rule(770)
 def regenerate_target_creature(text: str, activated: bool) -> RuleResult:
     if "regenerate target creature" in text:
-        effect_kind = "activated_regenerate" if activated else "spell_pattern"
+        effect_kind = activated_kind(activated, "regenerate")
         return _instruction("grant_regeneration_to_target_creature"), effect_kind
     return None
 

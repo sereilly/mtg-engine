@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 
 from ..oracle_types import _instruction, _parse_number_token
-from .base import RuleResult, parse_rule
+from .base import RuleResult, activated_kind, parse_rule
 
 _REANIMATE_ENCHANTED_RE = re.compile(r"return enchanted creature card to the battlefield under your control")
 _DRAWS_N_RE = re.compile(r"target player draws (\w+) cards?")
@@ -23,7 +23,7 @@ def reanimate_enchanted_creature(text: str, activated: bool) -> RuleResult:
 @parse_rule(160)
 def draw_x_cards(text: str, activated: bool) -> RuleResult:
     if "target player draws x cards" in text:
-        effect_kind = "activated_draw" if activated else "spell_pattern"
+        effect_kind = activated_kind(activated, "draw")
         return _instruction("draw_target_cards", amount="x"), effect_kind
     return None
 
@@ -55,7 +55,7 @@ def draw_n_cards(text: str, activated: bool) -> RuleResult:
     if draw_match:
         count = _parse_number_token(draw_match.group(1))
         if count > 0:
-            effect_kind = "activated_draw" if activated else "spell_pattern"
+            effect_kind = activated_kind(activated, "draw")
             return _instruction("draw_target_cards", amount=count), effect_kind
     return None
 

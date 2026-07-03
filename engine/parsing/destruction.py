@@ -6,7 +6,7 @@ import re
 from typing import Any
 
 from ..oracle_types import _COLOR_WORD_TO_SYMBOL, OracleInstruction, _instruction
-from .base import RuleResult, parse_rule
+from .base import RuleResult, activated_kind, parse_rule
 
 _DESTROY_LAND_TYPE_RE = re.compile(r"destroy all (plains|islands|swamps|mountains|forests)")
 
@@ -72,7 +72,7 @@ def destroy_all_lands_of_type(text: str, activated: bool) -> RuleResult:
 def destroy_target(text: str, activated: bool) -> RuleResult:
     if "destroy target" not in text:
         return None
-    effect_kind = "activated_destroy" if activated else "spell_pattern"
+    effect_kind = activated_kind(activated, "destroy")
     # Inspect the noun phrase that follows "destroy target" — adjectives such as
     # "tapped", "nonblack", or a subtype like "Wall" can sit between "target" and
     # the actual type word (e.g. "destroy target tapped creature",

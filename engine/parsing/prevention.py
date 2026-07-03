@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 
 from ..oracle_types import _COLOR_WORD_TO_SYMBOL, _instruction
-from .base import RuleResult, parse_rule
+from .base import RuleResult, activated_kind, parse_rule
 
 _PREVENT_N_RE = re.compile(r"prevent the next (\d+) damage")
 _COLOR_SOURCE_RE = re.compile(r"a (\w+) source of your choice")
@@ -14,7 +14,7 @@ _COLOR_SOURCE_RE = re.compile(r"a (\w+) source of your choice")
 @parse_rule(730)
 def prevent_next_x_damage(text: str, activated: bool) -> RuleResult:
     if "prevent the next x damage" in text:
-        effect_kind = "activated_prevent" if activated else "spell_pattern"
+        effect_kind = activated_kind(activated, "prevent")
         # "dealt to you" means the activating player, not a chosen target
         # (e.g. Conservator). Otherwise the shield goes to the designated target.
         to_self = "would be dealt to you" in text
@@ -28,7 +28,7 @@ def prevent_next_n_damage(text: str, activated: bool) -> RuleResult:
     prevent_match = _PREVENT_N_RE.search(text)
     if prevent_match:
         amount = int(prevent_match.group(1))
-        effect_kind = "activated_prevent" if activated else "spell_pattern"
+        effect_kind = activated_kind(activated, "prevent")
         # Conservator: "Prevent the next 2 damage that would be dealt to you this
         # turn." — "you" is the ability's controller, so the shield is granted to
         # the caster, not to the default (opponent) target. Rock Hydra:

@@ -45,6 +45,12 @@ def parse_rule(order: int, name: str | None = None) -> Callable[[RuleFn], RuleFn
     return decorator
 
 
+def activated_kind(activated: bool, kind: str) -> str:
+    """The effect_kind for a clause that can appear on either an activated
+    ability ("activated_<kind>") or a spell ("spell_pattern")."""
+    return f"activated_{kind}" if activated else "spell_pattern"
+
+
 def iter_rules() -> tuple[ParseRule, ...]:
     global _sorted_cache
     if _sorted_cache is None:
