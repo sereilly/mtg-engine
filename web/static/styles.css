@@ -1188,8 +1188,42 @@ h2.targeting-valid {
   background: linear-gradient(180deg, rgba(35, 30, 20, 0.92), rgba(16, 27, 39, 0.88));
 }
 
+.debug-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.debug-panel-head h3 {
+  margin: 0;
+}
+
+.panel-collapse-btn {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 1px 9px;
+  line-height: 1.4;
+  font-size: 0.85rem;
+}
+
+.debug-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.debug-panel.collapsed .debug-panel-body {
+  display: none;
+}
+
+.debug-panel-body label {
+  margin-bottom: 0;
+}
+
 .debug-search-label {
-  margin: 0 0 6px;
+  margin: 0 0 2px;
 }
 
 .debug-panel input {
@@ -1218,6 +1252,24 @@ h2.targeting-valid {
   border-top: 1px solid rgba(255, 255, 255, 0.12);
   font-size: 0.95rem;
   color: var(--accent);
+}
+
+.debug-panel-body .debug-status {
+  margin: 0;
+  min-height: 0;
+}
+
+.debug-panel-body .debug-subhead {
+  margin: 6px 0 0;
+  padding-top: 6px;
+  font-size: 0.88rem;
+}
+
+#rawState {
+  max-height: 240px;
+  overflow: auto;
+  margin: 0;
+  font-size: 0.76rem;
 }
 
 /* Verification: mark-result modal */
@@ -1883,21 +1935,6 @@ h2.targeting-valid {
   width: 54px;
   min-height: 74px;
   flex: 0 0 auto;
-}
-
-.tab-row {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.tab-btn {
-  flex: 1;
-}
-
-.tab-btn.active {
-  border-color: var(--accent);
-  color: var(--accent);
 }
 
 .tab-body {

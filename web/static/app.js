@@ -8492,20 +8492,18 @@ function initBattlefieldCanvas() {
 }
 
 function initTabs() {
-  q("logTabBtn").addEventListener("click", () => {
-    q("logTabBtn").classList.add("active");
-    q("rawTabBtn").classList.remove("active");
-    q("logTab").classList.remove("hidden");
-    q("rawTab").classList.add("hidden");
-    SFX.onLogOpen();
-  });
-
-  q("rawTabBtn").addEventListener("click", () => {
-    q("rawTabBtn").classList.add("active");
-    q("logTabBtn").classList.remove("active");
-    q("rawTab").classList.remove("hidden");
-    q("logTab").classList.add("hidden");
-    SFX.onLogClose();
+  const debugPanel = q("debugPanel");
+  const debugCollapseBtn = q("debugCollapseBtn");
+  debugCollapseBtn.addEventListener("click", () => {
+    const collapsed = debugPanel.classList.toggle("collapsed");
+    debugCollapseBtn.setAttribute("aria-expanded", String(!collapsed));
+    debugCollapseBtn.title = collapsed ? "Expand debug menu" : "Collapse debug menu";
+    debugCollapseBtn.textContent = collapsed ? "▸" : "▾";
+    if (collapsed) {
+      SFX.onLogClose();
+    } else {
+      SFX.onLogOpen();
+    }
   });
 
   q("rawStateCopyBtn").addEventListener("click", async () => {
