@@ -640,7 +640,10 @@ class LegalityMixin:
         return True
 
     def _permanent_matches_target_kind(self, perm: Permanent, kind: str, spec: dict, casting_aura: bool) -> bool:
-        type_line = perm.card.type_line.lower()
+        # Effective type line so copies match by their copied types — a Copy
+        # Artifact copying a Mox is an "Artifact Enchantment" and must be a
+        # legal target both as an artifact and as an enchantment.
+        type_line = perm.effective_card.type_line.lower()
         if kind in ("creature", "any", "divided"):
             # Volcanic Eruption: a divided spell that targets Mountains, not creatures.
             land_filter = spec.get("land_filter")

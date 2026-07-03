@@ -189,6 +189,15 @@ class Game(
     # player plays it." Awaiting the caster's choice of which of the target's cards
     # to force. Shape: {"caster_index", "target_index", "card_name", "hand"}.
     pending_word_of_command: dict | None = None
+    # Library of Leng: "If an effect causes you to discard a card, discard it, but
+    # you may put it on top of your library instead of into your graveyard." The
+    # replacement is optional, so a human controller is prompted per discarded card
+    # (random/forced/cleanup discards where the card is already determined). Each
+    # entry: {"player_index", "card"}; the card sits here (in no zone) until
+    # confirm_leng_discard routes it. AI/headless play resolves the choice inline
+    # with the beneficial top-of-library default, so this is only armed for seats
+    # in ``interactive_seats``.
+    pending_leng_discards: list[dict] = field(default_factory=list)
     # 610.3: tracks creatures exiled "until end of turn" — (owner_player_index, card)
     exile_until_eot: list[tuple[int, CardDefinition]] = field(default_factory=list)
     # 104.4: True when the game ends in a draw for all players

@@ -122,12 +122,19 @@ class TurnManagementMixin:
         )
         return True
 
-    def start_turn(self, player_index: int) -> None:
+    def begin_turn_bookkeeping(self, player_index: int) -> None:
+        """Per-turn state resets that must run whenever a new turn begins —
+        both the headless ``start_turn`` flow and the web layer's step-by-step
+        turn flow. Missing these leaves stale "this turn" counters (e.g.
+        Scavenging Ghoul's end-step trigger firing on last turn's deaths)."""
         self.active_player_index = player_index
         self.lands_played_this_turn[player_index] = 0
         self.creatures_died_this_turn = 0
         for player in self.players:
             player.damage_taken_this_turn = 0
+
+    def start_turn(self, player_index: int) -> None:
+        self.begin_turn_bookkeeping(player_index)
         self.resolve_untap_step(player_index)
         self.resolve_upkeep(player_index)
         self.resolve_draw_step(player_index)
@@ -146,9 +153,18 @@ class TurnManagementMixin:
             return SimulationResult("Channel", False, "spell_pattern", "Channel is not active")
         if amount <= 0:
             return SimulationResult("Channel", False, "spell_pattern", "Amount must be positive")
+        if amount > player.life:
+            # CR 118.3: a player can pay any amount of life up to their total,
+            # including all of it, but no more.
+            return SimulationResult(
+                "Channel", False, "spell_pattern",
+                f"cannot pay {amount} life with only {player.life} remaining",
+            )
         player.life -= amount
         player.mana_pool["C"] = player.mana_pool.get("C", 0) + amount
         self.log.append(f"{player.name} paid {amount} life via Channel for {amount} {{C}}")
+        # Paying down to 0 is legal; the player then loses to SBAs (704.5a).
+        self.check_state_based_actions()
         return SimulationResult("Channel", True, "spell_pattern", f"added {amount} C")
 
     def tap_land_for_mana(

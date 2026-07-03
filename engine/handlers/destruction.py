@@ -99,14 +99,21 @@ def destroy_all_artifacts_creatures_enchantments(game: Game, instruction: Oracle
     for player in game.players:
         survivors: list[Permanent] = []
         for permanent in player.battlefield:
-            primary_type = permanent.card.primary_type
-            if primary_type in {"artifact", "creature", "enchantment"} and game._is_indestructible(permanent):
+            # has_type/is_creature so copies keep all their types (a Copy
+            # Artifact copy is an Artifact Enchantment) and animated lands
+            # count as creatures.
+            matches = (
+                permanent.is_creature
+                or permanent.has_type("artifact")
+                or permanent.has_type("enchantment")
+            )
+            if matches and game._is_indestructible(permanent):
                 survivors.append(permanent)
-            elif primary_type == "creature" and permanent.regeneration_shield > 0:
+            elif permanent.is_creature and permanent.regeneration_shield > 0:
                 permanent.regeneration_shield -= 1
                 permanent.tapped = True
                 survivors.append(permanent)
-            elif primary_type in {"artifact", "creature", "enchantment"}:
+            elif matches:
                 game._permanent_to_graveyard(player, permanent)
             else:
                 survivors.append(permanent)
@@ -120,7 +127,7 @@ def destroy_all_enchantments(game: Game, instruction: OracleInstruction, context
     for player in game.players:
         survivors: list[Permanent] = []
         for permanent in player.battlefield:
-            if permanent.card.primary_type == "enchantment" and not game._is_indestructible(permanent):
+            if permanent.has_type("enchantment") and not game._is_indestructible(permanent):
                 game._permanent_to_graveyard(player, permanent)
             else:
                 survivors.append(permanent)

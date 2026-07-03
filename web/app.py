@@ -240,7 +240,9 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
 
     return {
         "name": perm.card.name,
-        "type": perm.card.type_line,
+        # Effective type line so a copy shows its copied types (a Copy Artifact
+        # copying a Mox reads "Artifact Enchantment", not just "Enchantment").
+        "type": perm.effective_card.type_line,
         "tapped": perm.tapped,
         "colors": effective_colors,
         # True for printed creatures and for animated lands (Kormus Bell / Living
@@ -1190,8 +1192,10 @@ def _untap_land_selection_requirement(session: Session) -> int:
 
 def _begin_turn(session: Session, player_index: int, defer_untap_selection: bool) -> bool:
     game = session.game
-    game.active_player_index = player_index
-    game.lands_played_this_turn[player_index] = 0
+    # Reset the per-turn counters (creatures died, damage taken, lands played)
+    # exactly as the headless start_turn flow does — without this, Scavenging
+    # Ghoul's end-step trigger fires on deaths from previous turns.
+    game.begin_turn_bookkeeping(player_index)
 
     # Time Vault: "If you would begin your turn while this is tapped, you may skip
     # that turn instead. If you do, untap it." Prompt a human controller at the very
@@ -1531,6 +1535,22 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
                 "cards": [_serialize_card_summary(card) for card in discarder.hand],
             }
 
+    # Library of Leng: a card was discarded (random/forced/cleanup) and its
+    # controller may put it on top of their library instead of the graveyard.
+    # Surfaced only to the choosing player, one card at a time.
+    leng_discard_info = None
+    for leng_entry in session.game.pending_leng_discards:
+        leng_seat = leng_entry["player_index"]
+        if viewer_seat is None or viewer_seat == leng_seat:
+            leng_discard_info = {
+                "player_seat": leng_seat,
+                "card": _serialize_card_summary(leng_entry["card"]),
+                "remaining": sum(
+                    1 for e in session.game.pending_leng_discards if e["player_index"] == leng_seat
+                ),
+            }
+            break
+
     # Balance: surface the viewing player's own sacrifice/discard plan with the
     # battlefield (lands/creatures) and hand they choose from.
     balance_info = None
@@ -1647,11 +1667,13 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         }
 
     # Word of Command: the caster looks at the target's hand and chooses a card to
-    # force. Surfaced only to the (human) caster.
+    # force. Surfaced only to the (human) caster, and only while the choice is
+    # still owed — once chosen the spell just waits on the stack for priority.
     word_of_command_info = None
     pending_woc = session.game.pending_word_of_command
     if (
         pending_woc is not None
+        and "chosen_hand_index" not in pending_woc
         and viewer_seat is not None
         and pending_woc["caster_index"] == viewer_seat
         and _seat_type(session, viewer_seat) != "ai"
@@ -1766,6 +1788,7 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "search_library": search_library_info,
         "reorder_library": reorder_library_info,
         "discard_select": discard_info,
+        "leng_discard": leng_discard_info,
         "balance_select": balance_info,
         "sacrifice_select": sacrifice_info,
         "optional_pay": optional_pay_info,
@@ -2034,6 +2057,16 @@ def _auto_resolve_ai_pending_word_of_command(session: Session) -> None:
     game.confirm_word_of_command(pending["caster_index"], 0 if target.hand else -1)
 
 
+def _auto_resolve_ai_pending_leng_discards(session: Session) -> None:
+    """Safety net: pending Library of Leng choices are only armed for human
+    seats, but if a choosing seat is (now) AI-controlled, take the beneficial
+    top-of-library default."""
+    game = session.game
+    for entry in list(game.pending_leng_discards):
+        if _seat_type(session, entry["player_index"]) == "ai":
+            game.confirm_leng_discard(entry["player_index"], True)
+
+
 def _auto_resolve_ai_pending(session: Session) -> None:
     """Resolve any AI-owned pending choices (library search, library reorder,
     discard, balance, optional pays)."""
@@ -2048,6 +2081,7 @@ def _auto_resolve_ai_pending(session: Session) -> None:
     _auto_resolve_ai_pending_kudzu(session)
     _auto_resolve_ai_pending_face_down(session)
     _auto_resolve_ai_pending_word_of_command(session)
+    _auto_resolve_ai_pending_leng_discards(session)
 
 
 def _ai_step(session: Session) -> bool:
@@ -2157,10 +2191,12 @@ def _auto_advance_after_all_passed(session: Session, pass_result: str | None) ->
         return
 
     # A human caster still owes the Word of Command card choice — the game must
-    # not advance past it (an AI caster's choice was already auto-resolved).
+    # not advance past it (an AI caster's choice was already auto-resolved). A
+    # chosen-but-unresolved spell is just a stack object; don't hold for it.
     pending_woc = session.game.pending_word_of_command
     if (
         pending_woc is not None
+        and "chosen_hand_index" not in pending_woc
         and _seat_type(session, pending_woc.get("caster_index")) == "human"
     ):
         return
@@ -2630,9 +2666,11 @@ def _advance_phase(session: Session) -> None:
     game = session.game
     # A human caster still owes the Word of Command card choice; hold the turn
     # structure until they confirm (the choice happens while the spell resolves).
+    # Once chosen, the spell is just waiting on the stack — advance normally.
     pending_woc = game.pending_word_of_command
     if (
         pending_woc is not None
+        and "chosen_hand_index" not in pending_woc
         and _seat_type(session, pending_woc.get("caster_index")) == "human"
     ):
         return
@@ -3302,10 +3340,19 @@ def do_action(session_id: str, req: GameActionRequest):
         raise HTTPException(status_code=400, detail="resolve the pay-for-life trigger before other actions")
     if (
         session.game.pending_word_of_command is not None
+        and "chosen_hand_index" not in session.game.pending_word_of_command
         and session.game.pending_word_of_command.get("caster_index") == req.seat
         and req.action not in {"word_of_command_confirm", "debug_add_to_hand", "debug_cast_free"}
     ):
         raise HTTPException(status_code=400, detail="choose the Word of Command card before other actions")
+    if (
+        any(e["player_index"] == req.seat for e in session.game.pending_leng_discards)
+        and req.action not in {"leng_discard_confirm", "debug_add_to_hand", "debug_cast_free"}
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="choose where the discarded card goes (Library of Leng) before other actions",
+        )
 
     if req.action in {
         "cast",
@@ -3890,6 +3937,17 @@ def do_action(session_id: str, req: GameActionRequest):
         if not ok:
             raise HTTPException(status_code=400, detail="invalid discard selection")
 
+    elif req.action == "leng_discard_confirm":
+        # Library of Leng: choose where an already-discarded card goes — top of
+        # library (the optional replacement) or graveyard.
+        if not any(
+            e["player_index"] == req.seat for e in session.game.pending_leng_discards
+        ):
+            raise HTTPException(status_code=400, detail="no Library of Leng choice pending for you")
+        ok = session.game.confirm_leng_discard(req.seat, to_library=bool(req.to_library))
+        if not ok:
+            raise HTTPException(status_code=400, detail="invalid Library of Leng choice")
+
     elif req.action == "resolve_optional_pay":
         # Color rods (Wooden Sphere, …): "you may pay {1}. If you do, gain life."
         if not any(
@@ -3958,15 +4016,16 @@ def do_action(session_id: str, req: GameActionRequest):
         _begin_turn(session, req.seat, defer_untap_selection=True)
 
     elif req.action == "word_of_command_confirm":
-        # Word of Command: the caster forces the target to play the chosen card
-        # (accept=False / no hand_index declines).
+        # Word of Command: the caster records the card the target must play
+        # (accept=False / no hand_index declines). The spell stays on the stack
+        # and finishes resolving when priority is next released.
         if req.accept is False:
             hand_index = -1
         elif req.hand_index is None:
             raise HTTPException(status_code=400, detail="hand_index is required")
         else:
             hand_index = req.hand_index
-        ok = session.game.confirm_word_of_command(req.seat, hand_index)
+        ok = session.game.confirm_word_of_command(req.seat, hand_index, defer_resolution=True)
         if not ok:
             raise HTTPException(status_code=400, detail="no Word of Command pending for you")
 

@@ -203,7 +203,9 @@ class GameHelpersMixin:
             return
         if not permanent.metadata.get("is_token", False):
             player.graveyard.append(permanent.card)
-        if permanent.card.primary_type == "creature":
+        # is_creature (not the printed type) so an animated land (Kormus Bell /
+        # Living Lands) dying counts as a creature death (Scavenging Ghoul).
+        if permanent.is_creature:
             self.creatures_died_this_turn = getattr(self, "creatures_died_this_turn", 0) + 1
             program = compile_card_oracle(permanent.effective_card)
             for trig in program.triggered_abilities:

@@ -880,7 +880,7 @@ function combatDamageAssignmentPending(state = currentState) {
 }
 
 function hasBlockingPromptForAutoPass(state = currentState) {
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getLandTypeChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getLandTypeChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
   return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingAbilityChoice || pendingChannel);
 }
 
@@ -1774,6 +1774,14 @@ function getDiscardSelectInfo(state = currentState) {
   return info;
 }
 
+function getLengDiscardInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.leng_discard;
+  if (!info) return null;
+  if (info.player_seat !== seat) return null;
+  return info;
+}
+
 function getBalanceSelectInfo(state = currentState) {
   if (!state || seat === null) return null;
   const info = state.balance_select;
@@ -1944,6 +1952,7 @@ function isAnyPromptActive(state = currentState) {
   if (getOptionalTriggerInfo(state)) return true;
   if (getUpkeepPreventionInfo(state)) return true;
   if (getDiscardSelectInfo(state)) return true;
+  if (getLengDiscardInfo(state)) return true;
   if (getBalanceSelectInfo(state)) return true;
   if (getOptionalPayInfo(state)) return true;
   if (getLandTypeChoiceInfo(state)) return true;
@@ -1968,7 +1977,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getLandTypeChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getLandTypeChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -2420,6 +2429,52 @@ function applyDiscardSelectPrompt(info) {
         discard_indices: [idx],
         to_library: toLibrary,
       });
+    });
+  });
+}
+
+// Library of Leng: a card was discarded (random/forced/cleanup) and the optional
+// replacement lets its controller put it on top of their library instead of the
+// graveyard. One card at a time; two destination buttons.
+function applyLengDiscardPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  const cardName = (info.card && info.card.name) || "the card";
+  const remaining = Number(info.remaining || 1);
+  title.textContent = "Library of Leng";
+  body.textContent =
+    `You discarded ${cardName}. Put it on top of your library instead of your graveyard?` +
+    (remaining > 1 ? ` (${remaining} cards to route)` : "");
+
+  steps.innerHTML =
+    `<div class="prompt-choice-row">` +
+    `<button type="button" class="prompt-choice-btn" data-leng-dest="library">Top of Library</button>` +
+    `<button type="button" class="prompt-choice-btn" data-leng-dest="graveyard">Graveyard</button>` +
+    `</div>`;
+
+  steps.querySelectorAll("[data-leng-dest]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const toLibrary = btn.dataset.lengDest === "library";
+      await sendAction({ seat, action: "leng_discard_confirm", to_library: toLibrary });
+      updateActionHint(
+        toLibrary
+          ? `${cardName} was put on top of your library (Library of Leng).`
+          : `${cardName} was put into your graveyard.`,
+      );
     });
   });
 }
@@ -3579,6 +3634,12 @@ function renderActivationPrompt() {
     return;
   }
 
+  const lengDiscardInfo = getLengDiscardInfo();
+  if (lengDiscardInfo) {
+    applyLengDiscardPrompt(lengDiscardInfo);
+    return;
+  }
+
   const balanceSelectInfo = getBalanceSelectInfo();
   if (balanceSelectInfo) {
     applyBalanceSelectPrompt(balanceSelectInfo);
@@ -4035,7 +4096,8 @@ function startChannelMana() {
     return;
   }
   const me = currentState.players?.[seat];
-  const maxLife = Math.max(1, (me?.life ?? 1) - 1);
+  // You may pay your entire life total (CR 118.4); dying to it is legal.
+  const maxLife = Math.max(1, me?.life ?? 1);
   // Use the in-game prompt dialog (not window.prompt): pick how much life to pay.
   pendingChannel = { maxLife, awaitingCustomValue: false };
   renderActivationPrompt();

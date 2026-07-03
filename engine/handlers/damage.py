@@ -84,7 +84,9 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         # valid "any target" targets — the spell fizzles against them.
         if "any target" in card.oracle_text.lower():
             type_line = target_perm.card.type_line.lower()
-            if "creature" not in type_line and "planeswalker" not in type_line:
+            # is_creature (not the printed type line) so animated lands — Kormus
+            # Bell swamps, Living Lands forests — count as creatures here.
+            if not target_perm.is_creature and "planeswalker" not in type_line:
                 game.log.append(
                     f"{card.name}: '{target_perm.card.name}' is not a valid 'any target' target (115.4)"
                 )

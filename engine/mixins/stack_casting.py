@@ -14,11 +14,11 @@ from ._constants import _MANA_SYMBOLS
 # "creature" uses Permanent.is_creature so animated lands (Kormus Bell / Living
 # Lands) accept creature Auras while they are creatures.
 _ENCHANT_TARGET_MATCHERS = {
-    "artifact": lambda perm: "artifact" in perm.card.type_line.lower(),
+    "artifact": lambda perm: perm.has_type("artifact"),
     "creature": lambda perm: perm.is_creature,
     "land": lambda perm: perm.card.primary_type == "land",
-    "enchantment": lambda perm: "enchantment" in perm.card.type_line.lower(),
-    "wall": lambda perm: "wall" in perm.card.type_line.lower(),
+    "enchantment": lambda perm: perm.has_type("enchantment"),
+    "wall": lambda perm: perm.has_type("wall"),
 }
 
 
@@ -186,6 +186,40 @@ class StackCastingMixin:
         self.pending_discard = None
         return True
 
+    def confirm_leng_discard(self, player_index: int, to_library: bool) -> bool:
+        """Resolve the oldest pending Library of Leng destination choice for
+        *player_index*: the discarded card goes on top of their library (the
+        optional CR 701.8e replacement) or into their graveyard."""
+        entry_index = next(
+            (
+                i
+                for i, entry in enumerate(self.pending_leng_discards)
+                if entry["player_index"] == player_index
+            ),
+            None,
+        )
+        if entry_index is None:
+            return False
+        entry = self.pending_leng_discards.pop(entry_index)
+        player = self.players[player_index]
+        card = entry["card"]
+        if to_library:
+            player.library.insert(0, card)
+            self.log.append(
+                f"{player.name} put discarded {card.name} on top of their library (Library of Leng)"
+            )
+        else:
+            player.graveyard.append(card)
+            self.log.append(f"{player.name} put discarded {card.name} into their graveyard")
+        return True
+
+    def auto_resolve_pending_leng_discards(self) -> None:
+        """Resolve all pending Library of Leng choices with the beneficial
+        top-of-library default (safety net for seats that stop being
+        interactive, e.g. a human seat handed to the AI)."""
+        while self.pending_leng_discards:
+            self.confirm_leng_discard(self.pending_leng_discards[0]["player_index"], True)
+
     _BASIC_LAND_TYPES = ("plains", "island", "swamp", "mountain", "forest")
 
     def confirm_land_type(self, player_index: int, land_type: str) -> bool:
@@ -319,9 +353,17 @@ class StackCastingMixin:
         self.pending_face_down_cast = None
         return True
 
-    def confirm_word_of_command(self, caster_index: int, hand_index: int | None) -> bool:
-        """Resolve a pending Word of Command: the target player plays the caster's
-        chosen card from their hand, if able. ``hand_index`` < 0 (or None) declines.
+    def confirm_word_of_command(
+        self, caster_index: int, hand_index: int | None, defer_resolution: bool = False
+    ) -> bool:
+        """Record the caster's card choice for a pending Word of Command.
+        ``hand_index`` < 0 (or None) declines.
+
+        With ``defer_resolution`` (the interactive priority path) the choice is
+        only recorded: the spell stays on the stack and finishes resolving —
+        forcing the target to play the chosen card — when priority is next
+        released (resolve_top_of_stack). Headless/AI callers leave it False, so
+        confirming finishes the resolution immediately.
 
         MVP: the forced spell defaults its target to the forced player themselves
         (so e.g. their burn/removal is turned on them). Caster-chosen targets for
@@ -329,16 +371,65 @@ class StackCastingMixin:
         pending = self.pending_word_of_command
         if pending is None or pending["caster_index"] != caster_index:
             return False
+        chosen = -1 if hand_index is None or hand_index < 0 else hand_index
+        target = self.players[pending["target_index"]]
+        if chosen >= 0 and chosen >= len(target.hand):
+            return False
+        if defer_resolution and pending.get("_stack_item") in self.stack:
+            pending["chosen_hand_index"] = chosen
+            if chosen >= 0:
+                # The target may play cards in response before this resolves, so
+                # remember the chosen card by name and re-find it at resolution.
+                pending["chosen_card_name"] = target.hand[chosen].name
+                self.log.append(
+                    f"Word of Command: {self.players[caster_index].name} chose "
+                    f"{target.hand[chosen].name}; the spell waits on the stack"
+                )
+            else:
+                self.log.append(f"Word of Command: {self.players[caster_index].name} declined to force a card")
+            # The caster just acted mid-resolution; make sure a priority window is
+            # open so the spell can be responded to and then resolved by passing.
+            if self.priority_player_index is None:
+                self.start_priority_window(caster_index)
+            return True
+        self.pending_word_of_command = None
+        return self._finish_word_of_command(pending, chosen)
+
+    def _finish_word_of_command(self, pending: dict, hand_index: int, auto_resolve_forced: bool = True) -> bool:
+        """Finish a Word of Command's resolution: the spell leaves the stack for
+        the graveyard and the target plays the chosen card, if able.
+        ``auto_resolve_forced`` immediately resolves the forced spell (headless/AI
+        paths); the interactive path leaves it on the stack for a priority round."""
         target_index = pending["target_index"]
         target = self.players[target_index]
-        self.pending_word_of_command = None
-        if hand_index is None or hand_index < 0:
+        stack_item = pending.get("_stack_item")
+        if stack_item is not None and stack_item in self.stack:
+            self.stack.remove(stack_item)
+        spell_card = pending.get("_spell_card")
+        if spell_card is not None:
+            spell_caster = self.players[pending.get("_spell_caster_index", pending["caster_index"])]
+            spell_caster.graveyard.append(spell_card)
+            self.log.append(f"{spell_card.name} resolved and moved to graveyard")
+        if hand_index < 0:
             return True  # declined — nothing is played
+        chosen_name = pending.get("chosen_card_name")
+        if chosen_name is not None:
+            # Deferred choice: the hand may have changed since the caster chose
+            # (the target could respond while the spell waited), so locate the
+            # chosen card by name; if it left the hand it can't be played.
+            hand_index = next(
+                (i for i, c in enumerate(target.hand) if c.name == chosen_name), -1
+            )
+            if hand_index < 0:
+                self.log.append(
+                    f"Word of Command: {target.name} no longer has {chosen_name} to play"
+                )
+                return True
         if not (0 <= hand_index < len(target.hand)):
             return False
         card_name = target.hand[hand_index].name
         result = self.queue_from_hand(target_index, card_name, target_player_index=target_index)
-        if result.supported and self.stack:
+        if result.supported and auto_resolve_forced and self.stack:
             self.resolve_stack()
         if result.supported:
             self.log.append(f"Word of Command: {target.name} was forced to play {card_name}")
@@ -1229,21 +1320,29 @@ class StackCastingMixin:
         exclude_colors = payload.get("exclude_colors") or []
         exclude_types = payload.get("exclude_types") or []
 
+        # has_type/is_creature/effective colors so copies keep all their types
+        # (a Copy Artifact copy is an Artifact Enchantment), animated lands
+        # count as creatures, and color overrides (laces) are honored.
+        type_line = perm.effective_card.type_line.lower()
         if type_filter:
             if type_filter == "artifact_or_enchantment":
-                if perm.card.primary_type not in ("artifact", "enchantment"):
+                if not (perm.has_type("artifact") or perm.has_type("enchantment")):
                     return False
-            elif type_filter not in perm.card.type_line.lower():
+            elif type_filter == "creature":
+                if not perm.is_creature:
+                    return False
+            elif type_filter not in type_line:
                 return False
-        if subtype_filter and subtype_filter not in perm.card.type_line.lower():
+        if subtype_filter and subtype_filter not in type_line:
             return False
         if tapped_only and not perm.tapped:
             return False
-        if color_filter and color_filter not in perm.card.colors:
+        colors = self._effective_colors(perm)
+        if color_filter and color_filter not in colors:
             return False
-        if exclude_colors and any(c in perm.card.colors for c in exclude_colors):
+        if exclude_colors and any(c in colors for c in exclude_colors):
             return False
-        if exclude_types and any(t in perm.card.type_line.lower() for t in exclude_types):
+        if exclude_types and any(t in type_line for t in exclude_types):
             return False
         return True
 
@@ -1704,7 +1803,9 @@ class StackCastingMixin:
             self.check_state_based_actions()
             if not self.stack:
                 break
-            self.resolve_top_of_stack()
+            if not self.resolve_top_of_stack():
+                # Top item is paused on a pending choice (Word of Command).
+                break
             iterations += 1
             if iterations > self.MAX_SETTLE_ITERS:
                 self.log.append(
@@ -1714,7 +1815,10 @@ class StackCastingMixin:
 
     def resolve_stack(self) -> None:
         while self.stack:
-            self.resolve_top_of_stack()
+            if not self.resolve_top_of_stack():
+                # The top item is paused on a pending choice (Word of Command);
+                # it resolves when the choice is confirmed.
+                break
 
     def resolve_top_of_stack(self, pause_for_choices: bool = False) -> bool:
         """Resolve (and remove) the top stack object. Returns True if an object was
@@ -1731,9 +1835,29 @@ class StackCastingMixin:
         by the caller, preserving deterministic behavior)."""
         if not self.stack:
             return False
+        # A Word of Command paused mid-resolution stays on the stack until its
+        # card choice is confirmed; it can't be resolved a second time. Once the
+        # choice has been recorded (deferred confirm), releasing priority lands
+        # here and finishes the resolution: the forced card is played and the
+        # spell heads to the graveyard. The forced spell is left on the stack on
+        # the interactive path (pause_for_choices) so it gets its own priority
+        # round; headless loops drain it on their next iteration.
+        if (
+            self.pending_word_of_command is not None
+            and self.pending_word_of_command.get("_stack_item") is self.stack[-1]
+        ):
+            pending = self.pending_word_of_command
+            if "chosen_hand_index" not in pending:
+                return False
+            self.pending_word_of_command = None
+            self._finish_word_of_command(
+                pending, pending["chosen_hand_index"], auto_resolve_forced=False
+            )
+            return True
 
         item = self.stack.pop()
         pays_before = len(self.pending_optional_pays)
+        woc_before = self.pending_word_of_command
         self._run_stack_item_resolution(item)
         # Power Sink armed a pending "pay {X} or be countered" for the targeted
         # spell's controller. On the human priority path leave it for the prompt;
@@ -1750,6 +1874,13 @@ class StackCastingMixin:
             self.stack.append(item)
             for entry in self.pending_optional_pays[pays_before:]:
                 entry["_stack_item"] = item
+        # Word of Command pauses mid-resolution for the caster's card choice
+        # (CR 608.2: the spell is still resolving). Keep it on the stack until
+        # confirm_word_of_command finishes the resolution and removes it.
+        woc_after = self.pending_word_of_command
+        if woc_after is not None and woc_after is not woc_before and "_stack_item" not in woc_after:
+            self.stack.append(item)
+            woc_after["_stack_item"] = item
         return True
 
     def _run_stack_item_resolution(self, item: StackItem) -> None:
@@ -1903,6 +2034,18 @@ class StackCastingMixin:
             divided_targets=divided_targets,
         )
         self._apply_self_resolved_hook(caster_index, card, target_idx, target_permanent_index)
+        pending_woc = self.pending_word_of_command
+        if (
+            pending_woc is not None
+            and "_spell_card" not in pending_woc
+            and pending_woc.get("card_name") == card.name
+        ):
+            # Word of Command is still resolving while the caster chooses a card
+            # from the target's hand; it goes to the graveyard only when
+            # confirm_word_of_command finishes the resolution.
+            pending_woc["_spell_card"] = card
+            pending_woc["_spell_caster_index"] = caster_index
+            return
         caster.graveyard.append(card)
         self.log.append(f"{card.name} resolved and moved to graveyard")
 

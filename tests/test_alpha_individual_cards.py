@@ -266,6 +266,12 @@ def _run_card(card: CardDefinition, all_cards: list[CardDefinition]) -> tuple[Ga
         0, card.name, target_player_index=1, target_permanent_index=aura_target_index, x_value=cast_x_value
     )
 
+    # Word of Command pauses mid-resolution on the stack until the caster picks
+    # a card from the target's hand; finish the choice so the generic post-cast
+    # assertions (spell in graveyard) hold.
+    if game.pending_word_of_command is not None:
+        game.confirm_word_of_command(0, 0)
+
     activatable_fragments = (
         "this creature gets +1/+0 until end of turn",
         "this creature gets +0/+1 until end of turn",

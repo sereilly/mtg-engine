@@ -91,6 +91,14 @@ class Permanent:
         serialization must read this, not ``card``."""
         return self.metadata.get("copied_card") or self.card
 
+    def has_type(self, card_type: str) -> bool:
+        """Whether this permanent currently has the given card type, honoring
+        copy overlays. A Copy Artifact copying a Mox is an "Artifact
+        Enchantment" and must count as both types; ``primary_type`` collapses
+        multi-type lines to one type, so type checks on permanents should use
+        this instead."""
+        return card_type.lower() in self.effective_card.type_line.lower()
+
     @property
     def is_creature(self) -> bool:
         """Whether this permanent is currently a creature: printed as one, or a

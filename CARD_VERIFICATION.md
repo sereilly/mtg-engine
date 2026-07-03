@@ -3,8 +3,8 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **290**
-- Passed: **283**
-- Failed: **6**
+- Passed: **289**
+- Failed: **0**
 - Untested: **1**
 
 | Card | Status | Failure reason |
@@ -39,7 +39,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Camouflage | ⬜ untested |  |
 | Castle | ✅ pass |  |
 | Celestial Prism | ✅ pass |  |
-| Channel | ❌ fail | I should be able to pay my entire life pool for channel's ability, even if it kills me |
+| Channel | ✅ pass |  |
 | Chaos Orb | ✅ pass |  |
 | Chaoslace | ✅ pass |  |
 | Circle of Protection: Blue | ✅ pass |  |
@@ -55,7 +55,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Control Magic | ✅ pass |  |
 | Conversion | ✅ pass |  |
 | Copper Tablet | ✅ pass |  |
-| Copy Artifact | ❌ fail | Copy artifact should be an enchantment in addition to whatever it's copying. so it if copies an artifact is should be an artifact enchantment for example |
+| Copy Artifact | ✅ pass |  |
 | Counterspell | ✅ pass |  |
 | Craw Wurm | ✅ pass |  |
 | Creature Bond | ✅ pass |  |
@@ -144,11 +144,11 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Jump | ✅ pass |  |
 | Karma | ✅ pass |  |
 | Keldon Warlord | ✅ pass |  |
-| Kormus Bell | ❌ fail | I'm not able to destroy swamps with lightning bolt when Kormus bell is out. Swamps should be treated as creatures for all purposes |
+| Kormus Bell | ✅ pass |  |
 | Kudzu | ✅ pass |  |
 | Lance | ✅ pass |  |
 | Ley Druid | ✅ pass |  |
-| Library of Leng | ❌ fail | The effect is optional, add a prompt |
+| Library of Leng | ✅ pass |  |
 | Lich | ✅ pass |  |
 | Lifeforce | ✅ pass |  |
 | Lifelace | ✅ pass |  |
@@ -223,7 +223,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Savannah | ✅ pass |  |
 | Savannah Lions | ✅ pass |  |
 | Scathe Zombies | ✅ pass |  |
-| Scavenging Ghoul | ❌ fail | The effect is triggering even when no creatures died during the turn |
+| Scavenging Ghoul | ✅ pass |  |
 | Scrubland | ✅ pass |  |
 | Scryb Sprites | ✅ pass |  |
 | Sea Serpent | ✅ pass |  |
@@ -296,6 +296,6 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Will-o'-the-Wisp | ✅ pass |  |
 | Winter Orb | ✅ pass |  |
 | Wooden Sphere | ✅ pass |  |
-| Word of Command | ❌ fail | Card should stay on the stack until I finish the prompt |
+| Word of Command | ✅ pass |  |
 | Wrath of God | ✅ pass |  |
 | Zombie Master | ✅ pass |  |

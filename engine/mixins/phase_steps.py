@@ -86,6 +86,17 @@ class PhaseStepsMixin:
             if self.pending_mana_payment is not None:
                 self.priority_player_index = self.pending_mana_payment["player_index"]
                 return "awaiting_choice"
+            # Word of Command stays on the stack while the caster chooses a card
+            # from the target's hand; hand the caster priority to answer. Once the
+            # choice is recorded the spell is just a stack object waiting on the
+            # normal priority release, so fall through to the usual handling.
+            if (
+                self.pending_word_of_command is not None
+                and self.pending_word_of_command.get("_stack_item") in self.stack
+                and "chosen_hand_index" not in self.pending_word_of_command
+            ):
+                self.priority_player_index = self.pending_word_of_command["caster_index"]
+                return "awaiting_choice"
             # 704.3: state-based actions are checked before any player would
             # receive priority after a spell or ability resolves (e.g. an Aura
             # now illegally attached is put into its owner's graveyard).

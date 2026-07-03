@@ -36,6 +36,7 @@ ActionKind = Literal[
     "search_library_confirm",
     "reorder_library_confirm",
     "discard_confirm",
+    "leng_discard_confirm",
     "balance_confirm",
     "sacrifice_confirm",
     "resolve_optional_pay",

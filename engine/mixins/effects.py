@@ -112,17 +112,24 @@ class EffectsMixin:
             (i for i, p in enumerate(self.players) if p is target), None
         )
 
-        def _passes_type(card, tf):
+        def _passes_type(perm, tf):
             if not tf:
                 return True
+            # has_type/is_creature so copies keep all their types (a Copy
+            # Artifact copy is an Artifact Enchantment) and animated lands
+            # count as creatures.
             if tf == "artifact_or_enchantment":
-                return card.primary_type in ("artifact", "enchantment")
-            return card.primary_type == tf
+                return perm.has_type("artifact") or perm.has_type("enchantment")
+            if tf == "creature":
+                return perm.is_creature
+            if tf in ("artifact", "enchantment", "land"):
+                return perm.has_type(tf)
+            return perm.effective_card.primary_type == tf
 
         def _is_legal_target(perm) -> bool:
-            card = perm.card
+            card = perm.effective_card
             effective_colors = [perm.metadata.get("color_override")] if perm.metadata.get("color_override") else list(card.colors)
-            if not _passes_type(card, type_filter):
+            if not _passes_type(perm, type_filter):
                 return False
             if subtype_filter and subtype_filter not in card.type_line.lower():
                 return False
@@ -380,11 +387,22 @@ class EffectsMixin:
 
     def _discard_card(self, player: PlayerState, card) -> None:
         """Move a discarded card to the graveyard, or — if the player controls
-        Library of Leng — to the top of their library instead (CR 701.8e
-        replacement). Use for random/forced discards (combat damage, "discards X
-        cards at random") where the player can't pick the card but Library of Leng
-        still lets them keep it; the top-of-library route is the beneficial default."""
+        Library of Leng — apply its optional CR 701.8e replacement. Use for
+        random/forced discards (combat damage, "discards X cards at random",
+        cleanup) where the player can't pick the card but Library of Leng still
+        lets them keep it. The replacement is optional ("you may"), so a human
+        controller gets a per-card prompt (pending_leng_discards, resolved by
+        confirm_leng_discard); AI/headless play takes the beneficial
+        top-of-library route inline."""
         if any(perm.card.name == "Library of Leng" for perm in player.battlefield):
+            player_index = self.players.index(player)
+            if player_index in self.interactive_seats:
+                self.pending_leng_discards.append({"player_index": player_index, "card": card})
+                self.log.append(
+                    f"{player.name} discarded {card.name} — Library of Leng: "
+                    "choose graveyard or top of library"
+                )
+                return
             player.library.insert(0, card)
             self.log.append(
                 f"{player.name} discarded {card.name} to the top of their library (Library of Leng)"

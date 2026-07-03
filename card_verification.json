@@ -146,9 +146,9 @@
       "updated_at": 1782105893.8562238
     },
     "Channel": {
-      "reason": "I should be able to pay my entire life pool for channel's ability, even if it kills me",
-      "status": "fail",
-      "updated_at": 1783040541.294566
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1783043925.654096
     },
     "Chaos Orb": {
       "reason": "",
@@ -226,9 +226,9 @@
       "updated_at": 1782019908.8105206
     },
     "Copy Artifact": {
-      "reason": "Copy artifact should be an enchantment in addition to whatever it's copying. so it if copies an artifact is should be an artifact enchantment for example",
-      "status": "fail",
-      "updated_at": 1783041174.0318294
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1783043992.036946
     },
     "Counterspell": {
       "reason": "",
@@ -671,9 +671,9 @@
       "updated_at": 1782590997.0348485
     },
     "Kormus Bell": {
-      "reason": "I'm not able to destroy swamps with lightning bolt when Kormus bell is out. Swamps should be treated as creatures for all purposes",
-      "status": "fail",
-      "updated_at": 1783040323.1013074
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1783044075.765462
     },
     "Kudzu": {
       "reason": "",
@@ -691,9 +691,9 @@
       "updated_at": 1782361609.6198592
     },
     "Library of Leng": {
-      "reason": "The effect is optional, add a prompt",
-      "status": "fail",
-      "updated_at": 1783039852.9073727
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1783043901.4348843
     },
     "Lich": {
       "reason": "",
@@ -1066,9 +1066,9 @@
       "updated_at": 1782586144.231241
     },
     "Scavenging Ghoul": {
-      "reason": "The effect is triggering even when no creatures died during the turn",
-      "status": "fail",
-      "updated_at": 1783039401.8187306
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1783043745.1008599
     },
     "Scrubland": {
       "reason": "",
@@ -1431,9 +1431,9 @@
       "updated_at": 1782971951.679814
     },
     "Word of Command": {
-      "reason": "Card should stay on the stack until I finish the prompt",
-      "status": "fail",
-      "updated_at": 1783041226.2424786
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1783045943.2559516
     },
     "Wrath of God": {
       "reason": "",
