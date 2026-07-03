@@ -64,7 +64,7 @@ const BF_CARD_EASE = 0.22; // per-frame easing of cards toward their slots
 // not park cards under them (a full board would otherwise hide the viewer's
 // land row behind their hand). Screen-space bands, measured from the stage
 // edges, that the fit treats as unusable while the matching hand has cards.
-const BF_HAND_RESERVE_BOTTOM = 190; // viewer hand fan (150px cards, tilted)
+const BF_HAND_RESERVE_BOTTOM = 130; // viewer hand fan (tucked: only the top half of each card shows)
 const BF_HAND_RESERVE_TOP = 120; // opponent hand fan (75px card backs)
 // With no hand to dodge, still keep a small strip clear for the player
 // info pills that sit over the stage edges.
@@ -90,6 +90,19 @@ const BF_RESOLVE_HOVER_LIFT = 30; // world px the card hovers above its slot
 const BF_FIZZLE_MS = 480; // non-permanent: stack -> graveyard shrink/fade
 const BF_ABILITY_FADE_MS = 260; // resolved ability: shrink/fade in place
 const BF_IMPACT_RING_MS = 240; // expanding ring when a permanent slams down
+
+// ---- Zone piles (library / graveyard / exile) ----
+// Each player's deck, graveyard, and exile render as card piles pinned to the
+// left edge of the visible battlefield (opponent top-left, viewer bottom-left),
+// mirroring how the stack cascade pins to the right edge. Sizes divide by zoom
+// so the piles keep a constant on-screen size.
+const BF_ZONE_PILE_SCALE = 0.8;
+const BF_ZONE_LEFT_INSET_PX = 165; // pile left edge, in PAGE px from the stage's left edge (clears the DOM phase rail)
+const BF_ZONE_PILE_GAP_PX = 26; // vertical gap between piles (leaves room for labels)
+const BF_ZONE_TOP_INSET_PX = 64; // clears the opponent name/life pill
+const BF_ZONE_BOTTOM_INSET_PX = 116; // clears the viewer name/life pill
+const BF_ZONE_RIGHT_INSET_PX = 56; // stack cascade reserve for the DOM mana column
+const BF_CARD_BACK_URL = "/images/card_back.webp";
 
 // ---- Flying creatures ----
 // Creatures with Flying hover off the table and rock gently side to side, with
@@ -162,6 +175,19 @@ class BattlefieldCanvas {
     this._stackSynced = false;
     this._stackBaseX = 6 * BF_SLOT_PITCH_X + BF_STACK_GAP_X;
 
+    // Library / graveyard / exile piles pinned to the left edge of the view:
+    // [{seat, kind: "library"|"graveyard"|"exile", count, topCard, cx, cy, w, h}]
+    // Positions are recomputed every tick from the visible rect, like the
+    // stack cascade — the piles never participate in the camera fit.
+    this.zonePiles = [];
+    this.hoveredZonePile = null; // {seat, kind} | null
+    // Gold targeting pulse pushed from app.js while a spell targets a
+    // graveyard card: {kind: "graveyard", seats: [..]} | null.
+    this.zonePileTargeting = null;
+    // Stack-cascade indices that are legal targets for the in-progress cast
+    // (Counterspell, Fork) — Set<int> | null, pushed from app.js.
+    this.stackTargetableIndices = null;
+
     // Time-based resolve animations (card flights + impact rings) and the
     // battlefield keys hidden while their entrance animation plays.
     this.fxAnims = [];
@@ -215,6 +241,11 @@ class BattlefieldCanvas {
     this.river = null;
     // World-space rects of the currently drawn Left/Right buttons, for hit-testing.
     this._riverButtonRects = [];
+
+    // Zone pile interaction: hover fires with {seat, kind, topCard, count} (or
+    // null when the hover ends); click fires with {seat, kind}.
+    this.onZonePileHover = callbacks.onZonePileHover || null;
+    this.onZonePileClick = callbacks.onZonePileClick || null;
 
     // Fires with {seat, idx, pile} when a Camouflage pile button drawn above a
     // creature is clicked (`pile` is a 0-based pile number or "none").
@@ -538,6 +569,10 @@ class BattlefieldCanvas {
       item.x = item.tx;
       item.y = item.ty;
     }
+
+    // Zone piles sync BEFORE the stack zone so resolve/fizzle animations
+    // spawned there can aim at the freshly positioned graveyard pile.
+    this._syncZonePiles(state);
 
     const firstSync = !this._stackSynced;
     this._syncStackZone(state, brandNew);
@@ -941,7 +976,9 @@ class BattlefieldCanvas {
     const w = BF_CARD_W * sc;
     const offX = BF_STACK_OFFSET_X / this.zoom;
     const offY = BF_STACK_OFFSET_Y / this.zoom;
-    const margin = 30 / this.zoom;
+    // Extra right margin keeps the cascade clear of the DOM mana column
+    // overlaying the right edge of the stage.
+    const margin = (30 + BF_ZONE_RIGHT_INSET_PX) / this.zoom;
     const baseX = rect.maxX - margin - w / 2 - (n - 1) * offX;
     const centerY = (rect.minY + rect.maxY) / 2;
     this.stackVisuals.forEach((v, i) => {
@@ -978,6 +1015,199 @@ class BattlefieldCanvas {
     };
   }
 
+  // ---------------------------------------------------------------------------
+  // Zone piles (library / graveyard / exile)
+  // ---------------------------------------------------------------------------
+
+  // Rebuild the pile list from the serialized state. Library always shows
+  // while cards remain; graveyard/exile only once they hold a card. Only the
+  // top card of graveyard/exile is shown.
+  _syncZonePiles(state) {
+    const players = Array.isArray(state?.players) ? state.players : [];
+    const piles = [];
+    for (let seatIdx = 0; seatIdx < players.length; seatIdx++) {
+      const p = players[seatIdx] || {};
+      const grave = Array.isArray(p.graveyard) ? p.graveyard : [];
+      const exile = Array.isArray(p.exile) ? p.exile : [];
+      const libraryCount = p.library_count ?? 0;
+      if (libraryCount > 0) {
+        piles.push({ seat: seatIdx, kind: "library", count: libraryCount, topCard: null, cx: 0, cy: 0, w: 0, h: 0 });
+      }
+      if (grave.length > 0) {
+        piles.push({ seat: seatIdx, kind: "graveyard", count: grave.length, topCard: grave[grave.length - 1], cx: 0, cy: 0, w: 0, h: 0 });
+      }
+      if (exile.length > 0) {
+        piles.push({ seat: seatIdx, kind: "exile", count: exile.length, topCard: exile[exile.length - 1], cx: 0, cy: 0, w: 0, h: 0 });
+      }
+    }
+    this.zonePiles = piles;
+    if (this.hoveredZonePile && !piles.some((p) => p.seat === this.hoveredZonePile.seat && p.kind === this.hoveredZonePile.kind)) {
+      this.hoveredZonePile = null;
+      if (this.onZonePileHover) this.onZonePileHover(null);
+    }
+    this._retargetZonePiles();
+  }
+
+  // Pin the piles to the left edge of the visible battlefield, viewer's column
+  // growing up from the bottom-left, opponent's down from the top-left. Re-run
+  // every tick (like the stack cascade) so camera motion never strands them.
+  // The horizontal anchor is computed in PAGE space and projected onto the
+  // tilted plane per pile: the perspective tilt spreads the bottom of the
+  // plane outward, so a flat-canvas inset would drift left near the viewer's
+  // edge and slide under the DOM phase rail.
+  _retargetZonePiles() {
+    if (!this.zonePiles.length) return;
+    const rect = this._visibleWorldRect();
+    const w = (BF_CARD_W * BF_ZONE_PILE_SCALE) / this.zoom;
+    const h = (BF_CARD_H * BF_ZONE_PILE_SCALE) / this.zoom;
+    const gap = BF_ZONE_PILE_GAP_PX / this.zoom;
+    const stage = this.canvas.parentElement?.getBoundingClientRect();
+    const fallbackCx = rect.minX + BF_ZONE_LEFT_INSET_PX / this.zoom + w / 2;
+    const order = { library: 0, graveyard: 1, exile: 2 };
+    const slots = new Map(); // seat -> next slot index
+    for (const pile of this.zonePiles.slice().sort((a, b) => order[a.kind] - order[b.kind])) {
+      const isViewer = pile.seat === this.viewerSeat;
+      const slot = slots.get(pile.seat) || 0;
+      slots.set(pile.seat, slot + 1);
+      pile.w = w;
+      pile.h = h;
+      pile.cy = isViewer
+        ? rect.maxY - BF_ZONE_BOTTOM_INSET_PX / this.zoom - h / 2 - slot * (h + gap)
+        : rect.minY + BF_ZONE_TOP_INSET_PX / this.zoom + h / 2 + slot * (h + gap);
+      if (stage && stage.width > 0) {
+        // Project the pile's row back to page space, then find the world x
+        // whose page x sits exactly at the inset from the stage's left edge.
+        const rowCanvasY = this.worldToCanvas(0, pile.cy).y;
+        const rowPageY = this._canvasToPage(0, rowCanvasY).y;
+        const edge = this._pageToCanvas(stage.left + BF_ZONE_LEFT_INSET_PX, rowPageY);
+        pile.cx = this.canvasToWorld(edge.x, edge.y).x + w / 2;
+      } else {
+        pile.cx = fallbackCx;
+      }
+    }
+  }
+
+  _hitTestZonePile(wx, wy) {
+    for (const pile of this.zonePiles) {
+      if (
+        wx >= pile.cx - pile.w / 2 && wx <= pile.cx + pile.w / 2 &&
+        wy >= pile.cy - pile.h / 2 && wy <= pile.cy + pile.h / 2
+      ) {
+        return pile;
+      }
+    }
+    return null;
+  }
+
+  // Client (page) coordinates of a zone pile's center — lets app.js aim DOM
+  // fly-to-graveyard animations at the actual canvas pile.
+  getZonePileClientPoint(seat, kind) {
+    const pile = this.zonePiles.find((p) => p.seat === seat && p.kind === kind);
+    if (!pile) return null;
+    const c = this.worldToCanvas(pile.cx, pile.cy);
+    return this._canvasToPage(c.x, c.y);
+  }
+
+  // True while any canvas hover source (card, stack card, emblem, shield
+  // badge, zone pile) is active — app.js gates preview-hide on this so a
+  // hover handoff between sources never flickers the preview away.
+  hasAnyHover() {
+    return !!(
+      this.hoveredKey ||
+      this.hoveredStackIndex != null ||
+      this.hoveredEmblemIndex != null ||
+      this.hoveredShieldKey ||
+      this.hoveredZonePile
+    );
+  }
+
+  _drawZonePiles(ctx) {
+    if (!this.zonePiles.length) return;
+    const now = performance.now();
+    const labels = { library: "DECK", graveyard: "GRAVE", exile: "EXILE" };
+    for (const pile of this.zonePiles) {
+      const x = pile.cx - pile.w / 2;
+      const y = pile.cy - pile.h / 2;
+      const hovered =
+        this.hoveredZonePile &&
+        this.hoveredZonePile.seat === pile.seat &&
+        this.hoveredZonePile.kind === pile.kind;
+
+      ctx.save();
+
+      // Pile illusion: a couple of offset sheets behind the top card.
+      const layers = Math.min(2, Math.max(0, pile.count - 1));
+      for (let i = layers; i >= 1; i--) {
+        const off = (i * 3) / this.zoom;
+        ctx.fillStyle = "rgba(10, 16, 26, 0.9)";
+        this._roundRect(ctx, x + off, y + off, pile.w, pile.h, 6 / this.zoom);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(126, 196, 255, 0.25)";
+        ctx.lineWidth = 1 / this.zoom;
+        ctx.stroke();
+      }
+
+      if (pile.kind === "library") {
+        // Face-down: the card back fills a rounded frame.
+        const img = this._loadImage(BF_CARD_BACK_URL) || this.imageCache.get(BF_CARD_BACK_URL);
+        this._roundRect(ctx, x, y, pile.w, pile.h, 6 / this.zoom);
+        ctx.fillStyle = "#1a1a2e";
+        ctx.fill();
+        if (img) {
+          ctx.save();
+          this._roundRect(ctx, x, y, pile.w, pile.h, 6 / this.zoom);
+          ctx.clip();
+          ctx.drawImage(img, x, y, pile.w, pile.h);
+          ctx.restore();
+        }
+        ctx.strokeStyle = hovered ? "rgba(126, 196, 255, 0.9)" : "rgba(126, 196, 255, 0.35)";
+        ctx.lineWidth = (hovered ? 2 : 1) / this.zoom;
+        this._roundRect(ctx, x, y, pile.w, pile.h, 6 / this.zoom);
+        ctx.stroke();
+      } else {
+        this._drawCardFace(ctx, x, y, pile.w, pile.h, pile.topCard, { hovered: !!hovered });
+      }
+
+      // Gold pulse while a spell is choosing a target in this zone.
+      const targeting =
+        this.zonePileTargeting &&
+        this.zonePileTargeting.kind === pile.kind &&
+        (this.zonePileTargeting.seats || []).includes(pile.seat);
+      if (targeting) {
+        const pulse = 0.55 + 0.45 * Math.sin(now / 300);
+        ctx.strokeStyle = `rgba(255, 215, 106, ${0.5 + 0.5 * pulse})`;
+        ctx.lineWidth = 3 / this.zoom;
+        ctx.shadowColor = "#ffd76a";
+        ctx.shadowBlur = (10 + 8 * pulse) / this.zoom;
+        this._roundRect(ctx, x - 2 / this.zoom, y - 2 / this.zoom, pile.w + 4 / this.zoom, pile.h + 4 / this.zoom, 7 / this.zoom);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+
+      // Count badge, top-right of the pile.
+      const label = `×${pile.count}`;
+      ctx.font = `bold ${11 / this.zoom}px sans-serif`;
+      const bw = ctx.measureText(label).width + 8 / this.zoom;
+      const bh = 15 / this.zoom;
+      ctx.fillStyle = "rgba(0,0,0,0.78)";
+      this._roundRect(ctx, x + pile.w - bw - 2 / this.zoom, y + 2 / this.zoom, bw, bh, 3 / this.zoom);
+      ctx.fill();
+      ctx.fillStyle = "#ffd76a";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(label, x + pile.w - 2 / this.zoom - bw / 2, y + 2 / this.zoom + bh / 2);
+
+      // Zone label under the pile.
+      ctx.fillStyle = hovered ? "rgba(190,215,240,0.75)" : "rgba(190,215,240,0.35)";
+      ctx.font = `600 ${11 / this.zoom}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      ctx.fillText(labels[pile.kind] || "", pile.cx, y + pile.h + 4 / this.zoom);
+
+      ctx.restore();
+    }
+  }
+
   // World-space point a newly cast stack item flies in from. Hand/graveyard
   // anchors live outside the canvas, so the projected point is clamped to the
   // visible battlefield — the card enters from the matching table edge
@@ -1007,16 +1237,15 @@ class BattlefieldCanvas {
   // battlefield.
   _graveAnchor(casterSeat) {
     const isViewer = casterSeat === this.viewerSeat;
-    const el = document.getElementById(isViewer ? "selfGraveCount" : "oppGraveCount");
-    if (el) {
-      const r = el.getBoundingClientRect();
-      if (r.width > 0 || r.height > 0) {
-        const c = this._pageToCanvas(r.left + r.width / 2, r.top + r.height / 2);
-        const w = this.canvasToWorld(c.x, c.y);
-        return this._clampToBattlefield(w.x, w.y);
-      }
-    }
-    return this._clampToBattlefield(this._stackBaseX + 260, BF_WORLD_SPLIT_Y + (isViewer ? 420 : -420));
+    // Aim at the caster's on-canvas graveyard pile (or their library pile
+    // while the graveyard is still empty — same column, one slot over).
+    const pile =
+      this.zonePiles.find((p) => p.seat === casterSeat && p.kind === "graveyard") ||
+      this.zonePiles.find((p) => p.seat === casterSeat && p.kind === "library");
+    if (pile) return this._clampToBattlefield(pile.cx, pile.cy);
+    // No piles yet: head toward the left edge of the caster's half.
+    const rect = this._visibleWorldRect();
+    return this._clampToBattlefield(rect.minX, BF_WORLD_SPLIT_Y + (isViewer ? 420 : -420));
   }
 
   // A stack item disappeared: animate its resolution. Permanents fly to their
@@ -1426,8 +1655,10 @@ class BattlefieldCanvas {
     }
     // Stack-zone cards ease toward their cascade slot, growing on the way.
     // Targets are re-pinned to the visible battlefield every frame so camera
-    // motion never carries the stack out of view.
+    // motion never carries the stack out of view. Zone piles are pinned the
+    // same way to the left edge.
     this._retargetStackVisuals();
+    this._retargetZonePiles();
     for (const v of this.stackVisuals) {
       const dx = v.tcx - v.cx;
       const dy = v.tcy - v.cy;
@@ -1476,6 +1707,9 @@ class BattlefieldCanvas {
     if (!moving && this.cardItems.some((it) => _isFlyer(it.card))) moving = true;
     // The mana fan pops, pulses and bobs — keep redrawing while it's open.
     if (this.manaFan) moving = true;
+    // Zone-pile targeting pulses continuously while a graveyard target is
+    // being chosen.
+    if (this.zonePileTargeting) moving = true;
     if (moving) this.needsRedraw = true;
   }
 
@@ -2583,6 +2817,9 @@ class BattlefieldCanvas {
       this._drawEmblem(ctx, item);
     }
 
+    // ---- Library / graveyard / exile piles along the left edge ----
+    this._drawZonePiles(ctx);
+
     // ---- Aura→enchantment connectors (auras set beside their target) ----
     for (const stack of this.stacks) {
       if (!stack.sideX || stack.keys.length < 2) continue;
@@ -3040,10 +3277,12 @@ class BattlefieldCanvas {
       if (i === this.hoveredStackIndex) continue;
       const v = this.stackVisuals[i];
       this._drawFloatingCard(ctx, v.item?.card, v.cx, v.cy, v.scale, 1, i === this.stackHeldIndex);
+      this._drawStackTargetableGlow(ctx, v, i);
     }
     const hoveredVisual = this.hoveredStackIndex != null ? this.stackVisuals[this.hoveredStackIndex] : null;
     if (hoveredVisual) {
       this._drawFloatingCard(ctx, hoveredVisual.item?.card, hoveredVisual.cx, hoveredVisual.cy, hoveredVisual.scale, 1, true);
+      this._drawStackTargetableGlow(ctx, hoveredVisual, this.hoveredStackIndex);
     }
 
     this._drawStackHoldUi(ctx);
@@ -3062,6 +3301,24 @@ class BattlefieldCanvas {
         this._drawFloatingCard(ctx, fx.card, fx.x, fx.y, fx.scale, fx.alpha, fx.lifted);
       }
     }
+  }
+
+  // Gold pulsing border on stack-cascade cards that are legal targets for the
+  // in-progress cast (Counterspell, Fork) — the canvas replacement for the
+  // old sidebar stack panel's .stack-targetable highlight.
+  _drawStackTargetableGlow(ctx, v, index) {
+    if (!this.stackTargetableIndices || !this.stackTargetableIndices.has(index)) return;
+    const w = BF_CARD_W * v.scale;
+    const h = BF_CARD_H * v.scale;
+    const pulse = 0.55 + 0.45 * Math.sin(performance.now() / 300);
+    ctx.save();
+    ctx.strokeStyle = `rgba(255, 215, 106, ${0.5 + 0.5 * pulse})`;
+    ctx.lineWidth = 3 / this.zoom;
+    ctx.shadowColor = "#ffd76a";
+    ctx.shadowBlur = (10 + 8 * pulse) / this.zoom;
+    ctx.strokeRect(v.cx - w / 2, v.cy - h / 2, w, h);
+    ctx.restore();
+    this.needsRedraw = true;
   }
 
   // Hover/click-hold affordances for the floating stack cascade: a glowing
@@ -3088,18 +3345,20 @@ class BattlefieldCanvas {
     const text = labelIndex === this.stackHeldIndex
       ? "Priority held — click to release"
       : "Click to hold priority";
-    const w = BF_CARD_W * labelVisual.scale;
-    const tx = labelVisual.cx - w / 2 - 10 / this.zoom;
-    const ty = labelVisual.cy;
+    // Centered directly above the labeled card, clear of the prompt dock that
+    // now sits to the stack's left.
+    const h = BF_CARD_H * labelVisual.scale;
+    const tx = labelVisual.cx;
+    const ty = labelVisual.cy - h / 2 - 16 / this.zoom;
     ctx.save();
     ctx.font = `600 ${13 / this.zoom}px sans-serif`;
-    ctx.textAlign = "right";
+    ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     const pad = 6 / this.zoom;
     const tw = ctx.measureText(text).width;
     const th = 18 / this.zoom;
     ctx.fillStyle = "rgba(12, 20, 32, 0.82)";
-    ctx.fillRect(tx - tw - pad, ty - th / 2 - pad / 2, tw + pad * 2, th + pad);
+    ctx.fillRect(tx - tw / 2 - pad, ty - th / 2 - pad / 2, tw + pad * 2, th + pad);
     ctx.fillStyle = "rgba(126, 196, 255, 0.95)";
     ctx.fillText(text, tx, ty);
     ctx.restore();
@@ -3261,6 +3520,18 @@ class BattlefieldCanvas {
       return;
     }
 
+    // Zone piles are pinned to the view above battlefield cards.
+    const zoneHit = this._hitTestZonePile(world.x, world.y);
+    if (zoneHit) {
+      this.pressState = {
+        zonePile: { seat: zoneHit.seat, kind: zoneHit.kind },
+        key: null, seat: null, idx: null, card: null,
+        startCX: cx, startCY: cy, currentCX: cx, currentCY: cy,
+        combatDrag: false, cancelled: false,
+      };
+      return;
+    }
+
     const emblemHit = this._hitTestEmblem(world.x, world.y);
     if (emblemHit) {
       this.pressState = {
@@ -3350,19 +3621,35 @@ class BattlefieldCanvas {
     // Hover — the floating stack cascade sits above battlefield cards.
     const stackHit = this._updateStackHover(world.x, world.y);
 
-    const emblemHit = stackHit ? null : this._hitTestEmblem(world.x, world.y);
+    // Zone piles are pinned to the view, above battlefield cards and emblems.
+    const zoneHit = stackHit ? null : this._hitTestZonePile(world.x, world.y);
+    const newZonePile = zoneHit ? { seat: zoneHit.seat, kind: zoneHit.kind } : null;
+    const zoneChanged =
+      (newZonePile?.seat !== this.hoveredZonePile?.seat) ||
+      (newZonePile?.kind !== this.hoveredZonePile?.kind);
+    if (zoneChanged) {
+      this.hoveredZonePile = newZonePile;
+      this.needsRedraw = true;
+      if (this.onZonePileHover) {
+        this.onZonePileHover(
+          zoneHit ? { seat: zoneHit.seat, kind: zoneHit.kind, topCard: zoneHit.topCard, count: zoneHit.count } : null
+        );
+      }
+    }
+
+    const emblemHit = stackHit || zoneHit ? null : this._hitTestEmblem(world.x, world.y);
     // The shield badge sits on top of its card, so it wins over the card's own
     // hover preview — but yields to the stack cascade and emblems above it.
-    const shieldHit = stackHit || emblemHit ? null : this._hitTestShield(world.x, world.y);
-    const item = stackHit || emblemHit || shieldHit ? null : this._hitTest(world.x, world.y);
+    const shieldHit = stackHit || zoneHit || emblemHit ? null : this._hitTestShield(world.x, world.y);
+    const item = stackHit || zoneHit || emblemHit || shieldHit ? null : this._hitTest(world.x, world.y);
     const newKey = item?.key || null;
-    this.canvas.style.cursor = (item || stackHit || emblemHit || shieldHit) ? "pointer" : "default";
+    this.canvas.style.cursor = (item || stackHit || zoneHit || emblemHit || shieldHit) ? "pointer" : "default";
 
     const newEmblemIndex = emblemHit ? emblemHit.index : null;
     if (newEmblemIndex !== this.hoveredEmblemIndex) {
       this.hoveredEmblemIndex = newEmblemIndex;
       this.needsRedraw = true;
-      if (this.onEmblemHover && emblemHit) this.onEmblemHover(emblemHit.emblem);
+      if (this.onEmblemHover) this.onEmblemHover(emblemHit ? emblemHit.emblem : null);
     }
 
     const newShieldKey = shieldHit ? shieldHit.key : null;
@@ -3426,6 +3713,11 @@ class BattlefieldCanvas {
       if (this.onStackCardClick) {
         this.onStackCardClick({ index: ps.stackIndex, item: this.stackVisuals[ps.stackIndex]?.item || null });
       }
+      return;
+    }
+
+    if (!ps.cancelled && ps.zonePile) {
+      if (this.onZonePileClick) this.onZonePileClick(ps.zonePile);
       return;
     }
 

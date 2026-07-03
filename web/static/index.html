@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Magic LEA Web App</title>
-    <link rel="stylesheet" href="/styles.css?v=20260624-gravetarget" />
+    <link rel="stylesheet" href="/styles.css?v=20260703-uiredesign4" />
   </head>
   <body>
     <main>
@@ -182,105 +182,6 @@
 
       <section id="boardPanel" class="panel hidden">
         <div class="board-shell">
-          <aside class="side-column left-column">
-            <section class="side-panel">
-              <h3>Log</h3>
-              <div id="logTab" class="tab-body">
-                <div id="logText" class="log-list"></div>
-              </div>
-            </section>
-
-            <section class="side-panel">
-              <h3>Stack</h3>
-              <div id="stackZone" class="stack-zone">Stack: empty</div>
-            </section>
-
-            <section id="activationPanel" class="side-panel activation-panel hidden">
-              <div class="prompt-head">
-                <h3>Current Prompt</h3>
-                <div class="prompt-actions">
-                  <button id="promptAutoTapBtn" type="button" class="hidden">Auto-Tap</button>
-                  <button id="promptOkBtn" type="button">OK</button>
-                  <button id="promptCancelBtn" type="button" class="secondary-btn">Cancel</button>
-                </div>
-              </div>
-              <div id="promptTitle" class="prompt-title">No pending activation.</div>
-              <div id="promptBody" class="prompt-body">Select an activated ability to begin paying its cost.</div>
-              <div id="promptSteps" class="prompt-steps"></div>
-              <div id="promptCustomRow" class="prompt-custom-row hidden">
-                <label class="prompt-custom-label" for="promptCustomValue">Choose X</label>
-                <div class="prompt-custom-input-row">
-                  <input id="promptCustomValue" type="number" min="0" value="0" />
-                  <button id="promptCustomOkBtn" type="button">Use Value</button>
-                </div>
-              </div>
-              <div id="combatSummary" class="combat-summary hidden">Combat state: none</div>
-              <div id="combatActions" class="button-row hidden"></div>
-              <div id="combatDamagePanel" class="combat-damage-panel hidden"></div>
-            </section>
-
-            <section id="aiControls" class="side-panel ai-controls hidden">
-              <h3>AI Controls</h3>
-              <label class="ai-auto-step-label">
-                <input id="aiAutoStepToggle" type="checkbox" checked />
-                Step automically
-              </label>
-              <div class="button-row ai-button-row">
-                <button id="aiStepBtn" type="button">Run One AI Step</button>
-                <button id="aiLoopBtn" type="button">Run AI x10</button>
-              </div>
-            </section>
-
-            <section id="debugPanel" class="side-panel debug-panel collapsed">
-              <div class="debug-panel-head">
-                <h3>Debug Menu</h3>
-                <button id="debugCollapseBtn" type="button" class="panel-collapse-btn" aria-expanded="false" aria-controls="debugPanelBody" title="Expand debug menu">▸</button>
-              </div>
-              <div id="debugPanelBody" class="debug-panel-body">
-                <label class="debug-search-label" for="debugCardSearch">Add card to your hand</label>
-                <input
-                  id="debugCardSearch"
-                  type="text"
-                  list="debugCardOptions"
-                  placeholder="Type a card name"
-                  autocomplete="off"
-                />
-                <datalist id="debugCardOptions"></datalist>
-                <div class="button-row">
-                  <button id="debugAddToHandBtn" type="button">Add Selected Card</button>
-                  <button id="debugCastFreeBtn" type="button">Cast Selected Card For Free</button>
-                  <button id="debugCastFreeOpponentBtn" type="button">Cast Selected Card For Free (as Opponent)</button>
-                </div>
-                <p id="debugStatus" class="debug-status">Search for any LEA card, then add it to hand or cast it for free.</p>
-
-                <label class="menu-checkbox-label debug-toggle-label">
-                  <input id="debugAddManaToggle" type="checkbox" />
-                  Click mana pool symbols to add mana
-                </label>
-
-                <label class="menu-checkbox-label debug-toggle-label">
-                  <input id="debugForceAttackAllToggle" type="checkbox" />
-                  Force AI to attack with all creatures
-                </label>
-
-                <h3 class="debug-subhead">Card Verification</h3>
-                <p id="debugVerifyProgress" class="debug-status">Loading verification progress…</p>
-                <div class="button-row">
-                  <button id="debugAddUntestedBtn" type="button">Add Untested Card to Hand</button>
-                  <button id="debugMarkResultBtn" type="button">Mark Test Result…</button>
-                  <button id="debugViewTrackerBtn" type="button">View Tracker</button>
-                </div>
-
-                <h3 class="debug-subhead">Raw State</h3>
-                <div class="raw-state-actions">
-                  <button id="rawStateCopyBtn" type="button" class="secondary-btn">Copy</button>
-                  <button id="rawStatePasteBtn" type="button" class="secondary-btn">Paste</button>
-                </div>
-                <pre id="rawState"></pre>
-              </div>
-            </section>
-          </aside>
-
           <div class="board-column center-column">
             <div class="center-top-bar">
               <div class="player-header opponent-header">
@@ -342,22 +243,16 @@
                   <input id="musicVolumeSlider" type="range" min="0" max="100" value="40" class="volume-slider" title="Music volume" />
                 </div>
               </div>
-            </section>
-          </div>
-
-          <aside class="side-column right-column">
-            <section class="side-panel">
-              <h3>Opponent</h3>
-              <p class="side-label">Mana Pool</p>
-              <div id="oppMana" class="mana-row"></div>
-              <p class="side-label">Deck (<span id="oppDeckCount">0</span>)</p>
-              <p class="side-label">Graveyard (<span id="oppGraveCount">0</span>)</p>
-              <div id="oppGraveyardCards" class="zone-cards"></div>
-              <p class="side-label">Exile (<span id="oppExileCount">0</span>)</p>
-              <div id="oppExileCards" class="zone-cards"></div>
+              <div class="utility-row">
+                <button id="logToggleBtn" type="button" class="secondary-btn utility-btn" title="Toggle game log">📜</button>
+                <button id="debugToggleBtn" type="button" class="secondary-btn utility-btn" title="Toggle debug menu">🛠️</button>
+              </div>
             </section>
 
-            <section class="side-panel preview-panel">
+            <div id="oppMana" class="mana-row mana-col mana-col--opponent"></div>
+            <div id="selfMana" class="mana-row mana-col mana-col--self"></div>
+
+            <div id="cardPreviewOverlay" class="canvas-overlay card-preview-overlay hidden">
               <div id="cardPreview" class="card-preview-frame empty-preview">
                 <div class="card-preview-image-wrap">
                   <img id="cardPreviewImage" alt="Hovered card preview" class="hidden" />
@@ -369,19 +264,133 @@
                 <div id="cardPreviewType" class="card-preview-type"></div>
                 <div id="cardPreviewText" class="card-preview-text"></div>
               </div>
+            </div>
+
+            <div id="logOverlay" class="canvas-overlay log-overlay hidden">
+              <div class="overlay-head">
+                <h3>Log</h3>
+                <button id="logCloseBtn" type="button" class="overlay-close-btn" title="Close log">×</button>
+              </div>
+              <div id="logTab" class="tab-body">
+                <div id="logText" class="log-list"></div>
+              </div>
+            </div>
+
+            <div id="zoneRevealOverlay" class="canvas-overlay zone-reveal-overlay hidden">
+              <div class="overlay-head">
+                <h3 id="zoneRevealTitle">Graveyard</h3>
+                <button id="zoneRevealCloseBtn" type="button" class="overlay-close-btn" title="Close">×</button>
+              </div>
+              <div id="zoneRevealSections">
+                <div class="zone-reveal-section" data-zone="opp-graveyard">
+                  <p class="side-label">Opponent Graveyard (<span id="oppGraveCount">0</span>)</p>
+                  <div id="oppGraveyardCards" class="zone-cards"></div>
+                </div>
+                <div class="zone-reveal-section" data-zone="opp-exile">
+                  <p class="side-label">Opponent Exile (<span id="oppExileCount">0</span>)</p>
+                  <div id="oppExileCards" class="zone-cards"></div>
+                </div>
+                <div class="zone-reveal-section" data-zone="self-graveyard">
+                  <p class="side-label">Your Graveyard (<span id="selfGraveCount">0</span>)</p>
+                  <div id="selfGraveyardCards" class="zone-cards"></div>
+                </div>
+                <div class="zone-reveal-section" data-zone="self-exile">
+                  <p class="side-label">Your Exile (<span id="selfExileCount">0</span>)</p>
+                  <div id="selfExileCards" class="zone-cards"></div>
+                </div>
+              </div>
+              <span id="selfDeckCount" class="hidden">0</span>
+              <span id="oppDeckCount" class="hidden">0</span>
+            </div>
+
+            <div class="floating-dock">
+            <section id="activationPanel" class="side-panel activation-panel hidden">
+              <div class="prompt-head">
+                <div id="promptTitle" class="prompt-title">No pending activation.</div>
+                <div class="prompt-actions">
+                  <button id="promptAutoTapBtn" type="button" class="hidden">Auto-Tap</button>
+                  <button id="promptOkBtn" type="button">OK</button>
+                  <button id="promptCancelBtn" type="button" class="secondary-btn">Cancel</button>
+                </div>
+              </div>
+              <div id="promptBody" class="prompt-body">Select an activated ability to begin paying its cost.</div>
+              <div id="promptSteps" class="prompt-steps"></div>
+              <div id="promptCustomRow" class="prompt-custom-row hidden">
+                <label class="prompt-custom-label" for="promptCustomValue">Choose X</label>
+                <div class="prompt-custom-input-row">
+                  <input id="promptCustomValue" type="number" min="0" value="0" />
+                  <button id="promptCustomOkBtn" type="button">Use Value</button>
+                </div>
+              </div>
+              <div id="combatSummary" class="combat-summary hidden">Combat state: none</div>
+              <div id="combatActions" class="button-row hidden"></div>
+              <div id="combatDamagePanel" class="combat-damage-panel hidden"></div>
             </section>
 
-            <section class="side-panel">
-              <h3>You</h3>
-              <p class="side-label">Mana Pool</p>
-              <div id="selfMana" class="mana-row"></div>
-              <p class="side-label">Deck (<span id="selfDeckCount">0</span>)</p>
-              <p class="side-label">Graveyard (<span id="selfGraveCount">0</span>)</p>
-              <div id="selfGraveyardCards" class="zone-cards"></div>
-              <p class="side-label">Exile (<span id="selfExileCount">0</span>)</p>
-              <div id="selfExileCards" class="zone-cards"></div>
+            <section id="aiControls" class="side-panel ai-controls hidden">
+              <h3>AI Controls</h3>
+              <label class="ai-auto-step-label">
+                <input id="aiAutoStepToggle" type="checkbox" checked />
+                Step automically
+              </label>
+              <div class="button-row ai-button-row">
+                <button id="aiStepBtn" type="button">Run One AI Step</button>
+                <button id="aiLoopBtn" type="button">Run AI x10</button>
+              </div>
             </section>
-          </aside>
+            </div>
+
+            <div id="debugOverlay" class="canvas-overlay debug-overlay hidden">
+            <section id="debugPanel" class="side-panel debug-panel">
+              <div class="debug-panel-head">
+                <h3>Debug Menu</h3>
+                <button id="debugCloseBtn" type="button" class="overlay-close-btn" title="Close debug menu">×</button>
+              </div>
+              <div id="debugPanelBody" class="debug-panel-body">
+                <label class="debug-search-label" for="debugCardSearch">Add card to your hand</label>
+                <input
+                  id="debugCardSearch"
+                  type="text"
+                  list="debugCardOptions"
+                  placeholder="Type a card name"
+                  autocomplete="off"
+                />
+                <datalist id="debugCardOptions"></datalist>
+                <div class="button-row">
+                  <button id="debugAddToHandBtn" type="button">Add Selected Card</button>
+                  <button id="debugCastFreeBtn" type="button">Cast Selected Card For Free</button>
+                  <button id="debugCastFreeOpponentBtn" type="button">Cast Selected Card For Free (as Opponent)</button>
+                </div>
+                <p id="debugStatus" class="debug-status">Search for any LEA card, then add it to hand or cast it for free.</p>
+
+                <label class="menu-checkbox-label debug-toggle-label">
+                  <input id="debugAddManaToggle" type="checkbox" />
+                  Click mana pool symbols to add mana
+                </label>
+
+                <label class="menu-checkbox-label debug-toggle-label">
+                  <input id="debugForceAttackAllToggle" type="checkbox" />
+                  Force AI to attack with all creatures
+                </label>
+
+                <h3 class="debug-subhead">Card Verification</h3>
+                <p id="debugVerifyProgress" class="debug-status">Loading verification progress…</p>
+                <div class="button-row">
+                  <button id="debugAddUntestedBtn" type="button">Add Untested Card to Hand</button>
+                  <button id="debugMarkResultBtn" type="button">Mark Test Result…</button>
+                  <button id="debugViewTrackerBtn" type="button">View Tracker</button>
+                </div>
+
+                <h3 class="debug-subhead">Raw State</h3>
+                <div class="raw-state-actions">
+                  <button id="rawStateCopyBtn" type="button" class="secondary-btn">Copy</button>
+                  <button id="rawStatePasteBtn" type="button" class="secondary-btn">Paste</button>
+                </div>
+                <pre id="rawState"></pre>
+              </div>
+            </section>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -501,11 +510,11 @@
       </div>
     </div>
 
-    <script src="/battlefield-canvas.js?v=20260702-camopiles"></script>
+    <script src="/battlefield-canvas.js?v=20260703-uiredesign3"></script>
     <script src="/sfx.js?v=2-sfx"></script>
     <script src="/music.js?v=1-music"></script>
     <script src="/personal-decks.js?v=20260614-desc1"></script>
-    <script src="/app.js?v=20260702-camopiles"></script>
+    <script src="/app.js?v=20260703-uiredesign5"></script>
     <script src="/deck-editor.js?v=20260614-desc1"></script>
   </body>
 </html>

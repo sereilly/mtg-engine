@@ -106,15 +106,20 @@ button:hover {
 
 .board-shell {
   display: grid;
-  grid-template-columns: 0.95fr 3.15fr 1fr;
-  gap: 12px;
+  grid-template-columns: 1fr;
   height: calc(100vh - 28px);
   min-height: 540px;
   align-items: stretch;
 }
 
-.board-column,
-.side-column {
+/* The tucked hand fan extends below the stage's bottom edge; clip it so the
+   page itself never grows a scrollbar (clip, not hidden — the panel must not
+   become programmatically scrollable either). */
+#boardPanel {
+  overflow: clip;
+}
+
+.board-column {
   min-width: 0;
 }
 
@@ -177,19 +182,188 @@ button:hover {
   outline-offset: -2px;
 }
 
-.left-column,
-.right-column {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  overflow-y: auto;
-  min-height: 0;
+/* ---- Floating overlays over the battlefield ---- */
+/* Overlays set their own display (flex), so .hidden needs the extra
+   specificity to win regardless of rule order. */
+.canvas-overlay.hidden {
+  display: none;
 }
 
-/* Opponent and player panels stay at their natural height so the preview panel
-   between them absorbs the remaining vertical space. */
-.right-column > .side-panel:not(.preview-panel) {
+.canvas-overlay {
+  position: absolute;
+  z-index: 12;
+  background: rgba(8, 14, 22, 0.88);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(126, 196, 255, 0.22);
+  border-radius: 12px;
+  padding: 10px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+
+.overlay-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.overlay-head h3 {
+  margin: 0;
+}
+
+.overlay-close-btn {
   flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  line-height: 1;
+  font-size: 16px;
+  border-radius: 8px;
+  background: rgba(126, 196, 255, 0.12);
+  border: 1px solid rgba(126, 196, 255, 0.3);
+  color: var(--ink, #dfeaf5);
+  cursor: pointer;
+}
+
+.overlay-close-btn:hover {
+  background: rgba(126, 196, 255, 0.25);
+}
+
+.log-overlay {
+  left: 140px;
+  top: 70px;
+  bottom: 120px;
+  width: 340px;
+  display: flex;
+  flex-direction: column;
+}
+
+.log-overlay .tab-body {
+  flex: 1 1 auto;
+  max-height: none;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.debug-overlay {
+  left: 140px;
+  top: 70px;
+  bottom: 120px;
+  width: 400px;
+  overflow-y: auto;
+  z-index: 13;
+}
+
+.debug-overlay .side-panel {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+}
+
+/* Prompt / AI-controls dock: floats just left of the stack cascade (which is
+   pinned to the right edge, vertically centered). */
+.floating-dock {
+  position: absolute;
+  right: 300px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 330px;
+  z-index: 11;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 70%;
+  overflow-y: auto;
+}
+
+.floating-dock .side-panel {
+  background: rgba(8, 14, 22, 0.88);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(126, 196, 255, 0.22);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+
+/* Vertical mana columns pinned to the right edge of the stage */
+.mana-col {
+  position: absolute;
+  right: 12px;
+  z-index: 9;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.mana-col--opponent {
+  top: 64px;
+}
+
+.mana-col--self {
+  bottom: 110px;
+}
+
+/* Only show mana symbols with a nonzero count — unless debug click-to-add mode
+   marks the container addable, in which case every symbol must be clickable. */
+.mana-col .mana-symbol-empty {
+  display: none;
+}
+
+.mana-col.mana-row-addable .mana-symbol-empty {
+  display: flex;
+}
+
+.mana-col .mana-total:not(.mana-total-active) {
+  display: none;
+}
+
+/* Hover-only card preview floating at the left-middle of the stage */
+.card-preview-overlay {
+  left: 140px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 260px;
+  pointer-events: none;
+  z-index: 13;
+}
+
+/* Zone reveal panel (graveyard / exile contents) near the left piles */
+.zone-reveal-overlay {
+  left: 140px;
+  width: 380px;
+  max-height: 44%;
+  overflow-y: auto;
+  z-index: 14;
+}
+
+.zone-reveal-overlay.zone-reveal--top {
+  top: 70px;
+}
+
+.zone-reveal-overlay.zone-reveal--bottom {
+  bottom: 130px;
+}
+
+.zone-reveal-section.hidden {
+  display: none;
+}
+
+.utility-row {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+
+.utility-btn {
+  flex: 1 1 auto;
+  padding: 4px 0;
+  font-size: 15px;
+}
+
+.utility-btn.toggle-btn-active {
+  border-color: rgba(242, 184, 75, 0.8);
+  box-shadow: 0 0 8px rgba(242, 184, 75, 0.4);
 }
 
 .player-lane {
@@ -596,10 +770,27 @@ h2.targeting-valid {
   transform: translateX(var(--fan-push-x, 0px)) translateZ(var(--fan-z, 0px)) rotate(var(--fan-angle, 0deg)) rotateX(-12deg);
 }
 
-/* Hover pops the card up, flat to the camera, enlarged for readability */
+/* The viewer's hand tucks into the bottom edge of the stage: only the top
+   half of each card shows until it is hovered. `top` (not transform) carries
+   the tuck so the fan's per-slot transform chain stays intact. */
+.hand-fan:not(.hand-fan--opponent) .hand-fan-slot {
+  top: 106px;
+  transition: transform 0.18s ease, margin 0.18s ease, top 0.18s ease;
+}
+
+/* Hover pops the card up, flat to the camera, enlarged for readability —
+   and lifts the tucked card fully into view. */
 .hand-fan-slot:hover {
   transform: translateX(var(--fan-push-x, 0px)) translateY(-52px) translateZ(60px) rotate(var(--fan-angle, 0deg)) rotateX(0deg) scale(1.32);
   z-index: 100 !important;
+}
+
+/* The tuck release (top: 106px -> 0) already lifts the card into full view,
+   so the self hand drops the extra -52px hover translate — keeping it would
+   raise hovered cards too far above the fan. */
+.hand-fan:not(.hand-fan--opponent) .hand-fan-slot:hover {
+  top: 0;
+  transform: translateX(var(--fan-push-x, 0px)) translateZ(60px) rotate(var(--fan-angle, 0deg)) rotateX(0deg) scale(1.32);
 }
 
 .hand-fan--opponent .hand-fan-slot:hover {
@@ -697,8 +888,7 @@ h2.targeting-valid {
   color: var(--ink-soft);
 }
 
-.action-zone,
-.stack-zone {
+.action-zone {
   border-radius: 10px;
   border: 1px solid rgba(242, 184, 75, 0.44);
   background: rgba(242, 184, 75, 0.09);
@@ -709,91 +899,6 @@ h2.targeting-valid {
   align-items: center;
   justify-content: center;
   text-align: center;
-}
-
-.stack-zone {
-  align-items: flex-start;
-  justify-content: flex-start;
-  text-align: left;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.stack-empty-label {
-  color: var(--ink-soft);
-  font-size: 0.9rem;
-}
-
-.stack-item {
-  width: 100%;
-  background: rgba(242, 184, 75, 0.12);
-  border: 1px solid rgba(242, 184, 75, 0.3);
-  border-radius: 7px;
-  padding: 7px 9px;
-  font-size: 0.88rem;
-  line-height: 1.45;
-  box-sizing: border-box;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
-}
-
-.stack-item.stack-hl {
-  border-color: rgba(126, 196, 255, 0.8);
-  background: rgba(126, 196, 255, 0.15);
-  box-shadow: 0 0 8px rgba(126, 196, 255, 0.35);
-}
-
-.stack-item.stack-held {
-  border-color: rgba(126, 196, 255, 0.85);
-  background: rgba(126, 196, 255, 0.12);
-  box-shadow: 0 0 8px rgba(126, 196, 255, 0.3);
-}
-
-/* A spell on the stack that is a legal target for the in-progress cast
-   (Counterspell, Fork). */
-.stack-item.stack-targetable {
-  border-color: rgba(120, 230, 150, 0.95);
-  background: rgba(120, 230, 150, 0.16);
-  box-shadow: 0 0 10px rgba(120, 230, 150, 0.45);
-  cursor: crosshair;
-}
-
-.stack-hold-hint {
-  display: none;
-  margin-top: 4px;
-  font-size: 0.76rem;
-  font-style: italic;
-  color: rgba(126, 196, 255, 0.95);
-}
-
-.stack-item:hover .stack-hold-hint,
-.stack-item.stack-held .stack-hold-hint {
-  display: block;
-}
-
-.stack-pos {
-  font-weight: 600;
-  color: rgba(242, 184, 75, 0.9);
-  margin-right: 2px;
-}
-
-.stack-card-link {
-  text-decoration: underline;
-  text-decoration-style: solid;
-  text-underline-offset: 2px;
-  cursor: pointer;
-  color: #e8d9a8;
-  transition: color 0.12s;
-}
-
-.stack-card-link:hover {
-  color: #fff;
-}
-
-.card.stack-target-hl {
-  outline: 2px solid rgba(126, 196, 255, 0.9) !important;
-  box-shadow: 0 0 14px rgba(126, 196, 255, 0.55) !important;
-  z-index: 2;
 }
 
 .action-hint {
@@ -1163,11 +1268,6 @@ h2.targeting-valid {
   background: #1a1a2e;
 }
 
-.side-column {
-  display: flex;
-  flex-direction: column;
-}
-
 .ai-controls {
   border-color: rgba(126, 196, 255, 0.55);
 }
@@ -1199,23 +1299,11 @@ h2.targeting-valid {
   margin: 0;
 }
 
-.panel-collapse-btn {
-  flex: 0 0 auto;
-  margin: 0;
-  padding: 1px 9px;
-  line-height: 1.4;
-  font-size: 0.85rem;
-}
-
 .debug-panel-body {
   display: flex;
   flex-direction: column;
   gap: 6px;
   margin-top: 8px;
-}
-
-.debug-panel.collapsed .debug-panel-body {
-  display: none;
 }
 
 .debug-panel-body label {
@@ -1419,7 +1507,7 @@ h2.targeting-valid {
   margin-bottom: 8px;
 }
 
-.prompt-head h3 {
+.prompt-head .prompt-title {
   margin-bottom: 0;
 }
 
@@ -1508,29 +1596,6 @@ h2.targeting-valid {
 
 .prompt-custom-input-row input {
   width: 100px;
-}
-
-.preview-panel {
-  position: static;
-  /* Grow to fill the gap between the opponent (top) and player (bottom) panels. */
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-/* In the right column the preview art expands to fill the available height
-   instead of being clamped to a fixed card-sized box. */
-.preview-panel .card-preview-frame {
-  width: 100%;
-  flex: 1 1 auto;
-  min-height: 0;
-  aspect-ratio: auto;
-}
-
-.preview-panel .card-preview-meta {
-  flex: 0 0 auto;
 }
 
 .card-preview-frame {
@@ -1987,31 +2052,6 @@ pre {
   flex: 1 1 180px;
 }
 
-@media (max-width: 1200px) {
-  .board-shell {
-    grid-template-columns: 1fr;
-  }
-
-  .left-column,
-  .right-column {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-  }
-
-  .center-column {
-    display: block;
-  }
-
-  .activation-panel {
-    grid-column: 1 / -1;
-  }
-
-  .preview-panel {
-    position: static;
-  }
-}
-
 @media (max-width: 760px) {
   main {
     padding: 12px;
@@ -2023,10 +2063,6 @@ pre {
   }
 
   .zone-row {
-    grid-template-columns: 1fr;
-  }
-
-  .side-column {
     grid-template-columns: 1fr;
   }
 }
