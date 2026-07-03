@@ -484,3 +484,91 @@ def test_bug8_creature_with_positive_toughness_survives():
     game.check_state_based_actions()
 
     assert perm in p1.battlefield
+
+
+# ---------------------------------------------------------------------------
+# Bug 9: mass/delayed destruction bypassed _permanent_to_graveyard
+#
+# Pestilence's activated damage, Volcanic Eruption's Mountain destruction, and
+# the end-step delayed destruction sweep removed permanents with a raw
+# `graveyard.append`, skipping regeneration shields, dies-triggers
+# (creatures_died_this_turn, Soul Net, Dingus Egg), token cleanup, and aura
+# removal. They now route through the shared destruction paths.
+# ---------------------------------------------------------------------------
+
+def test_bug9_pestilence_damage_respects_regeneration_shield(all_cards):
+    """A creature with a regeneration shield survives lethal Pestilence damage
+    (CR 704.5g / 701.15: lethal-damage destruction is replaceable by regeneration)."""
+    pestilence = _get(all_cards, "Pestilence")
+    sprites = _get(all_cards, "Scryb Sprites")  # 1/1
+
+    perm = Permanent(card=sprites)
+    perm.regeneration_shield = 1
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=pestilence), perm], life=20)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Pestilence")
+
+    assert result.supported
+    assert perm in p1.battlefield, "regeneration shield should save the creature"
+    assert perm.regeneration_shield == 0, "the shield should be consumed"
+
+
+def test_bug9_pestilence_kill_counts_as_creature_death(all_cards):
+    """A creature killed by Pestilence dies through _permanent_to_graveyard, so
+    death bookkeeping (creatures_died_this_turn) now sees it."""
+    pestilence = _get(all_cards, "Pestilence")
+    sprites = _get(all_cards, "Scryb Sprites")  # 1/1, dies to 1 damage
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=pestilence), Permanent(card=sprites)], life=20)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Pestilence")
+
+    assert result.supported
+    assert not any(p.card.name == "Scryb Sprites" for p in p1.battlefield)
+    assert any(card.name == "Scryb Sprites" for card in p1.graveyard)
+    assert getattr(game, "creatures_died_this_turn", 0) >= 1
+
+
+def test_bug9_volcanic_eruption_fires_dingus_egg(all_cards):
+    """A Mountain destroyed by Volcanic Eruption is put into the graveyard from
+    the battlefield, so Dingus Egg's land-dies trigger now fires."""
+    p1 = PlayerState(
+        name="P1",
+        hand=[_get(all_cards, "Volcanic Eruption")],
+        battlefield=[Permanent(card=_get(all_cards, "Dingus Egg"))],
+        life=20,
+    )
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=_get(all_cards, "Mountain"))], life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    result = game.cast_from_hand(
+        0, "Volcanic Eruption", target_player_index=1, target_permanent_index=[0], x_value=1
+    )
+    game.resolve_stack()
+
+    assert result.supported
+    assert not p2.battlefield, "the Mountain should be destroyed"
+    # 1 from the eruption itself + 2 from Dingus Egg (land died under p2's control)
+    assert p2.life == 20 - 1 - 2
+
+
+def test_bug9_end_step_destruction_fires_dies_triggers(all_cards):
+    """A creature destroyed by the end-step sweep (Stone Giant's delayed
+    destruction) dies through _permanent_to_graveyard, so dies bookkeeping runs."""
+    sprites = _get(all_cards, "Scryb Sprites")
+    perm = Permanent(card=sprites)
+    perm.metadata["destroy_at_next_end_step"] = True
+    p1 = PlayerState(name="P1", battlefield=[perm])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    game.resolve_end_step(0)
+
+    assert perm not in p1.battlefield
+    assert any(card.name == "Scryb Sprites" for card in p1.graveyard)
+    assert getattr(game, "creatures_died_this_turn", 0) >= 1
