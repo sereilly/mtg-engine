@@ -19,7 +19,6 @@ Clusters covered in this batch:
 """
 from __future__ import annotations
 
-from pathlib import Path
 
 import pytest
 
@@ -29,21 +28,9 @@ from engine import Game, PlayerState, load_cards
 from engine.models import Permanent
 from engine.ai_policy import choose_attackers
 from engine.oracle import compile_card_oracle
+from tests.helpers import _game
 
 
-_ROOT = Path(__file__).resolve().parent.parent
-_C = {c.name: c for c in load_cards(_ROOT / "lea_cards.json")}
-
-
-@pytest.fixture(scope="module")
-def cards():
-    return _C
-
-
-def _game(p1: PlayerState, p2: PlayerState) -> Game:
-    game = Game(players=[p1, p2])
-    game.enforce_mana_costs = False
-    return game
 
 
 # ---------------------------------------------------------------------------

@@ -12,29 +12,12 @@ Circle of Protection: Red, Feedback, Force of Nature.
 """
 from __future__ import annotations
 
-from pathlib import Path
 
 import pytest
 
 from engine import Game, PlayerState, load_cards
 from engine.models import Permanent
-
-
-@pytest.fixture(scope="module")
-def cards():
-    root = Path(__file__).resolve().parent.parent
-    return {c.name: c for c in load_cards(root / "lea_cards.json")}
-
-
-def _game(p1: PlayerState, p2: PlayerState) -> Game:
-    game = Game(players=[p1, p2])
-    game.enforce_mana_costs = False
-    return game
-
-
-def _nosick(perm: Permanent) -> Permanent:
-    perm.metadata["summoning_sickness_turn"] = -99
-    return perm
+from tests.helpers import _game, _nosick
 
 
 def _destroy(game: Game, owner: PlayerState, perm: Permanent) -> None:
