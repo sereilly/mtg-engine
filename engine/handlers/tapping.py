@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ._common import resolve_target_permanent
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -25,23 +26,17 @@ def untap_self(game: Game, instruction: OracleInstruction, context: OracleExecut
 
 @effect_handler("untap_target_land")
 def untap_target_land(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    target = context.target
-    untapped = False
     # Honor an explicitly chosen land (Ley Druid: "{T}: Untap target land" — the
-    # player picks which land). Fall back to the first land the target controls.
-    idx = context.target_permanent_index
-    if isinstance(idx, int) and 0 <= idx < len(target.battlefield):
-        chosen = target.battlefield[idx]
-        if chosen.card.primary_type == "land":
-            chosen.tapped = False
-            untapped = True
-    if not untapped and not isinstance(idx, int):
-        for perm in target.battlefield:
-            if perm.card.primary_type == "land":
-                perm.tapped = False
-                untapped = True
-                break
-    game.log.append("Untapped target land" if untapped else "No land to untap")
+    # player picks which land). Fall back to the first land the target controls
+    # only when no explicit choice was made.
+    perm = resolve_target_permanent(
+        context,
+        predicate=lambda p: p.card.primary_type == "land",
+        fallback_on_invalid_choice=False,
+    )
+    if perm is not None:
+        perm.tapped = False
+    game.log.append("Untapped target land" if perm is not None else "No land to untap")
     return True, "resolved"
 
 
@@ -83,13 +78,7 @@ def tap_or_untap_target(game: Game, instruction: OracleInstruction, context: Ora
     # Twiddle: toggle the chosen permanent's tapped state (tap an untapped one,
     # untap a tapped one). Honor the explicitly chosen permanent on either
     # battlefield; fall back to the first permanent for AI/headless play.
-    target = context.target
-    idx = context.target_permanent_index
-    perm = None
-    if isinstance(idx, int) and 0 <= idx < len(target.battlefield):
-        perm = target.battlefield[idx]
-    elif target.battlefield:
-        perm = target.battlefield[0]
+    perm = resolve_target_permanent(context, predicate=lambda p: True)
     if perm is None:
         game.log.append("No valid permanent to tap or untap")
         return True, "resolved"

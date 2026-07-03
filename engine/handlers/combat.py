@@ -3,6 +3,7 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
+from ._common import resolve_target_permanent
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -20,9 +21,7 @@ def delayed_destroy_blocked_or_blocker(game: Game, instruction: OracleInstructio
     combat. The victim is identified by the stack item's target indices, captured
     at declaration time (509.3f).
     """
-    target = context.target
-    idx = context.target_permanent_index
-    victim = target.battlefield[idx] if isinstance(idx, int) and 0 <= idx < len(target.battlefield) else None
+    victim = resolve_target_permanent(context, predicate=lambda p: True, fallback_players=())
     if victim is None:
         game.log.append(f"{context.card.name} block trigger had no valid target")
         return True, "no target"
@@ -36,15 +35,8 @@ def grant_unlimited_blocking(game: Game, instruction: OracleInstruction, context
     # Blaze of Glory: "Target creature defending player controls can block any number
     # of creatures this turn. It blocks each attacking creature this turn if able."
     # Honor the chosen creature; fall back to the first only for AI/headless play.
-    target = context.target
     card = context.card
-    idx = context.target_permanent_index
-    blocker = None
-    if isinstance(idx, int) and 0 <= idx < len(target.battlefield):
-        if target.battlefield[idx].is_creature:
-            blocker = target.battlefield[idx]
-    if blocker is None:
-        blocker = next((perm for perm in target.battlefield if perm.is_creature), None)
+    blocker = resolve_target_permanent(context)
     if blocker is not None:
         # Lets it block any number of attackers (_max_blocks_for) and requires it to
         # block each attacker it can (enforced when blocks are declared).
@@ -197,21 +189,12 @@ def force_active_player_creatures_to_attack(game: Game, instruction: OracleInstr
 
 @effect_handler("grant_unblockable_to_low_power_target")
 def grant_unblockable_to_low_power_target(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    target = context.target
     # Honor the specifically chosen creature (the player picked one in the UI);
     # fall back to the first eligible creature only for AI/headless casts with no
     # explicit target. Either way the "power 2 or less" restriction is enforced.
-    idx = context.target_permanent_index
-    target_creature = None
-    if isinstance(idx, int) and 0 <= idx < len(target.battlefield):
-        candidate = target.battlefield[idx]
-        if candidate.is_creature and candidate.effective_power <= 2:
-            target_creature = candidate
-    if target_creature is None:
-        target_creature = next(
-            (perm for perm in target.battlefield if perm.is_creature and perm.effective_power <= 2),
-            None,
-        )
+    target_creature = resolve_target_permanent(
+        context, predicate=lambda p: p.is_creature and p.effective_power <= 2
+    )
     if target_creature is not None:
         target_creature.metadata["cant_be_blocked_until_eot"] = True
         game.log.append(f"{target_creature.card.name} can't be blocked this turn")
@@ -225,15 +208,7 @@ def grant_banding_to_target(game: Game, instruction: OracleInstruction, context:
     # Helm of Chatzuk: "{1}, {T}: Target creature gains banding until end of turn."
     # Honor the chosen target (any creature, on either battlefield); fall back to
     # the first creature only when no explicit target was supplied (AI/headless).
-    target = context.target
-    idx = context.target_permanent_index
-    target_creature = None
-    if isinstance(idx, int) and 0 <= idx < len(target.battlefield):
-        candidate = target.battlefield[idx]
-        if candidate.is_creature:
-            target_creature = candidate
-    if target_creature is None:
-        target_creature = next((perm for perm in target.battlefield if perm.is_creature), None)
+    target_creature = resolve_target_permanent(context)
     if target_creature is None:
         game.log.append("No valid creature target for banding effect")
         return False, "no valid creature target for banding effect"

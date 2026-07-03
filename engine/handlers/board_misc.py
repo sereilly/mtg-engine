@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..models import CardDefinition, Permanent
+from ._common import resolve_target_permanent
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -212,17 +213,11 @@ def recolor_target_from_text(game: Game, instruction: OracleInstruction, context
 
 @effect_handler("change_target_land_type")
 def change_target_land_type(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    target = context.target
-    target_land = None
     # Honor a specifically chosen land (e.g. a player selected the target land
     # in the UI). Fall back to the first land the target player controls.
-    chosen_index = context.target_permanent_index
-    if isinstance(chosen_index, int) and 0 <= chosen_index < len(target.battlefield):
-        candidate = target.battlefield[chosen_index]
-        if candidate.card.primary_type == "land":
-            target_land = candidate
-    if target_land is None:
-        target_land = next((perm for perm in target.battlefield if perm.card.primary_type == "land"), None)
+    target_land = resolve_target_permanent(
+        context, predicate=lambda p: p.card.primary_type == "land"
+    )
     if target_land is not None:
         target_land.metadata["land_type_override"] = str(instruction.payload.get("land_type", "forest"))
         game.log.append(f"{target_land.card.name} became a Forest")
@@ -257,23 +252,10 @@ def add_mire_counter_to_target_land(game: Game, instruction: OracleInstruction, 
     The source artifact records each land it mires so its rest-of-game cleanup
     trigger (see ON_LEAVE_BATTLEFIELD) knows which lands to undo when it dies.
     """
-    target = context.target
-    target_land = None
-    chosen_index = context.target_permanent_index
     # Honor the explicitly chosen land when one was targeted.
-    if isinstance(chosen_index, int) and 0 <= chosen_index < len(target.battlefield):
-        candidate = target.battlefield[chosen_index]
-        if candidate.card.primary_type == "land" and not _is_swamp(candidate):
-            target_land = candidate
-    if target_land is None:
-        target_land = next(
-            (
-                perm
-                for perm in target.battlefield
-                if perm.card.primary_type == "land" and not _is_swamp(perm)
-            ),
-            None,
-        )
+    target_land = resolve_target_permanent(
+        context, predicate=lambda p: p.card.primary_type == "land" and not _is_swamp(p)
+    )
     if target_land is None:
         game.log.append("No valid non-Swamp land for mire counter")
         return True, "resolved"

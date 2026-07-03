@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ._common import resolve_amount
+from ._common import resolve_amount, resolve_target_permanent
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -61,10 +61,8 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
         caster.damage_prevention_source = source_name
         # The chosen source (if the controller picked a specific permanent) is
         # recorded only for the log; matching is by color.
-        chosen = None
-        idx = context.target_permanent_index
-        if isinstance(idx, int) and context.target is not None and 0 <= idx < len(context.target.battlefield):
-            chosen = context.target.battlefield[idx].card.name
+        chosen_perm = resolve_target_permanent(context, predicate=lambda p: True, fallback_players=())
+        chosen = chosen_perm.card.name if chosen_perm is not None else None
         game.log.append(
             f"{caster.name} sets a Circle of Protection shield against "
             + (f"{chosen} (a {prevention_color} source)" if chosen else f"a {prevention_color} source")
@@ -114,9 +112,7 @@ def grant_reverse_damage_shield(game: Game, instruction: OracleInstruction, cont
         # CardDefinition the spell deals damage with when it resolves).
         chosen = context.stack_target.card
     else:
-        idx = context.target_permanent_index
-        if isinstance(idx, int) and context.target is not None and 0 <= idx < len(context.target.battlefield):
-            chosen = context.target.battlefield[idx]
+        chosen = resolve_target_permanent(context, predicate=lambda p: True, fallback_players=())
     if chosen is not None:
         caster.reverse_damage_sources.append(chosen)
         source_card = getattr(chosen, "card", chosen)
@@ -136,12 +132,7 @@ def grant_forcefield_shield(game: Game, instruction: OracleInstruction, context:
     # Honor the chosen unblocked attacker so only that creature's combat damage is
     # capped to 1. Fall back to a generic "next combat damage" cap for AI/headless
     # activations that supply no target.
-    chosen = None
-    idx = context.target_permanent_index
-    if isinstance(idx, int) and context.target is not None and 0 <= idx < len(context.target.battlefield):
-        candidate = context.target.battlefield[idx]
-        if candidate.is_creature:
-            chosen = candidate
+    chosen = resolve_target_permanent(context, fallback_players=())
     if chosen is not None:
         caster.forcefield_capped_sources.append(chosen)
         game.log.append(f"Forcefield will prevent all but 1 combat damage from {chosen.card.name}")
@@ -176,15 +167,7 @@ def jade_monolith_redirect(game: Game, instruction: OracleInstruction, context: 
     source choice (AI/legacy activations) any source's damage is redirected.
     """
     caster = context.caster
-    target = context.target
-    target_creature = None
-    idx = context.target_permanent_index
-    if isinstance(idx, int) and 0 <= idx < len(target.battlefield):
-        candidate = target.battlefield[idx]
-        if candidate.is_creature:
-            target_creature = candidate
-    if target_creature is None:
-        target_creature = next((p for p in target.battlefield if p.is_creature), None)
+    target_creature = resolve_target_permanent(context)
     if target_creature is not None:
         caster_idx = game.players.index(caster)
         target_creature.metadata["redirect_damage_to_player"] = caster_idx

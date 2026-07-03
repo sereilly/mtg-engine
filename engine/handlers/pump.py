@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..models import Permanent
-from ._common import apply_temp_pt_boost, resolve_amount
+from ._common import apply_temp_pt_boost, resolve_amount, resolve_target_permanent
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -14,15 +14,8 @@ if TYPE_CHECKING:
 
 @effect_handler("berserk_pump")
 def berserk_pump(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    target = context.target
     card = context.card
-    target_perm: Permanent | None = None
-    if context.target_permanent_index is not None and 0 <= context.target_permanent_index < len(target.battlefield):
-        candidate = target.battlefield[context.target_permanent_index]
-        if candidate.is_creature:
-            target_perm = candidate
-    if target_perm is None:
-        target_perm = next((p for p in target.battlefield if p.is_creature), None)
+    target_perm = resolve_target_permanent(context)
     if target_perm is not None:
         boost = target_perm.effective_power
         # "+X/+0 until end of turn" — apply now and track it so cleanup removes it
@@ -102,15 +95,9 @@ def pump_target_creature_until_eot(game: Game, instruction: OracleInstruction, c
             return False
         return True
 
-    target_perm: Permanent | None = None
-    if context.target_permanent_index is not None and 0 <= context.target_permanent_index < len(target.battlefield):
-        candidate = target.battlefield[context.target_permanent_index]
-        if _eligible(candidate):
-            target_perm = candidate
-    if target_perm is None:
-        target_perm = next((p for p in target.battlefield if _eligible(p)), None)
-    if target_perm is None:
-        target_perm = next((p for p in caster.battlefield if _eligible(p)), None)
+    target_perm = resolve_target_permanent(
+        context, predicate=_eligible, fallback_players=(target, caster)
+    )
     if target_perm is not None:
         apply_temp_pt_boost(target_perm, power_delta, toughness_delta)
         game.log.append(f"{card.name} gives {target_perm.card.name} +{power_delta}/+{toughness_delta} until end of turn")
@@ -186,16 +173,8 @@ def grant_self_flying_until_eot(game: Game, instruction: OracleInstruction, cont
 
 @effect_handler("grant_target_flying_until_eot")
 def grant_target_flying_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    target = context.target
     card = context.card
-    target_perm_idx = context.target_permanent_index
-    target_creature = None
-    if target_perm_idx is not None and 0 <= target_perm_idx < len(target.battlefield):
-        candidate = target.battlefield[target_perm_idx]
-        if candidate.is_creature:
-            target_creature = candidate
-    if target_creature is None:
-        target_creature = next((p for p in target.battlefield if p.is_creature), None)
+    target_creature = resolve_target_permanent(context)
     if target_creature is not None:
         target_creature.metadata["gains_flying_until_eot"] = True
         game.log.append(f"{target_creature.card.name} gains flying until end of turn from {card.name}")
@@ -217,15 +196,11 @@ def grant_flying_and_delayed_destruction(game: Game, instruction: OracleInstruct
 
     # Honor the player-chosen creature (Stone Giant targets "target creature you
     # control with toughness less than this creature's power"). Fall back to the
-    # first legal creature for AI/untargeted activations.
-    target_creature = None
-    idx = context.target_permanent_index
-    if isinstance(idx, int) and 0 <= idx < len(caster.battlefield):
-        candidate = caster.battlefield[idx]
-        if _is_legal(candidate):
-            target_creature = candidate
-    if target_creature is None and not isinstance(idx, int):
-        target_creature = next((perm for perm in caster.battlefield if _is_legal(perm)), None)
+    # first legal creature only for AI/untargeted activations — an explicitly
+    # chosen illegal target fizzles.
+    target_creature = resolve_target_permanent(
+        context, player=caster, predicate=_is_legal, fallback_on_invalid_choice=False
+    )
     if target_creature is not None:
         target_creature.metadata["gains_flying_until_eot"] = True
         target_creature.metadata["destroy_at_next_end_step"] = True

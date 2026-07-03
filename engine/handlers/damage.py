@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..models import Permanent, PlayerState
-from ._common import apply_damage_to_creature, resolve_amount
+from ._common import apply_damage_to_creature, resolve_amount, resolve_target_permanent
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -143,15 +143,7 @@ def simulacrum_redirect(game: Game, instruction: OracleInstruction, context: Ora
     if amount > 0:
         game._gain_life(caster, amount, card.name)
 
-    target_perm_idx = context.target_permanent_index
-    target_perm = None
-    if isinstance(target_perm_idx, int) and 0 <= target_perm_idx < len(caster.battlefield):
-        candidate = caster.battlefield[target_perm_idx]
-        if candidate.is_creature:
-            target_perm = candidate
-    if target_perm is None:
-        target_perm = next((p for p in caster.battlefield if p.is_creature), None)
-
+    target_perm = resolve_target_permanent(context, player=caster)
     if target_perm is None:
         game.log.append(f"{card.name}: no creature to deal damage to")
         return True, "resolved"
