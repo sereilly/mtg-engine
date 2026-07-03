@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..models import Permanent
+from ._common import apply_temp_pt_boost, resolve_amount
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -26,10 +27,7 @@ def berserk_pump(game: Game, instruction: OracleInstruction, context: OracleExec
         boost = target_perm.effective_power
         # "+X/+0 until end of turn" — apply now and track it so cleanup removes it
         # if the creature survives (Berserk only destroys it if it attacked).
-        target_perm.power_bonus += boost
-        target_perm.metadata["temporary_power_bonus_until_eot"] = int(
-            target_perm.metadata.get("temporary_power_bonus_until_eot", 0)
-        ) + boost
+        apply_temp_pt_boost(target_perm, boost)
         target_perm.metadata["gains_trample_until_eot"] = True
         # "At the beginning of the next end step, destroy that creature if it
         # attacked this turn." Mark it; the end step checks attacked_this_turn.
@@ -51,14 +49,7 @@ def pump_enchanted_creature(game: Game, instruction: OracleInstruction, context:
         return False, "aura not attached to a creature"
     power_delta = int(instruction.payload.get("power", 0))
     toughness_delta = int(instruction.payload.get("toughness", 0))
-    enchanted.power_bonus += power_delta
-    enchanted.toughness_bonus += toughness_delta
-    enchanted.metadata["temporary_power_bonus_until_eot"] = int(
-        enchanted.metadata.get("temporary_power_bonus_until_eot", 0)
-    ) + power_delta
-    enchanted.metadata["temporary_toughness_bonus_until_eot"] = int(
-        enchanted.metadata.get("temporary_toughness_bonus_until_eot", 0)
-    ) + toughness_delta
+    apply_temp_pt_boost(enchanted, power_delta, toughness_delta)
     game.log.append(f"{card.name} grants {enchanted.card.name} +{power_delta}/+{toughness_delta} until end of turn")
     return True, "resolved"
 
@@ -71,17 +62,8 @@ def pump_self(game: Game, instruction: OracleInstruction, context: OracleExecuti
         return False, "ability not implemented"
     power_delta = int(instruction.payload.get("power", 0))
     toughness_delta = int(instruction.payload.get("toughness", 0))
-    source_permanent.power_bonus += power_delta
-    source_permanent.toughness_bonus += toughness_delta
-    source_permanent.metadata["temporary_power_bonus_until_eot"] = int(
-        source_permanent.metadata.get("temporary_power_bonus_until_eot", 0)
-    ) + power_delta
-    source_permanent.metadata["temporary_toughness_bonus_until_eot"] = int(
-        source_permanent.metadata.get("temporary_toughness_bonus_until_eot", 0)
-    ) + toughness_delta
-    game.log.append(
-        f"{card.name} gets +{int(instruction.payload.get('power', 0))}/+{int(instruction.payload.get('toughness', 0))} until end of turn"
-    )
+    apply_temp_pt_boost(source_permanent, power_delta, toughness_delta)
+    game.log.append(f"{card.name} gets +{power_delta}/+{toughness_delta} until end of turn")
     return True, "resolved"
 
 
@@ -91,10 +73,7 @@ def pump_self_with_sacrifice_condition(game: Game, instruction: OracleInstructio
     source_permanent = context.source_permanent
     if source_permanent is None:
         return False, "ability not implemented"
-    source_permanent.power_bonus += 1
-    source_permanent.metadata["temporary_power_bonus_until_eot"] = int(
-        source_permanent.metadata.get("temporary_power_bonus_until_eot", 0)
-    ) + 1
+    apply_temp_pt_boost(source_permanent, 1)
     activation_count = int(source_permanent.metadata.get("pump_activation_count", 0)) + 1
     source_permanent.metadata["pump_activation_count"] = activation_count
     if activation_count >= 4:
@@ -111,10 +90,8 @@ def pump_target_creature_until_eot(game: Game, instruction: OracleInstruction, c
     target = context.target
     card = context.card
     x_value = context.x_value
-    raw_power = instruction.payload.get("power", 0)
-    raw_toughness = instruction.payload.get("toughness", 0)
-    power_delta = max(0, x_value or 0) if raw_power == "x" else int(raw_power)
-    toughness_delta = max(0, x_value or 0) if raw_toughness == "x" else int(raw_toughness)
+    power_delta = resolve_amount(instruction.payload.get("power", 0), x_value)
+    toughness_delta = resolve_amount(instruction.payload.get("toughness", 0), x_value)
     blocking_only = bool(instruction.payload.get("blocking_only"))
 
     def _eligible(perm: Permanent) -> bool:
@@ -135,14 +112,7 @@ def pump_target_creature_until_eot(game: Game, instruction: OracleInstruction, c
     if target_perm is None:
         target_perm = next((p for p in caster.battlefield if _eligible(p)), None)
     if target_perm is not None:
-        target_perm.power_bonus += power_delta
-        target_perm.toughness_bonus += toughness_delta
-        target_perm.metadata["temporary_power_bonus_until_eot"] = int(
-            target_perm.metadata.get("temporary_power_bonus_until_eot", 0)
-        ) + power_delta
-        target_perm.metadata["temporary_toughness_bonus_until_eot"] = int(
-            target_perm.metadata.get("temporary_toughness_bonus_until_eot", 0)
-        ) + toughness_delta
+        apply_temp_pt_boost(target_perm, power_delta, toughness_delta)
         game.log.append(f"{card.name} gives {target_perm.card.name} +{power_delta}/+{toughness_delta} until end of turn")
     return True, "resolved"
 
@@ -167,14 +137,7 @@ def buff_creatures_global(game: Game, instruction: OracleInstruction, context: O
                 actual_colors = {perm.metadata["color_override"]}
             if color_sym and color_sym not in actual_colors:
                 continue
-            perm.power_bonus += power_delta
-            perm.toughness_bonus += toughness_delta
-            perm.metadata["temporary_power_bonus_until_eot"] = (
-                int(perm.metadata.get("temporary_power_bonus_until_eot", 0)) + power_delta
-            )
-            perm.metadata["temporary_toughness_bonus_until_eot"] = (
-                int(perm.metadata.get("temporary_toughness_bonus_until_eot", 0)) + toughness_delta
-            )
+            apply_temp_pt_boost(perm, power_delta, toughness_delta)
     game.log.append(f"{card.name} buffed matching creatures")
     return True, "resolved"
 

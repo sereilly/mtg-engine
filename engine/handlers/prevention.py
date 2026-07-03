@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ._common import resolve_amount
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -41,9 +42,7 @@ def apply_prevention_shield(
 def grant_prevention_shield(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     caster = context.caster
     target = context.target
-    x_value = context.x_value
-    raw_amount = instruction.payload.get("amount", 0)
-    amount = max(0, x_value or 0) if raw_amount == "x" else int(raw_amount)
+    amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
     source_name = context.card.name if context.card else None
     # CoP-style abilities say "prevent damage to you" — protection_kind="color"
     # means the caster/controller is always the beneficiary. Conservator-style

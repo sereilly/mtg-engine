@@ -4,6 +4,7 @@ import random
 from typing import TYPE_CHECKING
 
 from ..models import Permanent
+from ._common import resolve_amount
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -15,9 +16,7 @@ if TYPE_CHECKING:
 @effect_handler("draw_target_cards")
 def draw_target_cards(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     target = context.target
-    x_value = context.x_value
-    amount = instruction.payload.get("amount", 0)
-    count = max(0, x_value or 0) if amount == "x" else int(amount)
+    count = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
     drawn = target.draw(count)
     game.log.append(f"{target.name} drew {drawn} cards")
     return True, "resolved"

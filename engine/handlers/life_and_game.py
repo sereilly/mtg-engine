@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ._common import resolve_amount
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -95,7 +96,7 @@ def target_gains_life(game: Game, instruction: OracleInstruction, context: Oracl
     # instructions that predate the recipient payload.
     recipient = instruction.payload.get("recipient", "target")
     gainer = context.caster if recipient == "caster" else context.target
-    life_gain = max(0, x_value or 0) if amount == "x" else int(amount)
+    life_gain = resolve_amount(amount, x_value)
     game._gain_life(gainer, life_gain, card.name)
     return True, "resolved"
 
