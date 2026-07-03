@@ -1,13 +1,40 @@
+"""Shared test helpers.
+
+Named ``helpers`` (no ``test_`` prefix) so pytest never collects it as a test
+module. Import from here instead of copy-pasting these into each file.
+"""
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
 import web.app as web_app
 import web.session_store as web_session_store
 from web.app import app, store
-from engine.models import CardDefinition
-from engine.models import Permanent
-from engine import PlayerState
+from engine import Game, PlayerState, load_cards
+from engine.models import CardDefinition, Permanent
 
 client = TestClient(app)
+
+LEA_PATH = Path(__file__).resolve().parent.parent / "lea_cards.json"
+# Loaded once per process; CardDefinition is immutable, so sharing is safe.
+CARDS_BY_NAME = {c.name: c for c in load_cards(LEA_PATH)}
+
+
+def _game(p1: PlayerState, p2: PlayerState) -> Game:
+    """A two-player game with mana-cost enforcement off (the standard test rig)."""
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    return game
+
+
+def _nosick(perm: Permanent) -> Permanent:
+    """Clear summoning sickness so the permanent can attack/tap immediately."""
+    perm.metadata["summoning_sickness_turn"] = -99
+    return perm
+
+
+# Alias used by older test files.
+_no_summoning_sickness = _nosick
 
 
 def _mk_card(*args, **kwargs):

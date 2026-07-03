@@ -21,7 +21,7 @@ import web.session_store as web_session_store
 from web.app import app, store
 
 # Extracted LEA-specific tests
-from tests.test_utils import (
+from tests.helpers import (
     _mk_card,
     _mk_creature_card,
     _pass_priority,
