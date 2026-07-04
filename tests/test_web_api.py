@@ -309,7 +309,7 @@ def test_networked_hvh_waits_for_opponent_before_starting():
     sid = created["session_id"]
 
     # The game is held: no pregame, opponent's deck/hand not built yet.
-    assert created["state"]["awaiting_opponent"] is True
+    assert created["state"]["lobby"]["game_started"] is False
     assert created["state"]["pregame"] is None
     assert created["state"]["players"][1]["hand_count"] == 0
 
@@ -319,10 +319,10 @@ def test_networked_hvh_waits_for_opponent_before_starting():
         json={"seat": 0, "action": "pass_priority"},
     )
     assert blocked.status_code == 400
-    assert "opponent" in blocked.json()["detail"]
+    assert "start the game" in blocked.json()["detail"]
 
 
-def test_networked_hvh_join_sets_name_and_starts_game():
+def test_networked_hvh_join_then_start_begins_game():
     created = client.post(
         "/api/sessions",
         json={
@@ -341,8 +341,16 @@ def test_networked_hvh_join_sets_name_and_starts_game():
     )
     assert joined.status_code == 200
     state = joined.json()["state"]
-    assert state["awaiting_opponent"] is False
     assert state["players"][1]["name"] == "Joiner"
+    # Joining alone doesn't start the game: it still needs an explicit Start.
+    assert state["lobby"]["game_started"] is False
+    assert state["lobby"]["open_seats"] == []
+    assert state["pregame"] is None
+
+    started = client.post(f"/api/sessions/{sid}/start", json={"seat": 1})
+    assert started.status_code == 200
+    state = started.json()
+    assert state["lobby"]["game_started"] is True
     # Game has begun: the coin-flip pregame phase is now active.
     assert state["pregame"]["phase"] == "coin_flip"
 
@@ -361,6 +369,7 @@ def _make_started_hvh_session(seed: int) -> str:
     ).json()
     sid = created["session_id"]
     client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
+    client.post(f"/api/sessions/{sid}/start", json={"seat": 0})
     return sid
 
 

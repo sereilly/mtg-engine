@@ -75,3 +75,60 @@ def test_ffa_restart_rebuilds_same_seats():
     assert session.mode == "free_for_all"
     assert len(session.game.players) == 3
     assert [p.name for p in session.game.players] == original_names
+
+
+def _ffa_lobby_payload(**overrides) -> dict:
+    # Seat 0 is the host (human), seat 1 is an open human seat (no deck/name
+    # configured up front — it joins over the network), seat 2 is AI.
+    seats = [
+        {"name": "Host", "is_ai": False, "colors": 2},
+        {"name": "Player 2", "is_ai": False, "colors": 2},
+        {"name": "AI", "is_ai": True, "colors": 2},
+    ]
+    payload = {"mode": "free_for_all", "seats": seats, "seed": 9001, "enable_pregame": True}
+    payload.update(overrides)
+    return payload
+
+
+def test_ffa_networked_join_waits_for_open_seat_then_starts():
+    created = client.post("/api/sessions", json=_ffa_lobby_payload()).json()
+    sid = created["session_id"]
+    state = created["state"]
+
+    assert state["lobby"]["game_started"] is False
+    assert state["lobby"]["open_seats"] == [1]
+    # The open seat has no roster info yet; the host and AI seats do.
+    assert state["lobby"]["seats"][1]["joined"] is False
+    assert state["lobby"]["seats"][1]["name"] is None
+    assert state["lobby"]["seats"][0]["joined"] is True
+    assert state["lobby"]["seats"][2]["joined"] is True
+
+    # Actions are blocked while the lobby is open.
+    blocked = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "pass_priority"})
+    assert blocked.status_code == 400
+
+    # Starting before everyone has joined is rejected.
+    early_start = client.post(f"/api/sessions/{sid}/start", json={"seat": 0})
+    assert early_start.status_code == 400
+
+    joined = client.post(
+        f"/api/sessions/{sid}/join",
+        json={"guest_name": "Joiner", "guest_colors": 1, "guest_deck_name": "Mono White"},
+    )
+    assert joined.status_code == 200
+    joined_body = joined.json()
+    assert joined_body["seat"] == 1
+    lobby = joined_body["state"]["lobby"]
+    assert lobby["game_started"] is False
+    assert lobby["open_seats"] == []
+    assert lobby["seats"][1]["joined"] is True
+    assert lobby["seats"][1]["name"] == "Joiner"
+    assert lobby["seats"][1]["deck_name"] == "Mono White"
+
+    started = client.post(f"/api/sessions/{sid}/start", json={"seat": 1})
+    assert started.status_code == 200
+    body = started.json()
+    assert body["lobby"]["game_started"] is True
+    # Pregame is underway (exact phase depends on who won the coin flip and
+    # whether that seat is AI, which auto-advances past its own decisions).
+    assert body["pregame"] is not None

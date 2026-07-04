@@ -156,6 +156,10 @@
   }
   window.populateDeckSelectElement = populateDeckSelectElement;
 
+  // Resolve a deck id (shared or personal) to its full summary, so app.js can
+  // read a saved deck's display name for the multiplayer lobby roster.
+  window.getDeckMeta = (id) => state.decks.find((d) => d.id === id) || null;
+
   function renderDeckSelectOptions() {
     const configs = [
       ["deckLoadSelect", "— Load a deck —"],
@@ -199,17 +203,17 @@
     const isAiVsAi = mode === "ai_vs_ai";
     const isHvh = mode === "human_vs_human";
 
+    // Seat-card titles reflect who sits where in the chosen mode.
+    setText("hostSeatTitle", isAiVsAi ? "Player 1 (AI)" : "You");
+    setText("guestSeatTitle", isAiVsAi ? "Player 2 (AI)" : isHvh ? "Opponent" : "Opponent (AI)");
+
     // Host's own name is irrelevant for AI vs AI.
     setHidden("hostNameLabel", isAiVsAi);
 
-    // Label wording per mode.
-    setText("hostDeckText", isAiVsAi ? "Player 1 deck" : "Your deck");
-    setText("hostColorsText", isAiVsAi ? "Player 1 deck colors (1-5)" : "Your deck colors (1-5)");
-    setText("guestDeckText", isAiVsAi ? "Player 2 deck" : "AI deck");
-    setText("guestColorsText", isAiVsAi ? "Player 2 deck colors (1-5)" : "AI deck colors (1-5)");
-
-    // The opponent's deck is only host-configurable when the opponent is AI.
+    // The opponent's deck is only host-configurable when the opponent is AI —
+    // a networked human opponent brings their own deck (and name) on join.
     setHidden("guestDeckLabel", isHvh);
+    setHidden("guestOpenNote", !isHvh);
 
     const hostSel = q("hostDeckSelect");
     const guestSel = q("guestDeckSelect");

@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Magic LEA Web App</title>
-    <link rel="stylesheet" href="/styles.css?v=20260703-uiredesign4" />
+    <link rel="stylesheet" href="/styles.css?v=20260703-hostui1" />
   </head>
   <body>
     <main>
@@ -32,53 +32,74 @@
         </div>
 
         <div id="hostGamePage" class="menu-page hidden">
-          <div class="menu-form-card">
+          <div class="menu-form-card menu-form-card--host">
             <div class="menu-form-topbar">
               <button id="hostBackBtn" type="button" class="secondary-btn">&larr; Back</button>
               <h2>Host Game</h2>
             </div>
-            <label>Format
-              <select id="format">
-                <option value="standard">Standard</option>
-                <option value="free_for_all">Free-For-All</option>
-              </select>
-            </label>
+            <div class="form-field">
+              <span class="form-field-label">Format</span>
+              <input type="hidden" id="format" value="standard" />
+              <div class="seg-toggle" data-input="format">
+                <button type="button" class="seg-option" data-value="standard">Standard (1v1)</button>
+                <button type="button" class="seg-option" data-value="free_for_all">Free-For-All</button>
+              </div>
+            </div>
             <div id="standardModeFields">
-              <label>Mode
-                <select id="mode">
-                  <option value="human_vs_ai">Human vs AI</option>
-                  <option value="ai_vs_ai">AI vs AI</option>
-                  <option value="human_vs_human">Human vs Human (Networked)</option>
-                </select>
-              </label>
-              <label id="hostNameLabel">Your name <input id="hostName" value="Player 1" /></label>
-              <label id="hostDeckLabel"><span id="hostDeckText">Your deck</span>
-                <select id="hostDeckSelect">
-                  <option value="">Random deck</option>
-                </select>
-              </label>
-              <label id="hostColorsLabel"><span id="hostColorsText">Your deck colors (1-5)</span> <input id="hostColors" type="number" min="1" max="5" value="2" /></label>
-              <label id="guestDeckLabel"><span id="guestDeckText">AI deck</span>
-                <select id="guestDeckSelect">
-                  <option value="">Random deck</option>
-                </select>
-              </label>
-              <label id="guestColorsLabel"><span id="guestColorsText">AI deck colors (1-5)</span> <input id="guestColors" type="number" min="1" max="5" value="2" /></label>
+              <div class="form-field">
+                <span class="form-field-label">Mode</span>
+                <input type="hidden" id="mode" value="human_vs_ai" />
+                <div class="seg-toggle" data-input="mode">
+                  <button type="button" class="seg-option" data-value="human_vs_ai">vs AI</button>
+                  <button type="button" class="seg-option" data-value="human_vs_human">vs Human</button>
+                  <button type="button" class="seg-option" data-value="ai_vs_ai">AI vs AI</button>
+                </div>
+              </div>
+              <div class="seat-grid">
+                <div class="seat-card">
+                  <div class="seat-card-head">
+                    <h3 class="seat-card-title" id="hostSeatTitle">You</h3>
+                  </div>
+                  <label id="hostNameLabel">Name <input id="hostName" value="Player 1" /></label>
+                  <label id="hostDeckLabel"><span id="hostDeckText">Deck</span>
+                    <select id="hostDeckSelect">
+                      <option value="">Random deck</option>
+                    </select>
+                  </label>
+                  <label id="hostColorsLabel"><span id="hostColorsText">Deck colors (1-5)</span> <input id="hostColors" type="number" min="1" max="5" value="2" /></label>
+                </div>
+                <div class="seat-card">
+                  <div class="seat-card-head">
+                    <h3 class="seat-card-title" id="guestSeatTitle">Opponent (AI)</h3>
+                  </div>
+                  <label id="guestDeckLabel"><span id="guestDeckText">Deck</span>
+                    <select id="guestDeckSelect">
+                      <option value="">Random deck</option>
+                    </select>
+                  </label>
+                  <label id="guestColorsLabel"><span id="guestColorsText">Deck colors (1-5)</span> <input id="guestColors" type="number" min="1" max="5" value="2" /></label>
+                  <div id="guestOpenNote" class="seat-open-note hidden">Open seat &mdash; your opponent joins with their own name and deck.</div>
+                </div>
+              </div>
             </div>
             <div id="ffaModeFields" class="hidden">
-              <label>Number of seats
-                <select id="ffaSeatCount">
-                  <option value="3">3</option>
-                  <option value="4">4</option>
-                </select>
-              </label>
-              <div id="ffaSeatsContainer"></div>
+              <div class="form-field">
+                <span class="form-field-label">Players</span>
+                <input type="hidden" id="ffaSeatCount" value="4" />
+                <div class="seg-toggle" data-input="ffaSeatCount">
+                  <button type="button" class="seg-option" data-value="3">3 Players</button>
+                  <button type="button" class="seg-option" data-value="4">4 Players</button>
+                </div>
+              </div>
+              <div id="ffaSeatsContainer" class="seat-grid"></div>
             </div>
-            <label class="menu-checkbox-label">
-              <input id="useCustomSeed" type="checkbox" />
-              Use custom seed
-            </label>
-            <label id="customSeedLabel" class="hidden">Custom seed <input id="customSeed" type="number" value="1337" disabled /></label>
+            <div class="seed-row">
+              <label class="menu-checkbox-label">
+                <input id="useCustomSeed" type="checkbox" />
+                Use custom seed
+              </label>
+              <label id="customSeedLabel" class="seed-input-label hidden"><input id="customSeed" type="number" value="1337" disabled /></label>
+            </div>
             <button id="startBtn" class="menu-primary-btn">Create Session</button>
           </div>
         </div>
@@ -223,11 +244,23 @@
                   <button id="leaveRoomBtn" type="button" class="secondary-btn">Leave Room</button>
                 </div>
               </div>
+              <div id="lobbyOverlay" class="lobby-overlay hidden">
+                <div class="lobby-box">
+                  <h2 class="lobby-title">Waiting for players&hellip;</h2>
+                  <div id="lobbyCount" class="lobby-count"></div>
+                  <div id="lobbyRoster" class="lobby-roster"></div>
+                  <div class="lobby-actions">
+                    <button id="lobbyCopyLinkBtn" type="button" class="secondary-btn">Copy Join Link</button>
+                    <button id="lobbyStartBtn" type="button" class="menu-primary-btn" disabled>Start Game</button>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <!-- Free-For-All (3-4 player) only: small info panels for opponents other
-                 than the one shown in the classic single-opponent header above. Hidden
-                 and left empty for 2-player games. -->
+            <!-- Free-For-All (3-4 player) only: corner panels (name/life pill +
+                 face-down hand fan) for opponents other than the top-left seat shown
+                 in the classic single-opponent header above. Hidden and left empty
+                 for 2-player games. -->
             <div id="ffaOpponentPanels" class="hidden" style="position:absolute; inset:0; pointer-events:none; z-index:7;"></div>
 
             <div class="center-bottom-bar">
@@ -532,11 +565,11 @@
       </div>
     </div>
 
-    <script src="/battlefield-canvas.js?v=20260703-uiredesign3"></script>
+    <script src="/battlefield-canvas.js?v=20260703-hostui1"></script>
     <script src="/sfx.js?v=2-sfx"></script>
     <script src="/music.js?v=1-music"></script>
     <script src="/personal-decks.js?v=20260614-desc1"></script>
-    <script src="/app.js?v=20260703-uiredesign5"></script>
-    <script src="/deck-editor.js?v=20260614-desc1"></script>
+    <script src="/app.js?v=20260703-hostui1"></script>
+    <script src="/deck-editor.js?v=20260703-hostui1"></script>
   </body>
 </html>

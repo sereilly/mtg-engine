@@ -48,6 +48,7 @@ from .schemas import (
     RandomDeckRequest,
     RawStateRequest,
     RematchRequest,
+    StartGameRequest,
     VerificationRequest,
 )
 from .session_store import Session, SessionStore
@@ -561,6 +562,28 @@ def _deck_detail(deck: dict) -> dict:
     detail = _deck_summary(deck)
     detail["cards"] = _resolve_deck_entries(deck.get("cards", []))
     return detail
+
+
+def _seat_deck_colors(game: Game, seat: int) -> list[str]:
+    """Color identity of a seat's deck, derived from its (pre-deal) library —
+    works uniformly for random/saved/personal decks and for host/AI/joined-guest
+    seats alike, since this is only ever read while the lobby is still open."""
+    colors: set[str] = set()
+    for card in game.players[seat].library:
+        match = CATALOG_BY_NAME.get(card.name.casefold())
+        if match:
+            colors.update(match["color_identity"])
+    return [c for c in ("W", "U", "B", "R", "G") if c in colors]
+
+
+def _seat_deck_display_name(session: Session, seat: int) -> str:
+    if session.mode == "free_for_all":
+        name = session.seat_deck_names[seat] if seat < len(session.seat_deck_names) else None
+    elif seat == 0:
+        name = session.host_deck_name
+    else:
+        name = session.guest_deck_name
+    return name or "Random Deck"
 
 
 def _serialize_mana_pool(player: PlayerState) -> dict:
@@ -1758,7 +1781,27 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "priority_pass_count": session.game.priority_pass_count,
         "joined_seats": sorted(session.joined_seats),
         "seat_types": session.seat_types,
-        "awaiting_opponent": session.awaiting_opponent,
+        "lobby": {
+            "game_started": session.game_started,
+            "open_seats": store.open_human_seats(session),
+            "total_seats": len(session.game.players),
+            "joined_count": len(session.joined_seats),
+            "seats": [
+                {
+                    "seat": i,
+                    "joined": i in session.joined_seats,
+                    "is_ai": session.seat_types.get(i) == "ai",
+                    "name": session.game.players[i].name if i in session.joined_seats else None,
+                    "deck_name": (
+                        _seat_deck_display_name(session, i) if i in session.joined_seats else None
+                    ),
+                    "colors": (
+                        _seat_deck_colors(session.game, i) if i in session.joined_seats else []
+                    ),
+                }
+                for i in range(len(session.game.players))
+            ],
+        },
         # NOTE (frontend FFA pass): this used to be a hardcoded 2-entry list
         # (session.game.players[0]/[1]), which silently truncated Free-For-All
         # sessions (3-4 players) to 2 players in the serialized state. Generalized
@@ -3059,12 +3102,13 @@ def create_session(req: CreateSessionRequest, request: Request):
 def join_session(session_id: str, req: JoinSessionRequest, request: Request):
     session = _require_session(session_id)
     try:
-        session = store.join(
+        session, seat = store.join(
             session_id,
             req.guest_name,
             req.guest_deck_id,
             req.guest_colors,
             req.guest_deck_cards,
+            req.guest_deck_name,
         )
     except DeckNotFoundError as exc:
         raise HTTPException(status_code=400, detail="selected deck not found") from exc
@@ -3078,9 +3122,21 @@ def join_session(session_id: str, req: JoinSessionRequest, request: Request):
         "session_id": session.id,
         "join_url": join_url,
         "lan_join_url": lan_join_url,
-        "seat": 1,
-        "state": _serialize_state(session, viewer_seat=1),
+        "seat": seat,
+        "state": _serialize_state(session, viewer_seat=seat),
     }
+
+
+@app.post("/api/sessions/{session_id}/start")
+def start_session(session_id: str, req: StartGameRequest):
+    session = _require_session(session_id)
+    try:
+        store.start(session, req.seat)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    _pregame_auto_advance(session)
+    _notify_session_change(session.id, "start")
+    return _serialize_state(session, viewer_seat=req.seat)
 
 
 @app.post("/api/sessions/{session_id}/rematch")
@@ -3300,8 +3356,8 @@ def do_action(session_id: str, req: GameActionRequest):
     if session.status == "finished":
         raise HTTPException(status_code=400, detail="game already finished")
 
-    if session.awaiting_opponent:
-        raise HTTPException(status_code=400, detail="waiting for opponent to join")
+    if not session.game_started:
+        raise HTTPException(status_code=400, detail="waiting for players to join and start the game")
 
     if req.seat not in session.joined_seats:
         raise HTTPException(status_code=400, detail="seat has not joined")

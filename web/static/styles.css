@@ -858,6 +858,78 @@ h2.targeting-valid {
   padding: 4px 14px 4px 4px;
 }
 
+/* ==== Free-For-All (3-4 player) corner layout ==== */
+/* The classic opponent header only represents the top-LEFT seat in FFA, so
+   confine it to the left half of the stage; the top-right seat gets its own
+   corner panel (see #ffaOpponentPanels). */
+.board-shell.is-ffa .center-top-bar {
+  right: 50%;
+}
+
+/* 4 players: the viewer's quadrant is bottom-left, so their hand fan shifts
+   into the left half too. 3 players keep the full-width centered hand — the
+   viewer's field spans the entire bottom. */
+.board-shell.is-ffa-4 .center-bottom-bar {
+  right: 50%;
+}
+
+/* The top-right corner hosts a seat panel (pill + card backs) in FFA; drop
+   the tip box below it so they don't overlap. */
+.board-shell.is-ffa .middle-lane {
+  top: 150px;
+}
+
+/* One corner block per extra FFA opponent, anchored to the screen corner
+   matching that seat's battlefield quadrant. */
+.ffa-corner {
+  position: absolute;
+  pointer-events: none;
+}
+
+.ffa-corner--top-right {
+  top: 0;
+  left: 50%;
+  right: 0;
+}
+
+.ffa-corner--bottom-right {
+  bottom: 0;
+  left: 50%;
+  right: 0;
+}
+
+/* Bottom-anchored opponent fan (4-player FFA bottom-right seat): the card
+   backs rest on the bottom edge like the viewer's hand. Declared after the
+   .hand-fan--opponent rules so the equal-specificity overrides win. */
+.hand-fan--bottom {
+  align-items: flex-end;
+  padding: 0 48px 8px;
+}
+
+.hand-fan--bottom .hand-fan-slot {
+  transform-origin: bottom center;
+  transform: translateX(var(--fan-push-x, 0px)) translateZ(var(--fan-z, 0px)) rotate(var(--fan-angle, 0deg)) rotateX(12deg);
+}
+
+/* Corner name/life pills mirror the classic left-corner pills on the right
+   edge. Clickable as a whole for the player-targeting flow. */
+.hand-fan-info--corner {
+  pointer-events: auto;
+  left: auto;
+  transform: none;
+  padding: 4px 4px 4px 16px;
+}
+
+.ffa-corner--top-right .hand-fan-info--corner {
+  top: 10px;
+  right: 24px;
+}
+
+.ffa-corner--bottom-right .hand-fan-info--corner {
+  bottom: 30px;
+  right: 24px;
+}
+
 .battlefield-row {
   display: grid;
   grid-template-rows: repeat(2, minmax(52px, auto));
@@ -2362,6 +2434,111 @@ pre {
   50%       { transform: scale(1.06); opacity: 0.85; }
 }
 
+.lobby-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.65);
+  z-index: 30;
+  pointer-events: all;
+}
+
+.lobby-overlay.hidden {
+  display: none;
+}
+
+.lobby-box {
+  background: var(--panel-soft);
+  border: 1px solid rgba(255, 215, 0, 0.35);
+  border-radius: 14px;
+  padding: 28px 32px;
+  min-width: 340px;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.lobby-title {
+  margin: 0;
+  text-align: center;
+}
+
+.lobby-count {
+  text-align: center;
+  opacity: 0.8;
+  font-weight: 600;
+}
+
+.lobby-roster {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lobby-seat-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.lobby-seat-row--open {
+  opacity: 0.55;
+  font-style: italic;
+  justify-content: center;
+}
+
+.lobby-seat-name {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.lobby-seat-deck {
+  flex: 1;
+  text-align: left;
+  margin-left: 10px;
+  opacity: 0.85;
+  font-size: 0.9em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lobby-mana-pips {
+  display: flex;
+  gap: 3px;
+  flex: 0 0 auto;
+}
+
+.mana-pip {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: inline-block;
+  border: 1px solid rgba(0, 0, 0, 0.3);
+}
+
+.mana-pip--W { background: #f5f0d8; }
+.mana-pip--U { background: #9fc6e8; }
+.mana-pip--B { background: #b0a3b8; }
+.mana-pip--R { background: #e8a08a; }
+.mana-pip--G { background: #a3c8a0; }
+.mana-pip--C { background: #cfcfcf; }
+
+.lobby-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
 /* ── Main menu ───────────────────────────────────────────────────────────── */
 
 .menu-shell {
@@ -2545,6 +2722,153 @@ pre {
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35), 0 0 16px rgba(242, 184, 75, 0.25);
 }
 
+.menu-primary-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* ── Host Game form ──────────────────────────────────────────────────────── */
+
+.menu-form-card--host {
+  max-width: 720px;
+}
+
+.form-field {
+  margin-bottom: 16px;
+}
+
+.form-field-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.seg-toggle {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(9, 16, 26, 0.7);
+}
+
+.seg-option {
+  flex: 1;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 0.92rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.seg-option:hover {
+  color: var(--ink);
+}
+
+.seg-option.is-active {
+  border-color: rgba(242, 184, 75, 0.65);
+  background: linear-gradient(180deg, rgba(242, 184, 75, 0.3), rgba(178, 138, 74, 0.2));
+  color: var(--ink);
+}
+
+.seg-toggle--small {
+  padding: 3px;
+  flex: none;
+}
+
+.seg-toggle--small .seg-option {
+  flex: none;
+  padding: 4px 12px;
+  font-size: 0.82rem;
+}
+
+.seat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.seat-card {
+  padding: 14px 16px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(9, 16, 26, 0.45);
+}
+
+.seat-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+  min-height: 28px;
+}
+
+.seat-card-title {
+  margin: 0;
+  font-size: 1rem;
+  letter-spacing: 0.03em;
+  color: var(--accent);
+}
+
+.seat-card label {
+  margin-bottom: 12px;
+  font-size: 0.9rem;
+}
+
+.seat-card label:last-child,
+.seat-card .ffa-seat-deck-fields label:last-child {
+  margin-bottom: 0;
+}
+
+.seat-open-note,
+.seat-ai-note {
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+.seat-ai-note strong {
+  color: var(--ink);
+}
+
+.seat-ai-note {
+  margin-top: 10px;
+}
+
+.seed-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.seed-row .menu-checkbox-label {
+  margin: 0;
+}
+
+.seed-input-label {
+  flex: 1;
+  max-width: 160px;
+}
+
+.menu-form-card .seed-input-label input {
+  margin-top: 0;
+  padding: 6px 10px;
+}
+
 @media (max-width: 980px) {
   .home-buttons {
     grid-template-columns: minmax(260px, 440px);
@@ -2553,6 +2877,12 @@ pre {
   .home-btn {
     min-height: 160px;
     padding: 22px 20px;
+  }
+}
+
+@media (max-width: 640px) {
+  .seat-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

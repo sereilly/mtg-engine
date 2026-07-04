@@ -15,6 +15,10 @@ let pendingModalChoice = null;
 let pendingAbilityChoice = null;
 // Channel emblem awaiting the player's choice of how much life to pay for {C}.
 let pendingChannel = null;
+// Free-For-All declare-attackers: the parked attack declaration while the
+// attacking player picks which opponent to swing at from the prompt panel
+// (one button per living opponent — never window.prompt).
+let pendingAttackTarget = null;
 // Disrupting Scepter discard destination toggle (Library of Leng): false =
 // graveyard, true = top of library. Reset whenever a new discard prompt opens.
 let discardToLibrarySelected = false;
@@ -916,7 +920,7 @@ function combatDamageAssignmentPending(state = currentState) {
 
 function hasBlockingPromptForAutoPass(state = currentState) {
   if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getLandTypeChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
-  return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingAbilityChoice || pendingChannel);
+  return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingAbilityChoice || pendingChannel || pendingAttackTarget);
 }
 
 function shouldAutoPassUntilTurnEnd(state = currentState) {
@@ -1969,21 +1973,33 @@ function isFfaState(state = currentState) {
   return !!(state && Array.isArray(state.players) && state.players.length > 2);
 }
 
-// Player-facing opponent picker for FFA: a simple synchronous prompt() listing
-// the other living seats (window.prompt blocks, so callers can stay sync).
-function pickOpponentSeatSync(label, state = currentState, viewerSeat = seat) {
-  const candidates = livingOpponentSeats(state, viewerSeat);
-  if (candidates.length === 0) return 1 - viewerSeat;
-  if (candidates.length === 1) return candidates[0];
-  const names = candidates.map((idx) => `${idx}: ${state.players[idx]?.name || `Seat ${idx}`}`).join("\n");
-  const answer = window.prompt(`${label}\n\n${names}`, String(candidates[0]));
-  const chosen = Number(answer);
-  return candidates.includes(chosen) ? chosen : candidates[0];
+// Seat shown by the classic single-opponent header (#oppName / #oppLife /
+// #oppHand): the only opponent in 2-player games, otherwise the seat whose
+// battlefield quadrant is top-LEFT. Must stay in lockstep with
+// _classicOppSeat() in battlefield-canvas.js (3 players: viewer's field spans
+// the whole bottom, opponents sit top-left/top-right; 4 players: quadrants
+// rotate viewer -> bottom-right -> top-left -> top-right).
+function classicOppSeat(state, viewerSeat) {
+  const n = Array.isArray(state?.players) ? state.players.length : 2;
+  if (n <= 2) return viewerSeat === 0 ? 1 : 0;
+  return (viewerSeat + (n === 3 ? 1 : 2)) % n;
 }
 
-// Best-effort default opponent seat for non-interactive / rarer flows (auto-pass
-// of an empty attacker declaration, debug "cast as opponent"): first living
-// opponent seat, no prompt. Logs so any FFA gap here is discoverable.
+// DOM id of the hand fan showing a seat's cards (every seat has one: the
+// viewer's #selfHand, the classic opponent's #oppHand, and per-seat FFA
+// corner fans built by renderFfaOpponentPanels).
+function handContainerIdForSeat(state, viewerSeat, seatIdx) {
+  if (seatIdx === viewerSeat) return "selfHand";
+  if (seatIdx === classicOppSeat(state, viewerSeat)) return "oppHand";
+  return `ffaHand_${seatIdx}`;
+}
+
+// Default opponent seat for flows where target_seat is a formality rather
+// than a real choice: first living opponent seat, no prompt. Anything that
+// genuinely targets a player runs through the prompt-panel targeting flows
+// (startCastTargetPrompt / startCastAnyTargetPrompt / pendingAttackTarget)
+// BEFORE these defaults are consulted — never window.prompt. Logs so any FFA
+// gap here is discoverable.
 function firstLivingOpponentSeat(state = currentState, viewerSeat = seat, context = "") {
   const candidates = livingOpponentSeats(state, viewerSeat);
   if (candidates.length > 0) return candidates[0];
@@ -1996,7 +2012,10 @@ function getDefaultTargetSeat(cardName) {
   if (["Ancestral Recall", "Healing Salve", "Stream of Life"].includes(cardName)) {
     return seat;
   }
-  if (isFfaState()) return pickOpponentSeatSync(`Target which player for ${cardName}?`);
+  // Cards that really target a player never reach this default — the cast
+  // paths intercept them with startCastTargetPrompt/startCastAnyTargetPrompt
+  // first — so in FFA any living opponent works as the formal target_seat.
+  if (isFfaState()) return firstLivingOpponentSeat(currentState, seat, `default target for ${cardName}`);
   return 1 - seat;
 }
 
@@ -2089,7 +2108,7 @@ function isAnyPromptActive(state = currentState) {
   if (getRagingRiverInfo(state)) return true;
   if (getCamouflageInfo(state)) return true;
   if (shouldShowPriorityPrompt(state)) return true;
-  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingAutoTap || pendingModalChoice || pendingAbilityChoice || pendingChannel) return true;
+  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingAutoTap || pendingModalChoice || pendingAbilityChoice || pendingChannel || pendingAttackTarget) return true;
 
   const hasValidAttackers = getValidAttackerIndices(state).length > 0;
   const hasValidBlockers = getValidBlockerAssignments(state).length > 0;
@@ -2167,8 +2186,22 @@ async function handleCombatPromptOk() {
     if (defendingSeat === null) {
       // 3+ player game with no single defender established yet: the attacking
       // player must choose which one opponent every declared attacker goes at
-      // (MVP scope — no true per-attacker-defender picker).
-      defendingSeat = isFfaState(state) ? pickOpponentSeatSync("Attack which player?", state, seat) : 1 - seat;
+      // (MVP scope — no true per-attacker-defender picker). With more than one
+      // living opponent, park the declaration and let the prompt panel offer a
+      // button per candidate (see renderActivationPrompt's pendingAttackTarget
+      // branch); the declaration is sent by confirmPendingAttackTarget.
+      const candidates = isFfaState(state) ? livingOpponentSeats(state, seat) : [1 - seat];
+      if (candidates.length > 1) {
+        pendingAttackTarget = {
+          attackerIndices: declared,
+          band: !!(combatBandDraft && selectedAttackersCanBand(state)),
+        };
+        renderCombatControls(state); // hide the declare summary/Alpha Strike while picking
+        renderActivationPrompt();
+        updateActionHint("Choose which player to attack.");
+        return true;
+      }
+      defendingSeat = candidates.length === 1 ? candidates[0] : 1 - seat;
     }
     const declareBody = {
       seat,
@@ -2204,9 +2237,39 @@ async function handleCombatPromptOk() {
   return false;
 }
 
+// Send the attack declaration parked by handleCombatPromptOk once the player
+// picks an opponent from the prompt-panel buttons.
+async function confirmPendingAttackTarget(targetSeat) {
+  const pending = pendingAttackTarget;
+  pendingAttackTarget = null;
+  if (!pending || !Number.isInteger(targetSeat)) {
+    renderActivationPrompt();
+    return;
+  }
+  const declareBody = {
+    seat,
+    action: "declare_attackers",
+    attacker_indices: pending.attackerIndices,
+    target_seat: targetSeat,
+  };
+  if (pending.band) declareBody.bands = [pending.attackerIndices];
+  try {
+    await sendAction(declareBody);
+    combatBandDraft = false;
+    updateActionHint(
+      `Attackers declared (${pending.attackerIndices.length})${declareBody.bands ? " as a band" : ""}.` +
+        " Players may now cast spells/activate abilities before blockers.",
+    );
+  } catch (e) {
+    updateActionHint(e.message, true);
+  }
+  if (currentState) renderCombatControls(currentState);
+  renderActivationPrompt();
+}
+
 async function handlePriorityPromptOk() {
   if (!currentState || seat === null) return false;
-  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingAbilityChoice || pendingChannel) return false;
+  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingAbilityChoice || pendingChannel || pendingAttackTarget) return false;
   if (!shouldShowPriorityPrompt(currentState)) return false;
   await sendAction({ seat, action: "pass_priority" });
   updateActionHint("Passed priority.");
@@ -3277,45 +3340,6 @@ function applyIslandSanctuaryPrompt() {
   }
 }
 
-function applyAwaitingOpponentPrompt() {
-  const panel = q("activationPanel");
-  const title = q("promptTitle");
-  const body = q("promptBody");
-  const steps = q("promptSteps");
-  const cancelBtn = q("promptCancelBtn");
-  const okBtn = q("promptOkBtn");
-  const customRow = q("promptCustomRow");
-  const customOkBtn = q("promptCustomOkBtn");
-
-  panel.classList.remove("hidden");
-  cancelBtn.classList.add("hidden");
-  customRow.classList.add("hidden");
-  okBtn.classList.add("hidden");
-  cancelBtn.disabled = true;
-  customOkBtn.disabled = true;
-
-  title.textContent = "Waiting for Opponent";
-  const linkUrl = currentLanJoinUrl || currentJoinUrl;
-  const joinLink = linkUrl
-    ? `<a href="${escapeHtml(linkUrl)}" id="awaitingJoinLink" class="join-url-link" title="Click to copy">Join URL</a>`
-    : "Join URL";
-  body.innerHTML = `Send the ${joinLink} to a friend. The game will begin once they join.`;
-  steps.innerHTML = `<div>Waiting for an opponent to join…</div>`;
-
-  const linkEl = document.getElementById("awaitingJoinLink");
-  if (linkEl) {
-    linkEl.addEventListener("click", async (event) => {
-      event.preventDefault();
-      try {
-        await copyTextToClipboard(linkUrl);
-        updateActionHint("Join URL copied to clipboard.");
-      } catch {
-        updateActionHint("Could not copy the Join URL. Copy it manually.", true);
-      }
-    });
-  }
-}
-
 function applyCoinFlipPrompt(info) {
   const panel = q("activationPanel");
   const title = q("promptTitle");
@@ -3424,23 +3448,11 @@ function applyMulliganBottomPrompt(info) {
   if (info.is_my_turn) {
     const required = Number(info.required_count || 0);
     const selectedCount = Number(info.selected_count || 0);
-    const selectedSet = new Set(info.selected_indices || []);
-    const hand = getCurrentPlayerState()?.hand || [];
 
     title.textContent = `Put ${required} Card${required !== 1 ? "s" : ""} on the Bottom`;
-    body.textContent = `You took ${required} mulligan${required !== 1 ? "s" : ""}. Select ${required} card${required !== 1 ? "s" : ""} to put on the bottom of your library, then click Confirm.`;
+    body.textContent = `You took ${required} mulligan${required !== 1 ? "s" : ""}. Click ${required} card${required !== 1 ? "s" : ""} in your hand to put on the bottom of your library, then click Confirm.`;
 
-    const cardRows = hand.map((card, idx) => {
-      const name = typeof card === "string" ? card : (card?.name || "Unknown");
-      const isSelected = selectedSet.has(idx);
-      return `<div>
-        <button type="button" class="prompt-choice-btn${isSelected ? " active" : ""}"
-          onclick="sendAction({ seat, action: 'mulligan_bottom_select', hand_index: ${idx} })">
-          ${escapeHtml(name)}${isSelected ? " ✓" : ""}
-        </button>
-      </div>`;
-    }).join("");
-    steps.innerHTML = `<div style="margin-bottom:4px">Selected: ${selectedCount} / ${required}</div>${cardRows}`;
+    steps.innerHTML = `<div>Selected: ${selectedCount} / ${required}</div>`;
 
     const ready = selectedCount === required;
     okBtn.classList.remove("hidden");
@@ -3720,7 +3732,7 @@ function getOpponentName(state = currentState) {
     return "Opponent";
   }
   const viewerSeat = Number.isInteger(seat) ? seat : 0;
-  const oppSeat = viewerSeat === 0 ? 1 : 0;
+  const oppSeat = classicOppSeat(state, viewerSeat);
   return state.players?.[oppSeat]?.name || "Opponent";
 }
 
@@ -3767,8 +3779,9 @@ function renderActivationPrompt() {
 
   applyPriorityPromptStyle(panel, currentState);
 
-  if (currentState?.awaiting_opponent) {
-    applyAwaitingOpponentPrompt();
+  if (currentState?.lobby && !currentState.lobby.game_started) {
+    // The lobby overlay owns the screen while waiting for players to join
+    // and start — see updateLobbyOverlay(), driven from renderState().
     return;
   }
 
@@ -3888,6 +3901,30 @@ function renderActivationPrompt() {
   const islandSanctuaryInfo = getIslandSanctuaryInfo();
   if (islandSanctuaryInfo) {
     applyIslandSanctuaryPrompt();
+    return;
+  }
+
+  // Free-For-All: the attack declaration is parked while the attacking player
+  // picks which opponent to swing at (see handleCombatPromptOk). One button
+  // per living opponent; Cancel returns to the declare-attackers prompt.
+  if (pendingAttackTarget) {
+    panel.classList.remove("hidden");
+    okBtn.classList.add("hidden");
+    customRow.classList.add("hidden");
+    title.textContent = "Attack which player?";
+    body.textContent = "Every declared attacker attacks the same opponent this combat.";
+    const seatButtons = livingOpponentSeats(currentState, seat)
+      .map((idx) => {
+        const p = currentState?.players?.[idx] || {};
+        const label = `${p.name || `Seat ${idx}`} — ${Number(p.life)} life`;
+        return `<button type="button" class="prompt-choice-btn" data-attack-seat="${idx}">${escapeHtml(label)}</button>`;
+      })
+      .join("");
+    steps.innerHTML = `<div class="prompt-choice-column">${seatButtons}</div>`;
+    okBtn.disabled = true;
+    cancelBtn.classList.remove("hidden");
+    cancelBtn.disabled = false;
+    customOkBtn.disabled = true;
     return;
   }
 
@@ -4930,6 +4967,7 @@ function confirmDividedTargets() {
   for (const elementId of ["selfLife", "oppLife", "selfName", "oppName"]) {
     q(elementId)?.classList.remove("targeting-valid");
   }
+  clearFfaTargetingHighlights();
   if (xEqualsTargets) {
     const body = {
       seat,
@@ -5102,6 +5140,7 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
   for (const elementId of ["selfLife", "oppLife", "selfName", "oppName"]) {
     q(elementId)?.classList.remove("targeting-valid");
   }
+  clearFfaTargetingHighlights();
   renderActivationPrompt();
 
   // Fork copy retarget: the chosen permanent becomes the copy's new target. Send
@@ -5975,6 +6014,7 @@ function createCardElement(card, options = {}) {
     permanentIndex = null,
     handIndex = null,
     cleanupSelectable = false,
+    mulliganBottomSelectable = false,
     selected = false,
     targetSeat = null,
     zoneKind = "",
@@ -6011,7 +6051,7 @@ function createCardElement(card, options = {}) {
   if (tapped) cardEl.classList.add("tapped");
   if (hidden) cardEl.classList.add("card-hidden");
   if (interactive) cardEl.classList.add("clickable");
-  if (cleanupSelectable) cardEl.classList.add("cleanup-selectable", "clickable");
+  if (cleanupSelectable || mulliganBottomSelectable) cardEl.classList.add("cleanup-selectable", "clickable");
   if (selected) cardEl.classList.add("selected-card");
   if (playable && !selected) cardEl.classList.add("playable");
   if (zoneKind === "hand" && isPendingHandCastCard(card, handIndex)) cardEl.classList.add("casting-card");
@@ -6182,10 +6222,13 @@ function createCardElement(card, options = {}) {
           return;
         }
 
-        // Abilities that buff/modify the controller's own creatures target self, not opponent.
+        // Abilities that buff/modify the controller's own creatures target self, not
+        // opponent. Abilities with a real target are intercepted by the dedicated
+        // prompt flows inside startActivationPrompt, so the FFA seat here is only
+        // the formal target_seat default — no picker needed.
         const activationTargetSeat = activatedAbilityTargetsSelf(card)
           ? seat
-          : (isFfaState() ? pickOpponentSeatSync(`Which player does ${cardName}'s ability target?`) : 1 - seat);
+          : (isFfaState() ? firstLivingOpponentSeat(currentState, seat, `${cardName} activation default`) : 1 - seat);
         startActivationPrompt(card, activationTargetSeat, permanentIndex);
       } catch (e) {
         updateActionHint(e.message, true);
@@ -6193,7 +6236,7 @@ function createCardElement(card, options = {}) {
     });
   }
 
-  if (castOnClick && typeof card === "object") {
+  if ((castOnClick || mulliganBottomSelectable) && typeof card === "object") {
     cardEl.classList.add("clickable");
     cardEl.addEventListener("click", async (event) => {
       event.preventDefault();
@@ -6236,6 +6279,20 @@ function createCardElement(card, options = {}) {
           } else {
             updateActionHint("Cleanup discard complete.");
           }
+          return;
+        }
+
+        if (mulliganBottomSelectable) {
+          await sendAction({ seat, action: "mulligan_bottom_select", hand_index: handIndex });
+          const nextInfo = getPregameInfo(currentState);
+          const required = Number(nextInfo?.required_count || 0);
+          const selectedCount = Number(nextInfo?.selected_count || 0);
+          const remaining = Math.max(0, required - selectedCount);
+          updateActionHint(
+            remaining > 0
+              ? `Select ${remaining} more card(s) for the bottom of your library.`
+              : "Selection complete — click Confirm."
+          );
           return;
         }
 
@@ -6405,6 +6462,10 @@ function renderHandFan(containerId, cards, options = {}) {
   container.innerHTML = "";
 
   const isOpponent = container.classList.contains("hand-fan--opponent");
+  // Bottom-anchored opponent fans (the 4-player FFA bottom-right seat) fan
+  // like the viewer's hand — cards rising from the bottom edge — while still
+  // rendering small face-down backs.
+  const anchorBottom = !isOpponent || container.classList.contains("hand-fan--bottom");
   const entries = Array.isArray(cards) ? cards : [];
   const totalCount = entries.length;
   const MAX_ANGLE = 15;
@@ -6429,7 +6490,7 @@ function renderHandFan(containerId, cards, options = {}) {
 
   windowEntries.forEach(({ card, index }, pos) => {
     const normalizedPos = count <= 1 ? 0 : (pos / (count - 1)) * 2 - 1;
-    const angle = normalizedPos * MAX_ANGLE * (isOpponent ? -1 : 1);
+    const angle = normalizedPos * MAX_ANGLE * (anchorBottom ? 1 : -1);
     // Both hands: center card most prominent (1-pos² parabola).
     const rise = (1 - normalizedPos * normalizedPos) * MAX_RISE;
 
@@ -6449,10 +6510,10 @@ function renderHandFan(containerId, cards, options = {}) {
     slot.style.setProperty("--fan-push-x", "0px");
     slot.style.setProperty("--fan-z", `${pos * 5}px`);
     slot.style.zIndex = String(pos + 1);
-    if (isOpponent) {
-      slot.style.marginTop = `${rise}px`;
-    } else {
+    if (anchorBottom) {
       slot.style.marginBottom = `${rise}px`;
+    } else {
+      slot.style.marginTop = `${rise}px`;
     }
     slot.appendChild(cardEl);
 
@@ -6882,7 +6943,9 @@ function renderCombatControls(state) {
   damagePanel.innerHTML = "";
   const combat = getCombatState(state);
   const inCombat = state?.current_turn_phase === "combat";
-  if (!inCombat) {
+  // While the FFA attack-target picker owns the prompt panel, the declare
+  // summary/Alpha Strike controls would just crowd it — keep them hidden.
+  if (!inCombat || pendingAttackTarget) {
     return;
   }
 
@@ -7786,62 +7849,144 @@ function updateRematchButtons(state) {
   }
 }
 
-// Free-For-All (3-4 player) only: small info panels for every seat other than
-// the viewer and whichever seat the classic single-opponent header (#oppName /
-// #oppLife / #oppHand) is already showing. Rough first pass — plain divs with
-// inline styling, positioned in the screen corners; not themed to match the
-// rest of the UI. Reuses the same click-to-target flow as the classic header
-// (see the click listener wired onto #ffaOpponentPanels below) so spells/
-// abilities targeting "any player" can be aimed at these seats too.
+function manaPipsHtml(colors) {
+  if (!colors || !colors.length) {
+    return `<span class="mana-pip mana-pip--C" title="Colorless"></span>`;
+  }
+  return colors.map((c) => `<span class="mana-pip mana-pip--${c}"></span>`).join("");
+}
+
+// Multi-human lobby (networked human_vs_human or Free-For-All with an open
+// human seat): a full-board overlay listing each seat's name/deck/colors as
+// players join, with a Start Game button any joined player can enable once
+// the roster is full. Driven by state.lobby (see _serialize_state in app.py).
+function updateLobbyOverlay(state) {
+  const overlay = q("lobbyOverlay");
+  if (!overlay) return;
+  const lobby = state?.lobby;
+  if (!lobby || lobby.game_started) {
+    overlay.classList.add("hidden");
+    return;
+  }
+  overlay.classList.remove("hidden");
+  const countEl = q("lobbyCount");
+  if (countEl) countEl.textContent = `${lobby.joined_count}/${lobby.total_seats} in game`;
+  const roster = q("lobbyRoster");
+  if (roster) {
+    roster.innerHTML = lobby.seats
+      .map((s) => {
+        if (!s.joined) {
+          return `<div class="lobby-seat-row lobby-seat-row--open">Waiting for a player…</div>`;
+        }
+        return `<div class="lobby-seat-row">
+          <span class="lobby-seat-name">${escapeHtml(s.name)}${s.is_ai ? " (AI)" : ""}</span>
+          <span class="lobby-seat-deck">${escapeHtml(s.deck_name || "")}</span>
+          <span class="lobby-mana-pips">${manaPipsHtml(s.colors)}</span>
+        </div>`;
+      })
+      .join("");
+  }
+  const startBtn = q("lobbyStartBtn");
+  if (startBtn) startBtn.disabled = lobby.open_seats.length > 0;
+}
+
+// Drop the gold player-targeting highlight from every FFA corner panel — the
+// classic header pills are cleared by their fixed-id loops, but the corner
+// pills would otherwise only re-sync on the next renderBoard.
+function clearFfaTargetingHighlights() {
+  document
+    .querySelectorAll("#ffaOpponentPanels .targeting-valid")
+    .forEach((el) => el.classList.remove("targeting-valid"));
+}
+
+// Free-For-All (3-4 player) only: a corner panel for every seat other than
+// the viewer and the classic single-opponent header's (top-left) seat. Each
+// panel mirrors the classic header — a name + life pill styled like
+// .hand-fan-info plus a face-down hand fan — anchored to the screen corner
+// matching that seat's battlefield quadrant (3 players: top-right; 4 players:
+// bottom-right and top-right). The pill reuses the same click-to-target flow
+// as the classic header (see the click listener wired onto
+// #ffaOpponentPanels below) so spells/abilities targeting "any player" can be
+// aimed at these seats too. The panel skeleton persists across renders (only
+// text/fans update) so the life-pill flash animation isn't cut short.
 function renderFfaOpponentPanels(state, viewerSeat, oppSeat) {
   const container = q("ffaOpponentPanels");
   if (!container) return;
-  const isFfa = Array.isArray(state.players) && state.players.length > 2;
+  const players = Array.isArray(state.players) ? state.players : [];
+  const n = players.length;
+  const isFfa = n > 2;
   container.classList.toggle("hidden", !isFfa);
   if (!isFfa) {
     container.innerHTML = "";
+    delete container.dataset.layout;
     return;
   }
-  const extraSeats = state.players.map((_, idx) => idx).filter((idx) => idx !== viewerSeat && idx !== oppSeat);
-  const validPlayerSeats = pendingCastTarget?.validPlayerSeats;
-  // The classic single-opponent header sits top-left, the viewer's own header
-  // sits bottom-left, and the action-hint tip box sits top-right (~90px tall) —
-  // so stack these extra panels on the right side, below the tip box (at most
-  // 2 extra seats ever exist: a 4-player game minus the viewer and the classic
-  // header's one seat).
-  const cornerStyles = [
-    "top:100px; right:8px;",
-    "top:180px; right:8px;",
-  ];
-  container.innerHTML = extraSeats
-    .map((idx, i) => {
-      const p = state.players[idx] || {};
-      const isTurn = state.current_turn === idx;
-      const isTargetable = !!(validPlayerSeats && validPlayerSeats.has(idx));
-      const handCount = Array.isArray(p.hand) ? p.hand.length : Number(p.hand_count || 0) || 0;
-      return `
-      <div class="ffa-opponent-panel${isTargetable ? " targeting-valid" : ""}"
-           data-target-seat="${idx}"
-           style="position:absolute; pointer-events:auto; cursor:${isTargetable ? "pointer" : "default"};
-                  ${cornerStyles[i % cornerStyles.length]}
-                  background:rgba(10,14,20,0.82); border:1px solid ${isTurn ? "#7ec4ff" : "rgba(126,196,255,0.25)"};
-                  border-radius:8px; padding:6px 10px; color:#eaf2ff; font:12px/1.3 sans-serif; min-width:110px;">
-        <div style="font-weight:600;">${escapeHtml(p.name || `Seat ${idx}`)}${isTurn ? " &bull;" : ""}</div>
-        <div>Life: ${Number(p.life)}</div>
-        <div>Hand: ${handCount}</div>
-        ${p.lost ? '<div style="color:#ff8080;">Eliminated</div>' : ""}
+  const extraSeats = players.map((_, idx) => idx).filter((idx) => idx !== viewerSeat && idx !== oppSeat);
+  const cornerFor = (idx) => {
+    const r = (((idx - viewerSeat) % n) + n) % n;
+    // Matches _quadrantFor in battlefield-canvas.js: with 3 players the only
+    // extra seat is top-right; with 4, r=1 is bottom-right and r=3 top-right.
+    return n === 4 && r === 1 ? "bottom-right" : "top-right";
+  };
+  const layoutKey = extraSeats.map((idx) => `${idx}:${cornerFor(idx)}`).join(",");
+  if (container.dataset.layout !== layoutKey) {
+    container.dataset.layout = layoutKey;
+    container.innerHTML = extraSeats
+      .map((idx) => {
+        const corner = cornerFor(idx);
+        const fanClasses =
+          "hand-fan hand-fan--opponent" + (corner === "bottom-right" ? " hand-fan--bottom" : "");
+        return `
+      <div class="ffa-corner ffa-corner--${corner}">
+        <div class="hand-fan-wrap">
+          <div id="ffaHand_${idx}" class="${fanClasses}"></div>
+          <div class="hand-fan-info hand-fan-info--corner ffa-opponent-panel" data-target-seat="${idx}">
+            <h2 id="ffaName_${idx}"></h2>
+            <div id="ffaLife_${idx}" class="life-pill" data-target-seat="${idx}">20</div>
+          </div>
+        </div>
       </div>`;
-    })
-    .join("");
+      })
+      .join("");
+  }
+  const validPlayerSeats = pendingCastTarget?.validPlayerSeats;
+  for (const idx of extraSeats) {
+    const p = players[idx] || {};
+    const nameEl = q(`ffaName_${idx}`);
+    if (nameEl) {
+      nameEl.textContent = (p.name || `Seat ${idx}`) + (p.lost ? " ☠" : "");
+      nameEl.classList.toggle("opponent-turn-name", state.current_turn === idx);
+    }
+    renderLifePill(`ffaLife_${idx}`, idx, p.life);
+    const isTargetable = !!(validPlayerSeats && validPlayerSeats.has(idx));
+    const panel = container.querySelector(`.ffa-opponent-panel[data-target-seat="${idx}"]`);
+    if (panel) {
+      panel.classList.toggle("targeting-valid", isTargetable);
+      panel.style.cursor = isTargetable ? "pointer" : "default";
+    }
+    q(`ffaLife_${idx}`)?.classList.toggle("targeting-valid", isTargetable);
+    const hand = Array.isArray(p.hand)
+      ? p.hand
+      : new Array(Number(p.hand_count || 0) || 0).fill("<hidden>");
+    renderHandFan(`ffaHand_${idx}`, hand, { zoneKind: "hand", targetSeat: idx });
+  }
 }
 
 function renderBoard(state) {
   renderGameOverOverlay(state);
   const viewerSeat = seat ?? 0;
-  const oppSeat = viewerSeat === 0 ? 1 : 0;
+  const oppSeat = classicOppSeat(state, viewerSeat);
   const me = state.players[viewerSeat];
   const opp = state.players[oppSeat];
   const combat = getCombatState(state);
+  const playerCount = Array.isArray(state.players) ? state.players.length : 2;
+
+  // Free-For-All layout classes: the classic opponent header only spans the
+  // top-LEFT half (its seat's quadrant), and with 4 players the viewer's own
+  // hand shifts into the bottom-left half to stay inside their quadrant.
+  const boardShell = document.querySelector(".board-shell");
+  boardShell?.classList.toggle("is-ffa", playerCount > 2);
+  boardShell?.classList.toggle("is-ffa-4", playerCount >= 4);
 
   q("selfName").textContent = me.name;
   q("selfName").dataset.targetSeat = String(viewerSeat);
@@ -7861,6 +8006,8 @@ function renderBoard(state) {
   const isPregame = !!pregameInfo;
   const cleanupDiscard = getCleanupDiscardInfo(state);
   const requiresCleanupSelection = !!cleanupDiscard;
+  const mulliganBottomInfo = pregameInfo?.phase === "bottom_select" && pregameInfo.is_my_turn ? pregameInfo : null;
+  const requiresMulliganBottomSelection = !!mulliganBottomInfo;
   const hasBlockingPrompt = hasBlockingPromptForAutoPass(state);
   const hasCombatDeclarationPrompt = combatPromptNeedsConfirmation(state);
   const untapInfo = getUntapLandSelectionInfo(state);
@@ -7875,9 +8022,11 @@ function renderBoard(state) {
   q("undoBtn").disabled = sessionId === null;
   q("holdPriorityBtn").classList.toggle("toggle-btn-active", holdPriorityActive);
   selfHeader?.classList.toggle("turn-zone-self", isSelfTurn);
-  oppHeader?.classList.toggle("turn-zone-opponent", !isSelfTurn);
+  // Per-seat, not just "not my turn": in FFA the active player might be one
+  // of the corner seats instead of the classic header's seat.
+  oppHeader?.classList.toggle("turn-zone-opponent", state.current_turn === oppSeat);
   q("selfName").classList.toggle("active-turn-name", isSelfTurn);
-  q("oppName").classList.toggle("opponent-turn-name", !isSelfTurn);
+  q("oppName").classList.toggle("opponent-turn-name", state.current_turn === oppSeat);
 
   renderHandFan("selfHand", me.hand, {
     draggable: !requiresCleanupSelection && !isPregame,
@@ -7886,7 +8035,8 @@ function renderBoard(state) {
     targetSeat: viewerSeat,
     castOnClick: !isPregame,
     cleanupSelectable: requiresCleanupSelection,
-    selectedHandIndices: cleanupDiscard?.selected_indices || [],
+    mulliganBottomSelectable: requiresMulliganBottomSelection,
+    selectedHandIndices: cleanupDiscard?.selected_indices || mulliganBottomInfo?.selected_indices || [],
     playableHandIndices: me.playable_hand_indices || [],
   });
   renderHandFan("oppHand", opp.hand, { zoneKind: "hand", targetSeat: oppSeat });
@@ -7961,11 +8111,11 @@ function renderBoard(state) {
 
   renderZoneCards("selfGraveyardCards", me.graveyard, { zoneSeat: seat, zoneKind: "graveyard" });
   renderZoneCards("selfExileCards", me.exile || []);
-  renderZoneCards("oppGraveyardCards", opp.graveyard, { zoneSeat: 1 - seat, zoneKind: "graveyard" });
+  renderZoneCards("oppGraveyardCards", opp.graveyard, { zoneSeat: oppSeat, zoneKind: "graveyard" });
   renderZoneCards("oppExileCards", opp.exile || []);
 
   renderMana("selfMana", me.mana_pool, seat);
-  renderMana("oppMana", opp.mana_pool, 1 - seat);
+  renderMana("oppMana", opp.mana_pool, oppSeat);
   renderPhaseRail(state);
   if (aiControlsEl) {
     aiControlsEl.classList.toggle("hidden", !shouldShowAiControls(state));
@@ -8049,14 +8199,15 @@ function animateDiscards(prev, next, viewerSeat) {
     .filter((e) => /discarded/i.test(e) && !/drew/i.test(e));
   if (discardEntries.length === 0) return;
 
-  for (let s = 0; s < 2; s++) {
+  const seatCount = Array.isArray(next.players) ? next.players.length : 2;
+  for (let s = 0; s < seatCount; s++) {
     const grew = (next.players?.[s]?.graveyard?.length ?? 0) - (prev.players?.[s]?.graveyard?.length ?? 0);
     if (grew <= 0) continue;
     const name = next.players?.[s]?.name;
     if (!name || !discardEntries.some((e) => e.includes(name))) continue;
 
     const isSelf = s === viewerSeat;
-    const container = document.getElementById(isSelf ? "selfHand" : "oppHand");
+    const container = document.getElementById(handContainerIdForSeat(next, viewerSeat, s));
     const slotEls = container ? Array.from(container.querySelectorAll(".hand-fan-slot")) : [];
     if (slotEls.length === 0) continue;
 
@@ -8158,13 +8309,14 @@ function renderState(state, { skipStaleCheck = false } = {}) {
   const isSelfTurn = state.current_turn === viewerSeat;
   const turnChanged =
     lastAnnouncedTurn !== state.current_turn || lastAnnouncedTurnNumber !== state.turn_number;
-  if (turnChanged && !state.pregame && !state.awaiting_opponent) {
+  if (turnChanged && !state.pregame && state.lobby?.game_started !== false) {
     lastAnnouncedTurn = state.current_turn;
     lastAnnouncedTurnNumber = state.turn_number;
     showTurnAnnouncement(isSelfTurn, state.current_turn_is_extra);
   }
   animateDiscards(prevStateForDiscard, state, viewerSeat);
   renderBoard(state);
+  updateLobbyOverlay(state);
   if (wasInPregame && !state?.pregame) {
     updateActionHint("Drag from your hand to cast. The battlefield arranges itself automatically.");
   }
@@ -8494,9 +8646,12 @@ function initBattlefieldCanvas() {
           return;
         }
 
+        // Abilities with a real target are intercepted by the dedicated prompt
+        // flows inside startActivationPrompt, so the FFA seat here is only the
+        // formal target_seat default — no picker needed.
         startActivationPrompt(
           activateCard,
-          isFfaState() ? pickOpponentSeatSync(`Which player does ${activateCard.name}'s ability target?`) : 1 - seat,
+          isFfaState() ? firstLivingOpponentSeat(currentState, seat, `${activateCard.name} activation default`) : 1 - seat,
           activateIdx,
         );
       } catch (e) {
@@ -8777,42 +8932,85 @@ function deckSelection(selectId) {
   const id = q(selectId)?.value || null;
   if (id && window.PersonalDecks?.isPersonalId(id)) {
     const deck = window.PersonalDecks.get(id);
-    if (deck) return { deck_id: null, deck_cards: deck.cards || [] };
+    if (deck) return { deck_id: null, deck_cards: deck.cards || [], deck_name: deck.name || null };
   }
-  return { deck_id: id, deck_cards: null };
+  if (id) {
+    const meta = window.getDeckMeta?.(id);
+    return { deck_id: id, deck_cards: null, deck_name: meta?.name || null };
+  }
+  return { deck_id: null, deck_cards: null, deck_name: null };
 }
 
-// Markup for one Free-For-All seat config block, mirroring the visual pattern
-// of the existing host/guest deck-picker blocks (name + human/AI + deck + colors).
+// Segmented toggles: visible button groups backed by a hidden <input>, so the
+// rest of the code (and deck-editor.js) keeps reading q(id).value and listening
+// for "change" on the input exactly as it did with the old <select>s.
+function initSegToggles(root = document) {
+  for (const wrap of root.querySelectorAll(".seg-toggle[data-input]")) {
+    if (wrap.dataset.segWired) continue;
+    wrap.dataset.segWired = "1";
+    const input = q(wrap.dataset.input);
+    if (!input) continue;
+    const sync = () => {
+      for (const btn of wrap.querySelectorAll(".seg-option")) {
+        btn.classList.toggle("is-active", btn.dataset.value === input.value);
+      }
+    };
+    wrap.addEventListener("click", (event) => {
+      const btn = event.target instanceof Element ? event.target.closest(".seg-option") : null;
+      if (!btn || btn.dataset.value === input.value) return;
+      input.value = btn.dataset.value;
+      sync();
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    sync();
+  }
+}
+
+// Auto-assigned display names for AI seats — the host only names themself.
+const FFA_AI_NAMES = ["Urza", "Mishra", "Serra", "Ashnod"];
+
+function ffaAiName(index) {
+  return `AI ${FFA_AI_NAMES[index % FFA_AI_NAMES.length]}`;
+}
+
+// Markup for one Free-For-All seat card. Seat 0 is the host ("You") and is the
+// only seat with a name field; other human seats are open lobby slots and AI
+// seats get an auto-assigned name.
 function ffaSeatBlockHtml(index, defaults) {
-  const name = defaults?.name || `Player ${index + 1}`;
-  const isAi = defaults ? !!defaults.isAi : index !== 0;
+  const isHost = index === 0;
+  const name = defaults?.name || "Player 1";
+  const isAi = defaults ? !!defaults.isAi : false;
   const colors = defaults?.colors || 2;
   return `
-    <div class="menu-form-card ffa-seat-block" data-seat-index="${index}" style="margin-bottom:10px;">
-      <h3 style="margin:0 0 6px 0;">Seat ${index}${index === 0 ? " (Host)" : ""}</h3>
-      <label>Name <input id="ffaSeatName_${index}" value="${escapeHtml(name)}" /></label>
-      <label>Type
-        <select id="ffaSeatType_${index}">
-          <option value="human" ${!isAi ? "selected" : ""}>Human</option>
-          <option value="ai" ${isAi ? "selected" : ""}>AI</option>
-        </select>
-      </label>
-      <label>Deck
-        <select id="ffaSeatDeck_${index}" class="ffa-deck-select">
-          <option value="">Random deck</option>
-        </select>
-      </label>
-      <label>Colors (1-5) <input id="ffaSeatColors_${index}" type="number" min="1" max="5" value="${colors}" /></label>
+    <div class="seat-card ffa-seat-block" data-seat-index="${index}">
+      <div class="seat-card-head">
+        <h3 class="seat-card-title">${isHost ? "You (Host)" : `Seat ${index + 1}`}</h3>
+        <input type="hidden" id="ffaSeatType_${index}" value="${isAi ? "ai" : "human"}" />
+        <div class="seg-toggle seg-toggle--small" data-input="ffaSeatType_${index}">
+          <button type="button" class="seg-option" data-value="human">Human</button>
+          <button type="button" class="seg-option" data-value="ai">AI</button>
+        </div>
+      </div>
+      ${isHost ? `<label id="ffaSeatNameLabel_${index}">Name <input id="ffaSeatName_${index}" value="${escapeHtml(name)}" /></label>` : ""}
+      <div id="ffaSeatDeckFields_${index}" class="ffa-seat-deck-fields">
+        <label>Deck
+          <select id="ffaSeatDeck_${index}" class="ffa-deck-select">
+            <option value="">Random deck</option>
+          </select>
+        </label>
+        <label id="ffaSeatColorsLabel_${index}">Deck colors (1-5) <input id="ffaSeatColors_${index}" type="number" min="1" max="5" value="${colors}" /></label>
+      </div>
+      <div id="ffaSeatAiNote_${index}" class="seat-ai-note hidden">Plays as <strong>${escapeHtml(ffaAiName(index))}</strong></div>
+      <div id="ffaSeatOpenNote_${index}" class="seat-open-note hidden">Open seat &mdash; a player joins with their own name and deck.</div>
     </div>`;
 }
 
-// (Re)build the per-seat blocks for the current #ffaSeatCount, preserving
+// (Re)build the per-seat cards for the current #ffaSeatCount, preserving
 // whatever the user already entered for seats that still exist afterward.
 function generateFfaSeatBlocks() {
   const container = q("ffaSeatsContainer");
   if (!container) return;
-  const seatCount = Number(q("ffaSeatCount")?.value) || 3;
+  const seatCount = Number(q("ffaSeatCount")?.value) || 4;
   const previous = [];
   for (let i = 0; i < seatCount; i++) {
     const typeEl = q(`ffaSeatType_${i}`);
@@ -8827,15 +9025,36 @@ function generateFfaSeatBlocks() {
     const prev = previous[i];
     html += ffaSeatBlockHtml(i, {
       name: prev?.name,
-      isAi: prev?.isAi !== undefined ? prev.isAi : i !== 0,
+      isAi: prev?.isAi !== undefined ? prev.isAi : false,
       colors: prev?.colors,
     });
   }
   container.innerHTML = html;
+  initSegToggles(container);
   // Populate the freshly-created deck selects with the current deck catalog
   // (deck-editor.js owns the deck list and exposes this helper on window).
   for (let i = 0; i < seatCount; i++) {
     window.populateDeckSelectElement?.(q(`ffaSeatDeck_${i}`), "Random deck");
+  }
+  // Deck fields are shown for the host and for AI seats — a human non-host seat
+  // is an open lobby slot filled by whoever joins, so it needs no config here.
+  // The colors input only matters for random decks, so it hides when a deck is picked.
+  for (let i = 0; i < seatCount; i++) {
+    const isHost = i === 0;
+    const typeEl = q(`ffaSeatType_${i}`);
+    const deckEl = q(`ffaSeatDeck_${i}`);
+    const sync = () => {
+      const isAi = typeEl.value === "ai";
+      const showDeckFields = isHost || isAi;
+      q(`ffaSeatDeckFields_${i}`)?.classList.toggle("hidden", !showDeckFields);
+      q(`ffaSeatOpenNote_${i}`)?.classList.toggle("hidden", isAi || isHost);
+      q(`ffaSeatAiNote_${i}`)?.classList.toggle("hidden", !isAi);
+      q(`ffaSeatNameLabel_${i}`)?.classList.toggle("hidden", isAi);
+      q(`ffaSeatColorsLabel_${i}`)?.classList.toggle("hidden", Boolean(deckEl?.value));
+    };
+    typeEl?.addEventListener("change", sync);
+    deckEl?.addEventListener("change", sync);
+    sync();
   }
 }
 
@@ -8856,20 +9075,30 @@ function syncFormatFields() {
 // Build the {name, is_ai, colors, deck_id, deck_cards} entries for a
 // Free-For-All session from the per-seat blocks generateFfaSeatBlocks() built.
 function collectFfaSeats() {
-  const seatCount = Number(q("ffaSeatCount")?.value) || 3;
+  const seatCount = Number(q("ffaSeatCount")?.value) || 4;
   const seats = [];
   for (let i = 0; i < seatCount; i++) {
-    const nameEl = q(`ffaSeatName_${i}`);
     const typeEl = q(`ffaSeatType_${i}`);
     const colorsEl = q(`ffaSeatColors_${i}`);
     const sel = deckSelection(`ffaSeatDeck_${i}`);
-    const isAi = typeEl ? typeEl.value === "ai" : i !== 0;
+    const isAi = typeEl ? typeEl.value === "ai" : false;
+    // Only the host names themself; AI seats get auto-assigned names and open
+    // human seats are placeholders until a player joins with their own name.
+    let name;
+    if (isAi) {
+      name = ffaAiName(i);
+    } else if (i === 0) {
+      name = q("ffaSeatName_0")?.value || "Player 1";
+    } else {
+      name = `Player ${i + 1}`;
+    }
     seats.push({
-      name: nameEl ? nameEl.value : `Player ${i + 1}`,
+      name,
       is_ai: isAi,
       colors: Number(colorsEl?.value) || 2,
       deck_id: sel.deck_id,
       deck_cards: sel.deck_cards,
+      deck_name: sel.deck_name,
     });
   }
   return seats;
@@ -8894,16 +9123,18 @@ async function createSession() {
     const hostSel = deckSelection("hostDeckSelect");
     // The opponent's deck is only host-configurable when it's AI. For networked
     // human_vs_human the guest brings their own deck on join.
-    const guestSel = mode === "human_vs_human" ? { deck_id: null, deck_cards: null } : deckSelection("guestDeckSelect");
+    const guestSel = mode === "human_vs_human" ? { deck_id: null, deck_cards: null, deck_name: null } : deckSelection("guestDeckSelect");
     req = {
       mode,
       host_name: q("hostName").value,
       host_colors: Number(q("hostColors").value),
       host_deck_id: hostSel.deck_id,
       host_deck_cards: hostSel.deck_cards,
+      host_deck_name: hostSel.deck_name,
       guest_colors: Number(q("guestColors").value),
       guest_deck_id: guestSel.deck_id,
       guest_deck_cards: guestSel.deck_cards,
+      guest_deck_name: guestSel.deck_name,
       use_custom_seed: useCustomSeed,
       custom_seed: useCustomSeed ? Number(q("customSeed").value) : null,
       enable_pregame: true,
@@ -8917,8 +9148,8 @@ async function createSession() {
   setVisible(true);
   initBattlefieldCanvas();
   renderState(data.state);
-  if (data.state?.awaiting_opponent) {
-    updateActionHint("Waiting for an opponent to join — share the Join URL above.");
+  if (data.state?.lobby && !data.state.lobby.game_started) {
+    updateActionHint("Waiting for players to join — share the Join URL above.");
   } else if (!data.state?.pregame) {
     updateActionHint("Session ready. Drag from your hand to cast. The battlefield arranges itself automatically.");
   }
@@ -8935,6 +9166,7 @@ async function joinSession() {
     guest_name: q("joinName").value,
     guest_deck_id: joinSel.deck_id,
     guest_deck_cards: joinSel.deck_cards,
+    guest_deck_name: joinSel.deck_name,
     guest_colors: Number(q("joinColors")?.value) || 2,
   });
   seat = data.seat;
@@ -9027,6 +9259,23 @@ q("leaveRoomBtn")?.addEventListener("click", () => {
   resetToSetup("Left the game. Start a new one when you're ready.");
 });
 
+q("lobbyStartBtn")?.addEventListener("click", async () => {
+  if (!sessionId || seat === null) return;
+  const data = await postJson(`/api/sessions/${sessionId}/start`, { seat });
+  renderState(data);
+});
+
+q("lobbyCopyLinkBtn")?.addEventListener("click", async () => {
+  const linkUrl = currentLanJoinUrl || currentJoinUrl;
+  if (!linkUrl) return;
+  try {
+    await copyTextToClipboard(linkUrl);
+    updateActionHint("Join URL copied to clipboard.");
+  } catch {
+    updateActionHint("Could not copy the Join URL. Copy it manually.", true);
+  }
+});
+
 q("startBtn").addEventListener("click", async () => {
   try {
     hideSetupPanel();
@@ -9036,6 +9285,8 @@ q("startBtn").addEventListener("click", async () => {
     alert(e.message);
   }
 });
+
+initSegToggles();
 
 q("mode").addEventListener("change", () => {
   window.syncStartPageColorInputs?.();
@@ -9109,6 +9360,8 @@ q("promptCancelBtn").addEventListener("click", () => {
   pendingModalChoice = null;
   pendingAbilityChoice = null;
   pendingChannel = null;
+  const wasPickingAttackTarget = !!pendingAttackTarget;
+  pendingAttackTarget = null;
   clearPendingHandCast();
   battlefieldCanvas?.hideManaFan();
   battlefieldCanvas?.setTargetingKeys([]);
@@ -9117,6 +9370,10 @@ q("promptCancelBtn").addEventListener("click", () => {
   for (const elementId of ["selfLife", "oppLife", "selfName", "oppName"]) {
     q(elementId)?.classList.remove("targeting-valid");
   }
+  clearFfaTargetingHighlights();
+  // Canceling the FFA attack-target picker returns to the declare-attackers
+  // prompt, whose summary/Alpha Strike controls were hidden while it was open.
+  if (wasPickingAttackTarget && currentState) renderCombatControls(currentState);
   renderActivationPrompt();
   updateActionHint(wasCasting ? "Cast canceled. Any mana in your pool is retained." : "Prompt canceled.");
 });
@@ -9164,6 +9421,12 @@ q("promptSteps").addEventListener("click", (event) => {
   const modeChoice = target.dataset.modeChoice;
   if (modeChoice !== undefined && pendingModalChoice) {
     chooseModalMode(Number(modeChoice));
+    return;
+  }
+
+  const attackSeat = target.dataset.attackSeat;
+  if (attackSeat !== undefined && pendingAttackTarget) {
+    confirmPendingAttackTarget(Number(attackSeat));
     return;
   }
 

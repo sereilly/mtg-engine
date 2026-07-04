@@ -29,9 +29,12 @@ class Session:
     # at join time for networked human_vs_human) stays deterministic with the host.
     seed: int = 0
     use_pregame: bool = False
-    # Networked human_vs_human only: the guest deck arrives with the join request,
-    # so the game is held until the opponent joins.  False once they have.
-    awaiting_opponent: bool = False
+    # Networked lobby (human_vs_human, or free_for_all with an open non-host human
+    # seat): False while waiting for every human seat to join AND for a joined
+    # player to explicitly start the game. True immediately for modes/configs that
+    # have nothing to wait for (human_vs_ai, ai_vs_ai, legacy no-pregame clients,
+    # FFA where every non-host seat is AI).
+    game_started: bool = True
     # Deck selections kept so a rematch can rebuild fresh (reshuffled) decks for the
     # same two players. guest_* is filled at join time for networked human_vs_human.
     host_deck_id: str | None = None
@@ -42,6 +45,10 @@ class Session:
     # Kept so a rematch can rebuild the same deck off a new seed.
     host_deck_cards: list[dict] | None = None
     guest_deck_cards: list[dict] | None = None
+    # Display names for the lobby roster (see SeatConfig.deck_name); the server
+    # has no other way to know a personal deck's name.
+    host_deck_name: str | None = None
+    guest_deck_name: str | None = None
     # Coordinated rematch (human_vs_human): seats that have requested a rematch on the
     # finished game. When every joined human seat has voted, the game is rebuilt.
     rematch_votes: set[int] = field(default_factory=set)
@@ -111,6 +118,7 @@ class Session:
     seat_deck_ids: list[str | None] = field(default_factory=list)
     seat_colors: list[int] = field(default_factory=list)
     seat_deck_cards_list: list[list[dict] | None] = field(default_factory=list)
+    seat_deck_names: list[str | None] = field(default_factory=list)
 
 
 class SessionStore:
@@ -161,8 +169,9 @@ class SessionStore:
 
         # Networked human_vs_human: the joining player chooses their own name and
         # deck, so defer building the guest deck (and starting the game) until they
-        # join.  Legacy/test clients (no pregame) keep the immediate-start behavior.
-        awaiting_opponent = request.mode == "human_vs_human" and use_pregame
+        # join and a player explicitly starts it. Legacy/test clients (no pregame)
+        # keep the immediate-start behavior.
+        lobby_needed = request.mode == "human_vs_human" and use_pregame
 
         host_deck_cards = _entries_to_dicts(request.host_deck_cards)
         guest_deck_cards = _entries_to_dicts(request.guest_deck_cards)
@@ -170,7 +179,7 @@ class SessionStore:
         host_deck = self._build_seat_deck(
             request.host_deck_id, request.host_colors, seed, host_deck_cards
         )
-        if awaiting_opponent:
+        if lobby_needed:
             guest_deck: list = []
         else:
             guest_deck = self._build_seat_deck(
@@ -193,16 +202,18 @@ class SessionStore:
             seat_types=seat_types,
             seed=seed,
             use_pregame=use_pregame,
-            awaiting_opponent=awaiting_opponent,
+            game_started=not lobby_needed,
             host_deck_id=request.host_deck_id,
             host_colors=request.host_colors,
             guest_deck_id=request.guest_deck_id,
             guest_colors=request.guest_colors,
             host_deck_cards=host_deck_cards,
             guest_deck_cards=guest_deck_cards,
+            host_deck_name=request.host_deck_name,
+            guest_deck_name=None if lobby_needed else request.guest_deck_name,
         )
 
-        if not awaiting_opponent:
+        if not lobby_needed:
             self._begin_pregame(session)
 
         self._sessions[sid] = session
@@ -210,8 +221,11 @@ class SessionStore:
 
     def _create_ffa(self, request: CreateSessionRequest) -> Session:
         """Free-For-All (3-4 players): one PlayerState per seat, each seat
-        independently Human or AI with its own deck — no networked join step
-        (all non-host human seats play on the same browser/session, or are AI)."""
+        independently Human or AI with its own deck. Seat 0 (the host) and every
+        AI seat are configured up front and are at the table immediately; a
+        non-host Human seat is left open for a networked join (unless pregame is
+        disabled, matching the legacy pass-and-play behavior where the host
+        configures every seat's name/deck up front)."""
         seats = request.seats or []
         if not (3 <= len(seats) <= 4):
             raise ValueError("Free-For-All sessions need 3 or 4 seats")
@@ -224,21 +238,31 @@ class SessionStore:
         seat_deck_ids = [seat.deck_id for seat in seats]
         seat_colors = [seat.colors for seat in seats]
         seat_deck_cards_list = [_entries_to_dicts(seat.deck_cards) for seat in seats]
+        seat_deck_names = [seat.deck_name for seat in seats]
 
-        players = [
-            PlayerState(
-                name=seat_names[i],
-                library=self._build_seat_deck(
-                    seat_deck_ids[i], seat_colors[i], seed + i, seat_deck_cards_list[i]
-                ),
-            )
-            for i in range(len(seats))
-        ]
+        use_pregame = request.enable_pregame
+        open_seats = {i for i in range(len(seats)) if i != 0 and not seat_is_ai[i]}
+        lobby_needed = use_pregame and bool(open_seats)
+
+        players = []
+        for i in range(len(seats)):
+            if i in open_seats and lobby_needed:
+                players.append(PlayerState(name=seat_names[i], library=[]))
+            else:
+                players.append(
+                    PlayerState(
+                        name=seat_names[i],
+                        library=self._build_seat_deck(
+                            seat_deck_ids[i], seat_colors[i], seed + i, seat_deck_cards_list[i]
+                        ),
+                    )
+                )
         game = Game(players=players, enforce_mana_costs=True)
 
         seat_types = {i: ("ai" if seat_is_ai[i] else "human") for i in range(len(seats))}
-        # No networked join step for FFA — every seat is already at the table.
         joined_seats = set(range(len(seats)))
+        if lobby_needed:
+            joined_seats -= open_seats
 
         session = Session(
             id=sid,
@@ -250,16 +274,18 @@ class SessionStore:
             joined_seats=joined_seats,
             seat_types=seat_types,
             seed=seed,
-            use_pregame=request.enable_pregame,
-            awaiting_opponent=False,
+            use_pregame=use_pregame,
+            game_started=not lobby_needed,
             seat_names=seat_names,
             seat_is_ai=seat_is_ai,
             seat_deck_ids=seat_deck_ids,
             seat_colors=seat_colors,
             seat_deck_cards_list=seat_deck_cards_list,
+            seat_deck_names=seat_deck_names,
         )
 
-        self._begin_pregame(session)
+        if not lobby_needed:
+            self._begin_pregame(session)
         self._sessions[sid] = session
         return session
 
@@ -324,6 +350,13 @@ class SessionStore:
             raise KeyError("session not found")
         return self._sessions[session_id]
 
+    def open_human_seats(self, session: Session) -> list[int]:
+        """Human seats that haven't joined yet — the lobby's open slots."""
+        return sorted(
+            i for i, t in session.seat_types.items()
+            if t == "human" and i not in session.joined_seats
+        )
+
     def join(
         self,
         session_id: str,
@@ -331,30 +364,51 @@ class SessionStore:
         guest_deck_id: str | None = None,
         guest_colors: int = 2,
         guest_deck_cards: list[dict] | None = None,
-    ) -> Session:
+        guest_deck_name: str | None = None,
+    ) -> tuple[Session, int]:
         session = self.get(session_id)
-        if session.mode != "human_vs_human":
-            return session
+        open_seats = self.open_human_seats(session)
+        if not open_seats:
+            raise ValueError("no open seat to join")
+        target = open_seats[0]
 
         guest_deck_cards = _entries_to_dicts(guest_deck_cards)
-        already_joined = 1 in session.joined_seats
-        session.joined_seats.add(1)
-        session.guest_name = guest_name
-        session.game.players[1].name = guest_name
-        # Remember the guest's deck choice so a rematch can rebuild it.
-        session.guest_deck_id = guest_deck_id
-        session.guest_colors = guest_colors
-        session.guest_deck_cards = guest_deck_cards
+        session.joined_seats.add(target)
+        session.game.players[target].name = guest_name
+        if session.mode == "free_for_all":
+            session.seat_names[target] = guest_name
+            session.seat_deck_ids[target] = guest_deck_id
+            session.seat_colors[target] = guest_colors
+            session.seat_deck_cards_list[target] = guest_deck_cards
+            session.seat_deck_names[target] = guest_deck_name
+        else:
+            session.guest_name = guest_name
+            session.guest_deck_id = guest_deck_id
+            session.guest_colors = guest_colors
+            session.guest_deck_cards = guest_deck_cards
+            session.guest_deck_name = guest_deck_name
 
-        # Networked flow: the guest's deck travels with the join request. Build it
-        # now (deterministically off the host's seed) and start the game.
-        if session.awaiting_opponent and not already_joined:
-            session.game.players[1].library = self._build_seat_deck(
-                guest_deck_id, guest_colors, session.seed + 1, guest_deck_cards
+        # Only rebuild the library while the lobby is still open. In the legacy
+        # (no-lobby) path the deck was already built — and possibly dealt from —
+        # at creation time, so overwriting it here would clobber live game state.
+        if not session.game_started:
+            session.game.players[target].library = self._build_seat_deck(
+                guest_deck_id, guest_colors, session.seed + target, guest_deck_cards
             )
-            session.awaiting_opponent = False
-            self._begin_pregame(session)
 
+        return session, target
+
+    def start(self, session: Session, seat: int) -> Session:
+        """Explicitly start a game once every human seat has joined. Any joined
+        seat may call this; it's idempotent so two players clicking Start at
+        once is harmless."""
+        if seat not in session.joined_seats:
+            raise ValueError("seat has not joined this session")
+        if self.open_human_seats(session):
+            raise ValueError("not all players have joined yet")
+        if not session.game_started:
+            session.game_started = True
+            self._begin_pregame(session)
         return session
 
     def restart(self, session: Session, first_chooser: int | None = None) -> Session:

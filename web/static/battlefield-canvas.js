@@ -111,6 +111,19 @@ const BF_ZONE_PILE_GAP_PX = 26; // vertical gap between piles (leaves room for l
 const BF_ZONE_TOP_INSET_PX = 64; // clears the opponent name/life pill
 const BF_ZONE_BOTTOM_INSET_PX = 116; // clears the viewer name/life pill
 const BF_ZONE_RIGHT_INSET_PX = 56; // stack cascade reserve for the DOM mana column
+// Free-For-All: seats whose quadrant sits in the right half pin their zone
+// piles to the RIGHT stage edge instead. Deeper inset than the mana-column
+// reserve so the piles clear the DOM mana symbols; the (transient) stack
+// cascade may briefly overlap them mid-resolution, which is acceptable.
+const BF_ZONE_RIGHT_PILE_INSET_PX = 120;
+// FFA corner-hand clearances: every top-half seat fans card backs over the
+// top edge of its quadrant, so top pile columns start below that band; the
+// top-right column additionally moves left of the action-hint tip box; and
+// with 4 players the viewer's hand shifts into the bottom-left half, over
+// the classic bottom pile spot, so that column rises above the tucked fan.
+const BF_ZONE_TOP_INSET_FFA_PX = 140;
+const BF_ZONE_TOP_RIGHT_PILE_INSET_FFA_PX = 330;
+const BF_ZONE_BOTTOM_INSET_FFA4_PX = 155;
 const BF_CARD_BACK_URL = "/images/card_back.webp";
 
 // ---- Flying creatures ----
@@ -639,10 +652,32 @@ class BattlefieldCanvas {
         xOffset: 0,
       };
     }
-    // Rotation order relative to the viewer: 0 = viewer (bottom-left), 1 =
-    // bottom-right, 2 = top-left, 3 = top-right. With 3 players seat r=3 never
-    // occurs, so the top-right quadrant is simply left empty.
+    // Rotation order relative to the viewer. 3 players: the viewer's field
+    // spans the ENTIRE bottom half while the two opponents split the top half
+    // into left (r=1) and right (r=2) quadrants. 4 players: 0 = viewer
+    // (bottom-left), 1 = bottom-right, 2 = top-left, 3 = top-right.
     const r = (((seatIdx - this.viewerSeat) % n) + n) % n;
+    if (n === 3) {
+      if (r === 0) {
+        return {
+          xMin: -Infinity,
+          xMax: Infinity,
+          yMin: BF_WORLD_SPLIT_Y,
+          yMax: Infinity,
+          growDirection: "down",
+          xOffset: 0,
+        };
+      }
+      const isLeft3 = r === 1;
+      return {
+        xMin: isLeft3 ? -Infinity : BF_QUADRANT_BOUNDARY_X,
+        xMax: isLeft3 ? BF_QUADRANT_BOUNDARY_X : Infinity,
+        yMin: -Infinity,
+        yMax: BF_WORLD_SPLIT_Y,
+        growDirection: "up",
+        xOffset: isLeft3 ? 0 : BF_QUADRANT_SHIFT_X,
+      };
+    }
     const isLeft = r === 0 || r === 2;
     const isBottom = r === 0 || r === 1;
     return {
@@ -665,9 +700,24 @@ class BattlefieldCanvas {
     }
     const isBottom = y >= BF_WORLD_SPLIT_Y;
     const isLeft = x < BF_QUADRANT_BOUNDARY_X;
+    if (n === 3) {
+      // Bottom half is all the viewer's; the top half splits left/right.
+      if (isBottom) return this.viewerSeat;
+      return (this.viewerSeat + (isLeft ? 1 : 2)) % n;
+    }
     const r = (isBottom ? 0 : 2) + (isLeft ? 0 : 1);
-    if (r >= n) return null; // the empty 4th quadrant of a 3-player game
+    if (r >= n) return null;
     return (this.viewerSeat + r) % n;
+  }
+
+  // The seat shown by the classic single-opponent DOM header (#oppName /
+  // #oppLife / #oppHand): the only opponent in 2-player games, otherwise the
+  // seat whose quadrant is top-LEFT (r=1 with 3 players, r=2 with 4). Must
+  // stay in lockstep with app.js's classicOppSeat().
+  _classicOppSeat() {
+    const n = this.currentState?.players?.length || 0;
+    if (n <= 2) return 1 - this.viewerSeat;
+    return (this.viewerSeat + (n === 3 ? 1 : 2)) % n;
   }
 
   // A representative point inside a seat's quadrant, used as a fallback aim
@@ -841,6 +891,32 @@ class BattlefieldCanvas {
           rowTop += h + BF_ROW_GAP;
         }
         cursor = growsDown ? cursor + band.height + BF_BAND_GAP : cursor - band.height - BF_BAND_GAP;
+      }
+    }
+
+    // 3 players: the viewer's field owns the whole bottom half, so center it
+    // under the two top quadrants rather than leaving it flush-left beneath
+    // the top-left opponent. Pure X translation of already-laid-out targets,
+    // so band structure and drop hit-testing (full-width bottom) are unaffected.
+    if (players.length === 3) {
+      let topMin = Infinity;
+      let topMax = -Infinity;
+      let mineMin = Infinity;
+      let mineMax = -Infinity;
+      for (const item of this.cardItems) {
+        if (item.seat === this.viewerSeat) {
+          mineMin = Math.min(mineMin, item.tx);
+          mineMax = Math.max(mineMax, item.tx + BF_CARD_W);
+        } else {
+          topMin = Math.min(topMin, item.tx);
+          topMax = Math.max(topMax, item.tx + BF_CARD_W);
+        }
+      }
+      if (Number.isFinite(topMin) && Number.isFinite(mineMin)) {
+        const dx = (topMin + topMax) / 2 - (mineMin + mineMax) / 2;
+        for (const item of this.cardItems) {
+          if (item.seat === this.viewerSeat) item.tx += dx;
+        }
       }
     }
 
@@ -1127,41 +1203,67 @@ class BattlefieldCanvas {
     this._retargetZonePiles();
   }
 
-  // Pin the piles to the left edge of the visible battlefield, viewer's column
-  // growing up from the bottom-left, opponent's down from the top-left. Re-run
-  // every tick (like the stack cascade) so camera motion never strands them.
-  // The horizontal anchor is computed in PAGE space and projected onto the
-  // tilted plane per pile: the perspective tilt spreads the bottom of the
-  // plane outward, so a flat-canvas inset would drift left near the viewer's
-  // edge and slide under the DOM phase rail.
+  // Pin each seat's piles to the stage corner matching its battlefield
+  // quadrant: bottom-half seats grow their column up from the bottom edge,
+  // top-half seats down from the top; left-half seats hug the left stage
+  // edge, right-half seats (Free-For-All only) hug the right. For 2-player
+  // games this reproduces the classic viewer-bottom-left / opponent-top-left
+  // columns exactly. Re-run every tick (like the stack cascade) so camera
+  // motion never strands them. The horizontal anchor is computed in PAGE
+  // space and projected onto the tilted plane per pile: the perspective tilt
+  // spreads the bottom of the plane outward, so a flat-canvas inset would
+  // drift near the viewer's edge and slide under the DOM phase rail.
   _retargetZonePiles() {
     if (!this.zonePiles.length) return;
     const rect = this._visibleWorldRect();
+    const n = this.currentState?.players?.length || 0;
     const w = (BF_CARD_W * BF_ZONE_PILE_SCALE) / this.zoom;
     const h = (BF_CARD_H * BF_ZONE_PILE_SCALE) / this.zoom;
     const gap = BF_ZONE_PILE_GAP_PX / this.zoom;
     const stage = this.canvas.parentElement?.getBoundingClientRect();
-    const fallbackCx = rect.minX + BF_ZONE_LEFT_INSET_PX / this.zoom + w / 2;
     const order = { library: 0, graveyard: 1, exile: 2 };
     const slots = new Map(); // seat -> next slot index
     for (const pile of this.zonePiles.slice().sort((a, b) => order[a.kind] - order[b.kind])) {
-      const isViewer = pile.seat === this.viewerSeat;
+      const quadrant = this._quadrantFor(pile.seat);
+      const isBottom = quadrant.growDirection === "down";
+      // Only a quadrant bounded on the left but open to the right lives in
+      // the right half (the 3-player viewer's full-width bottom is open on
+      // BOTH sides and stays left).
+      const isRight = n > 2 && Number.isFinite(quadrant.xMin) && !Number.isFinite(quadrant.xMax);
       const slot = slots.get(pile.seat) || 0;
       slots.set(pile.seat, slot + 1);
       pile.w = w;
       pile.h = h;
-      pile.cy = isViewer
-        ? rect.maxY - BF_ZONE_BOTTOM_INSET_PX / this.zoom - h / 2 - slot * (h + gap)
-        : rect.minY + BF_ZONE_TOP_INSET_PX / this.zoom + h / 2 + slot * (h + gap);
+      let topInsetPx = BF_ZONE_TOP_INSET_PX;
+      let bottomInsetPx = BF_ZONE_BOTTOM_INSET_PX;
+      let rightInsetPx = BF_ZONE_RIGHT_PILE_INSET_PX;
+      if (n > 2) {
+        if (!isBottom) {
+          topInsetPx = BF_ZONE_TOP_INSET_FFA_PX;
+          if (isRight) rightInsetPx = BF_ZONE_TOP_RIGHT_PILE_INSET_FFA_PX;
+        } else if (!isRight && pile.seat === this.viewerSeat && n >= 4) {
+          bottomInsetPx = BF_ZONE_BOTTOM_INSET_FFA4_PX;
+        }
+      }
+      pile.cy = isBottom
+        ? rect.maxY - bottomInsetPx / this.zoom - h / 2 - slot * (h + gap)
+        : rect.minY + topInsetPx / this.zoom + h / 2 + slot * (h + gap);
       if (stage && stage.width > 0) {
         // Project the pile's row back to page space, then find the world x
-        // whose page x sits exactly at the inset from the stage's left edge.
+        // whose page x sits exactly at the inset from the stage's edge.
         const rowCanvasY = this.worldToCanvas(0, pile.cy).y;
         const rowPageY = this._canvasToPage(0, rowCanvasY).y;
-        const edge = this._pageToCanvas(stage.left + BF_ZONE_LEFT_INSET_PX, rowPageY);
-        pile.cx = this.canvasToWorld(edge.x, edge.y).x + w / 2;
+        if (isRight) {
+          const edge = this._pageToCanvas(stage.right - rightInsetPx, rowPageY);
+          pile.cx = this.canvasToWorld(edge.x, edge.y).x - w / 2;
+        } else {
+          const edge = this._pageToCanvas(stage.left + BF_ZONE_LEFT_INSET_PX, rowPageY);
+          pile.cx = this.canvasToWorld(edge.x, edge.y).x + w / 2;
+        }
       } else {
-        pile.cx = fallbackCx;
+        pile.cx = isRight
+          ? rect.maxX - rightInsetPx / this.zoom - w / 2
+          : rect.minX + BF_ZONE_LEFT_INSET_PX / this.zoom + w / 2;
       }
     }
   }
@@ -1299,21 +1401,26 @@ class BattlefieldCanvas {
     const casterSeat = item?.caster_index;
     const fromViewer = casterSeat === this.viewerSeat;
     const n = this.currentState?.players?.length || 0;
-    // The classic single-opponent DOM hand fan (#oppHand) only ever represents
-    // one specific seat (see app.js's `oppSeat`). In a 3-4 player game, only
-    // the viewer and that one seat have a real hand-fan DOM rect to aim at —
-    // every other seat falls straight through to the quadrant-based fallback.
-    const classicOppSeat = this.viewerSeat === 0 ? 1 : 0;
-    if (n <= 2 || fromViewer || casterSeat === classicOppSeat) {
-      const el = document.getElementById(fromViewer ? "selfHand" : "oppHand");
-      if (el) {
-        const r = el.getBoundingClientRect();
-        if (r.width > 0 || r.height > 0) {
-          const c = this._pageToCanvas(r.left + r.width / 2, r.top + r.height / 2);
-          const w = this.canvasToWorld(c.x, c.y);
-          const p = this._clampToBattlefield(w.x, w.y);
-          return { x: p.x, y: p.y, scale: 0.55 / this.zoom };
-        }
+    // Every seat has a DOM hand fan: #selfHand for the viewer, #oppHand for
+    // the classic (top-left) opponent, and per-seat #ffaHand_<seat> fans for
+    // the remaining Free-For-All opponents (see app.js's
+    // renderFfaOpponentPanels). Missing elements fall through to the
+    // quadrant-based fallback.
+    let el = null;
+    if (fromViewer) {
+      el = document.getElementById("selfHand");
+    } else if (n <= 2 || casterSeat === this._classicOppSeat()) {
+      el = document.getElementById("oppHand");
+    } else if (Number.isInteger(casterSeat)) {
+      el = document.getElementById(`ffaHand_${casterSeat}`);
+    }
+    if (el) {
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 || r.height > 0) {
+        const c = this._pageToCanvas(r.left + r.width / 2, r.top + r.height / 2);
+        const w = this.canvasToWorld(c.x, c.y);
+        const p = this._clampToBattlefield(w.x, w.y);
+        return { x: p.x, y: p.y, scale: 0.55 / this.zoom };
       }
     }
     const fallbackPoint = n <= 2
@@ -1708,8 +1815,22 @@ class BattlefieldCanvas {
         const p = players[seat];
         return p?.hand_count ?? (Array.isArray(p?.hand) ? p.hand.length : 0);
       };
-      const topReserve = handCount(1 - this.viewerSeat) > 0 ? BF_HAND_RESERVE_TOP : BF_EDGE_RESERVE_TOP;
-      const bottomReserve = handCount(this.viewerSeat) > 0 ? BF_HAND_RESERVE_BOTTOM : BF_EDGE_RESERVE_BOTTOM;
+      // Any opponent whose quadrant sits in the top half fans their card
+      // backs over the top edge; a bottom-half opponent (4-player FFA's
+      // bottom-right seat) fans over the bottom edge next to the viewer.
+      let topHandShown = false;
+      let bottomOppHandShown = false;
+      for (let s = 0; s < players.length; s++) {
+        if (s === this.viewerSeat || handCount(s) <= 0) continue;
+        if (this._quadrantFor(s).growDirection === "down") bottomOppHandShown = true;
+        else topHandShown = true;
+      }
+      const topReserve = topHandShown ? BF_HAND_RESERVE_TOP : BF_EDGE_RESERVE_TOP;
+      const bottomReserve = handCount(this.viewerSeat) > 0
+        ? BF_HAND_RESERVE_BOTTOM
+        : bottomOppHandShown
+          ? BF_HAND_RESERVE_TOP
+          : BF_EDGE_RESERVE_BOTTOM;
       const cx = stage.left + stage.width / 2;
       const topY = this._pageToCanvas(cx, stage.top + topReserve).y;
       const bottomY = this._pageToCanvas(cx, stage.bottom - bottomReserve).y;
@@ -2809,8 +2930,10 @@ class BattlefieldCanvas {
       const boundaryX = this.worldToCanvas(BF_QUADRANT_BOUNDARY_X, BF_WORLD_SPLIT_Y).x;
       yTop = q.growDirection === "down" ? splitY : 0;
       yBot = q.growDirection === "down" ? ch : splitY;
-      xTop = q.xOffset === 0 ? 0 : boundaryX;
-      xBot = q.xOffset === 0 ? boundaryX : cw;
+      // A quadrant bounded on a side keeps the divider; an unbounded side
+      // (e.g. the 3-player viewer's full-width bottom half) spans the stage.
+      xTop = Number.isFinite(q.xMin) ? boundaryX : 0;
+      xBot = Number.isFinite(q.xMax) ? boundaryX : cw;
     }
     if (yBot - yTop <= 1) return;
     const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 350);
@@ -2912,13 +3035,17 @@ class BattlefieldCanvas {
     ctx.moveTo(0, splitCanvas.y);
     ctx.lineTo(cw, splitCanvas.y);
     ctx.stroke();
-    ctx.fillStyle = "rgba(190,215,240,0.22)";
-    ctx.font = "600 13px sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "bottom";
-    ctx.fillText("OPPONENT", cw / 2, splitCanvas.y - 7);
-    ctx.textBaseline = "top";
-    ctx.fillText("YOU", cw / 2, splitCanvas.y + 7);
+    // The YOU/OPPONENT captions only make sense with a single opponent; in a
+    // Free-For-All each corner has its own name pill instead.
+    if ((this.currentState?.players?.length || 0) <= 2) {
+      ctx.fillStyle = "rgba(190,215,240,0.22)";
+      ctx.font = "600 13px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      ctx.fillText("OPPONENT", cw / 2, splitCanvas.y - 7);
+      ctx.textBaseline = "top";
+      ctx.fillText("YOU", cw / 2, splitCanvas.y + 7);
+    }
     ctx.restore();
 
     // Apply camera transform for world-space drawing

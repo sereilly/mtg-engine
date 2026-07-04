@@ -158,7 +158,6 @@ def test_ai_defender_resolves_random_piles_on_advance():
 def test_human_vs_human_defender_prompted():
     sid, session, game = _session(mode="human_vs_human")
     session.joined_seats.add(1)  # the guest seat acts only once joined
-    session.awaiting_opponent = False
     session.current_turn = 0
     _setup_camouflage_combat(game, attacker_seat=0, defender_seat=1)
 

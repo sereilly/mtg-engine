@@ -76,6 +76,9 @@ class SeatConfig(BaseModel):
     deck_id: str | None = Field(default=None)
     # Personal (browser-only) deck sent inline; takes precedence over deck_id.
     deck_cards: list[DeckCardEntry] | None = Field(default=None)
+    # Display name for the lobby roster (saved deck name or personal deck
+    # name); the server has no other way to resolve a personal deck's name.
+    deck_name: str | None = Field(default=None)
 
 
 class CreateSessionRequest(BaseModel):
@@ -92,6 +95,9 @@ class CreateSessionRequest(BaseModel):
     # present these take precedence over the *_deck_id for that seat.
     host_deck_cards: list[DeckCardEntry] | None = Field(default=None)
     guest_deck_cards: list[DeckCardEntry] | None = Field(default=None)
+    # Display names for the lobby roster (see SeatConfig.deck_name).
+    host_deck_name: str | None = Field(default=None)
+    guest_deck_name: str | None = Field(default=None)
     use_custom_seed: bool = Field(default=False)
     custom_seed: int | None = Field(default=None)
     # Backward-compatible field for older clients that still post `seed`.
@@ -111,6 +117,8 @@ class JoinSessionRequest(BaseModel):
     # Personal (browser-only) deck sent inline; takes precedence over guest_deck_id.
     guest_deck_cards: list[DeckCardEntry] | None = Field(default=None)
     guest_colors: int = Field(default=2, ge=1, le=5)
+    # Display name for the lobby roster (see SeatConfig.deck_name).
+    guest_deck_name: str | None = Field(default=None)
 
 
 class DividedTargetRef(BaseModel):
@@ -235,6 +243,10 @@ class RawStateRequest(BaseModel):
 
 
 class RematchRequest(BaseModel):
+    seat: int = Field(ge=0)
+
+
+class StartGameRequest(BaseModel):
     seat: int = Field(ge=0)
 
 
