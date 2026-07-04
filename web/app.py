@@ -17,6 +17,7 @@ from engine import Game
 from engine.game_history import GameHistory
 from engine.ai_policy import (
     choose_activation_action,
+    choose_attack_target,
     choose_attackers,
     choose_cast_action,
     choose_combat_blockers,
@@ -1733,11 +1734,15 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         combat_state["legal_attacker_indices"] = game.legal_attacker_indices(game.active_player_index)
     else:
         combat_state["legal_attacker_indices"] = []
-    defender_index = game.combat_defending_player_index
-    if defender_index is not None:
-        combat_state["legal_blocker_assignments"] = game.legal_blocker_assignments(defender_index)
-    else:
-        combat_state["legal_blocker_assignments"] = []
+    # CR 802.4: aggregate legal blocker assignments across every defending
+    # player this combat (2+ in FFA), not just a single pre-picked one. Blocker
+    # indices are only unambiguous within one defender's battlefield, so tag
+    # each pair with which defender it belongs to.
+    combat_state["legal_blocker_assignments"] = [
+        {**pair, "defending_player_index": defender_index}
+        for defender_index in sorted(game.combat_defending_players())
+        for pair in game.legal_blocker_assignments(defender_index)
+    ]
 
     return {
         "session_id": session.id,
@@ -1754,15 +1759,16 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "joined_seats": sorted(session.joined_seats),
         "seat_types": session.seat_types,
         "awaiting_opponent": session.awaiting_opponent,
+        # NOTE (frontend FFA pass): this used to be a hardcoded 2-entry list
+        # (session.game.players[0]/[1]), which silently truncated Free-For-All
+        # sessions (3-4 players) to 2 players in the serialized state. Generalized
+        # to loop over every seat; identical output for the existing 2-player modes.
         "players": [
             _serialize_player(
-                session.game.players[0], viewer_seat, 0, session.game,
-                _compute_playable_hand_indices(session, 0) if viewer_seat == 0 else [],
-            ),
-            _serialize_player(
-                session.game.players[1], viewer_seat, 1, session.game,
-                _compute_playable_hand_indices(session, 1) if viewer_seat == 1 else [],
-            ),
+                session.game.players[i], viewer_seat, i, session.game,
+                _compute_playable_hand_indices(session, i) if viewer_seat == i else [],
+            )
+            for i in range(len(session.game.players))
         ],
         "stack": [_serialize_stack_item(item, session.game) for item in reversed(session.game.stack)],
         "combat": combat_state,
@@ -2127,7 +2133,14 @@ def _ai_step(session: Session) -> bool:
             )
             if result.supported:
                 game.note_priority_action_taken(seat)
-                game.pass_priority(seat)
+                # NOTE (frontend FFA pass): route through the priority-exchange
+                # cascade rather than a bare engine pass. In a 3+ player (FFA)
+                # game, the seat right after `seat` in turn order may be a
+                # second AI player rather than the human — only this cascade
+                # (already used by the "pass_priority" action handler) drives
+                # that seat's response instead of stalling with priority stuck
+                # on an AI seat no client action can ever advance.
+                _run_priority_exchange(session, seat)
                 return False  # paused — human has priority over the spell on the stack
         else:
             game.cast_from_hand(
@@ -2273,21 +2286,26 @@ def _ai_declare_attackers(session: Session) -> None:
         return
     if _seat_type(session, game.active_player_index) != "ai":
         return
+    # MVP multiplayer target choice (see choose_attack_target): with 2+ living
+    # opponents (FFA) there's no single unambiguous defender, so every AI
+    # attacker this turn is sent at the same chosen opponent. In 2-player games
+    # this always resolves to the only other seat, same as before.
+    target = choose_attack_target(game, game.active_player_index)
     if session.force_ai_attack_all:
         # Debug override: attack with every legal attacker, ignoring AI judgement.
-        attacker_indices = legal_attackers(game, game.active_player_index)
+        attacker_indices = legal_attackers(game, game.active_player_index, against=target)
     else:
         attacker_indices = choose_attackers(game, game.active_player_index)
-    ok, _ = game.declare_attackers(game.active_player_index, attacker_indices)
+    ok, _ = game.declare_attackers(game.active_player_index, attacker_indices, defending_player_index=target)
     if not ok:
         # The chosen set was rejected (e.g. it omitted a creature that must attack
         # if able). Attacking with every legal attacker is always a valid superset:
         # it includes every forced creature, and a forced creature that can't
         # legally attack is never required. Declaring [] would fail identically.
-        fallback = legal_attackers(game, game.active_player_index)
-        ok, _ = game.declare_attackers(game.active_player_index, fallback)
+        fallback = legal_attackers(game, game.active_player_index, against=target)
+        ok, _ = game.declare_attackers(game.active_player_index, fallback, defending_player_index=target)
         if not ok:
-            game.declare_attackers(game.active_player_index, [])
+            game.declare_attackers(game.active_player_index, [], defending_player_index=target)
 
 
 def _banding_blocked_attackers(game) -> list[int]:
@@ -2417,7 +2435,7 @@ def _multiblock_blocker_splits(game) -> list[dict]:
     defender = game.players[defender_index]
     band_blockers = {entry["blocker_idx"] for entry in _band_blocker_assignments(game)}
     result: list[dict] = []
-    for b_idx, attacker_idxs in sorted(game.combat_blockers.items()):
+    for b_idx, attacker_idxs in sorted(game.combat_blockers.get(defender_index, {}).items()):
         if b_idx in band_blockers or not (0 <= b_idx < len(defender.battlefield)):
             continue
         attackers = sorted(set(attacker_idxs))
@@ -2770,7 +2788,10 @@ def _advance_phase(session: Session) -> None:
             _ai_declare_attackers(session)
         if step == "declare_blockers":
             combat_state = game.get_combat_state()
-            defender_index = combat_state.get("defending_player_index")
+            # CR 802.4: with 2+ defending players (FFA), each declares in APNAP
+            # order — _pending_block_declarer() names whichever one is up next,
+            # not a single fixed defender.
+            defender_index = game._pending_block_declarer()
             if isinstance(defender_index, int) and _seat_type(session, defender_index) == "ai":
                 if not combat_state.get("blockers_locked", False):
                     if game.is_camouflage_active() and combat_state.get("attackers"):
@@ -3102,8 +3123,10 @@ async def stream_session_events(session_id: str):
 
 
 @app.get("/api/sessions/{session_id}/state")
-def get_state(session_id: str, seat: int | None = Query(default=None, ge=0, le=1)):
+def get_state(session_id: str, seat: int | None = Query(default=None, ge=0)):
     session = _require_session(session_id)
+    if seat is not None and seat >= len(session.game.players):
+        raise HTTPException(status_code=400, detail="seat out of range for this session")
     return _serialize_state(session, viewer_seat=seat)
 
 
@@ -3111,13 +3134,15 @@ def get_state(session_id: str, seat: int | None = Query(default=None, ge=0, le=1
 def get_card_target_spec(
     session_id: str,
     card_name: str = Query(...),
-    seat: int = Query(..., ge=0, le=1),
+    seat: int = Query(..., ge=0),
 ):
     """The cast target spec (kind + enumerated legal targets) for a card cast by
     ``seat`` in this session. Hand cards already carry this in the serialized
     state; this lets the debug "cast for free" flow — whose card comes from a
     session-less catalog search — drive the same backend-authoritative targeting."""
     session = _require_session(session_id)
+    if seat >= len(session.game.players):
+        raise HTTPException(status_code=400, detail="seat out of range for this session")
     card = CARD_BY_NAME.get(card_name.strip().casefold())
     if card is None:
         raise HTTPException(status_code=404, detail="card not found")
@@ -3481,7 +3506,12 @@ def do_action(session_id: str, req: GameActionRequest):
         else:
             if not session.game.has_priority(req.seat):
                 raise HTTPException(status_code=400, detail="you do not currently have priority")
-            target = req.target_seat if req.target_seat is not None else 1 - req.seat
+            if req.target_seat is not None:
+                target = req.target_seat
+            elif len(session.game.players) == 2:
+                target = 1 - req.seat
+            else:
+                raise HTTPException(status_code=400, detail="target_seat is required in a 3+ player game")
             # The client sends a top-first stack index; convert to the engine's
             # bottom-first indexing (Deathgrip: "Counter target green spell").
             engine_stack_index = None
@@ -3593,11 +3623,17 @@ def do_action(session_id: str, req: GameActionRequest):
             raise HTTPException(status_code=400, detail=details)
 
     elif req.action == "declare_blockers":
-        defender_seat = session.game.combat_defending_player_index
-        if defender_seat is None:
-            raise HTTPException(status_code=400, detail="no combat attackers declared")
-        if req.seat != defender_seat:
-            raise HTTPException(status_code=400, detail="only defending player may declare blockers")
+        # CR 802.4: with attack-multiple-players (FFA), 2+ defending players may
+        # each declare blocks in the same combat — any of them may act here, not
+        # just a single pre-picked defender. With zero attackers this turn nobody
+        # is formally "a defending player" yet, but any non-active seat may still
+        # submit a trivial no-op declaration (mirrors the engine's own check).
+        defending_players = session.game.combat_defending_players()
+        if defending_players:
+            if req.seat not in defending_players:
+                raise HTTPException(status_code=400, detail="only a defending player may declare blockers")
+        elif req.seat == session.game.active_player_index or not (0 <= req.seat < len(session.game.players)):
+            raise HTTPException(status_code=400, detail="only a defending player may declare blockers")
         # Declaring blockers is the defending player's turn-based action (CR 509.1),
         # not a priority action: no spells may be cast during the assignment, and the
         # defender declares even while no priority window is open. The engine grants
@@ -4191,7 +4227,12 @@ def do_action(session_id: str, req: GameActionRequest):
         if not req.card_name:
             raise HTTPException(status_code=400, detail="card_name is required")
 
-        opponent_seat = 1 - req.seat
+        if req.target_seat is not None:
+            opponent_seat = req.target_seat
+        elif len(session.game.players) == 2:
+            opponent_seat = 1 - req.seat
+        else:
+            raise HTTPException(status_code=400, detail="target_seat is required in a 3+ player game")
         card = CARD_BY_NAME.get(req.card_name.strip().casefold())
         if card is None:
             raise HTTPException(status_code=404, detail="card not found")
@@ -4260,6 +4301,10 @@ def do_action(session_id: str, req: GameActionRequest):
         choice = req.hand_index  # 0 = go first, 1 = go second
         if choice not in (0, 1):
             raise HTTPException(status_code=400, detail="hand_index must be 0 (go first) or 1 (go second)")
+        if choice == 1 and len(session.game.players) != 2:
+            # "Go second" only maps unambiguously to "the other player" in a
+            # 2-player game; FFA doesn't offer this choice (not in MVP scope).
+            raise HTTPException(status_code=400, detail="go second is only available in a 2-player game")
         starting_player = req.seat if choice == 0 else (1 - req.seat)
         session.game.log.append(
             f"{session.game.players[req.seat].name} chooses to go {'first' if choice == 0 else 'second'}"
@@ -4356,8 +4401,10 @@ def run_ai(session_id: str, steps: int = Query(default=1, ge=1, le=200)):
 
 
 @app.post("/api/sessions/{session_id}/undo")
-def undo_action(session_id: str, seat: int | None = Query(default=None, ge=0, le=1)):
+def undo_action(session_id: str, seat: int | None = Query(default=None, ge=0)):
     session = _require_session(session_id)
+    if seat is not None and seat >= len(session.game.players):
+        raise HTTPException(status_code=400, detail="seat out of range for this session")
     if not session.history.can_undo():
         raise HTTPException(status_code=400, detail="nothing to undo")
 

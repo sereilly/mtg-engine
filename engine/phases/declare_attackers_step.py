@@ -21,25 +21,54 @@ class DeclareAttackersStepMixin:
         attacker_indices: list[int],
         defending_player_index: int | None = None,
         bands: list[list[int]] | None = None,
+        attacker_targets: dict[int, int] | None = None,
     ) -> tuple[bool, str]:
+        """Declare attackers (CR 508). Under CR 802 (attack multiple players), each
+        attacker may name its own defending player via ``attacker_targets`` (attacker
+        battlefield idx -> defending player idx). Any attacker not present in
+        ``attacker_targets`` falls back to the shared ``defending_player_index`` —
+        the original 2-player/back-compat shorthand of "everyone attacks this one
+        opponent", still exactly how every existing (2-player) caller behaves."""
         if self.current_turn_phase != "combat" or self.current_step != "declare_attackers":
             return False, "attackers can only be declared during declare_attackers"
         if controller_index != self.active_player_index:
             return False, "only the active player may declare attackers"
 
-        defender_idx = defending_player_index if defending_player_index is not None else 1 - controller_index
-        if defender_idx < 0 or defender_idx >= len(self.players) or defender_idx == controller_index:
-            return False, "invalid defending player"
-
         controller = self.players[controller_index]
         unique_indices = sorted(set(attacker_indices))
+        living_opponents = self.opponents_of(controller_index)
+
+        attacker_targets = dict(attacker_targets or {})
+        per_attacker_defender: dict[int, int] = {}
+        for idx in unique_indices:
+            target = attacker_targets.get(idx, defending_player_index)
+            if target is None:
+                # No explicit target for this attacker: with exactly one living
+                # opponent (2-player games, always) that's unambiguous — attack
+                # them, exactly as every existing caller already assumes. Only a
+                # genuine 3+ player choice requires an explicit target.
+                if len(living_opponents) == 1:
+                    target = living_opponents[0]
+                else:
+                    return False, f"no defending player chosen for attacker {idx}"
+            per_attacker_defender[idx] = target
+
+        living_opponents_set = set(living_opponents)
+        for target in per_attacker_defender.values():
+            if target < 0 or target >= len(self.players) or target == controller_index:
+                return False, "invalid defending player"
+            if target not in living_opponents_set:
+                return False, "that player has already left the game"
+
         required_attackers: list[str] = []
         for idx, attacker in enumerate(controller.battlefield):
             if not self._is_creature(attacker) or attacker.tapped:
                 continue
             if idx in unique_indices:
                 continue
-            if self.can_attack(attacker, defender_idx) and self._must_attack_if_able(attacker):
+            if self._must_attack_if_able(attacker) and any(
+                self.can_attack(attacker, opp) for opp in living_opponents
+            ):
                 required_attackers.append(attacker.card.name)
         if required_attackers:
             if len(required_attackers) == 1:
@@ -55,7 +84,7 @@ class DeclareAttackersStepMixin:
                 return False, "only creatures can attack"
             if attacker.tapped:
                 return False, f"{attacker.card.name} is tapped"
-            if not self.can_attack(attacker, defender_idx):
+            if not self.can_attack(attacker, per_attacker_defender[idx]):
                 return False, f"{attacker.card.name} cannot attack"
 
         # CR 702.22c: validate any declared attacking bands before committing.
@@ -65,9 +94,10 @@ class DeclareAttackersStepMixin:
         if band_error is not None:
             return False, band_error
 
-        self.combat_defending_player_index = defender_idx
-        self.combat_attackers = {idx: defender_idx for idx in unique_indices}
+        self.combat_attackers = dict(per_attacker_defender)
+        self.combat_defending_player_index = self._resolve_defending_player_index()
         self.combat_blockers = {}
+        self.combat_blockers_declared_by = set()
         self.combat_bands = validated_bands
         self.combat_band_blocks = {}
         self.combat_banding_damage = {}
@@ -144,12 +174,11 @@ class DeclareAttackersStepMixin:
         from ..game_types import StackItem
 
         controller = self.players[controller_index]
-        defender_index = self.combat_defending_player_index
-        target_index = (
-            defender_index
-            if isinstance(defender_index, int) and 0 <= defender_index < len(self.players)
-            else controller_index
-        )
+        # CR 802.3a: a trigger not tied to a specific defending player applies once
+        # across the whole attacking group; use the first attacker's defender as a
+        # deterministic representative target (the only defender in the common
+        # single-defender/2-player case).
+        target_index = next(iter(self.combat_attackers.values()), controller_index)
         for permanent in list(controller.battlefield):
             for trig in matching_triggers(
                 permanent.effective_card, condition_kinds={"one_or_more_attack"}

@@ -833,7 +833,7 @@ class TestTwoHeadedGiantDoubleBlock:
         game, p1, p2, b1, b2, thg = self._combat(cards)
         ok, _ = game.declare_blockers(1, {0: [0, 1]})
         assert ok
-        assert game.combat_blockers == {0: [0, 1]}
+        assert game.combat_blockers == {1: {0: [0, 1]}}
         game._set_phase_and_step("combat", "combat_damage")
         game.resolve_combat_damage(0)
         # Both bears are blocked, so no damage reaches the player.
@@ -907,7 +907,7 @@ class TestCamouflage:
         first = dict(game.combat_blockers)
         assert first  # some creature was assigned to block
         # Each blocker blocks exactly one attacker (single pile membership).
-        assert all(len(atks) == 1 for atks in first.values())
+        assert all(len(atks) == 1 for atks in first.get(1, {}).values())
 
         game2 = self._combat(cards)
         random.seed(42)
@@ -938,9 +938,11 @@ class TestCamouflage:
         ok, msg = game.assign_camouflage_piles(1, {0: 0, 1: 0})
         assert ok, msg
         assert game.combat_blockers_locked is True
-        blocked_attackers = {a for atks in game.combat_blockers.values() for a in atks}
+        blocked_attackers = {
+            a for blocker_map in game.combat_blockers.values() for atks in blocker_map.values() for a in atks
+        }
         assert len(blocked_attackers) == 1
-        assert sorted(game.combat_blockers) == [0, 1]
+        assert sorted(game.combat_blockers.get(1, {})) == [0, 1]
 
     def test_empty_piles_mean_no_blocks(self, cards):
         game = self._combat(cards)

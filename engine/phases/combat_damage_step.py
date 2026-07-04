@@ -27,8 +27,8 @@ class CombatDamageStepMixin:
 
     def _attacker_blocked_by_banding(self, attacker_idx: int) -> bool:
         """CR 702.22j: is this attacker blocked by at least one creature with banding?"""
-        defending_index = self.combat_defending_player_index
-        if not isinstance(defending_index, int) or not (0 <= defending_index < len(self.players)):
+        defending_index = self.combat_attackers.get(attacker_idx)
+        if defending_index is None or not (0 <= defending_index < len(self.players)):
             return False
         defender = self.players[defending_index]
         for blocker_idx in self._attacker_all_blockers(attacker_idx):
@@ -48,11 +48,13 @@ class CombatDamageStepMixin:
         Stored and consumed by :meth:`resolve_combat_damage` in place of the active
         player's assignment for those attackers.
         """
-        if defender_index != self.combat_defending_player_index:
+        if defender_index not in self.combat_defending_players():
             return False, "only the defending player may assign banding damage"
         attacker_controller = self.players[self.active_player_index]
         for attacker_idx, split in attacker_damage.items():
             attacker_idx = int(attacker_idx)
+            if self.combat_attackers.get(attacker_idx) != defender_index:
+                return False, "that attacker isn't attacking this player"
             if not self._attacker_blocked_by_banding(attacker_idx):
                 return False, "attacker is not blocked by a creature with banding"
             if not (0 <= attacker_idx < len(attacker_controller.battlefield)):
@@ -90,14 +92,15 @@ class CombatDamageStepMixin:
         Stored and consumed by :meth:`resolve_combat_damage` when the resolving
         caller supplies no explicit ``blocker_damage_split`` for that blocker.
         """
-        if defender_index != self.combat_defending_player_index:
+        if defender_index not in self.combat_defending_players():
             return False, "only the defending player may divide blocker damage"
         defender = self.players[defender_index]
+        own_blockers = self.combat_blockers.get(defender_index, {})
         for b_idx, split in blocker_damage_split.items():
             b_idx = int(b_idx)
             if not (0 <= b_idx < len(defender.battlefield)):
                 return False, "blocker index out of range"
-            attackers = set(self.combat_blockers.get(b_idx, ()))
+            attackers = set(own_blockers.get(b_idx, ()))
             if len(attackers) < 2:
                 return False, "that creature is not blocking multiple attackers"
             blocker = defender.battlefield[b_idx]
@@ -177,9 +180,10 @@ class CombatDamageStepMixin:
         for attacker_idx in self.combat_attackers:
             if len(self._attacker_all_blockers(attacker_idx)) >= 2:
                 return True
-        for attacker_idxs in self.combat_blockers.values():
-            if len(set(attacker_idxs)) >= 2:
-                return True
+        for blocker_map in self.combat_blockers.values():
+            for attacker_idxs in blocker_map.values():
+                if len(set(attacker_idxs)) >= 2:
+                    return True
         return False
 
     def _manual_assignment_has_declared_multiblock(self) -> bool:
@@ -207,17 +211,18 @@ class CombatDamageStepMixin:
         if not self.combat_attackers:
             return {}
         attacker_controller = self.players[self.active_player_index]
-        defending_index = self.combat_defending_player_index
-        defender = (
-            self.players[defending_index]
-            if isinstance(defending_index, int) and 0 <= defending_index < len(self.players)
-            else None
-        )
         assignment: dict[int, dict[int, int]] = {}
-        for attacker_idx in self.combat_attackers:
+        for attacker_idx, defending_index in self.combat_attackers.items():
             if attacker_idx >= len(attacker_controller.battlefield):
                 continue
             attacker = attacker_controller.battlefield[attacker_idx]
+            # Each attacker resolves its own defender's battlefield — blocker
+            # indices are only unambiguous within one defender (CR 802).
+            defender = (
+                self.players[defending_index]
+                if 0 <= defending_index < len(self.players)
+                else None
+            )
             blockers = self._attacker_all_blockers(attacker_idx)
             if not blockers:
                 continue
@@ -294,10 +299,6 @@ class CombatDamageStepMixin:
             return True, "no attackers"
 
         attacker_controller = self.players[self.active_player_index]
-        defending_index = self.combat_defending_player_index
-        if defending_index is None:
-            return False, "no defending player"
-        defender = self.players[defending_index]
 
         def participates_in_first_strike(perm: Permanent) -> bool:
             return self._has_keyword(perm, "first strike") or self._has_keyword(perm, "double strike")
@@ -319,15 +320,27 @@ class CombatDamageStepMixin:
         # blocker_idx -> {band member -> damage}). Validate every split up front —
         # the blocker loop below mutates state as it goes, so a bad entry must be
         # rejected before any damage is marked.
+        # NOTE(FFA scope gap): banding/multiblock division across 2+ *simultaneous*
+        # defenders isn't fully modeled (rare combo: banding/Two-Headed Giant of
+        # Foriys AND attack-multiple-players in the same combat) — the blocker
+        # index here is resolved against the first defender this combat, matching
+        # the single-defender behavior this validation always assumed.
         if blocker_damage_split:
+            split_defender_index = next(iter(self.combat_defending_players()), None)
+            split_defender = (
+                self.players[split_defender_index]
+                if split_defender_index is not None
+                else None
+            )
             for b_idx, split in blocker_damage_split.items():
-                if not (0 <= b_idx < len(defender.battlefield)):
+                if split_defender is None or not (0 <= b_idx < len(split_defender.battlefield)):
                     return False, "blocker index out of range"
-                if b_idx not in self.combat_blockers:
+                own_blockers = self.combat_blockers.get(split_defender_index, {})
+                if b_idx not in own_blockers:
                     return False, "that creature is not blocking"
-                split_blocker = defender.battlefield[b_idx]
-                allowed = set(self.combat_blockers.get(b_idx, ()))
-                for blocked_attacker in self.combat_blockers.get(b_idx, ()):
+                split_blocker = split_defender.battlefield[b_idx]
+                allowed = set(own_blockers.get(b_idx, ()))
+                for blocked_attacker in own_blockers.get(b_idx, ()):
                     allowed |= set(self._attacker_band(blocked_attacker) or ())
                 total = 0
                 for member_idx, amount in split.items():
@@ -357,8 +370,10 @@ class CombatDamageStepMixin:
             attacker = attacker_controller.battlefield[attacker_idx]
             blockers = self._attacker_all_blockers(attacker_idx)
             if blockers:
+                defending_index = self.combat_attackers[attacker_idx]
+                defender = self.players[defending_index] if 0 <= defending_index < len(self.players) else None
                 for blocker_idx in blockers:
-                    if blocker_idx < len(defender.battlefield):
+                    if defender is not None and blocker_idx < len(defender.battlefield):
                         blocker = defender.battlefield[blocker_idx]
                         if participates_in_first_strike(attacker) or participates_in_first_strike(blocker):
                             attacker_passes.append(attacker_idx)
@@ -372,6 +387,7 @@ class CombatDamageStepMixin:
 
         # (defending_idx, blocker_idx, damage, attacker_idx)
         attacker_damage_events: list[tuple[int, int, int, int]] = []
+        # (defending_idx, damage, source_attacker)
         defender_damage_events: list[tuple[int, int, Permanent]] = []
         # CR 702.15b: damage dealt by a source with lifelink gains its controller
         # that much life. Accumulated per controller and applied after all combat
@@ -383,6 +399,10 @@ class CombatDamageStepMixin:
                 lifelink_gain[controller_index] = lifelink_gain.get(controller_index, 0) + amount
 
         for attacker_idx in sorted(self.combat_attackers):
+            defending_index = self.combat_attackers[attacker_idx]
+            if defending_index < 0 or defending_index >= len(self.players):
+                continue
+            defender = self.players[defending_index]
             if attacker_idx < 0 or attacker_idx >= len(attacker_controller.battlefield):
                 continue
             attacker = attacker_controller.battlefield[attacker_idx]
@@ -458,79 +478,83 @@ class CombatDamageStepMixin:
                     if self._has_keyword(attacker, "lifelink"):
                         add_lifelink(self.active_player_index, trample_damage)
 
-        for blocker_idx, attacker_idxs in sorted(self.combat_blockers.items()):
-            if blocker_idx < 0 or blocker_idx >= len(defender.battlefield):
+        for defending_idx, blocker_map in sorted(self.combat_blockers.items()):
+            if defending_idx < 0 or defending_idx >= len(self.players):
                 continue
-            if not attacker_idxs:
-                continue
-            # CR 702.22j/k: an explicit division of this blocker's damage among the
-            # band members it blocks (validated above) wins over the single-target
-            # default. Each portion is dealt separately, honoring protection.
-            # Falls back to the defender's pre-committed CR 510.1d division for a
-            # creature blocking multiple attackers (Two-Headed Giant of Foriys).
-            split = (blocker_damage_split or {}).get(blocker_idx)
-            if split is None:
-                split = self.combat_multiblock_damage.get(blocker_idx)
-            if split:
+            defender = self.players[defending_idx]
+            for blocker_idx, attacker_idxs in sorted(blocker_map.items()):
+                if blocker_idx < 0 or blocker_idx >= len(defender.battlefield):
+                    continue
+                if not attacker_idxs:
+                    continue
+                # CR 702.22j/k: an explicit division of this blocker's damage among the
+                # band members it blocks (validated above) wins over the single-target
+                # default. Each portion is dealt separately, honoring protection.
+                # Falls back to the defender's pre-committed CR 510.1d division for a
+                # creature blocking multiple attackers (Two-Headed Giant of Foriys).
+                split = (blocker_damage_split or {}).get(blocker_idx)
+                if split is None:
+                    split = self.combat_multiblock_damage.get(blocker_idx)
+                if split:
+                    blocker = defender.battlefield[blocker_idx]
+                    if blocker.effective_power <= 0:
+                        continue
+                    if run_first_pass and not participates_in_first_strike(blocker):
+                        continue
+                    if not run_first_pass and has_first_strike_pass and not participates_in_second_strike(blocker):
+                        continue
+                    for member_idx, amount in sorted(split.items()):
+                        amount = int(amount)
+                        if amount <= 0 or not (0 <= member_idx < len(attacker_controller.battlefield)):
+                            continue
+                        member = attacker_controller.battlefield[member_idx]
+                        if self._is_protected_from(member, blocker):
+                            continue
+                        dealt = self._mark_damage_on_permanent(member, amount, source=blocker)
+                        if dealt > 0:
+                            self._record_damage_source(member, blocker)
+                            self._fire_dealt_damage_triggers(member)
+                            if self._has_keyword(blocker, "lifelink"):
+                                add_lifelink(defending_idx, dealt)
+                        if self._has_keyword(blocker, "deathtouch"):
+                            member.metadata["received_deathtouch"] = True
+                    continue
+                # A blocker deals its combat damage to one of the creatures it blocks
+                # (CR 510.1c, defender's choice; default the first). A creature blocking
+                # several attackers (Two-Headed Giant of Foriys) still deals once.
+                attacker_idx = attacker_idxs[0]
+                # CR 702.22k: a blocker blocking a band (which always contains a creature
+                # with banding) deals its damage where the *active* player chooses among
+                # the band members it blocks. Also lets the defender pick which blocked
+                # attacker a multi-block creature damages.
+                band = self._attacker_band(attacker_idx)
+                if blocker_damage and blocker_idx in blocker_damage:
+                    chosen = blocker_damage[blocker_idx]
+                    allowed = chosen in attacker_idxs or (band and chosen in band)
+                    if allowed and 0 <= chosen < len(attacker_controller.battlefield):
+                        attacker_idx = chosen
+                if attacker_idx < 0 or attacker_idx >= len(attacker_controller.battlefield):
+                    continue
                 blocker = defender.battlefield[blocker_idx]
+                attacker = attacker_controller.battlefield[attacker_idx]
                 if blocker.effective_power <= 0:
                     continue
                 if run_first_pass and not participates_in_first_strike(blocker):
                     continue
                 if not run_first_pass and has_first_strike_pass and not participates_in_second_strike(blocker):
                     continue
-                for member_idx, amount in sorted(split.items()):
-                    amount = int(amount)
-                    if amount <= 0 or not (0 <= member_idx < len(attacker_controller.battlefield)):
-                        continue
-                    member = attacker_controller.battlefield[member_idx]
-                    if self._is_protected_from(member, blocker):
-                        continue
-                    dealt = self._mark_damage_on_permanent(member, amount, source=blocker)
-                    if dealt > 0:
-                        self._record_damage_source(member, blocker)
-                        self._fire_dealt_damage_triggers(member)
-                        if self._has_keyword(blocker, "lifelink"):
-                            add_lifelink(defending_index, dealt)
-                    if self._has_keyword(blocker, "deathtouch"):
-                        member.metadata["received_deathtouch"] = True
-                continue
-            # A blocker deals its combat damage to one of the creatures it blocks
-            # (CR 510.1c, defender's choice; default the first). A creature blocking
-            # several attackers (Two-Headed Giant of Foriys) still deals once.
-            attacker_idx = attacker_idxs[0]
-            # CR 702.22k: a blocker blocking a band (which always contains a creature
-            # with banding) deals its damage where the *active* player chooses among
-            # the band members it blocks. Also lets the defender pick which blocked
-            # attacker a multi-block creature damages.
-            band = self._attacker_band(attacker_idx)
-            if blocker_damage and blocker_idx in blocker_damage:
-                chosen = blocker_damage[blocker_idx]
-                allowed = chosen in attacker_idxs or (band and chosen in band)
-                if allowed and 0 <= chosen < len(attacker_controller.battlefield):
-                    attacker_idx = chosen
-            if attacker_idx < 0 or attacker_idx >= len(attacker_controller.battlefield):
-                continue
-            blocker = defender.battlefield[blocker_idx]
-            attacker = attacker_controller.battlefield[attacker_idx]
-            if blocker.effective_power <= 0:
-                continue
-            if run_first_pass and not participates_in_first_strike(blocker):
-                continue
-            if not run_first_pass and has_first_strike_pass and not participates_in_second_strike(blocker):
-                continue
-            # CR 702.16e: damage from a source of the protected quality is prevented.
-            if self._is_protected_from(attacker, blocker):
-                continue
-            dealt = self._mark_damage_on_permanent(attacker, blocker.effective_power, source=blocker)
-            if dealt > 0:
-                self._record_damage_source(attacker, blocker)
-                self._fire_dealt_damage_triggers(attacker)
-                if self._has_keyword(blocker, "lifelink"):
-                    add_lifelink(defending_index, dealt)
-            # 704.5h: mark attacker if blocker has deathtouch
-            if self._has_keyword(blocker, "deathtouch") and blocker.effective_power > 0:
-                attacker.metadata["received_deathtouch"] = True
+                # CR 702.16e: damage from a source of the protected quality is prevented.
+                if self._is_protected_from(attacker, blocker):
+                    continue
+                dealt = self._mark_damage_on_permanent(attacker, blocker.effective_power, source=blocker)
+                if dealt > 0:
+                    self._record_damage_source(attacker, blocker)
+                    self._fire_dealt_damage_triggers(attacker)
+                    if self._has_keyword(blocker, "lifelink"):
+                        add_lifelink(defending_idx, dealt)
+                # 704.5h: mark attacker if blocker has deathtouch
+                if self._has_keyword(blocker, "deathtouch") and blocker.effective_power > 0:
+                    attacker.metadata["received_deathtouch"] = True
 
         for defending_idx, blocker_idx, damage, a_idx in attacker_damage_events:
             if defending_idx >= len(self.players):
@@ -560,7 +584,13 @@ class CombatDamageStepMixin:
                     blocker_perm.metadata["received_deathtouch"] = True
 
         total_player_damage = sum(dmg for _, dmg, _ in defender_damage_events)
-        for _, damage, source_attacker in defender_damage_events:
+        damage_by_defender: dict[int, int] = {}
+        for defending_idx, damage, _ in defender_damage_events:
+            damage_by_defender[defending_idx] = damage_by_defender.get(defending_idx, 0) + damage
+        for defending_idx, damage, source_attacker in defender_damage_events:
+            if defending_idx < 0 or defending_idx >= len(self.players):
+                continue
+            defender = self.players[defending_idx]
             # Prevention was already applied when the event was recorded.
             # Veteran Bodyguard: "As long as this creature is untapped, all damage
             # that would be dealt to you by unblocked creatures is dealt to this
@@ -597,9 +627,13 @@ class CombatDamageStepMixin:
         self._prune_combat_state()
 
         if total_player_damage > 0:
-            self.log.append(
-                f"{defender.name} took {total_player_damage} combat damage (life: {defender.life + total_player_damage} → {defender.life})"
-            )
+            for defending_idx, damage in sorted(damage_by_defender.items()):
+                if not (0 <= defending_idx < len(self.players)) or damage <= 0:
+                    continue
+                defender = self.players[defending_idx]
+                self.log.append(
+                    f"{defender.name} took {damage} combat damage (life: {defender.life + damage} → {defender.life})"
+                )
 
         if run_first_pass:
             self.combat_first_strike_done = True

@@ -102,6 +102,15 @@ class Session:
     mulligan_bottom_seat: int | None = None
     mulligan_bottom_required: int = 0
     mulligan_bottom_selected: list[int] = field(default_factory=list)
+    # Free-For-All only (mode == "free_for_all"): per-seat config, one entry per
+    # seat, kept (like host_deck_id/host_colors/etc. for the 2-player modes) so a
+    # rematch can rebuild fresh (reshuffled) decks for the same seats. Empty for
+    # every other mode.
+    seat_names: list[str] = field(default_factory=list)
+    seat_is_ai: list[bool] = field(default_factory=list)
+    seat_deck_ids: list[str | None] = field(default_factory=list)
+    seat_colors: list[int] = field(default_factory=list)
+    seat_deck_cards_list: list[list[dict] | None] = field(default_factory=list)
 
 
 class SessionStore:
@@ -127,6 +136,9 @@ class SessionStore:
         return deck
 
     def create(self, request: CreateSessionRequest) -> Session:
+        if request.mode == "free_for_all":
+            return self._create_ffa(request)
+
         sid = secrets.token_urlsafe(8)
 
         seed = self._resolve_seed(request)
@@ -196,6 +208,61 @@ class SessionStore:
         self._sessions[sid] = session
         return session
 
+    def _create_ffa(self, request: CreateSessionRequest) -> Session:
+        """Free-For-All (3-4 players): one PlayerState per seat, each seat
+        independently Human or AI with its own deck — no networked join step
+        (all non-host human seats play on the same browser/session, or are AI)."""
+        seats = request.seats or []
+        if not (3 <= len(seats) <= 4):
+            raise ValueError("Free-For-All sessions need 3 or 4 seats")
+
+        sid = secrets.token_urlsafe(8)
+        seed = self._resolve_seed(request)
+
+        seat_names = [seat.name or f"Player {i + 1}" for i, seat in enumerate(seats)]
+        seat_is_ai = [seat.is_ai for seat in seats]
+        seat_deck_ids = [seat.deck_id for seat in seats]
+        seat_colors = [seat.colors for seat in seats]
+        seat_deck_cards_list = [_entries_to_dicts(seat.deck_cards) for seat in seats]
+
+        players = [
+            PlayerState(
+                name=seat_names[i],
+                library=self._build_seat_deck(
+                    seat_deck_ids[i], seat_colors[i], seed + i, seat_deck_cards_list[i]
+                ),
+            )
+            for i in range(len(seats))
+        ]
+        game = Game(players=players, enforce_mana_costs=True)
+
+        seat_types = {i: ("ai" if seat_is_ai[i] else "human") for i in range(len(seats))}
+        # No networked join step for FFA — every seat is already at the table.
+        joined_seats = set(range(len(seats)))
+
+        session = Session(
+            id=sid,
+            mode="free_for_all",
+            host_name=seat_names[0],
+            guest_name=seat_names[1] if len(seat_names) > 1 else "",
+            game=game,
+            current_turn=0,
+            joined_seats=joined_seats,
+            seat_types=seat_types,
+            seed=seed,
+            use_pregame=request.enable_pregame,
+            awaiting_opponent=False,
+            seat_names=seat_names,
+            seat_is_ai=seat_is_ai,
+            seat_deck_ids=seat_deck_ids,
+            seat_colors=seat_colors,
+            seat_deck_cards_list=seat_deck_cards_list,
+        )
+
+        self._begin_pregame(session)
+        self._sessions[sid] = session
+        return session
+
     def _begin_pregame(self, session: Session) -> None:
         """Start the game once all decks are known (immediately, or once the
         networked opponent has joined)."""
@@ -233,8 +300,10 @@ class SessionStore:
             # starter. The Game constructor defaults both to seat 0, so without this
             # an AI-vs-AI game where seat 1 wins the flip deadlocks: current_turn is
             # 1 but priority sits with 0, so neither the AI step nor the UI advances.
-            # (Legacy no-pregame human/test sessions keep seat 0 as the actor.)
-            if session.mode == "ai_vs_ai":
+            # (Legacy no-pregame human/test sessions keep seat 0 as the actor.) FFA
+            # can equally start on an AI seat (or a non-zero human seat), so it needs
+            # the same alignment.
+            if session.mode in ("ai_vs_ai", "free_for_all"):
                 game.active_player_index = starting_player
                 game.start_priority_window(starting_player)
 
@@ -298,15 +367,28 @@ class SessionStore:
         state on the session is reset.
         """
         seed = secrets.randbits(32)
-        host_deck = self._build_seat_deck(
-            session.host_deck_id, session.host_colors, seed, session.host_deck_cards
-        )
-        guest_deck = self._build_seat_deck(
-            session.guest_deck_id, session.guest_colors, seed + 1, session.guest_deck_cards
-        )
-        p1 = PlayerState(name=session.host_name, library=host_deck)
-        p2 = PlayerState(name=session.guest_name, library=guest_deck)
-        session.game = Game(players=[p1, p2], enforce_mana_costs=True)
+        if session.mode == "free_for_all":
+            players = [
+                PlayerState(
+                    name=session.seat_names[i],
+                    library=self._build_seat_deck(
+                        session.seat_deck_ids[i], session.seat_colors[i], seed + i,
+                        session.seat_deck_cards_list[i],
+                    ),
+                )
+                for i in range(len(session.seat_names))
+            ]
+            session.game = Game(players=players, enforce_mana_costs=True)
+        else:
+            host_deck = self._build_seat_deck(
+                session.host_deck_id, session.host_colors, seed, session.host_deck_cards
+            )
+            guest_deck = self._build_seat_deck(
+                session.guest_deck_id, session.guest_colors, seed + 1, session.guest_deck_cards
+            )
+            p1 = PlayerState(name=session.host_name, library=host_deck)
+            p2 = PlayerState(name=session.guest_name, library=guest_deck)
+            session.game = Game(players=[p1, p2], enforce_mana_costs=True)
         session.seed = seed
         session.current_turn = 0
         session.status = "active"

@@ -84,17 +84,27 @@ def remove_creature_from_combat(game: Game, instruction: OracleInstruction, cont
     removed.metadata["removed_from_combat"] = True
 
     # If this creature is currently blocking, take it out of combat: drop it as a
-    # blocker and unblock any attacker whose only blocker it was.
+    # blocker and unblock any attacker whose only blocker it was. combat_blockers is
+    # nested by defender (CR 802), so look up this defender's own blocker entries.
     target_player_index = game.players.index(target)
-    if target_player_index == game.combat_defending_player_index and removed_index in game.combat_blockers:
-        freed_attackers = list(game.combat_blockers.get(removed_index, []))
-        game.combat_blockers.pop(removed_index, None)
+    own_blocker_map = game.combat_blockers.get(target_player_index, {})
+    if removed_index in own_blocker_map:
+        freed_attackers = list(own_blocker_map.get(removed_index, []))
+        own_blocker_map.pop(removed_index, None)
+        if own_blocker_map:
+            game.combat_blockers[target_player_index] = own_blocker_map
+        else:
+            game.combat_blockers.pop(target_player_index, None)
         game.combat_band_blocks.pop(removed_index, None)
         removed.blocking_attacker_controller = None
         removed.blocking_attacker_index = None
         active = game.players[game.active_player_index]
         for a_idx in freed_attackers:
-            still_blocked = any(a_idx in atks for atks in game.combat_blockers.values())
+            still_blocked = any(
+                a_idx in atks
+                for blocker_map in game.combat_blockers.values()
+                for atks in blocker_map.values()
+            )
             if not still_blocked and 0 <= a_idx < len(active.battlefield):
                 active.battlefield[a_idx].blocked = False
         # CR 702.22h: band block propagation is recomputed from combat_blockers.
@@ -112,7 +122,12 @@ def left_right_combat_division(game: Game, instruction: OracleInstruction, conte
     if context.source_permanent is not None:
         context.source_permanent.metadata["left_right_division_turn"] = game.turn
     game.combat_left_right_active = True
-    game.combat_left_right_defender_index = game.combat_defending_player_index
+    # TODO(FFA): Raging River's left/right split is only spec'd for a single
+    # defending player; under attack-multiple-players (CR 802) with 2+ defenders
+    # this combat, default to the first one rather than modeling a division per
+    # defender.
+    defender_index = next(iter(game.combat_defending_players()), None)
+    game.combat_left_right_defender_index = defender_index
     # A fresh attack re-opens both players' pile decisions.
     game.combat_left_right_defender_locked = False
     game.combat_left_right_attacker_locked = False
@@ -123,7 +138,6 @@ def left_right_combat_division(game: Game, instruction: OracleInstruction, conte
     # (an AI defender "chooses randomly"); a human overrides it via the UI before
     # blocks are declared (assign_defender_piles / assign_attacker_piles). The
     # module RNG is seeded in AI simulations, so a seeded run stays reproducible.
-    defender_index = game.combat_defending_player_index
     if isinstance(defender_index, int) and 0 <= defender_index < len(game.players):
         defender = game.players[defender_index]
         game.combat_defender_piles = {}

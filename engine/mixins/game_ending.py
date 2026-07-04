@@ -37,10 +37,30 @@ class GameEndingMixin:
             return True
         return False
 
+    def _eliminate_player(self, player_index: int) -> None:
+        """CR 800.4a: when a player leaves the game, objects they own leave with
+        them. Scope decision for this engine: their battlefield permanents are
+        exiled (removed from play — they're no longer valid attackers, blockers,
+        or targets) and any stack objects they control cease to exist; their
+        hand/library/graveyard are left alone (inert history — nothing keys off
+        a lost player's non-battlefield zones for gameplay purposes, since
+        ``opponents_of``/combat helpers already exclude lost players)."""
+        player = self.players[player_index]
+        if player.battlefield:
+            for permanent in player.battlefield:
+                self.log.append(
+                    f"{permanent.card.name} leaves the game ({player.name} left the game, CR 800.4a)"
+                )
+            player.battlefield = []
+        # CR 800.4a: stack objects this player owns/controls cease to exist.
+        self.stack = [item for item in self.stack if item.caster_index != player_index]
+        self.log.append(f"{player.name} has left the game (CR 800.4a)")
+
     def check_state_based_actions(self) -> bool:
         """Check and apply all state-based actions per CR 704. Returns True if any action fired."""
         any_changed = False
         changed = True
+        previously_lost = {i for i, p in enumerate(self.players) if p.lost}
         while changed:
             changed = False
 
@@ -372,5 +392,15 @@ class GameEndingMixin:
         # SBA check). Recompute static buffs / dynamic P/T so the board is current.
         if any_changed:
             self._recompute_continuous_effects()
+
+        # CR 800.4a: in a multiplayer game (3+ players) the game continues after a
+        # player leaves, so their zones must actually be cleaned up now. A 2-player
+        # game just ends instead (CR 800.4 is explicitly a multiplayer concept —
+        # "unlike two-player games, multiplayer games can continue..."), so nothing
+        # here changes 2-player behavior.
+        if len(self.players) >= 3:
+            newly_lost = [i for i, p in enumerate(self.players) if p.lost and i not in previously_lost]
+            for idx in newly_lost:
+                self._eliminate_player(idx)
 
         return any_changed

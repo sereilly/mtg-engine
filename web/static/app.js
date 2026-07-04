@@ -961,7 +961,9 @@ async function maybeAutoPassUntilTurnEnd(state = currentState) {
         seat,
         action: "declare_attackers",
         attacker_indices: [],
-        target_seat: Number.isInteger(combat?.defending_player_index) ? combat.defending_player_index : 1 - seat,
+        target_seat: Number.isInteger(combat?.defending_player_index)
+          ? combat.defending_player_index
+          : firstLivingOpponentSeat(state, seat, "auto-pass empty declare_attackers"),
       });
       return;
     }
@@ -1107,7 +1109,9 @@ async function maybeAutoPassDisabledPhase(state = currentState) {
         seat,
         action: "declare_attackers",
         attacker_indices: [],
-        target_seat: Number.isInteger(combat?.defending_player_index) ? combat.defending_player_index : 1 - seat,
+        target_seat: Number.isInteger(combat?.defending_player_index)
+          ? combat.defending_player_index
+          : firstLivingOpponentSeat(state, seat, "auto-pass empty declare_attackers"),
       });
       return;
     }
@@ -1153,7 +1157,9 @@ async function maybeAutoAdvanceCombatDeclaration(state = currentState) {
     !combat.attackers_locked &&
     getValidAttackerIndices(state).length === 0
   ) {
-    const defendingSeat = Number.isInteger(combat.defending_player_index) ? combat.defending_player_index : 1 - seat;
+    const defendingSeat = Number.isInteger(combat.defending_player_index)
+      ? combat.defending_player_index
+      : firstLivingOpponentSeat(state, seat, "auto-advance empty declare_attackers");
     actionBody = { seat, action: "declare_attackers", attacker_indices: [], target_seat: defendingSeat };
   } else if (
     isCombatStep(state, "declare_blockers") &&
@@ -1946,18 +1952,61 @@ function getHandRevealInfo(state = currentState) {
   return info;
 }
 
+// ---------------------------------------------------------------------------
+// Free-For-All (3-4 player) target-seat helpers.
+//
+// Every 2-player call site keeps its original `1 - seat` shortcut untouched.
+// These helpers are only ever consulted when `state.players.length > 2`, so
+// they add zero risk to the well-tested 2-player paths.
+function livingOpponentSeats(state, viewerSeat) {
+  if (!state || !Array.isArray(state.players) || !Number.isInteger(viewerSeat)) return [];
+  return state.players
+    .map((_, idx) => idx)
+    .filter((idx) => idx !== viewerSeat && !state.players[idx]?.lost);
+}
+
+function isFfaState(state = currentState) {
+  return !!(state && Array.isArray(state.players) && state.players.length > 2);
+}
+
+// Player-facing opponent picker for FFA: a simple synchronous prompt() listing
+// the other living seats (window.prompt blocks, so callers can stay sync).
+function pickOpponentSeatSync(label, state = currentState, viewerSeat = seat) {
+  const candidates = livingOpponentSeats(state, viewerSeat);
+  if (candidates.length === 0) return 1 - viewerSeat;
+  if (candidates.length === 1) return candidates[0];
+  const names = candidates.map((idx) => `${idx}: ${state.players[idx]?.name || `Seat ${idx}`}`).join("\n");
+  const answer = window.prompt(`${label}\n\n${names}`, String(candidates[0]));
+  const chosen = Number(answer);
+  return candidates.includes(chosen) ? chosen : candidates[0];
+}
+
+// Best-effort default opponent seat for non-interactive / rarer flows (auto-pass
+// of an empty attacker declaration, debug "cast as opponent"): first living
+// opponent seat, no prompt. Logs so any FFA gap here is discoverable.
+function firstLivingOpponentSeat(state = currentState, viewerSeat = seat, context = "") {
+  const candidates = livingOpponentSeats(state, viewerSeat);
+  if (candidates.length > 0) return candidates[0];
+  if (context) console.log(`FFA: no living opponent found for ${context}; falling back to 1 - seat`);
+  return 1 - viewerSeat;
+}
+
 function getDefaultTargetSeat(cardName) {
   if (seat === null) return 1;
   if (["Ancestral Recall", "Healing Salve", "Stream of Life"].includes(cardName)) {
     return seat;
   }
+  if (isFfaState()) return pickOpponentSeatSync(`Target which player for ${cardName}?`);
   return 1 - seat;
 }
 
 function getOpponentDefaultTargetSeat(cardName) {
-  // Default target when the spell is being cast on the opponent's behalf.
+  // Default target when the spell is being cast on the opponent's behalf
+  // (debug-only "cast for free as opponent" flow).
   if (seat === null) return 0;
-  const opponentSeat = 1 - seat;
+  const opponentSeat = isFfaState()
+    ? firstLivingOpponentSeat(currentState, seat, "debug cast-as-opponent default target")
+    : 1 - seat;
   if (["Ancestral Recall", "Healing Salve", "Stream of Life"].includes(cardName)) {
     return opponentSeat;
   }
@@ -2114,7 +2163,13 @@ async function handleCombatPromptOk() {
       return false;
     }
     const declared = [...combatAttackerDraft];
-    const defendingSeat = Number.isInteger(combat.defending_player_index) ? combat.defending_player_index : 1 - seat;
+    let defendingSeat = Number.isInteger(combat.defending_player_index) ? combat.defending_player_index : null;
+    if (defendingSeat === null) {
+      // 3+ player game with no single defender established yet: the attacking
+      // player must choose which one opponent every declared attacker goes at
+      // (MVP scope — no true per-attacker-defender picker).
+      defendingSeat = isFfaState(state) ? pickOpponentSeatSync("Attack which player?", state, seat) : 1 - seat;
+    }
     const declareBody = {
       seat,
       action: "declare_attackers",
@@ -6128,7 +6183,9 @@ function createCardElement(card, options = {}) {
         }
 
         // Abilities that buff/modify the controller's own creatures target self, not opponent.
-        const activationTargetSeat = activatedAbilityTargetsSelf(card) ? seat : 1 - seat;
+        const activationTargetSeat = activatedAbilityTargetsSelf(card)
+          ? seat
+          : (isFfaState() ? pickOpponentSeatSync(`Which player does ${cardName}'s ability target?`) : 1 - seat);
         startActivationPrompt(card, activationTargetSeat, permanentIndex);
       } catch (e) {
         updateActionHint(e.message, true);
@@ -7729,6 +7786,55 @@ function updateRematchButtons(state) {
   }
 }
 
+// Free-For-All (3-4 player) only: small info panels for every seat other than
+// the viewer and whichever seat the classic single-opponent header (#oppName /
+// #oppLife / #oppHand) is already showing. Rough first pass — plain divs with
+// inline styling, positioned in the screen corners; not themed to match the
+// rest of the UI. Reuses the same click-to-target flow as the classic header
+// (see the click listener wired onto #ffaOpponentPanels below) so spells/
+// abilities targeting "any player" can be aimed at these seats too.
+function renderFfaOpponentPanels(state, viewerSeat, oppSeat) {
+  const container = q("ffaOpponentPanels");
+  if (!container) return;
+  const isFfa = Array.isArray(state.players) && state.players.length > 2;
+  container.classList.toggle("hidden", !isFfa);
+  if (!isFfa) {
+    container.innerHTML = "";
+    return;
+  }
+  const extraSeats = state.players.map((_, idx) => idx).filter((idx) => idx !== viewerSeat && idx !== oppSeat);
+  const validPlayerSeats = pendingCastTarget?.validPlayerSeats;
+  // The classic single-opponent header sits top-left, the viewer's own header
+  // sits bottom-left, and the action-hint tip box sits top-right (~90px tall) —
+  // so stack these extra panels on the right side, below the tip box (at most
+  // 2 extra seats ever exist: a 4-player game minus the viewer and the classic
+  // header's one seat).
+  const cornerStyles = [
+    "top:100px; right:8px;",
+    "top:180px; right:8px;",
+  ];
+  container.innerHTML = extraSeats
+    .map((idx, i) => {
+      const p = state.players[idx] || {};
+      const isTurn = state.current_turn === idx;
+      const isTargetable = !!(validPlayerSeats && validPlayerSeats.has(idx));
+      const handCount = Array.isArray(p.hand) ? p.hand.length : Number(p.hand_count || 0) || 0;
+      return `
+      <div class="ffa-opponent-panel${isTargetable ? " targeting-valid" : ""}"
+           data-target-seat="${idx}"
+           style="position:absolute; pointer-events:auto; cursor:${isTargetable ? "pointer" : "default"};
+                  ${cornerStyles[i % cornerStyles.length]}
+                  background:rgba(10,14,20,0.82); border:1px solid ${isTurn ? "#7ec4ff" : "rgba(126,196,255,0.25)"};
+                  border-radius:8px; padding:6px 10px; color:#eaf2ff; font:12px/1.3 sans-serif; min-width:110px;">
+        <div style="font-weight:600;">${escapeHtml(p.name || `Seat ${idx}`)}${isTurn ? " &bull;" : ""}</div>
+        <div>Life: ${Number(p.life)}</div>
+        <div>Hand: ${handCount}</div>
+        ${p.lost ? '<div style="color:#ff8080;">Eliminated</div>' : ""}
+      </div>`;
+    })
+    .join("");
+}
+
 function renderBoard(state) {
   renderGameOverOverlay(state);
   const viewerSeat = seat ?? 0;
@@ -7868,6 +7974,7 @@ function renderBoard(state) {
   renderStack(state.stack);
   renderLog(state);
   renderCombatOverlay(state);
+  renderFfaOpponentPanels(state, viewerSeat, oppSeat);
   q("rawState").textContent = JSON.stringify(state, null, 2);
 
   if (requiresCleanupSelection) {
@@ -8387,7 +8494,11 @@ function initBattlefieldCanvas() {
           return;
         }
 
-        startActivationPrompt(activateCard, 1 - seat, activateIdx);
+        startActivationPrompt(
+          activateCard,
+          isFfaState() ? pickOpponentSeatSync(`Which player does ${activateCard.name}'s ability target?`) : 1 - seat,
+          activateIdx,
+        );
       } catch (e) {
         updateActionHint(e.message, true);
       }
@@ -8671,28 +8782,133 @@ function deckSelection(selectId) {
   return { deck_id: id, deck_cards: null };
 }
 
+// Markup for one Free-For-All seat config block, mirroring the visual pattern
+// of the existing host/guest deck-picker blocks (name + human/AI + deck + colors).
+function ffaSeatBlockHtml(index, defaults) {
+  const name = defaults?.name || `Player ${index + 1}`;
+  const isAi = defaults ? !!defaults.isAi : index !== 0;
+  const colors = defaults?.colors || 2;
+  return `
+    <div class="menu-form-card ffa-seat-block" data-seat-index="${index}" style="margin-bottom:10px;">
+      <h3 style="margin:0 0 6px 0;">Seat ${index}${index === 0 ? " (Host)" : ""}</h3>
+      <label>Name <input id="ffaSeatName_${index}" value="${escapeHtml(name)}" /></label>
+      <label>Type
+        <select id="ffaSeatType_${index}">
+          <option value="human" ${!isAi ? "selected" : ""}>Human</option>
+          <option value="ai" ${isAi ? "selected" : ""}>AI</option>
+        </select>
+      </label>
+      <label>Deck
+        <select id="ffaSeatDeck_${index}" class="ffa-deck-select">
+          <option value="">Random deck</option>
+        </select>
+      </label>
+      <label>Colors (1-5) <input id="ffaSeatColors_${index}" type="number" min="1" max="5" value="${colors}" /></label>
+    </div>`;
+}
+
+// (Re)build the per-seat blocks for the current #ffaSeatCount, preserving
+// whatever the user already entered for seats that still exist afterward.
+function generateFfaSeatBlocks() {
+  const container = q("ffaSeatsContainer");
+  if (!container) return;
+  const seatCount = Number(q("ffaSeatCount")?.value) || 3;
+  const previous = [];
+  for (let i = 0; i < seatCount; i++) {
+    const typeEl = q(`ffaSeatType_${i}`);
+    previous.push({
+      name: q(`ffaSeatName_${i}`)?.value,
+      isAi: typeEl ? typeEl.value === "ai" : undefined,
+      colors: q(`ffaSeatColors_${i}`)?.value,
+    });
+  }
+  let html = "";
+  for (let i = 0; i < seatCount; i++) {
+    const prev = previous[i];
+    html += ffaSeatBlockHtml(i, {
+      name: prev?.name,
+      isAi: prev?.isAi !== undefined ? prev.isAi : i !== 0,
+      colors: prev?.colors,
+    });
+  }
+  container.innerHTML = html;
+  // Populate the freshly-created deck selects with the current deck catalog
+  // (deck-editor.js owns the deck list and exposes this helper on window).
+  for (let i = 0; i < seatCount; i++) {
+    window.populateDeckSelectElement?.(q(`ffaSeatDeck_${i}`), "Random deck");
+  }
+}
+
+// Toggle between the Standard host form and the Free-For-All seat list, and
+// (re)generate the seat blocks whenever the format or seat count changes.
+function syncFormatFields() {
+  const format = q("format")?.value || "standard";
+  const isFfa = format === "free_for_all";
+  q("standardModeFields")?.classList.toggle("hidden", isFfa);
+  q("ffaModeFields")?.classList.toggle("hidden", !isFfa);
+  if (isFfa) {
+    generateFfaSeatBlocks();
+  } else {
+    window.syncStartPageColorInputs?.();
+  }
+}
+
+// Build the {name, is_ai, colors, deck_id, deck_cards} entries for a
+// Free-For-All session from the per-seat blocks generateFfaSeatBlocks() built.
+function collectFfaSeats() {
+  const seatCount = Number(q("ffaSeatCount")?.value) || 3;
+  const seats = [];
+  for (let i = 0; i < seatCount; i++) {
+    const nameEl = q(`ffaSeatName_${i}`);
+    const typeEl = q(`ffaSeatType_${i}`);
+    const colorsEl = q(`ffaSeatColors_${i}`);
+    const sel = deckSelection(`ffaSeatDeck_${i}`);
+    const isAi = typeEl ? typeEl.value === "ai" : i !== 0;
+    seats.push({
+      name: nameEl ? nameEl.value : `Player ${i + 1}`,
+      is_ai: isAi,
+      colors: Number(colorsEl?.value) || 2,
+      deck_id: sel.deck_id,
+      deck_cards: sel.deck_cards,
+    });
+  }
+  return seats;
+}
+
 async function createSession() {
   hideSetupPanel();
   syncSeedControls();
-  const mode = q("mode").value;
+  const format = q("format")?.value || "standard";
   const useCustomSeed = q("useCustomSeed").checked;
-  const hostSel = deckSelection("hostDeckSelect");
-  // The opponent's deck is only host-configurable when it's AI. For networked
-  // human_vs_human the guest brings their own deck on join.
-  const guestSel = mode === "human_vs_human" ? { deck_id: null, deck_cards: null } : deckSelection("guestDeckSelect");
-  const req = {
-    mode,
-    host_name: q("hostName").value,
-    host_colors: Number(q("hostColors").value),
-    host_deck_id: hostSel.deck_id,
-    host_deck_cards: hostSel.deck_cards,
-    guest_colors: Number(q("guestColors").value),
-    guest_deck_id: guestSel.deck_id,
-    guest_deck_cards: guestSel.deck_cards,
-    use_custom_seed: useCustomSeed,
-    custom_seed: useCustomSeed ? Number(q("customSeed").value) : null,
-    enable_pregame: true,
-  };
+  let req;
+  if (format === "free_for_all") {
+    req = {
+      mode: "free_for_all",
+      seats: collectFfaSeats(),
+      use_custom_seed: useCustomSeed,
+      custom_seed: useCustomSeed ? Number(q("customSeed").value) : null,
+      enable_pregame: true,
+    };
+  } else {
+    const mode = q("mode").value;
+    const hostSel = deckSelection("hostDeckSelect");
+    // The opponent's deck is only host-configurable when it's AI. For networked
+    // human_vs_human the guest brings their own deck on join.
+    const guestSel = mode === "human_vs_human" ? { deck_id: null, deck_cards: null } : deckSelection("guestDeckSelect");
+    req = {
+      mode,
+      host_name: q("hostName").value,
+      host_colors: Number(q("hostColors").value),
+      host_deck_id: hostSel.deck_id,
+      host_deck_cards: hostSel.deck_cards,
+      guest_colors: Number(q("guestColors").value),
+      guest_deck_id: guestSel.deck_id,
+      guest_deck_cards: guestSel.deck_cards,
+      use_custom_seed: useCustomSeed,
+      custom_seed: useCustomSeed ? Number(q("customSeed").value) : null,
+      enable_pregame: true,
+    };
+  }
   const data = await postJson("/api/sessions", req);
   sessionId = data.session_id;
   seat = data.seat;
@@ -8750,7 +8966,7 @@ async function sendAction(actionBody) {
 
 q("homeHostBtn")?.addEventListener("click", () => {
   showMenuPage("host");
-  window.syncStartPageColorInputs?.();
+  syncFormatFields();
 });
 
 q("homeJoinBtn")?.addEventListener("click", () => {
@@ -8825,6 +9041,14 @@ q("mode").addEventListener("change", () => {
   window.syncStartPageColorInputs?.();
 });
 
+q("format")?.addEventListener("change", () => {
+  syncFormatFields();
+});
+
+q("ffaSeatCount")?.addEventListener("change", () => {
+  generateFfaSeatBlocks();
+});
+
 q("useCustomSeed").addEventListener("change", () => {
   syncSeedControls();
 });
@@ -8835,6 +9059,24 @@ q("joinBtn").addEventListener("click", async () => {
   } catch (e) {
     alert(e.message);
   }
+});
+
+// Free-For-All opponent panels are rebuilt (innerHTML) on every render, so use
+// one delegated listener on the container rather than rebinding per-panel.
+q("ffaOpponentPanels")?.addEventListener("click", (event) => {
+  if (
+    !pendingCastTarget ||
+    (pendingCastTarget.targetKind !== "player" &&
+      pendingCastTarget.targetKind !== "any" &&
+      pendingCastTarget.targetKind !== "divided")
+  )
+    return;
+  const panel = event.target instanceof Element ? event.target.closest("[data-target-seat]") : null;
+  if (!panel) return;
+  const targetSeat = Number(panel.dataset.targetSeat);
+  if (!Number.isInteger(targetSeat)) return;
+  event.preventDefault();
+  handlePlayerTargetClick(targetSeat);
 });
 
 for (const elementId of ["selfName", "oppName", "selfLife", "oppLife"]) {

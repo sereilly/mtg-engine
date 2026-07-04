@@ -48,9 +48,15 @@ class DeclareBlockersStepMixin:
     ) -> tuple[bool, str]:
         if self.current_turn_phase != "combat" or self.current_step != "declare_blockers":
             return False, "blockers can only be declared during declare_blockers"
-        if self.combat_defending_player_index is None:
-            return False, "no defending player set"
-        if controller_index != self.combat_defending_player_index:
+        if self.combat_attackers:
+            if controller_index not in self.combat_defending_players():
+                return False, "only defending player may declare blockers"
+        elif controller_index == self.active_player_index or not (0 <= controller_index < len(self.players)):
+            # No attackers at all this combat: nobody is formally "a defending
+            # player" yet (combat_defending_players() is empty), but any non-active
+            # player may still submit a trivial no-op declaration — matching the
+            # historical single-defender behavior where the (sole) opponent was
+            # always considered the defending player even before any attack.
             return False, "only defending player may declare blockers"
         # Camouflage replaces the declare-blockers turn-based action: blocks come
         # from the defender's piles (assign_camouflage_piles / the random AI
@@ -61,6 +67,11 @@ class DeclareBlockersStepMixin:
         self._prune_combat_state()
         defender = self.players[controller_index]
         attacker_controller = self.players[self.active_player_index]
+        # CR 802.4a: a defending player may only block attackers aimed at them.
+        own_attackers = {
+            idx for idx, defending_idx in self.combat_attackers.items()
+            if defending_idx == controller_index
+        }
         assignments: dict[int, list[int]] = {}
 
         for blocker_idx, raw_attackers in blocker_to_attacker.items():
@@ -78,8 +89,8 @@ class DeclareBlockersStepMixin:
             if len(set(attacker_indices)) > self._max_blocks_for(blocker):
                 return False, f"{blocker.card.name} cannot block that many creatures"
             for attacker_idx in dict.fromkeys(attacker_indices):  # dedupe, keep order
-                if attacker_idx not in self.combat_attackers:
-                    return False, "blocker assigned to non-attacker"
+                if attacker_idx not in own_attackers:
+                    return False, "blocker assigned to a creature not attacking this player"
                 attacker = attacker_controller.battlefield[attacker_idx]
                 if not self._can_block_attacker(blocker, attacker):
                     return False, f"{blocker.card.name} cannot block {attacker.card.name}"
@@ -87,10 +98,11 @@ class DeclareBlockersStepMixin:
                     return False, f"{blocker.card.name} is in the wrong pile to block {attacker.card.name}"
                 assignments.setdefault(blocker_idx, []).append(attacker_idx)
 
-        # Lure enforcement: every creature that can block a Lure attacker must do so.
-        # Skipped for Camouflage resolutions: blocks then come from random pile
-        # assignment, not a declaration, so blocking requirements don't constrain it.
-        for attacker_idx in self.combat_attackers if not _camouflage_resolution else ():
+        # Lure enforcement: every creature that can block a Lure attacker (aimed at
+        # this defender) must do so. Skipped for Camouflage resolutions: blocks then
+        # come from random pile assignment, not a declaration, so blocking
+        # requirements don't constrain it.
+        for attacker_idx in (own_attackers if not _camouflage_resolution else ()):
             if attacker_idx >= len(attacker_controller.battlefield):
                 continue
             attacker = attacker_controller.battlefield[attacker_idx]
@@ -105,15 +117,16 @@ class DeclareBlockersStepMixin:
                     return False, f"{blocker.card.name} must block {attacker.card.name} due to Lure"
 
         # Blaze of Glory enforcement: the marked creature "blocks each attacking
-        # creature this turn if able" — every attacker it can legally block must
-        # be among its assignments. Also skipped for Camouflage resolutions.
+        # creature this turn if able" — every attacker (aimed at this defender) it
+        # can legally block must be among its assignments. Also skipped for
+        # Camouflage resolutions.
         for blocker_idx, blocker in enumerate(defender.battlefield if not _camouflage_resolution else ()):
             if not blocker.metadata.get("must_block_all_until_eot"):
                 continue
             if not blocker.is_creature or blocker.tapped:
                 continue
             assigned = set(assignments.get(blocker_idx, []))
-            for attacker_idx in self.combat_attackers:
+            for attacker_idx in own_attackers:
                 if attacker_idx >= len(attacker_controller.battlefield):
                     continue
                 attacker = attacker_controller.battlefield[attacker_idx]
@@ -127,19 +140,28 @@ class DeclareBlockersStepMixin:
                         "(Blaze of Glory)"
                     )
 
-        self.combat_blockers = assignments
-        self.combat_blockers_locked = True
+        # Nested by defender (CR 802): only this defender's own entry is replaced,
+        # so an earlier defender's declaration in the same combat survives.
+        if assignments:
+            self.combat_blockers[controller_index] = assignments
+        else:
+            self.combat_blockers.pop(controller_index, None)
+        self.combat_blockers_declared_by.add(controller_index)
         for blocker_idx in assignments:
             if 0 <= blocker_idx < len(defender.battlefield):
                 defender.battlefield[blocker_idx].metadata["blocked_this_combat"] = True
         self._prune_combat_state()
+        # CR 802.4: blocks lock in only once every defending player has declared
+        # (or been auto-skipped) in APNAP order — not after this one defender.
+        self.combat_blockers_locked = self._pending_block_declarer() is None
         self.log.append(f"{defender.name} declared {len(assignments)} blocker(s)")
         # 509.1i / 509.2a: abilities that trigger on blockers being declared fire now.
         self._fire_block_triggers(controller_index)
         self._apply_rampage_and_flanking(controller_index)
-        # CR 509.4: once blockers have been declared (the turn-based action of the
-        # declare blockers step), the active player receives priority.
-        self.start_priority_window(self.active_player_index)
+        # CR 509.4/802.4: once every defending player has declared, the active
+        # player receives priority.
+        if self.combat_blockers_locked:
+            self.start_priority_window(self.active_player_index)
         return True, "declared blockers"
 
     def is_camouflage_active(self) -> bool:
@@ -161,7 +183,7 @@ class DeclareBlockersStepMixin:
             return False, "piles can only be assigned during declare_blockers"
         if not self.is_camouflage_active():
             return False, "Camouflage is not active"
-        if defender_index != self.combat_defending_player_index:
+        if defender_index not in self.combat_defending_players():
             return False, "only the defending player may assign piles"
         if self.combat_blockers_locked:
             return False, "blockers are already locked in"
@@ -198,7 +220,7 @@ class DeclareBlockersStepMixin:
         reproducible."""
         if self.current_turn_phase != "combat" or self.current_step != "declare_blockers":
             return False, "blockers can only be declared during declare_blockers"
-        if defender_index != self.combat_defending_player_index:
+        if defender_index not in self.combat_defending_players():
             return False, "only defending player may declare blockers"
         defender = self.players[defender_index]
         attackers = [a for a, d in self.combat_attackers.items() if d == defender_index]
@@ -366,17 +388,24 @@ class DeclareBlockersStepMixin:
         return False
 
     def _combat_blockers_for_attacker(self, attacker_idx: int) -> list[int]:
-        return [blocker_idx for blocker_idx, a_idxs in self.combat_blockers.items() if attacker_idx in a_idxs]
+        """Battlefield indices (on this attacker's own defender's battlefield) of
+        every creature blocking it. Resolved via the attacker's own defender since
+        blocker indices are only unambiguous within one defender's battlefield."""
+        defending_idx = self.combat_attackers.get(attacker_idx)
+        if defending_idx is None:
+            return []
+        blocker_map = self.combat_blockers.get(defending_idx, {})
+        return [blocker_idx for blocker_idx, a_idxs in blocker_map.items() if attacker_idx in a_idxs]
 
     def _is_blocking_creature(self, permanent: Permanent) -> bool:
         """True if *permanent* is currently blocking an attacker (Righteousness)."""
-        defending_index = self.combat_defending_player_index
-        if not isinstance(defending_index, int) or not (0 <= defending_index < len(self.players)):
-            return False
-        defender = self.players[defending_index]
-        for blocker_idx in self.combat_blockers:
-            if 0 <= blocker_idx < len(defender.battlefield) and defender.battlefield[blocker_idx] is permanent:
-                return True
+        for defending_index, blocker_map in self.combat_blockers.items():
+            if not (0 <= defending_index < len(self.players)):
+                continue
+            defender = self.players[defending_index]
+            for blocker_idx in blocker_map:
+                if 0 <= blocker_idx < len(defender.battlefield) and defender.battlefield[blocker_idx] is permanent:
+                    return True
         return False
 
     def _apply_band_block_propagation(self) -> None:
@@ -466,7 +495,8 @@ class DeclareBlockersStepMixin:
 
         # A blocker that blocks an attacker (509.3a "Whenever this creature blocks").
         # A creature blocking several attackers fires once per attacker it blocks.
-        for blocker_idx, attacker_idxs in self.combat_blockers.items():
+        # Scoped to this defender's own declared blocks (nested by defender, CR 802).
+        for blocker_idx, attacker_idxs in self.combat_blockers.get(controller_index, {}).items():
             if blocker_idx < 0 or blocker_idx >= len(defender.battlefield):
                 continue
             blocker = defender.battlefield[blocker_idx]
@@ -480,8 +510,11 @@ class DeclareBlockersStepMixin:
                         attacker_idx,
                     )
 
-        # An attacker that becomes blocked (509.3c/509.3d "becomes blocked").
-        for attacker_idx in self.combat_attackers:
+        # An attacker that becomes blocked (509.3c/509.3d "becomes blocked"), scoped
+        # to attackers aimed at this defender (CR 802.4a).
+        for attacker_idx, defending_idx in self.combat_attackers.items():
+            if defending_idx != controller_index:
+                continue
             if attacker_idx < 0 or attacker_idx >= len(attacker_controller.battlefield):
                 continue
             attacker = attacker_controller.battlefield[attacker_idx]
@@ -533,7 +566,11 @@ class DeclareBlockersStepMixin:
             return
         defender = self.players[controller_index]
 
-        for attacker_idx in self.combat_attackers:
+        # Scoped to attackers aimed at this defender (CR 802.4a) — rampage/flanking
+        # act on the block just declared against controller_index specifically.
+        for attacker_idx, defending_idx in self.combat_attackers.items():
+            if defending_idx != controller_index:
+                continue
             if attacker_idx < 0 or attacker_idx >= len(attacker_controller.battlefield):
                 continue
             attacker = attacker_controller.battlefield[attacker_idx]

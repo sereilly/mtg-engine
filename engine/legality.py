@@ -447,12 +447,27 @@ class LegalityMixin:
             i.kind == "cant_be_blocked" for i in compile_card_oracle(perm.effective_card).instructions
         )
 
-    def legal_attacker_indices(self, attacker_index: int) -> list[int]:
+    def opponents_of(self, player_index: int) -> list[int]:
+        """Every other player still in the game (CR 800.4a: a player who has left
+        the game is no longer anyone's opponent). In a 2-player game this is just
+        the other seat; in a 3+ player (Free-For-All) game it's every living seat
+        but this one."""
+        return [
+            i for i, p in enumerate(self.players)
+            if i != player_index and not p.lost
+        ]
+
+    def legal_attacker_indices(self, attacker_index: int, against: int | None = None) -> list[int]:
         """Battlefield indices of creatures that may legally be declared as
         attackers this turn — untapped, not summoning sick, and allowed to attack
-        the opponent (mirrors the declare-attackers acceptance checks)."""
+        an opponent (mirrors the declare-attackers acceptance checks).
+
+        When ``against`` is given, mirrors the original single-opponent behavior
+        exactly (legal against that one specific opponent). When omitted, returns
+        creatures legal against ANY living opponent — the union view a 3+ player
+        UI needs before the player has picked which opponent to attack."""
         player = self.players[attacker_index]
-        opponent_index = 1 - attacker_index
+        opponents = [against] if against is not None else self.opponents_of(attacker_index)
         return [
             idx
             for idx, perm in enumerate(player.battlefield)
@@ -460,8 +475,20 @@ class LegalityMixin:
             if self._is_creature(perm)
             and not perm.tapped
             and not self._is_summoning_sick(perm)
-            and self.can_attack(perm, opponent_index)
+            and any(self.can_attack(perm, opp) for opp in opponents)
         ]
+
+    def legal_defenders_for_attacker(self, attacker_index: int, permanent_index: int) -> list[int]:
+        """Which of ``attacker_index``'s living opponents the creature at
+        ``permanent_index`` could legally attack — lets a 3+ player UI offer a
+        per-attacker defending-player picker (CR 802.3)."""
+        player = self.players[attacker_index]
+        if not (0 <= permanent_index < len(player.battlefield)):
+            return []
+        perm = player.battlefield[permanent_index]
+        if not self._is_creature(perm) or perm.tapped or self._is_summoning_sick(perm):
+            return []
+        return [opp for opp in self.opponents_of(attacker_index) if self.can_attack(perm, opp)]
 
     def legal_blocker_assignments(self, defender_index: int) -> list[dict[str, int]]:
         """Every legal ``{"blocker_index", "attacker_index"}`` pair for the
@@ -469,7 +496,7 @@ class LegalityMixin:
         untapped, ``_can_block_attacker``, and Raging River pile restrictions)."""
         if self.current_turn_phase != "combat" or self.current_step != "declare_blockers":
             return []
-        if self.combat_defending_player_index != defender_index:
+        if defender_index not in self.combat_defending_players():
             return []
         # Camouflage replaces blocker declaration with pile assignment, so there
         # are no individually declarable blocker→attacker pairs this combat.
@@ -482,7 +509,10 @@ class LegalityMixin:
             # is_creature so animated lands (Kormus Bell, Living Lands) may block.
             if not blocker.is_creature or blocker.tapped:
                 continue
-            for attacker_idx in self.combat_attackers:
+            # CR 802.4a: this defender can only block attackers aimed at them.
+            for attacker_idx, defending_idx in self.combat_attackers.items():
+                if defending_idx != defender_index:
+                    continue
                 if attacker_idx < 0 or attacker_idx >= len(attacker_controller.battlefield):
                     continue
                 attacker = attacker_controller.battlefield[attacker_idx]

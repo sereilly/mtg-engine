@@ -30,6 +30,15 @@ const BF_OVERSCAN_Y = 1.34;
 const BF_OVERSAMPLE = 1.3; // extra backing resolution so the projection stays crisp
 // World Y value of the dividing line between the two player halves
 const BF_WORLD_SPLIT_Y = 310;
+// Free-For-All (3-4 player) quadrant layout. 2-player games never use these:
+// _quadrantFor()/_seatForWorldPoint() reproduce the original single-split
+// behavior exactly whenever there are 2 or fewer players. For 3-4 players the
+// board is additionally split left/right at this world X, giving four
+// quadrants (BF_WORLD_SPLIT_Y still divides top/bottom). The shift is wide
+// enough to clear a full BF_MAX_COLS-wide row (including per-slot side-aura
+// overhang) so the two X columns never collide.
+const BF_QUADRANT_SHIFT_X = 1400;
+const BF_QUADRANT_BOUNDARY_X = BF_QUADRANT_SHIFT_X / 2;
 
 // ---- Automatic layout ----
 // Each player's permanents are split into bands, ordered front (nearest the
@@ -607,6 +616,71 @@ class BattlefieldCanvas {
     return Boolean(card.attacking) || Number(card.damage_marked) > 0 || card.blocking_attacker_index != null;
   }
 
+  // ---------------------------------------------------------------------------
+  // Free-For-All quadrant layout
+  // ---------------------------------------------------------------------------
+
+  // Where a seat's permanents live: which way its bands grow (down from the
+  // split line, or up), and which half of the X axis they're offset into.
+  // For 2-or-fewer players this MUST reproduce the original behavior exactly
+  // (full-width bottom half for the viewer growing down, full-width top half
+  // for the other seat growing up) — every call site below is written so the
+  // n<=2 branch is a byte-for-byte no-op versus the pre-FFA code.
+  _quadrantFor(seatIdx) {
+    const n = this.currentState?.players?.length || 0;
+    if (n <= 2) {
+      const isViewer = seatIdx === this.viewerSeat;
+      return {
+        xMin: -Infinity,
+        xMax: Infinity,
+        yMin: isViewer ? BF_WORLD_SPLIT_Y : -Infinity,
+        yMax: isViewer ? Infinity : BF_WORLD_SPLIT_Y,
+        growDirection: isViewer ? "down" : "up",
+        xOffset: 0,
+      };
+    }
+    // Rotation order relative to the viewer: 0 = viewer (bottom-left), 1 =
+    // bottom-right, 2 = top-left, 3 = top-right. With 3 players seat r=3 never
+    // occurs, so the top-right quadrant is simply left empty.
+    const r = (((seatIdx - this.viewerSeat) % n) + n) % n;
+    const isLeft = r === 0 || r === 2;
+    const isBottom = r === 0 || r === 1;
+    return {
+      xMin: isLeft ? -Infinity : BF_QUADRANT_BOUNDARY_X,
+      xMax: isLeft ? BF_QUADRANT_BOUNDARY_X : Infinity,
+      yMin: isBottom ? BF_WORLD_SPLIT_Y : -Infinity,
+      yMax: isBottom ? Infinity : BF_WORLD_SPLIT_Y,
+      growDirection: isBottom ? "down" : "up",
+      xOffset: isLeft ? 0 : BF_QUADRANT_SHIFT_X,
+    };
+  }
+
+  // Reverse lookup: which seat owns the quadrant containing a given world
+  // point. Used to resolve blocker/attacker/cast drag-drops onto a seat.
+  // Mirrors _quadrantFor's n<=2 no-op guarantee exactly.
+  _seatForWorldPoint(x, y) {
+    const n = this.currentState?.players?.length || 0;
+    if (n <= 2) {
+      return y < BF_WORLD_SPLIT_Y ? (1 - this.viewerSeat) : this.viewerSeat;
+    }
+    const isBottom = y >= BF_WORLD_SPLIT_Y;
+    const isLeft = x < BF_QUADRANT_BOUNDARY_X;
+    const r = (isBottom ? 0 : 2) + (isLeft ? 0 : 1);
+    if (r >= n) return null; // the empty 4th quadrant of a 3-player game
+    return (this.viewerSeat + r) % n;
+  }
+
+  // A representative point inside a seat's quadrant, used as a fallback aim
+  // target for animations when no more specific anchor (hand fan DOM rect,
+  // zone pile, etc.) is available.
+  _quadrantAnchor(seatIdx) {
+    const q = this._quadrantFor(seatIdx);
+    return {
+      x: q.xOffset + BF_SLOT_PITCH_X * 2,
+      y: BF_WORLD_SPLIT_Y + (q.growDirection === "down" ? 520 : -520),
+    };
+  }
+
   // Recompute every card's layout target and rebuild identity piles.
   _layoutBoard(state) {
     const players = Array.isArray(state.players) ? state.players : [];
@@ -733,14 +807,19 @@ class BattlefieldCanvas {
       });
 
       // ---- Place groups. Viewer bands grow downward from the split line,
-      //      opponent bands grow upward, front band nearest the split. ----
-      const isViewer = seatIdx === this.viewerSeat;
-      let cursor = isViewer ? BF_WORLD_SPLIT_Y + BF_SPLIT_GAP : BF_WORLD_SPLIT_Y - BF_SPLIT_GAP;
+      //      opponent bands grow upward, front band nearest the split. In a
+      //      3-4 player (Free-For-All) game, each seat additionally gets its
+      //      own X quadrant (_quadrantFor) so seats don't pile on top of each
+      //      other; for 2-or-fewer players growDirection/xOffset reproduce
+      //      the original isViewer-based placement exactly. ----
+      const quadrant = this._quadrantFor(seatIdx);
+      const growsDown = quadrant.growDirection === "down";
+      let cursor = growsDown ? BF_WORLD_SPLIT_Y + BF_SPLIT_GAP : BF_WORLD_SPLIT_Y - BF_SPLIT_GAP;
       for (const band of bands) {
         if (!band.rows.length) continue;
-        let rowTop = isViewer ? cursor : cursor - band.height;
+        let rowTop = growsDown ? cursor : cursor - band.height;
         for (const { row, h } of band.rows) {
-          let gx = 0;
+          let gx = quadrant.xOffset;
           for (const g of row) {
             for (const k of g.keys) {
               const item = itemByKey.get(k);
@@ -761,7 +840,7 @@ class BattlefieldCanvas {
           }
           rowTop += h + BF_ROW_GAP;
         }
-        cursor = isViewer ? cursor + band.height + BF_BAND_GAP : cursor - band.height - BF_BAND_GAP;
+        cursor = growsDown ? cursor + band.height + BF_BAND_GAP : cursor - band.height - BF_BAND_GAP;
       }
     }
 
@@ -1217,18 +1296,30 @@ class BattlefieldCanvas {
       const pos = this._renderPos(`${item.source_permanent_seat}-${item.source_permanent_index}`);
       if (pos) return { x: pos.x + BF_CARD_W / 2, y: pos.y + BF_CARD_H / 2, scale: 1.0 };
     }
-    const fromViewer = item?.caster_index === this.viewerSeat;
-    const el = document.getElementById(fromViewer ? "selfHand" : "oppHand");
-    if (el) {
-      const r = el.getBoundingClientRect();
-      if (r.width > 0 || r.height > 0) {
-        const c = this._pageToCanvas(r.left + r.width / 2, r.top + r.height / 2);
-        const w = this.canvasToWorld(c.x, c.y);
-        const p = this._clampToBattlefield(w.x, w.y);
-        return { x: p.x, y: p.y, scale: 0.55 / this.zoom };
+    const casterSeat = item?.caster_index;
+    const fromViewer = casterSeat === this.viewerSeat;
+    const n = this.currentState?.players?.length || 0;
+    // The classic single-opponent DOM hand fan (#oppHand) only ever represents
+    // one specific seat (see app.js's `oppSeat`). In a 3-4 player game, only
+    // the viewer and that one seat have a real hand-fan DOM rect to aim at —
+    // every other seat falls straight through to the quadrant-based fallback.
+    const classicOppSeat = this.viewerSeat === 0 ? 1 : 0;
+    if (n <= 2 || fromViewer || casterSeat === classicOppSeat) {
+      const el = document.getElementById(fromViewer ? "selfHand" : "oppHand");
+      if (el) {
+        const r = el.getBoundingClientRect();
+        if (r.width > 0 || r.height > 0) {
+          const c = this._pageToCanvas(r.left + r.width / 2, r.top + r.height / 2);
+          const w = this.canvasToWorld(c.x, c.y);
+          const p = this._clampToBattlefield(w.x, w.y);
+          return { x: p.x, y: p.y, scale: 0.55 / this.zoom };
+        }
       }
     }
-    const fallback = this._clampToBattlefield(this._stackBaseX, BF_WORLD_SPLIT_Y + (fromViewer ? 520 : -520));
+    const fallbackPoint = n <= 2
+      ? { x: this._stackBaseX, y: BF_WORLD_SPLIT_Y + (fromViewer ? 520 : -520) }
+      : this._quadrantAnchor(Number.isInteger(casterSeat) ? casterSeat : this.viewerSeat);
+    const fallback = this._clampToBattlefield(fallbackPoint.x, fallbackPoint.y);
     return { x: fallback.x, y: fallback.y, scale: 0.55 / this.zoom };
   }
 
@@ -2678,28 +2769,56 @@ class BattlefieldCanvas {
 
   // Which board half should pulse, or null if neither. Returns "you" when the
   // viewer holds priority, "opponent" when the other player does. Suppressed
-  // once the game is over.
+  // once the game is over. (2-player only — see _priorityPulseSeat for the
+  // seat-based version that also covers 3-4 player games.)
   _priorityPulseSide() {
+    const seat = this._priorityPulseSeat();
+    if (seat === null) return null;
+    return seat === this.viewerSeat ? "you" : "opponent";
+  }
+
+  // Seat currently holding priority, or null if no seat should pulse (nobody
+  // has priority, or the game is over). Valid for any player count.
+  _priorityPulseSeat() {
     const st = this.currentState;
-    if (!st || st.winner !== null && st.winner !== undefined) return null;
+    if (!st || (st.winner !== null && st.winner !== undefined)) return null;
     const pp = st.priority_player;
-    if (pp !== 0 && pp !== 1) return null;
-    return pp === this.viewerSeat ? "you" : "opponent";
+    const n = Array.isArray(st.players) ? st.players.length : 0;
+    if (!Number.isInteger(pp) || pp < 0 || pp >= n) return null;
+    return pp;
   }
 
   _drawPriorityPulse(ctx, cw, ch, grid) {
-    const side = this._priorityPulseSide();
-    if (!side) return;
-    const splitY = this.worldToCanvas(0, BF_WORLD_SPLIT_Y).y;
-    const yTop = side === "you" ? splitY : 0;
-    const yBot = side === "you" ? ch : splitY;
+    const pp = this._priorityPulseSeat();
+    if (pp === null) return;
+    const n = this.currentState?.players?.length || 0;
+    const isYou = pp === this.viewerSeat;
+    let xTop = 0;
+    let xBot = cw;
+    let yTop;
+    let yBot;
+    if (n <= 2) {
+      const splitY = this.worldToCanvas(0, BF_WORLD_SPLIT_Y).y;
+      yTop = isYou ? splitY : 0;
+      yBot = isYou ? ch : splitY;
+    } else {
+      // 3-4 players: pulse just the priority-holder's own quadrant rather
+      // than an entire half, so the highlight points at the right seat.
+      const q = this._quadrantFor(pp);
+      const splitY = this.worldToCanvas(0, BF_WORLD_SPLIT_Y).y;
+      const boundaryX = this.worldToCanvas(BF_QUADRANT_BOUNDARY_X, BF_WORLD_SPLIT_Y).x;
+      yTop = q.growDirection === "down" ? splitY : 0;
+      yBot = q.growDirection === "down" ? ch : splitY;
+      xTop = q.xOffset === 0 ? 0 : boundaryX;
+      xBot = q.xOffset === 0 ? boundaryX : cw;
+    }
     if (yBot - yTop <= 1) return;
     const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 350);
     const alpha = 0.08 + pulse * 0.24;
-    const color = side === "you" ? `rgba(74,222,128,${alpha})` : `rgba(248,82,82,${alpha})`;
+    const color = isYou ? `rgba(74,222,128,${alpha})` : `rgba(248,82,82,${alpha})`;
     ctx.save();
     ctx.beginPath();
-    ctx.rect(0, yTop, cw, yBot - yTop);
+    ctx.rect(xTop, yTop, xBot - xTop, yBot - yTop);
     ctx.clip();
     ctx.strokeStyle = color;
     ctx.lineWidth = 1.5;
@@ -3750,8 +3869,10 @@ class BattlefieldCanvas {
     const { x: cx, y: cy } = this._pageToCanvas(event.clientX, event.clientY);
     const world = this.canvasToWorld(cx, cy);
 
-    // Determine seat from vertical position relative to split
-    const dropSeat = world.y < BF_WORLD_SPLIT_Y ? (1 - this.viewerSeat) : this.viewerSeat;
+    // Determine seat from position relative to the split (and, in a 3-4
+    // player game, the left/right quadrant boundary too).
+    const resolvedDropSeat = this._seatForWorldPoint(world.x, world.y);
+    const dropSeat = resolvedDropSeat === null ? this.viewerSeat : resolvedDropSeat;
 
     // Check for card under cursor (for blocker assignment or aura targeting)
     const item = this._hitTest(world.x, world.y);

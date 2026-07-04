@@ -105,9 +105,11 @@ def test_defender_assigns_piles_via_action():
     )
     assert resp.status_code == 200
     assert game.combat_blockers_locked is True
-    blocked_attackers = {a for atks in game.combat_blockers.values() for a in atks}
+    blocked_attackers = {
+        a for blocker_map in game.combat_blockers.values() for atks in blocker_map.values() for a in atks
+    }
     assert len(blocked_attackers) == 1
-    assert sorted(game.combat_blockers) == [0, 1]
+    assert sorted(game.combat_blockers.get(0, {})) == [0, 1]
     # The prompt is gone once blocks are locked in.
     state = client.get(f"/api/sessions/{sid}/state", params={"seat": 0}).json()
     assert state["camouflage"] is None
@@ -174,5 +176,7 @@ def test_human_vs_human_defender_prompted():
     )
     assert resp.status_code == 200
     assert game.combat_blockers_locked is True
-    blocked_attackers = {a for atks in game.combat_blockers.values() for a in atks}
+    blocked_attackers = {
+        a for blocker_map in game.combat_blockers.values() for atks in blocker_map.values() for a in atks
+    }
     assert blocked_attackers == {0, 1}

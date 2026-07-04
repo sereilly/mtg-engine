@@ -150,9 +150,10 @@ def test_509_1b_flying_attacker_can_be_blocked_by_flier_or_reach():
 
     ok, _ = game.declare_blockers(1, {0: 0})
     assert ok
-    # combat_blockers maps blocker index -> list of blocked attacker indices
-    # (a creature may block several attackers, CR 509.1b / _max_blocks_for).
-    assert game.combat_blockers == {0: [0]}
+    # combat_blockers is nested by defender index -> {blocker index -> list of
+    # blocked attacker indices} (CR 802: 2+ defenders may declare blocks in the
+    # same combat; a creature may block several attackers, CR 509.1b / _max_blocks_for).
+    assert game.combat_blockers == {1: {0: [0]}}
 
 
 def test_509_1b_evasion_abilities_are_cumulative():

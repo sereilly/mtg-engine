@@ -37,26 +37,43 @@
               <button id="hostBackBtn" type="button" class="secondary-btn">&larr; Back</button>
               <h2>Host Game</h2>
             </div>
-            <label>Mode
-              <select id="mode">
-                <option value="human_vs_ai">Human vs AI</option>
-                <option value="ai_vs_ai">AI vs AI</option>
-                <option value="human_vs_human">Human vs Human (Networked)</option>
+            <label>Format
+              <select id="format">
+                <option value="standard">Standard</option>
+                <option value="free_for_all">Free-For-All</option>
               </select>
             </label>
-            <label id="hostNameLabel">Your name <input id="hostName" value="Player 1" /></label>
-            <label id="hostDeckLabel"><span id="hostDeckText">Your deck</span>
-              <select id="hostDeckSelect">
-                <option value="">Random deck</option>
-              </select>
-            </label>
-            <label id="hostColorsLabel"><span id="hostColorsText">Your deck colors (1-5)</span> <input id="hostColors" type="number" min="1" max="5" value="2" /></label>
-            <label id="guestDeckLabel"><span id="guestDeckText">AI deck</span>
-              <select id="guestDeckSelect">
-                <option value="">Random deck</option>
-              </select>
-            </label>
-            <label id="guestColorsLabel"><span id="guestColorsText">AI deck colors (1-5)</span> <input id="guestColors" type="number" min="1" max="5" value="2" /></label>
+            <div id="standardModeFields">
+              <label>Mode
+                <select id="mode">
+                  <option value="human_vs_ai">Human vs AI</option>
+                  <option value="ai_vs_ai">AI vs AI</option>
+                  <option value="human_vs_human">Human vs Human (Networked)</option>
+                </select>
+              </label>
+              <label id="hostNameLabel">Your name <input id="hostName" value="Player 1" /></label>
+              <label id="hostDeckLabel"><span id="hostDeckText">Your deck</span>
+                <select id="hostDeckSelect">
+                  <option value="">Random deck</option>
+                </select>
+              </label>
+              <label id="hostColorsLabel"><span id="hostColorsText">Your deck colors (1-5)</span> <input id="hostColors" type="number" min="1" max="5" value="2" /></label>
+              <label id="guestDeckLabel"><span id="guestDeckText">AI deck</span>
+                <select id="guestDeckSelect">
+                  <option value="">Random deck</option>
+                </select>
+              </label>
+              <label id="guestColorsLabel"><span id="guestColorsText">AI deck colors (1-5)</span> <input id="guestColors" type="number" min="1" max="5" value="2" /></label>
+            </div>
+            <div id="ffaModeFields" class="hidden">
+              <label>Number of seats
+                <select id="ffaSeatCount">
+                  <option value="3">3</option>
+                  <option value="4">4</option>
+                </select>
+              </label>
+              <div id="ffaSeatsContainer"></div>
+            </div>
             <label class="menu-checkbox-label">
               <input id="useCustomSeed" type="checkbox" />
               Use custom seed
@@ -207,6 +224,11 @@
                 </div>
               </div>
             </div>
+
+            <!-- Free-For-All (3-4 player) only: small info panels for opponents other
+                 than the one shown in the classic single-opponent header above. Hidden
+                 and left empty for 2-player games. -->
+            <div id="ffaOpponentPanels" class="hidden" style="position:absolute; inset:0; pointer-events:none; z-index:7;"></div>
 
             <div class="center-bottom-bar">
               <div class="player-header self-header">

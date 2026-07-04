@@ -121,6 +121,41 @@
     renderDeckSelectOptions();
   }
 
+  function makeDeckOption(deck) {
+    const option = document.createElement("option");
+    option.value = deck.id;
+    let label = `${deck.name} (${deck.card_count})`;
+    if (deck.unknown_count > 0) label += " ⚠";
+    option.textContent = label;
+    return option;
+  }
+
+  // Populate a single <select> with the current deck list. Exposed on window so
+  // app.js can call it for dynamically-created selects (e.g. Free-For-All seat
+  // deck pickers) that aren't part of the fixed `configs` list below.
+  function populateDeckSelectElement(select, placeholder) {
+    if (!select) return;
+    const previous = select.value;
+    select.innerHTML = "";
+    const blank = document.createElement("option");
+    blank.value = "";
+    blank.textContent = placeholder;
+    select.appendChild(blank);
+    // Group decks by scope so the source of each is unambiguous.
+    for (const [scope, groupLabel] of [["personal", "Personal"], ["shared", "Shared"]]) {
+      const decks = state.decks.filter((d) => (d.scope || "shared") === scope);
+      if (decks.length === 0) continue;
+      const group = document.createElement("optgroup");
+      group.label = groupLabel;
+      for (const deck of decks) group.appendChild(makeDeckOption(deck));
+      select.appendChild(group);
+    }
+    if ([...select.options].some((o) => o.value === previous)) {
+      select.value = previous;
+    }
+  }
+  window.populateDeckSelectElement = populateDeckSelectElement;
+
   function renderDeckSelectOptions() {
     const configs = [
       ["deckLoadSelect", "— Load a deck —"],
@@ -128,35 +163,13 @@
       ["guestDeckSelect", "Random deck"],
       ["joinDeckSelect", "Random deck"],
     ];
-    const makeOption = (deck) => {
-      const option = document.createElement("option");
-      option.value = deck.id;
-      let label = `${deck.name} (${deck.card_count})`;
-      if (deck.unknown_count > 0) label += " ⚠";
-      option.textContent = label;
-      return option;
-    };
     for (const [id, placeholder] of configs) {
-      const select = q(id);
-      if (!select) continue;
-      const previous = select.value;
-      select.innerHTML = "";
-      const blank = document.createElement("option");
-      blank.value = "";
-      blank.textContent = placeholder;
-      select.appendChild(blank);
-      // Group decks by scope so the source of each is unambiguous.
-      for (const [scope, groupLabel] of [["personal", "Personal"], ["shared", "Shared"]]) {
-        const decks = state.decks.filter((d) => (d.scope || "shared") === scope);
-        if (decks.length === 0) continue;
-        const group = document.createElement("optgroup");
-        group.label = groupLabel;
-        for (const deck of decks) group.appendChild(makeOption(deck));
-        select.appendChild(group);
-      }
-      if ([...select.options].some((o) => o.value === previous)) {
-        select.value = previous;
-      }
+      populateDeckSelectElement(q(id), placeholder);
+    }
+    // Free-For-All seat deck selects are created dynamically by app.js; refresh
+    // whichever of them currently exist in the DOM too.
+    for (const select of document.querySelectorAll(".ffa-deck-select")) {
+      populateDeckSelectElement(select, "Random deck");
     }
     syncStartPageColorInputs();
   }
@@ -175,6 +188,12 @@
   // inputs only when that seat is on a random deck. The host never sets the
   // opponent's name; the opponent's deck is host-configurable only when it's AI.
   function syncStartPageColorInputs() {
+    // Free-For-All uses its own per-seat colors inputs (built by app.js); the
+    // singular host/guest colors fields this function manages are hidden in that
+    // format, so there's nothing here for it to do.
+    const formatEl = q("format");
+    if (formatEl && formatEl.value === "free_for_all") return;
+
     const modeEl = q("mode");
     const mode = modeEl ? modeEl.value : "human_vs_ai";
     const isAiVsAi = mode === "ai_vs_ai";

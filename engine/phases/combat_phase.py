@@ -15,6 +15,41 @@ from ..models import Permanent
 
 
 class CombatPhaseMixin:
+    def combat_defending_players(self) -> set[int]:
+        """CR 802.2: every player currently a defending player this combat — i.e.
+        named as the target of at least one declared attacker. Empty before
+        attackers are declared."""
+        return set(self.combat_attackers.values())
+
+    def _resolve_defending_player_index(self) -> int | None:
+        """The single-scalar ``combat_defending_player_index`` convenience value
+        (kept for 2-player back-compat and simple single-target UI reads).
+
+        In a 2-player game this is always unambiguous — the other seat — even
+        before any attacker has been declared, matching every existing 2-player
+        caller/test that reads it at any point during combat. In FFA (3+
+        players) it's only meaningful once exactly one distinct defender is
+        under attack; the authoritative source there is
+        ``combat_defending_players()``."""
+        if len(self.players) == 2:
+            return 1 - self.active_player_index
+        defenders = self.combat_defending_players()
+        return next(iter(defenders)) if len(defenders) == 1 else None
+
+    def _pending_block_declarer(self) -> int | None:
+        """CR 802.4: the next defending player, in APNAP order starting with the
+        player after the active player, who still needs to declare blocks (or be
+        auto-skipped) this declare-blockers step. None once every defender has."""
+        defenders = self.combat_defending_players()
+        if not defenders:
+            return None
+        n = len(self.players)
+        for offset in range(1, n + 1):
+            idx = (self.active_player_index + offset) % n
+            if idx in defenders and idx not in self.combat_blockers_declared_by:
+                return idx
+        return None
+
     def _has_any_legal_attacker(self, attacker_index: int, defender_index: int) -> bool:
         if attacker_index < 0 or attacker_index >= len(self.players):
             return False
@@ -48,7 +83,10 @@ class CombatPhaseMixin:
         for blocker in defender.battlefield:
             if not blocker.is_creature or blocker.tapped:
                 continue
-            for attacker_idx in self.combat_attackers:
+            # CR 802.4a: this defender can only block attackers aimed at them.
+            for attacker_idx, defending_idx in self.combat_attackers.items():
+                if defending_idx != defender_index:
+                    continue
                 if attacker_idx < 0 or attacker_idx >= len(attacker_controller.battlefield):
                     continue
                 attacker = attacker_controller.battlefield[attacker_idx]
@@ -73,12 +111,15 @@ class CombatPhaseMixin:
             self._enter_main_phase(precombat=False)
             return
         if self.current_step == "declare_attackers" and not self.combat_attackers_locked:
-            defender_index = self.combat_defending_player_index
-            if not isinstance(defender_index, int):
-                defender_index = 1 - self.active_player_index
-                self.combat_defending_player_index = defender_index
-
-            if self._has_any_legal_attacker(self.active_player_index, defender_index):
+            # CR 802.2: under attack-multiple-players there's no single pre-picked
+            # defender to check before attackers are even declared — each attacker
+            # names its own when declared. The active player just needs SOME legal
+            # attacker against ANY living opponent for this step not to auto-skip.
+            living_opponents = self.opponents_of(self.active_player_index)
+            if any(
+                self._has_any_legal_attacker(self.active_player_index, opp)
+                for opp in living_opponents
+            ):
                 return
 
             self.combat_attackers = {}
@@ -92,7 +133,8 @@ class CombatPhaseMixin:
         # divides their creatures into piles (assign_camouflage_piles), which are
         # then matched to attackers at random. Wait for that choice like a normal
         # blocker declaration; with no untapped creatures there is nothing to
-        # divide, so resolve the (empty) piles immediately.
+        # divide, so resolve the (empty) piles immediately. Camouflage's spell text
+        # names one specific defending player, so this stays single-defender.
         if (
             self.current_step == "declare_blockers"
             and not self.combat_blockers_locked
@@ -100,6 +142,8 @@ class CombatPhaseMixin:
             and self.is_camouflage_active()
         ):
             defender_index = self.combat_defending_player_index
+            if defender_index is None:
+                defender_index = next(iter(self.combat_defending_players()), None)
             if isinstance(defender_index, int):
                 defender = self.players[defender_index]
                 if any(p.is_creature and not p.tapped for p in defender.battlefield):
@@ -107,20 +151,29 @@ class CombatPhaseMixin:
                 self.resolve_camouflage_blocking(defender_index)
             return
         if self.current_step == "declare_blockers" and not self.combat_blockers_locked:
-            defender_index = self.combat_defending_player_index
-            if isinstance(defender_index, int) and not self._has_any_legal_block(defender_index):
-                self.combat_blockers = {}
-                self.combat_blockers_locked = True
+            # CR 802.4: each defending player declares blocks in APNAP order,
+            # starting with the player after the active player. Auto-skip any
+            # defender (in turn) who has no legal blocks; stop and wait once we
+            # reach one who has a real choice to make.
+            while True:
+                pending = self._pending_block_declarer()
+                if pending is None:
+                    self.combat_blockers_locked = True
+                    self._prune_combat_state()
+                    break
+                if self._has_any_legal_block(pending):
+                    return
+                self.combat_blockers_declared_by.add(pending)
                 self._prune_combat_state()
+                defender_name = self.players[pending].name
+                self.log.append(f"{defender_name} has no valid blockers; declare blockers step skipped")
+        if self.current_step == "declare_blockers" and self.combat_blockers_locked and not self.combat_attackers:
+            defender_index = self.combat_defending_player_index
+            if isinstance(defender_index, int) and 0 <= defender_index < len(self.players):
                 defender_name = self.players[defender_index].name
                 self.log.append(f"{defender_name} has no valid blockers; declare blockers step skipped")
             else:
-                return
-        if self.current_step == "declare_blockers" and self.combat_blockers_locked and not self.combat_attackers:
-            defender_index = self.combat_defending_player_index
-            if isinstance(defender_index, int):
-                defender_name = self.players[defender_index].name
-                self.log.append(f"{defender_name} has no valid blockers; declare blockers step skipped")
+                self.log.append("No attackers; declare blockers step skipped")
         if self.current_step == "combat_damage" and not self.combat_damage_resolved:
             return  # Awaiting manual damage assignment
 
@@ -129,8 +182,9 @@ class CombatPhaseMixin:
                 f"Declare attackers step complete: {len(self.combat_attackers)} attacker(s) declared"
             )
         if self.current_step == "declare_blockers":
+            total_blockers = sum(len(m) for m in self.combat_blockers.values())
             self.log.append(
-                f"Declare blockers step complete: {len(self.combat_blockers)} blocker(s) declared"
+                f"Declare blockers step complete: {total_blockers} blocker(s) declared"
             )
 
         # Close current combat step, then enter the next one.
@@ -168,8 +222,7 @@ class CombatPhaseMixin:
         if step == "declare_attackers":
             self.combat_attackers_locked = False
             self.combat_blockers_locked = False
-            if self.combat_defending_player_index is None:
-                self.combat_defending_player_index = 1 - self.active_player_index
+            self.combat_defending_player_index = self._resolve_defending_player_index()
         if step == "declare_blockers":
             self.combat_blockers_locked = not bool(self.combat_attackers)
         self._set_phase_and_step("combat", step)
@@ -189,6 +242,7 @@ class CombatPhaseMixin:
     def _reset_combat_state(self, clear_damage_marked: bool) -> None:
         self.combat_attackers = {}
         self.combat_blockers = {}
+        self.combat_blockers_declared_by = set()
         self.combat_bands = []
         self.combat_band_blocks = {}
         self.combat_banding_damage = {}
@@ -220,18 +274,11 @@ class CombatPhaseMixin:
             self._reset_combat_state(clear_damage_marked=False)
             return
         active = self.players[self.active_player_index]
-        if self.combat_defending_player_index is None:
-            if self.combat_attackers or self.combat_blockers:
-                self._reset_combat_state(clear_damage_marked=False)
-            return
-        if self.combat_defending_player_index < 0 or self.combat_defending_player_index >= len(self.players):
-            self._reset_combat_state(clear_damage_marked=False)
-            return
-        defender = self.players[self.combat_defending_player_index]
+        n = len(self.players)
 
         valid_attackers: dict[int, int] = {}
         for attacker_idx, defending_idx in self.combat_attackers.items():
-            if defending_idx != self.combat_defending_player_index:
+            if not (0 <= defending_idx < n) or defending_idx == self.active_player_index:
                 continue
             if attacker_idx < 0 or attacker_idx >= len(active.battlefield):
                 continue
@@ -244,6 +291,13 @@ class CombatPhaseMixin:
             valid_attackers[attacker_idx] = defending_idx
         self.combat_attackers = valid_attackers
 
+        # Populated only when every remaining attacker shares one defender
+        # (2-player back-compat / simple single-target UI reads); the authoritative
+        # source of "who's under attack" is combat_defending_players().
+        defenders_now = self.combat_defending_players()
+        self.combat_defending_player_index = self._resolve_defending_player_index()
+        self.combat_blockers_declared_by &= defenders_now
+
         # CR 702.22f: an attacking creature removed from combat is removed from its
         # band. Drop departed members; a band that falls below two members is no
         # longer a band (it leaves no banding interaction for the rest of combat).
@@ -253,17 +307,31 @@ class CombatPhaseMixin:
             ]
             self.combat_bands = [band for band in pruned_bands if len(band) >= 2]
 
-        valid_blockers: dict[int, list[int]] = {}
-        for blocker_idx, attacker_idxs in self.combat_blockers.items():
-            if blocker_idx < 0 or blocker_idx >= len(defender.battlefield):
+        # combat_blockers is nested by defender (CR 802: 2+ defenders may each have
+        # declared blocks in the same combat, and blocker battlefield indices are
+        # only unambiguous within one defender's own battlefield).
+        pruned_blockers: dict[int, dict[int, list[int]]] = {}
+        for defending_idx, blocker_map in self.combat_blockers.items():
+            if not (0 <= defending_idx < n):
                 continue
-            blocker = defender.battlefield[blocker_idx]
-            if not blocker.is_creature:
-                continue
-            kept = [a for a in attacker_idxs if a in self.combat_attackers]
-            if kept:
-                valid_blockers[blocker_idx] = kept
-        self.combat_blockers = valid_blockers
+            defender = self.players[defending_idx]
+            kept_for_defender: dict[int, list[int]] = {}
+            for blocker_idx, attacker_idxs in blocker_map.items():
+                if blocker_idx < 0 or blocker_idx >= len(defender.battlefield):
+                    continue
+                blocker = defender.battlefield[blocker_idx]
+                if not blocker.is_creature:
+                    continue
+                # Keep only attackers still valid AND still aimed at this defender.
+                kept = [
+                    a for a in attacker_idxs
+                    if self.combat_attackers.get(a) == defending_idx
+                ]
+                if kept:
+                    kept_for_defender[blocker_idx] = kept
+            if kept_for_defender:
+                pruned_blockers[defending_idx] = kept_for_defender
+        self.combat_blockers = pruned_blockers
 
         # Preserve "was ever blocked" state: once a creature is blocked it stays
         # blocked through the entire combat damage phase even if its blocker dies
@@ -282,20 +350,24 @@ class CombatPhaseMixin:
                 permanent.blocking_attacker_controller = None
                 permanent.blocking_attacker_index = None
 
+        all_blocked_attacker_idxs: set[int] = {
+            a for blocker_map in self.combat_blockers.values() for atks in blocker_map.values() for a in atks
+        }
         for attacker_idx, defending_idx in self.combat_attackers.items():
             attacker = active.battlefield[attacker_idx]
             attacker.attacking = True
             attacker.defending_player_index = defending_idx
-            attacker.blocked = was_blocked.get(attacker_idx, False) or any(
-                attacker_idx in atks for atks in self.combat_blockers.values()
-            )
+            attacker.blocked = was_blocked.get(attacker_idx, False) or attacker_idx in all_blocked_attacker_idxs
 
-        for blocker_idx, attacker_idxs in self.combat_blockers.items():
-            blocker = defender.battlefield[blocker_idx]
-            blocker.blocking_attacker_controller = self.active_player_index
-            # `blocking_attacker_index` holds a single representative attacker (the
-            # first) for the common one-block case; multi-block uses combat_blockers.
-            blocker.blocking_attacker_index = attacker_idxs[0] if attacker_idxs else None
+        for defending_idx, blocker_map in self.combat_blockers.items():
+            defender = self.players[defending_idx]
+            for blocker_idx, attacker_idxs in blocker_map.items():
+                blocker = defender.battlefield[blocker_idx]
+                blocker.blocking_attacker_controller = self.active_player_index
+                # `blocking_attacker_index` holds a single representative attacker
+                # (the first) for the common one-block case; multi-block uses
+                # combat_blockers.
+                blocker.blocking_attacker_index = attacker_idxs[0] if attacker_idxs else None
 
         # CR 702.22h: propagate band blocks (no-op when no bands were declared).
         # Recomputed here so the propagated "blocked" status survives every prune.
@@ -310,10 +382,13 @@ class CombatPhaseMixin:
         self._prune_combat_state()
         return {
             "defending_player_index": self.combat_defending_player_index,
+            # CR 802: every player currently under attack (may be 2+ in FFA).
+            "defending_player_indices": sorted(self.combat_defending_players()),
             "attackers": [{"attacker_index": k, "defending_player_index": v} for k, v in sorted(self.combat_attackers.items())],
             "blockers": [
-                {"blocker_index": k, "attacker_index": a}
-                for k, atks in sorted(self.combat_blockers.items())
+                {"blocker_index": blocker_idx, "attacker_index": a, "defending_player_index": defending_idx}
+                for defending_idx, blocker_map in sorted(self.combat_blockers.items())
+                for blocker_idx, atks in sorted(blocker_map.items())
                 for a in atks
             ],
             "damage_resolved": self.combat_damage_resolved,

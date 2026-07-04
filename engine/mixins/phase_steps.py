@@ -48,9 +48,25 @@ class PhaseStepsMixin:
         self.priority_pass_count = 0
 
     def _next_player_index(self, player_index: int) -> int:
-        if len(self.players) <= 1:
+        """The next player in turn order — skipping any player who has left the
+        game (CR 800.4h: priority/choices pass to the next player still in it).
+
+        Only applied in multiplayer (3+ players): CR 800.4 is explicitly a
+        multiplayer concept ("unlike two-player games, multiplayer games can
+        continue after one or more players have left the game") — a 2-player
+        game just ends instead, so this is a no-op there, identical to before."""
+        n = len(self.players)
+        if n <= 1:
             return player_index
-        return (player_index + 1) % len(self.players)
+        candidate = (player_index + 1) % n
+        if n < 3:
+            return candidate
+        for _ in range(n):
+            if not self.players[candidate].lost:
+                return candidate
+            candidate = (candidate + 1) % n
+        # Defensive: every player has left (is_game_over() should already be true).
+        return player_index
 
     def pass_priority(self, player_index: int) -> str:
         if self.priority_player_index is None:
@@ -61,7 +77,16 @@ class PhaseStepsMixin:
         self.priority_pass_count += 1
         self.log.append(f"{self.players[player_index].name} passed priority")
 
-        if self.priority_pass_count < len(self.players):
+        # CR 800.4h: a player who has left the game is skipped for priority, so
+        # "everyone passed in succession" means every player still IN the game —
+        # not the raw seat count. Multiplayer-only (see _next_player_index); a
+        # 2-player game behaves exactly as before.
+        living_count = (
+            sum(1 for p in self.players if not p.lost)
+            if len(self.players) >= 3
+            else len(self.players)
+        )
+        if self.priority_pass_count < living_count:
             self.priority_player_index = self._next_player_index(player_index)
             return "passed"
 
@@ -239,9 +264,20 @@ class PhaseStepsMixin:
         self.current_turn_is_extra = False
         player_count = len(self.players)
         candidate = (self.normal_rotation_anchor + 1) % player_count
-        while self.skip_turn_counts.get(candidate, 0) > 0:
-            self._consume_skip(self.skip_turn_counts, candidate)
-            candidate = (candidate + 1) % player_count
+        # CR 800.4k (multiplayer only — see _next_player_index): a player who has
+        # left the game never begins a turn — skip them without consuming a
+        # skip-turn charge (that's a distinct effect). A 2-player game just ends
+        # when someone loses, so this never needs to trigger there.
+        multiplayer = player_count >= 3
+        for _ in range(player_count + 1):
+            if multiplayer and self.players[candidate].lost:
+                candidate = (candidate + 1) % player_count
+                continue
+            if self.skip_turn_counts.get(candidate, 0) > 0:
+                self._consume_skip(self.skip_turn_counts, candidate)
+                candidate = (candidate + 1) % player_count
+                continue
+            break
         return candidate
 
     def _close_current_priority_step(self) -> None:

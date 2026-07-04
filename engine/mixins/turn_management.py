@@ -42,6 +42,16 @@ class TurnManagementMixin:
             drawn = player.draw(7)
             self.log.append(f"{player.name} drew opening hand of {drawn} card(s)")
 
+    def mulligan_effective_count(self, player_index: int) -> int:
+        """CR 800.6/103.5c: in a multiplayer game (3+ players), a player's FIRST
+        mulligan doesn't count toward the number of cards they'll put on the
+        bottom of their library or toward the 7-mulligan limit; every mulligan
+        after that counts normally. In a 2-player game this is just the raw
+        ``mulligans_taken`` count (no discount, matching 103.5's base rule)."""
+        player = self.players[player_index]
+        free_offset = 1 if len(self.players) >= 3 else 0
+        return max(0, player.mulligans_taken - free_offset)
+
     def take_mulligan(
         self,
         player_index: int,
@@ -51,7 +61,8 @@ class TurnManagementMixin:
 
         The player shuffles their hand into their library, draws 7 cards, then
         puts a number of cards equal to their new mulligan count on the bottom
-        of their library.
+        of their library (CR 800.6: one fewer in multiplayer, since the first
+        mulligan there is free).
 
         *bottom_card_indices* – indices into the freshly drawn hand of the
         cards to place on the bottom.  Defaults to the last N cards drawn.
@@ -60,7 +71,7 @@ class TurnManagementMixin:
         take further mulligans (they already have 0 cards).
         """
         player = self.players[player_index]
-        if player.mulligans_taken >= 7:
+        if self.mulligan_effective_count(player_index) >= 7:
             self.log.append(
                 f"{player.name} cannot take further mulligans (hand would be 0 cards)"
             )
@@ -72,7 +83,7 @@ class TurnManagementMixin:
         random.shuffle(player.library)
 
         player.mulligans_taken += 1
-        n = player.mulligans_taken
+        n = self.mulligan_effective_count(player_index)
 
         # Draw a new hand of starting hand size (7).
         player.draw(7)
@@ -87,7 +98,7 @@ class TurnManagementMixin:
         player.library.extend(cards_to_bottom)
 
         self.log.append(
-            f"{player.name} took mulligan #{n}, drew 7, put {len(cards_to_bottom)}"
+            f"{player.name} took mulligan #{player.mulligans_taken}, drew 7, put {len(cards_to_bottom)}"
             f" card(s) on the bottom, keeping {len(player.hand)}"
         )
         return True
@@ -111,7 +122,7 @@ class TurnManagementMixin:
         Returns False if the player cannot take another mulligan (already at 7).
         """
         player = self.players[player_index]
-        if player.mulligans_taken >= 7:
+        if self.mulligan_effective_count(player_index) >= 7:
             return False
         player.library.extend(player.hand)
         player.hand.clear()

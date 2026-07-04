@@ -1,13 +1,14 @@
 """Tests for CR 506 (Combat Phase).
 
-The LEA set has no planeswalkers or battles and this engine models only
-two-player games, so the planeswalker/battle/multiplayer sub-rules
-(506.2a/b, 506.3c-f, 506.4c-e) are not applicable here. The tests below cover
-the parts of rule 506 that the LEA engine implements: the five combat steps and
-their skips/repeats (506.1), the attacking/defending player roles (506.2), the
+The LEA set has no planeswalkers or battles, so those sub-rules (506.2a/b,
+506.3c-f, 506.4c-e) are not applicable here. The tests below cover the parts of
+rule 506 that the LEA engine implements: the five combat steps and their
+skips/repeats (506.1), the attacking/defending player roles (506.2), the
 "only a creature can attack or block" restriction (506.3, 506.3a, 506.3b),
 removal from combat (506.4, 506.4b), "attacking/blocking alone" (506.5), and
-"had to attack" (506.6).
+"had to attack" (506.6). All tests in this file are 2-player; see
+``tests/test_multiplayer_combat.py`` for the CR 802 (attack multiple players)
+multi-defender combat this engine also supports.
 """
 
 from engine import Game
@@ -498,7 +499,7 @@ def test_blocker_leaving_battlefield_is_removed_from_combat():
     game.declare_attackers(0, [0])
     game.advance_combat_phase()
     game.declare_blockers(1, {0: 0})
-    assert game.combat_blockers == {0: [0]}
+    assert game.combat_blockers == {1: {0: [0]}}
 
     p2.battlefield.remove(blocker)
     game._prune_combat_state()
@@ -578,7 +579,7 @@ def test_506_4b_tapping_declared_blocker_keeps_it_in_combat():
     blocker.tapped = True
     game._prune_combat_state()
 
-    assert game.combat_blockers == {0: [0]}
+    assert game.combat_blockers == {1: {0: [0]}}
     assert blocker.blocking_attacker_index == 0
 
     # The blocker still deals its damage to the attacker (3/3 takes 2, survives).

@@ -5,7 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
-GameMode = Literal["human_vs_ai", "ai_vs_ai", "human_vs_human"]
+GameMode = Literal["human_vs_ai", "ai_vs_ai", "human_vs_human", "free_for_all"]
 ActionKind = Literal[
     "cast",
     "activate",
@@ -66,6 +66,18 @@ class DeckCardEntry(BaseModel):
     count: int = Field(ge=1, le=99)
 
 
+class SeatConfig(BaseModel):
+    """One seat's configuration for a Free-For-All session (mode="free_for_all").
+    Mirrors the host/guest fields ``CreateSessionRequest`` already carries for the
+    2-player modes, one per seat instead of a fixed host/guest pair."""
+    name: str = Field(default="Player")
+    is_ai: bool = Field(default=False)
+    colors: int = Field(default=2, ge=1, le=5)
+    deck_id: str | None = Field(default=None)
+    # Personal (browser-only) deck sent inline; takes precedence over deck_id.
+    deck_cards: list[DeckCardEntry] | None = Field(default=None)
+
+
 class CreateSessionRequest(BaseModel):
     mode: GameMode
     host_name: str = Field(default="Player 1")
@@ -86,6 +98,9 @@ class CreateSessionRequest(BaseModel):
     seed: int | None = Field(default=None)
     # When True, show interactive coin-flip and mulligan prompts before the game starts.
     enable_pregame: bool = Field(default=False)
+    # Free-For-All only (mode="free_for_all"): one entry per seat (3 or 4 total).
+    # host_*/guest_* fields above are unused in this mode.
+    seats: list[SeatConfig] | None = Field(default=None)
 
 
 class JoinSessionRequest(BaseModel):
@@ -100,13 +115,15 @@ class JoinSessionRequest(BaseModel):
 
 class DividedTargetRef(BaseModel):
     # One target of a divided spell: a permanent (seat + battlefield index) or a
-    # player's face (index omitted).
-    seat: int = Field(ge=0, le=1)
+    # player's face (index omitted). Upper bound is the session's actual player
+    # count (up to 4 in Free-For-All), checked in the app.py handler — Pydantic
+    # alone can't know which session a request belongs to.
+    seat: int = Field(ge=0)
     index: int | None = Field(default=None, ge=0)
 
 
 class GameActionRequest(BaseModel):
-    seat: int = Field(ge=0, le=1)
+    seat: int = Field(ge=0)
     action: ActionKind
     card_name: str | None = None
     permanent_name: str | None = None
@@ -121,11 +138,11 @@ class GameActionRequest(BaseModel):
     # for a permanent, its battlefield index; index None targets that player's
     # face. Takes precedence over target_permanent_indices/target_seat.
     divided_targets: list[DividedTargetRef] | None = Field(default=None)
-    target_seat: int | None = Field(default=None, ge=0, le=1)
+    target_seat: int | None = Field(default=None, ge=0)
     # "A source of your choice" (Jade Monolith): the chosen damage source — a
     # battlefield permanent (source_seat + source_permanent_index) or a spell on
     # the stack (source_stack_index, top-first like target_stack_index).
-    source_seat: int | None = Field(default=None, ge=0, le=1)
+    source_seat: int | None = Field(default=None, ge=0)
     source_permanent_index: int | None = Field(default=None, ge=0)
     source_stack_index: int | None = Field(default=None, ge=0)
     # Which of the acting player's emblems to activate (activate_emblem action).
@@ -214,11 +231,11 @@ class RawStateRequest(BaseModel):
     # The full serialized game-state object (as produced by GET .../state and
     # shown in the board's Raw State tab), pasted back to overwrite the live game.
     state: dict
-    seat: int | None = Field(default=None, ge=0, le=1)
+    seat: int | None = Field(default=None, ge=0)
 
 
 class RematchRequest(BaseModel):
-    seat: int = Field(ge=0, le=1)
+    seat: int = Field(ge=0)
 
 
 class RandomDeckRequest(BaseModel):

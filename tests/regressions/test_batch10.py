@@ -88,7 +88,7 @@ class TestFalseOrders:
         assert res.supported
         assert blk.metadata.get("removed_from_combat") is True
         assert atk.blocked is False
-        assert 0 not in game.combat_blockers  # blocker no longer in combat
+        assert 0 not in game.combat_blockers.get(1, {})  # blocker no longer in combat
 
     def test_unblocked_attacker_deals_damage_to_player(self, cards):
         game, atk, blk, p1 = self._combat_board(cards)
@@ -317,7 +317,7 @@ class TestBlazeOfGlory:
         game._set_phase_and_step("combat", "declare_blockers")
         ok, _ = game.declare_blockers(1, {0: [0, 1]})  # the Wall blocks both attackers
         assert ok
-        assert game.combat_blockers == {0: [0, 1]}
+        assert game.combat_blockers == {1: {0: [0, 1]}}
 
 
 # ---------------------------------------------------------------------------

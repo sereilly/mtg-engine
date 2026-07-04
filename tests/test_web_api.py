@@ -1171,7 +1171,9 @@ def test_combat_actions_declare_attackers_and_blockers():
         json={"seat": 1, "action": "declare_blockers", "blocker_pairs": {"0": 0}},
     )
     assert declare_block.status_code == 200
-    assert declare_block.json()["combat"]["blockers"] == [{"blocker_index": 0, "attacker_index": 0}]
+    assert declare_block.json()["combat"]["blockers"] == [
+        {"blocker_index": 0, "attacker_index": 0, "defending_player_index": 1}
+    ]
 
 
 def test_no_spells_during_declare_attackers_assignment_then_priority_after():
@@ -1579,7 +1581,9 @@ def test_human_defender_can_declare_blockers_while_ai_attacker_holds_priority():
     )
     assert resp.status_code == 200, resp.text
     payload = resp.json()
-    assert payload["combat"]["blockers"] == [{"blocker_index": 0, "attacker_index": 0}]
+    assert payload["combat"]["blockers"] == [
+        {"blocker_index": 0, "attacker_index": 0, "defending_player_index": 0}
+    ]
     # After blockers are declared the active player receives priority so the AI's
     # turn can resume.
     assert payload["priority_player"] == 1
@@ -2203,7 +2207,7 @@ def test_ai_resolves_combat_damage_for_multi_blocked_attacker():
     # double-blocked attacker, sitting on an unresolved combat_damage step.
     game.combat_defending_player_index = 0
     game.combat_attackers = {0: 0}
-    game.combat_blockers = {0: [0], 1: [0]}
+    game.combat_blockers = {0: {0: [0], 1: [0]}}
     game.combat_attackers_locked = True
     game.combat_blockers_locked = True
     game.combat_damage_resolved = False

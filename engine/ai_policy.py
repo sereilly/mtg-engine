@@ -33,9 +33,20 @@ class ActivationAction:
     score: float
 
 
+def choose_attack_target(game: Game, player_index: int) -> int:
+    """MVP multiplayer opponent-choice heuristic: attack/target whichever living
+    opponent has the least life, tying broken by lowest seat index (deterministic
+    for tests/seeded simulations). Intentionally simple — no board-state or
+    threat-assessment awareness; deeper multiplayer AI tactics are future work.
+    In a 2-player game this is always just the other seat."""
+    opponents = game.opponents_of(player_index)
+    if not opponents:
+        return player_index
+    return min(opponents, key=lambda idx: (game.players[idx].life, idx))
+
+
 def choose_cast_action(game: Game, player_index: int) -> CastAction | None:
     player = game.players[player_index]
-    opponent = game.players[1 - player_index]
 
     best: CastAction | None = None
     for hand_index, card in enumerate(player.hand):
@@ -139,28 +150,37 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
     return best
 
 
-def legal_attackers(game: Game, attacking_player_index: int) -> list[int]:
+def legal_attackers(game: Game, attacking_player_index: int, against: int | None = None) -> list[int]:
     """Return battlefield indices of every creature that may legally attack this
-    turn — untapped, not summoning sick, and allowed to attack the opponent."""
+    turn — untapped, not summoning sick, and allowed to attack an opponent.
+
+    When ``against`` is given, mirrors the original single-opponent behavior
+    (legal against that one specific opponent). When omitted, returns creatures
+    legal against ANY living opponent."""
     player = game.players[attacking_player_index]
-    opponent_index = 1 - attacking_player_index
+    opponents = [against] if against is not None else game.opponents_of(attacking_player_index)
     return [
         idx
         for idx, perm in enumerate(player.battlefield)
         if perm.card.primary_type == "creature"
         and not perm.tapped
         and not game._is_summoning_sick(perm)
-        and game.can_attack(perm, opponent_index)
+        and any(game.can_attack(perm, opp) for opp in opponents)
     ]
 
 
 def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
-    """Return indices of creatures that should attack this turn."""
+    """Return indices of creatures that should attack this turn.
+
+    MVP multiplayer behavior: picks one opponent (``choose_attack_target``) and
+    decides, for each legal attacker, whether to send it at that opponent —
+    splitting one attack across multiple opponents is a documented stretch goal,
+    not implemented here."""
     player = game.players[attacking_player_index]
-    opponent_index = 1 - attacking_player_index
+    opponent_index = choose_attack_target(game, attacking_player_index)
     opponent = game.players[opponent_index]
 
-    legal_attackers_list = legal_attackers(game, attacking_player_index)
+    legal_attackers_list = legal_attackers(game, attacking_player_index, against=opponent_index)
     if not legal_attackers_list:
         return []
 
@@ -209,11 +229,16 @@ def choose_combat_blockers(game: Game, defending_player_index: int) -> dict[int,
     combat = game.get_combat_state()
     if game.current_turn_phase != "combat" or game.current_step != "declare_blockers":
         return {}
-    if combat.get("defending_player_index") != defending_player_index:
+    if defending_player_index not in game.combat_defending_players():
         return {}
 
     active_index = game.active_player_index
-    attackers = [int(item["attacker_index"]) for item in combat.get("attackers", [])]
+    # CR 802.4a: this defender may only block attackers aimed at them.
+    attackers = [
+        int(item["attacker_index"])
+        for item in combat.get("attackers", [])
+        if item.get("defending_player_index") == defending_player_index
+    ]
     if not attackers:
         return {}
 
@@ -387,7 +412,8 @@ def choose_reorder_library_order(
 
 def _score_tutor_choice(game: Game, player_index: int, card: CardDefinition) -> float:
     player = game.players[player_index]
-    opponent = game.players[1 - player_index]
+    opponent_index = choose_attack_target(game, player_index)
+    opponent = game.players[opponent_index]
 
     # Cards the engine cannot cast would strand in hand.
     if not classify_card(card).supported:
@@ -422,7 +448,7 @@ def _score_tutor_choice(game: Game, player_index: int, card: CardDefinition) -> 
 
     # A tutored burn spell that closes the game outranks everything else.
     damage = _extract_damage(card)
-    if target == 1 - player_index and 0 < opponent.life <= damage:
+    if target == opponent_index and 0 < opponent.life <= damage:
         score += 15.0
 
     return score
@@ -449,7 +475,7 @@ def _stack_response_bonus(game: Game, caster_index: int, card: CardDefinition, t
         if "gain" in lowered and "life" in lowered:
             bonus += 1.5
 
-    if _extract_damage(card) > 0 and target_index == 1 - caster_index:
+    if _extract_damage(card) > 0 and target_index == choose_attack_target(game, caster_index):
         bonus += 1.0
 
     if "destroy" in lowered or "disenchant" in lowered or "unsummon" in lowered:
@@ -518,7 +544,7 @@ def _estimated_incoming_player_damage(game: Game, defending_player_index: int) -
 
 
 def _can_cast_with_targets(game: Game, caster_index: int, card: CardDefinition) -> bool:
-    opponent = game.players[1 - caster_index]
+    opponent = game.players[choose_attack_target(game, caster_index)]
     caster = game.players[caster_index]
 
     program = compile_card_oracle(card)
@@ -570,7 +596,7 @@ def _choose_aura_target(game: Game, caster_index: int, card: CardDefinition) -> 
             "can't block",
         )
     )
-    target_player_index = (1 - caster_index) if harmful else caster_index
+    target_player_index = choose_attack_target(game, caster_index) if harmful else caster_index
     for permanent_index, permanent in enumerate(game.players[target_player_index].battlefield):
         if permanent_matches_enchant_noun(permanent, noun):
             return target_player_index, permanent_index
@@ -579,7 +605,7 @@ def _choose_aura_target(game: Game, caster_index: int, card: CardDefinition) -> 
 
 def _choose_target_for_spell(card: CardDefinition, caster_index: int, game: Game) -> int:
     self_score = _score_spell_target(card, caster_index, caster_index, game)
-    opponent_index = 1 - caster_index
+    opponent_index = choose_attack_target(game, caster_index)
     opp_score = _score_spell_target(card, caster_index, opponent_index, game)
     if self_score >= opp_score:
         return caster_index
@@ -589,7 +615,6 @@ def _choose_target_for_spell(card: CardDefinition, caster_index: int, game: Game
 def _score_spell_target(card: CardDefinition, caster_index: int, target_index: int, game: Game) -> float:
     caster = game.players[caster_index]
     target = game.players[target_index]
-    other = game.players[1 - target_index]
     text = card.oracle_text.lower()
 
     score = 0.0
@@ -652,15 +677,20 @@ def _score_spell_target(card: CardDefinition, caster_index: int, target_index: i
     if card.primary_type == "creature" and target_index == caster_index:
         score += 1.0
 
-    if other.life <= 0:
-        score -= 1.0
+    # 2-player-specific nudge: don't bother if the (only) other player already
+    # lost. Not generalized for 3+ players — no single well-defined "other".
+    if len(game.players) == 2:
+        other = game.players[1 - target_index]
+        if other.life <= 0:
+            score -= 1.0
 
     return score
 
 
 def _score_cast(game: Game, caster_index: int, card: CardDefinition, target_index: int, x_value: int | None) -> float:
     caster = game.players[caster_index]
-    opponent = game.players[1 - caster_index]
+    opponent_index = choose_attack_target(game, caster_index)
+    opponent = game.players[opponent_index]
 
     if card.primary_type == "land":
         untapped_lands = sum(1 for perm in caster.battlefield if perm.card.primary_type == "land" and not perm.tapped)
@@ -687,7 +717,7 @@ def _score_cast(game: Game, caster_index: int, card: CardDefinition, target_inde
         # at 0, causing a 704.5b loss on the next draw step.
         if target_index == caster_index and len(caster.library) <= 3:
             return -100.0
-    elif card.name == "Lightning Bolt" and target_index == 1 - caster_index and opponent.life <= 3:
+    elif card.name == "Lightning Bolt" and target_index == opponent_index and opponent.life <= 3:
         score += 12.0
     elif card.name == "Black Lotus":
         if game.enforce_mana_costs:
@@ -708,7 +738,6 @@ def _score_activation(
     target_index: int,
 ) -> float:
     score = 1.0
-    opponent = game.players[1 - player_index]
 
     if instruction.kind == "deal_damage":
         amount = int(instruction.payload.get("amount", 1) or 1)
@@ -717,7 +746,7 @@ def _score_activation(
         if effective_damage == 0:
             return -10.0
         score += 5.0 + effective_damage
-        if target_index == 1 - player_index and target_player.life <= effective_damage:
+        if target_index == choose_attack_target(game, player_index) and target_player.life <= effective_damage:
             score += 10.0
     elif instruction.kind == "draw_target_cards":
         score += 5.0 if target_index == player_index else 0.0
@@ -737,11 +766,10 @@ def _score_activation(
 def _choose_target_for_instruction(instruction: OracleInstruction, caster_index: int, game: Game) -> int:
     if instruction.kind in {"draw_target_cards", "gain_life", "prevent_damage", "black_lotus_add_mana"}:
         return caster_index
-    if instruction.kind in {"deal_damage", "destroy_target", "bounce_target", "target_player_loses_life"}:
-        return 1 - caster_index
-
-    # Fallback: prefer opponent for proactive effects.
-    return 1 - caster_index
+    # "deal_damage"/"destroy_target"/etc., and the fallback for any other
+    # proactive effect: target an opponent (MVP heuristic, see
+    # choose_attack_target — lowest life among living opponents).
+    return choose_attack_target(game, caster_index)
 
 
 def _estimate_x_damage(game: Game, caster: PlayerState, card: CardDefinition) -> int:

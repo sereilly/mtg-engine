@@ -74,7 +74,7 @@ class Game(
     current_turn_phase: str = "precombat_main"
     current_step: str = "precombat_main"
     active_player_index: int = 0
-    lands_played_this_turn: dict[int, int] = field(default_factory=lambda: {0: 0, 1: 0})
+    lands_played_this_turn: dict[int, int] = field(default_factory=dict)
     stack: list[StackItem] = field(default_factory=list)
     log: list[str] = field(default_factory=list)
     extra_turns: dict[int, int] = field(default_factory=dict)
@@ -92,11 +92,23 @@ class Game(
     skip_step_counts: dict[str, int] = field(default_factory=dict)
     combat_damage_prevented_until_eot: bool = False
     combat_attackers: dict[int, int] = field(default_factory=dict)
-    # Maps a blocker's battlefield index to the list of attacker indices it blocks.
-    # Almost always one attacker; a creature that "can block an additional creature"
+    # Maps defending player index -> {blocker battlefield idx -> attacker battlefield
+    # idx list}. Nested by defender because CR 802 (attack multiple players) lets 2+
+    # defenders declare blocks in the same combat, and blocker battlefield indices
+    # are only unambiguous within one defender's own battlefield. A blocker almost
+    # always blocks one attacker; a creature that "can block an additional creature"
     # (Two-Headed Giant of Foriys) may block more (CR 509.1b).
-    combat_blockers: dict[int, list[int]] = field(default_factory=dict)
+    combat_blockers: dict[int, dict[int, list[int]]] = field(default_factory=dict)
+    # Populated only when exactly one distinct defending player exists this combat
+    # (2-player games, or a 3+ player combat where a single opponent was attacked).
+    # The authoritative source for "who is under attack" with 2+ defenders is
+    # ``combat_attackers`` (attacker idx -> defender idx); see
+    # ``CombatPhaseMixin.combat_defending_players()``.
     combat_defending_player_index: int | None = None
+    # CR 802.4: defending players still under attack this combat that have already
+    # declared blocks (or been auto-skipped for having no legal blocks) during the
+    # declare-blockers step's APNAP-ordered declarations.
+    combat_blockers_declared_by: set[int] = field(default_factory=set)
     combat_damage_resolved: bool = False
     combat_first_strike_done: bool = False
     combat_attackers_locked: bool = False
@@ -151,7 +163,7 @@ class Game(
     # players); AI/headless play resolves the sacrifice inline with a deterministic
     # heuristic (permanents whose death loses the game are kept for last).
     pending_sacrifice: dict | None = None
-    # Seats (0/1) controlled by a human, set by the web layer each action. Empty in
+    # Seats controlled by a human, set by the web layer each action. Empty in
     # headless/AI play, so forced sacrifices there resolve inline without a prompt.
     interactive_seats: set[int] = field(default_factory=set)
     # "You may pay {1}. If you do, gain N life" triggers that fire when a spell

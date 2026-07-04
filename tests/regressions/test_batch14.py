@@ -132,7 +132,7 @@ class TestBlazeOfGloryForcedBlocks:
         assignments = choose_combat_blockers(game, 1)
         ok, msg = game.declare_blockers(1, assignments)
         assert ok, msg
-        assert sorted(game.combat_blockers.get(0, [])) == [0, 1]
+        assert sorted(game.combat_blockers.get(1, {}).get(0, [])) == [0, 1]
 
 
 # ---------------------------------------------------------------------------
