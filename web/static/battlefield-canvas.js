@@ -6,6 +6,11 @@
 // support permanents in the middle, lands in the back), and the camera pans
 // and zooms on its own to keep every card in view. There is no manual panning
 // or card dragging; the only drag interaction left is assigning blockers.
+//
+// 3-4 player (Free-For-All) games split the stage into one clipped screen
+// viewport per seat (separated by glowing divider lines), each rendered
+// through its OWN automatic camera so every quadrant independently fits its
+// permanents and zone piles regardless of how crowded the other seats are.
 
 const BF_CARD_W = 80;
 const BF_CARD_H = 112;
@@ -111,18 +116,17 @@ const BF_ZONE_PILE_GAP_PX = 26; // vertical gap between piles (leaves room for l
 const BF_ZONE_TOP_INSET_PX = 64; // clears the opponent name/life pill
 const BF_ZONE_BOTTOM_INSET_PX = 116; // clears the viewer name/life pill
 const BF_ZONE_RIGHT_INSET_PX = 56; // stack cascade reserve for the DOM mana column
-// Free-For-All: seats whose quadrant sits in the right half pin their zone
-// piles to the RIGHT stage edge instead. Deeper inset than the mana-column
-// reserve so the piles clear the DOM mana symbols; the (transient) stack
-// cascade may briefly overlap them mid-resolution, which is acceptable.
-const BF_ZONE_RIGHT_PILE_INSET_PX = 120;
+// Free-For-All: each seat's piles pin inside that seat's own screen viewport
+// instead of the stage edge. A viewport whose left edge is the vertical
+// separator (right-half seats) uses this small inset; a viewport at the
+// stage's left edge keeps BF_ZONE_LEFT_INSET_PX to clear the DOM phase rail.
+const BF_ZONE_INNER_LEFT_INSET_PX = 30;
 // FFA corner-hand clearances: every top-half seat fans card backs over the
-// top edge of its quadrant, so top pile columns start below that band; the
-// top-right column additionally moves left of the action-hint tip box; and
+// top edge of its viewport, so top pile columns start below that band; the
+// 4-player bottom-right opponent fans over the bottom edge the same way; and
 // with 4 players the viewer's hand shifts into the bottom-left half, over
 // the classic bottom pile spot, so that column rises above the tucked fan.
 const BF_ZONE_TOP_INSET_FFA_PX = 140;
-const BF_ZONE_TOP_RIGHT_PILE_INSET_FFA_PX = 330;
 const BF_ZONE_BOTTOM_INSET_FFA4_PX = 155;
 const BF_CARD_BACK_URL = "/images/card_back.webp";
 
@@ -178,6 +182,13 @@ class BattlefieldCanvas {
     this.zoom = 1.0;
     this.camTarget = null;
     this._cameraInit = false;
+
+    // Free-For-All (3-4 players): one automatic camera per seat viewport,
+    // seat -> {x, y, zoom, target, fresh}. camX/camY/zoom then act as the
+    // ACTIVE camera registers: world-space drawing and hit-testing run with a
+    // seat's camera loaded via _withCam. 2-player games never touch this and
+    // keep using the single global camera directly.
+    this.seatCams = new Map();
 
     // cardItems: [{key, seat, idx, card, x, y, tx, ty}]
     // x/y are the current (animated) world-space anchor coordinates;
@@ -343,6 +354,52 @@ class BattlefieldCanvas {
     return { x: wx * this.zoom + this.camX, y: wy * this.zoom + this.camY };
   }
 
+  // Free-For-All: 3-4 player games render each seat's quadrant through its
+  // own automatic camera, inside a clipped screen viewport.
+  _isFfa() {
+    return (this.currentState?.players?.length || 0) > 2;
+  }
+
+  // The camera for a seat: its per-seat FFA camera (a live object, eased by
+  // _tick), or a snapshot of the single global camera in 2-player games.
+  _camFor(seat) {
+    if (!this._isFfa()) return { x: this.camX, y: this.camY, zoom: this.zoom };
+    let cam = this.seatCams.get(seat);
+    if (!cam) {
+      cam = { x: 0, y: 0, zoom: 1, target: null, fresh: true };
+      this.seatCams.set(seat, cam);
+    }
+    return cam;
+  }
+
+  // Run fn with the given camera loaded into the active registers
+  // (camX/camY/zoom) — so all world<->canvas math and /zoom screen-constant
+  // sizing inside sees that camera — then restore the previous registers.
+  _withCam(cam, fn) {
+    const px = this.camX;
+    const py = this.camY;
+    const pz = this.zoom;
+    this.camX = cam.x;
+    this.camY = cam.y;
+    this.zoom = cam.zoom;
+    try {
+      return fn();
+    } finally {
+      this.camX = px;
+      this.camY = py;
+      this.zoom = pz;
+    }
+  }
+
+  // Re-express a world point seen through fromCam as the world point that
+  // renders at the same canvas position through toCam.
+  _convertWorldPoint(x, y, fromCam, toCam) {
+    return {
+      x: (x * fromCam.zoom + fromCam.x - toCam.x) / toCam.zoom,
+      y: (y * fromCam.zoom + fromCam.y - toCam.y) / toCam.zoom,
+    };
+  }
+
   // Center of the (untransformed) stage wrapper in client coordinates.
   // The canvas is centered on it, and both the transform-origin and the
   // perspective-origin coincide with it, which keeps the math closed-form.
@@ -437,10 +494,14 @@ class BattlefieldCanvas {
     return { x: pos.x, y: pos.y, w: BF_CARD_W, h: BF_CARD_H };
   }
 
-  _hitTest(wx, wy) {
+  // regionSeat (FFA): only cards rendering in that seat's viewport are
+  // candidates — the world point came through that viewport's camera, and a
+  // zoomed-out neighbor camera could otherwise phantom-hit off-screen cards.
+  _hitTest(wx, wy, regionSeat = null) {
     // Test from top of render order (last item = topmost visually).
     for (let i = this.cardItems.length - 1; i >= 0; i--) {
       const item = this.cardItems[i];
+      if (regionSeat !== null && this._itemRegionSeat(item) !== regionSeat) continue;
       const b = this._cardBounds(item.key);
       if (!b) continue;
       if (wx >= b.x && wx <= b.x + b.w && wy >= b.y && wy <= b.y + b.h) {
@@ -448,6 +509,31 @@ class BattlefieldCanvas {
       }
     }
     return null;
+  }
+
+  // Everything a mouse handler needs about a pointer position: canvas coords,
+  // the FFA viewport under the pointer (null in 2-player games), the world
+  // point through that viewport's camera, and the world point through the
+  // stack overlay's camera (the viewer camera in FFA — stack visuals live
+  // there).
+  _pointerContext(clientX, clientY) {
+    const { x: cx, y: cy } = this._pageToCanvas(clientX, clientY);
+    if (!this._isFfa()) {
+      const world = this.canvasToWorld(cx, cy);
+      return { cx, cy, region: null, world, overlayWorld: world };
+    }
+    const region = this._regionForCanvasPoint(cx, cy);
+    const world = this._withCam(this._camFor(region.seat), () => this.canvasToWorld(cx, cy));
+    const overlayWorld = this._withCam(this._camFor(this.viewerSeat), () => this.canvasToWorld(cx, cy));
+    return { cx, cy, region, world, overlayWorld };
+  }
+
+  // The pointer mapped into the open mana fan's camera space (the fan is
+  // modal, so this must work even when the pointer is over another viewport).
+  _manaFanWorldPoint(cx, cy) {
+    if (!this._isFfa()) return this.canvasToWorld(cx, cy);
+    const seat = this._manaFanRegionSeat() ?? this.viewerSeat;
+    return this._withCam(this._camFor(seat), () => this.canvasToWorld(cx, cy));
   }
 
   // Hit-test the floating stack cascade. Index 0 (top of the engine stack)
@@ -499,7 +585,11 @@ class BattlefieldCanvas {
     if (!this._lastMouseClient || this.pressState) return;
     if (!this.stackVisuals.length && this.hoveredStackIndex === null) return;
     const { x: cx, y: cy } = this._pageToCanvas(this._lastMouseClient.x, this._lastMouseClient.y);
-    const world = this.canvasToWorld(cx, cy);
+    // Stack visuals live in the overlay camera's space (the viewer camera in
+    // FFA), so the pointer is mapped through that camera.
+    const world = this._isFfa()
+      ? this._withCam(this._camFor(this.viewerSeat), () => this.canvasToWorld(cx, cy))
+      : this.canvasToWorld(cx, cy);
     this._updateStackHover(world.x, world.y);
   }
 
@@ -731,6 +821,91 @@ class BattlefieldCanvas {
     };
   }
 
+  // ---------------------------------------------------------------------------
+  // Free-For-All screen viewports (one clipped region + camera per seat)
+  // ---------------------------------------------------------------------------
+
+  // The visible (non-overscan) part of the canvas, in canvas coordinates.
+  _stageCanvasRect() {
+    return {
+      x: ((this.cssW || 0) * (1 - 1 / BF_OVERSCAN_X)) / 2,
+      y: ((this.cssH || 0) * (1 - 1 / BF_OVERSCAN_Y)) / 2,
+      w: (this.cssW || 0) / BF_OVERSCAN_X,
+      h: (this.cssH || 0) / BF_OVERSCAN_Y,
+    };
+  }
+
+  // Screen viewports for a 3-4 player game, in canvas coordinates. Outer
+  // edges extend into the overscan so clipping never shows a seam at the
+  // stage border; the inner edges are the shared separator lines (recorded in
+  // _sepSplitY/_sepBoundX for the divider drawing). 3 players: the viewer
+  // spans the whole bottom half and the two opponents split the top half.
+  _regions() {
+    const n = this.currentState?.players?.length || 0;
+    const stage = this._stageCanvasRect();
+    const splitY = stage.y + stage.h / 2;
+    const boundX = stage.x + stage.w / 2;
+    const W = this.cssW || 0;
+    const H = this.cssH || 0;
+    this._sepSplitY = splitY;
+    this._sepBoundX = boundX;
+    const v = this.viewerSeat;
+    if (n === 3) {
+      return [
+        { seat: v, x: 0, y: splitY, w: W, h: H - splitY },
+        { seat: (v + 1) % n, x: 0, y: 0, w: boundX, h: splitY },
+        { seat: (v + 2) % n, x: boundX, y: 0, w: W - boundX, h: splitY },
+      ];
+    }
+    return [
+      { seat: v, x: 0, y: splitY, w: boundX, h: H - splitY },
+      { seat: (v + 1) % n, x: boundX, y: splitY, w: W - boundX, h: H - splitY },
+      { seat: (v + 2) % n, x: 0, y: 0, w: boundX, h: splitY },
+      { seat: (v + 3) % n, x: boundX, y: 0, w: W - boundX, h: splitY },
+    ];
+  }
+
+  _regionForSeat(seat) {
+    return this._regions().find((r) => r.seat === seat) || null;
+  }
+
+  _regionForCanvasPoint(cx, cy) {
+    const regions = this._regions();
+    for (const r of regions) {
+      if (cx >= r.x && cx < r.x + r.w && cy >= r.y && cy < r.y + r.h) return r;
+    }
+    return regions[0];
+  }
+
+  // A seat's viewport, trimmed to the visible stage, expressed in that seat's
+  // camera world space — the FFA counterpart of _visibleWorldRect for
+  // screen-pinned content (zone piles, player beam endpoints).
+  _regionWorldRect(seat) {
+    const region = this._regionForSeat(seat);
+    if (!region) return this._visibleWorldRect();
+    const stage = this._stageCanvasRect();
+    const x0 = Math.max(region.x, stage.x);
+    const y0 = Math.max(region.y, stage.y);
+    const x1 = Math.min(region.x + region.w, stage.x + stage.w);
+    const y1 = Math.min(region.y + region.h, stage.y + stage.h);
+    return this._withCam(this._camFor(seat), () => {
+      const tl = this.canvasToWorld(x0, y0);
+      const br = this.canvasToWorld(x1, y1);
+      return { minX: tl.x, minY: tl.y, maxX: br.x, maxY: br.y };
+    });
+  }
+
+  // Which seat's viewport a card renders in: the quadrant owning its render
+  // position. Usually the card's controller, but e.g. an aura enchanting
+  // another seat's permanent rides into that seat's quadrant. useTarget picks
+  // the layout target instead of the animated position (for camera fitting).
+  _itemRegionSeat(item, useTarget = false) {
+    const pos =
+      (useTarget ? this._targetRenderPos(item.key) : this._renderPos(item.key)) ||
+      { x: item.tx, y: item.ty };
+    return this._seatForWorldPoint(pos.x + BF_CARD_W / 2, pos.y + BF_CARD_H / 2);
+  }
+
   // Recompute every card's layout target and rebuild identity piles.
   _layoutBoard(state) {
     const players = Array.isArray(state.players) ? state.players : [];
@@ -894,31 +1069,8 @@ class BattlefieldCanvas {
       }
     }
 
-    // 3 players: the viewer's field owns the whole bottom half, so center it
-    // under the two top quadrants rather than leaving it flush-left beneath
-    // the top-left opponent. Pure X translation of already-laid-out targets,
-    // so band structure and drop hit-testing (full-width bottom) are unaffected.
-    if (players.length === 3) {
-      let topMin = Infinity;
-      let topMax = -Infinity;
-      let mineMin = Infinity;
-      let mineMax = -Infinity;
-      for (const item of this.cardItems) {
-        if (item.seat === this.viewerSeat) {
-          mineMin = Math.min(mineMin, item.tx);
-          mineMax = Math.max(mineMax, item.tx + BF_CARD_W);
-        } else {
-          topMin = Math.min(topMin, item.tx);
-          topMax = Math.max(topMax, item.tx + BF_CARD_W);
-        }
-      }
-      if (Number.isFinite(topMin) && Number.isFinite(mineMin)) {
-        const dx = (topMin + topMax) / 2 - (mineMin + mineMax) / 2;
-        for (const item of this.cardItems) {
-          if (item.seat === this.viewerSeat) item.tx += dx;
-        }
-      }
-    }
+    // (3-4 players: no cross-seat alignment is needed here — each seat's
+    // viewport camera frames its own quadrant independently.)
 
     this.stacks = piles;
   }
@@ -958,11 +1110,12 @@ class BattlefieldCanvas {
   // top-left corner. Returns the granting card's preview payload so app.js can
   // show it, mirroring the source-card hover on emblems. Only cards that recorded
   // a `shield_source` participate, so cardless shields don't swallow card hover.
-  _hitTestShield(wx, wy) {
+  _hitTestShield(wx, wy, regionSeat = null) {
     for (let i = this.cardItems.length - 1; i >= 0; i--) {
       const item = this.cardItems[i];
       const card = item.card;
       if (!card || !(Number(card.damage_prevention_pool) > 0) || !card.shield_source) continue;
+      if (regionSeat !== null && this._itemRegionSeat(item) !== regionSeat) continue;
       const b = this._cardBounds(item.key);
       if (!b) continue;
       // The badge hugs the card's top-left corner (see _drawShieldBadge).
@@ -1088,7 +1241,7 @@ class BattlefieldCanvas {
         old[found].item = stackData[i];
         next[i] = old[found];
       } else {
-        const from = this._castOrigin(stackData[i]);
+        const from = this._castOriginOverlay(stackData[i]);
         next[i] = { sig: sigs[i], item: stackData[i], cx: from.x, cy: from.y, scale: from.scale, tcx: from.x, tcy: from.y, tScale: BF_STACK_SCALE };
       }
     }
@@ -1122,8 +1275,17 @@ class BattlefieldCanvas {
   // screen. Sizes divide by zoom so stack cards keep a constant on-screen
   // size however far the camera is zoomed out. The serialized stack is
   // top-first: index 0 (next to resolve) takes the deepest down-right offset
-  // and is drawn on top.
+  // and is drawn on top. In FFA the cascade lives in the viewer camera's
+  // "overlay" space and is drawn unclipped above every viewport.
   _retargetStackVisuals() {
+    if (this._isFfa()) {
+      this._withCam(this._camFor(this.viewerSeat), () => this._retargetStackVisualsActive());
+      return;
+    }
+    this._retargetStackVisualsActive();
+  }
+
+  _retargetStackVisualsActive() {
     const n = this.stackVisuals.length;
     if (!n) return;
     const rect = this._visibleWorldRect();
@@ -1203,73 +1365,72 @@ class BattlefieldCanvas {
     this._retargetZonePiles();
   }
 
-  // Pin each seat's piles to the stage corner matching its battlefield
-  // quadrant: bottom-half seats grow their column up from the bottom edge,
-  // top-half seats down from the top; left-half seats hug the left stage
-  // edge, right-half seats (Free-For-All only) hug the right. For 2-player
-  // games this reproduces the classic viewer-bottom-left / opponent-top-left
-  // columns exactly. Re-run every tick (like the stack cascade) so camera
-  // motion never strands them. The horizontal anchor is computed in PAGE
-  // space and projected onto the tilted plane per pile: the perspective tilt
-  // spreads the bottom of the plane outward, so a flat-canvas inset would
-  // drift near the viewer's edge and slide under the DOM phase rail.
+  // Pin each seat's piles inside its own viewport: bottom-half seats grow
+  // their column up from the viewport's bottom edge, top-half seats down from
+  // its top, and every column hugs the viewport's LEFT edge (the stage edge,
+  // or the vertical separator for right-half seats). For 2-player games this
+  // reproduces the classic viewer-bottom-left / opponent-top-left columns
+  // exactly. Re-run every tick (like the stack cascade) so camera motion
+  // never strands them. In FFA each pile is positioned through its seat's own
+  // camera, so the piles ride that quadrant's independent pan/zoom. The
+  // horizontal anchor is computed in PAGE space and projected onto the tilted
+  // plane per pile: the perspective tilt spreads the bottom of the plane
+  // outward, so a flat-canvas inset would drift near the viewer's edge and
+  // slide under the DOM phase rail.
   _retargetZonePiles() {
     if (!this.zonePiles.length) return;
-    const rect = this._visibleWorldRect();
     const n = this.currentState?.players?.length || 0;
-    const w = (BF_CARD_W * BF_ZONE_PILE_SCALE) / this.zoom;
-    const h = (BF_CARD_H * BF_ZONE_PILE_SCALE) / this.zoom;
-    const gap = BF_ZONE_PILE_GAP_PX / this.zoom;
     const stage = this.canvas.parentElement?.getBoundingClientRect();
     const order = { library: 0, graveyard: 1, exile: 2 };
     const slots = new Map(); // seat -> next slot index
     for (const pile of this.zonePiles.slice().sort((a, b) => order[a.kind] - order[b.kind])) {
-      const quadrant = this._quadrantFor(pile.seat);
-      const isBottom = quadrant.growDirection === "down";
-      // Only a quadrant bounded on the left but open to the right lives in
-      // the right half (the 3-player viewer's full-width bottom is open on
-      // BOTH sides and stays left).
-      const isRight = n > 2 && Number.isFinite(quadrant.xMin) && !Number.isFinite(quadrant.xMax);
       const slot = slots.get(pile.seat) || 0;
       slots.set(pile.seat, slot + 1);
-      pile.w = w;
-      pile.h = h;
-      let topInsetPx = BF_ZONE_TOP_INSET_PX;
-      let bottomInsetPx = BF_ZONE_BOTTOM_INSET_PX;
-      let rightInsetPx = BF_ZONE_RIGHT_PILE_INSET_PX;
-      if (n > 2) {
-        if (!isBottom) {
-          topInsetPx = BF_ZONE_TOP_INSET_FFA_PX;
-          if (isRight) rightInsetPx = BF_ZONE_TOP_RIGHT_PILE_INSET_FFA_PX;
-        } else if (!isRight && pile.seat === this.viewerSeat && n >= 4) {
-          bottomInsetPx = BF_ZONE_BOTTOM_INSET_FFA4_PX;
+      this._withCam(this._camFor(pile.seat), () => {
+        const isBottom = this._quadrantFor(pile.seat).growDirection === "down";
+        const rect = n > 2 ? this._regionWorldRect(pile.seat) : this._visibleWorldRect();
+        const region = n > 2 ? this._regionForSeat(pile.seat) : null;
+        const w = (BF_CARD_W * BF_ZONE_PILE_SCALE) / this.zoom;
+        const h = (BF_CARD_H * BF_ZONE_PILE_SCALE) / this.zoom;
+        const gap = BF_ZONE_PILE_GAP_PX / this.zoom;
+        pile.w = w;
+        pile.h = h;
+        let topInsetPx = BF_ZONE_TOP_INSET_PX;
+        let bottomInsetPx = BF_ZONE_BOTTOM_INSET_PX;
+        if (n > 2) {
+          if (!isBottom) topInsetPx = BF_ZONE_TOP_INSET_FFA_PX;
+          else if (pile.seat !== this.viewerSeat) bottomInsetPx = BF_ZONE_TOP_INSET_FFA_PX;
+          else if (n >= 4) bottomInsetPx = BF_ZONE_BOTTOM_INSET_FFA4_PX;
         }
-      }
-      pile.cy = isBottom
-        ? rect.maxY - bottomInsetPx / this.zoom - h / 2 - slot * (h + gap)
-        : rect.minY + topInsetPx / this.zoom + h / 2 + slot * (h + gap);
-      if (stage && stage.width > 0) {
-        // Project the pile's row back to page space, then find the world x
-        // whose page x sits exactly at the inset from the stage's edge.
-        const rowCanvasY = this.worldToCanvas(0, pile.cy).y;
-        const rowPageY = this._canvasToPage(0, rowCanvasY).y;
-        if (isRight) {
-          const edge = this._pageToCanvas(stage.right - rightInsetPx, rowPageY);
-          pile.cx = this.canvasToWorld(edge.x, edge.y).x - w / 2;
-        } else {
-          const edge = this._pageToCanvas(stage.left + BF_ZONE_LEFT_INSET_PX, rowPageY);
+        pile.cy = isBottom
+          ? rect.maxY - bottomInsetPx / this.zoom - h / 2 - slot * (h + gap)
+          : rect.minY + topInsetPx / this.zoom + h / 2 + slot * (h + gap);
+        const stageCanvas = this._stageCanvasRect();
+        const atStageLeft = !region || region.x <= stageCanvas.x;
+        const insetPx = atStageLeft ? BF_ZONE_LEFT_INSET_PX : BF_ZONE_INNER_LEFT_INSET_PX;
+        if (stage && stage.width > 0) {
+          // Project the pile's row back to page space, then find the world x
+          // whose page x sits exactly at the inset from the viewport's edge.
+          const rowCanvasY = this.worldToCanvas(0, pile.cy).y;
+          const rowPageY = this._canvasToPage(0, rowCanvasY).y;
+          const leftPageX = atStageLeft
+            ? stage.left
+            : this._canvasToPage(Math.max(region.x, stageCanvas.x), rowCanvasY).x;
+          const edge = this._pageToCanvas(leftPageX + insetPx, rowPageY);
           pile.cx = this.canvasToWorld(edge.x, edge.y).x + w / 2;
+        } else {
+          pile.cx = rect.minX + insetPx / this.zoom + w / 2;
         }
-      } else {
-        pile.cx = isRight
-          ? rect.maxX - rightInsetPx / this.zoom - w / 2
-          : rect.minX + BF_ZONE_LEFT_INSET_PX / this.zoom + w / 2;
-      }
+      });
     }
   }
 
-  _hitTestZonePile(wx, wy) {
+  // seatFilter (FFA): only piles of the viewport under the pointer are
+  // candidates — pile coordinates only mean anything through their own
+  // seat's camera.
+  _hitTestZonePile(wx, wy, seatFilter = null) {
     for (const pile of this.zonePiles) {
+      if (seatFilter !== null && pile.seat !== seatFilter) continue;
       if (
         wx >= pile.cx - pile.w / 2 && wx <= pile.cx + pile.w / 2 &&
         wy >= pile.cy - pile.h / 2 && wy <= pile.cy + pile.h / 2
@@ -1285,7 +1446,7 @@ class BattlefieldCanvas {
   getZonePileClientPoint(seat, kind) {
     const pile = this.zonePiles.find((p) => p.seat === seat && p.kind === kind);
     if (!pile) return null;
-    const c = this.worldToCanvas(pile.cx, pile.cy);
+    const c = this._withCam(this._camFor(seat), () => this.worldToCanvas(pile.cx, pile.cy));
     return this._canvasToPage(c.x, c.y);
   }
 
@@ -1302,11 +1463,12 @@ class BattlefieldCanvas {
     );
   }
 
-  _drawZonePiles(ctx) {
+  _drawZonePiles(ctx, seatFilter = null) {
     if (!this.zonePiles.length) return;
     const now = performance.now();
     const labels = { library: "DECK", graveyard: "GRAVE", exile: "EXILE" };
     for (const pile of this.zonePiles) {
+      if (seatFilter !== null && pile.seat !== seatFilter) continue;
       const x = pile.cx - pile.w / 2;
       const y = pile.cy - pile.h / 2;
       const hovered =
@@ -1396,7 +1558,19 @@ class BattlefieldCanvas {
   _castOrigin(item) {
     if (item?.type === "ability" && item.source_permanent_seat != null && item.source_permanent_index != null) {
       const pos = this._renderPos(`${item.source_permanent_seat}-${item.source_permanent_index}`);
-      if (pos) return { x: pos.x + BF_CARD_W / 2, y: pos.y + BF_CARD_H / 2, scale: 1.0 };
+      if (pos) {
+        let p = { x: pos.x + BF_CARD_W / 2, y: pos.y + BF_CARD_H / 2 };
+        if (this._isFfa()) {
+          // The permanent renders through its own quadrant's camera;
+          // re-express its position in the ACTIVE camera's space so the
+          // ability card visually pops out of the permanent.
+          const srcSeat = this._seatForWorldPoint(p.x, p.y);
+          p = this._convertWorldPoint(p.x, p.y, this._camFor(srcSeat), {
+            x: this.camX, y: this.camY, zoom: this.zoom,
+          });
+        }
+        return { x: p.x, y: p.y, scale: 1.0 };
+      }
     }
     const casterSeat = item?.caster_index;
     const fromViewer = casterSeat === this.viewerSeat;
@@ -1430,11 +1604,18 @@ class BattlefieldCanvas {
     return { x: fallback.x, y: fallback.y, scale: 0.55 / this.zoom };
   }
 
+  // Cast origin expressed in the stack overlay's camera space: the viewer's
+  // viewport camera in FFA, the (already-active) global camera otherwise.
+  _castOriginOverlay(item) {
+    if (!this._isFfa()) return this._castOrigin(item);
+    return this._withCam(this._camFor(this.viewerSeat), () => this._castOrigin(item));
+  }
+
   // World-space point a resolved non-permanent shrinks away toward, clamped
   // so the fizzle heads in the graveyard's direction without leaving the
-  // battlefield.
+  // battlefield. Coordinates are in the ACTIVE camera's space — in FFA call
+  // this under the caster seat's camera, whose space the piles live in.
   _graveAnchor(casterSeat) {
-    const isViewer = casterSeat === this.viewerSeat;
     // Aim at the caster's on-canvas graveyard pile (or their library pile
     // while the graveyard is still empty — same column, one slot over).
     const pile =
@@ -1442,8 +1623,9 @@ class BattlefieldCanvas {
       this.zonePiles.find((p) => p.seat === casterSeat && p.kind === "library");
     if (pile) return this._clampToBattlefield(pile.cx, pile.cy);
     // No piles yet: head toward the left edge of the caster's half.
+    const growsDown = this._quadrantFor(casterSeat).growDirection === "down";
     const rect = this._visibleWorldRect();
-    return this._clampToBattlefield(rect.minX, BF_WORLD_SPLIT_Y + (isViewer ? 420 : -420));
+    return this._clampToBattlefield(rect.minX, BF_WORLD_SPLIT_Y + (growsDown ? 420 : -420));
   }
 
   // A stack item disappeared: animate its resolution. Permanents fly to their
@@ -1463,12 +1645,36 @@ class BattlefieldCanvas {
     // cast flight, so the resolve movement always departs from the stack slot.
     const now = performance.now();
     const dwell = Math.max(0, BF_STACK_DWELL_MS - (now - (v.settledAt ?? now)));
-    const hold = dwell > 16
-      ? [{ x0: v.cx, y0: v.cy, s0: v.scale, a0: 1, x1: v.tcx, y1: v.tcy, s1: v.tScale, a1: 1, dur: dwell, ease: _easeOutCubic }]
-      : [];
-    const sx = hold.length ? v.tcx : v.cx;
-    const sy = hold.length ? v.tcy : v.cy;
-    const ss = hold.length ? v.tScale : v.scale;
+
+    // In FFA the stack cascade lives in the viewer camera's overlay space
+    // while battlefield slots and graveyard piles live in some seat camera's
+    // space. Each fx plays entirely in ONE space (fx.camSeat tags which; null
+    // means overlay/global), so the departing stack coordinates are
+    // re-expressed in the destination space up front. endStages receives the
+    // converted stack-slot position/scale and produces the remaining stages.
+    const spawn = (camSeat, endStages, extra = {}) => {
+      const overlayCam = this._isFfa() ? this._camFor(this.viewerSeat) : null;
+      const cam = overlayCam && camSeat !== null ? this._camFor(camSeat) : overlayCam;
+      const cv = (x, y, s) => {
+        if (!overlayCam || cam === overlayCam) return { x, y, s };
+        const p = this._convertWorldPoint(x, y, overlayCam, cam);
+        return { x: p.x, y: p.y, s: (s * overlayCam.zoom) / cam.zoom };
+      };
+      const start = cv(v.cx, v.cy, v.scale);
+      const slot = cv(v.tcx, v.tcy, v.tScale);
+      const hold = dwell > 16
+        ? [{ x0: start.x, y0: start.y, s0: start.s, a0: 1, x1: slot.x, y1: slot.y, s1: slot.s, a1: 1, dur: dwell, ease: _easeOutCubic }]
+        : [];
+      const sx = hold.length ? slot.x : start.x;
+      const sy = hold.length ? slot.y : start.y;
+      const ss = hold.length ? slot.s : start.s;
+      this.fxAnims.push({
+        type: "card", card, camSeat, stageIdx: 0, stageStart: null,
+        x: start.x, y: start.y, scale: start.s, alpha: 1,
+        stages: [...hold, ...endStages(sx, sy, ss)],
+        ...extra,
+      });
+    };
 
     if (isPermanentSpell) {
       const landed = (brandNew || []).find(
@@ -1479,40 +1685,32 @@ class BattlefieldCanvas {
         const pos = this._targetRenderPos(landed.key) || { x: landed.tx, y: landed.ty };
         const slot = { x: pos.x + BF_CARD_W / 2, y: pos.y + BF_CARD_H / 2 };
         const hover = { x: slot.x, y: slot.y - BF_RESOLVE_HOVER_LIFT };
+        const camSeat = this._isFfa() ? this._seatForWorldPoint(slot.x, slot.y) : null;
         this.suppressedKeys.add(landed.key);
-        this.fxAnims.push({
-          type: "card", card, suppressKey: landed.key, impactAt: slot,
-          stageIdx: 0, stageStart: null, x: v.cx, y: v.cy, scale: v.scale, alpha: 1,
-          stages: [
-            ...hold,
-            { x0: sx, y0: sy, s0: ss, a0: 1, x1: hover.x, y1: hover.y, s1: 1.12, a1: 1, dur: BF_RESOLVE_FLY_MS, ease: _easeOutCubic, lifted: true },
-            { x0: hover.x, y0: hover.y, s0: 1.12, a0: 1, x1: hover.x, y1: hover.y, s1: 1.12, a1: 1, dur: BF_RESOLVE_HOVER_MS, ease: null, lifted: true },
-            { x0: hover.x, y0: hover.y, s0: 1.12, a0: 1, x1: slot.x, y1: slot.y, s1: 1, a1: 1, dur: BF_RESOLVE_SLAM_MS, ease: _easeInQuad },
-          ],
-        });
+        spawn(camSeat, (sx, sy, ss) => [
+          { x0: sx, y0: sy, s0: ss, a0: 1, x1: hover.x, y1: hover.y, s1: 1.12, a1: 1, dur: BF_RESOLVE_FLY_MS, ease: _easeOutCubic, lifted: true },
+          { x0: hover.x, y0: hover.y, s0: 1.12, a0: 1, x1: hover.x, y1: hover.y, s1: 1.12, a1: 1, dur: BF_RESOLVE_HOVER_MS, ease: null, lifted: true },
+          { x0: hover.x, y0: hover.y, s0: 1.12, a0: 1, x1: slot.x, y1: slot.y, s1: 1, a1: 1, dur: BF_RESOLVE_SLAM_MS, ease: _easeInQuad },
+        ], { suppressKey: landed.key, impactAt: slot });
         return;
       }
     }
 
     if (isSpell) {
-      const g = this._graveAnchor(item.caster_index ?? 0);
-      this.fxAnims.push({
-        type: "card", card, stageIdx: 0, stageStart: null, x: v.cx, y: v.cy, scale: v.scale, alpha: 1,
-        stages: [
-          ...hold,
-          { x0: sx, y0: sy, s0: ss, a0: 1, x1: g.x, y1: g.y, s1: 0.2, a1: 0, dur: BF_FIZZLE_MS, ease: _easeInCubic },
-        ],
-      });
+      const casterSeat = item.caster_index ?? 0;
+      const camSeat = this._isFfa() ? casterSeat : null;
+      const g = camSeat !== null
+        ? this._withCam(this._camFor(camSeat), () => this._graveAnchor(casterSeat))
+        : this._graveAnchor(casterSeat);
+      spawn(camSeat, (sx, sy, ss) => [
+        { x0: sx, y0: sy, s0: ss, a0: 1, x1: g.x, y1: g.y, s1: 0.2, a1: 0, dur: BF_FIZZLE_MS, ease: _easeInCubic },
+      ]);
       return;
     }
 
-    this.fxAnims.push({
-      type: "card", card, stageIdx: 0, stageStart: null, x: v.cx, y: v.cy, scale: v.scale, alpha: 1,
-      stages: [
-        ...hold,
-        { x0: sx, y0: sy, s0: ss, a0: 1, x1: sx, y1: sy, s1: ss * 0.6, a1: 0, dur: BF_ABILITY_FADE_MS, ease: null },
-      ],
-    });
+    spawn(null, (sx, sy, ss) => [
+      { x0: sx, y0: sy, s0: ss, a0: 1, x1: sx, y1: sy, s1: ss * 0.6, a1: 0, dur: BF_ABILITY_FADE_MS, ease: null },
+    ]);
   }
 
   // Lands never go on the stack: new land permanents play the same
@@ -1527,10 +1725,15 @@ class BattlefieldCanvas {
       const pos = this._targetRenderPos(item.key) || { x: item.tx, y: item.ty };
       const slot = { x: pos.x + BF_CARD_W / 2, y: pos.y + BF_CARD_H / 2 };
       const hover = { x: slot.x, y: slot.y - BF_RESOLVE_HOVER_LIFT };
-      const from = this._castOrigin({ caster_index: item.seat });
+      // In FFA the whole entrance plays in the destination quadrant's camera
+      // space, so the hand origin is computed through that camera too.
+      const camSeat = this._isFfa() ? this._seatForWorldPoint(slot.x, slot.y) : null;
+      const from = camSeat !== null
+        ? this._withCam(this._camFor(camSeat), () => this._castOrigin({ caster_index: item.seat }))
+        : this._castOrigin({ caster_index: item.seat });
       this.suppressedKeys.add(item.key);
       this.fxAnims.push({
-        type: "card", card: item.card, suppressKey: item.key, impactAt: slot,
+        type: "card", card: item.card, camSeat, suppressKey: item.key, impactAt: slot,
         stageIdx: 0, stageStart: null, x: from.x, y: from.y, scale: from.scale, alpha: 1,
         stages: [
           { x0: from.x, y0: from.y, s0: from.scale, a0: 1, x1: hover.x, y1: hover.y, s1: 1.12, a1: 1, dur: BF_RESOLVE_FLY_MS, ease: _easeOutCubic, lifted: true },
@@ -1565,8 +1768,9 @@ class BattlefieldCanvas {
       const e = stage.ease ? stage.ease(k) : k;
       // Re-clamp against the live view every tick: the camera may pan/zoom
       // for battlefield changes mid-animation, and the card must ride the
-      // view edge rather than be left out of frame.
-      const p = this._clampToBattlefield(_lerp(stage.x0, stage.x1, e), _lerp(stage.y0, stage.y1, e));
+      // view edge rather than be left out of frame. The clamp runs through
+      // the fx's own camera space.
+      const p = this._fxClampPoint(fx, _lerp(stage.x0, stage.x1, e), _lerp(stage.y0, stage.y1, e));
       fx.x = p.x;
       fx.y = p.y;
       fx.scale = _lerp(stage.s0, stage.s1, e);
@@ -1578,10 +1782,19 @@ class BattlefieldCanvas {
       this.fxAnims.splice(this.fxAnims.indexOf(fx), 1);
       if (fx.suppressKey) this.suppressedKeys.delete(fx.suppressKey);
       if (fx.impactAt) {
-        this.fxAnims.push({ type: "ring", x: fx.impactAt.x, y: fx.impactAt.y, dur: BF_IMPACT_RING_MS, start: null, t: 0 });
+        this.fxAnims.push({ type: "ring", camSeat: fx.camSeat ?? null, x: fx.impactAt.x, y: fx.impactAt.y, dur: BF_IMPACT_RING_MS, start: null, t: 0 });
       }
     }
     return true;
+  }
+
+  // Clamp an fx position to the battlefield through the fx's own camera: its
+  // camSeat viewport camera in FFA (the viewer overlay camera for stack-space
+  // fx), the single global camera otherwise.
+  _fxClampPoint(fx, x, y) {
+    if (!this._isFfa()) return this._clampToBattlefield(x, y);
+    const cam = this._camFor(fx.camSeat ?? this.viewerSeat);
+    return this._withCam(cam, () => this._clampToBattlefield(x, y));
   }
 
   // True while a cast/resolve animation is visually in progress: a stack card
@@ -1729,10 +1942,12 @@ class BattlefieldCanvas {
     return { x: st.x + off.x, y: st.y + off.y };
   }
 
-  // World-space point standing in for a player: the matching table edge.
+  // World-space point standing in for a player: the matching edge of their
+  // own viewport (FFA) or of the table (2-player).
   _combatPlayerPoint(seatIdx, anchorX) {
-    const rect = this._visibleWorldRect();
-    const y = seatIdx === this.viewerSeat ? rect.maxY - 26 : rect.minY + 26;
+    const rect = this._isFfa() ? this._regionWorldRect(seatIdx) : this._visibleWorldRect();
+    const atBottom = this._quadrantFor(seatIdx).growDirection === "down";
+    const y = atBottom ? rect.maxY - 26 : rect.minY + 26;
     const x = Math.min(rect.maxX - 40, Math.max(rect.minX + 40, anchorX));
     return { x, y };
   }
@@ -1762,8 +1977,14 @@ class BattlefieldCanvas {
   // ---------------------------------------------------------------------------
 
   // Fit the camera target around every card's layout position (plus the split
-  // line, so the table center stays visible even on a sparse board).
+  // line, so the table center stays visible even on a sparse board). 3-4
+  // player games instead fit one camera per seat viewport.
   _updateCameraTarget() {
+    if (this._isFfa()) {
+      this.camTarget = null; // the global camera is unused in FFA
+      this._updateFfaCameraTargets();
+      return;
+    }
     let minX = Infinity;
     let minY = Infinity;
     let maxX = -Infinity;
@@ -1849,6 +2070,108 @@ class BattlefieldCanvas {
     };
   }
 
+  // Free-For-All: fit one camera per seat, framing that seat's quadrant
+  // content (cards rendering in its quadrant, plus the viewer's emblems)
+  // inside its own screen viewport — each quadrant pans/zooms independently
+  // of how crowded the other seats' boards are.
+  _updateFfaCameraTargets() {
+    const players = this.currentState?.players || [];
+    const stage = this.canvas.parentElement?.getBoundingClientRect();
+    const stageC = this._stageCanvasRect();
+    const handCount = (seat) => {
+      const p = players[seat];
+      return p?.hand_count ?? (Array.isArray(p?.hand) ? p.hand.length : 0);
+    };
+    for (const region of this._regions()) {
+      const seat = region.seat;
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+      for (const item of this.cardItems) {
+        if (this._itemRegionSeat(item, true) !== seat) continue;
+        const b = this._targetBounds(item.key);
+        if (!b) continue;
+        minX = Math.min(minX, b.x);
+        minY = Math.min(minY, b.y);
+        maxX = Math.max(maxX, b.x + b.w);
+        maxY = Math.max(maxY, b.y + b.h);
+      }
+      if (seat === this.viewerSeat) {
+        for (const item of this.emblemItems) {
+          const b = this._emblemBounds(item);
+          minX = Math.min(minX, b.x);
+          minY = Math.min(minY, b.y);
+          maxX = Math.max(maxX, b.x + b.w);
+          maxY = Math.max(maxY, b.y + b.h);
+        }
+      }
+      const q = this._quadrantFor(seat);
+      const growsDown = q.growDirection === "down";
+      if (!Number.isFinite(minX)) {
+        // Empty quadrant: frame a sensible area against the split line.
+        minX = q.xOffset;
+        maxX = q.xOffset + 4 * BF_SLOT_PITCH_X;
+        minY = growsDown ? BF_WORLD_SPLIT_Y : BF_WORLD_SPLIT_Y - 320;
+        maxY = growsDown ? BF_WORLD_SPLIT_Y + 320 : BF_WORLD_SPLIT_Y;
+      }
+      // Anchor the fit to the split line so the front band hugs the divider.
+      if (growsDown) minY = Math.min(minY, BF_WORLD_SPLIT_Y + 4);
+      else maxY = Math.max(maxY, BF_WORLD_SPLIT_Y - 4);
+
+      const bx = minX - BF_FIT_PADDING;
+      const by = minY - BF_FIT_PADDING;
+      const bw = maxX - minX + 2 * BF_FIT_PADDING;
+      const bh = maxY - minY + 2 * BF_FIT_PADDING;
+
+      // Usable part of the viewport: trimmed to the visible stage, inset off
+      // the separator lines, minus the screen bands the DOM hand fans cover.
+      let ux = Math.max(region.x, stageC.x);
+      let uy = Math.max(region.y, stageC.y);
+      let ux1 = Math.min(region.x + region.w, stageC.x + stageC.w);
+      let uy1 = Math.min(region.y + region.h, stageC.y + stageC.h);
+      const SEP_INSET = 14;
+      if (region.x > stageC.x) ux += SEP_INSET;
+      if (region.x + region.w < stageC.x + stageC.w) ux1 -= SEP_INSET;
+      if (region.y > stageC.y) uy += SEP_INSET;
+      if (region.y + region.h < stageC.y + stageC.h) uy1 -= SEP_INSET;
+      if (stage && stage.width > 0 && stage.height > 0) {
+        const cxPage = stage.left + stage.width / 2;
+        if (region.y <= stageC.y) {
+          // Viewport touches the stage top: this opponent fans card backs there.
+          const reserve = handCount(seat) > 0 ? BF_HAND_RESERVE_TOP : BF_EDGE_RESERVE_TOP;
+          uy = Math.max(uy, this._pageToCanvas(cxPage, stage.top + reserve).y);
+        }
+        if (region.y + region.h >= stageC.y + stageC.h) {
+          // Viewport touches the stage bottom: the viewer's tucked fan (or,
+          // with 4 players, the bottom-right opponent's card backs) covers it.
+          const reserve = handCount(seat) > 0
+            ? (seat === this.viewerSeat ? BF_HAND_RESERVE_BOTTOM : BF_HAND_RESERVE_TOP)
+            : BF_EDGE_RESERVE_BOTTOM;
+          uy1 = Math.min(uy1, this._pageToCanvas(cxPage, stage.bottom - reserve).y);
+        }
+      }
+      const vw = ux1 - ux;
+      const vh = uy1 - uy;
+      if (vw <= 0 || vh <= 0) continue;
+
+      const zoom = Math.max(BF_MIN_ZOOM, Math.min(BF_MAX_ZOOM, vw / bw, vh / bh));
+      const cam = this._camFor(seat);
+      cam.target = {
+        x: ux + (vw - bw * zoom) / 2 - bx * zoom,
+        y: uy + (vh - bh * zoom) / 2 - by * zoom,
+        zoom,
+      };
+      if (cam.fresh) {
+        // First fit for this seat: snap instead of easing in from nowhere.
+        cam.fresh = false;
+        cam.x = cam.target.x;
+        cam.y = cam.target.y;
+        cam.zoom = cam.target.zoom;
+      }
+    }
+  }
+
   // Ease cards and camera toward their targets (runs every frame).
   _tick() {
     let moving = false;
@@ -1909,6 +2232,24 @@ class BattlefieldCanvas {
         this.camX += dx * BF_CAM_EASE;
         this.camY += dy * BF_CAM_EASE;
         this.zoom += dz * BF_CAM_EASE;
+      }
+      moving = true;
+    }
+    // FFA per-seat viewport cameras ease toward their own targets.
+    for (const cam of this.seatCams.values()) {
+      const ct = cam.target;
+      if (!ct || (ct.x === cam.x && ct.y === cam.y && ct.zoom === cam.zoom)) continue;
+      const dx = ct.x - cam.x;
+      const dy = ct.y - cam.y;
+      const dz = ct.zoom - cam.zoom;
+      if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5 && Math.abs(dz) < 0.002) {
+        cam.x = ct.x;
+        cam.y = ct.y;
+        cam.zoom = ct.zoom;
+      } else {
+        cam.x += dx * BF_CAM_EASE;
+        cam.y += dy * BF_CAM_EASE;
+        cam.zoom += dz * BF_CAM_EASE;
       }
       moving = true;
     }
@@ -2923,17 +3264,14 @@ class BattlefieldCanvas {
       yTop = isYou ? splitY : 0;
       yBot = isYou ? ch : splitY;
     } else {
-      // 3-4 players: pulse just the priority-holder's own quadrant rather
+      // 3-4 players: pulse just the priority-holder's own viewport rather
       // than an entire half, so the highlight points at the right seat.
-      const q = this._quadrantFor(pp);
-      const splitY = this.worldToCanvas(0, BF_WORLD_SPLIT_Y).y;
-      const boundaryX = this.worldToCanvas(BF_QUADRANT_BOUNDARY_X, BF_WORLD_SPLIT_Y).x;
-      yTop = q.growDirection === "down" ? splitY : 0;
-      yBot = q.growDirection === "down" ? ch : splitY;
-      // A quadrant bounded on a side keeps the divider; an unbounded side
-      // (e.g. the 3-player viewer's full-width bottom half) spans the stage.
-      xTop = Number.isFinite(q.xMin) ? boundaryX : 0;
-      xBot = Number.isFinite(q.xMax) ? boundaryX : cw;
+      const region = this._regionForSeat(pp);
+      if (!region) return;
+      xTop = region.x;
+      xBot = region.x + region.w;
+      yTop = region.y;
+      yBot = region.y + region.h;
     }
     if (yBot - yTop <= 1) return;
     const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 350);
@@ -3016,8 +3354,14 @@ class BattlefieldCanvas {
     ctx.fillStyle = vig;
     ctx.fillRect(0, 0, cw, ch);
 
-    // ---- Glowing separator between the two player halves ----
-    const splitCanvas = this.worldToCanvas(0, BF_WORLD_SPLIT_Y);
+    // ---- Glowing separators between the player fields ----
+    // 2 players: a single horizontal line at the world split, through the
+    // global camera. 3-4 players: fixed screen-space viewport dividers — the
+    // horizontal split plus a vertical boundary (top half only with 3
+    // players, since the viewer owns the whole bottom; full height with 4).
+    const ffa = this._isFfa();
+    const regions = ffa ? this._regions() : null;
+    const splitYc = ffa ? this._sepSplitY : this.worldToCanvas(0, BF_WORLD_SPLIT_Y).y;
     ctx.save();
     const lineGrad = ctx.createLinearGradient(0, 0, cw, 0);
     lineGrad.addColorStop(0, "rgba(126,196,255,0)");
@@ -3026,50 +3370,144 @@ class BattlefieldCanvas {
     // Soft glow band
     ctx.fillStyle = lineGrad;
     ctx.globalAlpha = 0.16;
-    ctx.fillRect(0, splitCanvas.y - 9, cw, 18);
+    ctx.fillRect(0, splitYc - 9, cw, 18);
     ctx.globalAlpha = 1;
     // Crisp core line
     ctx.strokeStyle = lineGrad;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.moveTo(0, splitCanvas.y);
-    ctx.lineTo(cw, splitCanvas.y);
+    ctx.moveTo(0, splitYc);
+    ctx.lineTo(cw, splitYc);
     ctx.stroke();
+    if (ffa) {
+      const boundX = this._sepBoundX;
+      const vBot = (this.currentState?.players?.length || 0) === 3 ? splitYc : ch;
+      const vGrad = ctx.createLinearGradient(0, 0, 0, vBot);
+      vGrad.addColorStop(0, "rgba(126,196,255,0)");
+      vGrad.addColorStop(0.5, "rgba(126,196,255,0.45)");
+      vGrad.addColorStop(1, "rgba(126,196,255,0)");
+      ctx.fillStyle = vGrad;
+      ctx.globalAlpha = 0.16;
+      ctx.fillRect(boundX - 9, 0, 18, vBot);
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = vGrad;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(boundX, 0);
+      ctx.lineTo(boundX, vBot);
+      ctx.stroke();
+    }
     // The YOU/OPPONENT captions only make sense with a single opponent; in a
     // Free-For-All each corner has its own name pill instead.
-    if ((this.currentState?.players?.length || 0) <= 2) {
+    if (!ffa) {
       ctx.fillStyle = "rgba(190,215,240,0.22)";
       ctx.font = "600 13px sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "bottom";
-      ctx.fillText("OPPONENT", cw / 2, splitCanvas.y - 7);
+      ctx.fillText("OPPONENT", cw / 2, splitYc - 7);
       ctx.textBaseline = "top";
-      ctx.fillText("YOU", cw / 2, splitCanvas.y + 7);
+      ctx.fillText("YOU", cw / 2, splitYc + 7);
     }
     ctx.restore();
 
-    // Apply camera transform for world-space drawing
-    ctx.save();
-    ctx.translate(this.camX, this.camY);
-    ctx.scale(this.zoom, this.zoom);
+    // Button hit-rects are rebuilt during drawing (possibly across several
+    // viewport passes in FFA), so reset them once per frame here.
+    this._riverButtonRects = [];
+    this._camoButtonRects = [];
 
+    if (!ffa) {
+      // Apply camera transform for world-space drawing
+      ctx.save();
+      ctx.translate(this.camX, this.camY);
+      ctx.scale(this.zoom, this.zoom);
+      this._drawWorldContent(ctx, null);
+
+      // ---- Combat damage fx (ghosts, beams, chevrons, hit flashes, tickers) ----
+      this._drawCombatFx(ctx, performance.now(), null);
+
+      // ---- Spell stack zone and cast/resolve animations (drawn on top) ----
+      this._drawStackAndFx(ctx, this.fxAnims);
+
+      // ---- Mana-color fan, above everything so its wedges are clickable ----
+      this._drawManaFan(ctx, performance.now());
+
+      ctx.restore(); // camera
+    } else {
+      // ---- FFA: one clipped pass per seat viewport, each through its own
+      // camera, so every quadrant frames its own content independently. ----
+      const fanSeat = this._manaFanRegionSeat();
+      for (const region of regions) {
+        const cam = this._camFor(region.seat);
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(region.x, region.y, region.w, region.h);
+        ctx.clip();
+        ctx.translate(cam.x, cam.y);
+        ctx.scale(cam.zoom, cam.zoom);
+        this._withCam(cam, () => {
+          this._drawWorldContent(ctx, region.seat);
+          this._drawCombatFx(ctx, performance.now(), region.seat);
+          if (fanSeat === region.seat) this._drawManaFan(ctx, performance.now());
+        });
+        ctx.restore();
+      }
+
+      // Stack cascade + overlay-space fx, unclipped above every viewport,
+      // through the viewer's camera.
+      const overlayCam = this._camFor(this.viewerSeat);
+      ctx.save();
+      ctx.translate(overlayCam.x, overlayCam.y);
+      ctx.scale(overlayCam.zoom, overlayCam.zoom);
+      this._withCam(overlayCam, () =>
+        this._drawStackAndFx(ctx, this.fxAnims.filter((fx) => fx.camSeat == null))
+      );
+      ctx.restore();
+
+      // Seat-space fx (resolve flights, land entrances, fizzles, impact
+      // rings) play in their destination viewport's camera, unclipped so a
+      // card flying from the stack stays visible while crossing viewports.
+      const fxSeats = [...new Set(this.fxAnims.filter((fx) => fx.camSeat != null).map((fx) => fx.camSeat))];
+      for (const seat of fxSeats) {
+        const cam = this._camFor(seat);
+        ctx.save();
+        ctx.translate(cam.x, cam.y);
+        ctx.scale(cam.zoom, cam.zoom);
+        this._withCam(cam, () => this._drawFxAnims(ctx, this.fxAnims.filter((fx) => fx.camSeat === seat)));
+        ctx.restore();
+      }
+    }
+  }
+
+  // The world-space battlefield scene: cards, emblems, zone piles, aura
+  // connectors, combat arrows/bands, Raging River / Camouflage overlays and
+  // the live blocker drag arrow. Runs inside a camera transform. regionSeat
+  // (FFA) restricts drawing to content belonging to that seat's viewport;
+  // null (2-player) draws everything.
+  _drawWorldContent(ctx, regionSeat) {
     // ---- Draw all cards (stacked items render on top due to sort order) ----
     for (const item of this.cardItems) {
+      if (regionSeat !== null && this._itemRegionSeat(item) !== regionSeat) continue;
       this._drawCard(ctx, item);
     }
 
     // ---- Draw the viewer's emblem tokens (orange-bordered ability markers) ----
-    for (const item of this.emblemItems) {
-      this._drawEmblem(ctx, item);
+    if (regionSeat === null || regionSeat === this.viewerSeat) {
+      for (const item of this.emblemItems) {
+        this._drawEmblem(ctx, item);
+      }
     }
 
     // ---- Library / graveyard / exile piles along the left edge ----
-    this._drawZonePiles(ctx);
+    this._drawZonePiles(ctx, regionSeat);
 
     // ---- Aura→enchantment connectors (auras set beside their target) ----
     for (const stack of this.stacks) {
       if (!stack.sideX || stack.keys.length < 2) continue;
       const targetKey = stack.keys[0];
+      if (regionSeat !== null) {
+        const tItem0 = this.cardItems.find((c) => c.key === targetKey);
+        if (!tItem0 || this._itemRegionSeat(tItem0) !== regionSeat) continue;
+      }
       const tPos = this._renderPos(targetKey);
       if (!tPos) continue;
       // When the target enchantment is itself fanned up behind a creature, only
@@ -3105,8 +3543,10 @@ class BattlefieldCanvas {
       }
     }
 
-    // ---- Combat arrows ----
+    // ---- Combat arrows (a cross-viewport arrow draws in both endpoint
+    // passes; each pass clips to its own side) ----
     for (const arrow of this.combatArrows) {
+      if (regionSeat !== null && arrow.fromSeat !== regionSeat && arrow.toSeat !== regionSeat) continue;
       const fc = this._cardCenter(`${arrow.fromSeat}-${arrow.fromIdx}`);
       const tc = this._cardCenter(`${arrow.toSeat}-${arrow.toIdx}`);
       if (fc && tc) {
@@ -3116,6 +3556,7 @@ class BattlefieldCanvas {
 
     // ---- Attacking bands (CR 702.22): purple links connecting band members ----
     for (const band of this.combatBands) {
+      if (regionSeat !== null && band.length && band[0].seat !== regionSeat) continue;
       const centers = band
         .map((m) => this._cardCenter(`${m.seat}-${m.idx}`))
         .filter(Boolean);
@@ -3144,10 +3585,12 @@ class BattlefieldCanvas {
     }
 
     // ---- Raging River: pile dividers, side badges, and Left/Right buttons ----
-    this._drawRiver(ctx);
-    this._drawCamouflage(ctx);
+    this._drawRiver(ctx, regionSeat);
+    this._drawCamouflage(ctx, regionSeat);
 
-    // ---- Live blocker-assignment drag arrow ----
+    // ---- Live blocker-assignment drag arrow. The cursor endpoint maps
+    // through the active camera, so in every pass it sits under the pointer;
+    // the creature endpoint anchors in its own viewport's pass. ----
     if (this.pressState?.combatDrag) {
       const fc = this._cardCenter(this.pressState.key);
       const tw = this.canvasToWorld(this.pressState.currentCX, this.pressState.currentCY);
@@ -3155,29 +3598,29 @@ class BattlefieldCanvas {
         this._drawArrow(ctx, fc.x, fc.y, tw.x, tw.y, "#ff8888");
       }
     }
+  }
 
-    // ---- Combat damage fx (ghosts, beams, chevrons, hit flashes, tickers) ----
-    this._drawCombatFx(ctx, performance.now());
-
-    // ---- Spell stack zone and cast/resolve animations (drawn on top) ----
-    this._drawStackAndFx(ctx);
-
-    // ---- Mana-color fan, above everything so its wedges are clickable ----
-    this._drawManaFan(ctx, performance.now());
-
-    ctx.restore(); // camera
+  // Which seat's viewport the open mana fan belongs to (the quadrant of its
+  // source land), or null when no fan is open.
+  _manaFanRegionSeat() {
+    if (!this.manaFan) return null;
+    const item = this.cardItems.find((c) => c.key === this.manaFan.key);
+    return item ? this._itemRegionSeat(item) : this.viewerSeat;
   }
 
   // Raging River (CR 702): draw the left/right divider + side badges for committed
   // piles, and the Left/Right choice buttons above the viewer's pending creatures.
-  // Runs inside the camera transform so everything sits in world space.
-  _drawRiver(ctx) {
-    this._riverButtonRects = [];
+  // Runs inside the camera transform so everything sits in world space; in FFA
+  // regionSeat restricts drawing to the pass of the seat that owns each piece.
+  // (_riverButtonRects is reset once per frame by _render, since in FFA this
+  // runs once per viewport pass.)
+  _drawRiver(ctx, regionSeat = null) {
     const r = this.river;
     if (!r || !r.active) return;
 
     // --- Divider channel + LEFT/RIGHT captions for each committed cluster ---
     for (const cl of this._riverClusters || []) {
+      if (regionSeat !== null && cl.seat !== regionSeat) continue;
       const keys = [...cl.leftKeys, ...cl.rightKeys];
       let top = Infinity;
       let bot = -Infinity;
@@ -3217,6 +3660,7 @@ class BattlefieldCanvas {
 
     // --- Per-creature side badges for committed piles ---
     for (const item of this.cardItems) {
+      if (regionSeat !== null && this._itemRegionSeat(item) !== regionSeat) continue;
       const side = this._riverSideForKey(item.seat, item.idx);
       if (!side) continue;
       const pos = this._renderPos(item.key);
@@ -3227,7 +3671,7 @@ class BattlefieldCanvas {
 
     // --- Left/Right choice buttons above the viewer's own pending creatures ---
     const prompt = r.prompt;
-    if (prompt && Array.isArray(prompt.items)) {
+    if (prompt && Array.isArray(prompt.items) && (regionSeat === null || prompt.seat === regionSeat)) {
       for (const it of prompt.items) {
         const key = `${prompt.seat}-${it.idx}`;
         const pos = this._renderPos(key);
@@ -3299,11 +3743,12 @@ class BattlefieldCanvas {
 
   // Camouflage: draw a row of pile buttons (✕ = no pile, then 1..N) above each
   // of the defending player's untapped creatures. Runs inside the camera
-  // transform so everything sits in world space.
-  _drawCamouflage(ctx) {
-    this._camoButtonRects = [];
+  // transform so everything sits in world space. (_camoButtonRects is reset
+  // once per frame by _render, since in FFA this runs once per viewport pass.)
+  _drawCamouflage(ctx, regionSeat = null) {
     const c = this.camouflage;
     if (!c || !c.active || !Array.isArray(c.items)) return;
+    if (regionSeat !== null && c.seat !== regionSeat) return;
 
     const options = ["none"];
     for (let p = 0; p < c.pileCount; p++) options.push(p);
@@ -3345,12 +3790,24 @@ class BattlefieldCanvas {
     return null;
   }
 
-  _drawCombatFx(ctx, now) {
+  // regionSeat (FFA): draw only fx involving that seat's creatures (or, for
+  // beams, either endpoint — a cross-viewport beam draws in both passes, each
+  // clipped to its own side so both endpoints anchor correctly).
+  _combatFxInRegion(fx, regionSeat) {
+    if (fx.kind === "beam") {
+      const toSeat = fx.toRef ? fx.toRef.seat : fx.toPlayerSeat;
+      return fx.fromRef.seat === regionSeat || toSeat === regionSeat;
+    }
+    return fx.ref.seat === regionSeat;
+  }
+
+  _drawCombatFx(ctx, now, regionSeat = null) {
     if (!this.combatFx.length) return;
     const ordered = [...this.combatFx].sort(
       (a, b) => (_COMBAT_FX_DRAW_ORDER[a.kind] || 0) - (_COMBAT_FX_DRAW_ORDER[b.kind] || 0)
     );
     for (const fx of ordered) {
+      if (regionSeat !== null && !this._combatFxInRegion(fx, regionSeat)) continue;
       const t = now - fx.start;
       if (t < 0 || t >= fx.dur) continue;
       const p = t / fx.dur;
@@ -3501,7 +3958,10 @@ class BattlefieldCanvas {
     ctx.restore();
   }
 
-  _drawStackAndFx(ctx) {
+  // Draws the stack cascade plus the given subset of fxAnims (all of them in
+  // 2-player games; only the overlay-space ones in FFA, where seat-space fx
+  // draw in their own camera pass via _drawFxAnims).
+  _drawStackAndFx(ctx, fxList) {
     if (this.stackVisuals.length) {
       // Faint zone label below the cascade.
       const n = this.stackVisuals.length;
@@ -3533,7 +3993,11 @@ class BattlefieldCanvas {
 
     this._drawStackHoldUi(ctx);
 
-    for (const fx of this.fxAnims) {
+    this._drawFxAnims(ctx, fxList);
+  }
+
+  _drawFxAnims(ctx, list) {
+    for (const fx of list) {
       if (fx.type === "ring") {
         const k = Math.min(1, Math.max(0, fx.t));
         ctx.save();
@@ -3708,15 +4172,17 @@ class BattlefieldCanvas {
   _handleMouseDown(event) {
     if (event.button !== 0) return;
     event.preventDefault();
-    const { x: cx, y: cy } = this._pageToCanvas(event.clientX, event.clientY);
-    const world = this.canvasToWorld(cx, cy);
+    const pt = this._pointerContext(event.clientX, event.clientY);
+    const { cx, cy, world } = pt;
+    const regionSeat = pt.region ? pt.region.seat : null;
 
     // The mana fan is modal while open: it captures every press, so a wedge
     // picks a color and a press anywhere else dismisses it.
     if (this.manaFan) {
+      const fanWorld = this._manaFanWorldPoint(cx, cy);
       this.pressState = {
         manaFan: true,
-        manaFanIndex: this._manaFanHitIndex(world.x, world.y),
+        manaFanIndex: this._manaFanHitIndex(fanWorld.x, fanWorld.y),
         startCX: cx, startCY: cy, currentCX: cx, currentCY: cy,
         cancelled: false,
       };
@@ -3748,7 +4214,7 @@ class BattlefieldCanvas {
     }
 
     // Floating stack cards draw above the battlefield, so they win the press.
-    const stackHit = this._hitTestStack(world.x, world.y);
+    const stackHit = this._hitTestStack(pt.overlayWorld.x, pt.overlayWorld.y);
     if (stackHit) {
       this.pressState = {
         stackIndex: stackHit.index,
@@ -3767,7 +4233,7 @@ class BattlefieldCanvas {
     }
 
     // Zone piles are pinned to the view above battlefield cards.
-    const zoneHit = this._hitTestZonePile(world.x, world.y);
+    const zoneHit = this._hitTestZonePile(world.x, world.y, regionSeat);
     if (zoneHit) {
       this.pressState = {
         zonePile: { seat: zoneHit.seat, kind: zoneHit.kind },
@@ -3778,7 +4244,10 @@ class BattlefieldCanvas {
       return;
     }
 
-    const emblemHit = this._hitTestEmblem(world.x, world.y);
+    // Emblems only render in the viewer's viewport.
+    const emblemHit = regionSeat === null || regionSeat === this.viewerSeat
+      ? this._hitTestEmblem(world.x, world.y)
+      : null;
     if (emblemHit) {
       this.pressState = {
         key: null,
@@ -3797,7 +4266,7 @@ class BattlefieldCanvas {
       return;
     }
 
-    const item = this._hitTest(world.x, world.y);
+    const item = this._hitTest(world.x, world.y, regionSeat);
     if (!item) return;
 
     this.pressState = {
@@ -3816,8 +4285,9 @@ class BattlefieldCanvas {
 
   _handleMouseMove(event) {
     this._lastMouseClient = { x: event.clientX, y: event.clientY };
-    const { x: cx, y: cy } = this._pageToCanvas(event.clientX, event.clientY);
-    const world = this.canvasToWorld(cx, cy);
+    const pt = this._pointerContext(event.clientX, event.clientY);
+    const { cx, cy, world } = pt;
+    const regionSeat = pt.region ? pt.region.seat : null;
 
     const ps = this.pressState;
     if (ps) {
@@ -3849,7 +4319,8 @@ class BattlefieldCanvas {
     // The mana fan, while open, owns hover: highlight the wedge under the
     // cursor and suppress card/stack hover beneath it.
     if (this.manaFan) {
-      const idx = this._manaFanHitIndex(world.x, world.y);
+      const fanWorld = this._manaFanWorldPoint(cx, cy);
+      const idx = this._manaFanHitIndex(fanWorld.x, fanWorld.y);
       if (idx !== this.manaFan.hovered) {
         this.manaFan.hovered = idx;
         this.needsRedraw = true;
@@ -3865,10 +4336,10 @@ class BattlefieldCanvas {
     }
 
     // Hover — the floating stack cascade sits above battlefield cards.
-    const stackHit = this._updateStackHover(world.x, world.y);
+    const stackHit = this._updateStackHover(pt.overlayWorld.x, pt.overlayWorld.y);
 
     // Zone piles are pinned to the view, above battlefield cards and emblems.
-    const zoneHit = stackHit ? null : this._hitTestZonePile(world.x, world.y);
+    const zoneHit = stackHit ? null : this._hitTestZonePile(world.x, world.y, regionSeat);
     const newZonePile = zoneHit ? { seat: zoneHit.seat, kind: zoneHit.kind } : null;
     const zoneChanged =
       (newZonePile?.seat !== this.hoveredZonePile?.seat) ||
@@ -3883,11 +4354,14 @@ class BattlefieldCanvas {
       }
     }
 
-    const emblemHit = stackHit || zoneHit ? null : this._hitTestEmblem(world.x, world.y);
+    const emblemHit =
+      stackHit || zoneHit || (regionSeat !== null && regionSeat !== this.viewerSeat)
+        ? null
+        : this._hitTestEmblem(world.x, world.y);
     // The shield badge sits on top of its card, so it wins over the card's own
     // hover preview — but yields to the stack cascade and emblems above it.
-    const shieldHit = stackHit || zoneHit || emblemHit ? null : this._hitTestShield(world.x, world.y);
-    const item = stackHit || zoneHit || emblemHit || shieldHit ? null : this._hitTest(world.x, world.y);
+    const shieldHit = stackHit || zoneHit || emblemHit ? null : this._hitTestShield(world.x, world.y, regionSeat);
+    const item = stackHit || zoneHit || emblemHit || shieldHit ? null : this._hitTest(world.x, world.y, regionSeat);
     const newKey = item?.key || null;
     this.canvas.style.cursor = (item || stackHit || zoneHit || emblemHit || shieldHit) ? "pointer" : "default";
 
@@ -3931,9 +4405,8 @@ class BattlefieldCanvas {
 
     if (ps.combatDrag) {
       // Blocker assignment: find attacker under cursor
-      const { x: cx, y: cy } = this._pageToCanvas(event.clientX, event.clientY);
-      const world = this.canvasToWorld(cx, cy);
-      const target = this._hitTest(world.x, world.y);
+      const pt = this._pointerContext(event.clientX, event.clientY);
+      const target = this._hitTest(pt.world.x, pt.world.y, pt.region ? pt.region.seat : null);
       if (
         target &&
         target.seat !== this.viewerSeat &&
@@ -3981,9 +4454,8 @@ class BattlefieldCanvas {
 
   _handleContextMenu(event) {
     event.preventDefault();
-    const { x: cx, y: cy } = this._pageToCanvas(event.clientX, event.clientY);
-    const world = this.canvasToWorld(cx, cy);
-    const item = this._hitTest(world.x, world.y);
+    const pt = this._pointerContext(event.clientX, event.clientY);
+    const item = this._hitTest(pt.world.x, pt.world.y, pt.region ? pt.region.seat : null);
     if (item && this.onCardContextMenu) {
       this.onCardContextMenu({ seat: item.seat, idx: item.idx, card: item.card, event });
     }
@@ -3993,16 +4465,16 @@ class BattlefieldCanvas {
     event.preventDefault();
     this.canvas.classList.remove("active-drop");
 
-    const { x: cx, y: cy } = this._pageToCanvas(event.clientX, event.clientY);
-    const world = this.canvasToWorld(cx, cy);
+    const pt = this._pointerContext(event.clientX, event.clientY);
+    const world = pt.world;
 
-    // Determine seat from position relative to the split (and, in a 3-4
-    // player game, the left/right quadrant boundary too).
-    const resolvedDropSeat = this._seatForWorldPoint(world.x, world.y);
+    // Determine seat: the viewport under the pointer in a 3-4 player game,
+    // the split-relative half otherwise.
+    const resolvedDropSeat = pt.region ? pt.region.seat : this._seatForWorldPoint(world.x, world.y);
     const dropSeat = resolvedDropSeat === null ? this.viewerSeat : resolvedDropSeat;
 
     // Check for card under cursor (for blocker assignment or aura targeting)
-    const item = this._hitTest(world.x, world.y);
+    const item = this._hitTest(world.x, world.y, pt.region ? pt.region.seat : null);
 
     if (this.onHandCardDrop) {
       this.onHandCardDrop({
