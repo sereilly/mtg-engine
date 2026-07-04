@@ -1018,6 +1018,24 @@ h2.targeting-valid {
   z-index: 100 !important;
 }
 
+/* The opponent's hand tucks into the top edge of the stage, mirroring the
+   viewer's bottom tuck: only the bottom half of each face-down card shows.
+   Revealed cards render without this class, so the full hand appears whenever
+   the cards are shown face-up. `top` (not transform) carries the tuck so the
+   fan's per-slot transform chain stays intact. */
+.hand-fan--opponent .hand-fan-slot--tucked {
+  top: -53px;
+  transition: transform 0.28s var(--ease-spring), margin 0.18s ease, top 0.22s var(--ease-spring);
+}
+
+/* Hovering a tucked card lifts it fully into view (top -53px -> 0), like the
+   viewer's hand — the un-tuck does the lifting, so drop the extra upward
+   translate the default opponent hover applies. */
+.hand-fan--opponent .hand-fan-slot--tucked:hover {
+  top: 0;
+  transform: translateX(var(--fan-push-x, 0px)) translateZ(60px) rotate(var(--fan-angle, 0deg)) rotateX(0deg) scale(1.15);
+}
+
 .hand-fan .card {
   width: 150px;
   min-height: 210px;

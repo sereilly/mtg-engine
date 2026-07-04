@@ -6558,6 +6558,12 @@ function renderHandFan(containerId, cards, options = {}) {
 
     const slot = document.createElement("div");
     slot.className = "hand-fan-slot";
+    // Top-anchored opponent fans tuck their face-down cards into the top edge
+    // (mirror of the viewer's bottom tuck): only the bottom half shows until a
+    // card is revealed (rendered face-up), which drops the tuck for full view.
+    if (isOpponent && !anchorBottom && isHidden) {
+      slot.classList.add("hand-fan-slot--tucked");
+    }
     slot.style.setProperty("--fan-angle", `${angle}deg`);
     slot.style.setProperty("--fan-push-x", "0px");
     slot.style.setProperty("--fan-z", `${pos * 5}px`);

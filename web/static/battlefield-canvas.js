@@ -2545,12 +2545,15 @@ class BattlefieldCanvas {
     ctx.fillText(text, px + pw / 2, py + ph / 2 + 0.5);
   }
 
-  // A land's produced-mana symbols, drawn as a centered row of discs pinned to
-  // the bottom of the card. Each symbol SVG already carries its color; a shadow
+  // A mana source's produced-mana symbols, drawn as a centered row of discs
+  // pinned to the bottom of the card. Covers lands and mana rocks (artifacts
+  // like Sol Ring / the Moxen) — anything with produced mana that isn't a
+  // creature, since creatures reserve that bottom-center strip for their
+  // power/toughness box. Each symbol SVG already carries its color; a shadow
   // disc behind it lifts it off the art.
   _drawLandMana(ctx, card, x, y, w, h, m) {
     const type = String(card?.type || "").toLowerCase();
-    if (!type.includes("land")) return;
+    if (type.includes("creature")) return;
     const produced = Array.isArray(card?.produced_mana) ? card.produced_mana : [];
     if (!produced.length) return;
     const sz = Math.max(12, w * 0.2);
