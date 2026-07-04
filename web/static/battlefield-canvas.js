@@ -2486,6 +2486,111 @@ class BattlefieldCanvas {
     ctx.closePath();
   }
 
+  // Draw `img` into the (dx,dy,dw,dh) box "cover"-fit: scaled to fill the box,
+  // overflow cropped, centered. Used to fit a wide art_crop into the portrait
+  // art window without distortion. Caller is expected to have clipped the box.
+  _drawImageCover(ctx, img, dx, dy, dw, dh) {
+    const iw = img.naturalWidth || img.width;
+    const ih = img.naturalHeight || img.height;
+    if (!iw || !ih) return;
+    const scale = Math.max(dw / iw, dh / ih);
+    const sw = dw / scale;
+    const sh = dh / scale;
+    const sx = (iw - sw) / 2;
+    // Bias the crop slightly above center — card art usually has its subject in
+    // the upper portion, and this keeps faces in frame in the portrait window.
+    const sy = (ih - sh) * 0.4;
+    ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
+  }
+
+  // The colored, beveled title plate across the top of a card, with the card's
+  // name auto-fit (shrunk, then ellipsized) to one line. Serif face to echo the
+  // Beleren title font MTG uses.
+  _drawNamePlate(ctx, name, px, py, pw, ph, fc, r) {
+    const rr = Math.min(r, ph / 2);
+    const g = ctx.createLinearGradient(0, py, 0, py + ph);
+    g.addColorStop(0, fc.hi);
+    g.addColorStop(1, fc.base);
+    ctx.fillStyle = g;
+    this._roundRect(ctx, px, py, pw, ph, rr);
+    ctx.fill();
+    // Top highlight + full outline for a raised, engraved look.
+    ctx.strokeStyle = "rgba(0,0,0,0.5)";
+    ctx.lineWidth = 1 / this.zoom;
+    this._roundRect(ctx, px, py, pw, ph, rr);
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(255,255,255,0.4)";
+    ctx.lineWidth = 1 / this.zoom;
+    ctx.beginPath();
+    ctx.moveTo(px + rr, py + 0.8 / this.zoom);
+    ctx.lineTo(px + pw - rr, py + 0.8 / this.zoom);
+    ctx.stroke();
+
+    const pad = 3;
+    const maxW = pw - pad * 2;
+    let font = Math.max(7, ph * 0.62);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = `bold ${font}px Georgia, "Times New Roman", serif`;
+    let text = String(name || "");
+    while (font > 6 && ctx.measureText(text).width > maxW) {
+      font -= 0.5;
+      ctx.font = `bold ${font}px Georgia, "Times New Roman", serif`;
+    }
+    text = _ellipsizeText(ctx, text, maxW);
+    // Legibility shadow under the engraved title.
+    ctx.fillStyle = "rgba(0,0,0,0.35)";
+    ctx.fillText(text, px + pw / 2, py + ph / 2 + 1);
+    ctx.fillStyle = fc.ink;
+    ctx.fillText(text, px + pw / 2, py + ph / 2 + 0.5);
+  }
+
+  // A land's produced-mana symbols, drawn as a centered row of discs pinned to
+  // the bottom of the card. Each symbol SVG already carries its color; a shadow
+  // disc behind it lifts it off the art.
+  _drawLandMana(ctx, card, x, y, w, h, m) {
+    const type = String(card?.type || "").toLowerCase();
+    if (!type.includes("land")) return;
+    const produced = Array.isArray(card?.produced_mana) ? card.produced_mana : [];
+    if (!produced.length) return;
+    const sz = Math.max(12, w * 0.2);
+    const gap = Math.max(2, w * 0.03);
+    const n = produced.length;
+    const totalW = n * sz + (n - 1) * gap;
+    let sx = x + w / 2 - totalW / 2;
+    const cy = y + h - m - sz / 2;
+    for (const sym of produced) {
+      const cxp = sx + sz / 2;
+      // Shadow disc behind the symbol.
+      ctx.save();
+      ctx.shadowColor = "rgba(0,0,0,0.65)";
+      ctx.shadowBlur = 3 / this.zoom;
+      ctx.shadowOffsetY = 1 / this.zoom;
+      ctx.fillStyle = "rgba(0,0,0,0.3)";
+      ctx.beginPath();
+      ctx.arc(cxp, cy, sz / 2 + 0.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      const src = this._symbolSrc(`{${sym}}`);
+      const symImg = src ? this._loadImage(src) : null;
+      if (symImg && symImg.complete && symImg.naturalWidth) {
+        ctx.drawImage(symImg, cxp - sz / 2, cy - sz / 2, sz, sz);
+      } else {
+        // Fallback: a colored disc with the mana letter until the SVG loads.
+        ctx.fillStyle = BF_MANA_GLOW[sym] || "#c2c6cf";
+        ctx.beginPath();
+        ctx.arc(cxp, cy, sz / 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "rgba(0,0,0,0.8)";
+        ctx.font = `bold ${sz * 0.7}px sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(String(sym), cxp, cy + 0.5);
+      }
+      sx += sz + gap;
+    }
+  }
+
   // Draw a single emblem token: the source card's art in a card-like frame with
   // a glowing orange border (marking it as an ability, not a real card) and a
   // short cost/effect label so the player knows what clicking it does.
@@ -2609,35 +2714,32 @@ class BattlefieldCanvas {
     };
   }
 
-  _drawCardFace(ctx, x, y, w, h, card, flags, creatureCard) {
-    const { selected, attacking, hovered, targeting, pileCount, emblem, enchantTargetHover } = flags || {};
-    const img = card?.image_uri ? this._loadImage(card.image_uri) : null;
-    const R = 4;
-
-    // A genuinely unblockable creature (Dwarven Warriors' "can't be blocked this
-    // turn", or inherent unblockable text) is rendered translucent — as if it can
-    // slip through blockers — with an "Unblockable" tag below.
-    const unblockableCard = creatureCard || card;
-    const isUnblockable = !!(unblockableCard && unblockableCard.unblockable);
+  // Render a card as its original full-card image (printed frame, art and text
+  // all baked in), clipped to a rounded rect with a drop shadow and a hover/
+  // state glow. Used for spells in flight and sitting on the stack — where the
+  // full Magic card reads better than the Arena battlefield face.
+  _drawFullCardFace(ctx, x, y, w, h, card, flags) {
+    const { hovered, selected, targeting } = flags || {};
+    const url = card?.large_image_uri || card?.image_uri || null;
+    const img = url ? this._loadImage(url) : null;
+    const R = 5;
 
     ctx.save();
 
-    // ---- Drop shadow onto the table ----
+    // ---- Drop shadow ----
     ctx.save();
-    ctx.shadowColor = "rgba(0,0,0,0.55)";
-    ctx.shadowBlur = (hovered ? 24 : 12) / this.zoom;
-    ctx.shadowOffsetY = (hovered ? 10 : 5) / this.zoom;
-    ctx.fillStyle = "rgba(0,0,0,0.4)";
+    ctx.shadowColor = "rgba(0,0,0,0.6)";
+    ctx.shadowBlur = (hovered ? 26 : 13) / this.zoom;
+    ctx.shadowOffsetY = (hovered ? 11 : 6) / this.zoom;
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
     this._roundRect(ctx, x, y, w, h, R);
     ctx.fill();
     ctx.restore();
 
-    // ---- Clipped card art ----
+    // ---- Clipped full card image ----
     ctx.save();
     this._roundRect(ctx, x, y, w, h, R);
     ctx.clip();
-    // Fade the face so the table shows through — the "phasing" unblockable look.
-    if (isUnblockable) ctx.globalAlpha = 0.5;
     if (img) {
       ctx.drawImage(img, x, y, w, h);
     } else {
@@ -2651,23 +2753,129 @@ class BattlefieldCanvas {
         _wrapCanvasText(ctx, card.name, x + w / 2, y + 6, w - 8, Math.max(9, w * 0.12));
       }
     }
-    // Summoning sickness tint
-    if (card?.summoning_sick) {
-      ctx.fillStyle = "rgba(90,20,220,0.22)";
-      ctx.fillRect(x, y, w, h);
-    }
-    // Glass sheen: a faint highlight across the top of the face, kept subtle so
-    // the card art stays readable.
-    if (!isUnblockable) {
-      const sheen = ctx.createLinearGradient(0, y, 0, y + h * 0.2);
-      sheen.addColorStop(0, "rgba(255,255,255,0.09)");
-      sheen.addColorStop(1, "rgba(255,255,255,0)");
-      ctx.fillStyle = sheen;
-      ctx.fillRect(x, y, w, h * 0.2);
-    }
     ctx.restore();
 
-    // ---- Glow / border ----
+    // ---- Border / hover-state glow ----
+    const T = this.theme;
+    const stateColor = selected ? T.selected : targeting ? T.targeting : hovered ? T.hovered : null;
+    ctx.save();
+    if (stateColor) {
+      ctx.shadowColor = stateColor;
+      ctx.shadowBlur = 14 / this.zoom;
+      ctx.strokeStyle = stateColor;
+      ctx.lineWidth = 2.5 / this.zoom;
+    } else {
+      ctx.strokeStyle = "rgba(0,0,0,0.55)";
+      ctx.lineWidth = 1.2 / this.zoom;
+    }
+    this._roundRect(ctx, x, y, w, h, R);
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.restore();
+  }
+
+  _drawCardFace(ctx, x, y, w, h, card, flags, creatureCard) {
+    const { selected, attacking, hovered, targeting, pileCount, emblem, enchantTargetHover, fullImage } = flags || {};
+    // Spells in flight and on the stack render as their original full card image
+    // (printed frame/art/text baked in) rather than the Arena battlefield face.
+    if (fullImage) {
+      this._drawFullCardFace(ctx, x, y, w, h, card, flags);
+      return;
+    }
+    // Arena-style face: the borderless art crop (falling back to the full card
+    // image) sits inside a custom colored, beveled frame drawn below.
+    const artUrl = card?.art_crop || card?.image_uri || null;
+    const img = artUrl ? this._loadImage(artUrl) : null;
+    const R = 5;
+    const fc = _cardFrameColors(card);
+
+    // A genuinely unblockable creature (Dwarven Warriors' "can't be blocked this
+    // turn", or inherent unblockable text) is rendered translucent — as if it can
+    // slip through blockers — with an "Unblockable" tag below.
+    const unblockableCard = creatureCard || card;
+    const isUnblockable = !!(unblockableCard && unblockableCard.unblockable);
+
+    ctx.save(); // outer group — balanced by the final restore at function end
+
+    // Face group (frame + art + title + mana): kept in its own save so the whole
+    // face can fade together when the creature is unblockable (a "phasing" look),
+    // while the state-glow border and status badges below stay full opacity.
+    ctx.save();
+    if (isUnblockable) ctx.globalAlpha = 0.5;
+
+    // ---- Drop shadow onto the table ----
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,0.6)";
+    ctx.shadowBlur = (hovered ? 26 : 13) / this.zoom;
+    ctx.shadowOffsetY = (hovered ? 11 : 6) / this.zoom;
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    this._roundRect(ctx, x, y, w, h, R);
+    ctx.fill();
+    ctx.restore();
+
+    // ---- Frame panel: beveled gradient in the card's color ----
+    const panel = ctx.createLinearGradient(0, y, 0, y + h);
+    panel.addColorStop(0, fc.hi);
+    panel.addColorStop(0.52, fc.base);
+    panel.addColorStop(1, fc.lo);
+    ctx.fillStyle = panel;
+    this._roundRect(ctx, x, y, w, h, R);
+    ctx.fill();
+
+    // ---- Face geometry: title plate on top, art window below ----
+    const m = Math.max(3, w * 0.055);        // frame thickness
+    const nh = Math.max(11, h * 0.115);      // title plate height
+    const artX = x + m;
+    const artTop = y + m + nh + 1;
+    const artW = w - 2 * m;
+    const artH = y + h - m - artTop;
+    const artR = Math.max(2, R * 0.5);
+
+    // ---- Art window (art_crop, cover-fit) ----
+    if (artH > 4) {
+      ctx.save();
+      this._roundRect(ctx, artX, artTop, artW, artH, artR);
+      ctx.clip();
+      ctx.fillStyle = "#0d1320";
+      ctx.fillRect(artX, artTop, artW, artH);
+      if (img) {
+        this._drawImageCover(ctx, img, artX, artTop, artW, artH);
+      } else if (card?.name) {
+        ctx.fillStyle = "#8ab";
+        ctx.font = `bold ${Math.max(7, w * 0.11)}px sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+        _wrapCanvasText(ctx, card.name, artX + artW / 2, artTop + 4, artW - 6, Math.max(9, w * 0.12));
+      }
+      // Summoning sickness tint over the art.
+      if (card?.summoning_sick) {
+        ctx.fillStyle = "rgba(90,20,220,0.24)";
+        ctx.fillRect(artX, artTop, artW, artH);
+      }
+      // Soft sheen across the top of the art.
+      const sheen = ctx.createLinearGradient(0, artTop, 0, artTop + artH * 0.35);
+      sheen.addColorStop(0, "rgba(255,255,255,0.14)");
+      sheen.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = sheen;
+      ctx.fillRect(artX, artTop, artW, artH * 0.35);
+      ctx.restore();
+      // Inset shadow line around the art window for recessed depth.
+      ctx.strokeStyle = "rgba(0,0,0,0.6)";
+      ctx.lineWidth = 1 / this.zoom;
+      this._roundRect(ctx, artX, artTop, artW, artH, artR);
+      ctx.stroke();
+    }
+
+    // ---- Title plate ----
+    this._drawNamePlate(ctx, card?.name, x + m, y + m, w - 2 * m, nh, fc, artR + 1);
+
+    // ---- Land mana symbols (bottom center) ----
+    this._drawLandMana(ctx, card, x, y, w, h, m);
+
+    ctx.restore(); // end face group (unblockable fade)
+
+    // ---- Frame bevel + state glow border ----
     const T = this.theme;
     const strongState = emblem || attacking || selected || targeting || enchantTargetHover;
     const stateColor = emblem ? T.emblem
@@ -2693,16 +2901,17 @@ class BattlefieldCanvas {
       ctx.shadowColor = stateColor;
       ctx.shadowBlur = (emblem ? (hovered ? 22 : 16) : attacking ? 18 : selected ? 14 : targeting ? 16 : enchantTargetHover ? 18 : 10) / this.zoom;
     }
-    ctx.strokeStyle = stateColor || T.frameStroke;
-    ctx.lineWidth = (strongState ? 2.5 : 1) / this.zoom;
+    // Outer edge: the state color when active, otherwise the frame's dark bevel.
+    ctx.strokeStyle = stateColor || "rgba(0,0,0,0.55)";
+    ctx.lineWidth = (strongState ? 2.5 : 1.2) / this.zoom;
     this._roundRect(ctx, x, y, w, h, R);
     ctx.stroke();
-    // Glass frame: inner top-edge highlight stroke, clipped to the upper half.
+    // Inner rim highlight along the top edge sells the raised bevel.
     ctx.save();
     ctx.beginPath();
     ctx.rect(x, y, w, h * 0.5);
     ctx.clip();
-    ctx.strokeStyle = T.frameHighlight;
+    ctx.strokeStyle = "rgba(255,255,255,0.35)";
     ctx.lineWidth = 1 / this.zoom;
     this._roundRect(ctx, x + 1 / this.zoom, y + 1 / this.zoom, w - 2 / this.zoom, h - 2 / this.zoom, R);
     ctx.stroke();
@@ -2744,11 +2953,26 @@ class BattlefieldCanvas {
     let ptBadgeDrawn = false;
     if (ptCard && typeof ptCard.power === "number" && typeof ptCard.toughness === "number" && ptIsCreature) {
       ptBadgeDrawn = true;
-      const bw = 26, bh = 13;
+      const bw = 28, bh = 15;
       const bx = x + w - bw - 2, by = y + h - bh - 2;
-      ctx.fillStyle = "rgba(0,0,0,0.78)";
-      ctx.fillRect(bx, by, bw, bh);
-      ctx.font = `bold ${Math.max(8, bh * 0.75)}px sans-serif`;
+      // Beveled dark capsule with a colored-frame rim for depth.
+      const cap = ctx.createLinearGradient(0, by, 0, by + bh);
+      cap.addColorStop(0, "rgba(46,46,52,0.97)");
+      cap.addColorStop(1, "rgba(12,12,17,0.97)");
+      ctx.fillStyle = cap;
+      this._roundRect(ctx, bx, by, bw, bh, 4);
+      ctx.fill();
+      ctx.strokeStyle = fc.hi;
+      ctx.lineWidth = 1.2 / this.zoom;
+      this._roundRect(ctx, bx, by, bw, bh, 4);
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(255,255,255,0.28)";
+      ctx.lineWidth = 1 / this.zoom;
+      ctx.beginPath();
+      ctx.moveTo(bx + 3, by + 1 / this.zoom);
+      ctx.lineTo(bx + bw - 3, by + 1 / this.zoom);
+      ctx.stroke();
+      ctx.font = `bold ${Math.max(8, bh * 0.7)}px sans-serif`;
       ctx.textBaseline = "middle";
       // Green when buffed above the printed base, red when reduced below it,
       // white when unchanged or the base is variable (`*`).
@@ -4340,9 +4564,9 @@ class BattlefieldCanvas {
     if (rot) {
       ctx.translate(cx, cy);
       ctx.rotate(rot);
-      this._drawCardFace(ctx, -w / 2, -h / 2, w, h, card, { hovered: !!lifted });
+      this._drawCardFace(ctx, -w / 2, -h / 2, w, h, card, { hovered: !!lifted, fullImage: true });
     } else {
-      this._drawCardFace(ctx, cx - w / 2, cy - h / 2, w, h, card, { hovered: !!lifted });
+      this._drawCardFace(ctx, cx - w / 2, cy - h / 2, w, h, card, { hovered: !!lifted, fullImage: true });
     }
     ctx.restore();
   }
@@ -4865,4 +5089,40 @@ function _wrapCanvasText(ctx, text, centerX, y, maxWidth, lineHeight) {
     }
   }
   if (line) ctx.fillText(line, centerX, y);
+}
+
+// ---- Arena-style card frame palette ----
+// Each entry drives the beveled frame gradient for a card's color: `hi` (top
+// bevel highlight) → `base` (mid) → `lo` (bottom bevel shadow), with `ink` the
+// title-plate text color chosen for contrast against that plate.
+const _FRAME_PALETTE = {
+  W: { hi: "#fdfbe8", base: "#e6dfbc", lo: "#a89a5c", ink: "#33301f" },
+  U: { hi: "#63acec", base: "#2f6fb8", lo: "#12386c", ink: "#f0f7ff" },
+  B: { hi: "#5c5764", base: "#332f3a", lo: "#100d15", ink: "#ece8f2" },
+  R: { hi: "#ef8266", base: "#c23a26", lo: "#6e1a0f", ink: "#ffeee8" },
+  G: { hi: "#61c078", base: "#2b8a45", lo: "#124a22", ink: "#eefff2" },
+  gold: { hi: "#f2da8c", base: "#c6a445", lo: "#7f6720", ink: "#2c2210" },
+  artifact: { hi: "#d0d9e3", base: "#8b95a2", lo: "#474f57", ink: "#181d24" },
+  colorless: { hi: "#d0d9e3", base: "#8b95a2", lo: "#474f57", ink: "#181d24" },
+  land: { hi: "#c09a70", base: "#7c5a3c", lo: "#3c2a1a", ink: "#f7ecdb" },
+};
+
+// Pick the frame palette for a card: lands are earthen, 2+ colors are gold
+// (multicolor), a single color uses that color, artifacts/colorless are steel.
+function _cardFrameColors(card) {
+  const type = String(card?.type || "").toLowerCase();
+  const colors = Array.isArray(card?.colors) ? card.colors : [];
+  if (type.includes("land")) return _FRAME_PALETTE.land;
+  if (colors.length >= 2) return _FRAME_PALETTE.gold;
+  if (colors.length === 1 && _FRAME_PALETTE[colors[0]]) return _FRAME_PALETTE[colors[0]];
+  if (type.includes("artifact")) return _FRAME_PALETTE.artifact;
+  return _FRAME_PALETTE.colorless;
+}
+
+// Truncate `text` with an ellipsis so it fits within `maxW` at the current font.
+function _ellipsizeText(ctx, text, maxW) {
+  if (ctx.measureText(text).width <= maxW) return text;
+  let t = text;
+  while (t.length > 1 && ctx.measureText(t + "…").width > maxW) t = t.slice(0, -1);
+  return t + "…";
 }

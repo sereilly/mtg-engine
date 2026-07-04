@@ -154,24 +154,28 @@ def _printed_stat(card, key: str) -> int | None:
     return int(text) if text.isdigit() else None
 
 
-def _card_image_uris(card) -> tuple[str | None, str | None]:
-    """The (normal, large) Scryfall image URIs from the card's raw payload."""
+def _card_image_uris(card) -> tuple[str | None, str | None, str | None]:
+    """The (normal, large, art_crop) Scryfall image URIs from the card's raw
+    payload. ``art_crop`` is the borderless art-only crop the Arena-style board
+    renderer uses as the card face."""
     image_uris = card.raw.get("image_uris") if isinstance(card.raw, dict) else None
     if not isinstance(image_uris, dict):
-        return None, None
-    return image_uris.get("normal"), image_uris.get("large")
+        return None, None, None
+    return image_uris.get("normal"), image_uris.get("large"), image_uris.get("art_crop")
 
 
 def _card_preview(card) -> dict:
     """The base card-preview dict shared by every card serialization: identity,
     rules text, and art. Callers extend it with context-specific fields."""
-    image_uri, large_image_uri = _card_image_uris(card)
+    image_uri, large_image_uri, art_crop = _card_image_uris(card)
     return {
         "name": card.name,
         "type": card.type_line,
         "oracle_text": card.oracle_text,
         "image_uri": image_uri,
         "large_image_uri": large_image_uri,
+        "art_crop": art_crop,
+        "colors": list(card.colors),
     }
 
 
@@ -230,7 +234,7 @@ def _text_change_replacements(perm: Permanent) -> list[dict]:
 
 
 def _serialize_permanent(perm: Permanent, game: Game) -> dict:
-    image_uri, large_image_uri = _card_image_uris(perm.card)
+    image_uri, large_image_uri, art_crop = _card_image_uris(perm.card)
 
     # Resolve aura attachment: find the battlefield index and seat of the attached target
     attached_to = perm.metadata.get("attached_to")
@@ -277,6 +281,7 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         "can_block_multiple": game._is_creature(perm) and game._max_blocks_for(perm) > 1,
         "image_uri": image_uri,
         "large_image_uri": large_image_uri,
+        "art_crop": art_crop,
         "attacking": perm.attacking,
         # True when this creature can't be blocked by any creature (Dwarven
         # Warriors' granted "can't be blocked this turn", or inherent unblockable
@@ -705,7 +710,7 @@ def _serialize_emblems(player: PlayerState) -> list[dict]:
     entries = player.prevent_one_damage_emblems
     if entries:
         source = CARD_BY_NAME.get("guardian angel")
-        image_uri, large_image_uri = _card_image_uris(source) if source else (None, None)
+        image_uri, large_image_uri, _art_crop = _card_image_uris(source) if source else (None, None, None)
         # The granted ability's reminder text — {1} renders as the mana symbol in
         # the preview, and names the fixed target ("that permanent or player").
         ability_text = (
@@ -729,7 +734,7 @@ def _serialize_emblems(player: PlayerState) -> list[dict]:
     # to spend life for colorless mana while the effect is active.
     if player.channel_active_until_eot:
         source = CARD_BY_NAME.get("channel")
-        image_uri, large_image_uri = _card_image_uris(source) if source else (None, None)
+        image_uri, large_image_uri, _art_crop = _card_image_uris(source) if source else (None, None, None)
         emblems.append({
             "kind": "channel",
             "index": -1,  # not an activate_emblem index; the client uses channel_mana
