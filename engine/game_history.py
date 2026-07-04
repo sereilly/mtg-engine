@@ -19,6 +19,8 @@ class GameSnapshot:
     upkeep_resolved_choices: dict[str, bool]
     optional_trigger_choices: list[dict] = field(default_factory=list)
     optional_trigger_resolved: dict[str, bool] = field(default_factory=dict)
+    upkeep_mana_prevention_choices: list[dict] = field(default_factory=list)
+    upkeep_mana_prevention_resolved: dict[str, int] = field(default_factory=dict)
     island_sanctuary_pending: bool = False
     pending_post_sacrifice: tuple[str, int] | None = None
 
@@ -42,6 +44,8 @@ class GameHistory:
                 upkeep_resolved_choices=dict(session.upkeep_resolved_choices),
                 optional_trigger_choices=list(session.optional_trigger_choices),
                 optional_trigger_resolved=dict(session.optional_trigger_resolved),
+                upkeep_mana_prevention_choices=list(session.upkeep_mana_prevention_choices),
+                upkeep_mana_prevention_resolved=dict(session.upkeep_mana_prevention_resolved),
                 island_sanctuary_pending=session.island_sanctuary_pending,
                 pending_post_sacrifice=session.pending_post_sacrifice,
             )
