@@ -3452,6 +3452,11 @@ class BattlefieldCanvas {
         ctx.restore();
       }
 
+      // Combat / drag arrows span quadrants, so they draw once in screen
+      // space above every viewport (each endpoint mapped through its own
+      // quadrant's camera).
+      this._drawArrowsOverlay(ctx);
+
       // Stack cascade + overlay-space fx, unclipped above every viewport,
       // through the viewer's camera.
       const overlayCam = this._camFor(this.viewerSeat);
@@ -3543,14 +3548,17 @@ class BattlefieldCanvas {
       }
     }
 
-    // ---- Combat arrows (a cross-viewport arrow draws in both endpoint
-    // passes; each pass clips to its own side) ----
-    for (const arrow of this.combatArrows) {
-      if (regionSeat !== null && arrow.fromSeat !== regionSeat && arrow.toSeat !== regionSeat) continue;
-      const fc = this._cardCenter(`${arrow.fromSeat}-${arrow.fromIdx}`);
-      const tc = this._cardCenter(`${arrow.toSeat}-${arrow.toIdx}`);
-      if (fc && tc) {
-        this._drawArrow(ctx, fc.x, fc.y, tc.x, tc.y, arrow.kind === "blocker" ? "#48b0ff" : "#ff6060");
+    // ---- Combat arrows (FFA draws these in a screen-space pass above every
+    // quadrant instead — see _drawArrowsOverlay — because each quadrant's
+    // independent camera would place the far endpoint wrongly and clip the
+    // arrow away) ----
+    if (regionSeat === null) {
+      for (const arrow of this.combatArrows) {
+        const fc = this._cardCenter(`${arrow.fromSeat}-${arrow.fromIdx}`);
+        const tc = this._cardCenter(`${arrow.toSeat}-${arrow.toIdx}`);
+        if (fc && tc) {
+          this._drawArrow(ctx, fc.x, fc.y, tc.x, tc.y, arrow.kind === "blocker" ? "#48b0ff" : "#ff6060");
+        }
       }
     }
 
@@ -3588,14 +3596,50 @@ class BattlefieldCanvas {
     this._drawRiver(ctx, regionSeat);
     this._drawCamouflage(ctx, regionSeat);
 
-    // ---- Live blocker-assignment drag arrow. The cursor endpoint maps
-    // through the active camera, so in every pass it sits under the pointer;
-    // the creature endpoint anchors in its own viewport's pass. ----
-    if (this.pressState?.combatDrag) {
+    // ---- Live blocker-assignment drag arrow (FFA: drawn by
+    // _drawArrowsOverlay in screen space instead, for the same reason as the
+    // combat arrows above) ----
+    if (regionSeat === null && this.pressState?.combatDrag) {
       const fc = this._cardCenter(this.pressState.key);
       const tw = this.canvasToWorld(this.pressState.currentCX, this.pressState.currentCY);
       if (fc) {
         this._drawArrow(ctx, fc.x, fc.y, tw.x, tw.y, "#ff8888");
+      }
+    }
+  }
+
+  // FFA: combat arrows and the live blocker drag arrow, drawn once in screen
+  // space above every quadrant viewport (unclipped). Each endpoint maps
+  // through the camera of the quadrant its card renders in, so an arrow
+  // crossing quadrants connects the two cards' actual on-screen positions —
+  // re-drawing it inside each quadrant pass would place the far endpoint via
+  // the wrong camera and clip most of the arrow away.
+  _drawArrowsOverlay(ctx) {
+    const screenCenter = (key) => {
+      const item = this.cardItems.find((c) => c.key === key);
+      if (!item) return null;
+      const wc = this._cardCenter(key);
+      if (!wc) return null;
+      const cam = this._camFor(this._itemRegionSeat(item));
+      return this._withCam(cam, () => this.worldToCanvas(wc.x, wc.y));
+    };
+    // Identity camera registers so _drawArrow's /zoom sizing is screen-constant.
+    const screenCam = { x: 0, y: 0, zoom: 1 };
+    for (const arrow of this.combatArrows) {
+      const fc = screenCenter(`${arrow.fromSeat}-${arrow.fromIdx}`);
+      const tc = screenCenter(`${arrow.toSeat}-${arrow.toIdx}`);
+      if (fc && tc) {
+        this._withCam(screenCam, () =>
+          this._drawArrow(ctx, fc.x, fc.y, tc.x, tc.y, arrow.kind === "blocker" ? "#48b0ff" : "#ff6060")
+        );
+      }
+    }
+    if (this.pressState?.combatDrag) {
+      const fc = screenCenter(this.pressState.key);
+      if (fc) {
+        this._withCam(screenCam, () =>
+          this._drawArrow(ctx, fc.x, fc.y, this.pressState.currentCX, this.pressState.currentCY, "#ff8888")
+        );
       }
     }
   }
