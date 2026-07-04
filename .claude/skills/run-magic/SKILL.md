@@ -1,9 +1,9 @@
 ---
 name: run-magic
-description: Build, launch, screenshot, and drive the MTG LEA web app (FastAPI + browser game UI). Use to run/start the server, take a screenshot of the board, start a human-vs-AI game in a browser, or verify a UI/engine change works in the real running app.
+description: Build, launch, screenshot, and drive the MTG Simulacrum web app (FastAPI + browser game UI). Use to run/start the server, take a screenshot of the board, start a human-vs-AI game in a browser, or verify a UI/engine change works in the real running app.
 ---
 
-# Run the MTG LEA web app
+# Run the MTG Simulacrum web app
 
 This repo is a single deployable unit: a text-based Magic: The Gathering rules
 engine (`engine/`) served behind a FastAPI web app (`web/app.py`) with a
@@ -17,7 +17,7 @@ the [playwright-cli skill](../playwright-cli/SKILL.md) for the full command
 reference. It manages its own headless Chromium and runs as a persistent daemon:
 every `playwright-cli` invocation talks to the **same default browser session**
 until you `close` it, so you drive the app one command at a time across separate
-shell calls. This skill documents only the LEA-specific launch + flow on top of it.
+shell calls. This skill documents only the MTG Simulacrum-specific launch + flow on top of it.
 
 ## Prerequisites (verified on Windows 11 / PowerShell)
 
@@ -68,7 +68,7 @@ $pw = "playwright-cli"   # or "$env:APPDATA\npm\playwright-cli.cmd" if not on PA
 $shots = "c:\Users\qwv48_66yef5i\Desktop\Magic\.claude\skills\run-magic\shots"
 
 & $pw open "http://127.0.0.1:8010/"
-& $pw --raw eval "document.title"                         # -> "Magic LEA Web App"
+& $pw --raw eval "document.title"                         # -> "MTG Simulacrum"
 
 # Home -> Host Game page (selectors are stable element ids from index.html).
 & $pw click "#homeHostBtn"

@@ -67,7 +67,7 @@ CARD_SEARCH_ORDER = sorted(CARD_CATALOG, key=lambda card: card.name)
 # Unique catalog card names in display order (some cards share a name across printings).
 CATALOG_CARD_NAMES = list(dict.fromkeys(card.name for card in CARD_SEARCH_ORDER))
 
-app = FastAPI(title="Magic LEA Web App")
+app = FastAPI(title="MTG Simulacrum")
 deck_store = DeckStore(DECKS_DIR)
 
 # The on-disk `decks/` folder is the *shared* deck pool — read-only to browser
