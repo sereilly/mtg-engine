@@ -3254,6 +3254,25 @@ def rematch_session(session_id: str, req: RematchRequest):
     return _serialize_state(session, viewer_seat=req.seat)
 
 
+@app.post("/api/sessions/{session_id}/restart")
+def restart_match(session_id: str, req: RematchRequest):
+    """Restart the current match in-place (from the Settings panel).
+
+    Unlike ``/rematch`` (which requires the game to be finished and both humans to
+    agree), this immediately rebuilds the same board — same players, seats, and
+    decks — for a new game. All connected seats are notified via the
+    ``match_restart`` stream reason so every client can announce the reset.
+    """
+    session = _require_session(session_id)
+    if req.seat not in session.joined_seats:
+        raise HTTPException(status_code=400, detail="seat has not joined")
+
+    store.restart(session)
+    _pregame_auto_advance(session)
+    _notify_session_change(session.id, "match_restart")
+    return _serialize_state(session, viewer_seat=req.seat)
+
+
 @app.get("/api/sessions/{session_id}/events")
 async def stream_session_events(session_id: str):
     _require_session(session_id)
@@ -3451,6 +3470,16 @@ def do_action(session_id: str, req: GameActionRequest):
     if req.seat not in session.joined_seats:
         raise HTTPException(status_code=400, detail="seat has not joined")
 
+    # Concede (Rule 104.3a) is always available — it bypasses every pending-decision
+    # guard below and any pregame gating, since a player can leave at any time.
+    if req.action == "concede":
+        session.game.concede(req.seat)
+        # Setting the seat as lost decides the game in a duel; _serialize_state
+        # flips status to "finished" once a winner exists.
+        state = _serialize_state(session, viewer_seat=req.seat)
+        _notify_session_change(session.id, "concede")
+        return state
+
     _pregame_actions = {
         "coin_flip_choose",
         "mulligan_take",
@@ -3458,7 +3487,7 @@ def do_action(session_id: str, req: GameActionRequest):
         "mulligan_bottom_select",
         "mulligan_bottom_confirm",
     }
-    if session.pregame_phase is not None and req.action not in _pregame_actions | {"debug_add_to_hand", "debug_cast_free"}:
+    if session.pregame_phase is not None and req.action not in _pregame_actions | {"debug_add_to_hand", "debug_cast_free", "debug_add_mana"}:
         raise HTTPException(status_code=400, detail="pregame not complete")
 
     if session.pregame_phase is None:
@@ -3498,13 +3527,13 @@ def do_action(session_id: str, req: GameActionRequest):
         if preferred_index is not None:
             req = req.model_copy(update={"action": "cleanup_select", "hand_index": preferred_index})
 
-    if cleanup_required > 0 and req.action not in {"cleanup_select", "debug_add_to_hand", "debug_cast_free"}:
+    if cleanup_required > 0 and req.action not in {"cleanup_select", "debug_add_to_hand", "debug_cast_free", "debug_add_mana"}:
         raise HTTPException(status_code=400, detail="select cleanup discards before other actions")
 
-    if untap_required > 0 and req.action not in {"untap_select", "untap_confirm", "debug_add_to_hand", "debug_cast_free"}:
+    if untap_required > 0 and req.action not in {"untap_select", "untap_confirm", "debug_add_to_hand", "debug_cast_free", "debug_add_mana"}:
         raise HTTPException(status_code=400, detail="select untap lands before other actions")
 
-    _UPKEEP_DECISION_ACTIONS = {"pay_upkeep", "sacrifice_upkeep", "resolve_optional_trigger", "pay_upkeep_prevention", "tap", "activate", "debug_add_to_hand", "debug_cast_free"}
+    _UPKEEP_DECISION_ACTIONS = {"pay_upkeep", "sacrifice_upkeep", "resolve_optional_trigger", "pay_upkeep_prevention", "tap", "activate", "debug_add_to_hand", "debug_cast_free", "debug_add_mana"}
     if _upkeep_pay_pending(session) and req.action not in _UPKEEP_DECISION_ACTIONS:
         raise HTTPException(status_code=400, detail="resolve upkeep payment before other actions")
 
@@ -3514,43 +3543,43 @@ def do_action(session_id: str, req: GameActionRequest):
     if _upkeep_mana_prevention_pending(session) and req.action not in _UPKEEP_DECISION_ACTIONS:
         raise HTTPException(status_code=400, detail="resolve upkeep prevention before other actions")
 
-    if session.island_sanctuary_pending and req.action not in {"island_sanctuary_skip", "island_sanctuary_draw", "debug_add_to_hand", "debug_cast_free"}:
+    if session.island_sanctuary_pending and req.action not in {"island_sanctuary_skip", "island_sanctuary_draw", "debug_add_to_hand", "debug_cast_free", "debug_add_mana"}:
         raise HTTPException(status_code=400, detail="choose Island Sanctuary draw option before other actions")
 
     _auto_resolve_ai_pending(session)
-    if session.game.pending_search_library is not None and req.action not in {"search_library_confirm", "debug_add_to_hand", "debug_cast_free"}:
+    if session.game.pending_search_library is not None and req.action not in {"search_library_confirm", "debug_add_to_hand", "debug_cast_free", "debug_add_mana"}:
         raise HTTPException(status_code=400, detail="complete library search before other actions")
-    if session.game.pending_reorder_library is not None and req.action not in {"reorder_library_confirm", "debug_add_to_hand", "debug_cast_free"}:
+    if session.game.pending_reorder_library is not None and req.action not in {"reorder_library_confirm", "debug_add_to_hand", "debug_cast_free", "debug_add_mana"}:
         raise HTTPException(status_code=400, detail="complete library reorder before other actions")
-    if session.game.pending_discard is not None and req.action not in {"discard_confirm", "debug_add_to_hand", "debug_cast_free"}:
+    if session.game.pending_discard is not None and req.action not in {"discard_confirm", "debug_add_to_hand", "debug_cast_free", "debug_add_mana"}:
         raise HTTPException(status_code=400, detail="complete discard before other actions")
     if (
         session.game.pending_balance is not None
         and req.seat in session.game.pending_balance["plans"]
-        and req.action not in {"balance_confirm", "debug_add_to_hand", "debug_cast_free"}
+        and req.action not in {"balance_confirm", "debug_add_to_hand", "debug_cast_free", "debug_add_mana"}
     ):
         raise HTTPException(status_code=400, detail="complete Balance sacrifices before other actions")
     if (
         session.game.pending_sacrifice is not None
         and req.seat == session.game.pending_sacrifice["player_index"]
-        and req.action not in {"sacrifice_confirm", "debug_add_to_hand", "debug_cast_free"}
+        and req.action not in {"sacrifice_confirm", "debug_add_to_hand", "debug_cast_free", "debug_add_mana"}
     ):
         raise HTTPException(status_code=400, detail="complete forced sacrifice before other actions")
     if (
         any(e["player_index"] == req.seat for e in session.game.pending_optional_pays)
-        and req.action not in {"resolve_optional_pay", "debug_add_to_hand", "debug_cast_free"}
+        and req.action not in {"resolve_optional_pay", "debug_add_to_hand", "debug_cast_free", "debug_add_mana"}
     ):
         raise HTTPException(status_code=400, detail="resolve the pay-for-life trigger before other actions")
     if (
         session.game.pending_word_of_command is not None
         and "chosen_hand_index" not in session.game.pending_word_of_command
         and session.game.pending_word_of_command.get("caster_index") == req.seat
-        and req.action not in {"word_of_command_confirm", "debug_add_to_hand", "debug_cast_free"}
+        and req.action not in {"word_of_command_confirm", "debug_add_to_hand", "debug_cast_free", "debug_add_mana"}
     ):
         raise HTTPException(status_code=400, detail="choose the Word of Command card before other actions")
     if (
         any(e["player_index"] == req.seat for e in session.game.pending_leng_discards)
-        and req.action not in {"leng_discard_confirm", "debug_add_to_hand", "debug_cast_free"}
+        and req.action not in {"leng_discard_confirm", "debug_add_to_hand", "debug_cast_free", "debug_add_mana"}
     ):
         raise HTTPException(
             status_code=400,

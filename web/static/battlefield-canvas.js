@@ -3482,12 +3482,16 @@ class BattlefieldCanvas {
 
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
 
-    // ---- Table surface ----
-    // Vertical gradient: darker toward the far (opponent) edge, lighter up close.
+    // ---- Table surface: a frosted glass pane ----
+    // The fills below are translucent so the page's aurora glows through the
+    // table (the wrap behind the canvas carries the backdrop blur); clear the
+    // previous frame first or the translucency accumulates.
+    ctx.clearRect(0, 0, cw, ch);
+    // Vertical tint: darker toward the far (opponent) edge, lighter up close.
     const bgGrad = ctx.createLinearGradient(0, 0, 0, ch);
-    bgGrad.addColorStop(0, "#0b1320");
-    bgGrad.addColorStop(0.45, "#152434");
-    bgGrad.addColorStop(1, "#21344b");
+    bgGrad.addColorStop(0, "rgba(8, 13, 26, 0.55)");
+    bgGrad.addColorStop(0.45, "rgba(16, 27, 46, 0.5)");
+    bgGrad.addColorStop(1, "rgba(26, 41, 66, 0.46)");
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, cw, ch);
 
@@ -3498,10 +3502,21 @@ class BattlefieldCanvas {
     ctx.fillStyle = sheen;
     ctx.fillRect(0, 0, cw, ch);
 
+    // Glass reflection: two faint diagonal streaks across the pane.
+    const streak = ctx.createLinearGradient(0, 0, cw, ch);
+    streak.addColorStop(0.0, "rgba(255,255,255,0)");
+    streak.addColorStop(0.2, "rgba(255,255,255,0.045)");
+    streak.addColorStop(0.3, "rgba(255,255,255,0)");
+    streak.addColorStop(0.52, "rgba(255,255,255,0.03)");
+    streak.addColorStop(0.66, "rgba(255,255,255,0)");
+    ctx.fillStyle = streak;
+    ctx.fillRect(0, 0, cw, ch);
+
     // Subtle grid: straight lines on the plane converge on screen under the
-    // real 3D tilt, which is what visually sells the perspective.
+    // real 3D tilt, which is what visually sells the perspective. Etched-glass
+    // white rather than a colored wireframe.
     ctx.save();
-    ctx.strokeStyle = "rgba(126,196,255,0.055)";
+    ctx.strokeStyle = "rgba(255,255,255,0.05)";
     ctx.lineWidth = 1;
     const GRID = 92;
     ctx.beginPath();
@@ -3521,10 +3536,11 @@ class BattlefieldCanvas {
     // obvious at a glance whose turn it is to act.
     this._drawPriorityPulse(ctx, cw, ch, GRID);
 
-    // Edge vignette so the table fades out toward the stage borders
+    // Edge vignette so the table fades out toward the stage borders — kept
+    // light so the glass pane stays translucent at the edges.
     const vig = ctx.createRadialGradient(cw / 2, ch / 2, Math.min(cw, ch) * 0.38, cw / 2, ch / 2, Math.max(cw, ch) * 0.78);
     vig.addColorStop(0, "rgba(0,0,0,0)");
-    vig.addColorStop(1, "rgba(0,0,0,0.42)");
+    vig.addColorStop(1, "rgba(0,0,0,0.3)");
     ctx.fillStyle = vig;
     ctx.fillRect(0, 0, cw, ch);
 
@@ -3570,17 +3586,6 @@ class BattlefieldCanvas {
       ctx.moveTo(boundX, 0);
       ctx.lineTo(boundX, vBot);
       ctx.stroke();
-    }
-    // The YOU/OPPONENT captions only make sense with a single opponent; in a
-    // Free-For-All each corner has its own name pill instead.
-    if (!ffa) {
-      ctx.fillStyle = "rgba(190,215,240,0.22)";
-      ctx.font = "600 13px sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "bottom";
-      ctx.fillText("OPPONENT", cw / 2, splitYc - 7);
-      ctx.textBaseline = "top";
-      ctx.fillText("YOU", cw / 2, splitYc + 7);
     }
     ctx.restore();
 

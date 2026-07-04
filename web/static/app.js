@@ -86,10 +86,10 @@ let autoPassDisabledPhaseInFlight = false;
 let autoPassDisabledPhaseRequestedStateKey = "";
 let autoCombatDeclareInFlight = false;
 let autoCombatDeclareRequestedStateKey = "";
-// Phases toggled OFF will be auto-passed. Default: only M1, AT, M2 are ON.
+// Phases toggled OFF will be auto-passed. Default: only M1, M2 are ON.
 const disabledPhases = new Set([
   "untap", "upkeep", "draw",
-  "beginning_of_combat", "declare_blockers", "combat_damage", "end_of_combat",
+  "beginning_of_combat", "declare_attackers", "declare_blockers", "combat_damage", "end_of_combat",
   "end", "cleanup",
 ]);
 const opponentDisabledPhases = new Set([
@@ -860,7 +860,10 @@ function openStateSyncStream() {
     // stale guard would wrongly discard it — bypass the guard for those resets too.
     try {
       const reason = JSON.parse(event.data)?.reason;
-      if (reason === "undo" || reason === "rematch_start") skipStale = true;
+      if (reason === "undo" || reason === "rematch_start" || reason === "match_restart") skipStale = true;
+      // A restart rebuilds the board for everyone — announce it to all seats
+      // (including the initiator, whose own stream also delivers this event).
+      if (reason === "match_restart") showMatchRestartAnnouncement();
     } catch {}
     getState(skipStale).catch(() => {
       // Ignore transient refresh failures; the stream will keep delivering future updates.
@@ -890,6 +893,9 @@ function resetToSetup(message = "Session not found. Start a new game.") {
   showMenuPage("home");
   boardEl.classList.add("hidden");
   aiControlsEl?.classList.add("hidden");
+  // Clear any game-over overlay (e.g. the Defeat shown by conceding on Leave
+  // Game) so it doesn't linger into the menu or a freshly hosted game.
+  q("gameOverOverlay")?.classList.add("hidden");
   setJoinUrls("", "");
   updateActionHint(message, true);
 }
@@ -1509,9 +1515,6 @@ function startCastGraveyardCreatureTargetPrompt(card, castAction = "cast") {
   const targetSeats = [...new Set((pendingCastTarget.validGraveyard || []).map((t) => t.seat))];
   const sections = targetSeats.map((s) => zoneRevealSectionFor(s, "graveyard"));
   if (sections.length) openZoneReveal(sections, { auto: true });
-  updateActionHint(
-    `Choose a ${noun} in ${ownGraveyardOnly ? "your" : "a"} graveyard to ${verb} with ${cardName}.`
-  );
 }
 
 // Whether a serialized stack item (at top-first array index `arrayIndex`) is a
@@ -2213,7 +2216,6 @@ async function handleCombatPromptOk() {
         };
         renderCombatControls(state); // hide the declare summary/Alpha Strike while picking
         renderActivationPrompt();
-        updateActionHint("Choose which player to attack.");
         return true;
       }
       defendingSeat = candidates.length === 1 ? candidates[0] : 1 - seat;
@@ -4383,7 +4385,6 @@ function startChannelMana() {
   // Use the in-game prompt dialog (not window.prompt): pick how much life to pay.
   pendingChannel = { maxLife, awaitingCustomValue: false };
   renderActivationPrompt();
-  updateActionHint("Choose how much life to pay for {C} via Channel.");
 }
 
 function resolveChannel(amount) {
@@ -4442,7 +4443,6 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     if (abilityOptions.length >= 2) {
       pendingAbilityChoice = { card, cardName, targetSeat, permanentIndex, options: abilityOptions };
       renderActivationPrompt();
-      updateActionHint(`Choose which ability of ${cardName} to activate.`);
       return;
     }
   }
@@ -4472,7 +4472,6 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     };
     renderActivationPrompt();
     renderBoard(currentState);
-    updateActionHint(`Choose a creature target for ${cardName}'s ability.`);
     return;
   }
 
@@ -4494,11 +4493,6 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     };
     renderActivationPrompt();
     renderBoard(currentState);
-    updateActionHint(
-      alsoStack
-        ? `Choose the source for ${cardName}: click a matching-color permanent or a spell on the stack.`
-        : `Choose a target permanent for ${cardName}'s ability.`,
-    );
     return;
   }
 
@@ -4517,7 +4511,6 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     };
     renderActivationPrompt();
     renderBoard(currentState);
-    updateActionHint(`Choose a target land for ${cardName}'s ability.`);
     return;
   }
 
@@ -4535,7 +4528,6 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     };
     renderActivationPrompt();
     renderBoard(currentState);
-    updateActionHint(`Choose a creature target for ${cardName}'s ability.`);
     return;
   }
 
@@ -4548,7 +4540,6 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     };
     renderActivationPrompt();
     renderBoard(currentState);
-    updateActionHint(`Choose a spell on the stack for ${cardName} to counter.`);
     return;
   }
 
@@ -4561,7 +4552,6 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     };
     renderActivationPrompt();
     renderBoard(currentState);
-    updateActionHint(`Choose any target for ${cardName}'s ability: click a creature, or a player's glowing life pill.`);
     return;
   }
 
@@ -4573,7 +4563,6 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
       sourcePermanentIndex: permanentIndex, ...pendingTargetFields(card),
     };
     renderActivationPrompt();
-    updateActionHint(`Choose whose hand to look at with ${cardName}: click a player's life pill.`);
     return;
   }
 
@@ -4585,7 +4574,6 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
       oracleText: card.oracle_text || "",
     };
     renderActivationPrompt();
-    updateActionHint(`Choose a mana color for ${cardName}.`);
     return;
   }
 
@@ -4635,7 +4623,6 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
       awaitingCustomValue: false,
     };
     renderActivationPrompt();
-    updateActionHint(`Choose X for ${cardName}'s ability.`);
     return;
   }
 
@@ -4664,9 +4651,6 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     abilityIndex,
   };
   renderActivationPrompt();
-  updateActionHint(
-    `Activation pending for ${cardName}. Press OK to begin paying the cost or cancel to undo it.`,
-  );
 }
 
 function resolvePendingManaColor(manaColor) {
@@ -4688,8 +4672,6 @@ function resolvePendingManaColor(manaColor) {
     if (pending.step === "from") {
       pendingManaColor = { ...pending, step: "to", fromColor: manaColor, colorOptions: undefined };
       renderActivationPrompt();
-      const noun = pending.isLandType ? "land type" : "color";
-      updateActionHint(`Now choose the replacement ${noun} for ${pending.cardName}.`);
       return;
     }
     const actionBody = {
@@ -4745,7 +4727,6 @@ function startModalChoicePrompt(card, castAction = "cast") {
 
   pendingModalChoice = { card, cardName, castAction, modes };
   renderActivationPrompt();
-  updateActionHint(`Choose a mode for ${cardName}.`);
   return true;
 }
 
@@ -4824,7 +4805,6 @@ function startCastTargetPrompt(card, castAction = "cast", validTargets = null) {
     ...pendingTargetFields(card, validTargets),
   };
   renderActivationPrompt();
-  updateActionHint(`Choose a target for ${cardName}.`);
 }
 
 function startCastLandTargetPrompt(card, castAction = "cast", validTargets = null) {
@@ -4841,7 +4821,6 @@ function startCastLandTargetPrompt(card, castAction = "cast", validTargets = nul
   pendingCastTarget = { card, cardName, targetKind: "land", castAction, ...fields };
   renderActivationPrompt();
   renderBoard(currentState);
-  updateActionHint(`Choose a land target for ${cardName}.`);
 }
 
 function startCastCreatureTargetPrompt(card, castAction = "cast", validTargets = null) {
@@ -4858,7 +4837,6 @@ function startCastCreatureTargetPrompt(card, castAction = "cast", validTargets =
   pendingCastTarget = { card, cardName, targetKind: "creature", castAction, ...fields };
   renderActivationPrompt();
   renderBoard(currentState);
-  updateActionHint(`Choose a creature target for ${cardName}.`);
 }
 
 function startCastPermanentTargetPrompt(card, castAction = "cast", validTargets = null) {
@@ -4879,11 +4857,6 @@ function startCastPermanentTargetPrompt(card, castAction = "cast", validTargets 
   pendingCastTarget = { card, cardName, targetKind: "permanent", alsoStack, castAction, ...fields };
   renderActivationPrompt();
   renderBoard(currentState);
-  updateActionHint(
-    alsoStack
-      ? `Choose a target for ${cardName}: click a permanent on the battlefield, or a spell on the stack.`
-      : `Choose a target permanent for ${cardName}.`,
-  );
 }
 
 function startCastArtifactTargetPrompt(card, castAction = "cast", validTargets = null) {
@@ -4900,7 +4873,6 @@ function startCastArtifactTargetPrompt(card, castAction = "cast", validTargets =
   pendingCastTarget = { card, cardName, targetKind: "artifact", castAction, ...fields };
   renderActivationPrompt();
   renderBoard(currentState);
-  updateActionHint(`Choose an artifact target for ${cardName}.`);
 }
 
 function startCastAnyTargetPrompt(card, castAction = "cast", validTargets = null) {
@@ -4916,7 +4888,6 @@ function startCastAnyTargetPrompt(card, castAction = "cast", validTargets = null
   };
   renderActivationPrompt();
   renderBoard(currentState);
-  updateActionHint(`Choose any target for ${cardName}: click a creature on the battlefield, or click a player's glowing life pill.`);
 }
 
 // Fireball-style "divided among any number of targets" cast flow. The player
@@ -5085,7 +5056,6 @@ function startCastStackSpellPrompt(card, castAction = "cast", validTargets = nul
   };
   renderActivationPrompt();
   renderStack(currentState ? currentState.stack : _currentStack);
-  updateActionHint(`Choose a spell on the stack for ${cardName} to target (glowing).`);
 }
 
 // Fork second step: after the spell to copy is chosen, offer the caster a new
@@ -5163,7 +5133,6 @@ function startCastXPrompt(card, targetSeat, targetPermanentIndex = null, castAct
     awaitingCustomValue: false,
   };
   renderActivationPrompt();
-  updateActionHint(`Choose X for ${cardName}.`);
 }
 
 function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
@@ -6278,7 +6247,6 @@ function createCardElement(card, options = {}) {
             ...fields,
           };
           renderActivationPrompt();
-          updateActionHint(`Choose a target land for ${cardName}'s ability.`);
           return;
         }
 
@@ -7896,6 +7864,19 @@ function showTurnAnnouncement(isSelfTurn, isExtraTurn = false, playerName = null
   el.addEventListener("animationend", () => el.classList.remove("announcing"), { once: true });
 }
 
+function showMatchRestartAnnouncement() {
+  // Reuse the center turn-announcement banner/animation to flash "Match
+  // Restarting" to every seat when someone restarts the match.
+  const el = document.getElementById("turnAnnouncement");
+  if (!el) return;
+  el.classList.remove("announcing");
+  void el.offsetWidth; // force reflow so the animation restarts
+  el.innerHTML = `<span style="color:#7ec4ff;">Match Restarting</span>`;
+  el.classList.add("announcing");
+  el.addEventListener("animationend", () => el.classList.remove("announcing"), { once: true });
+  updateActionHint("Match is restarting — resetting the board for a new game.");
+}
+
 function renderGameOverOverlay(state) {
   const overlay = q("gameOverOverlay");
   const textEl = q("gameOverText");
@@ -8132,7 +8113,6 @@ function renderBoard(state) {
     : (isSelfTurn ? (!canEndTurn || hasBlockingPrompt) : (seat === null || hasBlockingPrompt));
   q("nextPhaseBtn").disabled = !hasPriority || hasBlockingPrompt || hasCombatDeclarationPrompt;
   q("undoBtn").disabled = sessionId === null;
-  q("holdPriorityBtn").classList.toggle("toggle-btn-active", holdPriorityActive);
   selfHeader?.classList.toggle("turn-zone-self", isSelfTurn);
   // Per-seat, not just "not my turn": in FFA the active player might be one
   // of the corner seats instead of the classic header's seat.
@@ -8955,6 +8935,8 @@ function initTabs() {
   q("logCloseBtn")?.addEventListener("click", () => setOverlayOpen("logOverlay", "logToggleBtn", false));
   q("debugToggleBtn")?.addEventListener("click", () => toggleOverlay("debugOverlay", "debugToggleBtn"));
   q("debugCloseBtn")?.addEventListener("click", () => setOverlayOpen("debugOverlay", "debugToggleBtn", false));
+  q("settingsToggleBtn")?.addEventListener("click", () => toggleOverlay("settingsOverlay", "settingsToggleBtn"));
+  q("settingsCloseBtn")?.addEventListener("click", () => setOverlayOpen("settingsOverlay", "settingsToggleBtn", false));
   q("zoneRevealCloseBtn")?.addEventListener("click", () => closeZoneReveal());
 
   q("rawStateCopyBtn").addEventListener("click", async () => {
@@ -9040,6 +9022,11 @@ function initCardPreviewHover() {
 
 async function getState(skipStaleCheck = false) {
   if (!sessionId) return;
+  // Capture the session this fetch is for; if we leave/replace the session while
+  // the request is in flight (e.g. Leave Game concedes then resets to the menu),
+  // a late response must not render the old finished state over the menu or a
+  // freshly hosted game.
+  const requestedSessionId = sessionId;
   const params = new URLSearchParams();
   if (Number.isInteger(seat)) {
     params.set("seat", String(seat));
@@ -9047,12 +9034,14 @@ async function getState(skipStaleCheck = false) {
   const query = params.toString();
   const url = query ? `/api/sessions/${sessionId}/state?${query}` : `/api/sessions/${sessionId}/state`;
   const resp = await fetch(url);
+  if (sessionId !== requestedSessionId) return;
   if (resp.status === 404) {
     resetToSetup();
     return;
   }
   if (!resp.ok) return;
   const state = await resp.json();
+  if (sessionId !== requestedSessionId) return;
   renderState(state, { skipStaleCheck });
 }
 
@@ -9121,7 +9110,9 @@ function ffaAiName(index) {
 // seats get an auto-assigned name.
 function ffaSeatBlockHtml(index, defaults) {
   const isHost = index === 0;
-  const name = defaults?.name || "Player 1";
+  // The host seat defaults to the player's remembered name (persisted in
+  // localStorage), falling back to "Player 1" for a first-time visitor.
+  const name = defaults?.name || (isHost ? rememberedPlayerName() : null) || "Player 1";
   const isAi = defaults ? !!defaults.isAi : false;
   const colors = defaults?.colors || 2;
   return `
@@ -9247,11 +9238,44 @@ function collectFfaSeats() {
   return seats;
 }
 
+// The player's chosen name persists across sessions in localStorage so they
+// don't have to retype it every visit. Restored into the name inputs on load
+// (restorePlayerName) and re-saved whenever they start or join a game.
+const PLAYER_NAME_KEY = "player_name";
+
+function savePlayerName(name) {
+  const trimmed = (name || "").trim();
+  if (!trimmed) return;
+  try {
+    localStorage.setItem(PLAYER_NAME_KEY, trimmed);
+  } catch (_) {
+    /* storage unavailable (private mode / disabled) — non-fatal */
+  }
+}
+
+function rememberedPlayerName() {
+  try {
+    return localStorage.getItem(PLAYER_NAME_KEY) || null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function restorePlayerName() {
+  const saved = rememberedPlayerName();
+  if (!saved) return;
+  for (const id of ["hostName", "joinName", "ffaSeatName_0"]) {
+    const el = q(id);
+    if (el) el.value = saved;
+  }
+}
+
 async function createSession() {
   hideSetupPanel();
   syncSeedControls();
   const format = q("format")?.value || "standard";
   const useCustomSeed = q("useCustomSeed").checked;
+  savePlayerName(format === "free_for_all" ? q("ffaSeatName_0")?.value : q("hostName")?.value);
   let req;
   if (format === "free_for_all") {
     req = {
@@ -9306,6 +9330,7 @@ async function joinSession() {
     alert("Enter a session ID");
     return;
   }
+  savePlayerName(q("joinName")?.value);
   const joinSel = deckSelection("joinDeckSelect");
   const data = await postJson(`/api/sessions/${sessionId}/join`, {
     guest_name: q("joinName").value,
@@ -9402,6 +9427,59 @@ q("playAgainBtn")?.addEventListener("click", async () => {
 
 q("leaveRoomBtn")?.addEventListener("click", () => {
   resetToSetup("Left the game. Start a new one when you're ready.");
+});
+
+// ── Settings panel: match actions ─────────────────────────────────────────────
+function closeSettingsPanel() {
+  q("settingsOverlay")?.classList.add("hidden");
+  q("settingsToggleBtn")?.classList.remove("toggle-btn-active");
+}
+
+async function restartMatch() {
+  if (!sessionId || seat === null) return;
+  try {
+    // Server-side restart rebuilds the board in-place and broadcasts to every
+    // connected seat (see the "match_restart" reason in openStateSyncStream),
+    // so all players get the announcement and the fresh game.
+    const data = await postJson(`/api/sessions/${sessionId}/restart`, { seat });
+    closeSettingsPanel();
+    renderState(data, { skipStaleCheck: true });
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+async function concedeCurrentSeat() {
+  if (!sessionId || seat === null) return;
+  const data = await postJson(`/api/sessions/${sessionId}/action`, { seat, action: "concede" });
+  renderState(data, { skipStaleCheck: true });
+}
+
+q("restartMatchBtn")?.addEventListener("click", () => {
+  if (!confirm("Restart the match? The board will be reset for a new game.")) return;
+  restartMatch();
+});
+
+q("concedeBtn")?.addEventListener("click", async () => {
+  if (!confirm("Concede this match? You will lose the game.")) return;
+  try {
+    await concedeCurrentSeat();
+    closeSettingsPanel();
+  } catch (e) {
+    alert(e.message);
+  }
+});
+
+q("leaveGameBtn")?.addEventListener("click", async () => {
+  if (!confirm("Leave the match? You will forfeit and return to the main menu.")) return;
+  // Concede first so the remaining players see the forfeit, then bail to setup.
+  try {
+    await concedeCurrentSeat();
+  } catch {
+    // Even if the concede call fails (e.g. game already over), still leave.
+  }
+  closeSettingsPanel();
+  resetToSetup("You left the match.");
 });
 
 q("lobbyStartBtn")?.addEventListener("click", async () => {
@@ -9674,18 +9752,6 @@ q("undoBtn").addEventListener("click", async () => {
   }
 });
 
-q("holdPriorityBtn").addEventListener("click", () => {
-  holdPriorityActive = !holdPriorityActive;
-  q("holdPriorityBtn").classList.toggle("toggle-btn-active", holdPriorityActive);
-  if (!holdPriorityActive) {
-    autoPassPriorityRequestedStateKey = "";
-    autoPassDisabledPhaseRequestedStateKey = "";
-    maybeAutoPassPriority(currentState);
-    maybeAutoPassDisabledPhase(currentState);
-  }
-  updateActionHint(holdPriorityActive ? "Hold Priority on: priority will not auto-pass." : "Hold Priority off: priority will pass automatically.");
-});
-
 q("nextPhaseBtn").addEventListener("click", async () => {
   try {
     await sendAction({ seat, action: "pass_priority" });
@@ -9875,6 +9941,11 @@ initCombatContextMenu();
 clearCardPreview();
 
 // ── Audio controls ────────────────────────────────────────────────────────────
+// Restore the player's remembered name into the setup name inputs on load.
+(function initPlayerName() {
+  restorePlayerName();
+})();
+
 (function initAudioControls() {
   const muteBtn = q("muteBtn");
   const volSlider = q("volumeSlider");

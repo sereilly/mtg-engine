@@ -12,6 +12,7 @@ ActionKind = Literal[
     "activate_emblem",
     "channel_mana",
     "pass_priority",
+    "concede",
     "tap",
     "end_turn",
     "next_phase",

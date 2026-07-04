@@ -28,6 +28,10 @@
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --dur-fast: 140ms;
   --dur-med: 280ms;
+  /* Typography: Cinzel for titles/menus/large display text, Spectral for
+     body copy and card descriptions. */
+  --font-title: "Cinzel", "Trajan Pro", "Times New Roman", serif;
+  --font-body: "Spectral", "Georgia", "Segoe UI", serif;
 }
 
 * {
@@ -36,7 +40,7 @@
 
 body {
   margin: 0;
-  font-family: "Verdana", "Segoe UI", sans-serif;
+  font-family: var(--font-body);
   /* Arena-style environment: dark room with a glowing horizon behind the table */
   background:
     radial-gradient(ellipse at 50% -12%, rgba(126, 196, 255, 0.18), transparent 55%),
@@ -150,6 +154,7 @@ h1,
 h2,
 h3 {
   margin-top: 0;
+  font-family: var(--font-title);
   letter-spacing: 0.02em;
 }
 
@@ -234,6 +239,18 @@ button:hover {
   align-items: stretch;
 }
 
+/* In-game the board goes truly full-bleed: no page gutter, stage edge to edge.
+   (setVisible toggles `in-game` on <body> when the board opens.) */
+body.in-game main {
+  max-width: none;
+  padding: 0;
+}
+
+body.in-game .board-shell {
+  height: 100vh;
+  min-height: 100vh;
+}
+
 /* The tucked hand fan extends below the stage's bottom edge; clip it so the
    page itself never grows a scrollbar (clip, not hidden — the panel must not
    become programmatically scrollable either). */
@@ -280,16 +297,31 @@ button:hover {
 .battlefield-canvas-wrap {
   position: absolute;
   inset: 0;
-  border-radius: 18px;
+  border-radius: var(--radius-l);
   overflow: hidden;
-  border: 1px solid rgba(126, 196, 255, 0.14);
-  /* Room behind the tilted table: dark floor with a glowing horizon at the top */
+  border: 1px solid var(--glass-stroke);
+  /* Frosted glass pane over the aurora: a translucent tint + backdrop blur so
+     the page's gradient orbs glow through the table. The canvas above paints
+     translucent fills for the same reason. The aurora is paused in-game, so
+     the blurred backdrop is static and cheap. */
   background:
-    radial-gradient(ellipse at 50% 0%, rgba(126, 196, 255, 0.12), transparent 55%),
-    linear-gradient(180deg, #04070c 0%, #0a1019 45%, #101a28 100%);
+    radial-gradient(ellipse at 50% 0%, rgba(126, 196, 255, 0.08), transparent 55%),
+    linear-gradient(180deg, rgba(4, 7, 14, 0.5) 0%, rgba(10, 16, 28, 0.42) 45%, rgba(16, 26, 42, 0.38) 100%);
+  backdrop-filter: blur(var(--glass-blur-strong)) saturate(1.3);
+  -webkit-backdrop-filter: blur(var(--glass-blur-strong)) saturate(1.3);
   box-shadow:
-    inset 0 0 90px rgba(0, 0, 0, 0.6),
+    inset 0 0 90px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 var(--glass-highlight),
     0 18px 50px rgba(0, 0, 0, 0.5);
+}
+
+/* Full-bleed stage: square off the pane once it spans the whole viewport. */
+body.in-game .battlefield-canvas-wrap {
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  border-bottom: none;
 }
 
 #battlefieldCanvas {
@@ -383,6 +415,62 @@ button:hover {
   border: none;
   box-shadow: none;
   padding: 0;
+}
+
+/* Settings overlay: centered glass panel toggled by the ⚙️ utility button.
+   Holds the audio controls (moved off the phase bar) plus match actions. */
+.settings-overlay {
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 320px;
+  z-index: 14;
+}
+
+.settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-subhead {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted, #9db3c8);
+}
+
+.settings-section .audio-controls {
+  border-top: none;
+  padding-top: 0;
+  margin-top: 0;
+}
+
+.settings-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-actions .secondary-btn {
+  width: 100%;
+}
+
+.settings-danger-btn {
+  border-color: rgba(225, 109, 112, 0.5);
+  color: var(--danger);
+}
+
+.settings-danger-btn:hover {
+  border-color: var(--danger);
+  box-shadow: 0 0 8px rgba(225, 109, 112, 0.35);
 }
 
 /* Prompt / AI-controls dock: floats just left of the stack cascade (which is
@@ -1510,10 +1598,14 @@ h2.targeting-valid {
   left: 0;
   right: 0;
   top: 0;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.82));
   color: #fff;
   font-size: 0.72rem;
-  padding: 4px 5px;
+  line-height: 1.2;
+  padding: 6px 6px 5px;
+  /* No dark band behind the name — a layered drop shadow keeps the text legible
+     directly over the card art, on both light (Plains) and dark faces. */
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.95), 0 1px 4px rgba(0, 0, 0, 0.8),
+    0 0 2px rgba(0, 0, 0, 0.7);
 }
 
 .card-mana-cost {
@@ -2567,6 +2659,7 @@ pre {
 }
 
 .turn-announcement span {
+  font-family: var(--font-title);
   font-size: 3rem;
   font-weight: 800;
   letter-spacing: 0.06em;
@@ -2642,6 +2735,7 @@ pre {
 }
 
 .game-over-text {
+  font-family: var(--font-title);
   font-size: 4rem;
   font-weight: 900;
   letter-spacing: 0.1em;
@@ -2786,6 +2880,7 @@ pre {
 .menu-title {
   margin: 0 0 8px;
   text-align: center;
+  font-family: var(--font-title);
   font-size: clamp(2.4rem, 5vw, 3.8rem);
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -2842,6 +2937,7 @@ pre {
 }
 
 .home-btn-title {
+  font-family: var(--font-title);
   font-size: clamp(1.35rem, 2.4vw, 1.9rem);
   font-weight: 700;
   letter-spacing: 0.05em;
