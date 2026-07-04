@@ -165,6 +165,15 @@ class BattlefieldCanvas {
     this.dpr = window.devicePixelRatio || 1;
     this.tiltRad = (BF_TILT_DEG * Math.PI) / 180;
 
+    // Palette bridge: state colors shared with the DOM glass theme. Resolved
+    // from CSS custom properties once so canvas drawing and CSS stay in sync;
+    // the hard-coded fallbacks match the stylesheet's values.
+    this.theme = this._resolveTheme();
+    // Respect reduced-motion: continuous decorative effects (arrow pulses)
+    // render as static art instead.
+    this.reducedMotion = !!(window.matchMedia
+      && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+
     // Tilt the canvas plane in 3D. The wrapper provides the perspective camera.
     const wrap = canvasEl.parentElement;
     if (wrap) {
@@ -2268,6 +2277,17 @@ class BattlefieldCanvas {
     // Zone-pile targeting pulses continuously while a graveyard target is
     // being chosen.
     if (this.zonePileTargeting) moving = true;
+    // Combat/targeting arrows carry traveling pulses — keep redrawing while any
+    // are on screen (or a blocker drag is live). Tied strictly to arrow
+    // presence so the dirty-flag idles again once combat ends.
+    if (!this.reducedMotion && (this.combatArrows.length || this.pressState?.combatDrag)) moving = true;
+    // Aura connectors pulse only while their stack is hovered.
+    if (
+      !this.reducedMotion &&
+      !moving &&
+      this.hoveredKey != null &&
+      this.stacks.some((s) => s.sideX && s.keys.includes(this.hoveredKey))
+    ) moving = true;
     if (moving) this.needsRedraw = true;
   }
 
@@ -2567,6 +2587,28 @@ class BattlefieldCanvas {
     ctx.restore();
   }
 
+  _resolveTheme() {
+    const styles = getComputedStyle(document.documentElement);
+    const token = (name, fallback) => {
+      const value = styles.getPropertyValue(name).trim();
+      return value || fallback;
+    };
+    return {
+      emblem: "#ff9933",
+      attacking: "#ff5555",
+      selected: "#ffe040",
+      targeting: "#50ffb0",
+      enchant: "#c06bff",
+      hovered: token("--accent-2", "#7ec4ff"),
+      frameStroke: token("--glass-stroke", "rgba(255,255,255,0.22)"),
+      frameHighlight: token("--glass-highlight", "rgba(255,255,255,0.22)"),
+      arrowAttack: "#ff6060",
+      arrowBlock: "#48b0ff",
+      arrowDrag: "#ff8888",
+      arrowAura: "#caa6ff",
+    };
+  }
+
   _drawCardFace(ctx, x, y, w, h, card, flags, creatureCard) {
     const { selected, attacking, hovered, targeting, pileCount, emblem, enchantTargetHover } = flags || {};
     const img = card?.image_uri ? this._loadImage(card.image_uri) : null;
@@ -2614,21 +2656,57 @@ class BattlefieldCanvas {
       ctx.fillStyle = "rgba(90,20,220,0.22)";
       ctx.fillRect(x, y, w, h);
     }
+    // Glass sheen: a faint highlight across the top of the face, kept subtle so
+    // the card art stays readable.
+    if (!isUnblockable) {
+      const sheen = ctx.createLinearGradient(0, y, 0, y + h * 0.2);
+      sheen.addColorStop(0, "rgba(255,255,255,0.09)");
+      sheen.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = sheen;
+      ctx.fillRect(x, y, w, h * 0.2);
+    }
     ctx.restore();
 
     // ---- Glow / border ----
+    const T = this.theme;
+    const strongState = emblem || attacking || selected || targeting || enchantTargetHover;
+    const stateColor = emblem ? T.emblem
+      : attacking ? T.attacking
+      : selected ? T.selected
+      : targeting ? T.targeting
+      : enchantTargetHover ? T.enchant
+      : hovered ? T.hovered
+      : null;
     ctx.save();
-    if (emblem) { ctx.shadowColor = "#ff9933"; ctx.shadowBlur = (hovered ? 22 : 16) / this.zoom; }
-    else if (attacking) { ctx.shadowColor = "#ff5555"; ctx.shadowBlur = 18 / this.zoom; }
-    else if (selected) { ctx.shadowColor = "#ffe040"; ctx.shadowBlur = 14 / this.zoom; }
-    else if (targeting) { ctx.shadowColor = "#50ffb0"; ctx.shadowBlur = 16 / this.zoom; }
-    else if (enchantTargetHover) { ctx.shadowColor = "#c06bff"; ctx.shadowBlur = 18 / this.zoom; }
-    else if (hovered) { ctx.shadowColor = "#7ec4ff"; ctx.shadowBlur = 10 / this.zoom; }
+    if (stateColor) {
+      // Wide, low-alpha bloom ring under the crisp border.
+      ctx.save();
+      ctx.globalAlpha = 0.4;
+      ctx.shadowColor = stateColor;
+      ctx.shadowBlur = (strongState ? 28 : 18) / this.zoom;
+      ctx.strokeStyle = stateColor;
+      ctx.lineWidth = 4 / this.zoom;
+      this._roundRect(ctx, x, y, w, h, R);
+      ctx.stroke();
+      ctx.restore();
 
-    ctx.strokeStyle = emblem ? "#ff9933" : attacking ? "#ff5555" : selected ? "#ffe040" : targeting ? "#50ffb0" : enchantTargetHover ? "#c06bff" : hovered ? "#7ec4ff" : "rgba(255,255,255,0.22)";
-    ctx.lineWidth = (emblem || attacking || selected || targeting || enchantTargetHover ? 2.5 : 1) / this.zoom;
+      ctx.shadowColor = stateColor;
+      ctx.shadowBlur = (emblem ? (hovered ? 22 : 16) : attacking ? 18 : selected ? 14 : targeting ? 16 : enchantTargetHover ? 18 : 10) / this.zoom;
+    }
+    ctx.strokeStyle = stateColor || T.frameStroke;
+    ctx.lineWidth = (strongState ? 2.5 : 1) / this.zoom;
     this._roundRect(ctx, x, y, w, h, R);
     ctx.stroke();
+    // Glass frame: inner top-edge highlight stroke, clipped to the upper half.
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x, y, w, h * 0.5);
+    ctx.clip();
+    ctx.strokeStyle = T.frameHighlight;
+    ctx.lineWidth = 1 / this.zoom;
+    this._roundRect(ctx, x + 1 / this.zoom, y + 1 / this.zoom, w - 2 / this.zoom, h - 2 / this.zoom, R);
+    ctx.stroke();
+    ctx.restore();
     ctx.restore();
 
     // ---- Keyword strip ----
@@ -3021,33 +3099,92 @@ class BattlefieldCanvas {
     ctx.restore();
   }
 
-  _drawArrow(ctx, fx, fy, tx, ty, color) {
-    const HEAD = 10 / this.zoom;
+  // Combat / targeting arrow: a gently bowed, tapered glowing shaft (wide at
+  // the source, narrowing toward the head) with bright pulses traveling along
+  // it. `opts.now` drives the pulse motion; `opts.phase` offsets it per arrow
+  // so simultaneous arrows don't pulse in lockstep.
+  _drawArrow(ctx, fx, fy, tx, ty, color, opts = {}) {
+    const HEAD = 12 / this.zoom;
     const ANGLE = Math.PI / 6;
-    const angle = Math.atan2(ty - fy, tx - fx);
+    const dx = tx - fx;
+    const dy = ty - fy;
+    const len = Math.hypot(dx, dy) || 1;
+    const bow = Math.min(48, len * 0.18);
+    const cpx = (fx + tx) / 2 + (-dy / len) * bow;
+    const cpy = (fy + ty) / 2 + (dx / len) * bow;
+
+    const point = (t) => {
+      const mt = 1 - t;
+      return {
+        x: mt * mt * fx + 2 * mt * t * cpx + t * t * tx,
+        y: mt * mt * fy + 2 * mt * t * cpy + t * t * ty,
+      };
+    };
+
+    // The shaft stops just short of the head so the taper flows into it.
+    const headT = Math.max(0.5, 1 - HEAD / len);
+    const SEG = 16;
+    const wideW = 5 / this.zoom;
+    const narrowW = 1.6 / this.zoom;
+    const left = [];
+    const right = [];
+    for (let i = 0; i <= SEG; i++) {
+      const t = (i / SEG) * headT;
+      const p = point(t);
+      const ddx = 2 * (1 - t) * (cpx - fx) + 2 * t * (tx - cpx);
+      const ddy = 2 * (1 - t) * (cpy - fy) + 2 * t * (ty - cpy);
+      const dl = Math.hypot(ddx, ddy) || 1;
+      const px = -ddy / dl;
+      const py = ddx / dl;
+      const halfW = (wideW + (narrowW - wideW) * t) / 2;
+      left.push({ x: p.x + px * halfW, y: p.y + py * halfW });
+      right.push({ x: p.x - px * halfW, y: p.y - py * halfW });
+    }
 
     ctx.save();
-    ctx.strokeStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 12 / this.zoom;
     ctx.fillStyle = color;
-    ctx.lineWidth = 2.5 / this.zoom;
-    ctx.globalAlpha = 0.88;
+    ctx.globalAlpha = 0.85;
     ctx.beginPath();
-    ctx.moveTo(fx, fy);
-    ctx.lineTo(tx, ty);
-    ctx.stroke();
+    ctx.moveTo(left[0].x, left[0].y);
+    for (let i = 1; i < left.length; i++) ctx.lineTo(left[i].x, left[i].y);
+    for (let i = right.length - 1; i >= 0; i--) ctx.lineTo(right[i].x, right[i].y);
+    ctx.closePath();
+    ctx.fill();
+
+    // Arrowhead aligned with the curve's tangent at the target end.
+    const angle = Math.atan2(ty - cpy, tx - cpx);
     ctx.beginPath();
     ctx.moveTo(tx, ty);
     ctx.lineTo(tx - HEAD * Math.cos(angle - ANGLE), ty - HEAD * Math.sin(angle - ANGLE));
     ctx.lineTo(tx - HEAD * Math.cos(angle + ANGLE), ty - HEAD * Math.sin(angle + ANGLE));
     ctx.closePath();
     ctx.fill();
+
+    // Traveling pulses: bright dots flowing source -> target.
+    if (!this.reducedMotion) {
+      const now = opts.now ?? performance.now();
+      const phase = opts.phase || 0;
+      const PULSES = 3;
+      ctx.fillStyle = "rgba(255,255,255,0.95)";
+      for (let i = 0; i < PULSES; i++) {
+        const t = (now / 1200 + i / PULSES + phase) % 1;
+        const p = point(t * headT);
+        ctx.globalAlpha = 0.85 * (1 - 0.5 * t);
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, (2.6 - 1.0 * t) / this.zoom, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
     ctx.globalAlpha = 1;
     ctx.restore();
   }
 
   // A curved (bowed) connector with an arrowhead at the target end. Used to tie
-  // a side-set aura back to the enchantment it is attached to.
-  _drawCurvedArrow(ctx, fx, fy, tx, ty, color) {
+  // a side-set aura back to the enchantment it is attached to. Pulses are
+  // opt-in (hover only) so an idle board doesn't animate forever.
+  _drawCurvedArrow(ctx, fx, fy, tx, ty, color, opts = {}) {
     const HEAD = 9 / this.zoom;
     const ANGLE = Math.PI / 6;
     const dx = tx - fx;
@@ -3064,6 +3201,8 @@ class BattlefieldCanvas {
     ctx.fillStyle = color;
     ctx.lineWidth = 2.5 / this.zoom;
     ctx.globalAlpha = 0.9;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 8 / this.zoom;
     ctx.beginPath();
     ctx.moveTo(fx, fy);
     ctx.quadraticCurveTo(cpx, cpy, tx, ty);
@@ -3077,6 +3216,21 @@ class BattlefieldCanvas {
     ctx.lineTo(tx - HEAD * Math.cos(angle + ANGLE), ty - HEAD * Math.sin(angle + ANGLE));
     ctx.closePath();
     ctx.fill();
+    // Slow, faint traveling pulses along the connector (hover only).
+    if (opts.pulse && !this.reducedMotion) {
+      const now = opts.now ?? performance.now();
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      for (let i = 0; i < 2; i++) {
+        const t = (now / 2000 + i / 2) % 1;
+        const mt = 1 - t;
+        const px = mt * mt * fx + 2 * mt * t * cpx + t * t * tx;
+        const py = mt * mt * fy + 2 * mt * t * cpy + t * t * ty;
+        ctx.globalAlpha = 0.6;
+        ctx.beginPath();
+        ctx.arc(px, py, 2 / this.zoom, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
     ctx.globalAlpha = 1;
     ctx.restore();
   }
@@ -3547,6 +3701,10 @@ class BattlefieldCanvas {
         ? { x: tPos.x + BF_CARD_W / 2, y: tPos.y + BF_CARD_H * 0.11 }
         : this._cardCenter(targetKey);
       if (!tc) continue;
+      // Pulse the connector only while its aura or target is hovered — hover
+      // already keeps the frame loop redrawing, so an idle board stays idle.
+      const auraHovered =
+        this.hoveredKey != null && stack.keys.includes(this.hoveredKey);
       for (let i = 1; i < stack.keys.length; i++) {
         const fc = this._cardCenter(stack.keys[i]);
         if (!fc) continue;
@@ -3563,7 +3721,8 @@ class BattlefieldCanvas {
           fc.y + (dy / d) * fromInset,
           tc.x - (dx / d) * toInset,
           tc.y - (dy / d) * toInset,
-          "#caa6ff"
+          this.theme.arrowAura,
+          { pulse: auraHovered }
         );
       }
     }
@@ -3574,10 +3733,13 @@ class BattlefieldCanvas {
     // arrow away) ----
     if (regionSeat === null) {
       for (const arrow of this.combatArrows) {
-        const fc = this._cardCenter(`${arrow.fromSeat}-${arrow.fromIdx}`);
+        const fromKey = `${arrow.fromSeat}-${arrow.fromIdx}`;
+        const fc = this._cardCenter(fromKey);
         const tc = this._cardCenter(`${arrow.toSeat}-${arrow.toIdx}`);
         if (fc && tc) {
-          this._drawArrow(ctx, fc.x, fc.y, tc.x, tc.y, arrow.kind === "blocker" ? "#48b0ff" : "#ff6060");
+          this._drawArrow(ctx, fc.x, fc.y, tc.x, tc.y,
+            arrow.kind === "blocker" ? this.theme.arrowBlock : this.theme.arrowAttack,
+            { phase: _keyPhase(fromKey) / (Math.PI * 2) });
         }
       }
     }
@@ -3623,7 +3785,7 @@ class BattlefieldCanvas {
       const fc = this._cardCenter(this.pressState.key);
       const tw = this.canvasToWorld(this.pressState.currentCX, this.pressState.currentCY);
       if (fc) {
-        this._drawArrow(ctx, fc.x, fc.y, tw.x, tw.y, "#ff8888");
+        this._drawArrow(ctx, fc.x, fc.y, tw.x, tw.y, this.theme.arrowDrag);
       }
     }
   }
@@ -3646,11 +3808,14 @@ class BattlefieldCanvas {
     // Identity camera registers so _drawArrow's /zoom sizing is screen-constant.
     const screenCam = { x: 0, y: 0, zoom: 1 };
     for (const arrow of this.combatArrows) {
-      const fc = screenCenter(`${arrow.fromSeat}-${arrow.fromIdx}`);
+      const fromKey = `${arrow.fromSeat}-${arrow.fromIdx}`;
+      const fc = screenCenter(fromKey);
       const tc = screenCenter(`${arrow.toSeat}-${arrow.toIdx}`);
       if (fc && tc) {
         this._withCam(screenCam, () =>
-          this._drawArrow(ctx, fc.x, fc.y, tc.x, tc.y, arrow.kind === "blocker" ? "#48b0ff" : "#ff6060")
+          this._drawArrow(ctx, fc.x, fc.y, tc.x, tc.y,
+            arrow.kind === "blocker" ? this.theme.arrowBlock : this.theme.arrowAttack,
+            { phase: _keyPhase(fromKey) / (Math.PI * 2) })
         );
       }
     }
@@ -3658,7 +3823,7 @@ class BattlefieldCanvas {
       const fc = screenCenter(this.pressState.key);
       if (fc) {
         this._withCam(screenCam, () =>
-          this._drawArrow(ctx, fc.x, fc.y, this.pressState.currentCX, this.pressState.currentCY, "#ff8888")
+          this._drawArrow(ctx, fc.x, fc.y, this.pressState.currentCX, this.pressState.currentCY, this.theme.arrowDrag)
         );
       }
     }

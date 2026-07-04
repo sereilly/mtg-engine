@@ -1,15 +1,33 @@
 :root {
-  --bg-night: #0f1a26;
-  --bg-deep: #17283a;
+  --bg-night: #0c1220;
+  --bg-deep: #141c33;
   --bg-brass: #b28a4a;
-  --panel: rgba(16, 27, 39, 0.86);
-  --panel-soft: rgba(23, 39, 57, 0.86);
+  --panel: rgba(18, 26, 48, 0.62);
+  --panel-soft: rgba(24, 34, 58, 0.58);
   --ink: #f2e9cc;
   --ink-soft: #cfd7e4;
   --accent: #f2b84b;
   --accent-2: #7ec4ff;
   --danger: #e16d70;
   --ok: #85c886;
+  /* Glassmorphism tokens */
+  --glass-bg: rgba(20, 28, 52, 0.55);
+  --glass-bg-strong: rgba(17, 24, 46, 0.74);
+  --glass-stroke: rgba(255, 255, 255, 0.14);
+  --glass-highlight: rgba(255, 255, 255, 0.22);
+  --glass-blur: 14px;
+  --glass-blur-strong: 20px;
+  --glow-gold: rgba(242, 184, 75, 0.55);
+  --glow-blue: rgba(126, 196, 255, 0.55);
+  --glow-violet: rgba(168, 130, 255, 0.55);
+  --glow-danger: rgba(255, 96, 96, 0.6);
+  --radius-s: 8px;
+  --radius-m: 14px;
+  --radius-l: 20px;
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 140ms;
+  --dur-med: 280ms;
 }
 
 * {
@@ -28,6 +46,86 @@ body {
   color: var(--ink);
   min-height: 100vh;
   overflow-x: hidden;
+}
+
+/* ---- Aurora background: large soft gradient orbs drifting behind the glass.
+   Radial gradients fading to transparent (NOT filter:blur — too expensive at
+   viewport scale). Compositor-only transform animations; paused during play
+   because animating pixels under backdrop-filter panels force per-frame
+   re-blurs. ---- */
+#auroraLayer {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+#auroraLayer i {
+  position: absolute;
+  display: block;
+  border-radius: 50%;
+  will-change: transform;
+}
+
+#auroraLayer i:nth-child(1) {
+  width: 85vmax;
+  height: 85vmax;
+  left: -25vmax;
+  top: -30vmax;
+  background: radial-gradient(circle, rgba(64, 90, 220, 0.28) 0%, rgba(64, 90, 220, 0.1) 45%, transparent 70%);
+  animation: aurora-drift-1 70s ease-in-out infinite alternate;
+}
+
+#auroraLayer i:nth-child(2) {
+  width: 70vmax;
+  height: 70vmax;
+  right: -20vmax;
+  top: -15vmax;
+  background: radial-gradient(circle, rgba(140, 82, 230, 0.24) 0%, rgba(140, 82, 230, 0.09) 45%, transparent 70%);
+  animation: aurora-drift-2 90s ease-in-out infinite alternate;
+}
+
+#auroraLayer i:nth-child(3) {
+  width: 75vmax;
+  height: 75vmax;
+  left: 10vmax;
+  bottom: -35vmax;
+  background: radial-gradient(circle, rgba(48, 160, 200, 0.2) 0%, rgba(48, 160, 200, 0.08) 45%, transparent 70%);
+  animation: aurora-drift-3 80s ease-in-out infinite alternate;
+}
+
+#auroraLayer i:nth-child(4) {
+  width: 55vmax;
+  height: 55vmax;
+  right: 5vmax;
+  bottom: -20vmax;
+  background: radial-gradient(circle, rgba(242, 184, 75, 0.13) 0%, rgba(242, 184, 75, 0.05) 45%, transparent 70%);
+  animation: aurora-drift-4 60s ease-in-out infinite alternate;
+}
+
+@keyframes aurora-drift-1 {
+  from { transform: translate(0, 0) scale(1); }
+  to { transform: translate(18vmax, 10vmax) scale(1.15); }
+}
+
+@keyframes aurora-drift-2 {
+  from { transform: translate(0, 0) scale(1.1); }
+  to { transform: translate(-14vmax, 14vmax) scale(0.95); }
+}
+
+@keyframes aurora-drift-3 {
+  from { transform: translate(0, 0) scale(1); }
+  to { transform: translate(14vmax, -10vmax) scale(1.2); }
+}
+
+@keyframes aurora-drift-4 {
+  from { transform: translate(0, 0) scale(1.05); }
+  to { transform: translate(-10vmax, -8vmax) scale(0.9); }
+}
+
+body.in-game #auroraLayer i {
+  animation-play-state: paused;
 }
 
 main {
@@ -56,12 +154,36 @@ h3 {
 }
 
 .panel {
-  background: var(--panel);
-  border: 1px solid rgba(242, 184, 75, 0.4);
-  border-radius: 12px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+  border: 1px solid var(--glass-stroke);
+  border-radius: var(--radius-m);
   padding: 14px;
   margin-bottom: 14px;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45), inset 0 1px 0 var(--glass-highlight);
+}
+
+/* Reusable frosted-glass surfaces. `.glass` for floating panels; `.glass-strong`
+   for modals and anything that must read clearly over busy content. Chrome that
+   sits over the constantly-repainting canvas should NOT take these (blur there
+   is re-computed every canvas frame) — use a translucent bg + stroke instead. */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+  border: 1px solid var(--glass-stroke);
+  border-radius: var(--radius-m);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45), inset 0 1px 0 var(--glass-highlight);
+}
+
+.glass-strong {
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(var(--glass-blur-strong)) saturate(1.35);
+  -webkit-backdrop-filter: blur(var(--glass-blur-strong)) saturate(1.35);
+  border: 1px solid var(--glass-stroke);
+  border-radius: var(--radius-m);
+  box-shadow: 0 18px 56px rgba(0, 0, 0, 0.55), inset 0 1px 0 var(--glass-highlight);
 }
 
 .hidden {
@@ -192,12 +314,13 @@ button:hover {
 .canvas-overlay {
   position: absolute;
   z-index: 12;
-  background: rgba(8, 14, 22, 0.88);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(126, 196, 255, 0.22);
-  border-radius: 12px;
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+  border: 1px solid var(--glass-stroke);
+  border-radius: var(--radius-m);
   padding: 10px;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 var(--glass-highlight);
 }
 
 .overlay-head {
@@ -279,10 +402,11 @@ button:hover {
 }
 
 .floating-dock .side-panel {
-  background: rgba(8, 14, 22, 0.88);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(126, 196, 255, 0.22);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+  border: 1px solid var(--glass-stroke);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 var(--glass-highlight);
 }
 
 /* Vertical mana columns pinned to the right edge of the stage */
@@ -376,8 +500,9 @@ button:hover {
 
 .player-lane {
   background: var(--panel-soft);
-  border: 1px solid rgba(126, 196, 255, 0.28);
-  border-radius: 12px;
+  border: 1px solid var(--glass-stroke);
+  border-radius: var(--radius-m);
+  box-shadow: inset 0 1px 0 var(--glass-highlight);
   padding: 10px;
   margin-bottom: 10px;
 }
@@ -391,10 +516,10 @@ button:hover {
   max-width: 300px;
   margin: 0;
   padding: 8px 12px;
-  background: rgba(8, 14, 22, 0.78);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(126, 196, 255, 0.22);
-  border-radius: 12px;
+  background: rgba(14, 20, 38, 0.78);
+  border: 1px solid var(--glass-stroke);
+  border-radius: var(--radius-m);
+  box-shadow: inset 0 1px 0 var(--glass-highlight);
   pointer-events: none;
 }
 
@@ -413,11 +538,10 @@ button:hover {
   gap: 10px;
   margin: 0;
   padding: 8px;
-  background: rgba(8, 14, 22, 0.8);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(242, 184, 75, 0.28);
-  border-radius: 14px;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  background: rgba(14, 20, 38, 0.8);
+  border: 1px solid var(--glass-stroke);
+  border-radius: var(--radius-m);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45), inset 0 1px 0 var(--glass-highlight);
 }
 
 .phase-rail {
@@ -769,7 +893,7 @@ h2.targeting-valid {
   transform-origin: bottom center;
   /* Cards are held tilted slightly back, like a hand of cards facing you */
   transform: translateX(var(--fan-push-x, 0px)) translateZ(var(--fan-z, 0px)) rotate(var(--fan-angle, 0deg)) rotateX(16deg);
-  transition: transform 0.18s ease, margin 0.18s ease;
+  transition: transform 0.28s var(--ease-spring), margin 0.18s ease;
 }
 
 .hand-fan--opponent .hand-fan-slot {
@@ -783,7 +907,7 @@ h2.targeting-valid {
    the tuck so the fan's per-slot transform chain stays intact. */
 .hand-fan:not(.hand-fan--opponent) .hand-fan-slot {
   top: 106px;
-  transition: transform 0.18s ease, margin 0.18s ease, top 0.18s ease;
+  transition: transform 0.28s var(--ease-spring), margin 0.18s ease, top 0.22s var(--ease-spring);
 }
 
 /* Hover pops the card up, flat to the camera, enlarged for readability —
@@ -830,9 +954,9 @@ h2.targeting-valid {
   align-items: center;
   gap: 10px;
   z-index: 10;
-  background: rgba(8, 14, 22, 0.82);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(126, 196, 255, 0.25);
+  background: rgba(14, 20, 38, 0.82);
+  border: 1px solid var(--glass-stroke);
+  box-shadow: inset 0 1px 0 var(--glass-highlight);
   border-radius: 999px;
   padding: 4px 16px 4px 6px;
   white-space: nowrap;
@@ -1616,12 +1740,13 @@ h2.targeting-valid {
 }
 
 .side-panel {
-  background: rgba(9, 16, 26, 0.74);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(126, 196, 255, 0.16);
-  border-radius: 14px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+  border: 1px solid var(--glass-stroke);
+  border-radius: var(--radius-m);
   padding: 10px;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 var(--glass-highlight);
 }
 
 .activation-panel {
@@ -2215,25 +2340,38 @@ pre {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.72);
-  backdrop-filter: blur(2px);
+  background: rgba(4, 8, 18, 0.6);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  opacity: 1;
+  visibility: visible;
+  transition: opacity var(--dur-med) var(--ease-out), visibility 0s;
 }
 
+/* Kept "rendered" (visibility, not display) so the close fade can play; the
+   overlay is fixed + pointer-events:none while hidden, so layout is unaffected.
+   Game logic reads this class — never toggle it from animation code. */
 .modal-overlay.hidden {
-  display: none;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity var(--dur-med) var(--ease-out), visibility 0s linear var(--dur-med);
 }
 
 .modal-box {
-  background: var(--panel-soft);
-  border: 1px solid rgba(242, 184, 75, 0.5);
-  border-radius: 14px;
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(var(--glass-blur-strong)) saturate(1.35);
+  -webkit-backdrop-filter: blur(var(--glass-blur-strong)) saturate(1.35);
+  border: 1px solid var(--glass-stroke);
+  border-radius: var(--radius-l);
   padding: 20px 24px;
   width: min(900px, 94vw);
   max-height: 88vh;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6), 0 0 40px rgba(126, 196, 255, 0.08),
+    inset 0 1px 0 var(--glass-highlight);
 }
 
 .modal-title {
@@ -2537,16 +2675,18 @@ pre {
 }
 
 .lobby-box {
-  background: var(--panel-soft);
-  border: 1px solid rgba(255, 215, 0, 0.35);
-  border-radius: 14px;
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(var(--glass-blur-strong)) saturate(1.35);
+  -webkit-backdrop-filter: blur(var(--glass-blur-strong)) saturate(1.35);
+  border: 1px solid var(--glass-stroke);
+  border-radius: var(--radius-l);
   padding: 28px 32px;
   min-width: 340px;
   max-width: 420px;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), inset 0 1px 0 var(--glass-highlight);
 }
 
 .lobby-title {
@@ -2678,17 +2818,22 @@ pre {
   gap: 16px;
   min-height: clamp(300px, 50vh, 480px);
   padding: 32px 24px;
-  border-radius: 20px;
-  border: 1px solid rgba(242, 184, 75, 0.35);
-  background: linear-gradient(180deg, rgba(23, 39, 57, 0.92), rgba(12, 22, 33, 0.94));
-  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.4);
+  border-radius: var(--radius-l);
+  border: 1px solid var(--glass-stroke);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.4), inset 0 1px 0 var(--glass-highlight);
   text-align: center;
+  transition: transform var(--dur-med) var(--ease-spring), border-color var(--dur-med) var(--ease-out),
+    box-shadow var(--dur-med) var(--ease-out);
 }
 
 .home-btn:hover {
-  transform: translateY(-5px);
+  transform: translateY(-8px) scale(1.02);
   border-color: var(--accent);
-  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.5), 0 0 28px rgba(242, 184, 75, 0.2);
+  box-shadow: 0 24px 56px rgba(0, 0, 0, 0.55), 0 0 36px var(--glow-gold),
+    inset 0 1px 0 var(--glass-highlight);
 }
 
 .home-btn-icon {
@@ -2716,7 +2861,8 @@ pre {
 
 .home-btn--join:hover {
   border-color: var(--accent-2);
-  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.5), 0 0 28px rgba(126, 196, 255, 0.2);
+  box-shadow: 0 24px 56px rgba(0, 0, 0, 0.55), 0 0 36px var(--glow-blue),
+    inset 0 1px 0 var(--glass-highlight);
 }
 
 .home-btn--join .home-btn-title {
@@ -2729,7 +2875,8 @@ pre {
 
 .home-btn--decks:hover {
   border-color: var(--ok);
-  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.5), 0 0 28px rgba(133, 200, 134, 0.2);
+  box-shadow: 0 24px 56px rgba(0, 0, 0, 0.55), 0 0 36px rgba(133, 200, 134, 0.45),
+    inset 0 1px 0 var(--glass-highlight);
 }
 
 .home-btn--decks .home-btn-title {
@@ -2739,11 +2886,13 @@ pre {
 .menu-form-card {
   max-width: 540px;
   margin: 0 auto;
-  background: var(--panel);
-  border: 1px solid rgba(242, 184, 75, 0.4);
-  border-radius: 16px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+  border: 1px solid var(--glass-stroke);
+  border-radius: var(--radius-l);
   padding: 26px 30px 30px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5), inset 0 1px 0 var(--glass-highlight);
 }
 
 .menu-form-topbar {
@@ -2771,17 +2920,19 @@ pre {
   width: 100%;
   margin-top: 5px;
   padding: 9px 11px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(9, 16, 26, 0.7);
+  border-radius: var(--radius-s);
+  border: 1px solid var(--glass-stroke);
+  background: rgba(9, 14, 28, 0.55);
   color: var(--ink);
   font-size: 0.95rem;
+  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
 }
 
 .menu-form-card select:focus,
 .menu-form-card input:focus {
   outline: none;
   border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(242, 184, 75, 0.18), 0 0 14px var(--glow-gold);
 }
 
 .menu-checkbox-label {
@@ -2804,9 +2955,15 @@ pre {
   color: var(--ink);
 }
 
+.menu-primary-btn {
+  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-med) var(--ease-out),
+    transform var(--dur-med) var(--ease-spring);
+}
+
 .menu-primary-btn:hover {
   border-color: var(--accent);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35), 0 0 16px rgba(242, 184, 75, 0.25);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4), 0 0 22px var(--glow-gold);
 }
 
 .menu-primary-btn:disabled {
@@ -2889,9 +3046,10 @@ pre {
 
 .seat-card {
   padding: 14px 16px 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(9, 16, 26, 0.45);
+  border-radius: var(--radius-m);
+  border: 1px solid var(--glass-stroke);
+  background: rgba(12, 18, 36, 0.4);
+  box-shadow: inset 0 1px 0 var(--glass-highlight);
 }
 
 .seat-card-head {
@@ -2980,6 +3138,19 @@ pre {
   flex-direction: column;
   height: calc(100vh - 28px);
   min-height: 540px;
+  /* display:none -> flex restarts this animation each time the editor opens. */
+  animation: deck-editor-enter 380ms var(--ease-out);
+}
+
+@keyframes deck-editor-enter {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .deck-editor-panel.hidden {
@@ -3028,9 +3199,12 @@ pre {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: var(--panel-soft);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 10px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+  border: 1px solid var(--glass-stroke);
+  border-radius: var(--radius-m);
+  box-shadow: inset 0 1px 0 var(--glass-highlight);
   padding: 10px;
 }
 
@@ -3243,9 +3417,12 @@ pre {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: var(--panel-soft);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 10px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+  border: 1px solid var(--glass-stroke);
+  border-radius: var(--radius-m);
+  box-shadow: inset 0 1px 0 var(--glass-highlight);
   padding: 10px;
 }
 
@@ -3414,9 +3591,12 @@ pre {
   flex-direction: column;
   min-height: 0;
   overflow-y: auto;
-  background: var(--panel-soft);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 10px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+  border: 1px solid var(--glass-stroke);
+  border-radius: var(--radius-m);
+  box-shadow: inset 0 1px 0 var(--glass-highlight);
   padding: 10px;
 }
 
@@ -3476,5 +3656,30 @@ pre {
 
   .editor-preview-pane {
     display: none;
+  }
+}
+
+/* ── Reduced motion ──────────────────────────────────────────────────────────
+   Kill decorative animation for users who ask for it. anime.js helpers gate
+   themselves on the same media query (FX.reduced), and the canvas draws static
+   arrows (see BattlefieldCanvas.reducedMotion). */
+@media (prefers-reduced-motion: reduce) {
+  #auroraLayer i {
+    animation: none;
+  }
+
+  .home-btn,
+  .home-btn:hover,
+  .menu-primary-btn:hover {
+    transform: none;
+    transition: border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
+  }
+
+  .deck-editor-panel {
+    animation: none;
+  }
+
+  .turn-announcement.announcing {
+    animation-duration: 0.6s;
   }
 }

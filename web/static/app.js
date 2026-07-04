@@ -226,6 +226,7 @@ function renderLifePill(elementId, seatIndex, nextLife) {
 
   if (Number.isFinite(previousLife) && Number.isFinite(numericLife) && numericLife !== previousLife) {
     triggerLifeFlash(lifeEl, numericLife > previousLife ? "gain" : "loss");
+    if (window.FX) FX.lifePunch(lifeEl, numericLife - previousLife);
     SFX.onLifeChange(numericSeat, previousLife, numericLife, seat ?? 0);
   }
 
@@ -812,20 +813,34 @@ function syncSeedControls() {
 }
 
 function showMenuPage(name) {
-  for (const [key, element] of Object.entries(menuPages)) {
-    if (!element) continue;
-    element.classList.toggle("hidden", key !== name);
-    element.hidden = key !== name;
+  const applyVisibility = () => {
+    for (const [key, element] of Object.entries(menuPages)) {
+      if (!element) continue;
+      element.classList.toggle("hidden", key !== name);
+      element.hidden = key !== name;
+    }
+  };
+  const current = Object.values(menuPages).find(
+    (el) => el && !el.classList.contains("hidden")
+  );
+  const next = menuPages[name];
+  if (window.FX && current !== next) {
+    FX.menuSwap(current, next, applyVisibility);
+  } else {
+    applyVisibility();
   }
 }
 
 function setVisible(active) {
+  const wasActive = document.body.classList.contains("in-game");
   if (active) {
     hideSetupPanel();
   } else {
     showSetupPanel();
   }
   boardEl.classList.toggle("hidden", !active);
+  document.body.classList.toggle("in-game", active);
+  if (active && !wasActive && window.FX) FX.enterBoard(boardEl);
 }
 
 function closeStateSyncStream() {
@@ -6502,6 +6517,14 @@ const HAND_CAROUSEL_WINDOW = 12;
 const HAND_CAROUSEL_STEP = 4;
 let handCarouselOffset = 0;
 
+// Per-fan card keys from the previous render, so a full state-refresh rebuild
+// only plays the entrance animation for cards that actually just arrived.
+const _prevHandKeysByContainer = {};
+
+function _handCardKey(card) {
+  return card === "<hidden>" ? "<hidden>" : String(card?.name ?? card);
+}
+
 function renderHandFan(containerId, cards, options = {}) {
   const container = q(containerId);
   container.innerHTML = "";
@@ -6531,7 +6554,23 @@ function renderHandFan(containerId, cards, options = {}) {
   }
   const count = windowEntries.length;
 
+  // Multiset diff against the previous render: hand indices whose card wasn't
+  // present before are "new" and get the entrance animation.
+  const prevCounts = new Map();
+  for (const key of _prevHandKeysByContainer[containerId] || []) {
+    prevCounts.set(key, (prevCounts.get(key) || 0) + 1);
+  }
+  const newIndexSet = new Set();
+  entries.forEach((card, index) => {
+    const key = _handCardKey(card);
+    const remaining = prevCounts.get(key) || 0;
+    if (remaining > 0) prevCounts.set(key, remaining - 1);
+    else newIndexSet.add(index);
+  });
+  _prevHandKeysByContainer[containerId] = entries.map(_handCardKey);
+
   const slots = [];
+  const enteringCardEls = [];
 
   windowEntries.forEach(({ card, index }, pos) => {
     const normalizedPos = count <= 1 ? 0 : (pos / (count - 1)) * 2 - 1;
@@ -6564,7 +6603,10 @@ function renderHandFan(containerId, cards, options = {}) {
 
     container.appendChild(slot);
     slots.push(slot);
+    if (newIndexSet.has(index)) enteringCardEls.push(cardEl);
   });
+
+  if (enteringCardEls.length && window.FX) FX.handEnter(enteringCardEls);
 
   renderHandCarouselArrows(container, {
     active: carousel,
@@ -6777,12 +6819,16 @@ async function addDebugMana(targetSeat, color) {
   updateActionHint(`Debug: added {${color}} mana.`);
 }
 
+let _lastPhaseRailActiveKey = null;
+
 function renderPhaseRail(state) {
   const container = q("phaseRail");
   if (!container) return;
 
   container.innerHTML = "";
   const activeKey = getActiveStepKey(state);
+  const activeKeyChanged = activeKey !== _lastPhaseRailActiveKey;
+  _lastPhaseRailActiveKey = activeKey;
   for (const phase of PHASE_RAIL) {
     const item = document.createElement("div");
     item.className = "phase-chip-item";
@@ -6847,6 +6893,7 @@ function renderPhaseRail(state) {
     item.appendChild(rightHalf);
     item.appendChild(label);
     container.appendChild(item);
+    if (activeKey === phase.key && activeKeyChanged && window.FX) FX.phasePulse(item);
   }
 }
 

@@ -91,7 +91,7 @@ _session_event_queues: dict[str, set[asyncio.Queue[dict[str, str]]]] = defaultdi
 @app.middleware("http")
 async def _no_cache_assets(request: Request, call_next):
     response = await call_next(request)
-    if request.url.path in {"/", "/index.html", "/app.js", "/battlefield-canvas.js", "/deck-editor.js", "/personal-decks.js", "/styles.css"} or request.url.path.startswith("/api/"):
+    if request.url.path in {"/", "/index.html", "/app.js", "/battlefield-canvas.js", "/deck-editor.js", "/personal-decks.js", "/animations.js", "/styles.css"} or request.url.path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-store, max-age=0"
         response.headers["Pragma"] = "no-cache"
     return response
