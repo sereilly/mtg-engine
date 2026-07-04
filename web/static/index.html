@@ -94,6 +94,12 @@
               <div id="ffaSeatsContainer" class="seat-grid"></div>
             </div>
             <div class="seed-row">
+              <label class="menu-checkbox-label" title="Everyone decides keep/mulligan at the same time instead of in turn order">
+                <input id="simultaneousMulligan" type="checkbox" />
+                Simultaneous mulligans
+              </label>
+            </div>
+            <div class="seed-row">
               <label class="menu-checkbox-label">
                 <input id="useCustomSeed" type="checkbox" />
                 Use custom seed
@@ -228,6 +234,7 @@
                     <h2 id="oppName">Opponent</h2>
                     <div id="oppLife" class="life-pill">20</div>
                     <div id="oppShield" class="shield-pill hidden">0</div>
+                    <div id="oppManaHeader" class="mana-row mana-row--ffa mana-row--inline hidden"></div>
                   </div>
                   <div id="oppHand" class="hand-fan hand-fan--opponent"></div>
                 </div>
@@ -237,6 +244,9 @@
             <div id="battlefieldCanvasWrap" class="battlefield-canvas-wrap">
               <canvas id="battlefieldCanvas"></canvas>
               <div id="turnAnnouncement" class="turn-announcement"></div>
+              <div id="spectatorBanner" class="spectator-banner hidden">
+                ☠ You've been eliminated — spectating until the game ends
+              </div>
               <div id="gameOverOverlay" class="game-over-overlay hidden">
                 <div id="gameOverText" class="game-over-text"></div>
                 <div class="game-over-actions">

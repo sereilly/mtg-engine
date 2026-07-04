@@ -104,6 +104,10 @@ class CreateSessionRequest(BaseModel):
     seed: int | None = Field(default=None)
     # When True, show interactive coin-flip and mulligan prompts before the game starts.
     enable_pregame: bool = Field(default=False)
+    # When True (and pregame is enabled), every player decides keep/mulligan at
+    # the same time instead of in turn order — each seat gets its own prompt
+    # immediately and the game starts once everyone has kept (and bottomed).
+    simultaneous_mulligan: bool = Field(default=False)
     # Free-For-All only (mode="free_for_all"): one entry per seat (3 or 4 total).
     # host_*/guest_* fields above are unused in this mode.
     seats: list[SeatConfig] | None = Field(default=None)

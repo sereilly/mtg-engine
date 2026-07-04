@@ -3423,9 +3423,14 @@ function applyMulliganPrompt(info) {
       );
     }
   } else {
-    title.textContent = "Waiting for Mulligan Decision";
-    body.textContent = `${escapeHtml(info.waiting_for || "Opponent")} is deciding whether to mulligan.`;
-    steps.innerHTML = `<div>Waiting for ${escapeHtml(info.waiting_for || "opponent")}...</div>`;
+    // Simultaneous mode: waiting_for may name several still-deciding players.
+    const waitingFor = info.waiting_for || "Opponent";
+    const plural = info.simultaneous && waitingFor.includes(",");
+    title.textContent = plural ? "Waiting for Mulligan Decisions" : "Waiting for Mulligan Decision";
+    body.textContent = plural
+      ? `${escapeHtml(waitingFor)} are still deciding whether to mulligan.`
+      : `${escapeHtml(waitingFor)} is deciding whether to mulligan.`;
+    steps.innerHTML = `<div>Waiting for ${escapeHtml(waitingFor)}...</div>`;
   }
 }
 
@@ -3760,7 +3765,21 @@ function renderActivationPrompt() {
   const customValue = q("promptCustomValue");
   const customOkBtn = q("promptCustomOkBtn");
   if (autoTapBtn) autoTapBtn.classList.add("hidden");
+  // The OK button is shared by every prompt; restore its default label/handler
+  // before dispatching so one prompt's customization (mulligan-bottom's
+  // "Confirm (n/n)" text+onclick, the priority prompt's "Next Phase") can't
+  // leak into the next prompt.
+  okBtn.textContent = "OK";
+  okBtn.onclick = null;
   const me = getCurrentPlayerState();
+
+  // Eliminated in a still-running Free-For-All: the seat is a spectator until
+  // the game ends, so no prompt applies — the spectator banner (renderBoard)
+  // owns the messaging.
+  if (isFfaState(currentState) && me?.lost && currentState?.winner == null) {
+    panel.classList.add("hidden");
+    return;
+  }
   const cleanupDiscard = getCleanupDiscardInfo();
   const untapInfo = getUntapLandSelectionInfo();
   const upkeepPayInfo = getUpkeepPayInfo();
@@ -4004,13 +4023,25 @@ function renderActivationPrompt() {
           : lockedCombat?.blockers_locked && isCombatStep(currentState, "declare_blockers")
             ? "Blockers are declared. "
             : "";
-        body.textContent = `${stage}Cast an instant or activate an ability, or press OK to pass priority.`;
+        const stackEmpty = !(currentState?.stack || []).length;
+        if (stackEmpty) okBtn.textContent = "Next Phase";
+        body.textContent = stackEmpty
+          ? `${stage}Cast an instant or activate an ability, or press Next Phase to move on.`
+          : `${stage}Cast an instant or activate an ability, or press OK to pass priority.`;
       } else {
-        body.textContent = "Take an action (cast a spell, activate an ability, or play a land for turn), or press OK to pass priority.";
+        const stackEmpty = !(currentState?.stack || []).length;
+        if (stackEmpty) okBtn.textContent = "Next Phase";
+        body.textContent = stackEmpty
+          ? "Take an action (cast a spell, activate an ability, or play a land for turn), or press Next Phase to move on."
+          : "Take an action (cast a spell, activate an ability, or play a land for turn), or press OK to pass priority.";
       }
     } else if (shouldShowWaitingPriority) {
-      title.textContent = `Waiting for ${getOpponentName(currentState)}...`;
-      body.textContent = "Opponent has priority.";
+      // Name the seat that actually holds priority — in FFA any opponent can,
+      // so the classic top-left opponent's name (getOpponentName) is often wrong.
+      const holderName =
+        currentState.players?.[currentState.priority_player]?.name || getOpponentName(currentState);
+      title.textContent = `Waiting for ${holderName}...`;
+      body.textContent = `${holderName} has priority.`;
     } else {
       title.textContent = "No pending activation.";
       body.textContent = "Select an activated ability to begin paying its cost.";
@@ -4131,11 +4162,17 @@ function renderActivationPrompt() {
     panel.classList.remove("hidden");
     okBtn.classList.add("hidden");
     title.textContent = `Choose X for ${pendingCastX.cardName}`;
+    // Recompute the ceiling from the live mana pool: tapping more lands while
+    // the prompt is open grows the range of X choices on the next render.
+    if (pendingCastX.costString !== undefined) {
+      const liveMax = getMaxAffordableX(me?.mana_pool, pendingCastX.costString, pendingCastX.costCard);
+      pendingCastX.maxX = Math.max(0, liveMax - Math.max(0, pendingCastX.extraTargetTax || 0));
+    }
     const xColor = xSpendColorForCard(pendingCastX.card);
     const xColorName = xColor ? { W: "white", U: "blue", B: "black", R: "red", G: "green" }[xColor] : null;
     body.textContent = xColorName
-      ? `You have ${pendingCastX.maxX} ${xColorName} mana available for X (only ${xColorName} mana may be spent on X).`
-      : `You have ${pendingCastX.maxX} mana available for X after paying the colored cost.`;
+      ? `You have ${pendingCastX.maxX} ${xColorName} mana available for X (only ${xColorName} mana may be spent on X). Tap more mana sources to raise the limit.`
+      : `You have ${pendingCastX.maxX} mana available for X after paying the colored cost. Tap more mana sources to raise the limit.`;
     const choiceButtons = [];
     for (let value = 0; value <= pendingCastX.maxX; value += 1) {
       choiceButtons.push(`<button type="button" class="prompt-choice-btn" data-x-choice="${value}">${value}</button>`);
@@ -4577,6 +4614,8 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
       activatePermanentIndex: permanentIndex,
       activateAbilityIndex: abilityIndex,
       manaRequirement: parseManaCostSymbols(activationCost),
+      costString: activationCost,
+      costCard: null,
       maxX: getMaxAffordableX(getCurrentPlayerState()?.mana_pool, activationCost, null),
       awaitingCustomValue: false,
     };
@@ -4998,6 +5037,10 @@ function startCastDividedXPrompt(card, cardName, dividedPayload, extraTargetTax,
     extraTargetTax,
     castAction,
     manaRequirement: parseManaCostSymbols(card.mana_cost || ""),
+    // renderActivationPrompt recomputes maxX from these each render, so the
+    // prompt tracks mana added while it is open.
+    costString: card.mana_cost || "",
+    costCard: card,
     // Each target beyond the first eats {1} of generic mana that could go to X.
     maxX: Math.max(0, baseMax - Math.max(0, extraTargetTax)),
     awaitingCustomValue: false,
@@ -5099,6 +5142,8 @@ function startCastXPrompt(card, targetSeat, targetPermanentIndex = null, castAct
     targetStackIndex,
     castAction,
     manaRequirement: parseManaCostSymbols(card.mana_cost || ""),
+    costString: card.mana_cost || "",
+    costCard: card,
     maxX: getMaxAffordableX(getCurrentPlayerState()?.mana_pool, card.mana_cost || "", card),
     awaitingCustomValue: false,
   };
@@ -7788,15 +7833,16 @@ function renderLog(state) {
   if (logTab) logTab.scrollTop = logTab.scrollHeight;
 }
 
-function showTurnAnnouncement(isSelfTurn, isExtraTurn = false) {
+function showTurnAnnouncement(isSelfTurn, isExtraTurn = false, playerName = null) {
   const el = document.getElementById("turnAnnouncement");
   if (!el) return;
   el.classList.remove("announcing");
   // Force reflow so removing+adding the class restarts the animation
   void el.offsetWidth;
+  const possessive = playerName ? `${escapeHtml(playerName)}'s` : "Opponent's";
   const label = isSelfTurn
     ? (isExtraTurn ? "Your Extra Turn" : "Your Turn")
-    : (isExtraTurn ? "Opponent's Extra Turn" : "Opponent's Turn");
+    : (isExtraTurn ? `${possessive} Extra Turn` : `${possessive} Turn`);
   const color = isSelfTurn ? "#5dde6a" : "#e16d70";
   el.innerHTML = `<span style="color:${color};">${label}</span>`;
   el.classList.add("announcing");
@@ -7822,6 +7868,11 @@ function renderGameOverOverlay(state) {
   } else if (seat !== null && w === seat) {
     textEl.textContent = "Victory";
     textEl.classList.add("victory");
+  } else if (isFfaState(state)) {
+    // FFA: the viewer may have been eliminated (and spectating) long before
+    // this — name the last player standing rather than a bare "Defeat".
+    textEl.textContent = `${state.players?.[w]?.name || `Seat ${w}`} Wins`;
+    textEl.classList.add("defeat");
   } else {
     textEl.textContent = "Defeat";
     textEl.classList.add("defeat");
@@ -7944,6 +7995,7 @@ function renderFfaOpponentPanels(state, viewerSeat, oppSeat) {
             <h2 id="ffaName_${idx}"></h2>
             <div id="ffaLife_${idx}" class="life-pill" data-target-seat="${idx}">20</div>
           </div>
+          <div id="ffaMana_${idx}" class="mana-row mana-row--ffa"></div>
         </div>
       </div>`;
       })
@@ -7965,6 +8017,11 @@ function renderFfaOpponentPanels(state, viewerSeat, oppSeat) {
       panel.style.cursor = isTargetable ? "pointer" : "default";
     }
     q(`ffaLife_${idx}`)?.classList.toggle("targeting-valid", isTargetable);
+    // Corner opponents' floating mana, mirroring the classic #oppMana column:
+    // only non-zero orbs render (CSS), and the row hides entirely while empty.
+    renderMana(`ffaMana_${idx}`, p.mana_pool, idx);
+    const manaTotal = Object.values(p.mana_pool || {}).reduce((sum, n) => sum + Number(n || 0), 0);
+    q(`ffaMana_${idx}`)?.classList.toggle("hidden", manaTotal === 0 && !debugAddManaMode);
     const hand = Array.isArray(p.hand)
       ? p.hand
       : new Array(Number(p.hand_count || 0) || 0).fill("<hidden>");
@@ -7974,6 +8031,14 @@ function renderFfaOpponentPanels(state, viewerSeat, oppSeat) {
 
 function renderBoard(state) {
   renderGameOverOverlay(state);
+  // Eliminated in a still-running FFA: pin the spectator strip while the
+  // remaining players finish the game (the game-over overlay replaces it).
+  const spectatorBanner = q("spectatorBanner");
+  if (spectatorBanner) {
+    const spectating =
+      isFfaState(state) && seat !== null && !!state.players?.[seat]?.lost && state.winner == null;
+    spectatorBanner.classList.toggle("hidden", !spectating);
+  }
   const viewerSeat = seat ?? 0;
   const oppSeat = classicOppSeat(state, viewerSeat);
   const me = state.players[viewerSeat];
@@ -8044,6 +8109,20 @@ function renderBoard(state) {
   // Canvas battlefield update
   if (battlefieldCanvas) {
     battlefieldCanvas.updateState(state, viewerSeat);
+
+    // "Waiting for <name>" above the top stack card while another player sits
+    // on priority (e.g. holding it by hovering the stack on their client). The
+    // canvas applies a short dwell before drawing so quick hand-offs stay quiet.
+    const priorityHolder = Number.isInteger(state.priority_player) ? state.priority_player : null;
+    const waitingOnStack =
+      (state.stack || []).length > 0 &&
+      priorityHolder !== null &&
+      priorityHolder !== viewerSeat &&
+      state.winner == null &&
+      !getPregameInfo(state);
+    battlefieldCanvas.setStackWaitingLabel(
+      waitingOnStack ? state.players?.[priorityHolder]?.name || `Seat ${priorityHolder}` : null,
+    );
 
     // Compute selected permanent keys for the canvas
     const selfSelectedKeys = [];
@@ -8116,6 +8195,19 @@ function renderBoard(state) {
 
   renderMana("selfMana", me.mana_pool, seat);
   renderMana("oppMana", opp.mana_pool, oppSeat);
+  // FFA hides the stage-right #oppMana column (CSS) — the classic opponent's
+  // pool shows inline in their top-left header pill instead, like the corner
+  // seats' rows, so every pool sits next to its owner.
+  const oppManaHeader = q("oppManaHeader");
+  if (oppManaHeader) {
+    if (playerCount > 2) {
+      renderMana("oppManaHeader", opp.mana_pool, oppSeat);
+      const oppManaTotal = Object.values(opp.mana_pool || {}).reduce((sum, n) => sum + Number(n || 0), 0);
+      oppManaHeader.classList.toggle("hidden", oppManaTotal === 0 && !debugAddManaMode);
+    } else {
+      oppManaHeader.classList.add("hidden");
+    }
+  }
   renderPhaseRail(state);
   if (aiControlsEl) {
     aiControlsEl.classList.toggle("hidden", !shouldShowAiControls(state));
@@ -8312,7 +8404,11 @@ function renderState(state, { skipStaleCheck = false } = {}) {
   if (turnChanged && !state.pregame && state.lobby?.game_started !== false) {
     lastAnnouncedTurn = state.current_turn;
     lastAnnouncedTurnNumber = state.turn_number;
-    showTurnAnnouncement(isSelfTurn, state.current_turn_is_extra);
+    showTurnAnnouncement(
+      isSelfTurn,
+      state.current_turn_is_extra,
+      state.players?.[state.current_turn]?.name || null,
+    );
   }
   animateDiscards(prevStateForDiscard, state, viewerSeat);
   renderBoard(state);
@@ -9117,6 +9213,7 @@ async function createSession() {
       use_custom_seed: useCustomSeed,
       custom_seed: useCustomSeed ? Number(q("customSeed").value) : null,
       enable_pregame: true,
+      simultaneous_mulligan: !!q("simultaneousMulligan")?.checked,
     };
   } else {
     const mode = q("mode").value;
@@ -9138,6 +9235,7 @@ async function createSession() {
       use_custom_seed: useCustomSeed,
       custom_seed: useCustomSeed ? Number(q("customSeed").value) : null,
       enable_pregame: true,
+      simultaneous_mulligan: !!q("simultaneousMulligan")?.checked,
     };
   }
   const data = await postJson("/api/sessions", req);
@@ -9388,6 +9486,10 @@ q("promptAutoTapBtn")?.addEventListener("click", async () => {
 
 q("promptOkBtn").addEventListener("click", async () => {
   try {
+    // Pregame prompts (mulligan bottom-select's "Confirm (n/n)") drive the OK
+    // button through okBtn.onclick; without this guard the fallback chain below
+    // also fires and sends a stray pass_priority the server 400s on.
+    if (getPregameInfo()) return;
     const handledUntap = await handleUntapPromptOk();
     if (handledUntap) {
       return;

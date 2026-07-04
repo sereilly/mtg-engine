@@ -300,6 +300,14 @@ button:hover {
   top: 64px;
 }
 
+/* FFA: the classic opponent's quadrant is top-LEFT, so the stage-right mana
+   column would sit next to the wrong seat (and on top of the top-right corner
+   seat's own mana row). Their pool renders inline in their header pill
+   (#oppManaHeader) instead. */
+.is-ffa .mana-col--opponent {
+  display: none;
+}
+
 .mana-col--self {
   bottom: 110px;
 }
@@ -928,6 +936,66 @@ h2.targeting-valid {
 .ffa-corner--bottom-right .hand-fan-info--corner {
   bottom: 30px;
   right: 24px;
+}
+
+/* Corner opponents' floating mana (FFA): a compact row of only the non-zero
+   orbs, tucked under (top corner) / over (bottom corner) the name/life pill.
+   Hidden entirely by app.js while the pool is empty. */
+.mana-row--ffa {
+  position: absolute;
+  right: 28px;
+  gap: 5px;
+  justify-content: flex-end;
+  pointer-events: none;
+  z-index: 9;
+}
+
+.ffa-corner--top-right .mana-row--ffa {
+  top: 58px;
+}
+
+.ffa-corner--bottom-right .mana-row--ffa {
+  bottom: 78px;
+}
+
+.mana-row--ffa .mana-symbol {
+  width: 28px;
+  height: 28px;
+}
+
+.mana-row--ffa .mana-orb-glyph .mtg-symbol-mana {
+  width: 16px;
+  height: 16px;
+}
+
+.mana-row--ffa .mana-orb-count {
+  min-width: 15px;
+  height: 15px;
+  font-size: 0.62rem;
+}
+
+.mana-row--ffa .mana-symbol-empty {
+  display: none;
+}
+
+.mana-row--ffa .mana-total {
+  display: none;
+}
+
+/* Debug click-to-add mode needs every orb visible and clickable. */
+.mana-row--ffa.mana-row-addable {
+  pointer-events: auto;
+}
+
+.mana-row--ffa.mana-row-addable .mana-symbol-empty {
+  display: inline-flex;
+}
+
+/* FFA classic-opponent variant: flows inline inside the header name pill
+   (which is pointer-events: none, so re-enable for debug click-to-add). */
+.mana-row--inline {
+  position: static;
+  pointer-events: auto;
 }
 
 .battlefield-row {
@@ -2379,6 +2447,25 @@ pre {
 
 .turn-announcement.announcing {
   animation: turnAnnounceFade 2s ease-out forwards;
+}
+
+/* Eliminated-in-FFA spectator strip: pinned to the top of the battlefield,
+   non-blocking (the spectator can still pan, hover previews, read the log). */
+.spectator-banner {
+  position: absolute;
+  top: 170px; /* below the opponents' overlaid hand fans */
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 20px;
+  border-radius: 999px;
+  background: rgba(12, 20, 32, 0.85);
+  border: 1px solid rgba(225, 109, 112, 0.55);
+  color: #e16d70;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+  z-index: 21;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
 }
 
 .game-over-overlay {

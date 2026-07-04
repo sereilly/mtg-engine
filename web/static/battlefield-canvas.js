@@ -310,6 +310,11 @@ class BattlefieldCanvas {
     // (set externally by app.js so the DOM stack list stays in sync).
     this.hoveredStackIndex = null;
     this.stackHeldIndex = null;
+    // "Waiting for <name>" badge above the top stack card while another player
+    // sits on priority (e.g. holding it by hovering the stack on their client).
+    // {name, since} — drawn only after a short delay so the normal quick
+    // priority hand-offs don't flicker the label.
+    this.stackWaitingLabel = null;
 
     // Mouse-press state (left mouse): click detection + blocker-assignment drag.
     this.pressState = null;
@@ -2274,6 +2279,21 @@ class BattlefieldCanvas {
   setAttackingKeys(keys) { this.attackingKeys = new Set(keys); this.needsRedraw = true; }
   setTargetingKeys(keys) { this.targetingKeys = new Set(keys); this.needsRedraw = true; }
 
+  // "Waiting for <name>" above the top stack card while another player holds
+  // priority. Pass null to clear. The timestamp survives repeated calls with
+  // the same name so the show-after-delay check has a stable anchor.
+  setStackWaitingLabel(name) {
+    if (!name) {
+      if (this.stackWaitingLabel) this.needsRedraw = true;
+      this.stackWaitingLabel = null;
+      return;
+    }
+    if (this.stackWaitingLabel?.name !== name) {
+      this.stackWaitingLabel = { name, since: performance.now() };
+    }
+    this.needsRedraw = true;
+  }
+
   setCombatArrows(arrows) {
     // arrows: [{fromSeat, fromIdx, toSeat, toIdx, kind}]
     this.combatArrows = arrows;
@@ -4095,15 +4115,36 @@ class BattlefieldCanvas {
 
     const labelIndex = this.hoveredStackIndex != null ? this.hoveredStackIndex : this.stackHeldIndex;
     const labelVisual = labelIndex != null ? this.stackVisuals[labelIndex] : null;
-    if (!labelVisual) return;
-    const text = labelIndex === this.stackHeldIndex
-      ? "Priority held — click to release"
-      : "Click to hold priority";
-    // Centered directly above the labeled card, clear of the prompt dock that
-    // now sits to the stack's left.
-    const h = BF_CARD_H * labelVisual.scale;
-    const tx = labelVisual.cx;
-    const ty = labelVisual.cy - h / 2 - 16 / this.zoom;
+    if (labelVisual) {
+      const text = labelIndex === this.stackHeldIndex
+        ? "Priority held — click to release"
+        : "Click to hold priority";
+      // Centered directly above the labeled card, clear of the prompt dock that
+      // now sits to the stack's left.
+      const h = BF_CARD_H * labelVisual.scale;
+      this._drawStackBadge(ctx, labelVisual.cx, labelVisual.cy - h / 2 - 16 / this.zoom, text, "rgba(126, 196, 255, 0.95)");
+    }
+
+    // Another player is sitting on priority (e.g. holding it by hovering the
+    // stack on their client): badge the top stack card with who everyone is
+    // waiting on. Drawn only after a short dwell so ordinary quick priority
+    // hand-offs don't flash the label.
+    const waiting = this.stackWaitingLabel;
+    if (waiting && this.stackVisuals.length) {
+      if (performance.now() - waiting.since < 900) {
+        this.needsRedraw = true; // keep the rAF loop checking until it's due
+        return;
+      }
+      const top = this.stackVisuals[0];
+      const h = BF_CARD_H * top.scale;
+      // Sits one row above the hover hint when that hint occupies the top card.
+      const lift = labelVisual === top ? 42 / this.zoom : 16 / this.zoom;
+      this._drawStackBadge(ctx, top.cx, top.cy - h / 2 - lift, `Waiting for ${waiting.name}…`, "rgba(255, 215, 106, 0.95)");
+    }
+  }
+
+  // Small dark pill with centered text, used for the stack-cascade badges.
+  _drawStackBadge(ctx, tx, ty, text, color) {
     ctx.save();
     ctx.font = `600 ${13 / this.zoom}px sans-serif`;
     ctx.textAlign = "center";
@@ -4113,7 +4154,7 @@ class BattlefieldCanvas {
     const th = 18 / this.zoom;
     ctx.fillStyle = "rgba(12, 20, 32, 0.82)";
     ctx.fillRect(tx - tw / 2 - pad, ty - th / 2 - pad / 2, tw + pad * 2, th + pad);
-    ctx.fillStyle = "rgba(126, 196, 255, 0.95)";
+    ctx.fillStyle = color;
     ctx.fillText(text, tx, ty);
     ctx.restore();
   }

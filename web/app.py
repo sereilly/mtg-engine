@@ -799,6 +799,9 @@ def _serialize_player(
     return {
         "name": player.name,
         "life": player.life,
+        # Eliminated but the game continues (Free-For-All): the client drops
+        # this seat into spectator mode and skips it in targeting helpers.
+        "lost": _player_has_lost(game, seat),
         # Damage-prevention shield protecting the player directly (Conservator,
         # Circle of Protection, Healing Salve's "to any target" mode, …).
         "damage_prevention_pool": player.damage_prevention_pool,
@@ -838,14 +841,16 @@ def _player_has_lost(game, seat: int) -> bool:
 
 
 def _winner(session: Session) -> int | None:
-    lost0 = _player_has_lost(session.game, 0)
-    lost1 = _player_has_lost(session.game, 1)
-    if lost0 and lost1:
+    """Seat of the game's winner, ``-1`` for a draw, or None while play
+    continues. Rule 104.2a generalized to any player count: the game is only
+    decided once a single seat remains — in Free-For-All the first elimination
+    must NOT finish the game (the dead player spectates until the end)."""
+    lost = [_player_has_lost(session.game, i) for i in range(len(session.game.players))]
+    alive = [i for i, has_lost in enumerate(lost) if not has_lost]
+    if not alive:
         return -1
-    if lost0:
-        return 1
-    if lost1:
-        return 0
+    if len(alive) == 1 and len(lost) > 1:
+        return alive[0]
     return None
 
 
@@ -1083,6 +1088,37 @@ def _build_pregame_info(session: Session, viewer_seat: int | None) -> dict | Non
         if not info["is_my_turn"]:
             info["waiting_for"] = winner_name
 
+    elif phase == "mulligan" and session.simultaneous_mulligan:
+        # Everyone decides at once, so the phase is per-viewer: deciding seats
+        # see the keep/mulligan prompt, seats that kept after a mulligan see
+        # their own bottom_select, and finished seats see who is still pending.
+        info["simultaneous"] = True
+        players = session.game.players
+        if viewer_seat is not None and viewer_seat in session.mulligan_bottom_required_by_seat:
+            selected = session.mulligan_bottom_selected_by_seat.get(viewer_seat, [])
+            info["phase"] = "bottom_select"
+            info["bottom_seat"] = viewer_seat
+            info["bottom_name"] = players[viewer_seat].name
+            info["is_my_turn"] = True
+            info["required_count"] = session.mulligan_bottom_required_by_seat[viewer_seat]
+            info["selected_indices"] = list(selected)
+            info["selected_count"] = len(selected)
+        elif viewer_seat is not None and viewer_seat not in session.mulligan_kept_seats:
+            info["offer_seat"] = viewer_seat
+            info["offer_name"] = players[viewer_seat].name
+            info["is_my_turn"] = True
+            info["mulligans_taken"] = players[viewer_seat].mulligans_taken
+        else:
+            pending = [
+                i
+                for i in range(len(players))
+                if i not in session.mulligan_kept_seats
+                or i in session.mulligan_bottom_required_by_seat
+            ]
+            info["is_my_turn"] = False
+            info["mulligans_taken"] = 0
+            info["waiting_for"] = ", ".join(players[i].name for i in pending) or None
+
     elif phase == "mulligan":
         offer = session.mulligan_offer_seat
         offer_name = session.game.players[offer].name if offer is not None else None
@@ -1112,8 +1148,12 @@ def _pregame_enter_mulligan(session: Session, starting_player: int) -> None:
     session.pregame_starting_player = starting_player
     session.game.deal_opening_hands(starting_player)
     session.pregame_phase = "mulligan"
-    session.mulligan_offer_seat = starting_player
+    # Simultaneous mode: no single offer seat — every seat decides at once and
+    # per-seat progress lives in mulligan_kept_seats / *_by_seat dicts.
+    session.mulligan_offer_seat = None if session.simultaneous_mulligan else starting_player
     session.mulligan_kept_seats = set()
+    session.mulligan_bottom_required_by_seat = {}
+    session.mulligan_bottom_selected_by_seat = {}
 
 
 def _pregame_advance_mulligan_offer(session: Session) -> None:
@@ -1131,6 +1171,16 @@ def _pregame_advance_mulligan_offer(session: Session) -> None:
 def _pregame_keep_player(session: Session, seat: int) -> None:
     player = session.game.players[seat]
     session.mulligan_kept_seats.add(seat)
+    if session.simultaneous_mulligan:
+        # Bottom selection runs per-seat and concurrently: this seat picks its
+        # bottom cards while the others may still be deciding keep/mulligan.
+        if player.mulligans_taken > 0:
+            session.mulligan_bottom_required_by_seat[seat] = player.mulligans_taken
+            session.mulligan_bottom_selected_by_seat[seat] = []
+        else:
+            session.game.keep_hand(seat)
+        _pregame_check_simultaneous_done(session)
+        return
     if player.mulligans_taken > 0:
         session.pregame_phase = "bottom_select"
         session.mulligan_bottom_seat = seat
@@ -1139,6 +1189,32 @@ def _pregame_keep_player(session: Session, seat: int) -> None:
     else:
         session.game.keep_hand(seat)
         _pregame_advance_mulligan_offer(session)
+
+
+def _pregame_check_simultaneous_done(session: Session) -> None:
+    """Simultaneous mode: the game starts once every seat has kept and no seat
+    still owes bottom cards."""
+    if len(session.mulligan_kept_seats) < len(session.game.players):
+        return
+    if session.mulligan_bottom_required_by_seat:
+        return
+    _pregame_start_game(session)
+
+
+def _pregame_confirm_bottom_simultaneous(session: Session, seat: int) -> None:
+    player = session.game.players[seat]
+    required = session.mulligan_bottom_required_by_seat.get(seat, 0)
+    indices = sorted(set(session.mulligan_bottom_selected_by_seat.get(seat, [])), reverse=True)
+    # Safety: if somehow fewer cards are selected, auto-fill from end of hand
+    if len(indices) < required:
+        extras = [i for i in range(len(player.hand) - 1, -1, -1) if i not in set(indices)]
+        indices = sorted(set(indices) | set(extras[: required - len(indices)]), reverse=True)
+    cards_to_bottom = [player.hand.pop(i) for i in indices]
+    player.library.extend(cards_to_bottom)
+    session.game.keep_hand(seat)
+    session.mulligan_bottom_required_by_seat.pop(seat, None)
+    session.mulligan_bottom_selected_by_seat.pop(seat, None)
+    _pregame_check_simultaneous_done(session)
 
 
 def _pregame_confirm_bottom(session: Session) -> None:
@@ -1174,6 +1250,19 @@ def _pregame_auto_advance(session: Session) -> None:
             if winner is None or _seat_type(session, winner) != "ai":
                 break
             _pregame_enter_mulligan(session, winner)
+
+        elif session.pregame_phase == "mulligan" and session.simultaneous_mulligan:
+            # Every AI seat keeps its hand right away; the phase then waits on
+            # the remaining human seats (each prompted concurrently).
+            pending_ai = [
+                i
+                for i in range(len(session.game.players))
+                if i not in session.mulligan_kept_seats and _seat_type(session, i) == "ai"
+            ]
+            if not pending_ai:
+                break
+            for i in pending_ai:
+                _pregame_keep_player(session, i)
 
         elif session.pregame_phase == "mulligan":
             offer = session.mulligan_offer_seat
@@ -4371,7 +4460,10 @@ def do_action(session_id: str, req: GameActionRequest):
     elif req.action == "mulligan_take":
         if session.pregame_phase != "mulligan":
             raise HTTPException(status_code=400, detail="not in mulligan phase")
-        if req.seat != session.mulligan_offer_seat:
+        if session.simultaneous_mulligan:
+            if req.seat in session.mulligan_kept_seats:
+                raise HTTPException(status_code=400, detail="you already kept your hand")
+        elif req.seat != session.mulligan_offer_seat:
             raise HTTPException(status_code=400, detail="not your turn to decide on mulligan")
         if seat_type != "human":
             raise HTTPException(status_code=400, detail="cannot issue human action for AI seat")
@@ -4381,7 +4473,10 @@ def do_action(session_id: str, req: GameActionRequest):
     elif req.action == "mulligan_keep":
         if session.pregame_phase != "mulligan":
             raise HTTPException(status_code=400, detail="not in mulligan phase")
-        if req.seat != session.mulligan_offer_seat:
+        if session.simultaneous_mulligan:
+            if req.seat in session.mulligan_kept_seats:
+                raise HTTPException(status_code=400, detail="you already kept your hand")
+        elif req.seat != session.mulligan_offer_seat:
             raise HTTPException(status_code=400, detail="not your turn to decide on mulligan")
         if seat_type != "human":
             raise HTTPException(status_code=400, detail="cannot issue human action for AI seat")
@@ -4389,10 +4484,18 @@ def do_action(session_id: str, req: GameActionRequest):
         _pregame_auto_advance(session)
 
     elif req.action == "mulligan_bottom_select":
-        if session.pregame_phase != "bottom_select":
-            raise HTTPException(status_code=400, detail="not in bottom card selection phase")
-        if req.seat != session.mulligan_bottom_seat:
-            raise HTTPException(status_code=400, detail="not your turn to select bottom cards")
+        if session.simultaneous_mulligan:
+            # Bottom selection runs inside the shared "mulligan" phase, one
+            # concurrent selection per seat that kept after mulliganing.
+            if session.pregame_phase != "mulligan":
+                raise HTTPException(status_code=400, detail="not in bottom card selection phase")
+            if req.seat not in session.mulligan_bottom_required_by_seat:
+                raise HTTPException(status_code=400, detail="you have no bottom cards to select")
+        else:
+            if session.pregame_phase != "bottom_select":
+                raise HTTPException(status_code=400, detail="not in bottom card selection phase")
+            if req.seat != session.mulligan_bottom_seat:
+                raise HTTPException(status_code=400, detail="not your turn to select bottom cards")
         if seat_type != "human":
             raise HTTPException(status_code=400, detail="cannot issue human action for AI seat")
         if req.hand_index is None:
@@ -4400,26 +4503,46 @@ def do_action(session_id: str, req: GameActionRequest):
         player = session.game.players[req.seat]
         if req.hand_index >= len(player.hand):
             raise HTTPException(status_code=400, detail="invalid hand index")
-        selected = session.mulligan_bottom_selected
+        selected = (
+            session.mulligan_bottom_selected_by_seat[req.seat]
+            if session.simultaneous_mulligan
+            else session.mulligan_bottom_selected
+        )
         if req.hand_index in selected:
             selected.remove(req.hand_index)
         else:
             selected.append(req.hand_index)
 
     elif req.action == "mulligan_bottom_confirm":
-        if session.pregame_phase != "bottom_select":
-            raise HTTPException(status_code=400, detail="not in bottom card selection phase")
-        if req.seat != session.mulligan_bottom_seat:
-            raise HTTPException(status_code=400, detail="not your turn to select bottom cards")
-        if seat_type != "human":
-            raise HTTPException(status_code=400, detail="cannot issue human action for AI seat")
-        if len(session.mulligan_bottom_selected) != session.mulligan_bottom_required:
-            raise HTTPException(
-                status_code=400,
-                detail=f"must select exactly {session.mulligan_bottom_required} card(s)",
-            )
-        _pregame_confirm_bottom(session)
-        _pregame_auto_advance(session)
+        if session.simultaneous_mulligan:
+            if session.pregame_phase != "mulligan":
+                raise HTTPException(status_code=400, detail="not in bottom card selection phase")
+            if req.seat not in session.mulligan_bottom_required_by_seat:
+                raise HTTPException(status_code=400, detail="you have no bottom cards to select")
+            if seat_type != "human":
+                raise HTTPException(status_code=400, detail="cannot issue human action for AI seat")
+            required = session.mulligan_bottom_required_by_seat[req.seat]
+            if len(session.mulligan_bottom_selected_by_seat.get(req.seat, [])) != required:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"must select exactly {required} card(s)",
+                )
+            _pregame_confirm_bottom_simultaneous(session, req.seat)
+            _pregame_auto_advance(session)
+        else:
+            if session.pregame_phase != "bottom_select":
+                raise HTTPException(status_code=400, detail="not in bottom card selection phase")
+            if req.seat != session.mulligan_bottom_seat:
+                raise HTTPException(status_code=400, detail="not your turn to select bottom cards")
+            if seat_type != "human":
+                raise HTTPException(status_code=400, detail="cannot issue human action for AI seat")
+            if len(session.mulligan_bottom_selected) != session.mulligan_bottom_required:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"must select exactly {session.mulligan_bottom_required} card(s)",
+                )
+            _pregame_confirm_bottom(session)
+            _pregame_auto_advance(session)
 
     else:
         raise HTTPException(status_code=400, detail="unknown action")

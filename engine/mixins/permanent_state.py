@@ -250,7 +250,11 @@ class PermanentStateMixin:
                     continue
                 creature.power_bonus += x
                 creature.toughness_bonus += y
-                creature.metadata["aspect_of_wolf_bonus"] = (x, y)
+                # Accumulate: with several Aspects on one creature the recorded
+                # total must match everything added, or the next clear pass
+                # under-subtracts and the leftover compounds every refresh.
+                prev_x, prev_y = creature.metadata.get("aspect_of_wolf_bonus") or (0, 0)
+                creature.metadata["aspect_of_wolf_bonus"] = (prev_x + x, prev_y + y)
 
     def _refresh_dynamic_creatures(self) -> None:
         all_permanents = [perm for player in self.players for perm in player.battlefield]

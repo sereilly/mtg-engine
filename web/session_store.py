@@ -109,6 +109,13 @@ class Session:
     mulligan_bottom_seat: int | None = None
     mulligan_bottom_required: int = 0
     mulligan_bottom_selected: list[int] = field(default_factory=list)
+    # Host setting: every player decides keep/mulligan at once instead of in
+    # turn order. mulligan_offer_seat is unused; per-seat bottom selections run
+    # concurrently in the dicts below (seat -> required count / selected hand
+    # indices) while other seats may still be deciding.
+    simultaneous_mulligan: bool = False
+    mulligan_bottom_required_by_seat: dict[int, int] = field(default_factory=dict)
+    mulligan_bottom_selected_by_seat: dict[int, list[int]] = field(default_factory=dict)
     # Free-For-All only (mode == "free_for_all"): per-seat config, one entry per
     # seat, kept (like host_deck_id/host_colors/etc. for the 2-player modes) so a
     # rematch can rebuild fresh (reshuffled) decks for the same seats. Empty for
@@ -202,6 +209,7 @@ class SessionStore:
             seat_types=seat_types,
             seed=seed,
             use_pregame=use_pregame,
+            simultaneous_mulligan=use_pregame and request.simultaneous_mulligan,
             game_started=not lobby_needed,
             host_deck_id=request.host_deck_id,
             host_colors=request.host_colors,
@@ -275,6 +283,7 @@ class SessionStore:
             seat_types=seat_types,
             seed=seed,
             use_pregame=use_pregame,
+            simultaneous_mulligan=use_pregame and request.simultaneous_mulligan,
             game_started=not lobby_needed,
             seat_names=seat_names,
             seat_is_ai=seat_is_ai,
@@ -470,6 +479,10 @@ class SessionStore:
         session.mulligan_bottom_seat = None
         session.mulligan_bottom_required = 0
         session.mulligan_bottom_selected = []
+        # simultaneous_mulligan itself is a host setting and survives restarts;
+        # only the per-seat progress resets.
+        session.mulligan_bottom_required_by_seat = {}
+        session.mulligan_bottom_selected_by_seat = {}
         self._begin_pregame(session)
         return session
 
