@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from engine import Game, PlayerState, classify_card
+from tests.helpers import LEA_PATH
 
 
 def _build_test_case(card, all_cards):
@@ -29,10 +30,8 @@ def pytest_generate_tests(metafunc):
 
     # The conftest fixture is not available here, so read from request config path.
     from engine import load_cards
-    from pathlib import Path
 
-    root = Path(__file__).resolve().parent.parent
-    cards = load_cards(root / "cards" / "LEA_cards.json")
+    cards = load_cards(LEA_PATH)
     names = [card.name for card in cards]
     metafunc.parametrize("card_name", names)
 

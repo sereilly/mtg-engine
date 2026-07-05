@@ -7,7 +7,7 @@ skips/repeats (506.1), the attacking/defending player roles (506.2), the
 "only a creature can attack or block" restriction (506.3, 506.3a, 506.3b),
 removal from combat (506.4, 506.4b), "attacking/blocking alone" (506.5), and
 "had to attack" (506.6). All tests in this file are 2-player; see
-``tests/test_multiplayer_combat.py`` for the CR 802 (attack multiple players)
+``tests/rules/test_multiplayer_combat.py`` for the CR 802 (attack multiple players)
 multi-defender combat this engine also supports.
 """
 

@@ -5,12 +5,11 @@ fix, and guards against regressions.
 """
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
 from engine import Game, PlayerState, load_cards
 from engine.models import CardDefinition, Permanent
+from tests.helpers import LEA_PATH
 
 
 # ---------------------------------------------------------------------------
@@ -19,8 +18,7 @@ from engine.models import CardDefinition, Permanent
 
 @pytest.fixture(scope="module")
 def all_cards():
-    root = Path(__file__).resolve().parent.parent
-    return load_cards(root / "cards" / "LEA_cards.json")
+    return load_cards(LEA_PATH)
 
 
 def _get(cards, name: str) -> CardDefinition:

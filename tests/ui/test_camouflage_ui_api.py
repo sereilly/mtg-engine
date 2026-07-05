@@ -14,17 +14,16 @@ empty), and the engine matches each pile to a different attacker at random.
 from __future__ import annotations
 
 import random
-from pathlib import Path
-
 from fastapi.testclient import TestClient
 
 from engine import load_cards
 from engine.models import Permanent
 from web.app import app, store
+from tests.helpers import LEA_PATH
 
 client = TestClient(app)
 
-_CARDS = {c.name: c for c in load_cards(Path(__file__).resolve().parent.parent / "cards" / "LEA_cards.json")}
+_CARDS = {c.name: c for c in load_cards(LEA_PATH)}
 
 
 def _session(mode: str = "human_vs_ai"):

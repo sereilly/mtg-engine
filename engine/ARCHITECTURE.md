@@ -69,7 +69,7 @@ Work top-down; stop at the first step that covers the card.
    `engine/cast_restrictions.py`). Don't put card names anywhere else in the
    engine.
 5. **Tests.** Add a focused test per new rule/handler (see
-   `tests/test_lea_cards.py` for per-card patterns). The comprehensive-cast
+   `tests/sets/test_lea_cards.py` for per-card patterns). The comprehensive-cast
    sweep (`test_all_lea_cards_resolve_without_exception`) is driven by
    `pytest_generate_tests` over the live catalog, so a new set's cards are
    swept automatically — only add to that file's `SWEEP_EXCLUSIONS` if a card
@@ -120,7 +120,7 @@ using the named band constants in `engine/parsing/base.py`. Current bands
 - 113,000–117,000: global/static buffs (lowest precedence — most generic patterns) (`BAND_GLOBAL_STATIC`)
 
 A duplicate order raises at import time, so collisions surface immediately;
-`tests/test_parsing_common.py` additionally asserts the registry is strictly
+`tests/engine/test_parsing_common.py` additionally asserts the registry is strictly
 ordered.
 
 ## Scale properties

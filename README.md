@@ -81,7 +81,7 @@ AI-vs-AI games are fully deterministic for a given seed (the simulator seeds eve
 
 ## Card Verification
 
-`CARD_VERIFICATION.md` tracks which cards have been manually validated in the running game (currently all 290 LEA cards, all passing). Results are recorded via the in-game Debug Menu, and `tests/test_card_verification_regressions.py` guards verified cards against regressions.
+`CARD_VERIFICATION.md` tracks which cards have been manually validated in the running game (currently all 290 LEA cards, all passing). Results are recorded via the in-game Debug Menu, and `tests/regressions/test_card_verification_regressions.py` guards verified cards against regressions.
 
 ## Notes
 

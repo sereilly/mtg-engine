@@ -15,14 +15,13 @@ blockers, resolve combat damage) rather than poking handlers directly.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
 from engine import Game, load_cards
 from engine.models import CardDefinition, Permanent, PlayerState
 
 import web.app as web_app
+from tests.helpers import LEA_PATH
 
 
 # ---------------------------------------------------------------------------
@@ -113,7 +112,7 @@ def _resolve_combat(game: Game) -> None:
 
 @pytest.fixture(scope="module")
 def all_cards():
-    return load_cards(Path(__file__).resolve().parent.parent / "cards" / "LEA_cards.json")
+    return load_cards(LEA_PATH)
 
 
 def _get(all_cards, name: str) -> CardDefinition:

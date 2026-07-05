@@ -3,11 +3,10 @@ from __future__ import annotations
 import re
 from collections import Counter
 from dataclasses import dataclass
-from pathlib import Path
-
 from engine import Game, PlayerState, classify_card, load_cards
 from engine.mixins.stack_casting import aura_enchant_noun, permanent_matches_enchant_noun
 from engine.models import CardDefinition, Permanent
+from tests.helpers import LEA_PATH
 
 _NUMBER_WORDS = {
     "one": 1,
@@ -49,8 +48,7 @@ def _normalize_oracle(text: str) -> str:
 
 
 def _alpha_cards() -> list[CardDefinition]:
-    root = Path(__file__).resolve().parent.parent
-    return load_cards(root / "cards" / "LEA_cards.json")
+        return load_cards(LEA_PATH)
 
 
 def _cards_with_unique_effects(cards: list[CardDefinition]) -> list[CardDefinition]:

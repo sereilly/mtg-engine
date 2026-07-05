@@ -6,18 +6,16 @@ definitions so they exercise the actual oracle text and parse rules.
 """
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
 from engine import Game, PlayerState, load_cards
 from engine.models import CardDefinition, Permanent
+from tests.helpers import LEA_PATH
 
 
 @pytest.fixture(scope="module")
 def cards():
-    root = Path(__file__).resolve().parent.parent
-    return {c.name: c for c in load_cards(root / "cards" / "LEA_cards.json")}
+    return {c.name: c for c in load_cards(LEA_PATH)}
 
 
 def _game(p1: PlayerState, p2: PlayerState) -> Game:

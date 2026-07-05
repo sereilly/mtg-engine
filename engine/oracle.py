@@ -183,7 +183,7 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # First match wins and patterns are unanchored at the end, so a pattern
     # that is a strict prefix of a later pattern's text would shadow it —
     # specific forms must precede their generic prefixes. Guarded by
-    # tests/test_trigger_tables.py.
+    # tests/engine/test_trigger_tables.py.
     ("creature_deals_combat_damage",r"whenever this creature deals combat damage to a player"),
     ("hypnotic_specter_deals_damage", r"whenever this creature deals damage to an opponent"),
     ("deals_damage_to_player",      r"whenever .+ deals damage to a player"),

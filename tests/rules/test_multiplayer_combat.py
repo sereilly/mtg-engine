@@ -1,6 +1,6 @@
 """Tests for Free-For-All (3+ player) support: CR 802 (attack multiple players),
 CR 800.4 (a player leaving the game), and the multiplayer-only mulligan rule
-(CR 800.6). See ``tests/test_combat_phase.py`` for the 2-player combat suite —
+(CR 800.6). See ``tests/rules/test_combat_phase.py`` for the 2-player combat suite —
 this file covers only what's genuinely different with 3+ players.
 """
 

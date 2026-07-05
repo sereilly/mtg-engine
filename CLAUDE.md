@@ -20,9 +20,20 @@ All Python runs through the workspace venv (Windows / PowerShell):
 # Tests (pytest.ini sets testpaths=tests, addopts=-q)
 python -m pytest                                  # full suite
 python -m pytest -m "not slow"                    # skip the AI-simulation batch tests
-python -m pytest tests/test_web_api.py -q         # one file
-python -m pytest tests/test_lea_cards.py::test_name -q   # one test
+python -m pytest tests/ui/test_web_api.py -q      # one file
+python -m pytest tests/sets/test_lea_cards.py::test_name -q   # one test
 python -m pytest tests/regressions -q             # in-game bug regressions (batched by fix round)
+```
+
+Tests are organized by subject — put new tests in the matching subfolder:
+`tests/ai/` (AI policy/simulator), `tests/ui/` (web API + frontend/end-to-end),
+`tests/engine/` (loader, oracle compiler, parsing, dispatch internals),
+`tests/rules/` (Comprehensive Rules sections: phases, combat, mana, layers,
+keywords, replacements), `tests/sets/` (per-card tests for a specific set),
+`tests/regressions/` (in-game bug regressions). Shared fixtures live in
+`tests/conftest.py` and helpers in `tests/helpers.py`, both at the root.
+
+```powershell
 
 # Web server (browser game UI)
 python -m uvicorn web.app:app --host 127.0.0.1 --port 8010   # then open http://127.0.0.1:8010/
@@ -120,8 +131,8 @@ Work top-down, stop at the first step that covers it (recipe in
    `engine/replacements.py`.
 4. Bespoke behavior → register a hook in `card_hooks.py` keyed by name (or a
    `cast_restrictions.py` entry for a textual timing gate).
-5. Add a focused test (per-card patterns: `tests/test_lea_cards.py` for LEA,
-   `tests/test_arabian_nights_cards.py` for ARN). Test fixtures keep the pools
+5. Add a focused test (per-card patterns: `tests/sets/test_lea_cards.py` for LEA,
+   `tests/sets/test_arabian_nights_cards.py` for ARN). Test fixtures keep the pools
    separate: `all_cards`/`cards` are the LEA pool, `arn_cards`/`arn_by_name`
    the ARN pool (see `tests/conftest.py` — a new set adds its path to
    `card_paths` or gets its own fixtures). The comprehensive-cast sweep
@@ -159,7 +170,7 @@ The board UI is **canvas-rendered** (`web/static/battlefield-canvas.js`).
 manually validated in-game (currently the 290 LEA cards, all passing; ARN is
 not yet tracked). **Generated automatically** — results are
 edited via the in-game Debug Menu, not by hand.
-`tests/test_card_verification_regressions.py` guards against regressions in
+`tests/regressions/test_card_verification_regressions.py` guards against regressions in
 verified cards.
 
 ## MTG rules questions
