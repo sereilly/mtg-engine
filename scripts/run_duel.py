@@ -31,7 +31,7 @@ def _sample_library(lookup, seed: int):
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run a short scripted duel simulation")
-    parser.add_argument("--cards", default="lea_cards.json", help="Path to LEA cards JSON")
+    parser.add_argument("--cards", default="cards/LEA_cards.json", help="Path to LEA cards JSON")
     parser.add_argument("--seed", default=7, type=int, help="Deterministic shuffle seed")
     args = parser.parse_args()
 

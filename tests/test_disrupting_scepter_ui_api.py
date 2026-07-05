@@ -19,7 +19,7 @@ from web.app import app, store
 
 client = TestClient(app)
 
-_CARDS = {c.name: c for c in load_cards(Path(__file__).resolve().parent.parent / "lea_cards.json")}
+_CARDS = {c.name: c for c in load_cards(Path(__file__).resolve().parent.parent / "cards" / "LEA_cards.json")}
 
 
 def _session(with_library_of_leng: bool):

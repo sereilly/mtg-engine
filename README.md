@@ -1,6 +1,11 @@
-# MTG Text Rules Engine (LEA)
+# MTG Simulacrum
 
-This project provides a text-based MTG simulation engine focused on the Limited Edition Alpha dataset in `lea_cards.json`. All 290 LEA cards are classified as supported and covered by per-card simulation tests.
+A text-based Magic: The Gathering rules engine with a browser game UI (FastAPI + canvas board). The card pool lives in `cards/`, one JSON per set:
+
+- **Limited Edition Alpha** (`cards/LEA_cards.json`) — all 290 cards supported and covered by per-card simulation tests
+- **Arabian Nights** (`cards/ARN_cards.json`) — all 78 cards supported
+
+Games can be played human vs AI, AI vs AI, human vs human over LAN, or 3–4 player free-for-all.
 
 ## Engine Architecture
 
@@ -10,7 +15,8 @@ The engine is registry-based so the card pool can scale to thousands of cards by
 - `engine/handlers/` — effect executors (`@effect_handler(kind)`), dispatched per instruction with a single O(1) dict lookup.
 - `engine/card_hooks.py` — name-keyed hooks for truly bespoke card behavior (e.g. Power Sink's rider, Verduran Enchantress's cast trigger). The only place the engine references cards by name.
 - `engine/oracle.py` — the compiler: tokenizes oracle text, classifies lines (keyword / triggered / activated / static), and caches one compiled `OracleProgram` per card for the life of the process.
-- `engine/mixins/` — game flow: turn structure, priority, combat, the stack, upkeep, and state-based actions.
+- `engine/phases/` — one mixin per turn phase and step (CR 500–514).
+- `engine/mixins/` — cross-cutting game flow: turn-structure navigation, priority, the stack, and state-based actions.
 
 To add support for a new card: add a parse rule that emits an instruction kind, add an effect handler for that kind if it is new, and add a test. See `engine/ARCHITECTURE.md` for the full pipeline, the rule-ordering conventions, and the step-by-step recipe.
 
@@ -29,7 +35,8 @@ Cards whose text falls outside the recognized patterns degrade gracefully: they 
 With the workspace virtual environment activated:
 
 ```powershell
-pytest
+pytest                    # full suite
+pytest -m "not slow"      # skip the AI-simulation batch tests
 ```
 
 ## Start the Server
@@ -49,12 +56,12 @@ Or to host on ipv6 run:
 Then open `http://127.0.0.1:8010/` on the host machine.
 
 To join from another computer on the same network, open `http://<your-local-ip>:8010/`.
-The app's generated Join URL now uses your local IP when accessed via localhost.
+The app's generated Join URL uses your local IP when accessed via localhost.
 
 ## Run Scripted Duel
 
 ```powershell
-c:/Users/qwv48_66yef5i/Desktop/Magic/.venv/Scripts/python.exe scripts/run_duel.py
+.\.venv\Scripts\python.exe scripts/run_duel.py
 ```
 
 ## AI Simulation
@@ -62,17 +69,22 @@ c:/Users/qwv48_66yef5i/Desktop/Magic/.venv/Scripts/python.exe scripts/run_duel.p
 AI-vs-AI games are fully deterministic for a given seed (the simulator seeds every RNG the engine uses):
 
 ```powershell
-c:/Users/qwv48_66yef5i/Desktop/Magic/.venv/Scripts/python.exe scripts/simulate_ai_games.py
+.\.venv\Scripts\python.exe scripts/simulate_ai_games.py
 ```
 
 ## Support Coverage Report
 
 ```powershell
-c:/Users/qwv48_66yef5i/Desktop/Magic/.venv/Scripts/python.exe scripts/support_report.py
+.\.venv\Scripts\python.exe scripts/support_report.py                                # LEA (default)
+.\.venv\Scripts\python.exe scripts/support_report.py --cards cards/ARN_cards.json   # any set JSON
 ```
+
+## Card Verification
+
+`CARD_VERIFICATION.md` tracks which cards have been manually validated in the running game (currently all 290 LEA cards, all passing). Results are recorded via the in-game Debug Menu, and `tests/test_card_verification_regressions.py` guards verified cards against regressions.
 
 ## Notes
 
-This is intentionally a foundational engine. The registry architecture means new effect patterns, instruction kinds, and per-card hooks can be added incrementally while preserving full card coverage and deterministic tests.
+This is intentionally a foundational engine. The registry architecture means new effect patterns, instruction kinds, and per-card hooks can be added incrementally while preserving full card coverage and deterministic tests — adding a set is one JSON file in `cards/` plus registry entries for any new text patterns.
 
 See `engine/ARCHITECTURE.md` for details.

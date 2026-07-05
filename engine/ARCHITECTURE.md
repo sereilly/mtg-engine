@@ -7,7 +7,7 @@ in a category module; dispatch is data-driven.
 ## Pipeline
 
 ```
-lea_cards.json (+ any further set JSONs — web/app.py:CARD_PATHS)
+cards/LEA_cards.json (+ any further set JSONs — web/app.py:CARD_PATHS)
    │  card_loader.load_cards
    ▼
 CardDefinition (immutable)

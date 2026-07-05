@@ -4,10 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A text-based **Magic: The Gathering rules engine** for the Limited Edition Alpha
-(LEA) card set (290 cards in `lea_cards.json`), served behind a FastAPI web app
-with a browser game UI. The engine is **registry-based**: card support grows by
-adding small isolated entries, never by editing core control flow.
+**MTG Simulacrum** — a text-based **Magic: The Gathering rules engine** plus a
+FastAPI web app with a browser game UI. The card pool lives in `cards/` as one
+JSON per set: Limited Edition Alpha (`LEA_cards.json`, 290 cards) and Arabian
+Nights (`ARN_cards.json`, 78 cards), all classified as supported. The engine is
+**registry-based**: card support grows by adding small isolated entries, never
+by editing core control flow.
 
 ## Commands
 
@@ -42,7 +44,7 @@ skill documents the working harness.
 Full details in `engine/ARCHITECTURE.md`. The compile-and-dispatch pipeline:
 
 ```
-lea_cards.json → card_loader.load_cards → CardDefinition (immutable)
+cards/*.json (set files) → card_loader.load_cards → CardDefinition (immutable)
   → oracle.compile_card_oracle (cached once per card per process) → OracleProgram
       { instructions, activated_abilities, triggered_abilities, static_lines }
   → Game mixins → EFFECT_HANDLERS[instruction.kind](game, instruction, context)  # O(1) dict dispatch
@@ -118,10 +120,13 @@ Work top-down, stop at the first step that covers it (recipe in
    `engine/replacements.py`.
 4. Bespoke behavior → register a hook in `card_hooks.py` keyed by name (or a
    `cast_restrictions.py` entry for a textual timing gate).
-5. Add a focused test (see `tests/test_lea_cards.py` for per-card patterns).
-   The comprehensive-cast sweep (`test_all_lea_cards_resolve_without_exception`)
-   parametrizes dynamically over the live catalog, so new cards are swept
-   automatically.
+5. Add a focused test (per-card patterns: `tests/test_lea_cards.py` for LEA,
+   `tests/test_arabian_nights_cards.py` for ARN). Test fixtures keep the pools
+   separate: `all_cards`/`cards` are the LEA pool, `arn_cards`/`arn_by_name`
+   the ARN pool (see `tests/conftest.py` — a new set adds its path to
+   `card_paths` or gets its own fixtures). The comprehensive-cast sweep
+   (`test_all_lea_cards_resolve_without_exception`) parametrizes dynamically
+   over the LEA catalog, so new LEA cards are swept automatically.
 
 Cards whose text falls outside recognized patterns degrade gracefully: classified
 unsupported with an explicit reason, never crashing simulation.
@@ -135,21 +140,24 @@ touching anything that consumes randomness.
 ## Web layer
 
 `web/app.py` is the FastAPI app (`/api/...` routes + static UI in `web/static/`).
-The card pool is `CARD_PATHS` (a list of set JSONs, today just `lea_cards.json`)
-loaded once into `CARD_CATALOG` at process startup — adding a set means
-appending its JSON path there. State lives in in-memory stores: `session_store.py`
+The card pool is `CARD_PATHS` (a list of set JSONs, today `cards/LEA_cards.json`
++ `cards/ARN_cards.json`) loaded once into `CARD_CATALOG` at process startup —
+adding a set means appending its JSON path there. State lives in in-memory stores: `session_store.py`
 (games; takes the loaded catalog, not a path — never re-reads the JSON per
 session), `deck_store.py` (decks, incl. Moxfield import), `verification_store.py`.
 Game actions funnel through one endpoint, `POST /api/sessions/{id}/action`,
 dispatched by the `ActionKind` literal in `web/schemas.py`. Session `mode` must
-be one of the literals `human_vs_ai`, `ai_vs_ai`, `human_vs_human`.
+be one of the literals `human_vs_ai`, `ai_vs_ai`, `human_vs_human`,
+`free_for_all` (the last is 3–4 seats, configured per seat via the `seats`
+list instead of the host/guest field pairs).
 
 The board UI is **canvas-rendered** (`web/static/battlefield-canvas.js`).
 
 ## Card verification tracker
 
-`CARD_VERIFICATION.md` / `card_verification.json` track which of the 290 cards
-have been manually validated in-game. **Generated automatically** — results are
+`CARD_VERIFICATION.md` / `card_verification.json` track which cards have been
+manually validated in-game (currently the 290 LEA cards, all passing; ARN is
+not yet tracked). **Generated automatically** — results are
 edited via the in-game Debug Menu, not by hand.
 `tests/test_card_verification_regressions.py` guards against regressions in
 verified cards.

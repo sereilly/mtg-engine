@@ -20,7 +20,7 @@ from engine.models import CardDefinition, Permanent
 @pytest.fixture(scope="module")
 def all_cards():
     root = Path(__file__).resolve().parent.parent
-    return load_cards(root / "lea_cards.json")
+    return load_cards(root / "cards" / "LEA_cards.json")
 
 
 def _get(cards, name: str) -> CardDefinition:

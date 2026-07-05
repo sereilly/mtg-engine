@@ -130,7 +130,7 @@ def test_attacks_or_blocks_compiles_to_specific_kind():
 
 
 def test_hypnotic_specter_compiles_to_specific_kind():
-    cards = {c.name: c for c in load_cards("lea_cards.json")}
+    cards = {c.name: c for c in load_cards("cards/LEA_cards.json")}
     program = compile_card_oracle(cards["Hypnotic Specter"])
     kinds = [ta.condition.kind for ta in program.triggered_abilities]
     assert kinds == ["hypnotic_specter_deals_damage"]

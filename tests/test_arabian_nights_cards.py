@@ -1,4 +1,4 @@
-"""Per-card tests for the Arabian Nights set (arabian_nights_cards.json)."""
+"""Per-card tests for the Arabian Nights set (cards/ARN_cards.json)."""
 
 from __future__ import annotations
 

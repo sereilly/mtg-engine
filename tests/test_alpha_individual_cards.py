@@ -50,7 +50,7 @@ def _normalize_oracle(text: str) -> str:
 
 def _alpha_cards() -> list[CardDefinition]:
     root = Path(__file__).resolve().parent.parent
-    return load_cards(root / "lea_cards.json")
+    return load_cards(root / "cards" / "LEA_cards.json")
 
 
 def _cards_with_unique_effects(cards: list[CardDefinition]) -> list[CardDefinition]:

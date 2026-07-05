@@ -8542,7 +8542,7 @@ def pytest_generate_tests(metafunc):
         return
     if metafunc.function is not test_all_lea_cards_resolve_without_exception:
         return
-    cards = load_cards("lea_cards.json")
+    cards = load_cards("cards/LEA_cards.json")
     names = [c.name for c in cards if c.name not in SWEEP_EXCLUSIONS]
     metafunc.parametrize("card_name", names)
 

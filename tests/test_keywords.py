@@ -113,7 +113,7 @@ def _resolve_combat(game: Game) -> None:
 
 @pytest.fixture(scope="module")
 def all_cards():
-    return load_cards(Path(__file__).resolve().parent.parent / "lea_cards.json")
+    return load_cards(Path(__file__).resolve().parent.parent / "cards" / "LEA_cards.json")
 
 
 def _get(all_cards, name: str) -> CardDefinition:

@@ -11,7 +11,7 @@ from engine.ai_simulator import run_ai_simulation
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run automated AI-vs-AI MTG simulations")
-    parser.add_argument("--cards", default="lea_cards.json", help="Path to LEA cards JSON")
+    parser.add_argument("--cards", default="cards/LEA_cards.json", help="Path to LEA cards JSON")
     parser.add_argument("--games", type=int, default=10, help="Number of games to simulate")
     parser.add_argument("--seed", type=int, default=1337, help="Deterministic seed")
     parser.add_argument("--max-turns", type=int, default=18, help="Turn cap per game")

@@ -14,8 +14,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Show card support coverage for LEA cards")
     parser.add_argument(
         "--cards",
-        default="lea_cards.json",
-        help="Path to card JSON data (default: lea_cards.json)",
+        default="cards/LEA_cards.json",
+        help="Path to card JSON data (default: cards/LEA_cards.json)",
     )
     args = parser.parse_args()
 

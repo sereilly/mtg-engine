@@ -32,7 +32,7 @@ def pytest_generate_tests(metafunc):
     from pathlib import Path
 
     root = Path(__file__).resolve().parent.parent
-    cards = load_cards(root / "lea_cards.json")
+    cards = load_cards(root / "cards" / "LEA_cards.json")
     names = [card.name for card in cards]
     metafunc.parametrize("card_name", names)
 

@@ -15,7 +15,7 @@ from engine.models import CardDefinition, Permanent
 
 client = TestClient(app)
 
-LEA_PATH = Path(__file__).resolve().parent.parent / "lea_cards.json"
+LEA_PATH = Path(__file__).resolve().parent.parent / "cards" / "LEA_cards.json"
 # Loaded once per process; CardDefinition is immutable, so sharing is safe.
 CARDS_BY_NAME = {c.name: c for c in load_cards(LEA_PATH)}
 

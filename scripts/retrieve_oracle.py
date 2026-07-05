@@ -1,4 +1,4 @@
-"""Retrieve oracle text for a Magic card from lea_cards.json.
+"""Retrieve oracle text for a Magic card from cards/LEA_cards.json.
 
 Usage:
     python scripts/retrieve_oracle.py "Black Lotus"
@@ -13,7 +13,7 @@ import sys
 from typing import Dict, List, Optional, Tuple, Any
 
 
-def _load_cards(path: str = "lea_cards.json") -> List[Dict[str, Any]]:
+def _load_cards(path: str = "cards/LEA_cards.json") -> List[Dict[str, Any]]:
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
     # Accept either a list at top-level, or a dict containing common keys
@@ -82,10 +82,10 @@ def _print_card(card: Dict[str, Any]) -> None:
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="Retrieve oracle text from lea_cards.json by card name")
+    parser = argparse.ArgumentParser(description="Retrieve oracle text from cards/LEA_cards.json by card name")
     parser.add_argument("name", help="Card name to search for")
     parser.add_argument("--mode", choices=["exact", "ci", "substring", "fuzzy"], help="Match mode to use")
-    parser.add_argument("--file", default="lea_cards.json", help="Path to the card JSON file")
+    parser.add_argument("--file", default="cards/LEA_cards.json", help="Path to the card JSON file")
     parser.add_argument("--max-candidates", type=int, default=8, help="Maximum candidates to show for non-unique matches")
     args = parser.parse_args(argv)
 

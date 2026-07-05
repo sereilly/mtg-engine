@@ -17,7 +17,7 @@ from engine.models import CardDefinition, Permanent
 @pytest.fixture(scope="module")
 def cards():
     root = Path(__file__).resolve().parent.parent
-    return {c.name: c for c in load_cards(root / "lea_cards.json")}
+    return {c.name: c for c in load_cards(root / "cards" / "LEA_cards.json")}
 
 
 def _game(p1: PlayerState, p2: PlayerState) -> Game:

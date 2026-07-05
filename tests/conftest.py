@@ -9,7 +9,7 @@ from engine import load_cards
 
 @pytest.fixture(scope="session")
 def lea_path() -> Path:
-    return Path(__file__).resolve().parent.parent / "lea_cards.json"
+    return Path(__file__).resolve().parent.parent / "cards" / "LEA_cards.json"
 
 
 @pytest.fixture(scope="session")
@@ -34,7 +34,7 @@ def cards(all_cards):
 
 @pytest.fixture(scope="session")
 def arn_path() -> Path:
-    return Path(__file__).resolve().parent.parent / "arabian_nights_cards.json"
+    return Path(__file__).resolve().parent.parent / "cards" / "ARN_cards.json"
 
 
 @pytest.fixture(scope="session")

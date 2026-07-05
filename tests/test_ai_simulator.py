@@ -10,7 +10,7 @@ from engine.models import Permanent
 @pytest.mark.slow
 def test_ai_simulator_runs_without_issues_for_two_games():
     report = run_ai_simulation(
-        cards_path=Path("lea_cards.json"),
+        cards_path=Path("cards/LEA_cards.json"),
         games=2,
         seed=77,
         max_turns=10,
@@ -59,7 +59,7 @@ def test_prodigal_sorcerer_summoning_sickness_clears_after_turn(all_cards):
 def test_prodigal_sorcerer_deals_damage_in_simulation():
     """Regression: Prodigal Sorcerer must deal damage once summoning sickness clears."""
     report = run_ai_simulation(
-        cards_path=Path("lea_cards.json"),
+        cards_path=Path("cards/LEA_cards.json"),
         games=5,
         seed=42,
         max_turns=18,
@@ -84,7 +84,7 @@ def test_simulation_stops_when_player_loses_via_empty_library():
     the game continued for many more turns.
     """
     report = run_ai_simulation(
-        cards_path=Path("lea_cards.json"),
+        cards_path=Path("cards/LEA_cards.json"),
         games=5,
         seed=42,
         max_turns=18,
@@ -124,7 +124,7 @@ def test_ancestral_recall_never_self_causes_library_loss():
     which is the footprint of an AI-caused library self-kill from Ancestral Recall.
     """
     report = run_ai_simulation(
-        cards_path=Path("lea_cards.json"),
+        cards_path=Path("cards/LEA_cards.json"),
         games=10,
         seed=1337,
         max_turns=25,
