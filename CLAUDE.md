@@ -165,6 +165,6 @@ verified cards.
 ## MTG rules questions
 
 For rules/timing/layers/interaction questions, the `mtg-rules` skill
-(`.agents/skills/mtg-rules/`) is authoritative; it consults `MagicCompRules.txt`
+(`.claude/skills/mtg-rules/`) is authoritative; it consults `MagicCompRules.txt`
 (the full Comprehensive Rules, in the repo root). Don't answer non-trivial
 rulings from memory — cite that file.
