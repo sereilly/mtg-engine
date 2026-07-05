@@ -181,10 +181,34 @@ class GameHelpersMixin:
 
     def controller_index_of(self, permanent: Permanent) -> int | None:
         """Index of the player whose battlefield currently holds *permanent*, or
-        None if it is on no battlefield (already left / phased out)."""
+        None if it is on no battlefield (already left / phased out).
+
+        Matches by identity, not ``in``: Permanent is a dataclass with value
+        equality, so ``in`` would match a look-alike (an opponent's copy of the
+        same card in the same state) after this object has left the battlefield."""
         return next(
-            (i for i, p in enumerate(self.players) if permanent in p.battlefield), None
+            (
+                i
+                for i, p in enumerate(self.players)
+                if any(perm is permanent for perm in p.battlefield)
+            ),
+            None,
         )
+
+    def owner_index_of(self, permanent: Permanent) -> int | None:
+        """Index of the player who owns *permanent*'s card (CR 108.3), for
+        routing it to the right graveyard/hand when it leaves the battlefield
+        (CR 400.3). The engine doesn't track ownership on the Permanent; every
+        control effect in the supported pool is linked and records the
+        pre-theft controller on its source (``stolen_owner_index``), which is
+        the owner whenever owner and controller differ."""
+        for player in self.players:
+            for perm in player.battlefield:
+                if perm.metadata.get("stolen_permanent") is permanent:
+                    idx = perm.metadata.get("stolen_owner_index")
+                    if isinstance(idx, int) and 0 <= idx < len(self.players):
+                        return idx
+        return self.controller_index_of(permanent)
 
     def _take_control_linked(
         self,
@@ -244,7 +268,11 @@ class GameHelpersMixin:
         if consumed:
             return
         if not permanent.metadata.get("is_token", False):
-            player.graveyard.append(permanent.card)
+            # CR 400.3: the card goes to its owner's graveyard, which differs
+            # from the controller's when the permanent was stolen (Control Magic).
+            owner_idx = self.owner_index_of(permanent)
+            owner = self.players[owner_idx] if owner_idx is not None else player
+            owner.graveyard.append(permanent.card)
         # is_creature (not the printed type) so an animated land (Kormus Bell /
         # Living Lands) dying counts as a creature death (Scavenging Ghoul).
         if permanent.is_creature:

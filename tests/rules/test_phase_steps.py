@@ -218,6 +218,7 @@ def test_draw_step_active_player_draws_a_card_without_using_the_stack():
     p1 = PlayerState(name="P1", library=[_mk_land("L1"), _mk_land("L2")])
     p2 = PlayerState(name="P2", library=[_mk_land("L3")])
     game = Game(players=[p1, p2])
+    game.turn = 2  # an ordinary turn — turn 1 skips the draw (CR 103.8a)
     game.begin_turn_bookkeeping(0)
     game.resolve_untap_step(0)
     game.resolve_upkeep(0)

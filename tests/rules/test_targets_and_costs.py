@@ -456,3 +456,24 @@ def test_118_8_additional_cost_sacrifice_is_paid_when_casting(cards):
     assert all(perm.card.name != "Gray Ogre" for perm in p1.battlefield)
     assert any(c.name == "Gray Ogre" for c in p1.graveyard)
     assert p1.mana_pool.get("B", 0) == 3  # {B} equal to the sacrificed mana value
+
+
+@pytest.mark.cr("118.6")
+def test_118_6_spell_with_no_mana_cost_cannot_be_cast():
+    """An object with no mana cost has an unpayable cost — attempting to cast
+    it is illegal (118.6). This differs from {0}, which casts for free (118.5)."""
+    costless = _mk_card(
+        name="Costless Spell",
+        mana_cost="",
+        type_line="Instant",
+        oracle_text="Target player loses 1 life.",
+    )
+    p1 = PlayerState(name="P1", hand=[costless], mana_pool={"W": 5})
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2], enforce_mana_costs=True)
+
+    result = game.cast_from_hand(0, "Costless Spell", target_player_index=1)
+
+    assert not result.supported
+    assert p2.life == 20
+    assert costless in p1.hand  # never left the hand

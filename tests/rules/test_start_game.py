@@ -343,3 +343,35 @@ def test_103_5_full_mulligan_sequence_two_players():
     assert game.players[starting].mulligans_taken == 1
     assert len(game.players[other].hand) == 7
     assert game.players[other].mulligans_taken == 0
+
+
+# ---------------------------------------------------------------------------
+# 103.8a / 103.8c — the first player's first-turn draw step
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("103.8a")
+def test_103_8a_first_player_skips_first_turn_draw_in_two_player_game():
+    """In a two-player game the player who plays first skips the draw step of
+    their first turn (103.8a); the opponent's first turn draws normally."""
+    p1 = PlayerState(name="P1", library=_library(10))
+    p2 = PlayerState(name="P2", library=_library(10))
+    game = Game(players=[p1, p2])
+
+    game.start_turn(0)  # the game's first turn
+    assert len(p1.hand) == 0
+    assert len(p1.library) == 10
+
+    game.start_next_turn()  # P2's first turn is not the game's first
+    assert len(p2.hand) == 1
+    assert len(p2.library) == 9
+
+
+@pytest.mark.cr("103.8c")
+def test_103_8c_no_first_turn_draw_skip_in_multiplayer():
+    """In other multiplayer games no player skips their first draw step (103.8c)."""
+    players = [PlayerState(name=f"P{i}", library=_library(10)) for i in range(3)]
+    game = Game(players=players)
+
+    game.start_turn(0)
+    assert len(players[0].hand) == 1

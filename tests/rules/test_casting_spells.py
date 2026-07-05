@@ -415,14 +415,17 @@ def test_601_2f_gloom_cost_payable_with_sufficient_mana():
     assert p2.life == 17
 
 
-@pytest.mark.cr("601.2f")
+@pytest.mark.cr("601.2f", "118.5")
 def test_601_2f_zero_mana_cost_spell_is_castable():
-    """A spell with no mana cost (effectively {0}) can be cast without spending any mana (601.2f)."""
+    """A spell whose mana cost is {0} can be cast without spending any mana
+    (601.2f / 118.5). A spell with NO mana cost is different — that cost is
+    unpayable and the cast is illegal (CR 118.6, tested in
+    test_targets_and_costs.py)."""
     free_spell = _mk_card(
         "Free Spell",
         "Instant",
         "Target player loses 1 life.",
-        mana_cost="",
+        mana_cost="{0}",
     )
     p1 = PlayerState(name="P1", hand=[free_spell])
     p2 = PlayerState(name="P2", life=20)

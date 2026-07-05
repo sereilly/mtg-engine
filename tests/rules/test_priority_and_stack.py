@@ -542,3 +542,22 @@ def test_608_3b_aura_spell_with_illegal_target_does_not_resolve(all_cards):
     assert all(perm.card.name != "Holy Strength" for perm in p1.battlefield)
     assert all(perm.card.name != "Holy Strength" for perm in p2.battlefield)
     assert game.stack == []
+
+
+@pytest.mark.cr("608.2b")
+def test_608_2b_damage_spell_with_vanished_creature_target_does_not_hit_the_player(all_cards):
+    """A damage spell whose creature target has left the battlefield does
+    nothing on resolution (608.2b) — it must not fall back to damaging the
+    targeted creature's controller."""
+    bolt = _get(all_cards, "Lightning Bolt")
+    p1 = PlayerState(name="P1", hand=[bolt])
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+
+    # Target creature index 0 on P2's (now empty) battlefield: the creature is
+    # gone by resolution time, so the spell fizzles.
+    result = game.cast_from_hand(0, "Lightning Bolt", target_player_index=1, target_permanent_index=0)
+
+    assert result.supported
+    assert p2.life == 20  # no fallback damage to the player
+    assert any(card.name == "Lightning Bolt" for card in p1.graveyard)

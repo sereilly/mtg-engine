@@ -56,6 +56,16 @@ class DrawStepMixin:
             self._close_or_defer_step(phase, step, defer_priority)
             return 0
 
+        # CR 103.8a: in a two-player game, the player who plays first skips
+        # the draw step of their first turn. game.turn is 1 exactly during the
+        # game's first turn in every flow (headless start_turn, AI simulator
+        # half-turn counter, web _start_next_turn). 103.8c: multiplayer games
+        # don't skip.
+        if self.turn == 1 and len(self.players) == 2:
+            self.log.append(f"{player.name} skips the first turn's draw step (CR 103.8a)")
+            self._close_or_defer_step(phase, step, defer_priority)
+            return 0
+
         # Island Sanctuary: sanctuary_choice=None means auto-skip (AI); True=skip (human chose);
         # False=draw normally (human chose to draw instead of gaining protection)
         has_sanctuary = any(

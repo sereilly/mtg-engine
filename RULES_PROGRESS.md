@@ -5,14 +5,14 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**179 / 566 tracked rules covered (31%)** — 592 tests, 0 unannotated.
+**181 / 566 tracked rules covered (31%)** — 598 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
 | [100. General](#100-general) | 0/7 | 0% |
 | [101. The Magic Golden Rules](#101-the-magic-golden-rules) | 0/4 | 0% |
 | [102. Players](#102-players) | 0/4 | 0% |
-| [103. Starting the Game](#103-starting-the-game) | 3/8 | 37% |
+| [103. Starting the Game](#103-starting-the-game) | 4/8 | 50% |
 | [104. Ending the Game](#104-ending-the-game) | 5/6 | 83% |
 | [105. Colors](#105-colors) | 0/5 | 0% |
 | [106. Mana](#106-mana) | 4/13 | 30% |
@@ -26,7 +26,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [115. Targets](#115-targets) | 4/10 | 40% |
 | [116. Special Actions](#116-special-actions) | 0/3 | 0% |
 | [117. Timing and Priority](#117-timing-and-priority) | 6/7 | 85% |
-| [118. Costs](#118-costs) | 7/14 | 50% |
+| [118. Costs](#118-costs) | 8/14 | 57% |
 | [119. Life](#119-life) | 0/10 | 0% |
 | [120. Damage](#120-damage) | 0/10 | 0% |
 | [121. Drawing a Card](#121-drawing-a-card) | 3/9 | 33% |
@@ -128,7 +128,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **103.5** Each player draws a number of cards equal to their starting hand size, which is normally seven. (... *(22 tests)*
 - [ ] **103.6** Some cards allow a player to take actions with them from their opening hand. Once the mulligan pr...
 - [ ] **103.7** In a Planechase game, the starting player moves the top card of their planar deck off that planar...
-- [ ] **103.8** The starting player takes their first turn.
+- [x] **103.8** The starting player takes their first turn. *(2 tests, subrules ac)*
 
 ### 104. Ending the Game
 
@@ -282,8 +282,8 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **118.2** If a cost includes a mana payment, the player paying the cost has a chance to activate mana abili... *(1 tests)*
 - [x] **118.3** A player can’t pay a cost without having the necessary resources to pay it fully. For example, a ... *(5 tests, subrules ab)*
 - [x] **118.4** Some costs include an {X} or an X. See rule 107.3. *(1 tests)*
-- [x] **118.5** Some costs are represented by {0}, or are reduced to {0}. The action necessary for a player to pa... *(2 tests, subrules a)*
-- [ ] **118.6** Some objects have no mana cost. This represents an unpayable cost. An ability can also have an un...
+- [x] **118.5** Some costs are represented by {0}, or are reduced to {0}. The action necessary for a player to pa... *(3 tests, subrules a)*
+- [x] **118.6** Some objects have no mana cost. This represents an unpayable cost. An ability can also have an un... *(1 tests)*
 - [x] **118.7** What a player actually needs to do to pay a cost may be changed or reduced by effects. If the man... *(1 tests)*
 - [x] **118.8** Some spells and abilities have additional costs. An additional cost is a cost listed in a spell’s... *(1 tests)*
 - [ ] **118.9** Some spells have alternative costs. An alternative cost is a cost listed in a spell’s text, or ap...
@@ -455,7 +455,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **400.1** A zone is a place where objects can be during a game. There are normally seven zones: library, ha... *(2 tests)*
 - [ ] **400.2** Public zones are zones in which all players can see the cards’ faces, except for those cards that...
-- [x] **400.3** If an object would go to any library, graveyard, or hand other than its owner’s, it goes to its o... *(2 tests)*
+- [x] **400.3** If an object would go to any library, graveyard, or hand other than its owner’s, it goes to its o... *(4 tests)*
 - [ ] **400.4** Cards with certain card types can’t enter certain zones.
 - [x] **400.5** The order of objects in a library, in a graveyard, or on the stack can’t be changed except when e... *(1 tests)*
 - [ ] **400.6** If an object would move from one zone to another, determine what event is moving the object. If t...
@@ -692,7 +692,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 608. Resolving Spells and Abilities
 
 - [x] **608.1** Each time all players pass in succession, the spell or ability on top of the stack resolves. (See... *(1 tests)*
-- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(3 tests, subrules bn)*
+- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(4 tests, subrules bn)*
 - [x] **608.3** If the object that’s resolving is a permanent spell, its resolution may involve several steps. Th... *(3 tests, subrules ab)*
 
 ### 609. Effects

@@ -301,7 +301,9 @@ class TestIslandSanctuary:
             library=[cards["Forest"], cards["Forest"]],
         )
         p2 = PlayerState(name="P2")
-        return _game(p1, p2), p1
+        game = _game(p1, p2)
+        game.turn = 2  # an ordinary turn - turn 1 skips the draw (CR 103.8a)
+        return game, p1
 
     def test_skipping_the_draw_grants_protection(self, cards):
         game, p1 = self._setup(cards)

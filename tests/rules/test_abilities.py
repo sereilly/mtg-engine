@@ -461,6 +461,7 @@ def test_603_4_intervening_if_true_applies_the_effect(all_cards):
     p2 = PlayerState(name="P2", library=[_bear(f"Other {i}") for i in range(10)])
     game = Game(players=[p1, p2])
     game._initialize_permanent_state(perm, 0, None)
+    game.turn = 2  # an ordinary turn - turn 1 skips the draw (CR 103.8a)
 
     before = len(p1.hand)
     game.resolve_draw_step(0)
@@ -479,6 +480,7 @@ def test_603_4_intervening_if_false_does_nothing(all_cards):
     p2 = PlayerState(name="P2", library=[_bear(f"Other {i}") for i in range(10)])
     game = Game(players=[p1, p2])
     game._initialize_permanent_state(perm, 0, None)
+    game.turn = 2  # an ordinary turn - turn 1 skips the draw (CR 103.8a)
 
     before = len(p1.hand)
     game.resolve_draw_step(0)

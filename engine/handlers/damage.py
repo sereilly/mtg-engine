@@ -61,9 +61,9 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         indices = [i for i in target_perm_idx if isinstance(i, int) and 0 <= i < len(target.battlefield)]
         n = len(indices)
         if n == 0:
-            # No valid creature targets; treat as player damage
-            damage = game._deal_damage_to_player(target, damage, source=card)
-            game.log.append(f"{target.name} took {damage} damage")
+            # CR 608.2b: every chosen creature target is gone, so the spell
+            # does nothing — it must not fall back to damaging the player.
+            game.log.append(f"{card.name}: no remaining legal targets (CR 608.2b)")
             return True, "resolved"
         per_target = damage // n if n > 0 else 0
         for idx in sorted(indices, reverse=True):
@@ -76,7 +76,12 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         # shields can replace (CR 704.5g / 701.15).
         game._destroy_marked_creatures()
         return True, "resolved"
-    if target_perm_idx is not None and isinstance(target_perm_idx, int) and 0 <= target_perm_idx < len(target.battlefield):
+    if isinstance(target_perm_idx, int) and not 0 <= target_perm_idx < len(target.battlefield):
+        # CR 608.2b: a creature was targeted but is no longer on the
+        # battlefield — the spell does nothing rather than hitting the player.
+        game.log.append(f"{card.name}: target creature is gone, no effect (CR 608.2b)")
+        return True, "resolved"
+    if isinstance(target_perm_idx, int):
         # Damage targets a creature permanent, not the player
         target_perm = target.battlefield[target_perm_idx]
         # 115.4: "any target" is limited to creatures, players, planeswalkers, and battles.

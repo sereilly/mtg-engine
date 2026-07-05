@@ -1096,6 +1096,7 @@ def test_howling_mine_draw_step_bonus(all_cards):
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=mine)])
     p2 = PlayerState(name="P2", library=[island, island, island])
     game = Game(players=[p1, p2])
+    game.turn = 2  # an ordinary turn - turn 1 skips the draw (CR 103.8a)
 
     drawn = game.resolve_draw_step(1)
 
@@ -5094,6 +5095,7 @@ def test_island_sanctuary_grants_protection_after_skipping_draw(all_cards):
     p1 = PlayerState(name="P1", hand=[sanctuary], library=[island])
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=grizzly)])
     game = Game(players=[p1, p2])
+    game.turn = 2  # an ordinary turn - turn 1 skips the draw (CR 103.8a)
 
     result = game.cast_from_hand(0, "Island Sanctuary", target_player_index=0)
     assert result.supported

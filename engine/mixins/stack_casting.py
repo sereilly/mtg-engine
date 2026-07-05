@@ -1191,6 +1191,12 @@ class StackCastingMixin:
             resolved_x_value = self._infer_x_value(caster, card.mana_cost, extra_generic_tax, x_color=x_color)
 
         if self.enforce_mana_costs and card.primary_type != "land":
+            # CR 118.6: an object with no mana cost (as opposed to {0}) has an
+            # unpayable cost — attempting to cast it is illegal.
+            if not card.mana_cost.strip():
+                details = f"{card.name} has no mana cost; the cost is unpayable (CR 118.6)"
+                self.log.append(details)
+                return SimulationResult(card.name, False, classification.effect_kind, details)
             cost = self._parse_mana_cost(
                 card.mana_cost, x_value=resolved_x_value, extra_generic=extra_generic_tax, x_color=x_color
             )

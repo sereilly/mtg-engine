@@ -467,3 +467,47 @@ def test_121_1_draw_effect_of_a_spell_draws_from_the_top():
 
     assert [c.name for c in p1.hand] == ["A", "B", "C"]
     assert [c.name for c in p1.library] == ["D"]
+
+
+# ---------------------------------------------------------------------------
+# 400.3 — a stolen permanent's card leaves to its OWNER's zone
+# ---------------------------------------------------------------------------
+
+
+def _steal_setup():
+    """P1 controls a thief source that stole P2's creature (Control Magic
+    shape, recorded via the engine's linked-steal metadata)."""
+    creature = Permanent(card=_mk_creature("Stolen Bear"))
+    thief = Permanent(card=_mk_card("Thief Aura", "Enchantment - Aura", "You control enchanted creature."))
+    p1 = PlayerState(name="P1", battlefield=[thief])
+    p2 = PlayerState(name="P2", battlefield=[creature])
+    game = Game(players=[p1, p2])
+    assert game._take_control_linked(thief, creature, p1)
+    assert creature in p1.battlefield  # now controlled by P1
+    return game, p1, p2, creature
+
+
+@pytest.mark.cr("400.3")
+def test_400_3_stolen_creature_dies_into_owners_graveyard():
+    """A stolen creature that dies goes to its owner's graveyard, not its
+    current controller's (400.3)."""
+    game, p1, p2, creature = _steal_setup()
+
+    game._mark_damage_on_permanent(creature, 10, source=None)
+    game._destroy_marked_creatures()
+
+    assert creature not in p1.battlefield
+    assert all(card.name != "Stolen Bear" for card in p1.graveyard)
+    assert any(card.name == "Stolen Bear" for card in p2.graveyard)
+
+
+@pytest.mark.cr("400.3")
+def test_400_3_stolen_creature_bounces_to_owners_hand():
+    """A stolen creature returned to hand goes to its owner's hand (400.3)."""
+    game, p1, p2, creature = _steal_setup()
+    index = p1.battlefield.index(creature)
+
+    assert game._bounce_target_creature(p1, index)
+
+    assert all(card.name != "Stolen Bear" for card in p1.hand)
+    assert any(card.name == "Stolen Bear" for card in p2.hand)

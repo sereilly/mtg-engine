@@ -570,7 +570,11 @@ class EffectsMixin:
         chosen = pick_target_permanent(target, target_permanent_index)
         if chosen is None:
             return False
-        target.hand.append(chosen.card)
+        # CR 400.3: the card returns to its owner's hand, not its controller's
+        # (they differ when the creature was stolen, e.g. by Control Magic).
+        owner_idx = self.owner_index_of(chosen)
+        owner = self.players[owner_idx] if owner_idx is not None else target
+        owner.hand.append(chosen.card)
         target.battlefield.remove(chosen)
         return True
 
@@ -580,8 +584,12 @@ class EffectsMixin:
         chosen = pick_target_permanent(caster, chosen_index)
         if chosen is None:
             return None
+        # CR 400.3: a sacrificed stolen creature's card still goes to its
+        # owner's graveyard. Resolve the owner before leaving the battlefield.
+        owner_idx = self.owner_index_of(chosen)
+        owner = self.players[owner_idx] if owner_idx is not None else caster
         caster.battlefield.remove(chosen)
-        caster.graveyard.append(chosen.card)
+        owner.graveyard.append(chosen.card)
         return chosen.card
 
     def _apply_color_override(
