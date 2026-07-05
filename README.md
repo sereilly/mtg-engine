@@ -1,9 +1,6 @@
 # MTG Simulacrum
 
-A text-based Magic: The Gathering rules engine with a browser game UI (FastAPI + canvas board). The card pool lives in `cards/`, one JSON per set:
-
-- **Limited Edition Alpha** (`cards/LEA_cards.json`) — all 290 cards supported and covered by per-card simulation tests
-- **Arabian Nights** (`cards/ARN_cards.json`) — all 78 cards supported
+A text-based Magic: The Gathering rules engine with a browser game UI (FastAPI + canvas board). The card pool lives in `cards/`, one JSON per set. See SET_PROGRESS.md for a list of implemented sets.
 
 Games can be played human vs AI, AI vs AI, human vs human over LAN, or 3–4 player free-for-all.
 

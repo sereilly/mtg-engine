@@ -6,8 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **MTG Simulacrum** — a text-based **Magic: The Gathering rules engine** plus a
 FastAPI web app with a browser game UI. The card pool lives in `cards/` as one
-JSON per set: Limited Edition Alpha (`LEA_cards.json`, 290 cards) and Arabian
-Nights (`ARN_cards.json`, 78 cards), all classified as supported. The engine is
+JSON per set: Limited Edition Alpha (`LEA_cards.json`, 290 cards), Limited
+Edition Beta (`LEB_cards.json`, 292 cards), Unlimited Edition
+(`2ED_cards.json`, 292 cards — same list as Beta), and Arabian Nights
+(`ARN_cards.json`, 78 cards), all classified as supported. The engine is
 **registry-based**: card support grows by adding small isolated entries, never
 by editing core control flow.
 
@@ -152,8 +154,9 @@ touching anything that consumes randomness.
 ## Web layer
 
 `web/app.py` is the FastAPI app (`/api/...` routes + static UI in `web/static/`).
-The card pool is `CARD_PATHS` (a list of set JSONs, today `cards/LEA_cards.json`
-+ `cards/ARN_cards.json`) loaded once into `CARD_CATALOG` at process startup —
+The card pool is `CARD_PATHS` (a list of set JSONs in printing order — today
+LEA, LEB, 2ED, ARN; reprints dedupe by name, first printing wins) loaded once
+into `CARD_CATALOG` at process startup —
 adding a set means appending its JSON path there. State lives in in-memory stores: `session_store.py`
 (games; takes the loaded catalog, not a path — never re-reads the JSON per
 session), `deck_store.py` (decks, incl. Moxfield import), `verification_store.py`.

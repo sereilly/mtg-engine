@@ -57,11 +57,15 @@ from .verification_store import VerificationStore
 
 ROOT = Path(__file__).resolve().parent.parent
 CARDS_PATH = ROOT / "cards" / "LEA_cards.json"
+BETA_PATH = ROOT / "cards" / "LEB_cards.json"
+UNLIMITED_PATH = ROOT / "cards" / "2ED_cards.json"
 ARABIAN_NIGHTS_PATH = ROOT / "cards" / "ARN_cards.json"
 # Every set JSON that makes up the card pool, in printing order. Adding a new
 # set is appending its JSON path here — CARD_CATALOG and every store below
-# derive from this one list, loaded once at process startup.
-CARD_PATHS = [CARDS_PATH, ARABIAN_NIGHTS_PATH]
+# derive from this one list, loaded once at process startup. Reprints dedupe
+# by name (first printing wins), so Beta/Unlimited contribute only their two
+# cards missing from Alpha.
+CARD_PATHS = [CARDS_PATH, BETA_PATH, UNLIMITED_PATH, ARABIAN_NIGHTS_PATH]
 DECKS_DIR = ROOT / "decks"
 VERIFICATION_PATH = ROOT / "card_verification.json"
 VERIFICATION_MD_PATH = ROOT / "CARD_VERIFICATION.md"

@@ -33,6 +33,35 @@ def cards(all_cards):
 
 
 @pytest.fixture(scope="session")
+def leb_path() -> Path:
+    return Path(__file__).resolve().parent.parent / "cards" / "LEB_cards.json"
+
+
+@pytest.fixture(scope="session")
+def unlimited_path() -> Path:
+    return Path(__file__).resolve().parent.parent / "cards" / "2ED_cards.json"
+
+
+@pytest.fixture(scope="session")
+def leb_cards(leb_path):
+    """Limited Edition Beta cards, kept separate from all_cards/cards (the LEA
+    pool) — Beta is Alpha plus its two missing cards, so mixing it into the
+    LEA fixtures would silently double most lookups."""
+    return load_cards(leb_path)
+
+
+@pytest.fixture(scope="session")
+def leb_by_name(leb_cards):
+    return {c.name: c for c in leb_cards}
+
+
+@pytest.fixture(scope="session")
+def unlimited_cards(unlimited_path):
+    """Unlimited Edition cards — the same card list as Beta, reprinted."""
+    return load_cards(unlimited_path)
+
+
+@pytest.fixture(scope="session")
 def arn_path() -> Path:
     return Path(__file__).resolve().parent.parent / "cards" / "ARN_cards.json"
 
