@@ -70,6 +70,17 @@ def target_gains_x_life(text: str, activated: bool) -> RuleResult:
     return None
 
 
+# Diamond Valley: "{T}, Sacrifice a creature: You gain life equal to the
+# sacrificed creature's toughness." The sacrifice itself is resolved by the
+# handler (matching how Sacrifice / sacrifice_creature_for_black_mana already
+# fold a "sacrifice a creature" cost clause into effect resolution).
+@parse_rule(79800)
+def sacrifice_creature_gain_life_by_toughness(text: str, activated: bool) -> RuleResult:
+    if activated and "gain life equal to the sacrificed creature's toughness" in text:
+        return _instruction("sacrifice_creature_gain_life_by_toughness"), "activated_gain_life"
+    return None
+
+
 @parse_rule(80000)
 def target_gains_n_life(text: str, activated: bool) -> RuleResult:
     if "gain" in text and "life" in text:

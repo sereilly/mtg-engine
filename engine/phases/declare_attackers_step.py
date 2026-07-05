@@ -122,6 +122,7 @@ class DeclareAttackersStepMixin:
             self.log.append(f"{controller.name} declared {len(validated_bands)} band(s)")
         if unique_indices:
             self._fire_attack_triggers(controller_index)
+            self._fire_creature_attacks_triggers(controller_index, unique_indices)
         # CR 508.4: once attackers have been declared (the turn-based action of the
         # declare attackers step), the active player receives priority.
         self.start_priority_window(self.active_player_index)
@@ -189,6 +190,39 @@ class DeclareAttackersStepMixin:
                         caster_index=controller_index,
                         target_player_index=target_index,
                         target_permanent_index=None,
+                        x_value=None,
+                        ability_instruction=trig.instruction,
+                        ability_effect_kind=trig.effect_kind,
+                        source_permanent=permanent,
+                        ability_text=trig.source_line,
+                    )
+                )
+                self.log.append(f"{permanent.card.name} triggered on attack (added to stack)")
+
+    def _fire_creature_attacks_triggers(self, controller_index: int, attacker_indices: list[int]) -> None:
+        """Put each attacker's own "whenever this creature attacks" triggers on
+        the stack (e.g. Mijae Djinn's coin flip) — one per attacking creature
+        that has the trigger, unlike _fire_attack_triggers' once-per-declaration
+        team-wide version."""
+        from ..game_types import StackItem
+
+        controller = self.players[controller_index]
+        for idx in attacker_indices:
+            if not (0 <= idx < len(controller.battlefield)):
+                continue
+            permanent = controller.battlefield[idx]
+            for trig in matching_triggers(
+                permanent.effective_card, condition_kinds={"creature_attacks"}
+            ):
+                self.stack.append(
+                    StackItem(
+                        card=permanent.card,
+                        caster_index=controller_index,
+                        # The attacker's own controller/index, so the coin-flip
+                        # handler can remove IT from combat without re-deriving
+                        # who owns it.
+                        target_player_index=controller_index,
+                        target_permanent_index=idx,
                         x_value=None,
                         ability_instruction=trig.instruction,
                         ability_effect_kind=trig.effect_kind,

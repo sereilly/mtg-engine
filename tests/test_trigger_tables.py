@@ -43,6 +43,7 @@ EXAMPLE_TEXTS: dict[str, str] = {
     "creature_dealt_damage": "whenever this creature is dealt damage",
     "creature_dealt_damage_by_self_dies": "whenever a creature dealt damage by this creature this turn dies",
     "enchanted_land_tapped": "whenever enchanted land becomes tapped",
+    "self_becomes_tapped": "whenever this land becomes tapped",
     "land_tapped_for_mana": "whenever a player taps a land for mana",
     "spell_cast": "whenever a player casts a spell",
     "opponent_casts_spell": "whenever an opponent casts a spell",
@@ -61,6 +62,7 @@ EXAMPLE_TEXTS: dict[str, str] = {
     "you_gain_life": "when you gain life",
     "becomes_target": "when this creature becomes the target of a spell",
     "no_islands": "when you control no islands",
+    "no_lands": "when you control no lands",
     # at
     "upkeep_self": "at the beginning of your upkeep",
     "upkeep_each": "at the beginning of each upkeep",

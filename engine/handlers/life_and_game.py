@@ -101,10 +101,67 @@ def target_gains_life(game: Game, instruction: OracleInstruction, context: Oracl
     return True, "resolved"
 
 
+@effect_handler("gain_life_equal_to_damage_dealt")
+def gain_life_equal_to_damage_dealt(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """El-Hajjaj: "Whenever this creature deals damage, you gain that much
+    life." The amount is threaded through trigger_context by
+    _fire_combat_damage_to_player_triggers (the trigger has no static payload
+    of its own — the life gained depends on what actually happened)."""
+    caster = context.caster
+    card = context.card
+    tctx = context.trigger_context or {}
+    amount = int(tctx.get("amount", 0))
+    if amount > 0:
+        game._gain_life(caster, amount, card.name)
+    return True, "resolved"
+
+
+@effect_handler("arm_draw_step_life_loss_unless_pay")
+def arm_draw_step_life_loss_unless_pay(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Nafs Asp: "that player loses 1 life at the beginning of their next draw
+    step unless they pay {1} before that draw step." The victim (not Nafs
+    Asp's controller) is the one who owes the obligation, captured in
+    trigger_context by _fire_combat_damage_to_player_triggers."""
+    card = context.card
+    tctx = context.trigger_context or {}
+    idx = tctx.get("defending_player_index")
+    if not (isinstance(idx, int) and 0 <= idx < len(game.players)):
+        return True, "resolved"
+    game.pending_draw_step_life_loss.append({
+        "player_index": idx,
+        "amount": int(instruction.payload.get("amount", 1)),
+        "cost": int(instruction.payload.get("cost", 1)),
+        "source_name": card.name,
+    })
+    game.log.append(
+        f"{game.players[idx].name} will lose {instruction.payload.get('amount', 1)} life at their next draw "
+        f"step unless they pay {{{instruction.payload.get('cost', 1)}}} ({card.name})"
+    )
+    return True, "resolved"
+
+
 @effect_handler("grant_extra_turn")
 def grant_extra_turn(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     caster = context.caster
     caster_index = game.players.index(caster)
     game.add_extra_turn(caster_index)
     game.log.append(f"{caster.name} gained an extra turn")
+    return True, "resolved"
+
+
+@effect_handler("sacrifice_creature_gain_life_by_toughness")
+def sacrifice_creature_gain_life_by_toughness(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Diamond Valley: sacrifice one of the caster's own creatures, then gain
+    life equal to the toughness it had. Reuses the same "sacrifice a creature"
+    resolution helper as the Sacrifice card / sacrifice_creature_for_black_mana."""
+    caster = context.caster
+    card = context.card
+    chosen = context.target_permanent_index if isinstance(context.target_permanent_index, int) else None
+    sacrificed = game._sacrifice_creature_for_mana(caster, chosen_index=chosen)
+    if sacrificed is None:
+        game.log.append(f"{caster.name} had no creature to sacrifice")
+        return True, "resolved"
+    raw_toughness = str(sacrificed.raw.get("toughness", "0"))
+    toughness = int(raw_toughness) if raw_toughness.isdigit() else 0
+    game._gain_life(caster, toughness, card.name)
     return True, "resolved"

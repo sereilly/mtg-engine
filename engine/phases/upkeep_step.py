@@ -9,6 +9,7 @@ enchant-land upkeep effects, and graveyard-recursion upkeep triggers.
 
 import re
 
+from ..handlers._common import permanent_effective_colors
 from ..models import Permanent
 from ..oracle import OracleInstruction, compile_card_oracle
 from ..trigger_utils import iter_triggered_abilities, matching_triggers
@@ -282,6 +283,14 @@ class UpkeepStepMixin:
         self._set_phase_and_step(phase, step)
         self._on_step_or_phase_begin(phase, step)
         self._process_mire_cleanups(player_index)
+        # Erhnam Djinn: a granted forestwalk (or similar) lasting "until your
+        # next upkeep" expires now, at the start of that same upkeep, before
+        # this turn's own upkeep triggers (which might grant a fresh one) run.
+        for owner in self.players:
+            for perm in owner.battlefield:
+                if perm.metadata.get("forestwalk_until_next_upkeep_of") == player_index:
+                    perm.metadata.pop("has_forestwalk", None)
+                    perm.metadata.pop("forestwalk_until_next_upkeep_of", None)
         # Non-interactive "at the beginning of upkeep" triggers (fixed upkeep damage)
         # are collected here and put on the stack (CR 603.3); they resolve through the
         # upkeep priority window. The pay-or-consequence triggers below stay inline
@@ -342,6 +351,34 @@ class UpkeepStepMixin:
                         _enqueue_upkeep_damage(
                             permanent, self.players.index(controller), player_index, amount, trig.source_line
                         )
+                        break
+
+                    if cond == "upkeep_each" and kind == "upkeep_pay_per_creature_untap_color":
+                        # Magnetic Mountain: "that player" is whoever's upkeep
+                        # is currently resolving (player_index), not this
+                        # enchantment's controller. No interactive per-creature
+                        # selection channel exists, so as many affordable
+                        # tapped creatures of the color are untapped as
+                        # possible (greedy, battlefield order) — not an
+                        # all-or-nothing simplification.
+                        color = str(trig.instruction.payload.get("color", ""))
+                        cost_per = int(trig.instruction.payload.get("cost_per", 0))
+                        victim = self.players[player_index]
+                        untapped_names = []
+                        for perm in victim.battlefield:
+                            if not (perm.is_creature and perm.tapped):
+                                continue
+                            if color not in permanent_effective_colors(perm):
+                                continue
+                            if not self.can_pay_upkeep_mana(victim, {"generic": cost_per}):
+                                continue
+                            self._spend_upkeep_mana(victim, {"generic": cost_per})
+                            perm.tapped = False
+                            untapped_names.append(perm.card.name)
+                        if untapped_names:
+                            self.log.append(
+                                f"{victim.name} paid to untap {', '.join(untapped_names)} ({permanent.card.name})"
+                            )
                         break
 
                     if cond == "upkeep_each" and kind == "deal_damage_equal_to_swamps":
@@ -494,6 +531,75 @@ class UpkeepStepMixin:
                                     controller.graveyard.append(removed.card)
                                     self.log.append(f"{permanent.card.name} forced sacrifice of {removed.card.name}")
                                     break
+                        break
+
+                    if cond == "upkeep_self" and kind == "upkeep_sacrifice_land_conditional_damage":
+                        # Serendib Djinn: "Sacrifice a land. If you sacrifice an
+                        # Island this way, this creature deals 3 damage to you."
+                        # No choice is modeled for which land (matching the
+                        # existing Demonic-Hordes-style forced-land-sacrifice
+                        # precedent above) — the first land is sacrificed.
+                        land_type = str(trig.instruction.payload.get("land_type", "")).lower()
+                        damage_amt = int(trig.instruction.payload.get("damage", 0))
+                        for idx, land in enumerate(controller.battlefield):
+                            if land.card.primary_type != "land":
+                                continue
+                            removed = controller.battlefield.pop(idx)
+                            controller.graveyard.append(removed.card)
+                            self.log.append(f"{permanent.card.name} forced sacrifice of {removed.card.name}")
+                            was_matching_type = (
+                                land_type in removed.card.type_line.lower()
+                                or land.metadata.get("land_type_override") == land_type
+                            )
+                            if was_matching_type:
+                                dealt = self._deal_damage_to_player(controller, damage_amt, source=permanent)
+                                self.log.append(f"{permanent.card.name} dealt {dealt} damage to {controller.name}")
+                            break
+                        break
+
+                    if cond == "upkeep_self" and kind == "grant_forestwalk_until_next_upkeep":
+                        # Erhnam Djinn: no interactive target-choice channel
+                        # exists for upkeep triggers yet, so the first legal
+                        # non-Wall creature an opponent controls is chosen
+                        # (matching the deterministic-fallback precedent used
+                        # throughout this engine for untargeted resolution).
+                        target_perm = next(
+                            (
+                                perm
+                                for opponent in self.players
+                                if opponent is not controller
+                                for perm in opponent.battlefield
+                                if perm.is_creature and "wall" not in perm.effective_card.type_line.lower()
+                            ),
+                            None,
+                        )
+                        if target_perm is not None:
+                            target_perm.metadata["has_forestwalk"] = True
+                            target_perm.metadata["forestwalk_until_next_upkeep_of"] = self.players.index(controller)
+                            self.log.append(
+                                f"{permanent.card.name} grants {target_perm.card.name} forestwalk until {controller.name}'s next upkeep"
+                            )
+                        break
+
+                    if cond == "upkeep_self" and kind == "upkeep_most_life_gains_control":
+                        # Ghazbân Ogre: control passes to whichever player has
+                        # STRICTLY more life than every other (a tie for the
+                        # lead means no change). Living players only (CR
+                        # 800.4a: a player who's left the game has no life
+                        # total to compare).
+                        living = [p for p in self.players if not p.lost]
+                        sole_leader = None
+                        if living:
+                            top_life = max(p.life for p in living)
+                            leaders = [p for p in living if p.life == top_life]
+                            if len(leaders) == 1:
+                                sole_leader = leaders[0]
+                        if sole_leader is not None and sole_leader is not controller:
+                            controller.battlefield.remove(permanent)
+                            sole_leader.battlefield.append(permanent)
+                            self.log.append(
+                                f"{sole_leader.name} gains control of {permanent.card.name} (most life)"
+                            )
                         break
 
                     if cond == "upkeep_self" and kind == "upkeep_sacrifice_other_creature_or_deal_damage":

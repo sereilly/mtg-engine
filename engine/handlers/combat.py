@@ -12,6 +12,53 @@ if TYPE_CHECKING:
     from ..oracle import OracleInstruction
 
 
+@effect_handler("coin_flip_remove_attacker_and_tap")
+def coin_flip_remove_attacker_and_tap(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Mijae Djinn: "Whenever this creature attacks, flip a coin. If you lose
+    the flip, remove this creature from combat and tap it." Fired per-attacker
+    by _fire_creature_attacks_triggers, which threads the attacker's own
+    controller/index through target_player_index/target_permanent_index."""
+    card = context.card
+    controller = context.target
+    idx = context.target_permanent_index
+    if controller is None or not isinstance(idx, int) or not (0 <= idx < len(controller.battlefield)):
+        return True, "resolved"
+    won = random.random() < 0.5
+    if won:
+        game.log.append(f"{card.name} won the coin flip")
+        return True, "resolved"
+    permanent = controller.battlefield[idx]
+    game.combat_attackers.pop(idx, None)
+    game.combat_bands = [band for band in game.combat_bands if idx not in band]
+    permanent.tapped = True
+    game.log.append(f"{card.name} lost the coin flip: removed from combat and tapped")
+    return True, "resolved"
+
+
+@effect_handler("coin_flip_remove_blocker")
+def coin_flip_remove_blocker(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Ydwen Efreet: "Whenever this creature blocks, flip a coin. If you lose
+    the flip, remove this creature from combat and it can't block this turn.
+    Creatures it was blocking that had become blocked by only this creature
+    this combat become unblocked." Fired per-blocker by
+    _fire_creature_blocks_triggers. "Can't block this turn" needs no extra
+    flag: this engine only declares blockers once per combat, so removal
+    already prevents it from blocking again."""
+    card = context.card
+    controller = context.target
+    idx = context.target_permanent_index
+    if controller is None or not isinstance(idx, int) or not (0 <= idx < len(controller.battlefield)):
+        return True, "resolved"
+    won = random.random() < 0.5
+    if won:
+        game.log.append(f"{card.name} won the coin flip")
+        return True, "resolved"
+    controller_index = game.players.index(controller)
+    game._remove_blocker_from_combat(controller_index, idx)
+    game.log.append(f"{card.name} lost the coin flip: removed from combat")
+    return True, "resolved"
+
+
 @effect_handler("delayed_destroy_blocked_or_blocker")
 def delayed_destroy_blocked_or_blocker(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Resolve Cockatrice / Thicket Basilisk's block trigger (Rule 509.2a).
@@ -87,28 +134,7 @@ def remove_creature_from_combat(game: Game, instruction: OracleInstruction, cont
     # blocker and unblock any attacker whose only blocker it was. combat_blockers is
     # nested by defender (CR 802), so look up this defender's own blocker entries.
     target_player_index = game.players.index(target)
-    own_blocker_map = game.combat_blockers.get(target_player_index, {})
-    if removed_index in own_blocker_map:
-        freed_attackers = list(own_blocker_map.get(removed_index, []))
-        own_blocker_map.pop(removed_index, None)
-        if own_blocker_map:
-            game.combat_blockers[target_player_index] = own_blocker_map
-        else:
-            game.combat_blockers.pop(target_player_index, None)
-        game.combat_band_blocks.pop(removed_index, None)
-        removed.blocking_attacker_controller = None
-        removed.blocking_attacker_index = None
-        active = game.players[game.active_player_index]
-        for a_idx in freed_attackers:
-            still_blocked = any(
-                a_idx in atks
-                for blocker_map in game.combat_blockers.values()
-                for atks in blocker_map.values()
-            )
-            if not still_blocked and 0 <= a_idx < len(active.battlefield):
-                active.battlefield[a_idx].blocked = False
-        # CR 702.22h: band block propagation is recomputed from combat_blockers.
-        game._apply_band_block_propagation()
+    game._remove_blocker_from_combat(target_player_index, removed_index)
 
     game.log.append(f"{card.name} removed {removed.card.name} from combat")
     return True, "resolved"

@@ -177,19 +177,28 @@ class GameHelpersMixin:
             attached.metadata.pop("attached_aura", None)
         # Control effects (Control Magic, Steal Artifact) revert when the Aura leaves
         # — return the stolen permanent to its original controller (CR 611.3 / 805.4a).
-        stolen = aura.metadata.get("stolen_permanent")
-        owner_index = aura.metadata.get("stolen_owner_index")
-        if stolen is not None and isinstance(owner_index, int) and 0 <= owner_index < len(self.players):
-            for player in self.players:
-                if stolen in player.battlefield:
-                    if player is not self.players[owner_index]:
-                        player.battlefield.remove(stolen)
-                        self.players[owner_index].battlefield.append(stolen)
-                        self.log.append(
-                            f"{stolen.card.name} returns to {self.players[owner_index].name}'s control "
-                            f"({aura.card.name} left the battlefield)"
-                        )
-                    break
+        self._revert_stolen_permanent(aura)
+
+    def _revert_stolen_permanent(self, source: Permanent) -> None:
+        """Return whatever *source* stole (via ``stolen_permanent``/
+        ``stolen_owner_index`` metadata) to its original controller. Shared by
+        Aura-based control effects (Control Magic, Steal Artifact — reverted
+        when the Aura leaves) and Aladdin's linked-duration ability (reverted
+        by the ON_LEAVE_BATTLEFIELD hook when Aladdin itself leaves)."""
+        stolen = source.metadata.get("stolen_permanent")
+        owner_index = source.metadata.get("stolen_owner_index")
+        if stolen is None or not (isinstance(owner_index, int) and 0 <= owner_index < len(self.players)):
+            return
+        for player in self.players:
+            if stolen in player.battlefield:
+                if player is not self.players[owner_index]:
+                    player.battlefield.remove(stolen)
+                    self.players[owner_index].battlefield.append(stolen)
+                    self.log.append(
+                        f"{stolen.card.name} returns to {self.players[owner_index].name}'s control "
+                        f"({source.card.name} left the battlefield)"
+                    )
+                break
 
     def _permanent_to_graveyard(self, player: PlayerState, permanent: Permanent) -> None:
         """Move a permanent to the graveyard. Tokens (704.5d) cease to exist instead."""
@@ -217,6 +226,31 @@ class GameHelpersMixin:
                 player.life -= loss
                 self.log.append(
                     f"{permanent.card.name} died: {player.name} loses {loss} life (half, rounded up)"
+                )
+            # Rukh Egg: "When this creature dies, create a 4/4 red Bird
+            # creature token with flying at the beginning of the next end
+            # step." The source is gone by the time the token appears, so the
+            # obligation is queued at the Game level (pending_end_step_tokens)
+            # rather than tracked on the permanent, matching how "dies"
+            # triggers are handled inline rather than via the stack.
+            arm_trig = next(matching_triggers(
+                permanent.effective_card,
+                condition_kinds={"dies"},
+                instruction_kinds={"arm_end_step_token"},
+            ), None)
+            if arm_trig is not None:
+                payload = arm_trig.instruction.payload
+                self.pending_end_step_tokens.append({
+                    "controller_index": self.players.index(player),
+                    "name": payload.get("name", "Token"),
+                    "power": int(payload.get("power", 1)),
+                    "toughness": int(payload.get("toughness", 1)),
+                    "type_line": payload.get("type_line", "Creature — Token"),
+                    "colors": tuple(payload.get("colors") or ()),
+                    "keywords": tuple(payload.get("keywords") or ()),
+                })
+                self.log.append(
+                    f"{permanent.card.name}: a {payload.get('name', 'token')} will appear at the next end step"
                 )
         text = permanent.card.oracle_text.lower()
         if (

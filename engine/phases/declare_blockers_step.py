@@ -26,6 +26,7 @@ _LANDWALK_TO_LAND_TYPE = {
     "swampwalk": "swamp",
     "mountainwalk": "mountain",
     "forestwalk": "forest",
+    "desertwalk": "desert",
 }
 
 
@@ -158,6 +159,7 @@ class DeclareBlockersStepMixin:
         self.log.append(f"{defender.name} declared {len(assignments)} blocker(s)")
         # 509.1i / 509.2a: abilities that trigger on blockers being declared fire now.
         self._fire_block_triggers(controller_index)
+        self._fire_creature_blocks_triggers(controller_index, assignments)
         self._apply_rampage_and_flanking(controller_index)
         # CR 509.4/802.4: once every defending player has declared, the active
         # player receives priority.
@@ -436,6 +438,39 @@ class DeclareBlockersStepMixin:
                     self.combat_band_blocks[member] = extra
                 active.battlefield[member].blocked = True
 
+    def _remove_blocker_from_combat(self, defender_player_index: int, blocker_index: int) -> None:
+        """Take a creature out of combat as a blocker (CR 702.22f-style
+        cleanup, but for the blocking side): drop it from ``combat_blockers``
+        and unblock any attacker whose only blocker it was. Shared by False
+        Orders' "remove target creature ... from combat" and Ydwen Efreet's
+        "remove this creature from combat" (coin-flip block-fail)."""
+        own_blocker_map = self.combat_blockers.get(defender_player_index, {})
+        if blocker_index not in own_blocker_map:
+            return
+        freed_attackers = list(own_blocker_map.get(blocker_index, []))
+        own_blocker_map.pop(blocker_index, None)
+        if own_blocker_map:
+            self.combat_blockers[defender_player_index] = own_blocker_map
+        else:
+            self.combat_blockers.pop(defender_player_index, None)
+        self.combat_band_blocks.pop(blocker_index, None)
+        defender = self.players[defender_player_index]
+        if 0 <= blocker_index < len(defender.battlefield):
+            removed = defender.battlefield[blocker_index]
+            removed.blocking_attacker_controller = None
+            removed.blocking_attacker_index = None
+        active = self.players[self.active_player_index]
+        for a_idx in freed_attackers:
+            still_blocked = any(
+                a_idx in atks
+                for blocker_map in self.combat_blockers.values()
+                for atks in blocker_map.values()
+            )
+            if not still_blocked and 0 <= a_idx < len(active.battlefield):
+                active.battlefield[a_idx].blocked = False
+        # CR 702.22h: band block propagation is recomputed from combat_blockers.
+        self._apply_band_block_propagation()
+
     def _fire_block_triggers(self, controller_index: int) -> None:
         """Put abilities that trigger on blockers being declared onto the stack.
 
@@ -528,6 +563,41 @@ class DeclareBlockersStepMixin:
                         controller_index,
                         blocker_idx,
                     )
+
+    def _fire_creature_blocks_triggers(self, controller_index: int, assignments: dict[int, list[int]]) -> None:
+        """Put each blocker's own "whenever this creature blocks" triggers on
+        the stack (e.g. Ydwen Efreet's coin flip) — once per blocking
+        creature declared this call, regardless of how many attackers it
+        blocks (unlike Cockatrice's per-attacker-blocked firing)."""
+        if controller_index < 0 or controller_index >= len(self.players):
+            return
+        from ..game_types import StackItem
+
+        defender = self.players[controller_index]
+        for blocker_idx in assignments:
+            if not (0 <= blocker_idx < len(defender.battlefield)):
+                continue
+            blocker = defender.battlefield[blocker_idx]
+            for trig in matching_triggers(
+                blocker.effective_card, condition_kinds={"creature_blocks"}
+            ):
+                self.stack.append(
+                    StackItem(
+                        card=blocker.card,
+                        caster_index=controller_index,
+                        # The blocker's own controller/index, so the coin-flip
+                        # handler can remove IT from combat without re-deriving
+                        # who owns it.
+                        target_player_index=controller_index,
+                        target_permanent_index=blocker_idx,
+                        x_value=None,
+                        ability_instruction=trig.instruction,
+                        ability_effect_kind=trig.effect_kind,
+                        source_permanent=blocker,
+                        ability_text=trig.source_line,
+                    )
+                )
+                self.log.append(f"{blocker.card.name} triggered on block (added to stack)")
 
     def _apply_temporary_buff(self, permanent: Permanent, power: int, toughness: int) -> None:
         """Apply an "until end of turn" P/T change that the cleanup step reverts."""

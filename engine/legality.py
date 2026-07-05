@@ -314,10 +314,32 @@ def _activated_requires_creature(card: CardDefinition) -> bool:
         if "damage to target creature" in line:
             return True
         # Catch-all for any other "target creature" ability (Dwarven Warriors'
-        # "target creature ... can't be blocked", etc.).
-        if "target creature" in line:
+        # "target creature ... can't be blocked", etc.). "target attacking
+        # creature" (Singing Tree) doesn't contain "target creature" as a
+        # contiguous substring, so it needs its own check.
+        if "target creature" in line or "target attacking creature" in line:
             return True
     return False
+
+
+def _activated_requires_attacking_creature(card: CardDefinition) -> bool:
+    """Singing Tree: "Target attacking creature has base power 0 until end
+    of turn." — restricts legal targets to currently-attacking creatures."""
+    return any("target attacking creature" in line for line in _activated_lines(card))
+
+
+def _activated_requires_flying_creature(card: CardDefinition) -> bool:
+    """Island of Wak-Wak: "Target creature with flying has base power 0
+    until end of turn." — restricts legal targets to fliers."""
+    return any("target creature with flying" in line for line in _activated_lines(card))
+
+
+def _activated_requires_sacrifice_creature(card: CardDefinition) -> bool:
+    """Diamond Valley: "{T}, Sacrifice a creature: …" — the "creature" chosen
+    is the caster's own, sacrificed as (part of) the cost, mirroring the
+    cast-side "as an additional cost to cast this spell, sacrifice a
+    creature" handling."""
+    return any("sacrifice a creature" in line for line in _activated_lines(card))
 
 
 def _activated_requires_permanent(card: CardDefinition) -> bool:
@@ -367,6 +389,8 @@ _FILTERABLE_ABILITY_KINDS = {
     "mark_non_wall_target_to_attack",
     "grant_flying_and_delayed_destruction",
     "grant_unblockable_to_low_power_target",
+    "set_base_pt_target_until_eot",
+    "steal_creature_while_tapped_and_weaker",
 }
 
 
@@ -408,6 +432,15 @@ def _classify_activation(card: CardDefinition) -> dict:
     if _activated_requires_source_and_creature(card):
         # Before the generic creature check, which would otherwise swallow it.
         return {"kind": "creature", "requires_source": True}
+    if _activated_requires_attacking_creature(card):
+        # Before the generic creature check, which would otherwise swallow it.
+        return {"kind": "creature", "attacking_only": True}
+    if _activated_requires_flying_creature(card):
+        # Before the generic creature check, which would otherwise swallow it.
+        return {"kind": "creature", "flying_only": True}
+    if _activated_requires_sacrifice_creature(card):
+        # Before the generic creature check, which would otherwise swallow it.
+        return {"kind": "creature", "own_only": True}
     if _activated_requires_creature(card):
         return {"kind": "creature"}
     if _activated_requires_permanent(card):
@@ -671,6 +704,14 @@ class LegalityMixin:
             if source_permanent is not None and perm.effective_toughness >= source_permanent.effective_power:
                 return False
             return perm.is_creature
+        if instruction.kind == "set_base_pt_target_until_eot" and instruction.payload.get("exclude_self"):
+            # Sorceress Queen: "Target creature other than this creature."
+            return source_permanent is None or perm is not source_permanent
+        if instruction.kind == "steal_creature_while_tapped_and_weaker":
+            # Old Man of the Sea: only creatures at or below its own power.
+            if not perm.is_creature:
+                return False
+            return source_permanent is None or perm.effective_power <= source_permanent.effective_power
         return True
 
     def _permanent_matches_target_kind(self, perm: Permanent, kind: str, spec: dict, casting_aura: bool) -> bool:
@@ -695,9 +736,20 @@ class LegalityMixin:
             # Forcefield: only unblocked attacking creatures are legal choices.
             if spec.get("unblocked_attacker") and not (perm.attacking and not perm.blocked):
                 return False
+            # Singing Tree: only currently-attacking creatures are legal choices.
+            if spec.get("attacking_only") and not perm.attacking:
+                return False
+            # Island of Wak-Wak: only flying creatures are legal choices.
+            if spec.get("flying_only") and not self._has_keyword(perm, "flying"):
+                return False
             return True
         if kind == "artifact":
-            return "artifact" in type_line
+            if "artifact" not in type_line:
+                return False
+            # Guardian Beast: noncreature artifacts it protects can't be enchanted.
+            if casting_aura and self._untapped_artifact_protector_active(perm):
+                return False
+            return True
         if kind == "land":
             if perm.card.primary_type != "land":
                 return False

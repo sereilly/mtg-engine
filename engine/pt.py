@@ -29,15 +29,19 @@ if TYPE_CHECKING:
     from .models import Permanent
 
 
-def set_base_pt(perm: Permanent, power: int, toughness: int, *, until_eot: bool = False) -> None:
-    """Layer 7a/7b: set base power/toughness ("becomes 0/2", CDAs, animation).
-    7c modifications still apply on top of the new base."""
-    if until_eot:
-        perm.metadata["absolute_power_until_eot"] = int(power)
-        perm.metadata["absolute_toughness_until_eot"] = int(toughness)
-    else:
-        perm.metadata["absolute_power"] = int(power)
-        perm.metadata["absolute_toughness"] = int(toughness)
+def set_base_pt(
+    perm: Permanent, power: int | None, toughness: int | None, *, until_eot: bool = False
+) -> None:
+    """Layer 7a/7b: set base power and/or toughness ("becomes 0/2", CDAs,
+    animation). Pass None for a stat to leave it untouched — Singing Tree's
+    "has base power 0 until end of turn" sets only power, letting toughness
+    keep tracking whatever else applies. 7c modifications still apply on top
+    of the new base."""
+    suffix = "_until_eot" if until_eot else ""
+    if power is not None:
+        perm.metadata[f"absolute_power{suffix}"] = int(power)
+    if toughness is not None:
+        perm.metadata[f"absolute_toughness{suffix}"] = int(toughness)
 
 
 def clear_base_pt(perm: Permanent, *, until_eot: bool = False) -> None:

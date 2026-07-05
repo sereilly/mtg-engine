@@ -105,8 +105,10 @@ class GameEndingMixin:
                 changed = True
 
             # State trigger: "When you control no Islands, sacrifice this creature"
-            # (Sea Serpent). Modeled alongside SBAs so it fires immediately when the
-            # last Island leaves, not only at the next upkeep (CR 603.8).
+            # (Sea Serpent) / "When you control no lands, sacrifice this creature"
+            # (Serendib Djinn, Island Fish Jasconius already covered by no_islands).
+            # Modeled alongside SBAs so it fires immediately when the last
+            # matching land leaves, not only at the next upkeep (CR 603.8).
             for player in self.players:
                 survivors_ss: list[Permanent] = []
                 for perm in player.battlefield:
@@ -115,20 +117,79 @@ class GameEndingMixin:
                         condition_kinds={"no_islands"},
                         instruction_kinds={"sacrifice_self"},
                     ), None) is not None
-                    if needs_island and not any(
+                    needs_any_land = next(matching_triggers(
+                        perm.effective_card,
+                        condition_kinds={"no_lands"},
+                        instruction_kinds={"sacrifice_self"},
+                    ), None) is not None
+                    controls_island = any(
                         p.card.primary_type == "land"
                         and (
                             "island" in p.card.type_line.lower()
                             or p.metadata.get("land_type_override") == "island"
                         )
                         for p in player.battlefield
-                    ):
+                    )
+                    controls_any_land = any(p.card.primary_type == "land" for p in player.battlefield)
+                    if (needs_island and not controls_island) or (needs_any_land and not controls_any_land):
                         self._permanent_to_graveyard(player, perm)
-                        self.log.append(f"{perm.card.name} sacrificed (controls no Islands)")
+                        reason = "controls no lands" if needs_any_land and not controls_any_land else "controls no Islands"
+                        self.log.append(f"{perm.card.name} sacrificed ({reason})")
                         changed = True
                         continue
                     survivors_ss.append(perm)
                 player.battlefield = survivors_ss
+
+            # City in a Bottle: "other nontoken permanents with a name
+            # originally printed in [set] are on the battlefield, their
+            # controllers sacrifice them." Modeled as a continuous state
+            # check (like the no-lands trigger above) rather than a one-shot
+            # trigger, so it also catches a banned permanent entering after
+            # City in a Bottle is already in play.
+            banned_set_codes = {
+                instr.payload.get("set_code")
+                for player in self.players
+                for perm in player.battlefield
+                for instr in compile_card_oracle(perm.effective_card).instructions
+                if instr.kind == "ban_and_sacrifice_set_permanents"
+            }
+            banned_set_codes.discard(None)
+            if banned_set_codes:
+                for player in self.players:
+                    survivors_cb: list[Permanent] = []
+                    for perm in player.battlefield:
+                        is_banner = any(
+                            instr.kind == "ban_and_sacrifice_set_permanents"
+                            for instr in compile_card_oracle(perm.effective_card).instructions
+                        )
+                        card_set = str(perm.card.raw.get("set", "")) if isinstance(perm.card.raw, dict) else ""
+                        if (
+                            not is_banner
+                            and not perm.metadata.get("is_token")
+                            and card_set in banned_set_codes
+                        ):
+                            self._permanent_to_graveyard(player, perm)
+                            self.log.append(f"{perm.card.name} sacrificed (City in a Bottle)")
+                            changed = True
+                            continue
+                        survivors_cb.append(perm)
+                    player.battlefield = survivors_cb
+
+            # Old Man of the Sea: linked-duration steal ends the instant it
+            # untaps OR the stolen creature's power exceeds its own (unlike
+            # Aladdin's simpler "for as long as you control this creature"),
+            # so it's checked continuously here rather than only on leave.
+            for player in self.players:
+                for perm in player.battlefield:
+                    if not perm.metadata.get("stolen_while_tapped_and_weaker"):
+                        continue
+                    stolen = perm.metadata.get("stolen_permanent")
+                    if stolen is None:
+                        continue
+                    if not perm.tapped or stolen.effective_power > perm.effective_power:
+                        self._revert_stolen_permanent(perm)
+                        perm.metadata.pop("stolen_while_tapped_and_weaker", None)
+                        changed = True
 
             # 704.5d: tokens in non-battlefield zones cease to exist
             for player in self.players:

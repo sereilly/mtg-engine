@@ -12,12 +12,43 @@ from ..card_hooks import DRAW_STEP_MODIFIERS
 
 
 class DrawStepMixin:
-    def resolve_draw_step(self, player_index: int, sanctuary_choice: bool | None = None, defer_priority: bool = False) -> int:
+    def resolve_draw_step(
+        self,
+        player_index: int,
+        sanctuary_choice: bool | None = None,
+        defer_priority: bool = False,
+        pay_life_loss: dict[str, bool] | None = None,
+    ) -> int:
         phase = "beginning"
         step = "draw"
         self._set_phase_and_step(phase, step)
         self._on_step_or_phase_begin(phase, step)
         player = self.players[player_index]
+
+        # Nafs Asp: obligations armed against this player resolve now, before
+        # the draw itself — "before that draw step" (a human is prompted via
+        # pay_life_loss keyed by source name; AI/headless pays when able).
+        still_pending = []
+        for obligation in self.pending_draw_step_life_loss:
+            if obligation["player_index"] != player_index:
+                still_pending.append(obligation)
+                continue
+            source_name = obligation["source_name"]
+            cost = obligation["cost"]
+            if pay_life_loss is not None and source_name in pay_life_loss:
+                paid = pay_life_loss[source_name] and self.can_pay_upkeep_mana(
+                    player, {"generic": cost}
+                )
+            else:
+                paid = self.can_pay_upkeep_mana(player, {"generic": cost})
+            if paid:
+                self._spend_upkeep_mana(player, {"generic": cost})
+                self.log.append(f"{player.name} paid {{{cost}}} to avoid losing life ({source_name})")
+            else:
+                amount = obligation["amount"]
+                player.life -= amount
+                self.log.append(f"{player.name} lost {amount} life ({source_name})")
+        self.pending_draw_step_life_loss = still_pending
 
         # 614.1b/614.10: skip step is a replacement effect
         if self._consume_skip(self.skip_step_counts, step):

@@ -10,6 +10,9 @@ from .base import RuleResult, activated_kind, parse_rule
 _REANIMATE_ENCHANTED_RE = re.compile(r"return enchanted creature card to the battlefield under your control")
 _DRAWS_N_RE = re.compile(r"target player draws (\w+) cards?")
 _DISCARDS_N_RE = re.compile(r"target player discards (\w+) cards?")
+# Bazaar of Baghdad: "Draw two cards, then discard three cards." No target
+# word — draws/discards affect the ability's own controller.
+_DRAW_THEN_DISCARD_RE = re.compile(r"draw (\w+) cards?, then discard (\w+) cards?")
 
 
 # Animate Dead and similar: 'Return enchanted creature card to the battlefield under your control'
@@ -60,6 +63,19 @@ def draw_n_cards(text: str, activated: bool) -> RuleResult:
     return None
 
 
+@parse_rule(20500)
+def draw_then_discard_self(text: str, activated: bool) -> RuleResult:
+    m = _DRAW_THEN_DISCARD_RE.search(text)
+    if m:
+        draw_count = _parse_number_token(m.group(1))
+        discard_count = _parse_number_token(m.group(2))
+        effect_kind = activated_kind(activated, "draw")
+        return _instruction(
+            "draw_then_discard_self", draw=draw_count, discard=discard_count
+        ), effect_kind
+    return None
+
+
 @parse_rule(38000)
 def reanimate_from_graveyard(text: str, activated: bool) -> RuleResult:
     if "from your graveyard to the battlefield" in text or "from a graveyard onto the battlefield" in text:
@@ -85,6 +101,18 @@ def exile_target_creature_until_eot(text: str, activated: bool) -> RuleResult:
 def exile_creature_gain_life(text: str, activated: bool) -> RuleResult:
     if "exile target creature" in text and "its controller gains life equal to its power" in text:
         return _instruction("exile_creature_gain_life_equal_to_power"), "spell_pattern"
+    return None
+
+
+@parse_rule(41500)
+def phase_out_target_creature_until_source_leaves(text: str, activated: bool) -> RuleResult:
+    # Oubliette: "target creature phases out until this enchantment leaves the
+    # battlefield. Tap that creature as it phases in this way." Modeled as a
+    # scoped exile-and-return tracked on the source (not full CR 702.26
+    # phasing, which is listed as an unsupported keyword) — same linked-
+    # duration shape as Aladdin/Old Man of the Sea's control-steal effects.
+    if "target creature phases out until this" in text and "leaves the battlefield" in text:
+        return _instruction("phase_out_target_creature_until_source_leaves"), "spell_pattern"
     return None
 
 

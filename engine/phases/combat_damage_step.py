@@ -615,7 +615,7 @@ class CombatDamageStepMixin:
             self._on_player_dealt_damage(defender, damage)
             # Attacker "deals damage to a player/opponent" triggers (Hypnotic Specter).
             if source_attacker is not None:
-                self._fire_combat_damage_to_player_triggers(source_attacker, defender)
+                self._fire_combat_damage_to_player_triggers(source_attacker, defender, damage)
 
         # CR 702.15b: apply lifelink life gain for damage dealt this step.
         for controller_index, amount in lifelink_gain.items():

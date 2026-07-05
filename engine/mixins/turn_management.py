@@ -198,6 +198,14 @@ class TurnManagementMixin:
             return False
 
         land.tapped = True
+        # City of Brass: "Whenever this land becomes tapped, it deals 1 damage
+        # to you." Scoped to the mana-tap path (matching enchanted_land_tapped
+        # below) rather than every tap site in the engine.
+        for trig in compile_card_oracle(land.effective_card).triggered_abilities:
+            if trig.condition.kind == "self_becomes_tapped" and trig.instruction is not None:
+                amount = int(trig.instruction.payload.get("amount", 0))
+                damage = self._deal_damage_to_player(player, amount, source=land)
+                self.log.append(f"{land.card.name} dealt {damage} damage to {player.name}")
         mana_symbol = chosen_color
         produced = land.effective_produced_mana
         if produced:

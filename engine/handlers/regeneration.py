@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ._common import resolve_target_permanent
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -14,7 +15,9 @@ if TYPE_CHECKING:
 def grant_regeneration_to_target_creature(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     target = context.target
     regenerated = game._grant_regeneration_shield(
-        target, target_permanent_index=context.target_permanent_index
+        target,
+        target_permanent_index=context.target_permanent_index,
+        subtype_filter=instruction.payload.get("subtype_filter"),
     )
     game.log.append("Regeneration shield granted" if regenerated else "No valid creature to regenerate")
     return True, "resolved"
@@ -42,4 +45,17 @@ def grant_regeneration_to_enchanted_creature(game: Game, instruction: OracleInst
         return False, "aura not attached to a creature"
     enchanted.regeneration_shield += 1
     game.log.append(f"{card.name} grants regeneration shield to {enchanted.card.name}")
+    return True, "resolved"
+
+
+@effect_handler("deny_regeneration_to_target")
+def deny_regeneration_to_target(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Hurr Jackal: 'Target creature can't be regenerated this turn.' Reuses
+    the cant_be_regenerated_this_turn flag Disintegrate-style effects already
+    set (checked wherever a regeneration shield would apply)."""
+    target = resolve_target_permanent(context)
+    if target is None:
+        return False, "no valid creature target"
+    target.metadata["cant_be_regenerated_this_turn"] = True
+    game.log.append(f"{target.card.name} can't be regenerated this turn")
     return True, "resolved"

@@ -59,6 +59,25 @@ DYNAMIC_PT: dict[str, Callable[["object", PlayerState, Permanent], int]] = {
 }
 
 
+def _apply_conditional_bonus(
+    permanent: Permanent, metadata_key: str, active: bool, power: int, toughness: int
+) -> None:
+    """Clear a previously-applied conditional +N/+N bonus and reapply it if
+    *active*. Shared by every "gets +N/+N as long as <condition>" static
+    ability (conditional_land_bonus, conditional_untapped_bonus, …) — each
+    must be idempotently recomputed on every continuous-effects refresh."""
+    prev_power, prev_toughness = permanent.metadata.get(metadata_key, (0, 0))
+    if prev_power or prev_toughness:
+        permanent.power_bonus -= prev_power
+        permanent.toughness_bonus -= prev_toughness
+    if active:
+        permanent.power_bonus += power
+        permanent.toughness_bonus += toughness
+        permanent.metadata[metadata_key] = (power, toughness)
+    else:
+        permanent.metadata[metadata_key] = (0, 0)
+
+
 class PermanentStateMixin:
     def _initialize_permanent_state(
         self,
@@ -337,8 +356,6 @@ class PermanentStateMixin:
                     perm.metadata["attacking_buff_power"] = attacking_buff_power
                     perm.metadata["attacking_buff_toughness"] = attacking_buff_toughness
 
-            swamp_count = _count_swamps(self, player, None)
-
             for permanent in player.battlefield:
                 prog = compile_card_oracle(permanent.effective_card)
                 instr_kinds = {instr.kind for instr in prog.instructions}
@@ -349,16 +366,32 @@ class PermanentStateMixin:
                         value = count_fn(self, player, permanent)
                         set_base_pt(permanent, value, value)
 
-                if "conditional_swamp_bonus" in instr_kinds:
-                    previous = int(permanent.metadata.get("conditional_swamp_bonus", 0))
-                    if previous:
-                        permanent.power_bonus -= previous
-                        permanent.toughness_bonus -= previous
-                    current = 1 if swamp_count > 0 else 0
-                    if current:
-                        permanent.power_bonus += current
-                        permanent.toughness_bonus += current
-                    permanent.metadata["conditional_swamp_bonus"] = current
+                land_bonus_instr = next(
+                    (i for i in prog.instructions if i.kind == "conditional_land_bonus"), None
+                )
+                if land_bonus_instr is not None:
+                    land_type = land_bonus_instr.payload["land_type"]
+                    has_land = any(
+                        perm.card.primary_type == "land"
+                        and (
+                            land_type in perm.card.type_line.lower()
+                            or perm.metadata.get("land_type_override") == land_type
+                        )
+                        for perm in player.battlefield
+                    )
+                    _apply_conditional_bonus(
+                        permanent, "conditional_land_bonus", has_land,
+                        int(land_bonus_instr.payload["power"]), int(land_bonus_instr.payload["toughness"]),
+                    )
+
+                untapped_bonus_instr = next(
+                    (i for i in prog.instructions if i.kind == "conditional_untapped_bonus"), None
+                )
+                if untapped_bonus_instr is not None:
+                    _apply_conditional_bonus(
+                        permanent, "conditional_untapped_bonus", not permanent.tapped,
+                        int(untapped_bonus_instr.payload["power"]), int(untapped_bonus_instr.payload["toughness"]),
+                    )
 
                 # Kormus Bell / Living Lands animate basic lands into 1/1 creatures
                 # while the source is on the battlefield. Recomputed every call so

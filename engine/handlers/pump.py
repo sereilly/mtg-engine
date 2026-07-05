@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..models import Permanent
+from ..pt import set_base_pt
 from ._common import apply_temp_pt_boost, resolve_amount, resolve_target_permanent
 from .registry import effect_handler
 
@@ -178,6 +179,45 @@ def grant_target_flying_until_eot(game: Game, instruction: OracleInstruction, co
     if target_creature is not None:
         target_creature.metadata["gains_flying_until_eot"] = True
         game.log.append(f"{target_creature.card.name} gains flying until end of turn from {card.name}")
+    return True, "resolved"
+
+
+@effect_handler("set_base_pt_target_until_eot")
+def set_base_pt_target_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Sorceress Queen ("has base power and toughness 0/2") / Singing Tree
+    ("has base power 0", toughness untouched). ``payload["toughness"]`` is
+    None when the ability only sets power."""
+    card = context.card
+    source_permanent = context.source_permanent
+    exclude_self = bool(instruction.payload.get("exclude_self"))
+    attacking_only = bool(instruction.payload.get("attacking_only"))
+    flying_only = bool(instruction.payload.get("flying_only"))
+
+    def _eligible(perm: Permanent) -> bool:
+        if not perm.is_creature:
+            return False
+        if exclude_self and source_permanent is not None and perm is source_permanent:
+            return False
+        if attacking_only and not perm.attacking:
+            return False
+        if flying_only and not game._has_keyword(perm, "flying"):
+            return False
+        return True
+
+    target_perm = resolve_target_permanent(context, predicate=_eligible)
+    if target_perm is None:
+        game.log.append(f"{card.name}: no valid creature target")
+        return True, "resolved"
+
+    power = instruction.payload.get("power")
+    toughness = instruction.payload.get("toughness")
+    set_base_pt(target_perm, power, toughness, until_eot=True)
+    if toughness is None:
+        game.log.append(f"{card.name}: {target_perm.card.name} has base power {power} until end of turn")
+    else:
+        game.log.append(
+            f"{card.name}: {target_perm.card.name} has base power and toughness {power}/{toughness} until end of turn"
+        )
     return True, "resolved"
 
 

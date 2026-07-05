@@ -3,6 +3,7 @@ from __future__ import annotations
 import random
 import re
 
+from ..card_hooks import UNTAPPED_ARTIFACT_PROTECTORS
 from ..handlers._common import permanent_matches_filter, pick_target_permanent
 from ..models import CardDefinition, Permanent, PlayerState
 from ..replacements import apply_replacements
@@ -36,17 +37,26 @@ class EffectsMixin:
                 )
                 break
 
-    def _fire_combat_damage_to_player_triggers(self, attacker: Permanent, defending_player: PlayerState) -> None:
+    def _fire_combat_damage_to_player_triggers(
+        self, attacker: Permanent, defending_player: PlayerState, amount: int = 0
+    ) -> None:
         """Put an attacker's "whenever this creature deals (combat) damage to a
-        player/opponent" triggers (e.g. Hypnotic Specter) onto the stack. They resolve
-        through the post-combat priority window (CR 603.3), like attack/block triggers.
-        The defending player is captured in trigger_context."""
+        player/opponent" triggers (e.g. Hypnotic Specter, El-Hajjaj) onto the
+        stack. They resolve through the post-combat priority window (CR 603.3),
+        like attack/block triggers. The defending player and dealt amount are
+        captured in trigger_context.
+
+        El-Hajjaj's "whenever this creature deals damage" is bare (not
+        player-only), so CR-accurately it should also fire when this creature
+        deals combat damage to a blocking/blocked creature — that path isn't
+        wired up (a documented gap, not silent; the player-damage case below
+        covers the common unblocked scenario)."""
         controller_index = self._controller_index_of(attacker)
         defending_index = self.players.index(defending_player)
         events = [
             make_trigger_event(
                 controller_index, attacker, trig,
-                trigger_context={"defending_player_index": defending_index},
+                trigger_context={"defending_player_index": defending_index, "amount": amount},
             )
             for trig in matching_triggers(
                 attacker.effective_card,
@@ -56,7 +66,11 @@ class EffectsMixin:
                     "deals_damage_to_player",
                     "creature_deals_combat_damage",
                 },
-                instruction_kinds={"opponent_discards_random_card_on_damage"},
+                instruction_kinds={
+                    "opponent_discards_random_card_on_damage",
+                    "gain_life_equal_to_damage_dealt",
+                    "arm_draw_step_life_loss_unless_pay",
+                },
             )
         ]
         self._enqueue_triggered_batch(events)
@@ -86,7 +100,47 @@ class EffectsMixin:
     def _is_indestructible(self, permanent: Permanent) -> bool:
         """CR 700.4: a permanent with indestructible can't be destroyed by 'destroy'
         effects or lethal damage. In LEA, Consecrate Land grants this to a land."""
-        return bool(permanent.metadata.get("is_indestructible"))
+        return bool(permanent.metadata.get("is_indestructible")) or self._untapped_artifact_protector_active(permanent)
+
+    def _untapped_artifact_protector_active(self, permanent: Permanent) -> bool:
+        """Guardian Beast-style: "As long as this creature is untapped,
+        noncreature artifacts you control can't be enchanted, have
+        indestructible, and other players can't gain control of them."
+        Checked inline (mirrors Veteran Bodyguard's "as long as untapped"
+        redirect) rather than precomputed, since it tracks the protector's
+        tapped state continuously. Auras already attached when it enters
+        aren't removed — callers that check "already attached" separately
+        are unaffected. Protector names live in
+        card_hooks.UNTAPPED_ARTIFACT_PROTECTORS, not here (CLAUDE.md: no
+        card names outside card_hooks.py)."""
+        if not permanent.has_type("artifact") or permanent.is_creature:
+            return False
+        controller = next(
+            (p for p in self.players if permanent in p.battlefield), None
+        )
+        if controller is None:
+            return False
+        return any(
+            perm.card.name in UNTAPPED_ARTIFACT_PROTECTORS and not perm.tapped
+            for perm in controller.battlefield
+        )
+
+    def _set_lockout_banning_card(self, card: CardDefinition) -> str | None:
+        """City in a Bottle: whether some permanent's compiled
+        ``ban_and_sacrifice_set_permanents`` instruction bans *card* (its
+        ``raw["set"]`` matches the locked-out set code). Returns the banning
+        permanent's name, or None if unbanned. Shared by the cast/land-play
+        gate (queue_from_hand) and the battlefield-sacrifice state check
+        (game_ending.py)."""
+        card_set = str(card.raw.get("set", "")) if isinstance(card.raw, dict) else ""
+        if not card_set:
+            return None
+        for player in self.players:
+            for perm in player.battlefield:
+                for instr in compile_card_oracle(perm.effective_card).instructions:
+                    if instr.kind == "ban_and_sacrifice_set_permanents" and instr.payload.get("set_code") == card_set:
+                        return perm.card.name
+        return None
 
     def _destroy_target_permanent(
         self,
@@ -169,13 +223,24 @@ class EffectsMixin:
         return True
 
     def _grant_regeneration_shield(
-        self, target: PlayerState, target_permanent_index: int | None = None
+        self,
+        target: PlayerState,
+        target_permanent_index: int | None = None,
+        subtype_filter: str | None = None,
     ) -> bool:
         # Honor an explicitly chosen creature (e.g. Death Ward's "Regenerate target
         # creature" — the player picks which one; an explicit illegal choice
         # fizzles). Fall back to the first creature only with no explicit choice.
+        # Elephant Graveyard restricts the pool to a subtype ("target Elephant").
+        def _eligible(perm: Permanent) -> bool:
+            if not perm.is_creature:
+                return False
+            if subtype_filter and subtype_filter not in perm.effective_card.type_line.lower():
+                return False
+            return True
+
         chosen = pick_target_permanent(
-            target, target_permanent_index, fallback_on_invalid_choice=False
+            target, target_permanent_index, predicate=_eligible, fallback_on_invalid_choice=False
         )
         if chosen is None:
             return False
@@ -395,6 +460,10 @@ class EffectsMixin:
             self._turn_face_up(source)
         damage = self._prevent_damage(target, amount, source=source)
         if damage > 0:
+            # CR 614 replacement (Ali from Cairo's life floor) adjusts how much
+            # of the damage actually reduces life.
+            _, payload = apply_replacements(self, "damage_to_player", {"player": target, "amount": damage})
+            damage = payload["amount"]
             target.life -= damage
             self._on_player_dealt_damage(target, damage)
         return damage

@@ -10,6 +10,7 @@ only aggregates and enforces them, so new restriction cards never touch it.
 """
 
 from ..card_hooks import UNTAP_RESTRICTIONS
+from ..handlers._common import permanent_effective_colors
 
 
 class UntapStepMixin:
@@ -20,6 +21,7 @@ class UntapStepMixin:
         max_lands = 999
         max_creatures = 999
         min_power_block: int | None = None
+        blocked_colors: set[str] = set()
         for pl in self.players:
             for perm in pl.battlefield:
                 restriction = UNTAP_RESTRICTIONS.get(perm.card.name)
@@ -42,11 +44,14 @@ class UntapStepMixin:
                             if min_power_block is None
                             else min(min_power_block, restriction.min_power)
                         )
+                elif restriction.scope == "creature_color" and restriction.color:
+                    blocked_colors.add(restriction.color)
         return {
             "skip_all_source": skip_all_source,
             "max_lands": max_lands,
             "max_creatures": max_creatures,
             "min_power_block": min_power_block,
+            "blocked_colors": blocked_colors,
         }
 
     def get_untap_land_selection_options(self, player_index: int) -> dict[str, object] | None:
@@ -123,6 +128,7 @@ class UntapStepMixin:
         max_untap_creatures = constraints["max_creatures"]
         max_untap_lands = constraints["max_lands"]
         min_power_block = constraints["min_power_block"]
+        blocked_colors = constraints["blocked_colors"]
 
         selected_lands: set[int] | None = None
         if selected_land_indices is not None:
@@ -174,6 +180,10 @@ class UntapStepMixin:
             if permanent.card.primary_type == "creature":
                 # Meekstone-style: creatures at or above the power cap stay tapped.
                 if min_power_block is not None and permanent.effective_power >= min_power_block:
+                    continue
+                # Magnetic Mountain: creatures of a blocked color stay tapped
+                # (a separate upkeep effect may untap them anyway, for a cost).
+                if blocked_colors and permanent_effective_colors(permanent) & blocked_colors:
                     continue
                 # Honor the controller's Smoke selection when one was supplied.
                 if selected_creatures is not None and idx not in selected_creatures:

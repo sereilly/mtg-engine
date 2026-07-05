@@ -30,3 +30,21 @@ def cards(all_cards):
     """LEA cards keyed by name — replaces the module-scoped copies that each
     regression file used to declare."""
     return {c.name: c for c in all_cards}
+
+
+@pytest.fixture(scope="session")
+def arn_path() -> Path:
+    return Path(__file__).resolve().parent.parent / "arabian_nights_cards.json"
+
+
+@pytest.fixture(scope="session")
+def arn_cards(arn_path):
+    """Arabian Nights cards, kept separate from all_cards/cards (the LEA pool)
+    so ARN-specific tests can't accidentally interact with the wider LEA
+    fixture set."""
+    return load_cards(arn_path)
+
+
+@pytest.fixture(scope="session")
+def arn_by_name(arn_cards):
+    return {c.name: c for c in arn_cards}

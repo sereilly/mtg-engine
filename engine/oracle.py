@@ -63,6 +63,7 @@ SUPPORTED_KEYWORDS = {
     "Islandwalk",
     "Mountainwalk",
     "Plainswalk",
+    "Desertwalk",
 }
 
 UNSUPPORTED_KEYWORDS = {
@@ -195,6 +196,7 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("creature_dealt_damage",               r"whenever this creature is dealt damage"),
     ("creature_dealt_damage_by_self_dies",  r"whenever a creature dealt damage by this creature this turn dies"),
     ("enchanted_land_tapped",       r"whenever enchanted land becomes tapped"),
+    ("self_becomes_tapped",         r"whenever this land becomes tapped"),
     ("land_tapped_for_mana",        r"whenever a player taps a land for mana"),
     ("spell_cast",                  r"whenever a player casts a spell"),
     ("opponent_casts_spell",        r"whenever an opponent casts a spell"),
@@ -215,6 +217,7 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("you_gain_life",               r"when you gain life"),
     ("becomes_target",              r"when (?:this|.+) becomes the target"),
     ("no_islands",                  r"when you control no islands"),
+    ("no_lands",                    r"when you control no lands"),
 )
 
 # "at the beginning of" triggers
@@ -224,7 +227,7 @@ AT_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("upkeep_enchanted_controller", r"at the beginning of the upkeep of enchanted (?:creature|artifact|enchantment)'s controller"),
     ("upkeep_chosen",       r"at the beginning of the chosen player's upkeep"),
     ("draw_step_each",      r"at the beginning of each player's draw step"),
-    ("end_step",            r"at the beginning of (?:the |each )?end(?: step)?"),
+    ("end_step",            r"at the beginning of (?:the |each |your )?end(?: step)?"),
     ("combat",              r"at the beginning of combat"),
 )
 
@@ -471,9 +474,33 @@ def _parse_activated_ability(line: str) -> ParsedActivatedAbility | None:
     )
 
 
+_BASIC_LAND_WORDS = ("plains", "island", "swamp", "mountain", "forest", "desert")
+# "This creature gets +N/+N as long as you control a <land type>." (Sedge
+# Troll, Kird Ape). One regex covers any basic land type and any bonus size;
+# _refresh_dynamic_creatures applies it generically via conditional_land_bonus.
+CONDITIONAL_LAND_BONUS_RE = re.compile(
+    rf"gets \+(\d+)/\+(\d+) as long as you control an? ({'|'.join(_BASIC_LAND_WORDS)})\b"
+)
+# "This creature gets +N/+N as long as it's untapped." (Giant Tortoise).
+CONDITIONAL_UNTAPPED_BONUS_RE = re.compile(
+    r"gets \+(\d+)/\+(\d+) as long as (?:it's|this creature is) untapped\b"
+)
+# "This creature doesn't untap during your untap step." — the behavior is
+# already enforced directly in phases/untap_step.py's text scan; this only
+# needs to be recognized as a supported static line so the whole creature
+# doesn't classify as unsupported.
+_DOESNT_UNTAP_LINE = "this creature doesn't untap during your untap step"
+
+
 def _is_supported_static_creature_line(line: str) -> bool:
     normalized = normalize_creature_line(line)
     if normalized.startswith("protection from "):
+        return True
+    if CONDITIONAL_LAND_BONUS_RE.search(normalized):
+        return True
+    if CONDITIONAL_UNTAPPED_BONUS_RE.search(normalized):
+        return True
+    if normalized == _DOESNT_UNTAP_LINE:
         return True
     static_patterns = (
         "this creature enters with seven +1/+0 counters on it",
@@ -498,6 +525,30 @@ def _is_supported_static_creature_line(line: str) -> bool:
         "remove a corpse counter from this creature: regenerate this creature",
         "you may have this creature enter as a copy of any creature on the battlefield",
         "other ",
+        # Desert Nomads / Camel: static shield against Desert lands' damage
+        # ability. Handled by a replacement-effect interceptor (checked
+        # against oracle text directly) rather than a compiled instruction —
+        # see engine/replacements.py:_prevent_desert_damage. Camel's clause
+        # extending the shield to creatures banded with it is not modeled
+        # (band-mates get no protection); narrow enough in practice that
+        # this is a documented, not a silent, gap.
+        "prevent all damage that would be dealt to this creature by deserts",
+        "as long as this creature is attacking, prevent all damage deserts would deal to this creature",
+        # Ali from Cairo: a life-total-floor replacement effect (CR 614),
+        # handled by engine/replacements.py:_floor_life_at_one against oracle
+        # text directly rather than a compiled instruction.
+        "damage that would reduce your life total to less than 1 reduces it to 1 instead",
+        # Guardian Beast: static artifact protection (can't-be-enchanted,
+        # indestructible, can't-gain-control) while untapped. Checked by
+        # mixins/effects.py:_untapped_artifact_protector_active at each
+        # relevant site rather than a compiled instruction.
+        "as long as this creature is untapped, noncreature artifacts you control can't be enchanted, "
+        "they have indestructible, and other players can't gain control of them",
+        # Old Man of the Sea: a pure player option with no forced game-state
+        # consequence if unused (the untap step already defaults to
+        # untapping); its actual gameplay hook is the linked-duration control
+        # ability, which cares about the CURRENT tapped state, not this line.
+        "you may choose not to untap this creature during your untap step",
     )
     if normalized.startswith("other ") and " get +" in normalized:
         return True
@@ -576,11 +627,18 @@ def _parse_creature_program(
                 instructions.append(OracleInstruction("dynamic_pt_swamps"))
             elif normalized.startswith("as long as gaea's liege isn't attacking"):
                 instructions.append(OracleInstruction("dynamic_pt_forests_gaea"))
-            elif (
-                "gets +1/+1 as long as you control a swamp" in normalized
-                or "this creature gets +1/+1 as long as you control a swamp" in normalized
-            ):
-                instructions.append(OracleInstruction("conditional_swamp_bonus"))
+            elif (land_bonus_match := CONDITIONAL_LAND_BONUS_RE.search(normalized)):
+                power, toughness, land_word = land_bonus_match.groups()
+                instructions.append(OracleInstruction(
+                    "conditional_land_bonus", "",
+                    {"land_type": land_word, "power": int(power), "toughness": int(toughness)},
+                ))
+            elif (untapped_bonus_match := CONDITIONAL_UNTAPPED_BONUS_RE.search(normalized)):
+                power, toughness = untapped_bonus_match.groups()
+                instructions.append(OracleInstruction(
+                    "conditional_untapped_bonus", "",
+                    {"power": int(power), "toughness": int(toughness)},
+                ))
             elif normalized == "this creature attacks each combat if able":
                 instructions.append(OracleInstruction("must_attack_each_combat"))
             elif normalized == "this creature can't be blocked by walls":
@@ -664,7 +722,22 @@ def _compile_card_oracle(
         return OracleProgram(False, "unsupported", "complex oracle pattern", normalized_text)
 
     if primary_type == "land":
-        return OracleProgram(True, "land_mana", "basic land support", normalized_text)
+        # Mana production is driven by CardDefinition.produced_mana, not by
+        # parsing oracle text (basic lands' whole ability line is reminder
+        # text in parens, e.g. "({T}: Add {W}.)", which normalize_creature_line
+        # strips to nothing). A land is therefore ALWAYS at least playable —
+        # unlike creatures/artifacts, an unparsed bonus ability degrades just
+        # that ability, never the land's own castability. Non-reminder-text
+        # ability lines (Desert's damage ping, Bazaar of Baghdad's draw-
+        # discard, …) are parsed the same way artifacts' are, so lands with
+        # abilities beyond mana become activatable too.
+        activated_abilities = _parse_noncreature_abilities(oracle_text)
+        triggered_abilities = _parse_noncreature_triggered(oracle_text)
+        return OracleProgram(
+            True, "land_mana", "basic land support", normalized_text,
+            activated_abilities=activated_abilities,
+            triggered_abilities=triggered_abilities,
+        )
 
     if primary_type == "creature":
         supported, effect_kind, reason, instructions, activated, triggered, static_lines = _parse_creature_program(oracle_text)

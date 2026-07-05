@@ -2,8 +2,18 @@
 
 from __future__ import annotations
 
+import re
+
 from ..oracle_types import _instruction
 from .base import RuleResult, parse_rule
+
+_LOSES_LIFE_UNLESS_PAY_RE = re.compile(
+    r"that player loses (\d+) life at the beginning of their next draw step unless they pay \{(\d+)\} before that draw step"
+)
+_END_STEP_DAMAGE_IF_NOT_ATTACKED_RE = re.compile(
+    r"if this creature didn't attack this turn, it deals (\d+) damage to you "
+    r"unless it came under your control this turn"
+)
 
 
 # Raging River: left/right pile combat division
@@ -30,6 +40,65 @@ def delayed_destroy_blocked_or_blocker(text: str, activated: bool) -> RuleResult
 def opponent_discards_random_card_on_damage(text: str, activated: bool) -> RuleResult:
     if "that player discards a card at random" in text:
         return _instruction("opponent_discards_random_card_on_damage"), "triggered_discard"
+    return None
+
+
+# El-Hajjaj: effect-only match — condition "whenever this creature deals
+# damage" is already the existing creature_deals_damage trigger kind.
+@parse_rule(9500)
+def gain_life_equal_to_damage_dealt(text: str, activated: bool) -> RuleResult:
+    if "you gain that much life" in text:
+        return _instruction("gain_life_equal_to_damage_dealt"), "triggered_gain_life"
+    return None
+
+
+# Mijae Djinn: effect-only match — condition "whenever this creature attacks"
+# already exists (creature_attacks).
+@parse_rule(9600)
+def coin_flip_remove_attacker_and_tap(text: str, activated: bool) -> RuleResult:
+    if (
+        "flip a coin" in text
+        and "if you lose the flip, remove this creature from combat and tap it" in text
+    ):
+        return _instruction("coin_flip_remove_attacker_and_tap"), "triggered_coin_flip"
+    return None
+
+
+# Ydwen Efreet: effect-only match — condition "whenever this creature blocks"
+# already exists (creature_blocks).
+@parse_rule(9700)
+def coin_flip_remove_blocker(text: str, activated: bool) -> RuleResult:
+    if (
+        "flip a coin" in text
+        and "if you lose the flip, remove this creature from combat and it can't block this turn" in text
+    ):
+        return _instruction("coin_flip_remove_blocker"), "triggered_coin_flip"
+    return None
+
+
+# Nafs Asp: effect-only match — condition "whenever this creature deals
+# damage to a player" is already covered by the deals-damage-to-player
+# trigger family fired by _fire_combat_damage_to_player_triggers.
+@parse_rule(9800)
+def arm_draw_step_life_loss_unless_pay(text: str, activated: bool) -> RuleResult:
+    m = _LOSES_LIFE_UNLESS_PAY_RE.search(text)
+    if m:
+        amount, cost = int(m.group(1)), int(m.group(2))
+        return _instruction(
+            "arm_draw_step_life_loss_unless_pay", amount=amount, cost=cost
+        ), "triggered_delayed_life_loss"
+    return None
+
+
+# Erg Raiders: effect-only match — condition "at the beginning of your end
+# step" is already the existing end_step trigger kind.
+@parse_rule(9900)
+def end_step_damage_if_not_attacked(text: str, activated: bool) -> RuleResult:
+    m = _END_STEP_DAMAGE_IF_NOT_ATTACKED_RE.search(text)
+    if m:
+        return _instruction(
+            "end_step_damage_if_not_attacked", amount=int(m.group(1))
+        ), "triggered_damage"
     return None
 
 

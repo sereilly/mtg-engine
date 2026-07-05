@@ -15,10 +15,9 @@ from typing import Any
 
 from ..oracle_types import _COLOR_WORD_TO_SYMBOL
 
-# Creature subtypes the target-noun parser recognizes ("destroy target Wall").
-# Extend this tuple when a set introduces tribal targeting (e.g. Arabian
-# Nights adds camel/elephant/djinn/efreet).
-KNOWN_CREATURE_SUBTYPES: tuple[str, ...] = ("wall",)
+# Creature subtypes the target-noun parser recognizes ("destroy target Wall",
+# "regenerate target Elephant", "destroy target Djinn or Efreet").
+KNOWN_CREATURE_SUBTYPES: tuple[str, ...] = ("wall", "elephant", "djinn", "efreet")
 
 
 def find_color_word(text: str, template: str = "{}") -> str | None:
@@ -77,7 +76,9 @@ class TargetFilter:
     """
 
     type_filter: str | None = None
-    subtype_filter: str | None = None
+    # A single subtype ("Wall") or several alternatives ("Djinn or Efreet") —
+    # emitted as a bare string for one match, a list for several.
+    subtype_filter: str | tuple[str, ...] | None = None
     tapped_only: bool = False
     color_filter: str | None = None
     exclude_colors: tuple[str, ...] = ()
@@ -90,7 +91,11 @@ class TargetFilter:
         if self.type_filter:
             payload["type_filter"] = self.type_filter
         if self.subtype_filter:
-            payload["subtype_filter"] = self.subtype_filter
+            payload["subtype_filter"] = (
+                list(self.subtype_filter)
+                if isinstance(self.subtype_filter, tuple)
+                else self.subtype_filter
+            )
         if self.tapped_only:
             payload["tapped_only"] = True
         if self.color_filter:
@@ -117,16 +122,17 @@ def parse_target_filter(clause: str, full_text: str) -> TargetFilter:
         return re.search(rf"\b{word}\b", clause) is not None
 
     type_filter: str | None = None
-    subtype_filter: str | None = None
+    subtype_filter: str | tuple[str, ...] | None = None
     if "artifact or enchantment" in clause:
         type_filter = "artifact_or_enchantment"
     else:
-        for subtype in KNOWN_CREATURE_SUBTYPES:
-            if _clause_has(subtype):
-                # Subtype words imply the creature type ("destroy target Wall").
-                type_filter = "creature"
-                subtype_filter = subtype
-                break
+        # Collect every matching subtype so "Djinn or Efreet"-style OR clauses
+        # (King Suleiman) keep all alternatives, not just the first hit.
+        matched_subtypes = tuple(s for s in KNOWN_CREATURE_SUBTYPES if _clause_has(s))
+        if matched_subtypes:
+            # Subtype words imply the creature type ("destroy target Wall").
+            type_filter = "creature"
+            subtype_filter = matched_subtypes[0] if len(matched_subtypes) == 1 else matched_subtypes
     if type_filter is None:
         if _clause_has("creature"):
             type_filter = "creature"

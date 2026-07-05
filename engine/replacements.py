@@ -16,6 +16,7 @@ Event kinds and their payload keys:
 
 - ``life_gain``:          {player, amount, source_name}
 - ``damage_to_creature``: {permanent, amount, source}
+- ``damage_to_player``:   {player, amount}
 - ``would_die``:          {player, permanent}
 """
 
@@ -92,6 +93,27 @@ def _draw_instead_of_life_gain(game, payload: dict) -> ReplacementOutcome | None
     return ReplacementOutcome(replaced=True)
 
 
+@replacement_effect("damage_to_player")
+def _floor_life_at_one(game, payload: dict) -> ReplacementOutcome | None:
+    """Ali from Cairo: "Damage that would reduce your life total to less than
+    1 reduces it to 1 instead." Clamped via new_amount (the damage instance
+    still "happened" for tracking purposes; only how much it reduces life is
+    capped), matching how Personal Incarnation's partial redirect already
+    treats amount adjustments."""
+    player = payload["player"]
+    amount = payload["amount"]
+    if amount <= 0:
+        return None
+    if not game._player_controls_text(
+        player, "damage that would reduce your life total to less than 1 reduces it to 1 instead"
+    ):
+        return None
+    floor_amount = max(0, player.life - 1)
+    if floor_amount >= amount:
+        return None
+    return ReplacementOutcome(new_amount=floor_amount)
+
+
 @replacement_effect("damage_to_creature")
 def _redirect_damage_to_player(game, payload: dict) -> ReplacementOutcome | None:
     """Jade Monolith: "The next time a source of your choice would deal damage
@@ -135,6 +157,37 @@ def _redirect_one_damage_to_owner(game, payload: dict) -> ReplacementOutcome | N
         game._deal_damage_to_player(owner, 1)
         game.log.append(f"1 damage redirected from {permanent.card.name} to {owner.name}")
     return ReplacementOutcome(new_amount=amount - 1)
+
+
+def _is_desert(source) -> bool:
+    card = getattr(source, "card", source)
+    return (
+        card is not None
+        and getattr(card, "primary_type", None) == "land"
+        and "desert" in card.type_line.lower()
+    )
+
+
+@replacement_effect("damage_to_creature")
+def _prevent_desert_damage(game, payload: dict) -> ReplacementOutcome | None:
+    """Desert Nomads: "Prevent all damage that would be dealt to this
+    creature by Deserts." / Camel: same shield, but only while attacking.
+    Checked against oracle text directly (like Lich's life-gain replacement)
+    rather than a compiled instruction. Camel's clause extending the shield
+    to creatures banded with it is not modeled — see oracle.py's static-line
+    comment for that documented gap."""
+    permanent = payload["permanent"]
+    if not _is_desert(payload.get("source")):
+        return None
+    text = permanent.card.oracle_text.lower()
+    if "prevent all damage that would be dealt to this creature by deserts" in text:
+        return ReplacementOutcome(replaced=True)
+    if (
+        "prevent all damage deserts would deal to this creature" in text
+        and permanent.attacking
+    ):
+        return ReplacementOutcome(replaced=True)
+    return None
 
 
 @replacement_effect("would_die")

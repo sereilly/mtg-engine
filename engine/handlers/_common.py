@@ -92,8 +92,12 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
                 return False
         elif type_filter not in type_line:
             return False
-    if subtype_filter and subtype_filter not in type_line:
-        return False
+    if subtype_filter:
+        # A single subtype string, or several OR'd alternatives ("Djinn or
+        # Efreet") as a list — any one matching is enough.
+        subtypes = [subtype_filter] if isinstance(subtype_filter, str) else subtype_filter
+        if not any(s in type_line for s in subtypes):
+            return False
     if tapped_only and not perm.tapped:
         return False
     colors = permanent_effective_colors(perm)

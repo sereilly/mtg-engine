@@ -9,6 +9,20 @@ from .base import RuleResult, activated_kind, parse_rule
 
 _PUMP_TARGET_X_RE = re.compile(r"target (?:blocking )?creature gets \+(x|\d+)/\+(x|\d+) until end of turn")
 _PUMP_ENCHANTED_RE = re.compile(r"enchanted creature gets \+(-?\d+)/\+(-?\d+)")
+# Sorceress Queen: "Target creature other than this creature has base power
+# and toughness 0/2 until end of turn."
+_SET_BASE_PT_BOTH_RE = re.compile(
+    r"target creature( other than this creature)? has base power and toughness (\d+)/(\d+) until end of turn"
+)
+# Singing Tree: "Target attacking creature has base power 0 until end of
+# turn." / Island of Wak-Wak: "Target creature with flying has base power 0
+# until end of turn." — sets only power; toughness is untouched. Checked
+# after the "and toughness" form so its digit group can't accidentally match
+# "power and".
+_SET_BASE_POWER_ONLY_RE = re.compile(
+    r"target (?P<attacking>attacking )?creature(?P<flying> with flying)?"
+    r"(?P<exclude_self> other than this creature)? has base power (?P<power>\d+) until end of turn"
+)
 
 
 # Dragon Whelp: pump and delayed sacrifice
@@ -113,4 +127,33 @@ def add_variable_power_counters(text: str, activated: bool) -> RuleResult:
 def grant_flying_and_delayed_destruction(text: str, activated: bool) -> RuleResult:
     if activated and "target creature you control with toughness less than this creature's power gains flying until end of turn" in text:
         return _instruction("grant_flying_and_delayed_destruction"), "activated_keyword"
+    return None
+
+
+@parse_rule(93500)
+def set_base_pt_both_until_eot(text: str, activated: bool) -> RuleResult:
+    m = _SET_BASE_PT_BOTH_RE.search(text)
+    if m:
+        exclude_self = bool(m.group(1))
+        power, toughness = int(m.group(2)), int(m.group(3))
+        ek = activated_kind(activated, "set_pt")
+        return _instruction(
+            "set_base_pt_target_until_eot",
+            power=power, toughness=toughness, exclude_self=exclude_self,
+        ), ek
+    return None
+
+
+@parse_rule(93600)
+def set_base_power_only_until_eot(text: str, activated: bool) -> RuleResult:
+    m = _SET_BASE_POWER_ONLY_RE.search(text)
+    if m:
+        ek = activated_kind(activated, "set_pt")
+        return _instruction(
+            "set_base_pt_target_until_eot",
+            power=int(m.group("power")), toughness=None,
+            exclude_self=bool(m.group("exclude_self")),
+            attacking_only=bool(m.group("attacking")),
+            flying_only=bool(m.group("flying")),
+        ), ek
     return None

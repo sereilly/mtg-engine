@@ -9,6 +9,7 @@ creatures" triggers. The active player then receives priority.
 """
 
 from ..models import Permanent
+from ..tokens import make_token_card
 from ..trigger_utils import iter_triggered_abilities, make_trigger_event
 
 
@@ -18,6 +19,25 @@ class EndStepMixin:
         step = "end"
         self._set_phase_and_step(phase, step)
         self._on_step_or_phase_begin(phase, step)
+
+        # Rukh Egg: tokens armed by a "dies" trigger appear now, regardless of
+        # whose turn it is (CR 603.3 delayed triggers use their own fixed
+        # timing, not "your end step").
+        pending_tokens = self.pending_end_step_tokens
+        self.pending_end_step_tokens = []
+        for spec in pending_tokens:
+            controller_index = spec["controller_index"]
+            if not (0 <= controller_index < len(self.players)):
+                continue
+            token_card = make_token_card(
+                spec["name"], spec["power"], spec["toughness"], spec["type_line"],
+                colors=spec.get("colors", ()), keywords=spec.get("keywords", ()),
+            )
+            self._put_permanent_onto_battlefield(
+                controller_index, Permanent(card=token_card, metadata={"is_token": True}), None
+            )
+            self.log.append(f"{self.players[controller_index].name}'s {token_card.name} token entered the battlefield")
+
         def _delayed_eot_removal(permanent: Permanent) -> bool:
             # Nettling Imp / Siren's Call: destroy creatures that were
             # required to attack this turn but didn't.
@@ -79,6 +99,19 @@ class EndStepMixin:
                 instruction_kinds={"sacrifice_if_no_creatures"},
             ):
                 events.append(make_trigger_event(controller_index, permanent, trig))
+
+        # Erg Raiders: "at the beginning of YOUR end step" — scoped to this
+        # end step's own player only, unlike the two blocks above (which don't
+        # yet distinguish "your" from "each"/"the"). The "didn't attack" /
+        # "came under your control this turn" guards are re-checked at
+        # resolution (matching the Pestilence intervening-if precedent).
+        for controller_index, permanent, trig in iter_triggered_abilities(
+            self,
+            condition_kinds={"end_step"},
+            instruction_kinds={"end_step_damage_if_not_attacked"},
+            players=[self.players[player_index]],
+        ):
+            events.append(make_trigger_event(controller_index, permanent, trig))
 
         self._enqueue_triggered_batch(events)
 

@@ -959,29 +959,21 @@ class StackCastingMixin:
             self.log.append(details)
             return SimulationResult(permanent.card.name, False, "unsupported", details)
 
-        # Northern Paladin: "{W}{W}, {T}: Destroy target black permanent." The
-        # chosen target must satisfy the ability's color/type filter (601.2c) — an
-        # illegal target makes the ability impossible to activate, so it's rejected
-        # before any cost is paid rather than silently fizzling.
-        if ability.instruction.kind == "destroy_target_permanent":
-            color_filter = ability.instruction.payload.get("color_filter")
-            type_filter = ability.instruction.payload.get("type_filter")
-            # Dwarven Demolition Team / Tunnel: "Destroy target Wall." The subtype
-            # filter must be enforced too — a non-Wall creature is an illegal target.
-            subtype_filter = ability.instruction.payload.get("subtype_filter")
-            if (color_filter or type_filter or subtype_filter) and isinstance(target_permanent_index, int):
-                bf = target_player.battlefield
-                legal = 0 <= target_permanent_index < len(bf)
-                if legal and color_filter and color_filter not in bf[target_permanent_index].card.colors:
-                    legal = False
-                if legal and type_filter and type_filter not in bf[target_permanent_index].card.type_line.lower():
-                    legal = False
-                if legal and subtype_filter and subtype_filter not in bf[target_permanent_index].card.type_line.lower():
-                    legal = False
-                if not legal:
-                    details = f"no valid target for {permanent.card.name}"
-                    self.log.append(details)
-                    return SimulationResult(permanent.card.name, False, "unsupported", details)
+        # Northern Paladin: "{W}{W}, {T}: Destroy target black permanent." /
+        # Dwarven Demolition Team / Tunnel: "Destroy target Wall." / King
+        # Suleiman: "Destroy target Djinn or Efreet." The chosen target must
+        # satisfy the ability's color/type/subtype filter (601.2c) — an
+        # illegal target makes the ability impossible to activate, so it's
+        # rejected before any cost is paid rather than silently fizzling.
+        if ability.instruction.kind == "destroy_target_permanent" and isinstance(target_permanent_index, int):
+            bf = target_player.battlefield
+            legal = 0 <= target_permanent_index < len(bf) and permanent_matches_filter(
+                bf[target_permanent_index], ability.instruction.payload
+            )
+            if not legal:
+                details = f"no valid target for {permanent.card.name}"
+                self.log.append(details)
+                return SimulationResult(permanent.card.name, False, "unsupported", details)
 
         required_cost = dict(ability.cost.mana)
         requires_tap = ability.cost.requires_tap
@@ -1119,6 +1111,12 @@ class StackCastingMixin:
                 details = "already played a land this turn"
                 self.log.append(details)
                 return SimulationResult(card.name, False, classification.effect_kind, details)
+
+        banning_card = self._set_lockout_banning_card(card)
+        if banning_card is not None:
+            details = f"can't cast or play {card.name}: banned by {banning_card}"
+            self.log.append(details)
+            return SimulationResult(card.name, False, classification.effect_kind, details)
 
         spell_tax, taxing_names = spell_cost_tax(self, caster_index, card)
         if spell_tax:
@@ -1900,6 +1898,13 @@ class StackCastingMixin:
             self._put_permanent_onto_battlefield(caster_index, permanent, target_player_index)
             self.log.append(f"{caster.name} put {card.name} onto battlefield")
             self._apply_global_buff(caster, card)
+            # Auras resolve their own "when this Aura enters" text through
+            # _apply_aura_effect's bespoke matching (Animate Dead, Earthbind) —
+            # skip the generic ETB-trigger path for them to avoid firing twice.
+            if "Aura" not in card.type_line:
+                self._apply_self_enters_battlefield_triggers(
+                    caster_index, permanent, target_player_index, target_permanent_index
+                )
             self._apply_aura_effect(caster_index, permanent, target_player_index, target_permanent_index)
             # An Aura that failed to attach (its target left the battlefield while the
             # spell was on the stack) goes to its owner's graveyard instead of
@@ -1960,6 +1965,36 @@ class StackCastingMixin:
             return
         caster.graveyard.append(card)
         self.log.append(f"{card.name} resolved and moved to graveyard")
+
+    def _apply_self_enters_battlefield_triggers(
+        self,
+        controller_index: int,
+        permanent: Permanent,
+        target_player_index: int | None,
+        target_permanent_index: int | None,
+    ) -> None:
+        """Fire a just-entered permanent's own "when this enters the
+        battlefield" triggered abilities (e.g. Oubliette). This engine doesn't
+        model a separate priority window for choosing the trigger's own
+        target, so the caster's cast-time target choice is reused directly —
+        the same convention an Aura's enchant target already follows."""
+        program = compile_card_oracle(permanent.card)
+        for trig in program.triggered_abilities:
+            if trig.condition.kind != "enters_battlefield" or not trig.supported or trig.instruction is None:
+                continue
+            caster = self.players[controller_index]
+            target_idx = target_player_index if target_player_index is not None else controller_index
+            if not (0 <= target_idx < len(self.players)):
+                target_idx = controller_index
+            target = self.players[target_idx]
+            context = OracleExecutionContext(
+                caster=caster,
+                target=target,
+                card=permanent.card,
+                target_permanent_index=target_permanent_index,
+                source_permanent=permanent,
+            )
+            self._execute_oracle_instruction(trig.instruction, context)
 
     def _select_executable_instruction(
         self, card: CardDefinition, mode_index: int | None = None

@@ -214,10 +214,48 @@ def _gaeas_liege_leaves(game: Game, owner: PlayerState, permanent: Permanent) ->
     game._refresh_dynamic_creatures()
 
 
+def _aladdin_leaves(game: Game, owner: PlayerState, permanent: Permanent) -> None:
+    # "Gain control of target artifact for as long as you control this
+    # creature." When Aladdin leaves, the stolen artifact returns (CR 611.3
+    # linked-duration effects end when their source does — mirrors how
+    # Control Magic/Steal Artifact revert when their Aura leaves).
+    game._revert_stolen_permanent(permanent)
+
+
+def _old_man_of_the_sea_leaves(game: Game, owner: PlayerState, permanent: Permanent) -> None:
+    # Linked-duration steal ends when Old Man of the Sea itself leaves, same
+    # as when it untaps or the stolen creature's power exceeds its own
+    # (checked continuously — see game_ending.py's SBA-style sweep).
+    game._revert_stolen_permanent(permanent)
+
+
+def _oubliette_leaves(game: Game, owner: PlayerState, permanent: Permanent) -> None:
+    # "Target creature phases out until this enchantment leaves the
+    # battlefield. Tap that creature as it phases in this way." Scoped
+    # exile-and-return (not full CR 702.26 phasing) tracked on Oubliette
+    # itself — the phased creature and any Auras/Equipment that phased out
+    # with it return, tapped, when Oubliette leaves.
+    phased = permanent.metadata.pop("phased_out_permanent", None)
+    owner_index = permanent.metadata.pop("phased_out_owner_index", None)
+    attachments = permanent.metadata.pop("phased_out_attachments", None) or []
+    if phased is not None and isinstance(owner_index, int) and 0 <= owner_index < len(game.players):
+        phased.tapped = True
+        game.players[owner_index].battlefield.append(phased)
+        game.log.append(
+            f"{phased.card.name} phases back in, tapped ({permanent.card.name} left the battlefield)"
+        )
+    for seat, attached_perm in attachments:
+        if 0 <= seat < len(game.players):
+            game.players[seat].battlefield.append(attached_perm)
+
+
 ON_LEAVE_BATTLEFIELD: dict[str, LeaveBattlefieldHook] = {
     "Cyclopean Tomb": _cyclopean_tomb_leaves,
     "Consecrate Land": _consecrate_land_leaves,
     "Gaea's Liege": _gaeas_liege_leaves,
+    "Aladdin": _aladdin_leaves,
+    "Old Man of the Sea": _old_man_of_the_sea_leaves,
+    "Oubliette": _oubliette_leaves,
 }
 
 
@@ -289,6 +327,7 @@ class UntapRestriction:
     limit: int | None = None
     min_power: int | None = None
     only_while_source_untapped: bool = False
+    color: str | None = None
 
 
 UNTAP_RESTRICTIONS: dict[str, UntapRestriction] = {
@@ -296,7 +335,24 @@ UNTAP_RESTRICTIONS: dict[str, UntapRestriction] = {
     "Winter Orb": UntapRestriction(scope="land", limit=1, only_while_source_untapped=True),
     "Smoke": UntapRestriction(scope="creature", limit=1),
     "Meekstone": UntapRestriction(scope="creature", min_power=3),
+    # Magnetic Mountain: "Blue creatures don't untap during their controllers'
+    # untap steps." (The "may pay {4} per creature to untap anyway" clause is
+    # a separate upkeep effect — see upkeep_pay_per_creature_untap_color.)
+    "Magnetic Mountain": UntapRestriction(scope="creature_color", color="U"),
 }
+
+
+# --------------------------------------------------------------------------
+# Untapped artifact protectors
+# --------------------------------------------------------------------------
+# Guardian Beast: "As long as this creature is untapped, noncreature artifacts
+# you control can't be enchanted, have indestructible, and other players
+# can't gain control of them." Checked by
+# effects.py:_untapped_artifact_protector_active at each relevant site
+# (destroy, enchant-target legality, control-change legality) rather than
+# precomputed, since the protection tracks the source's tapped state.
+
+UNTAPPED_ARTIFACT_PROTECTORS: frozenset[str] = frozenset({"Guardian Beast"})
 
 
 # --------------------------------------------------------------------------

@@ -3,11 +3,21 @@ land-type changes, self-animation, token creation."""
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from ..oracle_types import OracleInstruction, _instruction
 from .base import RuleResult, parse_rule
 from .common import find_color_word
+
+# Rukh Egg: "create a 4/4 red Bird creature token with flying at the
+# beginning of the next end step." General enough for future "create a P/T
+# color Subtype creature token [with Keyword] at the beginning of the next
+# end step" delayed-token effects.
+_DELAYED_TOKEN_RE = re.compile(
+    r"create an? (\d+)/(\d+) (\w+) (\w+) creature token(?: with (\w+))? "
+    r"at the beginning of the next end step"
+)
 
 
 @parse_rule(48000)
@@ -30,6 +40,32 @@ def recolor_target(text: str, activated: bool) -> RuleResult:
     if target_color:
         payload: dict[str, Any] = {"target_color": target_color}
         return OracleInstruction("recolor_target_from_text", "", payload), "spell_pattern"
+    return None
+
+
+# Aladdin: "Gain control of target artifact for as long as you control this
+# creature." Reverted by the ON_LEAVE_BATTLEFIELD["Aladdin"] hook (unlike
+# Control Magic/Steal Artifact, which are Auras reverted when they leave).
+@parse_rule(51200)
+def steal_target_permanent_linked_to_self(text: str, activated: bool) -> RuleResult:
+    if activated and "gain control of target artifact for as long as you control this creature" in text:
+        return _instruction("steal_target_permanent_linked_to_self"), "activated_steal"
+    return None
+
+
+# Old Man of the Sea: "Gain control of target creature with power less than
+# or equal to this creature's power for as long as this creature remains
+# tapped and that creature's power remains less than or equal to this
+# creature's power." Reverted continuously (untap OR power comparison
+# failing) by the game_ending.py SBA-style check, not just on leaving.
+@parse_rule(51300)
+def steal_creature_while_tapped_and_weaker(text: str, activated: bool) -> RuleResult:
+    if (
+        activated
+        and "gain control of target creature with power less than or equal to this creature's power" in text
+        and "for as long as this creature remains tapped" in text
+    ):
+        return _instruction("steal_creature_while_tapped_and_weaker"), "activated_steal"
     return None
 
 
@@ -59,6 +95,48 @@ def create_wasp_token(text: str, activated: bool) -> RuleResult:
             type_line="Artifact Creature — Insect",
             keywords=("Flying",),
         ), "activated_token"
+    return None
+
+
+# City in a Bottle: "Whenever one or more other nontoken permanents with a
+# name originally printed in the Arabian Nights expansion are on the
+# battlefield, their controllers sacrifice them. Players can't cast spells or
+# play lands with a name originally printed in the Arabian Nights expansion."
+# One instruction covers both clauses (checked continuously as a state-based
+# action / at cast time — see game_ending.py and stack_casting.py) since a
+# single distinctive phrase ("originally printed in the ... expansion")
+# identifies the whole effect regardless of which clause matched first.
+_ORIGINALLY_PRINTED_IN_RE = re.compile(r"originally printed in the (.+?) expansion")
+_EXPANSION_NAME_TO_SET_CODE = {"arabian nights": "arn"}
+
+
+@parse_rule(97300)
+def ban_and_sacrifice_set_permanents(text: str, activated: bool) -> RuleResult:
+    m = _ORIGINALLY_PRINTED_IN_RE.search(text)
+    if not m:
+        return None
+    set_code = _EXPANSION_NAME_TO_SET_CODE.get(m.group(1))
+    if set_code is None:
+        return None
+    return _instruction("ban_and_sacrifice_set_permanents", set_code=set_code), "spell_pattern"
+
+
+@parse_rule(97500)
+def create_token_at_next_end_step(text: str, activated: bool) -> RuleResult:
+    m = _DELAYED_TOKEN_RE.search(text)
+    if m:
+        power, toughness, color_word, subtype, keyword = m.groups()
+        color_sym = find_color_word(color_word, "{}")
+        name = subtype.capitalize()
+        return _instruction(
+            "arm_end_step_token",
+            name=name,
+            power=int(power),
+            toughness=int(toughness),
+            type_line=f"Creature — {name}",
+            colors=(color_sym,) if color_sym else (),
+            keywords=(keyword.capitalize(),) if keyword else (),
+        ), "triggered_token"
     return None
 
 

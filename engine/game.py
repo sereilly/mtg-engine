@@ -222,6 +222,17 @@ class Game(
     # one-per-upkeep at the beginning of that controller's upkeeps. Populated via
     # the ON_LEAVE_BATTLEFIELD card hook and drained in resolve_upkeep.
     mire_cleanup_obligations: list = field(default_factory=list)
+    # Delayed token creation from a "dies" trigger whose token appears at the
+    # beginning of the next end step (Rukh Egg), by which time the source
+    # permanent is long gone — each entry is {"controller_index", "name",
+    # "power", "toughness", "type_line", "colors", "keywords"}. Populated in
+    # _permanent_to_graveyard, drained in resolve_end_step.
+    pending_end_step_tokens: list = field(default_factory=list)
+    # Nafs Asp: "that player loses N life at the beginning of their next draw
+    # step unless they pay {cost} before that draw step." Each entry is
+    # {"player_index", "amount", "cost", "source_name"}. Populated by the
+    # arm_draw_step_life_loss_unless_pay handler, resolved in resolve_draw_step.
+    pending_draw_step_life_loss: list = field(default_factory=list)
 
     def __post_init__(self) -> None:
         # Preserve legacy external phase naming while internally tracking phase/step.

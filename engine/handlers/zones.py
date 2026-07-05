@@ -4,7 +4,7 @@ import random
 from typing import TYPE_CHECKING
 
 from ..models import Permanent
-from ._common import resolve_amount
+from ._common import resolve_amount, resolve_target_permanent
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -29,6 +29,31 @@ def draw_controller_cards(game: Game, instruction: OracleInstruction, context: O
     drawn = caster.draw(int(instruction.payload.get("amount", 0)))
     game.log.append(f"{card.name} drew {drawn} card")
     return True, "resolved"
+
+
+@effect_handler("draw_then_discard_self")
+def draw_then_discard_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Bazaar of Baghdad: "Draw two cards, then discard three cards." Affects
+    the ability's own controller; the discard is non-random, so it becomes a
+    pending choice (the same flow discard_target_cards uses)."""
+    caster = context.caster
+    card = context.card
+    draw_count = int(instruction.payload.get("draw", 0))
+    discard_count = int(instruction.payload.get("discard", 0))
+    drawn = caster.draw(draw_count)
+    game.log.append(f"{card.name}: {caster.name} drew {drawn} card(s)")
+
+    actual_discard = min(discard_count, len(caster.hand))
+    if actual_discard <= 0:
+        return True, "resolved"
+    player_index = game.players.index(caster)
+    game.pending_discard = {
+        "player_index": player_index,
+        "count": actual_discard,
+        "allow_top_of_library": any(p.card.name == "Library of Leng" for p in caster.battlefield),
+    }
+    game.log.append(f"{caster.name} must choose {actual_discard} card(s) to discard")
+    return True, "pending_discard"
 
 
 @effect_handler("discard_hand_ante_then_draw_seven")
@@ -262,6 +287,34 @@ def exile_target_creature_until_eot(game: Game, instruction: OracleInstruction, 
         game.log.append(f"{exiled_perm.card.name} exiled until end of turn by {card.name}")
     else:
         game.log.append(f"{card.name}: no valid creature to exile")
+    return True, "resolved"
+
+
+@effect_handler("phase_out_target_creature_until_source_leaves")
+def phase_out_target_creature_until_source_leaves(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    card = context.card
+    source_permanent = context.source_permanent
+    if source_permanent is None:
+        return False, "ability not implemented"
+    target_perm = resolve_target_permanent(context, predicate=lambda p: p.is_creature)
+    if target_perm is None:
+        game.log.append(f"{card.name}: no valid creature target")
+        return True, "resolved"
+    owner_index = next((i for i, p in enumerate(game.players) if target_perm in p.battlefield), None)
+    if owner_index is None:
+        return True, "resolved"
+    game.players[owner_index].battlefield.remove(target_perm)
+    # Auras/Equipment attached to the phased creature phase out with it (CR 702.26h).
+    attachments: list[tuple[int, Permanent]] = []
+    for seat, player in enumerate(game.players):
+        for perm in list(player.battlefield):
+            if perm.metadata.get("attached_to") is target_perm:
+                player.battlefield.remove(perm)
+                attachments.append((seat, perm))
+    source_permanent.metadata["phased_out_permanent"] = target_perm
+    source_permanent.metadata["phased_out_owner_index"] = owner_index
+    source_permanent.metadata["phased_out_attachments"] = attachments
+    game.log.append(f"{card.name} phases {target_perm.card.name} out")
     return True, "resolved"
 
 

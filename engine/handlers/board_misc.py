@@ -14,6 +14,75 @@ if TYPE_CHECKING:
     from ..oracle import OracleInstruction
 
 
+@effect_handler("steal_target_permanent_linked_to_self")
+def steal_target_permanent_linked_to_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Aladdin: "Gain control of target artifact for as long as you control
+    this creature." The theft is recorded on Aladdin itself (not an Aura), so
+    ON_LEAVE_BATTLEFIELD["Aladdin"] can revert it via _revert_stolen_permanent
+    when Aladdin leaves the battlefield."""
+    caster = context.caster
+    card = context.card
+    source_permanent = context.source_permanent
+    if source_permanent is None:
+        return False, "ability not implemented"
+    # Guardian Beast: "other players can't gain control of" the artifacts it
+    # protects.
+    target_perm = resolve_target_permanent(
+        context,
+        predicate=lambda p: p.has_type("artifact") and not game._untapped_artifact_protector_active(p),
+    )
+    if target_perm is None:
+        game.log.append(f"{card.name}: no valid artifact target")
+        return True, "resolved"
+    owner_index = next(
+        (i for i, p in enumerate(game.players) if target_perm in p.battlefield), None
+    )
+    if owner_index is None:
+        return True, "resolved"
+    game.players[owner_index].battlefield.remove(target_perm)
+    caster.battlefield.append(target_perm)
+    source_permanent.metadata["stolen_permanent"] = target_perm
+    source_permanent.metadata["stolen_owner_index"] = owner_index
+    game.log.append(f"{card.name} gains control of {target_perm.card.name}")
+    return True, "resolved"
+
+
+@effect_handler("steal_creature_while_tapped_and_weaker")
+def steal_creature_while_tapped_and_weaker(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Old Man of the Sea: "Gain control of target creature with power less
+    than or equal to this creature's power for as long as this creature
+    remains tapped and that creature's power remains less than or equal to
+    this creature's power." Both revert conditions are re-checked
+    continuously by the game_ending.py SBA-style check (stolen_while_tapped_
+    and_weaker marks this as that specific steal, distinct from Aladdin's
+    single-condition linked duration)."""
+    caster = context.caster
+    card = context.card
+    source_permanent = context.source_permanent
+    if source_permanent is None:
+        return False, "ability not implemented"
+
+    def _eligible(perm: Permanent) -> bool:
+        return perm.is_creature and perm.effective_power <= source_permanent.effective_power
+
+    target_perm = resolve_target_permanent(context, predicate=_eligible)
+    if target_perm is None:
+        game.log.append(f"{card.name}: no valid creature target")
+        return True, "resolved"
+    owner_index = next(
+        (i for i, p in enumerate(game.players) if target_perm in p.battlefield), None
+    )
+    if owner_index is None:
+        return True, "resolved"
+    game.players[owner_index].battlefield.remove(target_perm)
+    caster.battlefield.append(target_perm)
+    source_permanent.metadata["stolen_permanent"] = target_perm
+    source_permanent.metadata["stolen_owner_index"] = owner_index
+    source_permanent.metadata["stolen_while_tapped_and_weaker"] = True
+    game.log.append(f"{card.name} gains control of {target_perm.card.name}")
+    return True, "resolved"
+
+
 @effect_handler("add_corpse_counters_for_each_creature_died")
 def add_corpse_counters_for_each_creature_died(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Scavenging Ghoul: "At the beginning of each end step, put a corpse counter on
@@ -47,6 +116,26 @@ def sacrifice_if_no_creatures(game: Game, instruction: OracleInstruction, contex
             pl.graveyard.append(source.card)
             game.log.append(f"{source.card.name} sacrificed at end step (no creatures)")
             break
+    return True, "resolved"
+
+
+@effect_handler("end_step_damage_if_not_attacked")
+def end_step_damage_if_not_attacked(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Erg Raiders: "At the beginning of your end step, if this creature
+    didn't attack this turn, it deals 2 damage to you unless it came under
+    your control this turn." Both guards are re-checked at resolution (CR
+    603.4), matching the Pestilence intervening-if precedent."""
+    source = context.source_permanent
+    caster = context.caster
+    if source is None or caster is None:
+        return True, "resolved"
+    if source.metadata.get("attacked_this_turn"):
+        return True, "resolved"
+    if source.metadata.get("summoning_sickness_turn") == game.turn:
+        return True, "resolved"
+    amount = int(instruction.payload.get("amount", 0))
+    dealt = game._deal_damage_to_player(caster, amount, source=source)
+    game.log.append(f"{source.card.name} dealt {dealt} damage to {caster.name}")
     return True, "resolved"
 
 
