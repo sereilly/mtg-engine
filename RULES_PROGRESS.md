@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**115 / 566 tracked rules covered (20%)** — 494 tests, 0 unannotated.
+**179 / 566 tracked rules covered (31%)** — 592 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -15,7 +15,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [103. Starting the Game](#103-starting-the-game) | 3/8 | 37% |
 | [104. Ending the Game](#104-ending-the-game) | 5/6 | 83% |
 | [105. Colors](#105-colors) | 0/5 | 0% |
-| [106. Mana](#106-mana) | 0/13 | 0% |
+| [106. Mana](#106-mana) | 4/13 | 30% |
 | [107. Numbers and Symbols](#107-numbers-and-symbols) | 0/18 | 0% |
 | [108. Cards](#108-cards) | 0/6 | 0% |
 | [109. Objects](#109-objects) | 0/5 | 0% |
@@ -23,13 +23,13 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [111. Tokens](#111-tokens) | 0/13 | 0% |
 | [112. Spells](#112-spells) | 0/4 | 0% |
 | [113. Abilities](#113-abilities) | 0/12 | 0% |
-| [115. Targets](#115-targets) | 0/10 | 0% |
+| [115. Targets](#115-targets) | 4/10 | 40% |
 | [116. Special Actions](#116-special-actions) | 0/3 | 0% |
-| [117. Timing and Priority](#117-timing-and-priority) | 1/7 | 14% |
-| [118. Costs](#118-costs) | 0/14 | 0% |
+| [117. Timing and Priority](#117-timing-and-priority) | 6/7 | 85% |
+| [118. Costs](#118-costs) | 7/14 | 50% |
 | [119. Life](#119-life) | 0/10 | 0% |
 | [120. Damage](#120-damage) | 0/10 | 0% |
-| [121. Drawing a Card](#121-drawing-a-card) | 1/9 | 11% |
+| [121. Drawing a Card](#121-drawing-a-card) | 3/9 | 33% |
 | [122. Counters](#122-counters) | 0/9 | 0% |
 | [200. General](#200-general) | 0/3 | 0% |
 | [201. Name](#201-name) | 0/6 | 0% |
@@ -44,36 +44,36 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [304. Instants](#304-instants) | 0/5 | 0% |
 | [305. Lands](#305-lands) | 0/9 | 0% |
 | [307. Sorceries](#307-sorceries) | 0/5 | 0% |
-| [400. General](#400-general) | 0/12 | 0% |
-| [401. Library](#401-library) | 0/7 | 0% |
-| [402. Hand](#402-hand) | 0/3 | 0% |
-| [403. Battlefield](#403-battlefield) | 0/5 | 0% |
-| [404. Graveyard](#404-graveyard) | 0/3 | 0% |
-| [405. Stack](#405-stack) | 0/6 | 0% |
-| [406. Exile](#406-exile) | 0/8 | 0% |
-| [500. General](#500-general) | 3/12 | 25% |
-| [501. Beginning Phase](#501-beginning-phase) | 0/1 | 0% |
-| [502. Untap Step](#502-untap-step) | 0/4 | 0% |
-| [503. Upkeep Step](#503-upkeep-step) | 0/2 | 0% |
-| [504. Draw Step](#504-draw-step) | 0/2 | 0% |
-| [505. Main Phase](#505-main-phase) | 1/6 | 16% |
+| [400. General](#400-general) | 4/12 | 33% |
+| [401. Library](#401-library) | 1/7 | 14% |
+| [402. Hand](#402-hand) | 2/3 | 66% |
+| [403. Battlefield](#403-battlefield) | 3/5 | 60% |
+| [404. Graveyard](#404-graveyard) | 1/3 | 33% |
+| [405. Stack](#405-stack) | 5/6 | 83% |
+| [406. Exile](#406-exile) | 2/8 | 25% |
+| [500. General](#500-general) | 6/12 | 50% |
+| [501. Beginning Phase](#501-beginning-phase) | 1/1 | 100% |
+| [502. Untap Step](#502-untap-step) | 2/4 | 50% |
+| [503. Upkeep Step](#503-upkeep-step) | 1/2 | 50% |
+| [504. Draw Step](#504-draw-step) | 2/2 | 100% |
+| [505. Main Phase](#505-main-phase) | 3/6 | 50% |
 | [506. Combat Phase](#506-combat-phase) | 6/7 | 85% |
-| [507. Beginning of Combat Step](#507-beginning-of-combat-step) | 0/2 | 0% |
+| [507. Beginning of Combat Step](#507-beginning-of-combat-step) | 1/2 | 50% |
 | [508. Declare Attackers Step](#508-declare-attackers-step) | 3/8 | 37% |
 | [509. Declare Blockers Step](#509-declare-blockers-step) | 4/4 | 100% |
 | [510. Combat Damage Step](#510-combat-damage-step) | 2/4 | 50% |
-| [511. End of Combat Step](#511-end-of-combat-step) | 0/3 | 0% |
-| [512. Ending Phase](#512-ending-phase) | 0/1 | 0% |
-| [513. End Step](#513-end-step) | 0/2 | 0% |
-| [514. Cleanup Step](#514-cleanup-step) | 1/3 | 33% |
+| [511. End of Combat Step](#511-end-of-combat-step) | 3/3 | 100% |
+| [512. Ending Phase](#512-ending-phase) | 1/1 | 100% |
+| [513. End Step](#513-end-step) | 1/2 | 50% |
+| [514. Cleanup Step](#514-cleanup-step) | 3/3 | 100% |
 | [601. Casting Spells](#601-casting-spells) | 4/7 | 57% |
 | [602. Activating Activated Abilities](#602-activating-activated-abilities) | 3/5 | 60% |
 | [603. Handling Triggered Abilities](#603-handling-triggered-abilities) | 4/12 | 33% |
 | [604. Handling Static Abilities](#604-handling-static-abilities) | 2/7 | 28% |
-| [605. Mana Abilities](#605-mana-abilities) | 3/5 | 60% |
+| [605. Mana Abilities](#605-mana-abilities) | 5/5 | 100% |
 | [606. Loyalty Abilities](#606-loyalty-abilities) | 2/5 | 40% |
 | [607. Linked Abilities](#607-linked-abilities) | 2/5 | 40% |
-| [608. Resolving Spells and Abilities](#608-resolving-spells-and-abilities) | 0/3 | 0% |
+| [608. Resolving Spells and Abilities](#608-resolving-spells-and-abilities) | 3/3 | 100% |
 | [609. Effects](#609-effects) | 3/7 | 42% |
 | [610. One-Shot Effects](#610-one-shot-effects) | 2/5 | 40% |
 | [611. Continuous Effects](#611-continuous-effects) | 2/3 | 66% |
@@ -149,10 +149,10 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 106. Mana
 
-- [ ] **106.1** Mana is the primary resource in the game. Players spend mana to pay costs, usually when casting s...
+- [x] **106.1** Mana is the primary resource in the game. Players spend mana to pay costs, usually when casting s... *(2 tests, subrules b)*
 - [ ] **106.2** Mana is represented by mana symbols (see rule 107.4). Mana symbols also represent mana costs (see...
-- [ ] **106.3** Mana is produced by the effects of mana abilities (see rule 605). It may also be produced by the ...
-- [ ] **106.4** When an effect instructs a player to add mana, that mana goes into a player’s mana pool. From the...
+- [x] **106.3** Mana is produced by the effects of mana abilities (see rule 605). It may also be produced by the ... *(2 tests)*
+- [x] **106.4** When an effect instructs a player to add mana, that mana goes into a player’s mana pool. From the... *(3 tests)*
 - [ ] **106.5** If an ability would produce one or more mana of an undefined type, it produces no mana instead.
 - [ ] **106.6** Some spells or abilities that produce mana restrict how that mana can be spent, have an additiona...
 - [ ] **106.7** Some abilities produce mana based on the type of mana another permanent or permanents “could prod...
@@ -160,7 +160,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **106.9** If an effect would add mana represented by a Phyrexian mana symbol to a player’s mana pool, one m...
 - [ ] **106.10** If an effect would add mana represented by a generic mana symbol to a player’s mana pool, that mu...
 - [ ] **106.11** If an effect would add mana represented by one or more snow mana symbols to a player’s mana pool,...
-- [ ] **106.12** To “tap [a permanent] for mana” is to activate a mana ability of that permanent that includes the...
+- [x] **106.12** To “tap [a permanent] for mana” is to activate a mana ability of that permanent that includes the... *(2 tests, subrules a)*
 - [ ] **106.13** One card (Drain Power) causes one player to lose unspent mana and another to add “the mana lost t...
 
 ### 107. Numbers and Symbols
@@ -249,16 +249,16 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 115. Targets
 
-- [ ] **115.1** Some spells and abilities require their controller to choose one or more targets for them. The ta...
-- [ ] **115.2** Only permanents are legal targets for spells and abilities, unless a spell or ability (a) specifi...
+- [x] **115.1** Some spells and abilities require their controller to choose one or more targets for them. The ta... *(4 tests, subrules bc)*
+- [x] **115.2** Only permanents are legal targets for spells and abilities, unless a spell or ability (a) specifi... *(2 tests)*
 - [ ] **115.3** The same target can’t be chosen multiple times for any one instance of the word “target” on a spe...
-- [ ] **115.4** Some spells and abilities that refer to damage require “any target,” “another target,” “two targe...
+- [x] **115.4** Some spells and abilities that refer to damage require “any target,” “another target,” “two targe... *(1 tests)*
 - [ ] **115.5** A spell or ability on the stack is an illegal target for itself.
 - [ ] **115.6** A spell or ability that requires targets may allow zero targets to be chosen. Such a spell or abi...
 - [ ] **115.7** Some effects allow a player to change the target(s) of a spell or ability, and other effects allo...
 - [ ] **115.8** Modal spells and abilities may have different targeting requirements for each mode. An effect tha...
 - [ ] **115.9** Some objects check what another spell or ability is targeting. Depending on the wording, these ma...
-- [ ] **115.10** Spells and abilities can affect objects and players they don’t target. In general, those objects ...
+- [x] **115.10** Spells and abilities can affect objects and players they don’t target. In general, those objects ... *(2 tests, subrules a)*
 
 ### 116. Special Actions
 
@@ -268,24 +268,24 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 117. Timing and Priority
 
-- [ ] **117.1** Unless a spell or ability is instructing a player to take an action, which player can take action...
-- [ ] **117.2** Other kinds of abilities and actions are automatically generated or performed by the game rules, ...
-- [ ] **117.3** Which player has priority is determined by the following rules:
-- [x] **117.4** If all players pass in succession (that is, if all players pass without taking any actions in bet... *(1 tests)*
-- [ ] **117.5** Each time a player would get priority, the game first performs all applicable state-based actions...
+- [x] **117.1** Unless a spell or ability is instructing a player to take an action, which player can take action... *(2 tests)*
+- [x] **117.2** Other kinds of abilities and actions are automatically generated or performed by the game rules, ... *(1 tests, subrules c)*
+- [x] **117.3** Which player has priority is determined by the following rules: *(7 tests, subrules abcd)*
+- [x] **117.4** If all players pass in succession (that is, if all players pass without taking any actions in bet... *(3 tests)*
+- [x] **117.5** Each time a player would get priority, the game first performs all applicable state-based actions... *(1 tests)*
 - [ ] **117.6** In a multiplayer game using the shared team turns option, teams rather than individual players ha...
-- [ ] **117.7** If a player with priority casts a spell or activates an activated ability while another spell or ...
+- [x] **117.7** If a player with priority casts a spell or activates an activated ability while another spell or ... *(1 tests)*
 
 ### 118. Costs
 
-- [ ] **118.1** A cost is an action or payment necessary to take another action or to stop another action from ta...
-- [ ] **118.2** If a cost includes a mana payment, the player paying the cost has a chance to activate mana abili...
-- [ ] **118.3** A player can’t pay a cost without having the necessary resources to pay it fully. For example, a ...
-- [ ] **118.4** Some costs include an {X} or an X. See rule 107.3.
-- [ ] **118.5** Some costs are represented by {0}, or are reduced to {0}. The action necessary for a player to pa...
+- [x] **118.1** A cost is an action or payment necessary to take another action or to stop another action from ta... *(1 tests)*
+- [x] **118.2** If a cost includes a mana payment, the player paying the cost has a chance to activate mana abili... *(1 tests)*
+- [x] **118.3** A player can’t pay a cost without having the necessary resources to pay it fully. For example, a ... *(5 tests, subrules ab)*
+- [x] **118.4** Some costs include an {X} or an X. See rule 107.3. *(1 tests)*
+- [x] **118.5** Some costs are represented by {0}, or are reduced to {0}. The action necessary for a player to pa... *(2 tests, subrules a)*
 - [ ] **118.6** Some objects have no mana cost. This represents an unpayable cost. An ability can also have an un...
-- [ ] **118.7** What a player actually needs to do to pay a cost may be changed or reduced by effects. If the man...
-- [ ] **118.8** Some spells and abilities have additional costs. An additional cost is a cost listed in a spell’s...
+- [x] **118.7** What a player actually needs to do to pay a cost may be changed or reduced by effects. If the man... *(1 tests)*
+- [x] **118.8** Some spells and abilities have additional costs. An additional cost is a cost listed in a spell’s... *(1 tests)*
 - [ ] **118.9** Some spells have alternative costs. An alternative cost is a cost listed in a spell’s text, or ap...
 - [ ] **118.10** Each payment of a cost applies to only one spell, ability, or effect. For example, a player can’t...
 - [ ] **118.11** The actions performed when paying a cost may be modified by effects. Even if they are, meaning th...
@@ -321,8 +321,8 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 121. Drawing a Card
 
-- [ ] **121.1** A player draws a card by putting the top card of their library into their hand. This is done as a...
-- [ ] **121.2** Cards may only be drawn one at a time. If a player is instructed to draw multiple cards, that pla...
+- [x] **121.1** A player draws a card by putting the top card of their library into their hand. This is done as a... *(3 tests)*
+- [x] **121.2** Cards may only be drawn one at a time. If a player is instructed to draw multiple cards, that pla... *(1 tests)*
 - [ ] **121.3** If there are no cards in a player’s library and an effect offers that player the choice to draw a...
 - [x] **121.4** A player who attempts to draw a card from a library with no cards in it loses the game the next t... *(3 tests)*
 - [ ] **121.5** If an effect moves cards from a player’s library to that player’s hand without using the word “dr...
@@ -453,13 +453,13 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 400. General
 
-- [ ] **400.1** A zone is a place where objects can be during a game. There are normally seven zones: library, ha...
+- [x] **400.1** A zone is a place where objects can be during a game. There are normally seven zones: library, ha... *(2 tests)*
 - [ ] **400.2** Public zones are zones in which all players can see the cards’ faces, except for those cards that...
-- [ ] **400.3** If an object would go to any library, graveyard, or hand other than its owner’s, it goes to its o...
+- [x] **400.3** If an object would go to any library, graveyard, or hand other than its owner’s, it goes to its o... *(2 tests)*
 - [ ] **400.4** Cards with certain card types can’t enter certain zones.
-- [ ] **400.5** The order of objects in a library, in a graveyard, or on the stack can’t be changed except when e...
+- [x] **400.5** The order of objects in a library, in a graveyard, or on the stack can’t be changed except when e... *(1 tests)*
 - [ ] **400.6** If an object would move from one zone to another, determine what event is moving the object. If t...
-- [ ] **400.7** An object that moves from one zone to another becomes a new object with no memory of, or relation...
+- [x] **400.7** An object that moves from one zone to another becomes a new object with no memory of, or relation... *(2 tests)*
 - [ ] **400.8** If an object in the exile zone is exiled, it doesn’t change zones, but it becomes a new object th...
 - [ ] **400.9** If a face-up object in the command zone is turned face down, it becomes a new object.
 - [ ] **400.10** If an object in the command zone is put into the command zone, it doesn’t change zones, but it be...
@@ -469,7 +469,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 401. Library
 
 - [ ] **401.1** When a game begins, each player’s deck becomes their library.
-- [ ] **401.2** Each library must be kept in a single face-down pile. Players can’t look at or change the order o...
+- [x] **401.2** Each library must be kept in a single face-down pile. Players can’t look at or change the order o... *(1 tests)*
 - [ ] **401.3** Any player may count the number of cards remaining in any player’s library at any time.
 - [ ] **401.4** If an effect puts two or more cards in a specific position in a library at the same time, the own...
 - [ ] **401.5** Some effects tell a player to play with the top card of their library revealed, or say that a pla...
@@ -478,37 +478,37 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 402. Hand
 
-- [ ] **402.1** The hand is where a player holds cards that have been drawn. Cards can be put into a player’s han...
-- [ ] **402.2** Each player has a maximum hand size, which is normally seven cards. A player may have any number ...
+- [x] **402.1** The hand is where a player holds cards that have been drawn. Cards can be put into a player’s han... *(2 tests)*
+- [x] **402.2** Each player has a maximum hand size, which is normally seven cards. A player may have any number ... *(5 tests)*
 - [ ] **402.3** A player may arrange their hand in any convenient fashion and look at it at any time. A player ca...
 
 ### 403. Battlefield
 
-- [ ] **403.1** Most of the area between the players represents the battlefield. The battlefield starts out empty...
+- [x] **403.1** Most of the area between the players represents the battlefield. The battlefield starts out empty... *(2 tests)*
 - [ ] **403.2** A spell or ability affects and checks only the battlefield unless it specifically mentions a play...
-- [ ] **403.3** Permanents exist only on the battlefield. Every object on the battlefield is a permanent. See rul...
-- [ ] **403.4** Whenever a permanent enters the battlefield, it becomes a new object and has no relationship to a...
+- [x] **403.3** Permanents exist only on the battlefield. Every object on the battlefield is a permanent. See rul... *(2 tests)*
+- [x] **403.4** Whenever a permanent enters the battlefield, it becomes a new object and has no relationship to a... *(2 tests)*
 - [ ] **403.5** Previously, the battlefield was called the “in-play zone.” Cards that were printed with text that...
 
 ### 404. Graveyard
 
-- [ ] **404.1** A player’s graveyard is their discard pile. Any object that’s countered, discarded, destroyed, or...
+- [x] **404.1** A player’s graveyard is their discard pile. Any object that’s countered, discarded, destroyed, or... *(4 tests)*
 - [ ] **404.2** Each graveyard is kept in a single face-up pile. A player can examine the cards in any graveyard ...
 - [ ] **404.3** If an effect or rule puts two or more cards into the same graveyard at the same time, the owner o...
 
 ### 405. Stack
 
-- [ ] **405.1** When a spell is cast, the physical card is put on the stack (see rule 601.2a). When an ability is...
-- [ ] **405.2** The stack keeps track of the order that spells and/or abilities were added to it. Each time an ob...
+- [x] **405.1** When a spell is cast, the physical card is put on the stack (see rule 601.2a). When an ability is... *(2 tests)*
+- [x] **405.2** The stack keeps track of the order that spells and/or abilities were added to it. Each time an ob... *(1 tests)*
 - [ ] **405.3** If an effect puts two or more objects on the stack at the same time, those controlled by the acti...
-- [ ] **405.4** Each spell has all the characteristics of the card associated with it. Each activated or triggere...
-- [ ] **405.5** When all players pass in succession, the top (last-added) spell or ability on the stack resolves....
-- [ ] **405.6** Some things that happen during the game don’t use the stack.
+- [x] **405.4** Each spell has all the characteristics of the card associated with it. Each activated or triggere... *(2 tests)*
+- [x] **405.5** When all players pass in succession, the top (last-added) spell or ability on the stack resolves.... *(2 tests)*
+- [x] **405.6** Some things that happen during the game don’t use the stack. *(3 tests, subrules ce)*
 
 ### 406. Exile
 
-- [ ] **406.1** The exile zone is essentially a holding area for objects. Some spells and abilities exile an obje...
-- [ ] **406.2** To exile an object is to put it into the exile zone from whatever zone it’s currently in. An exil...
+- [x] **406.1** The exile zone is essentially a holding area for objects. Some spells and abilities exile an obje... *(1 tests)*
+- [x] **406.2** To exile an object is to put it into the exile zone from whatever zone it’s currently in. An exil... *(1 tests)*
 - [ ] **406.3** Exiled cards are, by default, kept face up and may be examined by any player at any time. Cards “...
 - [ ] **406.4** Face-down cards in exile should be kept in separate piles based on when they were exiled and how ...
 - [ ] **406.5** Exiled cards that might return to the battlefield or any other zone should be kept in separate pi...
@@ -520,10 +520,10 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **500.1** A turn consists of five phases, in this order: beginning, precombat main, combat, postcombat main... *(2 tests)*
 - [ ] **500.2** A phase or step in which players receive priority ends when the stack is empty and all players pa...
-- [ ] **500.3** A step in which no players receive priority ends when all specified actions that take place durin...
+- [x] **500.3** A step in which no players receive priority ends when all specified actions that take place durin... *(2 tests)*
 - [ ] **500.4** As a step or phase begins, if there are effects that last until that step or phase, those effects...
-- [ ] **500.5** As a step or phase ends, if there are effects that last until the end of that step or phase, thos...
-- [ ] **500.6** When a phase or step begins, any abilities that trigger “at the beginning of” that phase or step ...
+- [x] **500.5** As a step or phase ends, if there are effects that last until the end of that step or phase, thos... *(1 tests)*
+- [x] **500.6** When a phase or step begins, any abilities that trigger “at the beginning of” that phase or step ... *(1 tests)*
 - [x] **500.7** Some effects can give a player extra turns. They do this by adding the turns directly after the s... *(3 tests)*
 - [ ] **500.8** Some effects can add phases to a turn. They do this by adding the phases directly after the speci...
 - [ ] **500.9** Some effects can add steps to a phase. They do this by adding the steps directly after a specifie...
@@ -533,33 +533,33 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 501. Beginning Phase
 
-- [ ] **501.1** The beginning phase consists of three steps, in this order: untap, upkeep, and draw.
+- [x] **501.1** The beginning phase consists of three steps, in this order: untap, upkeep, and draw. *(1 tests)*
 
 ### 502. Untap Step
 
 - [ ] **502.1** First, all phased-in permanents with phasing that the active player controls phase out, and all p...
 - [ ] **502.2** Second, if it’s day and the previous turn’s active player didn’t cast any spells during that turn...
-- [ ] **502.3** Third, the active player determines which permanents they control will untap. Then they untap the...
-- [ ] **502.4** No player receives priority during the untap step, so no spells can be cast or resolve and no abi...
+- [x] **502.3** Third, the active player determines which permanents they control will untap. Then they untap the... *(2 tests)*
+- [x] **502.4** No player receives priority during the untap step, so no spells can be cast or resolve and no abi... *(1 tests)*
 
 ### 503. Upkeep Step
 
-- [ ] **503.1** The upkeep step has no turn-based actions. Once it begins, the active player gets priority. (See ...
+- [x] **503.1** The upkeep step has no turn-based actions. Once it begins, the active player gets priority. (See ... *(2 tests)*
 - [ ] **503.2** If a spell states that it may be cast only “after [a player’s] upkeep step,” and the turn has mul...
 
 ### 504. Draw Step
 
-- [ ] **504.1** First, the active player draws a card. This turn-based action doesn’t use the stack.
-- [ ] **504.2** Second, the active player gets priority. (See rule 117, “Timing and Priority.”)
+- [x] **504.1** First, the active player draws a card. This turn-based action doesn’t use the stack. *(1 tests)*
+- [x] **504.2** Second, the active player gets priority. (See rule 117, “Timing and Priority.”) *(1 tests)*
 
 ### 505. Main Phase
 
 - [x] **505.1** There are two main phases in a turn. In each turn, the first main phase (also known as the precom... *(1 tests)*
-- [ ] **505.2** The main phase has no steps, so a main phase ends when all players pass in succession while the s...
+- [x] **505.2** The main phase has no steps, so a main phase ends when all players pass in succession while the s... *(1 tests)*
 - [ ] **505.3** First, but only if the players are playing an Archenemy game (see rule 904), the active player is...
 - [ ] **505.4** Second, if the active player controls one or more Saga enchantments and it’s the active player’s ...
 - [ ] **505.5** Third, if the active player controls one or more Attractions and it’s the active player’s precomb...
-- [ ] **505.6** Fourth, the active player gets priority. (See rule 117, “Timing and Priority.”)
+- [x] **505.6** Fourth, the active player gets priority. (See rule 117, “Timing and Priority.”) *(2 tests, subrules b)*
 
 ### 506. Combat Phase
 
@@ -574,7 +574,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 507. Beginning of Combat Step
 
 - [ ] **507.1** First, if the game being played is a multiplayer game in which the active player’s opponents don’...
-- [ ] **507.2** Second, the active player gets priority. (See rule 117, “Timing and Priority.”)
+- [x] **507.2** Second, the active player gets priority. (See rule 117, “Timing and Priority.”) *(1 tests)*
 
 ### 508. Declare Attackers Step
 
@@ -603,24 +603,24 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 511. End of Combat Step
 
-- [ ] **511.1** The end of combat step has no turn-based actions. Once it begins, the active player gets priority...
-- [ ] **511.2** Abilities that trigger “at end of combat” trigger as the end of combat step begins. Effects that ...
-- [ ] **511.3** As soon as the end of combat step ends, all creatures, battles, and planeswalkers are removed fro...
+- [x] **511.1** The end of combat step has no turn-based actions. Once it begins, the active player gets priority... *(1 tests)*
+- [x] **511.2** Abilities that trigger “at end of combat” trigger as the end of combat step begins. Effects that ... *(1 tests)*
+- [x] **511.3** As soon as the end of combat step ends, all creatures, battles, and planeswalkers are removed fro... *(1 tests)*
 
 ### 512. Ending Phase
 
-- [ ] **512.1** The ending phase consists of two steps: end and cleanup.
+- [x] **512.1** The ending phase consists of two steps: end and cleanup. *(1 tests)*
 
 ### 513. End Step
 
-- [ ] **513.1** The end step has no turn-based actions. Once it begins, the active player gets priority. (See rul...
+- [x] **513.1** The end step has no turn-based actions. Once it begins, the active player gets priority. (See rul... *(1 tests)*
 - [ ] **513.2** If a permanent with an ability that triggers “at the beginning of the end step” enters the battle...
 
 ### 514. Cleanup Step
 
-- [ ] **514.1** First, if the active player’s hand contains more cards than their maximum hand size (normally sev...
-- [x] **514.2** Second, the following actions happen simultaneously: all damage marked on permanents (including p... *(1 tests)*
-- [ ] **514.3** Normally, no player receives priority during the cleanup step, so no spells can be cast and no ab...
+- [x] **514.1** First, if the active player’s hand contains more cards than their maximum hand size (normally sev... *(6 tests)*
+- [x] **514.2** Second, the following actions happen simultaneously: all damage marked on permanents (including p... *(2 tests)*
+- [x] **514.3** Normally, no player receives priority during the cleanup step, so no spells can be cast and no ab... *(1 tests)*
 
 ### 601. Casting Spells
 
@@ -670,8 +670,8 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **605.1** Some activated abilities and some triggered abilities are mana abilities, which are subject to sp... *(1 tests, subrules a)*
 - [x] **605.2** A mana ability remains a mana ability even if the game state doesn’t allow it to produce mana. *(1 tests)*
 - [x] **605.3** Activating an activated mana ability follows the rules for activating any other activated ability... *(3 tests, subrules bc)*
-- [ ] **605.4** Triggered mana abilities follow all the rules for other triggered abilities (see rule 603, “Handl...
-- [ ] **605.5** Abilities that don’t meet the criteria specified in rules 605.1a–b and spells aren’t mana abilities.
+- [x] **605.4** Triggered mana abilities follow all the rules for other triggered abilities (see rule 603, “Handl... *(2 tests, subrules a)*
+- [x] **605.5** Abilities that don’t meet the criteria specified in rules 605.1a–b and spells aren’t mana abilities. *(2 tests, subrules b)*
 
 ### 606. Loyalty Abilities
 
@@ -691,9 +691,9 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 608. Resolving Spells and Abilities
 
-- [ ] **608.1** Each time all players pass in succession, the spell or ability on top of the stack resolves. (See...
-- [ ] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio...
-- [ ] **608.3** If the object that’s resolving is a permanent spell, its resolution may involve several steps. Th...
+- [x] **608.1** Each time all players pass in succession, the spell or ability on top of the stack resolves. (See... *(1 tests)*
+- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(3 tests, subrules bn)*
+- [x] **608.3** If the object that’s resolving is a permanent spell, its resolution may involve several steps. Th... *(3 tests, subrules ab)*
 
 ### 609. Effects
 
@@ -858,7 +858,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **704.2** State-based actions are checked throughout the game and are not controlled by any player.
 - [ ] **704.3** Whenever a player would get priority (see rule 117, “Timing and Priority”), the game checks for a...
 - [ ] **704.4** Unlike triggered abilities, state-based actions pay no attention to what happens during the resol...
-- [x] **704.5** The state-based actions are as follows: *(55 tests, subrules abcdefghijkmnpqrsy)*
+- [x] **704.5** The state-based actions are as follows: *(56 tests, subrules abcdefghijkmnpqrsy)*
 - [ ] **704.6** Some variant games include additional state-based actions that aren’t normally applicable:
 - [x] **704.7** If multiple state-based actions would have the same result at the same time, a single replacement... *(1 tests)*
 - [x] **704.8** If a state-based action results in a permanent leaving the battlefield at the same time other sta... *(1 tests)*
