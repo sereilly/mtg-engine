@@ -29,6 +29,9 @@ Hook registries:
 - MANA_PRODUCTION_MODIFIERS — fired once per registered permanent whenever a
                         land is tapped for mana (Mana Flare, Gauntlet of Might,
                         Lifetap), consumed by engine/mixins/turn_management.
+- ENCHANTED_LAND_TAPPED_FOR_MANA — bespoke behavior for the Aura on a land tapped
+                        for mana (Kudzu), keyed by Aura name, consumed by
+                        engine/mixins/turn_management.
 - SPELL_COST_MODIFIERS / ABILITY_COST_MODIFIERS — extra generic mana taxed onto
                         a cast / activation, once per registered permanent on
                         any battlefield (Gloom).
@@ -214,18 +217,13 @@ def _gaeas_liege_leaves(game: Game, owner: PlayerState, permanent: Permanent) ->
     game._refresh_dynamic_creatures()
 
 
-def _aladdin_leaves(game: Game, owner: PlayerState, permanent: Permanent) -> None:
-    # "Gain control of target artifact for as long as you control this
-    # creature." When Aladdin leaves, the stolen artifact returns (CR 611.3
-    # linked-duration effects end when their source does — mirrors how
-    # Control Magic/Steal Artifact revert when their Aura leaves).
-    game._revert_stolen_permanent(permanent)
-
-
-def _old_man_of_the_sea_leaves(game: Game, owner: PlayerState, permanent: Permanent) -> None:
-    # Linked-duration steal ends when Old Man of the Sea itself leaves, same
-    # as when it untaps or the stolen creature's power exceeds its own
-    # (checked continuously — see game_ending.py's SBA-style sweep).
+def _revert_linked_steal_on_leave(game: Game, owner: PlayerState, permanent: Permanent) -> None:
+    # A linked-duration "gain control for as long as you control this" steal
+    # (Aladdin's artifact, Old Man of the Sea's creature) ends when its source
+    # leaves the battlefield (CR 611.3), mirroring how Control Magic / Steal
+    # Artifact revert when their Aura leaves. Old Man's other end conditions
+    # (untaps / stolen power exceeds its own) are swept continuously in
+    # game_ending.py.
     game._revert_stolen_permanent(permanent)
 
 
@@ -253,8 +251,8 @@ ON_LEAVE_BATTLEFIELD: dict[str, LeaveBattlefieldHook] = {
     "Cyclopean Tomb": _cyclopean_tomb_leaves,
     "Consecrate Land": _consecrate_land_leaves,
     "Gaea's Liege": _gaeas_liege_leaves,
-    "Aladdin": _aladdin_leaves,
-    "Old Man of the Sea": _old_man_of_the_sea_leaves,
+    "Aladdin": _revert_linked_steal_on_leave,
+    "Old Man of the Sea": _revert_linked_steal_on_leave,
     "Oubliette": _oubliette_leaves,
 }
 
@@ -356,6 +354,17 @@ UNTAPPED_ARTIFACT_PROTECTORS: frozenset[str] = frozenset({"Guardian Beast"})
 
 
 # --------------------------------------------------------------------------
+# Top-of-library discard replacements
+# --------------------------------------------------------------------------
+# Library of Leng: "If an effect causes you to discard a card, discard it, but
+# you may put it on top of your library instead of into your graveyard." A
+# permanent whose controller may redirect discards to the top of their library.
+# Checked by effects.py:_controls_top_of_library_discard at each discard site.
+
+TOP_OF_LIBRARY_DISCARD_SOURCES: frozenset[str] = frozenset({"Library of Leng"})
+
+
+# --------------------------------------------------------------------------
 # Draw-step modifiers (CR 504)
 # --------------------------------------------------------------------------
 
@@ -422,6 +431,70 @@ MANA_PRODUCTION_MODIFIERS: dict[str, ManaProductionHook] = {
     "Mana Flare": _mana_flare,
     "Gauntlet of Might": _gauntlet_of_might,
     "Lifetap": _lifetap,
+}
+
+
+# --------------------------------------------------------------------------
+# Enchanted-land "when tapped for mana" bespoke effects
+# --------------------------------------------------------------------------
+# Fired for the Aura enchanting a land that was just tapped for mana, when the
+# Aura needs behavior the generic paths can't express — beyond the
+# enchanted_land_tapped trigger (Psychic Venom) and the "adds an additional"
+# mana clause (Wild Growth) both handled inline in tap_land_for_mana. Keyed by
+# Aura name. Signature: (game, controller_index, land, land_index, aura,
+# reattach_index, defer_choice).
+
+EnchantedLandTappedHook = Callable[
+    ["Game", int, "Permanent", int, "Permanent", "int | None", bool], None
+]
+
+
+def _kudzu_on_land_tapped(
+    game: Game,
+    controller_index: int,
+    land: Permanent,
+    land_index: int,
+    aura: Permanent,
+    reattach_index: int | None,
+    defer_choice: bool,
+) -> None:
+    """Kudzu: "Whenever enchanted land is tapped for mana, destroy that land.
+    That land's controller may attach Kudzu to a land of their choice." The
+    reattach target comes from ``reattach_index``; with no explicit choice a
+    human controller defers to an interactive prompt (``pending_kudzu_reattach``,
+    resolved by ``confirm_kudzu_reattach``), while AI/headless play deterministically
+    takes the first other land."""
+    player = game.players[controller_index]
+    player.battlefield.pop(land_index)
+    player.graveyard.append(land.card)
+    aura.metadata.pop("attached_to", None)
+    land.metadata.pop("attached_aura", None)
+    game.log.append(f"Kudzu destroyed {land.card.name}")
+    new_land = None
+    if (
+        isinstance(reattach_index, int)
+        and 0 <= reattach_index < len(player.battlefield)
+        and player.battlefield[reattach_index].card.primary_type == "land"
+    ):
+        new_land = player.battlefield[reattach_index]
+    # A human controller picks the land to re-enchant: defer when no choice was
+    # supplied and there is a land to move to. Headless/AI play keeps the
+    # deterministic "first other land" default below.
+    if new_land is None and defer_choice and any(
+        p.card.primary_type == "land" for p in player.battlefield
+    ):
+        game.pending_kudzu_reattach = {"player_index": controller_index, "aura": aura}
+        return
+    if new_land is None:
+        new_land = next((p for p in player.battlefield if p.card.primary_type == "land"), None)
+    if new_land is not None:
+        aura.metadata["attached_to"] = new_land
+        new_land.metadata["attached_aura"] = aura
+        game.log.append(f"Kudzu attached to {new_land.card.name}")
+
+
+ENCHANTED_LAND_TAPPED_FOR_MANA: dict[str, EnchantedLandTappedHook] = {
+    "Kudzu": _kudzu_on_land_tapped,
 }
 
 

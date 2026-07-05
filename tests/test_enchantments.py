@@ -229,14 +229,6 @@ def test_303_4b_aura_holds_reference_to_enchanted_object():
 # (State-based action — rule 704.)
 # ---------------------------------------------------------------------------
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "Rule 303.4c state-based action not implemented: the engine leaves the Aura "
-        "on the battlefield after its enchanted creature leaves play instead of moving "
-        "it to the owner's graveyard."
-    ),
-)
 def test_303_4c_aura_goes_to_graveyard_when_enchanted_creature_is_destroyed():
     """303.4c: When the enchanted creature is destroyed the Aura goes to its owner's graveyard."""
     aura = _mk_card("Test Aura", "Enchantment — Aura", "Enchant creature\nEnchanted creature gets +1/+1.")
@@ -381,24 +373,21 @@ def test_303_4f_aura_entering_via_reanimation_attaches_to_chosen_target():
 # graveyard instead of entering the battlefield.
 # ---------------------------------------------------------------------------
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "Rule 303.4g not implemented: when an 'enchant creature' Aura resolves from "
-        "the stack with no legal target, the engine places it on the battlefield "
-        "instead of moving it to its owner's graveyard."
-    ),
-)
-def test_303_4g_enchant_creature_aura_with_no_creatures_goes_to_graveyard():
-    """303.4g: Casting 'enchant creature' Aura with no creatures present — Aura goes to graveyard."""
+def test_303_4g_enchant_creature_aura_with_no_creatures_cannot_be_cast():
+    """303.4g / 601.2c: An 'enchant creature' Aura can't legally be cast when no creature
+    is on the battlefield to serve as its target — CR 601.2c requires a legal target be
+    chosen as part of casting, so the cast itself is rejected rather than the Aura
+    resolving and then being discarded (that discard-on-resolution path is for Auras
+    entering the battlefield by non-spell means with no legal object, e.g. 303.4i)."""
     aura = _mk_card("Orphan Aura", "Enchantment — Aura", "Enchant creature\nEnchanted creature gets +1/+1.")
     p1 = PlayerState(name="P1", hand=[aura])
     p2 = PlayerState(name="P2")  # No creatures
     game = Game(players=[p1, p2])
 
-    game.cast_from_hand(0, "Orphan Aura", target_player_index=1)
+    result = game.cast_from_hand(0, "Orphan Aura", target_player_index=1)
 
-    assert any(c.name == "Orphan Aura" for c in p1.graveyard)
+    assert not result.supported
+    assert any(c.name == "Orphan Aura" for c in p1.hand)
     assert not any(perm.card.name == "Orphan Aura" for perm in p1.battlefield)
 
 
@@ -466,25 +455,21 @@ def test_303_4h_creature_enters_unattached():
 # graveyard.
 # ---------------------------------------------------------------------------
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "Rule 303.4i not implemented: when an 'enchant land' Aura resolves from the "
-        "stack with no legal land target, the engine places it on the battlefield "
-        "instead of moving it to its owner's graveyard."
-    ),
-)
-def test_303_4i_enchant_land_aura_with_no_lands_goes_to_graveyard():
-    """303.4i: Casting 'enchant land' Aura when there are no lands — Aura goes to graveyard."""
+def test_303_4i_enchant_land_aura_with_no_lands_cannot_be_cast():
+    """303.4i / 601.2c: An 'enchant land' Aura can't legally be cast when no land is on
+    the battlefield to serve as its target — same reasoning as the enchant-creature case
+    in 303.4g: casting requires choosing a legal target, so with none available the cast
+    is rejected rather than resolving and discarding."""
     aura = _mk_card("Wandering Land Aura", "Enchantment — Aura",
                     "Enchant land\nEnchanted land is a Swamp.")
     p1 = PlayerState(name="P1", hand=[aura])
     p2 = PlayerState(name="P2")  # No lands
     game = Game(players=[p1, p2])
 
-    game.cast_from_hand(0, "Wandering Land Aura", target_player_index=1)
+    result = game.cast_from_hand(0, "Wandering Land Aura", target_player_index=1)
 
-    assert any(c.name == "Wandering Land Aura" for c in p1.graveyard)
+    assert not result.supported
+    assert any(c.name == "Wandering Land Aura" for c in p1.hand)
     assert not any(perm.card.name == "Wandering Land Aura" for perm in p1.battlefield)
 
 
@@ -714,14 +699,6 @@ def test_303_7_role_enters_battlefield_attached_like_an_aura():
 # recent timestamp is put into its owner's graveyard. (State-based action.)
 # ---------------------------------------------------------------------------
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "Rule 303.7a state-based action not implemented: the engine allows multiple "
-        "Roles controlled by the same player to remain on the battlefield simultaneously "
-        "instead of sending all but the newest to the owner's graveyard."
-    ),
-)
 def test_303_7a_two_roles_from_same_player_only_newest_survives():
     """303.7a: When the same player attaches two Roles to the same creature, only the
     Role with the most recent timestamp remains; the older one goes to the graveyard."""

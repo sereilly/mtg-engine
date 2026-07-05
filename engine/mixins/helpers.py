@@ -179,6 +179,38 @@ class GameHelpersMixin:
         # — return the stolen permanent to its original controller (CR 611.3 / 805.4a).
         self._revert_stolen_permanent(aura)
 
+    def controller_index_of(self, permanent: Permanent) -> int | None:
+        """Index of the player whose battlefield currently holds *permanent*, or
+        None if it is on no battlefield (already left / phased out)."""
+        return next(
+            (i for i, p in enumerate(self.players) if permanent in p.battlefield), None
+        )
+
+    def _take_control_linked(
+        self,
+        source: Permanent,
+        target_perm: Permanent,
+        new_controller: PlayerState,
+        *,
+        extra_meta: dict | None = None,
+    ) -> bool:
+        """Move *target_perm* under *new_controller* and record the theft on
+        *source* (``stolen_permanent``/``stolen_owner_index``) so
+        :meth:`_revert_stolen_permanent` can undo it when the linked duration
+        ends. The inverse of that revert. Returns False (a no-op) if the target
+        is on no battlefield. ``extra_meta`` tags the steal with a caller's own
+        revert-condition marker (e.g. Old Man of the Sea's tapped-and-weaker)."""
+        owner_index = self.controller_index_of(target_perm)
+        if owner_index is None:
+            return False
+        self.players[owner_index].battlefield.remove(target_perm)
+        new_controller.battlefield.append(target_perm)
+        source.metadata["stolen_permanent"] = target_perm
+        source.metadata["stolen_owner_index"] = owner_index
+        if extra_meta:
+            source.metadata.update(extra_meta)
+        return True
+
     def _revert_stolen_permanent(self, source: Permanent) -> None:
         """Return whatever *source* stole (via ``stolen_permanent``/
         ``stolen_owner_index`` metadata) to its original controller. Shared by

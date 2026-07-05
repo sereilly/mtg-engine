@@ -180,6 +180,9 @@
                   <option value="uncommon">Uncommon</option>
                   <option value="rare">Rare</option>
                 </select>
+                <select id="browserSetFilter" title="Filter by set">
+                  <option value="">All sets</option>
+                </select>
               </div>
               <div class="browser-filter-row">
                 <label class="browser-cmc-label">CMC
@@ -213,13 +216,15 @@
           <div class="editor-preview-pane">
             <div id="editorPreviewFrame" class="card-preview-frame empty-preview">
               <div class="card-preview-image-wrap">
+                <img id="editorPreviewCardBack" class="card-preview-cardback" src="/images/card_back.webp" alt="" />
                 <img id="editorPreviewImage" alt="Card preview" class="hidden" />
               </div>
-              <div id="editorPreviewEmpty" class="card-preview-empty">Click a card to preview it.</div>
+              <div id="editorPreviewEmpty" class="card-preview-empty hidden">Click a card to preview it.</div>
             </div>
             <div class="card-preview-meta">
               <div id="editorPreviewName" class="card-preview-name">No card selected</div>
               <div id="editorPreviewType" class="card-preview-type"></div>
+              <div id="editorPreviewSet" class="card-preview-set"></div>
               <div id="editorPreviewText" class="card-preview-text"></div>
               <div id="editorPreviewWarning" class="editor-preview-warning hidden"></div>
             </div>

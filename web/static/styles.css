@@ -2039,6 +2039,13 @@ h2.targeting-valid {
   color: var(--accent);
 }
 
+.card-preview-set {
+  font-size: 0.78rem;
+  font-style: italic;
+  color: var(--accent-2);
+  letter-spacing: 0.02em;
+}
+
 .card-preview-text {
   font-size: 0.84rem;
   color: var(--ink-soft);
@@ -3445,6 +3452,27 @@ pre {
   justify-content: center;
 }
 
+.browser-card-set {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  background: rgba(10, 18, 28, 0.82);
+  color: var(--ink-soft);
+  font-weight: 700;
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  border-radius: 5px;
+  padding: 2px 5px;
+  opacity: 0;
+  transition: opacity 100ms ease;
+  pointer-events: none;
+}
+
+.browser-card:hover .browser-card-set,
+.browser-card.selected .browser-card-set {
+  opacity: 1;
+}
+
 .browser-card-count {
   position: absolute;
   top: 6px;
@@ -3712,6 +3740,63 @@ pre {
   border-radius: var(--radius-m);
   box-shadow: inset 0 1px 0 var(--glass-highlight);
   padding: 10px;
+}
+
+/* Deck-editor card preview: a card back fills the frame whenever nothing is
+   selected, so the pane always reads as a face-down card rather than an empty
+   dashed box. Scoped to #editorPreviewFrame so the in-game hover preview (which
+   shares .card-preview-frame) is left untouched. */
+#editorPreviewFrame {
+  position: relative;
+  border-style: solid;
+  align-self: center;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.5), inset 0 1px 0 var(--glass-highlight);
+}
+
+#editorPreviewFrame .card-preview-image-wrap {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  aspect-ratio: auto;
+}
+
+#editorPreviewFrame .card-preview-cardback,
+#editorPreviewFrame #editorPreviewImage {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Fade the card image in as it loads so swapping selections doesn't flash. */
+#editorPreviewFrame #editorPreviewImage {
+  animation: preview-fade-in 220ms var(--ease-out);
+}
+
+@keyframes preview-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Re-assert the hidden state at higher specificity than the display rules above. */
+#editorPreviewFrame .card-preview-cardback.hidden,
+#editorPreviewFrame #editorPreviewImage.hidden,
+#editorPreviewFrame .card-preview-empty.hidden {
+  display: none;
+}
+
+#editorPreviewFrame .card-preview-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 18, 28, 0.72);
 }
 
 .editor-preview-warning {

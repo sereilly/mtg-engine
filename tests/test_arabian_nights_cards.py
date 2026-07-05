@@ -1036,6 +1036,44 @@ def test_city_of_brass_damages_controller_when_tapped(arn_by_name):
 
 
 # ===========================================================================
+# Upkeep self-damage — "this creature deals N damage to you" (Juzám Djinn,
+# Serendib Efreet). Fires only on the controller's own upkeep.
+# ===========================================================================
+
+def test_juzam_djinn_deals_upkeep_damage_to_controller(arn_by_name):
+    juzam = arn_by_name["Juzám Djinn"]
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=juzam)], life=20)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+
+    game.resolve_upkeep(0)
+
+    assert p1.life == 19
+
+
+def test_juzam_djinn_does_not_damage_on_opponents_upkeep(arn_by_name):
+    juzam = arn_by_name["Juzám Djinn"]
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=juzam)], life=20)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+
+    game.resolve_upkeep(1)
+
+    assert p1.life == 20
+
+
+def test_serendib_efreet_deals_upkeep_damage_to_controller(arn_by_name):
+    efreet = arn_by_name["Serendib Efreet"]
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=efreet)], life=20)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+
+    game.resolve_upkeep(0)
+
+    assert p1.life == 19
+
+
+# ===========================================================================
 # Old Man of the Sea — conditional control-steal, reverts continuously
 # ===========================================================================
 

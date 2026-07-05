@@ -118,8 +118,13 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
 
         game.stack.remove(target)
         countered = target
-        game.players[countered.caster_index].graveyard.append(countered.card)
-        game.log.append(f"{card.name} countered {countered.card.name}")
+        if countered.is_copy:
+            # 704.5e: a countered copy of a spell ceases to exist instead of
+            # going to a graveyard — it has no physical card to put there.
+            game.log.append(f"{card.name} countered {countered.card.name} (copy), which ceases to exist")
+        else:
+            game.players[countered.caster_index].graveyard.append(countered.card)
+            game.log.append(f"{card.name} countered {countered.card.name}")
         counter_hook = ON_SPELL_COUNTERED.get(card.name)
         if counter_hook is not None:
             counter_hook(game, card, countered)

@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 import re
 
-from ..card_hooks import UNTAPPED_ARTIFACT_PROTECTORS
+from ..card_hooks import TOP_OF_LIBRARY_DISCARD_SOURCES, UNTAPPED_ARTIFACT_PROTECTORS
 from ..handlers._common import permanent_matches_filter, pick_target_permanent
 from ..models import CardDefinition, Permanent, PlayerState
 from ..replacements import apply_replacements
@@ -123,6 +123,15 @@ class EffectsMixin:
         return any(
             perm.card.name in UNTAPPED_ARTIFACT_PROTECTORS and not perm.tapped
             for perm in controller.battlefield
+        )
+
+    def _controls_top_of_library_discard(self, player: PlayerState) -> bool:
+        """Whether *player* controls a Library of Leng-style permanent that lets
+        them redirect a discard to the top of their library (CR 701.8e). The
+        single point of truth for the ``allow_top_of_library`` discard option;
+        source names live in card_hooks.TOP_OF_LIBRARY_DISCARD_SOURCES."""
+        return any(
+            perm.card.name in TOP_OF_LIBRARY_DISCARD_SOURCES for perm in player.battlefield
         )
 
     def _set_lockout_banning_card(self, card: CardDefinition) -> str | None:
@@ -416,7 +425,7 @@ class EffectsMixin:
         replacement effect, so it doesn't fit engine/replacements.py as-is;
         migrate to a hook registry if a second interactive discard-replacement
         card appears."""
-        if any(perm.card.name == "Library of Leng" for perm in player.battlefield):
+        if self._controls_top_of_library_discard(player):
             player_index = self.players.index(player)
             if player_index in self.interactive_seats:
                 self.pending_leng_discards.append({"player_index": player_index, "card": card})

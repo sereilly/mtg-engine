@@ -289,8 +289,12 @@ class StackCastingMixin:
             # (tap all the controller's lands, drain their mana) applies.
             if target is not None and target in self.stack:
                 self.stack.remove(target)
-                controller.graveyard.append(target.card)
-                self.log.append(f"{pending['card_name']} countered {target.card.name}")
+                if target.is_copy:
+                    # 704.5e: a countered copy of a spell ceases to exist.
+                    self.log.append(f"{pending['card_name']} countered {target.card.name} (copy), which ceases to exist")
+                else:
+                    controller.graveyard.append(target.card)
+                    self.log.append(f"{pending['card_name']} countered {target.card.name}")
                 if counter_card is not None:
                     from ..card_hooks import ON_SPELL_COUNTERED
                     hook = ON_SPELL_COUNTERED.get(pending["card_name"])

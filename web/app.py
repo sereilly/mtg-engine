@@ -57,10 +57,11 @@ from .verification_store import VerificationStore
 
 ROOT = Path(__file__).resolve().parent.parent
 CARDS_PATH = ROOT / "lea_cards.json"
+ARABIAN_NIGHTS_PATH = ROOT / "arabian_nights_cards.json"
 # Every set JSON that makes up the card pool, in printing order. Adding a new
 # set is appending its JSON path here — CARD_CATALOG and every store below
 # derive from this one list, loaded once at process startup.
-CARD_PATHS = [CARDS_PATH]
+CARD_PATHS = [CARDS_PATH, ARABIAN_NIGHTS_PATH]
 DECKS_DIR = ROOT / "decks"
 VERIFICATION_PATH = ROOT / "card_verification.json"
 VERIFICATION_MD_PATH = ROOT / "CARD_VERIFICATION.md"
@@ -509,6 +510,8 @@ def _build_catalog_payload() -> list[dict]:
                 "cmc": card.cmc,
                 "type_line": card.type_line,
                 "oracle_text": card.oracle_text,
+                "set": raw.get("set"),
+                "set_name": raw.get("set_name"),
                 "colors": list(card.colors),
                 "color_identity": list(card.color_identity),
                 "keywords": list(card.keywords),

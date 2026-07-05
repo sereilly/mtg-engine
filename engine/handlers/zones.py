@@ -50,7 +50,7 @@ def draw_then_discard_self(game: Game, instruction: OracleInstruction, context: 
     game.pending_discard = {
         "player_index": player_index,
         "count": actual_discard,
-        "allow_top_of_library": any(p.card.name == "Library of Leng" for p in caster.battlefield),
+        "allow_top_of_library": game._controls_top_of_library_discard(caster),
     }
     game.log.append(f"{caster.name} must choose {actual_discard} card(s) to discard")
     return True, "pending_discard"
@@ -162,7 +162,7 @@ def discard_target_cards(game: Game, instruction: OracleInstruction, context: Or
     game.pending_discard = {
         "player_index": player_index,
         "count": actual,
-        "allow_top_of_library": any(p.card.name == "Library of Leng" for p in target.battlefield),
+        "allow_top_of_library": game._controls_top_of_library_discard(target),
     }
     game.log.append(f"{target.name} must choose {actual} card(s) to discard")
     return True, "pending_discard"
@@ -300,7 +300,7 @@ def phase_out_target_creature_until_source_leaves(game: Game, instruction: Oracl
     if target_perm is None:
         game.log.append(f"{card.name}: no valid creature target")
         return True, "resolved"
-    owner_index = next((i for i, p in enumerate(game.players) if target_perm in p.battlefield), None)
+    owner_index = game.controller_index_of(target_perm)
     if owner_index is None:
         return True, "resolved"
     game.players[owner_index].battlefield.remove(target_perm)

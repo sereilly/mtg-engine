@@ -71,6 +71,28 @@
     const payload = await resp.json();
     state.catalog = payload.cards || [];
     state.catalogByName = new Map(state.catalog.map((c) => [c.name.toLowerCase(), c]));
+    populateSetFilter();
+  }
+
+  // Build the set filter's options from the distinct sets present in the loaded
+  // catalog, so it stays correct automatically as sets are added to the pool.
+  function populateSetFilter() {
+    const select = q("browserSetFilter");
+    if (!select) return;
+    const byCode = new Map();
+    for (const card of state.catalog) {
+      if (card.set && !byCode.has(card.set)) {
+        byCode.set(card.set, card.set_name || card.set.toUpperCase());
+      }
+    }
+    const sets = [...byCode.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+    select.innerHTML = '<option value="">All sets</option>';
+    for (const [code, name] of sets) {
+      const option = document.createElement("option");
+      option.value = code;
+      option.textContent = name;
+      select.appendChild(option);
+    }
   }
 
   // Build a deck-list summary for a personal (localStorage) deck, mirroring the
@@ -445,6 +467,7 @@
     const term = q("browserSearch").value.trim().toLowerCase();
     const typeFilter = q("browserTypeFilter").value;
     const rarityFilter = q("browserRarityFilter").value;
+    const setFilter = q("browserSetFilter").value;
     const cmcMinRaw = q("browserCmcMin").value;
     const cmcMaxRaw = q("browserCmcMax").value;
     const cmcMin = cmcMinRaw === "" ? null : Number(cmcMinRaw);
@@ -458,6 +481,7 @@
       }
       if (typeFilter && primaryType(card) !== typeFilter) return false;
       if (rarityFilter && card.rarity !== rarityFilter) return false;
+      if (setFilter && card.set !== setFilter) return false;
       if (cmcMin !== null && card.cmc < cmcMin) return false;
       if (cmcMax !== null && card.cmc > cmcMax) return false;
       if (colors.size > 0) {
@@ -516,6 +540,14 @@
         fallback.className = "browser-card-fallback";
         fallback.textContent = card.name;
         tile.appendChild(fallback);
+      }
+
+      if (card.set) {
+        const setBadge = document.createElement("div");
+        setBadge.className = "browser-card-set";
+        setBadge.textContent = card.set.toUpperCase();
+        setBadge.title = card.set_name || card.set;
+        tile.appendChild(setBadge);
       }
 
       const inDeck = entryFor(card.name);
@@ -739,18 +771,23 @@
     const name = state.selectedCardName;
     const frame = q("editorPreviewFrame");
     const image = q("editorPreviewImage");
+    const cardBack = q("editorPreviewCardBack");
     const emptyEl = q("editorPreviewEmpty");
     const warning = q("editorPreviewWarning");
+    const setEl = q("editorPreviewSet");
     const addBtn = q("editorPreviewAddBtn");
     const removeBtn = q("editorPreviewRemoveBtn");
 
     if (!name) {
+      // Nothing selected: show a card back so the pane always reads as a card.
       frame.classList.add("empty-preview");
       image.classList.add("hidden");
       image.removeAttribute("src");
-      emptyEl.classList.remove("hidden");
+      cardBack.classList.remove("hidden");
+      emptyEl.classList.add("hidden");
       q("editorPreviewName").textContent = "No card selected";
       q("editorPreviewType").textContent = "";
+      setEl.textContent = "";
       q("editorPreviewText").textContent = "";
       warning.classList.add("hidden");
       addBtn.disabled = true;
@@ -758,8 +795,12 @@
       return;
     }
 
+    // A real card is selected, so the card back stays hidden behind it.
+    cardBack.classList.add("hidden");
+
     const card = lookupCard(name);
     const entry = entryFor(name);
+    setEl.textContent = card && card.set_name ? card.set_name : "";
 
     let nameHtml = escapeHtml(name);
     if (card && card.mana_cost) {
@@ -881,6 +922,7 @@
     q("browserSearch").addEventListener("input", renderBrowser);
     q("browserTypeFilter").addEventListener("change", renderBrowser);
     q("browserRarityFilter").addEventListener("change", renderBrowser);
+    q("browserSetFilter").addEventListener("change", renderBrowser);
     q("browserCmcMin").addEventListener("input", renderBrowser);
     q("browserCmcMax").addEventListener("input", renderBrowser);
     q("browserSortSelect").addEventListener("change", renderBrowser);
@@ -903,6 +945,7 @@
       q("browserSearch").value = "";
       q("browserTypeFilter").value = "";
       q("browserRarityFilter").value = "";
+      q("browserSetFilter").value = "";
       q("browserCmcMin").value = "";
       q("browserCmcMax").value = "";
       state.colorFilters.clear();

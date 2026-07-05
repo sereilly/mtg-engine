@@ -622,7 +622,9 @@ def _parse_creature_program(
             if "power and toughness are each equal to the number of non-wall creatures" in normalized:
                 instructions.append(OracleInstruction("dynamic_pt_non_wall_creatures"))
             elif "power and toughness are each equal to the number of creatures named plague rats" in normalized:
-                instructions.append(OracleInstruction("dynamic_pt_plague_rats"))
+                # Self-referential-name CDA (counts creatures sharing this card's
+                # name); the count is generic, only this text pattern is specific.
+                instructions.append(OracleInstruction("dynamic_pt_same_name"))
             elif "power and toughness are each equal to the number of swamps" in normalized:
                 instructions.append(OracleInstruction("dynamic_pt_swamps"))
             elif normalized.startswith("as long as gaea's liege isn't attacking"):

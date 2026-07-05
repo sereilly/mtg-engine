@@ -7,6 +7,7 @@ hosts logic the registered handlers share.
 
 from __future__ import annotations
 
+import random
 from typing import TYPE_CHECKING, Callable, Sequence
 
 if TYPE_CHECKING:
@@ -19,6 +20,28 @@ def resolve_amount(raw: object, x_value: int | None) -> int:
     """Numeric value of a parsed amount payload; ``"x"`` resolves to the cast's
     X (never negative)."""
     return max(0, x_value or 0) if raw == "x" else int(raw)
+
+
+def flip_coin(win_probability: float = 0.5) -> bool:
+    """Flip a coin, returning True on a win (CR 705). Draws from the module-level
+    RNG that ``run_ai_simulation`` seeds, so a given seed replays identically."""
+    return random.random() < win_probability
+
+
+def resolve_own_combatant(
+    context: OracleExecutionContext,
+) -> tuple[PlayerState, int, Permanent] | None:
+    """Resolve a trigger fired *on a permanent about itself* — the shape combat
+    triggers use, where ``_fire_creature_attacks_triggers`` /
+    ``_fire_creature_blocks_triggers`` thread the permanent's own controller and
+    battlefield index through ``target``/``target_permanent_index``. Returns
+    ``(controller, index, permanent)``, or ``None`` if the context no longer
+    points at a live permanent (already left combat/the battlefield)."""
+    controller = context.target
+    idx = context.target_permanent_index
+    if controller is None or not isinstance(idx, int) or not (0 <= idx < len(controller.battlefield)):
+        return None
+    return controller, idx, controller.battlefield[idx]
 
 
 def apply_temp_pt_boost(perm: Permanent, power: int = 0, toughness: int = 0) -> None:

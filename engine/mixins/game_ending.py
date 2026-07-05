@@ -1,10 +1,25 @@
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 
 from ..models import CardDefinition, Permanent, PlayerState
 from ..oracle import compile_card_oracle
 from ..trigger_utils import matching_triggers
+
+_COUNTER_CAP_RE = re.compile(r"can't have more than (\d+) (\w+) counters")
+
+
+@lru_cache(maxsize=None)
+def _parse_counter_cap(oracle_text: str) -> tuple[int, str] | None:
+    """The 704.5r counter cap ``(limit, counter_type)`` a card imposes on itself,
+    or None. Cached on oracle text so the regex runs once per distinct card
+    rather than for every permanent on every state-based-action pass."""
+    match = _COUNTER_CAP_RE.search(oracle_text.lower())
+    if match is None:
+        return None
+    return int(match.group(1)), match.group(2)
+
 
 class GameEndingMixin:
     def concede(self, player_index: int) -> None:
@@ -61,6 +76,22 @@ class GameEndingMixin:
         any_changed = False
         changed = True
         previously_lost = {i for i, p in enumerate(self.players) if p.lost}
+        # City in a Bottle-style set bans: which set codes are banned, and which
+        # permanents are the banners themselves (exempt from the sweep). Computed
+        # once per call — the banner population can't change mid-fixpoint (nothing
+        # enters the battlefield during SBA processing), so there's no need to
+        # recompile every permanent's oracle on each `while changed` pass. The
+        # common case (no banner in play) leaves this empty and skips the sweep.
+        banned_set_codes: set[str] = set()
+        banner_perm_ids: set[int] = set()
+        for _player in self.players:
+            for _perm in _player.battlefield:
+                for _instr in compile_card_oracle(_perm.effective_card).instructions:
+                    if _instr.kind == "ban_and_sacrifice_set_permanents":
+                        code = _instr.payload.get("set_code")
+                        if code is not None:
+                            banned_set_codes.add(code)
+                        banner_perm_ids.add(id(_perm))
         while changed:
             changed = False
 
@@ -146,25 +177,13 @@ class GameEndingMixin:
             # check (like the no-lands trigger above) rather than a one-shot
             # trigger, so it also catches a banned permanent entering after
             # City in a Bottle is already in play.
-            banned_set_codes = {
-                instr.payload.get("set_code")
-                for player in self.players
-                for perm in player.battlefield
-                for instr in compile_card_oracle(perm.effective_card).instructions
-                if instr.kind == "ban_and_sacrifice_set_permanents"
-            }
-            banned_set_codes.discard(None)
             if banned_set_codes:
                 for player in self.players:
                     survivors_cb: list[Permanent] = []
                     for perm in player.battlefield:
-                        is_banner = any(
-                            instr.kind == "ban_and_sacrifice_set_permanents"
-                            for instr in compile_card_oracle(perm.effective_card).instructions
-                        )
                         card_set = str(perm.card.raw.get("set", "")) if isinstance(perm.card.raw, dict) else ""
                         if (
-                            not is_banner
+                            id(perm) not in banner_perm_ids
                             and not perm.metadata.get("is_token")
                             and card_set in banned_set_codes
                         ):
@@ -390,17 +409,16 @@ class GameEndingMixin:
             # 704.5r: counter cap enforcement
             for player in self.players:
                 for perm in player.battlefield:
-                    text = perm.card.oracle_text.lower()
-                    cap_match = re.search(r"can't have more than (\d+) (\w+) counters", text)
-                    if cap_match:
-                        cap = int(cap_match.group(1))
-                        counter_type = cap_match.group(2)
-                        counter_key = f"{counter_type}_counters"
-                        current = perm.metadata.get(counter_key, 0)
-                        if current > cap:
-                            perm.metadata[counter_key] = cap
-                            self.log.append(f"{perm.card.name}: trimmed {counter_type} counters to {cap} (704.5r)")
-                            changed = True
+                    cap_info = _parse_counter_cap(perm.card.oracle_text)
+                    if cap_info is None:
+                        continue
+                    cap, counter_type = cap_info
+                    counter_key = f"{counter_type}_counters"
+                    current = perm.metadata.get(counter_key, 0)
+                    if current > cap:
+                        perm.metadata[counter_key] = cap
+                        self.log.append(f"{perm.card.name}: trimmed {counter_type} counters to {cap} (704.5r)")
+                        changed = True
 
             # 704.5s: Saga at or past final chapter → sacrifice
             def _saga_done(perm: Permanent) -> bool:

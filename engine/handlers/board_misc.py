@@ -34,15 +34,8 @@ def steal_target_permanent_linked_to_self(game: Game, instruction: OracleInstruc
     if target_perm is None:
         game.log.append(f"{card.name}: no valid artifact target")
         return True, "resolved"
-    owner_index = next(
-        (i for i, p in enumerate(game.players) if target_perm in p.battlefield), None
-    )
-    if owner_index is None:
+    if not game._take_control_linked(source_permanent, target_perm, caster):
         return True, "resolved"
-    game.players[owner_index].battlefield.remove(target_perm)
-    caster.battlefield.append(target_perm)
-    source_permanent.metadata["stolen_permanent"] = target_perm
-    source_permanent.metadata["stolen_owner_index"] = owner_index
     game.log.append(f"{card.name} gains control of {target_perm.card.name}")
     return True, "resolved"
 
@@ -69,16 +62,13 @@ def steal_creature_while_tapped_and_weaker(game: Game, instruction: OracleInstru
     if target_perm is None:
         game.log.append(f"{card.name}: no valid creature target")
         return True, "resolved"
-    owner_index = next(
-        (i for i, p in enumerate(game.players) if target_perm in p.battlefield), None
-    )
-    if owner_index is None:
+    if not game._take_control_linked(
+        source_permanent,
+        target_perm,
+        caster,
+        extra_meta={"stolen_while_tapped_and_weaker": True},
+    ):
         return True, "resolved"
-    game.players[owner_index].battlefield.remove(target_perm)
-    caster.battlefield.append(target_perm)
-    source_permanent.metadata["stolen_permanent"] = target_perm
-    source_permanent.metadata["stolen_owner_index"] = owner_index
-    source_permanent.metadata["stolen_while_tapped_and_weaker"] = True
     game.log.append(f"{card.name} gains control of {target_perm.card.name}")
     return True, "resolved"
 

@@ -21,9 +21,13 @@ def _count_non_wall_creatures(game, player: PlayerState, permanent: Permanent) -
     )
 
 
-def _count_plague_rats(game, player: PlayerState, permanent: Permanent) -> int:
+def _count_same_name(game, player: PlayerState, permanent: Permanent) -> int:
+    # Plague Rats: "power and toughness are each equal to the number of creatures
+    # named Plague Rats on the battlefield." Counts by the CDA permanent's own
+    # name, so any future self-referential-name creature reuses this with no new
+    # count function — the card name lives only in the compiler's text pattern.
     return sum(
-        1 for p in game.players for perm in p.battlefield if perm.card.name == "Plague Rats"
+        1 for p in game.players for perm in p.battlefield if perm.card.name == permanent.card.name
     )
 
 
@@ -53,7 +57,7 @@ def _count_forests_gaea(game, player: PlayerState, permanent: Permanent) -> int:
 
 DYNAMIC_PT: dict[str, Callable[["object", PlayerState, Permanent], int]] = {
     "dynamic_pt_non_wall_creatures": _count_non_wall_creatures,
-    "dynamic_pt_plague_rats": _count_plague_rats,
+    "dynamic_pt_same_name": _count_same_name,
     "dynamic_pt_swamps": _count_swamps,
     "dynamic_pt_forests_gaea": _count_forests_gaea,
 }

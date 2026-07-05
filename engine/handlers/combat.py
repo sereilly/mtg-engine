@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
-from ._common import resolve_target_permanent
+from ._common import flip_coin, resolve_own_combatant, resolve_target_permanent
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -18,20 +18,17 @@ def coin_flip_remove_attacker_and_tap(game: Game, instruction: OracleInstruction
     the flip, remove this creature from combat and tap it." Fired per-attacker
     by _fire_creature_attacks_triggers, which threads the attacker's own
     controller/index through target_player_index/target_permanent_index."""
-    card = context.card
-    controller = context.target
-    idx = context.target_permanent_index
-    if controller is None or not isinstance(idx, int) or not (0 <= idx < len(controller.battlefield)):
+    combatant = resolve_own_combatant(context)
+    if combatant is None:
         return True, "resolved"
-    won = random.random() < 0.5
-    if won:
-        game.log.append(f"{card.name} won the coin flip")
+    controller, idx, permanent = combatant
+    if flip_coin():
+        game.log.append(f"{context.card.name} won the coin flip")
         return True, "resolved"
-    permanent = controller.battlefield[idx]
     game.combat_attackers.pop(idx, None)
     game.combat_bands = [band for band in game.combat_bands if idx not in band]
     permanent.tapped = True
-    game.log.append(f"{card.name} lost the coin flip: removed from combat and tapped")
+    game.log.append(f"{context.card.name} lost the coin flip: removed from combat and tapped")
     return True, "resolved"
 
 
@@ -44,18 +41,16 @@ def coin_flip_remove_blocker(game: Game, instruction: OracleInstruction, context
     _fire_creature_blocks_triggers. "Can't block this turn" needs no extra
     flag: this engine only declares blockers once per combat, so removal
     already prevents it from blocking again."""
-    card = context.card
-    controller = context.target
-    idx = context.target_permanent_index
-    if controller is None or not isinstance(idx, int) or not (0 <= idx < len(controller.battlefield)):
+    combatant = resolve_own_combatant(context)
+    if combatant is None:
         return True, "resolved"
-    won = random.random() < 0.5
-    if won:
-        game.log.append(f"{card.name} won the coin flip")
+    controller, idx, _permanent = combatant
+    if flip_coin():
+        game.log.append(f"{context.card.name} won the coin flip")
         return True, "resolved"
     controller_index = game.players.index(controller)
     game._remove_blocker_from_combat(controller_index, idx)
-    game.log.append(f"{card.name} lost the coin flip: removed from combat")
+    game.log.append(f"{context.card.name} lost the coin flip: removed from combat")
     return True, "resolved"
 
 

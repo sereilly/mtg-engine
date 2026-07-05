@@ -277,6 +277,21 @@ class UpkeepStepMixin:
             })
         return triggers
 
+    def _force_sacrifice_first_land(self, controller, source) -> Permanent | None:
+        """Sacrifice the first land on *controller*'s battlefield to *source*'s
+        upkeep effect, logging it. Returns the sacrificed land so callers can
+        branch on its type (Serendib Djinn's "if it was an Island" damage), or
+        None if the player controls no land. No choice of which land is modeled
+        — the first is taken (the deterministic forced-sacrifice precedent shared
+        by every upkeep land-sacrifice effect)."""
+        for idx, land in enumerate(controller.battlefield):
+            if land.card.primary_type == "land":
+                removed = controller.battlefield.pop(idx)
+                controller.graveyard.append(removed.card)
+                self.log.append(f"{source.card.name} forced sacrifice of {removed.card.name}")
+                return removed
+        return None
+
     def resolve_upkeep(self, player_index: int, human_choices: dict[str, bool] | None = None, optional_choices: dict[str, bool] | None = None, defer_priority: bool = False, mana_prevention: dict[str, int] | None = None, sacrifice_choices: dict[str, int] | None = None, recopy_targets: dict[str, tuple[int, int]] | None = None) -> None:
         phase = "beginning"
         step = "upkeep"
@@ -343,6 +358,22 @@ class UpkeepStepMixin:
                         break
 
                     if cond == "upkeep_each" and kind == "deal_damage":
+                        raw_amount = trig.instruction.payload.get("amount", 1)
+                        if raw_amount == "x":
+                            amount = self.untapped_lands_at_turn_start.get(player_index, 0)
+                        else:
+                            amount = int(raw_amount)
+                        _enqueue_upkeep_damage(
+                            permanent, self.players.index(controller), player_index, amount, trig.source_line
+                        )
+                        break
+
+                    if cond == "upkeep_self" and kind == "deal_damage":
+                        # Unconditional self-damage at the controller's own upkeep
+                        # (Juzám Djinn, Serendib Efreet: "this creature deals N
+                        # damage to you"). The upkeep_self guard above already
+                        # ensures controller is player_index, so the victim is the
+                        # controller.
                         raw_amount = trig.instruction.payload.get("amount", 1)
                         if raw_amount == "x":
                             amount = self.untapped_lands_at_turn_start.get(player_index, 0)
@@ -525,12 +556,7 @@ class UpkeepStepMixin:
                             # choice" — the CONTROLLER sacrifices one of their own lands
                             # (the opponent merely chooses which; simplified to the first).
                             permanent.tapped = True
-                            for idx, land in enumerate(controller.battlefield):
-                                if land.card.primary_type == "land":
-                                    removed = controller.battlefield.pop(idx)
-                                    controller.graveyard.append(removed.card)
-                                    self.log.append(f"{permanent.card.name} forced sacrifice of {removed.card.name}")
-                                    break
+                            self._force_sacrifice_first_land(controller, permanent)
                         break
 
                     if cond == "upkeep_self" and kind == "upkeep_sacrifice_land_conditional_damage":
@@ -541,20 +567,15 @@ class UpkeepStepMixin:
                         # precedent above) — the first land is sacrificed.
                         land_type = str(trig.instruction.payload.get("land_type", "")).lower()
                         damage_amt = int(trig.instruction.payload.get("damage", 0))
-                        for idx, land in enumerate(controller.battlefield):
-                            if land.card.primary_type != "land":
-                                continue
-                            removed = controller.battlefield.pop(idx)
-                            controller.graveyard.append(removed.card)
-                            self.log.append(f"{permanent.card.name} forced sacrifice of {removed.card.name}")
+                        removed = self._force_sacrifice_first_land(controller, permanent)
+                        if removed is not None:
                             was_matching_type = (
                                 land_type in removed.card.type_line.lower()
-                                or land.metadata.get("land_type_override") == land_type
+                                or removed.metadata.get("land_type_override") == land_type
                             )
                             if was_matching_type:
                                 dealt = self._deal_damage_to_player(controller, damage_amt, source=permanent)
                                 self.log.append(f"{permanent.card.name} dealt {dealt} damage to {controller.name}")
-                            break
                         break
 
                     if cond == "upkeep_self" and kind == "grant_forestwalk_until_next_upkeep":

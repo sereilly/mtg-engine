@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 import re
 
-from ..card_hooks import MANA_PRODUCTION_MODIFIERS
+from ..card_hooks import ENCHANTED_LAND_TAPPED_FOR_MANA, MANA_PRODUCTION_MODIFIERS
 from ..game_types import SimulationResult
 from ..oracle import compile_card_oracle
 from ..trigger_utils import iter_triggered_abilities
@@ -235,47 +235,24 @@ class TurnManagementMixin:
 
         self.log.append(f"{player.name} tapped {land_name} for mana")
 
-        # Kudzu: destroy enchanted land when tapped, then re-attach to a land of
-        # the controller's choice ("That land's controller may attach this Aura to
-        # a land of their choice"). The caller passes the chosen land via
-        # kudzu_reattach_index; absent a choice it defaults to the first other land
-        # (deterministic for AI). The chosen land must not be the one being destroyed.
+        # An Aura enchanting this land may have bespoke "when tapped for mana"
+        # behavior (Kudzu destroys the land and re-attaches). Keyed by Aura name
+        # in card_hooks so the card name stays out of this core flow; the hook
+        # may set pending_kudzu_reattach for the interactive reattach choice. It
+        # detaches the Aura from this land, so the generic trigger pass below
+        # then sees no Aura here.
         aura = land.metadata.get("attached_aura")
-        if aura is not None and aura.card.name == "Kudzu":
-            land_idx = resolved[0]
-            player.battlefield.pop(land_idx)
-            player.graveyard.append(land.card)
-            aura.metadata.pop("attached_to", None)
-            land.metadata.pop("attached_aura", None)
-            self.log.append(f"Kudzu destroyed {land_name}")
-            new_land = None
-            if (
-                isinstance(kudzu_reattach_index, int)
-                and 0 <= kudzu_reattach_index < len(player.battlefield)
-                and player.battlefield[kudzu_reattach_index].card.primary_type == "land"
-            ):
-                new_land = player.battlefield[kudzu_reattach_index]
-            # A human controller picks the land to re-enchant: defer when no choice
-            # was supplied and there is a land to move to. Headless/AI play keeps the
-            # deterministic "first other land" default below.
-            if new_land is None and defer_kudzu_choice and any(
-                p.card.primary_type == "land" for p in player.battlefield
-            ):
-                self.pending_kudzu_reattach = {
-                    "player_index": player_index,
-                    "aura": aura,
-                }
-            else:
-                if new_land is None:
-                    new_land = next((p for p in player.battlefield if p.card.primary_type == "land"), None)
-                if new_land is not None:
-                    aura.metadata["attached_to"] = new_land
-                    new_land.metadata["attached_aura"] = aura
-                    self.log.append(f"Kudzu attached to {new_land.card.name}")
+        if aura is not None:
+            tapped_hook = ENCHANTED_LAND_TAPPED_FOR_MANA.get(aura.card.name)
+            if tapped_hook is not None:
+                tapped_hook(
+                    self, player_index, land, resolved[0], aura,
+                    kudzu_reattach_index, defer_kudzu_choice,
+                )
 
         # Aura attached to this land: fire enchanted_land_tapped triggers (e.g. Psychic Venom)
         attached_aura = land.metadata.get("attached_aura")
-        if attached_aura is not None and attached_aura.card.name != "Kudzu":
+        if attached_aura is not None:
             aura_prog = compile_card_oracle(attached_aura.card)
             for trig in aura_prog.triggered_abilities:
                 if trig.condition.kind == "enchanted_land_tapped" and trig.instruction is not None:

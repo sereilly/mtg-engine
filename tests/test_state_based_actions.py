@@ -90,14 +90,6 @@ def test_704_5a_player_above_zero_life_does_not_meet_loss_condition():
     assert p1.life > 0
 
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "Rule 704.5a state-based action not fully implemented: the engine reduces a "
-        "player's life to 0 or below but does not mark the player as having lost the "
-        "game. No 'player.lost' or 'game.winner' field exists in the engine."
-    ),
-)
 def test_704_5a_player_formally_loses_game_at_zero_life():
     """704.5a: A player with 0 or less life should formally lose the game."""
     spell = _mk_card("Lethal Drain", "Sorcery", "Target player loses 20 life.")
@@ -143,14 +135,6 @@ def test_704_5b_successful_draw_from_non_empty_library():
     assert len(p1.library) == 0
 
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "Rule 704.5b state-based action not implemented: the engine does not track "
-        "that a player attempted to draw from an empty library, and no 'player.lost' "
-        "flag is set when this occurs."
-    ),
-)
 def test_704_5b_drawing_from_empty_library_causes_player_to_lose():
     """704.5b: A player who attempts to draw from an empty library loses the game."""
     draw_spell = _mk_card("Draw Spell", "Sorcery", "Target player draws a card.")
@@ -190,14 +174,6 @@ def test_704_5c_player_state_has_poison_counter_field():
 # ceases to exist.
 # ---------------------------------------------------------------------------
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "Rule 704.5d not implemented: the engine does not distinguish token permanents "
-        "from card-backed permanents. Tokens are not removed when they enter a "
-        "non-battlefield zone (e.g. the graveyard after being destroyed)."
-    ),
-)
 def test_704_5d_token_destroyed_does_not_enter_graveyard():
     """704.5d: A token destroyed in combat ceases to exist instead of entering the graveyard."""
     token_card = _mk_creature("Saproling", 1, 1)
@@ -219,31 +195,42 @@ def test_704_5d_token_destroyed_does_not_enter_graveyard():
 # it ceases to exist.
 # ---------------------------------------------------------------------------
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "Rule 704.5e not implemented: the engine does not model spell or card copies "
-        "as distinct from originals. Copy tracking and automatic removal from "
-        "non-legal zones are not supported."
-    ),
-)
-def test_704_5e_copy_of_card_in_graveyard_ceases_to_exist():
-    """704.5e: A copy of a card in a zone other than the stack or battlefield ceases to exist."""
-    card = _mk_card("Clone Card", "Instant")
-    # Copies are not modeled; the engine has no 'is_copy' metadata enforcement
-    copy_perm = Permanent(card=card, metadata={"is_copy": True})
-    p1 = PlayerState(name="P1", battlefield=[copy_perm])
-    p2 = PlayerState(name="P2")
+def test_704_5e_countered_spell_copy_ceases_to_exist_instead_of_going_to_graveyard(cards):
+    """704.5e: A copy of a spell (Fork) that is countered before it resolves ceases to
+    exist — it has no physical card, so it must not be placed into any graveyard.
+
+    This is the scenario in this engine where 704.5e is actually reachable: Fork's
+    copy already skips the graveyard when it resolves normally (see the ``is_copy``
+    check in stack_casting.py's ``_run_stack_item_resolution``), but countering the
+    copy before it resolves used to append its (shared) card object to the
+    countering player's graveyard as a side effect of reusing the same ``card``
+    reference as the original spell."""
+    bolt = _mk_card("Bolt Test", "Instant", "Bolt Test deals 3 damage to any target.")
+    fork = cards["Fork"]
+    counterspell = cards["Counterspell"]
+
+    p1 = PlayerState(name="P1", hand=[bolt], life=20)
+    p2 = PlayerState(name="P2", hand=[fork, counterspell], life=20)
     game = Game(players=[p1, p2])
 
-    wrath = _mk_card("Wrath", "Sorcery", "Destroy all creatures.")
-    p1.hand.append(wrath)
-    game.cast_from_hand(0, "Wrath", target_player_index=1)
+    game.queue_from_hand(0, "Bolt Test", target_player_index=1)
+    game.queue_from_hand(1, "Fork", target_player_index=0)
+    # Resolve just Fork: it copies Bolt Test and puts the copy on top of the stack,
+    # above the original Bolt Test.
+    assert game.resolve_top_of_stack()
 
-    # 704.5e: the copy should cease to exist — it must not remain on the battlefield
-    # (Wrath only destroys creatures, so the copy_perm (Instant type) stays on battlefield
-    # when 704.5e is not enforced — this assertion will fail until the rule is implemented)
-    assert not any(perm.card.name == "Clone Card" for perm in p1.battlefield)
+    # Counterspell (defaults to the top of the stack) counters the copy before it resolves.
+    game.queue_from_hand(1, "Counterspell", target_player_index=0)
+    game.resolve_stack()
+
+    # Only the original Bolt Test resolved — the countered copy dealt no damage and
+    # left no card behind anywhere.
+    assert p1.life == 20
+    assert p2.life == 17
+    assert len(p1.graveyard) == 1
+    assert p1.graveyard[0].name == "Bolt Test"
+    assert not any(c.name == "Bolt Test" for c in p2.graveyard)
+    assert any(c.name == "Counterspell" for c in p2.graveyard)
 
 
 # ---------------------------------------------------------------------------
@@ -265,14 +252,6 @@ def test_704_5f_creature_debuffed_to_negative_toughness_meets_condition():
     assert perm.effective_toughness < 0
 
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "Rule 704.5f state-based action not implemented: the engine does not check "
-        "for creatures with toughness 0 or less outside of combat damage resolution. "
-        "A creature debuffed to 0 or negative toughness remains on the battlefield."
-    ),
-)
 def test_704_5f_creature_debuffed_to_zero_toughness_goes_to_graveyard():
     """704.5f: A creature whose toughness is reduced to 0 by a continuous effect is put
     into its owner's graveyard."""
@@ -286,21 +265,13 @@ def test_704_5f_creature_debuffed_to_zero_toughness_goes_to_graveyard():
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=creature)])
     game = Game(players=[p1, p2])
 
-    game.cast_from_hand(0, "Enfeeblement", target_player_index=1)
+    game.cast_from_hand(0, "Enfeeblement", target_player_index=1, target_permanent_index=0)
 
     # 704.5f: toughness is now -1 — creature must go to graveyard
     assert not any(perm.card.name == "Weakling" for perm in p2.battlefield)
     assert any(c.name == "Weakling" for c in p2.graveyard)
 
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "Rule 704.5f: regeneration cannot replace a creature going to the graveyard "
-        "due to toughness 0 or less. This distinction requires 704.5f to be implemented "
-        "as a separate check from lethal-damage destruction (704.5g)."
-    ),
-)
 def test_704_5f_regeneration_cannot_save_creature_with_zero_toughness():
     """704.5f: Regeneration cannot replace the 704.5f state-based action — a creature with
     toughness 0 or less goes to the graveyard regardless of regeneration shields."""
@@ -315,7 +286,7 @@ def test_704_5f_regeneration_cannot_save_creature_with_zero_toughness():
     p2 = PlayerState(name="P2", battlefield=[perm])
     game = Game(players=[p1, p2])
 
-    game.cast_from_hand(0, "Weakness Aura", target_player_index=1)
+    game.cast_from_hand(0, "Weakness Aura", target_player_index=1, target_permanent_index=0)
 
     # Regeneration shield must NOT prevent 704.5f — creature must still die
     assert not any(p.card.name == "Regen Creature" for p in p2.battlefield)
@@ -431,15 +402,6 @@ def test_704_5g_creature_with_non_lethal_damage_remains_on_battlefield():
 # this event.
 # ---------------------------------------------------------------------------
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "Rule 704.5h not implemented: the engine does not track the deathtouch keyword "
-        "as a damage source property. Any damage from a deathtouch source should destroy "
-        "the damaged creature, but the engine only destroys creatures when "
-        "damage_marked >= effective_toughness."
-    ),
-)
 def test_704_5h_deathtouch_source_destroys_with_one_damage():
     """704.5h: A creature dealt any amount of damage by a deathtouch source is destroyed,
     even if that damage is less than the creature's toughness."""
@@ -457,13 +419,6 @@ def test_704_5h_deathtouch_source_destroys_with_one_damage():
     assert any(c.name == "Armored Titan" for c in p2.graveyard)
 
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "Rule 704.5h: regeneration can replace the destruction caused by deathtouch "
-        "damage, but this requires deathtouch to be tracked as a damage source modifier."
-    ),
-)
 def test_704_5h_regeneration_replaces_deathtouch_destruction():
     """704.5h: Regeneration can replace the destruction caused by deathtouch damage."""
     deathtouch_card = _mk_creature("Deathtouch Creature", 1, 1, oracle_text="Deathtouch")
@@ -508,14 +463,6 @@ def test_704_5i_planeswalker_type_line_recognized():
     assert "Planeswalker" in walker.type_line
 
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "Rule 704.5i not implemented: the engine does not model planeswalkers with "
-        "loyalty counters. Loyalty tracking and the 0-loyalty graveyard state-based "
-        "action are absent from the engine."
-    ),
-)
 def test_704_5i_planeswalker_with_zero_loyalty_goes_to_graveyard():
     """704.5i: A planeswalker with 0 loyalty is put into its owner's graveyard."""
     walker_card = CardDefinition(
@@ -546,14 +493,6 @@ def test_704_5i_planeswalker_with_zero_loyalty_goes_to_graveyard():
 # rest are put into their owners' graveyards. ("The legend rule.")
 # ---------------------------------------------------------------------------
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "Rule 704.5j (legend rule) not implemented: the engine does not check for "
-        "multiple legendary permanents with the same name under the same controller. "
-        "Both legendaries remain on the battlefield simultaneously."
-    ),
-)
 def test_704_5j_same_name_same_controller_legend_rule_removes_one():
     """704.5j: When one player controls two legendary permanents with the same name, all
     but one are put into their owners' graveyards."""
@@ -610,14 +549,6 @@ def test_704_5j_different_controllers_same_legendary_name_both_survive():
 # time are put into their owners' graveyards. ("The world rule.")
 # ---------------------------------------------------------------------------
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "Rule 704.5k (world rule) not implemented: the engine does not track the "
-        "'World' supertype or compare permanents' timestamps. Multiple world permanents "
-        "coexist on the battlefield without any being removed."
-    ),
-)
 def test_704_5k_two_world_permanents_older_goes_to_graveyard():
     """704.5k: When two world permanents are on the battlefield simultaneously, all but
     the one with the most recent timestamp are put into their owners' graveyards."""
@@ -640,14 +571,6 @@ def test_704_5k_two_world_permanents_older_goes_to_graveyard():
 # graveyard.
 # ---------------------------------------------------------------------------
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "Rule 704.5m (and 303.4c) not implemented: when the enchanted creature is "
-        "destroyed, the engine leaves the Aura on the battlefield rather than moving "
-        "it to the owner's graveyard."
-    ),
-)
 def test_704_5m_aura_goes_to_graveyard_when_enchanted_creature_is_destroyed():
     """704.5m: When the creature an Aura enchants is destroyed, the Aura is put into its
     owner's graveyard because it is no longer attached to a legal object."""
@@ -662,7 +585,7 @@ def test_704_5m_aura_goes_to_graveyard_when_enchanted_creature_is_destroyed():
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=creature)])
     game = Game(players=[p1, p2])
 
-    game.cast_from_hand(0, "Holy Strength", target_player_index=1)
+    game.cast_from_hand(0, "Holy Strength", target_player_index=1, target_permanent_index=0)
     game.cast_from_hand(0, "Wrath of God", target_player_index=1)
 
     assert any(c.name == "Holy Strength" for c in p1.graveyard)
@@ -672,9 +595,19 @@ def test_704_5m_aura_goes_to_graveyard_when_enchanted_creature_is_destroyed():
 @pytest.mark.xfail(
     strict=False,
     reason=(
-        "Rule 704.5m: an Aura on the battlefield with no attached_to target is in an "
-        "illegal state and should be put into its owner's graveyard as a state-based "
-        "action. The engine does not perform this check."
+        "Rule 704.5m is enforced for Auras whose 'attached_to' becomes stale after "
+        "cast-time attachment (see test_704_5m_aura_goes_to_graveyard_when_enchanted_"
+        "creature_is_destroyed), but the SBA sweep deliberately skips Auras where the "
+        "'attached_to' key is absent from metadata entirely (game_ending.py's "
+        "_illegally_attached), so a bare Permanent(card=aura) built directly onto the "
+        "battlefield (as this test does, and as several unrelated test fixtures across "
+        "the suite do to set up Aura static effects without simulating a full cast) is "
+        "never swept. Removing that guard was tried and breaks real fixtures (e.g. "
+        "test_firebreathing_pumps_enchanted_creature, the Living Artifact upkeep tests "
+        "in tests/regressions/test_batch14.py) that rely on being able to place an Aura "
+        "on the battlefield and attach it in a later line before any SBA check runs. "
+        "Fully closing this gap needs those fixtures reworked to set 'attached_to' at "
+        "construction time, not a change to the SBA logic itself."
     ),
 )
 def test_704_5m_unattached_aura_on_battlefield_goes_to_graveyard():
@@ -702,14 +635,6 @@ def test_704_5m_unattached_aura_on_battlefield_goes_to_graveyard():
 # player. It remains on the battlefield.
 # ---------------------------------------------------------------------------
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "Rule 704.5n not implemented: when the equipped creature is destroyed, the "
-        "engine does not clear the Equipment's 'attached_to' metadata. The Equipment "
-        "should become unattached and remain on the battlefield."
-    ),
-)
 def test_704_5n_equipment_becomes_unattached_when_equipped_creature_dies():
     """704.5n: An Equipment attached to a creature that dies becomes unattached but
     remains on the battlefield."""
@@ -741,14 +666,6 @@ def test_704_5n_equipment_becomes_unattached_when_equipped_creature_dies():
 # it becomes unattached and remains on the battlefield.
 # ---------------------------------------------------------------------------
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "Rule 704.5p not implemented: the engine does not detect or correct a "
-        "non-Aura, non-Equipment permanent that finds itself in an attached state. "
-        "The 'attached_to' metadata would persist without being cleared."
-    ),
-)
 def test_704_5p_creature_in_attached_state_becomes_unattached():
     """704.5p: A creature permanent that is in an 'attached' state (which is illegal for
     creatures) becomes unattached and remains on the battlefield."""
@@ -775,15 +692,6 @@ def test_704_5p_creature_in_attached_state_becomes_unattached():
 # smaller of the two counts.
 # ---------------------------------------------------------------------------
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "Rule 704.5q not implemented: the engine tracks stat changes as net "
-        "power_bonus/toughness_bonus integers rather than as distinct named +1/+1 "
-        "and -1/-1 counter objects. Physical counter removal as a state-based action "
-        "is not implemented."
-    ),
-)
 def test_704_5q_one_plus_counter_and_one_minus_counter_cancel():
     """704.5q: One +1/+1 counter and one -1/-1 counter on the same permanent are both
     removed — N=1 of each is cancelled."""
@@ -801,13 +709,6 @@ def test_704_5q_one_plus_counter_and_one_minus_counter_cancel():
     assert current.metadata.get("minus_counters", 0) == 0
 
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "Rule 704.5q: with three +1/+1 and two -1/-1 counters, N=2 of each are "
-        "removed, leaving one +1/+1 counter. Named counter tracking is not implemented."
-    ),
-)
 def test_704_5q_partial_cancellation_leaves_remainder():
     """704.5q: When +1/+1 counters outnumber -1/-1 counters, N (the smaller count) of
     each type are removed, leaving the difference in +1/+1 counters."""
@@ -831,13 +732,6 @@ def test_704_5q_partial_cancellation_leaves_remainder():
 # of those counters are removed.
 # ---------------------------------------------------------------------------
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "Rule 704.5r not implemented: the engine does not parse counter cap abilities "
-        "or enforce counter maximums as a state-based action."
-    ),
-)
 def test_704_5r_excess_counters_trimmed_to_cap():
     """704.5r: A permanent with more counters than its stated cap has the excess removed."""
     capped_card = _mk_card(
@@ -861,14 +755,6 @@ def test_704_5r_excess_counters_trimmed_to_cap():
 # controller sacrifices it.
 # ---------------------------------------------------------------------------
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "Rule 704.5s not implemented: the engine does not track lore counters on "
-        "Saga permanents, does not compare them to the final chapter number, and "
-        "does not automatically sacrifice Sagas that have completed their final chapter."
-    ),
-)
 def test_704_5s_saga_sacrificed_when_lore_counters_reach_final_chapter():
     """704.5s: A Saga whose lore counter total reaches or exceeds its final chapter
     number is sacrificed by its controller."""
@@ -896,14 +782,6 @@ def test_704_5s_saga_sacrificed_when_lore_counters_reach_final_chapter():
 # recent timestamp is put into its owner's graveyard.
 # ---------------------------------------------------------------------------
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "Rule 704.5y (and 303.7a) state-based action not implemented: the engine "
-        "allows multiple Roles controlled by the same player to remain on the "
-        "battlefield simultaneously instead of keeping only the most recent one."
-    ),
-)
 def test_704_5y_only_newest_role_from_same_controller_survives():
     """704.5y: When the same player attaches two Roles to the same creature, only the
     Role with the most recent timestamp remains; the older Role goes to the graveyard."""
@@ -968,21 +846,16 @@ def test_704_7_multiple_lethal_damage_deaths_are_processed_simultaneously():
 # state before any of those state-based actions were performed.
 # ---------------------------------------------------------------------------
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "Rule 704.8 not implemented: the engine does not capture 'last known "
-        "information' snapshots before applying simultaneous state-based actions. "
-        "As illustrated in the rule's undying example, triggered abilities that rely "
-        "on a permanent's pre-SBA state (such as checking for +1/+1 counters) are "
-        "not supported."
-    ),
-)
 def test_704_8_last_known_information_undying_example():
     """704.8: Per the rule's example — Young Wolf (undying) with a +1/+1 counter and
     three -1/-1 counters has toughness 0 or less. Before state-based actions, it has
     the +1/+1 counter, so undying does not trigger (last known information shows the
-    counter was present)."""
+    counter was present).
+
+    Note: this passes today because undying's return-from-graveyard trigger isn't
+    implemented at all yet, not because the engine models LKI snapshots (it doesn't).
+    If undying support is added, revisit this test to make sure it still exercises
+    704.8 rather than passing by coincidence."""
     # Young Wolf: 1/1 undying. Net counters: +1/+1 and -1/-1/-1/-1 → toughness -1.
     # Before SBAs the wolf has a +1/+1 counter → undying won't trigger.
     wolf_card = _mk_creature("Young Wolf", 1, 1, oracle_text="Undying")
