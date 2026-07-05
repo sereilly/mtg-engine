@@ -3,7 +3,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..models import CardDefinition, Permanent
-from ._common import resolve_target_permanent
+from ..pt import set_base_pt
+from ..tokens import make_token_card
+from ._common import resolve_amount, resolve_target_permanent
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -46,31 +48,6 @@ def sacrifice_if_no_creatures(game: Game, instruction: OracleInstruction, contex
             game.log.append(f"{source.card.name} sacrificed at end step (no creatures)")
             break
     return True, "resolved"
-
-
-def _token_image_uris(source_card: CardDefinition, token_name: str) -> dict[str, str] | None:
-    """Resolve a token's Scryfall image URLs from its creating card's ``all_parts``.
-
-    Scryfall image URLs are derivable from a card's id, so we only need the id
-    that ``all_parts`` records for the token component — no network call. Returns
-    None when the source card has no matching token part (e.g. minimal raw data).
-    """
-    raw = source_card.raw
-    if not isinstance(raw, dict):
-        return None
-    for part in raw.get("all_parts") or ():
-        if not isinstance(part, dict):
-            continue
-        if part.get("component") == "token" and part.get("name") == token_name:
-            card_id = part.get("id")
-            if not isinstance(card_id, str) or len(card_id) < 2:
-                continue
-            base = f"{card_id[0]}/{card_id[1]}/{card_id}.jpg"
-            return {
-                size: f"https://cards.scryfall.io/{size}/front/{base}"
-                for size in ("small", "normal", "large", "art_crop", "border_crop")
-            }
-    return None
 
 
 @effect_handler("balance_resources")
@@ -280,36 +257,44 @@ def animate_self_until_end_of_combat(game: Game, instruction: OracleInstruction,
     source_permanent = context.source_permanent
     if source_permanent is None:
         return False, "ability not implemented"
-    source_permanent.metadata["absolute_power"] = int(instruction.payload.get("power", 0))
-    source_permanent.metadata["absolute_toughness"] = int(instruction.payload.get("toughness", 0))
+    set_base_pt(
+        source_permanent,
+        int(instruction.payload.get("power", 0)),
+        int(instruction.payload.get("toughness", 0)),
+    )
     source_permanent.metadata["animate_until_end_of_combat"] = True
     game.log.append(f"{card.name} is animated until end of combat")
     return True, "resolved"
 
 
-@effect_handler("create_wasp_token")
-def create_wasp_token(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+@effect_handler("create_token")
+def create_token(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Generic token creation: payload carries name / P/T / type_line / colors /
+    keywords / count ("x" resolves to the cast's X). Tokens are stamped
+    ``is_token`` so they cease to exist instead of hitting the graveyard
+    (CR 704.5d / 111.7)."""
     caster = context.caster
     card = context.card
+    payload = instruction.payload
     controller_index = game.players.index(caster)
-    raw = {"name": "Wasp", "type_line": "Artifact Creature — Insect", "power": "1", "toughness": "1"}
-    image_uris = _token_image_uris(card, "Wasp")
-    if image_uris is not None:
-        raw["image_uris"] = image_uris
-    wasp = CardDefinition(
-        name="Wasp",
-        mana_cost="",
-        cmc=0.0,
-        type_line="Artifact Creature — Insect",
-        oracle_text="Flying",
-        colors=(),
-        color_identity=(),
-        keywords=("Flying",),
-        produced_mana=(),
-        raw=raw,
+    token_card = make_token_card(
+        str(payload.get("name", "Token")),
+        int(payload.get("power", 1)),
+        int(payload.get("toughness", 1)),
+        str(payload.get("type_line", "Creature — Token")),
+        colors=tuple(payload.get("colors") or ()),
+        keywords=tuple(payload.get("keywords") or ()),
+        image_source=card,
     )
-    game._put_permanent_onto_battlefield(controller_index, Permanent(card=wasp), None)
-    game.log.append(f"{card.name} created a Wasp token")
+    count = resolve_amount(payload.get("count", 1), context.x_value)
+    for _ in range(count):
+        game._put_permanent_onto_battlefield(
+            controller_index, Permanent(card=token_card, metadata={"is_token": True}), None
+        )
+    if count == 1:
+        game.log.append(f"{card.name} created a {token_card.name} token")
+    elif count > 1:
+        game.log.append(f"{card.name} created {count} {token_card.name} tokens")
     return True, "resolved"
 
 

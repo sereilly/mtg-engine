@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import random
-from pathlib import Path
 
-from engine import load_cards
 from engine.models import CardDefinition
 
 
@@ -20,9 +18,10 @@ _CREATURE_TARGET = 15
 _NONCREATURE_TARGET = 21
 
 
-def _card_map(cards_path: Path) -> dict[str, CardDefinition]:
-    cards = load_cards(cards_path)
-    return {card.name: card for card in cards}
+def _card_map(catalog: list[CardDefinition]) -> dict[str, CardDefinition]:
+    """Name -> CardDefinition from an already-loaded catalog (no I/O — the
+    catalog is loaded once at process startup; see web/app.py:CARD_CATALOG)."""
+    return {card.name: card for card in catalog}
 
 
 def _pick_colors(rng: random.Random, color_count: int) -> list[str]:
@@ -150,7 +149,7 @@ def _pick_cards(
 
 
 def build_deck_from_entries(
-    cards_path: Path,
+    catalog: list[CardDefinition],
     entries: list[dict],
     seed: int,
 ) -> list[CardDefinition]:
@@ -158,7 +157,7 @@ def build_deck_from_entries(
 
     Raises ValueError listing any card names not present in the catalog.
     """
-    cards = _card_map(cards_path)
+    cards = _card_map(catalog)
     by_name = {name.casefold(): card for name, card in cards.items()}
 
     deck: list[CardDefinition] = []
@@ -184,12 +183,12 @@ def build_deck_from_entries(
     return deck
 
 
-def build_random_deck(cards_path: Path, color_count: int, seed: int) -> tuple[list[CardDefinition], list[str]]:
+def build_random_deck(catalog: list[CardDefinition], color_count: int, seed: int) -> tuple[list[CardDefinition], list[str]]:
     if not (1 <= color_count <= 5):
         raise ValueError("color_count must be between 1 and 5")
 
     rng = random.Random(seed)
-    cards = _card_map(cards_path)
+    cards = _card_map(catalog)
     selected_colors = _pick_colors(rng, color_count)
 
     lands = _build_lands(rng, cards, selected_colors)

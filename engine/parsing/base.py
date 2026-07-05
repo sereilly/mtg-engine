@@ -23,6 +23,22 @@ _ORDERS_SEEN: set[int] = set()
 _sorted_cache: tuple[ParseRule, ...] | None = None
 
 
+# Band base orders (one global order space shared by every category module —
+# cross-category precedence is intentional: "destroy all creatures" must beat
+# "destroy target" even though they could live in different files). Historic
+# LEA orders were multiplied by 100 to open ~99 slots between former
+# neighbors; write new rules as BAND_X + offset. The bands, ascending:
+BAND_UPKEEP = 1_000            # upkeep pay-or-else effects
+BAND_NAMED_TRIGGERS = 7_000    # named triggered-ability effects
+BAND_SPELLS = 14_000           # spells — zones, combat tricks, damage, library
+BAND_DESTRUCTION = 51_000      # recolor, mass/targeted destruction, pumps, discard
+BAND_LIFE_TAP_PREVENT = 64_000 # game-ending, life totals, tap/untap, prevention
+BAND_ACTIVATED = 81_000        # activated abilities (pump, counters, tokens, misc)
+BAND_MANA_COUNTER = 101_000    # mana production, counterspells
+BAND_TRIGGER_SHORTHANDS = 106_000  # "draw a card", "you lose the game"
+BAND_GLOBAL_STATIC = 113_000   # global/static buffs (lowest precedence)
+
+
 def parse_rule(order: int, name: str | None = None) -> Callable[[RuleFn], RuleFn]:
     """Register a parse rule at an explicit position in the matching sequence.
 
@@ -30,7 +46,8 @@ def parse_rule(order: int, name: str | None = None) -> Callable[[RuleFn], RuleFn
     Explicit ordering lets rules live in category modules while still giving
     deterministic precedence (specific patterns must outrank generic ones,
     e.g. "destroy all creatures" before "destroy target"). Pick an unused
-    order between the two rules yours must run between.
+    order between the two rules yours must run between — new rules should be
+    written as ``BAND_X + offset`` using the band constants above.
     """
 
     def decorator(fn: RuleFn) -> RuleFn:

@@ -133,13 +133,26 @@ _NUMBER_WORDS = {
     "five": 5,
     "six": 6,
     "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
 }
 
 
-def _parse_number_token(token: str) -> int:
+def parse_number_token(token: str) -> int | None:
+    """Strict number parse: digits or a spelled-out number word, else None.
+    New parse rules should prefer this over ``_parse_number_token`` so an
+    unrecognized word surfaces as a parse failure instead of a silent 0."""
     if token.isdigit():
         return int(token)
-    return _NUMBER_WORDS.get(token, 0)
+    return _NUMBER_WORDS.get(token)
+
+
+def _parse_number_token(token: str) -> int:
+    """Legacy lenient variant kept for existing call sites: unknown words
+    parse as 0."""
+    value = parse_number_token(token)
+    return 0 if value is None else value
 
 
 _MANA_TOKEN_RE = re.compile(r"\{([^}]+)\}")

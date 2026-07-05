@@ -13,8 +13,16 @@ def lea_path() -> Path:
 
 
 @pytest.fixture(scope="session")
-def all_cards(lea_path):
-    return load_cards(lea_path)
+def card_paths(lea_path) -> list[Path]:
+    """Every set JSON the test suite loads, in printing order. A new set adds
+    its JSON here (or a set-specific fixture list) so `all_cards`/`cards`
+    grow to cover it without touching individual test files."""
+    return [lea_path]
+
+
+@pytest.fixture(scope="session")
+def all_cards(card_paths):
+    return load_cards(card_paths)
 
 
 @pytest.fixture(scope="session")

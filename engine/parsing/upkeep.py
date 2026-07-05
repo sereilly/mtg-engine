@@ -4,22 +4,16 @@ from __future__ import annotations
 
 import re
 
-from ..oracle_types import _extract_mana_cost_from_text, _instruction
+from ..oracle_types import _NUMBER_WORDS, _extract_mana_cost_from_text, _instruction
 from .base import RuleResult, parse_rule
 
 _DAMAGE_UNLESS_PAY_RE = re.compile(r"this \w+ deals (\d+) damage to you unless you pay")
 _SELF_DAMAGE_RE = re.compile(r"this creature deals (\d+) damage to you")
 _CREATURES_ABOVE_RE = re.compile(r"(\w+) or more creature cards above it")
 
-# Spelled-out small numbers that appear in LEA graveyard-recursion text.
-_NUMBER_WORDS = {
-    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
-    "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
-}
-
 
 # "sacrifice this enchantment unless you pay {X}..." (Conversion, Stasis)
-@parse_rule(10)
+@parse_rule(1000)
 def upkeep_pay_or_sacrifice_enchantment(text: str, activated: bool) -> RuleResult:
     if "sacrifice this enchantment unless you pay" in text:
         mana = _extract_mana_cost_from_text(text)
@@ -28,7 +22,7 @@ def upkeep_pay_or_sacrifice_enchantment(text: str, activated: bool) -> RuleResul
 
 
 # "sacrifice this creature unless you pay {X}" (Seasinger, Sea Serpent variants)
-@parse_rule(20)
+@parse_rule(2000)
 def upkeep_pay_or_sacrifice_self(text: str, activated: bool) -> RuleResult:
     if "sacrifice this creature unless you pay" in text:
         mana = _extract_mana_cost_from_text(text)
@@ -38,7 +32,7 @@ def upkeep_pay_or_sacrifice_self(text: str, activated: bool) -> RuleResult:
 
 # Mana Vault / Basalt Monolith: "you may pay {N}. If you do, untap this artifact."
 # An optional pay during your own upkeep that untaps the source permanent.
-@parse_rule(22)
+@parse_rule(2200)
 def upkeep_pay_to_untap_self(text: str, activated: bool) -> RuleResult:
     if "may pay" in text and ("untap this artifact" in text or "untap this permanent" in text):
         mana = _extract_mana_cost_from_text(text)
@@ -48,7 +42,7 @@ def upkeep_pay_to_untap_self(text: str, activated: bool) -> RuleResult:
 
 # Paralyze: "that player may pay {N}. If the player does, untap the creature." An
 # optional pay during the enchanted creature's controller's upkeep.
-@parse_rule(24)
+@parse_rule(2400)
 def upkeep_pay_to_untap_enchanted(text: str, activated: bool) -> RuleResult:
     if "may pay" in text and ("untap the creature" in text or "untap enchanted creature" in text):
         mana = _extract_mana_cost_from_text(text)
@@ -57,7 +51,7 @@ def upkeep_pay_to_untap_enchanted(text: str, activated: bool) -> RuleResult:
 
 
 # "this creature/artifact deals N damage to you unless you pay {X}..." (Force of Nature)
-@parse_rule(30)
+@parse_rule(3000)
 def upkeep_pay_or_deal_damage_to_controller(text: str, activated: bool) -> RuleResult:
     damage_unless_pay = _DAMAGE_UNLESS_PAY_RE.search(text)
     if damage_unless_pay:
@@ -68,7 +62,7 @@ def upkeep_pay_or_deal_damage_to_controller(text: str, activated: bool) -> RuleR
 
 
 # "unless you pay {...}, tap this creature and sacrifice a land of an opponent's choice" (Demonic Hordes)
-@parse_rule(40)
+@parse_rule(4000)
 def upkeep_pay_or_tap_and_sacrifice_opponent_land(text: str, activated: bool) -> RuleResult:
     if "unless you pay" in text and "sacrifice a land of an opponent" in text:
         mana = _extract_mana_cost_from_text(text)
@@ -77,7 +71,7 @@ def upkeep_pay_or_tap_and_sacrifice_opponent_land(text: str, activated: bool) ->
 
 
 # "sacrifice a creature other than this creature. if you can't, this creature deals N damage to you"
-@parse_rule(50)
+@parse_rule(5000)
 def upkeep_sacrifice_other_creature_or_deal_damage(text: str, activated: bool) -> RuleResult:
     if "sacrifice a creature other than this creature" in text:
         alt_damage_match = _SELF_DAMAGE_RE.search(text)
@@ -87,7 +81,7 @@ def upkeep_sacrifice_other_creature_or_deal_damage(text: str, activated: bool) -
 
 
 # Black Vise: "this artifact deals x damage to that player, where x is the number of cards in their hand minus 4"
-@parse_rule(60)
+@parse_rule(6000)
 def upkeep_chosen_player_hand_overflow_damage(text: str, activated: bool) -> RuleResult:
     if "number of cards in their hand minus 4" in text:
         return _instruction("upkeep_chosen_player_hand_overflow_damage"), "upkeep_effect"
@@ -97,7 +91,7 @@ def upkeep_chosen_player_hand_overflow_damage(text: str, activated: bool) -> Rul
 # Nether Shadow: "if this card is in your graveyard with N or more creature cards
 # above it, you may put this card onto the battlefield". This ability functions
 # from the graveyard, so resolve_upkeep scans the owner's graveyard for it.
-@parse_rule(65)
+@parse_rule(6500)
 def upkeep_return_self_from_graveyard(text: str, activated: bool) -> RuleResult:
     if (
         "in your graveyard" in text

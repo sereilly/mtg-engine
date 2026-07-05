@@ -3,7 +3,9 @@ from __future__ import annotations
 import random
 import re
 
+from ..handlers._common import permanent_matches_filter, pick_target_permanent
 from ..models import CardDefinition, Permanent, PlayerState
+from ..replacements import apply_replacements
 from ..oracle import OracleInstruction, compile_card_oracle, lex_oracle_text
 from ..trigger_utils import iter_triggered_abilities, make_trigger_event, matching_triggers
 
@@ -102,38 +104,20 @@ class EffectsMixin:
             (i for i, p in enumerate(self.players) if p is target), None
         )
 
-        def _passes_type(perm, tf):
-            if not tf:
-                return True
-            # has_type/is_creature so copies keep all their types (a Copy
-            # Artifact copy is an Artifact Enchantment) and animated lands
-            # count as creatures.
-            if tf == "artifact_or_enchantment":
-                return perm.has_type("artifact") or perm.has_type("enchantment")
-            if tf == "creature":
-                return perm.is_creature
-            if tf in ("artifact", "enchantment", "land"):
-                return perm.has_type(tf)
-            return perm.effective_card.primary_type == tf
+        # Shared filter evaluation (handlers/_common.py) so resolution can
+        # never disagree with cast validation / legality enumeration about
+        # what a target filter means.
+        filter_payload = {
+            "type_filter": type_filter,
+            "subtype_filter": subtype_filter,
+            "tapped_only": tapped_only,
+            "color_filter": color_filter,
+            "exclude_colors": exclude_colors,
+            "exclude_types": exclude_types,
+        }
 
         def _is_legal_target(perm) -> bool:
-            card = perm.effective_card
-            effective_colors = [perm.metadata.get("color_override")] if perm.metadata.get("color_override") else list(card.colors)
-            if not _passes_type(perm, type_filter):
-                return False
-            if subtype_filter and subtype_filter not in card.type_line.lower():
-                return False
-            if tapped_only and not perm.tapped:
-                return False
-            if color_filter and color_filter not in effective_colors:
-                return False
-            if exclude_colors and any(c in effective_colors for c in exclude_colors):
-                return False
-            if exclude_types:
-                type_line_lower = card.type_line.lower()
-                if any(et in type_line_lower for et in exclude_types):
-                    return False
-            return True
+            return permanent_matches_filter(perm, filter_payload)
 
         def _do_destroy(perm: "Permanent", idx: int) -> "CardDefinition":
             if self._is_indestructible(perm):
@@ -178,30 +162,25 @@ class EffectsMixin:
         # artifact, creature, or land" — the player picks which one, on either
         # battlefield). Fall back to the first permanent only when no explicit
         # choice was supplied (AI/headless).
-        if isinstance(target_permanent_index, int) and 0 <= target_permanent_index < len(target.battlefield):
-            target.battlefield[target_permanent_index].tapped = make_tapped
-            return True
-        for permanent in target.battlefield:
-            permanent.tapped = make_tapped
-            return True
-        return False
+        chosen = pick_target_permanent(target, target_permanent_index, predicate=lambda p: True)
+        if chosen is None:
+            return False
+        chosen.tapped = make_tapped
+        return True
 
     def _grant_regeneration_shield(
         self, target: PlayerState, target_permanent_index: int | None = None
     ) -> bool:
         # Honor an explicitly chosen creature (e.g. Death Ward's "Regenerate target
-        # creature" — the player picks which one). Fall back to the first creature.
-        if isinstance(target_permanent_index, int) and 0 <= target_permanent_index < len(target.battlefield):
-            chosen = target.battlefield[target_permanent_index]
-            if chosen.is_creature:
-                chosen.regeneration_shield += 1
-                return True
+        # creature" — the player picks which one; an explicit illegal choice
+        # fizzles). Fall back to the first creature only with no explicit choice.
+        chosen = pick_target_permanent(
+            target, target_permanent_index, fallback_on_invalid_choice=False
+        )
+        if chosen is None:
             return False
-        for permanent in target.battlefield:
-            if permanent.is_creature:
-                permanent.regeneration_shield += 1
-                return True
-        return False
+        chosen.regeneration_shield += 1
+        return True
 
     def _source_colors(self, source) -> tuple[str, ...]:
         """Color symbols of a damage source — a Permanent (honoring a color
@@ -332,32 +311,15 @@ class EffectsMixin:
         if amount > 0:
             self._turn_face_up(permanent)
             self._turn_face_up(source)
-        # Jade Monolith: "The next time a source of your choice would deal damage
-        # to target creature this turn, that source deals that damage to you
-        # instead." Redirect the whole instance to the chosen player (works for
-        # combat damage too) — but only when the damage comes from the chosen source.
-        redirect_idx = permanent.metadata.get("redirect_damage_to_player")
-        if redirect_idx is not None and isinstance(redirect_idx, int) and 0 <= redirect_idx < len(self.players) and amount > 0:
-            chosen_source = permanent.metadata.get("redirect_damage_source")
-            if self._damage_source_matches(chosen_source, source):
-                permanent.metadata.pop("redirect_damage_to_player", None)
-                permanent.metadata.pop("redirect_damage_source", None)
-                self._deal_damage_to_player(self.players[redirect_idx], amount)
-                self.log.append(
-                    f"Damage to {permanent.card.name} redirected to {self.players[redirect_idx].name} (Jade Monolith)"
-                )
-                return 0
-        # Personal Incarnation: "The next 1 damage that would be dealt to this
-        # creature this turn is dealt to its owner instead." Redirect one point per
-        # charge before the rest is marked (CR 614 replacement effect).
-        redirect = int(permanent.metadata.get("redirect_one_damage_to_owner_until_eot", 0))
-        if redirect > 0 and amount > 0:
-            permanent.metadata["redirect_one_damage_to_owner_until_eot"] = redirect - 1
-            owner = next((p for p in self.players if permanent in p.battlefield), None)
-            if owner is not None:
-                self._deal_damage_to_player(owner, 1)
-                self.log.append(f"1 damage redirected from {permanent.card.name} to {owner.name}")
-            amount -= 1
+        # CR 614 replacement effects (Jade Monolith full redirect, Personal
+        # Incarnation 1-point redirect) run before the prevention pool.
+        consumed, payload = apply_replacements(
+            self, "damage_to_creature",
+            {"permanent": permanent, "amount": amount, "source": source},
+        )
+        if consumed:
+            return 0
+        amount = payload["amount"]
         dealt = self._prevent_permanent_damage(permanent, amount)
         if dealt > 0:
             permanent.damage_marked += dealt
@@ -383,7 +345,12 @@ class EffectsMixin:
         lets them keep it. The replacement is optional ("you may"), so a human
         controller gets a per-card prompt (pending_leng_discards, resolved by
         confirm_leng_discard); AI/headless play takes the beneficial
-        top-of-library route inline."""
+        top-of-library route inline.
+
+        TODO(card-hooks): this is an interactive-prompt flow, not a plain
+        replacement effect, so it doesn't fit engine/replacements.py as-is;
+        migrate to a hook registry if a second interactive discard-replacement
+        card appears."""
         if any(perm.card.name == "Library of Leng" for perm in player.battlefield):
             player_index = self.players.index(player)
             if player_index in self.interactive_seats:
@@ -405,13 +372,14 @@ class EffectsMixin:
         instead' replacement effects (e.g. Lich, CR 614)."""
         if amount <= 0:
             return
-        source = f" from {source_name}" if source_name else ""
-        if self._player_controls_text(target, "if you would gain life, draw that many cards instead"):
-            drawn = target.draw(amount)
-            self.log.append(
-                f"{target.name} would gain {amount} life{source}; drew {drawn} card(s) instead (Lich)"
-            )
+        consumed, payload = apply_replacements(
+            self, "life_gain",
+            {"player": target, "amount": amount, "source_name": source_name},
+        )
+        if consumed:
             return
+        amount = payload["amount"]
+        source = f" from {source_name}" if source_name else ""
         before = target.life
         target.life += amount
         self.log.append(f"{target.name} gained {amount} life{source} ({before} -> {target.life})")
@@ -521,38 +489,22 @@ class EffectsMixin:
     ) -> bool:
         # Respect the chosen target when one was declared; otherwise fall back to
         # the first creature so AI / legacy callers still resolve.
-        if isinstance(target_permanent_index, int) and 0 <= target_permanent_index < len(
-            target.battlefield
-        ):
-            candidate = target.battlefield[target_permanent_index]
-            if candidate.is_creature:
-                target.hand.append(candidate.card)
-                target.battlefield.pop(target_permanent_index)
-                return True
-        for idx, permanent in enumerate(target.battlefield):
-            if permanent.is_creature:
-                target.hand.append(permanent.card)
-                target.battlefield.pop(idx)
-                return True
-        return False
+        chosen = pick_target_permanent(target, target_permanent_index)
+        if chosen is None:
+            return False
+        target.hand.append(chosen.card)
+        target.battlefield.remove(chosen)
+        return True
 
     def _sacrifice_creature_for_mana(self, caster: PlayerState, chosen_index: int | None = None) -> CardDefinition | None:
         # Sacrifice: the caster chooses which creature to sacrifice for the cost.
         # Honor an explicit choice; otherwise sacrifice the first creature.
-        if (
-            isinstance(chosen_index, int)
-            and 0 <= chosen_index < len(caster.battlefield)
-            and caster.battlefield[chosen_index].is_creature
-        ):
-            removed = caster.battlefield.pop(chosen_index)
-            caster.graveyard.append(removed.card)
-            return removed.card
-        for idx, permanent in enumerate(caster.battlefield):
-            if permanent.is_creature:
-                removed = caster.battlefield.pop(idx)
-                caster.graveyard.append(removed.card)
-                return removed.card
-        return None
+        chosen = pick_target_permanent(caster, chosen_index)
+        if chosen is None:
+            return None
+        caster.battlefield.remove(chosen)
+        caster.graveyard.append(chosen.card)
+        return chosen.card
 
     def _apply_color_override(
         self,
@@ -562,13 +514,11 @@ class EffectsMixin:
     ) -> bool:
         if not symbol:
             return False
-        if target_permanent_index is not None and 0 <= target_permanent_index < len(target.battlefield):
-            target.battlefield[target_permanent_index].metadata["color_override"] = symbol
-            return True
-        if target.battlefield:
-            target.battlefield[0].metadata["color_override"] = symbol
-            return True
-        return False
+        chosen = pick_target_permanent(target, target_permanent_index, predicate=lambda p: True)
+        if chosen is None:
+            return False
+        chosen.metadata["color_override"] = symbol
+        return True
 
     def _process_land_enters(self, land_controller_index: int) -> None:
         """Put "whenever a land enters the battlefield, deal 2 damage" triggers onto
@@ -607,6 +557,8 @@ class EffectsMixin:
         self._enqueue_triggered_batch(events)
 
     def _fastbond_count(self, player_index: int) -> int:
+        # TODO(card-hooks): single-card bespoke site; migrate if a second
+        # "extra land drops for damage" card appears.
         if player_index < 0 or player_index >= len(self.players):
             return 0
         return sum(1 for permanent in self.players[player_index].battlefield if permanent.card.name == "Fastbond")

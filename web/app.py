@@ -57,11 +57,15 @@ from .verification_store import VerificationStore
 
 ROOT = Path(__file__).resolve().parent.parent
 CARDS_PATH = ROOT / "lea_cards.json"
+# Every set JSON that makes up the card pool, in printing order. Adding a new
+# set is appending its JSON path here — CARD_CATALOG and every store below
+# derive from this one list, loaded once at process startup.
+CARD_PATHS = [CARDS_PATH]
 DECKS_DIR = ROOT / "decks"
 VERIFICATION_PATH = ROOT / "card_verification.json"
 VERIFICATION_MD_PATH = ROOT / "CARD_VERIFICATION.md"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
-CARD_CATALOG = load_cards(CARDS_PATH)
+CARD_CATALOG = load_cards(CARD_PATHS)
 CARD_BY_NAME = {card.name.casefold(): card for card in CARD_CATALOG}
 CARD_SEARCH_ORDER = sorted(CARD_CATALOG, key=lambda card: card.name)
 # Unique catalog card names in display order (some cards share a name across printings).
@@ -84,7 +88,7 @@ def _require_shared_writes() -> None:
             detail="Shared decks are read-only. Save to your personal decks instead.",
         )
 verification_store = VerificationStore(VERIFICATION_PATH)
-store = SessionStore(cards_path=CARDS_PATH, deck_store=deck_store)
+store = SessionStore(catalog=CARD_CATALOG, deck_store=deck_store)
 _session_event_queues: dict[str, set[asyncio.Queue[dict[str, str]]]] = defaultdict(set)
 
 
@@ -3010,7 +3014,7 @@ def _require_session(session_id: str) -> Session:
 
 @app.post("/api/decks/random")
 def random_deck(req: RandomDeckRequest):
-    deck, colors = build_random_deck(CARDS_PATH, req.colors, req.seed)
+    deck, colors = build_random_deck(CARD_CATALOG, req.colors, req.seed)
     land_count = sum(1 for c in deck if c.primary_type == "land")
     return {
         "colors": colors,

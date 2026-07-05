@@ -24,7 +24,7 @@ def _life_recipient(text: str) -> str:
     return "caster"
 
 
-@parse_rule(460)
+@parse_rule(46000)
 def grant_extra_turn(text: str, activated: bool) -> RuleResult:
     if "take an extra turn after this one" in text:
         return _instruction("grant_extra_turn"), "spell_pattern"
@@ -32,7 +32,7 @@ def grant_extra_turn(text: str, activated: bool) -> RuleResult:
 
 
 # Rule 104.3e: effect that states a player loses the game
-@parse_rule(640)
+@parse_rule(64000)
 def target_player_loses_game(text: str, activated: bool) -> RuleResult:
     if "target player loses the game" in text:
         return _instruction("target_player_loses_game"), "spell_pattern"
@@ -40,7 +40,7 @@ def target_player_loses_game(text: str, activated: bool) -> RuleResult:
 
 
 # Rule 104.2b: effect that states a player wins the game (spell/sorcery form)
-@parse_rule(650)
+@parse_rule(65000)
 def player_wins_game(text: str, activated: bool) -> RuleResult:
     if "you win the game" in text:
         return _instruction("player_wins_game"), "spell_pattern"
@@ -48,14 +48,14 @@ def player_wins_game(text: str, activated: bool) -> RuleResult:
 
 
 # Rule 104.4c: effect that states the game is a draw
-@parse_rule(660)
+@parse_rule(66000)
 def game_is_draw(text: str, activated: bool) -> RuleResult:
     if "the game is a draw" in text:
         return _instruction("game_is_draw"), "spell_pattern"
     return None
 
 
-@parse_rule(670)
+@parse_rule(67000)
 def target_loses_n_life(text: str, activated: bool) -> RuleResult:
     lose_life_match = _LOSE_LIFE_RE.search(text)
     if lose_life_match:
@@ -63,14 +63,14 @@ def target_loses_n_life(text: str, activated: bool) -> RuleResult:
     return None
 
 
-@parse_rule(680)
+@parse_rule(68000)
 def target_gains_x_life(text: str, activated: bool) -> RuleResult:
     if "gains x life" in text or "gain x life" in text:
         return _instruction("target_gains_life", amount="x", recipient=_life_recipient(text)), "spell_pattern"
     return None
 
 
-@parse_rule(800)
+@parse_rule(80000)
 def target_gains_n_life(text: str, activated: bool) -> RuleResult:
     if "gain" in text and "life" in text:
         gain_match = _GAIN_LIFE_RE.search(text)

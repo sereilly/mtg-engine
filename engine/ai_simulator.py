@@ -103,7 +103,7 @@ def _zone_counter(player: PlayerState) -> Counter[str]:
         counter[card.name] += 1
     for permanent in player.battlefield:
         # Ignore generated tokens in zone conservation checks.
-        if permanent.card.name in {"Wasp"}:
+        if permanent.metadata.get("is_token"):
             continue
         counter[permanent.card.name] += 1
     return counter

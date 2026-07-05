@@ -2,8 +2,62 @@ from __future__ import annotations
 
 import re
 
+from typing import Callable
+
 from ..models import CardDefinition, Permanent, PlayerState
 from ..oracle import _COLOR_WORD_TO_SYMBOL, compile_card_oracle
+from ..pt import clear_base_pt, set_base_pt
+
+
+# Characteristic-defining P/T (CR 604.3 / layer 7a): instruction kind → count
+# function returning the value both power and toughness are set to. Adding a
+# CDA card = one compiler instruction kind + one entry here; the refresh loop
+# below never changes.
+def _count_non_wall_creatures(game, player: PlayerState, permanent: Permanent) -> int:
+    return sum(
+        1
+        for perm in player.battlefield
+        if perm.card.primary_type == "creature" and "wall" not in perm.card.type_line.lower()
+    )
+
+
+def _count_plague_rats(game, player: PlayerState, permanent: Permanent) -> int:
+    return sum(
+        1 for p in game.players for perm in p.battlefield if perm.card.name == "Plague Rats"
+    )
+
+
+def _count_swamps(game, player: PlayerState, permanent: Permanent) -> int:
+    return sum(
+        1
+        for perm in player.battlefield
+        if "swamp" in perm.card.type_line.lower()
+        or perm.metadata.get("land_type_override") == "swamp"
+    )
+
+
+def _count_forests_gaea(game, player: PlayerState, permanent: Permanent) -> int:
+    # Not attacking: forests its controller controls; attacking: forests the
+    # defending player controls.
+    if permanent.attacking and permanent.defending_player_index is not None:
+        reference_player = game.players[permanent.defending_player_index]
+    else:
+        reference_player = player
+    return sum(
+        1
+        for perm in reference_player.battlefield
+        if "forest" in perm.card.type_line.lower()
+        or perm.metadata.get("land_type_override") == "forest"
+    )
+
+
+DYNAMIC_PT: dict[str, Callable[["object", PlayerState, Permanent], int]] = {
+    "dynamic_pt_non_wall_creatures": _count_non_wall_creatures,
+    "dynamic_pt_plague_rats": _count_plague_rats,
+    "dynamic_pt_swamps": _count_swamps,
+    "dynamic_pt_forests_gaea": _count_forests_gaea,
+}
+
 
 class PermanentStateMixin:
     def _initialize_permanent_state(
@@ -257,6 +311,9 @@ class PermanentStateMixin:
                 creature.metadata["aspect_of_wolf_bonus"] = (prev_x + x, prev_y + y)
 
     def _refresh_dynamic_creatures(self) -> None:
+        # TODO(card-hooks): Kormus Bell / Living Lands are the only two land
+        # animators today (an "animate all <type>" registry, keyed by name,
+        # would be the extension point once a third one is added).
         all_permanents = [perm for player in self.players for perm in player.battlefield]
         kormus_active = any(perm.card.name == "Kormus Bell" for perm in all_permanents)
         living_lands_active = any(perm.card.name == "Living Lands" for perm in all_permanents)
@@ -280,51 +337,17 @@ class PermanentStateMixin:
                     perm.metadata["attacking_buff_power"] = attacking_buff_power
                     perm.metadata["attacking_buff_toughness"] = attacking_buff_toughness
 
-            non_wall_creatures = sum(
-                1
-                for perm in player.battlefield
-                if perm.card.primary_type == "creature" and "wall" not in perm.card.type_line.lower()
-            )
-            swamp_count = sum(
-                1
-                for perm in player.battlefield
-                if "swamp" in perm.card.type_line.lower() or perm.metadata.get("land_type_override") == "swamp"
-            )
-            plague_rats_total = sum(
-                1 for p in self.players for perm in p.battlefield if perm.card.name == "Plague Rats"
-            )
+            swamp_count = _count_swamps(self, player, None)
 
             for permanent in player.battlefield:
                 prog = compile_card_oracle(permanent.effective_card)
                 instr_kinds = {instr.kind for instr in prog.instructions}
 
-                if "dynamic_pt_non_wall_creatures" in instr_kinds:
-                    permanent.metadata["absolute_power"] = non_wall_creatures
-                    permanent.metadata["absolute_toughness"] = non_wall_creatures
-
-                if "dynamic_pt_plague_rats" in instr_kinds:
-                    permanent.metadata["absolute_power"] = plague_rats_total
-                    permanent.metadata["absolute_toughness"] = plague_rats_total
-
-                if "dynamic_pt_swamps" in instr_kinds:
-                    permanent.metadata["absolute_power"] = swamp_count
-                    permanent.metadata["absolute_toughness"] = swamp_count
-
-                if "dynamic_pt_forests_gaea" in instr_kinds:
-                    # Not attacking: forests its controller controls; attacking:
-                    # forests the defending player controls.
-                    if permanent.attacking and permanent.defending_player_index is not None:
-                        reference_player = self.players[permanent.defending_player_index]
-                    else:
-                        reference_player = player
-                    forest_count = sum(
-                        1
-                        for perm in reference_player.battlefield
-                        if "forest" in perm.card.type_line.lower()
-                        or perm.metadata.get("land_type_override") == "forest"
-                    )
-                    permanent.metadata["absolute_power"] = forest_count
-                    permanent.metadata["absolute_toughness"] = forest_count
+                # Characteristic-defining P/T (layer 7a) — registry-driven.
+                for kind, count_fn in DYNAMIC_PT.items():
+                    if kind in instr_kinds:
+                        value = count_fn(self, player, permanent)
+                        set_base_pt(permanent, value, value)
 
                 if "conditional_swamp_bonus" in instr_kinds:
                     previous = int(permanent.metadata.get("conditional_swamp_bonus", 0))
@@ -359,15 +382,13 @@ class PermanentStateMixin:
                 )
                 if is_animated_swamp or is_animated_forest:
                     permanent.metadata["land_animated"] = True
-                    permanent.metadata["absolute_power"] = 1
-                    permanent.metadata["absolute_toughness"] = 1
+                    set_base_pt(permanent, 1, 1)
                     if is_animated_swamp:
                         permanent.metadata["color_override"] = "B"
                 elif permanent.metadata.get("land_animated"):
                     # The animating source is gone: the land is no longer a creature.
                     permanent.metadata.pop("land_animated", None)
-                    permanent.metadata.pop("absolute_power", None)
-                    permanent.metadata.pop("absolute_toughness", None)
+                    clear_base_pt(permanent)
                     permanent.metadata.pop("color_override", None)
 
     def _has_keyword(self, permanent: Permanent, keyword: str) -> bool:
@@ -430,18 +451,10 @@ class PermanentStateMixin:
 
     def _effective_colors(self, permanent: Permanent) -> set[str]:
         """The color symbols a permanent currently has (honoring color overrides
-        and copied colors)."""
-        override = permanent.metadata.get("color_override")
-        if override:
-            return {override}
-        # A copy takes the copied creature's color (Clone) — unless the copier
-        # excludes it ("except it doesn't copy that creature's color", Vesuvan
-        # Doppelganger), in which case copied_colors is never recorded and the
-        # copier's own printed color (blue) shows through.
-        copied_colors = permanent.metadata.get("copied_colors")
-        if copied_colors is not None:
-            return set(copied_colors)
-        return set(permanent.card.colors)
+        and copied colors). Delegates to the shared handler helper."""
+        from ..handlers._common import permanent_effective_colors
+
+        return permanent_effective_colors(permanent)
 
     def _protection_colors(self, permanent: Permanent) -> set[str]:
         """Color symbols this permanent has protection from (CR 702.16).

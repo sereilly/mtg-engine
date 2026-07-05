@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from pathlib import Path
 import random
 import secrets
 
 from engine import Game, PlayerState
 from engine.game_history import GameHistory
+from engine.models import CardDefinition
 
 from .deck_builder import build_deck_from_entries, build_random_deck
 from .deck_store import DeckStore
@@ -129,8 +129,8 @@ class Session:
 
 
 class SessionStore:
-    def __init__(self, cards_path: Path, deck_store: DeckStore | None = None):
-        self.cards_path = cards_path
+    def __init__(self, catalog: list[CardDefinition], deck_store: DeckStore | None = None):
+        self.catalog = catalog
         self.deck_store = deck_store
         self._sessions: dict[str, Session] = {}
 
@@ -143,11 +143,11 @@ class SessionStore:
     ):
         # Inline cards (a personal/browser deck) win over a server-side id.
         if cards:
-            return build_deck_from_entries(self.cards_path, cards, seed)
+            return build_deck_from_entries(self.catalog, cards, seed)
         if deck_id and self.deck_store is not None:
             deck = self.deck_store.get(deck_id)
-            return build_deck_from_entries(self.cards_path, deck.get("cards", []), seed)
-        deck, _ = build_random_deck(self.cards_path, colors, seed)
+            return build_deck_from_entries(self.catalog, deck.get("cards", []), seed)
+        deck, _ = build_random_deck(self.catalog, colors, seed)
         return deck
 
     def create(self, request: CreateSessionRequest) -> Session:

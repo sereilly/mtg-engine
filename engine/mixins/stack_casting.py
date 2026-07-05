@@ -3,8 +3,11 @@ from __future__ import annotations
 import random
 import re
 
+from ..card_hooks import ability_cost_tax, spell_cost_tax
+from ..cast_restrictions import check_cast_timing
 from ..classifier import CardClassification, classify_card
 from ..game_types import OracleExecutionContext, OracleStateMachine, SimulationResult, StackItem
+from ..handlers._common import permanent_matches_filter
 from ..models import CardDefinition, Permanent, PlayerState
 from ..oracle import OracleInstruction, _COLOR_WORD_TO_SYMBOL, compile_card_oracle, lex_oracle_text
 from ..oracle_types import x_spend_color_from_text
@@ -829,6 +832,8 @@ class StackCastingMixin:
 
 
 
+        # TODO(card-hooks): bespoke untap-cost plumbing, single card — migrate
+        # to a card_hooks registry if a second card needs this shape.
         # Special handling for Basalt Monolith: only allow tap if untapped, untap if tapped
         if permanent.card.name == "Basalt Monolith" and len(program.activated_abilities) == 2:
             tap_ability = None
@@ -985,21 +990,13 @@ class StackCastingMixin:
         # the printed symbols, where X is the amount the player chose.
         if x_value and "{x}" in (ability.source_line or "").lower():
             required_cost["generic"] = required_cost.get("generic", 0) + int(x_value)
-        # Gloom's second clause: "Activated abilities of white enchantments cost
-        # {3} more to activate." (The white-spell cast tax is applied separately
-        # in cast_from_hand.)
-        source_card = permanent.effective_card
-        if (
-            "enchantment" in source_card.type_line.lower()
-            and "W" in source_card.colors
-            and any(
-                perm.card.name == "Gloom"
-                for player in self.players
-                for perm in player.battlefield
-            )
-        ):
-            required_cost["generic"] = required_cost.get("generic", 0) + 3
-            self.log.append(f"{permanent.card.name}'s ability is taxed by Gloom")
+        # Ability cost taxes (Gloom: "Activated abilities of white enchantments
+        # cost {3} more to activate"; the white-spell cast tax is applied
+        # separately in cast_from_hand).
+        extra_ability_tax, taxing_names = ability_cost_tax(self, controller_index, permanent)
+        if extra_ability_tax:
+            required_cost["generic"] = required_cost.get("generic", 0) + extra_ability_tax
+            self.log.append(f"{permanent.card.name}'s ability is taxed by {', '.join(taxing_names)}")
         if self.enforce_mana_costs and any(required_cost.values()):
             if not self._pay_mana_cost(controller, required_cost):
                 details = f"insufficient mana to activate {permanent.card.name}"
@@ -1123,15 +1120,10 @@ class StackCastingMixin:
                 self.log.append(details)
                 return SimulationResult(card.name, False, classification.effect_kind, details)
 
-        if "W" in card.colors:
-            has_gloom = any(
-                perm.card.name == "Gloom"
-                for player in self.players
-                for perm in player.battlefield
-            )
-            if has_gloom:
-                extra_generic_tax = 3
-                self.log.append(f"{card.name} is taxed by Gloom")
+        spell_tax, taxing_names = spell_cost_tax(self, caster_index, card)
+        if spell_tax:
+            extra_generic_tax += spell_tax
+            self.log.append(f"{card.name} is taxed by {', '.join(taxing_names)}")
 
         # Accept cards with supported triggered abilities (match classifier logic)
         if not classification.supported:
@@ -1144,59 +1136,10 @@ class StackCastingMixin:
             self.log.append(f"Unsupported card: {card.name} ({classification.reason})")
             return SimulationResult(card.name, False, classification.effect_kind, classification.reason)
 
-        if "cast this spell only during your declare attackers step" in card.oracle_text.lower():
-            if self.current_step != "declare_attackers" or self.active_player_index != caster_index:
-                details = "can only be cast during your declare attackers step"
-                self.log.append(details)
-                return SimulationResult(card.name, False, classification.effect_kind, details)
-
-        if "cast this spell only during the declare blockers step" in card.oracle_text.lower():
-            if self.current_turn_phase != "combat" or self.current_step != "declare_blockers":
-                details = "can only be cast during the declare blockers step"
-                self.log.append(details)
-                return SimulationResult(card.name, False, classification.effect_kind, details)
-
-        # Blaze of Glory: "Cast this spell only during combat before blockers are
-        # declared" — legal during the beginning-of-combat and declare-attackers
-        # steps (while attackers may still be declared / blockers not yet declared).
-        if "cast this spell only during combat before blockers are declared" in card.oracle_text.lower():
-            before_blockers = (
-                self.current_turn_phase == "combat"
-                and self.current_step in ("beginning_of_combat", "declare_attackers")
-            )
-            if not before_blockers:
-                details = "can only be cast during combat before blockers are declared"
-                self.log.append(details)
-                return SimulationResult(card.name, False, classification.effect_kind, details)
-
-        # Berserk: "Cast this spell only before the combat damage step." Illegal
-        # once the turn has reached the combat damage step — during it, after it
-        # (end of combat, postcombat main), or in the ending phase.
-        if "cast this spell only before the combat damage step" in card.oracle_text.lower():
-            past_combat_damage = (
-                self.current_turn_phase in ("postcombat_main", "ending")
-                or (
-                    self.current_turn_phase == "combat"
-                    and self.current_step in ("combat_damage", "end_of_combat")
-                )
-            )
-            if past_combat_damage:
-                details = "can only be cast before the combat damage step"
-                self.log.append(details)
-                return SimulationResult(card.name, False, classification.effect_kind, details)
-
-        if "cast this spell only during an opponent's turn, before attackers are declared" in card.oracle_text.lower():
-            if self.current_turn_phase == "combat":
-                before_attackers = (
-                    self.current_step in ("beginning_of_combat", "declare_attackers")
-                    and not self.combat_attackers_locked
-                )
-            else:
-                before_attackers = self.current_turn_phase in ("beginning", "precombat_main")
-            if self.active_player_index == caster_index or not before_attackers:
-                details = "can only be cast during an opponent's turn, before attackers are declared"
-                self.log.append(details)
-                return SimulationResult(card.name, False, classification.effect_kind, details)
+        timing_denial = check_cast_timing(self, caster_index, card.oracle_text.lower())
+        if timing_denial is not None:
+            self.log.append(timing_denial)
+            return SimulationResult(card.name, False, classification.effect_kind, timing_denial)
 
         # Resolve an explicitly chosen target spell on the stack (Counterspell,
         # Fork). target_stack_index indexes into self.stack (bottom-first).
@@ -1313,38 +1256,7 @@ class StackCastingMixin:
         validation and the legality enumerator so a destroy ability (Royal
         Assassin's "target tapped creature", Northern Paladin's "target black
         permanent") offers exactly the permanents it can legally destroy."""
-        type_filter = payload.get("type_filter")
-        subtype_filter = payload.get("subtype_filter")
-        color_filter = payload.get("color_filter")
-        tapped_only = payload.get("tapped_only", False)
-        exclude_colors = payload.get("exclude_colors") or []
-        exclude_types = payload.get("exclude_types") or []
-
-        # has_type/is_creature/effective colors so copies keep all their types
-        # (a Copy Artifact copy is an Artifact Enchantment), animated lands
-        # count as creatures, and color overrides (laces) are honored.
-        type_line = perm.effective_card.type_line.lower()
-        if type_filter:
-            if type_filter == "artifact_or_enchantment":
-                if not (perm.has_type("artifact") or perm.has_type("enchantment")):
-                    return False
-            elif type_filter == "creature":
-                if not perm.is_creature:
-                    return False
-            elif type_filter not in type_line:
-                return False
-        if subtype_filter and subtype_filter not in type_line:
-            return False
-        if tapped_only and not perm.tapped:
-            return False
-        colors = self._effective_colors(perm)
-        if color_filter and color_filter not in colors:
-            return False
-        if exclude_colors and any(c in colors for c in exclude_colors):
-            return False
-        if exclude_types and any(t in type_line for t in exclude_types):
-            return False
-        return True
+        return permanent_matches_filter(perm, payload)
 
     def _validate_cast_targets(
         self,

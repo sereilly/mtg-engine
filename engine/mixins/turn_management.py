@@ -3,6 +3,7 @@ from __future__ import annotations
 import random
 import re
 
+from ..card_hooks import MANA_PRODUCTION_MODIFIERS
 from ..game_types import SimulationResult
 from ..oracle import compile_card_oracle
 from ..trigger_utils import iter_triggered_abilities
@@ -218,23 +219,11 @@ class TurnManagementMixin:
                 mana_symbol = "G"
         player.mana_pool[mana_symbol] = player.mana_pool.get(mana_symbol, 0) + 1
 
-        all_permanents = [perm for pl in self.players for perm in pl.battlefield]
-        if any(perm.card.name == "Mana Flare" for perm in all_permanents):
-            player.mana_pool[mana_symbol] = player.mana_pool.get(mana_symbol, 0) + 1
-
-        land_type_line = land.card.type_line.lower()
-        land_type_override = str(land.metadata.get("land_type_override", "")).lower()
-        is_mountain = "mountain" in land_type_line or "mountain" in land_type_override
-        if is_mountain and any(perm.card.name == "Gauntlet of Might" for perm in all_permanents):
-            player.mana_pool["R"] = player.mana_pool.get("R", 0) + 1
-
-        is_forest = "forest" in land_type_line or "forest" in land_type_override
-        if is_forest:
-            for i, controller in enumerate(self.players):
-                if i != player_index:
-                    for perm in controller.battlefield:
-                        if perm.card.name == "Lifetap":
-                            self._gain_life(controller, 1, "Lifetap")
+        for source_index, source_player in enumerate(self.players):
+            for perm in source_player.battlefield:
+                hook = MANA_PRODUCTION_MODIFIERS.get(perm.card.name)
+                if hook is not None:
+                    hook(self, player_index, land, mana_symbol, perm, source_index)
 
         self.log.append(f"{player.name} tapped {land_name} for mana")
 

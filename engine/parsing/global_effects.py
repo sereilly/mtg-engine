@@ -11,7 +11,7 @@ from .base import RuleResult, parse_rule
 _GLOBAL_BUFF_RE = re.compile(r"(white|blue|black|red|green)?\s*creatures(?: you control)? get \+(\d+)/\+(\d+)")
 
 
-@parse_rule(220)
+@parse_rule(22000)
 def balance_resources(text: str, activated: bool) -> RuleResult:
     if "each player chooses a number of lands they control equal to the number of lands controlled by the player who controls the fewest" in text:
         return _instruction("balance_resources"), "spell_pattern"
@@ -19,14 +19,14 @@ def balance_resources(text: str, activated: bool) -> RuleResult:
 
 
 # Global buff / animate-land effects (e.g. Kormus Bell, Living Lands)
-@parse_rule(1130)
+@parse_rule(113000)
 def animate_all_swamps(text: str, activated: bool) -> RuleResult:
     if "all swamps are 1/1 black creatures that are still lands" in text:
         return _instruction("animate_all_swamps"), "spell_pattern"
     return None
 
 
-@parse_rule(1140)
+@parse_rule(114000)
 def animate_all_forests(text: str, activated: bool) -> RuleResult:
     if "all forests are 1/1 creatures that are still lands" in text:
         return _instruction("animate_all_forests"), "spell_pattern"
@@ -50,7 +50,7 @@ _LAND_TYPE_SINGULAR = {
 # Static basic-land-type change (e.g. Conversion: "All Mountains are Plains.").
 # The generic land-animation rules above use an "are 1/1 creatures" clause, so a
 # plain "X are Y" form (no "creature") is unambiguous here.
-@parse_rule(1145)
+@parse_rule(114500)
 def static_land_type_change(text: str, activated: bool) -> RuleResult:
     m = _STATIC_LAND_TYPE_RE.search(text)
     if m and "creature" not in text:
@@ -62,14 +62,14 @@ def static_land_type_change(text: str, activated: bool) -> RuleResult:
     return None
 
 
-@parse_rule(1150)
+@parse_rule(115000)
 def buff_attacking_creatures(text: str, activated: bool) -> RuleResult:
     if "attacking creatures you control get +1/+0" in text:
         return _instruction("buff_attacking_creatures", power=1, toughness=0), "spell_pattern"
     return None
 
 
-@parse_rule(1160)
+@parse_rule(116000)
 def buff_untapped_creatures(text: str, activated: bool) -> RuleResult:
     if "untapped creatures you control get +0/+2" in text:
         return _instruction("buff_untapped_creatures", power=0, toughness=2), "spell_pattern"
@@ -77,7 +77,7 @@ def buff_untapped_creatures(text: str, activated: bool) -> RuleResult:
 
 
 # Generic creatures-get pump (e.g. "white creatures get +1/+1")
-@parse_rule(1170)
+@parse_rule(117000)
 def buff_creatures_global(text: str, activated: bool) -> RuleResult:
     global_match = _GLOBAL_BUFF_RE.search(text)
     if global_match:

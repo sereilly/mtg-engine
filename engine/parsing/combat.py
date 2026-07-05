@@ -7,14 +7,14 @@ from .base import RuleResult, activated_kind, parse_rule
 
 
 # Dwarven Warriors: make small creature unblockable
-@parse_rule(120)
+@parse_rule(12000)
 def grant_unblockable_to_low_power_target(text: str, activated: bool) -> RuleResult:
     if "target creature with power 2 or less can't be blocked this turn" in text:
         return _instruction("grant_unblockable_to_low_power_target"), activated_kind(activated, "evasion")
     return None
 
 
-@parse_rule(230)
+@parse_rule(23000)
 def grant_unlimited_blocking(text: str, activated: bool) -> RuleResult:
     if "target creature defending player controls can block any number of creatures this turn" in text:
         effect_kind = activated_kind(activated, "keyword")
@@ -22,14 +22,14 @@ def grant_unlimited_blocking(text: str, activated: bool) -> RuleResult:
     return None
 
 
-@parse_rule(240)
+@parse_rule(24000)
 def randomize_blockers(text: str, activated: bool) -> RuleResult:
     if "this turn, instead of declaring blockers" in text:
         return _instruction("randomize_blockers"), "spell_pattern"
     return None
 
 
-@parse_rule(250)
+@parse_rule(25000)
 def remove_creature_from_combat(text: str, activated: bool) -> RuleResult:
     if "remove target creature defending player controls from combat" in text:
         effect_kind = activated_kind(activated, "combat")
@@ -37,21 +37,21 @@ def remove_creature_from_combat(text: str, activated: bool) -> RuleResult:
     return None
 
 
-@parse_rule(260)
+@parse_rule(26000)
 def left_right_division_on_attack(text: str, activated: bool) -> RuleResult:
     if "whenever one or more creatures you control attack, each defending player divides all creatures without flying" in text:
         return _instruction("left_right_combat_division"), "spell_pattern"
     return None
 
 
-@parse_rule(420)
+@parse_rule(42000)
 def prevent_all_combat_damage(text: str, activated: bool) -> RuleResult:
     if "prevent all combat damage that would be dealt this turn" in text:
         return _instruction("prevent_all_combat_damage"), "spell_pattern"
     return None
 
 
-@parse_rule(920)
+@parse_rule(92000)
 def mark_non_wall_target_to_attack(text: str, activated: bool) -> RuleResult:
     if activated and "choose target non-wall creature" in text:
         return _instruction("mark_non_wall_target_to_attack"), "activated_combat"
@@ -59,7 +59,7 @@ def mark_non_wall_target_to_attack(text: str, activated: bool) -> RuleResult:
 
 
 # Siren's Call: force every creature the active player controls to attack
-@parse_rule(925)
+@parse_rule(92500)
 def force_active_player_creatures_to_attack(text: str, activated: bool) -> RuleResult:
     if "creatures the active player controls attack this turn if able" in text:
         return _instruction("force_active_player_creatures_to_attack"), "spell_pattern"

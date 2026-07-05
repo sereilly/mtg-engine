@@ -8531,63 +8531,22 @@ class TestLandCards:
 # 9. COMPREHENSIVE CASTING â€” every LEA card resolves without crashing
 # ===========================================================================
 
-@pytest.mark.parametrize("card_name", [
-    "Air Elemental", "Ancestral Recall", "Animate Artifact", "Animate Dead",
-    "Animate Wall", "Ankh of Mishra", "Armageddon", "Aspect of Wolf",
-    "Bad Moon", "Balance", "Basalt Monolith", "Benalish Hero", "Berserk",
-    "Birds of Paradise", "Black Knight", "Black Lotus", "Black Vise",
-    "Blaze of Glory", "Blessing", "Blue Elemental Blast", "Blue Ward", "Bog Wraith",
-    "Braingeyser", "Burrowing", "Camouflage", "Castle",
-    "Circle of Protection: Blue", "Circle of Protection: Green",
-    "Circle of Protection: Red", "Circle of Protection: White",
-    "Clockwork Beast", "Clone", "Cockatrice", "Conservator",
-    "Control Magic", "Conversion", "Copper Tablet", "Copy Artifact",
-    "Counterspell", "Craw Wurm", "Creature Bond", "Crusade",
-    "Crystal Rod", "Cursed Land", "Cyclopean Tomb", "Dark Ritual", "Darkpact",
-    "Death Ward", "Deathlace", "Demonic Hordes", "Demonic Tutor",
-    "Dingus Egg", "Disenchant", "Disintegrate", "Disrupting Scepter",
-    "Dragon Whelp", "Drain Life", "Drudge Skeletons", "Dwarven Demolition Team",
-    "Dwarven Warriors", "Earth Elemental", "Earthbind", "Earthquake",
-    "Elvish Archers", "Evil Presence", "False Orders", "Fear",
-    "Feedback", "Fire Elemental", "Fireball", "Firebreathing", "Flashfires",
-    "Flight", "Fog", "Force of Nature", "Forcefield",
-    "Frozen Shade", "Fungusaur", "Gaea's Liege", "Gauntlet of Might",
-    "Giant Growth", "Giant Spider", "Glasses of Urza", "Gloom",
-    "Goblin Balloon Brigade", "Goblin King", "Granite Gargoyle", "Gray Ogre",
-    "Grizzly Bears", "Guardian Angel", "Healing Salve", "Helm of Chatzuk",
-    "Hill Giant", "Holy Armor", "Holy Strength", "Howl from Beyond",
-    "Howling Mine", "Hurloon Minotaur", "Hurricane", "Hypnotic Specter",
-    "Ice Storm", "Icy Manipulator", "Ironroot Treefolk", "Island Sanctuary",
-    "Jade Statue", "Jayemdae Tome", "Juggernaut", "Jump",
-    "Keldon Warlord", "Kormus Bell", "Lance", "Library of Leng",
-    "Lightning Bolt", "Llanowar Elves", "Lord of Atlantis", "Lure",
-    "Mahamoti Djinn", "Mana Flare", "Mana Short", "Mana Vault",
-    "Manabarbs", "Meekstone", "Merfolk of the Pearl Trident", "Mesa Pegasus",
-    "Mind Twist", "Mons's Goblin Raiders", "Natural Selection", "Nether Shadow",
-    "Nettling Imp", "Nevinyrral's Disk", "Nightmare", "Northern Paladin",
-    "Obsianus Golem", "Orcish Artillery", "Orcish Oriflamme", "Paralyze",
-    "Pearled Unicorn", "Personal Incarnation", "Pestilence", "Phantom Monster", "Pirate Ship",
-    "Plague Rats", "Power Leak", "Power Surge", "Prodigal Sorcerer",
-    "Psionic Blast", "Psychic Venom", "Raging River", "Raise Dead",
-    "Red Elemental Blast", "Regeneration", "Regrowth", "Resurrection",
-    "Reverse Damage", "Righteousness", "Roc of Kher Ridges", "Rock Hydra",
-    "Rod of Ruin", "Royal Assassin", "Samite Healer", "Savannah Lions",
-    "Scathe Zombies", "Scavenging Ghoul", "Scryb Sprites", "Sea Serpent",
-    "Sedge Troll", "Sengir Vampire", "Serra Angel", "Shatter",
-    "Shivan Dragon", "Sinkhole", "Siren's Call", "Sleight of Mind", "Smoke",
-    "Sol Ring", "Spell Blast", "Stasis", "Steal Artifact",
-    "Stone Giant", "Stone Rain", "Stream of Life", "Swords to Plowshares",
-    "Terror", "The Hive", "Thicket Basilisk", "Time Walk",
-    "Timetwister", "Tranquility", "Tsunami", "Twiddle",
-    "Two-Headed Giant of Foriys", "Unholy Strength", "Unsummon", "Uthden Troll",
-    "Verduran Enchantress", "Veteran Bodyguard", "Volcanic Eruption",
-    "Wall of Air", "Wall of Bone", "Wall of Brambles", "Wall of Fire",
-    "Wall of Ice", "Wall of Stone", "Wall of Swords", "Wall of Water",
-    "Wall of Wood", "Wanderlust", "War Mammoth", "Warp Artifact",
-    "Water Elemental", "Weakness", "Web", "Wheel of Fortune",
-    "White Knight", "Wild Growth", "Will-o'-the-Wisp", "Winter Orb",
-    "Wooden Sphere", "Word of Command", "Wrath of God", "Zombie Master",
-])
+# Cards excluded from the generic sweep below, with the reason each needs
+# something the generic setup doesn't provide. Everything else in the catalog
+# — new sets included — runs through the sweep automatically.
+SWEEP_EXCLUSIONS: set[str] = set()
+
+
+def pytest_generate_tests(metafunc):
+    if "card_name" not in metafunc.fixturenames:
+        return
+    if metafunc.function is not test_all_lea_cards_resolve_without_exception:
+        return
+    cards = load_cards("lea_cards.json")
+    names = [c.name for c in cards if c.name not in SWEEP_EXCLUSIONS]
+    metafunc.parametrize("card_name", names)
+
+
 def test_all_lea_cards_resolve_without_exception(all_cards, card_name):
     """Every LEA card must resolve without throwing a Python exception.
     This is a smoke-test â€” it does not check the effect in detail.

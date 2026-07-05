@@ -5,6 +5,7 @@ import re
 from ..card_hooks import ON_LEAVE_BATTLEFIELD
 from ..models import CardDefinition, Permanent, PlayerState
 from ..oracle import compile_card_oracle
+from ..replacements import apply_replacements
 from ..trigger_utils import make_trigger_event, matching_triggers
 from ._constants import _MANA_SYMBOLS, _NO_PRIORITY_STEPS
 
@@ -194,13 +195,12 @@ class GameHelpersMixin:
         """Move a permanent to the graveyard. Tokens (704.5d) cease to exist instead."""
         if "Aura" in permanent.card.type_line:
             self._remove_aura_effects(permanent)
-        # Disintegrate-style replacement: "if it would die this turn, exile it
-        # instead." The creature never reaches the graveyard, so no dies-triggers
-        # fire (CR 614 — the replacement applies as it would leave the battlefield).
-        if permanent.metadata.get("exile_if_dies_this_turn"):
-            if not permanent.metadata.get("is_token", False):
-                player.exile.append(permanent.card)
-            self.log.append(f"{permanent.card.name} was exiled instead of dying")
+        # CR 614 would-die replacements (Disintegrate's "exile it instead"):
+        # a consumed event never reaches the graveyard, so no dies-triggers fire.
+        consumed, _ = apply_replacements(
+            self, "would_die", {"player": player, "permanent": permanent}
+        )
+        if consumed:
             return
         if not permanent.metadata.get("is_token", False):
             player.graveyard.append(permanent.card)

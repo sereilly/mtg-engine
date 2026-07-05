@@ -22,10 +22,21 @@ Hook registries:
                         the counterspell's own name).
 - ON_LEAVE_BATTLEFIELD — fired when the named permanent is put into a graveyard
                         from the battlefield (keyed by the permanent's name).
+- UNTAP_RESTRICTIONS  — declarative untap-step constraints (Stasis, Winter Orb,
+                        Smoke, Meekstone), consumed by engine/phases/untap_step.
+- DRAW_STEP_MODIFIERS — draw-step skips and bonus draws (Island Sanctuary,
+                        Howling Mine), consumed by engine/phases/draw_step.
+- MANA_PRODUCTION_MODIFIERS — fired once per registered permanent whenever a
+                        land is tapped for mana (Mana Flare, Gauntlet of Might,
+                        Lifetap), consumed by engine/mixins/turn_management.
+- SPELL_COST_MODIFIERS / ABILITY_COST_MODIFIERS — extra generic mana taxed onto
+                        a cast / activation, once per registered permanent on
+                        any battlefield (Gloom).
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
@@ -254,3 +265,170 @@ def _resolve_optional_pay_trigger(game: Game, item: StackItem) -> None:
 TRIGGER_HOOKS: dict[str, TriggerStackHook] = {
     "optional_pay": _resolve_optional_pay_trigger,
 }
+
+
+# --------------------------------------------------------------------------
+# Untap-step restrictions (CR 502)
+# --------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class UntapRestriction:
+    """Declarative "don't untap as normal" constraint from a permanent.
+
+    scope      -- what the restriction applies to: "all" | "land" | "creature"
+    limit      -- max permanents of that scope the active player may untap
+                  (0 with scope="all" skips the untap step entirely; None
+                  means no count limit)
+    min_power  -- per-permanent block: creatures with effective power >= N
+                  don't untap (Meekstone)
+    only_while_source_untapped -- the restriction is active only while the
+                  source permanent itself is untapped (Winter Orb)
+    """
+
+    scope: str
+    limit: int | None = None
+    min_power: int | None = None
+    only_while_source_untapped: bool = False
+
+
+UNTAP_RESTRICTIONS: dict[str, UntapRestriction] = {
+    "Stasis": UntapRestriction(scope="all", limit=0),
+    "Winter Orb": UntapRestriction(scope="land", limit=1, only_while_source_untapped=True),
+    "Smoke": UntapRestriction(scope="creature", limit=1),
+    "Meekstone": UntapRestriction(scope="creature", min_power=3),
+}
+
+
+# --------------------------------------------------------------------------
+# Draw-step modifiers (CR 504)
+# --------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class DrawStepModifier:
+    """Draw-step behavior granted by a permanent.
+
+    optional_skip_grants_protection -- its controller may skip their draw to
+                  gain "attack only me with flyers" protection (Island Sanctuary)
+    extra_draws -- bonus cards drawn in EVERY player's draw step (Howling Mine)
+    requires_untapped -- the modifier applies only while the source is untapped
+    """
+
+    optional_skip_grants_protection: bool = False
+    extra_draws: int = 0
+    requires_untapped: bool = False
+
+
+DRAW_STEP_MODIFIERS: dict[str, DrawStepModifier] = {
+    "Island Sanctuary": DrawStepModifier(optional_skip_grants_protection=True),
+    "Howling Mine": DrawStepModifier(extra_draws=1, requires_untapped=True),
+}
+
+
+# --------------------------------------------------------------------------
+# Mana-production modifiers ("whenever a land is tapped for mana")
+# --------------------------------------------------------------------------
+# Fired once per registered permanent on any battlefield, after the land's own
+# mana is added: (game, tapping_player_index, land, produced_symbol,
+# source_permanent, source_controller_index).
+
+ManaProductionHook = Callable[["Game", int, "Permanent", str, "Permanent", int], None]
+
+
+def _land_has_type(land: Permanent, land_type: str) -> bool:
+    override = str(land.metadata.get("land_type_override", "")).lower()
+    return land_type in land.card.type_line.lower() or land_type in override
+
+
+def _mana_flare(game: Game, tapping_index: int, land: Permanent, symbol: str,
+                source: Permanent, source_index: int) -> None:
+    # "Whenever a player taps a land for mana, that player adds one mana of any
+    # type that land produced." — modeled as one extra of the produced symbol.
+    player = game.players[tapping_index]
+    player.mana_pool[symbol] = player.mana_pool.get(symbol, 0) + 1
+
+
+def _gauntlet_of_might(game: Game, tapping_index: int, land: Permanent, symbol: str,
+                       source: Permanent, source_index: int) -> None:
+    # "Whenever a Mountain is tapped for mana, its controller adds {R}."
+    if _land_has_type(land, "mountain"):
+        player = game.players[tapping_index]
+        player.mana_pool["R"] = player.mana_pool.get("R", 0) + 1
+
+
+def _lifetap(game: Game, tapping_index: int, land: Permanent, symbol: str,
+             source: Permanent, source_index: int) -> None:
+    # "Whenever an opponent taps a Forest for mana, you gain 1 life."
+    if source_index != tapping_index and _land_has_type(land, "forest"):
+        game._gain_life(game.players[source_index], 1, "Lifetap")
+
+
+MANA_PRODUCTION_MODIFIERS: dict[str, ManaProductionHook] = {
+    "Mana Flare": _mana_flare,
+    "Gauntlet of Might": _gauntlet_of_might,
+    "Lifetap": _lifetap,
+}
+
+
+# --------------------------------------------------------------------------
+# Cost modifiers (extra generic mana taxed onto casts / activations)
+# --------------------------------------------------------------------------
+# Applied once per registered permanent on any battlefield. Return the extra
+# generic mana (0 = no tax for this cast/activation).
+
+SpellCostModifier = Callable[["Game", int, "CardDefinition"], int]
+AbilityCostModifier = Callable[["Game", int, "Permanent"], int]
+
+
+def _gloom_spell_tax(game: Game, caster_index: int, card: CardDefinition) -> int:
+    # Gloom: "White spells cost {3} more to cast."
+    return 3 if "W" in card.colors else 0
+
+
+def _gloom_ability_tax(game: Game, controller_index: int, source: Permanent) -> int:
+    # Gloom: "Activated abilities of white enchantments cost {3} more to activate."
+    card = source.effective_card
+    return 3 if ("enchantment" in card.type_line.lower() and "W" in card.colors) else 0
+
+
+SPELL_COST_MODIFIERS: dict[str, SpellCostModifier] = {
+    "Gloom": _gloom_spell_tax,
+}
+
+ABILITY_COST_MODIFIERS: dict[str, AbilityCostModifier] = {
+    "Gloom": _gloom_ability_tax,
+}
+
+
+def spell_cost_tax(game: Game, caster_index: int, card: CardDefinition) -> tuple[int, list[str]]:
+    """Total extra generic mana for casting *card*, plus the taxing permanents'
+    names (for logging). One application per registered permanent (two Glooms
+    tax {6})."""
+    total = 0
+    names: list[str] = []
+    for player in game.players:
+        for perm in player.battlefield:
+            modifier = SPELL_COST_MODIFIERS.get(perm.card.name)
+            if modifier is None:
+                continue
+            extra = modifier(game, caster_index, card)
+            if extra:
+                total += extra
+                names.append(perm.card.name)
+    return total, names
+
+
+def ability_cost_tax(game: Game, controller_index: int, source: Permanent) -> tuple[int, list[str]]:
+    """Total extra generic mana for activating *source*'s ability, plus the
+    taxing permanents' names (for logging)."""
+    total = 0
+    names: list[str] = []
+    for player in game.players:
+        for perm in player.battlefield:
+            modifier = ABILITY_COST_MODIFIERS.get(perm.card.name)
+            if modifier is None:
+                continue
+            extra = modifier(game, controller_index, source)
+            if extra:
+                total += extra
+                names.append(perm.card.name)
+    return total, names

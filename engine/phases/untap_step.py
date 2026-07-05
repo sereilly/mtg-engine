@@ -3,30 +3,65 @@ from __future__ import annotations
 """Untap step (CR 502).
 
 The active player untaps their permanents as a turn-based action. No player
-receives priority during this step in this engine (CR 502.4). Handles the
-replacement/skip effects that constrain untapping: Stasis, Winter Orb, Smoke,
-Meekstone, Time Vault-style "doesn't untap" text, and Island Sanctuary cleanup.
+receives priority during this step in this engine (CR 502.4). Untap
+constraints (skip entirely, per-type count limits, power-based blocks) are
+declared per card in engine/card_hooks.py:UNTAP_RESTRICTIONS — this module
+only aggregates and enforces them, so new restriction cards never touch it.
 """
+
+from ..card_hooks import UNTAP_RESTRICTIONS
 
 
 class UntapStepMixin:
+    def _untap_constraints(self) -> dict[str, object]:
+        """Aggregate every active UNTAP_RESTRICTIONS source on any battlefield
+        into effective limits for the current untap step."""
+        skip_all_source: str | None = None
+        max_lands = 999
+        max_creatures = 999
+        min_power_block: int | None = None
+        for pl in self.players:
+            for perm in pl.battlefield:
+                restriction = UNTAP_RESTRICTIONS.get(perm.card.name)
+                if restriction is None:
+                    continue
+                if restriction.only_while_source_untapped and perm.tapped:
+                    continue
+                if restriction.scope == "all":
+                    if restriction.limit == 0:
+                        skip_all_source = perm.card.name
+                elif restriction.scope == "land":
+                    if restriction.limit is not None:
+                        max_lands = min(max_lands, restriction.limit)
+                elif restriction.scope == "creature":
+                    if restriction.limit is not None:
+                        max_creatures = min(max_creatures, restriction.limit)
+                    if restriction.min_power is not None:
+                        min_power_block = (
+                            restriction.min_power
+                            if min_power_block is None
+                            else min(min_power_block, restriction.min_power)
+                        )
+        return {
+            "skip_all_source": skip_all_source,
+            "max_lands": max_lands,
+            "max_creatures": max_creatures,
+            "min_power_block": min_power_block,
+        }
+
     def get_untap_land_selection_options(self, player_index: int) -> dict[str, object] | None:
         """Untap-step selection constraints the controller must resolve: Winter Orb
         limits untapping to one *land*, Smoke to one *creature*. Returns combined
         candidate battlefield indices and the total number that may be untapped
         among the constrained types, or None if nothing is constrained."""
         player = self.players[player_index]
-        all_permanents = [perm for pl in self.players for perm in pl.battlefield]
+        constraints = self._untap_constraints()
 
-        if any(perm.card.name == "Stasis" for perm in all_permanents):
+        if constraints["skip_all_source"] is not None:
             return None
 
-        max_untap_lands = 999
-        if any(perm.card.name == "Winter Orb" and not perm.tapped for perm in all_permanents):
-            max_untap_lands = 1
-        max_untap_creatures = 999
-        if any(perm.card.name == "Smoke" for perm in all_permanents):
-            max_untap_creatures = 1
+        max_untap_lands = constraints["max_lands"]
+        max_untap_creatures = constraints["max_creatures"]
 
         land_candidates = [
             idx for idx, p in enumerate(player.battlefield)
@@ -79,19 +114,15 @@ class UntapStepMixin:
         )
         # Island Sanctuary protection lasts until the player's next turn begins
         player.island_sanctuary_protected = False
-        all_permanents = [perm for pl in self.players for perm in pl.battlefield]
+        constraints = self._untap_constraints()
 
-        if any(perm.card.name == "Stasis" for perm in all_permanents):
-            self.log.append(f"{player.name} skipped untap due to Stasis")
+        if constraints["skip_all_source"] is not None:
+            self.log.append(f"{player.name} skipped untap due to {constraints['skip_all_source']}")
             return 0
 
-        max_untap_creatures = 999
-        if any(perm.card.name == "Smoke" for perm in all_permanents):
-            max_untap_creatures = 1
-
-        max_untap_lands = 999
-        if any(perm.card.name == "Winter Orb" and not perm.tapped for perm in all_permanents):
-            max_untap_lands = 1
+        max_untap_creatures = constraints["max_creatures"]
+        max_untap_lands = constraints["max_lands"]
+        min_power_block = constraints["min_power_block"]
 
         selected_lands: set[int] | None = None
         if selected_land_indices is not None:
@@ -128,8 +159,6 @@ class UntapStepMixin:
             if max_untap_creatures < 999 and len(selected_creatures) > max_untap_creatures:
                 raise ValueError(f"cannot untap more than {max_untap_creatures} creature(s)")
 
-        meekstone_active = any(perm.card.name == "Meekstone" for perm in all_permanents)
-
         untapped = 0
         creatures_untapped = 0
         lands_untapped = 0
@@ -143,7 +172,8 @@ class UntapStepMixin:
                 continue
 
             if permanent.card.primary_type == "creature":
-                if meekstone_active and permanent.effective_power >= 3:
+                # Meekstone-style: creatures at or above the power cap stay tapped.
+                if min_power_block is not None and permanent.effective_power >= min_power_block:
                     continue
                 # Honor the controller's Smoke selection when one was supplied.
                 if selected_creatures is not None and idx not in selected_creatures:

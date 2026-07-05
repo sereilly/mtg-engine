@@ -11,7 +11,7 @@ _PREVENT_N_RE = re.compile(r"prevent the next (\d+) damage")
 _COLOR_SOURCE_RE = re.compile(r"a (\w+) source of your choice")
 
 
-@parse_rule(730)
+@parse_rule(73000)
 def prevent_next_x_damage(text: str, activated: bool) -> RuleResult:
     if "prevent the next x damage" in text:
         effect_kind = activated_kind(activated, "prevent")
@@ -23,7 +23,7 @@ def prevent_next_x_damage(text: str, activated: bool) -> RuleResult:
     return None
 
 
-@parse_rule(740)
+@parse_rule(74000)
 def prevent_next_n_damage(text: str, activated: bool) -> RuleResult:
     prevent_match = _PREVENT_N_RE.search(text)
     if prevent_match:
@@ -43,7 +43,7 @@ def prevent_next_n_damage(text: str, activated: bool) -> RuleResult:
 # this turn, prevent that damage. You gain life equal to the damage prevented this
 # way." A spell (not activated) — distinct from the Circle of Protection shield in
 # that it gains life equal to the prevented damage and is colorless (any source).
-@parse_rule(745)
+@parse_rule(74500)
 def reverse_damage_shield(text: str, activated: bool) -> RuleResult:
     if (
         not activated
@@ -57,7 +57,7 @@ def reverse_damage_shield(text: str, activated: bool) -> RuleResult:
 # Circle of Protection style: "The next time a red source of your choice would deal
 # damage to you this turn, prevent that damage." The controller chooses a source of
 # the named color; the color is captured so the UI can prompt for that source.
-@parse_rule(750)
+@parse_rule(75000)
 def color_protection_shield(text: str, activated: bool) -> RuleResult:
     if "would deal damage to you this turn, prevent that damage" in text and activated:
         color_match = _COLOR_SOURCE_RE.search(text)
@@ -76,21 +76,21 @@ def color_protection_shield(text: str, activated: bool) -> RuleResult:
     return None
 
 
-@parse_rule(760)
+@parse_rule(76000)
 def forcefield_shield(text: str, activated: bool) -> RuleResult:
     if "the next time an unblocked creature of your choice would deal combat damage to you this turn, prevent all but 1 of that damage" in text and activated:
         return _instruction("grant_forcefield_shield"), "activated_prevent"
     return None
 
 
-@parse_rule(940)
+@parse_rule(94000)
 def redirect_one_damage_to_owner(text: str, activated: bool) -> RuleResult:
     if activated and "the next 1 damage that would be dealt to this creature this turn is dealt to its owner instead" in text:
         return _instruction("redirect_one_damage_to_owner"), "activated_prevent"
     return None
 
 
-@parse_rule(950)
+@parse_rule(95000)
 def jade_monolith_redirect(text: str, activated: bool) -> RuleResult:
     if activated and "next time a source of your choice would deal damage to target creature this turn" in text:
         return _instruction("jade_monolith_redirect"), "activated_prevent"

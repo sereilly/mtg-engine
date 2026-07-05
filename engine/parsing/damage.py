@@ -11,7 +11,7 @@ _DAMAGE_AND_SELF_RE = re.compile(r"deals (\d+) damage to any target and (\d+) da
 _DAMAGE_N_RE = re.compile(r"deals (\d+) damage")
 
 
-@parse_rule(290)
+@parse_rule(29000)
 def earthquake_damage(text: str, activated: bool) -> RuleResult:
     if "deals x damage" in text and "each creature without flying" in text:
         effect_kind = activated_kind(activated, "damage")
@@ -19,7 +19,7 @@ def earthquake_damage(text: str, activated: bool) -> RuleResult:
     return None
 
 
-@parse_rule(300)
+@parse_rule(30000)
 def hurricane_damage(text: str, activated: bool) -> RuleResult:
     if "deals x damage" in text and "each creature with flying" in text:
         effect_kind = activated_kind(activated, "damage")
@@ -27,7 +27,7 @@ def hurricane_damage(text: str, activated: bool) -> RuleResult:
     return None
 
 
-@parse_rule(310)
+@parse_rule(31000)
 def deal_x_damage_and_gain_life(text: str, activated: bool) -> RuleResult:
     if "deals x damage" in text and "you gain life equal to the damage dealt" in text:
         effect_kind = activated_kind(activated, "damage")
@@ -35,7 +35,7 @@ def deal_x_damage_and_gain_life(text: str, activated: bool) -> RuleResult:
     return None
 
 
-@parse_rule(315)
+@parse_rule(31500)
 def simulacrum_effect(text: str, activated: bool) -> RuleResult:
     # Simulacrum: "You gain life equal to the damage dealt to you this turn.
     # Simulacrum deals damage to target creature you control equal to the damage
@@ -45,7 +45,7 @@ def simulacrum_effect(text: str, activated: bool) -> RuleResult:
     return None
 
 
-@parse_rule(318)
+@parse_rule(31800)
 def deal_x_damage_exile_if_dies(text: str, activated: bool) -> RuleResult:
     # Disintegrate: "deals X damage to any target. If it's a creature, it can't be
     # regenerated this turn, and if it would die this turn, exile it instead."
@@ -60,7 +60,7 @@ def deal_x_damage_exile_if_dies(text: str, activated: bool) -> RuleResult:
     return None
 
 
-@parse_rule(320)
+@parse_rule(32000)
 def deal_x_damage(text: str, activated: bool) -> RuleResult:
     if "deals x damage" in text:
         effect_kind = activated_kind(activated, "damage")
@@ -68,7 +68,7 @@ def deal_x_damage(text: str, activated: bool) -> RuleResult:
     return None
 
 
-@parse_rule(330)
+@parse_rule(33000)
 def deal_damage_and_self_damage(text: str, activated: bool) -> RuleResult:
     self_dmg_match = _DAMAGE_AND_SELF_RE.search(text)
     if self_dmg_match:
@@ -81,14 +81,14 @@ def deal_damage_and_self_damage(text: str, activated: bool) -> RuleResult:
     return None
 
 
-@parse_rule(340)
+@parse_rule(34000)
 def deal_damage_equal_to_swamps(text: str, activated: bool) -> RuleResult:
     if "deals damage" in text and "equal to the number of swamps" in text:
         return _instruction("deal_damage_equal_to_swamps"), "upkeep_effect"
     return None
 
 
-@parse_rule(350)
+@parse_rule(35000)
 def deal_damage_each_creature_and_player(text: str, activated: bool) -> RuleResult:
     if "deals 1 damage to each creature and each player" in text:
         effect_kind = activated_kind(activated, "damage")
@@ -96,7 +96,7 @@ def deal_damage_each_creature_and_player(text: str, activated: bool) -> RuleResu
     return None
 
 
-@parse_rule(370)
+@parse_rule(37000)
 def deal_n_damage(text: str, activated: bool) -> RuleResult:
     dmg_match = _DAMAGE_N_RE.search(text)
     if dmg_match:

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import re
 
+from .card_hooks import spell_cost_tax
 from .classifier import classify_card
 from .game import Game
 from .mixins.stack_casting import aura_enchant_noun, permanent_matches_enchant_noun
@@ -805,14 +806,10 @@ def _creature_stat(card: CardDefinition, key: str) -> int:
 
 
 def _extra_generic_tax(game: Game, card: CardDefinition) -> int:
-    if "W" not in card.colors:
-        return 0
-    has_gloom = any(
-        perm.card.name == "Gloom"
-        for player in game.players
-        for perm in player.battlefield
-    )
-    return 3 if has_gloom else 0
+    # caster_index doesn't affect any registered cost modifier today (Gloom
+    # taxes by the card's own color); 0 is a safe placeholder.
+    tax, _names = spell_cost_tax(game, 0, card)
+    return tax
 
 
 def _pick_x_value(game: Game, player: PlayerState, card: CardDefinition) -> int | None:

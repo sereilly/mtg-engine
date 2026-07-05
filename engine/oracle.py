@@ -23,6 +23,7 @@ from .oracle_types import (
     ParsedTriggeredAbility,
     TriggerCondition,
     _COLOR_WORD_TO_SYMBOL,
+    _MANA_TOKEN_RE,
     _extract_mana_cost_from_text,
     _instruction,
     _parse_number_token,
@@ -178,14 +179,19 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("land_dies",                   r"whenever a land is put into a graveyard from the battlefield"),
     ("creature_dies",               r"whenever a creature dies"),
     ("creature_you_control_dies",   r"whenever a creature you control dies"),
-    ("creature_deals_damage",       r"whenever this creature deals damage"),
+    # First match wins and patterns are unanchored at the end, so a pattern
+    # that is a strict prefix of a later pattern's text would shadow it —
+    # specific forms must precede their generic prefixes. Guarded by
+    # tests/test_trigger_tables.py.
     ("creature_deals_combat_damage",r"whenever this creature deals combat damage to a player"),
-    ("cockatrice_blocks_or_blocked", r"whenever this creature blocks or becomes blocked by a non-wall creature"),
     ("hypnotic_specter_deals_damage", r"whenever this creature deals damage to an opponent"),
+    ("deals_damage_to_player",      r"whenever .+ deals damage to a player"),
+    ("creature_deals_damage",       r"whenever this creature deals damage"),
+    ("cockatrice_blocks_or_blocked", r"whenever this creature blocks or becomes blocked by a non-wall creature"),
+    ("creature_attacks_or_blocks",  r"whenever this creature attacks or blocks"),
     ("creature_attacks",            r"whenever this creature attacks"),
     ("creature_blocks",             r"whenever this creature blocks"),
     ("creature_becomes_blocked",    r"whenever this creature becomes blocked"),
-    ("creature_attacks_or_blocks",  r"whenever this creature attacks or blocks"),
     ("creature_dealt_damage",               r"whenever this creature is dealt damage"),
     ("creature_dealt_damage_by_self_dies",  r"whenever a creature dealt damage by this creature this turn dies"),
     ("enchanted_land_tapped",       r"whenever enchanted land becomes tapped"),
@@ -199,7 +205,6 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("artifact_enters",             r"whenever an artifact enters(?: the battlefield)?"),
     ("one_or_more_attack",          r"whenever one or more creatures you control attack"),
     ("draws_card",                  r"whenever you draw a card"),
-    ("deals_damage_to_player",      r"whenever .+ deals damage to a player"),
 )
 
 # "when" triggers (enter/leave events)
@@ -299,9 +304,6 @@ def normalize_creature_line(line: str) -> str:
     lowered = lowered.replace(";", ",")
     lowered = _WHITESPACE_RE.sub(" ", lowered).strip(" .,")
     return lowered
-
-
-_MANA_TOKEN_RE = re.compile(r"\{([^}]+)\}")
 
 
 def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
@@ -596,7 +598,9 @@ def _parse_creature_program(
             static_lines.append(normalized)
             continue
 
-        return False, "unsupported", "creature text too complex", (), (), (), ()
+        # Name the offending line so support_report on a new set pinpoints
+        # exactly which clause needs a parse rule.
+        return False, "unsupported", f"creature text too complex: {line!r}", (), (), (), ()
 
     if triggered and not any_supported_trigger:
         return False, "unsupported", "unsupported triggered ability", (), (), tuple(triggered), tuple(static_lines)

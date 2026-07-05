@@ -12,7 +12,7 @@ _PUMP_ENCHANTED_RE = re.compile(r"enchanted creature gets \+(-?\d+)/\+(-?\d+)")
 
 
 # Dragon Whelp: pump and delayed sacrifice
-@parse_rule(130)
+@parse_rule(13000)
 def dragon_whelp_pump(text: str, activated: bool) -> RuleResult:
     if (
         "this creature gets +1/+0 until end of turn" in text
@@ -23,14 +23,14 @@ def dragon_whelp_pump(text: str, activated: bool) -> RuleResult:
     return None
 
 
-@parse_rule(580)
+@parse_rule(58000)
 def berserk_pump(text: str, activated: bool) -> RuleResult:
     if "target creature gains trample and gets +x/+0 until end of turn" in text:
         return _instruction("berserk_pump"), "spell_pattern"
     return None
 
 
-@parse_rule(590)
+@parse_rule(59000)
 def grant_target_flying_until_eot(text: str, activated: bool) -> RuleResult:
     if "target creature gains flying until end of turn" in text:
         ek = activated_kind(activated, "keyword")
@@ -38,7 +38,7 @@ def grant_target_flying_until_eot(text: str, activated: bool) -> RuleResult:
     return None
 
 
-@parse_rule(600)
+@parse_rule(60000)
 def pump_target_creature_until_eot(text: str, activated: bool) -> RuleResult:
     pump_target_x_match = _PUMP_TARGET_X_RE.search(text)
     if pump_target_x_match:
@@ -62,12 +62,12 @@ def _register_pump_self(order: int, power: int, toughness: int) -> None:
         return None
 
 
-for _order, _power, _toughness in ((810, 1, 0), (820, 0, 1), (830, 1, 1)):
+for _order, _power, _toughness in ((81000, 1, 0), (82000, 0, 1), (83000, 1, 1)):
     _register_pump_self(_order, _power, _toughness)
 
 
 # Activated pump that applies to the enchanted creature (e.g. Firebreathing)
-@parse_rule(840)
+@parse_rule(84000)
 def pump_enchanted_creature(text: str, activated: bool) -> RuleResult:
     if activated:
         m = _PUMP_ENCHANTED_RE.search(text)
@@ -80,28 +80,28 @@ def pump_enchanted_creature(text: str, activated: bool) -> RuleResult:
     return None
 
 
-@parse_rule(850)
+@parse_rule(85000)
 def grant_self_flying_until_eot(text: str, activated: bool) -> RuleResult:
     if activated and "this creature gains flying until end of turn" in text:
         return _instruction("grant_self_flying_until_eot"), "activated_keyword"
     return None
 
 
-@parse_rule(860)
+@parse_rule(86000)
 def grant_banding_to_target(text: str, activated: bool) -> RuleResult:
     if activated and "target creature gains banding until end of turn" in text:
         return _instruction("grant_banding_to_target"), "activated_keyword"
     return None
 
 
-@parse_rule(870)
+@parse_rule(87000)
 def add_counter_to_self(text: str, activated: bool) -> RuleResult:
     if activated and "put a +1/+1 counter on this creature" in text:
         return _instruction("add_counter_to_self", power=1, toughness=1), "activated_counter"
     return None
 
 
-@parse_rule(880)
+@parse_rule(88000)
 def add_variable_power_counters(text: str, activated: bool) -> RuleResult:
     if activated and "put up to x +1/+0 counters on this creature" in text:
         return _instruction("add_variable_power_counters_to_self"), "activated_counter"
@@ -109,7 +109,7 @@ def add_variable_power_counters(text: str, activated: bool) -> RuleResult:
 
 
 # Stone Giant: throw a smaller creature at the sky
-@parse_rule(930)
+@parse_rule(93000)
 def grant_flying_and_delayed_destruction(text: str, activated: bool) -> RuleResult:
     if activated and "target creature you control with toughness less than this creature's power gains flying until end of turn" in text:
         return _instruction("grant_flying_and_delayed_destruction"), "activated_keyword"

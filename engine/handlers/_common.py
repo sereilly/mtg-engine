@@ -23,15 +23,10 @@ def resolve_amount(raw: object, x_value: int | None) -> int:
 
 def apply_temp_pt_boost(perm: Permanent, power: int = 0, toughness: int = 0) -> None:
     """Apply an until-end-of-turn P/T change and track it so the cleanup step
-    can remove it. Both metadata keys are written even for a 0 delta."""
-    perm.power_bonus += power
-    perm.toughness_bonus += toughness
-    perm.metadata["temporary_power_bonus_until_eot"] = int(
-        perm.metadata.get("temporary_power_bonus_until_eot", 0)
-    ) + power
-    perm.metadata["temporary_toughness_bonus_until_eot"] = int(
-        perm.metadata.get("temporary_toughness_bonus_until_eot", 0)
-    ) + toughness
+    can remove it. Thin wrapper over the single P/T write API in engine/pt.py."""
+    from ..pt import add_pt_modifier
+
+    add_pt_modifier(perm, power, toughness, until_eot=True)
 
 
 def apply_damage_to_creature(
@@ -56,19 +51,73 @@ def apply_damage_to_creature(
     return dealt
 
 
-def resolve_target_permanent(
-    context: OracleExecutionContext,
+def permanent_effective_colors(perm: Permanent) -> set[str]:
+    """The color symbols a permanent currently has, honoring color overrides
+    (laces) and copied colors (Clone records ``copied_colors``; Vesuvan
+    Doppelganger deliberately doesn't, so its printed blue shows through)."""
+    override = perm.metadata.get("color_override")
+    if override:
+        return {override}
+    copied_colors = perm.metadata.get("copied_colors")
+    if copied_colors is not None:
+        return set(copied_colors)
+    return set(perm.card.colors)
+
+
+def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
+    """Whether *perm* satisfies a target-filter payload (the key vocabulary
+    produced by ``engine.parsing.common.TargetFilter.to_payload``:
+    type/subtype/color filters, tapped_only, exclusions).
+
+    Uses has_type/is_creature/effective colors so copies keep all their types
+    (a Copy Artifact copy is an Artifact Enchantment), animated lands count as
+    creatures, and color overrides are honored. Shared by destroy-target
+    resolution, cast validation, and the legality enumerator so they can never
+    disagree about what a filter means.
+    """
+    type_filter = payload.get("type_filter")
+    subtype_filter = payload.get("subtype_filter")
+    color_filter = payload.get("color_filter")
+    tapped_only = payload.get("tapped_only", False)
+    exclude_colors = payload.get("exclude_colors") or []
+    exclude_types = payload.get("exclude_types") or []
+
+    type_line = perm.effective_card.type_line.lower()
+    if type_filter:
+        if type_filter == "artifact_or_enchantment":
+            if not (perm.has_type("artifact") or perm.has_type("enchantment")):
+                return False
+        elif type_filter == "creature":
+            if not perm.is_creature:
+                return False
+        elif type_filter not in type_line:
+            return False
+    if subtype_filter and subtype_filter not in type_line:
+        return False
+    if tapped_only and not perm.tapped:
+        return False
+    colors = permanent_effective_colors(perm)
+    if color_filter and color_filter not in colors:
+        return False
+    if exclude_colors and any(c in colors for c in exclude_colors):
+        return False
+    if exclude_types and any(t in type_line for t in exclude_types):
+        return False
+    return True
+
+
+def pick_target_permanent(
+    player: PlayerState | None,
+    index: int | None,
     *,
-    player: PlayerState | None = None,
     predicate: Callable[[Permanent], bool] | None = None,
     fallback_players: Sequence[PlayerState] | None = None,
     fallback_on_invalid_choice: bool = True,
 ) -> Permanent | None:
-    """Resolve the permanent a spell or ability acts on.
+    """Core "honor the chosen battlefield index, else fall back" resolution.
 
-    1. If ``context.target_permanent_index`` is a valid index into ``player``'s
-       battlefield (default: the context target's) and that permanent passes
-       ``predicate`` (default: is a creature), return it.
+    1. If ``index`` is a valid index into ``player``'s battlefield and that
+       permanent passes ``predicate`` (default: is a creature), return it.
     2. Otherwise scan ``fallback_players`` (default: just ``player``) for the
        first permanent passing ``predicate``. Pass ``()`` to disable fallback,
        or ``fallback_on_invalid_choice=False`` to skip the fallback only when
@@ -76,12 +125,9 @@ def resolve_target_permanent(
     """
     if predicate is None:
         predicate = lambda p: p.is_creature
-    if player is None:
-        player = context.target
-    idx = context.target_permanent_index
-    explicit = isinstance(idx, int)
-    if explicit and player is not None and 0 <= idx < len(player.battlefield):
-        candidate = player.battlefield[idx]
+    explicit = isinstance(index, int)
+    if explicit and player is not None and 0 <= index < len(player.battlefield):
+        candidate = player.battlefield[index]
         if predicate(candidate):
             return candidate
     if explicit and not fallback_on_invalid_choice:
@@ -93,3 +139,22 @@ def resolve_target_permanent(
         if found is not None:
             return found
     return None
+
+
+def resolve_target_permanent(
+    context: OracleExecutionContext,
+    *,
+    player: PlayerState | None = None,
+    predicate: Callable[[Permanent], bool] | None = None,
+    fallback_players: Sequence[PlayerState] | None = None,
+    fallback_on_invalid_choice: bool = True,
+) -> Permanent | None:
+    """Resolve the permanent a spell or ability acts on — the context-based
+    wrapper over :func:`pick_target_permanent` (see it for the semantics)."""
+    return pick_target_permanent(
+        player if player is not None else context.target,
+        context.target_permanent_index,
+        predicate=predicate,
+        fallback_players=fallback_players,
+        fallback_on_invalid_choice=fallback_on_invalid_choice,
+    )

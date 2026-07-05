@@ -14,6 +14,7 @@ import re
 
 from ..models import Permanent, PlayerState
 from ..oracle import compile_card_oracle
+from ..pt import add_pt_modifier
 from ..trigger_utils import matching_triggers
 
 # Landwalk keyword → the basic land subtype the defender must control for the
@@ -530,14 +531,7 @@ class DeclareBlockersStepMixin:
 
     def _apply_temporary_buff(self, permanent: Permanent, power: int, toughness: int) -> None:
         """Apply an "until end of turn" P/T change that the cleanup step reverts."""
-        permanent.metadata["temporary_power_bonus_until_eot"] = (
-            int(permanent.metadata.get("temporary_power_bonus_until_eot", 0)) + power
-        )
-        permanent.metadata["temporary_toughness_bonus_until_eot"] = (
-            int(permanent.metadata.get("temporary_toughness_bonus_until_eot", 0)) + toughness
-        )
-        permanent.power_bonus += power
-        permanent.toughness_bonus += toughness
+        add_pt_modifier(permanent, power, toughness, until_eot=True)
 
     def _rampage_value(self, permanent: Permanent) -> int:
         """The N of "Rampage N" on this creature, or 0 if it has no rampage."""

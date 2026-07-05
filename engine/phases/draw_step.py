@@ -2,10 +2,13 @@ from __future__ import annotations
 
 """Draw step (CR 504).
 
-The active player draws a card as a turn-based action. Honors the draw-step skip
-replacement effect, Island Sanctuary's "skip your draw step to gain protection"
-choice, and the extra-draw bonus from Howling Mine.
+The active player draws a card as a turn-based action. Draw-step behaviors
+(skip-for-protection, bonus draws) are declared per card in
+engine/card_hooks.py:DRAW_STEP_MODIFIERS — this module only aggregates and
+enforces them, so a new draw-modifier card never touches it.
 """
+
+from ..card_hooks import DRAW_STEP_MODIFIERS
 
 
 class DrawStepMixin:
@@ -24,7 +27,11 @@ class DrawStepMixin:
 
         # Island Sanctuary: sanctuary_choice=None means auto-skip (AI); True=skip (human chose);
         # False=draw normally (human chose to draw instead of gaining protection)
-        has_sanctuary = any(perm.card.name == "Island Sanctuary" for perm in player.battlefield)
+        has_sanctuary = any(
+            (modifier := DRAW_STEP_MODIFIERS.get(perm.card.name)) is not None
+            and modifier.optional_skip_grants_protection
+            for perm in player.battlefield
+        )
         if has_sanctuary and sanctuary_choice is not False:
             player.island_sanctuary_protected = True
             self.log.append(f"{player.name} skipped draw (Island Sanctuary active)")
@@ -34,8 +41,12 @@ class DrawStepMixin:
         bonus = 0
         for controller in self.players:
             for permanent in controller.battlefield:
-                if permanent.card.name == "Howling Mine" and not permanent.tapped:
-                    bonus += 1
+                modifier = DRAW_STEP_MODIFIERS.get(permanent.card.name)
+                if modifier is None or not modifier.extra_draws:
+                    continue
+                if modifier.requires_untapped and permanent.tapped:
+                    continue
+                bonus += modifier.extra_draws
         drawn = player.draw(1 + bonus)
         self.log.append(f"{player.name} drew {drawn} card(s) in draw step")
         self._close_or_defer_step(phase, step, defer_priority)
