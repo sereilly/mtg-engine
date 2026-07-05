@@ -4,6 +4,8 @@ CR 800.4 (a player leaving the game), and the multiplayer-only mulligan rule
 this file covers only what's genuinely different with 3+ players.
 """
 
+import pytest
+
 from engine import Game
 from engine.models import CardDefinition, Permanent, PlayerState
 
@@ -42,6 +44,7 @@ def _to_declare_attackers(game: Game) -> None:
 # CR 802.2/802.3 — declaring attackers against multiple defending players
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("802.3")
 def test_802_3_attacker_can_choose_a_different_defender_per_creature():
     a1 = Permanent(card=_mk_creature("Attacker One", 2, 2))
     a2 = Permanent(card=_mk_creature("Attacker Two", 2, 2))
@@ -59,6 +62,7 @@ def test_802_3_attacker_can_choose_a_different_defender_per_creature():
     assert game.combat_defending_player_index is None
 
 
+@pytest.mark.cr("802.2")
 def test_802_2_get_combat_state_reports_every_defending_player():
     a1 = Permanent(card=_mk_creature("Attacker One", 2, 2))
     a2 = Permanent(card=_mk_creature("Attacker Two", 2, 2))
@@ -77,6 +81,7 @@ def test_802_2_get_combat_state_reports_every_defending_player():
     ]
 
 
+@pytest.mark.cr("802.3a")
 def test_802_3_must_attack_if_able_checked_against_any_living_opponent():
     """A "must attack if able" creature is satisfied by attacking ANY opponent —
     not specifically a pre-picked one — when it's declared."""
@@ -93,6 +98,7 @@ def test_802_3_must_attack_if_able_checked_against_any_living_opponent():
     assert ok, msg
 
 
+@pytest.mark.cr("802.3", "800.4")
 def test_802_attacker_cannot_target_an_eliminated_player():
     a1 = Permanent(card=_mk_creature("Attacker", 2, 2))
     p0 = _p0_with_library(battlefield=[a1])
@@ -120,6 +126,7 @@ def _to_declare_blockers_multi(game: Game, attacker_targets: dict[int, int]) -> 
         game.advance_combat_phase()  # process the declare_blockers auto-skip/APNAP logic
 
 
+@pytest.mark.cr("802.4a")
 def test_802_4_each_defender_blocks_only_attackers_aimed_at_them():
     a1 = Permanent(card=_mk_creature("Attacker One", 2, 2))
     a2 = Permanent(card=_mk_creature("Attacker Two", 2, 2))
@@ -147,6 +154,7 @@ def test_802_4_each_defender_blocks_only_attackers_aimed_at_them():
     assert game.combat_blockers_locked is True
 
 
+@pytest.mark.cr("802.4")
 def test_802_4_apnap_second_defender_declares_after_first_without_erasing():
     """Regression: declare_blockers used to overwrite the whole combat_blockers
     dict, so a second defender's declaration would erase an earlier defender's
@@ -175,6 +183,7 @@ def test_802_4_apnap_second_defender_declares_after_first_without_erasing():
 # CR 510/802.5 — per-defender combat damage resolution
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("802.5", "510.2")
 def test_802_5_unblocked_damage_lands_on_each_attacker_own_defender():
     a1 = Permanent(card=_mk_creature("Attacker One", 3, 3))
     a2 = Permanent(card=_mk_creature("Attacker Two", 5, 5))
@@ -200,6 +209,7 @@ def test_802_5_unblocked_damage_lands_on_each_attacker_own_defender():
 # CR 800.4 — a player leaving the game (elimination)
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("800.4")
 def test_800_4_eliminated_player_is_skipped_in_turn_rotation():
     p0 = PlayerState(name="P0")
     p1 = PlayerState(name="P1")
@@ -211,6 +221,7 @@ def test_800_4_eliminated_player_is_skipped_in_turn_rotation():
     assert game._compute_next_active_player() == 2  # skips eliminated P1
 
 
+@pytest.mark.cr("800.4")
 def test_800_4_eliminated_player_is_skipped_for_priority():
     p0 = PlayerState(name="P0")
     p1 = PlayerState(name="P1")
@@ -220,6 +231,7 @@ def test_800_4_eliminated_player_is_skipped_for_priority():
     assert game._next_player_index(0) == 2
 
 
+@pytest.mark.cr("800.4a")
 def test_800_4a_eliminated_player_battlefield_is_cleared_in_multiplayer():
     dying = Permanent(card=_mk_creature("Doomed", 2, 2))
     p0 = PlayerState(name="P0", life=0, battlefield=[dying])
@@ -231,6 +243,7 @@ def test_800_4a_eliminated_player_battlefield_is_cleared_in_multiplayer():
     assert p0.battlefield == []
 
 
+@pytest.mark.cr("800.4a")
 def test_800_4a_2_player_loss_does_not_clear_battlefield():
     """CR 800.4 is explicitly a multiplayer concept — a 2-player game just ends
     instead, so nothing here should touch the loser's battlefield."""
@@ -243,6 +256,7 @@ def test_800_4a_2_player_loss_does_not_clear_battlefield():
     assert p0.battlefield == [dying]
 
 
+@pytest.mark.cr("104.2a")
 def test_104_2a_get_winner_with_four_players():
     p0 = PlayerState(name="P0")
     p1 = PlayerState(name="P1")
@@ -260,6 +274,7 @@ def test_104_2a_get_winner_with_four_players():
 # CR 800.6 — first mulligan is free in multiplayer
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("800.6")
 def test_800_6_first_mulligan_free_in_multiplayer():
     p0 = PlayerState(name="P0")
     p1 = PlayerState(name="P1")
@@ -283,6 +298,7 @@ def test_800_6_first_mulligan_free_in_multiplayer():
     assert len(p0.hand) == 6
 
 
+@pytest.mark.cr("800.6", "103.5")
 def test_800_6_two_player_mulligan_unaffected():
     p0 = PlayerState(name="P0")
     p1 = PlayerState(name="P1")

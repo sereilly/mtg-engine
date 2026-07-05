@@ -8,6 +8,8 @@ than asserted against absent functionality.
 
 from __future__ import annotations
 
+import pytest
+
 from engine import Game
 from engine.models import CardDefinition, Permanent, PlayerState
 
@@ -64,6 +66,7 @@ def _block_triggers_on_stack(game: Game) -> list:
 # 509.1 — the declaration is atomic; an illegal declaration is undone
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("509.1")
 def test_509_1_illegal_declaration_leaves_state_unchanged():
     """509.1: if the defender can't comply, the game returns to before the declaration."""
     attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
@@ -85,6 +88,7 @@ def test_509_1_illegal_declaration_leaves_state_unchanged():
 # 509.1a — chosen creatures must be untapped; each blocks an attacker of that player
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("509.1a")
 def test_509_1a_tapped_creature_cannot_block():
     attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
     blocker = Permanent(card=_mk_creature("Tapped Blocker", 2, 2), tapped=True)
@@ -98,6 +102,7 @@ def test_509_1a_tapped_creature_cannot_block():
     assert game.combat_blockers == {}
 
 
+@pytest.mark.cr("509.1a")
 def test_509_1a_blocker_must_be_assigned_to_a_real_attacker():
     attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
     other = Permanent(card=_mk_creature("Not Attacking", 2, 2))
@@ -111,6 +116,7 @@ def test_509_1a_blocker_must_be_assigned_to_a_real_attacker():
     assert not ok
 
 
+@pytest.mark.cr("509.1a")
 def test_509_1a_only_defending_player_may_declare_blockers():
     attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
     blocker = Permanent(card=_mk_creature("Blocker", 2, 2))
@@ -128,6 +134,7 @@ def test_509_1a_only_defending_player_may_declare_blockers():
 # 509.1b — restrictions / evasion abilities
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("509.1b", "702.9b")
 def test_509_1b_flying_attacker_cannot_be_blocked_by_ground_creature():
     flier = Permanent(card=_mk_creature("Flier", 2, 2, keywords=("Flying",)))
     grounder = Permanent(card=_mk_creature("Grounder", 2, 2))
@@ -140,6 +147,7 @@ def test_509_1b_flying_attacker_cannot_be_blocked_by_ground_creature():
     assert not ok
 
 
+@pytest.mark.cr("509.1b", "702.9b", "702.17b")
 def test_509_1b_flying_attacker_can_be_blocked_by_flier_or_reach():
     flier = Permanent(card=_mk_creature("Flier", 2, 2, keywords=("Flying",)))
     reacher = Permanent(card=_mk_creature("Reacher", 2, 2, keywords=("Reach",)))
@@ -156,6 +164,7 @@ def test_509_1b_flying_attacker_can_be_blocked_by_flier_or_reach():
     assert game.combat_blockers == {1: {0: [0]}}
 
 
+@pytest.mark.cr("509.1b", "702.9b", "702.36b")
 def test_509_1b_evasion_abilities_are_cumulative():
     """509.1b: an attacker with flying + fear needs a blocker that beats both."""
     sneaker = Permanent(card=_mk_creature("Sneaker", 2, 2, keywords=("Flying", "Fear")))
@@ -181,6 +190,7 @@ def test_509_1b_evasion_abilities_are_cumulative():
 # 509.1c — requirements (a creature that must block if able)
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("509.1c")
 def test_509_1c_lure_requires_all_able_creatures_to_block():
     """509.1c: a creature able to block a 'must be blocked' attacker must do so.
 
@@ -209,6 +219,7 @@ def test_509_1c_lure_requires_all_able_creatures_to_block():
 # 509.1g — chosen creatures become blocking creatures
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("509.1g")
 def test_509_1g_chosen_creature_becomes_a_blocking_creature():
     attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
     blocker = Permanent(card=_mk_creature("Blocker", 2, 2))
@@ -227,6 +238,7 @@ def test_509_1g_chosen_creature_becomes_a_blocking_creature():
 # 509.1h — attackers become blocked / unblocked; blocked stays blocked
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("509.1h")
 def test_509_1h_attacker_with_blocker_becomes_blocked_and_without_stays_unblocked():
     a_blocked = Permanent(card=_mk_creature("Blocked Attacker", 2, 2))
     a_free = Permanent(card=_mk_creature("Free Attacker", 2, 2))
@@ -242,6 +254,7 @@ def test_509_1h_attacker_with_blocker_becomes_blocked_and_without_stays_unblocke
     assert a_free.blocked is False
 
 
+@pytest.mark.cr("509.1h")
 def test_509_1h_creature_remains_blocked_after_its_blocker_leaves_combat():
     """509.1h: a creature stays blocked even if all its blockers leave combat."""
     attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
@@ -263,6 +276,7 @@ def test_509_1h_creature_remains_blocked_after_its_blocker_leaves_combat():
     assert game.combat_blockers == {}
 
 
+@pytest.mark.cr("509.1h", "510.1c")
 def test_509_1h_blocked_attacker_deals_no_damage_to_player_when_blocker_dies():
     """509.1h corollary: a blocked attacker without trample deals no player damage
     even after its only blocker is gone."""
@@ -286,6 +300,7 @@ def test_509_1h_blocked_attacker_deals_no_damage_to_player_when_blocker_dies():
 # 509.2 — the active player gets priority after blockers are declared
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("509.2")
 def test_509_2_active_player_gets_priority_after_blockers_declared():
     attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
     blocker = Permanent(card=_mk_creature("Blocker", 2, 2))
@@ -303,6 +318,7 @@ def test_509_2_active_player_gets_priority_after_blockers_declared():
     assert not game.has_priority(1)
 
 
+@pytest.mark.cr("509.2", "117.4")
 def test_509_2_priority_passing_advances_from_active_to_nonactive_player():
     """The priority window is real: passing hands priority to the defender, and a
     second pass on an empty stack ends the round back with the active player."""
@@ -326,6 +342,7 @@ def test_509_2_priority_passing_advances_from_active_to_nonactive_player():
 # 509.1i / 509.2a / 509.3 — abilities trigger on blockers being declared
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("509.2a", "509.1i")
 def test_509_2a_block_trigger_goes_on_stack_before_active_player_priority(all_cards):
     """509.2a: a triggered ability is put on the stack when blockers are declared,
     and the active player has priority while it sits there (it has not resolved)."""
@@ -351,6 +368,7 @@ def test_509_2a_block_trigger_goes_on_stack_before_active_player_priority(all_ca
     assert attacker.metadata.get("destroy_at_end_of_combat") is True
 
 
+@pytest.mark.cr("509.3a")
 def test_509_3a_creature_that_blocks_destroys_what_it_blocks(all_cards):
     """509.3a: Thicket Basilisk blocks -> destroys the blocked creature at EOC."""
     basilisk = Permanent(card=_get(all_cards, "Thicket Basilisk"))
@@ -371,6 +389,7 @@ def test_509_3a_creature_that_blocks_destroys_what_it_blocks(all_cards):
     assert all(perm.card.name != "Victim" for perm in p1.battlefield)
 
 
+@pytest.mark.cr("509.3c")
 def test_509_3c_attacker_that_becomes_blocked_destroys_its_blocker(all_cards):
     """509.3c: Thicket Basilisk attacks and becomes blocked -> destroys blocker."""
     basilisk = Permanent(card=_get(all_cards, "Thicket Basilisk"))
@@ -390,6 +409,7 @@ def test_509_3c_attacker_that_becomes_blocked_destroys_its_blocker(all_cards):
     assert all(perm.card.name != "Chump" for perm in p2.battlefield)
 
 
+@pytest.mark.cr("509.3")
 def test_509_3_block_trigger_excludes_walls(all_cards):
     """The "non-Wall creature" clause: a Wall blocker triggers nothing."""
     basilisk = Permanent(card=_get(all_cards, "Thicket Basilisk"))
@@ -408,6 +428,7 @@ def test_509_3_block_trigger_excludes_walls(all_cards):
     assert any(perm.card.name == "Stone Wall" for perm in p2.battlefield)
 
 
+@pytest.mark.cr("509.3g")
 def test_509_3_block_trigger_does_not_fire_for_unblocked_attacker(all_cards):
     """509.3g spirit: no block trigger when the Basilisk is never blocked."""
     basilisk = Permanent(card=_get(all_cards, "Thicket Basilisk"))
@@ -423,6 +444,7 @@ def test_509_3_block_trigger_does_not_fire_for_unblocked_attacker(all_cards):
     assert bystander.metadata.get("destroy_at_end_of_combat") is None
 
 
+@pytest.mark.cr("509.3a", "701.19a")
 def test_509_3a_blocking_basilisk_regeneration_saves_the_blocked_creature(all_cards):
     """End-of-combat destruction honors regeneration shields like any destroy.
 
@@ -449,6 +471,7 @@ def test_509_3a_blocking_basilisk_regeneration_saves_the_blocked_creature(all_ca
 # 509.4 — creatures put onto the battlefield blocking
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("509.4")
 def test_509_4_no_alpha_card_puts_creatures_onto_battlefield_blocking(all_cards):
     """509.4 governs creatures put onto the battlefield blocking. Limited Edition
     Alpha has no such effect, so this documents the absence rather than asserting

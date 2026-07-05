@@ -11,6 +11,8 @@ removal from combat (506.4, 506.4b), "attacking/blocking alone" (506.5), and
 multi-defender combat this engine also supports.
 """
 
+import pytest
+
 from engine import Game
 from engine.models import CardDefinition, Permanent, PlayerState
 
@@ -58,6 +60,7 @@ def _to_declare_attackers(game: Game) -> None:
 # 506.1 — the five combat steps, in order, with skips and first-strike repeats
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("506.1")
 def test_combat_has_five_steps_in_order():
     attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
     blocker = Permanent(card=_mk_creature("Blocker", 2, 2))
@@ -95,6 +98,7 @@ def test_combat_has_five_steps_in_order():
     ]
 
 
+@pytest.mark.cr("506.1", "508.8")
 def test_declare_blockers_and_damage_skipped_when_no_attackers():
     # 506.1: declare blockers and combat damage are skipped if no creature is
     # declared as an attacker.
@@ -116,6 +120,7 @@ def test_declare_blockers_and_damage_skipped_when_no_attackers():
     assert p2.battlefield[0].blocking_attacker_index is None  # never blocked
 
 
+@pytest.mark.cr("506.1", "702.7b")
 def test_two_combat_damage_steps_with_first_strike():
     # 506.1: there are two combat damage steps if an attacking or blocking
     # creature has first strike. The 2/2 first striker kills the 2/2 blocker in
@@ -138,6 +143,7 @@ def test_two_combat_damage_steps_with_first_strike():
     assert len(p1.battlefield) == 1  # first striker survived
 
 
+@pytest.mark.cr("510.1c")
 def test_auto_damage_assignment_dumps_power_on_first_blocker_when_unkillable():
     # The auto-assignment heuristic walks blockers in index order, assigning lethal
     # to each until power runs out, then dumps the remainder on the last blocker it
@@ -169,6 +175,7 @@ def test_auto_damage_assignment_dumps_power_on_first_blocker_when_unkillable():
     assert game.combat_damage_resolved is True
 
 
+@pytest.mark.cr("510.1c")
 def test_multi_block_attacker_may_divide_damage_freely():
     # CR 510.1c: a creature blocked by two or more creatures divides its combat
     # damage among them however its controller chooses — there is no damage
@@ -199,6 +206,7 @@ def test_multi_block_attacker_may_divide_damage_freely():
     assert "Bear A" in names      # took only 1, survived
 
 
+@pytest.mark.cr("510.1c")
 def test_multi_block_attacker_may_spread_sublethal_to_all():
     # CR 510.1c, continued: the division need not be lethal to anyone. A 4/4 may
     # split 2/2 across two 3/3 blockers, killing neither — a legal assignment.
@@ -220,6 +228,7 @@ def test_multi_block_attacker_may_spread_sublethal_to_all():
     assert len(p2.battlefield) == 2  # neither blocker took lethal
 
 
+@pytest.mark.cr("510.1a", "510.1e")
 def test_multi_block_assignment_cannot_exceed_power():
     # CR 510.1e: the total assignment may not exceed the attacker's power.
     attacker = Permanent(card=_mk_creature("Ogre", 4, 4))
@@ -240,6 +249,7 @@ def test_multi_block_assignment_cannot_exceed_power():
     assert "exceeds attacker power" in msg
 
 
+@pytest.mark.cr("702.19b")
 def test_trample_over_multiple_blockers_requires_lethal_before_spillover():
     # CR 702.19e: a trampler assigns excess to the defending player only after each
     # blocker is assigned at least lethal damage. A 6/6 trampler blocked by a 3/3
@@ -264,6 +274,7 @@ def test_trample_over_multiple_blockers_requires_lethal_before_spillover():
     assert p2.life == 18              # 2 trampled through
 
 
+@pytest.mark.cr("702.19b")
 def test_trample_cannot_spill_over_without_lethal_to_each_blocker():
     # CR 702.19e: assigning sub-lethal to a blocker while still trampling damage to
     # the player is illegal. A 6/6 trampler may not assign {2, 3} (the 3/3 gets only
@@ -287,6 +298,7 @@ def test_trample_cannot_spill_over_without_lethal_to_each_blocker():
     assert p2.life == 20  # nothing trampled through
 
 
+@pytest.mark.cr("506.1", "702.4b")
 def test_two_combat_damage_steps_with_double_strike():
     # 506.1 / 702.4: double strike also causes two combat damage steps. A 1/1
     # double striker blocked by a 2/2 deals 1 in each pass (2 total), killing it,
@@ -311,6 +323,7 @@ def test_two_combat_damage_steps_with_double_strike():
     assert len(p1.battlefield) == 1
 
 
+@pytest.mark.cr("506.1", "702.7b")
 def test_single_combat_damage_step_without_first_strike():
     # 506.1: with no first/double strike there is exactly one combat damage step,
     # so combat_first_strike_done stays False (no separate first-strike pass).
@@ -335,6 +348,7 @@ def test_single_combat_damage_step_without_first_strike():
 # 506.2 — the active player attacks; the nonactive player defends
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("506.2")
 def test_active_player_is_attacking_player_and_nonactive_is_defending():
     attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
     p1 = PlayerState(name="P1", battlefield=[attacker])
@@ -352,6 +366,7 @@ def test_active_player_is_attacking_player_and_nonactive_is_defending():
     assert attacker.defending_player_index == 1
 
 
+@pytest.mark.cr("506.2", "508.1a")
 def test_only_active_player_may_declare_attackers():
     # 506.2: only creatures the active player controls may attack, so the
     # nonactive player cannot declare attackers.
@@ -365,6 +380,7 @@ def test_only_active_player_may_declare_attackers():
     assert "only the active player" in msg
 
 
+@pytest.mark.cr("506.2", "509.1a")
 def test_only_defending_player_may_declare_blockers():
     attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
     blocker = Permanent(card=_mk_creature("Blocker", 2, 2))
@@ -390,6 +406,7 @@ def test_only_defending_player_may_declare_blockers():
 # 506.3 — only a creature can attack or block
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("506.3")
 def test_noncreature_cannot_be_declared_attacker():
     relic = Permanent(card=_mk_artifact("Test Relic"))
     p1 = PlayerState(name="P1", battlefield=[relic])
@@ -402,6 +419,7 @@ def test_noncreature_cannot_be_declared_attacker():
     assert "only creatures can attack" in msg
 
 
+@pytest.mark.cr("506.3")
 def test_noncreature_cannot_be_declared_blocker():
     attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
     relic = Permanent(card=_mk_artifact("Test Relic"))
@@ -418,6 +436,7 @@ def test_noncreature_cannot_be_declared_blocker():
     assert "only creatures can block" in msg
 
 
+@pytest.mark.cr("506.3a")
 def test_506_3a_noncreature_attacking_is_never_an_attacking_permanent():
     # 506.3a: if an effect would put a noncreature permanent onto the battlefield
     # attacking, it's never considered an attacking permanent. Simulate by forcing
@@ -441,6 +460,7 @@ def test_506_3a_noncreature_attacking_is_never_an_attacking_permanent():
     assert game.combat_attackers == {0: 1}  # only the real creature attacks
 
 
+@pytest.mark.cr("506.3b")
 def test_506_3b_creature_controlled_by_defender_is_never_attacking():
     # 506.3b: a creature put onto the battlefield attacking under the control of a
     # player other than the attacking player is never an attacking creature. The
@@ -468,6 +488,7 @@ def test_506_3b_creature_controlled_by_defender_is_never_attacking():
 # 506.4 — removal from combat
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("506.4")
 def test_attacker_leaving_battlefield_is_removed_from_combat():
     # 506.4: a permanent is removed from combat if it leaves the battlefield.
     attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
@@ -486,6 +507,7 @@ def test_attacker_leaving_battlefield_is_removed_from_combat():
     assert game.combat_attackers == {}
 
 
+@pytest.mark.cr("506.4")
 def test_blocker_leaving_battlefield_is_removed_from_combat():
     # 506.4: a blocking creature that leaves the battlefield stops being a
     # blocking creature.
@@ -507,6 +529,7 @@ def test_blocker_leaving_battlefield_is_removed_from_combat():
     assert game.combat_blockers == {}
 
 
+@pytest.mark.cr("506.4")
 def test_removed_creature_stops_being_attacking_and_blocking():
     # 506.4: a creature removed from combat stops being an attacking, blocking,
     # blocked, and/or unblocked creature. When the attacker leaves the
@@ -536,6 +559,7 @@ def test_removed_creature_stops_being_attacking_and_blocking():
     assert blocker.blocked is False
 
 
+@pytest.mark.cr("506.4b")
 def test_506_4b_untapping_declared_attacker_keeps_it_in_combat():
     # 506.4b: untapping a creature already declared as an attacker doesn't remove
     # it from combat and doesn't prevent its combat damage.
@@ -561,6 +585,7 @@ def test_506_4b_untapping_declared_attacker_keeps_it_in_combat():
     assert p2.life == 17
 
 
+@pytest.mark.cr("506.4b")
 def test_506_4b_tapping_declared_blocker_keeps_it_in_combat():
     # 506.4b: tapping a creature already declared as a blocker doesn't remove it
     # from combat and doesn't prevent its combat damage.
@@ -591,6 +616,7 @@ def test_506_4b_tapping_declared_blocker_keeps_it_in_combat():
 # 506.5 — attacking alone / blocking alone
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("506.5")
 def test_creature_attacking_alone():
     lone = Permanent(card=_mk_creature("Lone", 2, 2))
     p1 = PlayerState(name="P1", battlefield=[lone])
@@ -603,6 +629,7 @@ def test_creature_attacking_alone():
     assert game.creature_attacking_alone(lone) is True
 
 
+@pytest.mark.cr("506.5")
 def test_creature_not_attacking_alone_with_two_attackers():
     a1 = Permanent(card=_mk_creature("A1", 2, 2))
     a2 = Permanent(card=_mk_creature("A2", 2, 2))
@@ -617,6 +644,7 @@ def test_creature_not_attacking_alone_with_two_attackers():
     assert game.creature_attacking_alone(a2) is False
 
 
+@pytest.mark.cr("506.5")
 def test_non_attacking_creature_is_not_attacking_alone():
     attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
     bench = Permanent(card=_mk_creature("Bench", 2, 2))
@@ -631,6 +659,7 @@ def test_non_attacking_creature_is_not_attacking_alone():
     assert game.creature_attacking_alone(bench) is False  # bench isn't attacking
 
 
+@pytest.mark.cr("506.5")
 def test_creature_blocking_alone():
     attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
     blocker = Permanent(card=_mk_creature("Blocker", 2, 2))
@@ -648,6 +677,7 @@ def test_creature_blocking_alone():
     assert game.creature_blocking_alone(other) is False  # other isn't blocking
 
 
+@pytest.mark.cr("506.5")
 def test_creature_not_blocking_alone_with_two_blockers():
     attacker = Permanent(card=_mk_creature("Attacker", 4, 4))
     b1 = Permanent(card=_mk_creature("B1", 2, 2))
@@ -671,6 +701,7 @@ def test_creature_not_blocking_alone_with_two_blockers():
 # (No spell or ability can be cast during the assignment portion.)
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("508.1")
 def test_no_priority_during_declare_attackers_assignment():
     attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
     p1 = PlayerState(name="P1", battlefield=[attacker])
@@ -683,6 +714,7 @@ def test_no_priority_during_declare_attackers_assignment():
     assert game.has_priority(0) is False
 
 
+@pytest.mark.cr("508.2")
 def test_active_player_gets_priority_after_declaring_attackers():
     attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
     p1 = PlayerState(name="P1", battlefield=[attacker])
@@ -697,6 +729,7 @@ def test_active_player_gets_priority_after_declaring_attackers():
     assert game.has_priority(0) is True
 
 
+@pytest.mark.cr("508.2")
 def test_declaring_no_attackers_still_grants_active_player_priority():
     attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
     p1 = PlayerState(name="P1", battlefield=[attacker])
@@ -709,6 +742,7 @@ def test_declaring_no_attackers_still_grants_active_player_priority():
     assert game.priority_player_index == 0
 
 
+@pytest.mark.cr("509.1")
 def test_no_priority_during_declare_blockers_assignment():
     attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
     blocker = Permanent(card=_mk_creature("Blocker", 2, 2))
@@ -725,6 +759,7 @@ def test_no_priority_during_declare_blockers_assignment():
     assert game.has_priority(0) is False
 
 
+@pytest.mark.cr("509.2")
 def test_active_player_gets_priority_after_declaring_blockers():
     attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
     blocker = Permanent(card=_mk_creature("Blocker", 2, 2))
@@ -746,6 +781,7 @@ def test_active_player_gets_priority_after_declaring_blockers():
 # 506.6 — "had to attack"
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("506.6", "508.1d")
 def test_creature_that_had_to_attack_must_be_declared():
     # 506.6 / 508: a creature required to attack "had to attack." Such a creature
     # must be included when attackers are declared.
@@ -767,6 +803,7 @@ def test_creature_that_had_to_attack_must_be_declared():
     assert ok
 
 
+@pytest.mark.cr("508.1d")
 def test_ai_choose_attackers_includes_forced_creatures():
     # Regression: Siren's Call (and other "must attack if able" effects) set
     # must_attack_until_eot on the active player's creatures. The AI's
@@ -792,6 +829,7 @@ def test_ai_choose_attackers_includes_forced_creatures():
     assert ok
 
 
+@pytest.mark.cr("506.6")
 def test_creature_did_not_have_to_attack_even_if_only_legal_attacker():
     # 506.6: a creature did not "have to attack" if no effect required it, even if
     # there were no other legal attacks. An ordinary creature may hold back.

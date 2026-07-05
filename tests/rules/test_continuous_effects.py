@@ -6,6 +6,8 @@ Covers:
   613 — Interaction of Continuous Effects (layer system)
 """
 
+import pytest
+
 from engine import Game, PlayerState
 from engine.models import CardDefinition, Permanent
 
@@ -74,6 +76,7 @@ def _mk_creature(
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("611.2a")
 def test_611_2a_pump_until_eot_applies_during_turn():
     """611.2a: A pump spell effect applies during the turn it resolves."""
     pump = _mk_card("Giant Growth", "Instant", "Target creature gets +3/+3 until end of turn.")
@@ -89,6 +92,7 @@ def test_611_2a_pump_until_eot_applies_during_turn():
     assert perm.effective_toughness == 5
 
 
+@pytest.mark.cr("611.2a")
 def test_611_2a_pump_until_eot_clears_after_cleanup():
     """611.2a: A "until end of turn" continuous effect ends at the cleanup step (611.2a)."""
     pump = _mk_card("Giant Growth", "Instant", "Target creature gets +3/+3 until end of turn.")
@@ -108,6 +112,7 @@ def test_611_2a_pump_until_eot_clears_after_cleanup():
     assert perm.effective_toughness == 2
 
 
+@pytest.mark.cr("611.2a")
 def test_611_2a_enchantment_effect_with_no_duration_persists():
     """611.2a: If no duration is stated, a continuous effect lasts until the end of the game."""
     enchantment = _mk_card(
@@ -136,6 +141,7 @@ def test_611_2a_enchantment_effect_with_no_duration_persists():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("611.2b")
 def test_611_2b_for_as_long_as_duration_requires_condition_to_have_started():
     """611.2b: A 'for as long as' effect does nothing if the duration never starts.
 
@@ -162,6 +168,7 @@ def test_611_2b_for_as_long_as_duration_requires_condition_to_have_started():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("611.2c")
 def test_611_2c_spell_buff_applies_only_to_creatures_present_at_resolution():
     """611.2c: 'All white creatures get +1/+1 until EOT' only applies to white
     creatures on the battlefield when the spell resolves, not those that enter later.
@@ -193,6 +200,7 @@ def test_611_2c_spell_buff_applies_only_to_creatures_present_at_resolution():
     assert black_perm.effective_toughness == 2
 
 
+@pytest.mark.cr("611.2c")
 def test_611_2c_new_creature_entering_after_spell_buff_is_unaffected():
     """611.2c: A creature that enters the battlefield after a spell-based global buff
     resolves does not receive that buff (the set of objects was locked in at resolution).
@@ -223,6 +231,7 @@ def test_611_2c_new_creature_entering_after_spell_buff_is_unaffected():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("611.3a")
 def test_611_3a_static_ability_applies_to_creature_present_when_lord_enters():
     """611.3a: A static ability applies to creatures already on the battlefield
     when the permanent with the static ability enters.
@@ -245,6 +254,7 @@ def test_611_3a_static_ability_applies_to_creature_present_when_lord_enters():
     assert knight_perm.effective_toughness == 3
 
 
+@pytest.mark.cr("611.3a")
 def test_611_3a_static_ability_applies_to_newly_entering_creature():
     """611.3a: A static continuous effect from a permanent is not 'locked in'.
     A creature that enters the battlefield after the lord does also gets the buff.
@@ -269,6 +279,7 @@ def test_611_3a_static_ability_applies_to_newly_entering_creature():
     assert late_perm.effective_toughness == 3
 
 
+@pytest.mark.cr("611.3a")
 def test_611_3a_static_ability_does_not_apply_to_non_matching_creature():
     """611.3a: A static effect applies only to permanents matching its criteria.
     A black creature entering after a 'white creatures +1/+1' lord is unaffected.
@@ -295,6 +306,7 @@ def test_611_3a_static_ability_does_not_apply_to_non_matching_creature():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("611.3b")
 def test_611_3b_lord_buff_present_while_lord_on_battlefield():
     """611.3b: The continuous effect of a static ability applies while the
     permanent generating it is on the battlefield.
@@ -316,6 +328,7 @@ def test_611_3b_lord_buff_present_while_lord_on_battlefield():
     assert knight_perm.effective_power == 3
 
 
+@pytest.mark.cr("611.3b")
 def test_611_3b_lord_buff_removed_when_lord_leaves_battlefield():
     """611.3b: When the permanent generating a static effect leaves the battlefield,
     the effect ceases to apply (the buff should disappear).
@@ -352,6 +365,7 @@ def test_611_3b_lord_buff_removed_when_lord_leaves_battlefield():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("611.3c")
 def test_611_3c_static_buff_applies_simultaneously_with_creature_entering():
     """611.3c: A static continuous effect applies as the permanent enters the
     battlefield. A 1/1 white creature enters as 3/3 when a 'white creatures
@@ -383,6 +397,7 @@ def test_611_3c_static_buff_applies_simultaneously_with_creature_entering():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("613.4b")
 def test_613_4b_set_effect_layer_7b_overrides_card_base_stats():
     """613.4b: Effects that set power/toughness to a specific value (layer 7b)
     override the card's printed stats.
@@ -398,6 +413,7 @@ def test_613_4b_set_effect_layer_7b_overrides_card_base_stats():
     assert perm.effective_toughness == 1
 
 
+@pytest.mark.cr("613.4b", "613.4c")
 def test_613_4_layer_7b_set_then_7c_modify():
     """613.4: A layer 7b set effect establishes the base, and layer 7c modifications
     (counters, pump spells) are applied on top of that base.
@@ -420,6 +436,7 @@ def test_613_4_layer_7b_set_then_7c_modify():
     assert perm.effective_toughness == 4  # 1 (7b) + 3 (7c)
 
 
+@pytest.mark.cr("613.4b", "613.4c")
 def test_613_4_layer_7c_counter_plus_set_effect():
     """613.4: The Gray Ogre rules example from 613.5.
 
@@ -453,6 +470,7 @@ def test_613_4_layer_7c_counter_plus_set_effect():
     assert perm.effective_toughness == 8  # 1 (7b) + 7 (7c: 1+4+2)
 
 
+@pytest.mark.cr("613.4d")
 def test_613_4d_power_toughness_switch_layer_7d():
     """613.4d: Effects that switch a creature's power and toughness are applied
     in layer 7d, after all other layer 7 effects.
@@ -468,6 +486,7 @@ def test_613_4d_power_toughness_switch_layer_7d():
     assert perm.effective_toughness == 1
 
 
+@pytest.mark.cr("613.4d")
 def test_613_4d_switch_applied_after_7c_modify():
     """613.4d: Power/toughness switch (7d) is applied after +0/+1 modification (7c).
 
@@ -486,6 +505,7 @@ def test_613_4d_switch_applied_after_7c_modify():
     assert perm.effective_toughness == 1  # switched from power 1
 
 
+@pytest.mark.cr("613.4d")
 def test_613_4d_switch_applied_after_set_and_modify():
     """613.4d: Switch (7d) is applied after both 7b (set) and 7c (modify) effects.
 
@@ -508,6 +528,7 @@ def test_613_4d_switch_applied_after_set_and_modify():
     assert perm.effective_toughness == 5
 
 
+@pytest.mark.cr("613.4d")
 def test_613_4d_double_switch_returns_to_original_values():
     """613.4d: Two power/toughness switch effects essentially cancel each other.
 
@@ -534,6 +555,7 @@ def test_613_4d_double_switch_returns_to_original_values():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("613.5")
 def test_613_5_lord_buff_and_pump_applied_simultaneously():
     """613.5: Layer effects are applied continuously. A white creature on the
     battlefield gets the color lord's +1/+1 (layer 7c) plus any pump.
@@ -564,6 +586,7 @@ def test_613_5_lord_buff_and_pump_applied_simultaneously():
     assert knight_perm.effective_toughness == 6
 
 
+@pytest.mark.cr("613.5", "613.4b")
 def test_613_5_until_eot_set_plus_modifications_resolve_correctly():
     """613.5: When 'becomes 0/1' (layer 7b) is applied to a creature with existing
     layer 7c bonuses, those bonuses still apply on top of the new base.
@@ -593,6 +616,7 @@ def test_613_5_until_eot_set_plus_modifications_resolve_correctly():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("613.7")
 def test_613_7_later_timestamp_wins_for_conflicting_effects_in_same_layer():
     """613.7: When two conflicting effects apply in the same layer, the one with
     the later timestamp is applied last, so it 'wins'.
@@ -613,6 +637,7 @@ def test_613_7_later_timestamp_wins_for_conflicting_effects_in_same_layer():
     assert perm.metadata["color_override"] == "U"
 
 
+@pytest.mark.cr("613.7", "613.4b")
 def test_613_7_timestamp_order_affects_power_toughness_set_effects():
     """613.7: In layer 7b, two 'becomes X/Y' effects - the later one wins.
 
@@ -644,6 +669,7 @@ def test_613_7_timestamp_order_affects_power_toughness_set_effects():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("613.8")
 def test_613_8_dependent_effects_applied_after_effects_they_depend_on():
     """613.8: An effect that depends on another (its result changes based on the
     other) waits to apply until after the effect it depends on.
@@ -685,6 +711,7 @@ def test_613_8_dependent_effects_applied_after_effects_they_depend_on():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("613.9")
 def test_613_9_later_effect_overrides_earlier_effect_in_same_layer():
     """613.9: Two effects in the same layer — the later one applies last.
 
@@ -711,6 +738,7 @@ def test_613_9_later_effect_overrides_earlier_effect_in_same_layer():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("612.1")
 def test_612_1_text_changing_effect_modifies_rules_text():
     """612.1: A text-changing effect modifies the text of an object.
     This engine-level test verifies that the text_modified metadata flag can be
@@ -727,6 +755,7 @@ def test_612_1_text_changing_effect_modifies_rules_text():
     assert perm.metadata.get("has_islandwalk") is True
 
 
+@pytest.mark.cr("612.3")
 def test_612_3_granted_abilities_not_modified_by_text_changing_effects():
     """612.3: Abilities granted to an object by other effects are not modified
     by text-changing effects that affect that object. Only printed text changes.
@@ -749,6 +778,7 @@ def test_612_3_granted_abilities_not_modified_by_text_changing_effects():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("611.2a")
 def test_611_2a_eot_metadata_flags_cleared_at_cleanup():
     """611.2a: Metadata flags that carry 'until end of turn' effects are cleared
     during the cleanup step.
@@ -780,6 +810,7 @@ def test_611_2a_eot_metadata_flags_cleared_at_cleanup():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("613.4c")
 def test_integration_multiple_effects_stack_in_layer_7c():
     """613.4c: Multiple layer 7c effects (counters, pump spells, static buffs)
     all add together.

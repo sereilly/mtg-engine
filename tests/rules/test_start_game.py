@@ -43,6 +43,7 @@ def _two_player_game() -> Game:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("103.1")
 def test_103_1_select_starting_player_returns_valid_index():
     """select_starting_player returns an index within the player list (103.1)."""
     game = _two_player_game()
@@ -50,6 +51,7 @@ def test_103_1_select_starting_player_returns_valid_index():
     assert idx in range(len(game.players))
 
 
+@pytest.mark.cr("103.1")
 def test_103_1_result_is_logged():
     """Coin-flip result is recorded in the game log (103.1)."""
     game = _two_player_game()
@@ -57,6 +59,7 @@ def test_103_1_result_is_logged():
     assert any("Coin flip" in entry for entry in game.log)
 
 
+@pytest.mark.cr("103.1")
 def test_103_1_coin_flip_can_select_first_player():
     """Coin flip can select player 0 (Alice) as starting player (103.1)."""
     game = _two_player_game()
@@ -66,6 +69,7 @@ def test_103_1_coin_flip_can_select_first_player():
     assert "Alice" in game.log[-1]
 
 
+@pytest.mark.cr("103.1")
 def test_103_1_coin_flip_can_select_second_player():
     """Coin flip can select player 1 (Bob) as starting player (103.1)."""
     game = _two_player_game()
@@ -75,6 +79,7 @@ def test_103_1_coin_flip_can_select_second_player():
     assert "Bob" in game.log[-1]
 
 
+@pytest.mark.cr("103.1")
 def test_103_1_game_supports_more_than_two_players():
     """select_starting_player works for multi-player games (103.1)."""
     players = [PlayerState(name=f"P{i}", library=_library(10)) for i in range(4)]
@@ -89,6 +94,7 @@ def test_103_1_game_supports_more_than_two_players():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("103.5")
 def test_103_5_deal_opening_hands_gives_each_player_seven_cards():
     """Each player draws 7 cards as their opening hand (103.5)."""
     game = _two_player_game()
@@ -97,6 +103,7 @@ def test_103_5_deal_opening_hands_gives_each_player_seven_cards():
         assert len(player.hand) == 7
 
 
+@pytest.mark.cr("103.5")
 def test_103_5_deal_opening_hands_removes_cards_from_library():
     """Cards dealt to hand come from the player's library (103.5)."""
     game = _two_player_game()
@@ -105,6 +112,7 @@ def test_103_5_deal_opening_hands_removes_cards_from_library():
         assert len(player.library) == 20 - 7
 
 
+@pytest.mark.cr("103.5")
 def test_103_5_deal_opening_hands_is_logged():
     """Opening hand deal is recorded in the log (103.5)."""
     game = _two_player_game()
@@ -114,6 +122,7 @@ def test_103_5_deal_opening_hands_is_logged():
     assert "opening hand" in log_text
 
 
+@pytest.mark.cr("103.3", "103.5")
 def test_103_5_deal_opening_hands_shuffles_library():
     """deal_opening_hands shuffles the library before dealing (103.5)."""
     # Run many times; each library should have been shuffled (not always in original order).
@@ -130,6 +139,7 @@ def test_103_5_deal_opening_hands_shuffles_library():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("103.5")
 def test_103_5_take_mulligan_returns_true_on_success():
     """take_mulligan returns True when the mulligan is performed (103.5)."""
     game = _two_player_game()
@@ -138,6 +148,7 @@ def test_103_5_take_mulligan_returns_true_on_success():
     assert result is True
 
 
+@pytest.mark.cr("103.5")
 def test_103_5_take_mulligan_increments_counter():
     """mulligans_taken is incremented each time a mulligan is taken (103.5)."""
     game = _two_player_game()
@@ -149,6 +160,7 @@ def test_103_5_take_mulligan_increments_counter():
     assert game.players[0].mulligans_taken == 2
 
 
+@pytest.mark.cr("103.5")
 def test_103_5_first_mulligan_leaves_six_cards():
     """After the first mulligan a player has 6 cards (draws 7, puts 1 on bottom) (103.5)."""
     game = _two_player_game()
@@ -157,6 +169,7 @@ def test_103_5_first_mulligan_leaves_six_cards():
     assert len(game.players[0].hand) == 6
 
 
+@pytest.mark.cr("103.5")
 def test_103_5_second_mulligan_leaves_five_cards():
     """After two mulligans a player has 5 cards (103.5)."""
     game = _two_player_game()
@@ -166,6 +179,7 @@ def test_103_5_second_mulligan_leaves_five_cards():
     assert len(game.players[0].hand) == 5
 
 
+@pytest.mark.cr("103.5")
 def test_103_5_seventh_mulligan_leaves_zero_cards():
     """After seven mulligans a player has 0 cards in hand (103.5)."""
     p1 = PlayerState(name="Alice", library=_library(60))
@@ -178,6 +192,7 @@ def test_103_5_seventh_mulligan_leaves_zero_cards():
     assert game.players[0].mulligans_taken == 7
 
 
+@pytest.mark.cr("103.5")
 def test_103_5_cannot_mulligan_past_zero_cards():
     """A player with 0 cards cannot take further mulligans (103.5)."""
     p1 = PlayerState(name="Alice", library=_library(60))
@@ -191,6 +206,7 @@ def test_103_5_cannot_mulligan_past_zero_cards():
     assert game.players[0].mulligans_taken == 7
 
 
+@pytest.mark.cr("103.5")
 def test_103_5_mulligan_refusal_is_logged():
     """Refusing a mulligan when at 0 cards is recorded in the log (103.5)."""
     p1 = PlayerState(name="Alice", library=_library(60))
@@ -203,6 +219,7 @@ def test_103_5_mulligan_refusal_is_logged():
     assert any("cannot take further mulligans" in e for e in game.log)
 
 
+@pytest.mark.cr("103.5")
 def test_103_5_mulligan_is_logged():
     """Each mulligan action is recorded in the game log (103.5)."""
     game = _two_player_game()
@@ -211,6 +228,7 @@ def test_103_5_mulligan_is_logged():
     assert any("mulligan" in e.lower() and "Alice" in e for e in game.log)
 
 
+@pytest.mark.cr("103.5")
 def test_103_5_mulligan_hand_comes_from_new_library_draw():
     """After mulligan, hand consists of cards drawn from the reshuffled library (103.5)."""
     game = _two_player_game()
@@ -224,6 +242,7 @@ def test_103_5_mulligan_hand_comes_from_new_library_draw():
         assert card.name in all_cards
 
 
+@pytest.mark.cr("103.5")
 def test_103_5_mulligan_puts_cards_on_bottom_not_top():
     """Cards put to bottom are appended to the end of library, not inserted at index 0 (103.5)."""
     game = _two_player_game()
@@ -236,6 +255,7 @@ def test_103_5_mulligan_puts_cards_on_bottom_not_top():
     assert len(player.library) > 0
 
 
+@pytest.mark.cr("103.5")
 def test_103_5_bottom_card_indices_places_specific_cards_on_bottom():
     """bottom_card_indices selects which cards go to the bottom of the library (103.5)."""
     game = _two_player_game()
@@ -252,6 +272,7 @@ def test_103_5_bottom_card_indices_places_specific_cards_on_bottom():
     assert player.library[-1] == expected_bottom
 
 
+@pytest.mark.cr("103.5")
 def test_103_5_keep_hand_is_logged():
     """keep_hand records the decision in the game log (103.5)."""
     game = _two_player_game()
@@ -260,6 +281,7 @@ def test_103_5_keep_hand_is_logged():
     assert any("keeps opening hand" in e and "Alice" in e for e in game.log)
 
 
+@pytest.mark.cr("103.5")
 def test_103_5_keep_hand_logs_hand_size():
     """keep_hand log entry states the number of cards kept (103.5)."""
     game = _two_player_game()
@@ -268,6 +290,7 @@ def test_103_5_keep_hand_logs_hand_size():
     assert any("7" in e and "keeps opening hand" in e for e in game.log)
 
 
+@pytest.mark.cr("103.5")
 def test_103_5_keep_hand_after_mulligan_logs_mulligan_count():
     """keep_hand log entry mentions how many mulligans were taken (103.5)."""
     game = _two_player_game()
@@ -277,6 +300,7 @@ def test_103_5_keep_hand_after_mulligan_logs_mulligan_count():
     assert any("1 mulligan" in e for e in game.log)
 
 
+@pytest.mark.cr("103.5")
 def test_103_5_keep_hand_without_mulligan_no_mulligan_note():
     """keep_hand on the initial hand does not note any mulligans taken (103.5)."""
     game = _two_player_game()
@@ -287,6 +311,7 @@ def test_103_5_keep_hand_without_mulligan_no_mulligan_note():
     assert all("mulligan" not in e for e in keep_entries)
 
 
+@pytest.mark.cr("103.5")
 def test_103_5_second_player_is_unaffected_by_first_players_mulligan():
     """Each player's mulligan is independent; P2's hand is unchanged (103.5)."""
     game = _two_player_game()
@@ -297,6 +322,7 @@ def test_103_5_second_player_is_unaffected_by_first_players_mulligan():
     assert game.players[1].mulligans_taken == 0
 
 
+@pytest.mark.cr("103.1", "103.5")
 def test_103_5_full_mulligan_sequence_two_players():
     """Full two-player mulligan round: P1 mulligans once, P2 keeps (103.5)."""
     game = _two_player_game()

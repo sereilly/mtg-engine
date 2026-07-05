@@ -49,6 +49,7 @@ def _mk_creature(name: str, power: int = 2, toughness: int = 2, oracle_text: str
 # their hand during a main phase of their turn when the stack is empty.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("303.1")
 def test_303_1_enchantment_cast_from_hand_during_main_phase():
     """303.1: Casting an enchantment from hand uses the stack and resolves normally."""
     shrine = _mk_card("Test Shrine", "Enchantment — Shrine")
@@ -62,6 +63,7 @@ def test_303_1_enchantment_cast_from_hand_during_main_phase():
     assert not any(c.name == "Test Shrine" for c in p1.hand)
 
 
+@pytest.mark.cr("303.1")
 def test_303_1_enchantment_not_castable_as_sorcery_outside_main_phase():
     """303.1: Enchantments are cast during main phase — game starts in precombat_main."""
     enchantment = _mk_card("Upkeep Enchantment", "Enchantment")
@@ -78,6 +80,7 @@ def test_303_1_enchantment_not_castable_as_sorcery_outside_main_phase():
 # the battlefield under their control.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("303.2")
 def test_303_2_enchantment_enters_battlefield_under_casters_control():
     """303.2: Resolved enchantment is on the caster's battlefield, not the opponent's."""
     enchantment = _mk_card("Test Enchantment", "Enchantment")
@@ -92,6 +95,7 @@ def test_303_2_enchantment_enters_battlefield_under_casters_control():
     assert not any(c.name == "Test Enchantment" for c in p1.graveyard)
 
 
+@pytest.mark.cr("303.2")
 def test_303_2_enchantment_leaves_hand_when_cast():
     """303.2: The enchantment card leaves the hand as it is cast."""
     enchantment = _mk_card("Test Enchantment", "Enchantment")
@@ -110,6 +114,7 @@ def test_303_2_enchantment_leaves_hand_when_cast():
 # Enchantments may have multiple subtypes.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("303.3")
 def test_303_3_enchantment_primary_type_from_type_line():
     """303.3: Cards with 'Enchantment' in the type line have primary type 'enchantment'."""
     assert _mk_card("Plain", "Enchantment").primary_type == "enchantment"
@@ -119,6 +124,7 @@ def test_303_3_enchantment_primary_type_from_type_line():
     assert _mk_card("A Class", "Enchantment — Class").primary_type == "enchantment"
 
 
+@pytest.mark.cr("303.3")
 def test_303_3_enchantment_subtype_is_single_word_after_dash():
     """303.3: Subtypes in 'Enchantment — Aura' are single words separated by whitespace."""
     card = _mk_card("Test Aura", "Enchantment — Aura", "Enchant creature")
@@ -127,6 +133,7 @@ def test_303_3_enchantment_subtype_is_single_word_after_dash():
         assert " " not in subtype, f"Subtype '{subtype}' must be a single word"
 
 
+@pytest.mark.cr("303.3")
 def test_303_3_enchantment_multiple_subtypes_each_single_word():
     """303.3: An enchantment may have multiple subtypes; each is a single word after the dash."""
     card = _mk_card("Dual Subtype", "Enchantment — Aura Shrine")
@@ -145,6 +152,7 @@ def test_303_3_enchantment_multiple_subtypes_each_single_word():
 # is defined by its enchant keyword ability.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("303.4")
 def test_303_4_aura_identified_by_type_line():
     """303.4: A card with 'Enchantment — Aura' in its type line is an Aura."""
     aura_card = _mk_card("Test Aura", "Enchantment — Aura", "Enchant creature")
@@ -157,6 +165,7 @@ def test_303_4_aura_identified_by_type_line():
 # enchant keyword ability.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("303.4a", "701.3a")
 def test_303_4a_enchant_creature_aura_attaches_to_target_creature():
     """303.4a: 'Enchant creature' Aura spell targets and attaches to a creature."""
     aura = _mk_card("Power Buff", "Enchantment — Aura", "Enchant creature\nEnchanted creature gets +2/+1.")
@@ -172,6 +181,7 @@ def test_303_4a_enchant_creature_aura_attaches_to_target_creature():
     assert aura_perm.metadata["attached_to"].card.name == "Target Bear"
 
 
+@pytest.mark.cr("303.4a", "701.3a")
 def test_303_4a_enchant_land_aura_attaches_to_target_land():
     """303.4a: 'Enchant land' Aura spell targets and attaches to a land."""
     aura = _mk_card("Land Aura", "Enchantment — Aura",
@@ -193,6 +203,7 @@ def test_303_4a_enchant_land_aura_attaches_to_target_land():
 # The Aura is attached to, or "enchants," that object or player.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("303.4b")
 def test_303_4b_enchanted_object_holds_aura_reference():
     """303.4b: The enchanted permanent has a back-reference to the Aura in its metadata."""
     aura = _mk_card("Test Aura", "Enchantment — Aura", "Enchant creature\nEnchanted creature gets +1/+1.")
@@ -208,6 +219,7 @@ def test_303_4b_enchanted_object_holds_aura_reference():
     assert enchanted_creature.metadata["attached_aura"].card.name == "Test Aura"
 
 
+@pytest.mark.cr("303.4b")
 def test_303_4b_aura_holds_reference_to_enchanted_object():
     """303.4b: The Aura permanent's metadata points to the permanent it enchants."""
     aura = _mk_card("Test Aura", "Enchantment — Aura", "Enchant creature\nEnchanted creature gets +1/+1.")
@@ -229,6 +241,7 @@ def test_303_4b_aura_holds_reference_to_enchanted_object():
 # (State-based action — rule 704.)
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("303.4c", "704.5m")
 def test_303_4c_aura_goes_to_graveyard_when_enchanted_creature_is_destroyed():
     """303.4c: When the enchanted creature is destroyed the Aura goes to its owner's graveyard."""
     aura = _mk_card("Test Aura", "Enchantment — Aura", "Enchant creature\nEnchanted creature gets +1/+1.")
@@ -252,6 +265,7 @@ def test_303_4c_aura_goes_to_graveyard_when_enchanted_creature_is_destroyed():
 # to more than one, the controller chooses which one.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("303.4d")
 def test_303_4d_aura_not_attached_to_itself():
     """303.4d: After resolution the Aura's attached_to reference is not the Aura itself."""
     aura = _mk_card("Self Check Aura", "Enchantment — Aura", "Enchant creature\nEnchanted creature gets +1/+1.")
@@ -266,6 +280,7 @@ def test_303_4d_aura_not_attached_to_itself():
     assert aura_perm.metadata.get("attached_to") is not aura_perm
 
 
+@pytest.mark.cr("303.4d")
 def test_303_4d_aura_enchants_exactly_one_permanent():
     """303.4d: An Aura enchants exactly one permanent — not multiple."""
     aura = _mk_card("Single Target Aura", "Enchantment — Aura", "Enchant creature\nEnchanted creature gets +1/+1.")
@@ -290,6 +305,7 @@ def test_303_4d_aura_enchants_exactly_one_permanent():
 # enchanted object's controller is the only one who can activate that ability.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("303.4e")
 def test_303_4e_aura_is_on_casters_battlefield_while_creature_stays_on_opponents():
     """303.4e: P1's Aura sits on P1's battlefield; the enchanted creature stays on P2's."""
     aura = _mk_card("Control Test Aura", "Enchantment — Aura", "Enchant creature\nEnchanted creature gets +1/+1.")
@@ -306,6 +322,7 @@ def test_303_4e_aura_is_on_casters_battlefield_while_creature_stays_on_opponents
     assert not any(perm.card.name == "Opponent Creature" for perm in p1.battlefield)
 
 
+@pytest.mark.cr("303.4e")
 def test_303_4e_ability_granted_by_aura_is_stamped_on_enchanted_object():
     """303.4e: An ability granted by the Aura (flying) is stored on the enchanted creature."""
     aura = _mk_card("Wings Aura", "Enchantment — Aura", "Enchant creature\nEnchanted creature has flying.")
@@ -320,6 +337,7 @@ def test_303_4e_ability_granted_by_aura_is_stamped_on_enchanted_object():
     assert enchanted_creature.metadata.get("gains_flying") is True
 
 
+@pytest.mark.cr("303.4e")
 def test_303_4e_first_strike_granted_to_enchanted_creature():
     """303.4e: An ability granted by the Aura (first strike) is stored on the enchanted creature."""
     aura = _mk_card("Strike Aura", "Enchantment — Aura", "Enchant creature\nEnchanted creature has first strike.")
@@ -340,6 +358,7 @@ def test_303_4e_first_strike_granted_to_enchanted_creature():
 # Aura enters the battlefield.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("303.4f")
 def test_303_4f_aura_entering_via_reanimation_attaches_to_chosen_target():
     """303.4f: An Aura entering by non-spell means (reanimation) attaches to a chosen target."""
     animate = _mk_card(
@@ -373,6 +392,7 @@ def test_303_4f_aura_entering_via_reanimation_attaches_to_chosen_target():
 # graveyard instead of entering the battlefield.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("303.4g", "601.2c")
 def test_303_4g_enchant_creature_aura_with_no_creatures_cannot_be_cast():
     """303.4g / 601.2c: An 'enchant creature' Aura can't legally be cast when no creature
     is on the battlefield to serve as its target — CR 601.2c requires a legal target be
@@ -391,6 +411,7 @@ def test_303_4g_enchant_creature_aura_with_no_creatures_cannot_be_cast():
     assert not any(perm.card.name == "Orphan Aura" for perm in p1.battlefield)
 
 
+@pytest.mark.cr("303.4g")
 def test_303_4g_aura_goes_to_graveyard_when_target_removed_while_on_stack():
     """303.4g: An Aura whose target disappears while it is on the stack goes to the graveyard.
 
@@ -421,6 +442,7 @@ def test_303_4g_aura_goes_to_graveyard_when_target_removed_while_on_stack():
 # player, it enters the battlefield unattached.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("303.4h")
 def test_303_4h_non_aura_enchantment_enters_without_attached_to_metadata():
     """303.4h: A non-Aura enchantment enters the battlefield without being attached to anything."""
     enchantment = _mk_card("Plain Enchantment", "Enchantment",
@@ -435,6 +457,7 @@ def test_303_4h_non_aura_enchantment_enters_without_attached_to_metadata():
     assert perm.metadata.get("attached_to") is None
 
 
+@pytest.mark.cr("303.4h")
 def test_303_4h_creature_enters_unattached():
     """303.4h: A creature permanent (not an Aura) enters unattached."""
     creature = _mk_creature("Regular Creature")
@@ -455,6 +478,7 @@ def test_303_4h_creature_enters_unattached():
 # graveyard.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("303.4i", "601.2c")
 def test_303_4i_enchant_land_aura_with_no_lands_cannot_be_cast():
     """303.4i / 601.2c: An 'enchant land' Aura can't legally be cast when no land is on
     the battlefield to serve as its target — same reasoning as the enchant-creature case
@@ -478,6 +502,7 @@ def test_303_4i_enchant_land_aura_with_no_lands_cannot_be_cast():
 # an object or player it can't legally enchant, the Aura doesn't move.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("303.4j", "701.3a")
 def test_303_4j_enchant_creature_aura_attaches_to_creature_not_land():
     """303.4j: 'Enchant creature' Aura attaches to a creature even when both a creature
     and a land are present — it cannot legally enchant the land."""
@@ -498,6 +523,7 @@ def test_303_4j_enchant_creature_aura_attaches_to_creature_not_land():
     assert attached.card.name == "Valid Target"
 
 
+@pytest.mark.cr("303.4j", "701.3a")
 def test_303_4j_enchant_land_aura_attaches_to_land_not_creature():
     """303.4j: 'Enchant land' Aura attaches to a land even when a creature is also present."""
     aura = _mk_card("Land Seeker", "Enchantment — Aura",
@@ -522,6 +548,7 @@ def test_303_4j_enchant_land_aura_attaches_to_land_not_creature():
 # Regression test: Animate Artifact could previously be cast with no targets.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("601.2c")
 def test_601_2c_animate_artifact_cannot_be_cast_without_artifact_target():
     """601.2c: Animate Artifact (enchant artifact) cannot be cast when no artifacts are present."""
     aura = _mk_card(
@@ -540,6 +567,7 @@ def test_601_2c_animate_artifact_cannot_be_cast_without_artifact_target():
     assert not any(perm.card.name == "Animate Artifact" for perm in p1.battlefield)
 
 
+@pytest.mark.cr("601.2c", "303.4a")
 def test_601_2c_animate_artifact_can_be_cast_with_artifact_target():
     """601.2c: Animate Artifact can be cast when a valid artifact target exists."""
     aura = _mk_card(
@@ -565,6 +593,7 @@ def test_601_2c_animate_artifact_can_be_cast_with_artifact_target():
 # even if the permanent with the ability isn't an Aura.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("303.4m")
 def test_303_4m_enchanted_creature_receives_power_toughness_buff():
     """303.4m: 'Enchanted creature gets +2/+1' applies the buff to the attached creature."""
     aura = _mk_card("Power Aura", "Enchantment — Aura", "Enchant creature\nEnchanted creature gets +2/+1.")
@@ -580,6 +609,7 @@ def test_303_4m_enchanted_creature_receives_power_toughness_buff():
     assert enchanted.effective_toughness == 3
 
 
+@pytest.mark.cr("303.4m")
 def test_303_4m_enchanted_creature_receives_negative_buff():
     """303.4m: 'Enchanted creature gets -1/-1' applies the debuff to the attached creature."""
     aura = _mk_card("Weakness Aura", "Enchantment — Aura", "Enchant creature\nEnchanted creature gets -1/-1.")
@@ -595,6 +625,7 @@ def test_303_4m_enchanted_creature_receives_negative_buff():
     assert enchanted.effective_toughness == 2
 
 
+@pytest.mark.cr("303.4m")
 def test_303_4m_enchanted_creature_unaffected_by_aura_on_different_creature():
     """303.4m: 'Enchanted creature' buff only applies to the specific attached creature."""
     aura = _mk_card("Selective Aura", "Enchantment — Aura", "Enchant creature\nEnchanted creature gets +2/+2.")
@@ -623,6 +654,7 @@ def test_303_4m_enchanted_creature_unaffected_by_aura_on_different_creature():
 # Rule 303.5 – Some enchantments have the subtype "Saga."
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("303.5")
 def test_303_5_saga_has_enchantment_primary_type():
     """303.5: A Saga card's primary type is 'enchantment'."""
     saga = _mk_card("Test Saga", "Enchantment — Saga")
@@ -630,6 +662,7 @@ def test_303_5_saga_has_enchantment_primary_type():
     assert "Saga" in saga.type_line
 
 
+@pytest.mark.cr("303.5", "303.2")
 def test_303_5_saga_enters_casters_battlefield():
     """303.5: A Saga enters the battlefield under its controller's control."""
     saga = _mk_card("Story Saga", "Enchantment — Saga")
@@ -647,6 +680,7 @@ def test_303_5_saga_enters_casters_battlefield():
 # Rule 303.6 – Some enchantments have the subtype "Class."
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("303.6")
 def test_303_6_class_has_enchantment_primary_type():
     """303.6: A Class card's primary type is 'enchantment'."""
     class_card = _mk_card("Test Class", "Enchantment — Class")
@@ -654,6 +688,7 @@ def test_303_6_class_has_enchantment_primary_type():
     assert "Class" in class_card.type_line
 
 
+@pytest.mark.cr("303.6", "303.2")
 def test_303_6_class_enters_casters_battlefield():
     """303.6: A Class card enters the battlefield under its controller's control."""
     class_card = _mk_card("Wizard Class", "Enchantment — Class")
@@ -671,6 +706,7 @@ def test_303_6_class_enters_casters_battlefield():
 # Rule 303.7 – Some Aura enchantments also have the subtype "Role."
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("303.7")
 def test_303_7_role_has_enchantment_primary_type():
     """303.7: A Role card has primary type 'enchantment'."""
     role = _mk_card("Monster Role", "Enchantment — Role", "Enchant creature\nEnchanted creature gets +1/+1.")
@@ -678,6 +714,7 @@ def test_303_7_role_has_enchantment_primary_type():
     assert "Role" in role.type_line
 
 
+@pytest.mark.cr("303.7", "303.4")
 def test_303_7_role_enters_battlefield_attached_like_an_aura():
     """303.7: A Role (which is an Aura subtype) attaches to a creature when cast."""
     role = _mk_card("Warrior Role", "Enchantment — Role", "Enchant creature\nEnchanted creature gets +1/+1.")
@@ -699,6 +736,7 @@ def test_303_7_role_enters_battlefield_attached_like_an_aura():
 # recent timestamp is put into its owner's graveyard. (State-based action.)
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("303.7a")
 def test_303_7a_two_roles_from_same_player_only_newest_survives():
     """303.7a: When the same player attaches two Roles to the same creature, only the
     Role with the most recent timestamp remains; the older one goes to the graveyard."""

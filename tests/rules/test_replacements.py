@@ -7,6 +7,8 @@ tests cover the registry mechanics plus the migrated paths end-to-end.
 
 from __future__ import annotations
 
+import pytest
+
 from engine import PlayerState
 from engine.models import Permanent
 from engine.replacements import (
@@ -26,6 +28,7 @@ def _two_player_game():
 
 # --- registry mechanics ------------------------------------------------------
 
+@pytest.mark.cr("616.1", "614.5")
 def test_interceptors_run_in_registration_order_and_can_modify_amount():
     calls = []
 
@@ -49,6 +52,7 @@ def test_interceptors_run_in_registration_order_and_can_modify_amount():
         REPLACEMENTS.pop(kind, None)
 
 
+@pytest.mark.cr("614.6")
 def test_consuming_interceptor_stops_the_chain():
     calls = []
 
@@ -71,6 +75,7 @@ def test_consuming_interceptor_stops_the_chain():
         REPLACEMENTS.pop(kind, None)
 
 
+@pytest.mark.cr("614.1")
 def test_unknown_kind_is_a_no_op():
     consumed, payload = apply_replacements(None, "_no_such_kind", {"amount": 2})
     assert not consumed
@@ -79,6 +84,7 @@ def test_unknown_kind_is_a_no_op():
 
 # --- migrated LEA paths ------------------------------------------------------
 
+@pytest.mark.cr("614.1a")
 def test_lich_life_gain_draws_instead():
     game, p1, _ = _two_player_game()
     lich = CARDS_BY_NAME["Lich"]
@@ -90,6 +96,7 @@ def test_lich_life_gain_draws_instead():
     assert len(p1.hand) == 2
 
 
+@pytest.mark.cr("614.1a")
 def test_gain_life_without_lich_is_normal():
     game, p1, _ = _two_player_game()
     before = p1.life
@@ -97,6 +104,7 @@ def test_gain_life_without_lich_is_normal():
     assert p1.life == before + 3
 
 
+@pytest.mark.cr("614.1a", "614.6")
 def test_exile_if_dies_replacement():
     game, p1, _ = _two_player_game()
     perm = Permanent(card=_mk_creature_card("Doomed", 2, 2))
@@ -108,6 +116,7 @@ def test_exile_if_dies_replacement():
     assert p1.graveyard == []
 
 
+@pytest.mark.cr("614.9")
 def test_personal_incarnation_style_one_point_redirect():
     game, p1, _ = _two_player_game()
     perm = Permanent(card=_mk_creature_card("Avatar", 6, 6))

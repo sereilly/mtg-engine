@@ -124,6 +124,7 @@ def _get(all_cards, name: str) -> CardDefinition:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("702.1")
 def test_display_keywords_are_all_covered_here():
     """Guard: every keyword the UI displays has a test section in this file."""
     expected = {
@@ -140,6 +141,7 @@ def test_display_keywords_are_all_covered_here():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("702.9b")
 def test_702_9b_flying_cannot_be_blocked_by_ground_creature():
     flier = Permanent(card=_mk_creature("Flier", 2, 2, keywords=("Flying",)))
     grounder = Permanent(card=_mk_creature("Grounder", 2, 2))
@@ -150,6 +152,7 @@ def test_702_9b_flying_cannot_be_blocked_by_ground_creature():
     assert not ok
 
 
+@pytest.mark.cr("702.9b")
 def test_702_9b_flying_can_be_blocked_by_another_flier():
     flier = Permanent(card=_mk_creature("Flier", 2, 2, keywords=("Flying",)))
     blocker = Permanent(card=_mk_creature("Other Flier", 2, 2, keywords=("Flying",)))
@@ -160,6 +163,7 @@ def test_702_9b_flying_can_be_blocked_by_another_flier():
     assert ok
 
 
+@pytest.mark.cr("702.9b")
 def test_702_9b_flier_can_block_a_nonflier():
     """A creature with flying can block a creature with or without flying."""
     attacker = Permanent(card=_mk_creature("Ground Pounder", 2, 2))
@@ -176,6 +180,7 @@ def test_702_9b_flier_can_block_a_nonflier():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("702.17b")
 def test_702_17b_reach_can_block_a_flier():
     flier = Permanent(card=_mk_creature("Flier", 2, 2, keywords=("Flying",)))
     reacher = Permanent(card=_mk_creature("Spider", 2, 2, keywords=("Reach",)))
@@ -186,6 +191,7 @@ def test_702_17b_reach_can_block_a_flier():
     assert ok
 
 
+@pytest.mark.cr("702.17b")
 def test_702_17b_reach_alone_does_not_grant_evasion():
     """Reach lets you block fliers; it does not make the creature itself evasive."""
     reacher = Permanent(card=_mk_creature("Spider", 2, 2, keywords=("Reach",)))
@@ -202,6 +208,7 @@ def test_702_17b_reach_alone_does_not_grant_evasion():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("702.7b")
 def test_702_7_first_striker_kills_before_taking_damage():
     """702.7b: a first striker deals combat damage in a separate, earlier step.
     A 2/2 first striker kills an equal vanilla blocker before it can hit back."""
@@ -217,6 +224,7 @@ def test_702_7_first_striker_kills_before_taking_damage():
     assert p1.battlefield[0].damage_marked == 0
 
 
+@pytest.mark.cr("702.7b")
 def test_702_7_first_strike_real_card_black_knight(all_cards):
     bk = Permanent(card=_get(all_cards, "Black Knight"))  # 2/2 first strike
     blocker = Permanent(card=_mk_creature("Bear", 2, 2))
@@ -234,6 +242,7 @@ def test_702_7_first_strike_real_card_black_knight(all_cards):
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("702.4b")
 def test_702_4_double_strike_deals_damage_twice_to_player():
     """702.4: a double striker assigns combat damage in both the first-strike and
     the regular combat damage step — an unblocked 2/2 deals 4 to the defender."""
@@ -246,6 +255,7 @@ def test_702_4_double_strike_deals_damage_twice_to_player():
     assert p2.life == 16
 
 
+@pytest.mark.cr("702.4b")
 def test_702_4_double_strike_deals_two_rounds_to_blocker():
     ds = Permanent(card=_mk_creature("Double", 2, 2, keywords=("Double Strike",)))
     blocker = Permanent(card=_mk_creature("Wall", 0, 3))
@@ -263,6 +273,7 @@ def test_702_4_double_strike_deals_two_rounds_to_blocker():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("702.19b")
 def test_702_19b_trample_assigns_excess_to_player():
     trampler = Permanent(card=_mk_creature("Trampler", 4, 4, keywords=("Trample",)))
     blocker = Permanent(card=_mk_creature("Chump", 2, 2))
@@ -276,6 +287,7 @@ def test_702_19b_trample_assigns_excess_to_player():
     assert all(p.card.name != "Chump" for p in p2.battlefield)
 
 
+@pytest.mark.cr("510.1c")
 def test_702_19_no_trample_means_no_excess_to_player():
     attacker = Permanent(card=_mk_creature("Brute", 4, 4))
     blocker = Permanent(card=_mk_creature("Chump", 2, 2))
@@ -292,6 +304,7 @@ def test_702_19_no_trample_means_no_excess_to_player():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("702.2b")
 def test_702_2b_any_damage_from_deathtouch_is_lethal():
     deathtoucher = Permanent(card=_mk_creature("Viper", 1, 1, keywords=("Deathtouch",)))
     big = Permanent(card=_mk_creature("Giant", 5, 5))
@@ -303,6 +316,7 @@ def test_702_2b_any_damage_from_deathtouch_is_lethal():
     assert all(p.card.name != "Giant" for p in p2.battlefield)
 
 
+@pytest.mark.cr("702.2c", "702.19b")
 def test_702_2c_deathtouch_with_trample_assigns_one_then_tramples():
     """702.2c/702.19: with deathtouch, 1 damage is lethal, so a 4/4 deathtouch
     trampler need only assign 1 to a 3/3 blocker and tramples the other 3."""
@@ -324,12 +338,14 @@ def test_702_2c_deathtouch_with_trample_assigns_one_then_tramples():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("702.3b")
 def test_702_3b_defender_cannot_attack():
     wall = Permanent(card=_mk_creature("Wall", 0, 4, keywords=("Defender",)))
     game, _, _ = _game([wall], [])
     assert game.can_attack(wall, 1) is False
 
 
+@pytest.mark.cr("702.3b")
 def test_702_3b_defender_attack_declaration_rejected():
     wall = Permanent(card=_mk_creature("Wall", 0, 4, keywords=("Defender",)))
     game, _, _ = _game([wall], [])
@@ -343,6 +359,7 @@ def test_702_3b_defender_attack_declaration_rejected():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("702.20b")
 def test_702_20b_vigilance_does_not_tap_when_attacking():
     serra = Permanent(card=_mk_creature("Serra", 4, 4, keywords=("Vigilance",)))
     game, p1, _ = _game([serra], [])
@@ -352,6 +369,7 @@ def test_702_20b_vigilance_does_not_tap_when_attacking():
     assert p1.battlefield[0].tapped is False
 
 
+@pytest.mark.cr("508.1f")
 def test_702_20b_without_vigilance_attacking_taps():
     bear = Permanent(card=_mk_creature("Bear", 2, 2))
     game, p1, _ = _game([bear], [])
@@ -360,6 +378,7 @@ def test_702_20b_without_vigilance_attacking_taps():
     assert p1.battlefield[0].tapped is True
 
 
+@pytest.mark.cr("702.20b")
 def test_702_20b_serra_angel_real_card_keeps_untapped(all_cards):
     serra = Permanent(card=_get(all_cards, "Serra Angel"))
     game, p1, _ = _game([serra], [])
@@ -374,6 +393,7 @@ def test_702_20b_serra_angel_real_card_keeps_untapped(all_cards):
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("702.10b")
 def test_702_10b_haste_lets_a_summoning_sick_creature_attack():
     hasty = Permanent(card=_mk_creature("Raider", 2, 2, keywords=("Haste",)))
     game, p1, _ = _game([hasty], [])
@@ -383,6 +403,7 @@ def test_702_10b_haste_lets_a_summoning_sick_creature_attack():
     assert game.can_attack(hasty, 1) is True
 
 
+@pytest.mark.cr("302.6", "508.1a")
 def test_702_10b_without_haste_summoning_sick_cannot_attack():
     sick = Permanent(card=_mk_creature("Recruit", 2, 2))
     game, p1, _ = _game([sick], [])
@@ -397,6 +418,7 @@ def test_702_10b_without_haste_summoning_sick_cannot_attack():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("702.36b")
 def test_fear_cannot_be_blocked_by_plain_creature():
     sneak = Permanent(card=_mk_creature("Sneak", 2, 2, keywords=("Fear",)))
     plain = Permanent(card=_mk_creature("Plain", 2, 2))
@@ -406,6 +428,7 @@ def test_fear_cannot_be_blocked_by_plain_creature():
     assert not ok
 
 
+@pytest.mark.cr("702.36b")
 def test_fear_can_be_blocked_by_black_creature():
     sneak = Permanent(card=_mk_creature("Sneak", 2, 2, keywords=("Fear",)))
     black = Permanent(card=_mk_creature("Shade", 2, 2, colors=("B",)))
@@ -415,6 +438,7 @@ def test_fear_can_be_blocked_by_black_creature():
     assert ok
 
 
+@pytest.mark.cr("702.36b")
 def test_fear_can_be_blocked_by_artifact_creature():
     sneak = Permanent(card=_mk_creature("Sneak", 2, 2, keywords=("Fear",)))
     golem = Permanent(
@@ -431,6 +455,7 @@ def test_fear_can_be_blocked_by_artifact_creature():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("702.15b")
 def test_702_15b_lifelink_gains_life_on_player_damage():
     ll = Permanent(card=_mk_creature("Vampire", 3, 3, keywords=("Lifelink",)))
     game, p1, p2 = _game([ll], [], life=20)
@@ -442,6 +467,7 @@ def test_702_15b_lifelink_gains_life_on_player_damage():
     assert p1.life == 23  # controller gained 3
 
 
+@pytest.mark.cr("702.15b")
 def test_702_15b_lifelink_gains_life_when_blocking():
     attacker = Permanent(card=_mk_creature("Raider", 2, 2))
     ll_blocker = Permanent(card=_mk_creature("Cleric", 2, 2, keywords=("Lifelink",)))
@@ -454,6 +480,7 @@ def test_702_15b_lifelink_gains_life_when_blocking():
     assert p2.life == 22
 
 
+@pytest.mark.cr("702.15b", "702.19b")
 def test_702_15b_lifelink_on_trample_counts_all_damage_dealt():
     ll = Permanent(
         card=_mk_creature("Beast", 4, 4, keywords=("Lifelink", "Trample"))
@@ -474,6 +501,7 @@ def test_702_15b_lifelink_on_trample_counts_all_damage_dealt():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("702.18a")
 def test_702_18a_shroud_cannot_be_targeted_by_a_spell():
     bolt = _mk_instant("Bolt", "Bolt deals 3 damage to target creature.", colors=("R",))
     victim = Permanent(card=_mk_creature("Hidden One", 2, 3, keywords=("Shroud",)))
@@ -485,6 +513,7 @@ def test_702_18a_shroud_cannot_be_targeted_by_a_spell():
     assert p2.battlefield[0].damage_marked == 0  # spell did nothing
 
 
+@pytest.mark.cr("702.18a")
 def test_702_18a_shroud_blocks_even_your_own_spells():
     pump = _mk_instant("Pump", "Target creature gets +3/+3 until end of turn.", colors=("G",))
     own = Permanent(card=_mk_creature("Loner", 2, 2, keywords=("Shroud",)))
@@ -496,6 +525,7 @@ def test_702_18a_shroud_blocks_even_your_own_spells():
     assert p1.battlefield[0].effective_power == 2  # untargetable -> no buff
 
 
+@pytest.mark.cr("702.18a")
 def test_702_18a_a_creature_without_shroud_is_targetable():
     bolt = _mk_instant("Bolt", "Bolt deals 3 damage to target creature.", colors=("R",))
     victim = Permanent(card=_mk_creature("Open One", 2, 4))
@@ -512,6 +542,7 @@ def test_702_18a_a_creature_without_shroud_is_targetable():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("702.16f")
 def test_702_16f_protection_cannot_be_blocked_by_that_color(all_cards):
     """702.16f: an attacker with protection from white can't be blocked by white."""
     bk = Permanent(card=_get(all_cards, "Black Knight"))  # protection from white
@@ -523,6 +554,7 @@ def test_702_16f_protection_cannot_be_blocked_by_that_color(all_cards):
     assert not ok
 
 
+@pytest.mark.cr("702.16e")
 def test_702_16e_protection_prevents_damage_from_that_color(all_cards):
     """702.16e: damage from a white source to the Black Knight is prevented."""
     white_attacker = Permanent(card=_mk_creature("Crusader", 3, 3, colors=("W",)))
@@ -538,6 +570,7 @@ def test_702_16e_protection_prevents_damage_from_that_color(all_cards):
     assert survivor.damage_marked == 0
 
 
+@pytest.mark.cr("702.16b")
 def test_702_16b_protection_cannot_be_targeted_by_that_color(all_cards):
     white_bolt = _mk_instant(
         "Holy Light", "Holy Light deals 3 damage to target creature.", colors=("W",)
@@ -551,6 +584,7 @@ def test_702_16b_protection_cannot_be_targeted_by_that_color(all_cards):
     assert p2.battlefield[0].damage_marked == 0
 
 
+@pytest.mark.cr("702.16b")
 def test_702_16b_protection_does_not_stop_other_colors(all_cards):
     """Protection from white does not stop a red spell from killing the Knight."""
     red_bolt = _mk_instant(
@@ -566,6 +600,7 @@ def test_702_16b_protection_does_not_stop_other_colors(all_cards):
     assert all(p.card.name != "Black Knight" for p in p2.battlefield)
 
 
+@pytest.mark.cr("702.16f")
 def test_702_16_white_knight_protection_from_black(all_cards):
     """White Knight (protection from black) can't be blocked by a black creature."""
     wk = Permanent(card=_get(all_cards, "White Knight"))
@@ -593,6 +628,7 @@ def _mk_rampage(name: str, n: int, power: int = 3, toughness: int = 3) -> CardDe
     )
 
 
+@pytest.mark.cr("702.23a")
 def test_702_23a_rampage_buffs_per_blocker_beyond_the_first():
     ramp = Permanent(card=_mk_rampage("Rampager", 2, 3, 3))
     b1 = Permanent(card=_mk_creature("B1", 1, 1))
@@ -608,6 +644,7 @@ def test_702_23a_rampage_buffs_per_blocker_beyond_the_first():
     assert p1.battlefield[0].effective_toughness == 7
 
 
+@pytest.mark.cr("702.23a")
 def test_702_23a_rampage_no_bonus_with_a_single_blocker():
     ramp = Permanent(card=_mk_rampage("Rampager", 3, 3, 3))
     b1 = Permanent(card=_mk_creature("B1", 1, 1))
@@ -619,6 +656,7 @@ def test_702_23a_rampage_no_bonus_with_a_single_blocker():
     assert p1.battlefield[0].effective_toughness == 3
 
 
+@pytest.mark.cr("702.23a", "514.2")
 def test_702_23b_rampage_bonus_wears_off_end_of_turn():
     ramp = Permanent(card=_mk_rampage("Rampager", 2, 3, 3))
     b1 = Permanent(card=_mk_creature("B1", 1, 1))
@@ -637,6 +675,7 @@ def test_702_23b_rampage_bonus_wears_off_end_of_turn():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("702.25a")
 def test_702_25a_flanking_gives_blocker_minus_one_minus_one():
     flanker = Permanent(card=_mk_creature("Knight", 2, 2, keywords=("Flanking",)))
     blocker = Permanent(card=_mk_creature("Footman", 2, 2))
@@ -649,6 +688,7 @@ def test_702_25a_flanking_gives_blocker_minus_one_minus_one():
     assert survivor.effective_toughness == 1
 
 
+@pytest.mark.cr("702.25a", "704.5f")
 def test_702_25a_flanking_kills_an_x_1_blocker_outright():
     flanker = Permanent(card=_mk_creature("Knight", 2, 2, keywords=("Flanking",)))
     weakling = Permanent(card=_mk_creature("Goblin", 1, 1))
@@ -660,6 +700,7 @@ def test_702_25a_flanking_kills_an_x_1_blocker_outright():
     assert all(p.card.name != "Goblin" for p in p2.battlefield)
 
 
+@pytest.mark.cr("702.25a")
 def test_702_25a_flanking_does_not_debuff_another_flanker():
     flanker = Permanent(card=_mk_creature("Knight", 2, 2, keywords=("Flanking",)))
     other = Permanent(card=_mk_creature("Rival", 2, 2, keywords=("Flanking",)))
@@ -687,6 +728,7 @@ def test_702_25a_flanking_does_not_debuff_another_flanker():
         ("Forestwalk", "Forest"),
     ],
 )
+@pytest.mark.cr("702.14c")
 def test_702_14c_landwalk_is_unblockable_when_defender_has_that_land(walk_keyword, land_subtype):
     walker = Permanent(card=_mk_creature("Walker", 2, 2, keywords=(walk_keyword,)))
     blocker = Permanent(card=_mk_creature("Guard", 2, 2))
@@ -708,6 +750,7 @@ def test_702_14c_landwalk_is_unblockable_when_defender_has_that_land(walk_keywor
         ("Forestwalk", "Forest"),
     ],
 )
+@pytest.mark.cr("702.14c")
 def test_702_14c_landwalk_is_blockable_without_that_land(walk_keyword, land_subtype):
     walker = Permanent(card=_mk_creature("Walker", 2, 2, keywords=(walk_keyword,)))
     blocker = Permanent(card=_mk_creature("Guard", 2, 2))
@@ -721,6 +764,7 @@ def test_702_14c_landwalk_is_blockable_without_that_land(walk_keyword, land_subt
     assert ok
 
 
+@pytest.mark.cr("702.14c")
 def test_702_14_real_card_forestwalk(all_cards):
     """Jungle Lion-style — use an Alpha card with forestwalk if present."""
     forestwalker = next(
@@ -757,6 +801,7 @@ def _mk_bander(name: str, power: int = 1, toughness: int = 1) -> CardDefinition:
     return _mk_creature(name, power, toughness, keywords=("Banding",))
 
 
+@pytest.mark.cr("702.22a")
 def test_702_22a_banding_keyword_is_recognized(all_cards):
     """702.22a: banding is a static ability, recognized on the Alpha banders."""
     for name in ("Benalish Hero", "Mesa Pegasus", "Timber Wolves"):
@@ -768,6 +813,7 @@ def test_702_22a_banding_keyword_is_recognized(all_cards):
 # --- 702.22c: band declaration legality --------------------------------------
 
 
+@pytest.mark.cr("702.22c")
 def test_702_22c_valid_band_of_bander_plus_one_nonbander():
     bander = Permanent(card=_mk_bander("Bander"))
     ally = Permanent(card=_mk_creature("Ally", 2, 2))
@@ -778,6 +824,7 @@ def test_702_22c_valid_band_of_bander_plus_one_nonbander():
     assert game.combat_bands == [[0, 1]]
 
 
+@pytest.mark.cr("702.22c")
 def test_702_22c_band_with_two_nonbanders_is_illegal():
     bander = Permanent(card=_mk_bander("Bander"))
     a = Permanent(card=_mk_creature("A", 2, 2))
@@ -788,6 +835,7 @@ def test_702_22c_band_with_two_nonbanders_is_illegal():
     assert not ok
 
 
+@pytest.mark.cr("702.22c")
 def test_702_22c_band_without_a_bander_is_illegal():
     a = Permanent(card=_mk_creature("A", 2, 2))
     b = Permanent(card=_mk_creature("B", 2, 2))
@@ -797,6 +845,7 @@ def test_702_22c_band_without_a_bander_is_illegal():
     assert not ok
 
 
+@pytest.mark.cr("702.22c")
 def test_702_22c_two_or_more_banders_may_band_together():
     b1 = Permanent(card=_mk_bander("B1"))
     b2 = Permanent(card=_mk_bander("B2"))
@@ -806,6 +855,7 @@ def test_702_22c_two_or_more_banders_may_band_together():
     assert ok, msg
 
 
+@pytest.mark.cr("702.22c")
 def test_702_22c_creature_cannot_be_in_two_bands():
     bander = Permanent(card=_mk_bander("Bander"))
     b2 = Permanent(card=_mk_bander("Bander2"))
@@ -816,6 +866,7 @@ def test_702_22c_creature_cannot_be_in_two_bands():
     assert not ok
 
 
+@pytest.mark.cr("702.22c")
 def test_702_22c_band_member_must_be_an_attacker():
     bander = Permanent(card=_mk_bander("Bander"))
     ally = Permanent(card=_mk_creature("Ally", 2, 2))
@@ -828,6 +879,7 @@ def test_702_22c_band_member_must_be_an_attacker():
 # --- 702.22d: all creatures in a band attack the same player -----------------
 
 
+@pytest.mark.cr("702.22d")
 def test_702_22d_band_members_attack_the_same_player():
     bander = Permanent(card=_mk_bander("Bander"))
     ally = Permanent(card=_mk_creature("Ally", 2, 2))
@@ -843,6 +895,7 @@ def test_702_22d_band_members_attack_the_same_player():
 # --- 702.22e: a band lasts the rest of combat even if banding is removed ------
 
 
+@pytest.mark.cr("702.22e", "702.22h")
 def test_702_22e_band_persists_after_banding_is_removed():
     # The bander has banding only via a temporary grant; once declared, the band
     # must keep functioning even after the grant is gone (block still propagates).
@@ -865,6 +918,7 @@ def test_702_22e_band_persists_after_banding_is_removed():
 # --- 702.22f: an attacker removed from combat is removed from its band --------
 
 
+@pytest.mark.cr("702.22f")
 def test_702_22f_removed_member_is_dropped_from_band():
     b1 = Permanent(card=_mk_bander("B1"))
     b2 = Permanent(card=_mk_bander("B2"))
@@ -878,6 +932,7 @@ def test_702_22f_removed_member_is_dropped_from_band():
     assert game.combat_bands == [[0, 1]]
 
 
+@pytest.mark.cr("702.22f")
 def test_702_22f_band_dissolves_when_it_falls_below_two_members():
     bander = Permanent(card=_mk_bander("Bander"))
     ally = Permanent(card=_mk_creature("Ally", 2, 2))
@@ -892,6 +947,7 @@ def test_702_22f_band_dissolves_when_it_falls_below_two_members():
 # --- 702.22g: banding doesn't share or grant abilities -----------------------
 
 
+@pytest.mark.cr("702.22g")
 def test_702_22g_banding_does_not_share_abilities():
     flyer = Permanent(card=_mk_creature("Flyer", 2, 2, keywords=("Flying",)))
     bander = Permanent(card=_mk_bander("Bander"))
@@ -906,6 +962,7 @@ def test_702_22g_banding_does_not_share_abilities():
 # --- 702.22h/i: blocking one band member blocks the whole band ---------------
 
 
+@pytest.mark.cr("702.22h")
 def test_702_22h_block_propagates_to_the_whole_band():
     beater = Permanent(card=_mk_creature("Beater", 3, 3))
     bander = Permanent(card=_mk_bander("Bander"))
@@ -921,6 +978,7 @@ def test_702_22h_block_propagates_to_the_whole_band():
     assert game.combat_band_blocks.get(1) == [0]
 
 
+@pytest.mark.cr("702.22k", "702.22h")
 def test_702_22k_active_player_routes_shared_blockers_damage_to_save_the_beater():
     """702.22h + 702.22k: a band forces the lone blocker to block the whole band,
     and the active player assigns that blocker's damage onto the expendable bander,
@@ -943,6 +1001,7 @@ def test_702_22k_active_player_routes_shared_blockers_damage_to_save_the_beater(
     assert all(p.card.name != "Blocker" for p in p2.battlefield)     # 3+1 killed blocker
 
 
+@pytest.mark.cr("702.22k", "510.1d")
 def test_702_22k_without_redirect_blocker_damage_hits_the_blocked_creature():
     """Contrast: with no 702.22k redirect, the shared blocker damages the creature
     it was declared against — the beater — which then dies."""
@@ -962,6 +1021,7 @@ def test_702_22k_without_redirect_blocker_damage_hits_the_blocked_creature():
 # --- 702.22j: the defender assigns damage of an attacker blocked by a bander --
 
 
+@pytest.mark.cr("702.22j")
 def test_702_22j_defender_assigns_banding_blocked_attacker_damage_to_save_a_blocker():
     """702.22j: because a creature with banding is among the blockers, the defending
     player chooses how the attacker's combat damage is split. The defender dumps it
@@ -987,6 +1047,7 @@ def test_702_22j_defender_assigns_banding_blocked_attacker_damage_to_save_a_bloc
     assert all(p.card.name != "Ogre" for p in p1.battlefield)     # Ogre took 1+2=3
 
 
+@pytest.mark.cr("702.22j", "510.1e")
 def test_702_22j_defender_must_assign_all_of_the_attackers_damage():
     attacker = Permanent(card=_mk_creature("Ogre", 3, 3))
     bander = Permanent(card=_mk_bander("Bander", 1, 1))
@@ -1003,6 +1064,7 @@ def test_702_22j_defender_must_assign_all_of_the_attackers_damage():
     assert "all" in msg
 
 
+@pytest.mark.cr("702.22j")
 def test_702_22j_only_the_defending_player_may_assign_banding_damage():
     attacker = Permanent(card=_mk_creature("Ogre", 3, 3))
     bander = Permanent(card=_mk_bander("Bander", 1, 1))
@@ -1017,6 +1079,7 @@ def test_702_22j_only_the_defending_player_may_assign_banding_damage():
     assert not ok
 
 
+@pytest.mark.cr("702.22j")
 def test_702_22j_assignment_rejected_when_no_banding_blocker_present():
     attacker = Permanent(card=_mk_creature("Ogre", 3, 3))
     v1 = Permanent(card=_mk_creature("V1", 2, 2))
@@ -1033,6 +1096,7 @@ def test_702_22j_assignment_rejected_when_no_banding_blocker_present():
 # --- real Alpha banders + the grant-banding ability --------------------------
 
 
+@pytest.mark.cr("702.22h", "702.22k")
 def test_702_22_real_band_with_timber_wolves(all_cards):
     """Timber Wolves (1/1 banding) bands with a beater; blocking the beater blocks
     the whole band, and the active player routes the blocker's damage to the wolves."""
@@ -1051,6 +1115,7 @@ def test_702_22_real_band_with_timber_wolves(all_cards):
     assert all(p.card.name != "Blocker" for p in p2.battlefield)
 
 
+@pytest.mark.cr("702.22a")
 def test_702_22_normal_combat_with_a_lone_bander_is_unchanged(all_cards):
     """A banding creature attacking alone fights exactly like a vanilla creature."""
     hero = Permanent(card=_get(all_cards, "Benalish Hero"))  # 1/1 banding
@@ -1063,6 +1128,7 @@ def test_702_22_normal_combat_with_a_lone_bander_is_unchanged(all_cards):
     assert all(p.card.name != "Benalish Hero" for p in p1.battlefield)
 
 
+@pytest.mark.cr("702.22c")
 def test_grant_banding_until_end_of_turn_lets_a_creature_band():
     """The "target creature gains banding until end of turn" ability grants banding,
     so the creature can be the banding member of a band that same combat."""

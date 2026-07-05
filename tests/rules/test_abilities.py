@@ -81,6 +81,7 @@ def _get(all_cards, name: str) -> CardDefinition:
 # everything before the colon and must be paid by the activating player.
 
 
+@pytest.mark.cr("602.1a")
 def test_602_1a_activation_cost_is_everything_before_the_colon():
     """The activation cost is everything before the colon — here two generic mana
     plus tapping the permanent (602.1a)."""
@@ -90,6 +91,7 @@ def test_602_1a_activation_cost_is_everything_before_the_colon():
     assert cost.requires_tap is True
 
 
+@pytest.mark.cr("602.1a")
 def test_602_1a_colored_mana_in_activation_cost_is_parsed():
     """Colored symbols in the cost are tracked individually (602.1a)."""
     cost = parse_activated_ability_cost("{R}{R}: This creature gets +1/+0 until end of turn.")
@@ -98,6 +100,7 @@ def test_602_1a_colored_mana_in_activation_cost_is_parsed():
     assert cost.requires_tap is False
 
 
+@pytest.mark.cr("602.1")
 def test_602_1_ability_has_a_cost_and_an_effect():
     """A compiled activated ability carries both a cost and an effect
     instruction (602.1)."""
@@ -115,6 +118,7 @@ def test_602_1_ability_has_a_cost_and_an_effect():
 # only the object's controller may activate it.
 
 
+@pytest.mark.cr("602.2a")
 def test_602_2a_nonmana_ability_is_put_on_the_stack():
     """Activating a non-mana ability puts it on the stack as a new object
     (602.2a). queue defers resolution so the stack item is observable."""
@@ -132,6 +136,7 @@ def test_602_2a_nonmana_ability_is_put_on_the_stack():
     assert p2.life == 20
 
 
+@pytest.mark.cr("602.2a")
 def test_602_2a_stack_ability_resolves_and_applies_its_effect():
     """When the ability on the stack resolves, its effect is applied (602.2a)."""
     cannon = _mk_card("Cannon", "Artifact", "{T}: Cannon deals 1 damage to any target.")
@@ -146,6 +151,7 @@ def test_602_2a_stack_ability_resolves_and_applies_its_effect():
     assert p2.life == 19
 
 
+@pytest.mark.cr("602.2")
 def test_602_2_only_the_controller_can_activate_the_ability():
     """Only the permanent's controller can activate its ability (602.2). The
     opponent cannot reach into the controller's battlefield to do so."""
@@ -159,6 +165,7 @@ def test_602_2_only_the_controller_can_activate_the_ability():
         game.activate_permanent_ability(1, "Cannon", target_player_index=0)
 
 
+@pytest.mark.cr("602.1a", "602.2b")
 def test_602_2_activating_an_ability_taps_the_permanent_for_its_cost():
     """Paying a {T} cost taps the permanent (602.1a/602.2b)."""
     cannon = _mk_card("Cannon", "Artifact", "{T}: Cannon deals 1 damage to any target.")
@@ -175,6 +182,7 @@ def test_602_2_activating_an_ability_taps_the_permanent_for_its_cost():
 # 602.2b — the cost (including a mana payment) must actually be paid.
 
 
+@pytest.mark.cr("602.2b")
 def test_602_2b_mana_cost_is_paid_from_the_pool():
     """Activating an ability deducts its mana cost from the controller's pool
     (602.2b — the activation-cost analog of a spell's mana payment)."""
@@ -190,6 +198,7 @@ def test_602_2b_mana_cost_is_paid_from_the_pool():
     assert p2.life == 19
 
 
+@pytest.mark.cr("602.2b")
 def test_602_2b_ability_is_illegal_without_enough_mana():
     """If the activation cost can't be paid, the activation is illegal and the
     game returns to before it began (602.2/602.2b) — no effect, no tap-only loss."""
@@ -211,6 +220,7 @@ def test_602_2b_ability_is_illegal_without_enough_mana():
 # creature's {T} ability needs control since the start of the most recent turn.
 
 
+@pytest.mark.cr("602.5a")
 def test_602_5a_summoning_sick_creature_cannot_use_a_tap_ability():
     """A creature that hasn't been controlled since the start of its controller's
     most recent turn can't activate an ability with {T} in its cost (602.5a)."""
@@ -229,6 +239,7 @@ def test_602_5a_summoning_sick_creature_cannot_use_a_tap_ability():
     assert p1.mana_pool.get("G", 0) == 0
 
 
+@pytest.mark.cr("602.5a", "702.10c")
 def test_602_5a_haste_creature_ignores_summoning_sickness():
     """A creature with haste ignores 602.5a and may use its {T} ability the turn
     it enters (702.10)."""
@@ -246,6 +257,7 @@ def test_602_5a_haste_creature_ignores_summoning_sickness():
     assert p1.mana_pool.get("G", 0) == 1
 
 
+@pytest.mark.cr("602.5a")
 def test_602_5a_creature_controlled_since_turn_start_can_tap():
     """Once a creature has been under its controller's control since the start of
     their most recent turn, its {T} ability is legal (602.5a)."""
@@ -264,6 +276,7 @@ def test_602_5a_creature_controlled_since_turn_start_can_tap():
     assert p1.mana_pool.get("G", 0) == 1
 
 
+@pytest.mark.cr("602.5")
 def test_602_5_already_tapped_permanent_cannot_pay_a_tap_cost():
     """A permanent that's already tapped can't pay a {T} cost, so the ability
     can't be activated (602.5)."""
@@ -286,6 +299,7 @@ def test_602_5_already_tapped_permanent_cannot_pay_a_tap_cost():
 # times and prevent activation when their condition isn't met (602.1b).
 
 
+@pytest.mark.cr("602.1b")
 def test_602_1b_timing_restriction_blocks_activation_outside_its_window():
     """An "Activate only during your upkeep" instruction prevents activation
     during the main phase (602.1b — activation instructions function at all
@@ -303,6 +317,7 @@ def test_602_1b_timing_restriction_blocks_activation_outside_its_window():
     assert p1.life == 20
 
 
+@pytest.mark.cr("602.1b")
 def test_602_1b_timing_restriction_allows_activation_in_its_window():
     """The same ability is legal during the controller's upkeep (602.1b)."""
     tome = _mk_card("Tome", "Artifact", "{T}: You gain 1 life. Activate only during your upkeep.")
@@ -326,6 +341,7 @@ def test_602_1b_timing_restriction_allows_activation_in_its_window():
 # 603.1 — triggered abilities are "[When/Whenever/At] [condition], [effect]."
 
 
+@pytest.mark.cr("603.1")
 def test_603_1_triggered_ability_has_a_condition_and_an_effect():
     """A compiled triggered ability splits into a trigger condition and an
     effect instruction (603.1)."""
@@ -344,6 +360,7 @@ def test_603_1_triggered_ability_has_a_condition_and_an_effect():
 # step begins, "at the beginning of" abilities trigger.
 
 
+@pytest.mark.cr("603.2b")
 def test_603_2b_upkeep_trigger_fires_when_the_step_begins():
     """An "at the beginning of each upkeep" ability triggers when the upkeep step
     begins (603.2b)."""
@@ -358,6 +375,7 @@ def test_603_2b_upkeep_trigger_fires_when_the_step_begins():
     assert p2.life == 20
 
 
+@pytest.mark.cr("603.2")
 def test_603_2_trigger_fires_on_each_players_upkeep():
     """"At the beginning of each upkeep" fires whenever any player's upkeep
     begins (603.2) — here on the second player's upkeep too."""
@@ -372,6 +390,7 @@ def test_603_2_trigger_fires_on_each_players_upkeep():
     assert p1.life == 20
 
 
+@pytest.mark.cr("603.2")
 def test_603_2_dies_trigger_fires_when_a_creature_dies():
     """A "whenever a creature dies" ability triggers automatically when a
     creature is put into a graveyard from the battlefield (603.2)."""
@@ -403,6 +422,7 @@ def test_603_2_dies_trigger_fires_when_a_creature_dies():
 # on resolution. Here the choice is gated on being able to pay the optional cost.
 
 
+@pytest.mark.cr("603.5")
 def test_603_5_optional_trigger_is_skipped_when_the_cost_cannot_be_paid():
     """An optional "you may pay {2}" rider does nothing if the controller can't
     pay — the trigger still happened, but the option isn't taken (603.5)."""
@@ -430,6 +450,7 @@ def test_603_5_optional_trigger_is_skipped_when_the_cost_cannot_be_paid():
 # untapped" when the draw step begins.
 
 
+@pytest.mark.cr("603.4")
 def test_603_4_intervening_if_true_applies_the_effect(all_cards):
     """Howling Mine's intervening "if this artifact is untapped" is satisfied, so
     the active player draws an additional card on their draw step (603.4)."""
@@ -447,6 +468,7 @@ def test_603_4_intervening_if_true_applies_the_effect(all_cards):
     assert len(p1.hand) - before == 2  # normal draw + Howling Mine's extra
 
 
+@pytest.mark.cr("603.4")
 def test_603_4_intervening_if_false_does_nothing(all_cards):
     """When Howling Mine is tapped the intervening "if" is false, so only the
     normal draw happens — the ability is removed and does nothing (603.4)."""
@@ -473,6 +495,7 @@ def test_603_4_intervening_if_false_does_nothing(all_cards):
 # that lasts as long as the permanent stays on the battlefield with the ability.
 
 
+@pytest.mark.cr("604.1", "604.2")
 def test_604_1_static_buff_applies_continuously_while_on_battlefield(all_cards):
     """Crusade ("White creatures get +1/+1") continuously buffs white creatures
     as long as it's on the battlefield (604.1/604.2)."""
@@ -500,6 +523,7 @@ def test_604_1_static_buff_applies_continuously_while_on_battlefield(all_cards):
     assert creature_perm.effective_toughness == base_power + 1
 
 
+@pytest.mark.cr("604.2")
 def test_604_2_static_buff_disappears_when_the_source_leaves(all_cards):
     """The continuous effect ends the moment Crusade leaves the battlefield —
     static abilities aren't locked in (604.2)."""
@@ -529,6 +553,7 @@ def test_604_2_static_buff_disappears_when_the_source_leaves(all_cards):
     assert creature_perm.effective_power == base_power
 
 
+@pytest.mark.cr("604.1")
 def test_604_2_static_buff_only_applies_to_matching_creatures(all_cards):
     """Crusade buffs only white creatures — a non-white creature is unaffected
     (604.1, the effect's own selection criteria)."""
@@ -561,6 +586,7 @@ def test_604_2_static_buff_only_applies_to_matching_creatures(all_cards):
 # mana ability.
 
 
+@pytest.mark.cr("605.1a")
 def test_605_1a_tap_for_mana_is_a_mana_ability():
     """"{T}: Add {G}." is compiled as a mana-producing ability (605.1a)."""
     elf = _mk_card("Llanowar Elves", "Creature — Elf", "{T}: Add {G}.")
@@ -573,6 +599,7 @@ def test_605_1a_tap_for_mana_is_a_mana_ability():
     assert ability.cost.requires_tap is True
 
 
+@pytest.mark.cr("605.2")
 def test_605_2_remains_a_mana_ability_even_if_it_cannot_produce_now():
     """A conditional mana ability is still a mana ability even when the game
     state means it would produce nothing (605.2)."""
@@ -589,6 +616,7 @@ def test_605_2_remains_a_mana_ability_even_if_it_cannot_produce_now():
 # 605.3b — a mana ability doesn't go on the stack; it resolves immediately.
 
 
+@pytest.mark.cr("605.3b")
 def test_605_3b_mana_ability_does_not_use_the_stack():
     """Activating a mana ability adds the mana immediately without ever placing
     an object on the stack (605.3b)."""
@@ -608,6 +636,7 @@ def test_605_3b_mana_ability_does_not_use_the_stack():
     assert p1.mana_pool.get("G", 0) == 1
 
 
+@pytest.mark.cr("605.3", "602.1a")
 def test_605_3b_mana_ability_taps_its_source():
     """The {T} part of a mana ability's cost still taps the source (605.3/602.1a)."""
     elf = _mk_card("Llanowar Elves", "Creature — Elf", "{T}: Add {G}.")
@@ -629,6 +658,7 @@ def test_605_3b_mana_ability_taps_its_source():
 # tapped, so a second activation can't pay the cost.
 
 
+@pytest.mark.cr("605.3c")
 def test_605_3c_mana_ability_cannot_be_activated_twice_without_untapping():
     """After a {T} mana ability resolves, the now-tapped source can't pay the tap
     cost again until it untaps (605.3c)."""
@@ -654,6 +684,7 @@ def test_605_3c_mana_ability_cannot_be_activated_twice_without_untapping():
 # ===========================================================================
 
 
+@pytest.mark.cr("606.1", "606.2")
 def test_606_lea_has_no_planeswalkers_or_loyalty_abilities(all_cards):
     """Loyalty abilities belong to planeswalkers (606.2). Limited Edition Alpha
     predates planeswalkers, so the set contains none — there are no loyalty
@@ -670,6 +701,7 @@ def test_606_lea_has_no_planeswalkers_or_loyalty_abilities(all_cards):
 # ===========================================================================
 
 
+@pytest.mark.cr("607.1", "607.2c")
 def test_607_linked_abilities_act_on_the_object_they_affected(all_cards):
     """Animate Dead's reanimation ability and its leaves-the-battlefield ability
     are linked: the second refers to the creature put onto the battlefield by the
@@ -691,6 +723,7 @@ def test_607_linked_abilities_act_on_the_object_they_affected(all_cards):
     assert all(card.name != "Reanimated Bear" for card in p1.graveyard)
 
 
+@pytest.mark.cr("607.1", "607.2a")
 def test_607_linked_exile_and_return_reference_the_same_card():
     """A pair of linked abilities — one exiling a card, one returning "the exiled
     card" — keeps the second referring to what the first acted on (607.1/607.2a).

@@ -60,6 +60,7 @@ def _run_combat(game: Game, attacker_indices: list[int], blocker_dict: dict[int,
 # Rule 704.5a – If a player has 0 or less life, that player loses the game.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("704.5a")
 def test_704_5a_player_life_reduced_to_zero_condition_met():
     """704.5a: A player whose life is reduced to exactly 0 meets the state-based loss condition."""
     spell = _mk_card("Drain Life", "Sorcery", "Target player loses 20 life.")
@@ -72,6 +73,7 @@ def test_704_5a_player_life_reduced_to_zero_condition_met():
     assert p2.life <= 0
 
 
+@pytest.mark.cr("704.5a")
 def test_704_5a_player_life_pushed_below_zero_condition_met():
     """704.5a: Excess damage pushes life below 0; the rule condition is still met."""
     spell = _mk_card("Dark Ritual Drain", "Sorcery", "Target player loses 5 life.")
@@ -84,12 +86,14 @@ def test_704_5a_player_life_pushed_below_zero_condition_met():
     assert p2.life < 0
 
 
+@pytest.mark.cr("704.5a")
 def test_704_5a_player_above_zero_life_does_not_meet_loss_condition():
     """704.5a: A player with positive life does not meet the 704.5a loss condition."""
     p1 = PlayerState(name="P1", life=1)
     assert p1.life > 0
 
 
+@pytest.mark.cr("704.5a", "104.3b")
 def test_704_5a_player_formally_loses_game_at_zero_life():
     """704.5a: A player with 0 or less life should formally lose the game."""
     spell = _mk_card("Lethal Drain", "Sorcery", "Target player loses 20 life.")
@@ -109,6 +113,7 @@ def test_704_5a_player_formally_loses_game_at_zero_life():
 # player loses the game.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("704.5b", "121.4")
 def test_704_5b_draw_from_empty_library_returns_zero_cards():
     """704.5b: Attempting to draw from an empty library draws 0 cards."""
     p1 = PlayerState(name="P1", library=[])
@@ -117,6 +122,7 @@ def test_704_5b_draw_from_empty_library_returns_zero_cards():
     assert len(p1.hand) == 0
 
 
+@pytest.mark.cr("704.5b", "121.4")
 def test_704_5b_draw_from_empty_library_leaves_hand_unchanged():
     """704.5b: An empty-library draw attempt does not alter the player's hand size."""
     existing_card = _mk_card("Forest", "Basic Land — Forest")
@@ -125,6 +131,7 @@ def test_704_5b_draw_from_empty_library_leaves_hand_unchanged():
     assert len(p1.hand) == 1
 
 
+@pytest.mark.cr("704.5b")
 def test_704_5b_successful_draw_from_non_empty_library():
     """704.5b: Drawing from a library with cards succeeds; no loss condition is triggered."""
     card = _mk_card("Plains", "Basic Land — Plains")
@@ -135,6 +142,7 @@ def test_704_5b_successful_draw_from_non_empty_library():
     assert len(p1.library) == 0
 
 
+@pytest.mark.cr("704.5b", "121.4")
 def test_704_5b_drawing_from_empty_library_causes_player_to_lose():
     """704.5b: A player who attempts to draw from an empty library loses the game."""
     draw_spell = _mk_card("Draw Spell", "Sorcery", "Target player draws a card.")
@@ -152,6 +160,7 @@ def test_704_5b_drawing_from_empty_library_causes_player_to_lose():
 # loses the game.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("704.5c")
 def test_704_5c_ten_poison_counters_cause_player_to_lose():
     """704.5c: A player with 10 or more poison counters loses the game."""
     p1 = PlayerState(name="P1")
@@ -162,6 +171,7 @@ def test_704_5c_ten_poison_counters_cause_player_to_lose():
     assert p2.lost
 
 
+@pytest.mark.cr("704.5c")
 def test_704_5c_player_state_has_poison_counter_field():
     """704.5c: PlayerState now tracks poison_counters, defaulting to 0."""
     p1 = PlayerState(name="P1")
@@ -174,6 +184,7 @@ def test_704_5c_player_state_has_poison_counter_field():
 # ceases to exist.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("704.5d")
 def test_704_5d_token_destroyed_does_not_enter_graveyard():
     """704.5d: A token destroyed in combat ceases to exist instead of entering the graveyard."""
     token_card = _mk_creature("Saproling", 1, 1)
@@ -195,6 +206,7 @@ def test_704_5d_token_destroyed_does_not_enter_graveyard():
 # it ceases to exist.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("704.5e")
 def test_704_5e_countered_spell_copy_ceases_to_exist_instead_of_going_to_graveyard(cards):
     """704.5e: A copy of a spell (Fork) that is countered before it resolves ceases to
     exist — it has no physical card, so it must not be placed into any graveyard.
@@ -238,6 +250,7 @@ def test_704_5e_countered_spell_copy_ceases_to_exist_instead_of_going_to_graveya
 # owner's graveyard. Regeneration can't replace this event.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("704.5f")
 def test_704_5f_creature_debuffed_to_zero_toughness_meets_condition():
     """704.5f: A creature whose effective toughness reaches 0 via a debuff meets the condition."""
     creature = _mk_creature("Fragile Creature", 1, 1)
@@ -245,6 +258,7 @@ def test_704_5f_creature_debuffed_to_zero_toughness_meets_condition():
     assert perm.effective_toughness == 0
 
 
+@pytest.mark.cr("704.5f")
 def test_704_5f_creature_debuffed_to_negative_toughness_meets_condition():
     """704.5f: A creature whose effective toughness goes below 0 also meets the condition."""
     creature = _mk_creature("Glass Creature", 2, 1)
@@ -252,6 +266,7 @@ def test_704_5f_creature_debuffed_to_negative_toughness_meets_condition():
     assert perm.effective_toughness < 0
 
 
+@pytest.mark.cr("704.5f")
 def test_704_5f_creature_debuffed_to_zero_toughness_goes_to_graveyard():
     """704.5f: A creature whose toughness is reduced to 0 by a continuous effect is put
     into its owner's graveyard."""
@@ -272,6 +287,7 @@ def test_704_5f_creature_debuffed_to_zero_toughness_goes_to_graveyard():
     assert any(c.name == "Weakling" for c in p2.graveyard)
 
 
+@pytest.mark.cr("704.5f")
 def test_704_5f_regeneration_cannot_save_creature_with_zero_toughness():
     """704.5f: Regeneration cannot replace the 704.5f state-based action — a creature with
     toughness 0 or less goes to the graveyard regardless of regeneration shields."""
@@ -300,6 +316,7 @@ def test_704_5f_regeneration_cannot_save_creature_with_zero_toughness():
 # destroyed. Regeneration can replace this event.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("704.5g")
 def test_704_5g_creature_receiving_lethal_combat_damage_goes_to_graveyard():
     """704.5g: A creature that blocks and receives damage equal to its toughness is destroyed."""
     attacker = _mk_creature("Grizzly Bears", 2, 2)
@@ -314,6 +331,7 @@ def test_704_5g_creature_receiving_lethal_combat_damage_goes_to_graveyard():
     assert any(c.name == "Eager Cadet" for c in p2.graveyard)
 
 
+@pytest.mark.cr("704.5g")
 def test_704_5g_both_creatures_destroyed_when_each_deals_lethal_damage():
     """704.5g: When a 2/2 trades with a 2/2, both are destroyed simultaneously."""
     attacker = _mk_creature("Attacker Bear", 2, 2)
@@ -330,6 +348,7 @@ def test_704_5g_both_creatures_destroyed_when_each_deals_lethal_damage():
     assert any(c.name == "Blocker Bear" for c in p2.graveyard)
 
 
+@pytest.mark.cr("704.5g")
 def test_704_5g_creature_below_lethal_threshold_survives():
     """704.5g: A creature that receives damage less than its toughness is not destroyed."""
     attacker = _mk_creature("Tiny Attacker", 1, 1)
@@ -345,6 +364,7 @@ def test_704_5g_creature_below_lethal_threshold_survives():
     assert not any(c.name == "Stout Blocker" for c in p2.graveyard)
 
 
+@pytest.mark.cr("704.5g")
 def test_704_5g_creature_with_excess_lethal_damage_still_destroyed():
     """704.5g: A creature receiving far more damage than its toughness is still destroyed."""
     attacker = _mk_creature("Giant", 10, 10)
@@ -359,6 +379,7 @@ def test_704_5g_creature_with_excess_lethal_damage_still_destroyed():
     assert any(c.name == "Goblin" for c in p2.graveyard)
 
 
+@pytest.mark.cr("704.5g", "701.19a")
 def test_704_5g_regeneration_replaces_destruction_from_lethal_damage():
     """704.5g: Regeneration can replace the destruction event — the creature survives tapped
     with damage cleared."""
@@ -379,6 +400,7 @@ def test_704_5g_regeneration_replaces_destruction_from_lethal_damage():
     assert surviving.damage_marked == 0
 
 
+@pytest.mark.cr("704.5g")
 def test_704_5g_creature_with_non_lethal_damage_remains_on_battlefield():
     """704.5g: A creature that received damage less than its toughness stays on the
     battlefield; 704.5g is not triggered because the threshold is not met."""
@@ -402,6 +424,7 @@ def test_704_5g_creature_with_non_lethal_damage_remains_on_battlefield():
 # this event.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("704.5h")
 def test_704_5h_deathtouch_source_destroys_with_one_damage():
     """704.5h: A creature dealt any amount of damage by a deathtouch source is destroyed,
     even if that damage is less than the creature's toughness."""
@@ -419,6 +442,7 @@ def test_704_5h_deathtouch_source_destroys_with_one_damage():
     assert any(c.name == "Armored Titan" for c in p2.graveyard)
 
 
+@pytest.mark.cr("704.5h", "701.19a")
 def test_704_5h_regeneration_replaces_deathtouch_destruction():
     """704.5h: Regeneration can replace the destruction caused by deathtouch damage."""
     deathtouch_card = _mk_creature("Deathtouch Creature", 1, 1, oracle_text="Deathtouch")
@@ -446,6 +470,7 @@ def test_704_5h_regeneration_replaces_deathtouch_destruction():
 # graveyard.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("704.5i")
 def test_704_5i_planeswalker_type_line_recognized():
     """704.5i: Cards with 'Planeswalker' in the type line are identified as planeswalkers."""
     walker = CardDefinition(
@@ -463,6 +488,7 @@ def test_704_5i_planeswalker_type_line_recognized():
     assert "Planeswalker" in walker.type_line
 
 
+@pytest.mark.cr("704.5i")
 def test_704_5i_planeswalker_with_zero_loyalty_goes_to_graveyard():
     """704.5i: A planeswalker with 0 loyalty is put into its owner's graveyard."""
     walker_card = CardDefinition(
@@ -493,6 +519,7 @@ def test_704_5i_planeswalker_with_zero_loyalty_goes_to_graveyard():
 # rest are put into their owners' graveyards. ("The legend rule.")
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("704.5j")
 def test_704_5j_same_name_same_controller_legend_rule_removes_one():
     """704.5j: When one player controls two legendary permanents with the same name, all
     but one are put into their owners' graveyards."""
@@ -512,6 +539,7 @@ def test_704_5j_same_name_same_controller_legend_rule_removes_one():
     assert any(c.name == "Tolaria" for c in p1.graveyard)
 
 
+@pytest.mark.cr("704.5j")
 def test_704_5j_different_names_both_legendary_permanents_coexist():
     """704.5j: Two legendary permanents with different names do not trigger the legend rule."""
     legend_a = _mk_card("Urza's Mine", "Legendary Land")
@@ -529,6 +557,7 @@ def test_704_5j_different_names_both_legendary_permanents_coexist():
     assert not any(c.name == "Urza's Tower" for c in p1.graveyard)
 
 
+@pytest.mark.cr("704.5j")
 def test_704_5j_different_controllers_same_legendary_name_both_survive():
     """704.5j: Each player may control one legendary permanent with the same name;
     the legend rule only applies within a single player's permanents."""
@@ -549,6 +578,7 @@ def test_704_5j_different_controllers_same_legendary_name_both_survive():
 # time are put into their owners' graveyards. ("The world rule.")
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("704.5k")
 def test_704_5k_two_world_permanents_older_goes_to_graveyard():
     """704.5k: When two world permanents are on the battlefield simultaneously, all but
     the one with the most recent timestamp are put into their owners' graveyards."""
@@ -571,6 +601,7 @@ def test_704_5k_two_world_permanents_older_goes_to_graveyard():
 # graveyard.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("704.5m")
 def test_704_5m_aura_goes_to_graveyard_when_enchanted_creature_is_destroyed():
     """704.5m: When the creature an Aura enchants is destroyed, the Aura is put into its
     owner's graveyard because it is no longer attached to a legal object."""
@@ -610,6 +641,7 @@ def test_704_5m_aura_goes_to_graveyard_when_enchanted_creature_is_destroyed():
         "construction time, not a change to the SBA logic itself."
     ),
 )
+@pytest.mark.cr("704.5m")
 def test_704_5m_unattached_aura_on_battlefield_goes_to_graveyard():
     """704.5m: An Aura that is on the battlefield but not attached to any object or player
     is put into its owner's graveyard."""
@@ -635,6 +667,7 @@ def test_704_5m_unattached_aura_on_battlefield_goes_to_graveyard():
 # player. It remains on the battlefield.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("704.5n")
 def test_704_5n_equipment_becomes_unattached_when_equipped_creature_dies():
     """704.5n: An Equipment attached to a creature that dies becomes unattached but
     remains on the battlefield."""
@@ -666,6 +699,7 @@ def test_704_5n_equipment_becomes_unattached_when_equipped_creature_dies():
 # it becomes unattached and remains on the battlefield.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("704.5p")
 def test_704_5p_creature_in_attached_state_becomes_unattached():
     """704.5p: A creature permanent that is in an 'attached' state (which is illegal for
     creatures) becomes unattached and remains on the battlefield."""
@@ -692,6 +726,7 @@ def test_704_5p_creature_in_attached_state_becomes_unattached():
 # smaller of the two counts.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("704.5q")
 def test_704_5q_one_plus_counter_and_one_minus_counter_cancel():
     """704.5q: One +1/+1 counter and one -1/-1 counter on the same permanent are both
     removed — N=1 of each is cancelled."""
@@ -709,6 +744,7 @@ def test_704_5q_one_plus_counter_and_one_minus_counter_cancel():
     assert current.metadata.get("minus_counters", 0) == 0
 
 
+@pytest.mark.cr("704.5q")
 def test_704_5q_partial_cancellation_leaves_remainder():
     """704.5q: When +1/+1 counters outnumber -1/-1 counters, N (the smaller count) of
     each type are removed, leaving the difference in +1/+1 counters."""
@@ -732,6 +768,7 @@ def test_704_5q_partial_cancellation_leaves_remainder():
 # of those counters are removed.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("704.5r")
 def test_704_5r_excess_counters_trimmed_to_cap():
     """704.5r: A permanent with more counters than its stated cap has the excess removed."""
     capped_card = _mk_card(
@@ -755,6 +792,7 @@ def test_704_5r_excess_counters_trimmed_to_cap():
 # controller sacrifices it.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("704.5s")
 def test_704_5s_saga_sacrificed_when_lore_counters_reach_final_chapter():
     """704.5s: A Saga whose lore counter total reaches or exceeds its final chapter
     number is sacrificed by its controller."""
@@ -782,6 +820,7 @@ def test_704_5s_saga_sacrificed_when_lore_counters_reach_final_chapter():
 # recent timestamp is put into its owner's graveyard.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("704.5y")
 def test_704_5y_only_newest_role_from_same_controller_survives():
     """704.5y: When the same player attaches two Roles to the same creature, only the
     Role with the most recent timestamp remains; the older Role goes to the graveyard."""
@@ -814,6 +853,7 @@ def test_704_5y_only_newest_role_from_same_controller_survives():
 # the same time, a single replacement effect will replace all of them.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("704.7", "704.5g")
 def test_704_7_multiple_lethal_damage_deaths_are_processed_simultaneously():
     """704.7: When multiple creatures receive lethal damage in the same combat damage step,
     they are all destroyed together as part of a single state-based action event."""
@@ -846,6 +886,7 @@ def test_704_7_multiple_lethal_damage_deaths_are_processed_simultaneously():
 # state before any of those state-based actions were performed.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("704.8", "704.5f")
 def test_704_8_last_known_information_undying_example():
     """704.8: Per the rule's example — Young Wolf (undying) with a +1/+1 counter and
     three -1/-1 counters has toughness 0 or less. Before state-based actions, it has

@@ -35,6 +35,15 @@ keywords, replacements), `tests/sets/` (per-card tests for a specific set),
 `tests/regressions/` (in-game bug regressions). Shared fixtures live in
 `tests/conftest.py` and helpers in `tests/helpers.py`, both at the root.
 
+Every test in `tests/rules/` **must** carry a `@pytest.mark.cr("508.1a", ...)`
+marker citing the Comprehensive Rules rule(s) it verifies (numbered rule or
+subrule — never a bare section number; verify the number exists in
+`MagicCompRules.txt`). `scripts/rules_progress.py` collects these markers and
+regenerates `RULES_PROGRESS.md`, the per-rule coverage tracker; a guard test
+(`tests/engine/test_rules_progress.py`) fails on unannotated tests or
+citations of nonexistent rules. The tracked scope (which CR sections/rules
+count) is the `SCOPE` dict in that script — widen it as the engine grows.
+
 ```powershell
 
 # Web server (browser game UI)
@@ -45,6 +54,7 @@ python scripts/run_duel.py            # scripted deterministic duel, no server
 python scripts/simulate_ai_games.py   # AI-vs-AI batch; deterministic per seed
 python scripts/support_report.py      # per-category card-support coverage
 python scripts/set_progress.py        # regenerate SET_PROGRESS.md (per-set implementation tracker); --refresh re-fetches Scryfall data
+python scripts/rules_progress.py      # regenerate RULES_PROGRESS.md (CR test-coverage tracker); --check fails on unannotated tests
 ```
 
 To **launch and drive the running web app** (screenshots, scripted UI flow), use

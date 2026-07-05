@@ -43,6 +43,7 @@ def _mk_card(
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("601.2a")
 def test_601_2a_casting_moves_card_from_hand_to_stack():
     """Casting a spell moves it from the hand to the stack (601.2a)."""
     bolt = _mk_card("Lightning Bolt", "Instant", "Lightning Bolt deals 3 damage to any target.")
@@ -58,6 +59,7 @@ def test_601_2a_casting_moves_card_from_hand_to_stack():
     assert game.stack[0].card.name == "Lightning Bolt"
 
 
+@pytest.mark.cr("601.2a")
 def test_601_2a_spell_becomes_topmost_object_on_stack():
     """Each newly cast spell becomes the topmost object on the stack (601.2a)."""
     spell1 = _mk_card("First Spell", "Instant", "First Spell deals 1 damage to any target.")
@@ -73,6 +75,7 @@ def test_601_2a_spell_becomes_topmost_object_on_stack():
     assert game.stack[0].card.name == "First Spell"
 
 
+@pytest.mark.cr("601.2a")
 def test_601_2a_spell_remains_on_stack_until_resolved():
     """A spell remains on the stack until it resolves or is countered (601.2a)."""
     bolt = _mk_card("Bolt", "Instant", "Bolt deals 3 damage to any target.")
@@ -87,6 +90,7 @@ def test_601_2a_spell_remains_on_stack_until_resolved():
     assert len(game.stack) == 0
 
 
+@pytest.mark.cr("601.2a")
 def test_601_2a_caster_becomes_controller_of_spell():
     """The player who casts a spell becomes its controller on the stack (601.2a)."""
     spell = _mk_card("Spell", "Instant", "Spell deals 1 damage to any target.")
@@ -99,6 +103,7 @@ def test_601_2a_caster_becomes_controller_of_spell():
     assert game.stack[0].caster_index == 0
 
 
+@pytest.mark.cr("601.2a")
 def test_601_2a_second_player_caster_index_is_set():
     """When the second player casts a spell, they become its controller (601.2a)."""
     drain = _mk_card("Drain Life", "Sorcery", "Drain Life deals 2 damage to any target.")
@@ -116,6 +121,7 @@ def test_601_2a_second_player_caster_index_is_set():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("601.2b")
 def test_601_2b_x_value_stored_on_stack_item():
     """The announced X value is stored on the stack item at cast time (601.2b)."""
     fireball = _mk_card(
@@ -134,6 +140,7 @@ def test_601_2b_x_value_stored_on_stack_item():
     assert game.stack[-1].x_value == 4
 
 
+@pytest.mark.cr("601.2b")
 def test_601_2b_x_value_zero_is_a_valid_announcement():
     """X can be announced as zero; the spell is still placed on the stack (601.2b)."""
     fireball = _mk_card(
@@ -152,6 +159,7 @@ def test_601_2b_x_value_zero_is_a_valid_announcement():
     assert game.stack[-1].x_value == 0
 
 
+@pytest.mark.cr("601.2b")
 def test_601_2b_x_value_inferred_from_available_mana():
     """If X is not given, the engine infers it from the player's available mana pool (601.2b).
 
@@ -179,6 +187,7 @@ def test_601_2b_x_value_inferred_from_available_mana():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("601.2c")
 def test_601_2c_target_player_announced_and_stored():
     """The target player is announced at cast time and stored on the stack item (601.2c)."""
     bolt = _mk_card("Bolt", "Instant", "Bolt deals 3 damage to any target.")
@@ -191,6 +200,7 @@ def test_601_2c_target_player_announced_and_stored():
     assert game.stack[-1].target_player_index == 1
 
 
+@pytest.mark.cr("601.2c")
 def test_601_2c_target_permanent_index_announced_and_stored():
     """The target permanent is announced at cast time and stored on the stack item (601.2c)."""
     tap_spell = _mk_card("Paralyze", "Instant", "Tap target creature.")
@@ -205,6 +215,7 @@ def test_601_2c_target_permanent_index_announced_and_stored():
     assert game.stack[-1].target_permanent_index == 0
 
 
+@pytest.mark.cr("601.2c")
 def test_601_2c_spell_can_target_its_own_controller():
     """A player may target themselves with a spell (601.2c)."""
     heal = _mk_card("Healing Salve", "Instant", "Target player gains 3 life.")
@@ -222,6 +233,7 @@ def test_601_2c_spell_can_target_its_own_controller():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("601.2d")
 def test_601_2d_divided_damage_each_target_receives_at_least_one():
     """When an effect is divided among targets, each target receives at least one (601.2d).
 
@@ -259,6 +271,7 @@ def test_601_2d_divided_damage_each_target_receives_at_least_one():
     assert p2.battlefield[1].damage_marked > 0
 
 
+@pytest.mark.cr("601.2d")
 def test_601_2d_total_damage_is_preserved_across_division():
     """The total damage dealt equals the spell's damage value when divided (601.2d).
 
@@ -294,6 +307,7 @@ def test_601_2d_total_damage_is_preserved_across_division():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("601.2e", "601.5")
 def test_601_2e_illegal_spell_card_stays_in_hand():
     """If the proposed spell is illegal, the game returns to the prior state — card stays in hand (601.2e)."""
     unsupported = _mk_card(
@@ -312,6 +326,7 @@ def test_601_2e_illegal_spell_card_stays_in_hand():
     assert len(game.stack) == 0
 
 
+@pytest.mark.cr("601.2e", "601.5")
 def test_601_2e_game_state_unchanged_when_spell_proposal_fails():
     """Life totals and battlefield are unaffected when an illegal spell fails (601.2e)."""
     unsupported = _mk_card(
@@ -333,6 +348,7 @@ def test_601_2e_game_state_unchanged_when_spell_proposal_fails():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("601.2f")
 def test_601_2f_base_cost_is_the_mana_cost():
     """The total cost of a spell is normally its printed mana cost (601.2f)."""
     bolt = _mk_card(
@@ -353,6 +369,7 @@ def test_601_2f_base_cost_is_the_mana_cost():
     assert p2.life == 17
 
 
+@pytest.mark.cr("601.2f")
 def test_601_2f_gloom_increases_cost_of_white_spells():
     """Gloom adds {3} to the total cost of white spells (601.2f — additional cost effects)."""
     white_spell = _mk_card(
@@ -375,6 +392,7 @@ def test_601_2f_gloom_increases_cost_of_white_spells():
     assert "insufficient mana" in result.details
 
 
+@pytest.mark.cr("601.2f")
 def test_601_2f_gloom_cost_payable_with_sufficient_mana():
     """A white spell can be cast under Gloom when enough mana covers the extra {3} tax (601.2f)."""
     white_spell = _mk_card(
@@ -397,6 +415,7 @@ def test_601_2f_gloom_cost_payable_with_sufficient_mana():
     assert p2.life == 17
 
 
+@pytest.mark.cr("601.2f")
 def test_601_2f_zero_mana_cost_spell_is_castable():
     """A spell with no mana cost (effectively {0}) can be cast without spending any mana (601.2f)."""
     free_spell = _mk_card(
@@ -420,6 +439,7 @@ def test_601_2f_zero_mana_cost_spell_is_castable():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("601.2g")
 def test_601_2g_mana_generated_before_casting_allows_spell_to_resolve():
     """Mana abilities activated before paying costs make a spell castable (601.2g).
 
@@ -455,6 +475,7 @@ def test_601_2g_mana_generated_before_casting_allows_spell_to_resolve():
     assert p2.life == 17
 
 
+@pytest.mark.cr("601.2g")
 def test_601_2g_spell_fails_without_prior_mana_generation():
     """Without activating mana abilities first, a spell with a mana cost cannot be cast (601.2g)."""
     bolt = _mk_card(
@@ -480,6 +501,7 @@ def test_601_2g_spell_fails_without_prior_mana_generation():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("601.2h")
 def test_601_2h_mana_deducted_from_pool_when_spell_is_cast():
     """Paying the mana cost deducts mana from the player's pool (601.2h)."""
     bolt = _mk_card(
@@ -499,6 +521,7 @@ def test_601_2h_mana_deducted_from_pool_when_spell_is_cast():
     assert p1.mana_pool.get("R", 0) == 2
 
 
+@pytest.mark.cr("601.2h")
 def test_601_2h_insufficient_mana_prevents_casting():
     """If the player cannot pay the total cost, the spell cannot be cast (601.2h)."""
     bolt = _mk_card(
@@ -520,6 +543,7 @@ def test_601_2h_insufficient_mana_prevents_casting():
     assert len(p1.hand) == 1
 
 
+@pytest.mark.cr("601.2h")
 def test_601_2h_partial_payment_not_allowed():
     """A player cannot partially pay a spell's cost — all mana must be available at once (601.2h)."""
     expensive = _mk_card(
@@ -541,6 +565,7 @@ def test_601_2h_partial_payment_not_allowed():
     assert p2.life == 20
 
 
+@pytest.mark.cr("601.2f", "601.2h")
 def test_601_2h_cost_locked_in_before_payment():
     """The total cost is 'locked in' before payment is made (601.2h).
 
@@ -572,6 +597,7 @@ def test_601_2h_cost_locked_in_before_payment():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("601.2i")
 def test_601_2i_spell_effect_applies_after_resolution():
     """After a spell is cast and resolves, its effect is applied (601.2i)."""
     shock = _mk_card("Shock", "Instant", "Shock deals 2 damage to any target.")
@@ -584,6 +610,7 @@ def test_601_2i_spell_effect_applies_after_resolution():
     assert p2.life == 18
 
 
+@pytest.mark.cr("601.2i")
 def test_601_2i_creature_spell_enters_battlefield_on_resolution():
     """A creature spell that resolves enters the battlefield under its caster's control (601.2i)."""
     bear = _mk_card("Grizzly Bears", "Creature — Bear")
@@ -597,6 +624,7 @@ def test_601_2i_creature_spell_enters_battlefield_on_resolution():
     assert p1.battlefield[0].card.name == "Grizzly Bears"
 
 
+@pytest.mark.cr("601.2a", "601.2i")
 def test_601_2i_card_leaves_hand_as_soon_as_it_is_put_on_stack():
     """The spell leaves the hand when it moves to the stack, before it resolves (601.2i/601.2a)."""
     spell = _mk_card("Quick Bolt", "Instant", "Quick Bolt deals 1 damage to any target.")
@@ -615,6 +643,7 @@ def test_601_2i_card_leaves_hand_as_soon_as_it_is_put_on_stack():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("601.3")
 def test_601_3_player_can_cast_a_supported_spell():
     """A player may cast a spell when no rule or effect prohibits it (601.3)."""
     bolt = _mk_card("Bolt", "Instant", "Bolt deals 3 damage to any target.")
@@ -628,6 +657,7 @@ def test_601_3_player_can_cast_a_supported_spell():
     assert p2.life == 17
 
 
+@pytest.mark.cr("601.3")
 def test_601_3_unsupported_card_cannot_be_cast():
     """A card with no recognised effect cannot be cast — no rule allows it (601.3)."""
     mystery = _mk_card(
@@ -645,6 +675,7 @@ def test_601_3_unsupported_card_cannot_be_cast():
     assert len(p1.hand) == 1
 
 
+@pytest.mark.cr("601.3")
 def test_601_3_card_not_in_hand_raises_error():
     """Attempting to cast a card the player doesn't hold raises an error (601.3)."""
     p1 = PlayerState(name="P1", hand=[])
@@ -660,6 +691,7 @@ def test_601_3_card_not_in_hand_raises_error():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("601.5")
 def test_601_5_stack_is_empty_when_spell_proposal_fails():
     """If a spell cannot be cast, nothing is ever placed on the stack (601.5)."""
     unsupported = _mk_card(
@@ -676,6 +708,7 @@ def test_601_5_stack_is_empty_when_spell_proposal_fails():
     assert len(game.stack) == 0
 
 
+@pytest.mark.cr("601.5")
 def test_601_5_mana_not_spent_when_cast_fails_due_to_insufficient_mana():
     """Mana pool is unchanged when a cast fails due to insufficient mana (601.5)."""
     bolt = _mk_card(
@@ -701,6 +734,7 @@ def test_601_5_mana_not_spent_when_cast_fails_due_to_insufficient_mana():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("601.7")
 def test_601_7_new_cost_modifier_does_not_affect_already_queued_spell():
     """An effect that alters costs has no impact on spells already on the stack (601.7).
 

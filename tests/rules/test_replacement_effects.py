@@ -86,6 +86,7 @@ def _mk_creature(
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("614.1a", "615.1a")
 def test_614_1a_prevention_is_replacement_effect():
     """614.1a: A prevention effect uses 'instead' — it replaces the damage
     event entirely. The damage that would be dealt is replaced with 0; the
@@ -109,6 +110,7 @@ def test_614_1a_prevention_is_replacement_effect():
     assert p2.life == 20, "Damage was replaced by prevention; life should be unchanged"
 
 
+@pytest.mark.cr("614.1a", "614.6")
 def test_614_1a_partial_prevention_replaces_part_of_event():
     """614.1a: If prevention pool is smaller than the damage, only part of the
     event is replaced. The remainder proceeds as a modified event (614.6)."""
@@ -134,6 +136,7 @@ def test_614_1a_partial_prevention_replaces_part_of_event():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("614.1b")
 def test_614_1b_skip_turn_is_replacement_effect():
     """614.1b: A 'skip your next turn' effect replaces the turn with nothing —
     the skipped player does not take that turn at all."""
@@ -149,6 +152,7 @@ def test_614_1b_skip_turn_is_replacement_effect():
     assert next_player == 0, "P2's turn was skipped; P1 should be active again"
 
 
+@pytest.mark.cr("614.1b")
 def test_614_1b_skip_phase_replaces_phase_with_nothing():
     """614.1b: 'Skip your draw step' replaces the draw step with nothing —
     the player draws no card during that draw step."""
@@ -171,6 +175,7 @@ def test_614_1b_skip_phase_replaces_phase_with_nothing():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("614.1d")
 def test_614_1c_enters_tapped_is_replacement_effect():
     """614.1c: A permanent whose text says it enters tapped uses a replacement
     effect — the 'enters untapped' event is replaced with 'enters tapped'."""
@@ -188,6 +193,7 @@ def test_614_1c_enters_tapped_is_replacement_effect():
     assert p1.battlefield[0].tapped is True, "Replacement effect caused land to enter tapped"
 
 
+@pytest.mark.cr("614.1d")
 def test_614_1c_normal_permanent_enters_untapped():
     """614.1c baseline: Without an 'enters tapped' replacement effect, a
     permanent enters the battlefield untapped."""
@@ -208,6 +214,7 @@ def test_614_1c_normal_permanent_enters_untapped():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("614.1c")
 def test_614_1d_enters_with_x_plus1_counters():
     """614.1d: 'This creature enters with X +1/+1 counters on it' is a
     replacement effect that modifies how the permanent enters. The creature
@@ -230,6 +237,7 @@ def test_614_1d_enters_with_x_plus1_counters():
     assert perm.effective_toughness == 5, "Hydra entered with 3 +1/+1 counters (2+3=5 toughness)"
 
 
+@pytest.mark.cr("614.1c")
 def test_614_1d_enters_with_x_counters_zero_x():
     """614.1d: When X=0, 'enters with X +1/+1 counters' adds no counters.
     The creature enters with its base P/T."""
@@ -256,6 +264,7 @@ def test_614_1d_enters_with_x_counters_zero_x():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("614.4")
 def test_614_4_prevention_before_damage_works():
     """614.4: A prevention replacement effect set up before the damage event
     occurs correctly replaces the damage event."""
@@ -275,6 +284,7 @@ def test_614_4_prevention_before_damage_works():
     assert p2.life == 20, "Replacement effect existed before the damage; 3 damage prevented"
 
 
+@pytest.mark.cr("614.4")
 def test_614_4_no_replacement_means_no_prevention():
     """614.4: Without a replacement effect in place, the damage event proceeds
     unmodified — the full amount of damage is dealt."""
@@ -294,6 +304,7 @@ def test_614_4_no_replacement_means_no_prevention():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("614.5")
 def test_614_5_prevention_applies_exactly_once():
     """614.5: A prevention replacement effect intercepts the damage event once.
     After applying, the modified event (0 damage or reduced damage) is the
@@ -318,6 +329,7 @@ def test_614_5_prevention_applies_exactly_once():
     assert p2.damage_prevention_pool == 0, "Pool fully consumed by single application"
 
 
+@pytest.mark.cr("614.5")
 def test_614_5_two_prevention_shields_each_apply_to_separate_events():
     """614.5: Two separate prevention replacement effects each get one
     opportunity — the first applies to the first damage event, leaving the
@@ -359,6 +371,7 @@ def test_614_5_two_prevention_shields_each_apply_to_separate_events():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("614.6", "615.6")
 def test_614_6_replaced_damage_event_never_reduces_life():
     """614.6: When a damage event is fully replaced (all damage prevented),
     the original damage event never happens — the player's life total is
@@ -385,6 +398,7 @@ def test_614_6_replaced_damage_event_never_reduces_life():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("614.7")
 def test_614_7_prevention_pool_not_consumed_if_no_damage_event():
     """614.7: A prevention replacement effect watches for damage events. If no
     damage event occurs, the replacement does nothing and the pool is unchanged."""
@@ -412,6 +426,7 @@ def test_614_7_prevention_pool_not_consumed_if_no_damage_event():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("614.7a")
 def test_614_7a_zero_damage_leaves_prevention_pool_intact():
     """614.7a: A source dealing 0 damage creates no damage event. A prevention
     replacement effect watching for that damage has nothing to replace and does
@@ -442,6 +457,7 @@ def test_614_7a_zero_damage_leaves_prevention_pool_intact():
     assert p2.life == 20
 
 
+@pytest.mark.cr("614.7a")
 def test_614_7a_zero_damage_spell_has_no_event():
     """614.7a: A spell that would deal 0 damage to a player does not deal
     damage at all — the player's life total is unaffected."""
@@ -462,6 +478,7 @@ def test_614_7a_zero_damage_spell_has_no_event():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("614.8", "701.19a")
 def test_614_8_regeneration_replaces_targeted_destroy():
     """614.8: A regeneration shield replaces a 'destroy' event on the creature.
     The creature stays on the battlefield instead of going to the graveyard."""
@@ -489,6 +506,7 @@ def test_614_8_regeneration_replaces_targeted_destroy():
     assert len(p2.graveyard) == 0, "Creature did not go to graveyard"
 
 
+@pytest.mark.cr("614.8", "701.19a")
 def test_614_8_regeneration_taps_creature_after_replacing_destroy():
     """614.8: After regeneration replaces a destruction event, the creature
     is tapped as part of the replacement (rule 614.8 effect)."""
@@ -505,6 +523,7 @@ def test_614_8_regeneration_taps_creature_after_replacing_destroy():
     assert p2.battlefield[0].tapped is True, "Regenerated creature is tapped"
 
 
+@pytest.mark.cr("614.8", "701.19a")
 def test_614_8_regeneration_clears_damage_after_replacing_destroy():
     """614.8: After regeneration replaces a destruction event, all damage
     marked on the creature is removed as part of the replacement."""
@@ -522,6 +541,7 @@ def test_614_8_regeneration_clears_damage_after_replacing_destroy():
     assert p2.battlefield[0].damage_marked == 0, "Regeneration clears damage from the creature"
 
 
+@pytest.mark.cr("614.8", "701.19a")
 def test_614_8_regeneration_replaces_mass_destroy():
     """614.8: A regeneration shield also replaces destruction from mass-destroy
     effects such as 'Destroy all creatures.'"""
@@ -539,6 +559,7 @@ def test_614_8_regeneration_replaces_mass_destroy():
     assert p2.battlefield[0].tapped is True
 
 
+@pytest.mark.cr("614.8", "701.19a")
 def test_614_8_regen_shield_consumed_once_per_use():
     """614.8: Each regeneration shield replaces exactly one destruction event.
     After the shield is consumed, the creature is vulnerable again."""
@@ -562,6 +583,7 @@ def test_614_8_regen_shield_consumed_once_per_use():
     assert len(p2.graveyard) == 1
 
 
+@pytest.mark.cr("614.8", "701.19a")
 def test_614_8_two_regen_shields_survive_two_destroys():
     """614.8: Two regeneration shields allow a creature to survive two
     separate destruction events."""
@@ -593,6 +615,7 @@ def test_614_8_two_regen_shields_survive_two_destroys():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("614.9")
 def test_614_9_damage_redirected_from_creature_to_player():
     """614.9: A redirection effect replaces damage-to-creature with the same
     damage to a different target (in this case, the creature's controller)."""
@@ -622,6 +645,7 @@ def test_614_9_damage_redirected_from_creature_to_player():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("614.10")
 def test_614_10_skip_turn_skips_that_player():
     """614.10: 'Skip your next turn' is a replacement effect. The skipped turn
     is replaced with nothing — the player doesn't untap, doesn't draw, etc."""
@@ -638,6 +662,7 @@ def test_614_10_skip_turn_skips_that_player():
     assert game.turn == initial_turn + 1, "Turn counter advanced even though P2 was skipped"
 
 
+@pytest.mark.cr("614.10")
 def test_614_10_skip_draw_step_prevents_card_draw():
     """614.10: Skipping the draw step replaces the draw-a-card event with
     nothing; the player doesn't draw during that step."""
@@ -660,6 +685,7 @@ def test_614_10_skip_draw_step_prevents_card_draw():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("614.10a")
 def test_614_10a_two_skip_effects_mean_two_turns_skipped():
     """614.10a: If two 'skip your next turn' effects apply to the same player,
     that player skips two consecutive turns — one skip per effect."""
@@ -694,6 +720,7 @@ def test_614_10a_two_skip_effects_mean_two_turns_skipped():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("614.12", "614.1c")
 def test_614_12_enters_with_counters_is_etb_replacement():
     """614.12: 'This creature enters with X +1/+1 counters on it' modifies
     how the permanent enters the battlefield. The counters are part of the
@@ -719,6 +746,7 @@ def test_614_12_enters_with_counters_is_etb_replacement():
     assert perm.effective_toughness == 6
 
 
+@pytest.mark.cr("614.12", "614.1d")
 def test_614_12_enters_tapped_from_card_text():
     """614.12: A permanent with its own 'enters tapped' static ability uses a
     replacement effect to enter tapped. This works even without an external
@@ -737,6 +765,7 @@ def test_614_12_enters_tapped_from_card_text():
     assert p1.battlefield[0].tapped is True, "Enters-tapped replacement applied on entry"
 
 
+@pytest.mark.cr("614.12", "614.1d")
 def test_614_12_etb_replacement_from_creature_oracle_text():
     """614.12: A creature with 'this creature enters tapped' has its own ETB
     replacement effect that applies when it enters the battlefield."""

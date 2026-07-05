@@ -1,3 +1,5 @@
+import pytest
+
 from engine import Game
 from engine.models import CardDefinition, Permanent, PlayerState
 
@@ -17,6 +19,7 @@ def _mk_creature(name: str, power: int, toughness: int, oracle_text: str = "") -
     )
 
 
+@pytest.mark.cr("500.1", "505.1")
 def test_start_turn_runs_beginning_phase_and_enters_precombat_main():
     p1 = PlayerState(name="P1")
     p2 = PlayerState(name="P2")
@@ -29,6 +32,7 @@ def test_start_turn_runs_beginning_phase_and_enters_precombat_main():
     assert game.current_phase == "main"
 
 
+@pytest.mark.cr("500.1", "506.1")
 def test_advance_combat_moves_to_postcombat_main():
     p1 = PlayerState(name="P1")
     p2 = PlayerState(name="P2")
@@ -61,6 +65,7 @@ def test_advance_combat_moves_to_postcombat_main():
     assert game.current_phase == "main"
 
 
+@pytest.mark.cr("500.7")
 def test_extra_turn_queue_is_lifo():
     p1 = PlayerState(name="P1")
     p2 = PlayerState(name="P2")
@@ -74,6 +79,7 @@ def test_extra_turn_queue_is_lifo():
     assert game.start_next_turn() == 0
 
 
+@pytest.mark.cr("500.7")
 def test_extra_turn_for_opponent_is_inserted_not_substituted():
     # 500.7: an extra turn is *inserted* after the current turn; the normal
     # rotation resumes afterward. P0 (active) gives P1 an extra turn, so P1
@@ -92,6 +98,7 @@ def test_extra_turn_for_opponent_is_inserted_not_substituted():
     assert game.start_next_turn() == 0  # back to P0
 
 
+@pytest.mark.cr("500.7")
 def test_extra_turn_does_not_disturb_normal_rotation():
     # P0 takes an extra turn, then the rotation continues to P1, not back to P0.
     p1 = PlayerState(name="P1")
@@ -106,6 +113,7 @@ def test_extra_turn_does_not_disturb_normal_rotation():
     assert game.start_next_turn() == 0
 
 
+@pytest.mark.cr("614.10")
 def test_skip_turn_is_applied():
     p1 = PlayerState(name="P1")
     p2 = PlayerState(name="P2")
@@ -116,6 +124,7 @@ def test_skip_turn_is_applied():
     assert game.start_next_turn() == 0
 
 
+@pytest.mark.cr("500.10")
 def test_additional_step_after_phase_creates_single_step_phase():
     p1 = PlayerState(name="P1")
     p2 = PlayerState(name="P2")
@@ -129,6 +138,7 @@ def test_additional_step_after_phase_creates_single_step_phase():
     assert game._phase_steps(inserted_phase) == ("upkeep",)
 
 
+@pytest.mark.cr("510.1", "510.2")
 def test_combat_declare_and_damage_resolution():
     attacker = Permanent(card=_mk_creature("Attacker", 3, 3))
     blocker = Permanent(card=_mk_creature("Blocker", 2, 2))
@@ -153,6 +163,7 @@ def test_combat_declare_and_damage_resolution():
     assert len(p1.battlefield) == 1
 
 
+@pytest.mark.cr("702.7b")
 def test_first_strike_combat_damage_two_passes():
     first_striker = Permanent(card=_mk_creature("First", 2, 2, "First strike"))
     blocker = Permanent(card=_mk_creature("Blocker", 2, 2))
@@ -176,6 +187,7 @@ def test_first_strike_combat_damage_two_passes():
     assert len(p1.battlefield) == 1
 
 
+@pytest.mark.cr("702.19b")
 def test_trample_overflow_hits_defender():
     trampler = Permanent(card=_mk_creature("Trampler", 5, 5, "Trample"))
     blocker = Permanent(card=_mk_creature("Blocker", 2, 2))
@@ -195,6 +207,7 @@ def test_trample_overflow_hits_defender():
     assert p2.life == 17
 
 
+@pytest.mark.cr("508.1")
 def test_declare_attackers_requires_confirmation_before_phase_advance():
     attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
     p1 = PlayerState(name="P1", battlefield=[attacker])
@@ -218,6 +231,7 @@ def test_declare_attackers_requires_confirmation_before_phase_advance():
 
 
 
+@pytest.mark.cr("508.8")
 def test_declare_attackers_auto_skips_when_no_legal_attackers_exist():
     noncreature = CardDefinition(
         name="Test Relic",
@@ -252,6 +266,7 @@ def test_declare_attackers_auto_skips_when_no_legal_attackers_exist():
     assert any("has no valid blockers; declare blockers step skipped" in entry for entry in game.log)
 
 
+@pytest.mark.cr("509.1")
 def test_declare_blockers_requires_confirmation_before_phase_advance():
     attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
     blocker = Permanent(card=_mk_creature("Blocker", 2, 2))
@@ -276,6 +291,7 @@ def test_declare_blockers_requires_confirmation_before_phase_advance():
     assert game.current_step == "end_of_combat"
 
 
+@pytest.mark.cr("509.1a")
 def test_declare_blockers_auto_advances_when_no_legal_blocks_exist():
     attacker = Permanent(card=_mk_creature("Attacker", 3, 3))
     tapped_blocker = Permanent(card=_mk_creature("Tired Blocker", 2, 2), tapped=True)
@@ -300,6 +316,7 @@ def test_declare_blockers_auto_advances_when_no_legal_blocks_exist():
     assert any("has no valid blockers; declare blockers step skipped" in entry for entry in game.log)
 
 
+@pytest.mark.cr("508.1", "509.1")
 def test_combat_step_advancement_logs_attacker_and_blocker_counts():
     attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
     blocker = Permanent(card=_mk_creature("Blocker", 2, 2))

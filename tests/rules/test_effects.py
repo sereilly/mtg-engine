@@ -5,6 +5,8 @@ Covers:
   610 — One-Shot Effects
 """
 
+import pytest
+
 from engine import Game, PlayerState
 from engine.models import CardDefinition, Permanent
 
@@ -73,6 +75,7 @@ def _mk_creature(
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("609.1")
 def test_609_1_spell_resolution_creates_damage_effect():
     """609.1: When a damage spell resolves, it creates a one-shot effect that reduces
     the target player's life total. The effect is the outcome of the spell resolving.
@@ -88,6 +91,7 @@ def test_609_1_spell_resolution_creates_damage_effect():
     assert p2.life == 17
 
 
+@pytest.mark.cr("609.1")
 def test_609_1_activated_ability_creates_effect():
     """609.1: When an activated ability resolves, it may create one or more effects.
     Example: a tap ability that deals damage to a player.
@@ -108,6 +112,7 @@ def test_609_1_activated_ability_creates_effect():
     assert p2.life == 19
 
 
+@pytest.mark.cr("609.1")
 def test_609_1_spell_creates_pump_effect():
     """609.1: A pump spell creates a continuous effect that modifies power/toughness.
     The effect is a result of the spell resolving.
@@ -130,6 +135,7 @@ def test_609_1_spell_creates_pump_effect():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("609.2")
 def test_609_2_global_creature_buff_only_affects_battlefield_creatures():
     """609.2: An effect that changes all creatures applies only to creatures on the
     battlefield (permanents), not to creature cards in graveyards or other zones.
@@ -161,6 +167,7 @@ def test_609_2_global_creature_buff_only_affects_battlefield_creatures():
     assert p1.graveyard[0].name == "Dead Knight"
 
 
+@pytest.mark.cr("609.2")
 def test_609_2_global_creature_buff_does_not_affect_hand():
     """609.2: An effect that modifies 'all creatures' only affects permanents on the
     battlefield. A creature card in a player's hand is not a permanent and is not
@@ -192,6 +199,7 @@ def test_609_2_global_creature_buff_does_not_affect_hand():
     assert hand_creature.raw.get("power") == "2"
 
 
+@pytest.mark.cr("609.2")
 def test_609_2_wrath_only_destroys_battlefield_creatures_not_graveyard():
     """609.2: 'Destroy all creatures' only destroys creature permanents on the
     battlefield. Creature cards in graveyards are not affected.
@@ -223,6 +231,7 @@ def test_609_2_wrath_only_destroys_battlefield_creatures_not_graveyard():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("609.3")
 def test_609_3_discard_two_cards_with_one_in_hand():
     """609.3: If a player is holding only one card, an effect that reads 'discard
     two cards' causes them to discard only that card (CR 609.3 example).
@@ -244,6 +253,7 @@ def test_609_3_discard_two_cards_with_one_in_hand():
     assert len(p2.graveyard) == 1
 
 
+@pytest.mark.cr("609.3")
 def test_609_3_discard_zero_cards_when_hand_is_empty():
     """609.3: An effect that says 'discard two cards' against a player with an
     empty hand does nothing — the effect is impossible and zero cards move.
@@ -262,6 +272,7 @@ def test_609_3_discard_zero_cards_when_hand_is_empty():
     assert len(p2.graveyard) == 0
 
 
+@pytest.mark.cr("609.3")
 def test_609_3_draw_does_as_much_as_possible_with_partial_library():
     """609.3: If an effect moves cards out of the library, it moves as many as
     possible. Drawing 3 cards with a 1-card library draws only the 1 available.
@@ -282,6 +293,7 @@ def test_609_3_draw_does_as_much_as_possible_with_partial_library():
     assert len(p2.library) == 0
 
 
+@pytest.mark.cr("609.3", "704.5g")
 def test_609_3_damage_to_creature_does_not_exceed_toughness_kill():
     """609.3: Dealing excess damage to a creature kills it but doesn't do
     'impossible' bonus damage — the creature is simply destroyed.
@@ -305,6 +317,7 @@ def test_609_3_damage_to_creature_does_not_exceed_toughness_kill():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("615.7", "615.1")
 def test_609_7_damage_prevention_pool_prevents_incoming_damage():
     """609.7: A prevention effect creates a 'shield' that prevents the next damage
     from any source. The shield intercepts damage before it affects the player.
@@ -327,6 +340,7 @@ def test_609_7_damage_prevention_pool_prevents_incoming_damage():
     assert p2.life == 20
 
 
+@pytest.mark.cr("615.7")
 def test_609_7_prevention_pool_reduced_by_prevented_amount():
     """609.7: Each point of damage prevented consumes one charge from the
     prevention pool. After partial prevention, the remaining pool is correct.
@@ -350,6 +364,7 @@ def test_609_7_prevention_pool_reduced_by_prevented_amount():
     assert p2.damage_prevention_pool == 1
 
 
+@pytest.mark.cr("615.7")
 def test_609_7_prevention_pool_partially_blocks_excess_damage():
     """609.7: If damage exceeds the prevention pool, only the pooled amount is
     prevented and the excess still resolves normally.
@@ -371,6 +386,7 @@ def test_609_7_prevention_pool_partially_blocks_excess_damage():
     assert p2.damage_prevention_pool == 0
 
 
+@pytest.mark.cr("615.7", "615.3")
 def test_609_7_prevention_pool_exhausted_after_use():
     """609.7: Once a prevention shield is exhausted, subsequent damage is not
     prevented. The shield is fully consumed after protecting against its limit.
@@ -395,6 +411,7 @@ def test_609_7_prevention_pool_exhausted_after_use():
     assert p2.damage_prevention_pool == 0
 
 
+@pytest.mark.cr("615.7")
 def test_prevention_shield_records_and_clears_source():
     """The granting card is recorded on the shield (so the UI can preview it) and
     cleared once the pool is fully consumed."""
@@ -422,6 +439,7 @@ def test_prevention_shield_records_and_clears_source():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("610.1")
 def test_610_1_deal_damage_is_one_shot_no_duration():
     """610.1: Dealing damage is a one-shot effect. Once it resolves, there is no
     ongoing effect or duration — the damage was applied and is complete.
@@ -442,6 +460,7 @@ def test_610_1_deal_damage_is_one_shot_no_duration():
         assert "expires_at" not in perm.metadata or perm.metadata.get("expires_key") != "damage_marked"
 
 
+@pytest.mark.cr("610.1")
 def test_610_1_deal_damage_to_player_is_immediate():
     """610.1: Dealing damage to a player is a one-shot effect — the life total
     changes immediately when the effect resolves, with no delay or duration.
@@ -457,6 +476,7 @@ def test_610_1_deal_damage_to_player_is_immediate():
     assert p2.life == 17
 
 
+@pytest.mark.cr("610.1")
 def test_610_1_destroy_permanent_is_one_shot():
     """610.1: Destroying a permanent is a one-shot effect. The permanent is removed
     from the battlefield immediately when the effect resolves. There is no duration —
@@ -476,6 +496,7 @@ def test_610_1_destroy_permanent_is_one_shot():
     assert p2.graveyard[0].name == "Target Bear"
 
 
+@pytest.mark.cr("610.1")
 def test_610_1_destroy_does_not_return_after_cleanup():
     """610.1: A destroyed permanent stays destroyed after the cleanup step.
     Unlike 'until end of turn' continuous effects, destruction is a one-shot
@@ -496,6 +517,7 @@ def test_610_1_destroy_does_not_return_after_cleanup():
     assert len(p2.graveyard) == 1
 
 
+@pytest.mark.cr("614.8", "701.19a")
 def test_614_8_unused_regeneration_shield_expires_at_cleanup():
     """614.8 / 701.15: a regeneration shield that is not used lasts only until the
     end of the turn it was created. After the cleanup step it is gone.
@@ -511,6 +533,7 @@ def test_614_8_unused_regeneration_shield_expires_at_cleanup():
     assert perm.regeneration_shield == 0
 
 
+@pytest.mark.cr("610.1")
 def test_610_1_draw_cards_is_immediate_and_one_shot():
     """610.1: Drawing cards is a one-shot effect. Cards move to the hand immediately
     when the spell resolves. There is no duration.
@@ -529,6 +552,7 @@ def test_610_1_draw_cards_is_immediate_and_one_shot():
     assert len(p2.library) == 2
 
 
+@pytest.mark.cr("610.1")
 def test_610_1_discard_cards_is_one_shot():
     """610.1: Discarding cards is a one-shot effect. Cards move to the graveyard
     immediately when the effect resolves, with no duration or reversal.
@@ -548,6 +572,7 @@ def test_610_1_discard_cards_is_one_shot():
     assert len(p2.graveyard) == 2
 
 
+@pytest.mark.cr("610.1")
 def test_610_1_discard_cards_do_not_return_after_cleanup():
     """610.1: Cards discarded by a one-shot discard effect stay in the graveyard
     after cleanup. The discard is permanent — no duration, no return.
@@ -567,6 +592,7 @@ def test_610_1_discard_cards_do_not_return_after_cleanup():
     assert len(p2.graveyard) == 2
 
 
+@pytest.mark.cr("610.1")
 def test_610_1_bounce_is_one_shot_zone_change():
     """610.1: Returning a creature to its owner's hand (bounce) is a one-shot
     zone-change effect. The creature moves immediately from battlefield to hand.
@@ -587,6 +613,7 @@ def test_610_1_bounce_is_one_shot_zone_change():
     assert p2.hand[0].name == "Bounced Bear"
 
 
+@pytest.mark.cr("610.1")
 def test_610_1_create_token_is_one_shot():
     """610.1: Creating a token is a one-shot effect — the token enters the
     battlefield immediately when the effect resolves, with no duration.
@@ -606,6 +633,7 @@ def test_610_1_create_token_is_one_shot():
     assert len(p1.battlefield) > initial_battlefield_count
 
 
+@pytest.mark.cr("610.1")
 def test_610_1_multiple_one_shot_effects_from_same_spell():
     """610.1: A spell can create multiple one-shot effects, each resolving
     immediately in sequence. Each is an independent one-shot with no duration.
@@ -630,6 +658,7 @@ def test_610_1_multiple_one_shot_effects_from_same_spell():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("610.3")
 def test_610_3_exile_until_eot_moves_creature_to_exile():
     """610.3: A one-shot effect can cause an object to change zones 'until' a
     specified event. When 'Exile target creature until end of turn' resolves,
@@ -654,6 +683,7 @@ def test_610_3_exile_until_eot_moves_creature_to_exile():
     assert len(p2.graveyard) == 0
 
 
+@pytest.mark.cr("610.3")
 def test_610_3_exile_until_eot_returns_at_cleanup():
     """610.3: When an object is exiled 'until end of turn', a second one-shot
     effect is created at the end of the turn. This second effect returns the
@@ -681,6 +711,7 @@ def test_610_3_exile_until_eot_returns_at_cleanup():
     assert p2.battlefield[0].card.name == "Temporary Bear"
 
 
+@pytest.mark.cr("610.3c")
 def test_610_3c_exiled_creature_returns_under_owners_control():
     """610.3c: An object returned to the battlefield by a zone-change one-shot
     returns under its owner's control unless the effect specifies otherwise.
@@ -705,6 +736,7 @@ def test_610_3c_exiled_creature_returns_under_owners_control():
     assert p2.battlefield[0].card.name == "Owned Bear"
 
 
+@pytest.mark.cr("610.3d")
 def test_610_3d_simultaneous_zone_changes_from_same_event():
     """610.3d: If multiple one-shot zone-change effects are created immediately
     after one or more simultaneous events, those one-shot effects are also

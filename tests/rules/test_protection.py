@@ -136,6 +136,7 @@ def _get(all_cards, name: str) -> CardDefinition:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("702.16a")
 def test_702_16a_protection_from_color_is_a_static_ability(all_cards):
     """702.16a: Black Knight's printed "Protection from white" is recognized."""
     bk = Permanent(card=_get(all_cards, "Black Knight"))
@@ -143,6 +144,7 @@ def test_702_16a_protection_from_color_is_a_static_ability(all_cards):
     assert game._protection_colors(bk) == {"W"}
 
 
+@pytest.mark.cr("702.16a")
 def test_702_16a_creature_without_protection_has_none():
     bear = Permanent(card=_mk_creature("Bear", 2, 2, colors=("G",)))
     game, _, _ = _game([bear], [])
@@ -154,6 +156,7 @@ def test_702_16a_creature_without_protection_has_none():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("702.16b")
 def test_702_16b_cannot_be_targeted_by_spell_of_quality(all_cards):
     """702.16b: a white spell can't target a creature with protection from white."""
     white_bolt = _mk_instant(
@@ -169,6 +172,7 @@ def test_702_16b_cannot_be_targeted_by_spell_of_quality(all_cards):
     assert p2.battlefield[0].damage_marked == 0
 
 
+@pytest.mark.cr("702.16b", "601.2c")
 def test_702_16b_protected_creature_is_an_illegal_target_at_cast_time(all_cards):
     """702.16b: a spell can't even be cast targeting a protected creature — the
     target is rejected at cast time, not merely fizzled on resolution.
@@ -193,6 +197,7 @@ def test_702_16b_protected_creature_is_an_illegal_target_at_cast_time(all_cards)
     assert any(c.name == "Lightning Bolt" for c in p1.hand)
 
 
+@pytest.mark.cr("702.16b")
 def test_702_16b_unprotected_creature_is_a_legal_target(all_cards):
     """Sanity: the cast-time check doesn't reject legal targets."""
     bears = Permanent(card=_get(all_cards, "Grizzly Bears"))  # green, no protection
@@ -206,6 +211,7 @@ def test_702_16b_unprotected_creature_is_a_legal_target(all_cards):
     assert bears.damage_marked == 3
 
 
+@pytest.mark.cr("702.16b")
 def test_702_16b_cannot_be_targeted_by_ability_from_source_of_quality(all_cards):
     """702.16b: an ability from a white source can't target the protected creature."""
     bk = Permanent(card=_get(all_cards, "Black Knight"))
@@ -214,6 +220,7 @@ def test_702_16b_cannot_be_targeted_by_ability_from_source_of_quality(all_cards)
     assert game._can_be_targeted(bk, white_source) is False
 
 
+@pytest.mark.cr("702.16b")
 def test_702_16b_can_be_targeted_by_ability_from_other_color(all_cards):
     """702.16b: protection from white does not stop a non-white source's ability."""
     bk = Permanent(card=_get(all_cards, "Black Knight"))
@@ -222,6 +229,7 @@ def test_702_16b_can_be_targeted_by_ability_from_other_color(all_cards):
     assert game._can_be_targeted(bk, red_source) is True
 
 
+@pytest.mark.cr("702.16b")
 def test_702_16b_other_color_spell_can_target_and_kill(all_cards):
     """702.16b: protection from white doesn't stop a red spell from killing it."""
     red_bolt = _mk_instant(
@@ -243,6 +251,7 @@ def test_702_16b_other_color_spell_can_target_and_kill(all_cards):
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("702.16c")
 def test_702_16c_cannot_be_enchanted_by_aura_of_quality(all_cards):
     """702.16c: a white Aura can't be attached to a creature with protection from white."""
     white_aura = _mk_aura(
@@ -261,6 +270,7 @@ def test_702_16c_cannot_be_enchanted_by_aura_of_quality(all_cards):
     assert bk.power_bonus == 0 and bk.toughness_bonus == 0
 
 
+@pytest.mark.cr("702.16c", "704.5m")
 def test_702_16c_attached_aura_of_quality_falls_off_as_sba(all_cards):
     """702.16c via 704: an Aura with the stated quality already attached to a
     creature that has gained protection is put into its owner's graveyard."""
@@ -285,6 +295,7 @@ def test_702_16c_attached_aura_of_quality_falls_off_as_sba(all_cards):
     assert any(c.name == "Holy Strength" for c in p1.graveyard)
 
 
+@pytest.mark.cr("702.16c")
 def test_702_16c_attached_aura_without_quality_stays(all_cards):
     """702.16c only removes Auras that *have* the stated quality."""
     creature = Permanent(card=_mk_creature("Goblin", 2, 2, colors=("R",)))
@@ -313,6 +324,7 @@ def test_702_16c_attached_aura_without_quality_stays(all_cards):
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("702.16d", "704.5n")
 def test_702_16d_equipment_of_quality_becomes_unattached(all_cards):
     """702.16d via 704: Equipment with the stated quality attached to a protected
     permanent becomes unattached, but remains on the battlefield."""
@@ -337,6 +349,7 @@ def test_702_16d_equipment_of_quality_becomes_unattached(all_cards):
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("702.16e")
 def test_702_16e_combat_damage_from_quality_prevented(all_cards):
     """702.16e: combat damage from a white source to the protected creature is prevented."""
     white_attacker = Permanent(card=_mk_creature("Crusader", 3, 3, colors=("W",)))
@@ -351,6 +364,7 @@ def test_702_16e_combat_damage_from_quality_prevented(all_cards):
     assert survivor.damage_marked == 0
 
 
+@pytest.mark.cr("702.16e")
 def test_702_16e_combat_damage_from_other_color_not_prevented(all_cards):
     """702.16e: protection from white does not prevent a black source's damage."""
     black_attacker = Permanent(card=_mk_creature("Zombie", 3, 3, colors=("B",)))
@@ -370,6 +384,7 @@ def test_702_16e_combat_damage_from_other_color_not_prevented(all_cards):
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("702.16f")
 def test_702_16f_cannot_be_blocked_by_creature_of_quality(all_cards):
     """702.16f: a white blocker can't block an attacker with protection from white."""
     bk = Permanent(card=_get(all_cards, "Black Knight"))  # protection from white
@@ -381,6 +396,7 @@ def test_702_16f_cannot_be_blocked_by_creature_of_quality(all_cards):
     assert not ok
 
 
+@pytest.mark.cr("702.16f")
 def test_702_16f_can_be_blocked_by_creature_of_other_quality(all_cards):
     """702.16f: protection from white does not stop a black creature from blocking."""
     bk = Permanent(card=_get(all_cards, "Black Knight"))  # protection from white
@@ -397,6 +413,7 @@ def test_702_16f_can_be_blocked_by_creature_of_other_quality(all_cards):
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("702.16g")
 def test_702_16g_protection_from_two_qualities():
     """702.16g: "protection from white and from blue" grants both protections."""
     knight = _mk_creature(
@@ -410,6 +427,7 @@ def test_702_16g_protection_from_two_qualities():
     assert game._protection_colors(perm) == {"W", "U"}
 
 
+@pytest.mark.cr("702.16g", "702.16f")
 def test_702_16g_two_qualities_behave_independently():
     """702.16g: each quality is its own ability — a blue blocker and a white
     blocker are both unable to block, but a black one can."""
@@ -431,6 +449,7 @@ def test_702_16g_two_qualities_behave_independently():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("702.16m")
 def test_702_16m_multiple_instances_redundant(all_cards):
     """702.16m: protection from white from two sources is a single effective
     protection — the set of protected colors has no duplicate."""
@@ -440,6 +459,7 @@ def test_702_16m_multiple_instances_redundant(all_cards):
     assert game._protection_colors(bk) == {"W"}
 
 
+@pytest.mark.cr("702.16m")
 def test_702_16m_redundant_instance_still_protects_when_one_removed(all_cards):
     """702.16m: removing one redundant instance leaves the protection intact."""
     bk = Permanent(card=_get(all_cards, "Black Knight"))
@@ -456,6 +476,7 @@ def test_702_16m_redundant_instance_still_protects_when_one_removed(all_cards):
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cr("702.16n")
 def test_702_16n_self_granting_aura_is_not_removed(all_cards):
     """702.16n: White Ward grants protection from white and says the effect
     doesn't remove this Aura, so it stays attached despite being white."""
@@ -475,6 +496,7 @@ def test_702_16n_self_granting_aura_is_not_removed(all_cards):
     assert not any(c.name == "White Ward" for c in p1.graveyard)
 
 
+@pytest.mark.cr("702.16n")
 def test_702_16n_other_instance_affects_other_auras(all_cards):
     """702.16n: the "doesn't remove this Aura" clause only protects that Aura.
     Another white Aura attached to the same creature still falls off."""
@@ -506,15 +528,18 @@ def test_702_16n_other_instance_affects_other_auras(all_cards):
 
 
 @pytest.mark.skip(reason="No 'protection from everything' cards in LEA (702.16j)")
+@pytest.mark.cr("702.16j")
 def test_702_16j_protection_from_everything():
     ...
 
 
 @pytest.mark.skip(reason="No 'protection from [a player]' cards in LEA (702.16k)")
+@pytest.mark.cr("702.16k")
 def test_702_16k_protection_from_player():
     ...
 
 
 @pytest.mark.skip(reason="No 'protection from each [characteristic]' cards in LEA (702.16h/i)")
+@pytest.mark.cr("702.16h")
 def test_702_16h_protection_from_each_characteristic():
     ...

@@ -41,12 +41,14 @@ def _two_player_game(**kwargs) -> tuple[Game, PlayerState, PlayerState]:
 # a draw, or when the game is restarted.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("104.1")
 def test_104_1_fresh_game_is_not_over():
     """104.1: A newly created game has not ended."""
     game, p1, p2 = _two_player_game()
     assert not game.is_game_over()
 
 
+@pytest.mark.cr("104.1")
 def test_104_1_game_over_when_player_wins():
     """104.1: The game is over once a player has won."""
     game, p1, p2 = _two_player_game()
@@ -54,6 +56,7 @@ def test_104_1_game_over_when_player_wins():
     assert game.is_game_over()
 
 
+@pytest.mark.cr("104.1")
 def test_104_1_game_over_when_draw():
     """104.1: The game is over when it is a draw."""
     game, p1, p2 = _two_player_game()
@@ -65,6 +68,7 @@ def test_104_1_game_over_when_draw():
 # Rule 104.2a – A player wins if all opponents have left the game.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("104.2a")
 def test_104_2a_last_player_standing_wins():
     """104.2a: When all opponents have lost, the remaining player wins."""
     game, p1, p2 = _two_player_game()
@@ -73,12 +77,14 @@ def test_104_2a_last_player_standing_wins():
     assert winner is p1
 
 
+@pytest.mark.cr("104.2a")
 def test_104_2a_no_winner_while_both_active():
     """104.2a: No winner while both players are still in the game."""
     game, p1, p2 = _two_player_game()
     assert game.get_winner() is None
 
 
+@pytest.mark.cr("104.2a", "104.4a")
 def test_104_2a_no_winner_while_one_active_one_lost_draw():
     """104.2a: is_draw overrides last-standing win."""
     game, p1, p2 = _two_player_game()
@@ -87,6 +93,7 @@ def test_104_2a_no_winner_while_one_active_one_lost_draw():
     assert game.get_winner() is None
 
 
+@pytest.mark.cr("104.2a")
 def test_104_2a_three_players_two_lose_winner_identified():
     """104.2a: In a multiplayer game, the last player with opponents all lost wins."""
     p1 = PlayerState(name="P1")
@@ -102,6 +109,7 @@ def test_104_2a_three_players_two_lose_winner_identified():
 # Rule 104.2b – An effect may state that a player wins the game.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("104.2b")
 def test_104_2b_spell_causes_caster_to_win():
     """104.2b: Resolving a spell with 'you win the game' marks the caster as winner."""
     win_spell = _mk_card("Final Gambit", "Sorcery", "You win the game.")
@@ -117,6 +125,7 @@ def test_104_2b_spell_causes_caster_to_win():
     assert game.is_game_over()
 
 
+@pytest.mark.cr("104.2b")
 def test_104_2b_win_spell_marks_opponent_as_lost():
     """104.2b: When caster wins, all opponents are marked as lost."""
     win_spell = _mk_card("Win Card", "Sorcery", "You win the game.")
@@ -134,6 +143,7 @@ def test_104_2b_win_spell_marks_opponent_as_lost():
 # Rule 104.3a – A player can concede the game at any time.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("104.3a")
 def test_104_3a_concede_marks_player_as_lost():
     """104.3a: A conceding player immediately loses the game."""
     game, p1, p2 = _two_player_game()
@@ -141,6 +151,7 @@ def test_104_3a_concede_marks_player_as_lost():
     assert p1.lost
 
 
+@pytest.mark.cr("104.3a")
 def test_104_3a_concede_leaves_game_immediately():
     """104.3a: After conceding, the game is over because the opponent wins."""
     game, p1, p2 = _two_player_game()
@@ -149,6 +160,7 @@ def test_104_3a_concede_leaves_game_immediately():
     assert game.get_winner() is p2
 
 
+@pytest.mark.cr("104.3a")
 def test_104_3a_concede_is_logged():
     """104.3a: Concession is logged."""
     game, p1, p2 = _two_player_game()
@@ -156,6 +168,7 @@ def test_104_3a_concede_is_logged():
     assert any("concede" in entry.lower() or "lost" in entry.lower() for entry in game.log)
 
 
+@pytest.mark.cr("104.3a")
 def test_104_3a_double_concede_is_idempotent():
     """104.3a: Conceding twice does not change the lost flag or produce duplicate effects."""
     game, p1, p2 = _two_player_game()
@@ -171,6 +184,7 @@ def test_104_3a_double_concede_is_idempotent():
 # game the next time a player would receive priority. (State-based action.)
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("104.3b", "704.5a")
 def test_104_3b_zero_life_causes_loss():
     """104.3b: A player reduced to 0 life loses the game via state-based actions."""
     drain = _mk_card("Drain Life", "Sorcery", "Target player loses 20 life.")
@@ -184,6 +198,7 @@ def test_104_3b_zero_life_causes_loss():
     assert p2.lost
 
 
+@pytest.mark.cr("104.3b", "704.5a")
 def test_104_3b_negative_life_causes_loss():
     """104.3b: A player with negative life also loses the game."""
     drain = _mk_card("Big Drain", "Sorcery", "Target player loses 5 life.")
@@ -197,6 +212,7 @@ def test_104_3b_negative_life_causes_loss():
     assert p2.lost
 
 
+@pytest.mark.cr("104.3b", "704.5a")
 def test_104_3b_positive_life_does_not_cause_loss():
     """104.3b: A player with positive life does not lose."""
     game, p1, p2 = _two_player_game()
@@ -210,6 +226,7 @@ def test_104_3b_positive_life_does_not_cause_loss():
 # their library, they draw the remaining cards and then lose the game.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("104.3c", "704.5b")
 def test_104_3c_draw_from_empty_library_causes_loss():
     """104.3c: Drawing from an empty library causes the player to lose."""
     draw_spell = _mk_card("Draw Spell", "Sorcery", "Target player draws a card.")
@@ -222,6 +239,7 @@ def test_104_3c_draw_from_empty_library_causes_loss():
     assert p2.lost
 
 
+@pytest.mark.cr("104.3c", "104.2a")
 def test_104_3c_winning_player_identified_after_opponent_decks():
     """104.3c: After the opponent loses to decking, the remaining player wins."""
     draw_spell = _mk_card("Draw Spell", "Sorcery", "Target player draws a card.")
@@ -239,6 +257,7 @@ def test_104_3c_winning_player_identified_after_opponent_decks():
 # loses the game. (State-based action.)
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("104.3d")
 def test_104_3d_poison_counters_field_exists():
     """104.3d: PlayerState tracks poison_counters."""
     p = PlayerState(name="P1")
@@ -246,6 +265,7 @@ def test_104_3d_poison_counters_field_exists():
     assert p.poison_counters == 0
 
 
+@pytest.mark.cr("104.3d", "704.5c")
 def test_104_3d_nine_poison_counters_does_not_cause_loss():
     """104.3d: Nine poison counters is not enough to lose."""
     p1 = PlayerState(name="P1")
@@ -256,6 +276,7 @@ def test_104_3d_nine_poison_counters_does_not_cause_loss():
     assert not p2.lost
 
 
+@pytest.mark.cr("104.3d", "704.5c")
 def test_104_3d_ten_poison_counters_causes_loss():
     """104.3d: Exactly 10 poison counters causes the player to lose."""
     p1 = PlayerState(name="P1")
@@ -266,6 +287,7 @@ def test_104_3d_ten_poison_counters_causes_loss():
     assert p2.lost
 
 
+@pytest.mark.cr("104.3d", "704.5c")
 def test_104_3d_more_than_ten_poison_counters_causes_loss():
     """104.3d: More than 10 poison counters also causes the player to lose."""
     p1 = PlayerState(name="P1")
@@ -276,6 +298,7 @@ def test_104_3d_more_than_ten_poison_counters_causes_loss():
     assert p2.lost
 
 
+@pytest.mark.cr("104.3d", "704.5c")
 def test_104_3d_poison_loss_is_logged():
     """104.3d: Losing to poison is recorded in the game log."""
     p1 = PlayerState(name="P1")
@@ -286,6 +309,7 @@ def test_104_3d_poison_loss_is_logged():
     assert any("poison" in entry.lower() for entry in game.log)
 
 
+@pytest.mark.cr("104.3d", "104.2a")
 def test_104_3d_winner_determined_after_poison_death():
     """104.3d: The surviving player wins after opponent accumulates 10 poison counters."""
     p1 = PlayerState(name="P1")
@@ -300,6 +324,7 @@ def test_104_3d_winner_determined_after_poison_death():
 # Rule 104.3e – An effect may state that a player loses the game.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("104.3e")
 def test_104_3e_spell_causes_target_to_lose():
     """104.3e: A spell with 'target player loses the game' makes the target lose."""
     lose_spell = _mk_card("Death Sentence", "Sorcery", "Target player loses the game.")
@@ -313,6 +338,7 @@ def test_104_3e_spell_causes_target_to_lose():
     assert p2.lost
 
 
+@pytest.mark.cr("104.3e", "104.2a")
 def test_104_3e_caster_wins_after_opponent_spell_loss():
     """104.3e: After the target loses via effect, the caster wins."""
     lose_spell = _mk_card("Death Sentence", "Sorcery", "Target player loses the game.")
@@ -326,6 +352,7 @@ def test_104_3e_caster_wins_after_opponent_spell_loss():
     assert game.get_winner() is p1
 
 
+@pytest.mark.cr("104.3e")
 def test_104_3e_effect_on_already_lost_player_is_safe():
     """104.3e: Applying a 'loses the game' effect to an already-lost player is a no-op."""
     lose_spell = _mk_card("Overkill", "Sorcery", "Target player loses the game.")
@@ -345,6 +372,7 @@ def test_104_3e_effect_on_already_lost_player_is_safe():
 # player loses the game.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("104.3f")
 def test_104_3f_win_condition_does_not_save_player_who_has_lost():
     """104.3f: A player who has already lost cannot win even if a win effect fires."""
     p1 = PlayerState(name="P1")
@@ -356,6 +384,7 @@ def test_104_3f_win_condition_does_not_save_player_who_has_lost():
     assert game.get_winner() is not p1
 
 
+@pytest.mark.cr("104.3f", "704.5a")
 def test_104_3f_player_with_zero_life_casting_win_spell_still_loses():
     """104.3f: Casting 'you win the game' while at 0 life — player still loses (SBAs apply)."""
     win_spell = _mk_card("Last Gambit", "Sorcery", "You win the game.")
@@ -372,6 +401,7 @@ def test_104_3f_player_with_zero_life_casting_win_spell_still_loses():
 # the game is a draw.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("104.4a")
 def test_104_4a_both_players_lose_simultaneously_is_draw():
     """104.4a: Both players losing at the same time results in a draw."""
     p1 = PlayerState(name="P1", life=0)
@@ -382,6 +412,7 @@ def test_104_4a_both_players_lose_simultaneously_is_draw():
     assert game.is_draw
 
 
+@pytest.mark.cr("104.4a")
 def test_104_4a_draw_means_no_winner():
     """104.4a: A draw means there is no winner."""
     p1 = PlayerState(name="P1", life=0)
@@ -390,6 +421,7 @@ def test_104_4a_draw_means_no_winner():
     assert game.get_winner() is None
 
 
+@pytest.mark.cr("104.4a", "104.1")
 def test_104_4a_draw_is_game_over():
     """104.4a: A draw counts as the game being over (rule 104.1)."""
     p1 = PlayerState(name="P1", life=0)
@@ -398,6 +430,7 @@ def test_104_4a_draw_is_game_over():
     assert game.is_game_over()
 
 
+@pytest.mark.cr("104.4a")
 def test_104_4a_manual_draw_flag():
     """104.4a: Setting is_draw directly on the game object is respected."""
     game, p1, p2 = _two_player_game()
@@ -411,6 +444,7 @@ def test_104_4a_manual_draw_flag():
 # Rule 104.4c – An effect may state that the game is a draw.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("104.4c")
 def test_104_4c_spell_causes_game_to_be_draw():
     """104.4c: A spell with 'the game is a draw' ends the game as a draw."""
     draw_spell = _mk_card("Mutual Destruction", "Sorcery", "The game is a draw.")
@@ -424,6 +458,7 @@ def test_104_4c_spell_causes_game_to_be_draw():
     assert game.is_draw
 
 
+@pytest.mark.cr("104.4c")
 def test_104_4c_draw_spell_no_winner():
     """104.4c: After a 'game is a draw' effect, there is no winner."""
     draw_spell = _mk_card("Stalemate", "Sorcery", "The game is a draw.")
@@ -441,6 +476,7 @@ def test_104_4c_draw_spell_no_winner():
 # Rule 104.5 – If a player loses the game, that player leaves the game.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("104.5")
 def test_104_5_lost_player_has_lost_flag_set():
     """104.5: A player who loses has their lost flag set to True."""
     game, p1, p2 = _two_player_game()
@@ -448,6 +484,7 @@ def test_104_5_lost_player_has_lost_flag_set():
     assert p2.lost
 
 
+@pytest.mark.cr("104.5", "104.2a")
 def test_104_5_game_over_after_player_leaves():
     """104.5: Once a player loses and leaves, the remaining player wins."""
     game, p1, p2 = _two_player_game()
@@ -469,6 +506,7 @@ def test_104_5_game_over_after_player_leaves():
         "damage dealt to each player. No commander_damage field exists on PlayerState."
     ),
 )
+@pytest.mark.cr("104.3j")
 def test_104_3j_twenty_one_commander_damage_causes_loss():
     """104.3j: A player dealt 21+ combat damage by the same commander over the game loses."""
     p1 = PlayerState(name="P1")
@@ -485,6 +523,7 @@ def test_104_3j_twenty_one_commander_damage_causes_loss():
 # Additional edge-case tests
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cr("104.1")
 def test_game_not_over_with_all_players_alive():
     """No game-ending condition met when all players are alive and healthy."""
     game, p1, p2 = _two_player_game()
@@ -494,24 +533,28 @@ def test_game_not_over_with_all_players_alive():
     assert not game.is_game_over()
 
 
+@pytest.mark.cr("104.2a")
 def test_get_winner_returns_none_when_no_game_over():
     """get_winner() returns None while the game is ongoing."""
     game, p1, p2 = _two_player_game()
     assert game.get_winner() is None
 
 
+@pytest.mark.cr("104.1")
 def test_is_game_over_false_on_new_game():
     """is_game_over() returns False immediately after game creation."""
     game, p1, p2 = _two_player_game()
     assert not game.is_game_over()
 
 
+@pytest.mark.cr("104.3d")
 def test_poison_counters_start_at_zero():
     """Players start with zero poison counters."""
     p = PlayerState(name="P1")
     assert p.poison_counters == 0
 
 
+@pytest.mark.cr("104.4a")
 def test_is_draw_starts_false():
     """Games start with is_draw = False."""
     game, _, _ = _two_player_game()

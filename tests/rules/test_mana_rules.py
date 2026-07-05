@@ -1,3 +1,5 @@
+import pytest
+
 from engine import Game, PlayerState
 from engine.models import CardDefinition, Permanent
 
@@ -23,6 +25,7 @@ def _mk_card(
     )
 
 
+@pytest.mark.cr("601.2h")
 def test_strict_mana_blocks_unpaid_cast():
     spell = _mk_card(
         name="Bolt Test",
