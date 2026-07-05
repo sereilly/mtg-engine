@@ -1,0 +1,1125 @@
+{
+  "fetched_at": "2026-07-05",
+  "sets": [
+    {
+      "code": "lea",
+      "name": "Limited Edition Alpha",
+      "released_at": "1993-08-05",
+      "set_type": "core",
+      "total_cards": 290,
+      "new_cards": 290
+    },
+    {
+      "code": "leb",
+      "name": "Limited Edition Beta",
+      "released_at": "1993-10-04",
+      "set_type": "core",
+      "total_cards": 292,
+      "new_cards": 2
+    },
+    {
+      "code": "2ed",
+      "name": "Unlimited Edition",
+      "released_at": "1993-12-01",
+      "set_type": "core",
+      "total_cards": 292,
+      "new_cards": 0
+    },
+    {
+      "code": "arn",
+      "name": "Arabian Nights",
+      "released_at": "1993-12-17",
+      "set_type": "expansion",
+      "total_cards": 78,
+      "new_cards": 77
+    },
+    {
+      "code": "atq",
+      "name": "Antiquities",
+      "released_at": "1994-03-04",
+      "set_type": "expansion",
+      "total_cards": 85,
+      "new_cards": 85
+    },
+    {
+      "code": "fbb",
+      "name": "Foreign Black Border",
+      "released_at": "1994-04-11",
+      "set_type": "core",
+      "total_cards": 296,
+      "new_cards": 0
+    },
+    {
+      "code": "3ed",
+      "name": "Revised Edition",
+      "released_at": "1994-04-11",
+      "set_type": "core",
+      "total_cards": 296,
+      "new_cards": 0
+    },
+    {
+      "code": "leg",
+      "name": "Legends",
+      "released_at": "1994-06-01",
+      "set_type": "expansion",
+      "total_cards": 310,
+      "new_cards": 310
+    },
+    {
+      "code": "sum",
+      "name": "Summer Magic / Edgar",
+      "released_at": "1994-06-21",
+      "set_type": "core",
+      "total_cards": 296,
+      "new_cards": 0
+    },
+    {
+      "code": "drk",
+      "name": "The Dark",
+      "released_at": "1994-08-01",
+      "set_type": "expansion",
+      "total_cards": 119,
+      "new_cards": 119
+    },
+    {
+      "code": "fem",
+      "name": "Fallen Empires",
+      "released_at": "1994-11-01",
+      "set_type": "expansion",
+      "total_cards": 102,
+      "new_cards": 102
+    },
+    {
+      "code": "4bb",
+      "name": "Fourth Edition Foreign Black Border",
+      "released_at": "1995-04-01",
+      "set_type": "core",
+      "total_cards": 368,
+      "new_cards": 0
+    },
+    {
+      "code": "4ed",
+      "name": "Fourth Edition",
+      "released_at": "1995-04-01",
+      "set_type": "core",
+      "total_cards": 368,
+      "new_cards": 0
+    },
+    {
+      "code": "ice",
+      "name": "Ice Age",
+      "released_at": "1995-06-03",
+      "set_type": "expansion",
+      "total_cards": 373,
+      "new_cards": 346
+    },
+    {
+      "code": "hml",
+      "name": "Homelands",
+      "released_at": "1995-10-01",
+      "set_type": "expansion",
+      "total_cards": 115,
+      "new_cards": 115
+    },
+    {
+      "code": "all",
+      "name": "Alliances",
+      "released_at": "1996-06-10",
+      "set_type": "expansion",
+      "total_cards": 144,
+      "new_cards": 144
+    },
+    {
+      "code": "mir",
+      "name": "Mirage",
+      "released_at": "1996-10-08",
+      "set_type": "expansion",
+      "total_cards": 335,
+      "new_cards": 313
+    },
+    {
+      "code": "vis",
+      "name": "Visions",
+      "released_at": "1997-02-03",
+      "set_type": "expansion",
+      "total_cards": 167,
+      "new_cards": 167
+    },
+    {
+      "code": "5ed",
+      "name": "Fifth Edition",
+      "released_at": "1997-03-24",
+      "set_type": "core",
+      "total_cards": 434,
+      "new_cards": 0
+    },
+    {
+      "code": "wth",
+      "name": "Weatherlight",
+      "released_at": "1997-06-09",
+      "set_type": "expansion",
+      "total_cards": 167,
+      "new_cards": 161
+    },
+    {
+      "code": "tmp",
+      "name": "Tempest",
+      "released_at": "1997-10-14",
+      "set_type": "expansion",
+      "total_cards": 335,
+      "new_cards": 299
+    },
+    {
+      "code": "sth",
+      "name": "Stronghold",
+      "released_at": "1998-03-02",
+      "set_type": "expansion",
+      "total_cards": 143,
+      "new_cards": 137
+    },
+    {
+      "code": "exo",
+      "name": "Exodus",
+      "released_at": "1998-06-15",
+      "set_type": "expansion",
+      "total_cards": 143,
+      "new_cards": 138
+    },
+    {
+      "code": "usg",
+      "name": "Urza's Saga",
+      "released_at": "1998-10-12",
+      "set_type": "expansion",
+      "total_cards": 335,
+      "new_cards": 309
+    },
+    {
+      "code": "ulg",
+      "name": "Urza's Legacy",
+      "released_at": "1999-02-15",
+      "set_type": "expansion",
+      "total_cards": 143,
+      "new_cards": 140
+    },
+    {
+      "code": "6ed",
+      "name": "Classic Sixth Edition",
+      "released_at": "1999-04-21",
+      "set_type": "core",
+      "total_cards": 335,
+      "new_cards": 0
+    },
+    {
+      "code": "uds",
+      "name": "Urza's Destiny",
+      "released_at": "1999-06-07",
+      "set_type": "expansion",
+      "total_cards": 143,
+      "new_cards": 142
+    },
+    {
+      "code": "mmq",
+      "name": "Mercadian Masques",
+      "released_at": "1999-10-04",
+      "set_type": "expansion",
+      "total_cards": 335,
+      "new_cards": 309
+    },
+    {
+      "code": "nem",
+      "name": "Nemesis",
+      "released_at": "2000-02-14",
+      "set_type": "expansion",
+      "total_cards": 143,
+      "new_cards": 143
+    },
+    {
+      "code": "pcy",
+      "name": "Prophecy",
+      "released_at": "2000-06-05",
+      "set_type": "expansion",
+      "total_cards": 143,
+      "new_cards": 143
+    },
+    {
+      "code": "inv",
+      "name": "Invasion",
+      "released_at": "2000-10-02",
+      "set_type": "expansion",
+      "total_cards": 335,
+      "new_cards": 310
+    },
+    {
+      "code": "pls",
+      "name": "Planeshift",
+      "released_at": "2001-02-05",
+      "set_type": "expansion",
+      "total_cards": 143,
+      "new_cards": 143
+    },
+    {
+      "code": "7ed",
+      "name": "Seventh Edition",
+      "released_at": "2001-04-11",
+      "set_type": "core",
+      "total_cards": 335,
+      "new_cards": 0
+    },
+    {
+      "code": "apc",
+      "name": "Apocalypse",
+      "released_at": "2001-06-04",
+      "set_type": "expansion",
+      "total_cards": 143,
+      "new_cards": 143
+    },
+    {
+      "code": "ody",
+      "name": "Odyssey",
+      "released_at": "2001-10-01",
+      "set_type": "expansion",
+      "total_cards": 335,
+      "new_cards": 321
+    },
+    {
+      "code": "tor",
+      "name": "Torment",
+      "released_at": "2002-02-04",
+      "set_type": "expansion",
+      "total_cards": 143,
+      "new_cards": 142
+    },
+    {
+      "code": "jud",
+      "name": "Judgment",
+      "released_at": "2002-05-27",
+      "set_type": "expansion",
+      "total_cards": 143,
+      "new_cards": 141
+    },
+    {
+      "code": "ons",
+      "name": "Onslaught",
+      "released_at": "2002-10-07",
+      "set_type": "expansion",
+      "total_cards": 335,
+      "new_cards": 320
+    },
+    {
+      "code": "lgn",
+      "name": "Legions",
+      "released_at": "2003-02-03",
+      "set_type": "expansion",
+      "total_cards": 145,
+      "new_cards": 144
+    },
+    {
+      "code": "scg",
+      "name": "Scourge",
+      "released_at": "2003-05-26",
+      "set_type": "expansion",
+      "total_cards": 143,
+      "new_cards": 142
+    },
+    {
+      "code": "8ed",
+      "name": "Eighth Edition",
+      "released_at": "2003-07-28",
+      "set_type": "core",
+      "total_cards": 342,
+      "new_cards": 0
+    },
+    {
+      "code": "mrd",
+      "name": "Mirrodin",
+      "released_at": "2003-10-02",
+      "set_type": "expansion",
+      "total_cards": 291,
+      "new_cards": 269
+    },
+    {
+      "code": "dst",
+      "name": "Darksteel",
+      "released_at": "2004-02-06",
+      "set_type": "expansion",
+      "total_cards": 165,
+      "new_cards": 162
+    },
+    {
+      "code": "5dn",
+      "name": "Fifth Dawn",
+      "released_at": "2004-06-04",
+      "set_type": "expansion",
+      "total_cards": 165,
+      "new_cards": 162
+    },
+    {
+      "code": "chk",
+      "name": "Champions of Kamigawa",
+      "released_at": "2004-10-01",
+      "set_type": "expansion",
+      "total_cards": 291,
+      "new_cards": 283
+    },
+    {
+      "code": "bok",
+      "name": "Betrayers of Kamigawa",
+      "released_at": "2005-02-04",
+      "set_type": "expansion",
+      "total_cards": 165,
+      "new_cards": 159
+    },
+    {
+      "code": "sok",
+      "name": "Saviors of Kamigawa",
+      "released_at": "2005-06-03",
+      "set_type": "expansion",
+      "total_cards": 165,
+      "new_cards": 165
+    },
+    {
+      "code": "9ed",
+      "name": "Ninth Edition",
+      "released_at": "2005-07-29",
+      "set_type": "core",
+      "total_cards": 344,
+      "new_cards": 0
+    },
+    {
+      "code": "rav",
+      "name": "Ravnica: City of Guilds",
+      "released_at": "2005-10-07",
+      "set_type": "expansion",
+      "total_cards": 291,
+      "new_cards": 280
+    },
+    {
+      "code": "gpt",
+      "name": "Guildpact",
+      "released_at": "2006-02-03",
+      "set_type": "expansion",
+      "total_cards": 165,
+      "new_cards": 163
+    },
+    {
+      "code": "dis",
+      "name": "Dissension",
+      "released_at": "2006-05-05",
+      "set_type": "expansion",
+      "total_cards": 180,
+      "new_cards": 177
+    },
+    {
+      "code": "csp",
+      "name": "Coldsnap",
+      "released_at": "2006-07-21",
+      "set_type": "expansion",
+      "total_cards": 155,
+      "new_cards": 149
+    },
+    {
+      "code": "tsb",
+      "name": "Time Spiral Timeshifted",
+      "released_at": "2006-10-06",
+      "set_type": "expansion",
+      "total_cards": 121,
+      "new_cards": 0
+    },
+    {
+      "code": "tsp",
+      "name": "Time Spiral",
+      "released_at": "2006-10-06",
+      "set_type": "expansion",
+      "total_cards": 286,
+      "new_cards": 281
+    },
+    {
+      "code": "plc",
+      "name": "Planar Chaos",
+      "released_at": "2007-02-02",
+      "set_type": "expansion",
+      "total_cards": 165,
+      "new_cards": 165
+    },
+    {
+      "code": "fut",
+      "name": "Future Sight",
+      "released_at": "2007-05-04",
+      "set_type": "expansion",
+      "total_cards": 180,
+      "new_cards": 180
+    },
+    {
+      "code": "10e",
+      "name": "Tenth Edition",
+      "released_at": "2007-07-13",
+      "set_type": "core",
+      "total_cards": 368,
+      "new_cards": 0
+    },
+    {
+      "code": "lrw",
+      "name": "Lorwyn",
+      "released_at": "2007-10-12",
+      "set_type": "expansion",
+      "total_cards": 286,
+      "new_cards": 280
+    },
+    {
+      "code": "mor",
+      "name": "Morningtide",
+      "released_at": "2008-02-01",
+      "set_type": "expansion",
+      "total_cards": 150,
+      "new_cards": 148
+    },
+    {
+      "code": "shm",
+      "name": "Shadowmoor",
+      "released_at": "2008-05-02",
+      "set_type": "expansion",
+      "total_cards": 286,
+      "new_cards": 274
+    },
+    {
+      "code": "eve",
+      "name": "Eventide",
+      "released_at": "2008-07-25",
+      "set_type": "expansion",
+      "total_cards": 180,
+      "new_cards": 179
+    },
+    {
+      "code": "ala",
+      "name": "Shards of Alara",
+      "released_at": "2008-10-03",
+      "set_type": "expansion",
+      "total_cards": 234,
+      "new_cards": 224
+    },
+    {
+      "code": "con",
+      "name": "Conflux",
+      "released_at": "2009-02-06",
+      "set_type": "expansion",
+      "total_cards": 145,
+      "new_cards": 141
+    },
+    {
+      "code": "arb",
+      "name": "Alara Reborn",
+      "released_at": "2009-04-30",
+      "set_type": "expansion",
+      "total_cards": 145,
+      "new_cards": 143
+    },
+    {
+      "code": "m10",
+      "name": "Magic 2010",
+      "released_at": "2009-07-17",
+      "set_type": "core",
+      "total_cards": 234,
+      "new_cards": 111
+    },
+    {
+      "code": "zen",
+      "name": "Zendikar",
+      "released_at": "2009-10-02",
+      "set_type": "expansion",
+      "total_cards": 234,
+      "new_cards": 220
+    },
+    {
+      "code": "wwk",
+      "name": "Worldwake",
+      "released_at": "2010-02-05",
+      "set_type": "expansion",
+      "total_cards": 145,
+      "new_cards": 142
+    },
+    {
+      "code": "roe",
+      "name": "Rise of the Eldrazi",
+      "released_at": "2010-04-23",
+      "set_type": "expansion",
+      "total_cards": 233,
+      "new_cards": 220
+    },
+    {
+      "code": "m11",
+      "name": "Magic 2011",
+      "released_at": "2010-07-16",
+      "set_type": "core",
+      "total_cards": 234,
+      "new_cards": 105
+    },
+    {
+      "code": "som",
+      "name": "Scars of Mirrodin",
+      "released_at": "2010-10-01",
+      "set_type": "expansion",
+      "total_cards": 234,
+      "new_cards": 218
+    },
+    {
+      "code": "mbs",
+      "name": "Mirrodin Besieged",
+      "released_at": "2011-02-04",
+      "set_type": "expansion",
+      "total_cards": 150,
+      "new_cards": 142
+    },
+    {
+      "code": "nph",
+      "name": "New Phyrexia",
+      "released_at": "2011-05-13",
+      "set_type": "expansion",
+      "total_cards": 170,
+      "new_cards": 162
+    },
+    {
+      "code": "m12",
+      "name": "Magic 2012",
+      "released_at": "2011-07-15",
+      "set_type": "core",
+      "total_cards": 234,
+      "new_cards": 98
+    },
+    {
+      "code": "isd",
+      "name": "Innistrad",
+      "released_at": "2011-09-30",
+      "set_type": "expansion",
+      "total_cards": 254,
+      "new_cards": 240
+    },
+    {
+      "code": "dka",
+      "name": "Dark Ascension",
+      "released_at": "2012-02-03",
+      "set_type": "expansion",
+      "total_cards": 158,
+      "new_cards": 154
+    },
+    {
+      "code": "avr",
+      "name": "Avacyn Restored",
+      "released_at": "2012-05-04",
+      "set_type": "expansion",
+      "total_cards": 234,
+      "new_cards": 217
+    },
+    {
+      "code": "m13",
+      "name": "Magic 2013",
+      "released_at": "2012-07-13",
+      "set_type": "core",
+      "total_cards": 234,
+      "new_cards": 107
+    },
+    {
+      "code": "rtr",
+      "name": "Return to Ravnica",
+      "released_at": "2012-10-05",
+      "set_type": "expansion",
+      "total_cards": 254,
+      "new_cards": 230
+    },
+    {
+      "code": "gtc",
+      "name": "Gatecrash",
+      "released_at": "2013-02-01",
+      "set_type": "expansion",
+      "total_cards": 249,
+      "new_cards": 232
+    },
+    {
+      "code": "dgm",
+      "name": "Dragon's Maze",
+      "released_at": "2013-05-03",
+      "set_type": "expansion",
+      "total_cards": 156,
+      "new_cards": 143
+    },
+    {
+      "code": "m14",
+      "name": "Magic 2014",
+      "released_at": "2013-07-19",
+      "set_type": "core",
+      "total_cards": 234,
+      "new_cards": 112
+    },
+    {
+      "code": "ths",
+      "name": "Theros",
+      "released_at": "2013-09-27",
+      "set_type": "expansion",
+      "total_cards": 234,
+      "new_cards": 217
+    },
+    {
+      "code": "bng",
+      "name": "Born of the Gods",
+      "released_at": "2014-02-07",
+      "set_type": "expansion",
+      "total_cards": 165,
+      "new_cards": 160
+    },
+    {
+      "code": "jou",
+      "name": "Journey into Nyx",
+      "released_at": "2014-05-02",
+      "set_type": "expansion",
+      "total_cards": 165,
+      "new_cards": 161
+    },
+    {
+      "code": "m15",
+      "name": "Magic 2015",
+      "released_at": "2014-07-18",
+      "set_type": "core",
+      "total_cards": 269,
+      "new_cards": 142
+    },
+    {
+      "code": "ktk",
+      "name": "Khans of Tarkir",
+      "released_at": "2014-09-26",
+      "set_type": "expansion",
+      "total_cards": 254,
+      "new_cards": 231
+    },
+    {
+      "code": "frf",
+      "name": "Fate Reforged",
+      "released_at": "2015-01-23",
+      "set_type": "expansion",
+      "total_cards": 180,
+      "new_cards": 161
+    },
+    {
+      "code": "dtk",
+      "name": "Dragons of Tarkir",
+      "released_at": "2015-03-27",
+      "set_type": "expansion",
+      "total_cards": 254,
+      "new_cards": 233
+    },
+    {
+      "code": "ori",
+      "name": "Magic Origins",
+      "released_at": "2015-07-17",
+      "set_type": "core",
+      "total_cards": 273,
+      "new_cards": 181
+    },
+    {
+      "code": "bfz",
+      "name": "Battle for Zendikar",
+      "released_at": "2015-10-02",
+      "set_type": "expansion",
+      "total_cards": 254,
+      "new_cards": 232
+    },
+    {
+      "code": "ogw",
+      "name": "Oath of the Gatewatch",
+      "released_at": "2016-01-22",
+      "set_type": "expansion",
+      "total_cards": 183,
+      "new_cards": 176
+    },
+    {
+      "code": "soi",
+      "name": "Shadows over Innistrad",
+      "released_at": "2016-04-08",
+      "set_type": "expansion",
+      "total_cards": 287,
+      "new_cards": 267
+    },
+    {
+      "code": "emn",
+      "name": "Eldritch Moon",
+      "released_at": "2016-07-22",
+      "set_type": "expansion",
+      "total_cards": 208,
+      "new_cards": 199
+    },
+    {
+      "code": "kld",
+      "name": "Kaladesh",
+      "released_at": "2016-09-30",
+      "set_type": "expansion",
+      "total_cards": 264,
+      "new_cards": 246
+    },
+    {
+      "code": "aer",
+      "name": "Aether Revolt",
+      "released_at": "2017-01-20",
+      "set_type": "expansion",
+      "total_cards": 194,
+      "new_cards": 187
+    },
+    {
+      "code": "akh",
+      "name": "Amonkhet",
+      "released_at": "2017-04-28",
+      "set_type": "expansion",
+      "total_cards": 272,
+      "new_cards": 241
+    },
+    {
+      "code": "hou",
+      "name": "Hour of Devastation",
+      "released_at": "2017-07-14",
+      "set_type": "expansion",
+      "total_cards": 199,
+      "new_cards": 186
+    },
+    {
+      "code": "xln",
+      "name": "Ixalan",
+      "released_at": "2017-09-29",
+      "set_type": "expansion",
+      "total_cards": 274,
+      "new_cards": 245
+    },
+    {
+      "code": "rix",
+      "name": "Rivals of Ixalan",
+      "released_at": "2018-01-19",
+      "set_type": "expansion",
+      "total_cards": 205,
+      "new_cards": 178
+    },
+    {
+      "code": "dom",
+      "name": "Dominaria",
+      "released_at": "2018-04-27",
+      "set_type": "expansion",
+      "total_cards": 265,
+      "new_cards": 231
+    },
+    {
+      "code": "m19",
+      "name": "Core Set 2019",
+      "released_at": "2018-07-13",
+      "set_type": "core",
+      "total_cards": 299,
+      "new_cards": 181
+    },
+    {
+      "code": "grn",
+      "name": "Guilds of Ravnica",
+      "released_at": "2018-10-05",
+      "set_type": "expansion",
+      "total_cards": 268,
+      "new_cards": 234
+    },
+    {
+      "code": "rna",
+      "name": "Ravnica Allegiance",
+      "released_at": "2019-01-25",
+      "set_type": "expansion",
+      "total_cards": 268,
+      "new_cards": 242
+    },
+    {
+      "code": "war",
+      "name": "War of the Spark",
+      "released_at": "2019-05-03",
+      "set_type": "expansion",
+      "total_cards": 266,
+      "new_cards": 248
+    },
+    {
+      "code": "m20",
+      "name": "Core Set 2020",
+      "released_at": "2019-07-12",
+      "set_type": "core",
+      "total_cards": 330,
+      "new_cards": 175
+    },
+    {
+      "code": "eld",
+      "name": "Throne of Eldraine",
+      "released_at": "2019-10-04",
+      "set_type": "expansion",
+      "total_cards": 286,
+      "new_cards": 270
+    },
+    {
+      "code": "thb",
+      "name": "Theros Beyond Death",
+      "released_at": "2020-01-24",
+      "set_type": "expansion",
+      "total_cards": 273,
+      "new_cards": 246
+    },
+    {
+      "code": "iko",
+      "name": "Ikoria: Lair of Behemoths",
+      "released_at": "2020-04-24",
+      "set_type": "expansion",
+      "total_cards": 266,
+      "new_cards": 229
+    },
+    {
+      "code": "m21",
+      "name": "Core Set 2021",
+      "released_at": "2020-07-03",
+      "set_type": "core",
+      "total_cards": 285,
+      "new_cards": 183
+    },
+    {
+      "code": "znr",
+      "name": "Zendikar Rising",
+      "released_at": "2020-09-25",
+      "set_type": "expansion",
+      "total_cards": 285,
+      "new_cards": 270
+    },
+    {
+      "code": "khm",
+      "name": "Kaldheim",
+      "released_at": "2021-02-05",
+      "set_type": "expansion",
+      "total_cards": 323,
+      "new_cards": 305
+    },
+    {
+      "code": "stx",
+      "name": "Strixhaven: School of Mages",
+      "released_at": "2021-04-23",
+      "set_type": "expansion",
+      "total_cards": 290,
+      "new_cards": 284
+    },
+    {
+      "code": "afr",
+      "name": "Adventures in the Forgotten Realms",
+      "released_at": "2021-07-23",
+      "set_type": "expansion",
+      "total_cards": 288,
+      "new_cards": 279
+    },
+    {
+      "code": "mid",
+      "name": "Innistrad: Midnight Hunt",
+      "released_at": "2021-09-24",
+      "set_type": "expansion",
+      "total_cards": 279,
+      "new_cards": 256
+    },
+    {
+      "code": "vow",
+      "name": "Innistrad: Crimson Vow",
+      "released_at": "2021-11-19",
+      "set_type": "expansion",
+      "total_cards": 283,
+      "new_cards": 264
+    },
+    {
+      "code": "neo",
+      "name": "Kamigawa: Neon Dynasty",
+      "released_at": "2022-02-18",
+      "set_type": "expansion",
+      "total_cards": 304,
+      "new_cards": 284
+    },
+    {
+      "code": "snc",
+      "name": "Streets of New Capenna",
+      "released_at": "2022-04-29",
+      "set_type": "expansion",
+      "total_cards": 310,
+      "new_cards": 297
+    },
+    {
+      "code": "dmu",
+      "name": "Dominaria United",
+      "released_at": "2022-09-09",
+      "set_type": "expansion",
+      "total_cards": 288,
+      "new_cards": 261
+    },
+    {
+      "code": "bro",
+      "name": "The Brothers' War",
+      "released_at": "2022-11-18",
+      "set_type": "expansion",
+      "total_cards": 292,
+      "new_cards": 268
+    },
+    {
+      "code": "one",
+      "name": "Phyrexia: All Will Be One",
+      "released_at": "2023-02-10",
+      "set_type": "expansion",
+      "total_cards": 271,
+      "new_cards": 252
+    },
+    {
+      "code": "mom",
+      "name": "March of the Machine",
+      "released_at": "2023-04-21",
+      "set_type": "expansion",
+      "total_cards": 296,
+      "new_cards": 272
+    },
+    {
+      "code": "mat",
+      "name": "March of the Machine: The Aftermath",
+      "released_at": "2023-05-12",
+      "set_type": "expansion",
+      "total_cards": 50,
+      "new_cards": 49
+    },
+    {
+      "code": "woe",
+      "name": "Wilds of Eldraine",
+      "released_at": "2023-09-08",
+      "set_type": "expansion",
+      "total_cards": 281,
+      "new_cards": 266
+    },
+    {
+      "code": "lci",
+      "name": "The Lost Caverns of Ixalan",
+      "released_at": "2023-11-17",
+      "set_type": "expansion",
+      "total_cards": 292,
+      "new_cards": 276
+    },
+    {
+      "code": "mkm",
+      "name": "Murders at Karlov Manor",
+      "released_at": "2024-02-09",
+      "set_type": "expansion",
+      "total_cards": 279,
+      "new_cards": 269
+    },
+    {
+      "code": "otj",
+      "name": "Outlaws of Thunder Junction",
+      "released_at": "2024-04-19",
+      "set_type": "expansion",
+      "total_cards": 276,
+      "new_cards": 259
+    },
+    {
+      "code": "big",
+      "name": "The Big Score",
+      "released_at": "2024-04-19",
+      "set_type": "expansion",
+      "total_cards": 30,
+      "new_cards": 27
+    },
+    {
+      "code": "blb",
+      "name": "Bloomburrow",
+      "released_at": "2024-08-02",
+      "set_type": "expansion",
+      "total_cards": 280,
+      "new_cards": 259
+    },
+    {
+      "code": "dsk",
+      "name": "Duskmourn: House of Horror",
+      "released_at": "2024-09-27",
+      "set_type": "expansion",
+      "total_cards": 278,
+      "new_cards": 267
+    },
+    {
+      "code": "fdn",
+      "name": "Foundations",
+      "released_at": "2024-11-15",
+      "set_type": "core",
+      "total_cards": 517,
+      "new_cards": 139
+    },
+    {
+      "code": "dft",
+      "name": "Aetherdrift",
+      "released_at": "2025-02-14",
+      "set_type": "expansion",
+      "total_cards": 276,
+      "new_cards": 256
+    },
+    {
+      "code": "tdm",
+      "name": "Tarkir: Dragonstorm",
+      "released_at": "2025-04-11",
+      "set_type": "expansion",
+      "total_cards": 277,
+      "new_cards": 253
+    },
+    {
+      "code": "fin",
+      "name": "Final Fantasy",
+      "released_at": "2025-06-13",
+      "set_type": "expansion",
+      "total_cards": 313,
+      "new_cards": 305
+    },
+    {
+      "code": "eoe",
+      "name": "Edge of Eternities",
+      "released_at": "2025-08-01",
+      "set_type": "expansion",
+      "total_cards": 266,
+      "new_cards": 252
+    },
+    {
+      "code": "spm",
+      "name": "Marvel's Spider-Man",
+      "released_at": "2025-09-26",
+      "set_type": "expansion",
+      "total_cards": 193,
+      "new_cards": 187
+    },
+    {
+      "code": "tla",
+      "name": "Avatar: The Last Airbender",
+      "released_at": "2025-11-21",
+      "set_type": "expansion",
+      "total_cards": 286,
+      "new_cards": 277
+    },
+    {
+      "code": "ecl",
+      "name": "Lorwyn Eclipsed",
+      "released_at": "2026-01-23",
+      "set_type": "expansion",
+      "total_cards": 273,
+      "new_cards": 252
+    },
+    {
+      "code": "tmt",
+      "name": "Teenage Mutant Ninja Turtles",
+      "released_at": "2026-03-06",
+      "set_type": "expansion",
+      "total_cards": 195,
+      "new_cards": 187
+    },
+    {
+      "code": "sos",
+      "name": "Secrets of Strixhaven",
+      "released_at": "2026-04-24",
+      "set_type": "expansion",
+      "total_cards": 271,
+      "new_cards": 255
+    },
+    {
+      "code": "msh",
+      "name": "Marvel Super Heroes",
+      "released_at": "2026-06-26",
+      "set_type": "expansion",
+      "total_cards": 281,
+      "new_cards": 270
+    }
+  ]
+}

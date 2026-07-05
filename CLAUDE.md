@@ -42,6 +42,7 @@ python -m uvicorn web.app:app --host 127.0.0.1 --port 8010   # then open http://
 python scripts/run_duel.py            # scripted deterministic duel, no server
 python scripts/simulate_ai_games.py   # AI-vs-AI batch; deterministic per seed
 python scripts/support_report.py      # per-category card-support coverage
+python scripts/set_progress.py        # regenerate SET_PROGRESS.md (per-set implementation tracker); --refresh re-fetches Scryfall data
 ```
 
 To **launch and drive the running web app** (screenshots, scripted UI flow), use
