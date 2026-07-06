@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import json
 import os
 import random
@@ -497,7 +498,38 @@ def _search_cards(query: str, limit: int, *, untested_only: bool = False) -> lis
     return [_serialize_card_summary(card) for card in ranked[:limit]]
 
 
+def _build_set_memberships() -> dict[str, list[dict]]:
+    """Map card name -> every set it was printed in, in printing order.
+
+    ``CARD_CATALOG`` dedupes reprints by name (first printing wins), so the
+    catalog card's own ``set``/``image_uri`` only reflect the first printing.
+    The deck editor's set filter needs full membership — a Beta filter should
+    show all of Beta, not just the two cards missing from Alpha — and each
+    printing carries its own art so the UI can show the filtered set's version.
+    """
+    memberships: dict[str, list[dict]] = {}
+    for path in CARD_PATHS:
+        for card in load_cards(path):
+            raw = card.raw if isinstance(card.raw, dict) else {}
+            code = raw.get("set")
+            if not code:
+                continue
+            printings = memberships.setdefault(card.name, [])
+            if all(printing["code"] != code for printing in printings):
+                image_uris = raw.get("image_uris") if isinstance(raw.get("image_uris"), dict) else {}
+                printings.append(
+                    {
+                        "code": code,
+                        "name": raw.get("set_name"),
+                        "image_uri": image_uris.get("normal"),
+                        "large_image_uri": image_uris.get("large"),
+                    }
+                )
+    return memberships
+
+
 def _build_catalog_payload() -> list[dict]:
+    memberships = _build_set_memberships()
     entries: list[dict] = []
     seen: set[str] = set()
     for card in CARD_SEARCH_ORDER:
@@ -516,6 +548,7 @@ def _build_catalog_payload() -> list[dict]:
                 "oracle_text": card.oracle_text,
                 "set": raw.get("set"),
                 "set_name": raw.get("set_name"),
+                "sets": memberships.get(card.name, []),
                 "colors": list(card.colors),
                 "color_identity": list(card.color_identity),
                 "keywords": list(card.keywords),
@@ -1958,6 +1991,17 @@ def _default_target(card_name: str, caster_index: int) -> int:
     return 1 - caster_index
 
 
+def _first_opponent_seat(game, seat: int) -> int | None:
+    """A living opposing seat for *seat* — the only other seat in a 2-player
+    game, or the first still-alive opponent (turn order) in Free-For-All.
+    Returns None if no opposing seat exists."""
+    for offset in range(1, len(game.players)):
+        candidate = (seat + offset) % len(game.players)
+        if not _player_has_lost(game, candidate):
+            return candidate
+    return None
+
+
 def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
     """Queue a spell from ``seat``'s hand using every targeting field on the
     request, so the normal ``cast`` action and the debug free-cast paths share
@@ -2057,6 +2101,38 @@ def _build_lan_join_url(request: Request, session_id: str) -> str | None:
 
     lan_base_url = request.base_url.replace(hostname=local_ip)
     return f"{str(lan_base_url).rstrip('/')}/index.html?session={session_id}"
+
+
+def _detect_public_ipv6() -> str | None:
+    """Best-effort discovery of this machine's global (public) IPv6 address.
+
+    The UDP connect never sends a packet; it only asks the OS which source
+    address it would route through, which for IPv6 is the public address.
+    """
+    try:
+        with socket.socket(socket.AF_INET6, socket.SOCK_DGRAM) as sock:
+            sock.connect(("2001:4860:4860::8888", 80))
+            raw = sock.getsockname()[0]
+    except OSError:
+        return None
+
+    try:
+        addr = ipaddress.IPv6Address(raw.split("%")[0])
+    except ValueError:
+        return None
+    if not addr.is_global:
+        return None
+    return str(addr)
+
+
+def _build_public_join_url(request: Request, session_id: str) -> str | None:
+    ipv6 = _detect_public_ipv6()
+    if not ipv6:
+        return None
+
+    port = request.url.port
+    netloc = f"[{ipv6}]" + (f":{port}" if port else "")
+    return f"{request.url.scheme}://{netloc}/index.html?session={session_id}"
 
 
 def _auto_resolve_ai_pending_search(session: Session) -> None:
@@ -3194,10 +3270,12 @@ def create_session(req: CreateSessionRequest, request: Request):
     _pregame_auto_advance(session)
     join_url = _build_join_url(request, session.id)
     lan_join_url = _build_lan_join_url(request, session.id)
+    public_join_url = _build_public_join_url(request, session.id)
     return {
         "session_id": session.id,
         "join_url": join_url,
         "lan_join_url": lan_join_url,
+        "public_join_url": public_join_url,
         "seat": 0,
         "state": _serialize_state(session, viewer_seat=0),
     }
@@ -3223,10 +3301,12 @@ def join_session(session_id: str, req: JoinSessionRequest, request: Request):
     _notify_session_change(session.id, "join")
     join_url = _build_join_url(request, session.id)
     lan_join_url = _build_lan_join_url(request, session.id)
+    public_join_url = _build_public_join_url(request, session.id)
     return {
         "session_id": session.id,
         "join_url": join_url,
         "lan_join_url": lan_join_url,
+        "public_join_url": public_join_url,
         "seat": seat,
         "state": _serialize_state(session, viewer_seat=seat),
     }
@@ -4417,12 +4497,17 @@ def do_action(session_id: str, req: GameActionRequest):
         if not req.card_name:
             raise HTTPException(status_code=400, detail="card_name is required")
 
-        if req.target_seat is not None:
-            opponent_seat = req.target_seat
-        elif len(session.game.players) == 2:
-            opponent_seat = 1 - req.seat
+        # The caster is an opposing seat, NOT req.target_seat — that field carries
+        # the spell's *target* (frequently the acting human's own seat, e.g. for a
+        # burn spell aimed back at them), so deriving the caster from it would cast
+        # the card as the wrong player. An explicit caster_seat overrides (lets FFA
+        # pick which opponent); otherwise fall back to the first living opponent.
+        if req.caster_seat is not None:
+            opponent_seat = req.caster_seat
         else:
-            raise HTTPException(status_code=400, detail="target_seat is required in a 3+ player game")
+            opponent_seat = _first_opponent_seat(session.game, req.seat)
+        if opponent_seat is None or not (0 <= opponent_seat < len(session.game.players)):
+            raise HTTPException(status_code=400, detail="no opposing seat to cast for")
         card = CARD_BY_NAME.get(req.card_name.strip().casefold())
         if card is None:
             raise HTTPException(status_code=404, detail="card not found")

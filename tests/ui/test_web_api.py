@@ -1635,6 +1635,45 @@ def test_debug_cast_free_opponent_returns_priority_to_caster():
     assert payload["priority_player"] == 0
 
 
+def test_debug_cast_free_opponent_casts_as_opponent_when_target_seat_is_self():
+    """Regression: the frontend sends target_seat as the spell's *target* (often the
+    acting human's own seat). A prior refactor read target_seat as the caster, so the
+    card was cast by the human instead of the opponent. The caster must be the
+    opposing seat regardless of what target_seat holds."""
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_ai",
+            "host_name": "Host",
+            "guest_name": "AI",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 99211,
+        },
+    ).json()
+    sid = created["session_id"]
+    session = store.get(sid)
+    session.seat_types = {0: "human", 1: "ai"}
+    session.current_turn = 0
+    session.game.active_player_index = 0
+    session.game.current_turn_phase = "precombat_main"
+    session.game.current_step = "precombat_main"
+    session.game.current_phase = "main"
+    session.game.start_priority_window(0)
+
+    resp = client.post(
+        f"/api/sessions/{sid}/action",
+        # target_seat=0 (the acting human) is exactly what the frontend sends for a
+        # no-explicit-target creature cast as opponent.
+        json={"seat": 0, "action": "debug_cast_free_opponent", "card_name": "Hill Giant", "target_seat": 0},
+    )
+    assert resp.status_code == 200, resp.text
+    payload = resp.json()
+    assert len(payload["stack"]) == 1
+    # The opponent (seat 1) is the caster, not the human whose seat is in target_seat.
+    assert payload["stack"][0]["caster_index"] == 1
+
+
 def test_next_phase_runs_end_then_cleanup_then_next_turn():
     created = client.post(
         "/api/sessions",
@@ -2591,3 +2630,34 @@ def test_debug_cast_free_forwards_text_change_colors():
     lifeforce = state["players"][0]["battlefield"][0]
     assert lifeforce["text_changes"] == [{"from": "black", "to": "red"}]
     assert any("changed B text to R" in line for line in state["log"])
+
+
+def test_catalog_lists_every_set_a_card_was_printed_in():
+    """The catalog dedupes reprints (first printing wins), but each entry's
+    ``sets`` must still list every printing so the deck editor's set filter
+    shows a full set, not just the cards new to it."""
+    cards = client.get("/api/cards/catalog").json()["cards"]
+    by_name = {c["name"]: c for c in cards}
+
+    # A card reprinted in Beta and Unlimited carries all three printings even
+    # though its catalog entry is the Alpha one.
+    bolt = by_name["Lightning Bolt"]
+    assert bolt["set"] == "lea"
+    assert [s["code"] for s in bolt["sets"]] == ["lea", "leb", "2ed"]
+
+    # Each printing carries its own art so the deck editor can show the
+    # filtered set's version, and the Alpha printing matches the entry's own.
+    images = [s["image_uri"] for s in bolt["sets"]]
+    assert all(images)
+    assert len(set(images)) == 3
+    assert images[0] == bolt["image_uri"]
+
+    # Filtering by membership yields the full set, not just the delta: Beta and
+    # Unlimited are 292 cards (Alpha's 290 plus the two missing from Alpha).
+    def in_set(code):
+        return [c for c in cards if any(s["code"] == code for s in c["sets"])]
+
+    assert len(in_set("lea")) == 290
+    assert len(in_set("leb")) == 292
+    assert len(in_set("2ed")) == 292
+    assert len(in_set("arn")) == 78

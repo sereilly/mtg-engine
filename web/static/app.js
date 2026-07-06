@@ -128,6 +128,7 @@ const aiControlsEl = document.getElementById("aiControls");
 // Opponent" prompt rather than at the top of the page.
 let currentJoinUrl = "";
 let currentLanJoinUrl = "";
+let currentPublicJoinUrl = "";
 const menuPages = {
   home: document.getElementById("homePage"),
   host: document.getElementById("hostGamePage"),
@@ -2144,7 +2145,18 @@ function shouldShowPriorityPrompt(state = currentState) {
   if (combatPromptNeedsConfirmation(state)) return false;
 
   const phase = state.current_turn_phase;
-  return phase === "precombat_main" || phase === "combat" || phase === "postcombat_main" || state.current_step === "end";
+  if (phase === "precombat_main" || phase === "combat" || phase === "postcombat_main" || state.current_step === "end") {
+    return true;
+  }
+  // Holding priority during another player's turn (e.g. a phase-rail hold at their
+  // upkeep or draw step): the server only hands us priority at a step that grants
+  // it, so priority_player === seat here means we have a genuine window to act or
+  // pass. Surface the prompt at those steps too, otherwise the game silently
+  // stalls with no visible reason.
+  if (Number.isInteger(state.current_turn) && state.current_turn !== seat) {
+    return true;
+  }
+  return false;
 }
 
 function combatNeedsManualDamageAssignment(state = currentState) {
@@ -2403,10 +2415,10 @@ function applyUpkeepPayPrompt(upkeepInfo) {
     declineLabel = "Don't pay (tap & sacrifice a land)";
   } else if (kind === "upkeep_pay_to_untap_self" || kind === "upkeep_pay_to_untap_enchanted") {
     // No consequence — declining just leaves the permanent tapped.
-    declineLabel = "Don't pay (stay tapped)";
+    declineLabel = "Don't pay";
   } else if (kind === "upkeep_pay_to_gain_life") {
     // No consequence — declining just forgoes the life gain (Farmstead).
-    declineLabel = "Don't pay (no life)";
+    declineLabel = "Don't pay";
   } else {
     declineLabel = `Sacrifice ${escapeHtml(cardName)}`;
   }
@@ -4031,6 +4043,16 @@ function renderActivationPrompt() {
         body.textContent = "Assign your blockers and press OK to declare them.";
       }
     } else if (shouldShowPriority) {
+      // Holding priority during someone else's turn: name the holder so it's clear
+      // to everyone the game is paused on them (not the active player), and don't
+      // mislabel the pass button as "Next Phase" — passing here just returns
+      // priority to the active player, it doesn't advance to the holder's turn.
+      const holdingOnOpponentTurn =
+        Number.isInteger(currentState?.current_turn) && currentState.current_turn !== seat;
+      const holderName = currentState?.players?.[seat]?.name || "You";
+      const holdNote = holdingOnOpponentTurn
+        ? `⏸ Priority is being held by ${holderName}. `
+        : "";
       title.textContent = getPriorityPromptTitle(currentState);
       if (inCombat) {
         const lockedCombat = getCombatState(currentState);
@@ -4041,16 +4063,14 @@ function renderActivationPrompt() {
             ? "Blockers are declared. "
             : "";
         const stackEmpty = !(currentState?.stack || []).length;
-        if (stackEmpty) okBtn.textContent = "Next Phase";
-        body.textContent = stackEmpty
-          ? `${stage}Cast an instant or activate an ability, or press Next Phase to move on.`
-          : `${stage}Cast an instant or activate an ability, or press OK to pass priority.`;
+        okBtn.textContent = holdingOnOpponentTurn ? "Pass Priority" : (stackEmpty ? "Next Phase" : "OK");
+        const passLabel = holdingOnOpponentTurn ? "Pass Priority" : (stackEmpty ? "Next Phase" : "OK");
+        body.textContent = `${holdNote}${stage}Cast an instant or activate an ability, or press ${passLabel} to ${holdingOnOpponentTurn ? "pass back" : (stackEmpty ? "move on" : "pass priority")}.`;
       } else {
         const stackEmpty = !(currentState?.stack || []).length;
-        if (stackEmpty) okBtn.textContent = "Next Phase";
-        body.textContent = stackEmpty
-          ? "Take an action (cast a spell, activate an ability, or play a land for turn), or press Next Phase to move on."
-          : "Take an action (cast a spell, activate an ability, or play a land for turn), or press OK to pass priority.";
+        okBtn.textContent = holdingOnOpponentTurn ? "Pass Priority" : (stackEmpty ? "Next Phase" : "OK");
+        const passLabel = holdingOnOpponentTurn ? "Pass Priority" : (stackEmpty ? "Next Phase" : "OK");
+        body.textContent = `${holdNote}Take an action (cast a spell, activate an ability, or play a land for turn), or press ${passLabel} to ${holdingOnOpponentTurn ? "pass back" : (stackEmpty ? "move on" : "pass priority")}.`;
       }
     } else if (shouldShowWaitingPriority) {
       // Name the seat that actually holds priority — in FFA any opponent can,
@@ -5434,9 +5454,10 @@ function updateActionHint(message, isError = false) {
   }
 }
 
-function setJoinUrls(url = "", lanUrl = "") {
+function setJoinUrls(url = "", lanUrl = "", publicUrl = "") {
   currentJoinUrl = String(url || "").trim();
   currentLanJoinUrl = String(lanUrl || "").trim();
+  currentPublicJoinUrl = String(publicUrl || "").trim();
 }
 
 async function copyTextToClipboard(text) {
@@ -9319,7 +9340,7 @@ async function createSession() {
   sessionId = data.session_id;
   seat = data.seat;
   openStateSyncStream();
-  setJoinUrls(data.join_url, data.lan_join_url);
+  setJoinUrls(data.join_url, data.lan_join_url, data.public_join_url);
   setVisible(true);
   initBattlefieldCanvas();
   renderState(data.state);
@@ -9347,7 +9368,7 @@ async function joinSession() {
   });
   seat = data.seat;
   openStateSyncStream();
-  setJoinUrls(data.join_url, data.lan_join_url);
+  setJoinUrls(data.join_url, data.lan_join_url, data.public_join_url);
   setVisible(true);
   initBattlefieldCanvas();
   renderState(data.state);
@@ -9495,7 +9516,8 @@ q("lobbyStartBtn")?.addEventListener("click", async () => {
 });
 
 q("lobbyCopyLinkBtn")?.addEventListener("click", async () => {
-  const linkUrl = currentLanJoinUrl || currentJoinUrl;
+  // Prefer the public IPv6 URL so the link works beyond the local network.
+  const linkUrl = currentPublicJoinUrl || currentLanJoinUrl || currentJoinUrl;
   if (!linkUrl) return;
   try {
     await copyTextToClipboard(linkUrl);

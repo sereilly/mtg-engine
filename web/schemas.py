@@ -152,6 +152,10 @@ class GameActionRequest(BaseModel):
     # face. Takes precedence over target_permanent_indices/target_seat.
     divided_targets: list[DividedTargetRef] | None = Field(default=None)
     target_seat: int | None = Field(default=None, ge=0)
+    # Debug "cast for free as opponent" (`debug_cast_free_opponent`): which seat
+    # casts the spell. Distinct from target_seat (the spell's target). Optional —
+    # the server defaults to the first living opponent of the acting seat.
+    caster_seat: int | None = Field(default=None, ge=0)
     # "A source of your choice" (Jade Monolith): the chosen damage source — a
     # battlefield permanent (source_seat + source_permanent_index) or a spell on
     # the stack (source_stack_index, top-first like target_stack_index).
