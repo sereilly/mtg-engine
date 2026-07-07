@@ -1,0 +1,1316 @@
+[
+ {
+  "card": "Abu Ja'far",
+  "clause": "destroy all creatures blocking or blocked by it. they can't be regenerated",
+  "ignored": [
+   "blocking",
+   "or",
+   "blocked",
+   "by"
+  ]
+ },
+ {
+  "card": "Aladdin's Lamp",
+  "clause": "the next time you would draw a card this turn, instead look at the top x cards of your library, put all but one of them on the bottom of your library in a random order, then draw a card",
+  "ignored": [
+   "library,",
+   "put",
+   "all",
+   "but",
+   "one",
+   "on",
+   "bottom",
+   "library",
+   "in",
+   "random",
+   "order,",
+   "draw",
+   "card"
+  ]
+ },
+ {
+  "card": "Aladdin's Ring",
+  "clause": "this artifact deals 4 damage to any target",
+  "ignored": [
+   "artifact",
+   "any",
+   "target"
+  ]
+ },
+ {
+  "card": "Animate Dead",
+  "clause": "if it's on the battlefield, it loses \"enchant creature card in a graveyard\" and gains \"enchant creature put onto the battlefield with this aura.\" return enchanted creature card to the battlefield under your control and attach this aura to it",
+  "ignored": [
+   "if",
+   "it's",
+   "on",
+   "battlefield,",
+   "loses",
+   "\"enchant",
+   "creature",
+   "card",
+   "in",
+   "graveyard\"",
+   "gains",
+   "\"enchant",
+   "creature",
+   "put",
+   "onto",
+   "battlefield",
+   "with",
+   "aura.\"",
+   "attach",
+   "aura"
+  ]
+ },
+ {
+  "card": "Ankh of Mishra",
+  "clause": "this artifact deals 2 damage to that land's controller",
+  "ignored": [
+   "artifact",
+   "land's",
+   "controller"
+  ]
+ },
+ {
+  "card": "Balance",
+  "clause": "each player chooses a number of lands they control equal to the number of lands controlled by the player who controls the fewest, then sacrifices the rest",
+  "ignored": [
+   "sacrifices",
+   "rest"
+  ]
+ },
+ {
+  "card": "Berserk",
+  "clause": "target creature gains trample and gets +x/+0 until end of turn, where x is its power",
+  "ignored": [
+   "where",
+   "x",
+   "power"
+  ]
+ },
+ {
+  "card": "Black Vise",
+  "clause": "this artifact deals x damage to that player, where x is the number of cards in their hand minus 4",
+  "ignored": [
+   "artifact",
+   "deals",
+   "x",
+   "damage",
+   "player,",
+   "where",
+   "x"
+  ]
+ },
+ {
+  "card": "Blue Elemental Blast",
+  "clause": "destroy target red permanent",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Bottle of Suleiman",
+  "clause": "flip a coin. if you win the flip, create a 5/5 colorless djinn artifact creature token with flying. if you lose the flip, this artifact deals 5 damage to you",
+  "ignored": [
+   "flip",
+   "coin.",
+   "if",
+   "win",
+   "flip,",
+   "create",
+   "5/5",
+   "colorless",
+   "djinn",
+   "artifact",
+   "creature",
+   "token",
+   "with",
+   "flying.",
+   "if",
+   "lose",
+   "flip,",
+   "artifact"
+  ]
+ },
+ {
+  "card": "Brass Man",
+  "clause": "you may pay {1}. if you do, untap this creature",
+  "ignored": [
+   "if",
+   "do,"
+  ]
+ },
+ {
+  "card": "Camouflage",
+  "clause": "this turn, instead of declaring blockers, each defending player chooses any number of creatures they control and divides them into a number of piles equal to the number of attacking creatures for whom that player is the defending player",
+  "ignored": [
+   "each",
+   "defending",
+   "player",
+   "chooses",
+   "any",
+   "number",
+   "creatures",
+   "control",
+   "divides",
+   "into",
+   "number",
+   "piles",
+   "equal",
+   "number",
+   "attacking",
+   "creatures",
+   "for",
+   "whom",
+   "player",
+   "defending",
+   "player"
+  ]
+ },
+ {
+  "card": "Channel",
+  "clause": "until end of turn, any time you could activate a mana ability, you may pay 1 life. if you do, add {c}",
+  "ignored": [
+   "any",
+   "time",
+   "could",
+   "activate",
+   "mana",
+   "ability,",
+   "if",
+   "do,"
+  ]
+ },
+ {
+  "card": "Chaos Orb",
+  "clause": "if this artifact is on the battlefield, flip it onto the battlefield from a height of at least one foot",
+  "ignored": [
+   "if",
+   "artifact",
+   "on",
+   "battlefield,",
+   "from",
+   "height",
+   "at",
+   "least",
+   "one",
+   "foot"
+  ]
+ },
+ {
+  "card": "Chaoslace",
+  "clause": "target spell or permanent becomes red",
+  "ignored": [
+   "target",
+   "spell",
+   "or",
+   "permanent"
+  ]
+ },
+ {
+  "card": "Circle of Protection: Black",
+  "clause": "the next time a black source of your choice would deal damage to you this turn, prevent that damage",
+  "ignored": [
+   "next",
+   "time"
+  ]
+ },
+ {
+  "card": "Circle of Protection: Blue",
+  "clause": "the next time a blue source of your choice would deal damage to you this turn, prevent that damage",
+  "ignored": [
+   "next",
+   "time"
+  ]
+ },
+ {
+  "card": "Circle of Protection: Green",
+  "clause": "the next time a green source of your choice would deal damage to you this turn, prevent that damage",
+  "ignored": [
+   "next",
+   "time"
+  ]
+ },
+ {
+  "card": "Circle of Protection: Red",
+  "clause": "the next time a red source of your choice would deal damage to you this turn, prevent that damage",
+  "ignored": [
+   "next",
+   "time"
+  ]
+ },
+ {
+  "card": "Circle of Protection: White",
+  "clause": "the next time a white source of your choice would deal damage to you this turn, prevent that damage",
+  "ignored": [
+   "next",
+   "time"
+  ]
+ },
+ {
+  "card": "City in a Bottle",
+  "clause": "players can't cast spells or play lands with a name originally printed in the arabian nights expansion",
+  "ignored": [
+   "players",
+   "can't",
+   "cast",
+   "spells",
+   "or",
+   "play",
+   "lands",
+   "with",
+   "name"
+  ]
+ },
+ {
+  "card": "City in a Bottle",
+  "clause": "whenever one or more other nontoken permanents with a name originally printed in the arabian nights expansion are on the battlefield, their controllers sacrifice them",
+  "ignored": [
+   "whenever",
+   "one",
+   "or",
+   "more",
+   "other",
+   "nontoken",
+   "permanents",
+   "with",
+   "name",
+   "on",
+   "battlefield,",
+   "controllers",
+   "sacrifice"
+  ]
+ },
+ {
+  "card": "Copper Tablet",
+  "clause": "this artifact deals 1 damage to that player",
+  "ignored": [
+   "artifact",
+   "player"
+  ]
+ },
+ {
+  "card": "Crystal Rod",
+  "clause": "whenever a player casts a blue spell, you may pay {1}. if you do, you gain 1 life",
+  "ignored": [
+   "whenever",
+   "player",
+   "casts",
+   "blue",
+   "spell,",
+   "may",
+   "pay",
+   "{1}.",
+   "if",
+   "do,"
+  ]
+ },
+ {
+  "card": "Cuombajj Witches",
+  "clause": "this creature deals 1 damage to any target and 1 damage to any target of an opponent's choice",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
+  "card": "Cursed Land",
+  "clause": "at the beginning of the upkeep of enchanted land's controller, this aura deals 1 damage to that player",
+  "ignored": [
+   "at",
+   "beginning",
+   "upkeep",
+   "enchanted",
+   "land's",
+   "controller,",
+   "aura",
+   "player"
+  ]
+ },
+ {
+  "card": "Deathlace",
+  "clause": "target spell or permanent becomes black",
+  "ignored": [
+   "target",
+   "spell",
+   "or",
+   "permanent"
+  ]
+ },
+ {
+  "card": "Demonic Hordes",
+  "clause": "unless you pay {b}{b}{b}, tap this creature and sacrifice a land of an opponent's choice",
+  "ignored": [
+   "tap",
+   "creature",
+   "choice"
+  ]
+ },
+ {
+  "card": "Desert",
+  "clause": "this land deals 1 damage to target attacking creature",
+  "ignored": [
+   "land",
+   "target",
+   "attacking",
+   "creature"
+  ]
+ },
+ {
+  "card": "Desert Twister",
+  "clause": "destroy target permanent",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Dingus Egg",
+  "clause": "this artifact deals 2 damage to that land's controller",
+  "ignored": [
+   "artifact",
+   "land's",
+   "controller"
+  ]
+ },
+ {
+  "card": "Disintegrate",
+  "clause": "disintegrate deals x damage to any target. if it's a creature, it can't be regenerated this turn, and if it would die this turn, exile it instead",
+  "ignored": [
+   "disintegrate",
+   "any",
+   "target.",
+   "if",
+   "it's",
+   "creature,",
+   "can't",
+   "be",
+   "regenerated"
+  ]
+ },
+ {
+  "card": "Drain Life",
+  "clause": "drain life deals x damage to any target. you gain life equal to the damage dealt, but not more life than the player's life total before the damage was dealt, the planeswalker's loyalty before the damage was dealt, or the creature's toughness",
+  "ignored": [
+   "drain",
+   "life",
+   "any",
+   "target.",
+   "but",
+   "not",
+   "more",
+   "life",
+   "than",
+   "player's",
+   "life",
+   "total",
+   "before",
+   "damage",
+   "was",
+   "dealt,",
+   "planeswalker's",
+   "loyalty",
+   "before",
+   "damage",
+   "was",
+   "dealt,",
+   "or",
+   "creature's",
+   "toughness"
+  ]
+ },
+ {
+  "card": "Drain Power",
+  "clause": "target player activates a mana ability of each land they control. then that player loses all unspent mana and you add the mana lost this way",
+  "ignored": [
+   "target",
+   "player",
+   "player",
+   "add",
+   "mana",
+   "lost",
+   "way"
+  ]
+ },
+ {
+  "card": "Drop of Honey",
+  "clause": "when there are no creatures on the battlefield, sacrifice this enchantment",
+  "ignored": [
+   "when",
+   "there",
+   "no",
+   "creatures",
+   "on",
+   "battlefield,"
+  ]
+ },
+ {
+  "card": "Earthbind",
+  "clause": "if enchanted creature has flying, this aura deals 2 damage to that creature and this aura gains \"enchanted creature loses flying.\"",
+  "ignored": [
+   "if",
+   "enchanted",
+   "creature",
+   "has",
+   "flying,",
+   "aura",
+   "creature",
+   "aura",
+   "gains",
+   "\"enchanted",
+   "creature",
+   "loses",
+   "flying.\""
+  ]
+ },
+ {
+  "card": "Earthquake",
+  "clause": "earthquake deals x damage to each creature without flying and each player",
+  "ignored": [
+   "earthquake",
+   "each",
+   "player"
+  ]
+ },
+ {
+  "card": "Eye for an Eye",
+  "clause": "the next time a source of your choice would deal damage to you this turn, instead that source deals that much damage to you and eye for an eye deals that much damage to that source's controller",
+  "ignored": [
+   "next",
+   "time",
+   "source",
+   "choice",
+   "would",
+   "deal",
+   "damage",
+   "eye",
+   "for",
+   "eye"
+  ]
+ },
+ {
+  "card": "Farmstead",
+  "clause": "enchanted land has \"at the beginning of your upkeep, you may pay {w}{w}. if you do, you gain 1 life.\"",
+  "ignored": [
+   "enchanted",
+   "land",
+   "has",
+   "\"at",
+   "beginning",
+   "upkeep,",
+   "may",
+   "pay",
+   "{w}{w}.",
+   "if",
+   "do,"
+  ]
+ },
+ {
+  "card": "Fastbond",
+  "clause": "whenever you play a land, if it wasn't the first land you played this turn, this enchantment deals 1 damage to you",
+  "ignored": [
+   "whenever",
+   "play",
+   "land,",
+   "if",
+   "wasn't",
+   "first",
+   "land",
+   "played",
+   "enchantment"
+  ]
+ },
+ {
+  "card": "Feedback",
+  "clause": "this aura deals 1 damage to that player",
+  "ignored": [
+   "aura",
+   "player"
+  ]
+ },
+ {
+  "card": "Fireball",
+  "clause": "fireball deals x damage divided evenly, rounded down, among any number of targets",
+  "ignored": [
+   "fireball",
+   "divided",
+   "evenly,",
+   "rounded",
+   "down,",
+   "among",
+   "any",
+   "number",
+   "targets"
+  ]
+ },
+ {
+  "card": "Fork",
+  "clause": "copy target instant or sorcery spell, except that the copy is red",
+  "ignored": [
+   "except",
+   "copy",
+   "red"
+  ]
+ },
+ {
+  "card": "Gaea's Liege",
+  "clause": "target land becomes a forest until this creature leaves the battlefield",
+  "ignored": [
+   "creature",
+   "leaves",
+   "battlefield"
+  ]
+ },
+ {
+  "card": "Guardian Angel",
+  "clause": "if you do, prevent the next 1 damage that would be dealt to that permanent or player this turn",
+  "ignored": [
+   "if",
+   "do,",
+   "would",
+   "be",
+   "dealt",
+   "permanent",
+   "or",
+   "player"
+  ]
+ },
+ {
+  "card": "Guardian Angel",
+  "clause": "prevent the next x damage that would be dealt to any target this turn",
+  "ignored": [
+   "would",
+   "be",
+   "dealt",
+   "any",
+   "target"
+  ]
+ },
+ {
+  "card": "Healing Salve",
+  "clause": "prevent the next 3 damage that would be dealt to any target this turn",
+  "ignored": [
+   "would",
+   "be",
+   "dealt",
+   "any",
+   "target"
+  ]
+ },
+ {
+  "card": "Hurricane",
+  "clause": "hurricane deals x damage to each creature with flying and each player",
+  "ignored": [
+   "hurricane",
+   "each",
+   "player"
+  ]
+ },
+ {
+  "card": "Ifh-Bíff Efreet",
+  "clause": "this creature deals 1 damage to each creature with flying and each player",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
+  "card": "Illusionary Mask",
+  "clause": "you may choose a creature card in your hand whose mana cost could be paid by some amount of, or all of, the mana you spent on {x}. if you do, you may cast that card face down as a 2/2 creature spell without paying its mana cost",
+  "ignored": [
+   "may",
+   "choose",
+   "creature",
+   "card",
+   "in",
+   "hand",
+   "whose",
+   "mana",
+   "cost",
+   "could",
+   "be",
+   "paid",
+   "by",
+   "some",
+   "amount",
+   "or",
+   "all",
+   "mana",
+   "spent",
+   "on",
+   "{x}.",
+   "if",
+   "do,",
+   "without",
+   "paying",
+   "mana",
+   "cost"
+  ]
+ },
+ {
+  "card": "Iron Star",
+  "clause": "whenever a player casts a red spell, you may pay {1}. if you do, you gain 1 life",
+  "ignored": [
+   "whenever",
+   "player",
+   "casts",
+   "red",
+   "spell,",
+   "may",
+   "pay",
+   "{1}.",
+   "if",
+   "do,"
+  ]
+ },
+ {
+  "card": "Island Fish Jasconius",
+  "clause": "you may pay {u}{u}{u}. if you do, untap this creature",
+  "ignored": [
+   "if",
+   "do,"
+  ]
+ },
+ {
+  "card": "Island Sanctuary",
+  "clause": "if you would draw a card during your draw step, instead you may skip that draw",
+  "ignored": [
+   "if",
+   "would",
+   "during",
+   "draw",
+   "step,",
+   "instead",
+   "may",
+   "skip",
+   "draw"
+  ]
+ },
+ {
+  "card": "Ivory Cup",
+  "clause": "whenever a player casts a white spell, you may pay {1}. if you do, you gain 1 life",
+  "ignored": [
+   "whenever",
+   "player",
+   "casts",
+   "white",
+   "spell,",
+   "may",
+   "pay",
+   "{1}.",
+   "if",
+   "do,"
+  ]
+ },
+ {
+  "card": "Jade Monolith",
+  "clause": "the next time a source of your choice would deal damage to target creature this turn, that source deals that damage to you instead",
+  "ignored": [
+   "source",
+   "deals",
+   "damage",
+   "instead"
+  ]
+ },
+ {
+  "card": "Jandor's Saddlebags",
+  "clause": "untap target creature",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
+  "card": "Jeweled Bird",
+  "clause": "ante this artifact. if you do, put all other cards you own from the ante into your graveyard, then draw a card",
+  "ignored": [
+   "ante",
+   "artifact.",
+   "if",
+   "do,",
+   "put",
+   "all",
+   "other",
+   "cards",
+   "own",
+   "from",
+   "ante",
+   "into",
+   "graveyard,"
+  ]
+ },
+ {
+  "card": "Jihad",
+  "clause": "when the chosen player controls no nontoken permanents of the chosen color, sacrifice this enchantment",
+  "ignored": [
+   "when",
+   "chosen",
+   "player",
+   "controls",
+   "no",
+   "nontoken",
+   "permanents",
+   "chosen",
+   "color,"
+  ]
+ },
+ {
+  "card": "Juzám Djinn",
+  "clause": "this creature deals 1 damage to you",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
+  "card": "Karma",
+  "clause": "this enchantment deals damage to that player equal to the number of swamps they control",
+  "ignored": [
+   "enchantment",
+   "player",
+   "control"
+  ]
+ },
+ {
+  "card": "King Suleiman",
+  "clause": "destroy target djinn or efreet",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
+  "card": "Lich",
+  "clause": "when this enchantment is put into a graveyard from the battlefield, you lose the game",
+  "ignored": [
+   "when",
+   "enchantment",
+   "put",
+   "into",
+   "graveyard",
+   "from",
+   "battlefield,"
+  ]
+ },
+ {
+  "card": "Lich",
+  "clause": "whenever you're dealt damage, sacrifice that many nontoken permanents. if you can't, you lose the game",
+  "ignored": [
+   "whenever",
+   "you're",
+   "dealt",
+   "damage,",
+   "sacrifice",
+   "many",
+   "nontoken",
+   "permanents.",
+   "if",
+   "can't,"
+  ]
+ },
+ {
+  "card": "Lifelace",
+  "clause": "target spell or permanent becomes green",
+  "ignored": [
+   "target",
+   "spell",
+   "or",
+   "permanent"
+  ]
+ },
+ {
+  "card": "Lifetap",
+  "clause": "whenever a forest an opponent controls becomes tapped, you gain 1 life",
+  "ignored": [
+   "whenever",
+   "forest",
+   "opponent",
+   "controls",
+   "becomes",
+   "tapped,"
+  ]
+ },
+ {
+  "card": "Lightning Bolt",
+  "clause": "lightning bolt deals 3 damage to any target",
+  "ignored": [
+   "lightning",
+   "bolt",
+   "any",
+   "target"
+  ]
+ },
+ {
+  "card": "Living Artifact",
+  "clause": "you may remove a vitality counter from this aura. if you do, you gain 1 life",
+  "ignored": [
+   "may",
+   "remove",
+   "vitality",
+   "counter",
+   "from",
+   "aura.",
+   "if",
+   "do,"
+  ]
+ },
+ {
+  "card": "Lord of the Pit",
+  "clause": "sacrifice a creature other than this creature. if you can't, this creature deals 7 damage to you",
+  "ignored": [
+   "if",
+   "can't,"
+  ]
+ },
+ {
+  "card": "Magical Hack",
+  "clause": "change the text of target spell or permanent by replacing all instances of one basic land type with another",
+  "ignored": [
+   "with",
+   "another"
+  ]
+ },
+ {
+  "card": "Magnetic Mountain",
+  "clause": "that player may choose any number of tapped blue creatures they control and pay {4} for each creature chosen this way",
+  "ignored": [
+   "player"
+  ]
+ },
+ {
+  "card": "Mana Short",
+  "clause": "tap all lands target player controls and that player loses all unspent mana",
+  "ignored": [
+   "player"
+  ]
+ },
+ {
+  "card": "Mana Vault",
+  "clause": "at the beginning of your draw step, if this artifact is tapped, it deals 1 damage to you",
+  "ignored": [
+   "at",
+   "beginning",
+   "draw",
+   "step,",
+   "if",
+   "artifact",
+   "tapped,"
+  ]
+ },
+ {
+  "card": "Mana Vault",
+  "clause": "you may pay {4}. if you do, untap this artifact",
+  "ignored": [
+   "if",
+   "do,"
+  ]
+ },
+ {
+  "card": "Manabarbs",
+  "clause": "this enchantment deals 1 damage to that player",
+  "ignored": [
+   "enchantment",
+   "player"
+  ]
+ },
+ {
+  "card": "Merchant Ship",
+  "clause": "and isn't blocked, you gain 2 life",
+  "ignored": [
+   "isn't",
+   "blocked,"
+  ]
+ },
+ {
+  "card": "Mind Twist",
+  "clause": "target player discards x cards at random",
+  "ignored": [
+   "at",
+   "random"
+  ]
+ },
+ {
+  "card": "Nether Shadow",
+  "clause": "if this card is in your graveyard with three or more creature cards above it, you may put this card onto the battlefield",
+  "ignored": [
+   "if",
+   "card",
+   "with",
+   "three",
+   "or",
+   "more",
+   "may"
+  ]
+ },
+ {
+  "card": "Nettling Imp",
+  "clause": "choose target non-wall creature the active player has controlled continuously since the beginning of the turn",
+  "ignored": [
+   "active",
+   "player",
+   "has",
+   "controlled",
+   "continuously",
+   "since",
+   "beginning"
+  ]
+ },
+ {
+  "card": "Northern Paladin",
+  "clause": "destroy target black permanent",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Oasis",
+  "clause": "prevent the next 1 damage that would be dealt to target creature this turn",
+  "ignored": [
+   "would",
+   "be",
+   "dealt",
+   "target",
+   "creature"
+  ]
+ },
+ {
+  "card": "Old Man of the Sea",
+  "clause": "gain control of target creature with power less than or equal to this creature's power for as long as this creature remains tapped and that creature's power remains less than or equal to this creature's power",
+  "ignored": [
+   "creature's",
+   "power",
+   "remains",
+   "less",
+   "than",
+   "or",
+   "equal",
+   "creature's",
+   "power"
+  ]
+ },
+ {
+  "card": "Orcish Artillery",
+  "clause": "this creature deals 2 damage to any target and 3 damage to you",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
+  "card": "Oubliette",
+  "clause": "target creature phases out until this enchantment leaves the battlefield",
+  "ignored": [
+   "enchantment"
+  ]
+ },
+ {
+  "card": "Paralyze",
+  "clause": "that player may pay {4}. if the player does, untap the creature",
+  "ignored": [
+   "player",
+   "if",
+   "player",
+   "does,"
+  ]
+ },
+ {
+  "card": "Pestilence",
+  "clause": "if no creatures are on the battlefield, sacrifice this enchantment",
+  "ignored": [
+   "if",
+   "enchantment"
+  ]
+ },
+ {
+  "card": "Pestilence",
+  "clause": "this enchantment deals 1 damage to each creature and each player",
+  "ignored": [
+   "enchantment"
+  ]
+ },
+ {
+  "card": "Pirate Ship",
+  "clause": "this creature deals 1 damage to any target",
+  "ignored": [
+   "creature",
+   "any",
+   "target"
+  ]
+ },
+ {
+  "card": "Power Leak",
+  "clause": "that player may pay any amount of mana. this aura deals 2 damage to that player",
+  "ignored": [
+   "player",
+   "may",
+   "pay",
+   "any",
+   "amount",
+   "mana.",
+   "aura",
+   "player"
+  ]
+ },
+ {
+  "card": "Power Surge",
+  "clause": "this enchantment deals x damage to that player, where x is the number of untapped lands they controlled at the beginning of this turn",
+  "ignored": [
+   "enchantment",
+   "player,",
+   "where",
+   "x",
+   "number",
+   "untapped",
+   "lands",
+   "controlled",
+   "at",
+   "beginning"
+  ]
+ },
+ {
+  "card": "Prodigal Sorcerer",
+  "clause": "this creature deals 1 damage to any target",
+  "ignored": [
+   "creature",
+   "any",
+   "target"
+  ]
+ },
+ {
+  "card": "Psionic Blast",
+  "clause": "psionic blast deals 4 damage to any target and 2 damage to you",
+  "ignored": [
+   "psionic",
+   "blast"
+  ]
+ },
+ {
+  "card": "Psychic Venom",
+  "clause": "this aura deals 2 damage to that land's controller",
+  "ignored": [
+   "aura",
+   "land's",
+   "controller"
+  ]
+ },
+ {
+  "card": "Purelace",
+  "clause": "target spell or permanent becomes white",
+  "ignored": [
+   "target",
+   "spell",
+   "or",
+   "permanent"
+  ]
+ },
+ {
+  "card": "Raise Dead",
+  "clause": "return target creature card from your graveyard to your hand",
+  "ignored": [
+   "return",
+   "target"
+  ]
+ },
+ {
+  "card": "Red Elemental Blast",
+  "clause": "destroy target blue permanent",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Regrowth",
+  "clause": "return target card from your graveyard to your hand",
+  "ignored": [
+   "return",
+   "target",
+   "card"
+  ]
+ },
+ {
+  "card": "Resurrection",
+  "clause": "return target creature card from your graveyard to the battlefield",
+  "ignored": [
+   "return",
+   "target",
+   "creature",
+   "card"
+  ]
+ },
+ {
+  "card": "Reverse Damage",
+  "clause": "the next time a source of your choice would deal damage to you this turn, prevent that damage. you gain life equal to the damage prevented this way",
+  "ignored": [
+   "next",
+   "time",
+   "source",
+   "choice",
+   "way"
+  ]
+ },
+ {
+  "card": "Ring of Ma'rûf",
+  "clause": "the next time you would draw a card this turn, instead put a card you own from outside the game into your hand",
+  "ignored": [
+   "next",
+   "time",
+   "would",
+   "instead",
+   "put",
+   "card",
+   "own",
+   "from",
+   "outside",
+   "game",
+   "into",
+   "hand"
+  ]
+ },
+ {
+  "card": "Rod of Ruin",
+  "clause": "this artifact deals 1 damage to any target",
+  "ignored": [
+   "artifact",
+   "any",
+   "target"
+  ]
+ },
+ {
+  "card": "Samite Healer",
+  "clause": "prevent the next 1 damage that would be dealt to any target this turn",
+  "ignored": [
+   "would",
+   "be",
+   "dealt",
+   "any",
+   "target"
+  ]
+ },
+ {
+  "card": "Sandals of Abdallah",
+  "clause": "target creature gains islandwalk until end of turn. when that creature dies this turn, destroy this artifact",
+  "ignored": [
+   "when",
+   "creature",
+   "dies"
+  ]
+ },
+ {
+  "card": "Sandstorm",
+  "clause": "sandstorm deals 1 damage to each attacking creature",
+  "ignored": [
+   "sandstorm",
+   "each",
+   "attacking",
+   "creature"
+  ]
+ },
+ {
+  "card": "Serendib Efreet",
+  "clause": "this creature deals 1 damage to you",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
+  "card": "Simulacrum",
+  "clause": "you gain life equal to the damage dealt to you this turn. simulacrum deals damage to target creature you control equal to the damage dealt to you this turn",
+  "ignored": [
+   "gain",
+   "life",
+   "equal",
+   "damage",
+   "dealt",
+   "simulacrum"
+  ]
+ },
+ {
+  "card": "Sleight of Mind",
+  "clause": "change the text of target spell or permanent by replacing all instances of one color word with another",
+  "ignored": [
+   "with",
+   "another"
+  ]
+ },
+ {
+  "card": "Soul Net",
+  "clause": "you may pay {1}. if you do, you gain 1 life",
+  "ignored": [
+   "may",
+   "pay",
+   "{1}.",
+   "if",
+   "do,"
+  ]
+ },
+ {
+  "card": "Thoughtlace",
+  "clause": "target spell or permanent becomes blue",
+  "ignored": [
+   "target",
+   "spell",
+   "or",
+   "permanent"
+  ]
+ },
+ {
+  "card": "Throne of Bone",
+  "clause": "whenever a player casts a black spell, you may pay {1}. if you do, you gain 1 life",
+  "ignored": [
+   "whenever",
+   "player",
+   "casts",
+   "black",
+   "spell,",
+   "may",
+   "pay",
+   "{1}.",
+   "if",
+   "do,"
+  ]
+ },
+ {
+  "card": "Twiddle",
+  "clause": "you may tap or untap target artifact, creature, or land",
+  "ignored": [
+   "may",
+   "artifact,",
+   "creature,",
+   "or",
+   "land"
+  ]
+ },
+ {
+  "card": "Verduran Enchantress",
+  "clause": "you may draw a card",
+  "ignored": [
+   "may"
+  ]
+ },
+ {
+  "card": "Wanderlust",
+  "clause": "this aura deals 1 damage to that player",
+  "ignored": [
+   "aura",
+   "player"
+  ]
+ },
+ {
+  "card": "Warp Artifact",
+  "clause": "this aura deals 1 damage to that player",
+  "ignored": [
+   "aura",
+   "player"
+  ]
+ },
+ {
+  "card": "Wooden Sphere",
+  "clause": "whenever a player casts a green spell, you may pay {1}. if you do, you gain 1 life",
+  "ignored": [
+   "whenever",
+   "player",
+   "casts",
+   "green",
+   "spell,",
+   "may",
+   "pay",
+   "{1}.",
+   "if",
+   "do,"
+  ]
+ }
+]

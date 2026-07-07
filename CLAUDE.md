@@ -55,7 +55,21 @@ python scripts/simulate_ai_games.py   # AI-vs-AI batch; deterministic per seed
 python scripts/support_report.py      # per-category card-support coverage
 python scripts/set_progress.py        # regenerate SET_PROGRESS.md (per-set implementation tracker); --refresh re-fetches Scryfall data
 python scripts/rules_progress.py      # regenerate RULES_PROGRESS.md (CR test-coverage tracker); --check fails on unannotated tests
+python scripts/parse_coverage.py      # regenerate PARSE_COVERAGE.md (oracle-text parse-coverage tracker); --check fails on unclaimed text
 ```
+
+**Parse coverage:** `scripts/parse_coverage.py` verifies that every sentence of
+every supported card's oracle text is claimed by a known consumer (parse rules,
+compiler tables, the text-keyed channels in its `CHANNELS`/`HANDLER_CLAIMS`
+registries, card hooks) — the guard test
+(`tests/engine/test_parse_coverage.py`) fails when a supported card carries
+text nothing parses. Deliberate shortcuts live in its `ACKNOWLEDGED` dict
+(with reasons); a deletion probe additionally flags words a matching rule
+ignored (the dropped-rider bug class), ratcheted through
+`scripts/parse_coverage_probe_baseline.json` — review new findings, then
+`--accept-probe` to re-snapshot. When adding a parse rule or a new text-keyed
+engine behavior, run `--check`; if you add a handler that implements trailing
+sentences of a clause, declare them in `HANDLER_CLAIMS`.
 
 To **launch and drive the running web app** (screenshots, scripted UI flow), use
 the `/run-magic` skill at `.claude/skills/run-magic/` — it drives the browser
