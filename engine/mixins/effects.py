@@ -235,6 +235,10 @@ class EffectsMixin:
         if chosen is None:
             return False
         chosen.tapped = make_tapped
+        if make_tapped:
+            # Illusionary Mask: a face-down creature that becomes tapped is
+            # turned face up (no-op for everything else).
+            self._turn_face_up(chosen)
         return True
 
     def _grant_regeneration_shield(

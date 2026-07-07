@@ -7,8 +7,8 @@ the guard test `tests/engine/test_parse_coverage.py` fails on new
 unclaimed text. Do not edit by hand.
 
 - Supported cards analyzed: **369**
-- Fully claimed: **361**
-- With acknowledged simplifications: **8**
+- Fully claimed: **362**
+- With acknowledged simplifications: **7**
 - With UNCLAIMED text (must fix or acknowledge): **0**
 - With deletion-probe findings (ignored words): **109**
 
@@ -19,7 +19,6 @@ unclaimed text. Do not edit by hand.
 | Black Ward | `this effect doesn't remove this aura` | inherently satisfied: protection never unattaches Auras in this engine, so the exception has nothing to override |
 | Blue Ward | `this effect doesn't remove this aura` | inherently satisfied: protection never unattaches Auras in this engine, so the exception has nothing to override |
 | Green Ward | `this effect doesn't remove this aura` | inherently satisfied: protection never unattaches Auras in this engine, so the exception has nothing to override |
-| Illusionary Mask | `if the creature that spell becomes as it resolves has not been turned face up an` | simplified: the face-down flow turns the creature face up on those events without the full replacement wording (_turn_face_up) |
 | Red Ward | `this effect doesn't remove this aura` | inherently satisfied: protection never unattaches Auras in this engine, so the exception has nothing to override |
 | Shahrazad | `players play a magic subgame, using their libraries as their decks` | subgames are far out of scope; the card resolves with the life-halving only |
 | Shahrazad | `each player who doesn't win the subgame loses half their life, rounded up` | applied directly to the non-caster instead of the subgame loser |
@@ -162,7 +161,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | aura enchant noun (oracle_instructions attach) | 44 |
 | static-line table | 38 |
 | aura static (oracle_instructions/permanent_state) | 31 |
-| mixin text scan | 24 |
+| mixin text scan | 25 |
 | card_hooks bespoke (name-keyed) | 19 |
 | activation gate (stack_casting) | 13 |
 | cast_restrictions.py | 5 |

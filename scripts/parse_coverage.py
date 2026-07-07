@@ -123,6 +123,7 @@ _MIXIN_TEXT_SCANS = (
     "if you do, untap this artifact",                                    # beginning_phase.py untap_for_skip (Time Vault)
     "enter as a copy of any artifact on the battlefield",                # copy machinery (Copy Artifact; legality + clone handler)
     "where x is 1 plus the sacrificed creature's mana value",            # handlers/mana.py sacrifice_creature_for_black_mana (Metamorphosis)
+    "if the creature that spell becomes as it resolves has not been turned face up",  # effects._turn_face_up, invoked at every damage/tap site (Illusionary Mask)
     "add an amount of {b} equal to the sacrificed creature's mana value",  # handlers/mana.py sacrifice_creature_for_black_mana (Sacrifice)
     "spend this mana only to cast creature spells",                      # handlers/mana.py + _pay_mana_cost creature_only_mana bucket (Metamorphosis)
     "as this artifact enters, choose an opponent",                       # permanent_state.py enter choice + pending_enter_choice prompt (Black Vise)
@@ -280,12 +281,6 @@ ACKNOWLEDGED: dict[str, dict[str, str]] = {
     "Green Ward": {"this effect doesn't remove this aura": _WARD_REASON},
     "Red Ward": {"this effect doesn't remove this aura": _WARD_REASON},
     "White Ward": {"this effect doesn't remove this aura": _WARD_REASON},
-    "Illusionary Mask": {
-        "if the creature that spell becomes as it resolves has not been turned face up and would assign or deal damage, be dealt damage, or become tapped, instead it's turned face up and assigns or deals damage, is dealt damage, or becomes tapped": (
-            "simplified: the face-down flow turns the creature face up on those "
-            "events without the full replacement wording (_turn_face_up)"
-        ),
-    },
     "Word of Command": {
         "you control that player until word of command finishes resolving": (
             "simplified: control-of-player is modeled as forcing the chosen card "
