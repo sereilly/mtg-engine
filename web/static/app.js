@@ -4804,8 +4804,57 @@ function getActivatedAbilityOptions(card) {
   return options;
 }
 
-// Library of Alexandria's draw is only activatable with exactly seven cards in
-// hand; the ability menu greys the option out when the restriction fails.
+// Mirror of the engine's per-ability activation gates (queue_permanent_ability):
+// given one ability's text, the reason it can't be activated RIGHT NOW, or null.
+// Used to grey menu buttons and to fail fast before a doomed request.
+function activationTimingDisabledReason(lineText) {
+  const line = (lineText || "").toLowerCase();
+  if (!currentState || seat === null) return null;
+  const myTurn = currentState.current_turn === seat;
+  const phase = currentState.current_turn_phase;
+  const step = currentState.current_step;
+
+  if (line.includes("activate only during your upkeep") && !(myTurn && step === "upkeep")) {
+    return "Can only be activated during your upkeep.";
+  }
+  if (line.includes("only during your turn") && !myTurn) {
+    return "Can only be activated during your turn.";
+  }
+  if (line.includes("activate only as a sorcery")) {
+    const stackEmpty = !(currentState.stack || []).length;
+    if (!(myTurn && currentState.current_phase === "main" && stackEmpty)) {
+      return "Can only be activated as a sorcery (your main phase, empty stack).";
+    }
+  }
+  if (line.includes("activate only during the end of combat step") && step !== "end_of_combat") {
+    return "Can only be activated during the end of combat step.";
+  }
+  if (
+    line.includes("activate only during combat")
+    && !line.includes("end of combat")
+    && phase !== "combat"
+  ) {
+    return "Can only be activated during combat.";
+  }
+  if (line.includes("activate only during an opponent's turn, before attackers are declared")) {
+    const combat = getCombatState(currentState);
+    const beforeAttackers =
+      phase === "beginning"
+      || phase === "precombat_main"
+      || (
+        phase === "combat"
+        && (step === "beginning_of_combat" || step === "declare_attackers")
+        && !combat?.attackers_locked
+      );
+    if (myTurn || !beforeAttackers) {
+      return "Can only be activated during an opponent's turn, before attackers are declared.";
+    }
+  }
+  return null;
+}
+
+// Per-option gate for the multi-ability menu: engine activation gates plus
+// Library of Alexandria's exact-hand-size restriction.
 function abilityOptionDisabledReason(opt) {
   if (/activate only if you have exactly seven cards in hand/i.test(opt.line || "")) {
     const handCount = Number(getCurrentPlayerState()?.hand_count ?? getCurrentPlayerState()?.hand?.length ?? 0);
@@ -4813,7 +4862,7 @@ function abilityOptionDisabledReason(opt) {
       return `Requires exactly seven cards in hand (you have ${handCount}).`;
     }
   }
-  return null;
+  return activationTimingDisabledReason(opt.line);
 }
 
 function resolveAbilityChoice(optionIndex) {
@@ -4857,6 +4906,17 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     SFX.onError();
     updateActionHint(`${cardName} has summoning sickness and can't use its tap ability yet.`, true);
     return;
+  }
+
+  // Activation-timing gates (Jade Statue's combat-only, Illusionary Mask's
+  // sorcery-speed, ...): fail fast with the reason instead of a doomed request.
+  {
+    const gateReason = activationTimingDisabledReason(card?.oracle_text);
+    if (gateReason) {
+      SFX.onError();
+      updateActionHint(`${cardName}: ${gateReason}`, true);
+      return;
+    }
   }
 
   // Activated abilities that destroy a target creature (e.g. Royal Assassin)
