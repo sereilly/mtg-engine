@@ -177,6 +177,10 @@ class PlayerState:
     mana_pool: dict[str, int] = field(
         default_factory=lambda: {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0}
     )
+    # Metamorphosis: "Spend this mana only to cast creature spells." Mana held
+    # here joins the pool only when paying for a creature spell (spent before
+    # unrestricted mana) and empties whenever the regular pool does.
+    creature_only_mana: dict[str, int] = field(default_factory=dict)
     damage_prevention_pool: int = 0
     # Name of the card/effect that granted the player's current prevention pool,
     # surfaced as a hover preview on the life pill's shield badge.
@@ -201,6 +205,10 @@ class PlayerState:
     # This is the generic fallback used when no specific source was chosen (AI /
     # headless casts); a human pick is recorded in reverse_damage_sources instead.
     reverse_damage_charges: int = 0
+    # Eye for an Eye: one-shot "the next damage dealt to you this turn is also
+    # dealt to its source's controller" charges. Consumed in
+    # _deal_damage_to_player; expire at cleanup.
+    mirror_damage_charges: int = 0
     # Reverse Damage with a chosen "source of your choice": the specific Permanent
     # or spell (a CardDefinition) the caster picked. Only damage from a matching
     # source is prevented and converted to life, then the entry is consumed.

@@ -144,6 +144,7 @@ class GameHelpersMixin:
         for player in self.players:
             for symbol in _MANA_SYMBOLS:
                 player.mana_pool[symbol] = 0
+            player.creature_only_mana.clear()
 
     def _recompute_continuous_effects(self) -> None:
         """Recalculate all static/continuous P/T effects (611.3). Call after any
@@ -178,6 +179,18 @@ class GameHelpersMixin:
         # Control effects (Control Magic, Steal Artifact) revert when the Aura leaves
         # — return the stolen permanent to its original controller (CR 611.3 / 805.4a).
         self._revert_stolen_permanent(aura)
+        # Animate Dead: "When this Aura leaves the battlefield, that creature's
+        # controller sacrifices it." A sacrifice can't be replaced by
+        # regeneration (CR 701.15e).
+        if aura.metadata.get("sacrifice_attached_on_leave"):
+            controller_index = self.controller_index_of(attached)
+            if controller_index is not None:
+                controller = self.players[controller_index]
+                controller.battlefield = [p for p in controller.battlefield if p is not attached]
+                self._permanent_to_graveyard(controller, attached)
+                self.log.append(
+                    f"{controller.name} sacrificed {attached.card.name} ({aura.card.name} left the battlefield)"
+                )
 
     def controller_index_of(self, permanent: Permanent) -> int | None:
         """Index of the player whose battlefield currently holds *permanent*, or
@@ -202,6 +215,11 @@ class GameHelpersMixin:
         control effect in the supported pool is linked and records the
         pre-theft controller on its source (``stolen_owner_index``), which is
         the owner whenever owner and controller differ."""
+        # Reanimation (Animate Dead on an opponent's creature card) records the
+        # owner directly on the permanent.
+        meta_owner = permanent.metadata.get("owner_player_index")
+        if isinstance(meta_owner, int) and 0 <= meta_owner < len(self.players):
+            return meta_owner
         for player in self.players:
             for perm in player.battlefield:
                 if perm.metadata.get("stolen_permanent") is permanent:
@@ -229,6 +247,13 @@ class GameHelpersMixin:
             return False
         self.players[owner_index].battlefield.remove(target_perm)
         new_controller.battlefield.append(target_perm)
+        # CR 302.6: a creature has summoning sickness since it came under its
+        # controller's control, not since it entered the battlefield — a stolen
+        # creature can't attack or use {T} abilities the turn it changes hands
+        # (and counts as not "controlled continuously since the turn began" for
+        # effects like Siren's Call).
+        if self._is_creature(target_perm):
+            target_perm.metadata["summoning_sickness_turn"] = self.turn
         source.metadata["stolen_permanent"] = target_perm
         source.metadata["stolen_owner_index"] = owner_index
         if extra_meta:
@@ -250,6 +275,10 @@ class GameHelpersMixin:
                 if player is not self.players[owner_index]:
                     player.battlefield.remove(stolen)
                     self.players[owner_index].battlefield.append(stolen)
+                    # CR 302.6: returning to the owner is another control
+                    # change, so the creature is summoning-sick again.
+                    if self._is_creature(stolen):
+                        stolen.metadata["summoning_sickness_turn"] = self.turn
                     self.log.append(
                         f"{stolen.card.name} returns to {self.players[owner_index].name}'s control "
                         f"({source.card.name} left the battlefield)"
@@ -277,6 +306,13 @@ class GameHelpersMixin:
         # Living Lands) dying counts as a creature death (Scavenging Ghoul).
         if permanent.is_creature:
             self.creatures_died_this_turn = getattr(self, "creatures_died_this_turn", 0) + 1
+            # Sandals of Abdallah: "When that creature dies this turn, destroy
+            # this artifact." Flag the linked artifact(s); the state-based
+            # sweep destroys them (a battlefield rebuild here could race the
+            # sweep loop that is moving this creature)."""
+            linked = permanent.metadata.pop("on_death_destroy_permanents", None)
+            for artifact in linked or ():
+                artifact.metadata["destroy_linked_death"] = True
             if next(matching_triggers(
                 permanent.effective_card,
                 condition_kinds={"dies"},
@@ -350,6 +386,10 @@ class GameHelpersMixin:
         destroyed: list[Permanent] = []
         for permanent in player.battlefield:
             if not matches(permanent):
+                survivors.append(permanent)
+                continue
+            # Pyramids: a shielded land survives its next destruction this turn.
+            if self._consume_land_destruction_shield(permanent):
                 survivors.append(permanent)
                 continue
             if respect_indestructible and self._is_indestructible(permanent):

@@ -113,6 +113,43 @@ def add_corpse_counters(text: str, activated: bool) -> RuleResult:
     return None
 
 
+# Hasran Ogress: "Whenever this creature attacks, it deals 3 damage to you
+# unless you pay {2}." Must out-rank the generic "deals N damage" spell rule
+# (order 37000), which would drop the pay-out clause.
+_SELF_DAMAGE_UNLESS_PAY_RE = re.compile(r"deals (\d+) damage to you unless you pay \{(\d+)\}")
+
+
+@parse_rule(9850)
+def self_damage_unless_pay(text: str, activated: bool) -> RuleResult:
+    m = _SELF_DAMAGE_UNLESS_PAY_RE.search(text)
+    if m:
+        return _instruction(
+            "self_damage_unless_pay", amount=int(m.group(1)), cost=int(m.group(2))
+        ), "triggered_damage"
+    return None
+
+
+# Khabál Ghoul: at end step, +1/+1 counters for each creature that died.
+# Must out-rank the generic "put a +1/+1 counter on this creature" shorthand
+# (order 107000), which would drop the per-death scaling.
+@parse_rule(10500)
+def add_plus1_counters_for_deaths(text: str, activated: bool) -> RuleResult:
+    if "put a +1/+1 counter on this creature for each creature that died this turn" in text:
+        return _instruction(
+            "add_plus1_counters_for_each_creature_died", power=1, toughness=1
+        ), "triggered_counter"
+    return None
+
+
+# Unstable Mutation: "At the beginning of the upkeep of enchanted creature's
+# controller, put a -1/-1 counter on that creature."
+@parse_rule(10600)
+def add_minus1_counter_to_enchanted(text: str, activated: bool) -> RuleResult:
+    if "put a -1/-1 counter on that creature" in text:
+        return _instruction("add_minus1_counter_to_enchanted"), "upkeep_effect"
+    return None
+
+
 # Scavenging Ghoul: remove a corpse counter to regenerate
 @parse_rule(11000)
 def remove_counter_to_regenerate(text: str, activated: bool) -> RuleResult:

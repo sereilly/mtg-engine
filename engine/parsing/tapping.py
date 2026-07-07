@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from ..oracle_types import _instruction
 from .base import RuleResult, parse_rule
+from .common import parse_target_filter
 
 
 @parse_rule(15000)
@@ -45,6 +46,21 @@ def tap_or_untap_target(text: str, activated: bool) -> RuleResult:
     return None
 
 
+@parse_rule(70800)
+def untap_attacker_and_prevent_combat_damage(text: str, activated: bool) -> RuleResult:
+    # Ebony Horse: "Untap target attacking creature you control. Prevent all
+    # combat damage that would be dealt to and dealt by that creature this
+    # turn." One instruction carries both sentences; the handler claims the
+    # prevention rider (see HANDLER_CLAIMS in scripts/parse_coverage.py).
+    # Must out-rank the generic untap_target rule.
+    if (
+        "untap target attacking creature you control" in text
+        and "prevent all combat damage that would be dealt to and dealt by that creature" in text
+    ):
+        return _instruction("untap_attacker_and_prevent_combat_damage"), "spell_pattern"
+    return None
+
+
 @parse_rule(71000)
 def untap_target(text: str, activated: bool) -> RuleResult:
     if "untap target" in text:
@@ -55,5 +71,13 @@ def untap_target(text: str, activated: bool) -> RuleResult:
 @parse_rule(72000)
 def tap_target(text: str, activated: bool) -> RuleResult:
     if "tap target" in text:
-        return _instruction("tap_target_permanent"), "spell_pattern"
+        # Ali Baba: "{R}: Tap target Wall." — carry the noun-phrase restriction
+        # so resolution and the legality enumerator only accept matching
+        # permanents. Icy Manipulator's "artifact, creature, or land" parses to
+        # no filter, preserving its any-permanent behavior.
+        clause = text.split("tap target", 1)[1].split(".", 1)[0]
+        payload = {}
+        if "artifact, creature, or land" not in clause and "permanent" not in clause:
+            payload = parse_target_filter(clause, text).to_payload()
+        return _instruction("tap_target_permanent", **payload), "spell_pattern"
     return None

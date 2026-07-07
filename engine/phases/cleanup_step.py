@@ -57,6 +57,7 @@ class CleanupStepMixin:
             player.combat_damage_cap_one_charges = 0
             player.forcefield_capped_sources = []
             player.reverse_damage_charges = 0
+            player.mirror_damage_charges = 0
             player.reverse_damage_sources = []
             player.channel_active_until_eot = False
             player.prevent_one_damage_emblems = []
@@ -75,6 +76,11 @@ class CleanupStepMixin:
                     permanent.toughness_bonus -= temp_toughness
                 for key in _EOT_METADATA_KEYS:
                     permanent.metadata.pop(key, None)
+                # Sandals of Abdallah: the islandwalk grant (and its linked
+                # "when that creature dies this turn" destruction) expire now.
+                if permanent.metadata.pop("gains_islandwalk_until_eot", None):
+                    permanent.metadata.pop("has_islandwalk", None)
+                permanent.metadata.pop("on_death_destroy_permanents", None)
         # 610.3: return all creatures exiled "until end of turn" to their owners' battlefields
         returned_from_exile = list(self.exile_until_eot)
         self.exile_until_eot.clear()

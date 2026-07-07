@@ -15,6 +15,20 @@ _SACRIFICE_LAND_CONDITIONAL_DAMAGE_RE = re.compile(
 )
 
 
+# Cyclone: "put a wind counter on this enchantment, then sacrifice this
+# enchantment unless you pay {G} for each wind counter on it. If you pay, this
+# enchantment deals damage equal to the number of wind counters on it to each
+# creature and each player." Must out-rank the generic pay-or-sacrifice rule.
+@parse_rule(900)
+def upkeep_wind_counter_pay_or_sacrifice(text: str, activated: bool) -> RuleResult:
+    if (
+        "put a wind counter on this enchantment" in text
+        and "sacrifice this enchantment unless you pay {g} for each wind counter on it" in text
+    ):
+        return _instruction("upkeep_wind_counter_pay_or_sacrifice"), "upkeep_effect"
+    return None
+
+
 # "sacrifice this enchantment unless you pay {X}..." (Conversion, Stasis)
 @parse_rule(1000)
 def upkeep_pay_or_sacrifice_enchantment(text: str, activated: bool) -> RuleResult:
@@ -147,6 +161,16 @@ def upkeep_most_life_gains_control(text: str, activated: bool) -> RuleResult:
         and "the player with the most life gains control of this creature" in text
     ):
         return _instruction("upkeep_most_life_gains_control"), "upkeep_effect"
+    return None
+
+
+# Drop of Honey: "At the beginning of your upkeep, destroy the creature with
+# the least power. It can't be regenerated. If two or more creatures are tied
+# for least power, you choose one of them."
+@parse_rule(6900)
+def upkeep_destroy_least_power_creature(text: str, activated: bool) -> RuleResult:
+    if "destroy the creature with the least power" in text:
+        return _instruction("upkeep_destroy_least_power_creature"), "upkeep_effect"
     return None
 
 

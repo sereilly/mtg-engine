@@ -75,14 +75,18 @@ class EndStepMixin:
         events: list[dict] = []
 
         # Scavenging Ghoul: "...put a corpse counter on this creature for each
-        # creature that died this turn." The death count is captured now (it resets
-        # next turn) and read by the handler at resolution.
+        # creature that died this turn." Khabál Ghoul: same trigger shape but
+        # +1/+1 counters. The death count is captured now (it resets next turn)
+        # and read by the handler at resolution.
         died = getattr(self, "creatures_died_this_turn", 0)
         if died:
             for controller_index, permanent, trig in iter_triggered_abilities(
                 self,
                 condition_kinds={"end_step"},
-                instruction_kinds={"add_corpse_counters_for_each_creature_died"},
+                instruction_kinds={
+                    "add_corpse_counters_for_each_creature_died",
+                    "add_plus1_counters_for_each_creature_died",
+                },
             ):
                 events.append(make_trigger_event(
                     controller_index, permanent, trig, trigger_context={"count": died}

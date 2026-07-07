@@ -182,3 +182,39 @@ def jade_monolith_redirect(game: Game, instruction: OracleInstruction, context: 
             target_creature.metadata.pop("redirect_damage_source", None)
             game.log.append(f"Jade Monolith marks {target_creature.card.name} for damage redirect to {caster.name}")
     return True, "resolved"
+
+
+@effect_handler("shield_target_land_from_destruction")
+def shield_target_land_from_destruction(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Pyramids mode 2: "The next time target land would be destroyed this
+    turn, remove all damage marked on it instead." Arms a one-shot shield the
+    destroy paths consume via _consume_land_destruction_shield."""
+    card = context.card
+    target_land = resolve_target_permanent(
+        context,
+        predicate=lambda p: p.card.primary_type == "land",
+        fallback_players=(context.caster, context.target),
+    )
+    if target_land is None:
+        game.log.append(f"{card.name}: no valid land target")
+        return True, "resolved"
+    target_land.metadata["land_destruction_shield_this_turn"] = True
+    game.log.append(
+        f"{card.name}: the next time {target_land.card.name} would be destroyed this turn, "
+        "all damage marked on it is removed instead"
+    )
+    return True, "resolved"
+
+
+@effect_handler("arm_mirror_damage")
+def arm_mirror_damage(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Eye for an Eye: the next damage dealt to you this turn also hits the
+    source's controller for the same amount. Modeled as a generic one-shot
+    charge (like Reverse Damage's), consumed in _deal_damage_to_player."""
+    caster = context.caster
+    caster.mirror_damage_charges += 1
+    game.log.append(
+        f"{caster.name}: the next damage dealt to them this turn is mirrored "
+        f"to its source's controller ({context.card.name})"
+    )
+    return True, "resolved"

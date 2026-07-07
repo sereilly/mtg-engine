@@ -313,6 +313,7 @@ def test_desert_pings_attacking_creature(all_cards, arn_by_name):
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=desert)])
     p2 = PlayerState(name="P2", battlefield=[attacker])
     game = Game(players=[p1, p2])
+    game._set_phase_and_step("combat", "end_of_combat")  # "Activate only during the end of combat step."
 
     result = game.activate_permanent_ability(
         0, "Desert", target_player_index=1, target_permanent_index=0, ability_index=1,
@@ -329,6 +330,7 @@ def test_desert_nomads_immune_to_desert_damage(all_cards, arn_by_name):
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=desert)])
     p2 = PlayerState(name="P2", battlefield=[attacker])
     game = Game(players=[p1, p2])
+    game._set_phase_and_step("combat", "end_of_combat")
 
     game.activate_permanent_ability(0, "Desert", target_player_index=1, target_permanent_index=0, ability_index=1)
 
@@ -342,6 +344,7 @@ def test_camel_immune_to_desert_damage_while_attacking(all_cards, arn_by_name):
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=desert)])
     p2 = PlayerState(name="P2", battlefield=[attacker])
     game = Game(players=[p1, p2])
+    game._set_phase_and_step("combat", "end_of_combat")
 
     game.activate_permanent_ability(0, "Desert", target_player_index=1, target_permanent_index=0, ability_index=1)
 
@@ -1217,3 +1220,466 @@ def test_oubliette_phased_out_creature_is_invisible_to_state_based_actions(arn_b
     assert camel_perm not in p2.battlefield
     assert camel_perm not in p1.battlefield
     assert not any(c.name == "Camel" for c in p2.graveyard)
+
+
+# ===========================================================================
+# Piety — "Blocking creatures get +0/+3 until end of turn."
+# (Found by the parse-coverage deletion probe: the "blocking" qualifier was
+# being dropped, buffing every creature.)
+# ===========================================================================
+
+def test_piety_buffs_only_blocking_creatures(arn_by_name, all_cards):
+    piety = arn_by_name["Piety"]
+    attacker = Permanent(card=_get(all_cards, "Grizzly Bears"))
+    attacker.metadata["summoning_sickness_turn"] = -99
+    blocker = Permanent(card=_get(all_cards, "Scryb Sprites"))
+    idle = Permanent(card=_get(all_cards, "Pearled Unicorn"))
+
+    p1 = PlayerState(name="P1", battlefield=[attacker])
+    p2 = PlayerState(name="P2", hand=[piety], battlefield=[blocker, idle])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    game.combat_defending_player_index = 1
+    game.declare_attackers(0, [0], 1)
+    game._set_phase_and_step("combat", "declare_blockers")
+    game.declare_blockers(1, {0: 0})
+
+    result = game.cast_from_hand(1, "Piety", target_player_index=0)
+    assert result.supported
+    game.resolve_stack()
+
+    assert blocker.effective_toughness == 4   # 1 + 3
+    assert idle.effective_toughness == 2      # untouched
+    assert attacker.effective_toughness == 2  # untouched
+
+
+# ===========================================================================
+# Fixes for gaps found by the parse-coverage validator
+# ===========================================================================
+
+def test_cyclone_pays_and_deals_wind_counter_damage(arn_by_name, all_cards):
+    cyclone = Permanent(card=arn_by_name["Cyclone"])
+    sprite = Permanent(card=_get(all_cards, "Scryb Sprites"))  # 1/1 dies to 1
+    p1 = PlayerState(name="P1", battlefield=[cyclone], mana_pool={"G": 1}, life=20)
+    p2 = PlayerState(name="P2", battlefield=[sprite], life=20)
+    game = Game(players=[p1, p2])
+
+    game.resolve_upkeep(0)
+
+    assert cyclone.metadata.get("wind_counters") == 1
+    assert cyclone in p1.battlefield  # paid, not sacrificed
+    assert p1.mana_pool.get("G") == 0
+    assert p1.life == 19 and p2.life == 19
+    assert sprite not in p2.battlefield  # 1 damage killed the 1/1
+
+
+def test_cyclone_sacrificed_when_green_cannot_be_paid(arn_by_name):
+    cyclone = Permanent(card=arn_by_name["Cyclone"])
+    p1 = PlayerState(name="P1", battlefield=[cyclone], life=20)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+
+    game.resolve_upkeep(0)
+
+    assert cyclone not in p1.battlefield
+    assert any(c.name == "Cyclone" for c in p1.graveyard)
+    assert p1.life == 20 and p2.life == 20  # no payment, no damage
+
+
+def test_cyclone_upkeep_prompt_quotes_escalated_cost(arn_by_name):
+    cyclone = Permanent(card=arn_by_name["Cyclone"])
+    cyclone.metadata["wind_counters"] = 2
+    p1 = PlayerState(name="P1", battlefield=[cyclone])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    choices = game.get_upkeep_pay_triggers(0)
+    entry = next(c for c in choices if c["card_name"] == "Cyclone")
+    assert entry["mana"] == {"G": 3}  # this upkeep's counter is included
+
+
+def test_eye_for_an_eye_mirrors_damage_to_source_controller(arn_by_name, all_cards):
+    from tests.helpers import _game as _mk_game, _nosick as _clear_sick
+
+    p1 = PlayerState(name="P1", hand=[arn_by_name["Eye for an Eye"]], life=20)
+    p2 = PlayerState(
+        name="P2",
+        battlefield=[_clear_sick(Permanent(card=_get(all_cards, "Orcish Artillery")))],
+        life=20,
+    )
+    game = _mk_game(p1, p2)
+    game.cast_from_hand(0, "Eye for an Eye", target_player_index=1)
+    game.resolve_stack()
+    assert p1.mirror_damage_charges == 1
+
+    # Orcish Artillery: "{T}: deals 2 damage to any target and 3 damage to you."
+    game.activate_permanent_ability(1, "Orcish Artillery", target_player_index=0)
+
+    assert p1.life == 18            # the damage still happens
+    assert p2.life == 20 - 3 - 2    # its own 3, plus the mirrored 2
+    assert p1.mirror_damage_charges == 0  # one-shot
+
+
+def test_unstable_mutation_decays_the_enchanted_creature(arn_by_name, all_cards):
+    bear = Permanent(card=_get(all_cards, "Grizzly Bears"))
+    mutation = Permanent(card=arn_by_name["Unstable Mutation"])
+    mutation.metadata["attached_to"] = bear
+    bear.metadata["attached_aura"] = mutation
+    bear.power_bonus += 3
+    bear.toughness_bonus += 3  # the aura's +3/+3, as applied at attach
+    p1 = PlayerState(name="P1", battlefield=[bear, mutation])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    game.resolve_upkeep(0)
+    assert bear.effective_power == 4 and bear.effective_toughness == 4
+
+    game.resolve_upkeep(0)
+    assert bear.effective_power == 3 and bear.effective_toughness == 3
+
+
+def test_unstable_mutation_decay_kills_at_zero_toughness(arn_by_name, all_cards):
+    bear = Permanent(card=_get(all_cards, "Grizzly Bears"))
+    mutation = Permanent(card=arn_by_name["Unstable Mutation"])
+    mutation.metadata["attached_to"] = bear
+    bear.metadata["attached_aura"] = mutation
+    bear.toughness_bonus -= 1  # next counter takes the 2/2 to toughness 0
+    p1 = PlayerState(name="P1", battlefield=[bear, mutation])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    game.resolve_upkeep(0)
+
+    assert bear not in p1.battlefield
+    assert any(c.name == "Grizzly Bears" for c in p1.graveyard)
+
+
+def test_drop_of_honey_destroys_least_power_creature(arn_by_name, all_cards):
+    honey = Permanent(card=arn_by_name["Drop of Honey"])
+    sprite = Permanent(card=_get(all_cards, "Scryb Sprites"))   # 1/1
+    giant = Permanent(card=_get(all_cards, "Hill Giant"))       # 3/3
+    sprite.regeneration_shield = 1  # "It can't be regenerated."
+    p1 = PlayerState(name="P1", battlefield=[honey, giant])
+    p2 = PlayerState(name="P2", battlefield=[sprite])
+    game = Game(players=[p1, p2])
+
+    game.resolve_upkeep(0)
+
+    assert sprite not in p2.battlefield
+    assert any(c.name == "Scryb Sprites" for c in p2.graveyard)
+    assert giant in p1.battlefield
+
+
+def test_ifh_biff_efreet_damages_fliers_and_players(arn_by_name, all_cards):
+    from tests.helpers import _nosick as _clear_sick
+
+    efreet = _clear_sick(Permanent(card=arn_by_name["Ifh-Bíff Efreet"]))
+    flier = Permanent(card=_get(all_cards, "Scryb Sprites"))     # 1/1 flying
+    grounded = Permanent(card=_get(all_cards, "Grizzly Bears"))  # no flying
+    p1 = PlayerState(name="P1", battlefield=[efreet], mana_pool={"G": 1}, life=20)
+    p2 = PlayerState(name="P2", battlefield=[flier, grounded], life=20)
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(0, "Ifh-Bíff Efreet", target_player_index=1)
+
+    assert result.supported
+    assert p1.life == 19 and p2.life == 19  # each player
+    assert flier not in p2.battlefield      # 1 damage killed the 1/1 flier
+    assert grounded in p2.battlefield       # non-fliers untouched
+    # The Efreet is itself a 3/3 flier - it took the 1 damage too.
+    assert efreet.damage_marked == 1
+
+
+def test_ifh_biff_efreet_any_player_may_activate(arn_by_name):
+    from tests.helpers import _nosick as _clear_sick
+
+    efreet = _clear_sick(Permanent(card=arn_by_name["Ifh-Bíff Efreet"]))
+    p1 = PlayerState(name="P1", battlefield=[efreet], life=20)
+    p2 = PlayerState(name="P2", mana_pool={"G": 1}, life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = True  # prove the ACTIVATOR pays the {G}
+
+    # The OPPONENT (seat 1) activates the seat-0 Efreet's ability and pays.
+    result = game.activate_permanent_ability(
+        1, "Ifh-Bíff Efreet", target_player_index=0, source_controller_index=0
+    )
+
+    assert result.supported
+    assert p2.mana_pool.get("G") == 0
+    assert p1.life == 19 and p2.life == 19
+
+
+def test_only_controller_may_activate_ordinary_abilities(arn_by_name, all_cards):
+    from tests.helpers import _game as _mk_game, _nosick as _clear_sick
+
+    sindbad = _clear_sick(Permanent(card=arn_by_name["Sindbad"]))
+    p1 = PlayerState(name="P1", battlefield=[sindbad], library=[_get(all_cards, "Forest")])
+    p2 = PlayerState(name="P2")
+    game = _mk_game(p1, p2)
+
+    result = game.activate_permanent_ability(
+        1, "Sindbad", target_player_index=0, source_controller_index=0
+    )
+
+    assert not result.supported
+    assert "controller" in result.details
+
+
+def test_desert_ping_gated_to_end_of_combat(arn_by_name, all_cards):
+    desert = Permanent(card=arn_by_name["Desert"])
+    attacker = Permanent(card=_get(all_cards, "Grizzly Bears"), attacking=True)
+    p1 = PlayerState(name="P1", battlefield=[desert])
+    p2 = PlayerState(name="P2", battlefield=[attacker])
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(
+        0, "Desert", target_player_index=1, target_permanent_index=0, ability_index=1
+    )
+
+    assert not result.supported
+    assert "end of combat" in result.details
+    assert attacker.damage_marked == 0
+
+
+def test_merchant_ship_gains_life_only_when_unblocked(arn_by_name, all_cards):
+    from tests.helpers import _game as _mk_game, _nosick as _clear_sick
+
+    ship = _clear_sick(Permanent(card=arn_by_name["Merchant Ship"]))
+    island = Permanent(card=_get(all_cards, "Island"))
+    p1 = PlayerState(name="P1", battlefield=[ship, island], life=20)
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=_get(all_cards, "Island"))], life=20)
+    game = _mk_game(p1, p2)
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    game.declare_attackers(0, [0])
+    game.resolve_stack()
+    assert p1.life == 20  # NOT at attack declaration any more
+
+    game._set_phase_and_step("combat", "combat_damage")
+    game.resolve_combat_damage(0)
+    game.resolve_stack()
+    assert p1.life == 22  # unblocked: the trigger fired with blocks known
+
+
+def test_merchant_ship_gains_nothing_when_blocked(arn_by_name, all_cards):
+    from tests.helpers import _game as _mk_game, _nosick as _clear_sick
+
+    ship = _clear_sick(Permanent(card=arn_by_name["Merchant Ship"]))
+    island = Permanent(card=_get(all_cards, "Island"))
+    blocker = _clear_sick(Permanent(card=_get(all_cards, "Grizzly Bears")))
+    p1 = PlayerState(name="P1", battlefield=[ship, island], life=20)
+    p2 = PlayerState(
+        name="P2",
+        battlefield=[blocker, Permanent(card=_get(all_cards, "Island"))],
+        life=20,
+    )
+    game = _mk_game(p1, p2)
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    game.declare_attackers(0, [0])
+    game.resolve_stack()
+    game._set_phase_and_step("combat", "declare_blockers")
+    game.declare_blockers(1, {0: 0})
+    game._set_phase_and_step("combat", "combat_damage")
+    game.resolve_combat_damage(0)
+    game.resolve_stack()
+
+    assert p1.life == 20  # blocked: no life
+
+
+# ===========================================================================
+# Ebony Horse — untap + "prevent all combat damage dealt to and by"
+# ===========================================================================
+
+def test_ebony_horse_untaps_attacker_and_prevents_combat_damage(arn_by_name, all_cards):
+    from tests.helpers import _nosick
+
+    horse = Permanent(card=arn_by_name["Ebony Horse"])
+    attacker = _nosick(Permanent(card=_get(all_cards, "Grizzly Bears")))  # 2/2
+    blocker = Permanent(card=_get(all_cards, "Hill Giant"))               # 3/3
+    island = _get(all_cards, "Island")
+    p1 = PlayerState(name="P1", battlefield=[horse, attacker], library=[island])
+    p2 = PlayerState(name="P2", battlefield=[blocker], life=20)
+    game = Game(players=[p1, p2])
+
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # beginning_of_combat
+    game.advance_combat_phase()  # declare_attackers
+    ok, _ = game.declare_attackers(0, [1])
+    assert ok
+    game.advance_combat_phase()  # declare_blockers
+    ok, _ = game.declare_blockers(1, {0: 1})
+    assert ok
+
+    result = game.activate_permanent_ability(
+        0, "Ebony Horse", target_player_index=0, target_permanent_index=1
+    )
+    assert result.supported
+    assert attacker.tapped is False
+    assert attacker.metadata.get("prevent_combat_damage_to_and_by_until_eot") is True
+
+    game.advance_combat_phase()  # combat damage auto-resolves (single blocker)
+    # "Prevent all combat damage that would be dealt to and dealt by that
+    # creature this turn": neither side of the blocked combat marks damage.
+    assert blocker.damage_marked == 0
+    assert attacker.damage_marked == 0
+    assert p2.life == 20
+
+
+def test_ebony_horse_shield_expires_in_cleanup(arn_by_name, all_cards):
+    horse_target = Permanent(card=_get(all_cards, "Grizzly Bears"))
+    horse_target.metadata["prevent_combat_damage_to_and_by_until_eot"] = True
+    p1 = PlayerState(name="P1", battlefield=[horse_target])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    game.resolve_cleanup_step(0)
+
+    assert horse_target.metadata.get("prevent_combat_damage_to_and_by_until_eot") is None
+
+
+# ===========================================================================
+# Jihad — enter choice, conditional anthem, auto-sacrifice
+# ===========================================================================
+
+def test_jihad_defaults_conditional_anthem_and_auto_sacrifice(arn_by_name, all_cards):
+    jihad = arn_by_name["Jihad"]
+    white_knight = Permanent(card=_get(all_cards, "White Knight"))  # white 2/2
+    green_perm = Permanent(card=_get(all_cards, "Grizzly Bears"))   # green nontoken
+    p1 = PlayerState(name="P1", hand=[jihad], battlefield=[white_knight])
+    p2 = PlayerState(name="P2", battlefield=[green_perm])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Jihad", target_player_index=1)
+
+    assert result.supported
+    jihad_perm = next(p for p in p1.battlefield if p.card.name == "Jihad")
+    # Headless defaults: the cast target, and the color they control most of.
+    assert jihad_perm.metadata.get("chosen_player_index") == 1
+    assert jihad_perm.metadata.get("chosen_color") == "G"
+    # Anthem is live while the chosen player controls a green nontoken permanent.
+    assert white_knight.effective_power == 4
+    assert white_knight.effective_toughness == 3
+
+    # The last green permanent leaves: Jihad is sacrificed and the buff ends.
+    p2.battlefield.remove(green_perm)
+    game.check_state_based_actions()
+    assert all(p.card.name != "Jihad" for p in p1.battlefield)
+    assert any(c.name == "Jihad" for c in p1.graveyard)
+    assert white_knight.effective_power == 2
+
+
+def test_jihad_interactive_prompt_confirms_color_and_opponent(arn_by_name, all_cards):
+    jihad = arn_by_name["Jihad"]
+    white_perm = Permanent(card=_get(all_cards, "White Knight"))
+    green_perm = Permanent(card=_get(all_cards, "Grizzly Bears"))
+    p1 = PlayerState(name="P1", hand=[jihad])
+    p2 = PlayerState(name="P2", battlefield=[green_perm, white_perm])
+    game = Game(players=[p1, p2])
+    game.interactive_seats = {0}
+
+    result = game.cast_from_hand(0, "Jihad", target_player_index=1)
+
+    assert result.supported
+    pending = game.pending_enter_choice
+    assert pending is not None
+    assert pending["needs_color"] is True
+    assert pending["opponents"] == [1]
+
+    assert game.confirm_enter_choice(0, 1, "W") is True
+    jihad_perm = next(p for p in p1.battlefield if p.card.name == "Jihad")
+    assert jihad_perm.metadata.get("chosen_color") == "W"
+    assert jihad_perm.metadata.get("chosen_player_index") == 1
+    assert game.pending_enter_choice is None
+    # Still alive: the chosen player controls a white nontoken permanent.
+    assert any(p.card.name == "Jihad" for p in p1.battlefield)
+
+
+# ===========================================================================
+# Drop of Honey — the controller chooses among creatures tied for least power
+# ===========================================================================
+
+def test_drop_of_honey_tie_prompts_human_controller(arn_by_name, all_cards):
+    honey = Permanent(card=arn_by_name["Drop of Honey"])
+    own_sprite = Permanent(card=_get(all_cards, "Scryb Sprites"))   # 1/1
+    enemy_hero = Permanent(card=_get(all_cards, "Benalish Hero"))   # 1/1
+    p1 = PlayerState(name="P1", battlefield=[honey, own_sprite])
+    p2 = PlayerState(name="P2", battlefield=[enemy_hero])
+    game = Game(players=[p1, p2])
+    game.interactive_seats = {0}
+
+    game.resolve_upkeep(0)
+
+    pending = game.pending_least_power_choice
+    assert pending is not None
+    assert pending["controller_index"] == 0
+    assert {c["name"] for c in pending["candidates"]} == {"Scryb Sprites", "Benalish Hero"}
+    # Nothing is destroyed until the controller picks.
+    assert own_sprite in p1.battlefield and enemy_hero in p2.battlefield
+
+    assert game.confirm_least_power_choice(0, 1, 0) is True
+    assert enemy_hero not in p2.battlefield
+    assert any(c.name == "Benalish Hero" for c in p2.graveyard)
+    assert own_sprite in p1.battlefield
+    assert game.pending_least_power_choice is None
+
+
+def test_drop_of_honey_tie_rejects_non_candidate_choice(arn_by_name, all_cards):
+    honey = Permanent(card=arn_by_name["Drop of Honey"])
+    sprite = Permanent(card=_get(all_cards, "Scryb Sprites"))  # 1/1 (tied)
+    hero = Permanent(card=_get(all_cards, "Benalish Hero"))    # 1/1 (tied)
+    giant = Permanent(card=_get(all_cards, "Hill Giant"))      # 3/3 (not tied)
+    p1 = PlayerState(name="P1", battlefield=[honey, sprite])
+    p2 = PlayerState(name="P2", battlefield=[hero, giant])
+    game = Game(players=[p1, p2])
+    game.interactive_seats = {0}
+
+    game.resolve_upkeep(0)
+
+    assert game.pending_least_power_choice is not None
+    # The 3/3 is not tied for least power — an illegal pick is refused.
+    assert game.confirm_least_power_choice(0, 1, 1) is False
+    assert giant in p2.battlefield
+    assert game.pending_least_power_choice is not None
+
+
+# ===========================================================================
+# Metamorphosis — "Spend this mana only to cast creature spells."
+# ===========================================================================
+
+def test_metamorphosis_mana_spendable_only_on_creature_spells(arn_by_name, all_cards):
+    metamorphosis = arn_by_name["Metamorphosis"]
+    bears_card = _get(all_cards, "Grizzly Bears")   # {1}{G} creature
+    vise_card = _get(all_cards, "Black Vise")       # {1} artifact
+    fodder = Permanent(card=_get(all_cards, "Hill Giant"))  # mana value 4 -> X = 5
+    p1 = PlayerState(
+        name="P1",
+        hand=[metamorphosis, bears_card, vise_card],
+        battlefield=[fodder],
+        mana_pool={"G": 1},
+    )
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = True
+
+    result = game.cast_from_hand(0, "Metamorphosis", target_permanent_index=0, new_color="G")
+
+    assert result.supported
+    assert any(c.name == "Hill Giant" for c in p1.graveyard)
+    # 1 + mana value 4 = 5 green mana, restricted to creature spells.
+    assert p1.creature_only_mana.get("G") == 5
+    assert p1.mana_pool.get("G", 0) == 0
+
+    # A noncreature spell can't be paid with the restricted mana.
+    result = game.cast_from_hand(0, "Black Vise", target_player_index=1)
+    assert not result.supported
+    assert "insufficient mana" in result.details
+
+    # A creature spell can — and consumes the restricted mana first.
+    result = game.cast_from_hand(0, "Grizzly Bears")
+    assert result.supported
+    assert any(p.card.name == "Grizzly Bears" for p in p1.battlefield)
+    assert p1.creature_only_mana.get("G") == 3

@@ -167,6 +167,12 @@ def _run_card(card: CardDefinition, all_cards: list[CardDefinition]) -> tuple[Ga
     if card.name == "False Orders":
         # False Orders may only be cast during the declare blockers step.
         game._set_phase_and_step("combat", "declare_blockers")
+    if card.name == "Jade Statue":
+        # "Activate only during combat."
+        game._set_phase_and_step("combat", "beginning_of_combat")
+    if card.name == "Nettling Imp":
+        # "Activate only during an opponent's turn, before attackers are declared."
+        game.active_player_index = 1
     if card.name == "Blaze of Glory":
         # Blaze of Glory may be cast only during combat before blockers are declared.
         game._set_phase_and_step("combat", "declare_attackers")

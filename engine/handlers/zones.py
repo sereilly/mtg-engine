@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 def draw_target_cards(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     target = context.target
     count = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
-    drawn = target.draw(count)
+    drawn = game._draw_with_lamp(target, count)
     game.log.append(f"{target.name} drew {drawn} cards")
     return True, "resolved"
 
@@ -26,8 +26,45 @@ def draw_target_cards(game: Game, instruction: OracleInstruction, context: Oracl
 def draw_controller_cards(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     caster = context.caster
     card = context.card
-    drawn = caster.draw(int(instruction.payload.get("amount", 0)))
+    drawn = game._draw_with_lamp(caster, int(instruction.payload.get("amount", 0)))
     game.log.append(f"{card.name} drew {drawn} card")
+    return True, "resolved"
+
+
+@effect_handler("arm_lamp_draw_replacement")
+def arm_lamp_draw_replacement(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Aladdin's Lamp: arm the controller's next draw this turn to become
+    "look at the top X, choose one to draw, bottom the rest in a random
+    order". Consumed by Game._draw_with_lamp at the next draw."""
+    caster = context.caster
+    x = max(1, int(context.x_value or 0))
+    game.lamp_draw_replacements[game.players.index(caster)] = x
+    game.log.append(
+        f"{context.card.name}: {caster.name}'s next draw this turn looks at the top {x} card(s) instead"
+    )
+    return True, "resolved"
+
+
+@effect_handler("draw_reveal_discard_unless_land")
+def draw_reveal_discard_unless_land(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Sindbad: "Draw a card and reveal it. If it isn't a land card, discard
+    it." The reveal is public (logged); a non-land is discarded through
+    _discard_card so Library of Leng's replacement still applies."""
+    caster = context.caster
+    card = context.card
+    if not caster.library:
+        # 120.3: the draw is still attempted; drawing from an empty library
+        # marks the loss the same way every other draw does.
+        caster.draw(1)
+        game.log.append(f"{card.name}: {caster.name} has no cards to draw")
+        return True, "resolved"
+    drawn = caster.library[0]
+    caster.draw(1)
+    game.log.append(f"{card.name}: {caster.name} drew and revealed {drawn.name}")
+    if drawn.primary_type != "land":
+        caster.hand.remove(drawn)
+        game._discard_card(caster, drawn)
+        game.log.append(f"{caster.name} discarded {drawn.name} (not a land card)")
     return True, "resolved"
 
 

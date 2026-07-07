@@ -233,6 +233,36 @@ class Game(
     # {"player_index", "amount", "cost", "source_name"}. Populated by the
     # arm_draw_step_life_loss_unless_pay handler, resolved in resolve_draw_step.
     pending_draw_step_life_loss: list = field(default_factory=list)
+    # Cuombajj Witches: "...and 1 damage to any target of an opponent's choice."
+    # Awaiting the opposing (human) chooser's pick of any target. Shape:
+    # {"chooser_index", "amount", "card_name", "_source_permanent"}. AI/headless
+    # choosers resolve inline with a deterministic heuristic instead.
+    pending_opponent_damage: dict | None = None
+    # Aladdin's Lamp: an armed "the next time you would draw a card this turn,
+    # instead look at the top X..." replacement per player. Shape:
+    # {player_index: X}. Consumed by the next draw that player makes this turn;
+    # cleared at end of turn.
+    lamp_draw_replacements: dict = field(default_factory=dict)
+    # Aladdin's Lamp: a replaced draw awaiting the (human) player's choice of
+    # which of the revealed top cards to draw. Shape: {"player_index",
+    # "card_names": [...]}. The unchosen cards go to the bottom of the library
+    # in a random order.
+    pending_lamp_draw: dict | None = None
+    # "As this [artifact/enchantment] enters, choose an opponent [and a color]."
+    # (Black Vise; Jihad adds a color.) Deterministic defaults are stamped on the
+    # permanent immediately so headless/AI play never blocks; an interactive
+    # caster with a genuine choice (several opponents, or a color to pick) gets
+    # this prompt, whose confirm_enter_choice overwrites the defaults. Shape:
+    # {"controller_index", "card_name", "permanent", "needs_color",
+    #  "opponents": [seats], "default_seat", "default_color"}.
+    pending_enter_choice: dict | None = None
+    # Drop of Honey: "destroy the creature with the least power. If two or more
+    # creatures are tied for least power, you choose one of them." Armed during
+    # the controller's upkeep when the tie is real and the controller is a human
+    # seat; AI/headless play breaks the tie deterministically inline. Shape:
+    # {"controller_index", "card_name", "candidates": [{"seat", "index",
+    #  "name"}, ...], "_candidate_perms": [Permanent, ...]}.
+    pending_least_power_choice: dict | None = None
 
     def __post_init__(self) -> None:
         # Preserve legacy external phase naming while internally tracking phase/step.

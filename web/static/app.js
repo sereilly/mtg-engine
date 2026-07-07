@@ -941,7 +941,7 @@ function combatDamageAssignmentPending(state = currentState) {
 }
 
 function hasBlockingPromptForAutoPass(state = currentState) {
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getLandTypeChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getLandTypeChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
   return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingAbilityChoice || pendingChannel || pendingAttackTarget);
 }
 
@@ -1906,6 +1906,25 @@ function getLandTypeChoiceInfo(state = currentState) {
   return info;
 }
 
+// Black Vise / Jihad: the "as this enters, choose an opponent [and a color]" prompt.
+function getEnterChoiceInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.enter_choice;
+  if (!info || !Array.isArray(info.opponents) || info.opponents.length === 0) {
+    enterChoiceSelectedColor = null;
+    return null;
+  }
+  return info;
+}
+
+// Drop of Honey: the tie-break choice among creatures tied for least power.
+function getLeastPowerChoiceInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.least_power_choice;
+  if (!info || !Array.isArray(info.candidates) || info.candidates.length === 0) return null;
+  return info;
+}
+
 function getManaPaymentInfo(state = currentState) {
   if (!state || seat === null) return null;
   const info = state.mana_payment;
@@ -1938,6 +1957,31 @@ function getWordOfCommandInfo(state = currentState) {
   if (!state || seat === null) return null;
   const info = state.word_of_command;
   if (!info || !Array.isArray(info.choices) || info.choices.length === 0) return null;
+  return info;
+}
+
+// Old Man of the Sea: the start-of-turn "may choose not to untap" choice.
+function getOptionalUntapInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  if (state.current_turn !== seat) return null;
+  const info = state.optional_untap;
+  if (!info || !Array.isArray(info.permanents) || info.permanents.length === 0) return null;
+  return info;
+}
+
+// Cuombajj Witches: the opposing chooser picks any target for the second damage.
+function getOpponentDamageInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.opponent_damage_choice;
+  if (!info || !Array.isArray(info.valid_targets)) return null;
+  return info;
+}
+
+// Aladdin's Lamp: pick which of the revealed top cards to draw.
+function getLampDrawInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.lamp_draw;
+  if (!info || !Array.isArray(info.card_names) || info.card_names.length === 0) return null;
   return info;
 }
 
@@ -2116,6 +2160,9 @@ function isAnyPromptActive(state = currentState) {
   if (getLengDiscardInfo(state)) return true;
   if (getBalanceSelectInfo(state)) return true;
   if (getOptionalPayInfo(state)) return true;
+  if (getOptionalUntapInfo(state)) return true;
+  if (getOpponentDamageInfo(state)) return true;
+  if (getLampDrawInfo(state)) return true;
   if (getLandTypeChoiceInfo(state)) return true;
   if (getManaPaymentInfo(state)) return true;
   if (getBandBlockerInfo(state)) return true;
@@ -2139,7 +2186,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getLandTypeChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getLandTypeChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -2889,14 +2936,20 @@ function applyOptionalPayPrompt(info) {
   cancelBtn.disabled = true;
   customOkBtn.disabled = true;
 
+  // Hasran Ogress: "unless you pay {2}" — declining deals damage instead.
+  const damage = Number(current?.damage || 0);
+
   // Render the generic cost as a mana icon ({1}) rather than literal "{1}" text.
   const costSymbols = renderSymbolsInline(`{${cost}}`);
   const acceptLabel = isDraw
     ? escapeHtml(`Draw ${current.draw} card${current.draw > 1 ? "s" : ""}`)
     : `Pay ${costSymbols}`;
-  title.textContent = isDraw ? "Optional Draw" : "Pay for Life?";
+  const declineLabel = damage > 0 ? escapeHtml(`Take ${damage} damage`) : "Decline";
+  title.textContent = isDraw ? "Optional Draw" : damage > 0 ? "Pay or Take Damage" : "Pay for Life?";
   if (isDraw) {
     body.textContent = `${cardName}: ${current.prompt || "Draw a card?"}`;
+  } else if (damage > 0) {
+    setSymbolsHtml(body, `${cardName}: pay {${cost}}, or it deals ${damage} damage to you.`);
   } else {
     setSymbolsHtml(body, `${cardName}: pay {${cost}} to gain ${life} life?`);
   }
@@ -2905,7 +2958,7 @@ function applyOptionalPayPrompt(info) {
     `<div>Remaining decisions: ${pending.length}</div>`,
     `<div class="prompt-choice-row">` +
       `<button type="button" class="prompt-choice-btn" data-optional-pay="yes">${acceptLabel}</button>` +
-      `<button type="button" class="prompt-choice-btn" data-optional-pay="no">Decline</button>` +
+      `<button type="button" class="prompt-choice-btn" data-optional-pay="no">${declineLabel}</button>` +
       `</div>`,
   ].join("");
 
@@ -2917,6 +2970,146 @@ function applyOptionalPayPrompt(info) {
         card_name: cardName,
         accept: btn.dataset.optionalPay === "yes",
       });
+    });
+  });
+}
+
+// Old Man of the Sea: at the start of the turn, toggle which "may choose not
+// to untap" permanents stay tapped, then confirm.
+let optionalUntapKeepSelection = [];
+function applyOptionalUntapPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  const validIndices = new Set((info.permanents || []).map((p) => Number(p.index)));
+  optionalUntapKeepSelection = optionalUntapKeepSelection.filter((i) => validIndices.has(i));
+
+  title.textContent = "Choose not to untap?";
+  body.textContent = "These permanents may stay tapped this turn (e.g. Old Man of the Sea keeps control of its stolen creature while tapped).";
+  const buttons = (info.permanents || [])
+    .map((p) => {
+      const idx = Number(p.index);
+      const keep = optionalUntapKeepSelection.includes(idx);
+      const label = `${p.name}: ${keep ? "stays TAPPED" : "will untap"}`;
+      return `<button type="button" class="prompt-choice-btn" data-optional-untap="${idx}">${escapeHtml(label)}</button>`;
+    })
+    .join("");
+  steps.innerHTML = [
+    `<div class="prompt-choice-column">${buttons}</div>`,
+    `<div class="prompt-choice-row"><button type="button" class="prompt-choice-btn" data-optional-untap-confirm="1">Continue</button></div>`,
+  ].join("");
+
+  steps.querySelectorAll("[data-optional-untap]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const idx = Number(btn.dataset.optionalUntap);
+      const at = optionalUntapKeepSelection.indexOf(idx);
+      if (at >= 0) optionalUntapKeepSelection.splice(at, 1);
+      else optionalUntapKeepSelection.push(idx);
+      applyOptionalUntapPrompt(info);
+    });
+  });
+  steps.querySelector("[data-optional-untap-confirm]")?.addEventListener("click", async () => {
+    const keep = [...optionalUntapKeepSelection];
+    optionalUntapKeepSelection = [];
+    await sendAction({ seat, action: "optional_untap_confirm", creature_indices: keep });
+  });
+}
+
+// Cuombajj Witches: the opposing chooser picks any target ("any target of an
+// opponent's choice") for the second point of damage.
+function applyOpponentDamagePrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  title.textContent = `Choose a target for ${info.card_name}`;
+  body.textContent = `You choose any target for ${info.card_name}'s ${info.amount} damage.`;
+  const buttons = (info.valid_targets || [])
+    .map((t) => {
+      if (t.kind === "player") {
+        const name = currentState?.players?.[t.seat]?.name || `Seat ${t.seat}`;
+        return `<button type="button" class="prompt-choice-btn" data-opp-dmg-seat="${t.seat}">${escapeHtml(`Player: ${name}`)}</button>`;
+      }
+      if (t.kind === "permanent") {
+        return `<button type="button" class="prompt-choice-btn" data-opp-dmg-seat="${t.seat}" data-opp-dmg-index="${t.index}">${escapeHtml(t.name || "Creature")}</button>`;
+      }
+      return "";
+    })
+    .join("");
+  steps.innerHTML = `<div class="prompt-choice-column">${buttons}</div>`;
+
+  steps.querySelectorAll("[data-opp-dmg-seat]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const bodyAction = {
+        seat,
+        action: "opponent_damage_choose",
+        target_seat: Number(btn.dataset.oppDmgSeat),
+      };
+      if (btn.dataset.oppDmgIndex !== undefined) {
+        bodyAction.target_permanent_index = Number(btn.dataset.oppDmgIndex);
+      }
+      await sendAction(bodyAction);
+    });
+  });
+}
+
+// Aladdin's Lamp: the replaced draw — pick one of the revealed top cards to
+// draw; the rest go to the bottom of the library in a random order.
+function applyLampDrawPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  title.textContent = "Aladdin's Lamp";
+  body.textContent = "Choose which card to draw. The rest go to the bottom of your library in a random order.";
+  const buttons = info.card_names
+    .map(
+      (name, i) =>
+        `<button type="button" class="prompt-choice-btn" data-lamp-draw="${i}">${escapeHtml(name)}</button>`,
+    )
+    .join("");
+  steps.innerHTML = `<div class="prompt-choice-column">${buttons}</div>`;
+
+  steps.querySelectorAll("[data-lamp-draw]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await sendAction({ seat, action: "lamp_draw_confirm", hand_index: Number(btn.dataset.lampDraw) });
     });
   });
 }
@@ -2958,6 +3151,123 @@ function applyLandTypeChoicePrompt(info) {
         seat,
         action: "land_type_confirm",
         land_type: btn.dataset.landType,
+      });
+    });
+  });
+}
+
+// Black Vise / Jihad: "As this enters, choose an opponent [and a color]."
+// Selected color for the current enter-choice prompt (Jihad); reset whenever
+// the prompt is (re)rendered without a prior selection.
+let enterChoiceSelectedColor = null;
+
+function applyEnterChoicePrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  const cardName = info.card_name || "Permanent";
+  const needsColor = !!info.needs_color;
+  if (needsColor && !enterChoiceSelectedColor) {
+    enterChoiceSelectedColor = info.default_color || "W";
+  }
+  title.textContent = needsColor ? "Choose a color and an opponent" : "Choose an opponent";
+  body.textContent = `${cardName}: as it enters, choose ${needsColor ? "a color and " : ""}an opponent.`;
+
+  const colorNames = { W: "White", U: "Blue", B: "Black", R: "Red", G: "Green" };
+  const colorRow = needsColor
+    ? `<div class="prompt-choice-row">` +
+      (info.colors || [])
+        .map(
+          (c) =>
+            `<button type="button" class="prompt-choice-btn${c === enterChoiceSelectedColor ? " selected" : ""}" data-enter-color="${escapeHtml(c)}">` +
+            `${escapeHtml(colorNames[c] || c)}</button>`
+        )
+        .join("") +
+      `</div>`
+    : "";
+  const seatButtons = (info.opponents || [])
+    .map(
+      (opp) =>
+        `<button type="button" class="prompt-choice-btn" data-enter-seat="${opp.seat}">` +
+        `${escapeHtml(opp.name || `Seat ${opp.seat}`)}</button>`
+    )
+    .join("");
+  steps.innerHTML = `${colorRow}<div class="prompt-choice-column">${seatButtons}</div>`;
+
+  steps.querySelectorAll("[data-enter-color]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      enterChoiceSelectedColor = btn.dataset.enterColor;
+      steps.querySelectorAll("[data-enter-color]").forEach((b) => {
+        b.classList.toggle("selected", b.dataset.enterColor === enterChoiceSelectedColor);
+      });
+    });
+  });
+  steps.querySelectorAll("[data-enter-seat]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const payload = {
+        seat,
+        action: "enter_choice_confirm",
+        target_seat: Number(btn.dataset.enterSeat),
+      };
+      if (needsColor) payload.mana_color = enterChoiceSelectedColor;
+      enterChoiceSelectedColor = null;
+      await sendAction(payload);
+    });
+  });
+}
+
+// Drop of Honey: pick which of the creatures tied for least power is destroyed.
+function applyLeastPowerChoicePrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  const cardName = info.card_name || "Drop of Honey";
+  title.textContent = "Choose a creature to destroy";
+  body.textContent = `${cardName}: these creatures are tied for least power — choose which one is destroyed.`;
+  const buttons = (info.candidates || [])
+    .map((c) => {
+      const owner = currentState?.players?.[c.seat]?.name || `Seat ${c.seat}`;
+      return (
+        `<button type="button" class="prompt-choice-btn" data-least-seat="${c.seat}" data-least-index="${c.index}">` +
+        `${escapeHtml(c.name)} (${escapeHtml(owner)})</button>`
+      );
+    })
+    .join("");
+  steps.innerHTML = `<div class="prompt-choice-column">${buttons}</div>`;
+
+  steps.querySelectorAll("[data-least-seat]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await sendAction({
+        seat,
+        action: "least_power_choice_confirm",
+        target_seat: Number(btn.dataset.leastSeat),
+        target_permanent_index: Number(btn.dataset.leastIndex),
       });
     });
   });
@@ -3865,6 +4175,24 @@ function renderActivationPrompt() {
     return;
   }
 
+  const optionalUntapInfo = getOptionalUntapInfo();
+  if (optionalUntapInfo) {
+    applyOptionalUntapPrompt(optionalUntapInfo);
+    return;
+  }
+
+  const opponentDamageInfo = getOpponentDamageInfo();
+  if (opponentDamageInfo) {
+    applyOpponentDamagePrompt(opponentDamageInfo);
+    return;
+  }
+
+  const lampDrawInfo = getLampDrawInfo();
+  if (lampDrawInfo) {
+    applyLampDrawPrompt(lampDrawInfo);
+    return;
+  }
+
   if (upkeepPayInfo) {
     applyUpkeepPayPrompt(upkeepPayInfo);
     return;
@@ -3915,6 +4243,18 @@ function renderActivationPrompt() {
   const landTypeChoiceInfo = getLandTypeChoiceInfo();
   if (landTypeChoiceInfo) {
     applyLandTypeChoicePrompt(landTypeChoiceInfo);
+    return;
+  }
+
+  const enterChoiceInfo = getEnterChoiceInfo();
+  if (enterChoiceInfo) {
+    applyEnterChoicePrompt(enterChoiceInfo);
+    return;
+  }
+
+  const leastPowerChoiceInfo = getLeastPowerChoiceInfo();
+  if (leastPowerChoiceInfo) {
+    applyLeastPowerChoicePrompt(leastPowerChoiceInfo);
     return;
   }
 
@@ -4241,9 +4581,14 @@ function renderActivationPrompt() {
       `<div>Card: ${escapeHtml(pendingAbilityChoice.cardName)}</div>`,
       `<div class="prompt-choice-row">${pendingAbilityChoice.options
         .map(
-          (opt) =>
-            `<button type="button" class="prompt-choice-btn" data-ability-choice="${opt.index}">` +
-            `${renderSymbolsInline(opt.cost)}: ${escapeHtml(opt.text)}</button>`,
+          (opt) => {
+            const disabledReason = abilityOptionDisabledReason(opt);
+            const disabledAttrs = disabledReason
+              ? ` disabled title="${escapeHtml(disabledReason)}"`
+              : "";
+            return `<button type="button" class="prompt-choice-btn" data-ability-choice="${opt.index}"${disabledAttrs}>` +
+              `${renderSymbolsInline(opt.cost)}: ${escapeHtml(opt.text)}</button>`;
+          },
         )
         .join("")}</div>`,
     ].join("");
@@ -4430,14 +4775,45 @@ function getActivatedAbilityOptions(card) {
   if (!card || typeof card === "string") return [];
   const options = [];
   let index = 0;
-  for (const line of activatedAbilityText(card).split("\n")) {
+  const lines = activatedAbilityText(card).split("\n");
+  for (let li = 0; li < lines.length; li++) {
+    const line = lines[li];
     const m = line.match(/^\s*((?:\{[^}]+\}[,\s]*)+):\s*(.+)$/);
-    if (m) {
-      options.push({ index, cost: m[1].trim(), text: m[2].trim(), line: line.trim() });
-      index += 1;
+    if (!m) continue;
+    // Modal activated ability (Pyramids: "{2}: Choose one —" + bullets):
+    // one option per bullet, sharing the cost — matching the engine, which
+    // compiles each bullet as its own activated ability.
+    if (/^choose one\b/i.test(m[2].trim())) {
+      let consumedBullets = false;
+      let j = li + 1;
+      while (j < lines.length && lines[j].trim().startsWith("•")) {
+        const text = lines[j].trim().replace(/^•\s*/, "");
+        options.push({ index, cost: m[1].trim(), text, line: `${m[1].trim()}: ${text}` });
+        index += 1;
+        consumedBullets = true;
+        j += 1;
+      }
+      if (consumedBullets) {
+        li = j - 1;
+        continue;
+      }
     }
+    options.push({ index, cost: m[1].trim(), text: m[2].trim(), line: line.trim() });
+    index += 1;
   }
   return options;
+}
+
+// Library of Alexandria's draw is only activatable with exactly seven cards in
+// hand; the ability menu greys the option out when the restriction fails.
+function abilityOptionDisabledReason(opt) {
+  if (/activate only if you have exactly seven cards in hand/i.test(opt.line || "")) {
+    const handCount = Number(getCurrentPlayerState()?.hand_count ?? getCurrentPlayerState()?.hand?.length ?? 0);
+    if (handCount !== 7) {
+      return `Requires exactly seven cards in hand (you have ${handCount}).`;
+    }
+  }
+  return null;
 }
 
 function resolveAbilityChoice(optionIndex) {
@@ -4449,6 +4825,12 @@ function resolveAbilityChoice(optionIndex) {
   // Recurse with a single-ability synthetic card so the normal target/cost flow
   // handles just the chosen ability; __abilityIndex is threaded into the action.
   const singleAbilityCard = { ...pending.card, oracle_text: opt.line, __abilityIndex: opt.index };
+  // Multi-ability cards whose abilities target differently (Pyramids) carry a
+  // per-ability spec; swap it in so the target flow prompts for THIS ability.
+  const perAbilitySpecs = pending.card?.ability_target_specs;
+  if (Array.isArray(perAbilitySpecs) && perAbilitySpecs[opt.index]) {
+    singleAbilityCard.target_spec = perAbilitySpecs[opt.index];
+  }
   startActivationPrompt(singleAbilityCard, pending.targetSeat, pending.permanentIndex);
 }
 
@@ -4488,7 +4870,7 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     }
     pendingCastTarget = {
       card, cardName, targetKind: "creature", castAction: "activate",
-      sourcePermanentIndex: permanentIndex, ...fields,
+      sourcePermanentIndex: permanentIndex, abilityIndex, ...fields,
     };
     renderActivationPrompt();
     renderBoard(currentState);
@@ -4509,7 +4891,7 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     }
     pendingCastTarget = {
       card, cardName, targetKind: "permanent", castAction: "activate", alsoStack,
-      sourcePermanentIndex: permanentIndex, ...fields,
+      sourcePermanentIndex: permanentIndex, abilityIndex, ...fields,
     };
     renderActivationPrompt();
     renderBoard(currentState);
@@ -4527,7 +4909,7 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     }
     pendingCastTarget = {
       card, cardName, targetKind: "land", castAction: "activate",
-      sourcePermanentIndex: permanentIndex, ...fields,
+      sourcePermanentIndex: permanentIndex, abilityIndex, ...fields,
     };
     renderActivationPrompt();
     renderBoard(currentState);
@@ -4544,7 +4926,7 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     }
     pendingCastTarget = {
       card, cardName, targetKind: "creature", castAction: "activate",
-      sourcePermanentIndex: permanentIndex, ...fields,
+      sourcePermanentIndex: permanentIndex, abilityIndex, ...fields,
     };
     renderActivationPrompt();
     renderBoard(currentState);
@@ -4556,7 +4938,7 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   if (activatedAbilityRequiresTargetStackSpell(card)) {
     pendingCastTarget = {
       card, cardName, targetKind: "stack", castAction: "activate",
-      sourcePermanentIndex: permanentIndex, ...pendingTargetFields(card),
+      sourcePermanentIndex: permanentIndex, abilityIndex, ...pendingTargetFields(card),
     };
     renderActivationPrompt();
     renderBoard(currentState);
@@ -4568,7 +4950,7 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   if (activatedAbilityRequiresTargetAny(card)) {
     pendingCastTarget = {
       card, cardName, targetKind: "any", castAction: "activate",
-      sourcePermanentIndex: permanentIndex, ...pendingTargetFields(card),
+      sourcePermanentIndex: permanentIndex, abilityIndex, ...pendingTargetFields(card),
     };
     renderActivationPrompt();
     renderBoard(currentState);
@@ -4580,7 +4962,7 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   if (activatedAbilityRequiresTargetPlayer(card)) {
     pendingCastTarget = {
       card, cardName, targetKind: "player", castAction: "activate",
-      sourcePermanentIndex: permanentIndex, ...pendingTargetFields(card),
+      sourcePermanentIndex: permanentIndex, abilityIndex, ...pendingTargetFields(card),
     };
     renderActivationPrompt();
     return;
@@ -4684,6 +5066,22 @@ function resolvePendingManaColor(manaColor) {
   const pending = pendingManaColor;
   pendingManaColor = null;
   renderActivationPrompt();
+
+  if (pending.kind === "cast_fixed") {
+    // One-shot color choice attached to an already-built cast body (Metamorphosis).
+    const actionBody = { ...pending.castActionBody, mana_color: manaColor };
+    updateActionHint(`Casting ${pending.cardName} (${manaColor})...`);
+    sendAction(actionBody)
+      .then(() => {
+        updateActionHint(`Cast ${pending.cardName} for ${manaColor} mana.`);
+        clearPendingHandCast();
+      })
+      .catch((e) => {
+        clearPendingHandCast();
+        updateActionHint(e.message, true);
+      });
+    return;
+  }
 
   if (pending.kind === "cast") {
     // First pick is the "from" word; re-prompt for the "to" word before casting.
@@ -5252,6 +5650,7 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
           target_seat: selectedTarget,
           target_permanent_index: selectedPermanentIndex,
         };
+    if (Number.isInteger(pending.abilityIndex)) activateBody.ability_index = pending.abilityIndex;
     updateActionHint(`Activating ${pending.cardName}...`);
     sendAction(activateBody)
       .then(() => updateActionHint(`Activated ${pending.cardName}.`))
@@ -5281,6 +5680,19 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
     target_seat: selectedTarget,
     permanent_index: selectedPermanentIndex,
   };
+
+  // Metamorphosis: "Add X mana of any one color..." — the caster picks the
+  // color after choosing the sacrificed creature; it rides mana_color.
+  if (cardRequiresManaColorChoice(pending.card) && (pending.castAction || "cast") === "cast") {
+    pendingManaColor = {
+      kind: "cast_fixed",
+      cardName: pending.cardName,
+      oracleText: pending.card.oracle_text || "",
+      castActionBody: actionBody,
+    };
+    renderActivationPrompt();
+    return;
+  }
 
   if (cardRequiresCastColorChoice(pending.card)) {
     // Text-change spells (Sleight of Mind / Magical Hack) replace one word with
@@ -8759,8 +9171,11 @@ function initBattlefieldCanvas() {
 
         // Beyond this point we're trying to use the permanent (tap/activate),
         // which only the controller may do. Targeting an opponent's permanent
-        // for a pending spell/ability was already handled above.
-        if (cardSeat !== seat) {
+        // for a pending spell/ability was already handled above. Exception:
+        // "Any player may activate this ability" (Ifh-Bíff Efreet).
+        const anyPlayerAbility =
+          (card.oracle_text || "").toLowerCase().includes("any player may activate this ability");
+        if (cardSeat !== seat && !anyPlayerAbility) {
           updateActionHint("You don't control this permanent.", true);
           return;
         }

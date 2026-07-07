@@ -86,5 +86,19 @@ def buff_creatures_global(text: str, activated: bool) -> RuleResult:
         if color_word:
             payload["color"] = _COLOR_WORD_TO_SYMBOL.get(color_word)
         payload["all"] = "you control" not in text
+        # Army of Allah: "Attacking creatures get +2/+0 until end of turn."
+        # Only creatures that are attacking when the spell resolves get the
+        # buff. Word boundary so "nonattacking" can never match.
+        if re.search(r"\battacking creatures get\b", text):
+            payload["attacking_only"] = True
+        # Piety: "Blocking creatures get +0/+3 until end of turn." — found by
+        # the parse-coverage deletion probe (the qualifier was being dropped).
+        if re.search(r"\bblocking creatures get\b", text):
+            payload["blocking_only"] = True
+        # Jihad: the anthem only applies while the chosen player controls a
+        # nontoken permanent of the chosen color (choices stamped at ETB;
+        # evaluated in _recalculate_lord_buffs).
+        if "as long as the chosen player controls a nontoken permanent of the chosen color" in text:
+            payload["requires_chosen_color_permanent"] = True
         return OracleInstruction("buff_creatures_global", "", payload), "spell_pattern"
     return None

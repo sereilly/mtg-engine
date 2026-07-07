@@ -44,6 +44,18 @@ def berserk_pump(text: str, activated: bool) -> RuleResult:
     return None
 
 
+# Sandals of Abdallah: "{2}, {T}: Target creature gains islandwalk until end
+# of turn. When that creature dies this turn, destroy this artifact."
+@parse_rule(58500)
+def grant_islandwalk_and_linked_destroy(text: str, activated: bool) -> RuleResult:
+    if (
+        "target creature gains islandwalk until end of turn" in text
+        and "destroy this artifact" in text
+    ):
+        return _instruction("grant_islandwalk_and_linked_destroy"), activated_kind(activated, "keyword")
+    return None
+
+
 @parse_rule(59000)
 def grant_target_flying_until_eot(text: str, activated: bool) -> RuleResult:
     if "target creature gains flying until end of turn" in text:

@@ -705,6 +705,40 @@ def _parse_noncreature_triggered(oracle_text: str) -> tuple[ParsedTriggeredAbili
 # Top-level compiler
 # ---------------------------------------------------------------------------
 
+# A modal ACTIVATED ability ("{2}: Choose one —" followed by bullet lines,
+# e.g. Pyramids). Expanded into one plain activated-ability line per bullet
+# (same cost) so the existing multi-ability machinery (ability_index choice,
+# per-ability targeting) covers it — and so the bullets are never mistaken
+# for cast-time modes or top-level spell effects.
+_MODAL_ABILITY_HEAD_RE = re.compile(r"^((?:\{[^}]+\}[,\s]*)+):\s*choose one\s*[—\-–]?\s*$", re.IGNORECASE)
+
+
+def expand_modal_activated_lines(oracle_text: str) -> str:
+    """Rewrite '{cost}: Choose one —' + bullets into one ability line per
+    bullet. Text without that shape is returned unchanged. Shared with
+    engine.legality so target classification sees the same lines."""
+    if "choose one" not in (oracle_text or "").lower():
+        return oracle_text
+    lines = (oracle_text or "").splitlines()
+    out: list[str] = []
+    i = 0
+    while i < len(lines):
+        head = _MODAL_ABILITY_HEAD_RE.match(lines[i].strip())
+        if head is not None:
+            cost = head.group(1).strip()
+            j = i + 1
+            bullets: list[str] = []
+            while j < len(lines) and lines[j].strip().startswith("•"):
+                bullets.append(lines[j].strip().lstrip("•").strip())
+                j += 1
+            if bullets:
+                out.extend(f"{cost}: {bullet}" for bullet in bullets)
+                i = j
+                continue
+        out.append(lines[i])
+        i += 1
+    return "\n".join(out)
+
 # Unbounded cache: card definitions are immutable and the pool is finite, so
 # every distinct card compiles exactly once per process — even with thousands
 # of cards the programs are tiny compared to recompilation cost.
@@ -715,6 +749,9 @@ def _compile_card_oracle(
     oracle_text: str,
     keywords: tuple[str, ...],
 ) -> OracleProgram:
+    # Pyramids-style "{cost}: Choose one —" + bullets become one activated
+    # ability per bullet before any other classification runs.
+    oracle_text = expand_modal_activated_lines(oracle_text)
     normalized_text = _normalize_text(oracle_text)
 
     if any(keyword in keywords for keyword in UNSUPPORTED_KEYWORDS):

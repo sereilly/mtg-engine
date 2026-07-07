@@ -54,14 +54,38 @@ def drain_target_lands_mana(game: Game, instruction: OracleInstruction, context:
 
 @effect_handler("sacrifice_creature_for_black_mana")
 def sacrifice_creature_for_black_mana(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Sacrifice (LEA): "Add an amount of {B} equal to the sacrificed
+    creature's mana value." Metamorphosis (ARN): "Add X mana of any one color,
+    where X is 1 plus the sacrificed creature's mana value." Both share the
+    additional-cost parse; the amount bump and the color choice are read from
+    the card's own text (the chosen color rides context.new_color, like the
+    laces' color choice)."""
     caster = context.caster
     chosen = context.target_permanent_index if isinstance(context.target_permanent_index, int) else None
     sacrificed = game._sacrifice_creature_for_mana(caster, chosen_index=chosen)
-    if sacrificed is not None:
-        caster.mana_pool["B"] += int(sacrificed.cmc)
-        game.log.append(f"{caster.name} sacrificed {sacrificed.name} for {int(sacrificed.cmc)} black mana")
-    else:
+    if sacrificed is None:
         game.log.append(f"{caster.name} had no creature to sacrifice")
+        return True, "resolved"
+    text = (context.card.oracle_text or "").lower()
+    amount = int(sacrificed.cmc)
+    if "1 plus the sacrificed creature's mana value" in text:
+        amount += 1
+    symbol = "B"
+    color_word = "black"
+    if "mana of any one color" in text:
+        symbol = game._normalize_mana_color(context.new_color) or "G"
+        color_word = {"W": "white", "U": "blue", "B": "black", "R": "red", "G": "green"}.get(symbol, symbol)
+    if "spend this mana only to cast creature spells" in text:
+        # Metamorphosis: the mana goes into the creature-spells-only bucket,
+        # merged into payments by _pay_mana_cost only for creature spells.
+        caster.creature_only_mana[symbol] = caster.creature_only_mana.get(symbol, 0) + amount
+        game.log.append(
+            f"{caster.name} sacrificed {sacrificed.name} for {amount} {color_word} mana "
+            "(spendable only on creature spells)"
+        )
+    else:
+        caster.mana_pool[symbol] = caster.mana_pool.get(symbol, 0) + amount
+        game.log.append(f"{caster.name} sacrificed {sacrificed.name} for {amount} {color_word} mana")
     return True, "resolved"
 
 

@@ -103,10 +103,43 @@ class PermanentStateMixin:
         ):
             permanent.tapped = True
 
-        # choose opponent on enter
-        if "as this artifact enters, choose an opponent" in text:
-            chosen = target_player_index if target_player_index is not None else (1 - caster_index)
+        # "As this artifact enters, choose an opponent." (Black Vise) /
+        # "As this enchantment enters, choose a color and an opponent." (Jihad)
+        # Deterministic defaults are stamped immediately (the cast target, else
+        # the first living opponent; the color the opponent controls most among
+        # nontoken permanents) so headless/AI play never blocks. An interactive
+        # caster with a genuine choice — several opponents, or a color to pick —
+        # gets a prompt whose confirm_enter_choice overwrites the defaults
+        # before anything consults them.
+        needs_color = "as this enchantment enters, choose a color and an opponent" in text
+        if needs_color or "as this artifact enters, choose an opponent" in text:
+            opponents = [
+                i for i, p in enumerate(self.players) if i != caster_index and not p.lost
+            ]
+            if target_player_index in opponents:
+                chosen = target_player_index
+            elif opponents:
+                chosen = opponents[0]
+            else:
+                chosen = 1 - caster_index
             permanent.metadata["chosen_player_index"] = chosen
+            default_color = None
+            if needs_color:
+                default_color = self._dominant_nontoken_color(self.players[chosen]) if 0 <= chosen < len(self.players) else "W"
+                permanent.metadata["chosen_color"] = default_color
+                # Jihad's anthem is conditioned on the stored choices, and the
+                # entry recalculation ran before they were stamped — recompute.
+                self._recalculate_lord_buffs()
+            if caster_index in self.interactive_seats and (needs_color or len(opponents) > 1):
+                self.pending_enter_choice = {
+                    "controller_index": caster_index,
+                    "card_name": permanent.card.name,
+                    "permanent": permanent,
+                    "needs_color": needs_color,
+                    "opponents": opponents,
+                    "default_seat": chosen,
+                    "default_color": default_color,
+                }
 
         # enters with fixed counters (Clockwork Beast). Track the counter count so
         # the end-of-combat trigger and the upkeep activated ability can adjust it.
@@ -493,6 +526,32 @@ class PermanentStateMixin:
 
         return permanent_effective_colors(permanent)
 
+    def _dominant_nontoken_color(self, player: PlayerState) -> str:
+        """The color *player* controls most of among nontoken permanents — the
+        deterministic default for Jihad's "choose a color" (a color the chosen
+        opponent actually controls keeps the enchantment alive)."""
+        counts: dict[str, int] = {}
+        for perm in player.battlefield:
+            if perm.metadata.get("is_token"):
+                continue
+            for color in self._effective_colors(perm):
+                counts[color] = counts.get(color, 0) + 1
+        if not counts:
+            return "W"
+        return max(sorted(counts), key=lambda c: counts[c])
+
+    def _chosen_color_permanent_condition(self, source_perm: Permanent) -> bool:
+        """Jihad: whether "the chosen player controls a nontoken permanent of
+        the chosen color" currently holds for *source_perm*'s stored choices."""
+        seat = source_perm.metadata.get("chosen_player_index")
+        color = source_perm.metadata.get("chosen_color")
+        if not isinstance(seat, int) or not (0 <= seat < len(self.players)) or not color:
+            return False
+        return any(
+            not perm.metadata.get("is_token") and color in self._effective_colors(perm)
+            for perm in self.players[seat].battlefield
+        )
+
     def _protection_colors(self, permanent: Permanent) -> set[str]:
         """Color symbols this permanent has protection from (CR 702.16).
 
@@ -607,6 +666,12 @@ class PermanentStateMixin:
                 prog = compile_card_oracle(_eff_card(source_perm))
                 for instr in prog.instructions:
                     if instr.kind == "buff_creatures_global":
+                        # Jihad: "as long as the chosen player controls a
+                        # nontoken permanent of the chosen color."
+                        if instr.payload.get(
+                            "requires_chosen_color_permanent"
+                        ) and not self._chosen_color_permanent_condition(source_perm):
+                            continue
                         color_sym = instr.payload.get("color")
                         power = int(instr.payload.get("power", 0))
                         toughness = int(instr.payload.get("toughness", 0))

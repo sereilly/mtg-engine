@@ -54,6 +54,20 @@ def reverse_damage_shield(text: str, activated: bool) -> RuleResult:
     return None
 
 
+# Eye for an Eye: "The next time a source of your choice would deal damage to
+# you this turn, instead that source deals that much damage to you and Eye for
+# an Eye deals that much damage to that source's controller." The damage still
+# happens; a mirror copy hits the source's controller.
+@parse_rule(74700)
+def mirror_damage_shield(text: str, activated: bool) -> RuleResult:
+    if (
+        "instead that source deals that much damage to you" in text
+        and "deals that much damage to that source's controller" in text
+    ):
+        return _instruction("arm_mirror_damage"), "spell_pattern"
+    return None
+
+
 # Circle of Protection style: "The next time a red source of your choice would deal
 # damage to you this turn, prevent that damage." The controller chooses a source of
 # the named color; the color is captured so the UI can prompt for that source.

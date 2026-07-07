@@ -256,3 +256,63 @@ def hurricane_damage(game: Game, instruction: OracleInstruction, context: Oracle
     _mass_damage_players_and_creatures(game, card, damage, _has_flying)
     game.log.append(f"{card.name} dealt {damage} hurricane damage to each flying creature and each player")
     return True, "resolved"
+
+
+@effect_handler("self_damage_unless_pay")
+def self_damage_unless_pay(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Hasran Ogress: "Whenever this creature attacks, it deals 3 damage to
+    you unless you pay {2}." Arms a pending optional-pay entry for the
+    controller (the same prompt flow as the color rods); declining — or being
+    unable to pay — deals the damage. Headless/AI paths resolve it via
+    auto_resolve_pending_optional_pays."""
+    caster = context.caster
+    card = context.card
+    amount = int(instruction.payload.get("amount", 0))
+    cost = int(instruction.payload.get("cost", 0))
+    entry = {
+        "card_name": card.name,
+        "player_index": game.players.index(caster),
+        "cost": cost,
+        "life": 0,
+        "damage": amount,
+        "_source_permanent": context.source_permanent,
+    }
+    game.pending_optional_pays.append(entry)
+    game.log.append(
+        f"{caster.name} may pay {{{cost}}} or {card.name} deals {amount} damage to them"
+    )
+    return True, "resolved"
+
+
+@effect_handler("deal_damage_and_opponent_choice")
+def deal_damage_and_opponent_choice(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Cuombajj Witches: "{T}: This creature deals 1 damage to any target and
+    1 damage to any target of an opponent's choice." The controller's chosen
+    target rides the normal context targeting (handled by deal_damage); the
+    opposing choice becomes a pending prompt for a human chooser, or a
+    deterministic pick (kill a creature of the activator's if able, else the
+    activator's face) for AI/headless play."""
+    deal_damage(game, instruction, context)
+
+    caster_index = game.players.index(context.caster)
+    chooser_index = next(
+        (i for i, p in enumerate(game.players) if i != caster_index and not p.lost), None
+    )
+    if chooser_index is None:
+        return True, "resolved"
+    amount = int(instruction.payload.get("opponent_amount", instruction.payload.get("amount", 0)))
+    pending = {
+        "chooser_index": chooser_index,
+        "caster_index": caster_index,
+        "amount": amount,
+        "card_name": context.card.name,
+        "_source_permanent": context.source_permanent,
+    }
+    if chooser_index in game.interactive_seats:
+        game.pending_opponent_damage = pending
+        game.log.append(
+            f"{game.players[chooser_index].name} chooses any target for {context.card.name}'s {amount} damage"
+        )
+        return True, "resolved"
+    game._auto_resolve_opponent_damage_choice(pending)
+    return True, "resolved"

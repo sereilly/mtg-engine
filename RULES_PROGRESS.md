@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**181 / 566 tracked rules covered (31%)** — 598 tests, 0 unannotated.
+**181 / 566 tracked rules covered (31%)** — 599 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -410,7 +410,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **302.3** Creature subtypes are usually a single word long and are listed after a long dash: “Creature — Hu...
 - [ ] **302.4** Power and toughness are characteristics only creatures have.
 - [ ] **302.5** Creatures can attack and block. (See rule 508, “Declare Attackers Step,” and rule 509, “Declare B...
-- [x] **302.6** A creature’s activated ability with the tap symbol or the untap symbol in its activation cost can... *(1 tests)*
+- [x] **302.6** A creature’s activated ability with the tap symbol or the untap symbol in its activation cost can... *(2 tests)*
 - [ ] **302.7** Damage dealt to a creature by a source with neither wither nor infect is marked on that creature ...
 
 ### 303. Enchantments

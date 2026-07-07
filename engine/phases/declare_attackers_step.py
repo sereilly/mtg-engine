@@ -136,8 +136,19 @@ class DeclareAttackersStepMixin:
         instr_kinds = {i.kind for i in program.instructions}
 
         if "cant_attack_without_island" in instr_kinds:
+            # Honor text-changed land types (Magical Hack / Phantasmal Terrain):
+            # a land turned into an Island counts, matching the upkeep
+            # "no_islands" check. Scoped to lands so a creature subtype like
+            # "Island Fish" never satisfies the restriction.
             defending = self.players[defending_player_index]
-            has_island = any("island" in perm.card.type_line.lower() for perm in defending.battlefield)
+            has_island = any(
+                perm.card.primary_type == "land"
+                and (
+                    "island" in perm.card.type_line.lower()
+                    or perm.metadata.get("land_type_override") == "island"
+                )
+                for perm in defending.battlefield
+            )
             return has_island
 
         if "cant_attack" in instr_kinds:
@@ -214,6 +225,12 @@ class DeclareAttackersStepMixin:
             for trig in matching_triggers(
                 permanent.effective_card, condition_kinds={"creature_attacks"}
             ):
+                # "Whenever this creature attacks AND ISN'T BLOCKED" (Merchant
+                # Ship, Pirate Ship riders) can't be evaluated until blockers
+                # exist — deferred to _fire_unblocked_attack_triggers at the
+                # combat damage step.
+                if "isn't blocked" in (trig.source_line or "").lower():
+                    continue
                 self.stack.append(
                     StackItem(
                         card=permanent.card,

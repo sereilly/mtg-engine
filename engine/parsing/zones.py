@@ -173,6 +173,26 @@ def discard_cards(text: str, activated: bool) -> RuleResult:
     return None
 
 
+# Aladdin's Lamp: "{X}, {T}: The next time you would draw a card this turn,
+# instead look at the top X cards of your library, put all but one of them on
+# the bottom of your library in a random order, then draw a card." Arms a
+# one-shot draw replacement; must out-rank the generic "draw a card" shorthand.
+@parse_rule(89200)
+def arm_lamp_draw_replacement(text: str, activated: bool) -> RuleResult:
+    if "the next time you would draw a card this turn, instead look at the top x cards" in text:
+        return _instruction("arm_lamp_draw_replacement"), "activated_draw"
+    return None
+
+
+# Sindbad: "Draw a card and reveal it. If it isn't a land card, discard it."
+# Must out-rank the generic activated "draw a card" shorthand below.
+@parse_rule(89500)
+def draw_reveal_discard_unless_land(text: str, activated: bool) -> RuleResult:
+    if "draw a card and reveal it" in text and "if it isn't a land card, discard it" in text:
+        return _instruction("draw_reveal_discard_unless_land"), "activated_draw"
+    return None
+
+
 @parse_rule(90000)
 def activated_draw_a_card(text: str, activated: bool) -> RuleResult:
     if activated and "draw a card" in text:

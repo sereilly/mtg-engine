@@ -166,6 +166,7 @@ class OracleInstructionsMixin:
             has_reanimate = any(instr.kind == "reanimate_creature" for instr in program.instructions)
             if has_reanimate or ("creature card in a graveyard" in text and "return enchanted creature card to the battlefield" in text):
                 revived_card = None
+                revived_owner_index = None
                 caster_player = self.players[caster_index]
                 # The player chooses which creature card in a graveyard to target
                 # (Rule 601.2c). target_player_index identifies the graveyard's
@@ -176,6 +177,7 @@ class OracleInstructionsMixin:
                     and target_player.graveyard[target_permanent_index].primary_type == "creature"
                 ):
                     revived_card = target_player.graveyard.pop(target_permanent_index)
+                    revived_owner_index = target_idx
                 else:
                     # Fallback (e.g. AI with no explicit choice): search graveyards,
                     # preferring the caster's own, then the target's, then others.
@@ -186,6 +188,7 @@ class OracleInstructionsMixin:
                         for idx, card in enumerate(source_player.graveyard):
                             if card.primary_type == "creature":
                                 revived_card = source_player.graveyard.pop(idx)
+                                revived_owner_index = self.players.index(source_player)
                                 break
                         if revived_card is not None:
                             break
@@ -194,10 +197,18 @@ class OracleInstructionsMixin:
 
                 # Put the revived creature onto the battlefield under the caster's control
                 revived_perm = Permanent(card=revived_card)
+                # CR 400.3: when it later leaves the battlefield, the card goes
+                # to its OWNER's graveyard — remember whose it was.
+                if revived_owner_index is not None and revived_owner_index != caster_index:
+                    revived_perm.metadata["owner_player_index"] = revived_owner_index
                 self._put_permanent_onto_battlefield(caster_index, revived_perm, None)
                 # Attach the Aura to the revived permanent (store references in metadata)
                 aura_permanent.metadata["attached_to"] = revived_perm
                 revived_perm.metadata["attached_aura"] = aura_permanent
+                # "When this Aura leaves the battlefield, that creature's
+                # controller sacrifices it." — honored by _remove_aura_effects.
+                if "that creature's controller sacrifices it" in text:
+                    aura_permanent.metadata["sacrifice_attached_on_leave"] = True
                 # Apply the -1/-0 penalty from Animate Dead's text if present
                 if "enchanted creature gets -1/-0" in text or "enchanted creature gets -1/ -0" in text:
                     revived_perm.power_bonus += -1

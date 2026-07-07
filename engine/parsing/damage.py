@@ -8,6 +8,9 @@ from ..oracle_types import _instruction
 from .base import RuleResult, activated_kind, parse_rule
 
 _DAMAGE_AND_SELF_RE = re.compile(r"deals (\d+) damage to any target and (\d+) damage to you")
+_DAMAGE_AND_OPPONENT_CHOICE_RE = re.compile(
+    r"deals (\d+) damage to any target and (\d+) damage to any target of an opponent's choice"
+)
 _DAMAGE_N_RE = re.compile(r"deals (\d+) damage")
 
 
@@ -88,11 +91,41 @@ def deal_damage_equal_to_swamps(text: str, activated: bool) -> RuleResult:
     return None
 
 
+# Ifh-Bíff Efreet: "{G}: This creature deals 1 damage to each creature with
+# flying and each player." Same sweep as Hurricane, fixed amount. Must
+# out-rank the generic "deals N damage" rule.
+_DAMAGE_EACH_FLIER_AND_PLAYER_RE = re.compile(
+    r"deals (\d+) damage to each creature with flying and each player"
+)
+
+
+@parse_rule(34500)
+def deal_damage_each_flier_and_player(text: str, activated: bool) -> RuleResult:
+    m = _DAMAGE_EACH_FLIER_AND_PLAYER_RE.search(text)
+    if m:
+        return _instruction("hurricane_damage", amount=int(m.group(1))), activated_kind(activated, "damage")
+    return None
+
+
 @parse_rule(35000)
 def deal_damage_each_creature_and_player(text: str, activated: bool) -> RuleResult:
     if "deals 1 damage to each creature and each player" in text:
         effect_kind = activated_kind(activated, "damage")
         return _instruction("deal_damage_each_creature_and_player", amount=1), effect_kind
+    return None
+
+
+# Cuombajj Witches: the controller picks the first target, an opponent picks
+# the second. Must out-rank the generic "deals N damage" rule below.
+@parse_rule(36500)
+def deal_damage_and_opponent_choice(text: str, activated: bool) -> RuleResult:
+    m = _DAMAGE_AND_OPPONENT_CHOICE_RE.search(text)
+    if m:
+        return _instruction(
+            "deal_damage_and_opponent_choice",
+            amount=int(m.group(1)),
+            opponent_amount=int(m.group(2)),
+        ), activated_kind(activated, "damage")
     return None
 
 

@@ -162,6 +162,7 @@ class EffectsMixin:
         bypass_regeneration: bool = False,
         subtype_filter: str | None = None,
         tapped_only: bool = False,
+        attached_to_land: bool = False,
     ) -> CardDefinition | None:
         target_player_index = next(
             (i for i, p in enumerate(self.players) if p is target), None
@@ -177,12 +178,17 @@ class EffectsMixin:
             "color_filter": color_filter,
             "exclude_colors": exclude_colors,
             "exclude_types": exclude_types,
+            "attached_to_land": attached_to_land,
         }
 
         def _is_legal_target(perm) -> bool:
             return permanent_matches_filter(perm, filter_payload)
 
         def _do_destroy(perm: "Permanent", idx: int) -> "CardDefinition":
+            # Pyramids: a shielded land's destruction is replaced — remove all
+            # damage marked on it instead.
+            if self._consume_land_destruction_shield(perm):
+                return None  # type: ignore[return-value]
             if self._is_indestructible(perm):
                 self.log.append(f"{perm.card.name} can't be destroyed (indestructible)")
                 return None  # type: ignore[return-value]
@@ -399,6 +405,87 @@ class EffectsMixin:
             permanent.damage_marked += dealt
         return dealt
 
+    def _consume_land_destruction_shield(self, perm: Permanent) -> bool:
+        """Pyramids: "The next time target land would be destroyed this turn,
+        remove all damage marked on it instead." Consumes the one-shot shield
+        and reports True when the destruction was replaced."""
+        if (
+            perm.card.primary_type == "land"
+            and perm.metadata.pop("land_destruction_shield_this_turn", None)
+        ):
+            perm.damage_marked = 0
+            self.log.append(
+                f"{perm.card.name}'s destruction was replaced: all damage marked on it was removed"
+            )
+            return True
+        return False
+
+    def _apply_opponent_damage_choice(
+        self, pending: dict, target_seat: int, target_permanent_index: int | None
+    ) -> None:
+        """Deal a pending opponent-chosen damage packet (Cuombajj Witches) to the
+        chosen player face (index None) or creature."""
+        from ..handlers._common import apply_damage_to_creature
+
+        amount = int(pending["amount"])
+        source = pending.get("_source_permanent") or pending.get("card_name")
+        card_name = pending["card_name"]
+        victim_player = self.players[target_seat]
+        if target_permanent_index is None:
+            dealt = self._deal_damage_to_player(victim_player, amount, source=source)
+            self.log.append(f"{card_name} dealt {dealt} damage to {victim_player.name} (opponent's choice)")
+            return
+        if not (0 <= target_permanent_index < len(victim_player.battlefield)):
+            self.log.append(f"{card_name}: chosen target is gone, no effect")
+            return
+        perm = victim_player.battlefield[target_permanent_index]
+        if not perm.is_creature:
+            self.log.append(f"{card_name}: '{perm.card.name}' is not a valid 'any target' target (115.4)")
+            return
+        apply_damage_to_creature(
+            self, perm, amount, source,
+            log_message=lambda dealt: f"{card_name} dealt {dealt} damage to {perm.card.name} (opponent's choice)",
+        )
+
+    def confirm_opponent_damage_choice(
+        self, chooser_index: int, target_seat: int, target_permanent_index: int | None = None
+    ) -> bool:
+        """Resolve the pending opponent-chosen damage (Cuombajj Witches) with the
+        chooser's pick. Returns False when no such choice is pending for them."""
+        pending = self.pending_opponent_damage
+        if pending is None or pending["chooser_index"] != chooser_index:
+            return False
+        if not (0 <= target_seat < len(self.players)):
+            return False
+        self.pending_opponent_damage = None
+        self._apply_opponent_damage_choice(pending, target_seat, target_permanent_index)
+        return True
+
+    def _auto_resolve_opponent_damage_choice(self, pending: dict) -> None:
+        """Deterministic chooser policy for AI/headless play: kill one of the
+        activator's creatures if the damage is lethal to it (largest power
+        first), otherwise hit the activator's face."""
+        chooser_index = pending["chooser_index"]
+        amount = int(pending["amount"])
+        target_seat = pending.get("caster_index")
+        if not (isinstance(target_seat, int) and 0 <= target_seat < len(self.players)):
+            target_seat = next(
+                (i for i, p in enumerate(self.players) if i != chooser_index and not p.lost),
+                None,
+            )
+        if target_seat is None:
+            return
+        victim = self.players[target_seat]
+        best_index: int | None = None
+        best_power = -1
+        for idx, perm in enumerate(victim.battlefield):
+            if not perm.is_creature:
+                continue
+            if perm.effective_toughness - perm.damage_marked <= amount and perm.effective_power > best_power:
+                best_index = idx
+                best_power = perm.effective_power
+        self._apply_opponent_damage_choice(pending, target_seat, best_index)
+
     def _record_damage_source(self, victim: Permanent, source: Permanent) -> None:
         """Remember that *source* dealt damage to *victim* this turn, so that a
         "whenever a creature dealt damage by this creature this turn dies" trigger
@@ -410,6 +497,65 @@ class EffectsMixin:
 
     def _player_controls_text(self, player: PlayerState, phrase: str) -> bool:
         return any(phrase in perm.card.oracle_text.lower() for perm in player.battlefield)
+
+    def _draw_with_lamp(self, player: PlayerState, count: int) -> int:
+        """Draw ``count`` cards for *player*, applying an armed Aladdin's Lamp
+        replacement to the first draw: look at the top X, draw one of them, put
+        the rest on the bottom in a random order. A human chooser pauses on
+        ``pending_lamp_draw`` (the rest of the draws resolve after the choice);
+        AI/headless play keeps the top card deterministically."""
+        player_index = self.players.index(player)
+        x = self.lamp_draw_replacements.get(player_index)
+        if not x or count <= 0:
+            return player.draw(count)
+        self.lamp_draw_replacements.pop(player_index, None)
+        x = min(int(x), len(player.library))
+        if x <= 0:
+            return player.draw(count)
+        if player_index in self.interactive_seats:
+            self.pending_lamp_draw = {
+                "player_index": player_index,
+                "card_names": [c.name for c in player.library[:x]],
+                "remaining_draws": count - 1,
+            }
+            self.log.append(
+                f"{player.name} looks at the top {x} card(s) of their library (Aladdin's Lamp)"
+            )
+            return 0
+        drawn = self._finish_lamp_draw(player_index, 0, x)
+        return drawn + player.draw(count - 1)
+
+    def _finish_lamp_draw(self, player_index: int, chosen_index: int, x: int) -> int:
+        """Complete a lamp-replaced draw: the chosen card of the top ``x`` goes
+        to hand, the rest go to the bottom of the library in a random order."""
+        player = self.players[player_index]
+        top = list(player.library[:x])
+        chosen = top.pop(chosen_index)
+        del player.library[:x]
+        random.shuffle(top)
+        player.library.extend(top)
+        player.hand.append(chosen)
+        self.log.append(
+            f"{player.name} drew 1 card (Aladdin's Lamp) and put {len(top)} card(s) "
+            "on the bottom of their library in a random order"
+        )
+        return 1
+
+    def confirm_lamp_draw(self, player_index: int, chosen_index: int) -> bool:
+        """Resolve a pending Aladdin's Lamp draw with the player's chosen card,
+        then make any draws that were queued behind the replaced one."""
+        pending = self.pending_lamp_draw
+        if pending is None or pending["player_index"] != player_index:
+            return False
+        x = len(pending["card_names"])
+        if not (0 <= chosen_index < x):
+            return False
+        self.pending_lamp_draw = None
+        self._finish_lamp_draw(player_index, chosen_index, min(x, len(self.players[player_index].library)))
+        remaining = int(pending.get("remaining_draws", 0))
+        if remaining > 0:
+            self.players[player_index].draw(remaining)
+        return True
 
     def _discard_card(self, player: PlayerState, card) -> None:
         """Move a discarded card to the graveyard, or — if the player controls
@@ -475,6 +621,31 @@ class EffectsMixin:
             damage = payload["amount"]
             target.life -= damage
             self._on_player_dealt_damage(target, damage)
+            # Eye for an Eye: the damage still happens, and its source's
+            # controller is dealt the same amount. One charge per damage event;
+            # charges are finite, so a mirrored mirror can't loop forever.
+            if damage > 0 and target.mirror_damage_charges > 0:
+                target.mirror_damage_charges -= 1
+                mirror_index = (
+                    self.controller_index_of(source)
+                    if isinstance(source, Permanent)
+                    else None
+                )
+                if mirror_index is None:
+                    # A spell (or unknown) source: fall back to the first living
+                    # opponent — its caster in every two-player game.
+                    target_index = self.players.index(target)
+                    mirror_index = next(
+                        (i for i, p in enumerate(self.players) if i != target_index and not p.lost),
+                        None,
+                    )
+                if mirror_index is not None:
+                    victim = self.players[mirror_index]
+                    dealt = self._deal_damage_to_player(victim, damage, source=None)
+                    self.log.append(
+                        f"Eye for an Eye dealt {dealt} damage to {victim.name} "
+                        f"(mirroring the damage dealt to {target.name})"
+                    )
         return damage
 
     def _on_player_dealt_damage(self, target: PlayerState, damage: int) -> None:

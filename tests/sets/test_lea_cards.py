@@ -1304,6 +1304,7 @@ def test_jade_statue_animates_until_end_combat(all_cards):
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=statue)])
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
+    game._set_phase_and_step("combat", "beginning_of_combat")  # "Activate only during combat."
 
     result = game.activate_permanent_ability(0, "Jade Statue", target_player_index=1)
 
@@ -2006,6 +2007,8 @@ def test_nettling_imp_marks_target_for_attack(all_cards):
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=imp)])
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
     game = Game(players=[p1, p2])
+    # "Activate only during an opponent's turn, before attackers are declared."
+    game.active_player_index = 1
 
     result = game.activate_permanent_ability(0, "Nettling Imp", target_player_index=1)
 
@@ -9163,3 +9166,185 @@ def test_sirens_call_destroys_non_attackers_at_end_step(all_cards):
     assert "Eager Bear" in names
     assert "Lazy Bear" not in names
     assert any(c.name == "Lazy Bear" for c in p2.graveyard)
+
+
+# ===========================================================================
+# Fixes for gaps found by the parse-coverage validator
+# ===========================================================================
+
+def test_animate_dead_creature_sacrificed_when_aura_leaves(all_cards):
+    animate = _get(all_cards, "Animate Dead")
+    p1 = PlayerState(name="P1", hand=[animate, _get(all_cards, "Disenchant")])
+    p2 = PlayerState(name="P2", graveyard=[_get(all_cards, "Grizzly Bears")])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    game.cast_from_hand(0, "Animate Dead", target_player_index=1, target_permanent_index=0)
+    game.resolve_stack()
+    assert any(p.card.name == "Grizzly Bears" for p in p1.battlefield)
+
+    ad_idx = next(i for i, p in enumerate(p1.battlefield) if p.card.name == "Animate Dead")
+    game.cast_from_hand(0, "Disenchant", target_player_index=0, target_permanent_index=ad_idx)
+    game.resolve_stack()
+
+    # "When this Aura leaves the battlefield, that creature's controller
+    # sacrifices it." — the reanimated creature dies with the Aura.
+    assert not any(p.card.name == "Grizzly Bears" for p in p1.battlefield)
+    assert any(c.name == "Grizzly Bears" for c in p2.graveyard)  # owner's graveyard
+
+
+def test_jade_statue_cannot_animate_outside_combat(all_cards):
+    statue = _get(all_cards, "Jade Statue")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=statue)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])  # default: precombat main
+
+    result = game.activate_permanent_ability(0, "Jade Statue", target_player_index=1)
+
+    assert not result.supported
+    assert "during combat" in result.details
+    assert p1.battlefield[0].metadata.get("absolute_power") is None
+
+
+def test_nettling_imp_cannot_activate_on_own_turn(all_cards):
+    imp = _get(all_cards, "Nettling Imp")
+    bear = _mk_card("Bear", "Creature — Bear")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=imp)])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
+    game = Game(players=[p1, p2])
+    game.active_player_index = 0  # the Imp's controller's own turn
+
+    result = game.activate_permanent_ability(0, "Nettling Imp", target_player_index=1)
+
+    assert not result.supported
+    assert "opponent's turn" in result.details
+    assert not p2.battlefield[0].metadata.get("must_attack_until_eot")
+
+
+def test_illusionary_mask_activates_only_as_a_sorcery(all_cards):
+    mask = _get(all_cards, "Illusionary Mask")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=mask)], hand=[_get(all_cards, "Grizzly Bears")])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game._set_phase_and_step("combat", "declare_attackers")
+
+    result = game.activate_permanent_ability(0, "Illusionary Mask", target_player_index=1, x_value=2)
+
+    assert not result.supported
+    assert "sorcery" in result.details
+
+
+# ---------------------------------------------------------------------------
+# Black Vise — "As this artifact enters, choose an opponent." (real choice)
+# ---------------------------------------------------------------------------
+
+def test_black_vise_duel_needs_no_prompt_even_for_a_human(all_cards):
+    vise = _get(all_cards, "Black Vise")
+    p1 = PlayerState(name="P1", hand=[vise])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.interactive_seats = {0}
+
+    result = game.cast_from_hand(0, "Black Vise", target_player_index=1)
+
+    assert result.supported
+    # A duel has exactly one opponent — the choice is forced, no prompt.
+    assert game.pending_enter_choice is None
+    assert p1.battlefield[0].metadata.get("chosen_player_index") == 1
+
+
+def test_black_vise_multiplayer_prompts_human_and_confirm_overrides(all_cards):
+    vise = _get(all_cards, "Black Vise")
+    p1 = PlayerState(name="P1", hand=[vise])
+    p2 = PlayerState(name="P2")
+    p3 = PlayerState(name="P3")
+    game = Game(players=[p1, p2, p3])
+    game.interactive_seats = {0}
+
+    result = game.cast_from_hand(0, "Black Vise", target_player_index=2)
+
+    assert result.supported
+    vise_perm = p1.battlefield[0]
+    # The cast target is the provisional default...
+    assert vise_perm.metadata.get("chosen_player_index") == 2
+    pending = game.pending_enter_choice
+    assert pending is not None
+    assert pending["controller_index"] == 0
+    assert pending["opponents"] == [1, 2]
+    assert pending["needs_color"] is False
+    # ...and the human's confirm overrides it.
+    assert game.confirm_enter_choice(0, 1) is True
+    assert vise_perm.metadata.get("chosen_player_index") == 1
+    assert game.pending_enter_choice is None
+
+
+def test_black_vise_multiplayer_headless_defaults_without_prompt(all_cards):
+    vise = _get(all_cards, "Black Vise")
+    p1 = PlayerState(name="P1", hand=[vise])
+    p2 = PlayerState(name="P2")
+    p3 = PlayerState(name="P3")
+    game = Game(players=[p1, p2, p3])  # no interactive seats (AI/headless)
+
+    result = game.cast_from_hand(0, "Black Vise", target_player_index=2)
+
+    assert result.supported
+    assert game.pending_enter_choice is None
+    assert p1.battlefield[0].metadata.get("chosen_player_index") == 2
+
+
+# ---------------------------------------------------------------------------
+# Personal Incarnation — "Only this creatures owner may activate this ability."
+# ---------------------------------------------------------------------------
+
+def test_personal_incarnation_thief_cannot_activate_but_owner_can(all_cards):
+    incarnation = _get(all_cards, "Personal Incarnation")
+    incarnation_perm = Permanent(card=incarnation)
+    theft_source = Permanent(card=_mk_card("Theft Source", "Artifact"))
+    theft_source.metadata["stolen_permanent"] = incarnation_perm
+    theft_source.metadata["stolen_owner_index"] = 0
+    p1 = PlayerState(name="P1", battlefield=[theft_source])   # owner (seat 0)
+    p2 = PlayerState(name="P2", battlefield=[incarnation_perm])  # controller
+    game = Game(players=[p1, p2])
+
+    # The thief controls it but does not own it: activation is illegal.
+    result = game.activate_permanent_ability(1, "Personal Incarnation")
+    assert not result.supported
+    assert "owner" in result.details
+    assert not incarnation_perm.metadata.get("redirect_one_damage_to_owner_until_eot")
+
+    # The owner may activate it even while an opponent controls it.
+    result = game.activate_permanent_ability(
+        0, "Personal Incarnation", source_controller_index=1
+    )
+    assert result.supported
+    assert incarnation_perm.metadata.get("redirect_one_damage_to_owner_until_eot") == 1
+
+
+# ---------------------------------------------------------------------------
+# Siren's Call — "ignore this effect for each creature the player didn't
+# control continuously since the beginning of the turn" (control changes)
+# ---------------------------------------------------------------------------
+
+def test_sirens_call_exempts_creature_stolen_this_turn(all_cards):
+    call = _get(all_cards, "Siren's Call")
+    bear = Permanent(card=_mk_card("Traded Bear", "Creature - Bear"))
+    veteran = Permanent(card=_mk_card("Veteran Bear", "Creature - Bear"))
+    theft_source = Permanent(card=_mk_card("Theft Source", "Artifact"))
+    island = _get(all_cards, "Island")
+    p1 = PlayerState(name="P1", hand=[call], battlefield=[bear])
+    p2 = PlayerState(name="P2", battlefield=[theft_source, veteran], library=[island])
+    game = Game(players=[p1, p2])
+    game.start_turn(1)
+
+    # The active player steals P1's bear mid-turn: it is summoning-sick again
+    # (CR 302.6) and was not controlled continuously since the turn began.
+    assert game._take_control_linked(theft_source, bear, p2) is True
+    assert bear.metadata.get("summoning_sickness_turn") == game.turn
+    assert game._is_summoning_sick(bear) is True
+
+    result = game.cast_from_hand(0, "Siren's Call", target_player_index=1)
+
+    assert result.supported
+    assert veteran.metadata.get("destroy_if_did_not_attack_eot") is True
+    assert bear.metadata.get("destroy_if_did_not_attack_eot") is None

@@ -57,6 +57,10 @@ class Session:
     untap_required_lands: int = 0
     untap_candidate_indices: list[int] = field(default_factory=list)
     untap_selected_indices: list[int] = field(default_factory=list)
+    # Old Man of the Sea: tapped permanents whose controller may choose not to
+    # untap them this turn ({"index", "name"} each). Set at the start of a human
+    # turn; answered by the optional_untap_confirm action (keep-tapped indices).
+    optional_untap_pending: list[dict] = field(default_factory=list)
     upkeep_pay_choices: list[dict] = field(default_factory=list)
     upkeep_resolved_choices: dict[str, bool] = field(default_factory=dict)
     # Optional ("you may") upkeep triggers awaiting a yes/no decision (e.g. Nether

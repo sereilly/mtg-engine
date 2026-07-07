@@ -11,8 +11,56 @@ post-damage lethal-damage destruction, and the band/blocker lookup helpers.
 
 from ..models import Permanent
 
+# Ebony Horse: "Prevent all combat damage that would be dealt to and dealt by
+# that creature this turn." — per-creature marker set by the
+# untap_attacker_and_prevent_combat_damage handler, cleared in cleanup.
+_COMBAT_SHIELD_KEY = "prevent_combat_damage_to_and_by_until_eot"
+
+
+def _combat_shielded(perm: Permanent | None) -> bool:
+    return perm is not None and bool(perm.metadata.get(_COMBAT_SHIELD_KEY))
+
 
 class CombatDamageStepMixin:
+    def _fire_unblocked_attack_triggers(self) -> None:
+        """Put "whenever this creature attacks and isn't blocked" triggers
+        (Merchant Ship) on the stack. Deferred from declare-attackers — the
+        condition can only be evaluated once blockers are known — and fired at
+        the combat damage step, the reliable choke point every combat flow
+        passes through."""
+        from ..game_types import StackItem
+        from ..trigger_utils import matching_triggers
+
+        controller_index = self.active_player_index
+        controller = self.players[controller_index]
+        for idx in list(self.combat_attackers):
+            if not (0 <= idx < len(controller.battlefield)):
+                continue
+            permanent = controller.battlefield[idx]
+            if permanent.blocked or self._attacker_all_blockers(idx):
+                continue
+            for trig in matching_triggers(
+                permanent.effective_card, condition_kinds={"creature_attacks"}
+            ):
+                if "isn't blocked" not in (trig.source_line or "").lower():
+                    continue
+                self.stack.append(
+                    StackItem(
+                        card=permanent.card,
+                        caster_index=controller_index,
+                        target_player_index=controller_index,
+                        target_permanent_index=idx,
+                        x_value=None,
+                        ability_instruction=trig.instruction,
+                        ability_effect_kind=trig.effect_kind,
+                        source_permanent=permanent,
+                        ability_text=trig.source_line,
+                    )
+                )
+                self.log.append(
+                    f"{permanent.card.name} triggered (attacked and wasn't blocked)"
+                )
+
     def _attacker_band(self, attacker_idx: int) -> list[int] | None:
         for band in self.combat_bands:
             if attacker_idx in band:
@@ -300,6 +348,12 @@ class CombatDamageStepMixin:
 
         attacker_controller = self.players[self.active_player_index]
 
+        # "Whenever this creature attacks and isn't blocked" (Merchant Ship):
+        # deferred from declare-attackers, fired now that blocks are known.
+        # resolve_combat_damage runs once per combat (combat_damage_resolved),
+        # so the trigger can't double-fire across the strike passes.
+        self._fire_unblocked_attack_triggers()
+
         def participates_in_first_strike(perm: Permanent) -> bool:
             return self._has_keyword(perm, "first strike") or self._has_keyword(perm, "double strike")
 
@@ -416,7 +470,7 @@ class CombatDamageStepMixin:
             blockers = self._attacker_all_blockers(attacker_idx)
             power_left = attacker.effective_power
             if not blockers:
-                if self.combat_damage_prevented_until_eot:
+                if self.combat_damage_prevented_until_eot or _combat_shielded(attacker):
                     continue
                 # A creature that was declared blocked (e.g. its blocker died to
                 # first-strike damage) is still "blocked" — it cannot deal damage
@@ -471,7 +525,12 @@ class CombatDamageStepMixin:
                 return False, "assigned combat damage exceeds attacker power"
             if has_trample and power_left > 0 and trample_underlethal:
                 return False, "trample requires lethal damage assigned to each blocker"
-            if has_trample and power_left > 0 and not self.combat_damage_prevented_until_eot:
+            if (
+                has_trample
+                and power_left > 0
+                and not self.combat_damage_prevented_until_eot
+                and not _combat_shielded(attacker)
+            ):
                 trample_damage = self._prevent_damage(defender, power_left, source=attacker)
                 if trample_damage > 0:
                     defender_damage_events.append((defending_index, trample_damage, attacker))
@@ -510,6 +569,9 @@ class CombatDamageStepMixin:
                         member = attacker_controller.battlefield[member_idx]
                         if self._is_protected_from(member, blocker):
                             continue
+                        # Ebony Horse: combat damage to or by the shielded creature.
+                        if _combat_shielded(member) or _combat_shielded(blocker):
+                            continue
                         dealt = self._mark_damage_on_permanent(member, amount, source=blocker)
                         if dealt > 0:
                             self._record_damage_source(member, blocker)
@@ -546,6 +608,9 @@ class CombatDamageStepMixin:
                 # CR 702.16e: damage from a source of the protected quality is prevented.
                 if self._is_protected_from(attacker, blocker):
                     continue
+                # Ebony Horse: combat damage to or by the shielded creature.
+                if _combat_shielded(attacker) or _combat_shielded(blocker):
+                    continue
                 dealt = self._mark_damage_on_permanent(attacker, blocker.effective_power, source=blocker)
                 if dealt > 0:
                     self._record_damage_source(attacker, blocker)
@@ -570,6 +635,9 @@ class CombatDamageStepMixin:
             )
             # CR 702.16e: protection prevents damage from the protected quality.
             if source_attacker is not None and self._is_protected_from(blocker_perm, source_attacker):
+                continue
+            # Ebony Horse: combat damage to or by the shielded creature.
+            if _combat_shielded(blocker_perm) or _combat_shielded(source_attacker):
                 continue
             dealt = self._mark_damage_on_permanent(blocker_perm, damage, source=source_attacker)
             if dealt > 0:

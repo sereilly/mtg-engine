@@ -143,6 +143,9 @@ class TurnManagementMixin:
         self.active_player_index = player_index
         self.lands_played_this_turn[player_index] = 0
         self.creatures_died_this_turn = 0
+        # Aladdin's Lamp: an armed "next draw this turn" replacement expires
+        # with the turn it was activated on.
+        self.lamp_draw_replacements = {}
         for player in self.players:
             player.damage_taken_this_turn = 0
 
@@ -196,6 +199,21 @@ class TurnManagementMixin:
             land = None
         if land is None or land.tapped:
             return False
+
+        # A land with no mana ability at all (Island of Wak-Wak, Bazaar of
+        # Baghdad) can't be tapped for mana — without this, the color fallback
+        # below would invent a green mana out of nothing.
+        if not land.effective_produced_mana:
+            fallback_types = [
+                str(land.metadata.get("land_type_override", "")).lower(),
+                land.card.type_line.lower(),
+            ]
+            if not any(
+                basic in value
+                for value in fallback_types
+                for basic in ("plains", "island", "swamp", "mountain", "forest")
+            ):
+                return False
 
         land.tapped = True
         # City of Brass: "Whenever this land becomes tapped, it deals 1 damage

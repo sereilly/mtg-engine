@@ -105,6 +105,13 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     exclude_colors = payload.get("exclude_colors") or []
     exclude_types = payload.get("exclude_types") or []
 
+    # Pyramids: "target Aura attached to a land" — only Auras whose enchanted
+    # permanent is currently a land qualify.
+    if payload.get("attached_to_land"):
+        attached = perm.metadata.get("attached_to")
+        if attached is None or getattr(getattr(attached, "card", None), "primary_type", "") != "land":
+            return False
+
     type_line = perm.effective_card.type_line.lower()
     if type_filter:
         if type_filter == "artifact_or_enchantment":

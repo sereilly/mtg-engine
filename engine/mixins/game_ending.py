@@ -171,6 +171,29 @@ class GameEndingMixin:
                     survivors_ss.append(perm)
                 player.battlefield = survivors_ss
 
+            # Jihad: "When the chosen player controls no nontoken permanents of
+            # the chosen color, sacrifice this enchantment." A state trigger
+            # (CR 603.8) checked alongside SBAs like the no-lands sacrifices
+            # above, so it fires the moment the last matching permanent leaves.
+            for player in self.players:
+                survivors_cc: list[Permanent] = []
+                for perm in player.battlefield:
+                    if (
+                        "when the chosen player controls no nontoken permanents of the chosen color"
+                        in perm.effective_card.oracle_text.lower()
+                        and isinstance(perm.metadata.get("chosen_player_index"), int)
+                        and not self._chosen_color_permanent_condition(perm)
+                    ):
+                        self._permanent_to_graveyard(player, perm)
+                        self.log.append(
+                            f"{perm.card.name} sacrificed (the chosen player controls no "
+                            "nontoken permanents of the chosen color)"
+                        )
+                        changed = True
+                        continue
+                    survivors_cc.append(perm)
+                player.battlefield = survivors_cc
+
             # City in a Bottle: "other nontoken permanents with a name
             # originally printed in [set] are on the battlefield, their
             # controllers sacrifice them." Modeled as a continuous state
@@ -209,6 +232,20 @@ class GameEndingMixin:
                         self._revert_stolen_permanent(perm)
                         perm.metadata.pop("stolen_while_tapped_and_weaker", None)
                         changed = True
+
+            # Sandals of Abdallah: the artifact whose islandwalk target died
+            # this turn is destroyed (flagged in _permanent_to_graveyard).
+            for player in self.players:
+                doomed_sandals = self._destroy_swept_permanents(
+                    player,
+                    lambda p: p.metadata.get("destroy_linked_death"),
+                    allow_regeneration=False,
+                )
+                for artifact in doomed_sandals:
+                    self.log.append(
+                        f"{artifact.card.name} was destroyed (the creature it granted islandwalk died)"
+                    )
+                    changed = True
 
             # 704.5d: tokens in non-battlefield zones cease to exist
             for player in self.players:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ._common import resolve_target_permanent
+from ._common import permanent_matches_filter, resolve_target_permanent
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -50,6 +50,30 @@ def untap_target_permanent(game: Game, instruction: OracleInstruction, context: 
     return True, "resolved"
 
 
+@effect_handler("untap_attacker_and_prevent_combat_damage")
+def untap_attacker_and_prevent_combat_damage(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    # Ebony Horse: untap the chosen attacking creature you control and shield
+    # it — all combat damage that would be dealt to or by it this turn is
+    # prevented (the flag is honored in combat_damage_step and cleared in
+    # cleanup via _EOT_METADATA_KEYS).
+    caster = context.caster
+    perm = resolve_target_permanent(
+        context,
+        predicate=lambda p: p.is_creature and p.attacking and any(p is q for q in caster.battlefield),
+        fallback_players=(caster,),
+        fallback_on_invalid_choice=False,
+    )
+    if perm is None:
+        game.log.append(f"{context.card.name}: no attacking creature you control to untap")
+        return True, "resolved"
+    perm.tapped = False
+    perm.metadata["prevent_combat_damage_to_and_by_until_eot"] = True
+    game.log.append(
+        f"{context.card.name} untapped {perm.card.name}; all combat damage to and by it is prevented this turn"
+    )
+    return True, "resolved"
+
+
 @effect_handler("untap_enchanted_creature")
 def untap_enchanted_creature(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     card = context.card
@@ -66,6 +90,24 @@ def untap_enchanted_creature(game: Game, instruction: OracleInstruction, context
 @effect_handler("tap_target_permanent")
 def tap_target_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     target = context.target
+    # Ali Baba: "Tap target Wall." — the parsed noun-phrase filter restricts
+    # what the ability may tap; an explicitly chosen non-matching permanent
+    # fizzles rather than falling back to an arbitrary one.
+    if any(k in instruction.payload for k in ("type_filter", "subtype_filter", "color_filter")):
+        caster = context.caster
+        perm = resolve_target_permanent(
+            context,
+            predicate=lambda p: permanent_matches_filter(p, instruction.payload),
+            fallback_players=(target, caster),
+            fallback_on_invalid_choice=False,
+        )
+        if perm is not None:
+            perm.tapped = True
+            game._turn_face_up(perm)
+            game.log.append(f"Tapped {perm.card.name}")
+        else:
+            game.log.append("No valid permanent to tap")
+        return True, "resolved"
     tapped = game._tap_or_untap_target(
         target, make_tapped=True, target_permanent_index=context.target_permanent_index
     )
@@ -98,5 +140,6 @@ def tap_target_player_lands_and_drain_mana(game: Game, instruction: OracleInstru
             perm.tapped = True
     for sym in ("W", "U", "B", "R", "G", "C"):
         target.mana_pool[sym] = 0
+    target.creature_only_mana.clear()
     game.log.append(f"{card.name} tapped all lands and drained mana from {target.name}")
     return True, "resolved"

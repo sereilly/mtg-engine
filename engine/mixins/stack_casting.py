@@ -99,6 +99,7 @@ class StackCastingMixin:
         source_seat: int | None = None,
         source_permanent_index: int | None = None,
         source_stack_index: int | None = None,
+        source_controller_index: int | None = None,
     ) -> SimulationResult:
         queued = self.queue_permanent_ability(
             controller_index,
@@ -113,6 +114,7 @@ class StackCastingMixin:
             source_seat=source_seat,
             source_permanent_index=source_permanent_index,
             source_stack_index=source_stack_index,
+            source_controller_index=source_controller_index,
         )
         if not queued.supported:
             return queued
@@ -243,6 +245,42 @@ class StackCastingMixin:
                 f"{pending['card_name']}: enchanted land becomes a {land_type.title()}"
             )
         self.pending_land_type_choice = None
+        return True
+
+    def confirm_enter_choice(
+        self, player_index: int, opponent_index: int, mana_color: str | None = None
+    ) -> bool:
+        """Resolve a pending "as this enters, choose an opponent [and a color]"
+        prompt (Black Vise / Jihad), overwriting the provisional defaults
+        stamped on the permanent at ETB."""
+        pending = self.pending_enter_choice
+        if pending is None or pending["controller_index"] != player_index:
+            return False
+        if opponent_index not in pending["opponents"]:
+            return False
+        permanent = pending["permanent"]
+        color = None
+        if pending["needs_color"]:
+            try:
+                color = self._normalize_mana_color(mana_color)
+            except ValueError:
+                return False
+            if color is None:
+                return False
+        # The permanent may already be gone (e.g. destroyed at instant speed);
+        # the choice then has nothing to apply to, but the prompt still clears.
+        if any(perm is permanent for p in self.players for perm in p.battlefield):
+            permanent.metadata["chosen_player_index"] = opponent_index
+            chose = f"{self.players[player_index].name} chose {self.players[opponent_index].name}"
+            if color is not None:
+                permanent.metadata["chosen_color"] = color
+                chose += f" and {color}"
+            self.log.append(f"{pending['card_name']}: {chose}")
+            if color is not None:
+                # Jihad's anthem is conditioned on the chosen color/player.
+                self._recalculate_lord_buffs()
+        self.pending_enter_choice = None
+        self.check_state_based_actions()
         return True
 
     def confirm_mana_payment(self, player_index: int, pay: bool) -> bool:
@@ -519,12 +557,26 @@ class StackCastingMixin:
                 if perm.card.primary_type == "land" and not perm.tapped and perm.effective_produced_mana:
                     perm.tapped = True
                     remaining -= 1
-        if remaining == 0:
+        if remaining == 0 and int(entry.get("life", 0) or 0) > 0:
             self._gain_life(player, int(entry["life"]), entry["card_name"])
 
+    def _apply_optional_pay_decline(self, entry: dict) -> None:
+        """The consequence of NOT paying an optional-pay prompt. Plain "may pay"
+        riders (the color rods) have none; "unless you pay" entries (Hasran
+        Ogress) carry a ``damage`` amount dealt to the player instead."""
+        player = self.players[entry["player_index"]]
+        damage = int(entry.get("damage", 0) or 0)
+        if damage > 0:
+            source = entry.get("_source_permanent")
+            dealt = self._deal_damage_to_player(player, damage, source=source)
+            self.log.append(f"{entry['card_name']} dealt {dealt} damage to {player.name}")
+        else:
+            self.log.append(f"{player.name} declined {entry['card_name']}'s pay-for-life trigger")
+
     def confirm_optional_pay(self, player_index: int, card_name: str | None = None, accept: bool = True) -> bool:
-        """Resolve the first pending optional "pay {1}: gain N life" trigger for a
-        player (the color rods). ``accept`` pays it; otherwise it is declined."""
+        """Resolve the first pending optional "pay {N}" trigger for a player (the
+        color rods' gain-life riders, Hasran Ogress' pay-or-take-damage).
+        ``accept`` pays it; otherwise the decline consequence (if any) applies."""
         idx = next(
             (
                 i for i, e in enumerate(self.pending_optional_pays)
@@ -538,7 +590,7 @@ class StackCastingMixin:
         if accept and self._player_can_pay_generic(self.players[player_index], int(entry["cost"])):
             self._pay_optional(entry)
         else:
-            self.log.append(f"{self.players[player_index].name} declined {entry['card_name']}'s pay-for-life trigger")
+            self._apply_optional_pay_decline(entry)
         # The trigger ability that raised this prompt was held on the stack (human
         # priority path); now that the choice is made, it leaves the stack.
         self._remove_optional_pay_stack_item(entry)
@@ -553,8 +605,10 @@ class StackCastingMixin:
             self.stack.remove(stack_item)
 
     def auto_resolve_pending_optional_pays(self, only_player_index: int | None = None) -> None:
-        """Pay every pending optional "pay {1}: gain N life" trigger when able — the
-        deterministic default used for AI players and headless simulation."""
+        """Pay every pending optional "pay {N}" trigger when able — the
+        deterministic default used for AI players and headless simulation. An
+        unpayable "unless you pay" entry applies its decline consequence
+        (Hasran Ogress' damage)."""
         remaining: list[dict] = []
         for entry in self.pending_optional_pays:
             if only_player_index is not None and entry["player_index"] != only_player_index:
@@ -564,6 +618,8 @@ class StackCastingMixin:
             available = sum(player.mana_pool.get(s, 0) for s in player.mana_pool)
             if available >= int(entry["cost"]):
                 self._pay_optional(entry)
+            elif int(entry.get("damage", 0) or 0) > 0:
+                self._apply_optional_pay_decline(entry)
             self._remove_optional_pay_stack_item(entry)
         self.pending_optional_pays = remaining
 
@@ -806,12 +862,37 @@ class StackCastingMixin:
         source_seat: int | None = None,
         source_permanent_index: int | None = None,
         source_stack_index: int | None = None,
+        source_controller_index: int | None = None,
     ) -> SimulationResult:
         controller = self.players[controller_index]
-        resolved = self._find_controlled_permanent(controller, permanent_name, permanent_index)
+        # Ifh-Bíff Efreet: "Any player may activate this ability." The activator
+        # (controller of the ability, payer of its cost) may differ from the
+        # permanent's controller; source_controller_index names whose
+        # battlefield holds the permanent.
+        source_owner = (
+            controller
+            if source_controller_index is None
+            else self.players[source_controller_index]
+        )
+        resolved = self._find_controlled_permanent(source_owner, permanent_name, permanent_index)
         if resolved is None:
             raise ValueError(f"Permanent not found: {permanent_name}")
         _, permanent = resolved
+        # Personal Incarnation: "Only this creatures owner may activate this
+        # ability." grants the owner activation rights even while an opponent
+        # controls the creature (CR 118.9a-style permission override).
+        owner_may_activate = (
+            "only this creatures owner may activate this ability" in permanent.card.oracle_text.lower()
+            and self.owner_index_of(permanent) == controller_index
+        )
+        if (
+            source_owner is not controller
+            and not owner_may_activate
+            and "any player may activate this ability" not in permanent.card.oracle_text.lower()
+        ):
+            details = f"{permanent.card.name}'s abilities can only be activated by its controller"
+            self.log.append(details)
+            return SimulationResult(permanent.card.name, False, "unsupported", details)
 
         program = compile_card_oracle(permanent.effective_card)
         target_idx = target_player_index if target_player_index is not None else (1 - controller_index)
@@ -950,6 +1031,74 @@ class StackCastingMixin:
                 details = f"{permanent.card.name} can only be activated during your upkeep"
                 self.log.append(details)
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
+
+        # "Activate only as a sorcery." (Illusionary Mask) — your turn, a main
+        # phase, and an empty stack (CR 118.2a wording shortcut).
+        if "activate only as a sorcery" in ability_lower:
+            if not (
+                self.active_player_index == controller_index
+                and self.current_turn_phase in ("precombat_main", "postcombat_main")
+                and not self.stack
+            ):
+                details = f"{permanent.card.name} can only be activated as a sorcery"
+                self.log.append(details)
+                return SimulationResult(permanent.card.name, False, "unsupported", details)
+
+        # "Activate only during combat." (Jade Statue) / "Activate only during
+        # the end of combat step." (Desert).
+        if "activate only during the end of combat step" in ability_lower:
+            if self.current_step != "end_of_combat":
+                details = f"{permanent.card.name} can only be activated during the end of combat step"
+                self.log.append(details)
+                return SimulationResult(permanent.card.name, False, "unsupported", details)
+        elif "activate only during combat" in ability_lower:
+            if self.current_turn_phase != "combat":
+                details = f"{permanent.card.name} can only be activated during combat"
+                self.log.append(details)
+                return SimulationResult(permanent.card.name, False, "unsupported", details)
+
+        # "Activate only during an opponent's turn, before attackers are
+        # declared." (Nettling Imp; mirrors cast_restrictions' same phrase.)
+        if "activate only during an opponent's turn, before attackers are declared" in ability_lower:
+            legal = self.active_player_index != controller_index and (
+                self.current_turn_phase in ("beginning", "precombat_main")
+                or (
+                    self.current_turn_phase == "combat"
+                    and self.current_step in ("beginning_of_combat", "declare_attackers")
+                    and not self.combat_attackers_locked
+                )
+            )
+            if not legal:
+                details = (
+                    f"{permanent.card.name} can only be activated during an opponent's turn, "
+                    "before attackers are declared"
+                )
+                self.log.append(details)
+                return SimulationResult(permanent.card.name, False, "unsupported", details)
+
+        # "Only this creatures owner may activate this ability." (Personal
+        # Incarnation.) The owner — not whoever controls it — is the only legal
+        # activator, so a thief who stole it with Control Magic can't use it.
+        if (
+            "only this creatures owner may activate this ability" in ability_lower
+            and self.owner_index_of(permanent) != controller_index
+        ):
+            details = f"only {permanent.card.name}'s owner may activate this ability"
+            self.log.append(details)
+            return SimulationResult(permanent.card.name, False, "unsupported", details)
+
+        # "X can't be 0." (Aladdin's Lamp.)
+        if "x can't be 0" in ability_lower and not x_value:
+            details = f"{permanent.card.name}: X can't be 0"
+            self.log.append(details)
+            return SimulationResult(permanent.card.name, False, "unsupported", details)
+
+        # "Activate only if you have exactly seven cards in hand." (Library of
+        # Alexandria's draw ability.)
+        if "activate only if you have exactly seven cards in hand" in ability_lower and len(controller.hand) != 7:
+            details = f"{permanent.card.name} can only be activated with exactly seven cards in hand"
+            self.log.append(details)
+            return SimulationResult(permanent.card.name, False, "unsupported", details)
 
         # "Activate only during your turn and only once each turn." (Instill Energy)
         oracle_lower = ability_lower
@@ -1200,7 +1349,9 @@ class StackCastingMixin:
             cost = self._parse_mana_cost(
                 card.mana_cost, x_value=resolved_x_value, extra_generic=extra_generic_tax, x_color=x_color
             )
-            if not self._pay_mana_cost(caster, cost):
+            if not self._pay_mana_cost(
+                caster, cost, creature_spell=card.primary_type == "creature"
+            ):
                 details = f"insufficient mana for {card.name}"
                 if x_color is not None:
                     details = f"insufficient mana for {card.name} (X can be paid only with {x_color} mana)"
@@ -1592,7 +1743,31 @@ class StackCastingMixin:
                 required[token] += 1
         return required
 
-    def _pay_mana_cost(self, player: PlayerState, required: dict[str, int]) -> bool:
+    def _pay_mana_cost(
+        self, player: PlayerState, required: dict[str, int], *, creature_spell: bool = False
+    ) -> bool:
+        # Metamorphosis: mana restricted to creature spells joins the pool for
+        # a creature-spell payment only, and whatever the payment consumes is
+        # attributed to the restricted bucket first (its units are otherwise
+        # lost, so spending them first is the only rational attribution).
+        restricted = player.creature_only_mana
+        if creature_spell and restricted and any(restricted.values()):
+            snapshot = dict(player.mana_pool)
+            player.mana_pool = {
+                sym: snapshot.get(sym, 0) + restricted.get(sym, 0)
+                for sym in ("W", "U", "B", "R", "G", "C")
+            }
+            if not self._pay_mana_cost(player, required):
+                player.mana_pool = snapshot
+                return False
+            for sym in ("W", "U", "B", "R", "G", "C"):
+                spent = snapshot.get(sym, 0) + restricted.get(sym, 0) - player.mana_pool.get(sym, 0)
+                from_restricted = min(spent, restricted.get(sym, 0))
+                if from_restricted:
+                    restricted[sym] = restricted.get(sym, 0) - from_restricted
+                snapshot[sym] = snapshot.get(sym, 0) - (spent - from_restricted)
+            player.mana_pool = snapshot
+            return True
         pool = player.mana_pool
 
         if pool.get("W", 0) < required["W"]:

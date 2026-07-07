@@ -26,10 +26,12 @@ rules when adding cards.
 """
 
 import re
+from types import SimpleNamespace
 
+from .handlers._common import permanent_matches_filter
 from .models import CardDefinition, Permanent
 from .mixins.stack_casting import aura_enchant_noun
-from .oracle import compile_card_oracle
+from .oracle import compile_card_oracle, expand_modal_activated_lines
 
 # An oracle line that begins with a mana/tap cost followed by a colon is an
 # activated ability ("{T}: ..."), not a cast-time effect.
@@ -40,7 +42,9 @@ _COLOR_WORD_TO_SYMBOL = {"white": "W", "blue": "U", "black": "B", "red": "R", "g
 
 
 def _oracle_lines(card: CardDefinition) -> list[str]:
-    return (card.oracle_text or "").split("\n")
+    # Same modal-activated expansion the compiler applies (Pyramids), so the
+    # bullet effects classify as activated-ability lines, not cast effects.
+    return expand_modal_activated_lines(card.oracle_text or "").split("\n")
 
 
 def _cast_lines(card: CardDefinition) -> list[str]:
@@ -334,6 +338,18 @@ def _activated_requires_flying_creature(card: CardDefinition) -> bool:
     return any("target creature with flying" in line for line in _activated_lines(card))
 
 
+def _activated_requires_wall(card: CardDefinition) -> bool:
+    """Ali Baba: "{R}: Tap target Wall." — restricts legal targets to Walls."""
+    return any(re.search(r"\btarget wall\b", line) for line in _activated_lines(card))
+
+
+def _activated_requires_aura_on_land(card: CardDefinition) -> bool:
+    """Pyramids mode 1: "Destroy target Aura attached to a land." Must be
+    recognized before the land classifier, whose regex would otherwise read
+    "...a land" as a land target."""
+    return any("target aura attached to a land" in line for line in _activated_lines(card))
+
+
 def _activated_requires_sacrifice_creature(card: CardDefinition) -> bool:
     """Diamond Valley: "{T}, Sacrifice a creature: …" — the "creature" chosen
     is the caster's own, sacrificed as (part of) the cost, mirroring the
@@ -391,6 +407,7 @@ _FILTERABLE_ABILITY_KINDS = {
     "grant_unblockable_to_low_power_target",
     "set_base_pt_target_until_eot",
     "steal_creature_while_tapped_and_weaker",
+    "tap_target_permanent",
 }
 
 
@@ -438,11 +455,18 @@ def _classify_activation(card: CardDefinition) -> dict:
     if _activated_requires_flying_creature(card):
         # Before the generic creature check, which would otherwise swallow it.
         return {"kind": "creature", "flying_only": True}
+    if _activated_requires_wall(card):
+        # Ali Baba — before the generic creature check.
+        return {"kind": "creature", "wall_only": True}
     if _activated_requires_sacrifice_creature(card):
         # Before the generic creature check, which would otherwise swallow it.
         return {"kind": "creature", "own_only": True}
     if _activated_requires_creature(card):
         return {"kind": "creature"}
+    if _activated_requires_aura_on_land(card):
+        # Pyramids — before the land classifier. The destroy instruction's
+        # attached_to_land filter narrows the enumeration to Auras on lands.
+        return {"kind": "permanent"}
     if _activated_requires_permanent(card):
         return {"kind": "permanent"}
     color = _activated_destroy_permanent_color(card)
@@ -578,9 +602,14 @@ class LegalityMixin:
         spec = {"kind": kind, **flags}
         return self._enumerate_targets(caster_index, card, spec, for_cast=False)
 
-    def activation_target_spec(self, controller_index: int, permanent_index: int) -> dict:
+    def activation_target_spec(
+        self, controller_index: int, permanent_index: int, ability_index: int | None = None
+    ) -> dict:
         """Target spec for activating the ability of the permanent at
-        ``permanent_index`` on ``controller_index``'s battlefield."""
+        ``permanent_index`` on ``controller_index``'s battlefield. With
+        ``ability_index`` (multi-ability cards whose abilities target
+        differently — Pyramids), the spec is computed from that ability's own
+        line rather than the whole card."""
         player = self.players[controller_index]
         if not (0 <= permanent_index < len(player.battlefield)):
             return {"kind": "none", "requires_target": False, "valid_targets": []}
@@ -588,7 +617,25 @@ class LegalityMixin:
         # effective_card so a copy (Clone / Vesuvan Doppelganger) offers the
         # copied creature's activated abilities (CR 707.2).
         card = source_permanent.effective_card
-        spec = _classify_activation(card)
+        chosen_ability = None
+        if ability_index is not None:
+            usable = [
+                ab for ab in compile_card_oracle(card).activated_abilities
+                if ab.supported and ab.instruction is not None
+            ]
+            if 0 <= ability_index < len(usable):
+                chosen_ability = usable[ability_index]
+        if chosen_ability is not None:
+            # A stand-in whose oracle text is just this ability's line: every
+            # _activated_* classifier reads only oracle_text.
+            line_card = SimpleNamespace(
+                name=card.name,
+                type_line=card.type_line,
+                oracle_text=chosen_ability.source_line or "",
+            )
+            spec = _classify_activation(line_card)
+        else:
+            spec = _classify_activation(card)
         # A Sleight of Mind text change on this permanent retargets a color-word
         # counter (Lifeforce black -> red), so the UI must offer the new color's
         # spells rather than the printed one's.
@@ -597,9 +644,17 @@ class LegalityMixin:
                 source_permanent, spec["stack_color_filter"]
             )
         spec["requires_target"] = spec["kind"] != "none"
+        if chosen_ability is not None:
+            ability_instruction = (
+                chosen_ability.instruction
+                if chosen_ability.instruction.kind in _FILTERABLE_ABILITY_KINDS
+                else None
+            )
+        else:
+            ability_instruction = _ability_target_instruction(card)
         spec["valid_targets"] = self._enumerate_targets(
             controller_index, card, spec, for_cast=False,
-            ability_instruction=_ability_target_instruction(card),
+            ability_instruction=ability_instruction,
             source_permanent=source_permanent,
         )
         # Jade Monolith's second choice — the damage source: any permanent on
@@ -712,6 +767,10 @@ class LegalityMixin:
             if not perm.is_creature:
                 return False
             return source_permanent is None or perm.effective_power <= source_permanent.effective_power
+        if instruction.kind == "tap_target_permanent":
+            # Ali Baba's "target Wall" (and any other parsed tap-target filter);
+            # Icy Manipulator's payload is empty, so everything passes.
+            return permanent_matches_filter(perm, instruction.payload)
         return True
 
     def _permanent_matches_target_kind(self, perm: Permanent, kind: str, spec: dict, casting_aura: bool) -> bool:
@@ -741,6 +800,9 @@ class LegalityMixin:
                 return False
             # Island of Wak-Wak: only flying creatures are legal choices.
             if spec.get("flying_only") and not self._has_keyword(perm, "flying"):
+                return False
+            # Ali Baba: only Walls are legal choices.
+            if spec.get("wall_only") and "wall" not in type_line:
                 return False
             return True
         if kind == "artifact":

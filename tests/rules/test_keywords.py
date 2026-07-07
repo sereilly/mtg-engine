@@ -412,6 +412,29 @@ def test_702_10b_without_haste_summoning_sick_cannot_attack():
     assert game.can_attack(sick, 1) is False
 
 
+@pytest.mark.cr("302.6")
+def test_302_6_creature_is_summoning_sick_after_control_change():
+    # CR 302.6: the sickness clock runs from when the creature came under its
+    # controller's control, not from when it entered the battlefield — a
+    # creature stolen this turn (Control Magic et al.) can't attack or use
+    # {T} abilities until its new controller's next turn.
+    bear = Permanent(card=_mk_creature("Bear", 2, 2))
+    theft_source = Permanent(card=_mk_creature("Thief", 1, 1))
+    game, p1, p2 = _game([bear], [theft_source])
+    game.turn = 3  # bear has no sickness marker: controlled since long ago
+    assert game._is_summoning_sick(bear) is False
+
+    assert game._take_control_linked(theft_source, bear, p2) is True
+
+    assert bear.metadata.get("summoning_sickness_turn") == game.turn
+    assert game._is_summoning_sick(bear) is True
+
+    # Returning to its owner is another control change: sick again there too.
+    game._revert_stolen_permanent(theft_source)
+    assert any(p is bear for p in p1.battlefield)
+    assert game._is_summoning_sick(bear) is True
+
+
 # ---------------------------------------------------------------------------
 # 702.13 — Fear (engine models the Alpha-era "can't be blocked except by
 # artifact and/or black creatures" evasion)

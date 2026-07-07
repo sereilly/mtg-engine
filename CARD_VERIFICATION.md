@@ -2,28 +2,37 @@
 
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
-- Total cards: **290**
-- Passed: **290**
+- Total cards: **369**
+- Passed: **303**
 - Failed: **0**
-- Untested: **0**
+- Untested: **66**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
+| Abu Ja'far | ⬜ untested |  |
 | Air Elemental | ✅ pass |  |
+| Aladdin | ⬜ untested |  |
+| Aladdin's Lamp | ⬜ untested |  |
+| Aladdin's Ring | ✅ pass |  |
+| Ali Baba | ⬜ untested |  |
+| Ali from Cairo | ⬜ untested |  |
 | Ancestral Recall | ✅ pass |  |
 | Animate Artifact | ✅ pass |  |
 | Animate Dead | ✅ pass |  |
 | Animate Wall | ✅ pass |  |
 | Ankh of Mishra | ✅ pass |  |
 | Armageddon | ✅ pass |  |
+| Army of Allah | ⬜ untested |  |
 | Aspect of Wolf | ✅ pass |  |
 | Bad Moon | ✅ pass |  |
 | Badlands | ✅ pass |  |
 | Balance | ✅ pass |  |
 | Basalt Monolith | ✅ pass |  |
 | Bayou | ✅ pass |  |
+| Bazaar of Baghdad | ⬜ untested |  |
 | Benalish Hero | ✅ pass |  |
 | Berserk | ✅ pass |  |
+| Bird Maiden | ✅ pass |  |
 | Birds of Paradise | ✅ pass |  |
 | Black Knight | ✅ pass |  |
 | Black Lotus | ✅ pass |  |
@@ -34,18 +43,24 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Blue Elemental Blast | ✅ pass |  |
 | Blue Ward | ✅ pass |  |
 | Bog Wraith | ✅ pass |  |
+| Bottle of Suleiman | ⬜ untested |  |
 | Braingeyser | ✅ pass |  |
+| Brass Man | ✅ pass |  |
 | Burrowing | ✅ pass |  |
+| Camel | ⬜ untested |  |
 | Camouflage | ✅ pass |  |
 | Castle | ✅ pass |  |
 | Celestial Prism | ✅ pass |  |
 | Channel | ✅ pass |  |
 | Chaos Orb | ✅ pass |  |
 | Chaoslace | ✅ pass |  |
+| Circle of Protection: Black | ⬜ untested |  |
 | Circle of Protection: Blue | ✅ pass |  |
 | Circle of Protection: Green | ✅ pass |  |
 | Circle of Protection: Red | ✅ pass |  |
 | Circle of Protection: White | ✅ pass |  |
+| City in a Bottle | ⬜ untested |  |
+| City of Brass | ⬜ untested |  |
 | Clockwork Beast | ✅ pass |  |
 | Clone | ✅ pass |  |
 | Cockatrice | ✅ pass |  |
@@ -61,8 +76,12 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Creature Bond | ✅ pass |  |
 | Crusade | ✅ pass |  |
 | Crystal Rod | ✅ pass |  |
+| Cuombajj Witches | ⬜ untested |  |
 | Cursed Land | ✅ pass |  |
+| Cyclone | ⬜ untested |  |
 | Cyclopean Tomb | ✅ pass |  |
+| Dancing Scimitar | ⬜ untested |  |
+| Dandân | ✅ pass |  |
 | Dark Ritual | ✅ pass |  |
 | Darkpact | ✅ pass |  |
 | Death Ward | ✅ pass |  |
@@ -71,6 +90,10 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Demonic Attorney | ✅ pass |  |
 | Demonic Hordes | ✅ pass |  |
 | Demonic Tutor | ✅ pass |  |
+| Desert | ⬜ untested |  |
+| Desert Nomads | ⬜ untested |  |
+| Desert Twister | ⬜ untested |  |
+| Diamond Valley | ⬜ untested |  |
 | Dingus Egg | ✅ pass |  |
 | Disenchant | ✅ pass |  |
 | Disintegrate | ✅ pass |  |
@@ -78,14 +101,21 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Dragon Whelp | ✅ pass |  |
 | Drain Life | ✅ pass |  |
 | Drain Power | ✅ pass |  |
+| Drop of Honey | ⬜ untested |  |
 | Drudge Skeletons | ✅ pass |  |
 | Dwarven Demolition Team | ✅ pass |  |
 | Dwarven Warriors | ✅ pass |  |
 | Earth Elemental | ✅ pass |  |
 | Earthbind | ✅ pass |  |
 | Earthquake | ✅ pass |  |
+| Ebony Horse | ⬜ untested |  |
+| El-Hajjâj | ✅ pass |  |
+| Elephant Graveyard | ⬜ untested |  |
 | Elvish Archers | ✅ pass |  |
+| Erg Raiders | ⬜ untested |  |
+| Erhnam Djinn | ⬜ untested |  |
 | Evil Presence | ✅ pass |  |
+| Eye for an Eye | ⬜ untested |  |
 | False Orders | ✅ pass |  |
 | Farmstead | ✅ pass |  |
 | Fastbond | ✅ pass |  |
@@ -94,8 +124,11 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Fire Elemental | ✅ pass |  |
 | Fireball | ✅ pass |  |
 | Firebreathing | ✅ pass |  |
+| Fishliver Oil | ⬜ untested |  |
 | Flashfires | ✅ pass |  |
 | Flight | ✅ pass |  |
+| Flying Carpet | ⬜ untested |  |
+| Flying Men | ✅ pass |  |
 | Fog | ✅ pass |  |
 | Force of Nature | ✅ pass |  |
 | Forcefield | ✅ pass |  |
@@ -105,8 +138,10 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Fungusaur | ✅ pass |  |
 | Gaea's Liege | ✅ pass |  |
 | Gauntlet of Might | ✅ pass |  |
+| Ghazbán Ogre | ⬜ untested |  |
 | Giant Growth | ✅ pass |  |
 | Giant Spider | ✅ pass |  |
+| Giant Tortoise | ⬜ untested |  |
 | Glasses of Urza | ✅ pass |  |
 | Gloom | ✅ pass |  |
 | Goblin Balloon Brigade | ✅ pass |  |
@@ -116,6 +151,8 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Green Ward | ✅ pass |  |
 | Grizzly Bears | ✅ pass |  |
 | Guardian Angel | ✅ pass |  |
+| Guardian Beast | ⬜ untested |  |
+| Hasran Ogress | ⬜ untested |  |
 | Healing Salve | ✅ pass |  |
 | Helm of Chatzuk | ✅ pass |  |
 | Hill Giant | ✅ pass |  |
@@ -124,10 +161,12 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Howl from Beyond | ✅ pass |  |
 | Howling Mine | ✅ pass |  |
 | Hurloon Minotaur | ✅ pass |  |
+| Hurr Jackal | ⬜ untested |  |
 | Hurricane | ✅ pass |  |
 | Hypnotic Specter | ✅ pass |  |
 | Ice Storm | ✅ pass |  |
 | Icy Manipulator | ✅ pass |  |
+| Ifh-Bíff Efreet | ⬜ untested |  |
 | Illusionary Mask | ✅ pass |  |
 | Instill Energy | ✅ pass |  |
 | Invisibility | ✅ pass |  |
@@ -135,19 +174,31 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Ironclaw Orcs | ✅ pass |  |
 | Ironroot Treefolk | ✅ pass |  |
 | Island | ✅ pass |  |
+| Island Fish Jasconius | ⬜ untested |  |
 | Island Sanctuary | ✅ pass |  |
+| Island of Wak-Wak | ⬜ untested |  |
 | Ivory Cup | ✅ pass |  |
 | Jade Monolith | ✅ pass |  |
 | Jade Statue | ✅ pass |  |
+| Jandor's Ring | ⬜ untested |  |
+| Jandor's Saddlebags | ⬜ untested |  |
 | Jayemdae Tome | ✅ pass |  |
+| Jeweled Bird | ⬜ untested |  |
+| Jihad | ⬜ untested |  |
 | Juggernaut | ✅ pass |  |
 | Jump | ✅ pass |  |
+| Junún Efreet | ⬜ untested |  |
+| Juzám Djinn | ✅ pass |  |
 | Karma | ✅ pass |  |
 | Keldon Warlord | ✅ pass |  |
+| Khabál Ghoul | ⬜ untested |  |
+| King Suleiman | ⬜ untested |  |
+| Kird Ape | ⬜ untested |  |
 | Kormus Bell | ✅ pass |  |
 | Kudzu | ✅ pass |  |
 | Lance | ✅ pass |  |
 | Ley Druid | ✅ pass |  |
+| Library of Alexandria | ⬜ untested |  |
 | Library of Leng | ✅ pass |  |
 | Lich | ✅ pass |  |
 | Lifeforce | ✅ pass |  |
@@ -162,31 +213,40 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Lord of the Pit | ✅ pass |  |
 | Lure | ✅ pass |  |
 | Magical Hack | ✅ pass |  |
+| Magnetic Mountain | ⬜ untested |  |
 | Mahamoti Djinn | ✅ pass |  |
 | Mana Flare | ✅ pass |  |
 | Mana Short | ✅ pass |  |
 | Mana Vault | ✅ pass |  |
 | Manabarbs | ✅ pass |  |
 | Meekstone | ✅ pass |  |
+| Merchant Ship | ⬜ untested |  |
 | Merfolk of the Pearl Trident | ✅ pass |  |
 | Mesa Pegasus | ✅ pass |  |
+| Metamorphosis | ⬜ untested |  |
+| Mijae Djinn | ✅ pass |  |
 | Mind Twist | ✅ pass |  |
 | Mons's Goblin Raiders | ✅ pass |  |
+| Moorish Cavalry | ✅ pass |  |
 | Mountain | ✅ pass |  |
 | Mox Emerald | ✅ pass |  |
 | Mox Jet | ✅ pass |  |
 | Mox Pearl | ✅ pass |  |
 | Mox Ruby | ✅ pass |  |
 | Mox Sapphire | ✅ pass |  |
+| Nafs Asp | ⬜ untested |  |
 | Natural Selection | ✅ pass |  |
 | Nether Shadow | ✅ pass |  |
 | Nettling Imp | ✅ pass |  |
 | Nevinyrral's Disk | ✅ pass |  |
 | Nightmare | ✅ pass |  |
 | Northern Paladin | ✅ pass |  |
+| Oasis | ⬜ untested |  |
 | Obsianus Golem | ✅ pass |  |
+| Old Man of the Sea | ⬜ untested |  |
 | Orcish Artillery | ✅ pass |  |
 | Orcish Oriflamme | ✅ pass |  |
+| Oubliette | ✅ pass |  |
 | Paralyze | ✅ pass |  |
 | Pearled Unicorn | ✅ pass |  |
 | Personal Incarnation | ✅ pass |  |
@@ -194,6 +254,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Phantasmal Forces | ✅ pass |  |
 | Phantasmal Terrain | ✅ pass |  |
 | Phantom Monster | ✅ pass |  |
+| Piety | ⬜ untested |  |
 | Pirate Ship | ✅ pass |  |
 | Plague Rats | ✅ pass |  |
 | Plains | ✅ pass |  |
@@ -205,21 +266,27 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Psionic Blast | ✅ pass |  |
 | Psychic Venom | ✅ pass |  |
 | Purelace | ✅ pass |  |
+| Pyramids | ⬜ untested |  |
 | Raging River | ✅ pass |  |
 | Raise Dead | ✅ pass |  |
 | Red Elemental Blast | ✅ pass |  |
 | Red Ward | ✅ pass |  |
 | Regeneration | ✅ pass |  |
 | Regrowth | ✅ pass |  |
+| Repentant Blacksmith | ✅ pass |  |
 | Resurrection | ✅ pass |  |
 | Reverse Damage | ✅ pass |  |
 | Righteousness | ✅ pass |  |
+| Ring of Ma'rûf | ⬜ untested |  |
 | Roc of Kher Ridges | ✅ pass |  |
 | Rock Hydra | ✅ pass |  |
 | Rod of Ruin | ✅ pass |  |
 | Royal Assassin | ✅ pass |  |
+| Rukh Egg | ⬜ untested |  |
 | Sacrifice | ✅ pass |  |
 | Samite Healer | ✅ pass |  |
+| Sandals of Abdallah | ⬜ untested |  |
+| Sandstorm | ⬜ untested |  |
 | Savannah | ✅ pass |  |
 | Savannah Lions | ✅ pass |  |
 | Scathe Zombies | ✅ pass |  |
@@ -229,22 +296,29 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Sea Serpent | ✅ pass |  |
 | Sedge Troll | ✅ pass |  |
 | Sengir Vampire | ✅ pass |  |
+| Serendib Djinn | ⬜ untested |  |
+| Serendib Efreet | ✅ pass |  |
 | Serra Angel | ✅ pass |  |
+| Shahrazad | ⬜ untested |  |
 | Shanodin Dryads | ✅ pass |  |
 | Shatter | ✅ pass |  |
 | Shivan Dragon | ✅ pass |  |
 | Simulacrum | ✅ pass |  |
+| Sindbad | ⬜ untested |  |
+| Singing Tree | ⬜ untested |  |
 | Sinkhole | ✅ pass |  |
 | Siren's Call | ✅ pass |  |
 | Sleight of Mind | ✅ pass |  |
 | Smoke | ✅ pass |  |
 | Sol Ring | ✅ pass |  |
+| Sorceress Queen | ⬜ untested |  |
 | Soul Net | ✅ pass |  |
 | Spell Blast | ✅ pass |  |
 | Stasis | ✅ pass |  |
 | Steal Artifact | ✅ pass |  |
 | Stone Giant | ✅ pass |  |
 | Stone Rain | ✅ pass |  |
+| Stone-Throwing Devils | ✅ pass |  |
 | Stream of Life | ✅ pass |  |
 | Sunglasses of Urza | ✅ pass |  |
 | Swamp | ✅ pass |  |
@@ -268,12 +342,14 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Two-Headed Giant of Foriys | ✅ pass |  |
 | Underground Sea | ✅ pass |  |
 | Unholy Strength | ✅ pass |  |
+| Unstable Mutation | ⬜ untested |  |
 | Unsummon | ✅ pass |  |
 | Uthden Troll | ✅ pass |  |
 | Verduran Enchantress | ✅ pass |  |
 | Vesuvan Doppelganger | ✅ pass |  |
 | Veteran Bodyguard | ✅ pass |  |
 | Volcanic Eruption | ✅ pass |  |
+| Volcanic Island | ⬜ untested |  |
 | Wall of Air | ✅ pass |  |
 | Wall of Bone | ✅ pass |  |
 | Wall of Brambles | ✅ pass |  |
@@ -284,6 +360,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Wall of Water | ✅ pass |  |
 | Wall of Wood | ✅ pass |  |
 | Wanderlust | ✅ pass |  |
+| War Elephant | ⬜ untested |  |
 | War Mammoth | ✅ pass |  |
 | Warp Artifact | ✅ pass |  |
 | Water Elemental | ✅ pass |  |
@@ -298,4 +375,6 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Wooden Sphere | ✅ pass |  |
 | Word of Command | ✅ pass |  |
 | Wrath of God | ✅ pass |  |
+| Wyluli Wolf | ⬜ untested |  |
+| Ydwen Efreet | ⬜ untested |  |
 | Zombie Master | ✅ pass |  |

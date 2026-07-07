@@ -844,6 +844,20 @@ def _serialize_player(
     if viewer_seat == seat:
         for idx, perm_dict in enumerate(battlefield):
             perm_dict["target_spec"] = game.activation_target_spec(seat, idx)
+            # Multi-ability permanents whose abilities target differently
+            # (Pyramids): one spec per usable ability, indexed like the
+            # ability_index the activate action takes.
+            perm = player.battlefield[idx]
+            program = compile_card_oracle(perm.effective_card)
+            usable = [
+                ab for ab in program.activated_abilities
+                if ab.supported and ab.instruction is not None
+            ]
+            if len(usable) > 1:
+                perm_dict["ability_target_specs"] = [
+                    game.activation_target_spec(seat, idx, ability_index=k)
+                    for k in range(len(usable))
+                ]
 
     return {
         "name": player.name,
@@ -959,6 +973,7 @@ def _clear_untap_selection(session: Session) -> None:
     session.untap_required_lands = 0
     session.untap_candidate_indices = []
     session.untap_selected_indices = []
+    session.optional_untap_pending = []
 
 
 def _clear_upkeep_pay_choices(session: Session) -> None:
@@ -1378,6 +1393,15 @@ def _begin_turn(session: Session, player_index: int, defer_untap_selection: bool
             session.untap_selected_indices = []
             return False
 
+        # Old Man of the Sea: "You may choose not to untap this creature during
+        # your untap step." Pause for the human's keep-tapped choice; answered
+        # by the optional_untap_confirm action.
+        optional = game.get_optional_untap_permanents(player_index)
+        if optional:
+            game._set_phase_and_step("beginning", "untap")
+            session.optional_untap_pending = list(optional)
+            return False
+
     _clear_untap_selection(session)
     game.resolve_untap_step(player_index)
 
@@ -1771,6 +1795,44 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         if mine:
             optional_pay_info = {"pending": mine}
 
+    # Aladdin's Lamp: the replaced draw's revealed top cards, shown only to the
+    # drawing player.
+    lamp_draw_info = None
+    pending_lamp = session.game.pending_lamp_draw
+    if (
+        pending_lamp is not None
+        and viewer_seat is not None
+        and pending_lamp.get("player_index") == viewer_seat
+        and _seat_type(session, viewer_seat) != "ai"
+    ):
+        lamp_draw_info = {"card_names": list(pending_lamp["card_names"])}
+
+    # Cuombajj Witches: the opposing chooser picks any target for the second
+    # damage packet. Surface the prompt only to the chooser.
+    opponent_damage_info = None
+    pending_opp_damage = session.game.pending_opponent_damage
+    if (
+        pending_opp_damage is not None
+        and viewer_seat is not None
+        and pending_opp_damage.get("chooser_index") == viewer_seat
+        and _seat_type(session, viewer_seat) != "ai"
+    ):
+        opp_targets: list[dict] = [
+            {"kind": "player", "seat": seat} for seat in range(len(session.game.players))
+        ]
+        for seat, pl in enumerate(session.game.players):
+            for idx, perm in enumerate(pl.battlefield):
+                if perm.is_creature:
+                    opp_targets.append(
+                        {"kind": "permanent", "seat": seat, "index": idx,
+                         "key": f"{seat}-{idx}", "name": perm.card.name}
+                    )
+        opponent_damage_info = {
+            "card_name": pending_opp_damage["card_name"],
+            "amount": pending_opp_damage["amount"],
+            "valid_targets": opp_targets,
+        }
+
     # Phantasmal Terrain: the controller chooses the enchanted land's basic land
     # type. Surface the prompt only to that (human) player.
     land_type_choice_info = None
@@ -1784,6 +1846,43 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         land_type_choice_info = {
             "card_name": pending_land_type["card_name"],
             "options": ["plains", "island", "swamp", "mountain", "forest"],
+        }
+
+    # Black Vise / Jihad: "as this enters, choose an opponent [and a color]".
+    # Surface the prompt only to the (human) controller who owes the choice.
+    enter_choice_info = None
+    pending_enter = session.game.pending_enter_choice
+    if (
+        pending_enter is not None
+        and viewer_seat is not None
+        and pending_enter["controller_index"] == viewer_seat
+        and _seat_type(session, viewer_seat) != "ai"
+    ):
+        enter_choice_info = {
+            "card_name": pending_enter["card_name"],
+            "needs_color": bool(pending_enter["needs_color"]),
+            "opponents": [
+                {"seat": seat, "name": session.game.players[seat].name}
+                for seat in pending_enter["opponents"]
+            ],
+            "default_seat": pending_enter["default_seat"],
+            "default_color": pending_enter["default_color"],
+            "colors": ["W", "U", "B", "R", "G"] if pending_enter["needs_color"] else [],
+        }
+
+    # Drop of Honey: the controller picks which of the creatures tied for least
+    # power is destroyed. Surface the prompt only to that (human) player.
+    least_power_choice_info = None
+    pending_least = session.game.pending_least_power_choice
+    if (
+        pending_least is not None
+        and viewer_seat is not None
+        and pending_least["controller_index"] == viewer_seat
+        and _seat_type(session, viewer_seat) != "ai"
+    ):
+        least_power_choice_info = {
+            "card_name": pending_least["card_name"],
+            "candidates": [dict(entry) for entry in pending_least["candidates"]],
         }
 
     # Power Sink: the targeted spell's controller is asked to pay {X} (tap lands,
@@ -1958,6 +2057,13 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "rematch": _build_rematch_info(session, viewer_seat),
         "cleanup_discard": cleanup_info,
         "untap_land_selection": untap_info,
+        "optional_untap": (
+            {"permanents": list(session.optional_untap_pending)}
+            if session.optional_untap_pending and viewer_seat == session.current_turn
+            else None
+        ),
+        "opponent_damage_choice": opponent_damage_info,
+        "lamp_draw": lamp_draw_info,
         "upkeep_pay": _build_upkeep_pay_info(session, viewer_seat),
         "upkeep_mana_prevention": _build_upkeep_mana_prevention_info(session, viewer_seat),
         "optional_trigger": _build_optional_trigger_info(session, viewer_seat),
@@ -1976,6 +2082,8 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "optional_pay": optional_pay_info,
         "hand_reveal": hand_reveal_info,
         "land_type_choice": land_type_choice_info,
+        "enter_choice": enter_choice_info,
+        "least_power_choice": least_power_choice_info,
         "mana_payment": mana_payment_info,
         "kudzu_reattach": kudzu_reattach_info,
         "face_down_cast": face_down_cast_info,
@@ -3629,6 +3737,9 @@ def do_action(session_id: str, req: GameActionRequest):
     if untap_required > 0 and req.action not in {"untap_select", "untap_confirm", "debug_add_to_hand", "debug_cast_free", "debug_add_mana"}:
         raise HTTPException(status_code=400, detail="select untap lands before other actions")
 
+    if session.optional_untap_pending and req.action not in {"optional_untap_confirm", "debug_add_to_hand", "debug_cast_free", "debug_add_mana"}:
+        raise HTTPException(status_code=400, detail="choose which permanents stay tapped before other actions")
+
     _UPKEEP_DECISION_ACTIONS = {"pay_upkeep", "sacrifice_upkeep", "resolve_optional_trigger", "pay_upkeep_prevention", "tap", "activate", "debug_add_to_hand", "debug_cast_free", "debug_add_mana"}
     if _upkeep_pay_pending(session) and req.action not in _UPKEEP_DECISION_ACTIONS:
         raise HTTPException(status_code=400, detail="resolve upkeep payment before other actions")
@@ -3667,6 +3778,18 @@ def do_action(session_id: str, req: GameActionRequest):
     ):
         raise HTTPException(status_code=400, detail="resolve the pay-for-life trigger before other actions")
     if (
+        session.game.pending_opponent_damage is not None
+        and session.game.pending_opponent_damage.get("chooser_index") == req.seat
+        and req.action not in {"opponent_damage_choose", "debug_add_to_hand", "debug_cast_free", "debug_add_mana"}
+    ):
+        raise HTTPException(status_code=400, detail="choose a target for the opponent-choice damage before other actions")
+    if (
+        session.game.pending_lamp_draw is not None
+        and session.game.pending_lamp_draw.get("player_index") == req.seat
+        and req.action not in {"lamp_draw_confirm", "debug_add_to_hand", "debug_cast_free", "debug_add_mana"}
+    ):
+        raise HTTPException(status_code=400, detail="choose a card for Aladdin's Lamp before other actions")
+    if (
         session.game.pending_word_of_command is not None
         and "chosen_hand_index" not in session.game.pending_word_of_command
         and session.game.pending_word_of_command.get("caster_index") == req.seat
@@ -3681,6 +3804,18 @@ def do_action(session_id: str, req: GameActionRequest):
             status_code=400,
             detail="choose where the discarded card goes (Library of Leng) before other actions",
         )
+    if (
+        session.game.pending_enter_choice is not None
+        and session.game.pending_enter_choice.get("controller_index") == req.seat
+        and req.action not in {"enter_choice_confirm", "debug_add_to_hand", "debug_cast_free", "debug_add_mana"}
+    ):
+        raise HTTPException(status_code=400, detail="choose an opponent (and color) for the entering permanent before other actions")
+    if (
+        session.game.pending_least_power_choice is not None
+        and session.game.pending_least_power_choice.get("controller_index") == req.seat
+        and req.action not in {"least_power_choice_confirm", "debug_add_to_hand", "debug_cast_free", "debug_add_mana"}
+    ):
+        raise HTTPException(status_code=400, detail="choose which creature tied for least power is destroyed before other actions")
 
     if req.action in {
         "cast",
@@ -3759,11 +3894,51 @@ def do_action(session_id: str, req: GameActionRequest):
             raise HTTPException(status_code=400, detail="permanent_name or permanent_index is required")
         controller = session.game.players[req.seat]
         resolved = _find_controlled_permanent(controller, req.permanent_name, req.permanent_index)
+        # Ifh-Bíff Efreet: "Any player may activate this ability." — the
+        # permanent may sit on another player's battlefield; the activator
+        # still pays the cost and controls the ability.
+        source_controller_seat = None
+        if resolved is None:
+            for other_seat, other in enumerate(session.game.players):
+                if other_seat == req.seat:
+                    continue
+                candidate = _find_controlled_permanent(other, req.permanent_name, req.permanent_index)
+                if candidate is not None and (
+                    "any player may activate this ability"
+                    in candidate[1].card.oracle_text.lower()
+                ):
+                    resolved = candidate
+                    source_controller_seat = other_seat
+                    break
         if resolved is None:
             raise HTTPException(status_code=400, detail="permanent not found")
         permanent_index, permanent = resolved
 
-        if permanent.card.primary_type == "land":
+        # A land activation is a mana tap ONLY when the chosen ability is a mana
+        # ability. Non-mana land abilities (Island of Wak-Wak's power-set,
+        # Library of Alexandria's draw) go through the normal ability path —
+        # previously every land activation fell into tap_land_for_mana, which
+        # invented a green mana for mana-less lands and made Library's draw
+        # unreachable.
+        land_as_mana_tap = permanent.card.primary_type == "land"
+        if land_as_mana_tap:
+            program = compile_card_oracle(permanent.effective_card)
+            usable = [
+                ab for ab in program.activated_abilities
+                if ab.supported and ab.instruction is not None
+            ]
+            mana_kinds = {"add_mana_from_text", "sacrifice_self_for_mana", "sacrifice_creature_for_black_mana"}
+            chosen_ability = None
+            if req.ability_index is not None and 0 <= req.ability_index < len(usable):
+                chosen_ability = usable[req.ability_index]
+            elif usable and not permanent.effective_produced_mana:
+                # No explicit choice on a land that makes no mana: its only
+                # meaningful activation is the non-mana ability.
+                chosen_ability = usable[0]
+            if chosen_ability is not None and chosen_ability.instruction.kind not in mana_kinds:
+                land_as_mana_tap = False
+
+        if land_as_mana_tap:
             tapped = session.game.tap_land_for_mana(
                 req.seat,
                 permanent.card.name,
@@ -3805,6 +3980,7 @@ def do_action(session_id: str, req: GameActionRequest):
                 source_seat=req.source_seat,
                 source_permanent_index=req.source_permanent_index,
                 source_stack_index=engine_source_stack_index,
+                source_controller_index=source_controller_seat,
             )
             if not result.supported:
                 raise HTTPException(status_code=400, detail=result.details)
@@ -4134,6 +4310,32 @@ def do_action(session_id: str, req: GameActionRequest):
                 session.game.resolve_draw_step(session.current_turn)
                 session.game._enter_main_phase(precombat=True)
 
+    elif req.action == "optional_untap_confirm":
+        # Old Man of the Sea: the player picked which "may choose not to untap"
+        # permanents stay tapped (creature_indices; empty/omitted = untap all).
+        if req.seat != session.current_turn:
+            raise HTTPException(status_code=400, detail="not your turn")
+        if not session.optional_untap_pending:
+            raise HTTPException(status_code=400, detail="no optional untap choice is pending")
+        valid = {int(entry["index"]) for entry in session.optional_untap_pending}
+        keep = sorted(set(req.creature_indices or []))
+        if any(idx not in valid for idx in keep):
+            raise HTTPException(status_code=400, detail="invalid keep-tapped choice")
+        session.optional_untap_pending = []
+        session.game.resolve_untap_step(session.current_turn, keep_tapped_indices=keep)
+        _clear_untap_selection(session)
+
+        if _seat_type(session, session.current_turn) == "human" and _gather_upkeep_decisions(session, session.current_turn):
+            pass
+        else:
+            _clear_upkeep_pay_choices(session)
+            session.game.resolve_upkeep(session.current_turn)
+            if _seat_type(session, session.current_turn) == "human" and _has_island_sanctuary(session.game, session.current_turn):
+                session.island_sanctuary_pending = True
+            else:
+                session.game.resolve_draw_step(session.current_turn)
+                session.game._enter_main_phase(precombat=True)
+
     elif req.action == "pay_upkeep":
         if req.seat != session.current_turn:
             raise HTTPException(status_code=400, detail="not your turn")
@@ -4353,6 +4555,55 @@ def do_action(session_id: str, req: GameActionRequest):
         session.time_vault_resolved_turn = session.game.turn
         session.time_vault_pending = []
         _begin_turn(session, req.seat, defer_untap_selection=True)
+
+    elif req.action == "lamp_draw_confirm":
+        # Aladdin's Lamp: the player picks which of the revealed top cards to
+        # draw (hand_index = position in the revealed list).
+        pending = session.game.pending_lamp_draw
+        if pending is None or pending.get("player_index") != req.seat:
+            raise HTTPException(status_code=400, detail="no Aladdin's Lamp draw is pending for you")
+        if req.hand_index is None:
+            raise HTTPException(status_code=400, detail="hand_index is required")
+        if not session.game.confirm_lamp_draw(req.seat, req.hand_index):
+            raise HTTPException(status_code=400, detail="invalid card choice")
+
+    elif req.action == "opponent_damage_choose":
+        # Cuombajj Witches: the opposing chooser picks any target for the second
+        # damage packet — a player face (target_permanent_index omitted) or a
+        # creature on target_seat's battlefield.
+        pending = session.game.pending_opponent_damage
+        if pending is None or pending.get("chooser_index") != req.seat:
+            raise HTTPException(status_code=400, detail="no opponent damage choice is pending for you")
+        if req.target_seat is None or not (0 <= req.target_seat < len(session.game.players)):
+            raise HTTPException(status_code=400, detail="target_seat is required")
+        if not session.game.confirm_opponent_damage_choice(
+            req.seat, req.target_seat, req.target_permanent_index
+        ):
+            raise HTTPException(status_code=400, detail="failed to resolve the damage choice")
+
+    elif req.action == "enter_choice_confirm":
+        # Black Vise / Jihad: the controller confirms the "as this enters"
+        # choice — an opponent (target_seat) and, for Jihad, a color (mana_color).
+        pending = session.game.pending_enter_choice
+        if pending is None or pending.get("controller_index") != req.seat:
+            raise HTTPException(status_code=400, detail="no enter choice is pending for you")
+        if req.target_seat is None:
+            raise HTTPException(status_code=400, detail="target_seat is required")
+        if not session.game.confirm_enter_choice(req.seat, req.target_seat, req.mana_color):
+            raise HTTPException(status_code=400, detail="invalid enter choice")
+
+    elif req.action == "least_power_choice_confirm":
+        # Drop of Honey: the controller picks which of the creatures tied for
+        # least power is destroyed (target_seat + target_permanent_index).
+        pending = session.game.pending_least_power_choice
+        if pending is None or pending.get("controller_index") != req.seat:
+            raise HTTPException(status_code=400, detail="no least-power choice is pending for you")
+        if req.target_seat is None or req.target_permanent_index is None:
+            raise HTTPException(status_code=400, detail="target_seat and target_permanent_index are required")
+        if not session.game.confirm_least_power_choice(
+            req.seat, req.target_seat, req.target_permanent_index
+        ):
+            raise HTTPException(status_code=400, detail="invalid creature choice")
 
     elif req.action == "word_of_command_confirm":
         # Word of Command: the caster records the card the target must play

@@ -97,11 +97,26 @@ class UntapStepMixin:
             "creature_max": max_untap_creatures if creature_constrained else None,
         }
 
+    def get_optional_untap_permanents(self, player_index: int) -> list[dict]:
+        """Tapped permanents whose controller may choose not to untap them
+        (Old Man of the Sea: "You may choose not to untap this creature during
+        your untap step"). The web layer prompts a human with these; the
+        keep-tapped choice is passed back via resolve_untap_step's
+        ``keep_tapped_indices``."""
+        player = self.players[player_index]
+        return [
+            {"index": idx, "name": permanent.card.name}
+            for idx, permanent in enumerate(player.battlefield)
+            if permanent.tapped
+            and "you may choose not to untap" in permanent.card.oracle_text.lower()
+        ]
+
     def resolve_untap_step(
         self,
         player_index: int,
         selected_land_indices: list[int] | None = None,
         selected_creature_indices: list[int] | None = None,
+        keep_tapped_indices: list[int] | None = None,
     ) -> int:
         phase = "beginning"
         step = "untap"
@@ -176,6 +191,20 @@ class UntapStepMixin:
             # Time Vault, Basalt Monolith) stay tapped (Rule 502.4, 702 self-text).
             if "doesn't untap during your untap step" in permanent.card.oracle_text.lower():
                 continue
+
+            # Old Man of the Sea: "You may choose not to untap this creature
+            # during your untap step." A human's explicit keep-tapped choice is
+            # honored; AI/headless play keeps it tapped while its linked steal
+            # is alive (untapping would end the control effect).
+            if "you may choose not to untap" in permanent.card.oracle_text.lower():
+                if keep_tapped_indices is not None:
+                    if idx in keep_tapped_indices:
+                        continue
+                elif (
+                    permanent.metadata.get("stolen_while_tapped_and_weaker")
+                    and permanent.metadata.get("stolen_permanent") is not None
+                ):
+                    continue
 
             if permanent.card.primary_type == "creature":
                 # Meekstone-style: creatures at or above the power cap stay tapped.

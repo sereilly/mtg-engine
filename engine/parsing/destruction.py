@@ -68,6 +68,27 @@ def destroy_all_lands_of_type(text: str, activated: bool) -> RuleResult:
     return None
 
 
+# Pyramids mode 1: "Destroy target Aura attached to a land." Must out-rank the
+# generic destroy-target rule, whose noun parser would read "...a land" as a
+# land target.
+@parse_rule(60500)
+def destroy_target_aura_on_land(text: str, activated: bool) -> RuleResult:
+    if "destroy target aura attached to a land" in text:
+        return _instruction(
+            "destroy_target_permanent", type_filter="enchantment", attached_to_land=True
+        ), activated_kind(activated, "destroy")
+    return None
+
+
+# Pyramids mode 2: "The next time target land would be destroyed this turn,
+# remove all damage marked on it instead." Arms a one-shot destruction shield.
+@parse_rule(60600)
+def shield_target_land_from_destruction(text: str, activated: bool) -> RuleResult:
+    if "the next time target land would be destroyed this turn, remove all damage marked on it instead" in text:
+        return _instruction("shield_target_land_from_destruction"), activated_kind(activated, "prevent")
+    return None
+
+
 @parse_rule(61000)
 def destroy_target(text: str, activated: bool) -> RuleResult:
     if "destroy target" not in text:

@@ -88,7 +88,7 @@ class DrawStepMixin:
                 if modifier.requires_untapped and permanent.tapped:
                     continue
                 bonus += modifier.extra_draws
-        drawn = player.draw(1 + bonus)
+        drawn = self._draw_with_lamp(player, 1 + bonus)
         self.log.append(f"{player.name} drew {drawn} card(s) in draw step")
         self._close_or_defer_step(phase, step, defer_priority)
         return drawn

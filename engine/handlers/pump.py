@@ -115,10 +115,18 @@ def buff_creatures_global(game: Game, instruction: OracleInstruction, context: O
     color_sym = instruction.payload.get("color")
     power_delta = int(instruction.payload.get("power", 0))
     toughness_delta = int(instruction.payload.get("toughness", 0))
+    attacking_only = bool(instruction.payload.get("attacking_only"))
+    blocking_only = bool(instruction.payload.get("blocking_only"))
     target_players = game.players if instruction.payload.get("all") else [caster]
     for player in target_players:
         for perm in list(player.battlefield):
             if not perm.is_creature:
+                continue
+            # Army of Allah: only creatures attacking at resolution are buffed.
+            if attacking_only and not perm.attacking:
+                continue
+            # Piety: only creatures blocking at resolution are buffed.
+            if blocking_only and not game._is_blocking_creature(perm):
                 continue
             actual_colors = set(perm.card.colors)
             if "color_override" in perm.metadata:
@@ -146,6 +154,21 @@ def add_variable_power_counters_to_self(game: Game, instruction: OracleInstructi
         source_permanent.power_bonus += added
         source_permanent.metadata["plus_1_0_counters"] = current + added
     game.log.append(f"{card.name} gets {added} +1/+0 counter(s)")
+    return True, "resolved"
+
+
+@effect_handler("add_plus1_counters_for_each_creature_died")
+def add_plus1_counters_for_each_creature_died(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Khabál Ghoul: "At the beginning of each end step, put a +1/+1 counter on
+    this creature for each creature that died this turn." Resolves off the stack;
+    the death count is captured in trigger_context at fire time."""
+    source = context.source_permanent
+    count = int((context.trigger_context or {}).get("count", 0))
+    if source is None or count <= 0:
+        return True, "resolved"
+    source.power_bonus += count * int(instruction.payload.get("power", 1))
+    source.toughness_bonus += count * int(instruction.payload.get("toughness", 1))
+    game.log.append(f"{source.card.name} gets {count} +1/+1 counter(s)")
     return True, "resolved"
 
 
@@ -179,6 +202,29 @@ def grant_target_flying_until_eot(game: Game, instruction: OracleInstruction, co
     if target_creature is not None:
         target_creature.metadata["gains_flying_until_eot"] = True
         game.log.append(f"{target_creature.card.name} gains flying until end of turn from {card.name}")
+    return True, "resolved"
+
+
+@effect_handler("grant_islandwalk_and_linked_destroy")
+def grant_islandwalk_and_linked_destroy(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Sandals of Abdallah: "Target creature gains islandwalk until end of
+    turn. When that creature dies this turn, destroy this artifact." The grant
+    rides the has_islandwalk metadata channel (same one lords use); the death
+    link is recorded on the creature and drained by _permanent_to_graveyard +
+    the state-based sweep."""
+    card = context.card
+    source_permanent = context.source_permanent
+    target_creature = resolve_target_permanent(context)
+    if target_creature is None:
+        game.log.append(f"{card.name}: no valid creature target")
+        return True, "resolved"
+    target_creature.metadata["has_islandwalk"] = True
+    target_creature.metadata["gains_islandwalk_until_eot"] = True
+    if source_permanent is not None:
+        links = target_creature.metadata.setdefault("on_death_destroy_permanents", [])
+        if source_permanent not in links:
+            links.append(source_permanent)
+    game.log.append(f"{target_creature.card.name} gains islandwalk until end of turn ({card.name})")
     return True, "resolved"
 
 

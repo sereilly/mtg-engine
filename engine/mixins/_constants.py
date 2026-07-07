@@ -25,6 +25,10 @@ _EOT_METADATA_KEYS = (
     "damaged_by_sources_this_turn",
     # Dragon Whelp firebreathing activation counter ("four or more times this turn")
     "pump_activation_count",
+    # Pyramids: unused land-destruction shield expires with the turn
+    "land_destruction_shield_this_turn",
+    # Ebony Horse: combat-damage shield on the untapped attacker
+    "prevent_combat_damage_to_and_by_until_eot",
 )
 
 # Map: artifact name → (color that triggers it, life gained).
@@ -61,6 +65,9 @@ _NO_PRIORITY_STEPS = {"untap", "cleanup"}
 # These require an interactive choice from a human player.
 _UPKEEP_PAY_KINDS = {
     "upkeep_pay_or_sacrifice_enchantment",
+    # Cyclone: escalating {G} per wind counter, or sacrifice; paying deals
+    # counter-many damage to each creature and each player.
+    "upkeep_wind_counter_pay_or_sacrifice",
     "upkeep_pay_or_sacrifice_self",
     "upkeep_pay_or_deal_damage_to_controller",
     "upkeep_pay_or_tap_and_sacrifice_opponent_land",

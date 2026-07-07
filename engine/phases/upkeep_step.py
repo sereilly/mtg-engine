@@ -69,9 +69,15 @@ class UpkeepStepMixin:
             instruction_kinds=_UPKEEP_PAY_KINDS,
             players=[controller],
         ):
+            mana = trig.instruction.payload.get("mana", {})
+            # Cyclone: the cost escalates with its wind counters — the counter
+            # for THIS upkeep is added when the trigger resolves, so the prompt
+            # quotes counters + 1 green.
+            if trig.instruction.kind == "upkeep_wind_counter_pay_or_sacrifice":
+                mana = {"G": int(permanent.metadata.get("wind_counters", 0)) + 1}
             choices.append({
                 "card_name": permanent.card.name,
-                "mana": trig.instruction.payload.get("mana", {}),
+                "mana": mana,
                 "kind": trig.instruction.kind,
                 # "unless you pay" alternative consequence, used to label the
                 # decline button (e.g. Force of Nature deals 8 damage; it is
@@ -292,6 +298,44 @@ class UpkeepStepMixin:
                 return removed
         return None
 
+    def confirm_least_power_choice(
+        self, player_index: int, target_seat: int, target_permanent_index: int
+    ) -> bool:
+        """Resolve a pending Drop of Honey tie-break: destroy the creature the
+        controller chose among those tied for least power. If every stored
+        candidate has meanwhile left the battlefield, the prompt clears with
+        nothing to destroy."""
+        pending = self.pending_least_power_choice
+        if pending is None or pending["controller_index"] != player_index:
+            return False
+        candidates = pending.get("_candidate_perms") or []
+        live = [
+            perm
+            for perm in candidates
+            if any(perm is p for pl in self.players for p in pl.battlefield)
+        ]
+        if not live:
+            self.pending_least_power_choice = None
+            self.log.append(f"{pending['card_name']}: no tied creature remains to destroy")
+            return True
+        if not (0 <= target_seat < len(self.players)):
+            return False
+        owner = self.players[target_seat]
+        if not (0 <= target_permanent_index < len(owner.battlefield)):
+            return False
+        victim = owner.battlefield[target_permanent_index]
+        if not any(victim is perm for perm in live):
+            return False
+        owner.battlefield = [p for p in owner.battlefield if p is not victim]
+        self._permanent_to_graveyard(owner, victim)
+        self.log.append(
+            f"{pending['card_name']} destroyed {victim.card.name} "
+            "(least power, controller's choice; it can't be regenerated)"
+        )
+        self.pending_least_power_choice = None
+        self.check_state_based_actions()
+        return True
+
     def resolve_upkeep(self, player_index: int, human_choices: dict[str, bool] | None = None, optional_choices: dict[str, bool] | None = None, defer_priority: bool = False, mana_prevention: dict[str, int] | None = None, sacrifice_choices: dict[str, int] | None = None, recopy_targets: dict[str, tuple[int, int]] | None = None) -> None:
         phase = "beginning"
         step = "upkeep"
@@ -334,6 +378,41 @@ class UpkeepStepMixin:
 
                     # "at the beginning of YOUR upkeep" only fires during the controller's own upkeep.
                     if cond == "upkeep_self" and controller is not self.players[player_index]:
+                        break
+
+                    if cond == "upkeep_self" and kind == "upkeep_wind_counter_pay_or_sacrifice":
+                        # Cyclone: add a wind counter, then pay {G} per counter
+                        # or sacrifice; paying deals counter-many damage to each
+                        # creature and each player.
+                        counters = int(permanent.metadata.get("wind_counters", 0)) + 1
+                        permanent.metadata["wind_counters"] = counters
+                        self.log.append(f"{permanent.card.name} gains a wind counter ({counters} total)")
+                        cost = {"G": counters}
+                        if human_choices is not None and permanent.card.name in human_choices:
+                            paid = bool(human_choices[permanent.card.name]) and self.can_pay_upkeep_mana(
+                                controller, cost
+                            )
+                        else:
+                            paid = self.can_pay_upkeep_mana(controller, cost)
+                        if paid:
+                            self._spend_upkeep_mana(controller, cost)
+                            self.log.append(
+                                f"{controller.name} paid {counters} green for {permanent.card.name}"
+                            )
+                            for victim in self.players:
+                                self._deal_damage_to_player(victim, counters, source=permanent)
+                            for victim in self.players:
+                                for perm in list(victim.battlefield):
+                                    if perm.is_creature:
+                                        self._mark_damage_on_permanent(perm, counters, source=permanent)
+                            self._destroy_marked_creatures()
+                            self.log.append(
+                                f"{permanent.card.name} dealt {counters} damage to each creature and each player"
+                            )
+                        else:
+                            controller.battlefield = [p for p in controller.battlefield if p is not permanent]
+                            controller.graveyard.append(permanent.card)
+                            self.log.append(f"{controller.name} sacrificed {permanent.card.name} on upkeep")
                         break
 
                     if cond == "upkeep_self" and kind == "upkeep_pay_or_sacrifice_enchantment":
@@ -623,6 +702,57 @@ class UpkeepStepMixin:
                             )
                         break
 
+                    if cond == "upkeep_self" and kind == "upkeep_destroy_least_power_creature":
+                        # Drop of Honey: destroy the creature with the least
+                        # power; it can't be regenerated. "If two or more
+                        # creatures are tied for least power, you choose one of
+                        # them" — a human controller gets a prompt
+                        # (confirm_least_power_choice); AI/headless play breaks
+                        # the tie by battlefield scan order.
+                        candidates = [
+                            (owner, perm)
+                            for owner in self.players
+                            for perm in owner.battlefield
+                            if perm.is_creature
+                        ]
+                        if candidates:
+                            least = min(perm.effective_power for _, perm in candidates)
+                            tied = [
+                                (owner, perm)
+                                for owner, perm in candidates
+                                if perm.effective_power == least
+                            ]
+                            controller_index = self.players.index(controller)
+                            if len(tied) > 1 and controller_index in self.interactive_seats:
+                                self.pending_least_power_choice = {
+                                    "controller_index": controller_index,
+                                    "card_name": permanent.card.name,
+                                    "candidates": [
+                                        {
+                                            "seat": self.players.index(owner),
+                                            "index": next(
+                                                i for i, p in enumerate(owner.battlefield) if p is victim
+                                            ),
+                                            "name": victim.card.name,
+                                        }
+                                        for owner, victim in tied
+                                    ],
+                                    "_candidate_perms": [victim for _, victim in tied],
+                                }
+                                self.log.append(
+                                    f"{permanent.card.name}: {controller.name} chooses which "
+                                    "creature tied for least power to destroy"
+                                )
+                            else:
+                                owner, victim = tied[0]
+                                owner.battlefield = [p for p in owner.battlefield if p is not victim]
+                                self._permanent_to_graveyard(owner, victim)
+                                self.log.append(
+                                    f"{permanent.card.name} destroyed {victim.card.name} "
+                                    "(least power; it can't be regenerated)"
+                                )
+                        break
+
                     if cond == "upkeep_self" and kind == "upkeep_sacrifice_other_creature_or_deal_damage":
                         # Lord of the Pit: "sacrifice a creature other than this
                         # creature. If you can't, this creature deals N damage to
@@ -715,6 +845,41 @@ class UpkeepStepMixin:
                     continue
                 amount = int(instr.payload.get("amount", 1))
                 _enqueue_upkeep_damage(permanent, self.players.index(controller), player_index, amount)
+
+        # Unstable Mutation: enchant-creature auras that decay the enchanted
+        # creature at the beginning of its controller's upkeep. The counters
+        # are real -1/-1 counters, not an aura grant — they stay if the Aura
+        # leaves, and 704.5f/704.5q apply.
+        mutation_decay_applied = False
+        for controller in self.players:
+            for permanent in controller.battlefield:
+                if permanent.card.primary_type != "enchantment":
+                    continue
+                trig = next(matching_triggers(
+                    permanent.effective_card,
+                    condition_kinds={"upkeep_enchanted_controller"},
+                    instruction_kinds={"add_minus1_counter_to_enchanted"},
+                ), None)
+                if trig is None:
+                    continue
+                attached = permanent.metadata.get("attached_to")
+                if attached is None:
+                    continue
+                creature_controller_idx = next(
+                    (i for i, p in enumerate(self.players) if attached in p.battlefield),
+                    None,
+                )
+                if creature_controller_idx != player_index:
+                    continue
+                attached.power_bonus -= 1
+                attached.toughness_bonus -= 1
+                mutation_decay_applied = True
+                self.log.append(
+                    f"{permanent.card.name}: {attached.card.name} gets a -1/-1 counter"
+                )
+        if mutation_decay_applied:
+            # 704.5f: a creature decayed to 0 toughness dies now.
+            self.check_state_based_actions()
 
         # Handle enchant-land auras with optional upkeep life gain (e.g. Farmstead)
         for controller in self.players:
