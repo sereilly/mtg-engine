@@ -208,7 +208,11 @@
             <label class="deck-description-label">Description
               <textarea id="deckDescriptionInput" rows="2" maxlength="2000" placeholder="Notes about this deck (optional)"></textarea>
             </label>
+            <label class="deck-format-label">Format
+              <select id="deckFormatSelect" title="Legality is checked against this format's banlist and deck-construction rules"></select>
+            </label>
             <div id="deckStats" class="deck-stats"></div>
+            <div id="deckLegality" class="deck-legality"></div>
             <div id="deckCurve" class="deck-curve"></div>
             <div id="deckList" class="deck-list"></div>
           </div>
@@ -613,7 +617,8 @@
     <script src="/anime.min.js?v=3.2.2"></script>
     <script src="/animations.js?v=20260704-glass1"></script>
     <script src="/personal-decks.js?v=20260614-desc1"></script>
-    <script src="/app.js?v=20260704-glass1"></script>
-    <script src="/deck-editor.js?v=20260704-glass1"></script>
+    <script src="/legality.js?v=20260706-banlist1"></script>
+    <script src="/app.js?v=20260706-banlist1"></script>
+    <script src="/deck-editor.js?v=20260706-banlist1"></script>
   </body>
 </html>

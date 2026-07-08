@@ -60,22 +60,24 @@
   }
 
   // Create (no id / unknown id) or update (existing id). Returns the saved deck.
-  function save({ id, name, description, cards }) {
+  function save({ id, name, description, format, cards }) {
     const decks = readAll();
     const now = Date.now() / 1000;
     const cleanName = String(name || "Untitled Deck").trim() || "Untitled Deck";
     const cleanDescription = String(description || "").trim();
+    const cleanFormat = String(format || "casual").trim() || "casual";
     const cleanCards = normalizeCards(cards);
     const idx = id ? decks.findIndex((d) => d.id === id) : -1;
     let deck;
     if (idx >= 0) {
-      deck = { ...decks[idx], name: cleanName, description: cleanDescription, cards: cleanCards, updated_at: now };
+      deck = { ...decks[idx], name: cleanName, description: cleanDescription, format: cleanFormat, cards: cleanCards, updated_at: now };
       decks[idx] = deck;
     } else {
       deck = {
         id: newId(),
         name: cleanName,
         description: cleanDescription,
+        format: cleanFormat,
         cards: cleanCards,
         created_at: now,
         updated_at: now,

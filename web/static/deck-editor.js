@@ -5,7 +5,7 @@
     catalog: [],
     catalogByName: new Map(),
     decks: [],
-    current: { id: null, name: "Untitled Deck", entries: [] }, // entries: [{name, count, status}]
+    current: { id: null, name: "Untitled Deck", entries: [], format: "casual" }, // entries: [{name, count, status}]
     dirty: false,
     selectedCardName: null,
     colorFilters: new Set(),
@@ -29,6 +29,17 @@
     const card = lookupCard(name);
     if (!card) return "unknown";
     return card.supported ? "ok" : "unsupported";
+  }
+
+  function currentFormat() {
+    return state.current.format || "casual";
+  }
+
+  // Legality reason for a card at a given count in the current format, "" if ok.
+  function cardLegalityProblem(name, count = 0) {
+    const card = lookupCard(name);
+    if (!card || !window.Legality) return "";
+    return window.Legality.cardProblem(card, currentFormat(), count);
   }
 
   function primaryType(card) {
@@ -71,7 +82,48 @@
     const payload = await resp.json();
     state.catalog = payload.cards || [];
     state.catalogByName = new Map(state.catalog.map((c) => [c.name.toLowerCase(), c]));
+    if (window.Legality) window.Legality.setFormats(payload.formats);
     populateSetFilter();
+    populateFormatSelect();
+  }
+
+  // Fill the deck-editor format picker from the format table shipped with the
+  // catalog, so it stays in sync with the server's banlist rules.
+  function populateFormatSelect() {
+    const select = q("deckFormatSelect");
+    if (!select || !window.Legality) return;
+    select.innerHTML = "";
+    for (const fmt of window.Legality.formats()) {
+      const option = document.createElement("option");
+      option.value = fmt.key;
+      option.textContent = fmt.label;
+      select.appendChild(option);
+    }
+    select.value = currentFormat();
+  }
+
+  // Every set a card was printed in: the backend's `sets` membership list
+  // (reprints included), falling back to the first printing's `set` code.
+  function cardSetCodes(card) {
+    if (Array.isArray(card.sets) && card.sets.length > 0) {
+      return card.sets.map((s) => s.code).filter(Boolean);
+    }
+    return card.set ? [card.set] : [];
+  }
+
+  // The printing to display for a card: the one matching the active set filter
+  // (so a Beta-filtered browser shows Beta art and a LEB badge), else the first
+  // printing. Fields default to the catalog entry's own first-printing values.
+  function displayPrinting(card) {
+    const setFilter = q("browserSetFilter")?.value || "";
+    const printings = Array.isArray(card.sets) ? card.sets : [];
+    const match = setFilter ? printings.find((s) => s.code === setFilter) : null;
+    return {
+      code: match ? match.code : card.set,
+      name: match ? match.name : card.set_name,
+      image_uri: (match && match.image_uri) || card.image_uri,
+      large_image_uri: (match && match.large_image_uri) || card.large_image_uri,
+    };
   }
 
   // Build the set filter's options from the distinct sets present in the loaded
@@ -81,6 +133,11 @@
     if (!select) return;
     const byCode = new Map();
     for (const card of state.catalog) {
+      for (const printing of Array.isArray(card.sets) ? card.sets : []) {
+        if (printing.code && !byCode.has(printing.code)) {
+          byCode.set(printing.code, printing.name || printing.code.toUpperCase());
+        }
+      }
       if (card.set && !byCode.has(card.set)) {
         byCode.set(card.set, card.set_name || card.set.toUpperCase());
       }
@@ -113,10 +170,16 @@
         for (const col of card.color_identity || []) colors.add(col);
       }
     }
+    const fmt = window.Legality ? window.Legality.normalizeFormat(deck.format) : "casual";
+    const legality = window.Legality
+      ? window.Legality.validateDeck(cards, fmt, (n) => lookupCard(n))
+      : { legal: true, problems: [] };
     return {
       id: deck.id,
       name: deck.name,
       description: deck.description || "",
+      format: fmt,
+      legality: { legal: legality.legal, problems: legality.problems },
       card_count: cardCount,
       colors: ["W", "U", "B", "R", "G"].filter((c) => colors.has(c)),
       unsupported_count: unsupported,
@@ -147,8 +210,19 @@
     const option = document.createElement("option");
     option.value = deck.id;
     let label = `${deck.name} (${deck.card_count})`;
-    if (deck.unknown_count > 0) label += " ⚠";
+    const illegal = deck.legality && deck.legality.legal === false;
+    if (deck.unknown_count > 0 || illegal) label += " ⚠";
     option.textContent = label;
+    // Native title tooltip explains why the deck is flagged for its format.
+    const tips = [];
+    if (illegal) {
+      const problems = deck.legality.problems || [];
+      const shown = problems.slice(0, 6).join("\n");
+      const more = problems.length > 6 ? `\n…and ${problems.length - 6} more` : "";
+      tips.push(`Not legal in ${window.Legality ? window.Legality.formatLabel(deck.format) : deck.format}:\n${shown}${more}`);
+    }
+    if (deck.unknown_count > 0) tips.push(`${deck.unknown_count} card(s) not in the catalog`);
+    if (tips.length) option.title = tips.join("\n\n");
     return option;
   }
 
@@ -308,12 +382,15 @@
     if (minus) minus.disabled = !entry;
   }
 
-  function resetDeck(name = "Untitled Deck", entries = [], id = null, scope = "personal", description = "") {
-    state.current = { id, name, description, entries, scope };
+  function resetDeck(name = "Untitled Deck", entries = [], id = null, scope = "personal", description = "", format = "casual") {
+    const fmt = window.Legality ? window.Legality.normalizeFormat(format) : format || "casual";
+    state.current = { id, name, description, entries, scope, format: fmt };
     state.dirty = false;
     state.selectedCardName = null;
     q("deckNameInput").value = name;
     q("deckDescriptionInput").value = description;
+    const formatSelect = q("deckFormatSelect");
+    if (formatSelect) formatSelect.value = fmt;
     renderAll();
   }
 
@@ -322,14 +399,14 @@
     if (window.PersonalDecks?.isPersonalId(deckId)) {
       const deck = window.PersonalDecks.get(deckId);
       if (!deck) throw new Error("could not load deck");
-      resetDeck(deck.name, (deck.cards || []).map((c) => ({ ...c })), deck.id, "personal", deck.description || "");
+      resetDeck(deck.name, (deck.cards || []).map((c) => ({ ...c })), deck.id, "personal", deck.description || "", deck.format);
       setStatus(`Loaded "${deck.name}".`);
       return;
     }
     const resp = await fetch(`/api/decks/${encodeURIComponent(deckId)}`);
     if (!resp.ok) throw new Error("could not load deck");
     const deck = await resp.json();
-    resetDeck(deck.name, deck.cards.map((c) => ({ ...c })), deck.id, "shared", deck.description || "");
+    resetDeck(deck.name, deck.cards.map((c) => ({ ...c })), deck.id, "shared", deck.description || "", deck.format);
     // Shared decks are read-only here; editing this and saving makes a personal copy.
     setStatus(`Loaded shared deck "${deck.name}" — saving will create a personal copy.`);
   }
@@ -348,23 +425,34 @@
       setStatus("Cannot save an empty deck.", true);
       return;
     }
+    const format = currentFormat();
     const isPersonal = state.current.scope === "personal" && state.current.id;
     const makeCopy = asCopy || !isPersonal;
     if (makeCopy && state.current.id) name = `${name} (copy)`;
     let deck;
     try {
-      deck = window.PersonalDecks.save({ id: makeCopy ? null : state.current.id, name, description, cards });
+      deck = window.PersonalDecks.save({ id: makeCopy ? null : state.current.id, name, description, format, cards });
     } catch (e) {
       setStatus(e.message || "Could not save deck.", true);
       return;
     }
     q("deckNameInput").value = deck.name;
-    resetDeck(deck.name, deck.cards.map((c) => ({ ...c })), deck.id, "personal", deck.description || "");
+    resetDeck(deck.name, deck.cards.map((c) => ({ ...c })), deck.id, "personal", deck.description || "", deck.format);
     await refreshDeckLists();
     q("deckLoadSelect").value = deck.id;
     renderTopbar();
     const cardCount = deck.cards.reduce((s, c) => s + c.count, 0);
-    setStatus(`Saved personal deck "${deck.name}" (${cardCount} cards).`);
+    // Saving never blocks, but surface any format-legality issues as a warning.
+    const legality = window.Legality
+      ? window.Legality.validateDeck(cards, format, (n) => lookupCard(n))
+      : { legal: true, problems: [] };
+    if (!legality.legal) {
+      const first = legality.problems[0] || "";
+      const extra = legality.problems.length > 1 ? ` (+${legality.problems.length - 1} more issue${legality.problems.length > 2 ? "s" : ""})` : "";
+      setStatus(`Saved "${deck.name}" (${cardCount} cards) — not legal in ${window.Legality.formatLabel(format)}: ${first}${extra}`, true);
+    } else {
+      setStatus(`Saved personal deck "${deck.name}" (${cardCount} cards).`);
+    }
   }
 
   async function deleteDeck() {
@@ -481,7 +569,7 @@
       }
       if (typeFilter && primaryType(card) !== typeFilter) return false;
       if (rarityFilter && card.rarity !== rarityFilter) return false;
-      if (setFilter && card.set !== setFilter) return false;
+      if (setFilter && !cardSetCodes(card).includes(setFilter)) return false;
       if (cmcMin !== null && card.cmc < cmcMin) return false;
       if (cmcMax !== null && card.cmc > cmcMax) return false;
       if (colors.size > 0) {
@@ -525,12 +613,23 @@
       const tile = document.createElement("div");
       tile.className = "browser-card";
       if (!card.supported) tile.classList.add("card-unsupported");
+      // Format legality: flag cards banned or not legal in the chosen format.
+      const legalStatus =
+        window.Legality && window.Legality.isChecked(currentFormat())
+          ? window.Legality.cardStatus(card, currentFormat())
+          : "legal";
+      const isIllegal = legalStatus === "banned" || legalStatus === "not_legal";
+      if (isIllegal) {
+        tile.classList.add("card-illegal");
+        tile.title = window.Legality.cardProblem(card, currentFormat());
+      }
       if (state.selectedCardName === card.name) tile.classList.add("selected");
       tile.dataset.cardName = card.name;
 
-      if (card.image_uri) {
+      const printing = displayPrinting(card);
+      if (printing.image_uri) {
         const img = document.createElement("img");
-        img.src = card.image_uri;
+        img.src = printing.image_uri;
         img.alt = card.name;
         img.loading = "lazy";
         img.draggable = false;
@@ -542,11 +641,11 @@
         tile.appendChild(fallback);
       }
 
-      if (card.set) {
+      if (printing.code) {
         const setBadge = document.createElement("div");
         setBadge.className = "browser-card-set";
-        setBadge.textContent = card.set.toUpperCase();
-        setBadge.title = card.set_name || card.set;
+        setBadge.textContent = printing.code.toUpperCase();
+        setBadge.title = printing.name || printing.code;
         tile.appendChild(setBadge);
       }
 
@@ -561,6 +660,12 @@
         const flag = document.createElement("div");
         flag.className = "card-unsupported-flag";
         flag.textContent = "Unsupported";
+        tile.appendChild(flag);
+      }
+      if (isIllegal) {
+        const flag = document.createElement("div");
+        flag.className = "card-illegal-flag";
+        flag.textContent = legalStatus === "banned" ? "Banned" : "Not Legal";
         tile.appendChild(flag);
       }
 
@@ -618,9 +723,37 @@
     }
     stats.innerHTML = statsHtml;
 
+    renderLegalitySummary();
     renderCurve();
     renderDeckList();
     renderTopbar();
+  }
+
+  // Deck-level legality banner: OK badge when the deck is legal for its format,
+  // or a red list of the specific rule violations.
+  function renderLegalitySummary() {
+    const el = q("deckLegality");
+    if (!el) return;
+    const format = currentFormat();
+    if (!window.Legality || !window.Legality.isChecked(format)) {
+      el.className = "deck-legality";
+      el.innerHTML = "";
+      return;
+    }
+    const cards = state.current.entries.map((e) => ({ name: e.name, count: e.count }));
+    const legality = window.Legality.validateDeck(cards, format, (n) => lookupCard(n));
+    const label = window.Legality.formatLabel(format);
+    if (legality.legal) {
+      el.className = "deck-legality deck-legality-ok";
+      el.innerHTML = `<span class="deck-legality-icon">✓</span> Legal in ${escapeHtml(label)}`;
+      return;
+    }
+    el.className = "deck-legality deck-legality-bad";
+    const items = legality.problems.map((p) => `<li>${escapeHtml(p)}</li>`).join("");
+    el.innerHTML =
+      `<div class="deck-legality-head"><span class="deck-legality-icon">⚠</span> ` +
+      `${legality.problems.length} issue${legality.problems.length === 1 ? "" : "s"} for ${escapeHtml(label)}</div>` +
+      `<ul class="deck-legality-list">${items}</ul>`;
   }
 
   function renderCurve() {
@@ -685,9 +818,10 @@
         .sort((a, b) => a.name.localeCompare(b.name))
         .forEach((entry) => {
           const card = lookupCard(entry.name);
+          const legalProblem = cardLegalityProblem(entry.name, entry.count);
           const row = document.createElement("div");
           row.className = "deck-row";
-          if (entry.status !== "ok") row.classList.add("deck-row-problem");
+          if (entry.status !== "ok" || legalProblem) row.classList.add("deck-row-problem");
           if (state.selectedCardName === entry.name) row.classList.add("selected");
 
           const count = document.createElement("span");
@@ -697,11 +831,12 @@
           const name = document.createElement("span");
           name.className = "deck-row-name";
           name.textContent = entry.name;
-          name.title = entry.status === "unknown"
+          const engineTip = entry.status === "unknown"
             ? "This card is not in the supported catalog"
             : entry.status === "unsupported"
               ? "The game engine does not support this card yet"
               : "";
+          name.title = [engineTip, legalProblem].filter(Boolean).join("\n");
 
           const mana = document.createElement("span");
           mana.className = "deck-row-mana";
@@ -749,7 +884,7 @@
     if (state.current.entries.length === 0) {
       const empty = document.createElement("div");
       empty.className = "deck-list-empty";
-      empty.textContent = "Deck is empty. Click + on cards in the browser to add them.";
+      empty.textContent = "Deck is empty. Add new cards from the browser on the left.";
       listEl.appendChild(empty);
     }
   }
@@ -800,7 +935,8 @@
 
     const card = lookupCard(name);
     const entry = entryFor(name);
-    setEl.textContent = card && card.set_name ? card.set_name : "";
+    const printing = card ? displayPrinting(card) : null;
+    setEl.textContent = printing && printing.name ? printing.name : "";
 
     let nameHtml = escapeHtml(name);
     if (card && card.mana_cost) {
@@ -818,7 +954,7 @@
       q("editorPreviewText").textContent = "";
     }
 
-    const imageUri = card ? (card.large_image_uri || card.image_uri) : null;
+    const imageUri = printing ? (printing.large_image_uri || printing.image_uri) : null;
     if (imageUri) {
       image.src = imageUri;
       image.classList.remove("hidden");
@@ -832,11 +968,17 @@
       frame.classList.add("empty-preview");
     }
 
+    const legalProblem = card ? cardLegalityProblem(name, entry ? entry.count : 0) : "";
     if (!card) {
       warning.textContent = "⚠ This card is not in the supported catalog and cannot be played.";
       warning.classList.remove("hidden");
     } else if (!card.supported) {
-      warning.textContent = `⚠ Unsupported by the game engine${card.unsupported_reason ? `: ${card.unsupported_reason}` : "."}`;
+      let text = `⚠ Unsupported by the game engine${card.unsupported_reason ? `: ${card.unsupported_reason}` : "."}`;
+      if (legalProblem) text += `\n⚠ ${legalProblem}`;
+      warning.textContent = text;
+      warning.classList.remove("hidden");
+    } else if (legalProblem) {
+      warning.textContent = `⚠ ${legalProblem}`;
       warning.classList.remove("hidden");
     } else {
       warning.classList.add("hidden");
@@ -912,6 +1054,15 @@
       markDirty();
     });
 
+    q("deckFormatSelect")?.addEventListener("change", (event) => {
+      state.current.format = window.Legality
+        ? window.Legality.normalizeFormat(event.target.value)
+        : event.target.value;
+      markDirty();
+      // Legality flags are format-dependent, so re-render everything.
+      renderAll();
+    });
+
     q("deckImportBtn").addEventListener("click", openImportModal);
     q("importDeckCancelBtn").addEventListener("click", closeImportModal);
     q("importDeckConfirmBtn").addEventListener("click", confirmImport);
@@ -922,7 +1073,10 @@
     q("browserSearch").addEventListener("input", renderBrowser);
     q("browserTypeFilter").addEventListener("change", renderBrowser);
     q("browserRarityFilter").addEventListener("change", renderBrowser);
-    q("browserSetFilter").addEventListener("change", renderBrowser);
+    q("browserSetFilter").addEventListener("change", () => {
+      renderBrowser();
+      renderPreview(); // the preview's art/set follow the filtered printing
+    });
     q("browserCmcMin").addEventListener("input", renderBrowser);
     q("browserCmcMax").addEventListener("input", renderBrowser);
     q("browserSortSelect").addEventListener("change", renderBrowser);
@@ -953,6 +1107,7 @@
         btn.classList.remove("active");
       }
       renderBrowser();
+      renderPreview(); // clearing the set filter reverts the preview's printing
     });
 
     q("editorPreviewAddBtn").addEventListener("click", () => {

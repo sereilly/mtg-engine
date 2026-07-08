@@ -7,8 +7,8 @@ the guard test `tests/engine/test_parse_coverage.py` fails on new
 unclaimed text. Do not edit by hand.
 
 - Supported cards analyzed: **369**
-- Fully claimed: **362**
-- With acknowledged simplifications: **7**
+- Fully claimed: **367**
+- With acknowledged simplifications: **2**
 - With UNCLAIMED text (must fix or acknowledge): **0**
 - With deletion-probe findings (ignored words): **109**
 
@@ -16,13 +16,8 @@ unclaimed text. Do not edit by hand.
 
 | Card | Sentence | Why it is acceptable |
 | --- | --- | --- |
-| Black Ward | `this effect doesn't remove this aura` | inherently satisfied: protection never unattaches Auras in this engine, so the exception has nothing to override |
-| Blue Ward | `this effect doesn't remove this aura` | inherently satisfied: protection never unattaches Auras in this engine, so the exception has nothing to override |
-| Green Ward | `this effect doesn't remove this aura` | inherently satisfied: protection never unattaches Auras in this engine, so the exception has nothing to override |
-| Red Ward | `this effect doesn't remove this aura` | inherently satisfied: protection never unattaches Auras in this engine, so the exception has nothing to override |
 | Shahrazad | `players play a magic subgame, using their libraries as their decks` | subgames are far out of scope; the card resolves with the life-halving only |
 | Shahrazad | `each player who doesn't win the subgame loses half their life, rounded up` | applied directly to the non-caster instead of the subgame loser |
-| White Ward | `this effect doesn't remove this aura` | inherently satisfied: protection never unattaches Auras in this engine, so the exception has nothing to override |
 | Word of Command | `you control that player until word of command finishes resolving` | simplified: control-of-player is modeled as forcing the chosen card to be played (pending_word_of_command) |
 | Word of Command | `while doing so, the player can activate mana abilities only if they're from land` | simplified: the forced play is cast without the mana-ability micromanagement |
 | Word of Command | `if the chosen card is cast as a spell, you control the player while that spell i` | simplified: the forced spell resolves under its own controller |
@@ -161,7 +156,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | aura enchant noun (oracle_instructions attach) | 44 |
 | static-line table | 38 |
 | aura static (oracle_instructions/permanent_state) | 31 |
-| mixin text scan | 25 |
+| mixin text scan | 30 |
 | card_hooks bespoke (name-keyed) | 19 |
 | activation gate (stack_casting) | 13 |
 | cast_restrictions.py | 5 |

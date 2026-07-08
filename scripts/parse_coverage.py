@@ -128,6 +128,7 @@ _MIXIN_TEXT_SCANS = (
     "spend this mana only to cast creature spells",                      # handlers/mana.py + _pay_mana_cost creature_only_mana bucket (Metamorphosis)
     "as this artifact enters, choose an opponent",                       # permanent_state.py enter choice + pending_enter_choice prompt (Black Vise)
     "as this enchantment enters, choose a color and an opponent",        # permanent_state.py enter choice + pending_enter_choice prompt (Jihad)
+    "this effect doesn't remove this aura",                              # game_ending.py 702.16c exempt branch (the Wards survive their own protection grant)
 )
 
 _ACTIVATION_GATES = (
@@ -262,11 +263,6 @@ HANDLER_CLAIMS: dict[str, tuple[str, ...]] = {
 }
 
 
-_WARD_REASON = (
-    "inherently satisfied: protection never unattaches Auras in this engine, "
-    "so the exception has nothing to override"
-)
-
 ACKNOWLEDGED: dict[str, dict[str, str]] = {
     "Shahrazad": {
         "players play a magic subgame, using their libraries as their decks": (
@@ -276,11 +272,6 @@ ACKNOWLEDGED: dict[str, dict[str, str]] = {
             "applied directly to the non-caster instead of the subgame loser"
         ),
     },
-    "Black Ward": {"this effect doesn't remove this aura": _WARD_REASON},
-    "Blue Ward": {"this effect doesn't remove this aura": _WARD_REASON},
-    "Green Ward": {"this effect doesn't remove this aura": _WARD_REASON},
-    "Red Ward": {"this effect doesn't remove this aura": _WARD_REASON},
-    "White Ward": {"this effect doesn't remove this aura": _WARD_REASON},
     "Word of Command": {
         "you control that player until word of command finishes resolving": (
             "simplified: control-of-player is modeled as forcing the chosen card "

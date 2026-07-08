@@ -1958,6 +1958,12 @@ h2.targeting-valid {
   cursor: not-allowed;
 }
 
+/* Jihad's enter-choice color picker: the currently selected color. */
+.prompt-choice-btn.selected {
+  outline: 2px solid #e8c15a;
+  outline-offset: -2px;
+}
+
 .prompt-custom-row {
   margin-top: 10px;
   padding-top: 10px;
@@ -2885,6 +2891,17 @@ pre {
   justify-content: center;
 }
 
+/* Both lobby buttons share one size, overriding the base button padding on
+   .secondary-btn and the full-width block layout of .menu-primary-btn. */
+.lobby-actions button {
+  flex: 1 1 0;
+  width: auto;
+  margin: 0;
+  padding: 13px 16px;
+  font-size: 1.08rem;
+  white-space: nowrap;
+}
+
 /* ── Main menu ───────────────────────────────────────────────────────────── */
 
 .menu-shell {
@@ -3553,6 +3570,28 @@ pre {
   pointer-events: none;
 }
 
+/* Format-illegal (banned / not legal) card in the browser */
+
+.card-illegal {
+  border-color: var(--danger);
+}
+
+.card-illegal-flag {
+  position: absolute;
+  bottom: 40%;
+  left: 0;
+  right: 0;
+  text-align: center;
+  background: rgba(146, 64, 14, 0.9);
+  color: #ffe9c7;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 3px 0;
+  pointer-events: none;
+}
+
 /* Deck pane */
 
 .deck-pane {
@@ -3597,10 +3636,71 @@ pre {
   font: inherit;
 }
 
+.deck-format-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.deck-format-label select {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+}
+
 .deck-stats {
   font-size: 0.9rem;
   color: var(--ink-soft);
   margin-bottom: 8px;
+}
+
+/* Format-legality banner in the deck pane */
+
+.deck-legality {
+  font-size: 0.85rem;
+  margin-bottom: 8px;
+}
+
+.deck-legality:empty {
+  display: none;
+}
+
+.deck-legality-ok {
+  color: var(--ok);
+  font-weight: 700;
+}
+
+.deck-legality-bad {
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  border-radius: 6px;
+  padding: 6px 8px;
+  background: rgba(120, 20, 24, 0.12);
+}
+
+.deck-legality-head {
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.deck-legality-icon {
+  font-weight: 700;
+}
+
+.deck-legality-list {
+  margin: 0;
+  padding-left: 18px;
+  max-height: 96px;
+  overflow-y: auto;
+  font-weight: 400;
+}
+
+.deck-legality-list li {
+  margin: 1px 0;
 }
 
 .deck-stat-total {
@@ -3804,6 +3904,7 @@ pre {
   font-size: 0.85rem;
   font-weight: 700;
   line-height: 1.4;
+  white-space: pre-line;
 }
 
 .editor-preview-actions {

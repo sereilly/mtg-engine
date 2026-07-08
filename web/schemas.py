@@ -272,6 +272,7 @@ class RandomDeckRequest(BaseModel):
 class DeckSaveRequest(BaseModel):
     name: str = Field(default="Untitled Deck", max_length=100)
     description: str = Field(default="", max_length=2000)
+    format: str = Field(default="casual", max_length=40)
     cards: list[DeckCardEntry] = Field(default_factory=list)
 
 

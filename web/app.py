@@ -33,6 +33,7 @@ from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle
 
 from .deck_builder import build_random_deck
+from .deck_legality import FORMATS, normalize_format, validate_deck
 from .deck_store import (
     DeckImportError,
     DeckNotFoundError,
@@ -555,6 +556,7 @@ def _build_catalog_payload() -> list[dict]:
                 "power": raw.get("power"),
                 "toughness": raw.get("toughness"),
                 "rarity": raw.get("rarity"),
+                "legalities": raw.get("legalities") or {},
                 "image_uri": image_uris.get("normal"),
                 "large_image_uri": image_uris.get("large"),
                 "supported": classification.supported,
@@ -592,10 +594,14 @@ def _deck_summary(deck: dict) -> dict:
         match = CATALOG_BY_NAME.get(entry["name"].casefold())
         if match:
             colors.update(match["color_identity"])
+    fmt = normalize_format(deck.get("format"))
+    legality = validate_deck(deck.get("cards", []), fmt, CATALOG_BY_NAME)
     return {
         "id": deck["id"],
         "name": deck["name"],
         "description": deck.get("description", ""),
+        "format": fmt,
+        "legality": legality,
         "card_count": sum(e["count"] for e in entries),
         "colors": [c for c in ("W", "U", "B", "R", "G") if c in colors],
         "unsupported_count": sum(e["count"] for e in entries if e["status"] == "unsupported"),
@@ -3217,7 +3223,7 @@ def random_deck(req: RandomDeckRequest):
 
 @app.get("/api/cards/catalog")
 def get_card_catalog():
-    return {"cards": CATALOG_PAYLOAD}
+    return {"cards": CATALOG_PAYLOAD, "formats": FORMATS}
 
 
 def _verification_listing() -> tuple[list[dict], dict[str, int]]:
@@ -3301,6 +3307,7 @@ def create_deck(req: DeckSaveRequest):
         req.name.strip() or "Untitled Deck",
         [c.model_dump() for c in req.cards],
         req.description.strip(),
+        normalize_format(req.format),
     )
     return _deck_detail(deck)
 
@@ -3323,6 +3330,7 @@ def update_deck(deck_id: str, req: DeckSaveRequest):
             req.name.strip() or "Untitled Deck",
             [c.model_dump() for c in req.cards],
             req.description.strip(),
+            normalize_format(req.format),
         )
     except DeckNotFoundError as exc:
         raise HTTPException(status_code=404, detail="deck not found") from exc
