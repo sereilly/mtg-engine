@@ -12,7 +12,8 @@ from pathlib import Path
 _DECKLIST_LINE = re.compile(r"^(?:(\d+)\s*[xX]?\s+)?(.+?)$")
 _SET_SUFFIX = re.compile(r"\s+\((?:[A-Za-z0-9]{2,6})\)(?:\s+[\w\-★]+)?\s*$")
 _SECTION_HEADERS = {"deck", "mainboard", "main", "commander", "companion"}
-_STOP_HEADERS = {"sideboard", "maybeboard", "considering", "tokens"}
+_SIDEBOARD_HEADERS = {"sideboard", "side"}
+_STOP_HEADERS = {"maybeboard", "considering", "tokens"}
 
 _MOXFIELD_URL = re.compile(r"moxfield\.com/decks/([A-Za-z0-9_-]+)")
 _MOXFIELD_API = "https://api2.moxfield.com/v3/decks/all/{deck_id}"
@@ -31,7 +32,13 @@ class DeckStore:
 
     Deck shape: {"id": str, "name": str, "description": str, "format": str,
                  "cards": [{"name": str, "count": int}],
+                 "sideboard": [{"name": str, "count": int}],
                  "created_at": float, "updated_at": float}
+
+    ``sideboard`` is the "outside the game" pool (CR 100.4) that cards such as
+    Ring of Ma'rûf draw from. Decks saved before it existed simply have no
+    ``sideboard`` key; read it through ``deck_sideboard`` so they behave as
+    empty rather than raising.
     """
 
     def __init__(self, decks_dir: Path):
@@ -62,25 +69,42 @@ class DeckStore:
             raise DeckNotFoundError(deck_id)
         return json.loads(path.read_text(encoding="utf-8"))
 
-    def create(self, name: str, cards: list[dict], description: str = "", format: str = "casual") -> dict:
+    def create(
+        self,
+        name: str,
+        cards: list[dict],
+        description: str = "",
+        format: str = "casual",
+        sideboard: list[dict] | None = None,
+    ) -> dict:
         deck = {
             "id": secrets.token_urlsafe(8).replace("-", "a").replace("_", "b"),
             "name": name,
             "description": description,
             "format": format,
             "cards": _normalize_cards(cards),
+            "sideboard": _normalize_cards(sideboard or []),
             "created_at": time.time(),
             "updated_at": time.time(),
         }
         self._path(deck["id"]).write_text(json.dumps(deck, indent=2), encoding="utf-8")
         return deck
 
-    def update(self, deck_id: str, name: str, cards: list[dict], description: str = "", format: str = "casual") -> dict:
+    def update(
+        self,
+        deck_id: str,
+        name: str,
+        cards: list[dict],
+        description: str = "",
+        format: str = "casual",
+        sideboard: list[dict] | None = None,
+    ) -> dict:
         deck = self.get(deck_id)
         deck["name"] = name
         deck["description"] = description
         deck["format"] = format
         deck["cards"] = _normalize_cards(cards)
+        deck["sideboard"] = _normalize_cards(sideboard or [])
         deck["updated_at"] = time.time()
         self._path(deck_id).write_text(json.dumps(deck, indent=2), encoding="utf-8")
         return deck
@@ -107,24 +131,36 @@ def _normalize_cards(cards: list[dict]) -> list[dict]:
     return [{"name": name, "count": merged[name]} for name in order]
 
 
-def parse_decklist_text(text: str) -> tuple[list[dict], list[str]]:
-    """Parse a pasted decklist into [(name, count)] entries.
+def deck_sideboard(deck: dict) -> list[dict]:
+    """A deck's sideboard entries. Decks saved before sideboards existed have no
+    ``sideboard`` key, so read every deck through here rather than indexing."""
+    return _normalize_cards(deck.get("sideboard") or [])
+
+
+def parse_decklist_text(text: str) -> tuple[list[dict], list[str], list[dict]]:
+    """Parse a pasted decklist into (mainboard, warnings, sideboard) entries.
 
     Accepts common formats: "4 Lightning Bolt", "4x Lightning Bolt",
     "Lightning Bolt", MTGA/Moxfield exports with set codes ("4 Bolt (LEA) 123").
-    Lines after a Sideboard/Maybeboard header are ignored.
-    Returns (entries, warnings).
+    Lines after a Sideboard header go to the sideboard; Maybeboard/Considering/
+    Tokens sections are still ignored entirely — they aren't part of the deck.
     """
     entries: list[dict] = []
+    sideboard: list[dict] = []
     warnings: list[str] = []
+    target = entries
     for raw_line in text.splitlines():
         line = raw_line.strip()
         if not line or line.startswith(("//", "#")):
             continue
         header = line.rstrip(":").casefold()
+        if header in _SIDEBOARD_HEADERS:
+            target = sideboard
+            continue
         if header in _STOP_HEADERS:
             break
         if header in _SECTION_HEADERS:
+            target = entries
             continue
         match = _DECKLIST_LINE.match(line)
         if not match:
@@ -135,12 +171,33 @@ def parse_decklist_text(text: str) -> tuple[list[dict], list[str]]:
         if not name:
             warnings.append(f"Could not parse line: {raw_line}")
             continue
-        entries.append({"name": name, "count": count})
-    return _normalize_cards(entries), warnings
+        target.append({"name": name, "count": count})
+    return _normalize_cards(entries), warnings, _normalize_cards(sideboard)
 
 
-def fetch_moxfield_deck(url: str) -> tuple[str, list[dict]]:
-    """Fetch a public Moxfield deck. Returns (deck_name, entries)."""
+def _moxfield_board_entries(boards: object, board_name: str) -> list[dict]:
+    """Entries from one Moxfield v3 ``boards`` section ("mainboard", "sideboard").
+    Returns [] for a missing or malformed section."""
+    if not isinstance(boards, dict):
+        return []
+    board = boards.get(board_name)
+    cards = board.get("cards") if isinstance(board, dict) else None
+    if not isinstance(cards, dict):
+        return []
+    entries: list[dict] = []
+    for item in cards.values():
+        if not isinstance(item, dict):
+            continue
+        card = item.get("card")
+        card_name = card.get("name") if isinstance(card, dict) else None
+        quantity = item.get("quantity", 0)
+        if card_name and isinstance(quantity, int) and quantity > 0:
+            entries.append({"name": str(card_name), "count": quantity})
+    return entries
+
+
+def fetch_moxfield_deck(url: str) -> tuple[str, list[dict], list[dict]]:
+    """Fetch a public Moxfield deck. Returns (deck_name, entries, sideboard)."""
     match = _MOXFIELD_URL.search(url)
     if not match:
         raise DeckImportError("Not a valid Moxfield deck URL (expected moxfield.com/decks/...)")
@@ -166,30 +223,24 @@ def fetch_moxfield_deck(url: str) -> tuple[str, list[dict]]:
         raise DeckImportError("Moxfield returned an unexpected response") from exc
 
     name = str(payload.get("name") or "Imported Deck")
-    entries: list[dict] = []
 
     boards = payload.get("boards")
-    if isinstance(boards, dict):
-        mainboard = boards.get("mainboard")
-        cards = mainboard.get("cards") if isinstance(mainboard, dict) else None
-        if isinstance(cards, dict):
-            for item in cards.values():
-                if not isinstance(item, dict):
-                    continue
-                card = item.get("card")
-                card_name = card.get("name") if isinstance(card, dict) else None
-                quantity = item.get("quantity", 0)
-                if card_name and isinstance(quantity, int) and quantity > 0:
-                    entries.append({"name": str(card_name), "count": quantity})
+    entries = _moxfield_board_entries(boards, "mainboard")
+    sideboard = _moxfield_board_entries(boards, "sideboard")
 
     if not entries and isinstance(payload.get("mainboard"), dict):
-        # Older API shape: top-level mainboard dict keyed by card name.
+        # Older API shape: top-level mainboard/sideboard dicts keyed by card name.
         for card_name, item in payload["mainboard"].items():
             quantity = item.get("quantity", 0) if isinstance(item, dict) else 0
             if isinstance(quantity, int) and quantity > 0:
                 entries.append({"name": str(card_name), "count": quantity})
+        if isinstance(payload.get("sideboard"), dict):
+            for card_name, item in payload["sideboard"].items():
+                quantity = item.get("quantity", 0) if isinstance(item, dict) else 0
+                if isinstance(quantity, int) and quantity > 0:
+                    sideboard.append({"name": str(card_name), "count": quantity})
 
     if not entries:
         raise DeckImportError("No mainboard cards found in the Moxfield deck")
 
-    return name, _normalize_cards(entries)
+    return name, _normalize_cards(entries), _normalize_cards(sideboard)

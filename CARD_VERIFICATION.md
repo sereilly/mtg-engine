@@ -4,15 +4,15 @@ Master record of which cards have been manually validated in-game. Generated aut
 
 - Total cards: **369**
 - Passed: **317**
-- Failed: **7**
-- Untested: **45**
+- Failed: **0**
+- Untested: **52**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
 | Abu Ja'far | ⬜ untested |  |
 | Air Elemental | ✅ pass |  |
 | Aladdin | ⬜ untested |  |
-| Aladdin's Lamp | ❌ fail | The look at top card(s) of library effect should open a window that shows the cards visually and allows you to hover over cards to see them. Reuse the Ui that's used for reordering cards on top of the library. |
+| Aladdin's Lamp | ⬜ untested |  |
 | Aladdin's Ring | ✅ pass |  |
 | Ali Baba | ⬜ untested |  |
 | Ali from Cairo | ⬜ untested |  |
@@ -113,9 +113,9 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Elephant Graveyard | ⬜ untested |  |
 | Elvish Archers | ✅ pass |  |
 | Erg Raiders | ⬜ untested |  |
-| Erhnam Djinn | ❌ fail | I didn't get to choose a target |
+| Erhnam Djinn | ⬜ untested |  |
 | Evil Presence | ✅ pass |  |
-| Eye for an Eye | ❌ fail | I didn't get to choose a source |
+| Eye for an Eye | ⬜ untested |  |
 | False Orders | ✅ pass |  |
 | Farmstead | ✅ pass |  |
 | Fastbond | ✅ pass |  |
@@ -151,7 +151,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Green Ward | ✅ pass |  |
 | Grizzly Bears | ✅ pass |  |
 | Guardian Angel | ✅ pass |  |
-| Guardian Beast | ❌ fail | When a card becomes indestructible, it should be shown visually on the affected cards with added keyword text and a shiny animated card gleam effect |
+| Guardian Beast | ⬜ untested |  |
 | Hasran Ogress | ✅ pass |  |
 | Healing Salve | ✅ pass |  |
 | Helm of Chatzuk | ✅ pass |  |
@@ -180,7 +180,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Ivory Cup | ✅ pass |  |
 | Jade Monolith | ✅ pass |  |
 | Jade Statue | ✅ pass |  |
-| Jandor's Ring | ❌ fail | It didn't discard the last card I drew this turn |
+| Jandor's Ring | ⬜ untested |  |
 | Jandor's Saddlebags | ✅ pass |  |
 | Jayemdae Tome | ✅ pass |  |
 | Jeweled Bird | ⬜ untested |  |
@@ -192,7 +192,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Karma | ✅ pass |  |
 | Keldon Warlord | ✅ pass |  |
 | Khabál Ghoul | ⬜ untested |  |
-| King Suleiman | ❌ fail | Ability didn't let me choose a target |
+| King Suleiman | ⬜ untested |  |
 | Kird Ape | ⬜ untested |  |
 | Kormus Bell | ✅ pass |  |
 | Kudzu | ✅ pass |  |
@@ -277,7 +277,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Resurrection | ✅ pass |  |
 | Reverse Damage | ✅ pass |  |
 | Righteousness | ✅ pass |  |
-| Ring of Ma'rûf | ❌ fail | First we need to implement the sideboard and allow the deck editor to add sideboard cards to a deck. WHen this card's ability triggers it should open a window that shows your sideboard and allows you to pick a card. |
+| Ring of Ma'rûf | ⬜ untested |  |
 | Roc of Kher Ridges | ✅ pass |  |
 | Rock Hydra | ✅ pass |  |
 | Rod of Ruin | ✅ pass |  |

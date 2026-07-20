@@ -10,7 +10,7 @@ unclaimed text. Do not edit by hand.
 - Fully claimed: **367**
 - With acknowledged simplifications: **2**
 - With UNCLAIMED text (must fix or acknowledge): **0**
-- With deletion-probe findings (ignored words): **109**
+- With deletion-probe findings (ignored words): **108**
 
 ## Acknowledged simplifications
 
@@ -128,7 +128,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Regrowth | `return target card from your graveyard to your hand` | return target card |
 | Resurrection | `return target creature card from your graveyard to the battlefield` | return target creature card |
 | Reverse Damage | `the next time a source of your choice would deal damage to you this tu` | next time source choice way |
-| Ring of Ma'rûf | `the next time you would draw a card this turn, instead put a card you ` | next time would instead put card own from outside game into hand |
 | Rod of Ruin | `this artifact deals 1 damage to any target` | artifact any target |
 | Samite Healer | `prevent the next 1 damage that would be dealt to any target this turn` | would be dealt any target |
 | Sandals of Abdallah | `target creature gains islandwalk until end of turn. when that creature` | when creature dies |

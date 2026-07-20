@@ -283,6 +283,75 @@ class UpkeepStepMixin:
             })
         return triggers
 
+    def _forestwalk_grant_candidates(self, controller) -> list[Permanent]:
+        """Legal targets for Erhnam Djinn's upkeep grant: "target non-Wall
+        creature an opponent controls"."""
+        return [
+            perm
+            for opponent in self.players
+            if opponent is not controller
+            for perm in opponent.battlefield
+            if perm.is_creature and "wall" not in perm.effective_card.type_line.lower()
+        ]
+
+    def _resolve_upkeep_trigger_target(
+        self, card_name: str, trigger_targets: dict | None, candidates: list[Permanent]
+    ) -> Permanent | None:
+        """The target a human picked for a mandatory targeted upkeep trigger, or —
+        for AI/headless play, or a stale pick whose permanent has since left the
+        battlefield — the first legal candidate. Returns None with no candidates
+        (CR 603.3d: a trigger with no legal target is removed from the stack)."""
+        chosen = (trigger_targets or {}).get(card_name)
+        if chosen is not None:
+            seat, index = chosen
+            if 0 <= seat < len(self.players) and 0 <= index < len(self.players[seat].battlefield):
+                candidate = self.players[seat].battlefield[index]
+                if any(candidate is perm for perm in candidates):
+                    return candidate
+        return candidates[0] if candidates else None
+
+    def get_upkeep_target_triggers(self, player_index: int) -> list[dict]:
+        """Mandatory upkeep triggers that need the controller to choose a target.
+
+        Same payload shape as ``get_optional_upkeep_triggers`` (``card_name``,
+        ``prompt``, ``valid_targets``) plus ``mandatory: True``, so the web layer
+        and UI reuse one channel — the difference is only that the player picks a
+        target rather than answering yes/no, and can't decline.
+        """
+        triggers: list[dict] = []
+        seen: set[str] = set()
+        controller = self.players[player_index]
+        for perm in controller.battlefield:
+            program = compile_card_oracle(perm.effective_card)
+            for trig in program.triggered_abilities:
+                if trig.instruction is None or trig.condition.kind != "upkeep_self":
+                    continue
+                if trig.instruction.kind != "grant_forestwalk_until_next_upkeep":
+                    continue
+                if perm.card.name in seen:
+                    continue
+                candidates = self._forestwalk_grant_candidates(controller)
+                if not candidates:
+                    continue
+                seen.add(perm.card.name)
+                triggers.append({
+                    "card_name": perm.card.name,
+                    "kind": "upkeep_grant_forestwalk",
+                    "mandatory": True,
+                    "prompt": (
+                        f"{perm.card.name}: choose a non-Wall creature an opponent "
+                        "controls to gain forestwalk until your next upkeep."
+                    ),
+                    "needs_target": "creature",
+                    "valid_targets": [
+                        {"kind": "permanent", "seat": s, "index": i, "name": p.card.name}
+                        for s, player in enumerate(self.players)
+                        for i, p in enumerate(player.battlefield)
+                        if any(p is c for c in candidates)
+                    ],
+                })
+        return triggers
+
     def _force_sacrifice_first_land(self, controller, source) -> Permanent | None:
         """Sacrifice the first land on *controller*'s battlefield to *source*'s
         upkeep effect, logging it. Returns the sacrificed land so callers can
@@ -336,7 +405,7 @@ class UpkeepStepMixin:
         self.check_state_based_actions()
         return True
 
-    def resolve_upkeep(self, player_index: int, human_choices: dict[str, bool] | None = None, optional_choices: dict[str, bool] | None = None, defer_priority: bool = False, mana_prevention: dict[str, int] | None = None, sacrifice_choices: dict[str, int] | None = None, recopy_targets: dict[str, tuple[int, int]] | None = None) -> None:
+    def resolve_upkeep(self, player_index: int, human_choices: dict[str, bool] | None = None, optional_choices: dict[str, bool] | None = None, defer_priority: bool = False, mana_prevention: dict[str, int] | None = None, sacrifice_choices: dict[str, int] | None = None, trigger_targets: dict[str, tuple[int, int]] | None = None) -> None:
         phase = "beginning"
         step = "upkeep"
         self._set_phase_and_step(phase, step)
@@ -658,20 +727,15 @@ class UpkeepStepMixin:
                         break
 
                     if cond == "upkeep_self" and kind == "grant_forestwalk_until_next_upkeep":
-                        # Erhnam Djinn: no interactive target-choice channel
-                        # exists for upkeep triggers yet, so the first legal
-                        # non-Wall creature an opponent controls is chosen
-                        # (matching the deterministic-fallback precedent used
-                        # throughout this engine for untargeted resolution).
-                        target_perm = next(
-                            (
-                                perm
-                                for opponent in self.players
-                                if opponent is not controller
-                                for perm in opponent.battlefield
-                                if perm.is_creature and "wall" not in perm.effective_card.type_line.lower()
-                            ),
-                            None,
+                        # Erhnam Djinn: "target non-Wall creature an opponent
+                        # controls". A human controller picks the target through
+                        # the upkeep trigger-target channel (trigger_targets,
+                        # gathered by get_upkeep_target_triggers); AI/headless
+                        # play falls back to the first legal creature.
+                        target_perm = self._resolve_upkeep_trigger_target(
+                            permanent.card.name,
+                            trigger_targets,
+                            self._forestwalk_grant_candidates(controller),
                         )
                         if target_perm is not None:
                             target_perm.metadata["has_forestwalk"] = True
@@ -958,7 +1022,7 @@ class UpkeepStepMixin:
                 continue
             if optional_choices is None or not optional_choices.get(perm.card.name, False):
                 continue
-            chosen = (recopy_targets or {}).get(perm.card.name)
+            chosen = (trigger_targets or {}).get(perm.card.name)
             source = None
             if chosen is not None:
                 seat, index = chosen

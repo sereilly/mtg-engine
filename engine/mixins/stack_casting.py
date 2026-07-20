@@ -1128,6 +1128,20 @@ class StackCastingMixin:
                 self.log.append(details)
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
 
+        # Jandor's Ring: "Discard the last card you drew this turn" is an
+        # additional cost — unpayable (so the ability can't be activated) if no
+        # card drawn this turn is still in hand. Checked before any cost is paid;
+        # the discard itself happens below, once every cost has been cleared.
+        discard_cost_card = None
+        if ability.cost.discard_last_drawn:
+            discard_cost_card = controller.last_card_drawn_this_turn()
+            if discard_cost_card is None:
+                details = (
+                    f"{permanent.card.name}: no card drawn this turn remains in hand to discard"
+                )
+                self.log.append(details)
+                return SimulationResult(permanent.card.name, False, "unsupported", details)
+
         required_cost = dict(ability.cost.mana)
         requires_tap = ability.cost.requires_tap
         # Abilities with an "{X}" in their cost (e.g. Clockwork Beast's
@@ -1162,6 +1176,28 @@ class StackCastingMixin:
         # All guards/costs passed — mark a "once each turn" ability as used.
         if once_each_turn:
             permanent.metadata["ability_used_turn"] = self.turn
+
+        # Pay the discard additional cost. Costs are paid on activation, before
+        # the ability goes on the stack, so the discarded card is the one drawn
+        # before this activation rather than the card it draws.
+        if discard_cost_card is not None:
+            controller.hand = [c for c in controller.hand if c is not discard_cost_card]
+            self._discard_card(controller, discard_cost_card)
+            self.log.append(
+                f"{controller.name} discarded {discard_cost_card.name} "
+                f"(the last card they drew this turn) to activate {permanent.card.name}"
+            )
+
+        # Ring of Ma'rûf: "Exile this artifact" is part of the cost, so the
+        # permanent leaves before the ability goes on the stack — and the ability
+        # still resolves from exile (CR 603.6 / 608.2: the source leaving doesn't
+        # counter it). The stack item keeps its source_permanent reference.
+        if ability.cost.exile_self:
+            controller.battlefield = [p for p in controller.battlefield if p is not permanent]
+            controller.exile.append(permanent.card)
+            self.log.append(
+                f"{controller.name} exiled {permanent.card.name} to activate its ability"
+            )
 
         instruction = ability.instruction
         if (

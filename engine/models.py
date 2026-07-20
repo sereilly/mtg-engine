@@ -174,6 +174,10 @@ class PlayerState:
     battlefield: list[Permanent] = field(default_factory=list)
     graveyard: list[CardDefinition] = field(default_factory=list)
     exile: list[CardDefinition] = field(default_factory=list)
+    # Cards owned from outside the game (CR 100.4 / 400.11): the player's
+    # sideboard. Not a game zone — nothing moves here during play; effects such
+    # as Ring of Ma'rûf move a card *from* here into hand.
+    sideboard: list[CardDefinition] = field(default_factory=list)
     mana_pool: dict[str, int] = field(
         default_factory=lambda: {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0}
     )
@@ -207,8 +211,15 @@ class PlayerState:
     reverse_damage_charges: int = 0
     # Eye for an Eye: one-shot "the next damage dealt to you this turn is also
     # dealt to its source's controller" charges. Consumed in
-    # _deal_damage_to_player; expire at cleanup.
+    # _deal_damage_to_player; expire at cleanup. This is the generic fallback
+    # used when no specific source was chosen (AI / headless casts); a human pick
+    # is recorded in mirror_damage_sources instead.
     mirror_damage_charges: int = 0
+    # Eye for an Eye with a chosen "source of your choice": the specific Permanent
+    # or spell (a CardDefinition) the caster picked. Only damage from a matching
+    # source is mirrored back to that source's controller, then the entry is
+    # consumed. Cleared at cleanup.
+    mirror_damage_sources: list = field(default_factory=list)
     # Reverse Damage with a chosen "source of your choice": the specific Permanent
     # or spell (a CardDefinition) the caster picked. Only damage from a matching
     # source is prevented and converted to life, then the entry is consumed.
@@ -229,6 +240,11 @@ class PlayerState:
     mulligans_taken: int = 0
     poison_counters: int = 0
     damage_taken_this_turn: int = 0
+    # Cards drawn this turn, in draw order — the last entry is "the last card you
+    # drew this turn" (Jandor's Ring's discard cost). Every path that draws must
+    # record here, so effects that replace a draw but still put a card in hand
+    # (Aladdin's Lamp) append too. Cleared in begin_turn_bookkeeping.
+    cards_drawn_this_turn: list = field(default_factory=list)
 
     def draw(self, count: int = 1) -> int:
         actual = 0
@@ -238,6 +254,18 @@ class PlayerState:
                 if count > actual:
                     self.drew_from_empty = True
                 break
-            self.hand.append(self.library.pop(0))
+            card = self.library.pop(0)
+            self.hand.append(card)
+            self.cards_drawn_this_turn.append(card)
             actual += 1
         return actual
+
+    def last_card_drawn_this_turn(self):
+        """The most recently drawn card that is still in hand, or None. A card
+        drawn and then played/discarded is no longer available to pay a "discard
+        the last card you drew this turn" cost (CR 118.3: you can only pay a cost
+        you're able to pay)."""
+        for card in reversed(self.cards_drawn_this_turn):
+            if any(c is card for c in self.hand):
+                return card
+        return None

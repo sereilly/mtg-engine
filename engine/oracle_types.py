@@ -39,6 +39,13 @@ class OracleToken:
 class ActivatedAbilityCost:
     mana: dict[str, int]
     requires_tap: bool = False
+    # Jandor's Ring: "{2}, {T}, Discard the last card you drew this turn: Draw a
+    # card." A non-mana additional cost — the ability can't be activated unless
+    # that card is still in hand, and activating discards it.
+    discard_last_drawn: bool = False
+    # Ring of Ma'rûf: "{5}, {T}, Exile this artifact: ..." — activating exiles
+    # the source permanent as part of the cost.
+    exile_self: bool = False
 
 
 @dataclass(frozen=True)

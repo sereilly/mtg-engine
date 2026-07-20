@@ -5,7 +5,11 @@
     catalog: [],
     catalogByName: new Map(),
     decks: [],
-    current: { id: null, name: "Untitled Deck", entries: [], format: "casual" }, // entries: [{name, count, status}]
+    current: { id: null, name: "Untitled Deck", entries: [], sideboard: [], format: "casual" }, // entries/sideboard: [{name, count, status}]
+    // Which list the browser's +/- buttons and the deck pane act on. The
+    // sideboard is the deck's "outside the game" pool (CR 100.4) — the cards
+    // Ring of Ma'rûf can fetch.
+    editingSideboard: false,
     dirty: false,
     selectedCardName: null,
     colorFilters: new Set(),
@@ -54,8 +58,21 @@
     return state.current.entries.reduce((sum, e) => sum + e.count, 0);
   }
 
-  function entryFor(name) {
-    return state.current.entries.find((e) => e.name.toLowerCase() === String(name).toLowerCase()) || null;
+  function sideboardTotal() {
+    return activeEntries("sideboard").reduce((sum, e) => sum + e.count, 0);
+  }
+
+  // The list currently being edited (mainboard unless the Sideboard tab is on),
+  // or a named one. state.current.sideboard is absent on decks saved before
+  // sideboards existed, so it is created on demand.
+  function activeEntries(which = null) {
+    const key = which || (state.editingSideboard ? "sideboard" : "entries");
+    if (!Array.isArray(state.current[key])) state.current[key] = [];
+    return state.current[key];
+  }
+
+  function entryFor(name, which = null) {
+    return activeEntries(which).find((e) => e.name.toLowerCase() === String(name).toLowerCase()) || null;
   }
 
   function setStatus(message, isError = false) {
@@ -184,9 +201,11 @@
       colors: ["W", "U", "B", "R", "G"].filter((c) => colors.has(c)),
       unsupported_count: unsupported,
       unknown_count: unknown,
+      sideboard_count: (deck.sideboard || []).reduce((s, c) => s + c.count, 0),
       updated_at: deck.updated_at,
       scope: "personal",
       cards,
+      sideboard: (deck.sideboard || []).map((c) => ({ name: c.name, count: c.count })),
     };
   }
 
@@ -339,15 +358,16 @@
   // ── Deck mutations ────────────────────────────────────────────────────────
 
   function changeCount(name, delta) {
+    const key = state.editingSideboard ? "sideboard" : "entries";
     const existing = entryFor(name);
     if (existing) {
       existing.count = Math.max(0, Math.min(99, existing.count + delta));
       if (existing.count === 0) {
-        state.current.entries = state.current.entries.filter((e) => e !== existing);
+        state.current[key] = activeEntries().filter((e) => e !== existing);
       }
     } else if (delta > 0) {
       const card = lookupCard(name);
-      state.current.entries.push({
+      activeEntries().push({
         name: card ? card.name : name,
         count: Math.min(99, delta),
         status: cardStatus(name),
@@ -382,9 +402,10 @@
     if (minus) minus.disabled = !entry;
   }
 
-  function resetDeck(name = "Untitled Deck", entries = [], id = null, scope = "personal", description = "", format = "casual") {
+  function resetDeck(name = "Untitled Deck", entries = [], id = null, scope = "personal", description = "", format = "casual", sideboard = []) {
     const fmt = window.Legality ? window.Legality.normalizeFormat(format) : format || "casual";
-    state.current = { id, name, description, entries, scope, format: fmt };
+    state.current = { id, name, description, entries, sideboard, scope, format: fmt };
+    state.editingSideboard = false;
     state.dirty = false;
     state.selectedCardName = null;
     q("deckNameInput").value = name;
@@ -399,14 +420,20 @@
     if (window.PersonalDecks?.isPersonalId(deckId)) {
       const deck = window.PersonalDecks.get(deckId);
       if (!deck) throw new Error("could not load deck");
-      resetDeck(deck.name, (deck.cards || []).map((c) => ({ ...c })), deck.id, "personal", deck.description || "", deck.format);
+      resetDeck(
+        deck.name, (deck.cards || []).map((c) => ({ ...c })), deck.id, "personal",
+        deck.description || "", deck.format, (deck.sideboard || []).map((c) => ({ ...c })),
+      );
       setStatus(`Loaded "${deck.name}".`);
       return;
     }
     const resp = await fetch(`/api/decks/${encodeURIComponent(deckId)}`);
     if (!resp.ok) throw new Error("could not load deck");
     const deck = await resp.json();
-    resetDeck(deck.name, deck.cards.map((c) => ({ ...c })), deck.id, "shared", deck.description || "", deck.format);
+    resetDeck(
+      deck.name, deck.cards.map((c) => ({ ...c })), deck.id, "shared",
+      deck.description || "", deck.format, (deck.sideboard || []).map((c) => ({ ...c })),
+    );
     // Shared decks are read-only here; editing this and saving makes a personal copy.
     setStatus(`Loaded shared deck "${deck.name}" — saving will create a personal copy.`);
   }
@@ -421,6 +448,7 @@
     let name = q("deckNameInput").value.trim() || "Untitled Deck";
     const description = q("deckDescriptionInput").value.trim();
     const cards = state.current.entries.map((e) => ({ name: e.name, count: e.count }));
+    const sideboard = activeEntries("sideboard").map((e) => ({ name: e.name, count: e.count }));
     if (cards.length === 0) {
       setStatus("Cannot save an empty deck.", true);
       return;
@@ -431,13 +459,16 @@
     if (makeCopy && state.current.id) name = `${name} (copy)`;
     let deck;
     try {
-      deck = window.PersonalDecks.save({ id: makeCopy ? null : state.current.id, name, description, format, cards });
+      deck = window.PersonalDecks.save({ id: makeCopy ? null : state.current.id, name, description, format, cards, sideboard });
     } catch (e) {
       setStatus(e.message || "Could not save deck.", true);
       return;
     }
     q("deckNameInput").value = deck.name;
-    resetDeck(deck.name, deck.cards.map((c) => ({ ...c })), deck.id, "personal", deck.description || "", deck.format);
+    resetDeck(
+      deck.name, deck.cards.map((c) => ({ ...c })), deck.id, "personal",
+      deck.description || "", deck.format, (deck.sideboard || []).map((c) => ({ ...c })),
+    );
     await refreshDeckLists();
     q("deckLoadSelect").value = deck.id;
     renderTopbar();
@@ -514,14 +545,22 @@
     try {
       const result = await postJson("/api/decks/import", url ? { url } : { text });
       const name = url ? result.name : (q("deckNameInput").value.trim() || result.name);
-      resetDeck(name, result.cards.map((c) => ({ ...c })));
+      resetDeck(
+        name, result.cards.map((c) => ({ ...c })), null, "personal", "", "casual",
+        (result.sideboard || []).map((c) => ({ ...c })),
+      );
       markDirty();
       closeImportModal();
       const problems = [];
       if (result.unknown_count > 0) problems.push(`${result.unknown_count} card(s) not in the catalog`);
       if (result.unsupported_count > 0) problems.push(`${result.unsupported_count} unsupported card(s)`);
       const suffix = problems.length ? ` — ${problems.join(", ")} highlighted in red.` : ".";
-      setStatus(`Imported ${result.cards.reduce((s, c) => s + c.count, 0)} cards${suffix}`, problems.length > 0);
+      const sideCount = (result.sideboard || []).reduce((s, c) => s + c.count, 0);
+      const sidePart = sideCount ? ` and ${sideCount} sideboard card(s)` : "";
+      setStatus(
+        `Imported ${result.cards.reduce((s, c) => s + c.count, 0)} cards${sidePart}${suffix}`,
+        problems.length > 0,
+      );
     } catch (e) {
       statusEl.textContent = e.message || "Import failed.";
     } finally {
@@ -536,6 +575,26 @@
     renderBrowser();
     renderDeckPane();
     renderPreview();
+  }
+
+  function renderBoardTabs() {
+    const mainBtn = q("deckBoardMainBtn");
+    const sideBtn = q("deckBoardSideBtn");
+    if (!mainBtn || !sideBtn) return;
+    mainBtn.textContent = `Deck (${deckTotal()})`;
+    sideBtn.textContent = `Sideboard (${sideboardTotal()})`;
+    mainBtn.classList.toggle("active", !state.editingSideboard);
+    sideBtn.classList.toggle("active", state.editingSideboard);
+    mainBtn.setAttribute("aria-selected", String(!state.editingSideboard));
+    sideBtn.setAttribute("aria-selected", String(state.editingSideboard));
+  }
+
+  function setEditingSideboard(on) {
+    if (state.editingSideboard === on) return;
+    state.editingSideboard = on;
+    state.selectedCardName = null;
+    // The browser tiles' count badges track the active board, so redraw them too.
+    renderAll();
   }
 
   function renderTopbar() {
@@ -705,14 +764,18 @@
   }
 
   function renderDeckPane() {
-    const total = deckTotal();
-    const landCount = state.current.entries
+    renderBoardTabs();
+    // Stats describe whichever board is being edited, so the numbers match the
+    // list below them.
+    const entries = activeEntries();
+    const total = entries.reduce((sum, e) => sum + e.count, 0);
+    const landCount = entries
       .filter((e) => {
         const card = lookupCard(e.name);
         return card && primaryType(card) === "land";
       })
       .reduce((sum, e) => sum + e.count, 0);
-    const problemCount = state.current.entries
+    const problemCount = entries
       .filter((e) => e.status !== "ok")
       .reduce((sum, e) => sum + e.count, 0);
 
@@ -792,13 +855,14 @@
 
   function renderDeckList() {
     const listEl = q("deckList");
+    const entries = activeEntries();
     listEl.innerHTML = "";
 
     const groups = new Map(TYPE_GROUPS.map(([key, label]) => [key, { label, entries: [] }]));
     groups.set("other", { label: "Other", entries: [] });
     groups.set("unknown", { label: "Not in Catalog", entries: [] });
 
-    for (const entry of state.current.entries) {
+    for (const entry of entries) {
       const card = lookupCard(entry.name);
       const key = card ? primaryType(card) : "unknown";
       (groups.get(key) || groups.get("other")).entries.push(entry);
@@ -881,10 +945,12 @@
         });
     }
 
-    if (state.current.entries.length === 0) {
+    if (entries.length === 0) {
       const empty = document.createElement("div");
       empty.className = "deck-list-empty";
-      empty.textContent = "Deck is empty. Add new cards from the browser on the left.";
+      empty.textContent = state.editingSideboard
+        ? "Sideboard is empty. Add cards from the browser on the left — Ring of Ma'rûf fetches from here."
+        : "Deck is empty. Add new cards from the browser on the left.";
       listEl.appendChild(empty);
     }
   }
@@ -1062,6 +1128,9 @@
       // Legality flags are format-dependent, so re-render everything.
       renderAll();
     });
+
+    q("deckBoardMainBtn")?.addEventListener("click", () => setEditingSideboard(false));
+    q("deckBoardSideBtn")?.addEventListener("click", () => setEditingSideboard(true));
 
     q("deckImportBtn").addEventListener("click", openImportModal);
     q("importDeckCancelBtn").addEventListener("click", closeImportModal);

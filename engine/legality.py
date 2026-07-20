@@ -167,14 +167,17 @@ def _cast_requires_permanent(card: CardDefinition) -> bool:
 
 
 def _cast_requires_source_of_choice(card: CardDefinition) -> bool:
-    # Reverse Damage: "The next time a source of your choice would deal damage to
-    # you this turn, prevent that damage. You gain life equal to the damage
-    # prevented this way." The caster picks any source — a permanent on any
-    # battlefield or a spell on the stack (folded in via also_stack).
+    # "The next time a source of your choice would deal damage to you this turn,
+    # ..." — the caster picks any source, a permanent on any battlefield or a
+    # spell on the stack (folded in via also_stack). Two spells share the shape:
+    # Reverse Damage (prevent it and gain that much life) and Eye for an Eye (the
+    # damage happens and is mirrored to the source's controller).
     t = (card.oracle_text or "").lower()
+    if "source of your choice would deal damage to you this turn" not in t:
+        return False
     return (
-        "source of your choice would deal damage to you this turn, prevent that damage" in t
-        and "gain life equal to the damage prevented" in t
+        ("prevent that damage" in t and "gain life equal to the damage prevented" in t)
+        or "deals that much damage to that source's controller" in t
     )
 
 

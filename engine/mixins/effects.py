@@ -102,6 +102,14 @@ class EffectsMixin:
         effects or lethal damage. In LEA, Consecrate Land grants this to a land."""
         return bool(permanent.metadata.get("is_indestructible")) or self._untapped_artifact_protector_active(permanent)
 
+    def _cant_be_enchanted(self, permanent: Permanent) -> bool:
+        """Whether an Aura can't be attached to *permanent* — either a per-permanent
+        flag set by an effect, or Guardian Beast's continuous grant to the
+        noncreature artifacts its controller controls while it's untapped."""
+        return bool(
+            permanent.metadata.get("cant_be_enchanted_by_auras")
+        ) or self._untapped_artifact_protector_active(permanent)
+
     def _untapped_artifact_protector_active(self, permanent: Permanent) -> bool:
         """Guardian Beast-style: "As long as this creature is untapped,
         noncreature artifacts you control can't be enchanted, have
@@ -277,18 +285,22 @@ class EffectsMixin:
         card = getattr(source, "card", source)
         return tuple(getattr(card, "colors", ()) or ())
 
-    def _match_reverse_damage_source(self, target: PlayerState, source):
-        """The chosen Reverse Damage source matching this damage's source, or None.
+    def _match_chosen_damage_source(self, chosen_sources, source):
+        """The entry of *chosen_sources* matching this damage's source, or None.
         A chosen permanent matches the dealing Permanent by identity; a chosen spell
         matches by its CardDefinition (the same object the spell deals damage with)."""
-        if source is None or not target.reverse_damage_sources:
+        if source is None or not chosen_sources:
             return None
         source_card = getattr(source, "card", source)
-        for chosen in target.reverse_damage_sources:
+        for chosen in chosen_sources:
             chosen_card = getattr(chosen, "card", chosen)
             if chosen is source or chosen is source_card or chosen_card is source_card:
                 return chosen
         return None
+
+    def _match_reverse_damage_source(self, target: PlayerState, source):
+        """The chosen Reverse Damage source matching this damage's source, or None."""
+        return self._match_chosen_damage_source(target.reverse_damage_sources, source)
 
     def _clear_reverse_damage_badge(self, target: PlayerState) -> None:
         # Drop the life-pill shield badge once no Reverse Damage shield remains.
@@ -503,12 +515,16 @@ class EffectsMixin:
         return any(phrase in perm.card.oracle_text.lower() for perm in player.battlefield)
 
     def _draw_with_lamp(self, player: PlayerState, count: int) -> int:
-        """Draw ``count`` cards for *player*, applying an armed Aladdin's Lamp
-        replacement to the first draw: look at the top X, draw one of them, put
-        the rest on the bottom in a random order. A human chooser pauses on
-        ``pending_lamp_draw`` (the rest of the draws resolve after the choice);
-        AI/headless play keeps the top card deterministically."""
+        """Draw ``count`` cards for *player*, applying an armed draw replacement
+        to the first draw (CR 614): Aladdin's Lamp's "look at the top X, draw one
+        of them, put the rest on the bottom in a random order", or Ring of
+        Ma'rûf's "put a card you own from outside the game into your hand". A
+        human chooser pauses on ``pending_lamp_draw`` /
+        ``pending_outside_game_draw`` (the rest of the draws resolve after the
+        choice); AI/headless play chooses deterministically."""
         player_index = self.players.index(player)
+        if player_index in self.outside_game_draw_replacements and count > 0:
+            return self._draw_from_outside_the_game(player, player_index, count)
         x = self.lamp_draw_replacements.get(player_index)
         if not x or count <= 0:
             return player.draw(count)
@@ -539,11 +555,69 @@ class EffectsMixin:
         random.shuffle(top)
         player.library.extend(top)
         player.hand.append(chosen)
+        # The replacement still ends in "then draw a card", so the chosen card is
+        # the last card drawn this turn (Jandor's Ring's cost can discard it).
+        player.cards_drawn_this_turn.append(chosen)
         self.log.append(
             f"{player.name} drew 1 card (Aladdin's Lamp) and put {len(top)} card(s) "
             "on the bottom of their library in a random order"
         )
         return 1
+
+    def _draw_from_outside_the_game(self, player: PlayerState, player_index: int, count: int) -> int:
+        """Ring of Ma'rûf's replaced draw: the player puts a card they own from
+        outside the game (their sideboard) into their hand instead of drawing.
+
+        Returns 0 drawn cards — nothing is drawn from the library, so a
+        "draw a card"-triggered effect correctly sees no draw. With an empty
+        sideboard there is no card to take and the replacement is spent anyway
+        (CR 614.1: a replacement effect applies even when it does nothing)."""
+        self.outside_game_draw_replacements.discard(player_index)
+        if not player.sideboard:
+            self.log.append(
+                f"{player.name} has no cards outside the game to take (Ring of Ma'rûf)"
+            )
+            player.draw(count - 1)
+            return 0
+        if player_index in self.interactive_seats:
+            self.pending_outside_game_draw = {
+                "player_index": player_index,
+                "card_names": [c.name for c in player.sideboard],
+                "remaining_draws": count - 1,
+            }
+            self.log.append(
+                f"{player.name} looks through the cards they own from outside the game (Ring of Ma'rûf)"
+            )
+            return 0
+        self._finish_outside_game_draw(player_index, 0)
+        player.draw(count - 1)
+        return 0
+
+    def _finish_outside_game_draw(self, player_index: int, chosen_index: int) -> None:
+        """Move the chosen sideboard card into hand."""
+        player = self.players[player_index]
+        if not (0 <= chosen_index < len(player.sideboard)):
+            return
+        card = player.sideboard.pop(chosen_index)
+        player.hand.append(card)
+        self.log.append(
+            f"{player.name} put {card.name} into their hand from outside the game (Ring of Ma'rûf)"
+        )
+
+    def confirm_outside_game_draw(self, player_index: int, chosen_index: int) -> bool:
+        """Resolve a pending Ring of Ma'rûf choice with the player's chosen card,
+        then make any draws that were queued behind the replaced one."""
+        pending = self.pending_outside_game_draw
+        if pending is None or pending["player_index"] != player_index:
+            return False
+        if not (0 <= chosen_index < len(pending["card_names"])):
+            return False
+        self.pending_outside_game_draw = None
+        self._finish_outside_game_draw(player_index, chosen_index)
+        remaining = int(pending.get("remaining_draws", 0))
+        if remaining > 0:
+            self.players[player_index].draw(remaining)
+        return True
 
     def confirm_lamp_draw(self, player_index: int, chosen_index: int) -> bool:
         """Resolve a pending Aladdin's Lamp draw with the player's chosen card,
@@ -626,10 +700,17 @@ class EffectsMixin:
             target.life -= damage
             self._on_player_dealt_damage(target, damage)
             # Eye for an Eye: the damage still happens, and its source's
-            # controller is dealt the same amount. One charge per damage event;
-            # charges are finite, so a mirrored mirror can't loop forever.
-            if damage > 0 and target.mirror_damage_charges > 0:
-                target.mirror_damage_charges -= 1
+            # controller is dealt the same amount. The caster picks "a source of
+            # your choice", so only damage from a matching source mirrors; a
+            # generic charge (no source picked) mirrors the next event from any
+            # source. One entry per damage event, and entries are finite, so a
+            # mirrored mirror can't loop forever.
+            matched_mirror = self._match_chosen_damage_source(target.mirror_damage_sources, source)
+            if damage > 0 and (matched_mirror is not None or target.mirror_damage_charges > 0):
+                if matched_mirror is not None:
+                    target.mirror_damage_sources.remove(matched_mirror)
+                else:
+                    target.mirror_damage_charges -= 1
                 mirror_index = (
                     self.controller_index_of(source)
                     if isinstance(source, Permanent)

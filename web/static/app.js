@@ -941,7 +941,7 @@ function combatDamageAssignmentPending(state = currentState) {
 }
 
 function hasBlockingPromptForAutoPass(state = currentState) {
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getLandTypeChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
   return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingAbilityChoice || pendingChannel || pendingAttackTarget);
 }
 
@@ -1998,6 +1998,15 @@ function getLampDrawInfo(state = currentState) {
   return info;
 }
 
+// Ring of Ma'rûf: pick a card you own from outside the game (your sideboard) to
+// put into your hand instead of drawing.
+function getOutsideGameDrawInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.outside_game_draw;
+  if (!info || !Array.isArray(info.card_names) || info.card_names.length === 0) return null;
+  return info;
+}
+
 function getRagingRiverInfo(state = currentState) {
   if (!state || seat === null) return null;
   const info = state.raging_river;
@@ -2175,7 +2184,7 @@ function isAnyPromptActive(state = currentState) {
   if (getOptionalPayInfo(state)) return true;
   if (getOptionalUntapInfo(state)) return true;
   if (getOpponentDamageInfo(state)) return true;
-  if (getLampDrawInfo(state)) return true;
+  if (getLampDrawInfo(state) || getOutsideGameDrawInfo(state)) return true;
   if (getLandTypeChoiceInfo(state)) return true;
   if (getManaPaymentInfo(state)) return true;
   if (getBandBlockerInfo(state)) return true;
@@ -2199,7 +2208,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getLandTypeChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -2541,12 +2550,14 @@ function applyOptionalTriggerPrompt(info) {
   cancelBtn.disabled = true;
   customOkBtn.disabled = true;
 
-  title.textContent = "Optional Trigger";
+  const mandatory = !!current?.mandatory;
+  title.textContent = mandatory ? "Triggered Ability" : "Optional Trigger";
   body.textContent = promptText;
 
-  // A target-bearing trigger (Vesuvan Doppelganger's upkeep re-copy) lists the
-  // legal creatures as buttons — picking one accepts the trigger with that
-  // target; plain triggers keep the simple Yes button.
+  // A target-bearing trigger (Vesuvan Doppelganger's upkeep re-copy, Erhnam
+  // Djinn's forestwalk grant) lists the legal creatures as buttons — picking one
+  // accepts the trigger with that target; plain triggers keep the simple Yes
+  // button. A mandatory trigger offers no decline: only the target buttons.
   const needsTarget = !!current?.needs_target;
   const validTargets = Array.isArray(current?.valid_targets) ? current.valid_targets : [];
   const targetButtons = validTargets
@@ -2562,7 +2573,9 @@ function applyOptionalTriggerPrompt(info) {
   steps.innerHTML = [
     `<div>Card: ${escapeHtml(cardName)}</div>`,
     `<div>Remaining decisions: ${pending.length}</div>`,
-    needsTarget
+    needsTarget && mandatory
+      ? `<div>Choose a target:</div><div class="prompt-choice-row">${targetButtons}</div>`
+      : needsTarget
       ? `<div>Choose the creature to copy, or decline:</div><div class="prompt-choice-row">${targetButtons}</div><div class="prompt-choice-row">${noBtn}</div>`
       : `<div class="prompt-choice-row">${yesBtn}${noBtn}</div>`,
   ].join("");
@@ -3091,39 +3104,86 @@ function applyOpponentDamagePrompt(info) {
   });
 }
 
-// Aladdin's Lamp: the replaced draw — pick one of the revealed top cards to
-// draw; the rest go to the bottom of the library in a random order.
-function applyLampDrawPrompt(info) {
-  const panel = q("activationPanel");
-  const title = q("promptTitle");
-  const body = q("promptBody");
-  const steps = q("promptSteps");
-  const cancelBtn = q("promptCancelBtn");
-  const okBtn = q("promptOkBtn");
-  const customRow = q("promptCustomRow");
-  const customOkBtn = q("promptCustomOkBtn");
+// A replaced draw where the player picks one card from a revealed set: Aladdin's
+// Lamp (the top X of the library) and Ring of Ma'rûf (the cards they own from
+// outside the game). Shown as a card grid with art and hover preview (the
+// hand-reveal modal's presentation) — picking a card is a visual decision, not a
+// choice between names. `info.card_names` is authoritative for the count and for
+// the index sent back; `info.cards` carries the art alongside it.
+function renderDrawChoiceModal(info, { title, subtitle, action }) {
+  const modal = document.getElementById("lampDrawModal");
+  if (!modal) return;
 
-  panel.classList.remove("hidden");
-  okBtn.classList.add("hidden");
-  customRow.classList.add("hidden");
-  cancelBtn.classList.add("hidden");
-  cancelBtn.disabled = true;
-  customOkBtn.disabled = true;
+  if (!info) {
+    modal.classList.add("hidden");
+    return;
+  }
 
-  title.textContent = "Aladdin's Lamp";
-  body.textContent = "Choose which card to draw. The rest go to the bottom of your library in a random order.";
-  const buttons = info.card_names
-    .map(
-      (name, i) =>
-        `<button type="button" class="prompt-choice-btn" data-lamp-draw="${i}">${escapeHtml(name)}</button>`,
-    )
+  const names = info.card_names || [];
+  const cards = info.cards || [];
+  modal.classList.remove("hidden");
+
+  const titleEl = document.getElementById("lampDrawTitle");
+  if (titleEl) titleEl.textContent = title;
+  const subtitleEl = document.getElementById("lampDrawSubtitle");
+  if (subtitleEl) subtitleEl.textContent = subtitle(names.length);
+
+  const grid = document.getElementById("lampDrawGrid");
+  if (!grid) return;
+  grid.innerHTML = names
+    .map((name, i) => {
+      const card = cards[i];
+      const inner = card?.image_uri
+        ? `<img src="${escapeHtml(card.image_uri)}" alt="${escapeHtml(name)}" loading="lazy" />`
+        : `<div class="library-card-text-placeholder">${escapeHtml(name)}</div>`;
+      return `<div class="library-card-choice lamp-draw-choice" role="button" tabindex="0" data-draw-choice="${i}">` +
+        `${inner}<div class="library-card-choice-name">${escapeHtml(name)}</div></div>`;
+    })
     .join("");
-  steps.innerHTML = `<div class="prompt-choice-column">${buttons}</div>`;
 
-  steps.querySelectorAll("[data-lamp-draw]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      await sendAction({ seat, action: "lamp_draw_confirm", hand_index: Number(btn.dataset.lampDraw) });
+  grid.querySelectorAll("[data-draw-choice]").forEach((el) => {
+    const index = Number(el.dataset.drawChoice);
+    const card = cards[index];
+    if (card) {
+      el.addEventListener("mouseenter", () => showCardPreview(card));
+      el.addEventListener("mouseleave", () => clearCardPreview());
+    }
+    const choose = async () => {
+      clearCardPreview();
+      modal.classList.add("hidden");
+      await sendAction({ seat, action, hand_index: index });
+    };
+    el.addEventListener("click", choose);
+    el.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" || ev.key === " ") {
+        ev.preventDefault();
+        choose();
+      }
     });
+  });
+}
+
+// Only one replaced draw can be pending at a time (each is consumed by the draw
+// that triggered it), so both share the one modal.
+function renderDrawChoiceModals(state) {
+  const lamp = getLampDrawInfo(state);
+  if (lamp) {
+    renderDrawChoiceModal(lamp, {
+      title: "Aladdin's Lamp",
+      action: "lamp_draw_confirm",
+      subtitle: (n) =>
+        `Choose which of these ${n} card${n === 1 ? "" : "s"} to draw. ` +
+        "The rest go to the bottom of your library in a random order.",
+    });
+    return;
+  }
+  const outside = getOutsideGameDrawInfo(state);
+  renderDrawChoiceModal(outside, {
+    title: "Ring of Ma'rûf",
+    action: "outside_game_draw_confirm",
+    subtitle: (n) =>
+      `Choose a card you own from outside the game to put into your hand ` +
+      `(${n} available).`,
   });
 }
 
@@ -4200,9 +4260,11 @@ function renderActivationPrompt() {
     return;
   }
 
-  const lampDrawInfo = getLampDrawInfo();
-  if (lampDrawInfo) {
-    applyLampDrawPrompt(lampDrawInfo);
+  // Aladdin's Lamp and Ring of Ma'rûf have their own card-grid modal
+  // (renderDrawChoiceModals), so they claim the prompt slot without rendering
+  // into the text prompt panel.
+  if (getLampDrawInfo() || getOutsideGameDrawInfo()) {
+    panel.classList.add("hidden");
     return;
   }
 
@@ -4871,16 +4933,28 @@ function activationTimingDisabledReason(lineText) {
   return null;
 }
 
-// Per-option gate for the multi-ability menu: engine activation gates plus
-// Library of Alexandria's exact-hand-size restriction.
-function abilityOptionDisabledReason(opt) {
-  if (/activate only if you have exactly seven cards in hand/i.test(opt.line || "")) {
+// Every reason one ability line can't be activated right now: the engine's
+// activation-timing gates plus the non-timing cost restrictions (Library of
+// Alexandria's exact hand size, Jandor's Ring's "discard the last card you drew
+// this turn" additional cost). Null when it is activatable.
+function abilityLineDisabledReason(line) {
+  if (/activate only if you have exactly seven cards in hand/i.test(line || "")) {
     const handCount = Number(getCurrentPlayerState()?.hand_count ?? getCurrentPlayerState()?.hand?.length ?? 0);
     if (handCount !== 7) {
       return `Requires exactly seven cards in hand (you have ${handCount}).`;
     }
   }
-  return activationTimingDisabledReason(opt.line);
+  if (/discard the last card you drew this turn/i.test(line || "")) {
+    if (!getCurrentPlayerState()?.has_last_drawn_card) {
+      return "No card you drew this turn is still in hand to discard.";
+    }
+  }
+  return activationTimingDisabledReason(line);
+}
+
+// Per-option gate for the multi-ability menu.
+function abilityOptionDisabledReason(opt) {
+  return abilityLineDisabledReason(opt.line);
 }
 
 function resolveAbilityChoice(optionIndex) {
@@ -4926,10 +5000,11 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     return;
   }
 
-  // Activation-timing gates (Jade Statue's combat-only, Illusionary Mask's
-  // sorcery-speed, ...): fail fast with the reason instead of a doomed request.
+  // Activation gates (Jade Statue's combat-only, Illusionary Mask's
+  // sorcery-speed, Jandor's Ring's discard cost, ...): fail fast with the reason
+  // instead of a doomed request.
   {
-    const gateReason = activationTimingDisabledReason(card?.oracle_text);
+    const gateReason = abilityLineDisabledReason(card?.oracle_text);
     if (gateReason) {
       SFX.onError();
       updateActionHint(`${cardName}: ${gateReason}`, true);
@@ -8988,6 +9063,7 @@ function renderState(state, { skipStaleCheck = false } = {}) {
   renderSearchLibraryModal(searchLibraryInfo);
   renderReorderLibraryModal(reorderLibraryInfo);
   renderHandRevealModal(getHandRevealInfo(state));
+  renderDrawChoiceModals(state);
   attemptPendingActivation();
 
   const combat = getCombatState(state);
@@ -9608,13 +9684,22 @@ function deckSelection(selectId) {
   const id = q(selectId)?.value || null;
   if (id && window.PersonalDecks?.isPersonalId(id)) {
     const deck = window.PersonalDecks.get(id);
-    if (deck) return { deck_id: null, deck_cards: deck.cards || [], deck_name: deck.name || null };
+    // A personal deck's sideboard travels inline with it; a shared deck's is
+    // read server-side from its saved record.
+    if (deck) {
+      return {
+        deck_id: null,
+        deck_cards: deck.cards || [],
+        deck_sideboard: deck.sideboard || [],
+        deck_name: deck.name || null,
+      };
+    }
   }
   if (id) {
     const meta = window.getDeckMeta?.(id);
-    return { deck_id: id, deck_cards: null, deck_name: meta?.name || null };
+    return { deck_id: id, deck_cards: null, deck_sideboard: null, deck_name: meta?.name || null };
   }
-  return { deck_id: null, deck_cards: null, deck_name: null };
+  return { deck_id: null, deck_cards: null, deck_sideboard: null, deck_name: null };
 }
 
 // Segmented toggles: visible button groups backed by a hidden <input>, so the
@@ -9776,6 +9861,7 @@ function collectFfaSeats() {
       colors: Number(colorsEl?.value) || 2,
       deck_id: sel.deck_id,
       deck_cards: sel.deck_cards,
+      deck_sideboard: sel.deck_sideboard,
       deck_name: sel.deck_name,
     });
   }
@@ -9835,17 +9921,21 @@ async function createSession() {
     const hostSel = deckSelection("hostDeckSelect");
     // The opponent's deck is only host-configurable when it's AI. For networked
     // human_vs_human the guest brings their own deck on join.
-    const guestSel = mode === "human_vs_human" ? { deck_id: null, deck_cards: null, deck_name: null } : deckSelection("guestDeckSelect");
+    const guestSel = mode === "human_vs_human"
+      ? { deck_id: null, deck_cards: null, deck_sideboard: null, deck_name: null }
+      : deckSelection("guestDeckSelect");
     req = {
       mode,
       host_name: q("hostName").value,
       host_colors: Number(q("hostColors").value),
       host_deck_id: hostSel.deck_id,
       host_deck_cards: hostSel.deck_cards,
+      host_deck_sideboard: hostSel.deck_sideboard,
       host_deck_name: hostSel.deck_name,
       guest_colors: Number(q("guestColors").value),
       guest_deck_id: guestSel.deck_id,
       guest_deck_cards: guestSel.deck_cards,
+      guest_deck_sideboard: guestSel.deck_sideboard,
       guest_deck_name: guestSel.deck_name,
       use_custom_seed: useCustomSeed,
       custom_seed: useCustomSeed ? Number(q("customSeed").value) : null,
@@ -9880,6 +9970,7 @@ async function joinSession() {
     guest_name: q("joinName").value,
     guest_deck_id: joinSel.deck_id,
     guest_deck_cards: joinSel.deck_cards,
+    guest_deck_sideboard: joinSel.deck_sideboard,
     guest_deck_name: joinSel.deck_name,
     guest_colors: Number(q("joinColors")?.value) || 2,
   });

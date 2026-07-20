@@ -2272,6 +2272,12 @@ class BattlefieldCanvas {
     if (this._priorityPulseSide()) moving = true;
     // Flyers bob and tilt continuously, so keep the frame loop alive for them.
     if (!moving && this.cardItems.some((it) => _isFlyer(it.card))) moving = true;
+    // The indestructible gleam sweeps continuously — same deal.
+    if (
+      !moving &&
+      !this.reducedMotion &&
+      this.cardItems.some((it) => it.card?.is_indestructible)
+    ) moving = true;
     // The mana fan pops, pulses and bobs — keep redrawing while it's open.
     if (this.manaFan) moving = true;
     // Zone-pile targeting pulses continuously while a graveyard target is
@@ -2921,20 +2927,54 @@ class BattlefieldCanvas {
     ctx.restore();
     ctx.restore();
 
+    // ---- Indestructible gleam ----
+    // A shiny highlight sweeping diagonally across the card, so a granted
+    // indestructible (Guardian Beast's artifacts, Consecrate Land's land) reads
+    // at a glance rather than only as a badge. Skipped under reduced motion —
+    // the keyword text and badge still carry the information.
+    if ((creatureCard || card)?.is_indestructible && !this.reducedMotion) {
+      const period = 2600;
+      // Per-card phase so several protected artifacts don't gleam in lockstep.
+      const t = ((performance.now() / period) + _keyPhase(card?.name || "") / (Math.PI * 2)) % 1;
+      // Sweep from off one corner to off the other, so the band is absent for
+      // part of the cycle rather than looping continuously.
+      const travel = (w + h) * 2;
+      const offset = -travel / 2 + t * travel * 2;
+      ctx.save();
+      this._roundRect(ctx, x, y, w, h, R);
+      ctx.clip();
+      const gleam = ctx.createLinearGradient(
+        x + offset, y, x + offset + w * 0.55, y + h,
+      );
+      gleam.addColorStop(0, "rgba(255,255,255,0)");
+      gleam.addColorStop(0.45, "rgba(255,255,255,0.30)");
+      gleam.addColorStop(0.5, "rgba(226,240,255,0.55)");
+      gleam.addColorStop(0.55, "rgba(255,255,255,0.30)");
+      gleam.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = gleam;
+      ctx.fillRect(x, y, w, h);
+      ctx.restore();
+    }
+
     // ---- Keyword strip ----
-    // Render the creature's current keywords (Flying, Trample, First Strike, …)
-    // in a translucent band just above the badge row. For an enchanted creature
-    // hidden under an aura, creatureCard carries the keywords (incl. any the
-    // aura grants); otherwise the card's own keywords are used.
+    // Render the permanent's current keywords (Flying, Trample, First Strike,
+    // Indestructible, …) in a translucent band just above the badge row. For an
+    // enchanted creature hidden under an aura, creatureCard carries the keywords
+    // (incl. any the aura grants); otherwise the card's own keywords are used.
+    // Noncreature permanents get the band too — Guardian Beast grants
+    // indestructible to artifacts, and that has to be visible on them.
     const kwCard = creatureCard || card;
     const keywords = Array.isArray(kwCard?.keywords) ? kwCard.keywords : [];
-    if (keywords.length && String(kwCard?.type || "").toLowerCase().includes("creature")) {
+    if (keywords.length) {
+      const isCreatureCard = String(kwCard?.type || "").toLowerCase().includes("creature");
       const font = Math.max(6, w * 0.085);
       ctx.font = `bold ${font}px sans-serif`;
       const lineH = font + 2;
       const lines = _wrapKeywordLines(ctx, keywords, w - 6);
       const bandH = lines.length * lineH + 3;
-      const reserveBottom = 16; // leave the bottom corners for P/T and damage badges
+      // Leave the bottom corners for P/T and damage badges; a noncreature has
+      // neither, so its band sits flush with the bottom edge.
+      const reserveBottom = isCreatureCard ? 16 : 3;
       const bandBottom = y + h - reserveBottom;
       const bandTop = bandBottom - bandH;
       ctx.fillStyle = "rgba(0,0,0,0.62)";

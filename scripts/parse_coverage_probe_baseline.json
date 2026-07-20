@@ -1143,24 +1143,6 @@
   ]
  },
  {
-  "card": "Ring of Ma'rûf",
-  "clause": "the next time you would draw a card this turn, instead put a card you own from outside the game into your hand",
-  "ignored": [
-   "next",
-   "time",
-   "would",
-   "instead",
-   "put",
-   "card",
-   "own",
-   "from",
-   "outside",
-   "game",
-   "into",
-   "hand"
-  ]
- },
- {
   "card": "Rod of Ruin",
   "clause": "this artifact deals 1 damage to any target",
   "ignored": [

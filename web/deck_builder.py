@@ -151,9 +151,12 @@ def _pick_cards(
 def build_deck_from_entries(
     catalog: list[CardDefinition],
     entries: list[dict],
-    seed: int,
+    seed: int | None,
 ) -> list[CardDefinition]:
     """Build a shuffled library from saved deck entries [{"name", "count"}].
+
+    ``seed=None`` skips the shuffle, for card pools that have no order — a
+    sideboard, whose owner sees all of it when choosing (CR 100.4).
 
     Raises ValueError listing any card names not present in the catalog.
     """
@@ -178,8 +181,9 @@ def build_deck_from_entries(
     if not deck:
         raise ValueError("Deck is empty")
 
-    rng = random.Random(seed)
-    rng.shuffle(deck)
+    if seed is not None:
+        rng = random.Random(seed)
+        rng.shuffle(deck)
     return deck
 
 

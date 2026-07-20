@@ -45,6 +45,20 @@ def arm_lamp_draw_replacement(game: Game, instruction: OracleInstruction, contex
     return True, "resolved"
 
 
+@effect_handler("arm_outside_game_draw_replacement")
+def arm_outside_game_draw_replacement(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Ring of Ma'rûf: arm the controller's next draw this turn to become "put a
+    card you own from outside the game into your hand" instead. Consumed by
+    Game._draw_with_lamp at the next draw."""
+    caster = context.caster
+    game.outside_game_draw_replacements.add(game.players.index(caster))
+    game.log.append(
+        f"{context.card.name}: instead of {caster.name}'s next draw this turn, they put "
+        "a card they own from outside the game into their hand"
+    )
+    return True, "resolved"
+
+
 @effect_handler("draw_reveal_discard_unless_land")
 def draw_reveal_discard_unless_land(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Sindbad: "Draw a card and reveal it. If it isn't a land card, discard

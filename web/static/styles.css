@@ -2540,6 +2540,14 @@ pre {
   background: rgba(255, 255, 255, 0.08);
 }
 
+/* Aladdin's Lamp's picker is keyboard-reachable, so the focus ring has to be
+   as visible as the hover state. */
+.lamp-draw-choice:focus-visible {
+  outline: none;
+  border-color: rgba(242, 184, 75, 0.95);
+  box-shadow: 0 0 0 2px rgba(242, 184, 75, 0.35);
+}
+
 .library-card-choice.selected {
   border-color: rgba(133, 200, 134, 0.95);
   background: rgba(133, 200, 134, 0.12);
@@ -3650,6 +3658,36 @@ pre {
   flex: 1;
   min-width: 0;
   font: inherit;
+}
+
+/* Mainboard / sideboard switch above the deck list. The stats, curve and list
+   below it all follow whichever tab is active. */
+
+.deck-board-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.deck-board-tab {
+  flex: 1;
+  padding: 5px 8px;
+  font-size: 0.85rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.deck-board-tab:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.deck-board-tab.active {
+  border-color: rgba(242, 184, 75, 0.6);
+  background: rgba(242, 184, 75, 0.14);
+  color: var(--ink);
 }
 
 .deck-stats {

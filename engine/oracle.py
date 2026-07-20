@@ -325,7 +325,13 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
             continue
         if token in {"W", "U", "B", "R", "G", "C"}:
             required[token] += 1
-    return ActivatedAbilityCost(required, requires_tap)
+    # Non-mana additional costs written as prose in the cost clause. Only the
+    # clause left of the ":" counts — "Draw a card" as an effect must not be read
+    # as a cost.
+    cost_lower = cost_part.lower()
+    discard_last_drawn = "discard the last card you drew this turn" in cost_lower
+    exile_self = bool(re.search(r"\bexile this (artifact|creature|enchantment|permanent|land)\b", cost_lower))
+    return ActivatedAbilityCost(required, requires_tap, discard_last_drawn, exile_self)
 
 
 # ---------------------------------------------------------------------------

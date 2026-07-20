@@ -211,6 +211,10 @@
             <label class="deck-format-label">Format
               <select id="deckFormatSelect" title="Legality is checked against this format's banlist and deck-construction rules"></select>
             </label>
+            <div class="deck-board-tabs" role="tablist" aria-label="Deck section">
+              <button id="deckBoardMainBtn" type="button" role="tab" class="deck-board-tab active" aria-selected="true">Deck</button>
+              <button id="deckBoardSideBtn" type="button" role="tab" class="deck-board-tab" aria-selected="false">Sideboard</button>
+            </div>
             <div id="deckStats" class="deck-stats"></div>
             <div id="deckLegality" class="deck-legality"></div>
             <div id="deckCurve" class="deck-curve"></div>
@@ -547,6 +551,14 @@
         <div class="modal-footer">
           <button id="handRevealContinueBtn" type="button">Continue</button>
         </div>
+      </div>
+    </div>
+
+    <div id="lampDrawModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="lampDrawTitle">
+      <div class="modal-box">
+        <h2 id="lampDrawTitle" class="modal-title">Aladdin's Lamp</h2>
+        <p id="lampDrawSubtitle" class="modal-subtitle">Choose which card to draw.</p>
+        <div id="lampDrawGrid" class="library-card-grid"></div>
       </div>
     </div>
 

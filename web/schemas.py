@@ -55,6 +55,7 @@ ActionKind = Literal[
     "enter_choice_confirm",
     "least_power_choice_confirm",
     "lamp_draw_confirm",
+    "outside_game_draw_confirm",
     "assign_defender_piles",
     "assign_attacker_piles",
     "assign_camouflage_piles",
@@ -82,6 +83,9 @@ class SeatConfig(BaseModel):
     deck_id: str | None = Field(default=None)
     # Personal (browser-only) deck sent inline; takes precedence over deck_id.
     deck_cards: list[DeckCardEntry] | None = Field(default=None)
+    # That deck's sideboard ("outside the game", CR 100.4), sent alongside
+    # deck_cards for the same reason.
+    deck_sideboard: list[DeckCardEntry] | None = Field(default=None)
     # Display name for the lobby roster (saved deck name or personal deck
     # name); the server has no other way to resolve a personal deck's name.
     deck_name: str | None = Field(default=None)
@@ -101,6 +105,9 @@ class CreateSessionRequest(BaseModel):
     # present these take precedence over the *_deck_id for that seat.
     host_deck_cards: list[DeckCardEntry] | None = Field(default=None)
     guest_deck_cards: list[DeckCardEntry] | None = Field(default=None)
+    # Those decks' sideboards ("outside the game", CR 100.4).
+    host_deck_sideboard: list[DeckCardEntry] | None = Field(default=None)
+    guest_deck_sideboard: list[DeckCardEntry] | None = Field(default=None)
     # Display names for the lobby roster (see SeatConfig.deck_name).
     host_deck_name: str | None = Field(default=None)
     guest_deck_name: str | None = Field(default=None)
@@ -126,6 +133,8 @@ class JoinSessionRequest(BaseModel):
     guest_deck_id: str | None = Field(default=None)
     # Personal (browser-only) deck sent inline; takes precedence over guest_deck_id.
     guest_deck_cards: list[DeckCardEntry] | None = Field(default=None)
+    # That deck's sideboard ("outside the game", CR 100.4).
+    guest_deck_sideboard: list[DeckCardEntry] | None = Field(default=None)
     guest_colors: int = Field(default=2, ge=1, le=5)
     # Display name for the lobby roster (see SeatConfig.deck_name).
     guest_deck_name: str | None = Field(default=None)
@@ -274,6 +283,9 @@ class DeckSaveRequest(BaseModel):
     description: str = Field(default="", max_length=2000)
     format: str = Field(default="casual", max_length=40)
     cards: list[DeckCardEntry] = Field(default_factory=list)
+    # The deck's sideboard ("outside the game", CR 100.4) — the pool Ring of
+    # Ma'rûf draws from.
+    sideboard: list[DeckCardEntry] = Field(default_factory=list)
 
 
 class DeckImportRequest(BaseModel):

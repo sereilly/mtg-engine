@@ -248,6 +248,14 @@ class Game(
     # "card_names": [...]}. The unchosen cards go to the bottom of the library
     # in a random order.
     pending_lamp_draw: dict | None = None
+    # Ring of Ma'rûf: seats whose next draw this turn is replaced by "put a card
+    # you own from outside the game into your hand". Consumed by that player's
+    # next draw; cleared at end of turn alongside lamp_draw_replacements.
+    outside_game_draw_replacements: set = field(default_factory=set)
+    # Ring of Ma'rûf: a replaced draw awaiting the (human) player's choice of
+    # which sideboard card to take. Shape: {"player_index", "card_names": [...],
+    # "remaining_draws"}, mirroring pending_lamp_draw.
+    pending_outside_game_draw: dict | None = None
     # "As this [artifact/enchantment] enters, choose an opponent [and a color]."
     # (Black Vise; Jihad adds a color.) Deterministic defaults are stamped on the
     # permanent immediately so headless/AI play never blocks; an interactive

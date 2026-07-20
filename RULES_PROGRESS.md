@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**181 / 566 tracked rules covered (31%)** — 599 tests, 0 unannotated.
+**182 / 566 tracked rules covered (32%)** — 600 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -61,7 +61,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [507. Beginning of Combat Step](#507-beginning-of-combat-step) | 1/2 | 50% |
 | [508. Declare Attackers Step](#508-declare-attackers-step) | 3/8 | 37% |
 | [509. Declare Blockers Step](#509-declare-blockers-step) | 4/4 | 100% |
-| [510. Combat Damage Step](#510-combat-damage-step) | 2/4 | 50% |
+| [510. Combat Damage Step](#510-combat-damage-step) | 3/4 | 75% |
 | [511. End of Combat Step](#511-end-of-combat-step) | 3/3 | 100% |
 | [512. Ending Phase](#512-ending-phase) | 1/1 | 100% |
 | [513. End Step](#513-end-step) | 1/2 | 50% |
@@ -596,10 +596,10 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 510. Combat Damage Step
 
-- [x] **510.1** First, the active player announces how each attacking creature assigns its combat damage, then th... *(10 tests, subrules acde)*
+- [x] **510.1** First, the active player announces how each attacking creature assigns its combat damage, then th... *(11 tests, subrules acde)*
 - [x] **510.2** Second, all combat damage that’s been assigned is dealt simultaneously. This turn-based action do... *(2 tests)*
 - [ ] **510.3** Third, the active player gets priority. (See rule 117, “Timing and Priority.”)
-- [ ] **510.4** If at least one attacking or blocking creature has first strike (see rule 702.7) or double strike...
+- [x] **510.4** If at least one attacking or blocking creature has first strike (see rule 702.7) or double strike... *(1 tests)*
 
 ### 511. End of Combat Step
 

@@ -5,11 +5,6 @@
       "status": "pass",
       "updated_at": 1782590075.2882295
     },
-    "Aladdin's Lamp": {
-      "reason": "The look at top card(s) of library effect should open a window that shows the cards visually and allows you to hover over cards to see them. Reuse the Ui that's used for reordering cards on top of the library.",
-      "status": "fail",
-      "updated_at": 1784514816.2664242
-    },
     "Aladdin's Ring": {
       "reason": "",
       "status": "pass",
@@ -300,7 +295,7 @@
       "status": "pass",
       "updated_at": 1781987899.028273
     },
-    "Dand\u00e2n": {
+    "Dandân": {
       "reason": "",
       "status": "pass",
       "updated_at": 1783294500.8693051
@@ -430,7 +425,7 @@
       "status": "pass",
       "updated_at": 1784515693.8784268
     },
-    "El-Hajj\u00e2j": {
+    "El-Hajjâj": {
       "reason": "",
       "status": "pass",
       "updated_at": 1783301264.258661
@@ -440,20 +435,10 @@
       "status": "pass",
       "updated_at": 1781455740.8711123
     },
-    "Erhnam Djinn": {
-      "reason": "I didn't get to choose a target",
-      "status": "fail",
-      "updated_at": 1784520072.4533038
-    },
     "Evil Presence": {
       "reason": "",
       "status": "pass",
       "updated_at": 1782022287.5750093
-    },
-    "Eye for an Eye": {
-      "reason": "I didn't get to choose a source",
-      "status": "fail",
-      "updated_at": 1784517668.7536411
     },
     "False Orders": {
       "reason": "",
@@ -610,11 +595,6 @@
       "status": "pass",
       "updated_at": 1782590169.0233815
     },
-    "Guardian Beast": {
-      "reason": "When a card becomes indestructible, it should be shown visually on the affected cards with added keyword text and a shiny animated card gleam effect",
-      "status": "fail",
-      "updated_at": 1784515307.0492723
-    },
     "Hasran Ogress": {
       "reason": "",
       "status": "pass",
@@ -735,11 +715,6 @@
       "status": "pass",
       "updated_at": 1782957764.093408
     },
-    "Jandor's Ring": {
-      "reason": "It didn't discard the last card I drew this turn",
-      "status": "fail",
-      "updated_at": 1784515815.6105716
-    },
     "Jandor's Saddlebags": {
       "reason": "",
       "status": "pass",
@@ -765,7 +740,7 @@
       "status": "pass",
       "updated_at": 1782599240.7461662
     },
-    "Juz\u00e1m Djinn": {
+    "Juzám Djinn": {
       "reason": "",
       "status": "pass",
       "updated_at": 1783300595.2878914
@@ -779,11 +754,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782590997.0348485
-    },
-    "King Suleiman": {
-      "reason": "Ability didn't let me choose a target",
-      "status": "fail",
-      "updated_at": 1784517545.6892085
     },
     "Kormus Bell": {
       "reason": "",
@@ -1169,11 +1139,6 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782597780.5635235
-    },
-    "Ring of Ma'r\u00fbf": {
-      "reason": "First we need to implement the sideboard and allow the deck editor to add sideboard cards to a deck. WHen this card's ability triggers it should open a window that shows your sideboard and allows you to pick a card.",
-      "status": "fail",
-      "updated_at": 1784514984.4521065
     },
     "Roc of Kher Ridges": {
       "reason": "",

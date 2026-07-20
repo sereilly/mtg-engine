@@ -184,6 +184,20 @@ def arm_lamp_draw_replacement(text: str, activated: bool) -> RuleResult:
     return None
 
 
+# Ring of Ma'rûf: "{5}, {T}, Exile this artifact: The next time you would draw a
+# card this turn, instead put a card you own from outside the game into your
+# hand." Same one-shot draw-replacement shape as Aladdin's Lamp, drawing from the
+# sideboard instead of the library; must likewise out-rank the generic draw rule.
+@parse_rule(89300)
+def arm_outside_game_draw_replacement(text: str, activated: bool) -> RuleResult:
+    if (
+        "the next time you would draw a card this turn, instead put a card you own "
+        "from outside the game into your hand" in text
+    ):
+        return _instruction("arm_outside_game_draw_replacement"), "activated_draw"
+    return None
+
+
 # Sindbad: "Draw a card and reveal it. If it isn't a land card, discard it."
 # Must out-rank the generic activated "draw a card" shorthand below.
 @parse_rule(89500)

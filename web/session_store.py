@@ -9,7 +9,7 @@ from engine.game_history import GameHistory
 from engine.models import CardDefinition
 
 from .deck_builder import build_deck_from_entries, build_random_deck
-from .deck_store import DeckStore
+from .deck_store import DeckStore, deck_sideboard
 from .schemas import CreateSessionRequest
 
 
@@ -45,6 +45,10 @@ class Session:
     # Kept so a rematch can rebuild the same deck off a new seed.
     host_deck_cards: list[dict] | None = None
     guest_deck_cards: list[dict] | None = None
+    # Those decks' inline sideboards ("outside the game", CR 100.4), kept for the
+    # same reason.
+    host_deck_sideboard: list[dict] | None = None
+    guest_deck_sideboard: list[dict] | None = None
     # Display names for the lobby roster (see SeatConfig.deck_name); the server
     # has no other way to know a personal deck's name.
     host_deck_name: str | None = None
@@ -129,6 +133,7 @@ class Session:
     seat_deck_ids: list[str | None] = field(default_factory=list)
     seat_colors: list[int] = field(default_factory=list)
     seat_deck_cards_list: list[list[dict] | None] = field(default_factory=list)
+    seat_deck_sideboards: list[list[dict] | None] = field(default_factory=list)
     seat_deck_names: list[str | None] = field(default_factory=list)
 
 
@@ -153,6 +158,23 @@ class SessionStore:
             return build_deck_from_entries(self.catalog, deck.get("cards", []), seed)
         deck, _ = build_random_deck(self.catalog, colors, seed)
         return deck
+
+    def _build_seat_sideboard(
+        self,
+        deck_id: str | None,
+        cards: list[dict] | None = None,
+        sideboard: list[dict] | None = None,
+    ):
+        """The seat's "outside the game" cards (CR 100.4). Unshuffled — a
+        sideboard has no order, and the player sees all of it when choosing.
+        Mirrors _build_seat_deck's precedence: inline entries (personal deck)
+        first, then the saved deck's; a random deck has no sideboard."""
+        entries = sideboard if sideboard else None
+        if entries is None and not cards and deck_id and self.deck_store is not None:
+            entries = deck_sideboard(self.deck_store.get(deck_id))
+        if not entries:
+            return []
+        return build_deck_from_entries(self.catalog, entries, seed=None)
 
     def create(self, request: CreateSessionRequest) -> Session:
         if request.mode == "free_for_all":
@@ -186,19 +208,28 @@ class SessionStore:
 
         host_deck_cards = _entries_to_dicts(request.host_deck_cards)
         guest_deck_cards = _entries_to_dicts(request.guest_deck_cards)
+        host_deck_sideboard = _entries_to_dicts(request.host_deck_sideboard)
+        guest_deck_sideboard = _entries_to_dicts(request.guest_deck_sideboard)
 
         host_deck = self._build_seat_deck(
             request.host_deck_id, request.host_colors, seed, host_deck_cards
         )
+        host_side = self._build_seat_sideboard(
+            request.host_deck_id, host_deck_cards, host_deck_sideboard
+        )
         if lobby_needed:
             guest_deck: list = []
+            guest_side: list = []
         else:
             guest_deck = self._build_seat_deck(
                 request.guest_deck_id, request.guest_colors, seed + 1, guest_deck_cards
             )
+            guest_side = self._build_seat_sideboard(
+                request.guest_deck_id, guest_deck_cards, guest_deck_sideboard
+            )
 
-        p1 = PlayerState(name=request.host_name, library=host_deck)
-        p2 = PlayerState(name=guest_name, library=guest_deck)
+        p1 = PlayerState(name=request.host_name, library=host_deck, sideboard=host_side)
+        p2 = PlayerState(name=guest_name, library=guest_deck, sideboard=guest_side)
 
         game = Game(players=[p1, p2], enforce_mana_costs=True)
 
@@ -221,6 +252,8 @@ class SessionStore:
             guest_colors=request.guest_colors,
             host_deck_cards=host_deck_cards,
             guest_deck_cards=guest_deck_cards,
+            host_deck_sideboard=host_deck_sideboard,
+            guest_deck_sideboard=guest_deck_sideboard,
             host_deck_name=request.host_deck_name,
             guest_deck_name=None if lobby_needed else request.guest_deck_name,
         )
@@ -250,6 +283,7 @@ class SessionStore:
         seat_deck_ids = [seat.deck_id for seat in seats]
         seat_colors = [seat.colors for seat in seats]
         seat_deck_cards_list = [_entries_to_dicts(seat.deck_cards) for seat in seats]
+        seat_deck_sideboards = [_entries_to_dicts(seat.deck_sideboard) for seat in seats]
         seat_deck_names = [seat.deck_name for seat in seats]
 
         use_pregame = request.enable_pregame
@@ -266,6 +300,9 @@ class SessionStore:
                         name=seat_names[i],
                         library=self._build_seat_deck(
                             seat_deck_ids[i], seat_colors[i], seed + i, seat_deck_cards_list[i]
+                        ),
+                        sideboard=self._build_seat_sideboard(
+                            seat_deck_ids[i], seat_deck_cards_list[i], seat_deck_sideboards[i]
                         ),
                     )
                 )
@@ -294,6 +331,7 @@ class SessionStore:
             seat_deck_ids=seat_deck_ids,
             seat_colors=seat_colors,
             seat_deck_cards_list=seat_deck_cards_list,
+            seat_deck_sideboards=seat_deck_sideboards,
             seat_deck_names=seat_deck_names,
         )
 
@@ -378,6 +416,7 @@ class SessionStore:
         guest_colors: int = 2,
         guest_deck_cards: list[dict] | None = None,
         guest_deck_name: str | None = None,
+        guest_deck_sideboard: list[dict] | None = None,
     ) -> tuple[Session, int]:
         session = self.get(session_id)
         open_seats = self.open_human_seats(session)
@@ -386,6 +425,7 @@ class SessionStore:
         target = open_seats[0]
 
         guest_deck_cards = _entries_to_dicts(guest_deck_cards)
+        guest_deck_sideboard = _entries_to_dicts(guest_deck_sideboard)
         session.joined_seats.add(target)
         session.game.players[target].name = guest_name
         if session.mode == "free_for_all":
@@ -393,12 +433,14 @@ class SessionStore:
             session.seat_deck_ids[target] = guest_deck_id
             session.seat_colors[target] = guest_colors
             session.seat_deck_cards_list[target] = guest_deck_cards
+            session.seat_deck_sideboards[target] = guest_deck_sideboard
             session.seat_deck_names[target] = guest_deck_name
         else:
             session.guest_name = guest_name
             session.guest_deck_id = guest_deck_id
             session.guest_colors = guest_colors
             session.guest_deck_cards = guest_deck_cards
+            session.guest_deck_sideboard = guest_deck_sideboard
             session.guest_deck_name = guest_deck_name
 
         # Only rebuild the library while the lobby is still open. In the legacy
@@ -407,6 +449,9 @@ class SessionStore:
         if not session.game_started:
             session.game.players[target].library = self._build_seat_deck(
                 guest_deck_id, guest_colors, session.seed + target, guest_deck_cards
+            )
+            session.game.players[target].sideboard = self._build_seat_sideboard(
+                guest_deck_id, guest_deck_cards, guest_deck_sideboard
             )
 
         return session, target
@@ -442,6 +487,10 @@ class SessionStore:
                         session.seat_deck_ids[i], session.seat_colors[i], seed + i,
                         session.seat_deck_cards_list[i],
                     ),
+                    sideboard=self._build_seat_sideboard(
+                        session.seat_deck_ids[i], session.seat_deck_cards_list[i],
+                        session.seat_deck_sideboards[i],
+                    ),
                 )
                 for i in range(len(session.seat_names))
             ]
@@ -453,8 +502,20 @@ class SessionStore:
             guest_deck = self._build_seat_deck(
                 session.guest_deck_id, session.guest_colors, seed + 1, session.guest_deck_cards
             )
-            p1 = PlayerState(name=session.host_name, library=host_deck)
-            p2 = PlayerState(name=session.guest_name, library=guest_deck)
+            p1 = PlayerState(
+                name=session.host_name,
+                library=host_deck,
+                sideboard=self._build_seat_sideboard(
+                    session.host_deck_id, session.host_deck_cards, session.host_deck_sideboard
+                ),
+            )
+            p2 = PlayerState(
+                name=session.guest_name,
+                library=guest_deck,
+                sideboard=self._build_seat_sideboard(
+                    session.guest_deck_id, session.guest_deck_cards, session.guest_deck_sideboard
+                ),
+            )
             session.game = Game(players=[p1, p2], enforce_mana_costs=True)
         session.seed = seed
         session.current_turn = 0

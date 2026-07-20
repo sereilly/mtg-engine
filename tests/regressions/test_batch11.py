@@ -380,7 +380,7 @@ class TestVesuvanDoppelganger:
         game.resolve_upkeep(
             0,
             optional_choices={"Vesuvan Doppelganger": True},
-            recopy_targets={"Vesuvan Doppelganger": (1, 0)},
+            trigger_targets={"Vesuvan Doppelganger": (1, 0)},
         )
         assert dop.metadata["copied_from"] == "Black Knight"
         assert dop.effective_power == 2 and dop.effective_toughness == 2

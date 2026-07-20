@@ -38,6 +38,7 @@ from .deck_store import (
     DeckImportError,
     DeckNotFoundError,
     DeckStore,
+    deck_sideboard,
     fetch_moxfield_deck,
     parse_decklist_text,
 )
@@ -124,20 +125,25 @@ _SYMBOL_TO_COLOR_WORD = {"W": "white", "U": "blue", "B": "black", "R": "red", "G
 
 
 def _effective_keywords(perm: Permanent, game: Game) -> list[str]:
-    """The keywords a creature currently has, reflecting grants and removals.
+    """The keywords a permanent currently has, reflecting grants and removals.
 
-    Only creatures get a keyword strip; for anything else this is empty. Each
-    candidate is resolved through ``game._has_keyword`` so aura-granted and
+    Each candidate is resolved through ``game._has_keyword`` so aura-granted and
     "until end of turn" keywords show up, and Layer 6 removal effects (e.g.
     Earthbind stripping Flying) take it back off.
+
+    The combat keywords are creature-only, but Indestructible is not: Guardian
+    Beast grants it to noncreature artifacts and Consecrate Land to a land, and
+    a player can't see that it applies unless the card says so.
 
     "Protection" is spelled out with the quality it's from (e.g. "Protection
     from white") so the player can see which color the permanent is protected
     against, not just that it has protection.
     """
     if "creature" not in perm.card.type_line.lower():
-        return []
+        return ["Indestructible"] if game._is_indestructible(perm) else []
     keywords = [kw for kw in _DISPLAY_KEYWORDS if game._has_keyword(perm, kw)]
+    if game._is_indestructible(perm):
+        keywords.append("Indestructible")
     if perm.metadata.get("loses_flying") or perm.metadata.get("loses_flying_until_eot"):
         keywords = [kw for kw in keywords if kw.lower() != "flying"]
     # Protection is driven by the effective protected colors (CR 702.16) rather
@@ -312,8 +318,12 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         "is_token": bool(perm.metadata.get("is_token", False)),
         "land_type_override": perm.metadata.get("land_type_override"),
         "mire_counter": bool(perm.metadata.get("mire_counter", False)),
-        "cant_be_enchanted_by_auras": bool(perm.metadata.get("cant_be_enchanted_by_auras", False)),
-        "is_indestructible": bool(perm.metadata.get("is_indestructible", False)),
+        # Both flags go through the engine's own predicates rather than reading
+        # the metadata flag directly: Guardian Beast grants them continuously to
+        # the noncreature artifacts their controller owns while it's untapped,
+        # computing them per query without ever writing metadata.
+        "cant_be_enchanted_by_auras": game._cant_be_enchanted(perm),
+        "is_indestructible": game._is_indestructible(perm),
         "is_aura": "aura" in perm.card.type_line.lower(),
         "attached_to_index": attached_to_index,
         "attached_to_seat": attached_to_seat,
@@ -606,6 +616,7 @@ def _deck_summary(deck: dict) -> dict:
         "colors": [c for c in ("W", "U", "B", "R", "G") if c in colors],
         "unsupported_count": sum(e["count"] for e in entries if e["status"] == "unsupported"),
         "unknown_count": sum(e["count"] for e in entries if e["status"] == "unknown"),
+        "sideboard_count": sum(e["count"] for e in deck_sideboard(deck)),
         "updated_at": deck.get("updated_at"),
         # Decks served from the on-disk store are the shared pool. Personal decks
         # live in the client's browser and are never returned by these endpoints.
@@ -616,6 +627,7 @@ def _deck_summary(deck: dict) -> dict:
 def _deck_detail(deck: dict) -> dict:
     detail = _deck_summary(deck)
     detail["cards"] = _resolve_deck_entries(deck.get("cards", []))
+    detail["sideboard"] = _resolve_deck_entries(deck_sideboard(deck))
     return detail
 
 
@@ -881,10 +893,19 @@ def _serialize_player(
         "channel_active": player.channel_active_until_eot,
         "hand": hand,
         "hand_count": len(player.hand),
+        # Jandor's Ring: whether a card drawn this turn is still in hand, i.e.
+        # whether its "Discard the last card you drew this turn" cost is payable.
+        "has_last_drawn_card": player.last_card_drawn_this_turn() is not None,
         "deck": {"count": len(player.library)},
         "library_count": len(player.library),
         "graveyard": [_serialize_card(card) for card in player.graveyard],
         "exile": [_serialize_card(card) for card in player.exile],
+        # Cards owned from outside the game (CR 100.4). Private, like the hand:
+        # only their owner sees what's in it, everyone sees the count.
+        "sideboard": (
+            [_serialize_card(card) for card in player.sideboard] if viewer_seat == seat else []
+        ),
+        "sideboard_count": len(player.sideboard),
         "battlefield": battlefield,
         "emblems": _serialize_emblems(player),
         "mana_pool": _serialize_mana_pool(player),
@@ -1045,7 +1066,11 @@ def _gather_upkeep_decisions(session: Session, player_index: int) -> bool:
     """
     game = session.game
     pay_choices = game.get_upkeep_pay_triggers(player_index)
+    # Optional ("you may") triggers and mandatory targeted triggers (Erhnam
+    # Djinn) share one decision channel — both are answered by
+    # resolve_optional_trigger, the mandatory ones with a target and no decline.
     optional_choices = game.get_optional_upkeep_triggers(player_index)
+    optional_choices += game.get_upkeep_target_triggers(player_index)
     prevention_choices = game.get_upkeep_mana_prevention_triggers(player_index)
     if not pay_choices and not optional_choices and not prevention_choices:
         return False
@@ -1064,7 +1089,7 @@ def _advance_after_upkeep_choices(session: Session) -> None:
     """Called once all upkeep decisions (pay-or-sacrifice and optional) are resolved."""
     choices = dict(session.upkeep_resolved_choices)
     optional = dict(session.optional_trigger_resolved)
-    recopy_targets = dict(session.optional_trigger_targets)
+    trigger_targets = dict(session.optional_trigger_targets)
     mana_prevention = dict(session.upkeep_mana_prevention_resolved)
     _clear_upkeep_pay_choices(session)
     session.game.resolve_upkeep(
@@ -1072,7 +1097,7 @@ def _advance_after_upkeep_choices(session: Session) -> None:
         human_choices=choices,
         optional_choices=optional,
         mana_prevention=mana_prevention,
-        recopy_targets=recopy_targets,
+        trigger_targets=trigger_targets,
     )
     # Lord of the Pit: a mandatory upkeep sacrifice armed an interactive choice.
     # Pause here; the sacrifice_confirm handler resumes _finish_beginning_phase.
@@ -1811,7 +1836,32 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         and pending_lamp.get("player_index") == viewer_seat
         and _seat_type(session, viewer_seat) != "ai"
     ):
-        lamp_draw_info = {"card_names": list(pending_lamp["card_names"])}
+        # The looked-at cards are still on top of the library until the choice is
+        # confirmed, so serialize them from there for the visual picker (art +
+        # hover preview). card_names stays as the authoritative order/length.
+        names = list(pending_lamp["card_names"])
+        library = session.game.players[viewer_seat].library
+        lamp_draw_info = {
+            "card_names": names,
+            "cards": [_serialize_card_summary(card) for card in library[: len(names)]],
+        }
+
+    # Ring of Ma'rûf: the replaced draw — the owner picks a card from outside the
+    # game (their sideboard). Shown only to that player.
+    outside_game_draw_info = None
+    pending_outside = session.game.pending_outside_game_draw
+    if (
+        pending_outside is not None
+        and viewer_seat is not None
+        and pending_outside.get("player_index") == viewer_seat
+        and _seat_type(session, viewer_seat) != "ai"
+    ):
+        names = list(pending_outside["card_names"])
+        sideboard = session.game.players[viewer_seat].sideboard
+        outside_game_draw_info = {
+            "card_names": names,
+            "cards": [_serialize_card_summary(card) for card in sideboard[: len(names)]],
+        }
 
     # Cuombajj Witches: the opposing chooser picks any target for the second
     # damage packet. Surface the prompt only to the chooser.
@@ -2070,6 +2120,7 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         ),
         "opponent_damage_choice": opponent_damage_info,
         "lamp_draw": lamp_draw_info,
+        "outside_game_draw": outside_game_draw_info,
         "upkeep_pay": _build_upkeep_pay_info(session, viewer_seat),
         "upkeep_mana_prevention": _build_upkeep_mana_prevention_info(session, viewer_seat),
         "optional_trigger": _build_optional_trigger_info(session, viewer_seat),
@@ -3329,6 +3380,7 @@ def create_deck(req: DeckSaveRequest):
         [c.model_dump() for c in req.cards],
         req.description.strip(),
         normalize_format(req.format),
+        [c.model_dump() for c in req.sideboard],
     )
     return _deck_detail(deck)
 
@@ -3352,6 +3404,7 @@ def update_deck(deck_id: str, req: DeckSaveRequest):
             [c.model_dump() for c in req.cards],
             req.description.strip(),
             normalize_format(req.format),
+            [c.model_dump() for c in req.sideboard],
         )
     except DeckNotFoundError as exc:
         raise HTTPException(status_code=404, detail="deck not found") from exc
@@ -3375,11 +3428,11 @@ def import_deck(req: DeckImportRequest):
     warnings: list[str] = []
     if req.url and req.url.strip():
         try:
-            name, entries = fetch_moxfield_deck(req.url.strip())
+            name, entries, sideboard = fetch_moxfield_deck(req.url.strip())
         except DeckImportError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
     elif req.text and req.text.strip():
-        entries, warnings = parse_decklist_text(req.text)
+        entries, warnings, sideboard = parse_decklist_text(req.text)
         name = "Imported Deck"
     else:
         raise HTTPException(status_code=400, detail="provide a decklist text or a Moxfield URL")
@@ -3390,6 +3443,7 @@ def import_deck(req: DeckImportRequest):
     return {
         "name": name,
         "cards": resolved,
+        "sideboard": _resolve_deck_entries(sideboard),
         "warnings": warnings,
         "unknown_count": sum(e["count"] for e in resolved if e["status"] == "unknown"),
         "unsupported_count": sum(e["count"] for e in resolved if e["status"] == "unsupported"),
@@ -3429,6 +3483,7 @@ def join_session(session_id: str, req: JoinSessionRequest, request: Request):
             req.guest_colors,
             req.guest_deck_cards,
             req.guest_deck_name,
+            req.guest_deck_sideboard,
         )
     except DeckNotFoundError as exc:
         raise HTTPException(status_code=400, detail="selected deck not found") from exc
@@ -3818,6 +3873,12 @@ def do_action(session_id: str, req: GameActionRequest):
         and req.action not in {"lamp_draw_confirm", "debug_add_to_hand", "debug_cast_free", "debug_add_mana"}
     ):
         raise HTTPException(status_code=400, detail="choose a card for Aladdin's Lamp before other actions")
+    if (
+        session.game.pending_outside_game_draw is not None
+        and session.game.pending_outside_game_draw.get("player_index") == req.seat
+        and req.action not in {"outside_game_draw_confirm", "debug_add_to_hand", "debug_cast_free", "debug_add_mana"}
+    ):
+        raise HTTPException(status_code=400, detail="choose a card from outside the game before other actions")
     if (
         session.game.pending_word_of_command is not None
         and "chosen_hand_index" not in session.game.pending_word_of_command
@@ -4418,9 +4479,12 @@ def do_action(session_id: str, req: GameActionRequest):
         if req.card_name not in pending:
             raise HTTPException(status_code=400, detail="card not awaiting an optional trigger decision")
 
-        # A target-bearing optional trigger (Vesuvan Doppelganger's re-copy)
-        # requires the chosen creature alongside an accept.
+        # A target-bearing trigger (Vesuvan Doppelganger's re-copy, Erhnam
+        # Djinn's forestwalk grant) requires the chosen creature alongside an
+        # accept. Mandatory triggers can't be declined — only targeted.
         choice = pending[req.card_name]
+        if choice.get("mandatory") and not req.accept:
+            raise HTTPException(status_code=400, detail="this trigger is mandatory and can't be declined")
         if choice.get("needs_target") and req.accept:
             if req.target_seat is None or req.target_permanent_index is None:
                 raise HTTPException(status_code=400, detail="this trigger requires a target choice")
@@ -4594,6 +4658,17 @@ def do_action(session_id: str, req: GameActionRequest):
         if req.hand_index is None:
             raise HTTPException(status_code=400, detail="hand_index is required")
         if not session.game.confirm_lamp_draw(req.seat, req.hand_index):
+            raise HTTPException(status_code=400, detail="invalid card choice")
+
+    elif req.action == "outside_game_draw_confirm":
+        # Ring of Ma'rûf: the player picks which card they own from outside the
+        # game to put into their hand (hand_index = position in the sideboard).
+        pending = session.game.pending_outside_game_draw
+        if pending is None or pending.get("player_index") != req.seat:
+            raise HTTPException(status_code=400, detail="no outside-the-game choice is pending for you")
+        if req.hand_index is None:
+            raise HTTPException(status_code=400, detail="hand_index is required")
+        if not session.game.confirm_outside_game_draw(req.seat, req.hand_index):
             raise HTTPException(status_code=400, detail="invalid card choice")
 
     elif req.action == "opponent_damage_choose":

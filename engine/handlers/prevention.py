@@ -208,13 +208,33 @@ def shield_target_land_from_destruction(game: Game, instruction: OracleInstructi
 
 @effect_handler("arm_mirror_damage")
 def arm_mirror_damage(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    """Eye for an Eye: the next damage dealt to you this turn also hits the
-    source's controller for the same amount. Modeled as a generic one-shot
-    charge (like Reverse Damage's), consumed in _deal_damage_to_player."""
+    """Eye for an Eye: the next damage dealt to you this turn by "a source of
+    your choice" also hits that source's controller for the same amount.
+
+    Mirrors Reverse Damage's shape: the caster picks the source — a permanent on
+    any battlefield (target_permanent_index) or a spell on the stack
+    (stack_target) — and only damage from that source is mirrored, matched by
+    identity in _deal_damage_to_player. With no chosen source (AI / headless
+    casts) fall back to a generic charge that mirrors the next damage event from
+    any source."""
     caster = context.caster
-    caster.mirror_damage_charges += 1
-    game.log.append(
-        f"{caster.name}: the next damage dealt to them this turn is mirrored "
-        f"to its source's controller ({context.card.name})"
-    )
+    if context.stack_target is not None:
+        # A spell on the stack: match later by its card identity (the same
+        # CardDefinition the spell deals damage with when it resolves).
+        chosen = context.stack_target.card
+    else:
+        chosen = resolve_target_permanent(context, predicate=lambda p: True, fallback_players=())
+    if chosen is not None:
+        caster.mirror_damage_sources.append(chosen)
+        source_card = getattr(chosen, "card", chosen)
+        game.log.append(
+            f"{caster.name}: the next damage {getattr(source_card, 'name', 'a source')} "
+            f"deals to them this turn is mirrored to its controller ({context.card.name})"
+        )
+    else:
+        caster.mirror_damage_charges += 1
+        game.log.append(
+            f"{caster.name}: the next damage dealt to them this turn is mirrored "
+            f"to its source's controller ({context.card.name})"
+        )
     return True, "resolved"
