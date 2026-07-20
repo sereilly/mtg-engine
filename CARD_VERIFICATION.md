@@ -3,9 +3,9 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **369**
-- Passed: **316**
-- Failed: **6**
-- Untested: **47**
+- Passed: **317**
+- Failed: **7**
+- Untested: **45**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -113,7 +113,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Elephant Graveyard | ⬜ untested |  |
 | Elvish Archers | ✅ pass |  |
 | Erg Raiders | ⬜ untested |  |
-| Erhnam Djinn | ⬜ untested |  |
+| Erhnam Djinn | ❌ fail | I didn't get to choose a target |
 | Evil Presence | ✅ pass |  |
 | Eye for an Eye | ❌ fail | I didn't get to choose a source |
 | False Orders | ✅ pass |  |
@@ -184,7 +184,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Jandor's Saddlebags | ✅ pass |  |
 | Jayemdae Tome | ✅ pass |  |
 | Jeweled Bird | ⬜ untested |  |
-| Jihad | ⬜ untested |  |
+| Jihad | ✅ pass |  |
 | Juggernaut | ✅ pass |  |
 | Jump | ✅ pass |  |
 | Junún Efreet | ⬜ untested |  |

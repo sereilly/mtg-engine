@@ -1577,6 +1577,8 @@ function activatedAbilityDestroyPermanentColor(card) {
   return s.color_filter ?? null;
 }
 function activatedAbilityRequiresTargetPermanent(card) { return specKind(card) === "permanent"; }
+// Aladdin: "Gain control of target artifact for as long as you control this creature."
+function activatedAbilityRequiresTargetArtifact(card) { return specKind(card) === "artifact"; }
 function activatedAbilityRequiresTargetAny(card) { return specKind(card) === "any"; }
 function activatedAbilityRequiresTargetPlayer(card) { return specKind(card) === "player"; }
 function activatedAbilityRequiresTargetCreatureGrant(card) { return specKind(card) === "creature"; }
@@ -4500,8 +4502,13 @@ function renderActivationPrompt() {
       steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
     } else {
       const players = Array.isArray(currentState?.players) ? currentState.players : [];
+      // Only seats the backend listed as legal — "target opponent" (Word of
+      // Command) excludes the caster's own seat, and a dead seat is nobody's
+      // legal target. An empty/absent list means every seat is fair game.
+      const legalSeats = pendingCastTarget.validPlayerSeats;
       const targetButtons = players
         .map((player, index) => {
+          if (legalSeats && legalSeats.size > 0 && !legalSeats.has(index)) return "";
           const label = player?.name || `Seat ${index}`;
           return `<button type="button" class="prompt-choice-btn" data-target-choice="${index}">${escapeHtml(label)}</button>`;
         })
@@ -4962,6 +4969,23 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     }
     pendingCastTarget = {
       card, cardName, targetKind: "permanent", castAction: "activate", alsoStack,
+      sourcePermanentIndex: permanentIndex, abilityIndex, ...fields,
+    };
+    renderActivationPrompt();
+    renderBoard(currentState);
+    return;
+  }
+
+  // Abilities that target an artifact (Aladdin's "Gain control of target
+  // artifact"): the backend restricts the list to artifacts it could legally take.
+  if (activatedAbilityRequiresTargetArtifact(card)) {
+    const fields = pendingTargetFields(card);
+    if (fields.validKeys.size === 0) {
+      updateActionHint(`No valid artifact targets in play for ${cardName}.`, true);
+      return;
+    }
+    pendingCastTarget = {
+      card, cardName, targetKind: "artifact", castAction: "activate",
       sourcePermanentIndex: permanentIndex, abilityIndex, ...fields,
     };
     renderActivationPrompt();

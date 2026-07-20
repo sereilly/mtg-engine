@@ -440,6 +440,11 @@
       "status": "pass",
       "updated_at": 1781455740.8711123
     },
+    "Erhnam Djinn": {
+      "reason": "I didn't get to choose a target",
+      "status": "fail",
+      "updated_at": 1784520072.4533038
+    },
     "Evil Presence": {
       "reason": "",
       "status": "pass",
@@ -744,6 +749,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782007143.640714
+    },
+    "Jihad": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1784519922.9096136
     },
     "Juggernaut": {
       "reason": "",

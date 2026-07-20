@@ -203,7 +203,15 @@ def _cast_requires_any(card: CardDefinition) -> bool:
 
 
 def _cast_requires_player(card: CardDefinition) -> bool:
-    return any("target player" in t for t in _cast_lines(card))
+    # "target opponent" (Word of Command) is a player target too — it just can't
+    # be the caster, which _cast_targets_opponent_only flags for the enumerator.
+    return any("target player" in t or "target opponent" in t for t in _cast_lines(card))
+
+
+def _cast_targets_opponent_only(card: CardDefinition) -> bool:
+    """Word of Command: "Look at target opponent's hand ..." — the caster's own
+    seat is not a legal choice (CR 115.4)."""
+    return any("target opponent" in t for t in _cast_lines(card))
 
 
 def _stack_spell_color_filter(card: CardDefinition) -> str | None:
@@ -279,7 +287,7 @@ def _classify_cast(card: CardDefinition) -> dict:
     if _cast_requires_any(card):
         return {"kind": "any"}
     if _cast_requires_player(card):
-        return {"kind": "player"}
+        return {"kind": "player", "opponents_only": _cast_targets_opponent_only(card)}
     return {"kind": "none"}
 
 
@@ -358,6 +366,19 @@ def _activated_requires_sacrifice_creature(card: CardDefinition) -> bool:
     return any("sacrifice a creature" in line for line in _activated_lines(card))
 
 
+def _activated_requires_artifact(card: CardDefinition) -> bool:
+    """Aladdin: "{1}{R}{R}, {T}: Gain control of target artifact ..." — mirrors
+    the cast-side artifact classifier, including its carve-out for "target
+    artifact, creature, or land" (Icy Manipulator), which is an any-permanent
+    target rather than an artifact-only one."""
+    for line in _activated_lines(card):
+        if "target artifact, creature, or land" in line:
+            continue
+        if "target artifact" in line and "artifact or enchantment" not in line:
+            return True
+    return False
+
+
 def _activated_requires_permanent(card: CardDefinition) -> bool:
     # "Tap target artifact, creature, or land" (Icy Manipulator) targets any
     # permanent; "target permanent" abilities likewise.
@@ -402,6 +423,7 @@ def _activated_requires_player(card: CardDefinition) -> bool:
 # exactly what it could legally affect, matching its resolution.
 _FILTERABLE_ABILITY_KINDS = {
     "destroy_target_permanent",
+    "grant_regeneration_to_target_creature",
     "mark_non_wall_target_to_attack",
     "grant_flying_and_delayed_destruction",
     "grant_unblockable_to_low_power_target",
@@ -419,6 +441,18 @@ def _ability_target_instruction(card: CardDefinition):
         if instruction is not None and instruction.kind in _FILTERABLE_ABILITY_KINDS:
             return instruction
     return None
+
+
+def _instruction_targets_by_subtype(instruction) -> bool:
+    """Whether *instruction* targets creatures named only by subtype — King
+    Suleiman's "target Djinn or Efreet", Elephant Graveyard's "target Elephant".
+    Such a line never contains the word "creature", so the text classifiers
+    can't see the target; the compiled filter can."""
+    if instruction is None or not instruction.payload.get("subtype_filter"):
+        return False
+    # A subtype filter on a non-creature target (a land subtype, say) isn't a
+    # creature prompt.
+    return instruction.payload.get("type_filter", "creature") == "creature"
 
 
 def _activated_requires_unblocked_attacker(card: CardDefinition) -> bool:
@@ -463,6 +497,10 @@ def _classify_activation(card: CardDefinition) -> dict:
         return {"kind": "creature", "own_only": True}
     if _activated_requires_creature(card):
         return {"kind": "creature"}
+    if _activated_requires_artifact(card):
+        # Aladdin — before the permanent classifier, which would otherwise offer
+        # every permanent for what is an artifact-only target.
+        return {"kind": "artifact"}
     if _activated_requires_aura_on_land(card):
         # Pyramids — before the land classifier. The destroy instruction's
         # attached_to_land filter narrows the enumeration to Auras on lands.
@@ -643,7 +681,6 @@ class LegalityMixin:
             spec["stack_color_filter"] = self._remap_color_filter(
                 source_permanent, spec["stack_color_filter"]
             )
-        spec["requires_target"] = spec["kind"] != "none"
         if chosen_ability is not None:
             ability_instruction = (
                 chosen_ability.instruction
@@ -652,6 +689,15 @@ class LegalityMixin:
             )
         else:
             ability_instruction = _ability_target_instruction(card)
+        if spec["kind"] == "none" and _instruction_targets_by_subtype(ability_instruction):
+            # King Suleiman ("Destroy target Djinn or Efreet"), Elephant Graveyard
+            # ("Regenerate target Elephant"): the line names a creature subtype and
+            # never the word "creature", so the textual classifiers above see no
+            # target at all. The compiled instruction's filters — which are what
+            # resolution enforces — do, so the prompt is derived from them and
+            # _ability_target_legal narrows the list to the named subtype.
+            spec["kind"] = "creature"
+        spec["requires_target"] = spec["kind"] != "none"
         spec["valid_targets"] = self._enumerate_targets(
             controller_index, card, spec, for_cast=False,
             ability_instruction=ability_instruction,
@@ -692,6 +738,9 @@ class LegalityMixin:
         # spells — but not a divided land selection (Volcanic Eruption's Mountains).
         if kind in ("player", "any", "divided") and not spec.get("land_filter"):
             for seat in range(len(self.players)):
+                # "target opponent" (Word of Command) can't be the caster's own seat.
+                if spec.get("opponents_only") and seat == caster_index:
+                    continue
                 targets.append({"kind": "player", "seat": seat})
             if kind == "player":
                 return targets
@@ -767,6 +816,11 @@ class LegalityMixin:
             if not perm.is_creature:
                 return False
             return source_permanent is None or perm.effective_power <= source_permanent.effective_power
+        if instruction.kind == "grant_regeneration_to_target_creature":
+            # Elephant Graveyard's "target Elephant" — the same subtype filter
+            # _grant_regeneration_shield enforces at resolution. Death Ward's
+            # payload is empty, so every creature passes.
+            return perm.is_creature and permanent_matches_filter(perm, instruction.payload)
         if instruction.kind == "tap_target_permanent":
             # Ali Baba's "target Wall" (and any other parsed tap-target filter);
             # Icy Manipulator's payload is empty, so everything passes.
