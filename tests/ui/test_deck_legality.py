@@ -120,6 +120,71 @@ def test_unknown_card_not_double_flagged():
     assert all("banned" not in p and "not legal" not in p for p in res["problems"])
 
 
+# ── Sideboard rules (CR 100.4a, 903.5e) ─────────────────────────────────────
+
+def test_sideboard_limited_to_fifteen_cards():
+    cat = _catalog(_card("Grizzly Bears", "legal"))
+    side = [{"name": "Grizzly Bears", "count": 4} for _ in range(4)]  # 16 cards
+    res = validate_deck([], "modern", cat, side)
+    assert any("Sideboard has 16 card(s)" in p and "at most 15" in p for p in res["problems"])
+
+
+def test_fifteen_card_sideboard_is_fine():
+    cat = _catalog(_card("Forest", "legal", type_line="Basic Land - Forest"))
+    res = validate_deck([{"name": "Forest", "count": 60}], "modern", cat,
+                        [{"name": "Forest", "count": 15}])
+    assert res["legal"] is True
+
+
+def test_copy_limit_counts_deck_plus_sideboard():
+    cat = _catalog(_card("Grizzly Bears", "legal"))
+    res = validate_deck([{"name": "Grizzly Bears", "count": 3}], "modern", cat,
+                        [{"name": "Grizzly Bears", "count": 2}])
+    assert "Grizzly Bears" in res["illegal_names"]
+    assert any("5 copies across deck and sideboard" in p for p in res["problems"])
+
+
+def test_sideboard_only_card_still_checked():
+    cat = _catalog(_card("Bad Card", "banned"), _card("Grizzly Bears", "legal"))
+    res = validate_deck([], "modern", cat, [{"name": "Bad Card", "count": 1}])
+    assert "Bad Card" in res["illegal_names"]
+    # A sideboard-only overage reads without the "across" wording.
+    over = validate_deck([], "modern", cat, [{"name": "Grizzly Bears", "count": 5}])
+    assert any("5 copies exceed the 4-copy limit" in p for p in over["problems"])
+
+
+def test_sideboard_does_not_count_toward_minimum_deck_size():
+    cat = _catalog(_card("Forest", "legal", type_line="Basic Land - Forest"))
+    res = validate_deck([{"name": "Forest", "count": 55}], "modern", cat,
+                        [{"name": "Forest", "count": 15}])
+    assert any("Deck has 55 card(s)" in p and "at least 60" in p for p in res["problems"])
+
+
+def test_commander_has_no_sideboard():
+    cat = _catalog(_card("Sol Ring", "legal", key="commander"))
+    res = validate_deck([], "commander", cat, [{"name": "Sol Ring", "count": 1}])
+    assert any("does not use a sideboard" in p for p in res["problems"])
+
+
+def test_casual_sideboard_unbounded():
+    cat = _catalog(_card("Grizzly Bears", "legal"))
+    res = validate_deck([], "casual", cat, [{"name": "Grizzly Bears", "count": 40}])
+    assert res["legal"] is True
+
+
+def test_deck_summary_validates_sideboard():
+    deck = {
+        "id": "d3",
+        "name": "Fat Sideboard",
+        "cards": [{"name": "Mountain", "count": 60}],
+        "sideboard": [{"name": "Mountain", "count": 16}],
+        "format": "premodern",
+    }
+    summary = _deck_summary(deck)
+    assert summary["legality"]["legal"] is False
+    assert any("Sideboard has 16 card(s)" in p for p in summary["legality"]["problems"])
+
+
 def test_normalize_format_falls_back_to_casual():
     assert normalize_format("nonsense") == "casual"
     assert normalize_format(None) == "casual"

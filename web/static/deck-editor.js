@@ -39,11 +39,31 @@
     return state.current.format || "casual";
   }
 
-  // Legality reason for a card at a given count in the current format, "" if ok.
-  function cardLegalityProblem(name, count = 0) {
+  // Legality reason for a card in the current format, "" if ok. The copy limit
+  // counts deck + sideboard together (CR 100.4a), so both boards are consulted
+  // regardless of which one the card is being shown in.
+  function cardLegalityProblem(name) {
     const card = lookupCard(name);
     if (!card || !window.Legality) return "";
-    return window.Legality.cardProblem(card, currentFormat(), count);
+    const main = entryFor(name, "entries");
+    const side = entryFor(name, "sideboard");
+    return window.Legality.cardProblem(
+      card, currentFormat(), main ? main.count : 0, side ? side.count : 0,
+    );
+  }
+
+  // Copies of a card held across both boards — the number the four-of limit
+  // actually applies to (CR 100.4a).
+  function combinedCount(name) {
+    const main = entryFor(name, "entries");
+    const side = entryFor(name, "sideboard");
+    return (main ? main.count : 0) + (side ? side.count : 0);
+  }
+
+  function overCopyLimit(name) {
+    const card = lookupCard(name);
+    const limit = card && window.Legality ? window.Legality.copyLimit(card, currentFormat()) : null;
+    return limit != null && combinedCount(name) > limit;
   }
 
   function primaryType(card) {
@@ -188,8 +208,9 @@
       }
     }
     const fmt = window.Legality ? window.Legality.normalizeFormat(deck.format) : "casual";
+    const sideboard = (deck.sideboard || []).map((c) => ({ name: c.name, count: c.count }));
     const legality = window.Legality
-      ? window.Legality.validateDeck(cards, fmt, (n) => lookupCard(n))
+      ? window.Legality.validateDeck(cards, fmt, (n) => lookupCard(n), sideboard)
       : { legal: true, problems: [] };
     return {
       id: deck.id,
@@ -201,11 +222,11 @@
       colors: ["W", "U", "B", "R", "G"].filter((c) => colors.has(c)),
       unsupported_count: unsupported,
       unknown_count: unknown,
-      sideboard_count: (deck.sideboard || []).reduce((s, c) => s + c.count, 0),
+      sideboard_count: sideboard.reduce((s, c) => s + c.count, 0),
       updated_at: deck.updated_at,
       scope: "personal",
       cards,
-      sideboard: (deck.sideboard || []).map((c) => ({ name: c.name, count: c.count })),
+      sideboard,
     };
   }
 
@@ -381,6 +402,14 @@
     renderPreview();
   }
 
+  // Redden a tile's count badge once the card breaks the format's copy limit,
+  // so the 5th copy is visible the instant it's added.
+  function decorateCountBadge(badge, name) {
+    const over = overCopyLimit(name);
+    badge.classList.toggle("browser-card-count-over", over);
+    badge.title = over ? cardLegalityProblem(name) : "";
+  }
+
   function updateBrowserTile(name) {
     const tile = document.querySelector(
       `#browserGrid .browser-card[data-card-name="${CSS.escape(name)}"]`,
@@ -395,6 +424,7 @@
         tile.insertBefore(badge, tile.querySelector(".browser-card-controls"));
       }
       badge.textContent = `×${entry.count}`;
+      decorateCountBadge(badge, name);
     } else if (badge) {
       badge.remove();
     }
@@ -475,7 +505,7 @@
     const cardCount = deck.cards.reduce((s, c) => s + c.count, 0);
     // Saving never blocks, but surface any format-legality issues as a warning.
     const legality = window.Legality
-      ? window.Legality.validateDeck(cards, format, (n) => lookupCard(n))
+      ? window.Legality.validateDeck(cards, format, (n) => lookupCard(n), sideboard)
       : { legal: true, problems: [] };
     if (!legality.legal) {
       const first = legality.problems[0] || "";
@@ -581,8 +611,25 @@
     const mainBtn = q("deckBoardMainBtn");
     const sideBtn = q("deckBoardSideBtn");
     if (!mainBtn || !sideBtn) return;
-    mainBtn.textContent = `Deck (${deckTotal()})`;
-    sideBtn.textContent = `Sideboard (${sideboardTotal()})`;
+    // Live counts against the format's limits, e.g. "Deck (58/60)" reddened
+    // until the minimum is met, "Sideboard (16/15)" once it's overfull.
+    const fmt = window.Legality && window.Legality.isChecked(currentFormat())
+      ? window.Legality.getFormat(currentFormat())
+      : null;
+    const main = deckTotal();
+    const side = sideboardTotal();
+    const mainLimit = fmt && fmt.min_deck ? `/${fmt.min_deck}` : "";
+    const sideLimit = fmt && fmt.max_sideboard ? `/${fmt.max_sideboard}` : "";
+    mainBtn.textContent = `Deck (${main}${mainLimit})`;
+    sideBtn.textContent = `Sideboard (${side}${sideLimit})`;
+    mainBtn.classList.toggle(
+      "deck-board-tab-problem",
+      Boolean(fmt) && (main < fmt.min_deck || (fmt.max_deck != null && main > fmt.max_deck)),
+    );
+    sideBtn.classList.toggle(
+      "deck-board-tab-problem",
+      Boolean(fmt) && fmt.max_sideboard != null && side > fmt.max_sideboard,
+    );
     mainBtn.classList.toggle("active", !state.editingSideboard);
     sideBtn.classList.toggle("active", state.editingSideboard);
     mainBtn.setAttribute("aria-selected", String(!state.editingSideboard));
@@ -713,6 +760,7 @@
         const badge = document.createElement("div");
         badge.className = "browser-card-count";
         badge.textContent = `×${inDeck.count}`;
+        decorateCountBadge(badge, card.name);
         tile.appendChild(badge);
       }
       if (!card.supported) {
@@ -793,7 +841,9 @@
   }
 
   // Deck-level legality banner: OK badge when the deck is legal for its format,
-  // or a red list of the specific rule violations.
+  // or a red list of the specific rule violations. Always covers both boards
+  // (deck size, sideboard cap, and the combined copy limit), whichever tab is
+  // open, so a sideboard problem can't hide behind the mainboard view.
   function renderLegalitySummary() {
     const el = q("deckLegality");
     if (!el) return;
@@ -804,7 +854,8 @@
       return;
     }
     const cards = state.current.entries.map((e) => ({ name: e.name, count: e.count }));
-    const legality = window.Legality.validateDeck(cards, format, (n) => lookupCard(n));
+    const side = activeEntries("sideboard").map((e) => ({ name: e.name, count: e.count }));
+    const legality = window.Legality.validateDeck(cards, format, (n) => lookupCard(n), side);
     const label = window.Legality.formatLabel(format);
     if (legality.legal) {
       el.className = "deck-legality deck-legality-ok";
@@ -882,7 +933,7 @@
         .sort((a, b) => a.name.localeCompare(b.name))
         .forEach((entry) => {
           const card = lookupCard(entry.name);
-          const legalProblem = cardLegalityProblem(entry.name, entry.count);
+          const legalProblem = cardLegalityProblem(entry.name);
           const row = document.createElement("div");
           row.className = "deck-row";
           if (entry.status !== "ok" || legalProblem) row.classList.add("deck-row-problem");

@@ -10,7 +10,7 @@
   // Kept minimal — the authoritative list arrives via setFormats() from the
   // /api/cards/catalog response.
   let FORMATS = [
-    { key: "casual", label: "Casual (no restrictions)", scryfall_key: null, min_deck: 0, max_deck: null, max_copies: 99, singleton: false },
+    { key: "casual", label: "Casual (no restrictions)", scryfall_key: null, min_deck: 0, max_deck: null, max_copies: 99, max_sideboard: null, singleton: false },
   ];
   let byKey = new Map(FORMATS.map((f) => [f.key, f]));
   const DEFAULT_FORMAT = "casual";
@@ -76,51 +76,84 @@
   }
 
   // Human-readable reason a card is illegal in a format, or "" if it's fine.
-  // `count` lets it report copy-limit violations; pass 0/omitted to only check
-  // the card's own ban/legality status (used for browser tiles).
-  function cardProblem(card, key, count = 0) {
+  // `count` is the main-deck count and `sideCount` the sideboard count; the copy
+  // limit applies to their sum (CR 100.4a). Pass 0/omit both to only check the
+  // card's own ban/legality status (used for browser tiles).
+  function cardProblem(card, key, count = 0, sideCount = 0) {
     const fmt = getFormat(key);
     if (!card || !fmt || !fmt.scryfall_key) return "";
     const status = cardStatus(card, key);
     if (status === "banned") return `${card.name} is banned in ${fmt.label}.`;
     if (status === "not_legal") return `${card.name} is not legal in ${fmt.label}.`;
     const limit = effectiveMaxCopies(card, fmt, status);
-    if (count && limit != null && count > limit) {
-      if (status === "restricted") return `${card.name} is restricted to 1 copy in ${fmt.label} (deck has ${count}).`;
-      if (limit === 1) return `${card.name}: ${count} copies exceed the 1-of limit in ${fmt.label}.`;
-      return `${card.name}: ${count} copies exceed the ${limit}-copy limit in ${fmt.label}.`;
+    const total = Number(count || 0) + Number(sideCount || 0);
+    if (total && limit != null && total > limit) {
+      // Name the sideboard only when it actually contributes to the overage.
+      const where = sideCount && count ? " across deck and sideboard" : "";
+      if (status === "restricted") return `${card.name} is restricted to 1 copy in ${fmt.label} (deck has ${total}${where}).`;
+      if (limit === 1) return `${card.name}: ${total} copies${where} exceed the 1-of limit in ${fmt.label}.`;
+      return `${card.name}: ${total} copies${where} exceed the ${limit}-copy limit in ${fmt.label}.`;
     }
     return "";
   }
 
-  // Validate a whole deck. `entries` is [{name, count}]; `lookupCard(name)`
-  // resolves a name to a catalog card (or null). Returns
-  // {format, legal, problems:[str], illegalNames:Set}. Cards not in the catalog
-  // are skipped — they're surfaced separately as "not in catalog".
-  function validateDeck(entries, key, lookupCard) {
+  // How many copies of `card` a deck may hold in this format, or null for
+  // unlimited (basic lands, "any number" cards, and unchecked formats).
+  function copyLimit(card, key) {
     const fmt = getFormat(key);
-    const result = { format: fmt ? fmt.key : DEFAULT_FORMAT, legal: true, problems: [], illegalNames: new Set() };
-    if (!fmt || !fmt.scryfall_key) return result;
+    if (!card || !fmt || !fmt.scryfall_key) return null;
+    return effectiveMaxCopies(card, fmt, cardStatus(card, key));
+  }
 
+  // Sum an entry list into a Map of lowercased name -> count, plus a total.
+  function tally(entries) {
+    const counts = new Map();
     let total = 0;
     for (const entry of entries || []) {
       const name = String((entry && entry.name) || "").trim();
       const count = Number((entry && entry.count) || 0);
       if (!name || count <= 0) continue;
+      const key = name.toLowerCase();
+      counts.set(key, (counts.get(key) || 0) + count);
       total += count;
+    }
+    return { counts, total };
+  }
+
+  // Validate a whole deck. `entries`/`sideboard` are [{name, count}];
+  // `lookupCard(name)` resolves a name to a catalog card (or null). Returns
+  // {format, legal, problems:[str], illegalNames:Set}. Cards not in the catalog
+  // are skipped — they're surfaced separately as "not in catalog".
+  function validateDeck(entries, key, lookupCard, sideboard = null) {
+    const fmt = getFormat(key);
+    const result = { format: fmt ? fmt.key : DEFAULT_FORMAT, legal: true, problems: [], illegalNames: new Set() };
+    if (!fmt || !fmt.scryfall_key) return result;
+
+    const main = tally(entries);
+    const side = tally(sideboard);
+    // Main-deck order first, then sideboard-only cards.
+    const names = [...main.counts.keys(), ...[...side.counts.keys()].filter((n) => !main.counts.has(n))];
+    for (const name of names) {
       const card = lookupCard(name);
       if (!card) continue;
-      const problem = cardProblem(card, key, count);
+      const problem = cardProblem(card, key, main.counts.get(name) || 0, side.counts.get(name) || 0);
       if (problem) {
         result.problems.push(problem);
         result.illegalNames.add(card.name);
       }
     }
-    if (total < fmt.min_deck) {
-      result.problems.push(`Deck has ${total} card(s); ${fmt.label} requires at least ${fmt.min_deck}.`);
+    if (main.total < fmt.min_deck) {
+      result.problems.push(`Deck has ${main.total} card(s); ${fmt.label} requires at least ${fmt.min_deck}.`);
     }
-    if (fmt.max_deck != null && total > fmt.max_deck) {
-      result.problems.push(`Deck has ${total} card(s); ${fmt.label} allows at most ${fmt.max_deck}.`);
+    if (fmt.max_deck != null && main.total > fmt.max_deck) {
+      result.problems.push(`Deck has ${main.total} card(s); ${fmt.label} allows at most ${fmt.max_deck}.`);
+    }
+    if (fmt.max_sideboard != null && side.total > fmt.max_sideboard) {
+      if (fmt.max_sideboard === 0) {
+        result.problems.push(`${fmt.label} does not use a sideboard (sideboard has ${side.total} card(s)).`);
+      } else {
+        result.problems.push(`Sideboard has ${side.total} card(s); ${fmt.label} allows at most ${fmt.max_sideboard}.`);
+      }
     }
     result.legal = result.problems.length === 0;
     return result;
@@ -135,6 +168,7 @@
     isChecked,
     cardStatus,
     cardProblem,
+    copyLimit,
     validateDeck,
     DEFAULT_FORMAT,
   };

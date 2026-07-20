@@ -3511,6 +3511,12 @@ pre {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
 }
 
+/* Deck + sideboard copies exceed the format's limit (CR 100.4a). */
+.browser-card-count-over {
+  background: var(--danger);
+  color: #fff;
+}
+
 .browser-card-controls {
   position: absolute;
   bottom: 0;
@@ -3688,6 +3694,12 @@ pre {
   border-color: rgba(242, 184, 75, 0.6);
   background: rgba(242, 184, 75, 0.14);
   color: var(--ink);
+}
+
+/* Board is outside its format's size limits (deck minimum / sideboard cap). */
+.deck-board-tab-problem {
+  color: var(--danger);
+  border-color: rgba(214, 74, 74, 0.55);
 }
 
 .deck-stats {

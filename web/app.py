@@ -605,7 +605,7 @@ def _deck_summary(deck: dict) -> dict:
         if match:
             colors.update(match["color_identity"])
     fmt = normalize_format(deck.get("format"))
-    legality = validate_deck(deck.get("cards", []), fmt, CATALOG_BY_NAME)
+    legality = validate_deck(deck.get("cards", []), fmt, CATALOG_BY_NAME, deck_sideboard(deck))
     return {
         "id": deck["id"],
         "name": deck["name"],
