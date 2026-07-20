@@ -1548,6 +1548,68 @@ def test_next_phase_holds_post_block_priority_when_stop_flagged():
     assert advanced.json()["current_step"] == "end_of_combat"
 
 
+def test_next_phase_holds_combat_damage_when_stop_flagged():
+    """Regression: a human attacker who flagged the combat-damage step on the phase
+    rail must receive the CR 510.4 priority window after damage is dealt, instead of
+    the server auto-resolving a trivial (unblocked) combat and skipping straight to
+    end_of_combat. Previously the combat_damage stop was silently ignored."""
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "human_vs_ai",
+            "host_name": "Host",
+            "guest_name": "AI",
+            "host_colors": 2,
+            "guest_colors": 2,
+            "seed": 99203,
+        },
+    ).json()
+    sid = created["session_id"]
+
+    session = store.get(sid)
+    attacker = _mk_creature_card("Attacker", 3, 3)
+    session.game.players[0].battlefield = [Permanent(card=attacker)]
+    session.game.players[1].battlefield = []  # no blockers: damage auto-resolves
+    session.current_turn = 0
+    session.game.active_player_index = 0
+    session.game.current_turn_phase = "combat"
+    session.game.current_step = "declare_attackers"
+    session.game.current_phase = "combat"
+    starting_life = session.game.players[1].life
+
+    declared = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "declare_attackers", "attacker_indices": [0], "target_seat": 1},
+    )
+    assert declared.status_code == 200
+
+    # Advance with combat_damage flagged; the step must hold once reached rather than
+    # skipping through to end_of_combat.
+    result = None
+    for _ in range(5):
+        resp = client.post(
+            f"/api/sessions/{sid}/action",
+            json={"seat": 0, "action": "next_phase", "self_stop_steps": ["combat_damage"]},
+        )
+        assert resp.status_code == 200
+        result = resp.json()
+        if result["current_step"] == "combat_damage":
+            break
+
+    assert result["current_step"] == "combat_damage"  # held, not skipped
+    assert result["priority_player"] == 0  # attacker has the CR 510.4 window
+    assert store.get(sid).game.combat_damage_resolved is True
+    assert store.get(sid).game.players[1].life == starting_life - 3  # damage was dealt
+
+    # Passing through the held window advances combat normally.
+    advanced = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "next_phase", "self_stop_steps": ["combat_damage"]},
+    )
+    assert advanced.status_code == 200
+    assert advanced.json()["current_step"] == "end_of_combat"
+
+
 def test_human_defender_can_declare_blockers_while_ai_attacker_holds_priority():
     """Regression: on the AI's turn the active (AI) player holds priority during the
     declare-blockers step. Declaring blockers is the defending player's turn-based
@@ -2231,6 +2293,43 @@ def test_ai_holds_priority_for_human_at_upkeep_on_turn_start():
     assert payload["current_turn"] == 1  # now the AI's turn
     assert payload["current_step"] == "upkeep"
     assert payload["priority_player"] == 0  # human holds priority at the AI's upkeep
+
+
+def test_ai_holds_priority_for_human_at_combat_damage():
+    """Flagging the combat-damage step must pause the AI's turn there (after combat
+    damage is dealt) and hand the human priority, instead of the engine auto-resolving
+    a trivial (unblocked) combat and skipping straight to end_of_combat."""
+    sid = _make_ai_turn_session(80105)
+    session = store.get(sid)
+    game = session.game
+    game.players[1].hand = []
+
+    attacker = Permanent(card=_mk_creature_card("AI Attacker", 3, 3))
+    attacker.attacking = True
+    game.players[1].battlefield = [attacker]
+    game.players[0].battlefield = []  # human has no blockers: trivial combat
+    game.combat_defending_player_index = 0
+    game.combat_attackers = {0: 0}
+    game.combat_blockers = {}
+    game.combat_attackers_locked = True
+    game.combat_blockers_locked = True
+    game.combat_damage_resolved = False
+    game.combat_first_strike_done = False
+    game._set_phase_and_step("combat", "declare_blockers")
+    game.start_priority_window(1)
+    starting_life = game.players[0].life
+
+    resp = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "ai_step", "stop_steps": ["combat_damage"]},
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["current_turn"] == 1  # still the AI's turn
+    assert payload["current_step"] == "combat_damage"  # held, not skipped to end_of_combat
+    assert payload["priority_player"] == 0  # human holds priority
+    assert game.combat_damage_resolved is True
+    assert game.players[0].life == starting_life - 3  # damage was dealt
 
 
 def test_ai_resolves_combat_damage_for_multi_blocked_attacker():

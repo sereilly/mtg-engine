@@ -5,6 +5,11 @@
       "status": "pass",
       "updated_at": 1782590075.2882295
     },
+    "Aladdin's Lamp": {
+      "reason": "The look at top card(s) of library effect should open a window that shows the cards visually and allows you to hover over cards to see them. Reuse the Ui that's used for reordering cards on top of the library.",
+      "status": "fail",
+      "updated_at": 1784514816.2664242
+    },
     "Aladdin's Ring": {
       "reason": "",
       "status": "pass",
@@ -39,6 +44,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781475506.7830067
+    },
+    "Army of Allah": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1784515412.0878656
     },
     "Aspect of Wolf": {
       "reason": "",
@@ -179,6 +189,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782797545.2013893
+    },
+    "Circle of Protection: Black": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1784517683.3734765
     },
     "Circle of Protection: Blue": {
       "reason": "",
@@ -330,6 +345,16 @@
       "status": "pass",
       "updated_at": 1782797204.1439722
     },
+    "Desert": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1784516370.2276409
+    },
+    "Desert Nomads": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1784516357.7388604
+    },
     "Dingus Egg": {
       "reason": "",
       "status": "pass",
@@ -365,6 +390,11 @@
       "status": "pass",
       "updated_at": 1782543981.2815964
     },
+    "Drop of Honey": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1784515973.2913003
+    },
     "Drudge Skeletons": {
       "reason": "",
       "status": "pass",
@@ -395,6 +425,11 @@
       "status": "pass",
       "updated_at": 1782086101.2387257
     },
+    "Ebony Horse": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1784515693.8784268
+    },
     "El-Hajj\u00e2j": {
       "reason": "",
       "status": "pass",
@@ -409,6 +444,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782022287.5750093
+    },
+    "Eye for an Eye": {
+      "reason": "I didn't get to choose a source",
+      "status": "fail",
+      "updated_at": 1784517668.7536411
     },
     "False Orders": {
       "reason": "",
@@ -528,7 +568,7 @@
     "Gloom": {
       "reason": "",
       "status": "pass",
-      "updated_at": 1783040762.756918
+      "updated_at": 1784516881.274088
     },
     "Goblin Balloon Brigade": {
       "reason": "",
@@ -564,6 +604,16 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782590169.0233815
+    },
+    "Guardian Beast": {
+      "reason": "When a card becomes indestructible, it should be shown visually on the affected cards with added keyword text and a shiny animated card gleam effect",
+      "status": "fail",
+      "updated_at": 1784515307.0492723
+    },
+    "Hasran Ogress": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1784516439.4814968
     },
     "Healing Salve": {
       "reason": "",
@@ -680,6 +730,16 @@
       "status": "pass",
       "updated_at": 1782957764.093408
     },
+    "Jandor's Ring": {
+      "reason": "It didn't discard the last card I drew this turn",
+      "status": "fail",
+      "updated_at": 1784515815.6105716
+    },
+    "Jandor's Saddlebags": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1784515093.9449544
+    },
     "Jayemdae Tome": {
       "reason": "",
       "status": "pass",
@@ -710,6 +770,11 @@
       "status": "pass",
       "updated_at": 1782590997.0348485
     },
+    "King Suleiman": {
+      "reason": "Ability didn't let me choose a target",
+      "status": "fail",
+      "updated_at": 1784517545.6892085
+    },
     "Kormus Bell": {
       "reason": "",
       "status": "pass",
@@ -729,6 +794,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782361609.6198592
+    },
+    "Library of Alexandria": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1784515348.5431209
     },
     "Library of Leng": {
       "reason": "",
@@ -829,6 +899,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782586064.367578
+    },
+    "Merchant Ship": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1784517812.0036106
     },
     "Merfolk of the Pearl Trident": {
       "reason": "",
@@ -975,6 +1050,11 @@
       "status": "pass",
       "updated_at": 1781586546.701313
     },
+    "Piety": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1784516760.2297738
+    },
     "Pirate Ship": {
       "reason": "",
       "status": "pass",
@@ -1080,6 +1160,11 @@
       "status": "pass",
       "updated_at": 1782597780.5635235
     },
+    "Ring of Ma'r\u00fbf": {
+      "reason": "First we need to implement the sideboard and allow the deck editor to add sideboard cards to a deck. WHen this card's ability triggers it should open a window that shows your sideboard and allows you to pick a card.",
+      "status": "fail",
+      "updated_at": 1784514984.4521065
+    },
     "Roc of Kher Ridges": {
       "reason": "",
       "status": "pass",
@@ -1184,6 +1269,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782586756.7506638
+    },
+    "Singing Tree": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1784515547.5596042
     },
     "Sinkhole": {
       "reason": "",
@@ -1439,6 +1529,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782178527.2426567
+    },
+    "War Elephant": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1784515447.2712681
     },
     "War Mammoth": {
       "reason": "",

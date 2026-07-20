@@ -98,6 +98,37 @@ def test_combat_has_five_steps_in_order():
     ]
 
 
+@pytest.mark.cr("510.4", "510.1c")
+def test_combat_damage_step_holds_when_skip_disallowed():
+    """A player who flagged the combat-damage step (hold priority on the phase rail)
+    must get the CR 510.4 priority window. With allow_damage_skip=False the engine
+    deals combat damage (the CR 510.1c turn-based action) but keeps the step open
+    with a priority window for the active player, instead of auto-resolving through
+    to end_of_combat as it does by default for a trivial (no-manual-assignment)
+    combat."""
+    attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
+    p1 = PlayerState(name="P1", battlefield=[attacker])
+    p2 = PlayerState(name="P2")  # no blockers: damage would normally auto-resolve
+    game = Game(players=[p1, p2])
+
+    _to_declare_attackers(game)
+    game.declare_attackers(0, [0])
+    game.advance_combat_phase()  # -> declare_blockers (no legal blocks)
+    assert game.current_step == "declare_blockers"
+
+    starting_life = game.players[1].life
+    game.advance_combat_phase(allow_damage_skip=False)  # -> combat_damage, held open
+
+    assert game.current_step == "combat_damage"
+    assert game.combat_damage_resolved is True
+    assert game.players[1].life == starting_life - 2  # damage still dealt
+    assert game.priority_player_index == game.active_player_index
+
+    # Passing through the held window advances combat normally.
+    game.advance_combat_phase()
+    assert game.current_step == "end_of_combat"
+
+
 @pytest.mark.cr("506.1", "508.8")
 def test_declare_blockers_and_damage_skipped_when_no_attackers():
     # 506.1: declare blockers and combat damage are skipped if no creature is

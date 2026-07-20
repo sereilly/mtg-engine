@@ -1353,6 +1353,17 @@ function abilityCostRequiresTap(card) {
   return /\{t\}/i.test(getActivatedAbilityCost(card));
 }
 
+// The mana the insufficient-mana auto-tap flow must actually pay. For casting
+// this is the card's mana cost; for an activated ability it is the ability's
+// activation cost (e.g. Circle of Protection's {1}, not its {1}{W} card cost),
+// carried on `pending.cost`. parseManaCostSymbols ignores {T}/commas, so a full
+// cost string like Rod of Ruin's "{3}, {T}" is safe to pass through.
+function pendingAutoTapCost(pending) {
+  if (!pending) return "";
+  if (typeof pending.cost === "string" && pending.cost) return pending.cost;
+  return (pending.card && pending.card.mana_cost) || "";
+}
+
 function shouldPromptForActivationCost(costText) {
   const cleaned = (costText || "").replace(/[()\s]/g, "").toUpperCase();
   if (!cleaned) return false;
@@ -1738,7 +1749,7 @@ async function performAutoTap() {
     const me = getCurrentPlayerState();
     if (!me) throw new Error("Cannot read player state.");
 
-    const landIndices = computeAutoTapLands(pending.card.mana_cost || "", me.mana_pool, me.battlefield);
+    const landIndices = computeAutoTapLands(pendingAutoTapCost(pending), me.mana_pool, me.battlefield);
     if (landIndices.length > 0) {
       updateActionHint(`Auto-tapping ${landIndices.length} land(s)...`);
       for (const permanentIndex of landIndices) {
@@ -4321,7 +4332,7 @@ function renderActivationPrompt() {
     if (autoTapBtn) {
       autoTapBtn.classList.remove("hidden");
       const canSatisfy = !!me && canAutoTapSatisfyCost(
-        pendingAutoTap.card.mana_cost || "",
+        pendingAutoTapCost(pendingAutoTap),
         me.mana_pool,
         me.battlefield
       );
@@ -4333,7 +4344,7 @@ function renderActivationPrompt() {
     body.textContent = `You don't have enough mana to cast ${pendingAutoTap.cardName}. Auto-tap lands to pay the cost, or cancel.`;
     steps.innerHTML = [
       `<div>Card: ${escapeHtml(pendingAutoTap.cardName)}</div>`,
-      `<div>Cost: ${renderSymbolsInline(pendingAutoTap.card.mana_cost || "none")}</div>`,
+      `<div>Cost: ${renderSymbolsInline(pendingAutoTapCost(pendingAutoTap) || "none")}</div>`,
       `<div>Current mana: ${me ? formatManaSymbolsHtml(me.mana_pool) : "Unknown"}</div>`,
     ].join("");
     cancelBtn.classList.remove("hidden");
@@ -5719,7 +5730,14 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
         // auto-tap/auto-pay flow when the pool can't cover the cost, just like
         // casting a spell.
         if (e.message && e.message.toLowerCase().startsWith("insufficient mana")) {
-          pendingAutoTap = { card: pending.card, cardName: pending.cardName, actionBody: activateBody };
+          // Ability activation: pay the ability's activation cost (e.g. Circle
+          // of Protection's {1}), not the card's casting cost ({1}{W}).
+          pendingAutoTap = {
+            card: pending.card,
+            cardName: pending.cardName,
+            cost: getActivatedAbilityCost(pending.card),
+            actionBody: activateBody,
+          };
           renderActivationPrompt();
           return;
         }
@@ -6778,7 +6796,7 @@ function createCardElement(card, options = {}) {
       if (pendingAutoTap && isPendingHandCastCard(card, handIndex)) {
         const me = getCurrentPlayerState();
         const canSatisfy = !!me && canAutoTapSatisfyCost(
-          pendingAutoTap.card.mana_cost || "",
+          pendingAutoTapCost(pendingAutoTap),
           me.mana_pool,
           me.battlefield
         );

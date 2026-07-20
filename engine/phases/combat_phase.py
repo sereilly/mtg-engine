@@ -94,7 +94,11 @@ class CombatPhaseMixin:
                     return True
         return False
 
-    def advance_combat_phase(self) -> None:
+    def advance_combat_phase(self, allow_damage_skip: bool = True) -> None:
+        # allow_damage_skip: when a player has flagged the combat-damage step on the
+        # phase rail (hold priority), the caller passes False so the engine enters
+        # the step and opens a priority window there instead of auto-resolving damage
+        # and skipping straight to end-of-combat.
         combat_steps = list(self._phase_steps("combat"))
         if self.current_turn_phase != "combat":
             self._enter_combat_step(combat_steps[0])
@@ -207,6 +211,15 @@ class CombatPhaseMixin:
             self.resolve_combat_damage(self.active_player_index, attacker_damage=auto)
             if not self.combat_damage_resolved:  # first-strike pass; do second
                 self.resolve_combat_damage(self.active_player_index, attacker_damage=auto)
+            if not allow_damage_skip:
+                # A player flagged the combat-damage step (hold priority). Combat
+                # damage has been dealt as the turn-based action (CR 510.1c); leave a
+                # priority window open for the active player (CR 510.4) instead of
+                # resolving the stack through to end-of-combat, so the flagged player
+                # can respond. The next advance (once players pass) moves on normally.
+                if self._receives_priority("combat_damage"):
+                    self.start_priority_window(self.active_player_index)
+                return
             if self._receives_priority("combat_damage"):
                 self._resolve_priority_window()
             self._on_step_or_phase_end("combat", "combat_damage")

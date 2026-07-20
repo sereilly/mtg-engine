@@ -3,16 +3,16 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **369**
-- Passed: **303**
-- Failed: **0**
-- Untested: **66**
+- Passed: **316**
+- Failed: **6**
+- Untested: **47**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
 | Abu Ja'far | ⬜ untested |  |
 | Air Elemental | ✅ pass |  |
 | Aladdin | ⬜ untested |  |
-| Aladdin's Lamp | ⬜ untested |  |
+| Aladdin's Lamp | ❌ fail | The look at top card(s) of library effect should open a window that shows the cards visually and allows you to hover over cards to see them. Reuse the Ui that's used for reordering cards on top of the library. |
 | Aladdin's Ring | ✅ pass |  |
 | Ali Baba | ⬜ untested |  |
 | Ali from Cairo | ⬜ untested |  |
@@ -22,7 +22,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Animate Wall | ✅ pass |  |
 | Ankh of Mishra | ✅ pass |  |
 | Armageddon | ✅ pass |  |
-| Army of Allah | ⬜ untested |  |
+| Army of Allah | ✅ pass |  |
 | Aspect of Wolf | ✅ pass |  |
 | Bad Moon | ✅ pass |  |
 | Badlands | ✅ pass |  |
@@ -54,7 +54,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Channel | ✅ pass |  |
 | Chaos Orb | ✅ pass |  |
 | Chaoslace | ✅ pass |  |
-| Circle of Protection: Black | ⬜ untested |  |
+| Circle of Protection: Black | ✅ pass |  |
 | Circle of Protection: Blue | ✅ pass |  |
 | Circle of Protection: Green | ✅ pass |  |
 | Circle of Protection: Red | ✅ pass |  |
@@ -90,8 +90,8 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Demonic Attorney | ✅ pass |  |
 | Demonic Hordes | ✅ pass |  |
 | Demonic Tutor | ✅ pass |  |
-| Desert | ⬜ untested |  |
-| Desert Nomads | ⬜ untested |  |
+| Desert | ✅ pass |  |
+| Desert Nomads | ✅ pass |  |
 | Desert Twister | ⬜ untested |  |
 | Diamond Valley | ⬜ untested |  |
 | Dingus Egg | ✅ pass |  |
@@ -101,21 +101,21 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Dragon Whelp | ✅ pass |  |
 | Drain Life | ✅ pass |  |
 | Drain Power | ✅ pass |  |
-| Drop of Honey | ⬜ untested |  |
+| Drop of Honey | ✅ pass |  |
 | Drudge Skeletons | ✅ pass |  |
 | Dwarven Demolition Team | ✅ pass |  |
 | Dwarven Warriors | ✅ pass |  |
 | Earth Elemental | ✅ pass |  |
 | Earthbind | ✅ pass |  |
 | Earthquake | ✅ pass |  |
-| Ebony Horse | ⬜ untested |  |
+| Ebony Horse | ✅ pass |  |
 | El-Hajjâj | ✅ pass |  |
 | Elephant Graveyard | ⬜ untested |  |
 | Elvish Archers | ✅ pass |  |
 | Erg Raiders | ⬜ untested |  |
 | Erhnam Djinn | ⬜ untested |  |
 | Evil Presence | ✅ pass |  |
-| Eye for an Eye | ⬜ untested |  |
+| Eye for an Eye | ❌ fail | I didn't get to choose a source |
 | False Orders | ✅ pass |  |
 | Farmstead | ✅ pass |  |
 | Fastbond | ✅ pass |  |
@@ -151,8 +151,8 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Green Ward | ✅ pass |  |
 | Grizzly Bears | ✅ pass |  |
 | Guardian Angel | ✅ pass |  |
-| Guardian Beast | ⬜ untested |  |
-| Hasran Ogress | ⬜ untested |  |
+| Guardian Beast | ❌ fail | When a card becomes indestructible, it should be shown visually on the affected cards with added keyword text and a shiny animated card gleam effect |
+| Hasran Ogress | ✅ pass |  |
 | Healing Salve | ✅ pass |  |
 | Helm of Chatzuk | ✅ pass |  |
 | Hill Giant | ✅ pass |  |
@@ -180,8 +180,8 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Ivory Cup | ✅ pass |  |
 | Jade Monolith | ✅ pass |  |
 | Jade Statue | ✅ pass |  |
-| Jandor's Ring | ⬜ untested |  |
-| Jandor's Saddlebags | ⬜ untested |  |
+| Jandor's Ring | ❌ fail | It didn't discard the last card I drew this turn |
+| Jandor's Saddlebags | ✅ pass |  |
 | Jayemdae Tome | ✅ pass |  |
 | Jeweled Bird | ⬜ untested |  |
 | Jihad | ⬜ untested |  |
@@ -192,13 +192,13 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Karma | ✅ pass |  |
 | Keldon Warlord | ✅ pass |  |
 | Khabál Ghoul | ⬜ untested |  |
-| King Suleiman | ⬜ untested |  |
+| King Suleiman | ❌ fail | Ability didn't let me choose a target |
 | Kird Ape | ⬜ untested |  |
 | Kormus Bell | ✅ pass |  |
 | Kudzu | ✅ pass |  |
 | Lance | ✅ pass |  |
 | Ley Druid | ✅ pass |  |
-| Library of Alexandria | ⬜ untested |  |
+| Library of Alexandria | ✅ pass |  |
 | Library of Leng | ✅ pass |  |
 | Lich | ✅ pass |  |
 | Lifeforce | ✅ pass |  |
@@ -220,7 +220,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Mana Vault | ✅ pass |  |
 | Manabarbs | ✅ pass |  |
 | Meekstone | ✅ pass |  |
-| Merchant Ship | ⬜ untested |  |
+| Merchant Ship | ✅ pass |  |
 | Merfolk of the Pearl Trident | ✅ pass |  |
 | Mesa Pegasus | ✅ pass |  |
 | Metamorphosis | ⬜ untested |  |
@@ -254,7 +254,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Phantasmal Forces | ✅ pass |  |
 | Phantasmal Terrain | ✅ pass |  |
 | Phantom Monster | ✅ pass |  |
-| Piety | ⬜ untested |  |
+| Piety | ✅ pass |  |
 | Pirate Ship | ✅ pass |  |
 | Plague Rats | ✅ pass |  |
 | Plains | ✅ pass |  |
@@ -277,7 +277,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Resurrection | ✅ pass |  |
 | Reverse Damage | ✅ pass |  |
 | Righteousness | ✅ pass |  |
-| Ring of Ma'rûf | ⬜ untested |  |
+| Ring of Ma'rûf | ❌ fail | First we need to implement the sideboard and allow the deck editor to add sideboard cards to a deck. WHen this card's ability triggers it should open a window that shows your sideboard and allows you to pick a card. |
 | Roc of Kher Ridges | ✅ pass |  |
 | Rock Hydra | ✅ pass |  |
 | Rod of Ruin | ✅ pass |  |
@@ -305,7 +305,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Shivan Dragon | ✅ pass |  |
 | Simulacrum | ✅ pass |  |
 | Sindbad | ⬜ untested |  |
-| Singing Tree | ⬜ untested |  |
+| Singing Tree | ✅ pass |  |
 | Sinkhole | ✅ pass |  |
 | Siren's Call | ✅ pass |  |
 | Sleight of Mind | ✅ pass |  |
@@ -360,7 +360,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Wall of Water | ✅ pass |  |
 | Wall of Wood | ✅ pass |  |
 | Wanderlust | ✅ pass |  |
-| War Elephant | ⬜ untested |  |
+| War Elephant | ✅ pass |  |
 | War Mammoth | ✅ pass |  |
 | Warp Artifact | ✅ pass |  |
 | Water Elemental | ✅ pass |  |

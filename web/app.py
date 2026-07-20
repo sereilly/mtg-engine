@@ -3171,7 +3171,28 @@ def _advance_phase(session: Session) -> None:
                         and _self_should_hold(session, "declare_blockers")
                     ):
                         return
-        game.advance_combat_phase()
+        # CR 510.4: the combat-damage step opens a priority window after damage is
+        # dealt. The engine normally auto-resolves that window and skips straight to
+        # end-of-combat when no manual damage assignment is needed — which silently
+        # ignores a combat_damage stop flagged on the phase rail. When either the
+        # active human (self) or a human opponent flagged it, tell the engine to hold
+        # the step open instead of skipping.
+        hold_damage = _self_should_hold(session, "combat_damage") or _ai_should_hold(
+            session, "combat_damage"
+        )
+        game.advance_combat_phase(allow_damage_skip=not hold_damage)
+        # On the AI's turn the engine leaves priority with the active AI; hand it to
+        # the human so they can act at the step they flagged (mirrors the upkeep/draw
+        # and declare-blockers holds). On the human's own turn the active player is
+        # already the human, so this is a no-op.
+        if (
+            hold_damage
+            and game.current_turn_phase == "combat"
+            and game.current_step == "combat_damage"
+            and game.combat_damage_resolved
+            and _seat_type(session, game.active_player_index) != "human"
+        ):
+            _hold_priority_for_human(session)
         return
     if phase == "postcombat_main":
         game._close_current_priority_step()
