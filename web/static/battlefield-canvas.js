@@ -2720,6 +2720,7 @@ class BattlefieldCanvas {
       arrowBlock: "#48b0ff",
       arrowDrag: "#ff8888",
       arrowAura: "#caa6ff",
+      arrowTarget: "#ffd76a",
     };
   }
 
@@ -4099,6 +4100,113 @@ class BattlefieldCanvas {
         );
       }
     }
+    this._drawStackTargetArrows(ctx, true);
+  }
+
+  // Animated arrows from the hovered stack card to everything it targets
+  // (CR 115): each permanent, player, graveyard card or spell-on-the-stack it
+  // chose, serialized by the web layer as item.targets. Split the same way the
+  // combat arrows are — 2-player draws in world space inside the stack pass,
+  // FFA in screen space from _drawArrowsOverlay — because the cascade rides the
+  // viewer's camera while its targets live in their own quadrants'.
+  _drawStackTargetArrows(ctx, screenSpace) {
+    const v = this.hoveredStackIndex != null ? this.stackVisuals[this.hoveredStackIndex] : null;
+    const targets = v?.item?.targets;
+    if (!v || !Array.isArray(targets) || !targets.length) return;
+    const viewerCam = this._camFor(this.viewerSeat);
+    const from = screenSpace
+      ? this._withCam(viewerCam, () => this.worldToCanvas(v.cx, v.cy))
+      : { x: v.cx, y: v.cy };
+    // Half the stack card, in whichever space we're drawing in.
+    const fromR = BF_CARD_W * v.scale * 0.5 * (screenSpace ? viewerCam.zoom : 1);
+    // An identity camera keeps _drawArrow's /zoom sizing screen-constant.
+    const screenCam = { x: 0, y: 0, zoom: 1 };
+    const now = performance.now();
+    let drew = false;
+    targets.forEach((t, i) => {
+      const to = this._stackTargetAnchor(t, screenSpace);
+      if (!to) return;
+      const dx = to.x - from.x;
+      const dy = to.y - from.y;
+      const d = Math.hypot(dx, dy);
+      if (!d) return;
+      // Both ends inset to their card edges so the head points at the target
+      // instead of burying itself in the art — capped at a third of the span
+      // each so a near target (the cascade card right below a Counterspell)
+      // still gets a short arrow rather than an inside-out one.
+      const cap = d / 3;
+      const fi = Math.min(fromR, cap);
+      const ti = Math.min(to.r, cap);
+      const draw = () =>
+        this._drawArrow(
+          ctx,
+          from.x + (dx / d) * fi,
+          from.y + (dy / d) * fi,
+          to.x - (dx / d) * ti,
+          to.y - (dy / d) * ti,
+          this.theme.arrowTarget,
+          { now, phase: i / targets.length }
+        );
+      if (screenSpace) this._withCam(screenCam, draw);
+      else draw();
+      drew = true;
+    });
+    // The traveling pulses animate, so keep the frame loop alive while hovering.
+    if (drew && !this.reducedMotion) this.needsRedraw = true;
+  }
+
+  // Endpoint for one entry of a stack item's `targets` list: {x, y, r}, where r
+  // is how far short of the point the arrowhead should stop. Coordinates come
+  // back in screen space (screenSpace, each endpoint mapped through the camera
+  // of the viewport it renders in) or in the active camera's world space.
+  _stackTargetAnchor(t, screenSpace) {
+    const project = (seat, p, r) => {
+      if (!p) return null;
+      const cam = this._camFor(seat);
+      if (!screenSpace) return { x: p.x, y: p.y, r };
+      const s = this._withCam(cam, () => this.worldToCanvas(p.x, p.y));
+      return { x: s.x, y: s.y, r: r * cam.zoom };
+    };
+    if (t.kind === "permanent") {
+      const key = `${t.seat}-${t.index}`;
+      const item = this.cardItems.find((c) => c.key === key);
+      if (!item) return null;
+      return project(this._itemRegionSeat(item), this._cardCenter(key), BF_CARD_W * 0.46);
+    }
+    if (t.kind === "graveyard") {
+      const pile = this.zonePiles.find((p) => p.seat === t.seat && p.kind === "graveyard");
+      if (!pile) return null;
+      return project(t.seat, { x: pile.cx, y: pile.cy }, (pile.w || BF_CARD_W) * 0.5);
+    }
+    if (t.kind === "stack") {
+      // Another spell in the cascade (Counterspell, Fork) — same space as the
+      // hovered card, so it needs the viewer's camera like the origin does.
+      const tv = this.stackVisuals[t.index];
+      if (!tv) return null;
+      return project(this.viewerSeat, { x: tv.cx, y: tv.cy }, BF_CARD_W * tv.scale * 0.5);
+    }
+    if (t.kind === "player") {
+      // Players have no canvas presence: aim at their DOM life pill, projected
+      // back onto the canvas plane the way _castOrigin does for hand fans.
+      const el = this._playerAnchorEl(t.seat);
+      const r = el?.getBoundingClientRect();
+      if (!r || (!r.width && !r.height)) return null;
+      const c = this._pageToCanvas(r.left + r.width / 2, r.top + r.height / 2);
+      if (screenSpace) return { x: c.x, y: c.y, r: 24 };
+      const w = this.canvasToWorld(c.x, c.y);
+      return { x: w.x, y: w.y, r: 24 / this.zoom };
+    }
+    return null;
+  }
+
+  // The DOM life pill standing in for a seat on screen: #selfLife for the
+  // viewer, #oppLife for the classic (top-left) opponent, per-seat #ffaLife_<n>
+  // for the remaining Free-For-All seats (see app.js renderFfaOpponentPanels).
+  _playerAnchorEl(seat) {
+    if (seat === this.viewerSeat) return document.getElementById("selfLife");
+    const n = this.currentState?.players?.length || 0;
+    if (n <= 2 || seat === this._classicOppSeat()) return document.getElementById("oppLife");
+    return document.getElementById(`ffaLife_${seat}`);
   }
 
   // Which seat's viewport the open mana fan belongs to (the quadrant of its
@@ -4477,6 +4585,11 @@ class BattlefieldCanvas {
       ctx.fillText("STACK", labelX, labelY);
       ctx.restore();
     }
+
+    // Targeting arrows under the cascade (FFA draws them in screen space from
+    // _drawArrowsOverlay instead — see _drawStackTargetArrows), so they lie
+    // over the board but never across the stack cards themselves.
+    if (!this._isFfa()) this._drawStackTargetArrows(ctx, false);
 
     // Bottom of the stack first; the top spell (next to resolve) draws on
     // top. The hovered card grows, so it draws above everything else.

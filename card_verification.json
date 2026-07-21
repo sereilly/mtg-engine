@@ -490,6 +490,11 @@
       "status": "pass",
       "updated_at": 1782586086.2205951
     },
+    "Flying Carpet": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1784608549.0607545
+    },
     "Flying Men": {
       "reason": "",
       "status": "pass",
@@ -539,6 +544,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782086170.3540556
+    },
+    "Ghazbán Ogre": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1784609334.3188765
     },
     "Giant Growth": {
       "reason": "",
@@ -739,6 +749,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782599240.7461662
+    },
+    "Junún Efreet": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1784609206.830897
     },
     "Juzám Djinn": {
       "reason": "",
@@ -1090,6 +1105,11 @@
       "status": "pass",
       "updated_at": 1782970446.445287
     },
+    "Pyramids": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1784609475.5014002
+    },
     "Raging River": {
       "reason": "",
       "status": "pass",
@@ -1424,6 +1444,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782190359.588932
+    },
+    "Unstable Mutation": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1784610878.8024893
     },
     "Unsummon": {
       "reason": "",

@@ -12,6 +12,34 @@ from ..card_hooks import DRAW_STEP_MODIFIERS
 
 
 class DrawStepMixin:
+    def get_draw_step_life_loss_choices(self, player_index: int) -> list[dict]:
+        """Nafs Asp obligations armed against *player_index*, as pay-or-consequence
+        choices shaped like ``get_upkeep_pay_triggers`` entries.
+
+        The card says the payment happens "before that draw step", so these are
+        offered during the player's upkeep alongside the other pay-or-else
+        prompts; the answers come back to ``resolve_draw_step(pay_life_loss=...)``
+        keyed by source name. Obligations from several copies of the same source
+        collapse into one prompt (they share a name and a cost).
+        """
+        choices: list[dict] = []
+        seen: set[str] = set()
+        for obligation in self.pending_draw_step_life_loss:
+            if obligation["player_index"] != player_index:
+                continue
+            name = obligation["source_name"]
+            if name in seen:
+                continue
+            seen.add(name)
+            choices.append({
+                "card_name": name,
+                "mana": {"generic": int(obligation["cost"])},
+                "kind": "draw_step_life_loss_unless_pay",
+                "damage": 0,
+                "life_loss": int(obligation["amount"]),
+            })
+        return choices
+
     def resolve_draw_step(
         self,
         player_index: int,

@@ -29,6 +29,7 @@ from engine.ai_policy import (
 )
 from engine.card_loader import load_cards
 from engine.classifier import classify_card
+from engine.legality import cast_target_kind
 from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle
 
@@ -706,6 +707,75 @@ async def _stream_session_events(session_id: str):
             _session_event_queues.pop(session_id, None)
 
 
+# A stack item's own text targets a player (rather than merely naming one as the
+# affected/controlling seat) — the gate for turning a bare target_player_index
+# into a player-targeting arrow.
+_TARGETS_PLAYER_RE = re.compile(r"target (?:player|opponent)|any target")
+
+
+def _stack_item_targets(item, game: Game) -> list[dict]:
+    """Every target a stack item chose, normalized for the UI's hover arrows.
+
+    One entry per target: ``{"kind": "permanent", "seat", "index"}``,
+    ``{"kind": "player", "seat"}``, ``{"kind": "graveyard", "seat", "index"}``,
+    or ``{"kind": "stack", "index"}`` (an index into this same serialized,
+    top-first stack). The engine records targets in several shapes — a divided
+    cross-seat list, a direct stack-item reference, one or many battlefield
+    indices under a controlling seat — so this flattens all of them into the
+    single list the canvas draws arrows to."""
+    players = game.players
+    targets: list[dict] = []
+
+    # Fireball & co: the full cross-seat list, which takes precedence over the
+    # single-target fields (see StackItem.divided_targets).
+    if item.divided_targets:
+        for seat, idx in item.divided_targets:
+            if not 0 <= seat < len(players):
+                continue
+            if idx is None:
+                targets.append({"kind": "player", "seat": seat})
+            elif 0 <= idx < len(players[seat].battlefield):
+                targets.append({"kind": "permanent", "seat": seat, "index": idx})
+        return targets
+
+    # Counterspell / Fork: a spell on the stack, held by identity. The serialized
+    # stack is reversed (top first), so flip the depth into that index space.
+    if item.target_stack_item is not None:
+        for depth, other in enumerate(game.stack):
+            if other is item.target_stack_item:
+                targets.append({"kind": "stack", "index": len(game.stack) - 1 - depth})
+                break
+        return targets
+
+    seat = item.target_player_index
+    if seat is None or not 0 <= seat < len(players):
+        return targets
+
+    raw = item.target_permanent_index
+    indices = raw if isinstance(raw, list) else ([raw] if isinstance(raw, int) else [])
+    if indices:
+        is_ability = item.ability_instruction is not None or item.hook_key is not None
+        # A reanimation spell's index is into that seat's graveyard, so aim at the
+        # graveyard pile rather than at whatever permanent shares the index.
+        if not is_ability and cast_target_kind(item.card) == "graveyard_creature":
+            zone = players[seat].graveyard
+            kind = "graveyard"
+        else:
+            zone = players[seat].battlefield
+            kind = "permanent"
+        for idx in indices:
+            if isinstance(idx, int) and 0 <= idx < len(zone):
+                targets.append({"kind": kind, "seat": seat, "index": idx})
+        return targets
+
+    # No permanent chosen: the seat is a real target only if the text says so —
+    # otherwise it is just the affected/controlling player the effect resolves on.
+    text = (item.ability_text or item.card.oracle_text or "").lower()
+    if _TARGETS_PLAYER_RE.search(text):
+        targets.append({"kind": "player", "seat": seat})
+    return targets
+
+
 def _serialize_stack_item(item, game: Game) -> dict:
     target_name = None
     if item.target_player_index is not None and 0 <= item.target_player_index < len(game.players):
@@ -761,6 +831,7 @@ def _serialize_stack_item(item, game: Game) -> dict:
         "target_permanent_index": item.target_permanent_index,
         "target_permanent_name": target_permanent_name,
         "target_permanent_seat": target_permanent_seat,
+        "targets": _stack_item_targets(item, game),
         "source_permanent_seat": source_permanent_seat,
         "source_permanent_index": source_permanent_index,
         "ability_text": item.ability_text,
@@ -916,6 +987,10 @@ def _serialize_player(
         "battlefield": battlefield,
         "emblems": _serialize_emblems(player),
         "mana_pool": _serialize_mana_pool(player),
+        # Metamorphosis: "Spend this mana only to cast creature spells." Kept in
+        # its own bucket so the UI can show it as a distinct, labelled tracker
+        # instead of folding it into the ordinary pool.
+        "creature_only_mana": {sym: n for sym, n in player.creature_only_mana.items() if n > 0},
         "playable_hand_indices": playable_hand_indices if viewer_seat == seat else [],
     }
 
@@ -1020,6 +1095,15 @@ def _clear_upkeep_pay_choices(session: Session) -> None:
     session.optional_trigger_targets = {}
 
 
+def _consume_draw_step_life_loss(session: Session) -> dict[str, bool] | None:
+    """Pop the Nafs Asp pay-or-lose-life answers gathered at upkeep. Returns None
+    when nothing was decided, which is resolve_draw_step's "no human input"
+    signal (it pays when able)."""
+    choices = session.draw_step_life_loss_choices
+    session.draw_step_life_loss_choices = {}
+    return choices or None
+
+
 def _has_island_sanctuary(game, player_index: int) -> bool:
     return any(p.card.name == "Island Sanctuary" for p in game.players[player_index].battlefield)
 
@@ -1073,6 +1157,9 @@ def _gather_upkeep_decisions(session: Session, player_index: int) -> bool:
     """
     game = session.game
     pay_choices = game.get_upkeep_pay_triggers(player_index)
+    # Nafs Asp: "unless they pay {1} before that draw step" — decided here, at
+    # upkeep, then handed to resolve_draw_step. Shares the pay-or-else channel.
+    pay_choices += game.get_draw_step_life_loss_choices(player_index)
     # Optional ("you may") triggers and mandatory targeted triggers (Erhnam
     # Djinn) share one decision channel — both are answered by
     # resolve_optional_trigger, the mandatory ones with a target and no decline.
@@ -1098,6 +1185,16 @@ def _advance_after_upkeep_choices(session: Session) -> None:
     optional = dict(session.optional_trigger_resolved)
     trigger_targets = dict(session.optional_trigger_targets)
     mana_prevention = dict(session.upkeep_mana_prevention_resolved)
+    # Split the Nafs Asp answers back out — resolve_upkeep knows nothing about
+    # them; they belong to the draw step that _finish_beginning_phase runs next.
+    life_loss_names = {
+        c["card_name"] for c in session.upkeep_pay_choices
+        if c.get("kind") == "draw_step_life_loss_unless_pay"
+    }
+    session.draw_step_life_loss_choices = {
+        name: paid for name, paid in choices.items() if name in life_loss_names
+    }
+    choices = {name: paid for name, paid in choices.items() if name not in life_loss_names}
     _clear_upkeep_pay_choices(session)
     session.game.resolve_upkeep(
         session.current_turn,
@@ -1480,16 +1577,19 @@ def _finish_beginning_phase(session: Session, player_index: int) -> bool:
         session.island_sanctuary_pending = True
         return False
 
+    # Nafs Asp answers collected during upkeep; consumed exactly once here.
+    pay_life_loss = _consume_draw_step_life_loss(session)
+
     if _ai_should_hold(session, "draw"):
-        game.resolve_draw_step(player_index, defer_priority=True)
+        game.resolve_draw_step(player_index, defer_priority=True, pay_life_loss=pay_life_loss)
         _hold_priority_for_human(session)
         return True
 
     if _self_should_hold(session, "draw"):
-        game.resolve_draw_step(player_index, defer_priority=True)
+        game.resolve_draw_step(player_index, defer_priority=True, pay_life_loss=pay_life_loss)
         return True
 
-    game.resolve_draw_step(player_index)
+    game.resolve_draw_step(player_index, pay_life_loss=pay_life_loss)
     game._enter_main_phase(precombat=True)
     return True
 
@@ -1498,6 +1598,7 @@ def _start_next_turn(session: Session) -> None:
     _clear_cleanup_selection(session)
     _clear_untap_selection(session)
     _clear_upkeep_pay_choices(session)
+    session.draw_step_life_loss_choices = {}
     session.island_sanctuary_pending = False
     session.game.active_player_index = session.current_turn
     session.game.turn += 1
@@ -4540,7 +4641,11 @@ def do_action(session_id: str, req: GameActionRequest):
             raise HTTPException(status_code=400, detail="no Island Sanctuary choice pending")
         session.island_sanctuary_pending = False
         skip = req.action == "island_sanctuary_skip"
-        session.game.resolve_draw_step(session.current_turn, sanctuary_choice=skip)
+        session.game.resolve_draw_step(
+            session.current_turn,
+            sanctuary_choice=skip,
+            pay_life_loss=_consume_draw_step_life_loss(session),
+        )
         session.game._enter_main_phase(precombat=True)
 
     elif req.action == "search_library_confirm":

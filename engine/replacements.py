@@ -168,24 +168,49 @@ def _is_desert(source) -> bool:
     )
 
 
+_CAMEL_SHIELD_TEXT = "prevent all damage deserts would deal to this creature"
+
+
+def _banded_desert_shield(game, permanent) -> bool:
+    """Camel's second clause: the shield also covers "creatures banded with
+    this creature". Bands are only declared for the attacking player, so find
+    the damaged creature's attacker index and scan its band for an attacking
+    Camel."""
+    if not permanent.attacking:
+        return False
+    for player in game.players:
+        try:
+            index = player.battlefield.index(permanent)
+        except ValueError:
+            continue
+        band = game._attacker_band(index)
+        if not band:
+            return False
+        for other in band:
+            if other == index or not (0 <= other < len(player.battlefield)):
+                continue
+            mate = player.battlefield[other]
+            if mate.attacking and _CAMEL_SHIELD_TEXT in (mate.card.oracle_text or "").lower():
+                return True
+        return False
+    return False
+
+
 @replacement_effect("damage_to_creature")
 def _prevent_desert_damage(game, payload: dict) -> ReplacementOutcome | None:
     """Desert Nomads: "Prevent all damage that would be dealt to this
-    creature by Deserts." / Camel: same shield, but only while attacking.
-    Checked against oracle text directly (like Lich's life-gain replacement)
-    rather than a compiled instruction. Camel's clause extending the shield
-    to creatures banded with it is not modeled — see oracle.py's static-line
-    comment for that documented gap."""
+    creature by Deserts." / Camel: same shield while attacking, extended to
+    creatures banded with it. Checked against oracle text directly (like
+    Lich's life-gain replacement) rather than a compiled instruction."""
     permanent = payload["permanent"]
     if not _is_desert(payload.get("source")):
         return None
-    text = permanent.card.oracle_text.lower()
+    text = (permanent.card.oracle_text or "").lower()
     if "prevent all damage that would be dealt to this creature by deserts" in text:
         return ReplacementOutcome(replaced=True)
-    if (
-        "prevent all damage deserts would deal to this creature" in text
-        and permanent.attacking
-    ):
+    if _CAMEL_SHIELD_TEXT in text and permanent.attacking:
+        return ReplacementOutcome(replaced=True)
+    if _banded_desert_shield(game, permanent):
         return ReplacementOutcome(replaced=True)
     return None
 

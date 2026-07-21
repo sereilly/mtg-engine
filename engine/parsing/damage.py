@@ -107,6 +107,22 @@ def deal_damage_each_flier_and_player(text: str, activated: bool) -> RuleResult:
     return None
 
 
+# Sandstorm: "Sandstorm deals 1 damage to each attacking creature." A
+# creature-only sweep (no player damage), so it can't reuse the Earthquake
+# shape. Must out-rank the generic "deals N damage" rule below.
+_DAMAGE_EACH_ATTACKING_RE = re.compile(r"deals (\d+) damage to each attacking creature")
+
+
+@parse_rule(34800)
+def deal_damage_each_attacking_creature(text: str, activated: bool) -> RuleResult:
+    m = _DAMAGE_EACH_ATTACKING_RE.search(text)
+    if m:
+        return _instruction(
+            "deal_damage_each_attacking_creature", amount=int(m.group(1))
+        ), activated_kind(activated, "damage")
+    return None
+
+
 @parse_rule(35000)
 def deal_damage_each_creature_and_player(text: str, activated: bool) -> RuleResult:
     if "deals 1 damage to each creature and each player" in text:

@@ -258,6 +258,26 @@ def hurricane_damage(game: Game, instruction: OracleInstruction, context: Oracle
     return True, "resolved"
 
 
+@effect_handler("deal_damage_each_attacking_creature")
+def deal_damage_each_attacking_creature(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """Sandstorm: "deals 1 damage to each attacking creature." Creature-only
+    sweep across every battlefield — no player damage — resolved as one SBA
+    batch so simultaneous lethal damage kills together."""
+    card = context.card
+    damage = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+    struck = 0
+    for player in game.players:
+        for perm in list(player.battlefield):
+            if perm.is_creature and perm.attacking:
+                game._mark_damage_on_permanent(perm, damage, source=card)
+                struck += 1
+    game._destroy_marked_creatures()
+    game.log.append(f"{card.name} dealt {damage} damage to each of {struck} attacking creatures")
+    return True, "resolved"
+
+
 @effect_handler("self_damage_unless_pay")
 def self_damage_unless_pay(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Hasran Ogress: "Whenever this creature attacks, it deals 3 damage to

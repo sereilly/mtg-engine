@@ -22,6 +22,10 @@ let pendingAttackTarget = null;
 // Disrupting Scepter discard destination toggle (Library of Leng): false =
 // graveyard, true = top of library. Reset whenever a new discard prompt opens.
 let discardToLibrarySelected = false;
+// Effect-driven discards (Bazaar of Baghdad's three, Disrupting Scepter's one):
+// the hand indices picked so far, by clicking cards in hand. Held client-side
+// and submitted as one discard_confirm once the required count is reached.
+let discardSelection = [];
 // Balance: the indices the player has currently picked to sacrifice/discard.
 let balanceSelection = { lands: [], creatures: [], hand: [] };
 // Forced sacrifice (Lich): the battlefield indices the player has currently
@@ -2491,6 +2495,9 @@ function applyUpkeepPayPrompt(upkeepInfo) {
   } else if (kind === "upkeep_pay_to_gain_life") {
     // No consequence — declining just forgoes the life gain (Farmstead).
     declineLabel = "Don't pay";
+  } else if (kind === "draw_step_life_loss_unless_pay") {
+    // Nafs Asp: nothing is sacrificed — declining costs life at the draw step.
+    declineLabel = `Lose ${current?.life_loss || 1} life`;
   } else {
     declineLabel = `Sacrifice ${escapeHtml(cardName)}`;
   }
@@ -2499,7 +2506,9 @@ function applyUpkeepPayPrompt(upkeepInfo) {
   okBtn.classList.add("hidden");
   customRow.classList.add("hidden");
   title.textContent = "Upkeep Payment Required";
-  body.textContent = `${cardName} requires a payment at the beginning of your upkeep. Tap lands to generate mana, then pay or decline.`;
+  body.textContent = kind === "draw_step_life_loss_unless_pay"
+    ? `${cardName} damaged you — pay before your draw step or lose ${current?.life_loss || 1} life. Tap lands to generate mana, then pay or decline.`
+    : `${cardName} requires a payment at the beginning of your upkeep. Tap lands to generate mana, then pay or decline.`;
 
   // Server-computed affordability (pool + untapped mana lands): a payment the
   // engine would reject is greyed out instead of offered.
@@ -2679,8 +2688,14 @@ function applyDiscardSelectPrompt(info) {
   const customRow = q("promptCustomRow");
   const customOkBtn = q("promptCustomOkBtn");
 
-  const cards = info.cards || [];
   const allowTop = !!info.allow_top_of_library;
+  const requiredCount = Math.max(1, Number(info.count || 1));
+  const handSize = (info.cards || []).length;
+  // Never quote a target the hand can't meet (Bazaar with fewer than three
+  // cards left); the engine caps the requirement the same way.
+  const target = Math.min(requiredCount, handSize);
+  const selectedCount = discardSelection.length;
+  const remaining = Math.max(0, target - selectedCount);
 
   panel.classList.remove("hidden");
   okBtn.classList.add("hidden");
@@ -2689,25 +2704,24 @@ function applyDiscardSelectPrompt(info) {
   cancelBtn.disabled = true;
   customOkBtn.disabled = true;
 
-  title.textContent = "Discard a Card";
+  title.textContent = target === 1 ? "Discard a Card" : `Discard ${target} Cards`;
   const destLabel = allowTop
     ? discardToLibrarySelected
       ? "top of your library (Library of Leng)"
       : "your graveyard"
     : "your graveyard";
-  body.textContent = `Choose a card to discard to ${destLabel}.`;
+  body.textContent = `Select ${target} card(s) from your hand to discard to ${destLabel}.`;
 
   const toggleRow = allowTop
     ? `<div class="prompt-choice-row"><button type="button" class="prompt-choice-btn" id="discardDestToggle">` +
       `Destination: ${discardToLibrarySelected ? "Top of Library" : "Graveyard"} (click to switch)</button></div>`
     : "";
-  const cardButtons = cards
-    .map(
-      (card, idx) =>
-        `<button type="button" class="prompt-choice-btn" data-discard-index="${idx}">${escapeHtml(card.name || "Card")}</button>`,
-    )
-    .join("");
-  steps.innerHTML = [toggleRow, `<div class="prompt-choice-row">${cardButtons}</div>`].join("");
+  // Only the count, never the card list — the hand itself is the picker.
+  steps.innerHTML = [
+    `<div><strong>Selected ${selectedCount} of ${target}</strong> (${remaining} more to discard)</div>`,
+    "<div>Action: click cards in your hand to select; click a highlighted card again to unselect it.</div>",
+    toggleRow,
+  ].join("");
 
   const toggleEl = document.getElementById("discardDestToggle");
   if (toggleEl) {
@@ -2716,19 +2730,33 @@ function applyDiscardSelectPrompt(info) {
       applyDiscardSelectPrompt(info);
     });
   }
-  steps.querySelectorAll("[data-discard-index]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const idx = Number(btn.dataset.discardIndex) || 0;
-      const toLibrary = allowTop && discardToLibrarySelected;
-      discardToLibrarySelected = false;
-      await sendAction({
-        seat,
-        action: "discard_confirm",
-        discard_indices: [idx],
-        to_library: toLibrary,
-      });
-    });
-  });
+}
+
+// A card in hand was clicked while a discard prompt is open: toggle it, and
+// submit the whole batch once the required count is reached (confirm_discard
+// requires all indices at once).
+async function toggleDiscardSelection(handIndex) {
+  const info = getDiscardSelectInfo();
+  if (!info) return;
+  const target = Math.min(Math.max(1, Number(info.count || 1)), (info.cards || []).length);
+  const at = discardSelection.indexOf(handIndex);
+  if (at >= 0) discardSelection.splice(at, 1);
+  else if (discardSelection.length < target) discardSelection.push(handIndex);
+
+  if (discardSelection.length < target) {
+    const remaining = target - discardSelection.length;
+    // renderBoard redraws the hand's highlights; the prompt panel is a separate
+    // render pass, so the "N of M" line needs its own refresh.
+    renderBoard(currentState);
+    renderActivationPrompt();
+    updateActionHint(`Select ${remaining} more card(s) to discard.`);
+    return;
+  }
+  const indices = [...discardSelection];
+  const toLibrary = !!info.allow_top_of_library && discardToLibrarySelected;
+  discardSelection = [];
+  discardToLibrarySelected = false;
+  await sendAction({ seat, action: "discard_confirm", discard_indices: indices, to_library: toLibrary });
 }
 
 // Library of Leng: a card was discarded (random/forced/cleanup) and the optional
@@ -4515,12 +4543,19 @@ function renderActivationPrompt() {
     panel.classList.remove("hidden");
     okBtn.classList.add("hidden");
     customRow.classList.add("hidden");
-    title.textContent = `Choose target for ${pendingCastTarget.cardName}`;
+    // A "sacrifice a creature" cost (Diamond Valley, Metamorphosis) picks a
+    // creature the same way, but it is a cost being paid, not a target.
+    const isSacrificeCost = !!targetSpecOf(pendingCastTarget.card)?.sacrifice_cost;
+    title.textContent = isSacrificeCost
+      ? `Choose a creature to sacrifice for ${pendingCastTarget.cardName}`
+      : `Choose target for ${pendingCastTarget.cardName}`;
     if (pendingCastTarget.targetKind === "land") {
       body.textContent = "Click a valid land on the battlefield to choose the target.";
       steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
     } else if (pendingCastTarget.targetKind === "creature") {
-      body.textContent = "Click a valid creature on the battlefield to choose the target.";
+      body.textContent = isSacrificeCost
+        ? "Click a creature you control on the battlefield to sacrifice it."
+        : "Click a valid creature on the battlefield to choose the target.";
       steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
     } else if (pendingCastTarget.targetKind === "artifact") {
       body.textContent = "Click a valid artifact on the battlefield to choose the target.";
@@ -6657,6 +6692,7 @@ function createCardElement(card, options = {}) {
     handIndex = null,
     cleanupSelectable = false,
     mulliganBottomSelectable = false,
+    discardSelectable = false,
     selected = false,
     targetSeat = null,
     zoneKind = "",
@@ -6693,7 +6729,7 @@ function createCardElement(card, options = {}) {
   if (tapped) cardEl.classList.add("tapped");
   if (hidden) cardEl.classList.add("card-hidden");
   if (interactive) cardEl.classList.add("clickable");
-  if (cleanupSelectable || mulliganBottomSelectable) cardEl.classList.add("cleanup-selectable", "clickable");
+  if (cleanupSelectable || mulliganBottomSelectable || discardSelectable) cardEl.classList.add("cleanup-selectable", "clickable");
   if (selected) cardEl.classList.add("selected-card");
   if (playable && !selected) cardEl.classList.add("playable");
   if (zoneKind === "hand" && isPendingHandCastCard(card, handIndex)) cardEl.classList.add("casting-card");
@@ -6877,7 +6913,7 @@ function createCardElement(card, options = {}) {
     });
   }
 
-  if ((castOnClick || mulliganBottomSelectable) && typeof card === "object") {
+  if ((castOnClick || mulliganBottomSelectable || discardSelectable) && typeof card === "object") {
     cardEl.classList.add("clickable");
     cardEl.addEventListener("click", async (event) => {
       event.preventDefault();
@@ -6920,6 +6956,11 @@ function createCardElement(card, options = {}) {
           } else {
             updateActionHint("Cleanup discard complete.");
           }
+          return;
+        }
+
+        if (discardSelectable) {
+          await toggleDiscardSelection(handIndex);
           return;
         }
 
@@ -7349,7 +7390,7 @@ function closeZoneRevealIfAutoOpened() {
 
 const lastManaCounts = {};
 
-function renderMana(containerId, manaPool, targetSeat = null) {
+function renderMana(containerId, manaPool, targetSeat = null, creatureOnlyPool = null) {
   const container = q(containerId);
   container.innerHTML = "";
   const pool = manaPool || {};
@@ -7394,6 +7435,29 @@ function renderMana(containerId, manaPool, targetSeat = null) {
     `<span class="mana-total-num">${total}</span>` +
     `<span class="mana-total-label">total</span>`;
   container.appendChild(totalChip);
+
+  // Metamorphosis: restricted mana lives in its own bucket and can't pay for
+  // anything but creature spells, so it gets its own chips rather than being
+  // added into the counts above (which would overstate what's spendable).
+  const restricted = creatureOnlyPool || {};
+  const RESTRICTED_TITLE = "This mana can only be used to cast creature spells.";
+  for (const symbol of MANA_ORDER) {
+    const count = Number(restricted[symbol] || 0);
+    if (count <= 0) continue;
+    const chip = document.createElement("div");
+    chip.className = `mana-symbol mana-${symbol} mana-symbol-filled mana-symbol-restricted`;
+    chip.title = RESTRICTED_TITLE;
+    const src = symbolSrc(`{${symbol}}`);
+    const glyph = src
+      ? `<img class="mtg-symbol mtg-symbol-mana" src="${escapeHtml(src)}" alt="{${symbol}}" title="${escapeHtml(RESTRICTED_TITLE)}" />`
+      : `<span class="mana-glyph-text">${symbol === "C" ? "◇" : symbol}</span>`;
+    chip.innerHTML =
+      `<span class="mana-orb-glyph">${glyph}</span>` +
+      `<span class="mana-orb-count">${count}</span>` +
+      `<span class="mana-orb-restricted-badge" title="${escapeHtml(RESTRICTED_TITLE)}">creatures only</span>`;
+    container.appendChild(chip);
+  }
+
   lastManaCounts[containerId] = current;
 }
 
@@ -8666,8 +8730,9 @@ function renderFfaOpponentPanels(state, viewerSeat, oppSeat) {
     q(`ffaLife_${idx}`)?.classList.toggle("targeting-valid", isTargetable);
     // Corner opponents' floating mana, mirroring the classic #oppMana column:
     // only non-zero orbs render (CSS), and the row hides entirely while empty.
-    renderMana(`ffaMana_${idx}`, p.mana_pool, idx);
-    const manaTotal = Object.values(p.mana_pool || {}).reduce((sum, n) => sum + Number(n || 0), 0);
+    renderMana(`ffaMana_${idx}`, p.mana_pool, idx, p.creature_only_mana);
+    const manaTotal = Object.values(p.mana_pool || {}).reduce((sum, n) => sum + Number(n || 0), 0)
+      + Object.values(p.creature_only_mana || {}).reduce((sum, n) => sum + Number(n || 0), 0);
     q(`ffaMana_${idx}`)?.classList.toggle("hidden", manaTotal === 0 && !debugAddManaMode);
     const hand = Array.isArray(p.hand)
       ? p.hand
@@ -8718,6 +8783,10 @@ function renderBoard(state) {
   const isPregame = !!pregameInfo;
   const cleanupDiscard = getCleanupDiscardInfo(state);
   const requiresCleanupSelection = !!cleanupDiscard;
+  const discardSelectInfo = getDiscardSelectInfo(state);
+  const requiresDiscardSelection = !!discardSelectInfo;
+  // A stale selection from a previous prompt would mis-index this one's hand.
+  if (!requiresDiscardSelection && discardSelection.length) discardSelection = [];
   const mulliganBottomInfo = pregameInfo?.phase === "bottom_select" && pregameInfo.is_my_turn ? pregameInfo : null;
   const requiresMulliganBottomSelection = !!mulliganBottomInfo;
   const hasBlockingPrompt = hasBlockingPromptForAutoPass(state);
@@ -8740,14 +8809,17 @@ function renderBoard(state) {
   q("oppName").classList.toggle("opponent-turn-name", state.current_turn === oppSeat);
 
   renderHandFan("selfHand", me.hand, {
-    draggable: !requiresCleanupSelection && !isPregame,
+    draggable: !requiresCleanupSelection && !requiresDiscardSelection && !isPregame,
     dragKind: "hand",
     zoneKind: "hand",
-    targetSeat: viewerSeat,
     castOnClick: !isPregame,
+    targetSeat: viewerSeat,
     cleanupSelectable: requiresCleanupSelection,
     mulliganBottomSelectable: requiresMulliganBottomSelection,
-    selectedHandIndices: cleanupDiscard?.selected_indices || mulliganBottomInfo?.selected_indices || [],
+    discardSelectable: requiresDiscardSelection,
+    selectedHandIndices: requiresDiscardSelection
+      ? discardSelection
+      : cleanupDiscard?.selected_indices || mulliganBottomInfo?.selected_indices || [],
     playableHandIndices: me.playable_hand_indices || [],
   });
   renderHandFan("oppHand", opp.hand, { zoneKind: "hand", targetSeat: oppSeat });
@@ -8839,16 +8911,17 @@ function renderBoard(state) {
   renderZoneCards("oppGraveyardCards", opp.graveyard, { zoneSeat: oppSeat, zoneKind: "graveyard" });
   renderZoneCards("oppExileCards", opp.exile || []);
 
-  renderMana("selfMana", me.mana_pool, seat);
-  renderMana("oppMana", opp.mana_pool, oppSeat);
+  renderMana("selfMana", me.mana_pool, seat, me.creature_only_mana);
+  renderMana("oppMana", opp.mana_pool, oppSeat, opp.creature_only_mana);
   // FFA hides the stage-right #oppMana column (CSS) — the classic opponent's
   // pool shows inline in their top-left header pill instead, like the corner
   // seats' rows, so every pool sits next to its owner.
   const oppManaHeader = q("oppManaHeader");
   if (oppManaHeader) {
     if (playerCount > 2) {
-      renderMana("oppManaHeader", opp.mana_pool, oppSeat);
-      const oppManaTotal = Object.values(opp.mana_pool || {}).reduce((sum, n) => sum + Number(n || 0), 0);
+      renderMana("oppManaHeader", opp.mana_pool, oppSeat, opp.creature_only_mana);
+      const oppManaTotal = Object.values(opp.mana_pool || {}).reduce((sum, n) => sum + Number(n || 0), 0)
+        + Object.values(opp.creature_only_mana || {}).reduce((sum, n) => sum + Number(n || 0), 0);
       oppManaHeader.classList.toggle("hidden", oppManaTotal === 0 && !debugAddManaMode);
     } else {
       oppManaHeader.classList.add("hidden");

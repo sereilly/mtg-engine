@@ -67,6 +67,10 @@ class Session:
     optional_untap_pending: list[dict] = field(default_factory=list)
     upkeep_pay_choices: list[dict] = field(default_factory=list)
     upkeep_resolved_choices: dict[str, bool] = field(default_factory=dict)
+    # Nafs Asp: pay-or-lose-life obligations are decided at upkeep ("before that
+    # draw step") but applied by resolve_draw_step. Source name -> paid?, carried
+    # across the gap between the two steps.
+    draw_step_life_loss_choices: dict[str, bool] = field(default_factory=dict)
     # Optional ("you may") upkeep triggers awaiting a yes/no decision (e.g. Nether
     # Shadow returning from the graveyard), and the answers collected so far.
     optional_trigger_choices: list[dict] = field(default_factory=list)
@@ -528,6 +532,7 @@ class SessionStore:
         session.untap_selected_indices = []
         session.upkeep_pay_choices = []
         session.upkeep_resolved_choices = {}
+        session.draw_step_life_loss_choices = {}
         session.optional_trigger_choices = []
         session.optional_trigger_resolved = {}
         session.optional_trigger_targets = {}

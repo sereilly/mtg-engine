@@ -131,7 +131,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Rod of Ruin | `this artifact deals 1 damage to any target` | artifact any target |
 | Samite Healer | `prevent the next 1 damage that would be dealt to any target this turn` | would be dealt any target |
 | Sandals of Abdallah | `target creature gains islandwalk until end of turn. when that creature` | when creature dies |
-| Sandstorm | `sandstorm deals 1 damage to each attacking creature` | sandstorm each attacking creature |
+| Sandstorm | `sandstorm deals 1 damage to each attacking creature` | sandstorm |
 | Serendib Efreet | `this creature deals 1 damage to you` | creature |
 | Simulacrum | `you gain life equal to the damage dealt to you this turn. simulacrum d` | gain life equal damage dealt simulacrum |
 | Sleight of Mind | `change the text of target spell or permanent by replacing all instance` | with another |

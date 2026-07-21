@@ -3,9 +3,9 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **369**
-- Passed: **317**
+- Passed: **322**
 - Failed: **0**
-- Untested: **52**
+- Untested: **47**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -127,7 +127,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Fishliver Oil | ⬜ untested |  |
 | Flashfires | ✅ pass |  |
 | Flight | ✅ pass |  |
-| Flying Carpet | ⬜ untested |  |
+| Flying Carpet | ✅ pass |  |
 | Flying Men | ✅ pass |  |
 | Fog | ✅ pass |  |
 | Force of Nature | ✅ pass |  |
@@ -138,7 +138,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Fungusaur | ✅ pass |  |
 | Gaea's Liege | ✅ pass |  |
 | Gauntlet of Might | ✅ pass |  |
-| Ghazbán Ogre | ⬜ untested |  |
+| Ghazbán Ogre | ✅ pass |  |
 | Giant Growth | ✅ pass |  |
 | Giant Spider | ✅ pass |  |
 | Giant Tortoise | ⬜ untested |  |
@@ -187,7 +187,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Jihad | ✅ pass |  |
 | Juggernaut | ✅ pass |  |
 | Jump | ✅ pass |  |
-| Junún Efreet | ⬜ untested |  |
+| Junún Efreet | ✅ pass |  |
 | Juzám Djinn | ✅ pass |  |
 | Karma | ✅ pass |  |
 | Keldon Warlord | ✅ pass |  |
@@ -266,7 +266,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Psionic Blast | ✅ pass |  |
 | Psychic Venom | ✅ pass |  |
 | Purelace | ✅ pass |  |
-| Pyramids | ⬜ untested |  |
+| Pyramids | ✅ pass |  |
 | Raging River | ✅ pass |  |
 | Raise Dead | ✅ pass |  |
 | Red Elemental Blast | ✅ pass |  |
@@ -342,7 +342,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Two-Headed Giant of Foriys | ✅ pass |  |
 | Underground Sea | ✅ pass |  |
 | Unholy Strength | ✅ pass |  |
-| Unstable Mutation | ⬜ untested |  |
+| Unstable Mutation | ✅ pass |  |
 | Unsummon | ✅ pass |  |
 | Uthden Troll | ✅ pass |  |
 | Verduran Enchantress | ✅ pass |  |

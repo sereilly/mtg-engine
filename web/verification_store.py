@@ -38,7 +38,12 @@ class VerificationStore:
         return data
 
     def _save(self, data: dict) -> None:
-        self.path.write_text(json.dumps(data, indent=2, sort_keys=True), encoding="utf-8")
+        # ensure_ascii=False keeps accented card names (Dandân, Juzám Djinn)
+        # literal in the checked-in file, so a save never churns the diff by
+        # flipping them to \uXXXX escapes and back.
+        self.path.write_text(
+            json.dumps(data, indent=2, sort_keys=True, ensure_ascii=False), encoding="utf-8"
+        )
 
     def results(self) -> dict:
         """Return the raw {card_name: entry} mapping of recorded results."""

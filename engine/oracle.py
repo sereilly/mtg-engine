@@ -534,10 +534,9 @@ def _is_supported_static_creature_line(line: str) -> bool:
         # Desert Nomads / Camel: static shield against Desert lands' damage
         # ability. Handled by a replacement-effect interceptor (checked
         # against oracle text directly) rather than a compiled instruction —
-        # see engine/replacements.py:_prevent_desert_damage. Camel's clause
-        # extending the shield to creatures banded with it is not modeled
-        # (band-mates get no protection); narrow enough in practice that
-        # this is a documented, not a silent, gap.
+        # see engine/replacements.py:_prevent_desert_damage, which also
+        # covers Camel's clause extending the shield to creatures banded
+        # with it.
         "prevent all damage that would be dealt to this creature by deserts",
         "as long as this creature is attacking, prevent all damage deserts would deal to this creature",
         # Ali from Cairo: a life-total-floor replacement effect (CR 614),

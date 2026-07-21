@@ -2057,6 +2057,68 @@ def test_fork_copy_retargets_to_a_second_creature_via_http():
     assert game.players[0].battlefield[1].effective_power == 5
 
 
+def test_stack_items_expose_their_targets_for_hover_arrows():
+    """Each stack item carries a normalized `targets` list — permanents, players,
+    graveyard cards and spells on the stack — which the canvas draws hover arrows
+    to. A spell that targets nothing carries an empty list."""
+    from engine.card_loader import load_cards as _load
+    from engine.models import Permanent
+
+    cards = {c.name: c for c in _load("cards/LEA_cards.json")}
+    created = client.post(
+        "/api/sessions",
+        json={"mode": "human_vs_human", "host_colors": 2, "guest_colors": 2, "seed": 51099},
+    ).json()
+    sid = created["session_id"]
+    client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
+    session = store.get(sid)
+    session.game.enforce_mana_costs = False
+    # Seat 0's own turn, so the sorcery-speed cases below are legal.
+    session.current_turn = 0
+    session.game.active_player_index = 0
+    session.game.priority_player_index = 0
+    session.game.players[1].battlefield = [Permanent(card=cards["Grizzly Bears"])]
+    session.game.players[0].graveyard = [cards["Grizzly Bears"]]
+    session.game.players[0].hand = [
+        cards["Lightning Bolt"],
+        cards["Ancestral Recall"],
+        cards["Counterspell"],
+        cards["Raise Dead"],
+        cards["Dark Ritual"],
+    ]
+
+    def cast(name, **body):
+        resp = client.post(
+            f"/api/sessions/{sid}/action",
+            json={"seat": 0, "action": "cast", "card_name": name, **body},
+        )
+        assert resp.status_code == 200, resp.text
+        return resp.json()["stack"][0]["targets"]
+
+    # A graveyard index is not a battlefield index — it points at the pile.
+    # (Sorcery-speed, so it goes first, on an empty stack.)
+    assert cast("Raise Dead", target_seat=0, permanent_index=0) == [
+        {"kind": "graveyard", "seat": 0, "index": 0}
+    ]
+    session.game.stack.clear()
+
+    # A spell that targets nothing draws no arrows, even though the engine
+    # records the caster's seat on the stack item.
+    assert cast("Dark Ritual") == []
+    session.game.stack.clear()
+
+    # A permanent target: the opponent's creature.
+    assert cast("Lightning Bolt", target_seat=1, permanent_index=0) == [
+        {"kind": "permanent", "seat": 1, "index": 0}
+    ]
+    # A player target.
+    assert cast("Ancestral Recall", target_seat=1) == [{"kind": "player", "seat": 1}]
+    # A spell on the stack. The chosen index is top-first over the stack as it
+    # stood before the Counterspell was cast (0 = Ancestral Recall); once the
+    # Counterspell itself is on top, that same spell serializes at index 1.
+    assert cast("Counterspell", target_stack_index=0) == [{"kind": "stack", "index": 1}]
+
+
 # ---------------------------------------------------------------------------
 # Bug regression: hold priority during opponent's (AI) turn
 # ---------------------------------------------------------------------------

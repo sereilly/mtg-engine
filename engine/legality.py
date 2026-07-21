@@ -34,8 +34,12 @@ from .mixins.stack_casting import aura_enchant_noun
 from .oracle import compile_card_oracle, expand_modal_activated_lines
 
 # An oracle line that begins with a mana/tap cost followed by a colon is an
-# activated ability ("{T}: ..."), not a cast-time effect.
-_ACTIVATED_LINE_RE = re.compile(r"^\s*(\{[^}]+\}[,\s]*)+:")
+# activated ability ("{T}: ..."), not a cast-time effect. The cost may mix
+# symbols with prose ("{T}, Sacrifice a creature:", "{2}, {T}, Discard the
+# last card you drew this turn:"), so after the leading symbol accept anything
+# up to the colon — barring a period, which would mean the colon belongs to a
+# later sentence rather than to a cost.
+_ACTIVATED_LINE_RE = re.compile(r"^\s*\{[^}]+\}[^:.]*:")
 # "target land" plus qualified variants ("target non-Swamp land").
 _TARGET_LAND_RE = re.compile(r"target (?:[\w-]+ )*land\b")
 _COLOR_WORD_TO_SYMBOL = {"white": "W", "blue": "U", "black": "B", "red": "R", "green": "G"}
@@ -294,6 +298,15 @@ def _classify_cast(card: CardDefinition) -> dict:
     return {"kind": "none"}
 
 
+def cast_target_kind(card: CardDefinition) -> str:
+    """The target kind of *card* cast from hand, without enumerating targets.
+
+    Exposed for the web layer's stack serialization, which needs to know which
+    zone an already-recorded target index points into — a reanimation spell's
+    ``target_permanent_index`` indexes a graveyard, not a battlefield."""
+    return _classify_cast(card)["kind"]
+
+
 # ---------------------------------------------------------------------------
 # Activated-ability target classification (mirrors the client activatedAbility* cascade)
 # ---------------------------------------------------------------------------
@@ -497,7 +510,9 @@ def _classify_activation(card: CardDefinition) -> dict:
         return {"kind": "creature", "wall_only": True}
     if _activated_requires_sacrifice_creature(card):
         # Before the generic creature check, which would otherwise swallow it.
-        return {"kind": "creature", "own_only": True}
+        # sacrifice_cost mirrors the cast-side spec so the UI can say
+        # "sacrifice" rather than "target" (Diamond Valley).
+        return {"kind": "creature", "own_only": True, "sacrifice_cost": True}
     if _activated_requires_creature(card):
         return {"kind": "creature"}
     if _activated_requires_artifact(card):

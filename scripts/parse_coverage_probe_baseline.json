@@ -1175,10 +1175,7 @@
   "card": "Sandstorm",
   "clause": "sandstorm deals 1 damage to each attacking creature",
   "ignored": [
-   "sandstorm",
-   "each",
-   "attacking",
-   "creature"
+   "sandstorm"
   ]
  },
  {
