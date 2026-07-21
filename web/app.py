@@ -38,6 +38,7 @@ from .deck_store import (
     DeckImportError,
     DeckNotFoundError,
     DeckStore,
+    deck_commander,
     deck_sideboard,
     fetch_moxfield_deck,
     parse_decklist_text,
@@ -607,7 +608,9 @@ def _deck_summary(deck: dict) -> dict:
         if match:
             colors.update(match["color_identity"])
     fmt = normalize_format(deck.get("format"))
-    legality = validate_deck(deck.get("cards", []), fmt, CATALOG_BY_NAME, deck_sideboard(deck))
+    legality = validate_deck(
+        deck.get("cards", []), fmt, CATALOG_BY_NAME, deck_sideboard(deck), deck_commander(deck),
+    )
     return {
         "id": deck["id"],
         "name": deck["name"],
@@ -619,6 +622,7 @@ def _deck_summary(deck: dict) -> dict:
         "unsupported_count": sum(e["count"] for e in entries if e["status"] == "unsupported"),
         "unknown_count": sum(e["count"] for e in entries if e["status"] == "unknown"),
         "sideboard_count": sum(e["count"] for e in deck_sideboard(deck)),
+        "commander_count": sum(e["count"] for e in deck_commander(deck)),
         "updated_at": deck.get("updated_at"),
         # Decks served from the on-disk store are the shared pool. Personal decks
         # live in the client's browser and are never returned by these endpoints.
@@ -630,6 +634,7 @@ def _deck_detail(deck: dict) -> dict:
     detail = _deck_summary(deck)
     detail["cards"] = _resolve_deck_entries(deck.get("cards", []))
     detail["sideboard"] = _resolve_deck_entries(deck_sideboard(deck))
+    detail["commander"] = _resolve_deck_entries(deck_commander(deck))
     return detail
 
 
@@ -3383,6 +3388,7 @@ def create_deck(req: DeckSaveRequest):
         req.description.strip(),
         normalize_format(req.format),
         [c.model_dump() for c in req.sideboard],
+        [c.model_dump() for c in req.commander],
     )
     return _deck_detail(deck)
 
@@ -3407,6 +3413,7 @@ def update_deck(deck_id: str, req: DeckSaveRequest):
             req.description.strip(),
             normalize_format(req.format),
             [c.model_dump() for c in req.sideboard],
+            [c.model_dump() for c in req.commander],
         )
     except DeckNotFoundError as exc:
         raise HTTPException(status_code=404, detail="deck not found") from exc
@@ -3430,11 +3437,11 @@ def import_deck(req: DeckImportRequest):
     warnings: list[str] = []
     if req.url and req.url.strip():
         try:
-            name, entries, sideboard = fetch_moxfield_deck(req.url.strip())
+            name, entries, sideboard, commander = fetch_moxfield_deck(req.url.strip())
         except DeckImportError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
     elif req.text and req.text.strip():
-        entries, warnings, sideboard = parse_decklist_text(req.text)
+        entries, warnings, sideboard, commander = parse_decklist_text(req.text)
         name = "Imported Deck"
     else:
         raise HTTPException(status_code=400, detail="provide a decklist text or a Moxfield URL")
@@ -3446,6 +3453,7 @@ def import_deck(req: DeckImportRequest):
         "name": name,
         "cards": resolved,
         "sideboard": _resolve_deck_entries(sideboard),
+        "commander": _resolve_deck_entries(commander),
         "warnings": warnings,
         "unknown_count": sum(e["count"] for e in resolved if e["status"] == "unknown"),
         "unsupported_count": sum(e["count"] for e in resolved if e["status"] == "unsupported"),

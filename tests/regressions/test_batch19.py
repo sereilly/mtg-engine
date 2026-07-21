@@ -377,7 +377,7 @@ class TestAladdinsLampPayload:
 
 class TestSideboardDeckModel:
     def test_decklist_text_parses_a_sideboard_section(self):
-        entries, warnings, sideboard = parse_decklist_text(
+        entries, warnings, sideboard, commander = parse_decklist_text(
             "4 Lightning Bolt\n2 Forest\n\nSideboard\n3 Disenchant\n1 Black Lotus\n"
         )
         assert entries == [
@@ -388,14 +388,28 @@ class TestSideboardDeckModel:
             {"name": "Disenchant", "count": 3},
             {"name": "Black Lotus", "count": 1},
         ]
+        assert commander == []
+        assert warnings == []
+
+    def test_decklist_text_parses_a_commander_section(self):
+        entries, warnings, sideboard, commander = parse_decklist_text(
+            "Commander\n1 Norin the Wary\n\nDeck\n1 Sol Ring\n99 Forest\n"
+        )
+        assert commander == [{"name": "Norin the Wary", "count": 1}]
+        assert entries == [
+            {"name": "Sol Ring", "count": 1},
+            {"name": "Forest", "count": 99},
+        ]
+        assert sideboard == []
         assert warnings == []
 
     def test_maybeboard_is_still_discarded(self):
-        entries, _, sideboard = parse_decklist_text(
+        entries, _, sideboard, commander = parse_decklist_text(
             "4 Lightning Bolt\n\nMaybeboard\n2 Shatter\n"
         )
         assert entries == [{"name": "Lightning Bolt", "count": 4}]
         assert sideboard == []
+        assert commander == []
 
     def test_deck_store_round_trips_a_sideboard(self, tmp_path):
         from web.deck_store import DeckStore, deck_sideboard
@@ -413,6 +427,24 @@ class TestSideboardDeckModel:
         from web.deck_store import deck_sideboard
 
         assert deck_sideboard({"id": "x", "name": "old", "cards": []}) == []
+
+    def test_deck_store_round_trips_a_commander(self, tmp_path):
+        from web.deck_store import DeckStore, deck_commander
+
+        deck_store = DeckStore(tmp_path)
+        deck = deck_store.create(
+            "T", [{"name": "Forest", "count": 99}], format="commander",
+            commander=[{"name": "Norin the Wary", "count": 1}],
+        )
+        assert deck_commander(deck_store.get(deck["id"])) == [{"name": "Norin the Wary", "count": 1}]
+
+        deck_store.update(deck["id"], "T", [{"name": "Forest", "count": 99}], format="commander")
+        assert deck_commander(deck_store.get(deck["id"])) == []
+
+    def test_a_deck_saved_before_commander_zones_reads_as_empty(self):
+        from web.deck_store import deck_commander
+
+        assert deck_commander({"id": "x", "name": "old", "cards": []}) == []
 
     def test_session_creation_puts_the_sideboard_in_the_players_zone(self):
         created = client.post(

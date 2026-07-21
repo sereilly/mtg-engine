@@ -286,6 +286,8 @@ class DeckSaveRequest(BaseModel):
     # The deck's sideboard ("outside the game", CR 100.4) — the pool Ring of
     # Ma'rûf draws from.
     sideboard: list[DeckCardEntry] = Field(default_factory=list)
+    # The deck's command zone (CR 903.5a) — only meaningful for Commander.
+    commander: list[DeckCardEntry] = Field(default_factory=list)
 
 
 class DeckImportRequest(BaseModel):

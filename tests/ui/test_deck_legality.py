@@ -102,8 +102,8 @@ def test_deck_size_minimum():
 
 def test_commander_deck_size_maximum():
     cat = _catalog(_card("Forest", "legal", type_line="Basic Land - Forest", key="commander"))
-    res = validate_deck([{"name": "Forest", "count": 101}], "commander", cat)
-    assert any("at most 100" in p for p in res["problems"])
+    res = validate_deck([{"name": "Forest", "count": 100}], "commander", cat)
+    assert any("at most 99" in p for p in res["problems"])
 
 
 def test_casual_deck_always_legal():
@@ -164,6 +164,45 @@ def test_commander_has_no_sideboard():
     cat = _catalog(_card("Sol Ring", "legal", key="commander"))
     res = validate_deck([], "commander", cat, [{"name": "Sol Ring", "count": 1}])
     assert any("does not use a sideboard" in p for p in res["problems"])
+
+
+# ── Command zone (CR 903.5a) ────────────────────────────────────────────────
+
+def test_commander_requires_a_designated_commander():
+    cat = _catalog(_card("Forest", "legal", type_line="Basic Land - Forest", key="commander"))
+    res = validate_deck([{"name": "Forest", "count": 99}], "commander", cat)
+    assert any("requires 1 designated commander" in p for p in res["problems"])
+
+
+def test_commander_with_one_designated_commander_is_fine():
+    cat = _catalog(
+        _card("Forest", "legal", type_line="Basic Land - Forest", key="commander"),
+        _card("Norin the Wary", "legal", type_line="Legendary Creature - Human", key="commander"),
+    )
+    res = validate_deck(
+        [{"name": "Forest", "count": 99}], "commander", cat,
+        commander=[{"name": "Norin the Wary", "count": 1}],
+    )
+    assert res["legal"] is True
+
+
+def test_other_formats_do_not_use_a_commander():
+    cat = _catalog(_card("Grizzly Bears", "legal"))
+    res = validate_deck(
+        [{"name": "Grizzly Bears", "count": 60}], "modern", cat,
+        commander=[{"name": "Grizzly Bears", "count": 1}],
+    )
+    assert any("does not use a commander" in p for p in res["problems"])
+
+
+def test_copy_limit_counts_deck_plus_commander():
+    cat = _catalog(_card("Sol Ring", "legal", key="commander"))
+    res = validate_deck(
+        [{"name": "Sol Ring", "count": 1}], "commander", cat,
+        commander=[{"name": "Sol Ring", "count": 1}],
+    )
+    assert "Sol Ring" in res["illegal_names"]
+    assert any("2 copies across deck and commander" in p for p in res["problems"])
 
 
 def test_casual_sideboard_unbounded():

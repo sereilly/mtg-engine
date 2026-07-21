@@ -5,15 +5,19 @@
     catalog: [],
     catalogByName: new Map(),
     decks: [],
-    current: { id: null, name: "Untitled Deck", entries: [], sideboard: [], format: "casual" }, // entries/sideboard: [{name, count, status}]
-    // Which list the browser's +/- buttons and the deck pane act on. The
-    // sideboard is the deck's "outside the game" pool (CR 100.4) — the cards
-    // Ring of Ma'rûf can fetch.
-    editingSideboard: false,
+    // entries/sideboard/commander: [{name, count, status}]
+    current: { id: null, name: "Untitled Deck", entries: [], sideboard: [], commander: [], format: "casual" },
+    // Which board the browser's +/- buttons and the deck pane act on: "main",
+    // "sideboard" (the "outside the game" pool, CR 100.4, that Ring of Ma'rûf
+    // fetches from), or "commander" (the command zone, CR 903.5a — only shown
+    // for the Commander format).
+    activeBoard: "main",
     dirty: false,
     selectedCardName: null,
     colorFilters: new Set(),
   };
+
+  const BOARD_PROPERTY = { main: "entries", sideboard: "sideboard", commander: "commander" };
 
   const TYPE_GROUPS = [
     ["creature", "Creatures"],
@@ -55,24 +59,26 @@
   }
 
   // Legality reason for a card in the current format, "" if ok. The copy limit
-  // counts deck + sideboard together (CR 100.4a), so both boards are consulted
-  // regardless of which one the card is being shown in.
+  // counts deck + sideboard + commander together (CR 100.4a), so all boards
+  // are consulted regardless of which one the card is being shown in.
   function cardLegalityProblem(name) {
     const card = lookupCard(name);
     if (!card || !window.Legality) return "";
     const main = entryFor(name, "entries");
     const side = entryFor(name, "sideboard");
+    const cmd = entryFor(name, "commander");
     return window.Legality.cardProblem(
-      card, currentFormat(), main ? main.count : 0, side ? side.count : 0,
+      card, currentFormat(), main ? main.count : 0, side ? side.count : 0, cmd ? cmd.count : 0,
     );
   }
 
-  // Copies of a card held across both boards — the number the four-of limit
+  // Copies of a card held across all boards — the number the four-of limit
   // actually applies to (CR 100.4a).
   function combinedCount(name) {
     const main = entryFor(name, "entries");
     const side = entryFor(name, "sideboard");
-    return (main ? main.count : 0) + (side ? side.count : 0);
+    const cmd = entryFor(name, "commander");
+    return (main ? main.count : 0) + (side ? side.count : 0) + (cmd ? cmd.count : 0);
   }
 
   function overCopyLimit(name) {
@@ -97,11 +103,15 @@
     return activeEntries("sideboard").reduce((sum, e) => sum + e.count, 0);
   }
 
-  // The list currently being edited (mainboard unless the Sideboard tab is on),
-  // or a named one. state.current.sideboard is absent on decks saved before
-  // sideboards existed, so it is created on demand.
+  function commanderTotal() {
+    return activeEntries("commander").reduce((sum, e) => sum + e.count, 0);
+  }
+
+  // The list currently being edited (mainboard unless the Sideboard/Commander
+  // tab is on), or a named one. state.current.sideboard/commander are absent
+  // on decks saved before those boards existed, so they are created on demand.
   function activeEntries(which = null) {
-    const key = which || (state.editingSideboard ? "sideboard" : "entries");
+    const key = which || BOARD_PROPERTY[state.activeBoard];
     if (!Array.isArray(state.current[key])) state.current[key] = [];
     return state.current[key];
   }
@@ -225,8 +235,9 @@
     }
     const fmt = window.Legality ? window.Legality.normalizeFormat(deck.format) : "casual";
     const sideboard = (deck.sideboard || []).map((c) => ({ name: c.name, count: c.count }));
+    const commander = (deck.commander || []).map((c) => ({ name: c.name, count: c.count }));
     const legality = window.Legality
-      ? window.Legality.validateDeck(cards, fmt, (n) => lookupCard(n), sideboard)
+      ? window.Legality.validateDeck(cards, fmt, (n) => lookupCard(n), sideboard, commander)
       : { legal: true, problems: [] };
     return {
       id: deck.id,
@@ -239,10 +250,12 @@
       unsupported_count: unsupported,
       unknown_count: unknown,
       sideboard_count: sideboard.reduce((s, c) => s + c.count, 0),
+      commander_count: commander.reduce((s, c) => s + c.count, 0),
       updated_at: deck.updated_at,
       scope: "personal",
       cards,
       sideboard,
+      commander,
     };
   }
 
@@ -395,7 +408,7 @@
   // ── Deck mutations ────────────────────────────────────────────────────────
 
   function changeCount(name, delta) {
-    const key = state.editingSideboard ? "sideboard" : "entries";
+    const key = BOARD_PROPERTY[state.activeBoard];
     const existing = entryFor(name);
     if (existing) {
       existing.count = Math.max(0, Math.min(99, existing.count + delta));
@@ -448,10 +461,10 @@
     if (minus) minus.disabled = !entry;
   }
 
-  function resetDeck(name = "Untitled Deck", entries = [], id = null, scope = "personal", description = "", format = "casual", sideboard = []) {
+  function resetDeck(name = "Untitled Deck", entries = [], id = null, scope = "personal", description = "", format = "casual", sideboard = [], commander = []) {
     const fmt = window.Legality ? window.Legality.normalizeFormat(format) : format || "casual";
-    state.current = { id, name, description, entries, sideboard, scope, format: fmt };
-    state.editingSideboard = false;
+    state.current = { id, name, description, entries, sideboard, commander, scope, format: fmt };
+    state.activeBoard = "main";
     state.dirty = false;
     state.selectedCardName = null;
     q("deckNameInput").value = name;
@@ -469,6 +482,7 @@
       resetDeck(
         deck.name, (deck.cards || []).map((c) => ({ ...c })), deck.id, "personal",
         deck.description || "", deck.format, (deck.sideboard || []).map((c) => ({ ...c })),
+        (deck.commander || []).map((c) => ({ ...c })),
       );
       setStatus(`Loaded "${deck.name}".`);
       return;
@@ -479,6 +493,7 @@
     resetDeck(
       deck.name, deck.cards.map((c) => ({ ...c })), deck.id, "shared",
       deck.description || "", deck.format, (deck.sideboard || []).map((c) => ({ ...c })),
+      (deck.commander || []).map((c) => ({ ...c })),
     );
     // Shared decks are read-only here; editing this and saving makes a personal copy.
     setStatus(`Loaded shared deck "${deck.name}" — saving will create a personal copy.`);
@@ -495,6 +510,7 @@
     const description = q("deckDescriptionInput").value.trim();
     const cards = state.current.entries.map((e) => ({ name: e.name, count: e.count }));
     const sideboard = activeEntries("sideboard").map((e) => ({ name: e.name, count: e.count }));
+    const commander = activeEntries("commander").map((e) => ({ name: e.name, count: e.count }));
     if (cards.length === 0) {
       setStatus("Cannot save an empty deck.", true);
       return;
@@ -505,7 +521,7 @@
     if (makeCopy && state.current.id) name = `${name} (copy)`;
     let deck;
     try {
-      deck = window.PersonalDecks.save({ id: makeCopy ? null : state.current.id, name, description, format, cards, sideboard });
+      deck = window.PersonalDecks.save({ id: makeCopy ? null : state.current.id, name, description, format, cards, sideboard, commander });
     } catch (e) {
       setStatus(e.message || "Could not save deck.", true);
       return;
@@ -514,6 +530,7 @@
     resetDeck(
       deck.name, deck.cards.map((c) => ({ ...c })), deck.id, "personal",
       deck.description || "", deck.format, (deck.sideboard || []).map((c) => ({ ...c })),
+      (deck.commander || []).map((c) => ({ ...c })),
     );
     await refreshDeckLists();
     q("deckLoadSelect").value = deck.id;
@@ -521,7 +538,7 @@
     const cardCount = deck.cards.reduce((s, c) => s + c.count, 0);
     // Saving never blocks, but surface any format-legality issues as a warning.
     const legality = window.Legality
-      ? window.Legality.validateDeck(cards, format, (n) => lookupCard(n), sideboard)
+      ? window.Legality.validateDeck(cards, format, (n) => lookupCard(n), sideboard, commander)
       : { legal: true, problems: [] };
     if (!legality.legal) {
       const first = legality.problems[0] || "";
@@ -594,6 +611,7 @@
       resetDeck(
         name, result.cards.map((c) => ({ ...c })), null, "personal", "", "casual",
         (result.sideboard || []).map((c) => ({ ...c })),
+        (result.commander || []).map((c) => ({ ...c })),
       );
       markDirty();
       closeImportModal();
@@ -603,8 +621,10 @@
       const suffix = problems.length ? ` — ${problems.join(", ")} highlighted in red.` : ".";
       const sideCount = (result.sideboard || []).reduce((s, c) => s + c.count, 0);
       const sidePart = sideCount ? ` and ${sideCount} sideboard card(s)` : "";
+      const cmdCount = (result.commander || []).reduce((s, c) => s + c.count, 0);
+      const cmdPart = cmdCount ? ` and ${cmdCount} commander card(s)` : "";
       setStatus(
-        `Imported ${result.cards.reduce((s, c) => s + c.count, 0)} cards${sidePart}${suffix}`,
+        `Imported ${result.cards.reduce((s, c) => s + c.count, 0)} cards${sidePart}${cmdPart}${suffix}`,
         problems.length > 0,
       );
     } catch (e) {
@@ -626,6 +646,7 @@
   function renderBoardTabs() {
     const mainBtn = q("deckBoardMainBtn");
     const sideBtn = q("deckBoardSideBtn");
+    const cmdBtn = q("deckBoardCommanderBtn");
     if (!mainBtn || !sideBtn) return;
     // Live counts against the format's limits, e.g. "Deck (58/60)" reddened
     // until the minimum is met, "Sideboard (16/15)" once it's overfull.
@@ -646,15 +667,30 @@
       "deck-board-tab-problem",
       Boolean(fmt) && fmt.max_sideboard != null && side > fmt.max_sideboard,
     );
-    mainBtn.classList.toggle("active", !state.editingSideboard);
-    sideBtn.classList.toggle("active", state.editingSideboard);
-    mainBtn.setAttribute("aria-selected", String(!state.editingSideboard));
-    sideBtn.setAttribute("aria-selected", String(state.editingSideboard));
+    mainBtn.classList.toggle("active", state.activeBoard === "main");
+    sideBtn.classList.toggle("active", state.activeBoard === "sideboard");
+    mainBtn.setAttribute("aria-selected", String(state.activeBoard === "main"));
+    sideBtn.setAttribute("aria-selected", String(state.activeBoard === "sideboard"));
+
+    // The Commander tab only exists for formats with a command zone (CR 903.5a).
+    const usesCommander = Boolean(fmt && fmt.max_commander);
+    if (cmdBtn) {
+      cmdBtn.classList.toggle("hidden", !usesCommander);
+      if (usesCommander) {
+        const cmd = commanderTotal();
+        cmdBtn.textContent = `Commander (${cmd}/${fmt.max_commander})`;
+        cmdBtn.classList.toggle(
+          "deck-board-tab-problem", cmd < fmt.min_commander || cmd > fmt.max_commander,
+        );
+        cmdBtn.classList.toggle("active", state.activeBoard === "commander");
+        cmdBtn.setAttribute("aria-selected", String(state.activeBoard === "commander"));
+      }
+    }
   }
 
-  function setEditingSideboard(on) {
-    if (state.editingSideboard === on) return;
-    state.editingSideboard = on;
+  function setActiveBoard(board) {
+    if (state.activeBoard === board) return;
+    state.activeBoard = board;
     state.selectedCardName = null;
     // The browser tiles' count badges track the active board, so redraw them too.
     renderAll();
@@ -673,6 +709,15 @@
     q("deckSaveAsBtn").disabled = total === 0;
   }
 
+  // CR 903.3: only a legendary creature (or a card that says it can be your
+  // commander) can go in the command zone. This card pool has no
+  // planeswalkers/"can be your commander" text, so legendary creature is the
+  // whole check.
+  function isLegendaryCreature(card) {
+    const tl = card.type_line.toLowerCase();
+    return tl.includes("legendary") && tl.includes("creature");
+  }
+
   function getFilteredCards() {
     const term = q("browserSearch").value.trim().toLowerCase();
     const typeFilter = q("browserTypeFilter").value;
@@ -686,6 +731,7 @@
     const legalOnly = q("browserLegalOnlyFilter").checked;
 
     const matches = state.catalog.filter((card) => {
+      if (state.activeBoard === "commander" && !isLegendaryCreature(card)) return false;
       if (term) {
         const haystack = `${card.name}\n${card.type_line}\n${card.oracle_text}`.toLowerCase();
         if (!haystack.includes(term)) return false;
@@ -827,7 +873,12 @@
     if (cards.length === 0) {
       const empty = document.createElement("div");
       empty.className = "browser-empty";
-      empty.textContent = "No cards match the current filters.";
+      empty.textContent =
+        state.activeBoard === "commander"
+          ? state.catalog.some(isLegendaryCreature)
+            ? "No legendary creatures match the current filters."
+            : "No legendary creatures in the current card pool (LEA/LEB/2ED/ARN predate the Legendary supertype, introduced in Legends)."
+          : "No cards match the current filters.";
       grid.appendChild(empty);
     }
   }
@@ -876,7 +927,8 @@
     }
     const cards = state.current.entries.map((e) => ({ name: e.name, count: e.count }));
     const side = activeEntries("sideboard").map((e) => ({ name: e.name, count: e.count }));
-    const legality = window.Legality.validateDeck(cards, format, (n) => lookupCard(n), side);
+    const cmd = activeEntries("commander").map((e) => ({ name: e.name, count: e.count }));
+    const legality = window.Legality.validateDeck(cards, format, (n) => lookupCard(n), side, cmd);
     const label = window.Legality.formatLabel(format);
     if (legality.legal) {
       el.className = "deck-legality deck-legality-ok";
@@ -1020,9 +1072,12 @@
     if (entries.length === 0) {
       const empty = document.createElement("div");
       empty.className = "deck-list-empty";
-      empty.textContent = state.editingSideboard
-        ? "Sideboard is empty. Add cards from the browser on the left — Ring of Ma'rûf fetches from here."
-        : "Deck is empty. Add new cards from the browser on the left.";
+      empty.textContent =
+        state.activeBoard === "sideboard"
+          ? "Sideboard is empty. Add cards from the browser on the left — Ring of Ma'rûf fetches from here."
+          : state.activeBoard === "commander"
+            ? "No commander designated yet. Add it from the browser on the left."
+            : "Deck is empty. Add new cards from the browser on the left.";
       listEl.appendChild(empty);
     }
   }
@@ -1205,13 +1260,20 @@
       state.current.format = window.Legality
         ? window.Legality.normalizeFormat(event.target.value)
         : event.target.value;
+      // Switching away from a format with a command zone while the Commander
+      // tab is open would leave it open on a now-hidden tab.
+      const fmt = window.Legality ? window.Legality.getFormat(state.current.format) : null;
+      if (state.activeBoard === "commander" && !(fmt && fmt.max_commander)) {
+        state.activeBoard = "main";
+      }
       markDirty();
       // Legality flags are format-dependent, so re-render everything.
       renderAll();
     });
 
-    q("deckBoardMainBtn")?.addEventListener("click", () => setEditingSideboard(false));
-    q("deckBoardSideBtn")?.addEventListener("click", () => setEditingSideboard(true));
+    q("deckBoardMainBtn")?.addEventListener("click", () => setActiveBoard("main"));
+    q("deckBoardSideBtn")?.addEventListener("click", () => setActiveBoard("sideboard"));
+    q("deckBoardCommanderBtn")?.addEventListener("click", () => setActiveBoard("commander"));
 
     q("deckImportBtn").addEventListener("click", openImportModal);
     q("importDeckCancelBtn").addEventListener("click", closeImportModal);

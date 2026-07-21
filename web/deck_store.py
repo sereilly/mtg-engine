@@ -11,8 +11,9 @@ from pathlib import Path
 
 _DECKLIST_LINE = re.compile(r"^(?:(\d+)\s*[xX]?\s+)?(.+?)$")
 _SET_SUFFIX = re.compile(r"\s+\((?:[A-Za-z0-9]{2,6})\)(?:\s+[\w\-★]+)?\s*$")
-_SECTION_HEADERS = {"deck", "mainboard", "main", "commander", "companion"}
+_SECTION_HEADERS = {"deck", "mainboard", "main", "companion"}
 _SIDEBOARD_HEADERS = {"sideboard", "side"}
+_COMMANDER_HEADERS = {"commander", "commanders"}
 _STOP_HEADERS = {"maybeboard", "considering", "tokens"}
 
 _MOXFIELD_URL = re.compile(r"moxfield\.com/decks/([A-Za-z0-9_-]+)")
@@ -33,12 +34,14 @@ class DeckStore:
     Deck shape: {"id": str, "name": str, "description": str, "format": str,
                  "cards": [{"name": str, "count": int}],
                  "sideboard": [{"name": str, "count": int}],
+                 "commander": [{"name": str, "count": int}],
                  "created_at": float, "updated_at": float}
 
     ``sideboard`` is the "outside the game" pool (CR 100.4) that cards such as
-    Ring of Ma'rûf draw from. Decks saved before it existed simply have no
-    ``sideboard`` key; read it through ``deck_sideboard`` so they behave as
-    empty rather than raising.
+    Ring of Ma'rûf draw from. ``commander`` is the command zone (CR 903.5a) —
+    only meaningful for the Commander format. Decks saved before either
+    existed simply have no such key; read them through ``deck_sideboard``/
+    ``deck_commander`` so they behave as empty rather than raising.
     """
 
     def __init__(self, decks_dir: Path):
@@ -76,6 +79,7 @@ class DeckStore:
         description: str = "",
         format: str = "casual",
         sideboard: list[dict] | None = None,
+        commander: list[dict] | None = None,
     ) -> dict:
         deck = {
             "id": secrets.token_urlsafe(8).replace("-", "a").replace("_", "b"),
@@ -84,6 +88,7 @@ class DeckStore:
             "format": format,
             "cards": _normalize_cards(cards),
             "sideboard": _normalize_cards(sideboard or []),
+            "commander": _normalize_cards(commander or []),
             "created_at": time.time(),
             "updated_at": time.time(),
         }
@@ -98,6 +103,7 @@ class DeckStore:
         description: str = "",
         format: str = "casual",
         sideboard: list[dict] | None = None,
+        commander: list[dict] | None = None,
     ) -> dict:
         deck = self.get(deck_id)
         deck["name"] = name
@@ -105,6 +111,7 @@ class DeckStore:
         deck["format"] = format
         deck["cards"] = _normalize_cards(cards)
         deck["sideboard"] = _normalize_cards(sideboard or [])
+        deck["commander"] = _normalize_cards(commander or [])
         deck["updated_at"] = time.time()
         self._path(deck_id).write_text(json.dumps(deck, indent=2), encoding="utf-8")
         return deck
@@ -137,16 +144,25 @@ def deck_sideboard(deck: dict) -> list[dict]:
     return _normalize_cards(deck.get("sideboard") or [])
 
 
-def parse_decklist_text(text: str) -> tuple[list[dict], list[str], list[dict]]:
-    """Parse a pasted decklist into (mainboard, warnings, sideboard) entries.
+def deck_commander(deck: dict) -> list[dict]:
+    """A deck's command zone entries (CR 903.5a). Decks saved before commander
+    zones existed have no ``commander`` key, so read every deck through here
+    rather than indexing."""
+    return _normalize_cards(deck.get("commander") or [])
+
+
+def parse_decklist_text(text: str) -> tuple[list[dict], list[str], list[dict], list[dict]]:
+    """Parse a pasted decklist into (mainboard, warnings, sideboard, commander).
 
     Accepts common formats: "4 Lightning Bolt", "4x Lightning Bolt",
     "Lightning Bolt", MTGA/Moxfield exports with set codes ("4 Bolt (LEA) 123").
-    Lines after a Sideboard header go to the sideboard; Maybeboard/Considering/
-    Tokens sections are still ignored entirely — they aren't part of the deck.
+    Lines after a Sideboard header go to the sideboard, after a Commander
+    header go to the command zone; Maybeboard/Considering/Tokens sections are
+    still ignored entirely — they aren't part of the deck.
     """
     entries: list[dict] = []
     sideboard: list[dict] = []
+    commander: list[dict] = []
     warnings: list[str] = []
     target = entries
     for raw_line in text.splitlines():
@@ -156,6 +172,9 @@ def parse_decklist_text(text: str) -> tuple[list[dict], list[str], list[dict]]:
         header = line.rstrip(":").casefold()
         if header in _SIDEBOARD_HEADERS:
             target = sideboard
+            continue
+        if header in _COMMANDER_HEADERS:
+            target = commander
             continue
         if header in _STOP_HEADERS:
             break
@@ -172,7 +191,10 @@ def parse_decklist_text(text: str) -> tuple[list[dict], list[str], list[dict]]:
             warnings.append(f"Could not parse line: {raw_line}")
             continue
         target.append({"name": name, "count": count})
-    return _normalize_cards(entries), warnings, _normalize_cards(sideboard)
+    return (
+        _normalize_cards(entries), warnings,
+        _normalize_cards(sideboard), _normalize_cards(commander),
+    )
 
 
 def _moxfield_board_entries(boards: object, board_name: str) -> list[dict]:
@@ -196,8 +218,8 @@ def _moxfield_board_entries(boards: object, board_name: str) -> list[dict]:
     return entries
 
 
-def fetch_moxfield_deck(url: str) -> tuple[str, list[dict], list[dict]]:
-    """Fetch a public Moxfield deck. Returns (deck_name, entries, sideboard)."""
+def fetch_moxfield_deck(url: str) -> tuple[str, list[dict], list[dict], list[dict]]:
+    """Fetch a public Moxfield deck. Returns (deck_name, entries, sideboard, commander)."""
     match = _MOXFIELD_URL.search(url)
     if not match:
         raise DeckImportError("Not a valid Moxfield deck URL (expected moxfield.com/decks/...)")
@@ -227,6 +249,7 @@ def fetch_moxfield_deck(url: str) -> tuple[str, list[dict], list[dict]]:
     boards = payload.get("boards")
     entries = _moxfield_board_entries(boards, "mainboard")
     sideboard = _moxfield_board_entries(boards, "sideboard")
+    commander = _moxfield_board_entries(boards, "commanders")
 
     if not entries and isinstance(payload.get("mainboard"), dict):
         # Older API shape: top-level mainboard/sideboard dicts keyed by card name.
@@ -243,4 +266,4 @@ def fetch_moxfield_deck(url: str) -> tuple[str, list[dict], list[dict]]:
     if not entries:
         raise DeckImportError("No mainboard cards found in the Moxfield deck")
 
-    return name, _normalize_cards(entries), _normalize_cards(sideboard)
+    return name, _normalize_cards(entries), _normalize_cards(sideboard), _normalize_cards(commander)

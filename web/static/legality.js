@@ -55,6 +55,14 @@
     return "not_legal";
   }
 
+  // English-join zone names for an overage message ("deck and sideboard",
+  // "deck, sideboard, and commander"). Empty/single-item lists join to "".
+  function joinZones(zones) {
+    if (zones.length < 2) return "";
+    if (zones.length === 2) return `${zones[0]} and ${zones[1]}`;
+    return `${zones.slice(0, -1).join(", ")}, and ${zones[zones.length - 1]}`;
+  }
+
   function isBasicLand(card) {
     const tl = String((card && card.type_line) || "").toLowerCase();
     return tl.includes("basic") && tl.includes("land");
@@ -76,20 +84,25 @@
   }
 
   // Human-readable reason a card is illegal in a format, or "" if it's fine.
-  // `count` is the main-deck count and `sideCount` the sideboard count; the copy
-  // limit applies to their sum (CR 100.4a). Pass 0/omit both to only check the
-  // card's own ban/legality status (used for browser tiles).
-  function cardProblem(card, key, count = 0, sideCount = 0) {
+  // `count` is the main-deck count, `sideCount` the sideboard count, and
+  // `cmdCount` the commander (command zone) count; the copy limit applies to
+  // their sum (CR 100.4a). Pass 0/omit all three to only check the card's own
+  // ban/legality status (used for browser tiles).
+  function cardProblem(card, key, count = 0, sideCount = 0, cmdCount = 0) {
     const fmt = getFormat(key);
     if (!card || !fmt || !fmt.scryfall_key) return "";
     const status = cardStatus(card, key);
     if (status === "banned") return `${card.name} is banned in ${fmt.label}.`;
     if (status === "not_legal") return `${card.name} is not legal in ${fmt.label}.`;
     const limit = effectiveMaxCopies(card, fmt, status);
-    const total = Number(count || 0) + Number(sideCount || 0);
+    const total = Number(count || 0) + Number(sideCount || 0) + Number(cmdCount || 0);
     if (total && limit != null && total > limit) {
-      // Name the sideboard only when it actually contributes to the overage.
-      const where = sideCount && count ? " across deck and sideboard" : "";
+      // Name the zones that actually contribute to the overage.
+      const zones = [];
+      if (count) zones.push("deck");
+      if (sideCount) zones.push("sideboard");
+      if (cmdCount) zones.push("commander");
+      const where = zones.length > 1 ? ` across ${joinZones(zones)}` : "";
       if (status === "restricted") return `${card.name} is restricted to 1 copy in ${fmt.label} (deck has ${total}${where}).`;
       if (limit === 1) return `${card.name}: ${total} copies${where} exceed the 1-of limit in ${fmt.label}.`;
       return `${card.name}: ${total} copies${where} exceed the ${limit}-copy limit in ${fmt.label}.`;
@@ -120,23 +133,30 @@
     return { counts, total };
   }
 
-  // Validate a whole deck. `entries`/`sideboard` are [{name, count}];
+  // Validate a whole deck. `entries`/`sideboard`/`commander` are [{name, count}];
   // `lookupCard(name)` resolves a name to a catalog card (or null). Returns
   // {format, legal, problems:[str], illegalNames:Set}. Cards not in the catalog
   // are skipped — they're surfaced separately as "not in catalog".
-  function validateDeck(entries, key, lookupCard, sideboard = null) {
+  function validateDeck(entries, key, lookupCard, sideboard = null, commander = null) {
     const fmt = getFormat(key);
     const result = { format: fmt ? fmt.key : DEFAULT_FORMAT, legal: true, problems: [], illegalNames: new Set() };
     if (!fmt || !fmt.scryfall_key) return result;
 
     const main = tally(entries);
     const side = tally(sideboard);
-    // Main-deck order first, then sideboard-only cards.
-    const names = [...main.counts.keys(), ...[...side.counts.keys()].filter((n) => !main.counts.has(n))];
+    const cmd = tally(commander);
+    // Main-deck order first, then sideboard/commander-only cards.
+    const names = [
+      ...main.counts.keys(),
+      ...[...side.counts.keys()].filter((n) => !main.counts.has(n)),
+      ...[...cmd.counts.keys()].filter((n) => !main.counts.has(n) && !side.counts.has(n)),
+    ];
     for (const name of names) {
       const card = lookupCard(name);
       if (!card) continue;
-      const problem = cardProblem(card, key, main.counts.get(name) || 0, side.counts.get(name) || 0);
+      const problem = cardProblem(
+        card, key, main.counts.get(name) || 0, side.counts.get(name) || 0, cmd.counts.get(name) || 0,
+      );
       if (problem) {
         result.problems.push(problem);
         result.illegalNames.add(card.name);
@@ -154,6 +174,15 @@
       } else {
         result.problems.push(`Sideboard has ${side.total} card(s); ${fmt.label} allows at most ${fmt.max_sideboard}.`);
       }
+    }
+    const minCmd = fmt.min_commander || 0;
+    const maxCmd = fmt.max_commander || 0;
+    if (maxCmd === 0 && cmd.total > 0) {
+      result.problems.push(`${fmt.label} does not use a commander (commander zone has ${cmd.total} card(s)).`);
+    } else if (cmd.total > maxCmd) {
+      result.problems.push(`Commander zone has ${cmd.total} card(s); ${fmt.label} allows at most ${maxCmd}.`);
+    } else if (cmd.total < minCmd) {
+      result.problems.push(`${fmt.label} requires ${minCmd} designated commander card(s) (found ${cmd.total}).`);
     }
     result.legal = result.problems.length === 0;
     return result;

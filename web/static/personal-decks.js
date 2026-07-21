@@ -48,9 +48,10 @@
     return [...merged.entries()].map(([name, count]) => ({ name, count }));
   }
 
-  // Returns raw decks {id, name, cards, sideboard, created_at, updated_at},
-  // sorted by name. Decks stored before sideboards existed have no `sideboard`
-  // key; read it as `deck.sideboard || []`.
+  // Returns raw decks {id, name, cards, sideboard, commander, created_at,
+  // updated_at}, sorted by name. Decks stored before sideboards/commander
+  // zones existed have no such key; read them as `deck.sideboard || []` /
+  // `deck.commander || []`.
   function all() {
     return readAll().sort((a, b) =>
       String(a.name).localeCompare(String(b.name), undefined, { sensitivity: "base" }),
@@ -62,7 +63,7 @@
   }
 
   // Create (no id / unknown id) or update (existing id). Returns the saved deck.
-  function save({ id, name, description, format, cards, sideboard }) {
+  function save({ id, name, description, format, cards, sideboard, commander }) {
     const decks = readAll();
     const now = Date.now() / 1000;
     const cleanName = String(name || "Untitled Deck").trim() || "Untitled Deck";
@@ -70,10 +71,11 @@
     const cleanFormat = String(format || "casual").trim() || "casual";
     const cleanCards = normalizeCards(cards);
     const cleanSideboard = normalizeCards(sideboard);
+    const cleanCommander = normalizeCards(commander);
     const idx = id ? decks.findIndex((d) => d.id === id) : -1;
     let deck;
     if (idx >= 0) {
-      deck = { ...decks[idx], name: cleanName, description: cleanDescription, format: cleanFormat, cards: cleanCards, sideboard: cleanSideboard, updated_at: now };
+      deck = { ...decks[idx], name: cleanName, description: cleanDescription, format: cleanFormat, cards: cleanCards, sideboard: cleanSideboard, commander: cleanCommander, updated_at: now };
       decks[idx] = deck;
     } else {
       deck = {
@@ -83,6 +85,7 @@
         format: cleanFormat,
         cards: cleanCards,
         sideboard: cleanSideboard,
+        commander: cleanCommander,
         created_at: now,
         updated_at: now,
       };
