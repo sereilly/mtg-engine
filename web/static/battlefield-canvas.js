@@ -24,6 +24,36 @@ const BF_MANA_FAN_STAGGER = 50;  // delay between successive symbols popping
 // Hover hit-box (world units) for the shield badge at a card's top-left corner.
 const SHIELD_BADGE_HIT = 24;
 
+// ---- Counter badges ----
+// One entry per counter kind the engine can put on a permanent (the keys are
+// the kinds serialized in a permanent's `counters` map). Unknown kinds fall
+// back to their capitalized initial, so a newly supported counter still gets a
+// distinct, readable badge without an entry here.
+//
+// `icon` is the symbol alone (the hover preview shows it as "icon: count");
+// `joiner` sits between symbol and count on the card-face badge, where the two
+// run together — a "×" keeps "+1/+1 ×2" from reading as "+1/+12".
+const BF_COUNTER_STYLES = {
+  "+1/+1": { icon: "+1/+1", joiner: " ×", fill: "rgba(30,70,40,0.92)", stroke: "rgba(130,220,150,0.9)", text: "#e6ffe9" },
+  "-1/-1": { icon: "-1/-1", joiner: " ×", fill: "rgba(80,30,30,0.92)", stroke: "rgba(230,140,140,0.9)", text: "#ffe8e8" },
+  "+1/+0": { icon: "+1/+0", joiner: " ×", fill: "rgba(70,55,25,0.92)", stroke: "rgba(230,195,110,0.9)", text: "#fff3d8" },
+  corpse: { icon: "☠", fill: "rgba(60,40,70,0.92)", stroke: "rgba(180,140,220,0.9)", text: "#f0e6ff" },
+  vitality: { icon: "❤", fill: "rgba(30,70,40,0.92)", stroke: "rgba(130,220,150,0.9)", text: "#e6ffe9" },
+  wind: { icon: "≈", fill: "rgba(25,60,75,0.92)", stroke: "rgba(120,210,235,0.9)", text: "#e2f8ff" },
+  lore: { icon: "✦", fill: "rgba(60,50,25,0.92)", stroke: "rgba(220,195,120,0.9)", text: "#fff6dc" },
+  mire: { icon: "◍", fill: "rgba(45,55,35,0.92)", stroke: "rgba(160,190,120,0.9)", text: "#eefbe0" },
+};
+const BF_COUNTER_FALLBACK = { fill: "rgba(40,50,70,0.92)", stroke: "rgba(150,180,220,0.9)", text: "#e8f0ff" };
+
+function counterBadgeStyle(kind) {
+  const known = BF_COUNTER_STYLES[kind];
+  if (known) return known;
+  const initial = String(kind || "?").trim().charAt(0).toUpperCase() || "●";
+  // The badge has room for one glyph, but the preview has room for the whole
+  // word — an unstyled kind reads "wither: 2" there rather than a bare "W: 2".
+  return { ...BF_COUNTER_FALLBACK, icon: initial, previewIcon: String(kind) };
+}
+
 // ---- 3D table perspective ----
 // The canvas is tilted away from the camera with a CSS rotateX inside a
 // perspective container, so the opponent's side recedes into the distance.
@@ -3071,19 +3101,20 @@ class BattlefieldCanvas {
       counterEntries.push(["corpse", Number(card.corpse_counters)]);
     }
     if (counterEntries.length) {
-      const styles = {
-        corpse: { icon: "☠", fill: "rgba(60,40,70,0.92)", stroke: "rgba(180,140,220,0.9)", text: "#f0e6ff" },
-        vitality: { icon: "❤", fill: "rgba(30,70,40,0.92)", stroke: "rgba(130,220,150,0.9)", text: "#e6ffe9" },
-      };
-      const fallbackStyle = { icon: "●", fill: "rgba(40,50,70,0.92)", stroke: "rgba(150,180,220,0.9)", text: "#e8f0ff" };
-      const bw = 22, bh = 13;
+      const bh = 13;
       const atTop = !!(flags && flags.occludedAuraMember);
       // When a P/T badge occupies the bottom-right corner, start the counter
       // stack one slot higher so counters never cover the power/toughness
       // (Scavenging Ghoul's corpse counters).
       const counterBaseSlot = ptBadgeDrawn && !atTop ? 1 : 0;
+      ctx.font = `bold ${Math.max(8, bh * 0.7)}px sans-serif`;
       counterEntries.forEach(([kind, count], i) => {
-        const s = styles[kind] || fallbackStyle;
+        const s = counterBadgeStyle(kind);
+        const label = `${s.icon}${s.joiner || ""}${count}`;
+        // Sized to its text so a wide symbol (+1/+1) or a double-digit count
+        // isn't clipped, with the historic 22px as the floor so the common
+        // single-glyph badges stay a uniform width down the stack.
+        const bw = Math.max(22, Math.ceil(ctx.measureText(label).width) + 8);
         const bx = x + w - bw - 2;
         const by = atTop
           ? y + 2 + i * (bh + 2)
@@ -3096,10 +3127,9 @@ class BattlefieldCanvas {
         this._roundRect(ctx, bx, by, bw, bh, 3);
         ctx.stroke();
         ctx.fillStyle = s.text;
-        ctx.font = `bold ${Math.max(8, bh * 0.7)}px sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText(s.icon + count, bx + bw / 2, by + bh / 2);
+        ctx.fillText(label, bx + bw / 2, by + bh / 2);
       });
     }
 

@@ -351,15 +351,38 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
     }
 
 
+# Counter metadata keys whose bare name doesn't read as the counter's kind
+# (``plus_counters`` is the +1/+1 counter, ``plus_1_0`` Instill Energy's +1/+0).
+_COUNTER_KIND_LABELS = {
+    "plus": "+1/+1",
+    "minus": "-1/-1",
+    "plus_1_0": "+1/+0",
+}
+
+
 def _serialize_counters(perm) -> dict:
-    """A name->count map of the counters worth rendering on a card face."""
+    """A kind->count map of every counter on this permanent.
+
+    Counters live in permanent metadata under ``<kind>_counters`` (corpse,
+    vitality, wind, lore, plus/minus, …), so sweeping that suffix means a new
+    counter-placing card renders on the card face and in the hover preview for
+    free — no per-counter entry here. ``mire_counter`` is the one boolean-shaped
+    counter (a land has it or doesn't) and is reported as a count of 1.
+    """
     counters: dict[str, int] = {}
-    corpse = int(perm.metadata.get("corpse_counters", 0))
-    if corpse:
-        counters["corpse"] = corpse
-    vitality = int(perm.metadata.get("vitality_counters", 0))
-    if vitality:
-        counters["vitality"] = vitality
+    for key, value in perm.metadata.items():
+        if not key.endswith("_counters"):
+            continue
+        try:
+            count = int(value)
+        except (TypeError, ValueError):
+            continue
+        if count <= 0:
+            continue
+        kind = key[: -len("_counters")]
+        counters[_COUNTER_KIND_LABELS.get(kind, kind)] = count
+    if perm.metadata.get("mire_counter"):
+        counters["mire"] = 1
     return counters
 
 

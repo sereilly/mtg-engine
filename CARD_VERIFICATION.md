@@ -3,9 +3,9 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **369**
-- Passed: **322**
+- Passed: **325**
 - Failed: **0**
-- Untested: **47**
+- Untested: **44**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -59,7 +59,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Circle of Protection: Green | ✅ pass |  |
 | Circle of Protection: Red | ✅ pass |  |
 | Circle of Protection: White | ✅ pass |  |
-| City in a Bottle | ⬜ untested |  |
+| City in a Bottle | ✅ pass |  |
 | City of Brass | ⬜ untested |  |
 | Clockwork Beast | ✅ pass |  |
 | Clone | ✅ pass |  |
@@ -78,7 +78,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Crystal Rod | ✅ pass |  |
 | Cuombajj Witches | ⬜ untested |  |
 | Cursed Land | ✅ pass |  |
-| Cyclone | ⬜ untested |  |
+| Cyclone | ✅ pass |  |
 | Cyclopean Tomb | ✅ pass |  |
 | Dancing Scimitar | ⬜ untested |  |
 | Dandân | ✅ pass |  |
@@ -349,7 +349,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Vesuvan Doppelganger | ✅ pass |  |
 | Veteran Bodyguard | ✅ pass |  |
 | Volcanic Eruption | ✅ pass |  |
-| Volcanic Island | ⬜ untested |  |
+| Volcanic Island | ✅ pass |  |
 | Wall of Air | ✅ pass |  |
 | Wall of Bone | ✅ pass |  |
 | Wall of Brambles | ✅ pass |  |

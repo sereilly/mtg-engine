@@ -6640,6 +6640,26 @@ function clearCardPreview() {
   q("cardPreviewOverlay")?.classList.add("hidden");
 }
 
+// One "symbol: count" line per counter kind on a permanent (["≈: 3"] for a
+// Cyclone holding three wind counters). Empty for a card with no counters, or a
+// bare card name / hand card that has no `counters` map.
+function previewCounterLines(card) {
+  if (!card || typeof card !== "object") return [];
+  const map = card.counters;
+  const entries = [];
+  if (map && typeof map === "object") {
+    for (const [kind, n] of Object.entries(map)) {
+      if (Number(n) > 0) entries.push([kind, Number(n)]);
+    }
+  } else if (Number(card.corpse_counters) > 0) {
+    entries.push(["corpse", Number(card.corpse_counters)]);
+  }
+  return entries.map(([kind, n]) => {
+    const style = counterBadgeStyle(kind);
+    return `${style.previewIcon || style.icon}: ${n}`;
+  });
+}
+
 function showCardPreview(card) {
   _cancelPendingPreviewHide();
   q("cardPreviewOverlay")?.classList.remove("hidden");
@@ -6655,9 +6675,13 @@ function showCardPreview(card) {
   // A text-changing spell (Sleight of Mind / Magical Hack) records per-word edits
   // so the oracle text can show the old word struck through and the new one in gold.
   const textChanges = typeof card === "object" && Array.isArray(card?.text_changes) ? card.text_changes : [];
+  // Counters currently on the permanent (wind counters from Cyclone, corpse
+  // counters from Scavenging Ghoul, …), one "symbol: count" line per kind.
+  const counterLines = previewCounterLines(card);
   const sections = [];
   if (keywordLabel) sections.push(renderSymbolsInline(keywordLabel));
   if (previewText) sections.push(renderOracleTextWithChanges(previewText, textChanges));
+  for (const line of counterLines) sections.push(renderSymbolsInline(line));
   if (sicknessLabel) sections.push(renderSymbolsInline(sicknessLabel));
   const previewEl = q("cardPreviewText");
   if (previewEl) previewEl.innerHTML = sections.join("<br>");
