@@ -29,6 +29,21 @@
     return state.catalogByName.get(String(name).toLowerCase()) || null;
   }
 
+  // Swap the W/U/B/R/G/C filter buttons' letter labels for the real mana icons,
+  // matching the in-game mana pool orbs. symbolMap (in app.js) loads
+  // asynchronously, so this may run before icons are available; app.js calls
+  // window.refreshDeckEditorSymbols once symbolMap is ready to retry.
+  function renderColorFilterIcons() {
+    for (const btn of document.querySelectorAll("#browserColorFilters .color-filter-btn[data-color]")) {
+      const color = btn.dataset.color;
+      if (color === "M") continue;
+      const src = typeof symbolSrc === "function" ? symbolSrc(`{${color}}`) : null;
+      if (src) {
+        btn.innerHTML = `<span class="mana-orb-glyph"><img class="mtg-symbol mtg-symbol-mana" src="${escapeHtml(src)}" alt="{${color}}" /></span>`;
+      }
+    }
+  }
+
   function cardStatus(name) {
     const card = lookupCard(name);
     if (!card) return "unknown";
@@ -1261,6 +1276,8 @@
 
   async function init() {
     bindEvents();
+    renderColorFilterIcons();
+    window.refreshDeckEditorSymbols = renderColorFilterIcons;
     try {
       await loadCatalog();
     } catch {

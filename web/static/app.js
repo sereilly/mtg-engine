@@ -790,6 +790,9 @@ async function loadSymbolMap() {
     if (currentState) {
       renderState(currentState);
     }
+    if (typeof window.refreshDeckEditorSymbols === "function") {
+      window.refreshDeckEditorSymbols();
+    }
   } catch {
     symbolMap = {};
   }

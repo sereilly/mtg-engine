@@ -3403,22 +3403,38 @@ pre {
   margin-left: 0;
   border-radius: 50%;
   font-weight: 700;
-  color: var(--ink-soft);
+  color: #0f1722;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  transition: transform 0.15s ease, box-shadow 0.25s ease, filter 0.25s ease,
+    opacity 0.25s ease;
+  /* Unselected colors read as dark/inert; selecting one lights it up below —
+     the same filled/empty language as the in-game mana pool orbs. */
+  filter: grayscale(0.55) brightness(0.6);
+  opacity: 0.5;
+}
+
+.color-filter-btn:hover {
+  filter: grayscale(0.2) brightness(0.85);
+  opacity: 0.8;
+}
+
+.color-filter-btn.mana-M {
+  background: linear-gradient(135deg, #f2b84b, #b28a4a);
+  --mana-glow: rgba(242, 184, 75, 0.75);
 }
 
 .color-filter-btn.active {
-  border-color: var(--accent);
-  color: var(--bg-night);
-  box-shadow: 0 0 8px rgba(242, 184, 75, 0.55);
+  filter: none;
+  opacity: 1;
+  border-color: rgba(255, 255, 255, 0.45);
+  box-shadow: 0 0 12px 1px var(--mana-glow, rgba(255, 255, 255, 0.5)),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.22);
 }
-
-.color-filter-btn[data-color="W"].active { background: #f5f0d8; }
-.color-filter-btn[data-color="U"].active { background: #9fc6e8; }
-.color-filter-btn[data-color="B"].active { background: #b0a3b8; }
-.color-filter-btn[data-color="R"].active { background: #e8a08a; }
-.color-filter-btn[data-color="G"].active { background: #a3c8a0; }
-.color-filter-btn[data-color="C"].active { background: #cfcfcf; }
-.color-filter-btn[data-color="M"].active { background: linear-gradient(135deg, #f2b84b, #b28a4a); }
 
 .browser-cmc-label {
   display: inline-flex;
