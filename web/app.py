@@ -534,6 +534,7 @@ def _build_set_memberships() -> dict[str, list[dict]]:
                         "name": raw.get("set_name"),
                         "image_uri": image_uris.get("normal"),
                         "large_image_uri": image_uris.get("large"),
+                        "scryfall_uri": raw.get("scryfall_uri"),
                     }
                 )
     return memberships
@@ -569,6 +570,7 @@ def _build_catalog_payload() -> list[dict]:
                 "legalities": raw.get("legalities") or {},
                 "image_uri": image_uris.get("normal"),
                 "large_image_uri": image_uris.get("large"),
+                "scryfall_uri": raw.get("scryfall_uri"),
                 "supported": classification.supported,
                 "unsupported_reason": None if classification.supported else classification.reason,
             }

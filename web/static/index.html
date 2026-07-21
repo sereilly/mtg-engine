@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
     <title>MTG Simulacrum</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -10,7 +11,7 @@
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700;800;900&family=Spectral:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,500&display=swap"
     />
-    <link rel="stylesheet" href="/styles.css?v=20260704-fonts2" />
+    <link rel="stylesheet" href="/styles.css?v=20260720-darkselect2" />
   </head>
   <body>
     <div id="auroraLayer" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
@@ -196,6 +197,10 @@
                   <option value="color">Sort: Color</option>
                   <option value="type">Sort: Type</option>
                 </select>
+                <label class="browser-legal-filter" title="Only show cards legal in the selected format">
+                  <input id="browserLegalOnlyFilter" type="checkbox" checked />
+                  Legal only
+                </label>
                 <button id="browserClearFiltersBtn" type="button" class="secondary-btn">Clear</button>
                 <span id="browserResultCount" class="browser-result-count"></span>
               </div>
@@ -233,6 +238,7 @@
               <div id="editorPreviewName" class="card-preview-name">No card selected</div>
               <div id="editorPreviewType" class="card-preview-type"></div>
               <div id="editorPreviewSet" class="card-preview-set"></div>
+              <a id="editorPreviewScryfallLink" class="card-preview-scryfall-link hidden" href="#" target="_blank" rel="noopener noreferrer">View on Scryfall ↗</a>
               <div id="editorPreviewText" class="card-preview-text"></div>
               <div id="editorPreviewWarning" class="editor-preview-warning hidden"></div>
             </div>
@@ -631,6 +637,6 @@
     <script src="/personal-decks.js?v=20260614-desc1"></script>
     <script src="/legality.js?v=20260706-banlist1"></script>
     <script src="/app.js?v=20260706-banlist1"></script>
-    <script src="/deck-editor.js?v=20260706-banlist1"></script>
+    <script src="/deck-editor.js?v=20260720-legalfilter"></script>
   </body>
 </html>

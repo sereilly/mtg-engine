@@ -160,6 +160,7 @@
       name: match ? match.name : card.set_name,
       image_uri: (match && match.image_uri) || card.image_uri,
       large_image_uri: (match && match.large_image_uri) || card.large_image_uri,
+      scryfall_uri: (match && match.scryfall_uri) || card.scryfall_uri,
     };
   }
 
@@ -667,6 +668,7 @@
     const cmcMin = cmcMinRaw === "" ? null : Number(cmcMinRaw);
     const cmcMax = cmcMaxRaw === "" ? null : Number(cmcMaxRaw);
     const colors = state.colorFilters;
+    const legalOnly = q("browserLegalOnlyFilter").checked;
 
     const matches = state.catalog.filter((card) => {
       if (term) {
@@ -678,6 +680,10 @@
       if (setFilter && !cardSetCodes(card).includes(setFilter)) return false;
       if (cmcMin !== null && card.cmc < cmcMin) return false;
       if (cmcMax !== null && card.cmc > cmcMax) return false;
+      if (legalOnly && window.Legality && window.Legality.isChecked(currentFormat())) {
+        const status = window.Legality.cardStatus(card, currentFormat());
+        if (status === "banned" || status === "not_legal") return false;
+      }
       if (colors.size > 0) {
         const cardColors = card.colors || [];
         let matched = false;
@@ -1041,6 +1047,7 @@
       q("editorPreviewType").textContent = "";
       setEl.textContent = "";
       q("editorPreviewText").textContent = "";
+      q("editorPreviewScryfallLink").classList.add("hidden");
       warning.classList.add("hidden");
       addBtn.disabled = true;
       removeBtn.disabled = true;
@@ -1054,6 +1061,14 @@
     const entry = entryFor(name);
     const printing = card ? displayPrinting(card) : null;
     setEl.textContent = printing && printing.name ? printing.name : "";
+
+    const scryfallLink = q("editorPreviewScryfallLink");
+    if (printing && printing.scryfall_uri) {
+      scryfallLink.href = printing.scryfall_uri;
+      scryfallLink.classList.remove("hidden");
+    } else {
+      scryfallLink.classList.add("hidden");
+    }
 
     let nameHtml = escapeHtml(name);
     if (card && card.mana_cost) {
@@ -1200,6 +1215,7 @@
     q("browserCmcMin").addEventListener("input", renderBrowser);
     q("browserCmcMax").addEventListener("input", renderBrowser);
     q("browserSortSelect").addEventListener("change", renderBrowser);
+    q("browserLegalOnlyFilter").addEventListener("change", renderBrowser);
 
     for (const btn of document.querySelectorAll("#browserColorFilters .color-filter-btn")) {
       btn.addEventListener("click", () => {
@@ -1222,6 +1238,7 @@
       q("browserSetFilter").value = "";
       q("browserCmcMin").value = "";
       q("browserCmcMax").value = "";
+      q("browserLegalOnlyFilter").checked = true;
       state.colorFilters.clear();
       for (const btn of document.querySelectorAll("#browserColorFilters .color-filter-btn")) {
         btn.classList.remove("active");

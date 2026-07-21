@@ -1,4 +1,5 @@
 :root {
+  color-scheme: dark;
   --bg-night: #0c1220;
   --bg-deep: #141c33;
   --bg-brass: #b28a4a;
@@ -207,7 +208,12 @@ button {
   margin-left: 6px;
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.22);
-  background: rgba(255, 255, 255, 0.08);
+  /* Dark (not translucent-white) base color: browsers pick the native
+     dropdown popup's light/dark theme off the declared background-color
+     channels, not the blended-with-page result, so a light-channel color
+     here (even at low alpha) forces a white <select> popup regardless of
+     color-scheme. */
+  background: var(--glass-bg);
   color: var(--ink);
   padding: 5px 8px;
 }
@@ -2052,6 +2058,17 @@ h2.targeting-valid {
   letter-spacing: 0.02em;
 }
 
+.card-preview-scryfall-link {
+  display: inline-block;
+  font-size: 0.78rem;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.card-preview-scryfall-link:hover {
+  text-decoration: underline;
+}
+
 .card-preview-text {
   font-size: 0.84rem;
   color: var(--ink-soft);
@@ -3413,6 +3430,21 @@ pre {
 
 .browser-cmc-label input {
   width: 56px;
+}
+
+.browser-legal-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  white-space: nowrap;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.browser-legal-filter input {
+  margin: 0;
 }
 
 .browser-result-count {
