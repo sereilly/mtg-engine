@@ -3,9 +3,9 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **369**
-- Passed: **325**
-- Failed: **0**
-- Untested: **44**
+- Passed: **326**
+- Failed: **1**
+- Untested: **42**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
@@ -43,7 +43,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Blue Elemental Blast | ✅ pass |  |
 | Blue Ward | ✅ pass |  |
 | Bog Wraith | ✅ pass |  |
-| Bottle of Suleiman | ⬜ untested |  |
+| Bottle of Suleiman | ❌ fail | I won the coin flip but instead of creating a creature it did 5 damage to my opponent |
 | Braingeyser | ✅ pass |  |
 | Brass Man | ✅ pass |  |
 | Burrowing | ✅ pass |  |
@@ -311,7 +311,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Sleight of Mind | ✅ pass |  |
 | Smoke | ✅ pass |  |
 | Sol Ring | ✅ pass |  |
-| Sorceress Queen | ⬜ untested |  |
+| Sorceress Queen | ✅ pass |  |
 | Soul Net | ✅ pass |  |
 | Spell Blast | ✅ pass |  |
 | Stasis | ✅ pass |  |

@@ -2822,3 +2822,149 @@ def test_catalog_lists_every_set_a_card_was_printed_in():
     assert len(in_set("leb")) == 292
     assert len(in_set("2ed")) == 292
     assert len(in_set("arn")) == 78
+
+
+# ---------------------------------------------------------------------------
+# Debug board actions behind the battlefield right-click menu
+# ---------------------------------------------------------------------------
+
+
+def _make_board_menu_session(seed: int, battlefield_by_seat: dict[int, list]):
+    """HvH session in seat 0's main phase with the given permanents in play."""
+    sid = _make_main_phase_session(seed, _mk_creature_card("Filler", 1, 1))
+    session = store.get(sid)
+    for owner_seat, permanents in battlefield_by_seat.items():
+        session.game.players[owner_seat].battlefield = permanents
+    return sid
+
+
+def _board_action(sid: str, action: str, target_seat: int, index: int, seat: int = 0):
+    return client.post(
+        f"/api/sessions/{sid}/action",
+        json={
+            "seat": seat,
+            "action": action,
+            "target_seat": target_seat,
+            "target_permanent_index": index,
+        },
+    )
+
+
+def test_debug_clear_summoning_sickness_lets_a_fresh_creature_attack():
+    bear = Permanent(card=_mk_creature_card("Sick Bear", 2, 2))
+    sid = _make_board_menu_session(9310, {0: [bear]})
+    session = store.get(sid)
+    bear.metadata["summoning_sickness_turn"] = session.game.turn
+    assert client.get(f"/api/sessions/{sid}/state?seat=0").json()[
+        "players"
+    ][0]["battlefield"][0]["summoning_sick"]
+
+    response = _board_action(sid, "debug_clear_summoning_sickness", 0, 0)
+    assert response.status_code == 200, response.text
+    assert not response.json()["players"][0]["battlefield"][0]["summoning_sick"]
+    assert not session.game._is_summoning_sick(bear)
+
+
+def test_debug_clear_summoning_sickness_rejects_a_noncreature():
+    mox = Permanent(card=_mk_card("Test Mox", "{0}", "Artifact", "{T}: Add {W}."))
+    sid = _make_board_menu_session(9311, {0: [mox]})
+
+    response = _board_action(sid, "debug_clear_summoning_sickness", 0, 0)
+    assert response.status_code == 400
+    assert "creature" in response.json()["detail"]
+
+
+def test_debug_return_to_hand_moves_the_permanent_to_its_owners_hand():
+    bear = Permanent(card=_mk_creature_card("Bounced Bear", 2, 2))
+    sid = _make_board_menu_session(9312, {1: [bear]})
+    session = store.get(sid)
+    session.game.players[1].hand = []
+
+    response = _board_action(sid, "debug_return_to_hand", 1, 0)
+    assert response.status_code == 200, response.text
+    assert session.game.players[1].battlefield == []
+    assert [c.name for c in session.game.players[1].hand] == ["Bounced Bear"]
+
+
+def test_debug_destroy_puts_the_permanent_into_its_owners_graveyard():
+    bear = Permanent(card=_mk_creature_card("Doomed Bear", 2, 2))
+    sid = _make_board_menu_session(9313, {0: [bear]})
+    session = store.get(sid)
+    session.game.players[0].graveyard = []
+
+    response = _board_action(sid, "debug_destroy_permanent", 0, 0)
+    assert response.status_code == 200, response.text
+    assert session.game.players[0].battlefield == []
+    assert [c.name for c in session.game.players[0].graveyard] == ["Doomed Bear"]
+
+
+def test_debug_destroy_ignores_a_regeneration_shield():
+    """The menu's Destroy is unconditional so a tester can always clear the
+    board — a regeneration shield would otherwise silently absorb it."""
+    bear = Permanent(card=_mk_creature_card("Shielded Bear", 2, 2))
+    bear.regeneration_shield = 1
+    sid = _make_board_menu_session(9314, {0: [bear]})
+    session = store.get(sid)
+    session.game.players[0].graveyard = []
+
+    response = _board_action(sid, "debug_destroy_permanent", 0, 0)
+    assert response.status_code == 200, response.text
+    assert session.game.players[0].battlefield == []
+    assert [c.name for c in session.game.players[0].graveyard] == ["Shielded Bear"]
+
+
+def test_debug_exile_moves_the_permanent_to_exile_not_the_graveyard():
+    bear = Permanent(card=_mk_creature_card("Exiled Bear", 2, 2))
+    sid = _make_board_menu_session(9315, {0: [bear]})
+    session = store.get(sid)
+    session.game.players[0].graveyard = []
+    session.game.players[0].exile = []
+
+    response = _board_action(sid, "debug_exile_permanent", 0, 0)
+    assert response.status_code == 200, response.text
+    assert session.game.players[0].battlefield == []
+    assert session.game.players[0].graveyard == []
+    assert [c.name for c in session.game.players[0].exile] == ["Exiled Bear"]
+
+
+def test_debug_board_action_rejects_an_index_off_the_battlefield():
+    bear = Permanent(card=_mk_creature_card("Lone Bear", 2, 2))
+    sid = _make_board_menu_session(9316, {0: [bear]})
+
+    response = _board_action(sid, "debug_destroy_permanent", 0, 3)
+    assert response.status_code == 404
+    assert store.get(sid).game.players[0].battlefield  # untouched
+
+
+def test_debug_board_action_is_undoable():
+    bear = Permanent(card=_mk_creature_card("Undone Bear", 2, 2))
+    sid = _make_board_menu_session(9317, {0: [bear]})
+
+    assert _board_action(sid, "debug_exile_permanent", 0, 0).status_code == 200
+    assert store.get(sid).game.players[0].battlefield == []
+
+    undo = client.post(f"/api/sessions/{sid}/undo?seat=0")
+    assert undo.status_code == 200, undo.text
+    restored = store.get(sid).game.players[0].battlefield
+    assert [p.card.name for p in restored] == ["Undone Bear"]
+
+
+def test_debug_board_action_works_while_a_cleanup_discard_is_pending():
+    """The board actions set up state rather than answering the game's pending
+    question, so — like the other debug actions — they stay available while a
+    decision is outstanding."""
+    bear = Permanent(card=_mk_creature_card("Cleanup Bear", 2, 2))
+    sid = _make_board_menu_session(9318, {0: [bear]})
+    session = store.get(sid)
+    # Cleanup with 9 cards in hand: two discards are owed (CR 514.1).
+    session.game.players[0].hand = [_mk_creature_card(f"Spare {i}", 1, 1) for i in range(9)]
+    session.game.current_phase = "cleanup"
+
+    blocked = client.post(
+        f"/api/sessions/{sid}/action", json={"seat": 0, "action": "next_phase"}
+    )
+    assert blocked.status_code == 400
+
+    allowed = _board_action(sid, "debug_destroy_permanent", 0, 0)
+    assert allowed.status_code == 200, allowed.text
+    assert session.game.players[0].battlefield == []

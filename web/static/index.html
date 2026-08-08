@@ -11,7 +11,7 @@
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700;800;900&family=Spectral:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,500&display=swap"
     />
-    <link rel="stylesheet" href="/styles.css?v=20260720-darkselect2" />
+    <link rel="stylesheet" href="/styles.css?v=20260808-permmenu" />
   </head>
   <body>
     <div id="auroraLayer" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
@@ -630,6 +630,17 @@
       </div>
     </div>
 
+    <!-- Right-click menu for a permanent on the battlefield. Positioned at the
+         pointer and dismissed by any click outside it (see app.js). -->
+    <div id="permanentMenu" class="permanent-menu hidden" role="menu" aria-label="Permanent actions">
+      <div id="permanentMenuTitle" class="permanent-menu-title"></div>
+      <button type="button" class="permanent-menu-item" role="menuitem" data-action="clear-summoning-sickness">Remove Summoning Sickness</button>
+      <button type="button" class="permanent-menu-item" role="menuitem" data-action="return-to-hand">Return to Hand</button>
+      <button type="button" class="permanent-menu-item" role="menuitem" data-action="destroy">Destroy</button>
+      <button type="button" class="permanent-menu-item" role="menuitem" data-action="exile">Exile</button>
+      <button type="button" class="permanent-menu-item" role="menuitem" data-action="mark-test-result">Mark Test Result</button>
+    </div>
+
     <script src="/battlefield-canvas.js?v=20260720-counters"></script>
     <script src="/sfx.js?v=2-sfx"></script>
     <script src="/music.js?v=1-music"></script>
@@ -637,7 +648,7 @@
     <script src="/animations.js?v=20260704-glass1"></script>
     <script src="/personal-decks.js?v=20260614-desc1"></script>
     <script src="/legality.js?v=20260706-banlist1"></script>
-    <script src="/app.js?v=20260720-counters"></script>
+    <script src="/app.js?v=20260808-permmenu"></script>
     <script src="/deck-editor.js?v=20260720-legalfilter"></script>
   </body>
 </html>

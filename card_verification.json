@@ -140,6 +140,11 @@
       "status": "pass",
       "updated_at": 1782970150.6128771
     },
+    "Bottle of Suleiman": {
+      "reason": "I won the coin flip but instead of creating a creature it did 5 damage to my opponent",
+      "status": "fail",
+      "updated_at": 1786221986.5239143
+    },
     "Braingeyser": {
       "reason": "",
       "status": "pass",
@@ -1304,6 +1309,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782586858.7362761
+    },
+    "Sorceress Queen": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786222209.3598945
     },
     "Soul Net": {
       "reason": "",

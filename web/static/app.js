@@ -8767,6 +8767,7 @@ function renderFfaOpponentPanels(state, viewerSeat, oppSeat) {
 
 function renderBoard(state) {
   renderGameOverOverlay(state);
+  closePermanentMenuIfStale(state);
   // Eliminated in a still-running FFA: pin the spectator strip while the
   // remaining players finish the game (the game-over overlay replaces it).
   const spectatorBanner = q("spectatorBanner");
@@ -9199,17 +9200,175 @@ function renderState(state, { skipStaleCheck = false } = {}) {
   maybeAutoPassPriority(state);
 }
 
+// ---------------------------------------------------------------------------
+// Battlefield permanent right-click menu
+// ---------------------------------------------------------------------------
+
+// The permanent the open menu acts on ({ seat, idx, name }), or null when closed.
+let permanentMenuTarget = null;
+// Set when a press outside the open menu dismissed it, so the click that press
+// produces is swallowed too — a dismissing click must never also act on the
+// board underneath (the same way a native context menu eats its dismissal).
+let swallowClickAfterMenuDismiss = false;
+
+// One entry per menu item: the server action it sends and the hint it leaves
+// behind. "mark-test-result" is handled separately (it opens a modal instead).
+const PERMANENT_MENU_ACTIONS = {
+  "clear-summoning-sickness": {
+    action: "debug_clear_summoning_sickness",
+    hint: (name) => `${name} no longer has summoning sickness.`,
+  },
+  "return-to-hand": {
+    action: "debug_return_to_hand",
+    hint: (name) => `Returned ${name} to its owner's hand.`,
+  },
+  destroy: {
+    action: "debug_destroy_permanent",
+    hint: (name) => `Destroyed ${name}.`,
+  },
+  exile: {
+    action: "debug_exile_permanent",
+    hint: (name) => `Exiled ${name}.`,
+  },
+};
+
+// The permanent the menu was opened on, re-read from *state* — null once it has
+// moved zones or the battlefield reshuffled under the stored index.
+function permanentMenuPermanent(state = currentState) {
+  if (!permanentMenuTarget) return null;
+  const permanent =
+    state?.players?.[permanentMenuTarget.seat]?.battlefield?.[permanentMenuTarget.idx];
+  return permanent && permanent.name === permanentMenuTarget.name ? permanent : null;
+}
+
+function closePermanentMenu({ silent = false } = {}) {
+  if (!permanentMenuTarget) return;
+  permanentMenuTarget = null;
+  q("permanentMenu").classList.add("hidden");
+  if (!silent) SFX.onMenuToggle(false);
+}
+
+// Called on every board render: the stored battlefield index only means
+// something against the state the menu was opened on.
+function closePermanentMenuIfStale(state) {
+  if (permanentMenuTarget && !permanentMenuPermanent(state)) closePermanentMenu({ silent: true });
+}
+
+function openPermanentMenu({ seat: targetSeat, idx, event }) {
+  const permanent = currentState?.players?.[targetSeat]?.battlefield?.[idx];
+  if (!permanent) return;
+  permanentMenuTarget = { seat: targetSeat, idx, name: permanent.name };
+
+  const menu = q("permanentMenu");
+  q("permanentMenuTitle").textContent = permanent.name;
+  // Summoning sickness is a creature-only condition (CR 302.6). is_creature —
+  // not the printed type — so an animated land (Kormus Bell) counts.
+  menu.querySelector('[data-action="clear-summoning-sickness"]').disabled = !permanent.is_creature;
+  menu.classList.remove("hidden");
+
+  // Measure once visible, then clamp so the menu never spills off-screen.
+  const { width, height } = menu.getBoundingClientRect();
+  const margin = 8;
+  menu.style.left = `${Math.max(margin, Math.min(event.clientX, window.innerWidth - width - margin))}px`;
+  menu.style.top = `${Math.max(margin, Math.min(event.clientY, window.innerHeight - height - margin))}px`;
+  SFX.onMenuToggle(true);
+}
+
+async function runPermanentMenuAction(itemAction) {
+  const target = permanentMenuTarget;
+  const stillOnBattlefield = !!permanentMenuPermanent();
+  closePermanentMenu({ silent: true });
+  if (!target) return;
+
+  if (itemAction === "mark-test-result") {
+    openVerifyResultModal(target.name);
+    return;
+  }
+
+  const entry = PERMANENT_MENU_ACTIONS[itemAction];
+  if (!entry) return;
+  if (seat === null) {
+    updateActionHint("Join or create a session before interacting.", true);
+    return;
+  }
+  if (!stillOnBattlefield) {
+    SFX.onError();
+    updateActionHint(`${target.name} is no longer on the battlefield.`, true);
+    return;
+  }
+
+  try {
+    await sendAction({
+      seat,
+      action: entry.action,
+      target_seat: target.seat,
+      target_permanent_index: target.idx,
+    });
+    updateActionHint(entry.hint(target.name));
+  } catch (e) {
+    SFX.onError();
+    updateActionHint(e.message, true);
+  }
+}
+
+function initPermanentMenu() {
+  const menu = q("permanentMenu");
+
+  menu.addEventListener("click", (event) => {
+    const item = event.target.closest(".permanent-menu-item");
+    if (!item || item.disabled) return;
+    runPermanentMenuAction(item.dataset.action);
+  });
+  // A right-click on the menu itself dismisses rather than stacking a menu.
+  menu.addEventListener("contextmenu", (event) => event.preventDefault());
+
+  // Any press outside the menu dismisses it. Capture phase, so a left press
+  // that only meant "close this" never reaches the canvas and taps a permanent;
+  // a right press is left alone so the contextmenu that follows can open the
+  // menu on whatever was clicked.
+  document.addEventListener(
+    "mousedown",
+    (event) => {
+      swallowClickAfterMenuDismiss = false;
+      if (!permanentMenuTarget || menu.contains(event.target)) return;
+      closePermanentMenu();
+      if (event.button !== 0) return;
+      swallowClickAfterMenuDismiss = true;
+      event.preventDefault();
+      event.stopPropagation();
+    },
+    true,
+  );
+  document.addEventListener(
+    "click",
+    (event) => {
+      if (!swallowClickAfterMenuDismiss) return;
+      swallowClickAfterMenuDismiss = false;
+      event.preventDefault();
+      event.stopPropagation();
+    },
+    true,
+  );
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closePermanentMenu();
+  });
+  window.addEventListener("blur", () => closePermanentMenu({ silent: true }));
+  window.addEventListener("resize", () => closePermanentMenu({ silent: true }));
+}
+
 function handleCanvasCardContextMenu({ seat: targetSeat, idx: permanentIndex, card, event }) {
   if (!currentState) return;
   const combat = getCombatState(currentState);
-  if (!combat) return;
 
   try {
     if (
+      combat &&
       isCombatStep(currentState, "declare_attackers") &&
       seat === currentState.current_turn &&
       targetSeat === seat &&
-      !combat?.attackers_locked
+      !combat.attackers_locked &&
+      combatAttackerDraft.includes(permanentIndex)
     ) {
       combatAttackerDraft = combatAttackerDraft.filter((idx) => idx !== permanentIndex);
       SFX.onMenuToggle(false);
@@ -9219,9 +9378,11 @@ function handleCanvasCardContextMenu({ seat: targetSeat, idx: permanentIndex, ca
     }
 
     if (
+      combat &&
       isCombatStep(currentState, "declare_blockers") &&
       seat === combat.defending_player_index &&
-      !combat?.blockers_locked
+      !combat.blockers_locked &&
+      blockerDraftReferences(permanentIndex, targetSeat, combat)
     ) {
       if (targetSeat === combat.defending_player_index) {
         delete combatBlockerDraft[permanentIndex];
@@ -9237,10 +9398,27 @@ function handleCanvasCardContextMenu({ seat: targetSeat, idx: permanentIndex, ca
       SFX.onMenuToggle(false);
       renderBoard(currentState);
       updateActionHint("Removed blocker target link from draft.");
+      return;
     }
+
+    // Nothing in a combat draft to unpick: right-click means "open the menu".
+    openPermanentMenu({ seat: targetSeat, idx: permanentIndex, event });
   } catch (e) {
     updateActionHint(e.message, true);
   }
+}
+
+// True when the blocker draft has an entry the right-clicked permanent would
+// clear — either the blocker itself, or an attacker some blocker points at.
+function blockerDraftReferences(permanentIndex, targetSeat, combat) {
+  if (targetSeat === combat.defending_player_index && permanentIndex in combatBlockerDraft) {
+    return true;
+  }
+  if (targetSeat !== currentState.current_turn) return false;
+  return Object.values(combatBlockerDraft).some((attackerIndices) =>
+    (Array.isArray(attackerIndices) ? attackerIndices : [attackerIndices])
+      .some((a) => Number(a) === permanentIndex),
+  );
 }
 
 function initCombatContextMenu() {
@@ -10674,6 +10852,7 @@ initDropZones(); // no-op; canvas handles battlefield drop
 initTabs();
 initCardPreviewHover();
 initCombatContextMenu();
+initPermanentMenu();
 clearCardPreview();
 
 // ── Audio controls ────────────────────────────────────────────────────────────

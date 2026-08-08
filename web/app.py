@@ -2298,6 +2298,60 @@ def _first_opponent_seat(game, seat: int) -> int | None:
     return None
 
 
+# Debug actions that stay available while the game is waiting on a pending
+# decision (a cleanup discard, a search, an upkeep payment…). They set up board
+# state rather than answering the question the game is asking, so blocking them
+# would strand a tester who needs, say, a creature destroyed before they can
+# make the choice in front of them.
+_DEBUG_ANYTIME_ACTIONS = {
+    "debug_add_to_hand",
+    "debug_cast_free",
+    "debug_add_mana",
+    "debug_clear_summoning_sickness",
+    "debug_return_to_hand",
+    "debug_destroy_permanent",
+    "debug_exile_permanent",
+}
+
+
+def _debug_target_permanent(session: Session, req) -> tuple[int, Permanent]:
+    """Resolve the battlefield permanent a debug board action addresses, from
+    ``target_seat`` (defaulting to the acting seat) + ``target_permanent_index``.
+    Returns ``(controller_seat, permanent)``."""
+    controller_seat = req.target_seat if req.target_seat is not None else req.seat
+    if not (0 <= controller_seat < len(session.game.players)):
+        raise HTTPException(status_code=400, detail="target seat out of range for this session")
+    battlefield = session.game.players[controller_seat].battlefield
+    index = req.target_permanent_index
+    if index is None or not (0 <= index < len(battlefield)):
+        raise HTTPException(status_code=404, detail="permanent not found on that battlefield")
+    return controller_seat, battlefield[index]
+
+
+def _debug_move_permanent_off_battlefield(game, controller_seat: int, index: int, zone: str) -> None:
+    """Move a permanent from the battlefield to its owner's hand or exile,
+    running the same leave-the-battlefield cleanup a real bounce/exile effect
+    does: the Aura's continuous grants end (CR 611.3), an Aura enchanting it
+    gets its "when that creature dies" trigger, and lord buffs are recomputed.
+    The card goes to its *owner's* zone (CR 400.3), which differs from the
+    controller's for a stolen permanent; a token ceases to exist (CR 704.5e)."""
+    controller = game.players[controller_seat]
+    permanent = controller.battlefield[index]
+    # Resolve the owner while the permanent is still on a battlefield —
+    # owner_index_of falls back to the current controller, which is unfindable
+    # once it has been popped.
+    owner_index = game.owner_index_of(permanent)
+    owner = game.players[owner_index] if owner_index is not None else controller
+
+    controller.battlefield.pop(index)
+    if "Aura" in permanent.card.type_line:
+        game._remove_aura_effects(permanent)
+    game._trigger_aura_death_effects(permanent, controller)
+    if not permanent.metadata.get("is_token", False):
+        (owner.hand if zone == "hand" else owner.exile).append(permanent.card)
+    game._recompute_continuous_effects()
+
+
 def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
     """Queue a spell from ``seat``'s hand using every targeting field on the
     request, so the normal ``cast`` action and the debug free-cast paths share
@@ -3909,7 +3963,7 @@ def do_action(session_id: str, req: GameActionRequest):
         "mulligan_bottom_select",
         "mulligan_bottom_confirm",
     }
-    if session.pregame_phase is not None and req.action not in _pregame_actions | {"debug_add_to_hand", "debug_cast_free", "debug_add_mana"}:
+    if session.pregame_phase is not None and req.action not in _pregame_actions | _DEBUG_ANYTIME_ACTIONS:
         raise HTTPException(status_code=400, detail="pregame not complete")
 
     if session.pregame_phase is None:
@@ -3949,16 +4003,16 @@ def do_action(session_id: str, req: GameActionRequest):
         if preferred_index is not None:
             req = req.model_copy(update={"action": "cleanup_select", "hand_index": preferred_index})
 
-    if cleanup_required > 0 and req.action not in {"cleanup_select", "debug_add_to_hand", "debug_cast_free", "debug_add_mana"}:
+    if cleanup_required > 0 and req.action not in {"cleanup_select"} | _DEBUG_ANYTIME_ACTIONS:
         raise HTTPException(status_code=400, detail="select cleanup discards before other actions")
 
-    if untap_required > 0 and req.action not in {"untap_select", "untap_confirm", "debug_add_to_hand", "debug_cast_free", "debug_add_mana"}:
+    if untap_required > 0 and req.action not in {"untap_select", "untap_confirm"} | _DEBUG_ANYTIME_ACTIONS:
         raise HTTPException(status_code=400, detail="select untap lands before other actions")
 
-    if session.optional_untap_pending and req.action not in {"optional_untap_confirm", "debug_add_to_hand", "debug_cast_free", "debug_add_mana"}:
+    if session.optional_untap_pending and req.action not in {"optional_untap_confirm"} | _DEBUG_ANYTIME_ACTIONS:
         raise HTTPException(status_code=400, detail="choose which permanents stay tapped before other actions")
 
-    _UPKEEP_DECISION_ACTIONS = {"pay_upkeep", "sacrifice_upkeep", "resolve_optional_trigger", "pay_upkeep_prevention", "tap", "activate", "debug_add_to_hand", "debug_cast_free", "debug_add_mana"}
+    _UPKEEP_DECISION_ACTIONS = {"pay_upkeep", "sacrifice_upkeep", "resolve_optional_trigger", "pay_upkeep_prevention", "tap", "activate"} | _DEBUG_ANYTIME_ACTIONS
     if _upkeep_pay_pending(session) and req.action not in _UPKEEP_DECISION_ACTIONS:
         raise HTTPException(status_code=400, detail="resolve upkeep payment before other actions")
 
@@ -3968,61 +4022,61 @@ def do_action(session_id: str, req: GameActionRequest):
     if _upkeep_mana_prevention_pending(session) and req.action not in _UPKEEP_DECISION_ACTIONS:
         raise HTTPException(status_code=400, detail="resolve upkeep prevention before other actions")
 
-    if session.island_sanctuary_pending and req.action not in {"island_sanctuary_skip", "island_sanctuary_draw", "debug_add_to_hand", "debug_cast_free", "debug_add_mana"}:
+    if session.island_sanctuary_pending and req.action not in {"island_sanctuary_skip", "island_sanctuary_draw"} | _DEBUG_ANYTIME_ACTIONS:
         raise HTTPException(status_code=400, detail="choose Island Sanctuary draw option before other actions")
 
     _auto_resolve_ai_pending(session)
-    if session.game.pending_search_library is not None and req.action not in {"search_library_confirm", "debug_add_to_hand", "debug_cast_free", "debug_add_mana"}:
+    if session.game.pending_search_library is not None and req.action not in {"search_library_confirm"} | _DEBUG_ANYTIME_ACTIONS:
         raise HTTPException(status_code=400, detail="complete library search before other actions")
-    if session.game.pending_reorder_library is not None and req.action not in {"reorder_library_confirm", "debug_add_to_hand", "debug_cast_free", "debug_add_mana"}:
+    if session.game.pending_reorder_library is not None and req.action not in {"reorder_library_confirm"} | _DEBUG_ANYTIME_ACTIONS:
         raise HTTPException(status_code=400, detail="complete library reorder before other actions")
-    if session.game.pending_discard is not None and req.action not in {"discard_confirm", "debug_add_to_hand", "debug_cast_free", "debug_add_mana"}:
+    if session.game.pending_discard is not None and req.action not in {"discard_confirm"} | _DEBUG_ANYTIME_ACTIONS:
         raise HTTPException(status_code=400, detail="complete discard before other actions")
     if (
         session.game.pending_balance is not None
         and req.seat in session.game.pending_balance["plans"]
-        and req.action not in {"balance_confirm", "debug_add_to_hand", "debug_cast_free", "debug_add_mana"}
+        and req.action not in {"balance_confirm"} | _DEBUG_ANYTIME_ACTIONS
     ):
         raise HTTPException(status_code=400, detail="complete Balance sacrifices before other actions")
     if (
         session.game.pending_sacrifice is not None
         and req.seat == session.game.pending_sacrifice["player_index"]
-        and req.action not in {"sacrifice_confirm", "debug_add_to_hand", "debug_cast_free", "debug_add_mana"}
+        and req.action not in {"sacrifice_confirm"} | _DEBUG_ANYTIME_ACTIONS
     ):
         raise HTTPException(status_code=400, detail="complete forced sacrifice before other actions")
     if (
         any(e["player_index"] == req.seat for e in session.game.pending_optional_pays)
-        and req.action not in {"resolve_optional_pay", "debug_add_to_hand", "debug_cast_free", "debug_add_mana"}
+        and req.action not in {"resolve_optional_pay"} | _DEBUG_ANYTIME_ACTIONS
     ):
         raise HTTPException(status_code=400, detail="resolve the pay-for-life trigger before other actions")
     if (
         session.game.pending_opponent_damage is not None
         and session.game.pending_opponent_damage.get("chooser_index") == req.seat
-        and req.action not in {"opponent_damage_choose", "debug_add_to_hand", "debug_cast_free", "debug_add_mana"}
+        and req.action not in {"opponent_damage_choose"} | _DEBUG_ANYTIME_ACTIONS
     ):
         raise HTTPException(status_code=400, detail="choose a target for the opponent-choice damage before other actions")
     if (
         session.game.pending_lamp_draw is not None
         and session.game.pending_lamp_draw.get("player_index") == req.seat
-        and req.action not in {"lamp_draw_confirm", "debug_add_to_hand", "debug_cast_free", "debug_add_mana"}
+        and req.action not in {"lamp_draw_confirm"} | _DEBUG_ANYTIME_ACTIONS
     ):
         raise HTTPException(status_code=400, detail="choose a card for Aladdin's Lamp before other actions")
     if (
         session.game.pending_outside_game_draw is not None
         and session.game.pending_outside_game_draw.get("player_index") == req.seat
-        and req.action not in {"outside_game_draw_confirm", "debug_add_to_hand", "debug_cast_free", "debug_add_mana"}
+        and req.action not in {"outside_game_draw_confirm"} | _DEBUG_ANYTIME_ACTIONS
     ):
         raise HTTPException(status_code=400, detail="choose a card from outside the game before other actions")
     if (
         session.game.pending_word_of_command is not None
         and "chosen_hand_index" not in session.game.pending_word_of_command
         and session.game.pending_word_of_command.get("caster_index") == req.seat
-        and req.action not in {"word_of_command_confirm", "debug_add_to_hand", "debug_cast_free", "debug_add_mana"}
+        and req.action not in {"word_of_command_confirm"} | _DEBUG_ANYTIME_ACTIONS
     ):
         raise HTTPException(status_code=400, detail="choose the Word of Command card before other actions")
     if (
         any(e["player_index"] == req.seat for e in session.game.pending_leng_discards)
-        and req.action not in {"leng_discard_confirm", "debug_add_to_hand", "debug_cast_free", "debug_add_mana"}
+        and req.action not in {"leng_discard_confirm"} | _DEBUG_ANYTIME_ACTIONS
     ):
         raise HTTPException(
             status_code=400,
@@ -4031,13 +4085,13 @@ def do_action(session_id: str, req: GameActionRequest):
     if (
         session.game.pending_enter_choice is not None
         and session.game.pending_enter_choice.get("controller_index") == req.seat
-        and req.action not in {"enter_choice_confirm", "debug_add_to_hand", "debug_cast_free", "debug_add_mana"}
+        and req.action not in {"enter_choice_confirm"} | _DEBUG_ANYTIME_ACTIONS
     ):
         raise HTTPException(status_code=400, detail="choose an opponent (and color) for the entering permanent before other actions")
     if (
         session.game.pending_least_power_choice is not None
         and session.game.pending_least_power_choice.get("controller_index") == req.seat
-        and req.action not in {"least_power_choice_confirm", "debug_add_to_hand", "debug_cast_free", "debug_add_mana"}
+        and req.action not in {"least_power_choice_confirm"} | _DEBUG_ANYTIME_ACTIONS
     ):
         raise HTTPException(status_code=400, detail="choose which creature tied for least power is destroyed before other actions")
 
@@ -5058,6 +5112,50 @@ def do_action(session_id: str, req: GameActionRequest):
         session.force_ai_attack_all = bool(req.force_attack_all)
         state = "ON" if session.force_ai_attack_all else "OFF"
         session.game.log.append(f"[Debug] Force AI to attack with all creatures: {state}.")
+
+    elif req.action == "debug_clear_summoning_sickness":
+        if seat_type != "human":
+            raise HTTPException(status_code=400, detail="cannot issue debug action for AI seat")
+        _, permanent = _debug_target_permanent(session, req)
+        if not session.game._is_creature(permanent):
+            raise HTTPException(status_code=400, detail="only a creature can have summoning sickness")
+        # Drop the marker entirely rather than back-dating it: _advance_summoning_sickness
+        # re-stamps a marker that still matches the current turn, so a stale value
+        # would come back as sickness on the next opponent's untap step.
+        permanent.metadata.pop("summoning_sickness_turn", None)
+        session.game.log.append(f"[Debug] {permanent.card.name} loses summoning sickness.")
+
+    elif req.action in {"debug_return_to_hand", "debug_exile_permanent"}:
+        if seat_type != "human":
+            raise HTTPException(status_code=400, detail="cannot issue debug action for AI seat")
+        controller_seat, permanent = _debug_target_permanent(session, req)
+        zone = "hand" if req.action == "debug_return_to_hand" else "exile"
+        name = permanent.card.name
+        _debug_move_permanent_off_battlefield(
+            session.game, controller_seat, req.target_permanent_index, zone
+        )
+        session.game.check_state_based_actions()
+        moved = "returned to its owner's hand" if zone == "hand" else "exiled"
+        session.game.log.append(f"[Debug] {name} {moved}.")
+
+    elif req.action == "debug_destroy_permanent":
+        if seat_type != "human":
+            raise HTTPException(status_code=400, detail="cannot issue debug action for AI seat")
+        controller_seat, permanent = _debug_target_permanent(session, req)
+        controller = session.game.players[controller_seat]
+        name = permanent.card.name
+        # A debug destroy is unconditional — regeneration shields, indestructibility
+        # and destruction-replacement shields are all skipped so the tester can
+        # always clear the board. It still routes through _permanent_to_graveyard,
+        # so dies-triggers and Aura cleanup fire exactly as in a real destruction.
+        controller.battlefield.pop(req.target_permanent_index)
+        session.game._permanent_to_graveyard(controller, permanent)
+        session.game._trigger_aura_death_effects(permanent, controller)
+        if permanent.card.primary_type == "land":
+            session.game._process_land_dies(controller_seat)
+        session.game._recompute_continuous_effects()
+        session.game.check_state_based_actions()
+        session.game.log.append(f"[Debug] {name} destroyed.")
 
     elif req.action == "coin_flip_choose":
         if session.pregame_phase != "coin_flip":
