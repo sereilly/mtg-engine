@@ -11,7 +11,7 @@
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700;800;900&family=Spectral:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,500&display=swap"
     />
-    <link rel="stylesheet" href="/styles.css?v=20260808-permmenu" />
+    <link rel="stylesheet" href="/styles.css?v=20260808-permmenu2" />
   </head>
   <body>
     <div id="auroraLayer" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
@@ -634,6 +634,9 @@
          pointer and dismissed by any click outside it (see app.js). -->
     <div id="permanentMenu" class="permanent-menu hidden" role="menu" aria-label="Permanent actions">
       <div id="permanentMenuTitle" class="permanent-menu-title"></div>
+      <!-- Label and data-action are both rewritten on open: the item always
+           offers the opposite of the permanent's current tapped state. -->
+      <button type="button" class="permanent-menu-item permanent-menu-item--tap" role="menuitem" data-action="tap">Tap</button>
       <button type="button" class="permanent-menu-item" role="menuitem" data-action="clear-summoning-sickness">Remove Summoning Sickness</button>
       <button type="button" class="permanent-menu-item" role="menuitem" data-action="return-to-hand">Return to Hand</button>
       <button type="button" class="permanent-menu-item" role="menuitem" data-action="destroy">Destroy</button>
@@ -648,7 +651,7 @@
     <script src="/animations.js?v=20260704-glass1"></script>
     <script src="/personal-decks.js?v=20260614-desc1"></script>
     <script src="/legality.js?v=20260706-banlist1"></script>
-    <script src="/app.js?v=20260808-permmenu"></script>
+    <script src="/app.js?v=20260808-permmenu2"></script>
     <script src="/deck-editor.js?v=20260720-legalfilter"></script>
   </body>
 </html>

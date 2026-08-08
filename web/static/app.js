@@ -9214,6 +9214,14 @@ let swallowClickAfterMenuDismiss = false;
 // One entry per menu item: the server action it sends and the hint it leaves
 // behind. "mark-test-result" is handled separately (it opens a modal instead).
 const PERMANENT_MENU_ACTIONS = {
+  tap: {
+    action: "debug_tap_permanent",
+    hint: (name) => `Tapped ${name}.`,
+  },
+  untap: {
+    action: "debug_untap_permanent",
+    hint: (name) => `Untapped ${name}.`,
+  },
   "clear-summoning-sickness": {
     action: "debug_clear_summoning_sickness",
     hint: (name) => `${name} no longer has summoning sickness.`,
@@ -9261,6 +9269,12 @@ function openPermanentMenu({ seat: targetSeat, idx, event }) {
 
   const menu = q("permanentMenu");
   q("permanentMenuTitle").textContent = permanent.name;
+  // One item, two meanings: it offers the opposite of the current state and
+  // carries that choice in its data-action, so the click can never disagree
+  // with the label the player read.
+  const tapItem = menu.querySelector(".permanent-menu-item--tap");
+  tapItem.dataset.action = permanent.tapped ? "untap" : "tap";
+  tapItem.textContent = permanent.tapped ? "Untap" : "Tap";
   // Summoning sickness is a creature-only condition (CR 302.6). is_creature —
   // not the printed type — so an animated land (Kormus Bell) counts.
   menu.querySelector('[data-action="clear-summoning-sickness"]').disabled = !permanent.is_creature;

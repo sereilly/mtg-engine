@@ -83,6 +83,12 @@ class Session:
     # player's chosen amount per card is collected in the resolved map.
     upkeep_mana_prevention_choices: list[dict] = field(default_factory=list)
     upkeep_mana_prevention_resolved: dict[str, int] = field(default_factory=dict)
+    # Phase-rail upkeep stop on the player's OWN turn: CR 503.1 gives the active
+    # player priority at the start of upkeep, before any "unless you pay" trigger
+    # resolves. True while that window is open with the upkeep still unresolved —
+    # the interactive trigger prompts are gathered only once the window closes,
+    # so the player isn't answering them before they can act.
+    upkeep_decisions_deferred: bool = False
     island_sanctuary_pending: bool = False
     # Lord of the Pit: a mandatory upkeep sacrifice pauses the beginning phase for
     # the human to choose which creature. This records (marker, player_index) so
@@ -536,6 +542,7 @@ class SessionStore:
         session.optional_trigger_choices = []
         session.optional_trigger_resolved = {}
         session.optional_trigger_targets = {}
+        session.upkeep_decisions_deferred = False
         session.island_sanctuary_pending = False
         session.force_ai_attack_all = False
         session.history = GameHistory()

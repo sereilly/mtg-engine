@@ -36,6 +36,8 @@ ActionKind = Literal[
     "debug_add_mana",
     "debug_force_ai_attack_all",
     "debug_clear_summoning_sickness",
+    "debug_tap_permanent",
+    "debug_untap_permanent",
     "debug_return_to_hand",
     "debug_destroy_permanent",
     "debug_exile_permanent",

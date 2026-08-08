@@ -1,14 +1,39 @@
 {
   "results": {
+    "Abu Ja'far": {
+      "reason": "I blocked a creature and the blocking creature didn't die",
+      "status": "fail",
+      "updated_at": 1786227109.5250666
+    },
     "Air Elemental": {
       "reason": "",
       "status": "pass",
       "updated_at": 1782590075.2882295
     },
+    "Aladdin": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786225289.6651351
+    },
+    "Aladdin's Lamp": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786226215.3701239
+    },
     "Aladdin's Ring": {
       "reason": "",
       "status": "pass",
       "updated_at": 1783302356.7762725
+    },
+    "Ali Baba": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786223797.6807773
+    },
+    "Ali from Cairo": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786224667.7086859
     },
     "Ancestral Recall": {
       "reason": "",
@@ -74,6 +99,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782598699.9781644
+    },
+    "Bazaar of Baghdad": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786225439.9390016
     },
     "Benalish Hero": {
       "reason": "",
@@ -160,6 +190,11 @@
       "status": "pass",
       "updated_at": 1782542361.3458302
     },
+    "Camel": {
+      "reason": "I attacked in a band with camel and then targeted the banded creature with a desert on the end combat step and it took damage. Not sure if that's intended or a bug",
+      "status": "fail",
+      "updated_at": 1786227373.9064853
+    },
     "Camouflage": {
       "reason": "",
       "status": "pass",
@@ -219,6 +254,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1784614084.9984093
+    },
+    "City of Brass": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786226571.004825
     },
     "Clockwork Beast": {
       "reason": "",
@@ -295,6 +335,11 @@
       "status": "pass",
       "updated_at": 1782971480.711318
     },
+    "Cuombajj Witches": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786224961.749248
+    },
     "Cursed Land": {
       "reason": "",
       "status": "pass",
@@ -309,6 +354,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781987899.028273
+    },
+    "Dancing Scimitar": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786227777.77265
     },
     "Dandân": {
       "reason": "",
@@ -364,6 +414,16 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1784516357.7388604
+    },
+    "Desert Twister": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786226977.453732
+    },
+    "Diamond Valley": {
+      "reason": "I sacrificed a giant tortoise, which should have healed me for 4 instead of 1 because it was untapped and had a toughness bonus",
+      "status": "fail",
+      "updated_at": 1786224219.4356933
     },
     "Dingus Egg": {
       "reason": "",
@@ -445,15 +505,35 @@
       "status": "pass",
       "updated_at": 1783301264.258661
     },
+    "Elephant Graveyard": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786225793.545686
+    },
     "Elvish Archers": {
       "reason": "",
       "status": "pass",
       "updated_at": 1781455740.8711123
     },
+    "Erg Raiders": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786228072.2936523
+    },
+    "Erhnam Djinn": {
+      "reason": "The creature targeting prompt should instead highlight all valid targets and let me choose one by clicking on it, rather than listing the cards in the prompt. If there are no valid targets, the prompt should be skipped entirely.",
+      "status": "fail",
+      "updated_at": 1786226031.3728452
+    },
     "Evil Presence": {
       "reason": "",
       "status": "pass",
       "updated_at": 1782022287.5750093
+    },
+    "Eye for an Eye": {
+      "reason": "I used this card on an attacking creature. Its controller should have taken damage when I took damage from the attack.",
+      "status": "fail",
+      "updated_at": 1786225593.4602408
     },
     "False Orders": {
       "reason": "",
@@ -494,6 +574,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782105849.706113
+    },
+    "Fishliver Oil": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786226371.911434
     },
     "Flashfires": {
       "reason": "",
@@ -575,6 +660,11 @@
       "status": "pass",
       "updated_at": 1782178605.8299546
     },
+    "Giant Tortoise": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786223889.7736194
+    },
     "Glasses of Urza": {
       "reason": "",
       "status": "pass",
@@ -619,6 +709,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782590169.0233815
+    },
+    "Guardian Beast": {
+      "reason": "This card should only affect artifacts I control",
+      "status": "fail",
+      "updated_at": 1786224787.1669166
     },
     "Hasran Ogress": {
       "reason": "",
@@ -665,6 +760,11 @@
       "status": "pass",
       "updated_at": 1782098161.0563412
     },
+    "Hurr Jackal": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786228223.9189692
+    },
     "Hurricane": {
       "reason": "",
       "status": "pass",
@@ -684,6 +784,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782797423.653214
+    },
+    "Ifh-Bíff Efreet": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786227169.8395429
     },
     "Illusionary Mask": {
       "reason": "",
@@ -720,10 +825,20 @@
       "status": "pass",
       "updated_at": 1781378704.6242044
     },
+    "Island Fish Jasconius": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786227751.464858
+    },
     "Island Sanctuary": {
       "reason": "",
       "status": "pass",
       "updated_at": 1782970469.6234977
+    },
+    "Island of Wak-Wak": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786224341.8390133
     },
     "Ivory Cup": {
       "reason": "",
@@ -740,6 +855,11 @@
       "status": "pass",
       "updated_at": 1782957764.093408
     },
+    "Jandor's Ring": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786226332.5659766
+    },
     "Jandor's Saddlebags": {
       "reason": "",
       "status": "pass",
@@ -749,6 +869,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782007143.640714
+    },
+    "Jeweled Bird": {
+      "reason": "This card should move into the ante zone when its ability is used",
+      "status": "fail",
+      "updated_at": 1786225863.6058002
     },
     "Jihad": {
       "reason": "",
@@ -784,6 +909,21 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782590997.0348485
+    },
+    "Khabál Ghoul": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786229070.187415
+    },
+    "King Suleiman": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786225239.4388769
+    },
+    "Kird Ape": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786224819.0839798
     },
     "Kormus Bell": {
       "reason": "",
@@ -880,6 +1020,11 @@
       "status": "pass",
       "updated_at": 1782971393.804839
     },
+    "Magnetic Mountain": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786228774.5901544
+    },
     "Mahamoti Djinn": {
       "reason": "",
       "status": "pass",
@@ -924,6 +1069,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1783032573.8577373
+    },
+    "Metamorphosis": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786226696.7889776
     },
     "Mijae Djinn": {
       "reason": "",
@@ -975,6 +1125,11 @@
       "status": "pass",
       "updated_at": 1782540531.3900843
     },
+    "Nafs Asp": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786228379.3363962
+    },
     "Natural Selection": {
       "reason": "",
       "status": "pass",
@@ -1005,10 +1160,20 @@
       "status": "pass",
       "updated_at": 1782107544.2623038
     },
+    "Oasis": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786226945.8285878
+    },
     "Obsianus Golem": {
       "reason": "",
       "status": "pass",
       "updated_at": 1782542915.6789494
+    },
+    "Old Man of the Sea": {
+      "reason": "Untapping this card should give control of the controlled creature back to its owner",
+      "status": "fail",
+      "updated_at": 1786227864.227361
     },
     "Orcish Artillery": {
       "reason": "",
@@ -1175,6 +1340,11 @@
       "status": "pass",
       "updated_at": 1782597780.5635235
     },
+    "Ring of Ma'rûf": {
+      "reason": "This ability should replace my next draw with a window that shows my sideboard and lets me choose a card from it.",
+      "status": "fail",
+      "updated_at": 1786226904.1420596
+    },
     "Roc of Kher Ridges": {
       "reason": "",
       "status": "pass",
@@ -1195,6 +1365,11 @@
       "status": "pass",
       "updated_at": 1783035466.1467454
     },
+    "Rukh Egg": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786225052.7240102
+    },
     "Sacrifice": {
       "reason": "",
       "status": "pass",
@@ -1204,6 +1379,16 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782107959.368606
+    },
+    "Sandals of Abdallah": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786228522.9537334
+    },
+    "Sandstorm": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786225107.8603985
     },
     "Savannah": {
       "reason": "",
@@ -1250,6 +1435,11 @@
       "status": "pass",
       "updated_at": 1782542731.2588892
     },
+    "Serendib Djinn": {
+      "reason": "I didn't get to choose which land to sacrifice",
+      "status": "fail",
+      "updated_at": 1786228755.6601925
+    },
     "Serendib Efreet": {
       "reason": "",
       "status": "pass",
@@ -1259,6 +1449,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782016549.60368
+    },
+    "Shahrazad": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786225347.741989
     },
     "Shanodin Dryads": {
       "reason": "",
@@ -1279,6 +1474,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782586756.7506638
+    },
+    "Sindbad": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786227485.4756355
     },
     "Singing Tree": {
       "reason": "",
@@ -1558,7 +1758,7 @@
     "War Elephant": {
       "reason": "",
       "status": "pass",
-      "updated_at": 1784515447.2712681
+      "updated_at": 1786225696.943532
     },
     "War Mammoth": {
       "reason": "",
@@ -1629,6 +1829,16 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782008868.629678
+    },
+    "Wyluli Wolf": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786224281.5912871
+    },
+    "Ydwen Efreet": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786226525.1387873
     },
     "Zombie Master": {
       "reason": "",

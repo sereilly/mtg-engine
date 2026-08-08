@@ -1116,6 +1116,7 @@ def _clear_upkeep_pay_choices(session: Session) -> None:
     session.optional_trigger_choices = []
     session.optional_trigger_resolved = {}
     session.optional_trigger_targets = {}
+    session.upkeep_decisions_deferred = False
 
 
 def _consume_draw_step_life_loss(session: Session) -> dict[str, bool] | None:
@@ -1172,13 +1173,10 @@ def _upkeep_decisions_pending(session: Session) -> bool:
     )
 
 
-def _gather_upkeep_decisions(session: Session, player_index: int) -> bool:
-    """Populate pending upkeep decisions for a human player and pause at upkeep.
-
-    Returns True if a decision is pending (caller should stop and prompt), False
-    if the player has nothing to decide and the upkeep can resolve immediately.
-    """
-    game = session.game
+def _collect_upkeep_decisions(game, player_index: int) -> tuple[list[dict], list[dict], list[dict]]:
+    """Every interactive upkeep decision this player owes right now, as
+    (pay-or-consequence, optional/targeted, pay-to-prevent) lists. Read-only, so
+    callers can also use it just to ask "does this upkeep need a prompt at all?"."""
     pay_choices = game.get_upkeep_pay_triggers(player_index)
     # Nafs Asp: "unless they pay {1} before that draw step" — decided here, at
     # upkeep, then handed to resolve_draw_step. Shares the pay-or-else channel.
@@ -1189,6 +1187,17 @@ def _gather_upkeep_decisions(session: Session, player_index: int) -> bool:
     optional_choices = game.get_optional_upkeep_triggers(player_index)
     optional_choices += game.get_upkeep_target_triggers(player_index)
     prevention_choices = game.get_upkeep_mana_prevention_triggers(player_index)
+    return pay_choices, optional_choices, prevention_choices
+
+
+def _gather_upkeep_decisions(session: Session, player_index: int) -> bool:
+    """Populate pending upkeep decisions for a human player and pause at upkeep.
+
+    Returns True if a decision is pending (caller should stop and prompt), False
+    if the player has nothing to decide and the upkeep can resolve immediately.
+    """
+    game = session.game
+    pay_choices, optional_choices, prevention_choices = _collect_upkeep_decisions(game, player_index)
     if not pay_choices and not optional_choices and not prevention_choices:
         return False
     session.upkeep_pay_choices = pay_choices
@@ -1563,6 +1572,37 @@ def _begin_turn(session: Session, player_index: int, defer_untap_selection: bool
     _clear_untap_selection(session)
     game.resolve_untap_step(player_index)
 
+    return _resolve_upkeep_step(session, player_index)
+
+
+def _resolve_upkeep_step(session: Session, player_index: int) -> bool:
+    """Run the upkeep step once the untap step is done, honoring the phase-rail
+    holds and any interactive upkeep-trigger prompts.
+
+    Returns True when the beginning phase ran through (or deliberately stopped at
+    a priority window), False when it paused waiting on human input. Shared by
+    _begin_turn and the untap-selection actions that resume a turn mid-untap.
+    """
+    game = session.game
+
+    # CR 503.1/503.1a: the upkeep step opens with a priority window — triggers go
+    # on the stack and the active player acts BEFORE any of them resolve, so an
+    # "unless you pay" choice is made at resolution, not on the way in. When the
+    # human flagged the upkeep stop on the phase rail, give them that window first
+    # and hold the trigger prompts back until they pass priority (_advance_phase
+    # picks the deferral back up) instead of prompting them out of the gate.
+    if (
+        _self_should_hold(session, "upkeep")
+        and _seat_type(session, player_index) == "human"
+        and any(_collect_upkeep_decisions(game, player_index))
+    ):
+        _clear_upkeep_pay_choices(session)
+        session.upkeep_decisions_deferred = True
+        game._set_phase_and_step("beginning", "upkeep")
+        game._on_step_or_phase_begin("beginning", "upkeep")
+        game.start_priority_window(player_index)
+        return True
+
     if _seat_type(session, player_index) == "human":
         if _gather_upkeep_decisions(session, player_index):
             return False
@@ -1589,6 +1629,24 @@ def _begin_turn(session: Session, player_index: int, defer_untap_selection: bool
         session.pending_post_sacrifice = ("begin_turn", player_index)
         return False
     return _finish_beginning_phase(session, player_index)
+
+
+def _resume_deferred_upkeep(session: Session, player_index: int) -> None:
+    """Resolve an upkeep whose trigger prompts were held back for the phase-rail
+    upkeep priority window, now that the window has closed. Any prompts are
+    gathered against the CURRENT board — the player may have sacrificed, killed or
+    bounced a trigger source during the window — and answering them resumes the
+    beginning phase through _advance_after_upkeep_choices."""
+    game = session.game
+    session.upkeep_decisions_deferred = False
+    if _gather_upkeep_decisions(session, player_index):
+        return
+    _clear_upkeep_pay_choices(session)
+    game.resolve_upkeep(player_index)
+    if game.pending_sacrifice is not None:
+        session.pending_post_sacrifice = ("begin_turn", player_index)
+        return
+    _finish_beginning_phase(session, player_index)
 
 
 def _finish_beginning_phase(session: Session, player_index: int) -> bool:
@@ -2308,6 +2366,8 @@ _DEBUG_ANYTIME_ACTIONS = {
     "debug_cast_free",
     "debug_add_mana",
     "debug_clear_summoning_sickness",
+    "debug_tap_permanent",
+    "debug_untap_permanent",
     "debug_return_to_hand",
     "debug_destroy_permanent",
     "debug_exile_permanent",
@@ -3298,6 +3358,13 @@ def _advance_phase(session: Session) -> None:
     step = game.current_step
 
     if phase == "beginning" and step in ("upkeep", "draw"):
+        # The phase-rail upkeep window has closed — resolve the upkeep itself now,
+        # prompting for the trigger decisions deliberately deferred past it. Runs
+        # before close_beginning_step so the step's own end (which empties mana
+        # pools, CR 500.4) doesn't strand mana the player floated to pay with.
+        if step == "upkeep" and session.upkeep_decisions_deferred:
+            _resume_deferred_upkeep(session, session.current_turn)
+            return
         # Resume after a held upkeep/draw step on the AI's turn: close it and move on,
         # holding again at the draw step if the human flagged it.
         game.close_beginning_step()
@@ -4299,6 +4366,10 @@ def do_action(session_id: str, req: GameActionRequest):
             raise HTTPException(status_code=400, detail="you do not currently have priority")
         if session.game.stack:
             raise HTTPException(status_code=400, detail="cannot end turn while stack is not empty")
+        # The upkeep is still unresolved behind the phase-rail window the player is
+        # standing in; ending the turn from here would skip its triggers outright.
+        if session.upkeep_decisions_deferred:
+            raise HTTPException(status_code=400, detail="resolve your upkeep before ending the turn")
         _end_turn(session, allow_manual_cleanup_selection=True)
 
     elif req.action == "next_phase":
@@ -4576,17 +4647,7 @@ def do_action(session_id: str, req: GameActionRequest):
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
         _clear_untap_selection(session)
-
-        if _seat_type(session, session.current_turn) == "human" and _gather_upkeep_decisions(session, session.current_turn):
-            pass
-        else:
-            _clear_upkeep_pay_choices(session)
-            session.game.resolve_upkeep(session.current_turn)
-            if _seat_type(session, session.current_turn) == "human" and _has_island_sanctuary(session.game, session.current_turn):
-                session.island_sanctuary_pending = True
-            else:
-                session.game.resolve_draw_step(session.current_turn)
-                session.game._enter_main_phase(precombat=True)
+        _resolve_upkeep_step(session, session.current_turn)
 
     elif req.action == "optional_untap_confirm":
         # Old Man of the Sea: the player picked which "may choose not to untap"
@@ -4602,17 +4663,7 @@ def do_action(session_id: str, req: GameActionRequest):
         session.optional_untap_pending = []
         session.game.resolve_untap_step(session.current_turn, keep_tapped_indices=keep)
         _clear_untap_selection(session)
-
-        if _seat_type(session, session.current_turn) == "human" and _gather_upkeep_decisions(session, session.current_turn):
-            pass
-        else:
-            _clear_upkeep_pay_choices(session)
-            session.game.resolve_upkeep(session.current_turn)
-            if _seat_type(session, session.current_turn) == "human" and _has_island_sanctuary(session.game, session.current_turn):
-                session.island_sanctuary_pending = True
-            else:
-                session.game.resolve_draw_step(session.current_turn)
-                session.game._enter_main_phase(precombat=True)
+        _resolve_upkeep_step(session, session.current_turn)
 
     elif req.action == "pay_upkeep":
         if req.seat != session.current_turn:
@@ -5125,6 +5176,22 @@ def do_action(session_id: str, req: GameActionRequest):
         permanent.metadata.pop("summoning_sickness_turn", None)
         session.game.log.append(f"[Debug] {permanent.card.name} loses summoning sickness.")
 
+    elif req.action in {"debug_tap_permanent", "debug_untap_permanent"}:
+        if seat_type != "human":
+            raise HTTPException(status_code=400, detail="cannot issue debug action for AI seat")
+        controller_seat, permanent = _debug_target_permanent(session, req)
+        make_tapped = req.action == "debug_tap_permanent"
+        # Same write path Twiddle uses: a raw state flip that also turns a
+        # face-down creature (Illusionary Mask) face up when it becomes tapped.
+        # City of Brass's "whenever this land becomes tapped" deliberately does
+        # not fire — the engine scopes that trigger to the tap-for-mana path.
+        session.game._tap_or_untap_target(
+            session.game.players[controller_seat], make_tapped, req.target_permanent_index
+        )
+        session.game.log.append(
+            f"[Debug] {permanent.card.name} {'tapped' if make_tapped else 'untapped'}."
+        )
+
     elif req.action in {"debug_return_to_hand", "debug_exile_permanent"}:
         if seat_type != "human":
             raise HTTPException(status_code=400, detail="cannot issue debug action for AI seat")
@@ -5323,6 +5390,7 @@ def undo_action(session_id: str, seat: int | None = Query(default=None, ge=0)):
     session.optional_trigger_resolved = snapshot.optional_trigger_resolved
     session.upkeep_mana_prevention_choices = snapshot.upkeep_mana_prevention_choices
     session.upkeep_mana_prevention_resolved = snapshot.upkeep_mana_prevention_resolved
+    session.upkeep_decisions_deferred = snapshot.upkeep_decisions_deferred
     session.island_sanctuary_pending = snapshot.island_sanctuary_pending
     session.pending_post_sacrifice = snapshot.pending_post_sacrifice
 

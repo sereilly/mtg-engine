@@ -2968,3 +2968,40 @@ def test_debug_board_action_works_while_a_cleanup_discard_is_pending():
     allowed = _board_action(sid, "debug_destroy_permanent", 0, 0)
     assert allowed.status_code == 200, allowed.text
     assert session.game.players[0].battlefield == []
+
+
+def test_debug_tap_and_untap_flip_a_permanent_in_place():
+    mox = Permanent(card=_mk_card("Test Mox", "{0}", "Artifact", "{T}: Add {W}."))
+    sid = _make_board_menu_session(9319, {0: [mox]})
+
+    tapped = _board_action(sid, "debug_tap_permanent", 0, 0)
+    assert tapped.status_code == 200, tapped.text
+    assert tapped.json()["players"][0]["battlefield"][0]["tapped"] is True
+    assert mox.tapped
+
+    untapped = _board_action(sid, "debug_untap_permanent", 0, 0)
+    assert untapped.status_code == 200, untapped.text
+    assert untapped.json()["players"][0]["battlefield"][0]["tapped"] is False
+    assert not mox.tapped
+
+
+def test_debug_tap_leaves_the_permanent_on_the_battlefield_and_adds_no_mana():
+    """The menu's Tap is a raw state flip, not an activation: no mana is
+    produced and no tap-for-mana trigger fires."""
+    land = Permanent(card=_mk_card("Test Waste", "", "Land", "{T}: Add {C}.", produced_mana=("C",)))
+    sid = _make_board_menu_session(9320, {0: [land]})
+    session = store.get(sid)
+    before = dict(session.game.players[0].mana_pool)
+
+    assert _board_action(sid, "debug_tap_permanent", 0, 0).status_code == 200
+    assert [p.card.name for p in session.game.players[0].battlefield] == ["Test Waste"]
+    assert session.game.players[0].mana_pool == before
+
+
+def test_debug_tap_works_on_an_opponents_permanent():
+    bear = Permanent(card=_mk_creature_card("Their Bear", 2, 2))
+    sid = _make_board_menu_session(9321, {1: [bear]})
+
+    response = _board_action(sid, "debug_tap_permanent", 1, 0)
+    assert response.status_code == 200, response.text
+    assert bear.tapped

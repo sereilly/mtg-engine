@@ -3,19 +3,19 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **369**
-- Passed: **326**
-- Failed: **1**
-- Untested: **42**
+- Passed: **358**
+- Failed: **11**
+- Untested: **0**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
-| Abu Ja'far | ⬜ untested |  |
+| Abu Ja'far | ❌ fail | I blocked a creature and the blocking creature didn't die |
 | Air Elemental | ✅ pass |  |
-| Aladdin | ⬜ untested |  |
-| Aladdin's Lamp | ⬜ untested |  |
+| Aladdin | ✅ pass |  |
+| Aladdin's Lamp | ✅ pass |  |
 | Aladdin's Ring | ✅ pass |  |
-| Ali Baba | ⬜ untested |  |
-| Ali from Cairo | ⬜ untested |  |
+| Ali Baba | ✅ pass |  |
+| Ali from Cairo | ✅ pass |  |
 | Ancestral Recall | ✅ pass |  |
 | Animate Artifact | ✅ pass |  |
 | Animate Dead | ✅ pass |  |
@@ -29,7 +29,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Balance | ✅ pass |  |
 | Basalt Monolith | ✅ pass |  |
 | Bayou | ✅ pass |  |
-| Bazaar of Baghdad | ⬜ untested |  |
+| Bazaar of Baghdad | ✅ pass |  |
 | Benalish Hero | ✅ pass |  |
 | Berserk | ✅ pass |  |
 | Bird Maiden | ✅ pass |  |
@@ -47,7 +47,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Braingeyser | ✅ pass |  |
 | Brass Man | ✅ pass |  |
 | Burrowing | ✅ pass |  |
-| Camel | ⬜ untested |  |
+| Camel | ❌ fail | I attacked in a band with camel and then targeted the banded creature with a desert on the end combat step and it took damage. Not sure if that's intended or a bug |
 | Camouflage | ✅ pass |  |
 | Castle | ✅ pass |  |
 | Celestial Prism | ✅ pass |  |
@@ -60,7 +60,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Circle of Protection: Red | ✅ pass |  |
 | Circle of Protection: White | ✅ pass |  |
 | City in a Bottle | ✅ pass |  |
-| City of Brass | ⬜ untested |  |
+| City of Brass | ✅ pass |  |
 | Clockwork Beast | ✅ pass |  |
 | Clone | ✅ pass |  |
 | Cockatrice | ✅ pass |  |
@@ -76,11 +76,11 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Creature Bond | ✅ pass |  |
 | Crusade | ✅ pass |  |
 | Crystal Rod | ✅ pass |  |
-| Cuombajj Witches | ⬜ untested |  |
+| Cuombajj Witches | ✅ pass |  |
 | Cursed Land | ✅ pass |  |
 | Cyclone | ✅ pass |  |
 | Cyclopean Tomb | ✅ pass |  |
-| Dancing Scimitar | ⬜ untested |  |
+| Dancing Scimitar | ✅ pass |  |
 | Dandân | ✅ pass |  |
 | Dark Ritual | ✅ pass |  |
 | Darkpact | ✅ pass |  |
@@ -92,8 +92,8 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Demonic Tutor | ✅ pass |  |
 | Desert | ✅ pass |  |
 | Desert Nomads | ✅ pass |  |
-| Desert Twister | ⬜ untested |  |
-| Diamond Valley | ⬜ untested |  |
+| Desert Twister | ✅ pass |  |
+| Diamond Valley | ❌ fail | I sacrificed a giant tortoise, which should have healed me for 4 instead of 1 because it was untapped and had a toughness bonus |
 | Dingus Egg | ✅ pass |  |
 | Disenchant | ✅ pass |  |
 | Disintegrate | ✅ pass |  |
@@ -110,12 +110,12 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Earthquake | ✅ pass |  |
 | Ebony Horse | ✅ pass |  |
 | El-Hajjâj | ✅ pass |  |
-| Elephant Graveyard | ⬜ untested |  |
+| Elephant Graveyard | ✅ pass |  |
 | Elvish Archers | ✅ pass |  |
-| Erg Raiders | ⬜ untested |  |
-| Erhnam Djinn | ⬜ untested |  |
+| Erg Raiders | ✅ pass |  |
+| Erhnam Djinn | ❌ fail | The creature targeting prompt should instead highlight all valid targets and let me choose one by clicking on it, rather than listing the cards in the prompt. If there are no valid targets, the prompt should be skipped entirely. |
 | Evil Presence | ✅ pass |  |
-| Eye for an Eye | ⬜ untested |  |
+| Eye for an Eye | ❌ fail | I used this card on an attacking creature. Its controller should have taken damage when I took damage from the attack. |
 | False Orders | ✅ pass |  |
 | Farmstead | ✅ pass |  |
 | Fastbond | ✅ pass |  |
@@ -124,7 +124,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Fire Elemental | ✅ pass |  |
 | Fireball | ✅ pass |  |
 | Firebreathing | ✅ pass |  |
-| Fishliver Oil | ⬜ untested |  |
+| Fishliver Oil | ✅ pass |  |
 | Flashfires | ✅ pass |  |
 | Flight | ✅ pass |  |
 | Flying Carpet | ✅ pass |  |
@@ -141,7 +141,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Ghazbán Ogre | ✅ pass |  |
 | Giant Growth | ✅ pass |  |
 | Giant Spider | ✅ pass |  |
-| Giant Tortoise | ⬜ untested |  |
+| Giant Tortoise | ✅ pass |  |
 | Glasses of Urza | ✅ pass |  |
 | Gloom | ✅ pass |  |
 | Goblin Balloon Brigade | ✅ pass |  |
@@ -151,7 +151,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Green Ward | ✅ pass |  |
 | Grizzly Bears | ✅ pass |  |
 | Guardian Angel | ✅ pass |  |
-| Guardian Beast | ⬜ untested |  |
+| Guardian Beast | ❌ fail | This card should only affect artifacts I control |
 | Hasran Ogress | ✅ pass |  |
 | Healing Salve | ✅ pass |  |
 | Helm of Chatzuk | ✅ pass |  |
@@ -161,12 +161,12 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Howl from Beyond | ✅ pass |  |
 | Howling Mine | ✅ pass |  |
 | Hurloon Minotaur | ✅ pass |  |
-| Hurr Jackal | ⬜ untested |  |
+| Hurr Jackal | ✅ pass |  |
 | Hurricane | ✅ pass |  |
 | Hypnotic Specter | ✅ pass |  |
 | Ice Storm | ✅ pass |  |
 | Icy Manipulator | ✅ pass |  |
-| Ifh-Bíff Efreet | ⬜ untested |  |
+| Ifh-Bíff Efreet | ✅ pass |  |
 | Illusionary Mask | ✅ pass |  |
 | Instill Energy | ✅ pass |  |
 | Invisibility | ✅ pass |  |
@@ -174,16 +174,16 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Ironclaw Orcs | ✅ pass |  |
 | Ironroot Treefolk | ✅ pass |  |
 | Island | ✅ pass |  |
-| Island Fish Jasconius | ⬜ untested |  |
+| Island Fish Jasconius | ✅ pass |  |
 | Island Sanctuary | ✅ pass |  |
-| Island of Wak-Wak | ⬜ untested |  |
+| Island of Wak-Wak | ✅ pass |  |
 | Ivory Cup | ✅ pass |  |
 | Jade Monolith | ✅ pass |  |
 | Jade Statue | ✅ pass |  |
-| Jandor's Ring | ⬜ untested |  |
+| Jandor's Ring | ✅ pass |  |
 | Jandor's Saddlebags | ✅ pass |  |
 | Jayemdae Tome | ✅ pass |  |
-| Jeweled Bird | ⬜ untested |  |
+| Jeweled Bird | ❌ fail | This card should move into the ante zone when its ability is used |
 | Jihad | ✅ pass |  |
 | Juggernaut | ✅ pass |  |
 | Jump | ✅ pass |  |
@@ -191,9 +191,9 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Juzám Djinn | ✅ pass |  |
 | Karma | ✅ pass |  |
 | Keldon Warlord | ✅ pass |  |
-| Khabál Ghoul | ⬜ untested |  |
-| King Suleiman | ⬜ untested |  |
-| Kird Ape | ⬜ untested |  |
+| Khabál Ghoul | ✅ pass |  |
+| King Suleiman | ✅ pass |  |
+| Kird Ape | ✅ pass |  |
 | Kormus Bell | ✅ pass |  |
 | Kudzu | ✅ pass |  |
 | Lance | ✅ pass |  |
@@ -213,7 +213,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Lord of the Pit | ✅ pass |  |
 | Lure | ✅ pass |  |
 | Magical Hack | ✅ pass |  |
-| Magnetic Mountain | ⬜ untested |  |
+| Magnetic Mountain | ✅ pass |  |
 | Mahamoti Djinn | ✅ pass |  |
 | Mana Flare | ✅ pass |  |
 | Mana Short | ✅ pass |  |
@@ -223,7 +223,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Merchant Ship | ✅ pass |  |
 | Merfolk of the Pearl Trident | ✅ pass |  |
 | Mesa Pegasus | ✅ pass |  |
-| Metamorphosis | ⬜ untested |  |
+| Metamorphosis | ✅ pass |  |
 | Mijae Djinn | ✅ pass |  |
 | Mind Twist | ✅ pass |  |
 | Mons's Goblin Raiders | ✅ pass |  |
@@ -234,16 +234,16 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Mox Pearl | ✅ pass |  |
 | Mox Ruby | ✅ pass |  |
 | Mox Sapphire | ✅ pass |  |
-| Nafs Asp | ⬜ untested |  |
+| Nafs Asp | ✅ pass |  |
 | Natural Selection | ✅ pass |  |
 | Nether Shadow | ✅ pass |  |
 | Nettling Imp | ✅ pass |  |
 | Nevinyrral's Disk | ✅ pass |  |
 | Nightmare | ✅ pass |  |
 | Northern Paladin | ✅ pass |  |
-| Oasis | ⬜ untested |  |
+| Oasis | ✅ pass |  |
 | Obsianus Golem | ✅ pass |  |
-| Old Man of the Sea | ⬜ untested |  |
+| Old Man of the Sea | ❌ fail | Untapping this card should give control of the controlled creature back to its owner |
 | Orcish Artillery | ✅ pass |  |
 | Orcish Oriflamme | ✅ pass |  |
 | Oubliette | ✅ pass |  |
@@ -277,16 +277,16 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Resurrection | ✅ pass |  |
 | Reverse Damage | ✅ pass |  |
 | Righteousness | ✅ pass |  |
-| Ring of Ma'rûf | ⬜ untested |  |
+| Ring of Ma'rûf | ❌ fail | This ability should replace my next draw with a window that shows my sideboard and lets me choose a card from it. |
 | Roc of Kher Ridges | ✅ pass |  |
 | Rock Hydra | ✅ pass |  |
 | Rod of Ruin | ✅ pass |  |
 | Royal Assassin | ✅ pass |  |
-| Rukh Egg | ⬜ untested |  |
+| Rukh Egg | ✅ pass |  |
 | Sacrifice | ✅ pass |  |
 | Samite Healer | ✅ pass |  |
-| Sandals of Abdallah | ⬜ untested |  |
-| Sandstorm | ⬜ untested |  |
+| Sandals of Abdallah | ✅ pass |  |
+| Sandstorm | ✅ pass |  |
 | Savannah | ✅ pass |  |
 | Savannah Lions | ✅ pass |  |
 | Scathe Zombies | ✅ pass |  |
@@ -296,15 +296,15 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Sea Serpent | ✅ pass |  |
 | Sedge Troll | ✅ pass |  |
 | Sengir Vampire | ✅ pass |  |
-| Serendib Djinn | ⬜ untested |  |
+| Serendib Djinn | ❌ fail | I didn't get to choose which land to sacrifice |
 | Serendib Efreet | ✅ pass |  |
 | Serra Angel | ✅ pass |  |
-| Shahrazad | ⬜ untested |  |
+| Shahrazad | ✅ pass |  |
 | Shanodin Dryads | ✅ pass |  |
 | Shatter | ✅ pass |  |
 | Shivan Dragon | ✅ pass |  |
 | Simulacrum | ✅ pass |  |
-| Sindbad | ⬜ untested |  |
+| Sindbad | ✅ pass |  |
 | Singing Tree | ✅ pass |  |
 | Sinkhole | ✅ pass |  |
 | Siren's Call | ✅ pass |  |
@@ -375,6 +375,6 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Wooden Sphere | ✅ pass |  |
 | Word of Command | ✅ pass |  |
 | Wrath of God | ✅ pass |  |
-| Wyluli Wolf | ⬜ untested |  |
-| Ydwen Efreet | ⬜ untested |  |
+| Wyluli Wolf | ✅ pass |  |
+| Ydwen Efreet | ✅ pass |  |
 | Zombie Master | ✅ pass |  |
