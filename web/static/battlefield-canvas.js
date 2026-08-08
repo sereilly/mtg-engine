@@ -3141,22 +3141,59 @@ class BattlefieldCanvas {
       this._drawShieldBadge(ctx, x + 3, y + 3, shieldCard.damage_prevention_pool);
     }
 
-    // ---- Regeneration badge ----
+    // ---- Regeneration badges ----
+    // A regeneration shield shows a green "Regeneration" tag. If the permanent
+    // also can't be regenerated (Disintegrate's rider, Hurr Jackal), that tag is
+    // struck through — the shield is still there but does nothing — and a red
+    // "Can't Regenerate" tag is stacked underneath.
     const regenCard = creatureCard || card;
-    if (regenCard && Number(regenCard.regeneration_shield) > 0) {
+    const hasRegenShield = !!(regenCard && Number(regenCard.regeneration_shield) > 0);
+    const cantRegenerate = !!(regenCard && regenCard.cant_be_regenerated);
+    if (hasRegenShield) {
       const label = "Regeneration";
       const bh = 13;
       ctx.font = `bold ${Math.max(7, bh * 0.62)}px sans-serif`;
-      const bw = Math.min(w - 4, Math.ceil(ctx.measureText(label).width) + 8);
+      const textW = Math.ceil(ctx.measureText(label).width);
+      const bw = Math.min(w - 4, textW + 8);
       const bx = x + (w - bw) / 2, by = y + 2;
-      ctx.fillStyle = "rgba(34,139,34,0.9)";
+      ctx.fillStyle = cantRegenerate ? "rgba(34,139,34,0.55)" : "rgba(34,139,34,0.9)";
       this._roundRect(ctx, bx, by, bw, bh, 3);
       ctx.fill();
       ctx.strokeStyle = "rgba(120,255,120,0.85)";
       ctx.lineWidth = 1;
       this._roundRect(ctx, bx, by, bw, bh, 3);
       ctx.stroke();
-      ctx.fillStyle = "#eaffea";
+      ctx.fillStyle = cantRegenerate ? "#cfe6cf" : "#eaffea";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(label, bx + bw / 2, by + bh / 2);
+      if (cantRegenerate) {
+        // Strike through the label itself, clamped to the badge so a clipped
+        // (narrower than the text) badge doesn't spill the line past its edge.
+        const strikeW = Math.min(textW, bw - 6);
+        ctx.strokeStyle = "#ff8a7a";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(bx + (bw - strikeW) / 2, by + bh / 2);
+        ctx.lineTo(bx + (bw + strikeW) / 2, by + bh / 2);
+        ctx.stroke();
+      }
+    }
+    if (cantRegenerate) {
+      const label = "Can't Regenerate";
+      const bh = 13;
+      ctx.font = `bold ${Math.max(7, bh * 0.62)}px sans-serif`;
+      const bw = Math.min(w - 4, Math.ceil(ctx.measureText(label).width) + 8);
+      const bx = x + (w - bw) / 2;
+      const by = y + 2 + (hasRegenShield ? 15 : 0);
+      ctx.fillStyle = "rgba(150,32,32,0.92)";
+      this._roundRect(ctx, bx, by, bw, bh, 3);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255,150,140,0.9)";
+      ctx.lineWidth = 1;
+      this._roundRect(ctx, bx, by, bw, bh, 3);
+      ctx.stroke();
+      ctx.fillStyle = "#ffe6e2";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(label, bx + bw / 2, by + bh / 2);
@@ -3175,8 +3212,8 @@ class BattlefieldCanvas {
       const textW = Math.ceil(ctx.measureText(text + " ").width);
       const bw = Math.min(w - 4, textW + symSize + 10);
       const bx = x + (w - bw) / 2;
-      // Sit just below the regeneration badge if present, else at the top.
-      const by = y + 2 + (regenCard && Number(regenCard.regeneration_shield) > 0 ? 15 : 0);
+      // Sit below whichever regeneration badges are present, else at the top.
+      const by = y + 2 + (hasRegenShield ? 15 : 0) + (cantRegenerate ? 15 : 0);
       ctx.fillStyle = "rgba(0,0,0,0.78)";
       this._roundRect(ctx, bx, by, bw, bh, 3);
       ctx.fill();
@@ -3278,6 +3315,8 @@ class BattlefieldCanvas {
       if (pileCount >= 2) by += 16;
       if (landOverride && String(card.type || "").toLowerCase().includes("land")) by += 15;
       if (indestructibleCard && indestructibleCard.is_indestructible) by += 15;
+      if (hasRegenShield) by += 15;
+      if (cantRegenerate) by += 15;
       if (colorOverride) by += 15;
       ctx.fillStyle = "rgba(24,86,104,0.9)";
       this._roundRect(ctx, bx, by, bw, bh, 3);

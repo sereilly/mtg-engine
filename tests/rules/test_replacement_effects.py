@@ -610,6 +610,54 @@ def test_614_8_two_regen_shields_survive_two_destroys():
 
 
 # ---------------------------------------------------------------------------
+# 701.19c — "Can't be regenerated" doesn't stop a shield from being created; it
+# stops the shield from being applied.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("701.19c", "614.8")
+def test_701_19c_cant_be_regenerated_makes_shield_inert_against_targeted_destroy():
+    """701.19c: A creature marked 'can't be regenerated this turn' keeps its
+    regeneration shield, but the shield no longer replaces destruction."""
+    regen = _mk_card("Regen Spell", "Instant", "Regenerate target creature.")
+    destroy = _mk_card("Terror", "Instant", "Destroy target creature.")
+    creature = _mk_creature("Bear", 2, 2)
+    p1 = PlayerState(name="P1", hand=[regen, destroy])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=creature)])
+    game = Game(players=[p1, p2])
+
+    game.cast_from_hand(0, "Regen Spell", target_player_index=1)
+    assert p2.battlefield[0].regeneration_shield == 1
+    # The rider a Disintegrate / Hurr Jackal resolution leaves on the creature.
+    p2.battlefield[0].metadata["cant_be_regenerated_this_turn"] = True
+
+    game.cast_from_hand(0, "Terror", target_player_index=1)
+
+    assert len(p2.battlefield) == 0, "Shield did not save the creature"
+    assert len(p2.graveyard) == 1
+
+
+@pytest.mark.cr("701.19c", "614.8")
+def test_701_19c_cant_be_regenerated_makes_shield_inert_against_mass_destroy():
+    """701.19c: The same holds for a sweeper — a shielded creature that can't be
+    regenerated dies to a 'Destroy all creatures' effect."""
+    regen = _mk_card("Regen Spell", "Instant", "Regenerate target creature.")
+    wrath = _mk_card("Wrath", "Sorcery", "Destroy all creatures.")
+    creature = _mk_creature("Bear", 2, 2)
+    p1 = PlayerState(name="P1", hand=[regen, wrath])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=creature)])
+    game = Game(players=[p1, p2])
+
+    game.cast_from_hand(0, "Regen Spell", target_player_index=1)
+    p2.battlefield[0].metadata["cant_be_regenerated_this_turn"] = True
+
+    game.cast_from_hand(0, "Wrath", target_player_index=1)
+
+    assert len(p2.battlefield) == 0, "Shield did not save the creature from the sweeper"
+    assert len(p2.graveyard) == 1
+
+
+# ---------------------------------------------------------------------------
 # 614.9 — Redirection effects replace damage to one target with the same
 # damage to another target.
 # ---------------------------------------------------------------------------

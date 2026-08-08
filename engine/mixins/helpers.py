@@ -395,7 +395,14 @@ class GameHelpersMixin:
             if respect_indestructible and self._is_indestructible(permanent):
                 survivors.append(permanent)
                 continue
-            if allow_regeneration and permanent.is_creature and permanent.regeneration_shield > 0:
+            if (
+                allow_regeneration
+                and permanent.is_creature
+                and permanent.regeneration_shield > 0
+                # A "can't be regenerated this turn" rider makes the shield inert
+                # (CR 701.19c) — it doesn't save the creature from a sweeper.
+                and not permanent.metadata.get("cant_be_regenerated_this_turn")
+            ):
                 permanent.regeneration_shield -= 1
                 permanent.tapped = True
                 if on_regenerate is not None:

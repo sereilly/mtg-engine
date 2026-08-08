@@ -312,6 +312,10 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         "blocking_attacker_index": perm.blocking_attacker_index,
         "damage_marked": perm.damage_marked,
         "regeneration_shield": perm.regeneration_shield,
+        # Disintegrate / Hurr Jackal style riders: the UI badges the permanent as
+        # unregeneratable and strikes through any regeneration shield it holds,
+        # since that shield can no longer save it.
+        "cant_be_regenerated": bool(perm.metadata.get("cant_be_regenerated_this_turn", False)),
         # "Prevent the next N damage" shield on this creature, with the granting
         # card's preview payload for the hover tooltip.
         "damage_prevention_pool": perm.damage_prevention_pool,

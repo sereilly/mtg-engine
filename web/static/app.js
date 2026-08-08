@@ -2049,6 +2049,259 @@ function getHandRevealInfo(state = currentState) {
 }
 
 // ---------------------------------------------------------------------------
+// Prompt board targeting
+// ---------------------------------------------------------------------------
+// Prompts that choose permanents and/or players are answered on the board — the
+// legal permanents glow like spell targets, the legal player pills glow gold —
+// instead of listing card names as buttons in the prompt panel. One descriptor
+// per prompt says what may be clicked and what a click submits, and the click
+// handlers (canvas cards, player pills) plus the render loop all read it, so a
+// prompt joins the flow by adding a branch to getPromptBoardTargeting below.
+
+// Fields:
+//   permanentKeys  "<seat>-<index>" battlefield keys that may be clicked
+//   playerSeats    seats whose name/life pill may be clicked
+//   selectedKeys   permanents already picked (multi-pick prompts), for the
+//                  canvas' "selected" highlight
+//   onPermanent / onPlayer  what a legal click submits
+//   fallThroughOnInvalid    true when clicking anything else keeps its normal
+//                  meaning (the backend still allows other actions meanwhile)
+//   invalidHint    message shown for an illegal click that doesn't fall through
+function promptTargeting(spec) {
+  return {
+    permanentKeys: new Set(spec.permanentKeys || []),
+    playerSeats: new Set(spec.playerSeats || []),
+    selectedKeys: spec.selectedKeys || [],
+    onPermanent: spec.onPermanent || (() => {}),
+    onPlayer: spec.onPlayer || (() => {}),
+    fallThroughOnInvalid: !!spec.fallThroughOnInvalid,
+    invalidHint: spec.invalidHint || "That isn't a legal choice for this prompt.",
+  };
+}
+
+// Submit a prompt answer, surfacing a rejection as an action hint rather than an
+// unhandled rejection (board clicks have no button to disable on failure).
+function submitPromptAction(body) {
+  sendAction(body).catch((e) => updateActionHint(e.message, true));
+}
+
+// Re-render the prompt panel and the board after a board click changed an
+// in-progress multi-pick selection (the counts live in the panel, the
+// highlights on the canvas).
+function refreshPromptSelection(state = currentState) {
+  renderActivationPrompt();
+  renderBoard(state);
+}
+
+// The board-targeting descriptor for the prompt currently on screen, or null.
+// The order below mirrors renderActivationPrompt's dispatch so the highlights
+// always belong to the prompt the player is actually looking at: every prompt
+// that outranks a board-targeted one bails out with null.
+function getPromptBoardTargeting(state = currentState) {
+  if (!state || seat === null) return null;
+  if (getPregameInfo(state)) return null;
+  if (getTimeVaultInfo(state)) return null;
+  if (getCleanupDiscardInfo(state)) return null;
+  // Constrained untap (Winter Orb / Smoke) is already board-driven through its
+  // own untap_select action — see the canvas click handler.
+  if (getUntapLandSelectionInfo(state)) return null;
+
+  // Old Man of the Sea: toggle which permanents stay tapped, then confirm.
+  const optionalUntapInfo = getOptionalUntapInfo(state);
+  if (optionalUntapInfo) {
+    const permanents = optionalUntapInfo.permanents || [];
+    return promptTargeting({
+      permanentKeys: permanents.map((p) => `${seat}-${Number(p.index)}`),
+      selectedKeys: optionalUntapKeepSelection.map((idx) => `${seat}-${idx}`),
+      onPermanent: (_targetSeat, idx) => {
+        const at = optionalUntapKeepSelection.indexOf(idx);
+        if (at >= 0) optionalUntapKeepSelection.splice(at, 1);
+        else optionalUntapKeepSelection.push(idx);
+        refreshPromptSelection(state);
+      },
+      invalidHint: "That permanent untaps normally — pick one of the highlighted ones.",
+    });
+  }
+
+  // Cuombajj Witches: the opposing chooser picks any target (player or creature).
+  const opponentDamageInfo = getOpponentDamageInfo(state);
+  if (opponentDamageInfo) {
+    const permanentKeys = [];
+    const playerSeats = [];
+    for (const t of opponentDamageInfo.valid_targets || []) {
+      if (t.kind === "player") playerSeats.push(Number(t.seat));
+      else if (t.kind === "permanent") permanentKeys.push(`${t.seat}-${t.index}`);
+    }
+    return promptTargeting({
+      permanentKeys,
+      playerSeats,
+      onPermanent: (targetSeat, idx) =>
+        submitPromptAction({
+          seat,
+          action: "opponent_damage_choose",
+          target_seat: targetSeat,
+          target_permanent_index: idx,
+        }),
+      onPlayer: (targetSeat) =>
+        submitPromptAction({ seat, action: "opponent_damage_choose", target_seat: targetSeat }),
+      invalidHint: `That isn't a legal target for ${opponentDamageInfo.card_name}'s damage.`,
+    });
+  }
+
+  if (getLampDrawInfo(state) || getOutsideGameDrawInfo(state)) return null;
+  if (getUpkeepPayInfo(state)) return null;
+
+  // A target-bearing upkeep trigger (Vesuvan Doppelganger's re-copy, Erhnam
+  // Djinn's forestwalk grant) picks its creature off the board.
+  const optionalTriggerInfo = getOptionalTriggerInfo(state);
+  if (optionalTriggerInfo) {
+    const current = (optionalTriggerInfo.pending || [])[0];
+    const targets = Array.isArray(current?.valid_targets) ? current.valid_targets : [];
+    if (!current?.needs_target || targets.length === 0) return null;
+    return promptTargeting({
+      permanentKeys: targets.map((t) => `${t.seat}-${t.index}`),
+      onPermanent: (targetSeat, idx) =>
+        submitPromptAction({
+          seat,
+          action: "resolve_optional_trigger",
+          card_name: current.card_name,
+          accept: true,
+          target_seat: targetSeat,
+          target_permanent_index: idx,
+        }),
+      // Upkeep still allows tapping lands and activating abilities while the
+      // trigger waits, so a click elsewhere keeps its normal meaning.
+      fallThroughOnInvalid: true,
+    });
+  }
+
+  if (getUpkeepPreventionInfo(state)) return null;
+  if (getDiscardSelectInfo(state)) return null;
+  if (getLengDiscardInfo(state)) return null;
+
+  // Balance: the lands/creatures to sacrifice are picked on the board (the cards
+  // to discard are picked in hand — see the balanceHandSelectable hand option).
+  const balanceSelectInfo = getBalanceSelectInfo(state);
+  if (balanceSelectInfo) {
+    const owner = Number(balanceSelectInfo.player_seat);
+    const need = {
+      lands: balanceSelectInfo.lands_to_sacrifice || 0,
+      creatures: balanceSelectInfo.creatures_to_sacrifice || 0,
+    };
+    // Lands and creatures index into the same battlefield array, so one map
+    // resolves a clicked index to the section it belongs to.
+    const kindByIndex = new Map();
+    if (need.lands) {
+      for (const land of balanceSelectInfo.lands || []) kindByIndex.set(Number(land.index), "lands");
+    }
+    if (need.creatures) {
+      for (const c of balanceSelectInfo.creatures || []) kindByIndex.set(Number(c.index), "creatures");
+    }
+    return promptTargeting({
+      permanentKeys: [...kindByIndex.keys()].map((idx) => `${owner}-${idx}`),
+      selectedKeys: [...balanceSelection.lands, ...balanceSelection.creatures].map((idx) => `${owner}-${idx}`),
+      onPermanent: (_targetSeat, idx) => {
+        const kind = kindByIndex.get(idx);
+        if (!kind) return;
+        const picked = balanceSelection[kind];
+        const at = picked.indexOf(idx);
+        if (at >= 0) picked.splice(at, 1);
+        else if (picked.length < need[kind]) picked.push(idx);
+        refreshPromptSelection(state);
+      },
+      invalidHint: "Balance only takes the highlighted lands and creatures.",
+    });
+  }
+
+  // Forced sacrifice (Lich, Lord of the Pit): pick `count` of your permanents.
+  const sacrificeSelectInfo = getSacrificeSelectInfo(state);
+  if (sacrificeSelectInfo) {
+    const owner = Number(sacrificeSelectInfo.player_seat);
+    const permanents = sacrificeSelectInfo.permanents || [];
+    const need = Math.min(sacrificeSelectInfo.count || 0, permanents.length);
+    return promptTargeting({
+      permanentKeys: permanents.map((p) => `${owner}-${p.index}`),
+      selectedKeys: sacrificeSelection.map((idx) => `${owner}-${idx}`),
+      onPermanent: (_targetSeat, idx) => {
+        const at = sacrificeSelection.indexOf(idx);
+        if (at >= 0) sacrificeSelection.splice(at, 1);
+        else if (sacrificeSelection.length < need) sacrificeSelection.push(idx);
+        refreshPromptSelection(state);
+      },
+      invalidHint: "That permanent can't be sacrificed.",
+    });
+  }
+
+  if (getOptionalPayInfo(state)) return null;
+  if (getLandTypeChoiceInfo(state)) return null;
+
+  // Black Vise / Jihad: "as this enters, choose an opponent [and a color]" — the
+  // opponent is chosen by clicking their pill (the color keeps its buttons).
+  const enterChoiceInfo = getEnterChoiceInfo(state);
+  if (enterChoiceInfo) {
+    return promptTargeting({
+      playerSeats: (enterChoiceInfo.opponents || []).map((opp) => Number(opp.seat)),
+      onPlayer: (targetSeat) => {
+        const payload = { seat, action: "enter_choice_confirm", target_seat: targetSeat };
+        if (enterChoiceInfo.needs_color) {
+          payload.mana_color = enterChoiceSelectedColor || enterChoiceInfo.default_color || "W";
+        }
+        enterChoiceSelectedColor = null;
+        submitPromptAction(payload);
+      },
+      invalidHint: "Choose one of the highlighted opponents.",
+    });
+  }
+
+  // Drop of Honey: which of the creatures tied for least power is destroyed.
+  const leastPowerChoiceInfo = getLeastPowerChoiceInfo(state);
+  if (leastPowerChoiceInfo) {
+    return promptTargeting({
+      permanentKeys: (leastPowerChoiceInfo.candidates || []).map((c) => `${c.seat}-${c.index}`),
+      onPermanent: (targetSeat, idx) =>
+        submitPromptAction({
+          seat,
+          action: "least_power_choice_confirm",
+          target_seat: targetSeat,
+          target_permanent_index: idx,
+        }),
+      invalidHint: "Only the creatures tied for least power can be chosen.",
+    });
+  }
+
+  if (getManaPaymentInfo(state)) return null;
+
+  // Kudzu: pick the land the Aura moves to.
+  const kudzuReattachInfo = getKudzuReattachInfo(state);
+  if (kudzuReattachInfo) {
+    return promptTargeting({
+      permanentKeys: (kudzuReattachInfo.lands || []).map((land) => `${seat}-${land.index}`),
+      onPermanent: (_targetSeat, idx) =>
+        submitPromptAction({ seat, action: "kudzu_reattach_confirm", target_permanent_index: idx }),
+      invalidHint: "Kudzu must be attached to one of your lands.",
+    });
+  }
+
+  return null;
+}
+
+// A cast or activation already choosing targets outranks a parked prompt (only
+// the upkeep-trigger prompt lets a spell get started while it waits), so its
+// targets stay the highlighted ones.
+function activePromptBoardTargeting(state = currentState) {
+  if (pendingCastTarget) return null;
+  return getPromptBoardTargeting(state);
+}
+
+// Seats whose name/life pill is a legal click right now — a board-targeting
+// prompt's players if one is open, otherwise the pending spell's.
+function validPlayerTargetSeats(state = currentState) {
+  const boardTargeting = activePromptBoardTargeting(state);
+  if (boardTargeting?.playerSeats.size) return boardTargeting.playerSeats;
+  return pendingCastTarget?.validPlayerSeats || null;
+}
+
+// ---------------------------------------------------------------------------
 // Free-For-All (3-4 player) target-seat helpers.
 //
 // Every 2-player call site keeps its original `1 - seat` shortcut untouched.
@@ -2567,45 +2820,26 @@ function applyOptionalTriggerPrompt(info) {
   body.textContent = promptText;
 
   // A target-bearing trigger (Vesuvan Doppelganger's upkeep re-copy, Erhnam
-  // Djinn's forestwalk grant) lists the legal creatures as buttons — picking one
-  // accepts the trigger with that target; plain triggers keep the simple Yes
-  // button. A mandatory trigger offers no decline: only the target buttons.
+  // Djinn's forestwalk grant) takes its target off the board: the legal
+  // creatures are highlighted and clicking one accepts the trigger with that
+  // target (see getPromptBoardTargeting). Plain triggers keep the simple Yes
+  // button. A mandatory trigger offers no decline — only the board click.
   const needsTarget = !!current?.needs_target;
   const validTargets = Array.isArray(current?.valid_targets) ? current.valid_targets : [];
-  const targetButtons = validTargets
-    .map(
-      (t, i) =>
-        `<button type="button" class="prompt-choice-btn optional-trigger-target-btn" data-ti="${i}">${escapeHtml(
-          t.name || "creature",
-        )} (${t.seat === seat ? "yours" : "opponent's"})</button>`,
-    )
-    .join("");
+  const hasBoardTargets = needsTarget && validTargets.length > 0;
   const yesBtn = `<button type="button" class="prompt-choice-btn" id="optionalTriggerYesBtn">Yes</button>`;
   const noBtn = `<button type="button" class="prompt-choice-btn" id="optionalTriggerNoBtn">No</button>`;
   steps.innerHTML = [
     `<div>Card: ${escapeHtml(cardName)}</div>`,
     `<div>Remaining decisions: ${pending.length}</div>`,
-    needsTarget && mandatory
-      ? `<div>Choose a target:</div><div class="prompt-choice-row">${targetButtons}</div>`
-      : needsTarget
-      ? `<div>Choose the creature to copy, or decline:</div><div class="prompt-choice-row">${targetButtons}</div><div class="prompt-choice-row">${noBtn}</div>`
+    hasBoardTargets && mandatory
+      ? `<div>Action: click a highlighted creature on the battlefield to choose it.</div>`
+      : hasBoardTargets
+      ? `<div>Action: click a highlighted creature on the battlefield to copy it, or decline.</div>` +
+        `<div class="prompt-choice-row">${noBtn}</div>`
       : `<div class="prompt-choice-row">${yesBtn}${noBtn}</div>`,
   ].join("");
 
-  for (const btn of steps.querySelectorAll(".optional-trigger-target-btn")) {
-    btn.addEventListener("click", async () => {
-      const t = validTargets[Number(btn.dataset.ti)];
-      if (!t) return;
-      await sendAction({
-        seat,
-        action: "resolve_optional_trigger",
-        card_name: cardName,
-        accept: true,
-        target_seat: t.seat,
-        target_permanent_index: t.index,
-      });
-    });
-  }
   const yesEl = document.getElementById("optionalTriggerYesBtn");
   const noEl = document.getElementById("optionalTriggerNoBtn");
   if (yesEl) {
@@ -2831,25 +3065,16 @@ function applyBalanceSelectPrompt(info) {
   customOkBtn.disabled = true;
 
   title.textContent = "Balance — Choose Sacrifices";
-  body.textContent = "Pick which of your permanents to sacrifice and cards to discard.";
+  // Permanents are picked on the board (highlighted lands/creatures), cards to
+  // discard by clicking them in hand — never from a list of names here.
+  body.textContent = "Click your highlighted lands and creatures to sacrifice them, and cards in your hand to discard.";
 
-  function section(label, kind, items, isHand) {
+  // Only the counts, never the card lists — the board and hand are the pickers.
+  function section(label, kind, where) {
     if (!need[kind]) return "";
-    const picked = balanceSelection[kind];
-    const rows = items
-      .map((item) => {
-        const idx = isHand ? items.indexOf(item) : item.index;
-        const selected = picked.includes(idx);
-        const name = item.name || "Card";
-        return (
-          `<button type="button" class="prompt-choice-btn${selected ? " selected" : ""}" ` +
-          `data-balance-kind="${kind}" data-balance-index="${idx}">${selected ? "✓ " : ""}${escapeHtml(name)}</button>`
-        );
-      })
-      .join("");
     return (
-      `<div>${escapeHtml(label)} — selected ${picked.length}/${need[kind]}</div>` +
-      `<div class="prompt-choice-row">${rows}</div>`
+      `<div>${escapeHtml(label)} — selected ${balanceSelection[kind].length}/${need[kind]} ` +
+      `(click ${escapeHtml(where)})</div>`
     );
   }
 
@@ -2859,23 +3084,11 @@ function applyBalanceSelectPrompt(info) {
     balanceSelection.hand.length === need.hand;
 
   steps.innerHTML = [
-    section(`Sacrifice ${need.lands} land(s)`, "lands", info.lands || [], false),
-    section(`Sacrifice ${need.creatures} creature(s)`, "creatures", info.creatures || [], false),
-    section(`Discard ${need.hand} card(s)`, "hand", info.hand || [], true),
+    section(`Sacrifice ${need.lands} land(s)`, "lands", "highlighted lands on the battlefield"),
+    section(`Sacrifice ${need.creatures} creature(s)`, "creatures", "highlighted creatures on the battlefield"),
+    section(`Discard ${need.hand} card(s)`, "hand", "cards in your hand"),
     `<div class="prompt-choice-row"><button type="button" class="prompt-choice-btn" id="balanceConfirmBtn"${ready ? "" : " disabled"}>Confirm</button></div>`,
   ].join("");
-
-  steps.querySelectorAll("[data-balance-index]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const kind = btn.dataset.balanceKind;
-      const idx = Number(btn.dataset.balanceIndex);
-      const picked = balanceSelection[kind];
-      const at = picked.indexOf(idx);
-      if (at >= 0) picked.splice(at, 1);
-      else if (picked.length < need[kind]) picked.push(idx);
-      applyBalanceSelectPrompt(info);
-    });
-  });
 
   const confirmBtn = document.getElementById("balanceConfirmBtn");
   if (confirmBtn) {
@@ -2891,6 +3104,18 @@ function applyBalanceSelectPrompt(info) {
       await sendAction(payload);
     });
   }
+}
+
+// A card in hand was clicked while Balance's prompt is open: toggle it in the
+// discard half of the plan (the sacrifice halves are toggled on the board).
+function toggleBalanceHandSelection(handIndex) {
+  const info = getBalanceSelectInfo();
+  if (!info) return;
+  const need = Number(info.cards_to_discard || 0);
+  const at = balanceSelection.hand.indexOf(handIndex);
+  if (at >= 0) balanceSelection.hand.splice(at, 1);
+  else if (balanceSelection.hand.length < need) balanceSelection.hand.push(handIndex);
+  refreshPromptSelection();
 }
 
 // Forced sacrifice (Lich: "sacrifice that many nontoken permanents"): the player
@@ -2922,35 +3147,13 @@ function applySacrificeSelectPrompt(info) {
   title.textContent = `${info.reason || "Sacrifice"} — Choose Sacrifices`;
   body.textContent = `Choose ${need} permanent(s) to sacrifice.`;
 
-  const rows = permanents
-    .map((p) => {
-      const selected = sacrificeSelection.includes(p.index);
-      const name = p.name || "Permanent";
-      return (
-        `<button type="button" class="prompt-choice-btn${selected ? " selected" : ""}" ` +
-        `data-sacrifice-index="${p.index}">${selected ? "✓ " : ""}${escapeHtml(name)}</button>`
-      );
-    })
-    .join("");
-
+  // Only the count, never the card list — the battlefield is the picker.
   const ready = sacrificeSelection.length === need;
   steps.innerHTML = [
     `<div>Selected ${sacrificeSelection.length}/${need}</div>`,
-    `<div class="prompt-choice-row">${rows}</div>`,
+    "<div>Action: click your highlighted permanents to select; click a selected one again to unselect it.</div>",
     `<div class="prompt-choice-row"><button type="button" class="prompt-choice-btn" id="sacrificeConfirmBtn"${ready ? "" : " disabled"}>Confirm</button></div>`,
   ].join("");
-
-  steps.querySelectorAll("[data-sacrifice-index]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const idx = Number(btn.dataset.sacrificeIndex);
-      const at = sacrificeSelection.indexOf(idx);
-      if (at >= 0) sacrificeSelection.splice(at, 1);
-      else if (sacrificeSelection.length < need) sacrificeSelection.push(idx);
-      applySacrificeSelectPrompt(info);
-      // Reflect the new picks as selected on the canvas immediately.
-      battlefieldCanvas?.setSelectedKeys(sacrificeSelection.map((i) => `${seat}-${i}`));
-    });
-  });
 
   const confirmBtn = document.getElementById("sacrificeConfirmBtn");
   if (confirmBtn) {
@@ -3056,28 +3259,20 @@ function applyOptionalUntapPrompt(info) {
 
   title.textContent = "Choose not to untap?";
   body.textContent = "These permanents may stay tapped this turn (e.g. Old Man of the Sea keeps control of its stolen creature while tapped).";
-  const buttons = (info.permanents || [])
-    .map((p) => {
-      const idx = Number(p.index);
-      const keep = optionalUntapKeepSelection.includes(idx);
-      const label = `${p.name}: ${keep ? "stays TAPPED" : "will untap"}`;
-      return `<button type="button" class="prompt-choice-btn" data-optional-untap="${idx}">${escapeHtml(label)}</button>`;
-    })
-    .join("");
+  // Toggled on the board: the eligible permanents are highlighted and the ones
+  // picked to stay tapped read back here, so no card list is needed.
+  const keeping = (info.permanents || []).filter((p) =>
+    optionalUntapKeepSelection.includes(Number(p.index)),
+  );
+  const keepLine = keeping.length
+    ? `Staying tapped: ${keeping.map((p) => p.name).join(", ")}`
+    : "Staying tapped: none — all of them will untap.";
   steps.innerHTML = [
-    `<div class="prompt-choice-column">${buttons}</div>`,
+    "<div>Action: click a highlighted permanent to keep it tapped; click it again to let it untap.</div>",
+    `<div><strong>${escapeHtml(keepLine)}</strong></div>`,
     `<div class="prompt-choice-row"><button type="button" class="prompt-choice-btn" data-optional-untap-confirm="1">Continue</button></div>`,
   ].join("");
 
-  steps.querySelectorAll("[data-optional-untap]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const idx = Number(btn.dataset.optionalUntap);
-      const at = optionalUntapKeepSelection.indexOf(idx);
-      if (at >= 0) optionalUntapKeepSelection.splice(at, 1);
-      else optionalUntapKeepSelection.push(idx);
-      applyOptionalUntapPrompt(info);
-    });
-  });
   steps.querySelector("[data-optional-untap-confirm]")?.addEventListener("click", async () => {
     const keep = [...optionalUntapKeepSelection];
     optionalUntapKeepSelection = [];
@@ -3106,33 +3301,10 @@ function applyOpponentDamagePrompt(info) {
 
   title.textContent = `Choose a target for ${info.card_name}`;
   body.textContent = `You choose any target for ${info.card_name}'s ${info.amount} damage.`;
-  const buttons = (info.valid_targets || [])
-    .map((t) => {
-      if (t.kind === "player") {
-        const name = currentState?.players?.[t.seat]?.name || `Seat ${t.seat}`;
-        return `<button type="button" class="prompt-choice-btn" data-opp-dmg-seat="${t.seat}">${escapeHtml(`Player: ${name}`)}</button>`;
-      }
-      if (t.kind === "permanent") {
-        return `<button type="button" class="prompt-choice-btn" data-opp-dmg-seat="${t.seat}" data-opp-dmg-index="${t.index}">${escapeHtml(t.name || "Creature")}</button>`;
-      }
-      return "";
-    })
-    .join("");
-  steps.innerHTML = `<div class="prompt-choice-column">${buttons}</div>`;
-
-  steps.querySelectorAll("[data-opp-dmg-seat]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const bodyAction = {
-        seat,
-        action: "opponent_damage_choose",
-        target_seat: Number(btn.dataset.oppDmgSeat),
-      };
-      if (btn.dataset.oppDmgIndex !== undefined) {
-        bodyAction.target_permanent_index = Number(btn.dataset.oppDmgIndex);
-      }
-      await sendAction(bodyAction);
-    });
-  });
+  // Picked on the board: creatures glow as targets, players' name/life pills
+  // glow gold (see getPromptBoardTargeting).
+  steps.innerHTML =
+    "<div>Action: click a highlighted creature on the battlefield, or a player's name/life pill.</div>";
 }
 
 // A replaced draw where the player picks one card from a revealed set: Aladdin's
@@ -3302,14 +3474,11 @@ function applyEnterChoicePrompt(info) {
         .join("") +
       `</div>`
     : "";
-  const seatButtons = (info.opponents || [])
-    .map(
-      (opp) =>
-        `<button type="button" class="prompt-choice-btn" data-enter-seat="${opp.seat}">` +
-        `${escapeHtml(opp.name || `Seat ${opp.seat}`)}</button>`
-    )
-    .join("");
-  steps.innerHTML = `${colorRow}<div class="prompt-choice-column">${seatButtons}</div>`;
+  // The opponent is chosen by clicking their (highlighted) name/life pill; only
+  // the color, which has no board representation, keeps its buttons.
+  steps.innerHTML =
+    `${colorRow}<div>Action: click a highlighted opponent's name or life pill` +
+    `${needsColor ? " (after picking a color above)" : ""}.</div>`;
 
   steps.querySelectorAll("[data-enter-color]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -3317,18 +3486,6 @@ function applyEnterChoicePrompt(info) {
       steps.querySelectorAll("[data-enter-color]").forEach((b) => {
         b.classList.toggle("selected", b.dataset.enterColor === enterChoiceSelectedColor);
       });
-    });
-  });
-  steps.querySelectorAll("[data-enter-seat]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const payload = {
-        seat,
-        action: "enter_choice_confirm",
-        target_seat: Number(btn.dataset.enterSeat),
-      };
-      if (needsColor) payload.mana_color = enterChoiceSelectedColor;
-      enterChoiceSelectedColor = null;
-      await sendAction(payload);
     });
   });
 }
@@ -3354,27 +3511,8 @@ function applyLeastPowerChoicePrompt(info) {
   const cardName = info.card_name || "Drop of Honey";
   title.textContent = "Choose a creature to destroy";
   body.textContent = `${cardName}: these creatures are tied for least power — choose which one is destroyed.`;
-  const buttons = (info.candidates || [])
-    .map((c) => {
-      const owner = currentState?.players?.[c.seat]?.name || `Seat ${c.seat}`;
-      return (
-        `<button type="button" class="prompt-choice-btn" data-least-seat="${c.seat}" data-least-index="${c.index}">` +
-        `${escapeHtml(c.name)} (${escapeHtml(owner)})</button>`
-      );
-    })
-    .join("");
-  steps.innerHTML = `<div class="prompt-choice-column">${buttons}</div>`;
-
-  steps.querySelectorAll("[data-least-seat]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      await sendAction({
-        seat,
-        action: "least_power_choice_confirm",
-        target_seat: Number(btn.dataset.leastSeat),
-        target_permanent_index: Number(btn.dataset.leastIndex),
-      });
-    });
-  });
+  // The tied creatures are highlighted on the battlefield; clicking one picks it.
+  steps.innerHTML = "<div>Action: click one of the highlighted creatures on the battlefield.</div>";
 }
 
 // Power Sink: "Counter target spell unless its controller pays {X}." The targeted
@@ -3449,24 +3587,8 @@ function applyKudzuReattachPrompt(info) {
 
   title.textContent = "Kudzu — choose a land";
   body.textContent = "Attach Kudzu to a land of your choice.";
-  const buttons = info.lands
-    .map(
-      (land) =>
-        `<button type="button" class="prompt-choice-btn" data-kudzu-land="${land.index}">` +
-        `${escapeHtml(land.name)}</button>`
-    )
-    .join("");
-  steps.innerHTML = `<div class="prompt-choice-column">${buttons}</div>`;
-
-  steps.querySelectorAll("[data-kudzu-land]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      await sendAction({
-        seat,
-        action: "kudzu_reattach_confirm",
-        target_permanent_index: Number(btn.dataset.kudzuLand),
-      });
-    });
-  });
+  // Your lands are highlighted on the battlefield; clicking one re-attaches Kudzu.
+  steps.innerHTML = "<div>Action: click one of your highlighted lands on the battlefield.</div>";
 }
 
 // Word of Command: "Look at target opponent's hand and choose a card; that player
@@ -6717,6 +6839,7 @@ function createCardElement(card, options = {}) {
     cleanupSelectable = false,
     mulliganBottomSelectable = false,
     discardSelectable = false,
+    balanceHandSelectable = false,
     selected = false,
     targetSeat = null,
     zoneKind = "",
@@ -6753,7 +6876,8 @@ function createCardElement(card, options = {}) {
   if (tapped) cardEl.classList.add("tapped");
   if (hidden) cardEl.classList.add("card-hidden");
   if (interactive) cardEl.classList.add("clickable");
-  if (cleanupSelectable || mulliganBottomSelectable || discardSelectable) cardEl.classList.add("cleanup-selectable", "clickable");
+  if (cleanupSelectable || mulliganBottomSelectable || discardSelectable || balanceHandSelectable)
+    cardEl.classList.add("cleanup-selectable", "clickable");
   if (selected) cardEl.classList.add("selected-card");
   if (playable && !selected) cardEl.classList.add("playable");
   if (zoneKind === "hand" && isPendingHandCastCard(card, handIndex)) cardEl.classList.add("casting-card");
@@ -6937,7 +7061,10 @@ function createCardElement(card, options = {}) {
     });
   }
 
-  if ((castOnClick || mulliganBottomSelectable || discardSelectable) && typeof card === "object") {
+  if (
+    (castOnClick || mulliganBottomSelectable || discardSelectable || balanceHandSelectable) &&
+    typeof card === "object"
+  ) {
     cardEl.classList.add("clickable");
     cardEl.addEventListener("click", async (event) => {
       event.preventDefault();
@@ -6985,6 +7112,11 @@ function createCardElement(card, options = {}) {
 
         if (discardSelectable) {
           await toggleDiscardSelection(handIndex);
+          return;
+        }
+
+        if (balanceHandSelectable) {
+          toggleBalanceHandSelection(handIndex);
           return;
         }
 
@@ -8736,7 +8868,7 @@ function renderFfaOpponentPanels(state, viewerSeat, oppSeat) {
       })
       .join("");
   }
-  const validPlayerSeats = pendingCastTarget?.validPlayerSeats;
+  const validPlayerSeats = validPlayerTargetSeats(state);
   for (const idx of extraSeats) {
     const p = players[idx] || {};
     const nameEl = q(`ffaName_${idx}`);
@@ -8814,6 +8946,15 @@ function renderBoard(state) {
   if (!requiresDiscardSelection && discardSelection.length) discardSelection = [];
   const mulliganBottomInfo = pregameInfo?.phase === "bottom_select" && pregameInfo.is_my_turn ? pregameInfo : null;
   const requiresMulliganBottomSelection = !!mulliganBottomInfo;
+  // Balance's discard half: its permanents are picked on the board, its cards to
+  // discard by clicking them in hand (the same picker as every other discard).
+  const balanceSelectInfo = getBalanceSelectInfo(state);
+  const requiresBalanceHandSelection = !!balanceSelectInfo && (balanceSelectInfo.cards_to_discard || 0) > 0;
+  // As with discardSelection: a plan left over from a previous Balance would
+  // mis-index this board and hand.
+  if (!balanceSelectInfo && (balanceSelection.lands.length || balanceSelection.creatures.length || balanceSelection.hand.length)) {
+    balanceSelection = { lands: [], creatures: [], hand: [] };
+  }
   const hasBlockingPrompt = hasBlockingPromptForAutoPass(state);
   const hasCombatDeclarationPrompt = combatPromptNeedsConfirmation(state);
   const untapInfo = getUntapLandSelectionInfo(state);
@@ -8834,7 +8975,8 @@ function renderBoard(state) {
   q("oppName").classList.toggle("opponent-turn-name", state.current_turn === oppSeat);
 
   renderHandFan("selfHand", me.hand, {
-    draggable: !requiresCleanupSelection && !requiresDiscardSelection && !isPregame,
+    draggable:
+      !requiresCleanupSelection && !requiresDiscardSelection && !requiresBalanceHandSelection && !isPregame,
     dragKind: "hand",
     zoneKind: "hand",
     castOnClick: !isPregame,
@@ -8842,8 +8984,11 @@ function renderBoard(state) {
     cleanupSelectable: requiresCleanupSelection,
     mulliganBottomSelectable: requiresMulliganBottomSelection,
     discardSelectable: requiresDiscardSelection,
+    balanceHandSelectable: requiresBalanceHandSelection,
     selectedHandIndices: requiresDiscardSelection
       ? discardSelection
+      : requiresBalanceHandSelection
+      ? balanceSelection.hand
       : cleanupDiscard?.selected_indices || mulliganBottomInfo?.selected_indices || [],
     playableHandIndices: me.playable_hand_indices || [],
   });
@@ -8883,13 +9028,14 @@ function renderBoard(state) {
         }
       }
     }
-    // Forced sacrifice (Lich): highlight every valid permanent as a target and
-    // mark the ones the player has picked so far as selected.
-    const sacrificeInfo = getSacrificeSelectInfo(state);
+    // A prompt that picks permanents off the board (forced sacrifice, Balance,
+    // Drop of Honey, …) highlights every legal permanent as a target and marks
+    // the ones picked so far as selected.
+    const boardTargeting = activePromptBoardTargeting(state);
     let targetingKeys = getTargetablePermanentKeysForPrompt();
-    if (sacrificeInfo) {
-      targetingKeys = (sacrificeInfo.permanents || []).map((p) => `${sacrificeInfo.player_seat}-${p.index}`);
-      for (const idx of sacrificeSelection) selfSelectedKeys.push(`${sacrificeInfo.player_seat}-${idx}`);
+    if (boardTargeting && boardTargeting.permanentKeys.size) {
+      targetingKeys = [...boardTargeting.permanentKeys];
+      selfSelectedKeys.push(...boardTargeting.selectedKeys);
     }
     // Constrained untap selection (Winter Orb / Smoke): highlight every
     // candidate so the player can see exactly which permanents may be untapped.
@@ -8914,9 +9060,10 @@ function renderBoard(state) {
     closeZoneReveal();
   }
 
-  // Highlight only the player faces the backend marked as legal targets for the
-  // pending spell/ability (each seat appears in validPlayerSeats or it doesn't).
-  const validPlayerSeats = pendingCastTarget?.validPlayerSeats;
+  // Highlight only the player faces that are legal right now — the seats the
+  // backend marked as targets for the pending spell/ability, or the seats an
+  // open player-choosing prompt offers.
+  const validPlayerSeats = validPlayerTargetSeats(state);
   const highlightSelfFace = !!(validPlayerSeats && validPlayerSeats.has(viewerSeat));
   const highlightOppFace = !!(validPlayerSeats && validPlayerSeats.has(oppSeat));
   q("selfLife")?.classList.toggle("targeting-valid", highlightSelfFace);
@@ -9585,22 +9732,19 @@ function initBattlefieldCanvas() {
           return;
         }
 
-        // Forced sacrifice (Lich): clicking a highlighted own permanent toggles it
-        // in the selection, mirroring the prompt panel's buttons.
-        const sacrificeInfo = getSacrificeSelectInfo(currentState);
-        if (sacrificeInfo && cardSeat === seat) {
-          const validIndices = new Set((sacrificeInfo.permanents || []).map((p) => p.index));
-          if (!validIndices.has(permanentIndex)) {
-            updateActionHint(`${card.name} can't be sacrificed.`, true);
+        // A prompt that picks permanents (forced sacrifice, Balance, Drop of
+        // Honey, Kudzu, an upkeep trigger's target, …) answers itself here:
+        // clicking a highlighted permanent submits or toggles that choice.
+        const boardTargeting = activePromptBoardTargeting(currentState);
+        if (boardTargeting && boardTargeting.permanentKeys.size) {
+          if (boardTargeting.permanentKeys.has(`${cardSeat}-${permanentIndex}`)) {
+            boardTargeting.onPermanent(cardSeat, permanentIndex);
             return;
           }
-          const need = Math.min(sacrificeInfo.count || 0, validIndices.size);
-          const at = sacrificeSelection.indexOf(permanentIndex);
-          if (at >= 0) sacrificeSelection.splice(at, 1);
-          else if (sacrificeSelection.length < need) sacrificeSelection.push(permanentIndex);
-          applySacrificeSelectPrompt(sacrificeInfo);
-          battlefieldCanvas?.setSelectedKeys(sacrificeSelection.map((i) => `${seat}-${i}`));
-          return;
+          if (!boardTargeting.fallThroughOnInvalid) {
+            updateActionHint(boardTargeting.invalidHint, true);
+            return;
+          }
         }
 
         // Attacker selection only owns the click while attackers are still being
@@ -10463,9 +10607,21 @@ q("joinBtn").addEventListener("click", async () => {
   }
 });
 
-// Free-For-All opponent panels are rebuilt (innerHTML) on every render, so use
-// one delegated listener on the container rather than rebinding per-panel.
-q("ffaOpponentPanels")?.addEventListener("click", (event) => {
+// A player's name/life pill was clicked. A prompt that chooses players (Cuombajj
+// Witches' damage, Black Vise's "choose an opponent") owns the click while it is
+// open; otherwise it aims the pending spell/ability at that player.
+function handlePlayerPillClick(targetSeat, event) {
+  if (!Number.isInteger(targetSeat)) return;
+  const boardTargeting = activePromptBoardTargeting();
+  if (boardTargeting && boardTargeting.playerSeats.size) {
+    event?.preventDefault();
+    if (!boardTargeting.playerSeats.has(targetSeat)) {
+      updateActionHint(boardTargeting.invalidHint, true);
+      return;
+    }
+    boardTargeting.onPlayer(targetSeat);
+    return;
+  }
   if (
     !pendingCastTarget ||
     (pendingCastTarget.targetKind !== "player" &&
@@ -10473,29 +10629,23 @@ q("ffaOpponentPanels")?.addEventListener("click", (event) => {
       pendingCastTarget.targetKind !== "divided")
   )
     return;
+  event?.preventDefault();
+  handlePlayerTargetClick(targetSeat);
+}
+
+// Free-For-All opponent panels are rebuilt (innerHTML) on every render, so use
+// one delegated listener on the container rather than rebinding per-panel.
+q("ffaOpponentPanels")?.addEventListener("click", (event) => {
   const panel = event.target instanceof Element ? event.target.closest("[data-target-seat]") : null;
   if (!panel) return;
-  const targetSeat = Number(panel.dataset.targetSeat);
-  if (!Number.isInteger(targetSeat)) return;
-  event.preventDefault();
-  handlePlayerTargetClick(targetSeat);
+  handlePlayerPillClick(Number(panel.dataset.targetSeat), event);
 });
 
 for (const elementId of ["selfName", "oppName", "selfLife", "oppLife"]) {
   q(elementId)?.addEventListener("click", (event) => {
-    if (
-      !pendingCastTarget ||
-      (pendingCastTarget.targetKind !== "player" &&
-        pendingCastTarget.targetKind !== "any" &&
-        pendingCastTarget.targetKind !== "divided")
-    )
-      return;
     const source = event.currentTarget;
     if (!(source instanceof HTMLElement)) return;
-    const targetSeat = Number(source.dataset.targetSeat);
-    if (!Number.isInteger(targetSeat)) return;
-    event.preventDefault();
-    handlePlayerTargetClick(targetSeat);
+    handlePlayerPillClick(Number(source.dataset.targetSeat), event);
   });
 }
 

@@ -200,7 +200,14 @@ class EffectsMixin:
             if self._is_indestructible(perm):
                 self.log.append(f"{perm.card.name} can't be destroyed (indestructible)")
                 return None  # type: ignore[return-value]
-            if not bypass_regeneration and perm.regeneration_shield > 0:
+            if (
+                not bypass_regeneration
+                and perm.regeneration_shield > 0
+                # Disintegrate / Hurr Jackal: the shield is still on the creature
+                # but does nothing while the "can't be regenerated" rider is up
+                # (CR 701.19c), same as the combat-damage path.
+                and not perm.metadata.get("cant_be_regenerated_this_turn")
+            ):
                 perm.regeneration_shield -= 1
                 perm.tapped = True
                 perm.damage_marked = 0

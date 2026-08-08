@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**182 / 566 tracked rules covered (32%)** — 600 tests, 0 unannotated.
+**182 / 566 tracked rules covered (32%)** — 602 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -755,7 +755,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **614.5** A replacement effect doesn’t invoke itself repeatedly; it gets only one opportunity to affect an ... *(3 tests)*
 - [x] **614.6** If an event is replaced, it never happens. A modified event occurs instead, which may in turn tri... *(4 tests)*
 - [x] **614.7** If a replacement effect would replace an event, but that event never happens, the replacement eff... *(3 tests, subrules a)*
-- [x] **614.8** Regeneration is a destruction-replacement effect. The word “instead” doesn’t appear on the card b... *(7 tests)*
+- [x] **614.8** Regeneration is a destruction-replacement effect. The word “instead” doesn’t appear on the card b... *(9 tests)*
 - [x] **614.9** Some effects replace damage dealt to one battle, creature, planeswalker, or player with the same ... *(2 tests)*
 - [x] **614.10** An effect that causes a player to skip an event, step, phase, or turn is a replacement effect. “S... *(4 tests, subrules a)*
 - [ ] **614.11** Some effects replace card draws. These effects are applied even if no cards could be drawn becaus...
@@ -817,7 +817,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **701.12** Exchange
 - [ ] **701.13** Exile
 - [ ] **701.18** Play
-- [x] **701.19** Regenerate *(10 tests, subrules a)*
+- [x] **701.19** Regenerate *(12 tests, subrules ac)*
 - [ ] **701.20** Reveal
 - [ ] **701.21** Sacrifice
 - [ ] **701.23** Search
