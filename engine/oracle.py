@@ -29,6 +29,7 @@ from .oracle_types import (
     _parse_number_token,
 )
 from .characteristic_defining import dynamic_pt_for
+from .auras import unclaimed_aura_lines
 from .combat_restrictions import combat_restriction_for
 from .static_bonuses import static_bonus_for
 from .grammar import ast as grammar_ast, compile_line as compile_grammar_line
@@ -925,6 +926,24 @@ def _compile_card_oracle(
         for coeffect in parse_static_coeffects(normalized_text):
             if coeffect.kind not in {i.kind for i in instructions}:
                 instructions.append(coeffect)
+
+        # An Aura used to be classified supported by the single whitelist
+        # substring "enchant creature", with nothing ever looking past the
+        # enchant clause — so an Aura whose effect the engine does not
+        # implement, or one with no effect line at all, entered play and did
+        # nothing while reporting support. Every effect line must be claimed
+        # (engine/auras.py) or the card is unsupported, with the offending line
+        # named.
+        aura_lines = [normalize_creature_line(line) for line in oracle_text.split("\n")]
+        if any(line.startswith("enchant ") for line in aura_lines):
+            unclaimed = unclaimed_aura_lines(aura_lines, name)
+            if unclaimed:
+                return OracleProgram(
+                    False,
+                    "unsupported",
+                    f"unimplemented aura effect: {unclaimed[0]}",
+                    normalized_text,
+                )
 
         instructions.extend(
             OracleInstruction("spell_pattern", pattern)

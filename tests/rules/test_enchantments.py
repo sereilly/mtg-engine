@@ -526,8 +526,15 @@ def test_303_4j_enchant_creature_aura_attaches_to_creature_not_land():
 @pytest.mark.cr("303.4j", "701.3a")
 def test_303_4j_enchant_land_aura_attaches_to_land_not_creature():
     """303.4j: 'Enchant land' Aura attaches to a land even when a creature is also present."""
+    # Real printed wording (Wild Growth). The invented phrasing this used to
+    # carry — "Enchanted land produces an additional {G} when tapped" — is not
+    # a template the engine implements; the card compiled as supported anyway
+    # because the substring "enchant land" was enough on its own, so the
+    # fixture asserted support that never existed. The subject here is
+    # attachment, not the effect.
     aura = _mk_card("Land Seeker", "Enchantment — Aura",
-                    "Enchant land\nEnchanted land produces an additional {G} when tapped.")
+                    "Enchant land\nWhenever enchanted land is tapped for mana, "
+                    "its controller adds an additional {G}.")
     creature = _mk_creature("Irrelevant Creature")
     land = _mk_card("Forest", "Basic Land — Forest")
     p1 = PlayerState(name="P1", hand=[aura])

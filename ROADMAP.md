@@ -699,6 +699,46 @@ specific noun is a template in disguise. Whether it fails as supported-but-wrong
 or as unsupported depends only on whether the gate and the dispatch were written
 with the same literal — which is why they must not be two lists.
 
+### The same hole, one card type wider: Auras
+
+The static-line gate is closed, but it had a bigger sibling. A single whitelist
+substring — `"enchant creature"` — was the *entire* support test for an Aura.
+Nothing ever looked past the enchant clause, so an Aura reading "Enchanted
+creature glimmers uncontrollably" compiled as supported, and so did one whose
+only line was the enchant clause itself. Forty-four Auras in the pool, none of
+whose support status had ever actually been checked.
+
+`engine/auras.py` names the effect lines the engine carries out, and the
+compiler now requires every effect line of an Aura to match one, reporting the
+offending line by name when it does not. All 369 cards remain supported; the
+pool was already correct, but nothing had verified that.
+
+Enumerating it produced the number the phase-6 work needs: **52 distinct effect
+lines across 44 Auras, every one appearing exactly once.** That is the
+signature of a mechanism that grows one branch per card, and it is why
+`_apply_aura_effect` is a 270-line text-reading if-chain. Roughly a third of
+those lines collapse into templates (the P/T modifications, the keyword grants,
+the protection cycle, the upkeep-damage family); the rest are genuinely
+single-card and are what the layer-owned rewrite has to absorb.
+
+Two things surfaced while building it, both worth keeping:
+
+- A test fixture asserted support it never had. `test_303_4j` used an invented
+  wording ("Enchanted land produces an additional {G} when tapped") where the
+  engine implements Wild Growth's real one. It passed only because "enchant
+  land" was sufficient on its own. The test's subject is attachment, so it now
+  uses the printed text and still tests what it meant to.
+- My first draft of the table claimed `protection from [a-z]+`, which matched
+  "protection from everything" — an over-broad entry of exactly the kind that
+  made "enchant creature" sufficient in the first place. Protection is
+  restricted to the five colours, because that is what the check behind it
+  implements.
+
+**Classification, not dispatch.** The behaviour still lives in the if-chain;
+this only makes the engine honest about what it can do. That distinction is the
+reason this was safe to land alongside parser work while the Aura rewrite
+itself stays a phase of its own.
+
 ### The static-ability cluster, and why it is a phase-6 job
 
 20 of the remaining lines fail with "static abilities need the CR 613 layers
