@@ -7,8 +7,18 @@ from ..events import emit
 from ..game_types import OracleExecutionContext, OracleStateMachine
 from ..handlers import EFFECT_HANDLERS
 from ..models import CardDefinition, Permanent, PlayerState
+from ..auras import attach_aura
 from ..oracle import OracleInstruction, _COLOR_WORD_TO_SYMBOL, compile_card_oracle
 from ..keywords import grant_keyword, remove_keyword
+
+
+# Attachment bookkeeping, not a granted characteristic. `aura_granted_meta` is
+# captured as "every key that appeared on the target while this Aura attached",
+# which sweeps up the attachment record itself — and popping `attached_auras`
+# on removal detached every *other* Aura too. The capture-anything heuristic is
+# the next thing phase 6 replaces with owned effects; until then it must at
+# least not eat its own bookkeeping.
+_ATTACHMENT_KEYS = frozenset({"attached_aura", "attached_auras"})
 
 
 class OracleInstructionsMixin:
@@ -209,8 +219,7 @@ class OracleInstructionsMixin:
                     revived_perm.metadata["owner_player_index"] = revived_owner_index
                 self._put_permanent_onto_battlefield(caster_index, revived_perm, None)
                 # Attach the Aura to the revived permanent (store references in metadata)
-                aura_permanent.metadata["attached_to"] = revived_perm
-                revived_perm.metadata["attached_aura"] = aura_permanent
+                attach_aura(aura_permanent, revived_perm)
                 # "When this Aura leaves the battlefield, that creature's
                 # controller sacrifices it." — honored by _remove_aura_effects.
                 if "that creature's controller sacrifices it" in text:
@@ -243,8 +252,6 @@ class OracleInstructionsMixin:
             # Snapshot the creature's pre-grant state so the continuous effects this
             # Aura grants can be reversed when the Aura leaves the battlefield
             # (CR 611.3 — a granted continuous effect ends when its source is gone).
-            _pre_power_bonus = target_creature.power_bonus
-            _pre_toughness_bonus = target_creature.toughness_bonus
             _pre_meta_keys = set(target_creature.metadata.keys())
 
             # Handle numeric static buffs/debuffs like "gets +2/+1" or "gets -2/-1".
@@ -252,15 +259,15 @@ class OracleInstructionsMixin:
             # ability (e.g. Firebreathing "{R}: ... +1/+0 until end of turn",
             # Blessing "{W}: ... +1/+1 until end of turn") and only apply when the
             # ability is activated — not when the Aura is attached.
-            buff_match = None
-            for _m in re.finditer(r"gets ([+-]\d+)/([+-]\d+)", text):
-                if text[_m.end():].lstrip().startswith("until end of turn"):
-                    continue
-                buff_match = _m
-                break
-            if buff_match:
-                target_creature.power_bonus += int(buff_match.group(1))
-                target_creature.toughness_bonus += int(buff_match.group(2))
+            # The grant is NOT applied here. It is derived from the Aura's own
+            # text every time characteristics are computed
+            # (auras.aura_static_pt_grant, collected by
+            # layer_bridge.collect_pt_effects at layer 7c with the Aura's
+            # attach timestamp). Adding it into the enchanted creature's
+            # power_bonus meant removal had to subtract a remembered delta —
+            # the shape that shipped the Aspect of Wolf compounding bug — and
+            # gave every Aura on the board the same derived timestamp instead
+            # of the moment it actually became attached (CR 613.7b).
 
             # Aspect of Wolf: "Enchanted creature gets +X/+Y, where X is half the
             # number of Forests you control (rounded down) and Y is half (rounded
@@ -328,8 +335,7 @@ class OracleInstructionsMixin:
                 self.log.append(f"{target_creature.card.name} can only be blocked by Walls")
 
             # Attach the aura to the creature
-            aura_permanent.metadata["attached_to"] = target_creature
-            target_creature.metadata["attached_aura"] = aura_permanent
+            attach_aura(aura_permanent, target_creature)
 
             # Lure: all creatures able to block this creature must do so
             if "all creatures able to block enchanted creature do so" in text:
@@ -361,18 +367,16 @@ class OracleInstructionsMixin:
                     aura_permanent.metadata["stolen_owner_index"] = self.players.index(target_player)
                     self.log.append(f"{aura_permanent.card.name} took control of {target_creature.card.name}")
 
-            # Record what continuous effects this Aura granted so they can be undone
-            # when the Aura leaves the battlefield (see _remove_aura_effects).
-            aura_permanent.metadata["aura_granted_power"] = (
-                target_creature.power_bonus - _pre_power_bonus
-            )
-            aura_permanent.metadata["aura_granted_toughness"] = (
-                target_creature.toughness_bonus - _pre_toughness_bonus
-            )
+            # P/T is no longer recorded here: it is derived from the Aura on
+            # every recompute, so removal has nothing to subtract. What remains
+            # are the metadata flags the if-chain above stamps directly
+            # (keyword grants, only_blockable_by_walls, lure_active, ...),
+            # which _remove_aura_effects still pops. Those are the next thing
+            # to become owned effects; see ROADMAP phase 6.
             aura_permanent.metadata["aura_granted_meta"] = [
                 key
                 for key in target_creature.metadata
-                if key not in _pre_meta_keys and key != "attached_aura"
+                if key not in _pre_meta_keys and key not in _ATTACHMENT_KEYS
             ]
 
         elif text.startswith("enchant land"):
@@ -386,8 +390,7 @@ class OracleInstructionsMixin:
             if target_land is None:
                 self.log.append(f"{aura_permanent.card.name} found no land target")
                 return
-            aura_permanent.metadata["attached_to"] = target_land
-            target_land.metadata["attached_aura"] = aura_permanent
+            attach_aura(aura_permanent, target_land)
             # Record every metadata key this Aura grants so _remove_aura_effects
             # undoes it when the Aura leaves (CR 611.3) — e.g. Phantasmal Terrain /
             # Evil Presence's land-type change reverts to the printed type.
@@ -433,8 +436,7 @@ class OracleInstructionsMixin:
                     None,
                 )
             if target_wall:
-                aura_permanent.metadata["attached_to"] = target_wall
-                target_wall.metadata["attached_aura"] = aura_permanent
+                attach_aura(aura_permanent, target_wall)
                 target_wall.metadata["can_attack_as_though_no_defender"] = True
                 # Record the granted flag so it is undone when the Aura leaves
                 # (CR 611.3 — the Wall stops being able to attack). Otherwise the
@@ -459,8 +461,7 @@ class OracleInstructionsMixin:
                 return
 
             # Attach metadata links
-            aura_permanent.metadata["attached_to"] = target_artifact
-            target_artifact.metadata["attached_aura"] = aura_permanent
+            attach_aura(aura_permanent, target_artifact)
 
             # Control effect: steal artifact to caster's battlefield (e.g. Steal Artifact)
             if "you control enchanted artifact" in text:
@@ -521,7 +522,5 @@ class OracleInstructionsMixin:
             if target_enchantment is None:
                 self.log.append(f"{aura_permanent.card.name} found no enchantment target")
                 return
-
-            aura_permanent.metadata["attached_to"] = target_enchantment
-            target_enchantment.metadata["attached_aura"] = aura_permanent
+            attach_aura(aura_permanent, target_enchantment)
             self.log.append(f"{aura_permanent.card.name} enchants {target_enchantment.card.name}")

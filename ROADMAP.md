@@ -797,6 +797,42 @@ implements it — never a new whitelist literal. That is the rule the remaining
 ~26k cards have to be onboarded under, and it is now enforced rather than
 described.
 
+### Phase 6, first slice: an Aura owns its P/T effect
+
+The Aura's static P/T grant is now *derived from the Aura's own text* on every
+recompute and collected at layer 7c with the timestamp of the moment it became
+attached, instead of being added once into the enchanted creature's
+`power_bonus` with the delta recorded and subtracted back on removal.
+
+Four things follow, and only the first was the stated goal:
+
+1. **Removal is dropping a contribution.** No remembered delta, so nothing can
+   fall out of step with what was added — the Aspect of Wolf compounding shape
+   is structurally gone for Auras, not just fixed once.
+2. **Each Aura gets a real timestamp** (CR 613.7b). Every Aura previously
+   shared `_DERIVED_TIMESTAMP = 0`, so two Auras had no order relative to each
+   other. Addition commutes, which is why that was invisible — and why it would
+   have stayed invisible right up until a layer-7c effect that does not commute
+   met it.
+3. **Counters and Aura grants are finally separable.** `power_bonus` holds
+   things that belong to the *creature*; an Aura no longer writes there at all.
+4. **Attachment is a list.** `attached_aura` was a single slot that a second
+   Aura silently overwrote. `attached_auras` is the authority now, and
+   `attach_aura`/`detach_aura` keep both directions in step so no caller has to
+   remember to.
+
+The bug this uncovered is the one worth remembering. `aura_granted_meta` is
+captured as "every key that appeared on the target while this Aura was
+attaching" — so it swept up the new `attached_auras` key, and removing one Aura
+popped the list, **detaching every other Aura on the creature**. A
+capture-anything heuristic will keep finding new things to eat; excluding the
+attachment keys is a patch, and the real fix is the rest of phase 6 turning
+those metadata flags into owned effects too.
+
+Still to do in this phase: keyword grants, `only_blockable_by_walls`,
+`lure_active` and the rest of the flags `_apply_aura_effect` stamps directly;
+then layers 1 (copies), 2 (control) and 3 (text-changing).
+
 ### The static-ability cluster, and why it is a phase-6 job
 
 20 of the remaining lines fail with "static abilities need the CR 613 layers

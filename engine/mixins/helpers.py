@@ -4,6 +4,7 @@ import re
 from typing import Iterator
 
 from ..card_hooks import ON_BECOMES_TAPPED, ON_LEAVE_BATTLEFIELD
+from ..auras import detach_aura
 from ..models import CardDefinition, Permanent, PlayerState
 from ..oracle import compile_card_oracle
 from ..replacements import apply_replacements
@@ -156,18 +157,18 @@ class GameHelpersMixin:
         self._refresh_dynamic_creatures()
 
     def _remove_aura_effects(self, aura: Permanent) -> None:
-        """Undo the continuous effects an Aura granted to the permanent it was
-        attached to (CR 611.3 — the effect ends when the Aura leaves). The grants
-        were recorded on the Aura by _apply_aura_effect."""
+        """End the continuous effects an Aura applied (CR 611.3).
+
+        The Aura's P/T contribution is *derived* while it is attached
+        (auras.aura_static_pt_grant via layer_bridge), so detaching it is the
+        whole removal — there is no delta to subtract. What is still undone
+        here are the metadata flags _apply_aura_effect stamps directly, plus
+        the linked one-shots (control theft, animation, Animate Dead's
+        sacrifice) that are not characteristics at all.
+        """
         attached = aura.metadata.get("attached_to")
         if attached is None:
             return
-        power_delta = int(aura.metadata.get("aura_granted_power", 0) or 0)
-        toughness_delta = int(aura.metadata.get("aura_granted_toughness", 0) or 0)
-        if power_delta:
-            attached.power_bonus -= power_delta
-        if toughness_delta:
-            attached.toughness_bonus -= toughness_delta
         for key in aura.metadata.get("aura_granted_meta", []) or []:
             attached.metadata.pop(key, None)
         # Animate Artifact (and similar) replaced the permanent's card with an
@@ -176,8 +177,7 @@ class GameHelpersMixin:
         pre_animate_card = attached.metadata.pop("pre_animate_card", None)
         if pre_animate_card is not None:
             attached.card = pre_animate_card
-        if attached.metadata.get("attached_aura") is aura:
-            attached.metadata.pop("attached_aura", None)
+        detach_aura(aura, attached)
         # Control effects (Control Magic, Steal Artifact) revert when the Aura leaves
         # — return the stolen permanent to its original controller (CR 611.3 / 805.4a).
         self._revert_stolen_permanent(aura)

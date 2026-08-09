@@ -17,6 +17,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import TYPE_CHECKING
 
+from .auras import aura_static_pt_grant, auras_attached_to
 from .continuous import (
     Characteristics,
     ContinuousEffect,
@@ -198,6 +199,25 @@ def collect_pt_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
             effects.append(
                 modify_pt(only, power, toughness, timestamp=_DERIVED_TIMESTAMP, label=label)
             )
+
+    # 7c — Auras. Derived from each attached Aura's own text on every
+    # recompute and stamped with the moment it became attached (CR 613.7b), so
+    # detaching one is simply ceasing to contribute: there is no remembered
+    # delta to subtract, and two Auras sort by when each started applying
+    # rather than sharing one derived timestamp.
+    for aura in auras_attached_to(perm):
+        grant = aura_static_pt_grant(aura.card.oracle_text)
+        if grant is None:
+            continue
+        effects.append(
+            modify_pt(
+                only,
+                grant[0],
+                grant[1],
+                timestamp=int(aura.metadata.get("aura_timestamp", _DERIVED_TIMESTAMP)),
+                label=f"aura:{aura.card.name}",
+            )
+        )
 
     # 7d — switch.
     if meta.get("pt_switched"):

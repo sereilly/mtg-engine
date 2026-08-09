@@ -9,6 +9,7 @@ from ..classifier import CardClassification, classify_card
 from ..game_types import OracleExecutionContext, OracleStateMachine, SimulationResult, StackItem
 from ..handlers._common import permanent_matches_filter
 from ..models import CardDefinition, Permanent, PlayerState
+from ..auras import attach_aura
 from ..oracle import OracleInstruction, _COLOR_WORD_TO_SYMBOL, compile_card_oracle, lex_oracle_text
 from ..oracle_types import x_spend_color_from_text
 from ._constants import _MANA_SYMBOLS
@@ -327,8 +328,7 @@ class StackCastingMixin:
         if new_land.card.primary_type != "land":
             return False
         aura = pending["aura"]
-        aura.metadata["attached_to"] = new_land
-        new_land.metadata["attached_aura"] = aura
+        attach_aura(aura, new_land)
         self.log.append(f"Kudzu attached to {new_land.card.name}")
         self.pending_kudzu_reattach = None
         return True

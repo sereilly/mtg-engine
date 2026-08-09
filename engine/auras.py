@@ -223,3 +223,91 @@ def unclaimed_aura_lines(normalized_lines: list[str], card_name: str = "") -> li
         and not line.startswith("enchant ")
         and aura_effect_claim(line, card_name) is None
     ]
+
+
+# ---------------------------------------------------------------------------
+# The static P/T an Aura grants, derived rather than remembered
+# ---------------------------------------------------------------------------
+
+# "Enchanted creature gets +2/+2." The grant is a property of the Aura's text,
+# so it can be recomputed from the Aura at any time. It used to be applied once
+# into the enchanted permanent's `power_bonus` with the delta recorded on the
+# Aura and subtracted again on removal (CR 611.3) — the shape that shipped the
+# Aspect of Wolf compounding bug.
+#
+# "+N/+N until end of turn" is deliberately excluded: that comes from an
+# *activated* ability the Aura grants (Firebreathing, Blessing) and applies when
+# the ability is activated, not while the Aura is attached.
+_STATIC_PT_GRANT = re.compile(r"gets ([+-]\d+)/([+-]\d+)(?! until end of turn)")
+
+
+def aura_static_pt_grant(oracle_text: str) -> tuple[int, int] | None:
+    """The permanent +P/+T an Aura grants while attached, or None.
+
+    Derived from the Aura's own text on every recompute, so detaching it is
+    simply ceasing to contribute — there is nothing to subtract, and nothing
+    that can drift out of step with what was added.
+    """
+    for match in _STATIC_PT_GRANT.finditer(" ".join(oracle_text.lower().split())):
+        tail = oracle_text.lower()[match.end():].lstrip()
+        if tail.startswith("until end of turn"):
+            continue
+        return int(match.group(1)), int(match.group(2))
+    return None
+
+
+def auras_attached_to(permanent) -> list:
+    """Every Aura currently attached to *permanent*, in attachment order.
+
+    ``attached_aura`` is a single slot that a second Aura overwrites, so it
+    cannot answer this: a creature can carry any number of Auras (CR 303.4).
+    The list is the authority; the slot is kept in step for the callers that
+    only ever want "an" Aura.
+    """
+    return list(permanent.metadata.get("attached_auras") or [])
+
+
+def attach_aura(aura, target) -> None:
+    """Attach *aura* to *target*, recording it as an owned continuous effect.
+
+    Stamps the Aura with a CR 613.7b timestamp at the moment it becomes
+    attached, so its contribution sorts against other effects by when it
+    started applying rather than sharing one derived timestamp with every other
+    Aura on the board.
+
+    Both directions are recorded here so no caller has to remember to keep them
+    in step: ``attached_to`` on the Aura, and both ``attached_auras`` (the list,
+    which is the authority) and ``attached_aura`` (the single slot kept for the
+    callers that only want "an" Aura) on the target.
+    """
+    from .continuous import next_timestamp
+
+    aura.metadata["attached_to"] = target
+    attached = list(target.metadata.get("attached_auras") or [])
+    if not any(existing is aura for existing in attached):
+        attached.append(aura)
+    target.metadata["attached_auras"] = attached
+    target.metadata["attached_aura"] = aura
+    aura.metadata.setdefault("aura_timestamp", next_timestamp())
+
+
+def detach_aura(aura, target) -> None:
+    """Stop *aura* applying to *target* (CR 611.3).
+
+    Dropping the Aura from the list is the whole removal: its P/T contribution
+    is recomputed from the Auras still attached, so there is no remembered
+    delta to subtract and nothing that can fall out of step with what was
+    added.
+    """
+    remaining = [
+        existing
+        for existing in (target.metadata.get("attached_auras") or [])
+        if existing is not aura
+    ]
+    if remaining:
+        target.metadata["attached_auras"] = remaining
+        target.metadata["attached_aura"] = remaining[-1]
+    else:
+        target.metadata.pop("attached_auras", None)
+        if target.metadata.get("attached_aura") is aura:
+            target.metadata.pop("attached_aura", None)

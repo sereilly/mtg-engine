@@ -43,6 +43,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable
 
+from .auras import attach_aura, detach_aura
+
 if TYPE_CHECKING:
     from .game import Game
     from .game_types import StackItem
@@ -123,8 +125,7 @@ def _consecrate_land_leaves(game: Game, owner: PlayerState, permanent: Permanent
         return
     land.metadata.pop("is_indestructible", None)
     land.metadata.pop("cant_be_enchanted_by_auras", None)
-    if land.metadata.get("attached_aura") is permanent:
-        land.metadata.pop("attached_aura", None)
+    detach_aura(permanent, land)
 
 
 def _gaeas_liege_leaves(game: Game, owner: PlayerState, permanent: Permanent) -> None:
@@ -391,7 +392,7 @@ def _kudzu_on_land_tapped(
     player.battlefield.pop(land_index)
     player.graveyard.append(land.card)
     aura.metadata.pop("attached_to", None)
-    land.metadata.pop("attached_aura", None)
+    detach_aura(aura, land)
     game.log.append(f"Kudzu destroyed {land.card.name}")
     new_land = None
     if (
@@ -411,8 +412,7 @@ def _kudzu_on_land_tapped(
     if new_land is None:
         new_land = next((p for p in player.battlefield if p.card.primary_type == "land"), None)
     if new_land is not None:
-        aura.metadata["attached_to"] = new_land
-        new_land.metadata["attached_aura"] = aura
+        attach_aura(aura, new_land)
         game.log.append(f"Kudzu attached to {new_land.card.name}")
 
 
