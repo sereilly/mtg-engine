@@ -118,13 +118,11 @@ SUPPORTED_SPELL_PATTERNS = (
     "becomes blue",
     "becomes green",
     "becomes white",
-    "attacking creatures you control get +1/+0",
     "prevent all combat damage that would be dealt this turn",
     "look at target player's hand",
     "draw a card",
     "add three mana of any one color",
     "at the beginning of your upkeep, sacrifice this enchantment unless you pay",
-    "untapped creatures you control get +0/+2",
     "whenever a player taps a land for mana, that player adds one mana of any type that land produced",
     "this artifact becomes a 3/6 golem artifact creature until end of combat",
     "create a 1/1 colorless insect artifact creature token with flying named wasp",
@@ -145,8 +143,6 @@ SUPPORTED_SPELL_PATTERNS = (
     "gain",
     "each player chooses a number of lands they control equal to the number of lands controlled by the player who controls the fewest",
     "the next time an unblocked creature of your choice would deal combat damage to you this turn, prevent all but 1 of that damage",
-    "all swamps are 1/1 black creatures that are still lands",
-    "all forests are 1/1 creatures that are still lands",
     "look at the top three cards of target player's library, then put them back in any order",
     "you may have that player shuffle",
     "change the text of target spell or permanent by replacing all instances of one basic land type with another",
@@ -163,7 +159,6 @@ SUPPORTED_SPELL_PATTERNS = (
     "discard your hand, ante the top card of your library, then draw seven cards",
     "you own target card in the ante. exchange that card with the top card of your library",
     "each player antes the top card of their library",
-    "you may have this enchantment enter as a copy of any artifact on the battlefield",
 )
 
 
@@ -855,7 +850,7 @@ def _derived_static_claims(oracle_text: str, normalized_text: str) -> list[str]:
     """
     from .cost_modifiers import cost_modifier_claims_line
     from .draw_step_modifiers import draw_step_bonus_for
-    from .enter_effects import NO_MAXIMUM_HAND_SIZE, SPEND_WHITE_AS_RED
+    from .enter_effects import enter_effect_line
     from .untap_restrictions import untap_restriction_for
 
     claims: list[str] = []
@@ -868,10 +863,11 @@ def _derived_static_claims(oracle_text: str, normalized_text: str) -> list[str]:
         for line in oracle_text.splitlines()
     ):
         claims.append("cost_modifiers")
-    if NO_MAXIMUM_HAND_SIZE in normalized_text:
-        claims.append("enter_effects.no_maximum_hand_size")
-    if SPEND_WHITE_AS_RED in normalized_text:
-        claims.append("enter_effects.spend_white_as_red")
+    # The whole entry-state registry, not two of its constants: every phrase in
+    # engine/enter_effects.py is implemented by _initialize_permanent_state, so
+    # naming a subset here is the same partial-list mistake one level down.
+    if any(enter_effect_line(line) for line in oracle_text.splitlines()):
+        claims.append("enter_effects")
     return claims
 
 

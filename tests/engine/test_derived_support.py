@@ -91,8 +91,12 @@ def test_real_cards_keep_their_support(artifact_card):
         "Winter Orb": "untap_restrictions",
         "Howling Mine": "draw_step_modifiers",
         "Gloom": "cost_modifiers",
-        "Library of Leng": "enter_effects.no_maximum_hand_size",
-        "Sunglasses of Urza": "enter_effects.spend_white_as_red",
+        # One claim for the whole entry-state registry: naming a subset of
+        # engine/enter_effects.py here would be the same partial-list mistake
+        # the derivation tables exist to remove.
+        "Library of Leng": "enter_effects",
+        "Sunglasses of Urza": "enter_effects",
+        "Copy Artifact": "enter_effects",
     }
     for name, table in expected.items():
         program = compile_card_oracle(catalog[name])
@@ -108,3 +112,44 @@ def test_text_no_table_claims_is_still_unsupported(artifact_card):
         artifact_card,
         "Creatures with toughness 4 or greater don't untap during their controllers' untap steps.",
     ).supported
+
+
+def test_no_permanent_is_supported_by_a_whitelist_substring_alone():
+    """The ratchet that keeps the whitelist from growing back.
+
+    ``spell_pattern`` is a marker recording that a substring matched. It
+    carries no behaviour, so a permanent whose *every* instruction is one — and
+    which has no ability either — is supported on the strength of a string
+    comparison and nothing else. That is how Shahrazad shipped as a no-op, and
+    how 44 Auras were classified without anyone checking their effects.
+
+    Instants and sorceries are covered by test_no_hollow_support.py (which
+    requires a registered handler); Auras by tests/rules/test_aura_support.py.
+    This is the remaining case: artifacts and non-Aura enchantments.
+
+    A new card failing here needs its behaviour claimed by the code that
+    implements it — a derivation table, a parse rule producing a real
+    instruction, or an entry-state phrase — not a new whitelist literal.
+    """
+    from engine.card_loader import load_catalog
+    from engine.oracle import compile_card_oracle
+
+    hollow = []
+    for card in load_catalog():
+        type_line = card.type_line.lower()
+        if any(t in type_line for t in ("instant", "sorcery", "creature", "land", "aura")):
+            continue
+        program = compile_card_oracle(card)
+        if not program.supported:
+            continue
+        if any(i.kind != "spell_pattern" for i in program.instructions):
+            continue
+        if any(a.supported for a in program.activated_abilities) or program.triggered_abilities:
+            continue
+        hollow.append((card.name, [f"{i.kind}:{i.value}" for i in program.instructions]))
+
+    assert not hollow, (
+        "permanent(s) supported only by a whitelist substring, with no "
+        "instruction, ability or rule table behind them:\n"
+        + "\n".join(f"  {name}: {kinds}" for name, kinds in sorted(hollow))
+    )

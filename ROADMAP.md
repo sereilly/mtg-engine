@@ -764,6 +764,39 @@ The table removed the duplication in the *dispatch* and left it in the *gate*,
 which is the same two-lists defect in a new place. When a behaviour moves to a
 table, the support check has to move with it.
 
+### Where the whitelist stands, and the ratchet holding it there
+
+Sweeping the same question across noncreature permanents took the count of
+cards "supported by a string comparison and nothing else" from **38 to 0**, and
+`SUPPORTED_SPELL_PATTERNS` from **88 literals to 75**.
+
+The last two removals were instructive in opposite directions:
+
+- Four literals (Castle, Kormus Bell, Living Lands, Orcish Oriflamme) merely
+  *restated* a parse rule that already produced a real instruction. Pure
+  redundancy — but redundancy in a support gate reads as coverage, so it hides
+  how much of the whitelist is actually load-bearing.
+- My own `_derived_static_claims` named **two constants** out of
+  `engine/enter_effects.py` rather than calling its `enter_effect_line`
+  registry. Every phrase in that module is implemented, so listing a subset was
+  the same partial-list mistake one level down — committed while fixing that
+  exact mistake a level up. Copy Artifact was the card it left behind.
+
+Three guards now cover the three shapes, and each was verified by reintroducing
+the bug it exists to catch:
+
+| Card kind | Guard | Requirement |
+|---|---|---|
+| Instant / sorcery | `test_no_hollow_support.py` | a registered `EFFECT_HANDLERS` entry |
+| Aura | `tests/rules/test_aura_support.py` | every effect line claimed by `engine/auras.py` |
+| Other permanents | `test_derived_support.py` | an instruction, an ability, or a rule table |
+| Creature static line | `test_static_line_support.py` | a derivation table or a named acknowledgement |
+
+A new card that fails one of these needs its behaviour claimed by the code that
+implements it — never a new whitelist literal. That is the rule the remaining
+~26k cards have to be onboarded under, and it is now enforced rather than
+described.
+
 ### The static-ability cluster, and why it is a phase-6 job
 
 20 of the remaining lines fail with "static abilities need the CR 613 layers
