@@ -51,9 +51,9 @@ class TestHelmOfChatzuk:
             target_player_index=1, target_permanent_index=0,
         )
         assert result.supported
-        assert their_creature.metadata.get("gains_banding_until_eot") is True
+        assert their_creature.has_keyword("banding") is True
         # The controller's own creature was NOT the one that gained banding.
-        assert not my_creature.metadata.get("gains_banding_until_eot")
+        assert not my_creature.has_keyword("banding")
         assert game._creature_has_banding(their_creature)
 
     def test_grants_banding_to_chosen_own_creature(self, cards):
@@ -66,8 +66,8 @@ class TestHelmOfChatzuk:
             0, "Helm of Chatzuk", permanent_index=0,
             target_player_index=0, target_permanent_index=2,
         )
-        assert ogre.metadata.get("gains_banding_until_eot") is True
-        assert not bear.metadata.get("gains_banding_until_eot")
+        assert ogre.has_keyword("banding") is True
+        assert not bear.has_keyword("banding")
 
 
 # ---------------------------------------------------------------------------

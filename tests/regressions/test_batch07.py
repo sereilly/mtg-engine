@@ -37,7 +37,7 @@ class TestFlight:
         )
 
         assert result.supported
-        assert bear.metadata.get("gains_flying") is True
+        assert bear.has_keyword("flying") is True
         # The bug: _has_keyword only consulted the until-eot flag, so combat never
         # saw the aura-granted flying.
         assert game._has_keyword(bear, "flying") is True

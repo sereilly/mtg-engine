@@ -6,12 +6,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **MTG Simulacrum** — a text-based **Magic: The Gathering rules engine** plus a
 FastAPI web app with a browser game UI. The card pool lives in `cards/` as one
-JSON per set: Limited Edition Alpha (`LEA_cards.json`, 290 cards), Limited
-Edition Beta (`LEB_cards.json`, 292 cards), Unlimited Edition
-(`2ED_cards.json`, 292 cards — same list as Beta), and Arabian Nights
-(`ARN_cards.json`, 78 cards), all classified as supported. The engine is
-**registry-based**: card support grows by adding small isolated entries, never
-by editing core control flow.
+JSON per set, registered in `cards/manifest.json` (the single source of truth
+for which sets ship): Limited Edition Alpha (290 cards), Limited Edition Beta
+(292), Unlimited Edition (292 — same list as Beta), and Arabian Nights (78),
+369 unique cards, all classified as supported. Card files hold only the fields
+the engine and web layer read; `scripts/ingest_set.py` produces them. The
+engine is **registry-based**: card support grows by adding small isolated
+entries, never by editing core control flow.
+
+`ROADMAP.md` tracks the work to scale from this pool to the full ~26,000-card
+release line — read it before parser or card-data work.
 
 ## Commands
 
@@ -55,7 +59,12 @@ python scripts/simulate_ai_games.py   # AI-vs-AI batch; deterministic per seed
 python scripts/support_report.py      # per-category card-support coverage
 python scripts/set_progress.py        # regenerate SET_PROGRESS.md (per-set implementation tracker); --refresh re-fetches Scryfall data
 python scripts/rules_progress.py      # regenerate RULES_PROGRESS.md (CR test-coverage tracker); --check fails on unannotated tests
+python scripts/behaviour_classes.py   # regenerate BEHAVIOUR_CLASSES.md (behavioural-equivalence tracker); --check fails on drift, --accept re-snapshots
 python scripts/parse_coverage.py      # regenerate PARSE_COVERAGE.md (oracle-text parse-coverage tracker); --check fails on unclaimed text
+python scripts/grammar_coverage.py    # regenerate GRAMMAR_COVERAGE.md (parser-migration ratchet); --check fails on regression, --accept re-snapshots floors
+python scripts/fetch_vocabulary.py    # re-fetch data/vocabulary/*.json from Scryfall (run when a new set adds creature/land types)
+python scripts/ingest_set.py 3ED --fetch   # add a new set: download from Scryfall into the engine's card format
+python scripts/ingest_set.py --all --check # report card-file sizes without writing
 ```
 
 **Parse coverage:** `scripts/parse_coverage.py` verifies that every sentence of
@@ -88,14 +97,35 @@ cards/*.json (set files) → card_loader.load_cards → CardDefinition (immutabl
   → Game mixins → EFFECT_HANDLERS[instruction.kind](game, instruction, context)  # O(1) dict dispatch
 ```
 
+**The parser is mid-migration.** `engine/grammar/` (tokenizer → recursive-descent
+grammar → typed AST → lowering) is progressively replacing the flat
+`engine/parsing/` rule registry. Both lower to the same `OracleInstruction`, and
+the compiler tries the grammar first per line, falling back to the legacy rules
+when the grammar refuses or its category isn't switched on yet. Read
+`ROADMAP.md` before doing parser work; coverage lives in `GRAMMAR_COVERAGE.md`.
+
 Extension points, each a small registered function — **adding a card means
 adding entries, not editing dispatch**:
 
-- `engine/parsing/` — `@parse_rule(order)` functions map a normalized oracle-text
-  clause to `(OracleInstruction, effect_kind)`. Organized by category
-  (damage, zones, destruction, combat, …). `engine/parsing/common.py` holds
-  shared helpers (number words, color-word scans, duration parsing, the
-  `parse_target_filter` noun-phrase parser) — reuse before writing a new regex.
+- `engine/grammar/` — the grammar front end. Adding a card pattern here means
+  adding a *production*, not a rule with a hand-picked precedence number.
+  Hard invariant: a production must consume **every token** of its line or
+  raise `GrammarError` — loud failure (card unsupported, clause named) is
+  always preferable to a silent partial match. Categories are switched on in
+  `GRAMMAR_CATEGORIES` only once
+  `tests/engine/test_grammar_differential.py` is green for them. Vocabulary
+  (creature types, keywords) is data in `data/vocabulary/`, refreshed by
+  `scripts/fetch_vocabulary.py` — never hardcode a type list.
+- `engine/parsing/` — legacy `@parse_rule(order)` functions mapping a normalized
+  oracle-text clause to `(OracleInstruction, effect_kind)`. Organized by category
+  (damage, zones, destruction, combat, …). Still the fallback for everything the
+  grammar hasn't taken over; being deleted category by category (roadmap phase 3
+  onward). Prefer extending the grammar over adding rules here.
+- `engine/handlers/control_flow.py` — `sequence`, `if_then`, `may`, `for_each`.
+  Effects compose through these instead of getting a fused instruction kind:
+  write "deal damage, then gain life" as two instructions in a `sequence`, never
+  as a new `deal_damage_and_gain_life`. Values pass between steps through
+  `OracleExecutionContext.results`.
 - `engine/handlers/` — `@effect_handler(kind)` functions mutate game state for one
   instruction kind. Registered into `EFFECT_HANDLERS`, dispatched by dict lookup.
   `engine/handlers/_common.py` holds shared helpers (target resolution, filter
@@ -105,9 +135,37 @@ adding entries, not editing dispatch**:
   direct metadata pokes; see "P/T channels" in `engine/ARCHITECTURE.md`.
 - `engine/replacements.py` — CR 614 "if X would happen, Y instead" interceptors,
   registered by event kind (`life_gain`, `damage_to_creature`, `would_die`).
+- `engine/replacement_choices.py` — for a replacement that is optional or offers
+  a choice: the interceptor offers a `ReplacementChoice` (seat, option labels,
+  default) instead of applying the effect, and a `@replacement_choice(kind)`
+  resolver finishes it. Interactive seats queue on
+  `game.pending_replacement_choices`; every other seat takes the default at
+  once, through that same resolver. Two registrations, no new `Game` field.
+- `engine/prevention.py` — CR 615 damage shields, `@prevention_effect(order)`
+  functions over one `{recipient, amount, source, combat}` event. `recipient` is
+  a player *or* a permanent, so a shield that applies to both is written once.
+  A new "prevent …" card is an entry here, never a branch in a damage path.
 - `engine/tokens.py` — `make_token_card(...)`, paired with the generic
   `create_token` instruction kind. A token-making card is one parse rule, never
   a bespoke handler.
+- `engine/targeting.py` — cast-time target kind derived from the *compiled
+  program* (Aura enchant line, instruction `type_filter`), replacing part of
+  `legality.py`'s text cascade. Returns None when the program lacks the
+  evidence, and `legality.py` falls back; a guard test holds the two to
+  agreement and ratchets how many cards still need the fallback.
+- `engine/cost_modifiers.py` — text-keyed cost taxes (CR 601.2f): "<colour>
+  spells cost {N} more to cast", "activated abilities of <colour> <type>s cost
+  {N} more to activate". Increases only; reduction should arrive with the card
+  that needs it, since it clamps at zero and there is nothing to verify against.
+- `engine/combat_restrictions.py` — text-keyed combat restrictions (CR 506):
+  "can't attack unless defending player controls a <land type>", "attacks each
+  combat if able", "can't be blocked by Walls". The land type is payload data,
+  not part of the instruction kind.
+- `engine/untap_restrictions.py`, `engine/draw_step_modifiers.py` — text-keyed
+  turn-step tables (CR 502/504): "players skip their untap steps", "creatures
+  with power N or greater don't untap", "that player draws an additional card".
+  Same model as `cast_restrictions.py` — derived from oracle text, so a card
+  printed with a known template needs no registration at all.
 - `engine/cast_restrictions.py` — text-keyed "cast this spell only during..."
   timing gates (an ordered predicate table; genuinely textual, not per-card).
 - `engine/card_hooks.py` — name-keyed registries for truly bespoke behavior
@@ -116,6 +174,10 @@ adding entries, not editing dispatch**:
   **This is the only sanctioned place to reference a card by name**; do not put
   card names anywhere else in the engine (a few single-card exceptions are
   marked `# TODO(card-hooks)` — migrate them if a second card needs the shape).
+- `engine/phases/upkeep_effects.py` — `@upkeep_effect(condition, kind)` handlers
+  for the interactive pay-or-consequence upkeep triggers, keyed by the
+  `(trigger condition, instruction kind)` pair the compiler produces. Everything
+  a handler reads arrives on `UpkeepContext`. A duplicate pair raises at import.
 - `engine/phases/` — one mixin per turn phase and per step within a phase
   (CR 500–514): beginning phase (untap/upkeep/draw steps), the two main phases,
   combat phase (its five steps), and the ending phase (end/cleanup steps). Each is
@@ -159,12 +221,13 @@ Work top-down, stop at the first step that covers it (recipe in
 4. Bespoke behavior → register a hook in `card_hooks.py` keyed by name (or a
    `cast_restrictions.py` entry for a textual timing gate).
 5. Add a focused test (per-card patterns: `tests/sets/test_lea_cards.py` for LEA,
-   `tests/sets/test_arabian_nights_cards.py` for ARN). Test fixtures keep the pools
-   separate: `all_cards`/`cards` are the LEA pool, `arn_cards`/`arn_by_name`
-   the ARN pool (see `tests/conftest.py` — a new set adds its path to
-   `card_paths` or gets its own fixtures). The comprehensive-cast sweep
-   (`test_all_lea_cards_resolve_without_exception`) parametrizes dynamically
-   over the LEA catalog, so new LEA cards are swept automatically.
+   `tests/sets/test_arabian_nights_cards.py` for ARN). Test fixtures keep the
+   per-set pools separate — `all_cards`/`cards` are the LEA pool,
+   `arn_cards`/`arn_by_name` the ARN pool — so name lookups stay unambiguous;
+   `catalog`/`catalog_by_name` are the whole manifest pool for anything
+   pool-wide (see `tests/conftest.py`). The comprehensive-cast sweep
+   (`test_every_catalog_card_resolves_without_exception`) parametrizes over the
+   whole manifest catalog, so a newly ingested set is swept automatically.
 
 Cards whose text falls outside recognized patterns degrade gracefully: classified
 unsupported with an explicit reason, never crashing simulation.
@@ -178,10 +241,13 @@ touching anything that consumes randomness.
 ## Web layer
 
 `web/app.py` is the FastAPI app (`/api/...` routes + static UI in `web/static/`).
-The card pool is `CARD_PATHS` (a list of set JSONs in printing order — today
-LEA, LEB, 2ED, ARN; reprints dedupe by name, first printing wins) loaded once
-into `CARD_CATALOG` at process startup —
-adding a set means appending its JSON path there. State lives in in-memory stores: `session_store.py`
+The card pool is `CARD_PATHS`, read from `cards/manifest.json` via
+`engine.card_loader.manifest_set_paths()` and loaded once into `CARD_CATALOG`
+at process startup. **Adding a set means ingesting it and appending one
+manifest entry** — the web app, the test fixtures, and the coverage scripts all
+read that one registry. Reprints dedupe to a single card by `oracle_id` (first
+printing wins) with every printing recorded in `CardDefinition.printings`.
+State lives in in-memory stores: `session_store.py`
 (games; takes the loaded catalog, not a path — never re-reads the JSON per
 session), `deck_store.py` (decks, incl. Moxfield import), `verification_store.py`.
 Game actions funnel through one endpoint, `POST /api/sessions/{id}/action`,
@@ -195,9 +261,18 @@ The board UI is **canvas-rendered** (`web/static/battlefield-canvas.js`).
 ## Card verification tracker
 
 `CARD_VERIFICATION.md` / `card_verification.json` track which cards have been
-manually validated in-game (currently the 290 LEA cards, all passing; ARN is
-not yet tracked). **Generated automatically** — results are
-edited via the in-game Debug Menu, not by hand.
+manually validated in-game (all 369 catalog cards, passing). **Generated
+automatically** — results are edited via the in-game Debug Menu, not by hand.
+
+A card is also reported `equivalent` when it is untested but a *passing* card
+shares its behaviour class: the engine resolves both through the same code
+paths, so a separate manual pass would exercise nothing new. That status is
+derived on read, never stored, so it can't be mistaken for a human check and it
+withdraws automatically if its peer is later marked failing.
+`engine/behaviour_signature.py` computes the classes and
+`scripts/behaviour_classes.py` regenerates `BEHAVIOUR_CLASSES.md`; `--check`
+fails when classes drift, because a signature that stops distinguishing two
+behaviours silently *raises* apparent coverage.
 `tests/regressions/test_card_verification_regressions.py` guards against regressions in
 verified cards.
 

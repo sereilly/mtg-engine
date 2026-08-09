@@ -67,9 +67,34 @@ def parse_modal_options(oracle_text: str) -> tuple[ModalOption, ...]:
         if not label:
             continue
         display = label.rstrip(".")
-        instr, kind = parse_primary_instruction(_normalize_mode_clause(label), activated=False)
+        # Grammar first, per mode — the same precedence the compiler uses for
+        # ordinary lines, so a mode's clause isn't stuck on the legacy rules
+        # just because it happens to sit behind a bullet.
+        instr, kind = _grammar_mode_instruction(label)
+        if instr is None:
+            instr, kind = parse_primary_instruction(
+                _normalize_mode_clause(label), activated=False
+            )
         options.append(ModalOption(display, instr, kind, instr is not None))
     return tuple(options)
+
+
+def _grammar_mode_instruction(label: str) -> tuple[OracleInstruction | None, str]:
+    """Parse one modal bullet through the grammar, or (None, "unsupported").
+
+    Imported lazily: engine.grammar is a sibling package and importing it at
+    module scope would make engine.parsing depend on it, which the migration
+    does not need in that direction.
+    """
+    from ..grammar import compile_line
+
+    compiled = compile_line(label)
+    if not compiled.usable:
+        return None, "unsupported"
+    instructions = compiled.instructions
+    if len(instructions) == 1:
+        return instructions[0], "spell_pattern"
+    return OracleInstruction("sequence", "", {"steps": instructions}), "spell_pattern"
 
 
 def parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleInstruction | None, str]:

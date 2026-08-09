@@ -493,7 +493,7 @@ def test_407_3_an_ante_card_cannot_be_brought_in_from_outside_the_game():
     )
     game = _game(p1, PlayerState(name="P2", library=_library(5)))
     game.outside_game_draw_replacements = {0}
-    game._draw_with_lamp(p1, 1)
+    game._draw_with_replacements(p1, 1)
     assert [c.name for c in p1.hand] == ["Black Lotus"]
     assert [c.name for c in p1.sideboard] == ["Contract from Below"]
 
@@ -508,7 +508,7 @@ def test_407_3_an_ante_game_may_bring_one_in_from_outside_the_game():
     game = _game(p1, PlayerState(name="P2", library=_library(5)))
     game.playing_for_ante = True
     game.outside_game_draw_replacements = {0}
-    game._draw_with_lamp(p1, 1)
+    game._draw_with_replacements(p1, 1)
     assert [c.name for c in p1.hand] == ["Contract from Below"]
 
 
@@ -524,7 +524,7 @@ def test_407_3_the_choice_offered_to_a_player_hides_the_ante_card():
     game = _game(p1, PlayerState(name="P2", library=_library(5)))
     game.interactive_seats = {0}
     game.outside_game_draw_replacements = {0}
-    game._draw_with_lamp(p1, 1)
+    game._draw_with_replacements(p1, 1)
     assert game.pending_outside_game_draw["card_names"] == ["Black Lotus", "Healing Salve"]
     assert game.confirm_outside_game_draw(0, 1) is True
     assert [c.name for c in p1.hand] == ["Healing Salve"]

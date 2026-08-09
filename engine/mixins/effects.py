@@ -4,10 +4,12 @@ import random
 import re
 
 from ..ante import is_ante_card
-from ..card_hooks import TOP_OF_LIBRARY_DISCARD_SOURCES, UNTAPPED_ARTIFACT_PROTECTORS
+from ..card_hooks import UNTAPPED_ARTIFACT_PROTECTORS
 from ..handlers._common import permanent_matches_filter, pick_target_permanent
 from ..models import CardDefinition, Permanent, PlayerState
-from ..replacements import apply_replacements
+from ..prevention import apply_prevention
+from ..replacement_choices import pending_choices_for, resolve_choice
+from ..replacements import TOP_OF_LIBRARY_DISCARD_TEXT, apply_replacements
 from ..oracle import OracleInstruction, compile_card_oracle, lex_oracle_text
 from ..trigger_utils import iter_triggered_abilities, make_trigger_event, matching_triggers
 
@@ -140,27 +142,36 @@ class EffectsMixin:
 
     def _controls_top_of_library_discard(self, player: PlayerState) -> bool:
         """Whether *player* controls a Library of Leng-style permanent that lets
-        them redirect a discard to the top of their library (CR 701.8e). The
-        single point of truth for the ``allow_top_of_library`` discard option;
-        source names live in card_hooks.TOP_OF_LIBRARY_DISCARD_SOURCES."""
-        return any(
-            perm.card.name in TOP_OF_LIBRARY_DISCARD_SOURCES for perm in player.battlefield
-        )
+        them redirect a discard to the top of their library (CR 701.9c).
+
+        Used by the *chosen*-discard flow, where the player picks which card to
+        discard and where it goes in one prompt, so the offer has to be known
+        before the discard happens. A forced discard instead routes through the
+        ``discard`` replacement in engine/replacements.py, which reads the same
+        text."""
+        return self._player_controls_text(player, TOP_OF_LIBRARY_DISCARD_TEXT)
 
     def _set_lockout_banning_card(self, card: CardDefinition) -> str | None:
         """City in a Bottle: whether some permanent's compiled
-        ``ban_and_sacrifice_set_permanents`` instruction bans *card* (its
-        ``raw["set"]`` matches the locked-out set code). Returns the banning
-        permanent's name, or None if unbanned. Shared by the cast/land-play
-        gate (queue_from_hand) and the battlefield-sacrifice state check
-        (game_ending.py)."""
-        card_set = str(card.raw.get("set", "")) if isinstance(card.raw, dict) else ""
+        ``ban_and_sacrifice_set_permanents`` instruction bans *card*. Returns
+        the banning permanent's name, or None if unbanned. Shared by the
+        cast/land-play gate (queue_from_hand) and the battlefield-sacrifice
+        state check (game_ending.py).
+
+        The card's *original* printing decides, not whichever set happened to
+        load first: "a name originally printed in Arabian Nights" still names
+        an Arabian Nights card once Revised reprints it.
+        """
+        card_set = card.original_printing.lower()
         if not card_set:
             return None
         for player in self.players:
             for perm in player.battlefield:
                 for instr in compile_card_oracle(perm.effective_card).instructions:
-                    if instr.kind == "ban_and_sacrifice_set_permanents" and instr.payload.get("set_code") == card_set:
+                    if (
+                        instr.kind == "ban_and_sacrifice_set_permanents"
+                        and str(instr.payload.get("set_code", "")).lower() == card_set
+                    ):
                         return perm.card.name
         return None
 
@@ -214,7 +225,7 @@ class EffectsMixin:
                 and not perm.metadata.get("cant_be_regenerated_this_turn")
             ):
                 perm.regeneration_shield -= 1
-                perm.tapped = True
+                self.become_tapped(perm)
                 perm.damage_marked = 0
                 self.log.append(f"{perm.card.name} regenerated")
                 return None  # type: ignore[return-value]
@@ -286,17 +297,6 @@ class EffectsMixin:
         chosen.regeneration_shield += 1
         return True
 
-    def _source_colors(self, source) -> tuple[str, ...]:
-        """Color symbols of a damage source — a Permanent (honoring a color
-        override), a CardDefinition (spell), or None."""
-        if source is None:
-            return ()
-        meta = getattr(source, "metadata", None)
-        if isinstance(meta, dict) and meta.get("color_override"):
-            return (str(meta["color_override"]),)
-        card = getattr(source, "card", source)
-        return tuple(getattr(card, "colors", ()) or ())
-
     def _match_chosen_damage_source(self, chosen_sources, source):
         """The entry of *chosen_sources* matching this damage's source, or None.
         A chosen permanent matches the dealing Permanent by identity; a chosen spell
@@ -310,77 +310,35 @@ class EffectsMixin:
                 return chosen
         return None
 
-    def _match_reverse_damage_source(self, target: PlayerState, source):
-        """The chosen Reverse Damage source matching this damage's source, or None."""
-        return self._match_chosen_damage_source(target.reverse_damage_sources, source)
+    def _prevent_damage(
+        self, target: PlayerState, damage: int, source=None, combat: bool = False
+    ) -> int:
+        """Run the prevention shields protecting *target* over an incoming damage
+        event (CR 615). Returns the unprevented remainder. Which shields exist
+        and in what order they apply lives in engine/prevention.py."""
+        return apply_prevention(
+            self,
+            {"recipient": target, "amount": damage, "source": source, "combat": combat},
+        )
 
-    def _clear_reverse_damage_badge(self, target: PlayerState) -> None:
-        # Drop the life-pill shield badge once no Reverse Damage shield remains.
-        if not target.reverse_damage_sources and target.reverse_damage_charges <= 0:
-            target.damage_prevention_source = None
-
-    def _prevent_damage(self, target: PlayerState, damage: int, source=None) -> int:
-        # Forcefield: prevent all but 1 of the next combat damage from the chosen
-        # unblocked attacker (source-specific, consumed once).
-        if damage > 1 and source is not None and source in target.forcefield_capped_sources:
-            target.forcefield_capped_sources.remove(source)
-            damage = 1
-        if damage > 1 and target.combat_damage_cap_one_charges > 0:
-            target.combat_damage_cap_one_charges -= 1
-            damage = 1
-        if damage <= 0:
-            return damage
-        # Reverse Damage: the next damage event from the chosen source ("a source of
-        # your choice") is fully prevented and the player gains that much life. A
-        # chosen source (permanent or spell) matches by identity; a generic charge
-        # (no source picked) shields the next event from any source. Consumed here.
-        matched = self._match_reverse_damage_source(target, source)
-        if matched is not None:
-            target.reverse_damage_sources.remove(matched)
-            self._clear_reverse_damage_badge(target)
-            self.log.append(f"Reverse Damage prevented {damage} damage to {target.name}")
-            self._gain_life(target, damage, source_name="Reverse Damage")
-            return 0
-        if target.reverse_damage_charges > 0:
-            target.reverse_damage_charges -= 1
-            self._clear_reverse_damage_badge(target)
-            self.log.append(f"Reverse Damage prevented {damage} damage to {target.name}")
-            self._gain_life(target, damage, source_name="Reverse Damage")
-            return 0
-        # Circle of Protection: a color-scoped shield prevents the whole next damage
-        # event from a source of that color ("prevent that damage").
-        if target.color_prevention_shields:
-            for color in self._source_colors(source):
-                if color in target.color_prevention_shields:
-                    target.color_prevention_shields.remove(color)
-                    if not target.color_prevention_shields:
-                        target.damage_prevention_color = None
-                        target.damage_prevention_source = None
-                    self.log.append(
-                        f"Circle of Protection prevented {damage} damage to {target.name} from a {color} source"
-                    )
-                    return 0
-        if target.damage_prevention_pool <= 0:
-            return damage
-        prevented = min(damage, target.damage_prevention_pool)
-        target.damage_prevention_pool -= prevented
-        if target.damage_prevention_pool <= 0:
-            target.damage_prevention_source = None
-        return damage - prevented
-
-    def _prevent_permanent_damage(self, permanent, damage: int) -> int:
-        """Reduce *damage* about to be dealt to a creature by its prevention pool
-        (Healing Salve prevention mode, Samite Healer, …). Returns the unprevented
-        remainder, consuming the shield as it goes."""
-        if damage <= 0 or permanent.damage_prevention_pool <= 0:
-            return max(0, damage)
-        prevented = min(damage, permanent.damage_prevention_pool)
-        permanent.damage_prevention_pool -= prevented
-        if permanent.damage_prevention_pool <= 0:
-            permanent.damage_prevention_source = None
-        if prevented > 0:
-            self.log.append(f"Prevented {prevented} damage to {permanent.card.name}")
-        return damage - prevented
+    def _prevent_permanent_damage(
+        self, permanent, damage: int, source=None, combat: bool = False
+    ) -> int:
+        """The same shields, protecting a creature rather than a player. The
+        player-only shields self-select out, so a creature is covered by the
+        numeric pool (CR 615.7) and the blanket combat shields."""
+        return max(
+            0,
+            apply_prevention(
+                self,
+                {
+                    "recipient": permanent,
+                    "amount": damage,
+                    "source": source,
+                    "combat": combat,
+                },
+            ),
+        )
 
     def _damage_source_matches(self, chosen, source) -> bool:
         """Whether an incoming damage *source* is the *chosen* one (Jade Monolith's
@@ -411,9 +369,13 @@ class EffectsMixin:
             self.log.append(f"{real.name} was turned face up")
             self._recalculate_lord_buffs()
 
-    def _mark_damage_on_permanent(self, permanent, amount: int, source=None) -> int:
-        """Mark *amount* damage on a creature after applying its prevention pool.
-        Returns the damage actually marked (0 if fully prevented)."""
+    def _mark_damage_on_permanent(
+        self, permanent, amount: int, source=None, combat: bool = False
+    ) -> int:
+        """Mark *amount* damage on a creature after applying its prevention
+        shields. Returns the damage actually marked (0 if fully prevented).
+        *combat* marks the event as combat damage so the blanket combat shields
+        (Fog, Ebony Horse) can see it."""
         # Illusionary Mask: turn a face-down creature face up when damage would
         # be dealt to it or it would deal damage (before prevention, CR 613/614).
         if amount > 0:
@@ -428,7 +390,7 @@ class EffectsMixin:
         if consumed:
             return 0
         amount = payload["amount"]
-        dealt = self._prevent_permanent_damage(permanent, amount)
+        dealt = self._prevent_permanent_damage(permanent, amount, source=source, combat=combat)
         if dealt > 0:
             permanent.damage_marked += dealt
         return dealt
@@ -526,36 +488,22 @@ class EffectsMixin:
     def _player_controls_text(self, player: PlayerState, phrase: str) -> bool:
         return any(phrase in perm.card.oracle_text.lower() for perm in player.battlefield)
 
-    def _draw_with_lamp(self, player: PlayerState, count: int) -> int:
-        """Draw ``count`` cards for *player*, applying an armed draw replacement
-        to the first draw (CR 614): Aladdin's Lamp's "look at the top X, draw one
-        of them, put the rest on the bottom in a random order", or Ring of
-        Ma'rûf's "put a card you own from outside the game into your hand". A
-        human chooser pauses on ``pending_lamp_draw`` /
-        ``pending_outside_game_draw`` (the rest of the draws resolve after the
-        choice); AI/headless play chooses deterministically."""
-        player_index = self.players.index(player)
-        if player_index in self.outside_game_draw_replacements and count > 0:
-            return self._draw_from_outside_the_game(player, player_index, count)
-        x = self.lamp_draw_replacements.get(player_index)
-        if not x or count <= 0:
+    def _draw_with_replacements(self, player: PlayerState, count: int) -> int:
+        """Draw ``count`` cards for *player*, letting an armed draw replacement
+        take the first of them (CR 614) — Aladdin's Lamp, Ring of Ma'rûf.
+
+        A replacement that needs the player to choose suspends the draw and
+        reports 0 drawn; the cards arrive when the choice is answered, along
+        with any draws queued behind it. Which replacements exist lives in
+        engine/replacements.py."""
+        if count <= 0:
             return player.draw(count)
-        self.lamp_draw_replacements.pop(player_index, None)
-        x = min(int(x), len(player.library))
-        if x <= 0:
-            return player.draw(count)
-        if player_index in self.interactive_seats:
-            self.pending_lamp_draw = {
-                "player_index": player_index,
-                "card_names": [c.name for c in player.library[:x]],
-                "remaining_draws": count - 1,
-            }
-            self.log.append(
-                f"{player.name} looks at the top {x} card(s) of their library (Aladdin's Lamp)"
-            )
-            return 0
-        drawn = self._finish_lamp_draw(player_index, 0, x)
-        return drawn + player.draw(count - 1)
+        consumed, payload = apply_replacements(
+            self, "draw", {"player": player, "count": count, "drawn": 0}
+        )
+        if consumed:
+            return int(payload["drawn"])
+        return player.draw(count)
 
     def _finish_lamp_draw(self, player_index: int, chosen_index: int, x: int) -> int:
         """Complete a lamp-replaced draw: the chosen card of the top ``x`` goes
@@ -575,43 +523,6 @@ class EffectsMixin:
             "on the bottom of their library in a random order"
         )
         return 1
-
-    def _draw_from_outside_the_game(self, player: PlayerState, player_index: int, count: int) -> int:
-        """Ring of Ma'rûf's replaced draw: the player puts a card they own from
-        outside the game (their sideboard) into their hand instead of drawing.
-
-        Returns 0 drawn cards — nothing is drawn from the library, so a
-        "draw a card"-triggered effect correctly sees no draw. With an empty
-        sideboard there is no card to take and the replacement is spent anyway
-        (CR 614.1: a replacement effect applies even when it does nothing).
-
-        CR 407.3: unless the game is played for ante, an ante card "can't be
-        brought into the game from outside the game", so those are not offered.
-        """
-        self.outside_game_draw_replacements.discard(player_index)
-        available = self._outside_game_choices(player_index)
-        if not available:
-            self.log.append(
-                f"{player.name} has no cards outside the game to take (Ring of Ma'rûf)"
-            )
-            player.draw(count - 1)
-            return 0
-        if player_index in self.interactive_seats:
-            self.pending_outside_game_draw = {
-                "player_index": player_index,
-                "card_names": [player.sideboard[i].name for i in available],
-                # Sideboard positions behind each offered name, so a choice made
-                # against the filtered list still pulls the right card.
-                "sideboard_indices": available,
-                "remaining_draws": count - 1,
-            }
-            self.log.append(
-                f"{player.name} looks through the cards they own from outside the game (Ring of Ma'rûf)"
-            )
-            return 0
-        self._finish_outside_game_draw(player_index, available[0])
-        player.draw(count - 1)
-        return 0
 
     def _outside_game_choices(self, player_index: int) -> list[int]:
         """Sideboard indices this player may bring into the game (CR 100.4).
@@ -633,69 +544,107 @@ class EffectsMixin:
             f"{player.name} put {card.name} into their hand from outside the game (Ring of Ma'rûf)"
         )
 
+    # ------------------------------------------------------------------
+    # Suspended replacement choices (engine/replacement_choices.py)
+    # ------------------------------------------------------------------
+
+    def resolve_replacement_choice(
+        self, player_index: int, option_index: int, kind: str | None = None
+    ) -> bool:
+        """Answer the oldest replacement choice queued for *player_index*
+        (optionally of one *kind*) with the chosen option.
+
+        Returns False when there is no such choice or the option is out of
+        range, so a stale or malformed client answer is rejected rather than
+        applied to whatever happens to be queued.
+        """
+        entry = next(
+            (
+                (i, choice)
+                for i, choice in enumerate(self.pending_replacement_choices)
+                if choice.player_index == player_index
+                and (kind is None or choice.kind == kind)
+            ),
+            None,
+        )
+        if entry is None:
+            return False
+        index, choice = entry
+        if not (0 <= option_index < len(choice.options)):
+            return False
+        self.pending_replacement_choices.pop(index)
+        resolve_choice(self, choice, option_index)
+        return True
+
+    def auto_resolve_pending_replacement_choices(self) -> None:
+        """Take the default on every queued choice (safety net for a seat that
+        stops being interactive, e.g. a human seat handed to the AI)."""
+        while self.pending_replacement_choices:
+            choice = self.pending_replacement_choices[0]
+            self.resolve_replacement_choice(
+                choice.player_index, choice.default_option, kind=choice.kind
+            )
+
+    # Compatibility views over the queue, in the shapes the web layer and its
+    # tests already read. The state itself is generic; these only name the three
+    # prompts it currently carries.
+
+    @property
+    def pending_lamp_draw(self) -> dict | None:
+        choices = pending_choices_for(self, "lamp_draw")
+        if not choices:
+            return None
+        choice = choices[0]
+        return {
+            "player_index": choice.player_index,
+            "card_names": list(choice.options),
+            "remaining_draws": choice.data.get("remaining_draws", 0),
+        }
+
+    @property
+    def pending_outside_game_draw(self) -> dict | None:
+        choices = pending_choices_for(self, "outside_game_draw")
+        if not choices:
+            return None
+        choice = choices[0]
+        return {
+            "player_index": choice.player_index,
+            "card_names": list(choice.options),
+            "sideboard_indices": choice.data.get("sideboard_indices"),
+            "remaining_draws": choice.data.get("remaining_draws", 0),
+        }
+
+    @property
+    def pending_leng_discards(self) -> list[dict]:
+        return [
+            {"player_index": choice.player_index, "card": choice.data["card"]}
+            for choice in pending_choices_for(self, "leng_discard")
+        ]
+
     def confirm_outside_game_draw(self, player_index: int, chosen_index: int) -> bool:
         """Resolve a pending Ring of Ma'rûf choice with the player's chosen card,
         then make any draws that were queued behind the replaced one."""
-        pending = self.pending_outside_game_draw
-        if pending is None or pending["player_index"] != player_index:
-            return False
-        if not (0 <= chosen_index < len(pending["card_names"])):
-            return False
-        self.pending_outside_game_draw = None
-        # The offered list can be a subset of the sideboard (CR 407.3 hides ante
-        # cards), so map the chosen offer back to its sideboard position.
-        indices = pending.get("sideboard_indices")
-        sideboard_index = indices[chosen_index] if indices else chosen_index
-        self._finish_outside_game_draw(player_index, sideboard_index)
-        remaining = int(pending.get("remaining_draws", 0))
-        if remaining > 0:
-            self.players[player_index].draw(remaining)
-        return True
+        return self.resolve_replacement_choice(
+            player_index, chosen_index, kind="outside_game_draw"
+        )
 
     def confirm_lamp_draw(self, player_index: int, chosen_index: int) -> bool:
         """Resolve a pending Aladdin's Lamp draw with the player's chosen card,
         then make any draws that were queued behind the replaced one."""
-        pending = self.pending_lamp_draw
-        if pending is None or pending["player_index"] != player_index:
-            return False
-        x = len(pending["card_names"])
-        if not (0 <= chosen_index < x):
-            return False
-        self.pending_lamp_draw = None
-        self._finish_lamp_draw(player_index, chosen_index, min(x, len(self.players[player_index].library)))
-        remaining = int(pending.get("remaining_draws", 0))
-        if remaining > 0:
-            self.players[player_index].draw(remaining)
-        return True
+        return self.resolve_replacement_choice(player_index, chosen_index, kind="lamp_draw")
 
     def _discard_card(self, player: PlayerState, card) -> None:
-        """Move a discarded card to the graveyard, or — if the player controls
-        Library of Leng — apply its optional CR 701.8e replacement. Use for
-        random/forced discards (combat damage, "discards X cards at random",
-        cleanup) where the player can't pick the card but Library of Leng still
-        lets them keep it. The replacement is optional ("you may"), so a human
-        controller gets a per-card prompt (pending_leng_discards, resolved by
-        confirm_leng_discard); AI/headless play takes the beneficial
-        top-of-library route inline.
+        """Move a discarded card to the graveyard, or let a discard replacement
+        take it instead (Library of Leng, CR 701.9c).
 
-        TODO(card-hooks): this is an interactive-prompt flow, not a plain
-        replacement effect, so it doesn't fit engine/replacements.py as-is;
-        migrate to a hook registry if a second interactive discard-replacement
-        card appears."""
-        if self._controls_top_of_library_discard(player):
-            player_index = self.players.index(player)
-            if player_index in self.interactive_seats:
-                self.pending_leng_discards.append({"player_index": player_index, "card": card})
-                self.log.append(
-                    f"{player.name} discarded {card.name} — Library of Leng: "
-                    "choose graveyard or top of library"
-                )
-                return
-            player.library.insert(0, card)
-            self.log.append(
-                f"{player.name} discarded {card.name} to the top of their library (Library of Leng)"
-            )
-        else:
+        Use for random/forced discards (combat damage, "discards X cards at
+        random", cleanup) where the player can't pick the card but a
+        replacement may still redirect it.
+        """
+        consumed, _ = apply_replacements(
+            self, "discard", {"player": player, "card": card}
+        )
+        if not consumed:
             player.graveyard.append(card)
 
     def _gain_life(self, target: PlayerState, amount: int, source_name: str | None = None) -> None:
@@ -727,8 +676,13 @@ class EffectsMixin:
         damage = self._prevent_damage(target, amount, source=source)
         if damage > 0:
             # CR 614 replacement (Ali from Cairo's life floor) adjusts how much
-            # of the damage actually reduces life.
-            _, payload = apply_replacements(self, "damage_to_player", {"player": target, "amount": damage})
+            # of the damage actually reduces life. The combat damage step runs
+            # this same pass at its own life-application site.
+            consumed, payload = apply_replacements(
+                self, "damage_to_player", {"player": target, "amount": damage}
+            )
+            if consumed:
+                return 0
             damage = payload["amount"]
             target.life -= damage
             self._on_player_dealt_damage(target, damage)

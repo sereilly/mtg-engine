@@ -21,6 +21,33 @@ def card_paths(lea_path) -> list[Path]:
 
 
 @pytest.fixture(scope="session")
+def all_set_paths() -> list[Path]:
+    """Every set JSON in printing order — the whole card pool, from
+    ``cards/manifest.json``.
+
+    Distinct from ``card_paths`` (LEA only), which the per-card test files want
+    so their name lookups stay unambiguous. Pool-wide guards (the grammar
+    differential and coverage ratchet) use this instead, so a new set is
+    covered by them the moment it is added to the manifest rather than when
+    someone remembers to widen a hardcoded list.
+    """
+    from engine.card_loader import manifest_set_paths
+
+    return manifest_set_paths()
+
+
+@pytest.fixture(scope="session")
+def catalog(all_set_paths):
+    """The whole deduped card pool, as the web app loads it."""
+    return load_cards(all_set_paths)
+
+
+@pytest.fixture(scope="session")
+def catalog_by_name(catalog):
+    return {card.name: card for card in catalog}
+
+
+@pytest.fixture(scope="session")
 def all_cards(card_paths):
     return load_cards(card_paths)
 

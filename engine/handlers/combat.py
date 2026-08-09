@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 from ._common import flip_coin, resolve_own_combatant, resolve_target_permanent
 from .registry import effect_handler
+from ..keywords import grant_keyword
 
 if TYPE_CHECKING:
     from ..game import Game
@@ -27,7 +28,7 @@ def coin_flip_remove_attacker_and_tap(game: Game, instruction: OracleInstruction
         return True, "resolved"
     game.combat_attackers.pop(idx, None)
     game.combat_bands = [band for band in game.combat_bands if idx not in band]
-    permanent.tapped = True
+    game.become_tapped(permanent)
     game.log.append(f"{context.card.name} lost the coin flip: removed from combat and tapped")
     return True, "resolved"
 
@@ -247,6 +248,6 @@ def grant_banding_to_target(game: Game, instruction: OracleInstruction, context:
     if target_creature is None:
         game.log.append("No valid creature target for banding effect")
         return False, "no valid creature target for banding effect"
-    target_creature.metadata["gains_banding_until_eot"] = True
+    grant_keyword(target_creature, "banding", until_eot=True)
     game.log.append(f"{target_creature.card.name} gains banding until end of turn")
     return True, "resolved"

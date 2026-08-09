@@ -63,6 +63,13 @@
   ]
  },
  {
+  "card": "Armageddon",
+  "clause": "destroy all lands",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Balance",
   "clause": "each player chooses a number of lands they control equal to the number of lands controlled by the player who controls the fewest, then sacrifices the rest",
   "ignored": [
@@ -90,21 +97,6 @@
    "player,",
    "where",
    "x"
-  ]
- },
- {
-  "card": "Blue Elemental Blast",
-  "clause": "destroy target red permanent",
-  "ignored": [
-   "permanent"
-  ]
- },
- {
-  "card": "Brass Man",
-  "clause": "you may pay {1}. if you do, untap this creature",
-  "ignored": [
-   "if",
-   "do,"
   ]
  },
  {
@@ -257,29 +249,6 @@
   ]
  },
  {
-  "card": "Crystal Rod",
-  "clause": "whenever a player casts a blue spell, you may pay {1}. if you do, you gain 1 life",
-  "ignored": [
-   "whenever",
-   "player",
-   "casts",
-   "blue",
-   "spell,",
-   "may",
-   "pay",
-   "{1}.",
-   "if",
-   "do,"
-  ]
- },
- {
-  "card": "Cuombajj Witches",
-  "clause": "this creature deals 1 damage to any target and 1 damage to any target of an opponent's choice",
-  "ignored": [
-   "creature"
-  ]
- },
- {
   "card": "Cursed Land",
   "clause": "at the beginning of the upkeep of enchanted land's controller, this aura deals 1 damage to that player",
   "ignored": [
@@ -323,34 +292,12 @@
   ]
  },
  {
-  "card": "Desert Twister",
-  "clause": "destroy target permanent",
-  "ignored": [
-   "permanent"
-  ]
- },
- {
   "card": "Dingus Egg",
   "clause": "this artifact deals 2 damage to that land's controller",
   "ignored": [
    "artifact",
    "land's",
    "controller"
-  ]
- },
- {
-  "card": "Disintegrate",
-  "clause": "disintegrate deals x damage to any target. if it's a creature, it can't be regenerated this turn, and if it would die this turn, exile it instead",
-  "ignored": [
-   "disintegrate",
-   "any",
-   "target.",
-   "if",
-   "it's",
-   "creature,",
-   "can't",
-   "be",
-   "regenerated"
   ]
  },
  {
@@ -429,15 +376,6 @@
   ]
  },
  {
-  "card": "Earthquake",
-  "clause": "earthquake deals x damage to each creature without flying and each player",
-  "ignored": [
-   "earthquake",
-   "each",
-   "player"
-  ]
- },
- {
   "card": "Eye for an Eye",
   "clause": "the next time a source of your choice would deal damage to you this turn, instead that source deals that much damage to you and eye for an eye deals that much damage to that source's controller",
   "ignored": [
@@ -455,17 +393,8 @@
  },
  {
   "card": "Farmstead",
-  "clause": "enchanted land has \"at the beginning of your upkeep, you may pay {w}{w}. if you do, you gain 1 life.\"",
+  "clause": "if you do, you gain 1 life.\"",
   "ignored": [
-   "enchanted",
-   "land",
-   "has",
-   "\"at",
-   "beginning",
-   "upkeep,",
-   "may",
-   "pay",
-   "{w}{w}.",
    "if",
    "do,"
   ]
@@ -506,6 +435,13 @@
    "any",
    "number",
    "targets"
+  ]
+ },
+ {
+  "card": "Flashfires",
+  "clause": "destroy all plains",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -563,12 +499,10 @@
   ]
  },
  {
-  "card": "Hurricane",
-  "clause": "hurricane deals x damage to each creature with flying and each player",
+  "card": "Icy Manipulator",
+  "clause": "tap target artifact, creature, or land",
   "ignored": [
-   "hurricane",
-   "each",
-   "player"
+   "or"
   ]
  },
  {
@@ -612,22 +546,6 @@
   ]
  },
  {
-  "card": "Iron Star",
-  "clause": "whenever a player casts a red spell, you may pay {1}. if you do, you gain 1 life",
-  "ignored": [
-   "whenever",
-   "player",
-   "casts",
-   "red",
-   "spell,",
-   "may",
-   "pay",
-   "{1}.",
-   "if",
-   "do,"
-  ]
- },
- {
   "card": "Island Fish Jasconius",
   "clause": "you may pay {u}{u}{u}. if you do, untap this creature",
   "ignored": [
@@ -648,22 +566,6 @@
    "may",
    "skip",
    "draw"
-  ]
- },
- {
-  "card": "Ivory Cup",
-  "clause": "whenever a player casts a white spell, you may pay {1}. if you do, you gain 1 life",
-  "ignored": [
-   "whenever",
-   "player",
-   "casts",
-   "white",
-   "spell,",
-   "may",
-   "pay",
-   "{1}.",
-   "if",
-   "do,"
   ]
  },
  {
@@ -699,13 +601,6 @@
   ]
  },
  {
-  "card": "Juzám Djinn",
-  "clause": "this creature deals 1 damage to you",
-  "ignored": [
-   "creature"
-  ]
- },
- {
   "card": "Karma",
   "clause": "this enchantment deals damage to that player equal to the number of swamps they control",
   "ignored": [
@@ -715,10 +610,11 @@
   ]
  },
  {
-  "card": "King Suleiman",
-  "clause": "destroy target djinn or efreet",
+  "card": "Lich",
+  "clause": "if you can't, you lose the game",
   "ignored": [
-   "or"
+   "if",
+   "can't,"
   ]
  },
  {
@@ -732,22 +628,6 @@
    "graveyard",
    "from",
    "battlefield,"
-  ]
- },
- {
-  "card": "Lich",
-  "clause": "whenever you're dealt damage, sacrifice that many nontoken permanents. if you can't, you lose the game",
-  "ignored": [
-   "whenever",
-   "you're",
-   "dealt",
-   "damage,",
-   "sacrifice",
-   "many",
-   "nontoken",
-   "permanents.",
-   "if",
-   "can't,"
   ]
  },
  {
@@ -784,14 +664,8 @@
  },
  {
   "card": "Living Artifact",
-  "clause": "you may remove a vitality counter from this aura. if you do, you gain 1 life",
+  "clause": "if you do, you gain 1 life",
   "ignored": [
-   "may",
-   "remove",
-   "vitality",
-   "counter",
-   "from",
-   "aura.",
    "if",
    "do,"
   ]
@@ -837,14 +711,6 @@
    "if",
    "artifact",
    "tapped,"
-  ]
- },
- {
-  "card": "Mana Vault",
-  "clause": "you may pay {4}. if you do, untap this artifact",
-  "ignored": [
-   "if",
-   "do,"
   ]
  },
  {
@@ -898,10 +764,10 @@
   ]
  },
  {
-  "card": "Northern Paladin",
-  "clause": "destroy target black permanent",
+  "card": "Nevinyrral's Disk",
+  "clause": "destroy all artifacts, creatures, and enchantments",
   "ignored": [
-   "permanent"
+   "all"
   ]
  },
  {
@@ -931,13 +797,6 @@
   ]
  },
  {
-  "card": "Orcish Artillery",
-  "clause": "this creature deals 2 damage to any target and 3 damage to you",
-  "ignored": [
-   "creature"
-  ]
- },
- {
   "card": "Oubliette",
   "clause": "target creature phases out until this enchantment leaves the battlefield",
   "ignored": [
@@ -959,13 +818,6 @@
   "clause": "if no creatures are on the battlefield, sacrifice this enchantment",
   "ignored": [
    "if",
-   "enchantment"
-  ]
- },
- {
-  "card": "Pestilence",
-  "clause": "this enchantment deals 1 damage to each creature and each player",
-  "ignored": [
    "enchantment"
   ]
  },
@@ -1018,14 +870,6 @@
   ]
  },
  {
-  "card": "Psionic Blast",
-  "clause": "psionic blast deals 4 damage to any target and 2 damage to you",
-  "ignored": [
-   "psionic",
-   "blast"
-  ]
- },
- {
   "card": "Psychic Venom",
   "clause": "this aura deals 2 damage to that land's controller",
   "ignored": [
@@ -1050,13 +894,6 @@
   "ignored": [
    "return",
    "target"
-  ]
- },
- {
-  "card": "Red Elemental Blast",
-  "clause": "destroy target blue permanent",
-  "ignored": [
-   "permanent"
   ]
  },
  {
@@ -1119,28 +956,20 @@
   ]
  },
  {
-  "card": "Sandstorm",
-  "clause": "sandstorm deals 1 damage to each attacking creature",
+  "card": "Shahrazad",
+  "clause": "each player who doesn't win the subgame loses half their life, rounded up",
   "ignored": [
-   "sandstorm"
-  ]
- },
- {
-  "card": "Serendib Efreet",
-  "clause": "this creature deals 1 damage to you",
-  "ignored": [
-   "creature"
+   "each",
+   "player",
+   "who",
+   "doesn't",
+   "win"
   ]
  },
  {
   "card": "Simulacrum",
-  "clause": "you gain life equal to the damage dealt to you this turn. simulacrum deals damage to target creature you control equal to the damage dealt to you this turn",
+  "clause": "simulacrum deals damage to target creature you control equal to the damage dealt to you this turn",
   "ignored": [
-   "gain",
-   "life",
-   "equal",
-   "damage",
-   "dealt",
    "simulacrum"
   ]
  },
@@ -1150,17 +979,6 @@
   "ignored": [
    "with",
    "another"
-  ]
- },
- {
-  "card": "Soul Net",
-  "clause": "you may pay {1}. if you do, you gain 1 life",
-  "ignored": [
-   "may",
-   "pay",
-   "{1}.",
-   "if",
-   "do,"
   ]
  },
  {
@@ -1174,19 +992,17 @@
   ]
  },
  {
-  "card": "Throne of Bone",
-  "clause": "whenever a player casts a black spell, you may pay {1}. if you do, you gain 1 life",
+  "card": "Tranquility",
+  "clause": "destroy all enchantments",
   "ignored": [
-   "whenever",
-   "player",
-   "casts",
-   "black",
-   "spell,",
-   "may",
-   "pay",
-   "{1}.",
-   "if",
-   "do,"
+   "all"
+  ]
+ },
+ {
+  "card": "Tsunami",
+  "clause": "destroy all islands",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -1198,13 +1014,6 @@
    "creature,",
    "or",
    "land"
-  ]
- },
- {
-  "card": "Verduran Enchantress",
-  "clause": "you may draw a card",
-  "ignored": [
-   "may"
   ]
  },
  {
@@ -1224,19 +1033,10 @@
   ]
  },
  {
-  "card": "Wooden Sphere",
-  "clause": "whenever a player casts a green spell, you may pay {1}. if you do, you gain 1 life",
+  "card": "Wrath of God",
+  "clause": "destroy all creatures. they can't be regenerated",
   "ignored": [
-   "whenever",
-   "player",
-   "casts",
-   "green",
-   "spell,",
-   "may",
-   "pay",
-   "{1}.",
-   "if",
-   "do,"
+   "all"
   ]
  }
 ]

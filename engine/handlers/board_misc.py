@@ -293,10 +293,7 @@ def change_target_land_type(game: Game, instruction: OracleInstruction, context:
 
 
 def _is_swamp(perm: Permanent) -> bool:
-    return (
-        "swamp" in perm.card.type_line.lower()
-        or perm.metadata.get("land_type_override") == "swamp"
-    )
+    return perm.has_type("swamp")
 
 
 @effect_handler("add_mire_counter_to_target_land")

@@ -567,7 +567,7 @@ class TestRingOfMaruf:
         game.queue_permanent_ability(0, ring_card.name)
         game.resolve_top_of_stack()
         # Draw two: the first is replaced, the second is a real draw.
-        game._draw_with_lamp(p1, 2)
+        game._draw_with_replacements(p1, 2)
         assert game.pending_outside_game_draw["remaining_draws"] == 1
         game.confirm_outside_game_draw(0, 0)
         assert [c.name for c in p1.hand] == ["Black Lotus", "Plains"]

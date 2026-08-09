@@ -334,7 +334,7 @@ def test_303_4e_ability_granted_by_aura_is_stamped_on_enchanted_object():
     game.cast_from_hand(0, "Wings Aura", target_player_index=1, target_permanent_index=0)
 
     enchanted_creature = p2.battlefield[0]
-    assert enchanted_creature.metadata.get("gains_flying") is True
+    assert enchanted_creature.has_keyword("flying") is True
 
 
 @pytest.mark.cr("303.4e")
@@ -349,7 +349,7 @@ def test_303_4e_first_strike_granted_to_enchanted_creature():
     game.cast_from_hand(0, "Strike Aura", target_player_index=1, target_permanent_index=0)
 
     enchanted_creature = p2.battlefield[0]
-    assert enchanted_creature.metadata.get("gains_first_strike") is True
+    assert enchanted_creature.has_keyword("first strike") is True
 
 
 # ---------------------------------------------------------------------------

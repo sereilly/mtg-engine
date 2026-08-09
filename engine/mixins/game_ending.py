@@ -91,9 +91,8 @@ class GameEndingMixin:
         # common case (no banner in play) leaves this empty and skips the sweep.
         banned_set_codes: set[str] = set()
         banner_perm_ids: set[int] = set()
-        for _player in self.players:
-            for _perm in _player.battlefield:
-                for _instr in compile_card_oracle(_perm.effective_card).instructions:
+        for _perm in self.all_permanents():
+            for _instr in compile_card_oracle(_perm.effective_card).instructions:
                     if _instr.kind == "ban_and_sacrifice_set_permanents":
                         code = _instr.payload.get("set_code")
                         if code is not None:
@@ -161,11 +160,7 @@ class GameEndingMixin:
                         instruction_kinds={"sacrifice_self"},
                     ), None) is not None
                     controls_island = any(
-                        p.card.primary_type == "land"
-                        and (
-                            "island" in p.card.type_line.lower()
-                            or p.metadata.get("land_type_override") == "island"
-                        )
+                        p.card.primary_type == "land" and p.has_type("island")
                         for p in player.battlefield
                     )
                     controls_any_land = any(p.card.primary_type == "land" for p in player.battlefield)
@@ -211,7 +206,9 @@ class GameEndingMixin:
                 for player in self.players:
                     survivors_cb: list[Permanent] = []
                     for perm in player.battlefield:
-                        card_set = str(perm.card.raw.get("set", "")) if isinstance(perm.card.raw, dict) else ""
+                        # The card's original printing, not whichever set loaded
+                        # first — see _set_lockout_banning_card.
+                        card_set = perm.card.original_printing.lower()
                         if (
                             id(perm) not in banner_perm_ids
                             and not perm.metadata.get("is_token")
@@ -228,17 +225,16 @@ class GameEndingMixin:
             # untaps OR the stolen creature's power exceeds its own (unlike
             # Aladdin's simpler "for as long as you control this creature"),
             # so it's checked continuously here rather than only on leave.
-            for player in self.players:
-                for perm in player.battlefield:
-                    if not perm.metadata.get("stolen_while_tapped_and_weaker"):
-                        continue
-                    stolen = perm.metadata.get("stolen_permanent")
-                    if stolen is None:
-                        continue
-                    if not perm.tapped or stolen.effective_power > perm.effective_power:
-                        self._revert_stolen_permanent(perm)
-                        perm.metadata.pop("stolen_while_tapped_and_weaker", None)
-                        changed = True
+            for perm in self.all_permanents():
+                if not perm.metadata.get("stolen_while_tapped_and_weaker"):
+                    continue
+                stolen = perm.metadata.get("stolen_permanent")
+                if stolen is None:
+                    continue
+                if not perm.tapped or stolen.effective_power > perm.effective_power:
+                    self._revert_stolen_permanent(perm)
+                    perm.metadata.pop("stolen_while_tapped_and_weaker", None)
+                    changed = True
 
             # Sandals of Abdallah: the artifact whose islandwalk target died
             # this turn is destroyed (flagged in _permanent_to_graveyard).
@@ -277,6 +273,54 @@ class GameEndingMixin:
                     on_destroy=_on_destroy_5f,
                 ):
                     changed = True
+
+            # 704.5g/h: creature with lethal damage marked (or any damage from a
+            # deathtouch source) is destroyed. Regeneration replaces that
+            # destruction (CR 701.19).
+            #
+            # This lives in the SBA loop rather than only in
+            # _destroy_marked_creatures(), which every damage-dealing effect had
+            # to remember to call by hand — nine call sites, and a tenth that
+            # forgot would leave a lethally damaged creature alive. Composed
+            # damage sequences make that failure mode much easier to hit, since
+            # a damage step no longer necessarily sits inside a handler that
+            # knows to run the sweep.
+            def _lethally_damaged(perm: Permanent) -> bool:
+                if not perm.is_creature:
+                    return False
+                if perm.effective_toughness <= 0:
+                    return False  # 704.5f above owns this case
+                if perm.damage_marked >= perm.effective_toughness:
+                    return True
+                return bool(
+                    perm.metadata.get("received_deathtouch") and perm.damage_marked > 0
+                )
+
+            def _regenerated(perm: Permanent) -> None:
+                # Clear the marked damage the shield replaced; leaving it marked
+                # would re-destroy the creature on the next pass of this loop.
+                perm.damage_marked = 0
+                perm.metadata.pop("received_deathtouch", None)
+
+            for player in self.players:
+                def _on_destroy_5g(perm: Permanent, player=player) -> None:
+                    self.log.append(f"{perm.card.name} died (704.5g: lethal damage)")
+                    self._trigger_aura_death_effects(perm, player)
+
+                if self._destroy_swept_permanents(
+                    player, _lethally_damaged,
+                    on_regenerate=_regenerated,
+                    on_destroy=_on_destroy_5g,
+                ):
+                    changed = True
+
+            # 704.5h is scoped to damage dealt "since the last time state-based
+            # actions were checked", so the marker is one-shot: anything still
+            # alive after the sweep (its damage was prevented down to nothing)
+            # must not carry the flag into a later, unrelated damage event.
+            for player in self.players:
+                for perm in player.battlefield:
+                    perm.metadata.pop("received_deathtouch", None)
 
             # 704.5i: planeswalker with 0 loyalty → graveyard
             def _zero_loyalty(perm: Permanent) -> bool:

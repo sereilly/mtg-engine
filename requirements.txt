@@ -1,0 +1,12 @@
+# Runtime and test dependencies for the engine and web app.
+# Pinned to the versions the workspace venv runs, so CI reproduces local results.
+# Install: python -m pip install -r requirements.txt
+
+fastapi==0.136.3
+starlette==1.1.0
+pydantic==2.13.4
+uvicorn==0.47.0
+
+# httpx backs fastapi.testclient.TestClient, which the web-layer tests use.
+httpx==0.28.1
+pytest==9.0.3

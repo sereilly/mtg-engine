@@ -27,8 +27,9 @@ from engine.ai_policy import (
     choose_search_library_index,
     legal_attackers,
 )
-from engine.card_loader import load_cards
+from engine.card_loader import load_cards, manifest_set_paths
 from engine.classifier import classify_card
+from engine.behaviour_signature import equivalent_peer, peers_by_card
 from engine.legality import cast_target_kind
 from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle
@@ -61,16 +62,14 @@ from .verification_store import VerificationStore
 
 
 ROOT = Path(__file__).resolve().parent.parent
-CARDS_PATH = ROOT / "cards" / "LEA_cards.json"
-BETA_PATH = ROOT / "cards" / "LEB_cards.json"
-UNLIMITED_PATH = ROOT / "cards" / "2ED_cards.json"
-ARABIAN_NIGHTS_PATH = ROOT / "cards" / "ARN_cards.json"
-# Every set JSON that makes up the card pool, in printing order. Adding a new
-# set is appending its JSON path here — CARD_CATALOG and every store below
-# derive from this one list, loaded once at process startup. Reprints dedupe
-# by name (first printing wins), so Beta/Unlimited contribute only their two
-# cards missing from Alpha.
-CARD_PATHS = [CARDS_PATH, BETA_PATH, UNLIMITED_PATH, ARABIAN_NIGHTS_PATH]
+# Every set JSON that makes up the card pool, in printing order, read from
+# cards/manifest.json — the single registry of which sets the engine ships.
+# Adding a set means ingesting it and appending one manifest entry, not editing
+# this list and the five other copies of it that used to exist. CARD_CATALOG and
+# every store below derive from it, loaded once at process startup. Reprints
+# dedupe to one card (first printing wins), so Beta/Unlimited contribute only
+# their two cards missing from Alpha.
+CARD_PATHS = manifest_set_paths()
 DECKS_DIR = ROOT / "decks"
 VERIFICATION_PATH = ROOT / "card_verification.json"
 VERIFICATION_MD_PATH = ROOT / "CARD_VERIFICATION.md"
@@ -80,6 +79,10 @@ CARD_BY_NAME = {card.name.casefold(): card for card in CARD_CATALOG}
 CARD_SEARCH_ORDER = sorted(CARD_CATALOG, key=lambda card: card.name)
 # Unique catalog card names in display order (some cards share a name across printings).
 CATALOG_CARD_NAMES = list(dict.fromkeys(card.name for card in CARD_SEARCH_ORDER))
+# Behavioural peers, computed once at startup like the catalog itself: it is a
+# pure function of the card pool, and recomputing it per request would compile
+# every card's oracle program again.
+BEHAVIOUR_PEERS = peers_by_card(CARD_CATALOG)
 
 app = FastAPI(title="MTG Simulacrum")
 deck_store = DeckStore(DECKS_DIR)
@@ -146,8 +149,6 @@ def _effective_keywords(perm: Permanent, game: Game) -> list[str]:
     keywords = [kw for kw in _DISPLAY_KEYWORDS if game._has_keyword(perm, kw)]
     if game._is_indestructible(perm):
         keywords.append("Indestructible")
-    if perm.metadata.get("loses_flying") or perm.metadata.get("loses_flying_until_eot"):
-        keywords = [kw for kw in keywords if kw.lower() != "flying"]
     # Protection is driven by the effective protected colors (CR 702.16) rather
     # than the printed keyword, so a quality granted by another card (e.g. White
     # Ward) shows up and is spelled out — "Protection from white".
@@ -2718,14 +2719,21 @@ def _auto_resolve_ai_pending_word_of_command(session: Session) -> None:
     game.confirm_word_of_command(pending["caster_index"], 0 if target.hand else -1)
 
 
-def _auto_resolve_ai_pending_leng_discards(session: Session) -> None:
-    """Safety net: pending Library of Leng choices are only armed for human
-    seats, but if a choosing seat is (now) AI-controlled, take the beneficial
-    top-of-library default."""
+def _auto_resolve_ai_pending_replacement_choices(session: Session) -> None:
+    """Safety net: a suspended replacement choice (Library of Leng's discard
+    destination, Aladdin's Lamp's revealed cards, Ring of Ma'rûf's outside-the-
+    game card) is only armed for human seats, but if a choosing seat is (now)
+    AI-controlled, take the choice's recorded default.
+
+    Generic over the queue, so every interactive replacement is covered by
+    construction — the lamp and Ring prompts previously had no safety net and
+    would have stalled a seat handed from a human to the AI."""
     game = session.game
-    for entry in list(game.pending_leng_discards):
-        if _seat_type(session, entry["player_index"]) == "ai":
-            game.confirm_leng_discard(entry["player_index"], True)
+    for choice in list(game.pending_replacement_choices):
+        if _seat_type(session, choice.player_index) == "ai":
+            game.resolve_replacement_choice(
+                choice.player_index, choice.default_option, kind=choice.kind
+            )
 
 
 def _auto_resolve_ai_pending(session: Session) -> None:
@@ -2742,7 +2750,7 @@ def _auto_resolve_ai_pending(session: Session) -> None:
     _auto_resolve_ai_pending_kudzu(session)
     _auto_resolve_ai_pending_face_down(session)
     _auto_resolve_ai_pending_word_of_command(session)
-    _auto_resolve_ai_pending_leng_discards(session)
+    _auto_resolve_ai_pending_replacement_choices(session)
 
 
 def _ai_step(session: Session) -> bool:
@@ -3577,13 +3585,30 @@ def get_card_catalog():
 
 
 def _verification_listing() -> tuple[list[dict], dict[str, int]]:
-    """Merge recorded results with the full catalog so every card is represented."""
+    """Merge recorded results with the full catalog so every card is represented.
+
+    An untested card whose behaviour class already contains a passing card is
+    reported as ``equivalent`` rather than ``untested``: the engine resolves it
+    through the same code paths, so a separate manual pass would exercise
+    nothing new (see engine/behaviour_signature.py).
+
+    This status is *derived*, never stored — ``card_verification.json`` holds
+    only what a human recorded. That keeps the two claims distinguishable, and
+    means the derivation follows its peer: if the peer is later marked failing,
+    everything resting on it stops counting as covered on the next read.
+    """
     results = verification_store.results()
+    verified = {name for name, entry in results.items() if entry.get("status") == "pass"}
     cards: list[dict] = []
-    counts = {"pass": 0, "fail": 0, "untested": 0}
+    counts = {"pass": 0, "fail": 0, "untested": 0, "equivalent": 0}
     for name in CATALOG_CARD_NAMES:
         entry = results.get(name)
         status = entry["status"] if entry else "untested"
+        peer = None
+        if status == "untested":
+            peer = equivalent_peer(name, BEHAVIOUR_PEERS, verified)
+            if peer is not None:
+                status = "equivalent"
         counts[status] = counts.get(status, 0) + 1
         cards.append(
             {
@@ -3591,6 +3616,7 @@ def _verification_listing() -> tuple[list[dict], dict[str, int]]:
                 "status": status,
                 "reason": entry.get("reason", "") if entry else "",
                 "updated_at": entry.get("updated_at") if entry else None,
+                "equivalent_to": peer,
             }
         )
     return cards, counts
@@ -3608,15 +3634,28 @@ def _write_verification_markdown() -> None:
         f"- Total cards: **{len(cards)}**",
         f"- Passed: **{counts['pass']}**",
         f"- Failed: **{counts['fail']}**",
+        f"- Equivalent to a passing card: **{counts['equivalent']}**",
         f"- Untested: **{counts['untested']}**",
         "",
-        "| Card | Status | Failure reason |",
+        "`equivalent` is derived, never recorded: the engine resolves that card "
+        "through the same code paths as the named peer, so a separate manual pass "
+        "would exercise nothing new. It is a weaker claim than a check — it "
+        "inherits the peer's correctness. See BEHAVIOUR_CLASSES.md.",
+        "",
+        "| Card | Status | Failure reason / equivalent to |",
         "| --- | --- | --- |",
     ]
-    badge = {"pass": "✅ pass", "fail": "❌ fail", "untested": "⬜ untested"}
+    badge = {
+        "pass": "✅ pass",
+        "fail": "❌ fail",
+        "untested": "⬜ untested",
+        "equivalent": "≡ equivalent",
+    }
     for card in cards:
-        reason = (card["reason"] or "").replace("|", "\\|").replace("\n", " ")
-        lines.append(f"| {card['card_name']} | {badge[card['status']]} | {reason} |")
+        note = (card["reason"] or "").replace("|", "\\|").replace("\n", " ")
+        if card["status"] == "equivalent":
+            note = f"same behaviour as {card['equivalent_to']}"
+        lines.append(f"| {card['card_name']} | {badge[card['status']]} | {note} |")
     VERIFICATION_MD_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 

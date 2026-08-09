@@ -6,6 +6,7 @@ import web.session_store as web_session_store
 
 from engine.models import CardDefinition, Permanent
 from web.app import app, store
+from tests.helpers import LEA_PATH
 
 
 client = TestClient(app)
@@ -1980,7 +1981,7 @@ def test_fork_serializes_copies_spell_flag_in_hand():
     flow; a plain counterspell does not."""
     from engine.card_loader import load_cards as _load
 
-    cards = {c.name: c for c in _load("cards/LEA_cards.json")}
+    cards = {c.name: c for c in _load(LEA_PATH)}
     created = client.post(
         "/api/sessions",
         json={"mode": "human_vs_human", "host_colors": 2, "guest_colors": 2, "seed": 51001},
@@ -2005,7 +2006,7 @@ def test_fork_copy_retargets_to_a_second_creature_via_http():
     from engine.card_loader import load_cards as _load
     from engine.models import Permanent
 
-    cards = {c.name: c for c in _load("cards/LEA_cards.json")}
+    cards = {c.name: c for c in _load(LEA_PATH)}
     created = client.post(
         "/api/sessions",
         json={"mode": "human_vs_human", "host_colors": 2, "guest_colors": 2, "seed": 51002},
@@ -2064,7 +2065,7 @@ def test_stack_items_expose_their_targets_for_hover_arrows():
     from engine.card_loader import load_cards as _load
     from engine.models import Permanent
 
-    cards = {c.name: c for c in _load("cards/LEA_cards.json")}
+    cards = {c.name: c for c in _load(LEA_PATH)}
     created = client.post(
         "/api/sessions",
         json={"mode": "human_vs_human", "host_colors": 2, "guest_colors": 2, "seed": 51099},

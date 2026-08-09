@@ -1,0 +1,29 @@
+{
+  "description": "Sets the engine ships, in printing order. The single registry of the card pool: the web app, test fixtures, and scripts all read this instead of keeping their own copies of the list. Add a set by ingesting it (scripts/ingest_set.py) and appending an entry here.",
+  "sets": [
+    {
+      "code": "LEA",
+      "name": "Limited Edition Alpha",
+      "released": "1993-08-05",
+      "file": "LEA_cards.json"
+    },
+    {
+      "code": "LEB",
+      "name": "Limited Edition Beta",
+      "released": "1993-10-01",
+      "file": "LEB_cards.json"
+    },
+    {
+      "code": "2ED",
+      "name": "Unlimited Edition",
+      "released": "1993-12-01",
+      "file": "2ED_cards.json"
+    },
+    {
+      "code": "ARN",
+      "name": "Arabian Nights",
+      "released": "1993-12-17",
+      "file": "ARN_cards.json"
+    }
+  ]
+}

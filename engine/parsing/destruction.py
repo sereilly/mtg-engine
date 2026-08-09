@@ -1,15 +1,25 @@
-"""Permanent destruction effects."""
+"""Permanent destruction effects.
+
+The generic destroy rules that used to live here — "destroy target <noun>",
+"destroy all creatures/enchantments/lands", "destroy all <basic land type>" —
+have been replaced by a single production in ``engine/grammar/parser.py``. They
+were the clearest illustration of what the flat registry cost: five rules whose
+relative precedence had to be hand-numbered so that the sweep forms outranked
+the targeted one, each re-deriving its own noun phrase. In the grammar the
+distinction falls out of the noun phrase's quantifier, and the lowered
+instructions are identical for every card in the pool.
+
+What remains is genuinely bespoke: effects whose destruction is bundled with
+something else, or whose target vocabulary the noun parser does not yet reach.
+"""
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
 from ..oracle_types import OracleInstruction, _instruction
 from .base import RuleResult, activated_kind, parse_rule
-from .common import cant_be_regenerated, parse_target_filter
-
-_DESTROY_LAND_TYPE_RE = re.compile(r"destroy all (plains|islands|swamps|mountains|forests)")
+from .common import cant_be_regenerated
 
 
 @parse_rule(51500)
@@ -29,16 +39,9 @@ def chaos_orb_flip(text: str, activated: bool) -> RuleResult:
     return None
 
 
-@parse_rule(53000)
-def destroy_all_artifacts_creatures_enchantments(text: str, activated: bool) -> RuleResult:
-    if "destroy all artifacts, creatures, and enchantments" in text:
-        return _instruction("destroy_all_artifacts_creatures_enchantments"), "spell_pattern"
-    return None
-
-
 # Abu Ja'far: "When this creature dies, destroy all creatures blocking or
-# blocked by it. They can't be regenerated." Must out-rank the generic
-# "destroy all creatures" rule below, which would otherwise sweep the board.
+# blocked by it. They can't be regenerated." The scope is defined by combat
+# relationship rather than a noun phrase, so it stays its own rule.
 @parse_rule(53500)
 def destroy_creatures_in_combat_with_source(text: str, activated: bool) -> RuleResult:
     if "destroy all creatures blocking or blocked by it" in text:
@@ -52,41 +55,8 @@ def destroy_creatures_in_combat_with_source(text: str, activated: bool) -> RuleR
     return None
 
 
-@parse_rule(54000)
-def destroy_all_creatures(text: str, activated: bool) -> RuleResult:
-    if "destroy all creatures" in text:
-        payload: dict[str, Any] = {"bypass_regeneration": True} if cant_be_regenerated(text) else {}
-        return OracleInstruction("destroy_all_creatures", "", payload), "spell_pattern"
-    return None
-
-
-@parse_rule(55000)
-def destroy_all_enchantments(text: str, activated: bool) -> RuleResult:
-    if "destroy all enchantments" in text:
-        return _instruction("destroy_all_enchantments"), "spell_pattern"
-    return None
-
-
-@parse_rule(56000)
-def destroy_all_lands(text: str, activated: bool) -> RuleResult:
-    if "destroy all lands" in text:
-        return _instruction("destroy_all_lands"), "spell_pattern"
-    return None
-
-
-# Destroy all of a specific land type (e.g., "Destroy all Plains.")
-@parse_rule(57000)
-def destroy_all_lands_of_type(text: str, activated: bool) -> RuleResult:
-    m = _DESTROY_LAND_TYPE_RE.search(text)
-    if m:
-        land = m.group(1)
-        return _instruction("destroy_all_lands_of_type", land_type=land), "spell_pattern"
-    return None
-
-
-# Pyramids mode 1: "Destroy target Aura attached to a land." Must out-rank the
-# generic destroy-target rule, whose noun parser would read "...a land" as a
-# land target.
+# Pyramids mode 1: "Destroy target Aura attached to a land." The restriction is
+# on what the Aura is attached to, which the noun parser has no vocabulary for.
 @parse_rule(60500)
 def destroy_target_aura_on_land(text: str, activated: bool) -> RuleResult:
     if "destroy target aura attached to a land" in text:
@@ -103,18 +73,3 @@ def shield_target_land_from_destruction(text: str, activated: bool) -> RuleResul
     if "the next time target land would be destroyed this turn, remove all damage marked on it instead" in text:
         return _instruction("shield_target_land_from_destruction"), activated_kind(activated, "prevent")
     return None
-
-
-@parse_rule(61000)
-def destroy_target(text: str, activated: bool) -> RuleResult:
-    if "destroy target" not in text:
-        return None
-    effect_kind = activated_kind(activated, "destroy")
-    # The noun phrase after "destroy target" — adjectives such as "tapped",
-    # "nonblack", or a subtype like "Wall" can sit between "target" and the
-    # actual type word. parse_target_filter owns that vocabulary.
-    clause = text.split("destroy target", 1)[1].split(".")[0]
-    destroy_payload = parse_target_filter(clause, text).to_payload()
-    if cant_be_regenerated(text):
-        destroy_payload["bypass_regeneration"] = True
-    return OracleInstruction("destroy_target_permanent", "", destroy_payload), effect_kind

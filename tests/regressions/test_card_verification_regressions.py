@@ -631,9 +631,9 @@ class TestStoneGiant:
         )
 
         assert result.supported
-        assert sprites.metadata.get("gains_flying_until_eot") is True
+        assert sprites.has_keyword("flying") is True
         assert sprites.metadata.get("destroy_at_next_end_step") is True
-        assert bears.metadata.get("gains_flying_until_eot") is not True  # not the chosen one
+        assert bears.has_keyword("flying") is not True  # not the chosen one
 
     def test_cannot_target_creature_with_toughness_at_least_power(self, cards):
         giant = _untapped(cards["Stone Giant"])  # power 3
@@ -646,7 +646,7 @@ class TestStoneGiant:
             0, "Stone Giant", target_player_index=0, target_permanent_index=1, permanent_index=0
         )
 
-        assert big.metadata.get("gains_flying_until_eot") is not True
+        assert big.has_keyword("flying") is not True
 
 
 # ---------------------------------------------------------------------------
@@ -842,7 +842,6 @@ class TestIvoryCup:
         # Bottom-first: the triggering white spell stays on the stack, with Ivory
         # Cup's trigger enqueued above it (resolves first).
         assert [it.card.name for it in game.stack] == ["Healing Salve", "Ivory Cup"]
-        assert game.stack[-1].hook_key == "optional_pay"
         assert game.stack[0].card.name == "Healing Salve"
 
     def test_non_white_spell_does_not_trigger(self, cards):

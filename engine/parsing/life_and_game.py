@@ -55,6 +55,20 @@ def game_is_draw(text: str, activated: bool) -> RuleResult:
     return None
 
 
+# Shahrazad: "Players play a Magic subgame, using their libraries as their
+# decks. Each player who doesn't win the subgame loses half their life, rounded
+# up." Subgames are out of scope, so the documented simplification is that the
+# caster is treated as the subgame's winner and everyone else pays the life.
+# Matched on the life clause specifically — the subgame sentence is what the
+# engine can't honour, and claiming it would be the silent-support bug this
+# rule exists to fix.
+@parse_rule(66500)
+def opponents_lose_half_life_subgame(text: str, activated: bool) -> RuleResult:
+    if "loses half their life, rounded up" in text and "subgame" in text:
+        return _instruction("opponents_lose_half_life"), "spell_pattern"
+    return None
+
+
 @parse_rule(67000)
 def target_loses_n_life(text: str, activated: bool) -> RuleResult:
     lose_life_match = _LOSE_LIFE_RE.search(text)

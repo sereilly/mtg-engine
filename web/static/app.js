@@ -6600,7 +6600,7 @@ async function refreshVerifyProgress() {
     if (!resp.ok) throw new Error("failed");
     const payload = await resp.json();
     const c = payload.counts || {};
-    el.textContent = `Verified ${c.pass || 0} passed, ${c.fail || 0} failed, ${c.untested || 0} untested (of ${payload.total || 0}).`;
+    el.textContent = `Verified ${c.pass || 0} passed, ${c.fail || 0} failed, ${c.equivalent || 0} equivalent, ${c.untested || 0} untested (of ${payload.total || 0}).`;
     el.classList.remove("error");
   } catch (e) {
     el.textContent = "Could not load verification progress.";
@@ -6698,7 +6698,9 @@ function renderTrackerList() {
   if (!listEl) return;
   const nameFilter = q("trackerFilter").value.trim().toLowerCase();
   const statusFilter = q("trackerStatusFilter").value;
-  const badge = { pass: "✅", fail: "❌", untested: "⬜" };
+  // "equivalent" is derived, not recorded: the card runs the same engine
+  // paths as a passing peer, so it needs no separate manual pass.
+  const badge = { pass: "✅", fail: "❌", untested: "⬜", equivalent: "≡" };
   listEl.innerHTML = "";
   const filtered = trackerCards.filter((card) => {
     if (statusFilter !== "all" && card.status !== statusFilter) return false;
@@ -6752,7 +6754,7 @@ async function openTrackerModal() {
     const payload = await resp.json();
     trackerCards = payload.cards || [];
     const c = payload.counts || {};
-    q("trackerSummary").textContent = `${c.pass || 0} passed · ${c.fail || 0} failed · ${c.untested || 0} untested · ${payload.total || 0} total`;
+    q("trackerSummary").textContent = `${c.pass || 0} passed · ${c.fail || 0} failed · ${c.equivalent || 0} equivalent · ${c.untested || 0} untested · ${payload.total || 0} total`;
     renderTrackerList();
   } catch (e) {
     q("trackerSummary").textContent = "Could not load the tracker.";

@@ -780,6 +780,70 @@ def test_ali_from_cairo_does_not_prevent_normal_damage(all_cards, arn_by_name):
     assert p1.life == 17
 
 
+def _combat_against(game: Game, attacker_indices: list[int]) -> None:
+    """Run a full combat with the given attackers and no blocks."""
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # beginning_of_combat
+    game.advance_combat_phase()  # declare_attackers
+    ok, msg = game.declare_attackers(0, attacker_indices)
+    assert ok, msg
+    game.advance_combat_phase()  # declare_blockers
+    game.declare_blockers(1, {})
+    game.advance_combat_phase()  # combat damage
+
+
+def test_ali_from_cairo_floors_combat_damage_at_one(all_cards, arn_by_name):
+    """The floor is not spell-only. Combat damage applies life loss on its own
+    path, which used to skip the replacement entirely and kill through Ali."""
+    from tests.helpers import _nosick
+
+    ali = arn_by_name["Ali from Cairo"]
+    ogre = _nosick(Permanent(card=_get(all_cards, "Hurloon Minotaur")))  # 2/3
+    p1 = PlayerState(name="P1", battlefield=[ogre], life=20)
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=ali)], life=1)
+    game = Game(players=[p1, p2])
+
+    _combat_against(game, [0])
+
+    assert p2.life == 1
+    assert p2.lost is False
+
+
+def test_ali_from_cairo_floors_combat_damage_from_several_attackers(all_cards, arn_by_name):
+    """Each attacker's damage is applied in turn, and once the life total is at
+    the floor the later ones take it no lower (CR 616.1f re-checks which
+    effects still apply after each one)."""
+    from tests.helpers import _nosick
+
+    ali = arn_by_name["Ali from Cairo"]
+    attackers = [
+        _nosick(Permanent(card=_get(all_cards, "Hurloon Minotaur"))) for _ in range(3)
+    ]
+    p1 = PlayerState(name="P1", battlefield=attackers, life=20)
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=ali)], life=3)
+    game = Game(players=[p1, p2])
+
+    _combat_against(game, [0, 1, 2])
+
+    assert p2.life == 1
+
+
+def test_combat_damage_kills_a_player_without_ali_from_cairo(all_cards):
+    """The control for the two tests above: the same combat is lethal when the
+    floor is absent, so they cannot pass by simply dealing no damage."""
+    from tests.helpers import _nosick
+
+    ogre = _nosick(Permanent(card=_get(all_cards, "Hurloon Minotaur")))  # 2/3
+    p1 = PlayerState(name="P1", battlefield=[ogre], life=20)
+    p2 = PlayerState(name="P2", life=1)
+    game = Game(players=[p1, p2])
+
+    _combat_against(game, [0])
+
+    assert p2.life == -1
+
+
 def test_ali_from_cairo_does_not_protect_opponent(all_cards, arn_by_name):
     ali = arn_by_name["Ali from Cairo"]
     bolt = _get(all_cards, "Lightning Bolt")
@@ -1683,3 +1747,50 @@ def test_metamorphosis_mana_spendable_only_on_creature_spells(arn_by_name, all_c
     assert result.supported
     assert any(p.card.name == "Grizzly Bears" for p in p1.battlefield)
     assert p1.creature_only_mana.get("G") == 3
+
+
+# ===========================================================================
+# Shahrazad — subgame simplification: the caster is treated as the winner
+# ===========================================================================
+
+def test_shahrazad_halves_opponent_life_rounded_up(arn_by_name):
+    """"Players play a Magic subgame... Each player who doesn't win the subgame
+    loses half their life, rounded up."
+
+    Subgames are out of scope, so the engine resolves the documented
+    simplification: the caster is the winner and everyone else pays. Before
+    this, the card matched the whitelist's bare "loses" pattern and resolved
+    as a no-op while reporting supported."""
+    p1 = PlayerState(name="P1", hand=[arn_by_name["Shahrazad"]], life=20)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Shahrazad", target_player_index=1)
+
+    assert result.supported
+    assert p2.life == 10
+    assert p1.life == 20, "the caster is treated as the subgame's winner"
+
+
+def test_shahrazad_rounds_the_loss_up(arn_by_name):
+    """Half of an odd life total rounds up: at 7 life the loss is 4, not 3."""
+    p1 = PlayerState(name="P1", hand=[arn_by_name["Shahrazad"]], life=20)
+    p2 = PlayerState(name="P2", life=7)
+    game = Game(players=[p1, p2])
+
+    game.cast_from_hand(0, "Shahrazad", target_player_index=1)
+
+    assert p2.life == 3
+
+
+def test_shahrazad_says_in_the_log_that_the_subgame_was_not_played(arn_by_name):
+    """A simplification a player can see is a different thing from a card that
+    quietly does nothing, so the log names it rather than reporting the effect
+    as though it were the printed card."""
+    p1 = PlayerState(name="P1", hand=[arn_by_name["Shahrazad"]], life=20)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+
+    game.cast_from_hand(0, "Shahrazad", target_player_index=1)
+
+    assert any("subgame not played" in line for line in game.log)

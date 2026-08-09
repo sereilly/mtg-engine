@@ -327,8 +327,8 @@ def test_flight_grants_flying(all_cards):
 
     creature_perm = p1.battlefield[0]
     assert (
-        creature_perm.metadata.get("gains_flying")
-        or creature_perm.metadata.get("gains_flying_until_eot")
+        creature_perm.has_keyword("flying")
+        or creature_perm.has_keyword("flying")
         or "Flying" in creature_perm.card.keywords
     )
 
@@ -991,7 +991,7 @@ def test_goblin_balloon_brigade_gains_flying_flag(all_cards):
     result = game.activate_permanent_ability(0, "Goblin Balloon Brigade", target_player_index=1)
 
     assert result.supported
-    assert p1.battlefield[0].metadata.get("gains_flying_until_eot") is True
+    assert p1.battlefield[0].has_keyword("flying") is True
 
 def test_clockwork_beast_enters_with_seven_plus_zero(all_cards):
     beast = _get(all_cards, "Clockwork Beast")
@@ -1946,7 +1946,7 @@ def test_helm_of_chatzuk_grants_banding_until_eot(all_cards):
     assert result.supported
     assert p1.battlefield[0].tapped is True
     # Banding is granted to the caster's own creature, not an opponent's
-    assert p1.battlefield[1].metadata.get("gains_banding_until_eot") is True
+    assert p1.battlefield[1].has_keyword("banding") is True
 
 def test_helm_of_chatzuk_requires_valid_creature_target(all_cards):
     helm = _get(all_cards, "Helm of Chatzuk")
@@ -2027,7 +2027,7 @@ def test_stone_giant_grants_temp_flying_and_delayed_destroy(all_cards):
 
     assert result.supported
     target = p1.battlefield[1]
-    assert target.metadata.get("gains_flying_until_eot") is True
+    assert target.has_keyword("flying") is True
     assert target.metadata.get("destroy_at_next_end_step") is True
 
 def test_clone_copies_existing_creature_stats_on_entry(all_cards):
@@ -3684,7 +3684,7 @@ def test_lance_grants_first_strike_to_enchanted_creature(all_cards):
     )
     assert result.supported
     enchanted = p1.battlefield[0]
-    assert enchanted.metadata.get("gains_first_strike") is True, \
+    assert enchanted.has_keyword("first strike") is True, \
         "Enchanted creature should have gains_first_strike=True in metadata"
 
 
@@ -3806,7 +3806,7 @@ def test_berserk_doubles_power_and_grants_trample(all_cards):
     target_perm = p2.battlefield[0]
     # power doubles: base 2 + bonus 2 = 4
     assert target_perm.effective_power == 4
-    assert target_perm.metadata.get("gains_trample_until_eot") is True
+    assert target_perm.has_keyword("trample") is True
 
 
 def test_birds_of_paradise_classifies_supported(all_cards):
@@ -4536,7 +4536,7 @@ def test_earthbind_damages_flying_creature_and_strips_flying(all_cards):
     assert result.supported
     creature_perm = p2.battlefield[0]
     assert creature_perm.damage_marked == 2
-    assert creature_perm.metadata.get("loses_flying") is True
+    assert creature_perm.has_keyword("flying") is False
 
 
 def test_earthbind_no_damage_on_non_flying_creature(all_cards):
@@ -4551,7 +4551,9 @@ def test_earthbind_no_damage_on_non_flying_creature(all_cards):
     assert result.supported
     creature_perm = p2.battlefield[0]
     assert creature_perm.damage_marked == 0
-    assert not creature_perm.metadata.get("loses_flying")
+    # Earthbind only acts on a flier; the creature is untouched and still has
+    # no flying to strip.
+    assert creature_perm.has_keyword("flying") is False
 
 
 
@@ -5054,7 +5056,7 @@ def test_jump_grants_flying_until_eot(all_cards):
     result = game.cast_from_hand(0, "Jump", target_player_index=1)
 
     assert result.supported
-    assert p2.battlefield[0].metadata.get("gains_flying_until_eot") is True
+    assert p2.battlefield[0].has_keyword("flying") is True
 
 
 def test_karma_deals_damage_based_on_swamps(all_cards):
@@ -8545,20 +8547,28 @@ SWEEP_EXCLUSIONS: set[str] = set()
 def pytest_generate_tests(metafunc):
     if "card_name" not in metafunc.fixturenames:
         return
-    if metafunc.function is not test_all_lea_cards_resolve_without_exception:
+    if metafunc.function is not test_every_catalog_card_resolves_without_exception:
         return
-    cards = load_cards("cards/LEA_cards.json")
-    names = [c.name for c in cards if c.name not in SWEEP_EXCLUSIONS]
+    # The whole manifest catalog, not just LEA. This used to read
+    # cards/LEA_cards.json directly, so Arabian Nights — 78 cards, tracked as a
+    # complete set — was never swept at all. Driving it from the manifest means
+    # a new set is covered the moment it is ingested.
+    from engine.card_loader import load_catalog
+
+    names = [c.name for c in load_catalog() if c.name not in SWEEP_EXCLUSIONS]
     metafunc.parametrize("card_name", names)
 
 
-def test_all_lea_cards_resolve_without_exception(all_cards, card_name):
-    """Every LEA card must resolve without throwing a Python exception.
-    This is a smoke-test â€” it does not check the effect in detail.
+def test_every_catalog_card_resolves_without_exception(all_cards, catalog_by_name, card_name):
+    """Every card in the pool must resolve without throwing a Python exception.
+
+    A smoke test: it does not check the effect in detail. The board it builds is
+    LEA scaffolding (basics, a Grizzly Bears, a Black Lotus, a Bad Moon), which
+    is deliberately generic — the card under test comes from the full catalog.
     """
     from engine.mixins.stack_casting import aura_enchant_noun, permanent_matches_enchant_noun
 
-    card = _get(all_cards, card_name)
+    card = catalog_by_name[card_name]
     island = _island(all_cards)
     plains = _plains(all_cards)
     swamp = _swamp(all_cards)

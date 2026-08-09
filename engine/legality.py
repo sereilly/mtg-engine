@@ -32,6 +32,7 @@ from .handlers._common import permanent_matches_filter
 from .models import CardDefinition, Permanent
 from .mixins.stack_casting import aura_enchant_noun
 from .oracle import compile_card_oracle, expand_modal_activated_lines
+from .targeting import derive_cast_target
 
 # An oracle line that begins with a mana/tap cost followed by a colon is an
 # activated ability ("{T}: ..."), not a cast-time effect. The cost may mix
@@ -303,7 +304,17 @@ def cast_target_kind(card: CardDefinition) -> str:
 
     Exposed for the web layer's stack serialization, which needs to know which
     zone an already-recorded target index points into — a reanimation spell's
-    ``target_permanent_index`` indexes a graveyard, not a battlefield."""
+    ``target_permanent_index`` indexes a graveyard, not a battlefield.
+
+    Answered from the *compiled program* wherever it carries the evidence
+    (engine/targeting.py), and only otherwise by the text cascade below. That is
+    the strangler seam for deleting this module: as lowering starts emitting
+    target specs, more cards route through the derivation and the cascade
+    shrinks. tests/engine/test_targeting.py holds the two to agreement.
+    """
+    derived = derive_cast_target(card, compile_card_oracle(card))
+    if derived is not None:
+        return derived
     return _classify_cast(card)["kind"]
 
 
@@ -644,9 +655,19 @@ class LegalityMixin:
         # Modal "Choose one —" spells choose a mode first; each mode carries its
         # own target spec (filled in by the web layer per mode), so report "modal"
         # and let the UI run its mode-choice flow rather than enumerating here.
-        if len(compile_card_oracle(card).modes) >= 2:
+        program = compile_card_oracle(card)
+        if len(program.modes) >= 2:
             return {"kind": "modal", "requires_target": False, "valid_targets": []}
         spec = _classify_cast(card)
+        # The compiled program decides the *kind* wherever it carries the
+        # evidence; the cascade below supplies the per-kind flags it does not
+        # model yet (own_only, stack filters, sacrifice_cost, ...). Proven equal
+        # on every derivable card by tests/engine/test_targeting.py, so this is
+        # a seam rather than a behaviour change — and it makes the derivation
+        # load-bearing for the target picker, not just for serialization.
+        derived = derive_cast_target(card, program)
+        if derived is not None:
+            spec["kind"] = derived
         spec["requires_target"] = spec["kind"] != "none"
         spec["valid_targets"] = self._enumerate_targets(caster_index, card, spec, for_cast=True)
         return spec

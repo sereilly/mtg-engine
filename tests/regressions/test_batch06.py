@@ -455,3 +455,62 @@ class TestVolcanicEruption:
         # 2 Mountains destroyed → 2 damage to each player and each creature.
         assert p1.life == 18 and p2.life == 18
         assert not any(p.card.name == "Grizzly Bears" for p in p2.battlefield)
+
+
+# ---------------------------------------------------------------------------
+# Lifetap — the card says "becomes tapped", but it was registered on the
+# tapped-for-mana path only, so any other way of tapping an opponent's Forest
+# missed it entirely. Now fired from Game.become_tapped (CR 701.26a).
+# ---------------------------------------------------------------------------
+
+class TestLifetapFiresOnAnyTapping:
+    def _board(self, cards):
+        from tests.helpers import _nosick
+
+        forest = Permanent(card=cards["Forest"])
+        p1 = PlayerState(
+            name="P1",
+            life=20,
+            battlefield=[
+                Permanent(card=cards["Lifetap"]),
+                _nosick(Permanent(card=cards["Icy Manipulator"])),
+            ],
+        )
+        p2 = PlayerState(name="P2", life=20, battlefield=[forest])
+        game = _game(p1, p2)
+        game.enforce_mana_costs = False
+        return game, p1, forest
+
+    def test_fires_when_the_forest_is_tapped_by_an_effect(self, cards):
+        """Icy Manipulator taps the Forest. Nothing about "becomes tapped"
+        restricts it to being tapped for mana."""
+        game, p1, _forest = self._board(cards)
+
+        result = game.activate_permanent_ability(
+            0, "Icy Manipulator", target_player_index=1, target_permanent_index=0
+        )
+
+        assert result.supported
+        assert p1.life == 21
+
+    def test_does_not_fire_for_an_already_tapped_forest(self, cards):
+        """CR 701.26a: only untapped permanents can be tapped. Re-tapping is no
+        state change, so nothing becomes tapped and nothing triggers."""
+        game, p1, forest = self._board(cards)
+        forest.tapped = True
+
+        game.activate_permanent_ability(
+            0, "Icy Manipulator", target_player_index=1, target_permanent_index=0
+        )
+
+        assert p1.life == 20
+
+    def test_a_land_entering_tapped_does_not_become_tapped(self, cards):
+        """A permanent that enters tapped was never untapped on the
+        battlefield, so it does not *become* tapped and grants no life."""
+        game, p1, _forest = self._board(cards)
+        entering = Permanent(card=cards["Forest"])
+        entering.tapped = True
+        game.players[1].battlefield.append(entering)
+
+        assert p1.life == 20

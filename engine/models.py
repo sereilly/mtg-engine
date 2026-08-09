@@ -14,6 +14,34 @@ _LAND_TYPE_MANA = {
 }
 
 
+def _printed_basic_types(type_line: str) -> frozenset[str]:
+    """Basic land types printed on a type line, used to tell whether a
+    layer-4 effect has actually replaced them."""
+    lowered = type_line.lower()
+    return frozenset(land_type for land_type in _LAND_TYPE_MANA if land_type in lowered)
+
+
+@dataclass(frozen=True)
+class CardFace:
+    """One face of a multi-face card (split, flip, transform, adventure, …).
+
+    For every non-``normal`` layout the top-level ``mana_cost``/``oracle_text``
+    are empty and the real characteristics live per face, so a loader that only
+    reads the top level would silently produce a blank vanilla.
+    """
+    name: str
+    mana_cost: str = ""
+    type_line: str = ""
+    oracle_text: str = ""
+    power: str | None = None
+    toughness: str | None = None
+
+
+# Layouts whose characteristics live entirely at the top level. Anything else
+# needs face-aware handling before it can be compiled — see LAYOUT_SUPPORTED.
+SINGLE_FACE_LAYOUTS = frozenset({"normal", "leveler", "class", "saga", "case", "planar", "scheme", "vanguard"})
+
+
 @dataclass(frozen=True)
 class CardDefinition:
     name: str
@@ -26,6 +54,24 @@ class CardDefinition:
     keywords: tuple[str, ...]
     produced_mana: tuple[str, ...]
     raw: dict[str, Any]
+    # Printed characteristics, kept as strings so "*", "1+*" and "-1" survive
+    # intact — coercing them to int is how a Nightmare becomes a 0/0 and dies to
+    # state-based actions. Use base_power/base_toughness for a numeric view.
+    power: str | None = None
+    toughness: str | None = None
+    loyalty: str | None = None
+    layout: str = "normal"
+    faces: tuple[CardFace, ...] = ()
+    # Scryfall's stable per-card (not per-printing) identity. The right key for
+    # reprint dedupe: names collide across languages and templating revisions.
+    oracle_id: str = ""
+    set_code: str = ""
+    collector_number: str = ""
+    # Set codes this card appears in, in load (printing) order. ``printings[0]``
+    # is its original printing — what "cards originally printed in X" effects
+    # such as City in a Bottle need. Reading the loaded-first set code instead
+    # breaks as soon as a reprint set is added.
+    printings: tuple[str, ...] = ()
 
     @property
     def primary_type(self) -> str:
@@ -34,6 +80,62 @@ class CardDefinition:
             if known in lowered:
                 return known
         return self.type_line.split(" ")[0].strip().lower()
+
+    def _printed_stat(self, typed: str | None, raw_key: str) -> str | None:
+        """Printed P/T, preferring the typed field.
+
+        The ``raw`` fallback is a migration bridge: test fixtures build
+        ``CardDefinition`` directly with a raw dict and no typed fields. It goes
+        away when those move to the typed constructor.
+        """
+        if typed is not None:
+            return typed
+        if isinstance(self.raw, dict) and raw_key in self.raw:
+            return str(self.raw[raw_key])
+        return None
+
+    @property
+    def printed_power(self) -> str | None:
+        return self._printed_stat(self.power, "power")
+
+    @property
+    def printed_toughness(self) -> str | None:
+        return self._printed_stat(self.toughness, "toughness")
+
+    @staticmethod
+    def _as_int(value: str | None) -> int | None:
+        """Numeric view of a printed stat, or None when it is variable ("*",
+        "1+*") or absent. None means "ask the characteristic-defining-ability
+        registry", never "zero"."""
+        if value is None:
+            return None
+        text = value.strip()
+        if text.lstrip("-").isdigit():
+            return int(text)
+        return None
+
+    @property
+    def base_power(self) -> int | None:
+        return self._as_int(self.printed_power)
+
+    @property
+    def base_toughness(self) -> int | None:
+        return self._as_int(self.printed_toughness)
+
+    @property
+    def has_variable_pt(self) -> bool:
+        """True when P/T is defined by a characteristic-defining ability rather
+        than printed digits (Nightmare, Keldon Warlord, Rock Hydra)."""
+        return (
+            self.primary_type == "creature"
+            and self.printed_power is not None
+            and self.base_power is None
+        )
+
+    @property
+    def original_printing(self) -> str:
+        """Set code of this card's earliest loaded printing."""
+        return self.printings[0] if self.printings else self.set_code
 
 
 @dataclass
@@ -60,8 +162,16 @@ class Permanent:
     damage_prevention_source: str | None = None
 
     def _base_stat(self, key: str) -> int:
-        raw_value = str(self.card.raw.get(key, "0"))
-        return int(raw_value) if raw_value.isdigit() else 0
+        """Printed power/toughness as a number, or 0 when it is variable.
+
+        A variable stat ("*", "1+*") is supplied by the characteristic-defining
+        registry (``mixins.permanent_state.DYNAMIC_PT``) writing an
+        ``absolute_power``/``absolute_toughness`` override, which the callers of
+        this method consult first — so returning 0 here is the base case for a
+        CDA, not a claim that the creature is 0/0.
+        """
+        value = self.card.base_power if key == "power" else self.card.base_toughness
+        return value if value is not None else 0
 
     @property
     def effective_produced_mana(self) -> tuple[str, ...]:
@@ -71,11 +181,15 @@ class Permanent:
         the land's types, so it produces only the override type's mana and loses
         its printed mana ability (CR 305.7).
         """
-        override = str(self.metadata.get("land_type_override", "")).lower()
-        if override:
-            for land_type, symbol in _LAND_TYPE_MANA.items():
-                if land_type in override:
-                    return (symbol,)
+        # Only when layer 4 has actually changed the land's types: a land whose
+        # types were replaced produces that type's mana instead of its printed
+        # ability. An unchanged land keeps its printed production, which matters
+        # for duals — deriving mana from their types would reorder the symbols
+        # that callers read positionally.
+        current = self.basic_land_types
+        printed = _printed_basic_types(self.card.type_line)
+        if current and set(current) != printed:
+            return tuple(_LAND_TYPE_MANA[land_type] for land_type in current)
         # A copy (Copy Artifact of a Mox / Sol Ring) produces the copied
         # card's mana, so read the effective card rather than the copier's own.
         return self.effective_card.produced_mana
@@ -92,77 +206,96 @@ class Permanent:
         return self.metadata.get("copied_card") or self.card
 
     def has_type(self, card_type: str) -> bool:
-        """Whether this permanent currently has the given card type, honoring
-        copy overlays. A Copy Artifact copying a Mox is an "Artifact
-        Enchantment" and must count as both types; ``primary_type`` collapses
-        multi-type lines to one type, so type checks on permanents should use
-        this instead."""
-        return card_type.lower() in self.effective_card.type_line.lower()
+        """Whether this permanent currently has the given card type or subtype.
+
+        Computed through CR 613 layer 4, so animation and basic-land-type
+        changes are included alongside the printed line. A Copy Artifact copying
+        a Mox is an "Artifact Enchantment" and counts as both;
+        ``primary_type`` collapses multi-type lines to one type, so type checks
+        on permanents should use this instead.
+        """
+        from .layer_bridge import computed_types
+
+        wanted = card_type.lower()
+        card_types, subtypes = computed_types(self)
+        return wanted in card_types or wanted in subtypes
 
     @property
     def is_creature(self) -> bool:
-        """Whether this permanent is currently a creature: printed as one, or a
-        land animated into one (Kormus Bell / Living Lands set ``land_animated``),
-        or an artifact animated until end of combat (Jade Statue). Targeting,
-        combat, and creature-only effects must use this rather than the printed
-        ``card.primary_type`` so animated permanents behave as creatures."""
-        return (
-            self.card.primary_type == "creature"
-            or bool(self.metadata.get("land_animated"))
-            or bool(self.metadata.get("animate_until_end_of_combat"))
-        )
+        """Whether this permanent is currently a creature.
+
+        Printed as one, or animated into one (Kormus Bell's Swamps, Living
+        Lands' Forests, Jade Statue) — a layer-4 type-changing effect, not a
+        special case. Targeting, combat, and creature-only effects must use
+        this rather than the printed ``card.primary_type``.
+        """
+        from .layer_bridge import computed_types
+
+        return "creature" in computed_types(self)[0]
+
+    @property
+    def basic_land_types(self) -> tuple[str, ...]:
+        """The basic land types this permanent currently has, after layer 4.
+
+        One place to ask "is this a Swamp now?" — printed, or made one by Evil
+        Presence / Phantasmal Terrain / Blood Moon. Several call sites used to
+        re-derive this by checking the printed type line and the override
+        separately, which meant each had to remember both.
+        """
+        from .layer_bridge import computed_types
+
+        subtypes = computed_types(self)[1]
+        return tuple(land_type for land_type in _LAND_TYPE_MANA if land_type in subtypes)
+
+    @property
+    def basic_land_mana(self) -> tuple[str, ...]:
+        """Mana symbols implied by the basic land types it currently has."""
+        return tuple(_LAND_TYPE_MANA[land_type] for land_type in self.basic_land_types)
+
+    @property
+    def effective_colors(self) -> set[str]:
+        """The colours this permanent currently is, after layer 5 — printed,
+        or replaced by a lace or a copy effect."""
+        from .layer_bridge import computed_colors
+
+        return computed_colors(self)
+
+    def has_keyword(self, keyword: str) -> bool:
+        """Whether this permanent currently has a keyword ability.
+
+        Printed keywords plus every grant and removal, resolved through CR 613
+        layer 6 — so a grant after a removal restores the ability, per 613.9.
+        Reading a ``gains_<keyword>`` metadata flag instead misses anything
+        granted by another route and gets the ordering wrong.
+
+        ``Game._has_keyword`` adds a fallback for keywords that only appear in a
+        card's oracle text; prefer that from inside the engine.
+        """
+        from .layer_bridge import computed_abilities
+
+        return keyword.lower() in computed_abilities(self)
 
     @property
     def effective_power(self) -> int:
-        # Layer 7d: power/toughness switch — return pre-switch toughness as power
-        if self.metadata.get("pt_switched"):
-            if "absolute_toughness_until_eot" in self.metadata:
-                t_base = int(self.metadata["absolute_toughness_until_eot"])
-            elif "absolute_toughness" in self.metadata:
-                t_base = int(self.metadata["absolute_toughness"])
-            else:
-                t_base = self._base_stat("toughness")
-            return t_base + self.toughness_bonus + int(self.metadata.get("static_buff_toughness", 0))
-        # Layer 7b: temporary set effect takes priority over permanent set
-        if "absolute_power_until_eot" in self.metadata:
-            base = int(self.metadata["absolute_power_until_eot"])
-        elif "absolute_power" in self.metadata:
-            base = int(self.metadata["absolute_power"])
-        else:
-            base = self._base_stat("power")
-        # Layer 7c: modifications on top of 7b base
-        return (
-            base
-            + self.power_bonus
-            + int(self.metadata.get("static_buff_power", 0))
-            + (int(self.metadata.get("attacking_buff_power", 0)) if self.attacking else 0)
-        )
+        """Power after every continuous effect, computed through CR 613's
+        layers (``engine/continuous.py`` via ``engine/layer_bridge.py``).
+
+        The sublayer order — 7a characteristic-defining, 7b set, 7c modify,
+        7d switch — is enforced by the layer system rather than by the shape of
+        this method. That matters because the order is a rule, not a coding
+        convention: written by hand it was correct only as long as nobody added
+        a channel in the wrong place.
+        """
+        from .layer_bridge import computed_pt
+
+        return computed_pt(self)[0]
 
     @property
     def effective_toughness(self) -> int:
-        # Layer 7d: power/toughness switch — return pre-switch power as toughness
-        if self.metadata.get("pt_switched"):
-            if "absolute_power_until_eot" in self.metadata:
-                p_base = int(self.metadata["absolute_power_until_eot"])
-            elif "absolute_power" in self.metadata:
-                p_base = int(self.metadata["absolute_power"])
-            else:
-                p_base = self._base_stat("power")
-            return p_base + self.power_bonus + int(self.metadata.get("static_buff_power", 0))
-        # Layer 7b: temporary set effect takes priority over permanent set
-        if "absolute_toughness_until_eot" in self.metadata:
-            base = int(self.metadata["absolute_toughness_until_eot"])
-        elif "absolute_toughness" in self.metadata:
-            base = int(self.metadata["absolute_toughness"])
-        else:
-            base = self._base_stat("toughness")
-        # Layer 7c: modifications on top of 7b base
-        return (
-            base
-            + self.toughness_bonus
-            + int(self.metadata.get("static_buff_toughness", 0))
-            + (int(self.metadata.get("attacking_buff_toughness", 0)) if self.attacking else 0)
-        )
+        """Toughness after every continuous effect. See effective_power."""
+        from .layer_bridge import computed_pt
+
+        return computed_pt(self)[1]
 
 
 @dataclass

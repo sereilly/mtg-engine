@@ -3,7 +3,6 @@ from __future__ import annotations
 import pytest
 
 from engine import Game, PlayerState, classify_card
-from tests.helpers import LEA_PATH
 
 
 def _build_test_case(card, all_cards):
@@ -28,14 +27,13 @@ def pytest_generate_tests(metafunc):
     if "card_name" not in metafunc.fixturenames:
         return
 
-    # The conftest fixture is not available here, so read from request config path.
-    from engine import load_cards
+    # Conftest fixtures are not available at collection time, so the catalog
+    # is loaded from the manifest directly — the same list, covering every set.
+    from engine.card_loader import load_catalog
 
-    cards = load_cards(LEA_PATH)
-    names = [card.name for card in cards]
-    metafunc.parametrize("card_name", names)
+    metafunc.parametrize("card_name", [card.name for card in load_catalog()])
 
 
-def test_each_card_simulates_without_crash(card_name, all_cards):
-    card = next(c for c in all_cards if c.name == card_name)
+def test_each_card_simulates_without_crash(card_name, catalog_by_name, all_cards):
+    card = catalog_by_name[card_name]
     _build_test_case(card, all_cards)

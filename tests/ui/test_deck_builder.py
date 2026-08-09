@@ -2,8 +2,9 @@ from pathlib import Path
 
 from engine import load_cards
 from web.deck_builder import build_random_deck
+from tests.helpers import LEA_PATH
 
-_CATALOG = load_cards(Path("cards/LEA_cards.json"))
+_CATALOG = load_cards(LEA_PATH)
 
 
 def test_random_deck_has_60_cards_and_24_lands():

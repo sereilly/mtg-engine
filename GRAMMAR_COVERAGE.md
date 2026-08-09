@@ -1,0 +1,665 @@
+# Grammar Coverage
+
+Migration tracker for the oracle-text parser rewrite: how much of the card pool `engine/grammar/` accounts for, as it takes over from the `@parse_rule` registry in `engine/parsing/`.
+
+**Generated** — run `python scripts/grammar_coverage.py` to refresh.
+
+| Measure | Meaning |
+| --- | --- |
+| Parsed | Grammar consumed every token of the line and built an AST |
+| Lowered | That AST mapped onto executable instructions |
+| Executed | Instructions' categories are switched on, so the grammar's output runs |
+
+Categories currently switched on: `counters, counterspells, damage, destruction, evasion, life, mana, optional, prevention, pump, recolor, regeneration, tapping, tokens, turns, upkeep, zones`.
+
+## Coverage by set
+
+| Set | Cards | Lines | Parsed | Lowered | Executed | Cards executing |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| LEA | 290 | 388 | 70.1% | 63.9% | 35.1% | 129 |
+| LEB | 292 | 389 | 70.2% | 64.0% | 35.2% | 130 |
+| 2ED | 292 | 389 | 70.2% | 64.0% | 35.2% | 130 |
+| ARN | 78 | 108 | 59.3% | 51.9% | 32.4% | 31 |
+| **All** | **952** | **1274** | **69.2%** | **63.0%** | **34.9%** | **420** |
+
+## Backlog — most common failure reasons
+
+Each row is a production the grammar still needs, ordered by how many lines it would unlock. Reasons tied to a scheduled roadmap phase are annotated.
+
+| Lines | Reason | Scheduled |
+| ---: | --- | --- |
+| 199 | expected a subject |  |
+| 89 | unrecognized effect verb |  |
+| 52 | static abilities need the CR 613 layers engine | phase 6 (CR 613 layers) |
+| 36 | unconsumed text |  |
+| 18 | granted ability in quotes | phase 3 (quoted abilities) |
+| 12 | expected 'be' |  |
+| 10 | modal line | phase 3 (modal production) |
+| 9 | continuous pump needs the CR 613 layers engine | phase 6 (CR 613 layers) |
+| 6 | expected a quantity |  |
+| 6 | expected a colour after 'becomes' |  |
+| 4 | upkeep triggers are dispatched by fused instruction kind; a decomposed wrapper has no handler |  |
+| 4 | expected a keyword ability |  |
+| 4 | expected something to destroy |  |
+| 3 | no lowering for RawEffect |  |
+| 3 | only one mana of any colour has a handler; 3 does not |  |
+| 3 | expected the player whose hand is looked at |  |
+| 3 | no handler for non-targeted tap/untap |  |
+| 3 | expected 'mana' |  |
+| 3 | no tap-or-untap handler honours this restriction |  |
+| 1 | optional colored costs need a real cost-payment prompt |  |
+| 1 | expected a permanent to put counters on |  |
+| 1 | back-reference to 'damage_dealt' with no producer in this effect |  |
+| 1 | expected something to shield |  |
+| 1 | no untap handler honors this restriction |  |
+
+## Cards executing through the grammar
+
+420 cards, 445 lines.
+
+- **Aladdin's Ring**
+  - `{8}, {T}: This artifact deals 4 damage to any target.`
+- **Ali Baba**
+  - `{R}: Tap target Wall.`
+- **Ancestral Recall**
+  - `Target player draws three cards.`
+  - `Target player draws three cards.`
+  - `Target player draws three cards.`
+- **Ankh of Mishra**
+  - `Whenever a land enters, this artifact deals 2 damage to that land's controller.`
+  - `Whenever a land enters, this artifact deals 2 damage to that land's controller.`
+  - `Whenever a land enters, this artifact deals 2 damage to that land's controller.`
+- **Armageddon**
+  - `Destroy all lands.`
+  - `Destroy all lands.`
+  - `Destroy all lands.`
+- **Army of Allah**
+  - `Attacking creatures get +2/+0 until end of turn.`
+- **Basalt Monolith**
+  - `{T}: Add {C}{C}{C}.`
+  - `{3}: Untap this artifact.`
+  - `{T}: Add {C}{C}{C}.`
+  - `{3}: Untap this artifact.`
+  - `{T}: Add {C}{C}{C}.`
+  - `{3}: Untap this artifact.`
+- **Bazaar of Baghdad**
+  - `{T}: Draw two cards, then discard three cards.`
+- **Birds of Paradise**
+  - `{T}: Add one mana of any color.`
+  - `{T}: Add one mana of any color.`
+  - `{T}: Add one mana of any color.`
+- **Black Vise**
+  - `At the beginning of the chosen player's upkeep, this artifact deals X damage to that player, where X is the number of cards in their hand minus 4.`
+  - `At the beginning of the chosen player's upkeep, this artifact deals X damage to that player, where X is the number of cards in their hand minus 4.`
+  - `At the beginning of the chosen player's upkeep, this artifact deals X damage to that player, where X is the number of cards in their hand minus 4.`
+- **Blessing**
+  - `{W}: Enchanted creature gets +1/+1 until end of turn.`
+  - `{W}: Enchanted creature gets +1/+1 until end of turn.`
+  - `{W}: Enchanted creature gets +1/+1 until end of turn.`
+- **Blue Elemental Blast**
+  - `• Counter target red spell.`
+  - `• Destroy target red permanent.`
+  - `• Counter target red spell.`
+  - `• Destroy target red permanent.`
+  - `• Counter target red spell.`
+  - `• Destroy target red permanent.`
+- **Braingeyser**
+  - `Target player draws X cards.`
+  - `Target player draws X cards.`
+  - `Target player draws X cards.`
+- **Celestial Prism**
+  - `{2}, {T}: Add one mana of any color.`
+  - `{2}, {T}: Add one mana of any color.`
+  - `{2}, {T}: Add one mana of any color.`
+- **Chaoslace**
+  - `Target spell or permanent becomes red. (Its mana symbols remain unchanged.)`
+  - `Target spell or permanent becomes red. (Its mana symbols remain unchanged.)`
+  - `Target spell or permanent becomes red. (Its mana symbols remain unchanged.)`
+- **Circle of Protection: Black**
+  - `{1}: The next time a black source of your choice would deal damage to you this turn, prevent that damage.`
+  - `{1}: The next time a black source of your choice would deal damage to you this turn, prevent that damage.`
+- **Circle of Protection: Blue**
+  - `{1}: The next time a blue source of your choice would deal damage to you this turn, prevent that damage.`
+  - `{1}: The next time a blue source of your choice would deal damage to you this turn, prevent that damage.`
+  - `{1}: The next time a blue source of your choice would deal damage to you this turn, prevent that damage.`
+- **Circle of Protection: Green**
+  - `{1}: The next time a green source of your choice would deal damage to you this turn, prevent that damage.`
+  - `{1}: The next time a green source of your choice would deal damage to you this turn, prevent that damage.`
+  - `{1}: The next time a green source of your choice would deal damage to you this turn, prevent that damage.`
+- **Circle of Protection: Red**
+  - `{1}: The next time a red source of your choice would deal damage to you this turn, prevent that damage.`
+  - `{1}: The next time a red source of your choice would deal damage to you this turn, prevent that damage.`
+  - `{1}: The next time a red source of your choice would deal damage to you this turn, prevent that damage.`
+- **Circle of Protection: White**
+  - `{1}: The next time a white source of your choice would deal damage to you this turn, prevent that damage.`
+  - `{1}: The next time a white source of your choice would deal damage to you this turn, prevent that damage.`
+  - `{1}: The next time a white source of your choice would deal damage to you this turn, prevent that damage.`
+- **City of Brass**
+  - `Whenever this land becomes tapped, it deals 1 damage to you.`
+  - `{T}: Add one mana of any color.`
+- **Conservator**
+  - `{3}, {T}: Prevent the next 2 damage that would be dealt to you this turn.`
+  - `{3}, {T}: Prevent the next 2 damage that would be dealt to you this turn.`
+  - `{3}, {T}: Prevent the next 2 damage that would be dealt to you this turn.`
+- **Conversion**
+  - `At the beginning of your upkeep, sacrifice this enchantment unless you pay {W}{W}.`
+  - `At the beginning of your upkeep, sacrifice this enchantment unless you pay {W}{W}.`
+  - `At the beginning of your upkeep, sacrifice this enchantment unless you pay {W}{W}.`
+- **Copper Tablet**
+  - `At the beginning of each player's upkeep, this artifact deals 1 damage to that player.`
+  - `At the beginning of each player's upkeep, this artifact deals 1 damage to that player.`
+  - `At the beginning of each player's upkeep, this artifact deals 1 damage to that player.`
+- **Counterspell**
+  - `Counter target spell.`
+  - `Counter target spell.`
+  - `Counter target spell.`
+- **Crystal Rod**
+  - `Whenever a player casts a blue spell, you may pay {1}. If you do, you gain 1 life.`
+  - `Whenever a player casts a blue spell, you may pay {1}. If you do, you gain 1 life.`
+  - `Whenever a player casts a blue spell, you may pay {1}. If you do, you gain 1 life.`
+- **Cuombajj Witches**
+  - `{T}: This creature deals 1 damage to any target and 1 damage to any target of an opponent's choice.`
+- **Dandân**
+  - `When you control no Islands, sacrifice this creature.`
+- **Dark Ritual**
+  - `Add {B}{B}{B}.`
+  - `Add {B}{B}{B}.`
+  - `Add {B}{B}{B}.`
+- **Death Ward**
+  - `Regenerate target creature.`
+  - `Regenerate target creature.`
+  - `Regenerate target creature.`
+- **Deathgrip**
+  - `{B}{B}: Counter target green spell.`
+  - `{B}{B}: Counter target green spell.`
+  - `{B}{B}: Counter target green spell.`
+- **Deathlace**
+  - `Target spell or permanent becomes black. (Mana symbols on that permanent remain unchanged.)`
+  - `Target spell or permanent becomes black. (Mana symbols on that permanent remain unchanged.)`
+  - `Target spell or permanent becomes black. (Mana symbols on that permanent remain unchanged.)`
+- **Demonic Hordes**
+  - `{T}: Destroy target land.`
+  - `{T}: Destroy target land.`
+  - `{T}: Destroy target land.`
+- **Demonic Tutor**
+  - `Search your library for a card, put that card into your hand, then shuffle.`
+  - `Search your library for a card, put that card into your hand, then shuffle.`
+  - `Search your library for a card, put that card into your hand, then shuffle.`
+- **Desert**
+  - `{T}: Add {C}.`
+  - `{T}: This land deals 1 damage to target attacking creature. Activate only during the end of combat step.`
+- **Desert Twister**
+  - `Destroy target permanent.`
+- **Dingus Egg**
+  - `Whenever a land is put into a graveyard from the battlefield, this artifact deals 2 damage to that land's controller.`
+  - `Whenever a land is put into a graveyard from the battlefield, this artifact deals 2 damage to that land's controller.`
+  - `Whenever a land is put into a graveyard from the battlefield, this artifact deals 2 damage to that land's controller.`
+- **Disenchant**
+  - `Destroy target artifact or enchantment.`
+  - `Destroy target artifact or enchantment.`
+  - `Destroy target artifact or enchantment.`
+- **Disintegrate**
+  - `Disintegrate deals X damage to any target. If it's a creature, it can't be regenerated this turn, and if it would die this turn, exile it instead.`
+  - `Disintegrate deals X damage to any target. If it's a creature, it can't be regenerated this turn, and if it would die this turn, exile it instead.`
+  - `Disintegrate deals X damage to any target. If it's a creature, it can't be regenerated this turn, and if it would die this turn, exile it instead.`
+- **Disrupting Scepter**
+  - `{3}, {T}: Target player discards a card. Activate only during your turn.`
+  - `{3}, {T}: Target player discards a card. Activate only during your turn.`
+  - `{3}, {T}: Target player discards a card. Activate only during your turn.`
+- **Drudge Skeletons**
+  - `{B}: Regenerate this creature. (The next time this creature would be destroyed this turn, instead tap it, remove it from combat, and heal all damage on it.)`
+  - `{B}: Regenerate this creature. (The next time this creature would be destroyed this turn, instead tap it, remove it from combat, and heal all damage on it.)`
+  - `{B}: Regenerate this creature. (The next time this creature would be destroyed this turn, instead tap it, remove it from combat, and heal all damage on it.)`
+- **Dwarven Demolition Team**
+  - `{T}: Destroy target Wall.`
+  - `{T}: Destroy target Wall.`
+  - `{T}: Destroy target Wall.`
+- **Dwarven Warriors**
+  - `{T}: Target creature with power 2 or less can't be blocked this turn.`
+  - `{T}: Target creature with power 2 or less can't be blocked this turn.`
+  - `{T}: Target creature with power 2 or less can't be blocked this turn.`
+- **Earthquake**
+  - `Earthquake deals X damage to each creature without flying and each player.`
+  - `Earthquake deals X damage to each creature without flying and each player.`
+  - `Earthquake deals X damage to each creature without flying and each player.`
+- **Elephant Graveyard**
+  - `{T}: Add {C}.`
+  - `{T}: Regenerate target Elephant.`
+- **Feedback**
+  - `At the beginning of the upkeep of enchanted enchantment's controller, this Aura deals 1 damage to that player.`
+  - `At the beginning of the upkeep of enchanted enchantment's controller, this Aura deals 1 damage to that player.`
+  - `At the beginning of the upkeep of enchanted enchantment's controller, this Aura deals 1 damage to that player.`
+- **Fireball**
+  - `Fireball deals X damage divided evenly, rounded down, among any number of targets.`
+  - `Fireball deals X damage divided evenly, rounded down, among any number of targets.`
+  - `Fireball deals X damage divided evenly, rounded down, among any number of targets.`
+- **Firebreathing**
+  - `{R}: Enchanted creature gets +1/+0 until end of turn.`
+  - `{R}: Enchanted creature gets +1/+0 until end of turn.`
+  - `{R}: Enchanted creature gets +1/+0 until end of turn.`
+- **Flashfires**
+  - `Destroy all Plains.`
+  - `Destroy all Plains.`
+  - `Destroy all Plains.`
+- **Flying Carpet**
+  - `{2}, {T}: Target creature gains flying until end of turn.`
+- **Fog**
+  - `Prevent all combat damage that would be dealt this turn.`
+  - `Prevent all combat damage that would be dealt this turn.`
+  - `Prevent all combat damage that would be dealt this turn.`
+- **Force of Nature**
+  - `At the beginning of your upkeep, this creature deals 8 damage to you unless you pay {G}{G}{G}{G}.`
+  - `At the beginning of your upkeep, this creature deals 8 damage to you unless you pay {G}{G}{G}{G}.`
+  - `At the beginning of your upkeep, this creature deals 8 damage to you unless you pay {G}{G}{G}{G}.`
+- **Frozen Shade**
+  - `{B}: This creature gets +1/+1 until end of turn.`
+  - `{B}: This creature gets +1/+1 until end of turn.`
+  - `{B}: This creature gets +1/+1 until end of turn.`
+- **Fungusaur**
+  - `Whenever this creature is dealt damage, put a +1/+1 counter on it.`
+  - `Whenever this creature is dealt damage, put a +1/+1 counter on it.`
+  - `Whenever this creature is dealt damage, put a +1/+1 counter on it.`
+- **Giant Growth**
+  - `Target creature gets +3/+3 until end of turn.`
+  - `Target creature gets +3/+3 until end of turn.`
+  - `Target creature gets +3/+3 until end of turn.`
+- **Glasses of Urza**
+  - `{T}: Look at target player's hand.`
+  - `{T}: Look at target player's hand.`
+  - `{T}: Look at target player's hand.`
+- **Goblin Balloon Brigade**
+  - `{R}: This creature gains flying until end of turn.`
+  - `{R}: This creature gains flying until end of turn.`
+  - `{R}: This creature gains flying until end of turn.`
+- **Granite Gargoyle**
+  - `{R}: This creature gets +0/+1 until end of turn.`
+  - `{R}: This creature gets +0/+1 until end of turn.`
+  - `{R}: This creature gets +0/+1 until end of turn.`
+- **Hasran Ogress**
+  - `Whenever this creature attacks, it deals 3 damage to you unless you pay {2}.`
+- **Healing Salve**
+  - `• Target player gains 3 life.`
+  - `• Prevent the next 3 damage that would be dealt to any target this turn.`
+  - `• Target player gains 3 life.`
+  - `• Prevent the next 3 damage that would be dealt to any target this turn.`
+  - `• Target player gains 3 life.`
+  - `• Prevent the next 3 damage that would be dealt to any target this turn.`
+- **Helm of Chatzuk**
+  - `{1}, {T}: Target creature gains banding until end of turn. (Any creatures with banding, and up to one without, can attack in a band. Bands are blocked as a group. If any creatures with banding a player controls are blocking or being blocked by a creature, that player divides that creature's combat damage, not its controller, among any of the creatures it's being blocked by or is blocking.)`
+  - `{1}, {T}: Target creature gains banding until end of turn. (Any creatures with banding, and up to one without, can attack in a band. Bands are blocked as a group. If any creatures with banding a player controls are blocking or being blocked by a creature, that player divides that creature's combat damage, not its controller, among any of the creatures it's being blocked by or is blocking.)`
+  - `{1}, {T}: Target creature gains banding until end of turn. (Any creatures with banding, and up to one without, can attack in a band. Bands are blocked as a group. If any creatures with banding a player controls are blocking or being blocked by a creature, that player divides that creature's combat damage, not its controller, among any of the creatures it's being blocked by or is blocking.)`
+- **Holy Armor**
+  - `{W}: Enchanted creature gets +0/+1 until end of turn.`
+  - `{W}: Enchanted creature gets +0/+1 until end of turn.`
+  - `{W}: Enchanted creature gets +0/+1 until end of turn.`
+- **Howl from Beyond**
+  - `Target creature gets +X/+0 until end of turn.`
+  - `Target creature gets +X/+0 until end of turn.`
+  - `Target creature gets +X/+0 until end of turn.`
+- **Hurr Jackal**
+  - `{T}: Target creature can't be regenerated this turn.`
+- **Hurricane**
+  - `Hurricane deals X damage to each creature with flying and each player.`
+  - `Hurricane deals X damage to each creature with flying and each player.`
+  - `Hurricane deals X damage to each creature with flying and each player.`
+- **Ice Storm**
+  - `Destroy target land.`
+  - `Destroy target land.`
+  - `Destroy target land.`
+- **Icy Manipulator**
+  - `{1}, {T}: Tap target artifact, creature, or land.`
+  - `{1}, {T}: Tap target artifact, creature, or land.`
+  - `{1}, {T}: Tap target artifact, creature, or land.`
+- **Ifh-Bíff Efreet**
+  - `{G}: This creature deals 1 damage to each creature with flying and each player. Any player may activate this ability.`
+- **Instill Energy**
+  - `{0}: Untap enchanted creature. Activate only during your turn and only once each turn.`
+  - `{0}: Untap enchanted creature. Activate only during your turn and only once each turn.`
+  - `{0}: Untap enchanted creature. Activate only during your turn and only once each turn.`
+- **Iron Star**
+  - `Whenever a player casts a red spell, you may pay {1}. If you do, you gain 1 life.`
+  - `Whenever a player casts a red spell, you may pay {1}. If you do, you gain 1 life.`
+  - `Whenever a player casts a red spell, you may pay {1}. If you do, you gain 1 life.`
+- **Island Fish Jasconius**
+  - `When you control no Islands, sacrifice this creature.`
+- **Island of Wak-Wak**
+  - `{T}: Target creature with flying has base power 0 until end of turn.`
+- **Ivory Cup**
+  - `Whenever a player casts a white spell, you may pay {1}. If you do, you gain 1 life.`
+  - `Whenever a player casts a white spell, you may pay {1}. If you do, you gain 1 life.`
+  - `Whenever a player casts a white spell, you may pay {1}. If you do, you gain 1 life.`
+- **Jandor's Ring**
+  - `{2}, {T}, Discard the last card you drew this turn: Draw a card.`
+- **Jayemdae Tome**
+  - `{4}, {T}: Draw a card.`
+  - `{4}, {T}: Draw a card.`
+  - `{4}, {T}: Draw a card.`
+- **Jump**
+  - `Target creature gains flying until end of turn.`
+  - `Target creature gains flying until end of turn.`
+  - `Target creature gains flying until end of turn.`
+- **Junún Efreet**
+  - `At the beginning of your upkeep, sacrifice this creature unless you pay {B}{B}.`
+- **Juzám Djinn**
+  - `At the beginning of your upkeep, this creature deals 1 damage to you.`
+- **Karma**
+  - `At the beginning of each player's upkeep, this enchantment deals damage to that player equal to the number of Swamps they control.`
+  - `At the beginning of each player's upkeep, this enchantment deals damage to that player equal to the number of Swamps they control.`
+  - `At the beginning of each player's upkeep, this enchantment deals damage to that player equal to the number of Swamps they control.`
+- **Khabál Ghoul**
+  - `At the beginning of each end step, put a +1/+1 counter on this creature for each creature that died this turn.`
+- **King Suleiman**
+  - `{T}: Destroy target Djinn or Efreet.`
+- **Ley Druid**
+  - `{T}: Untap target land.`
+  - `{T}: Untap target land.`
+  - `{T}: Untap target land.`
+- **Library of Alexandria**
+  - `{T}: Add {C}.`
+  - `{T}: Draw a card. Activate only if you have exactly seven cards in hand.`
+- **Lifeforce**
+  - `{G}{G}: Counter target black spell.`
+  - `{G}{G}: Counter target black spell.`
+  - `{G}{G}: Counter target black spell.`
+- **Lifelace**
+  - `Target spell or permanent becomes green. (Mana symbols on that permanent remain unchanged.)`
+  - `Target spell or permanent becomes green. (Mana symbols on that permanent remain unchanged.)`
+  - `Target spell or permanent becomes green. (Mana symbols on that permanent remain unchanged.)`
+- **Lightning Bolt**
+  - `Lightning Bolt deals 3 damage to any target.`
+  - `Lightning Bolt deals 3 damage to any target.`
+  - `Lightning Bolt deals 3 damage to any target.`
+- **Living Wall**
+  - `{1}: Regenerate this creature.`
+  - `{1}: Regenerate this creature.`
+  - `{1}: Regenerate this creature.`
+- **Llanowar Elves**
+  - `{T}: Add {G}.`
+  - `{T}: Add {G}.`
+  - `{T}: Add {G}.`
+- **Mana Vault**
+  - `{T}: Add {C}{C}{C}.`
+  - `{T}: Add {C}{C}{C}.`
+  - `{T}: Add {C}{C}{C}.`
+- **Manabarbs**
+  - `Whenever a player taps a land for mana, this enchantment deals 1 damage to that player.`
+  - `Whenever a player taps a land for mana, this enchantment deals 1 damage to that player.`
+  - `Whenever a player taps a land for mana, this enchantment deals 1 damage to that player.`
+- **Merchant Ship**
+  - `When you control no Islands, sacrifice this creature.`
+- **Mind Twist**
+  - `Target player discards X cards at random.`
+  - `Target player discards X cards at random.`
+  - `Target player discards X cards at random.`
+- **Mox Emerald**
+  - `{T}: Add {G}.`
+  - `{T}: Add {G}.`
+  - `{T}: Add {G}.`
+- **Mox Jet**
+  - `{T}: Add {B}.`
+  - `{T}: Add {B}.`
+  - `{T}: Add {B}.`
+- **Mox Pearl**
+  - `{T}: Add {W}.`
+  - `{T}: Add {W}.`
+  - `{T}: Add {W}.`
+- **Mox Ruby**
+  - `{T}: Add {R}.`
+  - `{T}: Add {R}.`
+  - `{T}: Add {R}.`
+- **Mox Sapphire**
+  - `{T}: Add {U}.`
+  - `{T}: Add {U}.`
+  - `{T}: Add {U}.`
+- **Nevinyrral's Disk**
+  - `{1}, {T}: Destroy all artifacts, creatures, and enchantments.`
+  - `{1}, {T}: Destroy all artifacts, creatures, and enchantments.`
+  - `{1}, {T}: Destroy all artifacts, creatures, and enchantments.`
+- **Northern Paladin**
+  - `{W}{W}, {T}: Destroy target black permanent.`
+  - `{W}{W}, {T}: Destroy target black permanent.`
+  - `{W}{W}, {T}: Destroy target black permanent.`
+- **Oasis**
+  - `{T}: Prevent the next 1 damage that would be dealt to target creature this turn.`
+- **Orcish Artillery**
+  - `{T}: This creature deals 2 damage to any target and 3 damage to you.`
+  - `{T}: This creature deals 2 damage to any target and 3 damage to you.`
+  - `{T}: This creature deals 2 damage to any target and 3 damage to you.`
+- **Pestilence**
+  - `{B}: This enchantment deals 1 damage to each creature and each player.`
+  - `{B}: This enchantment deals 1 damage to each creature and each player.`
+  - `{B}: This enchantment deals 1 damage to each creature and each player.`
+- **Phantasmal Forces**
+  - `At the beginning of your upkeep, sacrifice this creature unless you pay {U}.`
+  - `At the beginning of your upkeep, sacrifice this creature unless you pay {U}.`
+  - `At the beginning of your upkeep, sacrifice this creature unless you pay {U}.`
+- **Piety**
+  - `Blocking creatures get +0/+3 until end of turn.`
+- **Pirate Ship**
+  - `{T}: This creature deals 1 damage to any target.`
+  - `When you control no Islands, sacrifice this creature.`
+  - `{T}: This creature deals 1 damage to any target.`
+  - `When you control no Islands, sacrifice this creature.`
+  - `{T}: This creature deals 1 damage to any target.`
+  - `When you control no Islands, sacrifice this creature.`
+- **Power Sink**
+  - `Counter target spell unless its controller pays {X}. If that player doesn't, they tap all lands with mana abilities they control and lose all unspent mana.`
+  - `Counter target spell unless its controller pays {X}. If that player doesn't, they tap all lands with mana abilities they control and lose all unspent mana.`
+  - `Counter target spell unless its controller pays {X}. If that player doesn't, they tap all lands with mana abilities they control and lose all unspent mana.`
+- **Power Surge**
+  - `At the beginning of each player's upkeep, this enchantment deals X damage to that player, where X is the number of untapped lands they controlled at the beginning of this turn.`
+  - `At the beginning of each player's upkeep, this enchantment deals X damage to that player, where X is the number of untapped lands they controlled at the beginning of this turn.`
+  - `At the beginning of each player's upkeep, this enchantment deals X damage to that player, where X is the number of untapped lands they controlled at the beginning of this turn.`
+- **Prodigal Sorcerer**
+  - `{T}: This creature deals 1 damage to any target.`
+  - `{T}: This creature deals 1 damage to any target.`
+  - `{T}: This creature deals 1 damage to any target.`
+- **Psionic Blast**
+  - `Psionic Blast deals 4 damage to any target and 2 damage to you.`
+  - `Psionic Blast deals 4 damage to any target and 2 damage to you.`
+  - `Psionic Blast deals 4 damage to any target and 2 damage to you.`
+- **Psychic Venom**
+  - `Whenever enchanted land becomes tapped, this Aura deals 2 damage to that land's controller.`
+  - `Whenever enchanted land becomes tapped, this Aura deals 2 damage to that land's controller.`
+  - `Whenever enchanted land becomes tapped, this Aura deals 2 damage to that land's controller.`
+- **Purelace**
+  - `Target spell or permanent becomes white. (Mana symbols on that permanent remain unchanged.)`
+  - `Target spell or permanent becomes white. (Mana symbols on that permanent remain unchanged.)`
+  - `Target spell or permanent becomes white. (Mana symbols on that permanent remain unchanged.)`
+- **Raise Dead**
+  - `Return target creature card from your graveyard to your hand.`
+  - `Return target creature card from your graveyard to your hand.`
+  - `Return target creature card from your graveyard to your hand.`
+- **Red Elemental Blast**
+  - `• Counter target blue spell.`
+  - `• Destroy target blue permanent.`
+  - `• Counter target blue spell.`
+  - `• Destroy target blue permanent.`
+  - `• Counter target blue spell.`
+  - `• Destroy target blue permanent.`
+- **Regeneration**
+  - `{G}: Regenerate enchanted creature. (The next time that creature would be destroyed this turn, instead tap it, remove it from combat, and heal all damage on it.)`
+  - `{G}: Regenerate enchanted creature. (The next time that creature would be destroyed this turn, instead tap it, remove it from combat, and heal all damage on it.)`
+  - `{G}: Regenerate enchanted creature. (The next time that creature would be destroyed this turn, instead tap it, remove it from combat, and heal all damage on it.)`
+- **Regrowth**
+  - `Return target card from your graveyard to your hand.`
+  - `Return target card from your graveyard to your hand.`
+  - `Return target card from your graveyard to your hand.`
+- **Resurrection**
+  - `Return target creature card from your graveyard to the battlefield.`
+  - `Return target creature card from your graveyard to the battlefield.`
+  - `Return target creature card from your graveyard to the battlefield.`
+- **Righteousness**
+  - `Target blocking creature gets +7/+7 until end of turn.`
+  - `Target blocking creature gets +7/+7 until end of turn.`
+  - `Target blocking creature gets +7/+7 until end of turn.`
+- **Rock Hydra**
+  - `{R}: Prevent the next 1 damage that would be dealt to this creature this turn.`
+  - `{R}{R}{R}: Put a +1/+1 counter on this creature. Activate only during your upkeep.`
+  - `{R}: Prevent the next 1 damage that would be dealt to this creature this turn.`
+  - `{R}{R}{R}: Put a +1/+1 counter on this creature. Activate only during your upkeep.`
+  - `{R}: Prevent the next 1 damage that would be dealt to this creature this turn.`
+  - `{R}{R}{R}: Put a +1/+1 counter on this creature. Activate only during your upkeep.`
+- **Rod of Ruin**
+  - `{3}, {T}: This artifact deals 1 damage to any target.`
+  - `{3}, {T}: This artifact deals 1 damage to any target.`
+  - `{3}, {T}: This artifact deals 1 damage to any target.`
+- **Royal Assassin**
+  - `{T}: Destroy target tapped creature.`
+  - `{T}: Destroy target tapped creature.`
+  - `{T}: Destroy target tapped creature.`
+- **Samite Healer**
+  - `{T}: Prevent the next 1 damage that would be dealt to any target this turn.`
+  - `{T}: Prevent the next 1 damage that would be dealt to any target this turn.`
+  - `{T}: Prevent the next 1 damage that would be dealt to any target this turn.`
+- **Sandstorm**
+  - `Sandstorm deals 1 damage to each attacking creature.`
+- **Scavenging Ghoul**
+  - `At the beginning of each end step, put a corpse counter on this creature for each creature that died this turn.`
+  - `Remove a corpse counter from this creature: Regenerate this creature.`
+  - `At the beginning of each end step, put a corpse counter on this creature for each creature that died this turn.`
+  - `Remove a corpse counter from this creature: Regenerate this creature.`
+  - `At the beginning of each end step, put a corpse counter on this creature for each creature that died this turn.`
+  - `Remove a corpse counter from this creature: Regenerate this creature.`
+- **Sea Serpent**
+  - `When you control no Islands, sacrifice this creature.`
+  - `When you control no Islands, sacrifice this creature.`
+  - `When you control no Islands, sacrifice this creature.`
+- **Sedge Troll**
+  - `{B}: Regenerate this creature.`
+  - `{B}: Regenerate this creature.`
+  - `{B}: Regenerate this creature.`
+- **Sengir Vampire**
+  - `Whenever a creature dealt damage by this creature this turn dies, put a +1/+1 counter on this creature.`
+  - `Whenever a creature dealt damage by this creature this turn dies, put a +1/+1 counter on this creature.`
+  - `Whenever a creature dealt damage by this creature this turn dies, put a +1/+1 counter on this creature.`
+- **Serendib Djinn**
+  - `When you control no lands, sacrifice this creature.`
+- **Serendib Efreet**
+  - `At the beginning of your upkeep, this creature deals 1 damage to you.`
+- **Shatter**
+  - `Destroy target artifact.`
+  - `Destroy target artifact.`
+  - `Destroy target artifact.`
+- **Shivan Dragon**
+  - `{R}: This creature gets +1/+0 until end of turn.`
+  - `{R}: This creature gets +1/+0 until end of turn.`
+  - `{R}: This creature gets +1/+0 until end of turn.`
+- **Singing Tree**
+  - `{T}: Target attacking creature has base power 0 until end of turn.`
+- **Sinkhole**
+  - `Destroy target land.`
+  - `Destroy target land.`
+  - `Destroy target land.`
+- **Sol Ring**
+  - `{T}: Add {C}{C}.`
+  - `{T}: Add {C}{C}.`
+  - `{T}: Add {C}{C}.`
+- **Sorceress Queen**
+  - `{T}: Target creature other than this creature has base power and toughness 0/2 until end of turn.`
+- **Soul Net**
+  - `Whenever a creature dies, you may pay {1}. If you do, you gain 1 life.`
+  - `Whenever a creature dies, you may pay {1}. If you do, you gain 1 life.`
+  - `Whenever a creature dies, you may pay {1}. If you do, you gain 1 life.`
+- **Spell Blast**
+  - `Counter target spell with mana value X. (For example, if that spell's mana cost is {3}{U}{U}, X is 5.)`
+  - `Counter target spell with mana value X. (For example, if that spell's mana cost is {3}{U}{U}, X is 5.)`
+  - `Counter target spell with mana value X. (For example, if that spell's mana cost is {3}{U}{U}, X is 5.)`
+- **Stasis**
+  - `At the beginning of your upkeep, sacrifice this enchantment unless you pay {U}.`
+  - `At the beginning of your upkeep, sacrifice this enchantment unless you pay {U}.`
+  - `At the beginning of your upkeep, sacrifice this enchantment unless you pay {U}.`
+- **Stone Rain**
+  - `Destroy target land.`
+  - `Destroy target land.`
+  - `Destroy target land.`
+- **Stream of Life**
+  - `Target player gains X life.`
+  - `Target player gains X life.`
+  - `Target player gains X life.`
+- **Terror**
+  - `Destroy target nonartifact, nonblack creature. It can't be regenerated.`
+  - `Destroy target nonartifact, nonblack creature. It can't be regenerated.`
+  - `Destroy target nonartifact, nonblack creature. It can't be regenerated.`
+- **The Hive**
+  - `{5}, {T}: Create a 1/1 colorless Insect artifact creature token with flying named Wasp. (It can't be blocked except by creatures with flying or reach.)`
+  - `{5}, {T}: Create a 1/1 colorless Insect artifact creature token with flying named Wasp. (It can't be blocked except by creatures with flying or reach.)`
+  - `{5}, {T}: Create a 1/1 colorless Insect artifact creature token with flying named Wasp. (It can't be blocked except by creatures with flying or reach.)`
+- **Thoughtlace**
+  - `Target spell or permanent becomes blue. (Mana symbols on that permanent remain unchanged.)`
+  - `Target spell or permanent becomes blue. (Mana symbols on that permanent remain unchanged.)`
+  - `Target spell or permanent becomes blue. (Mana symbols on that permanent remain unchanged.)`
+- **Throne of Bone**
+  - `Whenever a player casts a black spell, you may pay {1}. If you do, you gain 1 life.`
+  - `Whenever a player casts a black spell, you may pay {1}. If you do, you gain 1 life.`
+  - `Whenever a player casts a black spell, you may pay {1}. If you do, you gain 1 life.`
+- **Time Vault**
+  - `{T}: Take an extra turn after this one.`
+  - `{T}: Take an extra turn after this one.`
+  - `{T}: Take an extra turn after this one.`
+- **Time Walk**
+  - `Take an extra turn after this one.`
+  - `Take an extra turn after this one.`
+  - `Take an extra turn after this one.`
+- **Tranquility**
+  - `Destroy all enchantments.`
+  - `Destroy all enchantments.`
+  - `Destroy all enchantments.`
+- **Tsunami**
+  - `Destroy all Islands.`
+  - `Destroy all Islands.`
+  - `Destroy all Islands.`
+- **Tunnel**
+  - `Destroy target Wall. It can't be regenerated.`
+  - `Destroy target Wall. It can't be regenerated.`
+  - `Destroy target Wall. It can't be regenerated.`
+- **Unsummon**
+  - `Return target creature to its owner's hand.`
+  - `Return target creature to its owner's hand.`
+  - `Return target creature to its owner's hand.`
+- **Uthden Troll**
+  - `{R}: Regenerate this creature.`
+  - `{R}: Regenerate this creature.`
+  - `{R}: Regenerate this creature.`
+- **Verduran Enchantress**
+  - `Whenever you cast an enchantment spell, you may draw a card.`
+  - `Whenever you cast an enchantment spell, you may draw a card.`
+  - `Whenever you cast an enchantment spell, you may draw a card.`
+- **Wall of Bone**
+  - `{B}: Regenerate this creature. (The next time this creature would be destroyed this turn, instead tap it, remove it from combat, and heal all damage on it.)`
+  - `{B}: Regenerate this creature. (The next time this creature would be destroyed this turn, instead tap it, remove it from combat, and heal all damage on it.)`
+  - `{B}: Regenerate this creature. (The next time this creature would be destroyed this turn, instead tap it, remove it from combat, and heal all damage on it.)`
+- **Wall of Brambles**
+  - `{G}: Regenerate this creature.`
+  - `{G}: Regenerate this creature.`
+  - `{G}: Regenerate this creature.`
+- **Wall of Fire**
+  - `{R}: This creature gets +1/+0 until end of turn.`
+  - `{R}: This creature gets +1/+0 until end of turn.`
+  - `{R}: This creature gets +1/+0 until end of turn.`
+- **Wall of Water**
+  - `{U}: This creature gets +1/+0 until end of turn.`
+  - `{U}: This creature gets +1/+0 until end of turn.`
+  - `{U}: This creature gets +1/+0 until end of turn.`
+- **Wanderlust**
+  - `At the beginning of the upkeep of enchanted creature's controller, this Aura deals 1 damage to that player.`
+  - `At the beginning of the upkeep of enchanted creature's controller, this Aura deals 1 damage to that player.`
+  - `At the beginning of the upkeep of enchanted creature's controller, this Aura deals 1 damage to that player.`
+- **Warp Artifact**
+  - `At the beginning of the upkeep of enchanted artifact's controller, this Aura deals 1 damage to that player.`
+  - `At the beginning of the upkeep of enchanted artifact's controller, this Aura deals 1 damage to that player.`
+  - `At the beginning of the upkeep of enchanted artifact's controller, this Aura deals 1 damage to that player.`
+- **Will-o'-the-Wisp**
+  - `{B}: Regenerate this creature. (The next time this creature would be destroyed this turn, instead tap it, remove it from combat, and heal all damage on it.)`
+  - `{B}: Regenerate this creature. (The next time this creature would be destroyed this turn, instead tap it, remove it from combat, and heal all damage on it.)`
+  - `{B}: Regenerate this creature. (The next time this creature would be destroyed this turn, instead tap it, remove it from combat, and heal all damage on it.)`
+- **Wooden Sphere**
+  - `Whenever a player casts a green spell, you may pay {1}. If you do, you gain 1 life.`
+  - `Whenever a player casts a green spell, you may pay {1}. If you do, you gain 1 life.`
+  - `Whenever a player casts a green spell, you may pay {1}. If you do, you gain 1 life.`
+- **Wrath of God**
+  - `Destroy all creatures. They can't be regenerated.`
+  - `Destroy all creatures. They can't be regenerated.`
+  - `Destroy all creatures. They can't be regenerated.`
+- **Wyluli Wolf**
+  - `{T}: Target creature gets +1/+1 until end of turn.`

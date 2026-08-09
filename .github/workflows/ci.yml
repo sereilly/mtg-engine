@@ -1,0 +1,102 @@
+name: CI
+
+# The repo's real defenses are its guard scripts — parse coverage with its
+# deletion probe, the grammar migration ratchet, CR-citation checking. They only
+# help if something runs them, so this workflow is the thing that does.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Run the test suite
+        run: python -m pytest
+
+      # The suite finishing in under ten seconds is a property worth defending,
+      # not an accident: it is what makes the large refactors on the roadmap
+      # feasible. The budget is deliberately loose so normal growth doesn't trip
+      # it, but a step change (a test that starts a server, an accidental
+      # O(cards^2) sweep) fails here instead of being absorbed.
+      - name: Enforce the suite-time budget
+        run: |
+          START=$(date +%s)
+          python -m pytest -q > /dev/null
+          ELAPSED=$(( $(date +%s) - START ))
+          echo "suite wall time: ${ELAPSED}s"
+          if [ "$ELAPSED" -gt 20 ]; then
+            echo "::error::test suite took ${ELAPSED}s, over the 20s budget"
+            exit 1
+          fi
+
+  guards:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      # Every supported card's oracle text must be claimed by a known consumer,
+      # and the deletion probe flags words a matching rule ignored.
+      - name: Parse coverage
+        run: python scripts/parse_coverage.py --check
+
+      # Parser-migration coverage may only move forward.
+      - name: Grammar coverage ratchet
+        run: python scripts/grammar_coverage.py --check
+
+      # Every tests/rules/ test cites a Comprehensive Rules rule that exists.
+      - name: Rules-citation coverage
+        run: python scripts/rules_progress.py --check
+
+      # Behavioural equivalence decides which cards need no separate manual
+      # verification, so a signature that stops distinguishing two behaviours
+      # silently inflates coverage. New/changed classes must be reviewed.
+      - name: Behaviour classes
+        run: python scripts/behaviour_classes.py --check
+
+      # The committed vocabulary catalogs the grammar parses against are present.
+      - name: Vocabulary catalogs
+        run: python scripts/fetch_vocabulary.py --check
+
+      # Regenerating the trackers must be a no-op on a clean tree; a diff here
+      # means someone changed behavior without refreshing the generated docs.
+      - name: Generated trackers are up to date
+        run: |
+          python scripts/grammar_coverage.py > /dev/null
+          python scripts/rules_progress.py > /dev/null
+          python scripts/behaviour_classes.py > /dev/null
+          # PARSE_COVERAGE.md was missing here: its --check guards *unclaimed
+          # text*, not report freshness, so a HANDLER_CLAIMS entry could shift
+          # the channel table and leave the committed report stale with every
+          # guard still green.
+          python scripts/parse_coverage.py > /dev/null
+          if ! git diff --quiet; then
+            echo "::error::generated trackers are stale — run the scripts and commit the result"
+            git --no-pager diff --stat
+            exit 1
+          fi

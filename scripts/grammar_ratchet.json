@@ -1,0 +1,29 @@
+{
+  "floors": {
+    "2ED": {
+      "executed_pct": 35.2,
+      "lowered_pct": 64.0,
+      "parsed_pct": 70.2
+    },
+    "ALL": {
+      "executed_pct": 34.9,
+      "lowered_pct": 63.0,
+      "parsed_pct": 69.2
+    },
+    "ARN": {
+      "executed_pct": 32.4,
+      "lowered_pct": 51.9,
+      "parsed_pct": 59.3
+    },
+    "LEA": {
+      "executed_pct": 35.1,
+      "lowered_pct": 63.9,
+      "parsed_pct": 70.1
+    },
+    "LEB": {
+      "executed_pct": 35.2,
+      "lowered_pct": 64.0,
+      "parsed_pct": 70.2
+    }
+  }
+}

@@ -482,7 +482,7 @@ def _assert_supported_effect(card: CardDefinition, game: Game, p1: PlayerState, 
         # Helm of Chatzuk grants banding to the *chosen* target creature. The
         # harness activates with target_player_index=1, so the targeted player's
         # creature is the one that gains banding.
-        assert any(perm.metadata.get("gains_banding_until_eot") for perm in p2.battlefield)
+        assert any(perm.has_keyword("banding") for perm in p2.battlefield)
         return
 
     if "target creature with power 2 or less can't be blocked this turn" in text:
@@ -508,7 +508,7 @@ def _assert_supported_effect(card: CardDefinition, game: Game, p1: PlayerState, 
         return
 
     if "gains flying until end of turn" in text and "target creature you control" in text:
-        assert any(perm.metadata.get("gains_flying_until_eot") for perm in p1.battlefield)
+        assert any(perm.has_keyword("flying") for perm in p1.battlefield)
         return
 
     if "create a 1/1 colorless insect artifact creature token with flying named wasp" in text:

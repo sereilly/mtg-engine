@@ -213,15 +213,14 @@ class Game(
     # player plays it." Awaiting the caster's choice of which of the target's cards
     # to force. Shape: {"caster_index", "target_index", "card_name", "hand"}.
     pending_word_of_command: dict | None = None
-    # Library of Leng: "If an effect causes you to discard a card, discard it, but
-    # you may put it on top of your library instead of into your graveyard." The
-    # replacement is optional, so a human controller is prompted per discarded card
-    # (random/forced/cleanup discards where the card is already determined). Each
-    # entry: {"player_index", "card"}; the card sits here (in no zone) until
-    # confirm_leng_discard routes it. AI/headless play resolves the choice inline
-    # with the beneficial top-of-library default, so this is only armed for seats
-    # in ``interactive_seats``.
-    pending_leng_discards: list[dict] = field(default_factory=list)
+    # Replacement effects suspended on a player's decision — the optional or
+    # choose-one ones (Library of Leng's discard destination, Aladdin's Lamp's
+    # look-at-the-top-X, Ring of Ma'rûf's outside-the-game card). Each entry is a
+    # ReplacementChoice; the affected object sits in no zone until
+    # resolve_replacement_choice answers it. Only armed for seats in
+    # ``interactive_seats`` — every other seat takes the choice's default at
+    # once, through the same resolver. See engine/replacement_choices.py.
+    pending_replacement_choices: list = field(default_factory=list)
     # 610.3: tracks creatures exiled "until end of turn" — (owner_player_index, card)
     exile_until_eot: list[tuple[int, CardDefinition]] = field(default_factory=list)
     # 104.4: True when the game ends in a draw for all players
@@ -255,19 +254,12 @@ class Game(
     # {player_index: X}. Consumed by the next draw that player makes this turn;
     # cleared at end of turn.
     lamp_draw_replacements: dict = field(default_factory=dict)
-    # Aladdin's Lamp: a replaced draw awaiting the (human) player's choice of
-    # which of the revealed top cards to draw. Shape: {"player_index",
-    # "card_names": [...]}. The unchosen cards go to the bottom of the library
-    # in a random order.
-    pending_lamp_draw: dict | None = None
     # Ring of Ma'rûf: seats whose next draw this turn is replaced by "put a card
     # you own from outside the game into your hand". Consumed by that player's
     # next draw; cleared at end of turn alongside lamp_draw_replacements.
     outside_game_draw_replacements: set = field(default_factory=set)
-    # Ring of Ma'rûf: a replaced draw awaiting the (human) player's choice of
-    # which sideboard card to take. Shape: {"player_index", "card_names": [...],
-    # "remaining_draws"}, mirroring pending_lamp_draw.
-    pending_outside_game_draw: dict | None = None
+    # Both of the above are *armed state*, like a prevention shield. The
+    # suspended draw itself waits on pending_replacement_choices.
     # "As this [artifact/enchantment] enters, choose an opponent [and a color]."
     # (Black Vise; Jihad adds a color.) Deterministic defaults are stamped on the
     # permanent immediately so headless/AI play never blocks; an interactive

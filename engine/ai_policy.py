@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import re
 
-from .card_hooks import spell_cost_tax
+from .cost_modifiers import spell_cost_tax
 from .classifier import classify_card
 from .game import Game
 from .mixins.stack_casting import aura_enchant_noun, permanent_matches_enchant_noun
@@ -935,15 +935,7 @@ def _land_symbol(permanent: Permanent) -> str:
     if permanent.card.produced_mana:
         return permanent.card.produced_mana[0]
 
-    land_types = [str(permanent.metadata.get("land_type_override", "")).lower(), permanent.card.type_line.lower()]
-    if any("plains" in value for value in land_types):
-        return "W"
-    if any("island" in value for value in land_types):
-        return "U"
-    if any("swamp" in value for value in land_types):
-        return "B"
-    if any("mountain" in value for value in land_types):
-        return "R"
-    if any("forest" in value for value in land_types):
-        return "G"
-    return "C"
+    # Layer 4 already knows which basic land types this permanent currently
+    # has, printed or granted by a type-changing effect.
+    symbols = permanent.basic_land_mana
+    return symbols[0] if symbols else "C"

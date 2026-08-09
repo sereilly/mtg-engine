@@ -112,7 +112,7 @@ class DeclareAttackersStepMixin:
             attacker = controller.battlefield[idx]
             # CR 702.20b: attacking doesn't cause a creature with vigilance to tap.
             if not self._has_keyword(attacker, "vigilance"):
-                attacker.tapped = True
+                self.become_tapped(attacker)
                 self._turn_face_up(attacker)
             attacker.metadata["attacked_this_turn"] = True
 
@@ -135,21 +135,27 @@ class DeclareAttackersStepMixin:
         program = compile_card_oracle(attacker.effective_card)
         instr_kinds = {i.kind for i in program.instructions}
 
-        if "cant_attack_without_island" in instr_kinds:
+        # The land type is *data* on the instruction rather than baked into its
+        # name: a creature printed "unless defending player controls a Mountain"
+        # is the same restriction with a different type. The chain that used to
+        # produce this instruction matched an exact string naming Island, so any
+        # other type fell through to a bare `static_line` and the creature
+        # attacked freely while still reporting supported.
+        without_land = next(
+            (i for i in program.instructions if i.kind == "cant_attack_without_land_type"),
+            None,
+        )
+        if without_land is not None:
+            required = str(without_land.payload.get("land_type") or "island")
             # Honor text-changed land types (Magical Hack / Phantasmal Terrain):
-            # a land turned into an Island counts, matching the upkeep
+            # a land turned into the named type counts, matching the upkeep
             # "no_islands" check. Scoped to lands so a creature subtype like
             # "Island Fish" never satisfies the restriction.
             defending = self.players[defending_player_index]
-            has_island = any(
-                perm.card.primary_type == "land"
-                and (
-                    "island" in perm.card.type_line.lower()
-                    or perm.metadata.get("land_type_override") == "island"
-                )
+            return any(
+                perm.card.primary_type == "land" and perm.has_type(required)
                 for perm in defending.battlefield
             )
-            return has_island
 
         if "cant_attack" in instr_kinds:
             return False
@@ -255,7 +261,7 @@ class DeclareAttackersStepMixin:
 
     def _creature_has_banding(self, permanent: Permanent) -> bool:
         """Whether a creature currently has banding (printed or granted)."""
-        if permanent.metadata.get("gains_banding_until_eot"):
+        if permanent.has_keyword("banding"):
             return True
         return self._has_keyword(permanent, "banding")
 

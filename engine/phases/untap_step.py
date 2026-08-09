@@ -5,47 +5,50 @@ from __future__ import annotations
 The active player untaps their permanents as a turn-based action. No player
 receives priority during this step in this engine (CR 502.4). Untap
 constraints (skip entirely, per-type count limits, power-based blocks) are
-declared per card in engine/card_hooks.py:UNTAP_RESTRICTIONS — this module
-only aggregates and enforces them, so new restriction cards never touch it.
+derived from oracle text by engine/untap_restrictions.py — this module only
+aggregates and enforces them, so new restriction cards never touch it.
 """
 
-from ..card_hooks import UNTAP_RESTRICTIONS
 from ..handlers._common import permanent_effective_colors
+from ..untap_restrictions import (
+    SELF_DOESNT_UNTAP_PHRASE,
+    SELF_MAY_KEEP_TAPPED_PHRASE,
+    untap_restriction_for,
+)
 
 
 class UntapStepMixin:
     def _untap_constraints(self) -> dict[str, object]:
-        """Aggregate every active UNTAP_RESTRICTIONS source on any battlefield
-        into effective limits for the current untap step."""
+        """Aggregate every active untap restriction on any battlefield into
+        effective limits for the current untap step."""
         skip_all_source: str | None = None
         max_lands = 999
         max_creatures = 999
         min_power_block: int | None = None
         blocked_colors: set[str] = set()
-        for pl in self.players:
-            for perm in pl.battlefield:
-                restriction = UNTAP_RESTRICTIONS.get(perm.card.name)
-                if restriction is None:
-                    continue
-                if restriction.only_while_source_untapped and perm.tapped:
-                    continue
-                if restriction.scope == "all":
-                    if restriction.limit == 0:
-                        skip_all_source = perm.card.name
-                elif restriction.scope == "land":
-                    if restriction.limit is not None:
-                        max_lands = min(max_lands, restriction.limit)
-                elif restriction.scope == "creature":
-                    if restriction.limit is not None:
-                        max_creatures = min(max_creatures, restriction.limit)
-                    if restriction.min_power is not None:
-                        min_power_block = (
-                            restriction.min_power
-                            if min_power_block is None
-                            else min(min_power_block, restriction.min_power)
-                        )
-                elif restriction.scope == "creature_color" and restriction.color:
-                    blocked_colors.add(restriction.color)
+        for perm in self.all_permanents():
+            restriction = untap_restriction_for(perm.card.oracle_text)
+            if restriction is None:
+                continue
+            if restriction.only_while_source_untapped and perm.tapped:
+                continue
+            if restriction.scope == "all":
+                if restriction.limit == 0:
+                    skip_all_source = perm.card.name
+            elif restriction.scope == "land":
+                if restriction.limit is not None:
+                    max_lands = min(max_lands, restriction.limit)
+            elif restriction.scope == "creature":
+                if restriction.limit is not None:
+                    max_creatures = min(max_creatures, restriction.limit)
+                if restriction.min_power is not None:
+                    min_power_block = (
+                        restriction.min_power
+                        if min_power_block is None
+                        else min(min_power_block, restriction.min_power)
+                    )
+            elif restriction.scope == "creature_color" and restriction.color:
+                blocked_colors.add(restriction.color)
         return {
             "skip_all_source": skip_all_source,
             "max_lands": max_lands,
@@ -189,14 +192,14 @@ class UntapStepMixin:
 
             # Permanents that read "doesn't untap during your untap step" (e.g.
             # Time Vault, Basalt Monolith) stay tapped (Rule 502.4, 702 self-text).
-            if "doesn't untap during your untap step" in permanent.card.oracle_text.lower():
+            if SELF_DOESNT_UNTAP_PHRASE in permanent.card.oracle_text.lower():
                 continue
 
             # Old Man of the Sea: "You may choose not to untap this creature
             # during your untap step." A human's explicit keep-tapped choice is
             # honored; AI/headless play keeps it tapped while its linked steal
             # is alive (untapping would end the control effect).
-            if "you may choose not to untap" in permanent.card.oracle_text.lower():
+            if SELF_MAY_KEEP_TAPPED_PHRASE in permanent.card.oracle_text.lower():
                 if keep_tapped_indices is not None:
                     if idx in keep_tapped_indices:
                         continue

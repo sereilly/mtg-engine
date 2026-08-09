@@ -519,7 +519,7 @@ def test_610_1_destroy_does_not_return_after_cleanup():
 
 @pytest.mark.cr("614.8", "701.19a")
 def test_614_8_unused_regeneration_shield_expires_at_cleanup():
-    """614.8 / 701.15: a regeneration shield that is not used lasts only until the
+    """614.8 / 701.19a: a regeneration shield that is not used lasts only until the
     end of the turn it was created. After the cleanup step it is gone.
     """
     creature = _mk_creature("Shielded Bear", 2, 2)

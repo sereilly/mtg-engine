@@ -276,8 +276,8 @@ def test_bug5_banding_granted_to_casters_own_creature(all_cards):
 
     assert result.supported
     # Own Bear should gain banding, opponent's Bear should not
-    assert p1.battlefield[1].metadata.get("gains_banding_until_eot") is True
-    assert not p2.battlefield[0].metadata.get("gains_banding_until_eot")
+    assert p1.battlefield[1].has_keyword("banding") is True
+    assert not p2.battlefield[0].has_keyword("banding")
 
 
 def test_bug5_banding_granted_to_chosen_target(all_cards):
@@ -302,9 +302,9 @@ def test_bug5_banding_granted_to_chosen_target(all_cards):
     )
 
     assert result.supported
-    assert p1.battlefield[1].metadata.get("gains_banding_until_eot") is True
+    assert p1.battlefield[1].has_keyword("banding") is True
     # The other creature was not the chosen target, so it has no banding.
-    assert not p2.battlefield[0].metadata.get("gains_banding_until_eot")
+    assert not p2.battlefield[0].has_keyword("banding")
 
 
 # ---------------------------------------------------------------------------
@@ -496,7 +496,7 @@ def test_bug8_creature_with_positive_toughness_survives():
 
 def test_bug9_pestilence_damage_respects_regeneration_shield(all_cards):
     """A creature with a regeneration shield survives lethal Pestilence damage
-    (CR 704.5g / 701.15: lethal-damage destruction is replaceable by regeneration)."""
+    (CR 704.5g / 701.19: lethal-damage destruction is replaceable by regeneration)."""
     pestilence = _get(all_cards, "Pestilence")
     sprites = _get(all_cards, "Scryb Sprites")  # 1/1
 

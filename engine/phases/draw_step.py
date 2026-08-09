@@ -2,13 +2,16 @@ from __future__ import annotations
 
 """Draw step (CR 504).
 
-The active player draws a card as a turn-based action. Draw-step behaviors
-(skip-for-protection, bonus draws) are declared per card in
-engine/card_hooks.py:DRAW_STEP_MODIFIERS — this module only aggregates and
-enforces them, so a new draw-modifier card never touches it.
+The active player draws a card as a turn-based action. Bonus draws granted to
+every player are derived from oracle text by engine/draw_step_modifiers.py;
+the skip-your-draw-for-protection behavior stays name-keyed in
+engine/card_hooks.py:DRAW_STEP_MODIFIERS because the protection quality it
+grants is card-specific. Either way this module only aggregates and enforces,
+so a new bonus-draw card never touches it.
 """
 
 from ..card_hooks import DRAW_STEP_MODIFIERS
+from ..draw_step_modifiers import draw_step_bonus_for
 
 
 class DrawStepMixin:
@@ -108,15 +111,14 @@ class DrawStepMixin:
             return 0
 
         bonus = 0
-        for controller in self.players:
-            for permanent in controller.battlefield:
-                modifier = DRAW_STEP_MODIFIERS.get(permanent.card.name)
-                if modifier is None or not modifier.extra_draws:
-                    continue
-                if modifier.requires_untapped and permanent.tapped:
-                    continue
-                bonus += modifier.extra_draws
-        drawn = self._draw_with_lamp(player, 1 + bonus)
+        for permanent in self.all_permanents():
+            extra = draw_step_bonus_for(permanent.card.oracle_text)
+            if extra is None:
+                continue
+            if extra.requires_untapped and permanent.tapped:
+                continue
+            bonus += extra.count
+        drawn = self._draw_with_replacements(player, 1 + bonus)
         self.log.append(f"{player.name} drew {drawn} card(s) in draw step")
         self._close_or_defer_step(phase, step, defer_priority)
         return drawn

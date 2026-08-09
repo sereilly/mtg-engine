@@ -494,7 +494,7 @@ def test_400_3_stolen_creature_dies_into_owners_graveyard():
     game, p1, p2, creature = _steal_setup()
 
     game._mark_damage_on_permanent(creature, 10, source=None)
-    game._destroy_marked_creatures()
+    game.check_state_based_actions()
 
     assert creature not in p1.battlefield
     assert all(card.name != "Stolen Bear" for card in p1.graveyard)

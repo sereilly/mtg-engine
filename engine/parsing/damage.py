@@ -1,4 +1,16 @@
-"""Damage-dealing effects."""
+"""Damage-dealing effects.
+
+Most of this family now lives in ``engine/grammar/parser.py``: the plain
+"deals N damage to <recipient>" form, the Earthquake/Hurricane/Sandstorm
+sweeps, the Disintegrate riders, and the two-clause forms that used to need
+their own fused instruction kinds (``deal_damage_and_self_damage``,
+``deal_damage_and_opponent_choice``) — the grammar reads those as an ordinary
+conjunction and emits two instructions.
+
+What remains needs a quantity the grammar has no node for (a count of Swamps,
+"the damage dealt to you this turn") or bundles damage with an unrelated
+effect.
+"""
 
 from __future__ import annotations
 
@@ -7,27 +19,7 @@ import re
 from ..oracle_types import _instruction
 from .base import RuleResult, activated_kind, parse_rule
 
-_DAMAGE_AND_SELF_RE = re.compile(r"deals (\d+) damage to any target and (\d+) damage to you")
-_DAMAGE_AND_OPPONENT_CHOICE_RE = re.compile(
-    r"deals (\d+) damage to any target and (\d+) damage to any target of an opponent's choice"
-)
 _DAMAGE_N_RE = re.compile(r"deals (\d+) damage")
-
-
-@parse_rule(29000)
-def earthquake_damage(text: str, activated: bool) -> RuleResult:
-    if "deals x damage" in text and "each creature without flying" in text:
-        effect_kind = activated_kind(activated, "damage")
-        return _instruction("earthquake_damage", amount="x"), effect_kind
-    return None
-
-
-@parse_rule(30000)
-def hurricane_damage(text: str, activated: bool) -> RuleResult:
-    if "deals x damage" in text and "each creature with flying" in text:
-        effect_kind = activated_kind(activated, "damage")
-        return _instruction("hurricane_damage", amount="x"), effect_kind
-    return None
 
 
 @parse_rule(31000)
@@ -48,39 +40,11 @@ def simulacrum_effect(text: str, activated: bool) -> RuleResult:
     return None
 
 
-@parse_rule(31800)
-def deal_x_damage_exile_if_dies(text: str, activated: bool) -> RuleResult:
-    # Disintegrate: "deals X damage to any target. If it's a creature, it can't be
-    # regenerated this turn, and if it would die this turn, exile it instead."
-    if "deals x damage" in text and "if it would die this turn, exile it instead" in text:
-        effect_kind = activated_kind(activated, "damage")
-        return _instruction(
-            "deal_damage",
-            amount="x",
-            no_regen=True,
-            exile_if_dies=True,
-        ), effect_kind
-    return None
-
-
 @parse_rule(32000)
 def deal_x_damage(text: str, activated: bool) -> RuleResult:
     if "deals x damage" in text:
         effect_kind = activated_kind(activated, "damage")
         return _instruction("deal_damage", amount="x"), effect_kind
-    return None
-
-
-@parse_rule(33000)
-def deal_damage_and_self_damage(text: str, activated: bool) -> RuleResult:
-    self_dmg_match = _DAMAGE_AND_SELF_RE.search(text)
-    if self_dmg_match:
-        effect_kind = activated_kind(activated, "damage")
-        return _instruction(
-            "deal_damage_and_self_damage",
-            amount=int(self_dmg_match.group(1)),
-            self_damage=int(self_dmg_match.group(2)),
-        ), effect_kind
     return None
 
 
@@ -104,44 +68,6 @@ def deal_damage_each_flier_and_player(text: str, activated: bool) -> RuleResult:
     m = _DAMAGE_EACH_FLIER_AND_PLAYER_RE.search(text)
     if m:
         return _instruction("hurricane_damage", amount=int(m.group(1))), activated_kind(activated, "damage")
-    return None
-
-
-# Sandstorm: "Sandstorm deals 1 damage to each attacking creature." A
-# creature-only sweep (no player damage), so it can't reuse the Earthquake
-# shape. Must out-rank the generic "deals N damage" rule below.
-_DAMAGE_EACH_ATTACKING_RE = re.compile(r"deals (\d+) damage to each attacking creature")
-
-
-@parse_rule(34800)
-def deal_damage_each_attacking_creature(text: str, activated: bool) -> RuleResult:
-    m = _DAMAGE_EACH_ATTACKING_RE.search(text)
-    if m:
-        return _instruction(
-            "deal_damage_each_attacking_creature", amount=int(m.group(1))
-        ), activated_kind(activated, "damage")
-    return None
-
-
-@parse_rule(35000)
-def deal_damage_each_creature_and_player(text: str, activated: bool) -> RuleResult:
-    if "deals 1 damage to each creature and each player" in text:
-        effect_kind = activated_kind(activated, "damage")
-        return _instruction("deal_damage_each_creature_and_player", amount=1), effect_kind
-    return None
-
-
-# Cuombajj Witches: the controller picks the first target, an opponent picks
-# the second. Must out-rank the generic "deals N damage" rule below.
-@parse_rule(36500)
-def deal_damage_and_opponent_choice(text: str, activated: bool) -> RuleResult:
-    m = _DAMAGE_AND_OPPONENT_CHOICE_RE.search(text)
-    if m:
-        return _instruction(
-            "deal_damage_and_opponent_choice",
-            amount=int(m.group(1)),
-            opponent_amount=int(m.group(2)),
-        ), activated_kind(activated, "damage")
     return None
 
 

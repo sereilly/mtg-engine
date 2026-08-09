@@ -214,8 +214,7 @@ class TestWoodenSphereTriggerStaysOnStack:
         assert game.queue_from_hand(0, "Llanowar Elves").supported
         # The trigger fires at cast time and sits on the stack ABOVE the triggering
         # spell, which remains on the stack beneath it (CR 603.3).
-        assert [it.hook_key for it in game.stack] == [None, "optional_pay"]
-        assert game.stack[0].card.name == "Llanowar Elves"
+        assert [it.card.name for it in game.stack] == ["Llanowar Elves", "Wooden Sphere"]
         game.note_priority_action_taken(0)
         # Both players pass: the trigger (top of stack) resolves and pauses on the
         # stack for the pay prompt — Llanowar Elves is still on the stack below it.

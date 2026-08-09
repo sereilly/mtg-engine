@@ -6,15 +6,15 @@ no generic instruction covers, register it here instead of hardcoding the card
 name inside engine internals. This keeps per-card behavior in one place and
 lets the card pool grow without touching the core rules code.
 
+Cast triggers used to live here as two name-keyed registries, covering six
+cards whose conditions the oracle compiler already understood — they were
+name-keyed only because nothing dispatched "whenever a player casts a … spell"
+and because "you may pay {N}" had no generic representation. Both gaps are
+closed: the condition's colour is captured into its payload and dispatched by
+``engine/events.py``, and the optional cost is an ordinary ``may`` instruction.
+Prefer that route before adding a registry entry here.
+
 Hook registries:
-- ON_SPELL_CAST       — fired when a player casts a spell, once per permanent
-                        that player controls whose name is registered.
-- ON_SPELL_CAST_ANY   — fired when *any* player casts a spell (as the spell is put
-                        on the stack, CR 603.3), once per permanent on any
-                        battlefield whose name is registered. Used by "whenever a
-                        player casts a [color] spell" triggers (the Rod/Cup/Sphere
-                        cycle) so their trigger goes on the stack above the spell
-                        and resolves while the spell is still on the stack.
 - ON_SELF_RESOLVED    — fired when the named instant/sorcery itself resolves
                         (keyed by the resolving card's own name), for bespoke
                         effects the single compiled instruction can't express.
@@ -22,19 +22,20 @@ Hook registries:
                         the counterspell's own name).
 - ON_LEAVE_BATTLEFIELD — fired when the named permanent is put into a graveyard
                         from the battlefield (keyed by the permanent's name).
-- UNTAP_RESTRICTIONS  — declarative untap-step constraints (Stasis, Winter Orb,
-                        Smoke, Meekstone), consumed by engine/phases/untap_step.
-- DRAW_STEP_MODIFIERS — draw-step skips and bonus draws (Island Sanctuary,
-                        Howling Mine), consumed by engine/phases/draw_step.
+- DRAW_STEP_MODIFIERS — the skip-your-draw-for-protection behavior (Island
+                        Sanctuary), consumed by engine/phases/draw_step. Untap
+                        restrictions and symmetric bonus draws left this file:
+                        they are templates, derived from oracle text by
+                        engine/untap_restrictions.py and
+                        engine/draw_step_modifiers.py.
 - MANA_PRODUCTION_MODIFIERS — fired once per registered permanent whenever a
                         land is tapped for mana (Mana Flare, Gauntlet of Might,
                         Lifetap), consumed by engine/mixins/turn_management.
 - ENCHANTED_LAND_TAPPED_FOR_MANA — bespoke behavior for the Aura on a land tapped
                         for mana (Kudzu), keyed by Aura name, consumed by
                         engine/mixins/turn_management.
-- SPELL_COST_MODIFIERS / ABILITY_COST_MODIFIERS — extra generic mana taxed onto
-                        a cast / activation, once per registered permanent on
-                        any battlefield (Gloom).
+Cost taxes left this file too: "<colour> spells cost {N} more to cast" is a
+template, derived from oracle text by engine/cost_modifiers.py.
 """
 
 from __future__ import annotations
@@ -47,84 +48,9 @@ if TYPE_CHECKING:
     from .game_types import StackItem
     from .models import CardDefinition, Permanent, PlayerState
 
-SpellCastHook = Callable[["Game", "PlayerState", "Permanent", "CardDefinition"], None]
-SpellCastAnyHook = Callable[["Game", "PlayerState", "Permanent", "CardDefinition"], None]
 SelfResolvedHook = Callable[["Game", "PlayerState", "CardDefinition", int, "int | None"], None]
 SpellCounteredHook = Callable[["Game", "CardDefinition", "StackItem"], None]
 LeaveBattlefieldHook = Callable[["Game", "PlayerState", "Permanent"], None]
-
-
-def _verduran_enchantress(game: Game, controller: PlayerState, permanent: Permanent, cast_card: CardDefinition) -> None:
-    # "Whenever you cast an enchantment spell, you may draw a card." The trigger goes
-    # on the stack (CR 603.3); when it resolves, the optional draw is offered (a yes/no
-    # prompt — human is asked; AI/headless auto-draws). Only fires for enchantments.
-    if cast_card.primary_type != "enchantment":
-        return
-    controller_index = game.players.index(controller)
-    game._enqueue_triggered_ability(
-        controller_index=controller_index,
-        source_permanent=permanent,
-        effect_kind="triggered_draw",
-        ability_text="Whenever you cast an enchantment spell, you may draw a card.",
-        hook_key="optional_pay",
-        hook_event={
-            "card_name": permanent.card.name,
-            "player_index": controller_index,
-            "cost": 0,
-            "life": 0,
-            "draw": 1,
-            "prompt": "Draw a card?",
-        },
-    )
-
-
-ON_SPELL_CAST: dict[str, SpellCastHook] = {
-    "Verduran Enchantress": _verduran_enchantress,
-}
-
-
-# Map: artifact name → (color that triggers it, life gained)
-COLOR_ROD_TRIGGERS: dict[str, tuple[str, int]] = {
-    "Crystal Rod": ("U", 1),
-    "Iron Star": ("R", 1),
-    "Ivory Cup": ("W", 1),
-    "Throne of Bone": ("B", 1),
-    "Wooden Sphere": ("G", 1),
-}
-
-
-def _make_color_rod_hook(trigger_color: str, life_amount: int) -> SpellCastAnyHook:
-    def hook(game: Game, controller: PlayerState, permanent: Permanent, cast_card: CardDefinition) -> None:
-        # "Whenever a player casts a [color] spell, you may pay {1}. If you do, you
-        # gain 1 life." (Throne of Bone, Crystal Rod, Iron Star, Ivory Cup, Wooden
-        # Sphere). The trigger fires as the spell is put on the stack and goes on the
-        # stack above it (CR 603.3), so it resolves while the triggering spell is
-        # still on the stack. When it resolves, the optional "pay {1}: gain life" is
-        # offered — but only if the controller can actually pay (checked at
-        # resolution, in _resolve_optional_pay_trigger).
-        if trigger_color not in cast_card.colors:
-            return
-        controller_index = game.players.index(controller)
-        game._enqueue_triggered_ability(
-            controller_index=controller_index,
-            source_permanent=permanent,
-            effect_kind="triggered_gain_life",
-            ability_text="Whenever a player casts a spell of the chosen color, you may pay {1}. If you do, gain 1 life.",
-            hook_key="optional_pay",
-            hook_event={
-                "card_name": permanent.card.name,
-                "player_index": controller_index,
-                "cost": 1,
-                "life": life_amount,
-            },
-        )
-
-    return hook
-
-
-ON_SPELL_CAST_ANY: dict[str, SpellCastAnyHook] = {
-    name: _make_color_rod_hook(color, amount) for name, (color, amount) in COLOR_ROD_TRIGGERS.items()
-}
 
 
 def _guardian_angel(
@@ -155,7 +81,7 @@ def _power_sink(game: Game, counter_card: CardDefinition, countered: StackItem) 
     ctrl = game.players[countered.caster_index]
     for perm in ctrl.battlefield:
         if perm.card.primary_type == "land":
-            perm.tapped = True
+            game.become_tapped(perm)
     ctrl.mana_pool = {k: 0 for k in ctrl.mana_pool}
     game.log.append(f"{counter_card.name} tapped all lands and drained mana from {ctrl.name}")
 
@@ -304,40 +230,13 @@ TRIGGER_HOOKS: dict[str, TriggerStackHook] = {
 
 
 # --------------------------------------------------------------------------
-# Untap-step restrictions (CR 502)
+# Untap-step restrictions (CR 502) — moved out
 # --------------------------------------------------------------------------
-
-@dataclass(frozen=True)
-class UntapRestriction:
-    """Declarative "don't untap as normal" constraint from a permanent.
-
-    scope      -- what the restriction applies to: "all" | "land" | "creature"
-    limit      -- max permanents of that scope the active player may untap
-                  (0 with scope="all" skips the untap step entirely; None
-                  means no count limit)
-    min_power  -- per-permanent block: creatures with effective power >= N
-                  don't untap (Meekstone)
-    only_while_source_untapped -- the restriction is active only while the
-                  source permanent itself is untapped (Winter Orb)
-    """
-
-    scope: str
-    limit: int | None = None
-    min_power: int | None = None
-    only_while_source_untapped: bool = False
-    color: str | None = None
-
-
-UNTAP_RESTRICTIONS: dict[str, UntapRestriction] = {
-    "Stasis": UntapRestriction(scope="all", limit=0),
-    "Winter Orb": UntapRestriction(scope="land", limit=1, only_while_source_untapped=True),
-    "Smoke": UntapRestriction(scope="creature", limit=1),
-    "Meekstone": UntapRestriction(scope="creature", min_power=3),
-    # Magnetic Mountain: "Blue creatures don't untap during their controllers'
-    # untap steps." (The "may pay {4} per creature to untap anyway" clause is
-    # a separate upkeep effect — see upkeep_pay_per_creature_untap_color.)
-    "Magnetic Mountain": UntapRestriction(scope="creature_color", color="U"),
-}
+# Stasis, Winter Orb, Smoke, Meekstone and Magnetic Mountain used to be five
+# name-keyed UntapRestriction entries here. Their wordings are templates, so
+# the restriction is now derived from oracle text in
+# engine/untap_restrictions.py and a card printed with one of those templates
+# needs no registration at all.
 
 
 # --------------------------------------------------------------------------
@@ -354,14 +253,11 @@ UNTAPPED_ARTIFACT_PROTECTORS: frozenset[str] = frozenset({"Guardian Beast"})
 
 
 # --------------------------------------------------------------------------
-# Top-of-library discard replacements
+# Top-of-library discard replacements — moved out
 # --------------------------------------------------------------------------
-# Library of Leng: "If an effect causes you to discard a card, discard it, but
-# you may put it on top of your library instead of into your graveyard." A
-# permanent whose controller may redirect discards to the top of their library.
-# Checked by effects.py:_controls_top_of_library_discard at each discard site.
-
-TOP_OF_LIBRARY_DISCARD_SOURCES: frozenset[str] = frozenset({"Library of Leng"})
+# Library of Leng was a name-keyed frozenset here. It is now a text-keyed
+# `discard` replacement in engine/replacements.py, offering the optional
+# destination as a ReplacementChoice.
 
 
 # --------------------------------------------------------------------------
@@ -374,18 +270,19 @@ class DrawStepModifier:
 
     optional_skip_grants_protection -- its controller may skip their draw to
                   gain "attack only me with flyers" protection (Island Sanctuary)
-    extra_draws -- bonus cards drawn in EVERY player's draw step (Howling Mine)
-    requires_untapped -- the modifier applies only while the source is untapped
     """
 
     optional_skip_grants_protection: bool = False
-    extra_draws: int = 0
-    requires_untapped: bool = False
 
 
+# Howling Mine's "that player draws an additional card" moved out to
+# engine/draw_step_modifiers.py: it is a template a long line of cards
+# reprints, so it is derived from oracle text instead of registered here.
+# Island Sanctuary stays because the quality it grants protection against
+# ("creatures with flying and/or islandwalk") is specific to the card — until
+# a second card grants a different quality there is nothing to generalize.
 DRAW_STEP_MODIFIERS: dict[str, DrawStepModifier] = {
     "Island Sanctuary": DrawStepModifier(optional_skip_grants_protection=True),
-    "Howling Mine": DrawStepModifier(extra_draws=1, requires_untapped=True),
 }
 
 
@@ -400,8 +297,9 @@ ManaProductionHook = Callable[["Game", int, "Permanent", str, "Permanent", int],
 
 
 def _land_has_type(land: Permanent, land_type: str) -> bool:
-    override = str(land.metadata.get("land_type_override", "")).lower()
-    return land_type in land.card.type_line.lower() or land_type in override
+    """Whether the land currently has a basic land type — printed, or made so
+    by a layer-4 type-changing effect."""
+    return land.has_type(land_type)
 
 
 def _mana_flare(game: Game, tapping_index: int, land: Permanent, symbol: str,
@@ -420,17 +318,42 @@ def _gauntlet_of_might(game: Game, tapping_index: int, land: Permanent, symbol: 
         player.mana_pool["R"] = player.mana_pool.get("R", 0) + 1
 
 
-def _lifetap(game: Game, tapping_index: int, land: Permanent, symbol: str,
-             source: Permanent, source_index: int) -> None:
-    # "Whenever an opponent taps a Forest for mana, you gain 1 life."
-    if source_index != tapping_index and _land_has_type(land, "forest"):
-        game._gain_life(game.players[source_index], 1, "Lifetap")
+# --------------------------------------------------------------------------
+# "Becomes tapped" triggers (CR 701.26a)
+# --------------------------------------------------------------------------
+# Fired by Game.tap_permanent for every permanent that changes from untapped to
+# tapped — any cause, not just being tapped for mana. Signature:
+# (game, source_permanent, tapped_permanent).
+
+BecomesTappedHook = Callable[["Game", "Permanent", "Permanent"], None]
+
+
+def _lifetap(game: Game, source: Permanent, tapped: Permanent) -> None:
+    # "Whenever a Forest an opponent controls becomes tapped, you gain 1 life."
+    # Registered here rather than on the tapped-for-mana path: the card says
+    # *becomes tapped*, so an opponent's Forest tapped by Icy Manipulator counts
+    # just as much as one tapped for mana.
+    #
+    # Still name-keyed because the compiler does not parse this trigger at all
+    # (Lifetap compiles to zero triggered abilities). Once the parser produces a
+    # becomes_tapped condition, this moves onto engine/events.py and the entry
+    # disappears.
+    controller_index = game.controller_index_of(source)
+    tapped_controller = game.controller_index_of(tapped)
+    if controller_index is None or tapped_controller is None:
+        return
+    if tapped_controller != controller_index and tapped.has_type("forest"):
+        game._gain_life(game.players[controller_index], 1, "Lifetap")
+
+
+ON_BECOMES_TAPPED: dict[str, BecomesTappedHook] = {
+    "Lifetap": _lifetap,
+}
 
 
 MANA_PRODUCTION_MODIFIERS: dict[str, ManaProductionHook] = {
     "Mana Flare": _mana_flare,
     "Gauntlet of Might": _gauntlet_of_might,
-    "Lifetap": _lifetap,
 }
 
 
@@ -499,65 +422,8 @@ ENCHANTED_LAND_TAPPED_FOR_MANA: dict[str, EnchantedLandTappedHook] = {
 
 
 # --------------------------------------------------------------------------
-# Cost modifiers (extra generic mana taxed onto casts / activations)
+# Cost modifiers — moved out
 # --------------------------------------------------------------------------
-# Applied once per registered permanent on any battlefield. Return the extra
-# generic mana (0 = no tax for this cast/activation).
-
-SpellCostModifier = Callable[["Game", int, "CardDefinition"], int]
-AbilityCostModifier = Callable[["Game", int, "Permanent"], int]
-
-
-def _gloom_spell_tax(game: Game, caster_index: int, card: CardDefinition) -> int:
-    # Gloom: "White spells cost {3} more to cast."
-    return 3 if "W" in card.colors else 0
-
-
-def _gloom_ability_tax(game: Game, controller_index: int, source: Permanent) -> int:
-    # Gloom: "Activated abilities of white enchantments cost {3} more to activate."
-    card = source.effective_card
-    return 3 if ("enchantment" in card.type_line.lower() and "W" in card.colors) else 0
-
-
-SPELL_COST_MODIFIERS: dict[str, SpellCostModifier] = {
-    "Gloom": _gloom_spell_tax,
-}
-
-ABILITY_COST_MODIFIERS: dict[str, AbilityCostModifier] = {
-    "Gloom": _gloom_ability_tax,
-}
-
-
-def spell_cost_tax(game: Game, caster_index: int, card: CardDefinition) -> tuple[int, list[str]]:
-    """Total extra generic mana for casting *card*, plus the taxing permanents'
-    names (for logging). One application per registered permanent (two Glooms
-    tax {6})."""
-    total = 0
-    names: list[str] = []
-    for player in game.players:
-        for perm in player.battlefield:
-            modifier = SPELL_COST_MODIFIERS.get(perm.card.name)
-            if modifier is None:
-                continue
-            extra = modifier(game, caster_index, card)
-            if extra:
-                total += extra
-                names.append(perm.card.name)
-    return total, names
-
-
-def ability_cost_tax(game: Game, controller_index: int, source: Permanent) -> tuple[int, list[str]]:
-    """Total extra generic mana for activating *source*'s ability, plus the
-    taxing permanents' names (for logging)."""
-    total = 0
-    names: list[str] = []
-    for player in game.players:
-        for perm in player.battlefield:
-            modifier = ABILITY_COST_MODIFIERS.get(perm.card.name)
-            if modifier is None:
-                continue
-            extra = modifier(game, controller_index, source)
-            if extra:
-                total += extra
-                names.append(perm.card.name)
-    return total, names
+# Gloom was two hand-written functions keyed by name. "<colour> spells cost
+# {N} more to cast" is a template Magic reprints constantly, so the tax is
+# now derived from oracle text in engine/cost_modifiers.py.

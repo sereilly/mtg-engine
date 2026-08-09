@@ -12,6 +12,29 @@ from ..models import Permanent
 from ..tokens import make_token_card
 from ..trigger_utils import iter_triggered_abilities, make_trigger_event
 
+# Instruction kinds this step enqueues under the ``end_step`` trigger condition,
+# grouped by the board question that gates each scan.
+#
+# Hoisted out of ``resolve_end_step`` so the dispatch surface is *data*. Nothing
+# else fires an ``end_step`` trigger, so a compiler that lowers one of these
+# lines onto any other kind produces a card that reports as supported and never
+# fires — the failure mode the equivalent upkeep guard was built for after it
+# shipped twice. ``tests/engine/test_grammar_lowering.py`` reads these sets and
+# checks every end-step trigger the grammar executes against them.
+END_STEP_DEATH_COUNTER_KINDS = frozenset({
+    "add_corpse_counters_for_each_creature_died",
+    "add_plus1_counters_for_each_creature_died",
+})
+END_STEP_EMPTY_BOARD_KINDS = frozenset({"sacrifice_if_no_creatures"})
+END_STEP_DID_NOT_ATTACK_KINDS = frozenset({"end_step_damage_if_not_attacked"})
+
+#: Every instruction kind an ``end_step`` trigger can be dispatched on.
+END_STEP_DISPATCHED_KINDS = (
+    END_STEP_DEATH_COUNTER_KINDS
+    | END_STEP_EMPTY_BOARD_KINDS
+    | END_STEP_DID_NOT_ATTACK_KINDS
+)
+
 
 class EndStepMixin:
     def resolve_end_step(self, player_index: int) -> None:
@@ -57,8 +80,9 @@ class EndStepMixin:
             )
 
         # Regeneration is deliberately not offered here: the flags conflate
-        # sacrifices (never replaceable by regeneration, CR 701.15e) with
-        # destructions; separating them is a rules feature, not cleanup.
+        # sacrifices (not destruction, so no replacement effect applies —
+        # CR 701.21a) with destructions; separating them is a rules feature,
+        # not cleanup.
         destroyed_names: list[str] = []
         for controller in self.players:
             for permanent in self._destroy_swept_permanents(
@@ -83,10 +107,7 @@ class EndStepMixin:
             for controller_index, permanent, trig in iter_triggered_abilities(
                 self,
                 condition_kinds={"end_step"},
-                instruction_kinds={
-                    "add_corpse_counters_for_each_creature_died",
-                    "add_plus1_counters_for_each_creature_died",
-                },
+                instruction_kinds=END_STEP_DEATH_COUNTER_KINDS,
             ):
                 events.append(make_trigger_event(
                     controller_index, permanent, trig, trigger_context={"count": died}
@@ -100,7 +121,7 @@ class EndStepMixin:
             for controller_index, permanent, trig in iter_triggered_abilities(
                 self,
                 condition_kinds={"end_step"},
-                instruction_kinds={"sacrifice_if_no_creatures"},
+                instruction_kinds=END_STEP_EMPTY_BOARD_KINDS,
             ):
                 events.append(make_trigger_event(controller_index, permanent, trig))
 
@@ -112,7 +133,7 @@ class EndStepMixin:
         for controller_index, permanent, trig in iter_triggered_abilities(
             self,
             condition_kinds={"end_step"},
-            instruction_kinds={"end_step_damage_if_not_attacked"},
+            instruction_kinds=END_STEP_DID_NOT_ATTACK_KINDS,
             players=[self.players[player_index]],
         ):
             events.append(make_trigger_event(controller_index, permanent, trig))

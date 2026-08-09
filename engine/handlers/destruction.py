@@ -21,10 +21,7 @@ def volcanic_eruption(game: Game, instruction: OracleInstruction, context: Oracl
     x_value = max(0, context.x_value or 0)
 
     def _is_mountain(perm: Permanent) -> bool:
-        return perm.card.primary_type == "land" and (
-            "mountain" in perm.card.type_line.lower()
-            or perm.metadata.get("land_type_override") == "mountain"
-        )
+        return perm.card.primary_type == "land" and perm.has_type("mountain")
 
     # Resolve the chosen Mountains. The UI supplies either a cross-seat divided
     # list (Mountains may be chosen on both battlefields at once) or explicit
@@ -69,7 +66,6 @@ def volcanic_eruption(game: Game, instruction: OracleInstruction, context: Oracl
             for perm in list(player.battlefield):
                 if perm.is_creature:
                     game._mark_damage_on_permanent(perm, destroyed, source=card)
-        game._destroy_marked_creatures()
     game.log.append(f"{card.name} dealt {destroyed} damage to each creature and each player")
     return True, "resolved"
 

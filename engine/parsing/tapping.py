@@ -1,10 +1,15 @@
-"""Tap and untap effects."""
+"""Tap and untap effects.
+
+The plain "tap/untap target <noun>" forms are productions in
+``engine/grammar/parser.py`` now, including the land-restricted untap.
+What is left either bundles tapping with another effect or lets the player
+choose the direction.
+"""
 
 from __future__ import annotations
 
 from ..oracle_types import _instruction
 from .base import RuleResult, parse_rule
-from .common import parse_target_filter
 
 
 @parse_rule(15000)
@@ -25,13 +30,6 @@ def tap_lands_and_drain_mana(text: str, activated: bool) -> RuleResult:
 def untap_enchanted_creature(text: str, activated: bool) -> RuleResult:
     if activated and "untap enchanted creature" in text:
         return _instruction("untap_enchanted_creature"), "activated_untap"
-    return None
-
-
-@parse_rule(70000)
-def untap_target_land(text: str, activated: bool) -> RuleResult:
-    if "untap target land" in text and activated:
-        return _instruction("untap_target_land"), "activated_untap"
     return None
 
 
@@ -65,19 +63,4 @@ def untap_attacker_and_prevent_combat_damage(text: str, activated: bool) -> Rule
 def untap_target(text: str, activated: bool) -> RuleResult:
     if "untap target" in text:
         return _instruction("untap_target_permanent"), "spell_pattern"
-    return None
-
-
-@parse_rule(72000)
-def tap_target(text: str, activated: bool) -> RuleResult:
-    if "tap target" in text:
-        # Ali Baba: "{R}: Tap target Wall." — carry the noun-phrase restriction
-        # so resolution and the legality enumerator only accept matching
-        # permanents. Icy Manipulator's "artifact, creature, or land" parses to
-        # no filter, preserving its any-permanent behavior.
-        clause = text.split("tap target", 1)[1].split(".", 1)[0]
-        payload = {}
-        if "artifact, creature, or land" not in clause and "permanent" not in clause:
-            payload = parse_target_filter(clause, text).to_payload()
-        return _instruction("tap_target_permanent", **payload), "spell_pattern"
     return None

@@ -28,7 +28,12 @@ from .oracle_types import (
     _instruction,
     _parse_number_token,
 )
+from .characteristic_defining import dynamic_pt_for
+from .combat_restrictions import combat_restriction_for
+from .static_bonuses import static_bonus_for
+from .grammar import ast as grammar_ast, compile_line as compile_grammar_line
 from .parsing import parse_modal_options, parse_primary_instruction, parse_static_coeffects
+from .parsing.base import activated_kind
 
 __all__ = [
     "ActivatedAbilityCost",
@@ -198,6 +203,10 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("enchanted_land_tapped",       r"whenever enchanted land becomes tapped"),
     ("self_becomes_tapped",         r"whenever this land becomes tapped"),
     ("land_tapped_for_mana",        r"whenever a player taps a land for mana"),
+    # A colour-narrowed cast trigger (the Rod/Cup/Sphere cycle). The colour is
+    # captured into the condition payload so one dispatcher covers every card
+    # written this way; must precede the unnarrowed form below.
+    ("spell_cast",                  r"whenever a player casts a (?P<color_word>white|blue|black|red|green) spell"),
     ("spell_cast",                  r"whenever a player casts a spell"),
     ("opponent_casts_spell",        r"whenever an opponent casts a spell"),
     ("you_cast_spell",              r"whenever you cast a spell"),
@@ -224,6 +233,10 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
 AT_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("upkeep_self",         r"at the beginning of your upkeep"),
     ("upkeep_each",         r"at the beginning of each (?:player's )?upkeep"),
+    # Deliberately excludes `land`: Cursed Land's upkeep damage is already dealt
+    # by the enchant-land upkeep pass in phases/upkeep_step.py. Adding `land`
+    # here compiles a *second* trigger and the card deals its damage twice —
+    # caught by test_cursed_land_deals_upkeep_damage_to_land_controller.
     ("upkeep_enchanted_controller", r"at the beginning of the upkeep of enchanted (?:creature|artifact|enchantment)'s controller"),
     ("upkeep_chosen",       r"at the beginning of the chosen player's upkeep"),
     ("draw_step_each",      r"at the beginning of each player's draw step"),
@@ -354,7 +367,13 @@ def _match_trigger_patterns(
     for kind, pattern in patterns:
         m = pattern.match(text)
         if m:
-            return TriggerCondition(kind=kind, trigger=trigger_word, raw_text=m.group(0))
+            # Named groups become the condition's payload, so a narrowed
+            # condition ("…casts a *blue* spell") carries its restriction as
+            # data. Event dispatch reads it instead of needing a per-card hook.
+            payload = {k: v for k, v in m.groupdict().items() if v is not None}
+            return TriggerCondition(
+                kind=kind, trigger=trigger_word, raw_text=m.group(0), payload=payload
+            )
     return None
 
 
@@ -408,7 +427,7 @@ def _extract_if_condition(effect_text: str) -> tuple[str | None, str]:
     return None, effect_text
 
 
-def _parse_triggered_ability(line: str) -> ParsedTriggeredAbility | None:
+def _parse_triggered_ability(line: str, card_name: str | None = None) -> ParsedTriggeredAbility | None:
     """Parse a single oracle text line as a triggered ability.
 
     Returns None if the line doesn't start with a trigger word at all,
@@ -428,7 +447,10 @@ def _parse_triggered_ability(line: str) -> ParsedTriggeredAbility | None:
     # Extract any trailing "if ..." guard on the effect
     if_kind, clean_effect = _extract_if_condition(remainder)
 
-    instruction, effect_kind = parse_primary_instruction(clean_effect, activated=False)
+    instruction, effect_kind = _prefer_grammar(
+        _grammar_instruction(line, card_name),
+        parse_primary_instruction(clean_effect, activated=False),
+    )
 
     if instruction is not None and if_kind is not None:
         # Attach the if-condition into the instruction payload
@@ -458,6 +480,78 @@ def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleIns
 
 
 # ---------------------------------------------------------------------------
+# Grammar front end (strangler fig)
+# ---------------------------------------------------------------------------
+#
+# engine.grammar parses a line into a typed AST and lowers it to instructions.
+# It runs on every line, but its result is only *used* when every category it
+# lowered to is switched on in engine.grammar.GRAMMAR_CATEGORIES; otherwise the
+# legacy @parse_rule registry handles the line exactly as before. That keeps the
+# migration continuously shippable: a category is enabled only once the
+# differential guard is green for it, and the legacy rules for a category are
+# deleted only once the coverage ratchet shows the grammar claims every line
+# they used to.
+
+# A grammar category maps to the legacy effect_kind vocabulary so newly
+# grammar-supported lines report the same way rule-supported ones always have.
+_CATEGORY_EFFECT_KINDS = {"damage": "damage", "pump": "pump", "life": "life"}
+
+
+def _grammar_instruction(
+    line: str,
+    card_name: str | None,
+    *,
+    activated: bool = False,
+    spell_line_only: bool = False,
+) -> tuple[OracleInstruction, str] | None:
+    """The grammar's ``(instruction, effect_kind)`` for one line, or None to
+    fall back to the legacy rule registry.
+
+    A multi-instruction lowering is wrapped in a single ``sequence``
+    instruction, so composition becomes first-class in the IR without changing
+    the one-instruction shape that ParsedActivatedAbility,
+    ParsedTriggeredAbility and the stack all currently assume.
+
+    *spell_line_only* restricts the result to plain one-shot effect lines. The
+    card-level ``instructions`` list must not absorb an activated ability's
+    effect — those belong to ``activated_abilities``, and hoisting one would
+    make casting an Aura immediately perform its activated ability.
+    """
+    compiled = compile_grammar_line(line, card_name=card_name)
+    if not compiled.usable:
+        return None
+    if spell_line_only and not isinstance(compiled.node, grammar_ast.SpellEffectLine):
+        return None
+
+    instructions = compiled.instructions
+    instruction = (
+        instructions[0] if len(instructions) == 1
+        else OracleInstruction("sequence", "", {"steps": instructions})
+    )
+    category = next(iter(sorted(compiled.categories)), "effect")
+    effect_kind = activated_kind(activated, _CATEGORY_EFFECT_KINDS.get(category, category))
+    return instruction, effect_kind
+
+
+def _prefer_grammar(
+    grammar: tuple[OracleInstruction, str] | None,
+    legacy: tuple[OracleInstruction | None, str],
+) -> tuple[OracleInstruction | None, str]:
+    """Take the grammar's instruction when it has one, but keep the legacy
+    ``effect_kind`` label where the legacy rules also matched.
+
+    The label feeds reporting (``SimulationResult``, the support report) rather
+    than dispatch, so holding it steady keeps the migration's diff to the thing
+    that actually matters — the instruction.
+    """
+    legacy_instruction, legacy_kind = legacy
+    if grammar is None:
+        return legacy_instruction, legacy_kind
+    instruction, grammar_kind = grammar
+    return instruction, (legacy_kind if legacy_instruction is not None else grammar_kind)
+
+
+# ---------------------------------------------------------------------------
 # Creature-line helpers
 # ---------------------------------------------------------------------------
 
@@ -470,13 +564,16 @@ def _is_supported_keyword_line(line: str) -> bool:
     return all(part in supported for part in parts)
 
 
-def _parse_activated_ability(line: str) -> ParsedActivatedAbility | None:
+def _parse_activated_ability(line: str, card_name: str | None = None) -> ParsedActivatedAbility | None:
     normalized = normalize_creature_line(line)
     if ":" not in normalized:
         return None
 
     effect_text = normalized.split(":", 1)[1].strip()
-    instruction, effect_kind = parse_primary_instruction(effect_text, activated=True)
+    instruction, effect_kind = _prefer_grammar(
+        _grammar_instruction(line, card_name, activated=True),
+        parse_primary_instruction(effect_text, activated=True),
+    )
     supported = instruction is not None
     return ParsedActivatedAbility(
         source_line=line,
@@ -488,17 +585,6 @@ def _parse_activated_ability(line: str) -> ParsedActivatedAbility | None:
     )
 
 
-_BASIC_LAND_WORDS = ("plains", "island", "swamp", "mountain", "forest", "desert")
-# "This creature gets +N/+N as long as you control a <land type>." (Sedge
-# Troll, Kird Ape). One regex covers any basic land type and any bonus size;
-# _refresh_dynamic_creatures applies it generically via conditional_land_bonus.
-CONDITIONAL_LAND_BONUS_RE = re.compile(
-    rf"gets \+(\d+)/\+(\d+) as long as you control an? ({'|'.join(_BASIC_LAND_WORDS)})\b"
-)
-# "This creature gets +N/+N as long as it's untapped." (Giant Tortoise).
-CONDITIONAL_UNTAPPED_BONUS_RE = re.compile(
-    r"gets \+(\d+)/\+(\d+) as long as (?:it's|this creature is) untapped\b"
-)
 # "This creature doesn't untap during your untap step." — the behavior is
 # already enforced directly in phases/untap_step.py's text scan; this only
 # needs to be recognized as a supported static line so the whole creature
@@ -510,11 +596,21 @@ def _is_supported_static_creature_line(line: str) -> bool:
     normalized = normalize_creature_line(line)
     if normalized.startswith("protection from "):
         return True
-    if CONDITIONAL_LAND_BONUS_RE.search(normalized):
-        return True
-    if CONDITIONAL_UNTAPPED_BONUS_RE.search(normalized):
+    if static_bonus_for(normalized) is not None:
         return True
     if normalized == _DOESNT_UNTAP_LINE:
+        return True
+    if dynamic_pt_for(normalized) is not None:
+        return True
+    # The gate and the dispatch must read the SAME table. The literals below are
+    # matched by `startswith`, while `combat_restriction_for`'s patterns are
+    # anchored — so a line like "this creature can't block creatures with
+    # flying" was gated in by the prefix "this creature can't block", then
+    # matched no anchored pattern and fell through to a bare `static_line`:
+    # supported, with the restriction silently absent. Deriving the gate from
+    # the dispatch table means an unrecognized rider is now reported unsupported
+    # (loud) instead.
+    if combat_restriction_for(normalized) is not None:
         return True
     static_patterns = (
         "this creature enters with seven +1/+0 counters on it",
@@ -522,19 +618,12 @@ def _is_supported_static_creature_line(line: str) -> bool:
         "this creature enters tapped",
         "at end of combat, if this creature attacked or blocked this combat, remove a +1/+0 counter from it",
         "for each 1 damage that would be dealt to this creature, if it has a +1/+1 counter on it, remove a +1/+1 counter from it and prevent that 1 damage",
-        "this creature can't block",
-        "this creature can't attack",
-        "this creature can't attack unless defending player controls an island",
-        "this creature attacks each combat if able",
+        # "can't attack", "can't block", "can't attack unless defending player
+        # controls a <type>", "attacks each combat if able" and "can't be
+        # blocked by walls" are gated above by combat_restriction_for, whose
+        # patterns are anchored. Listing them here too would restore the prefix
+        # hole those anchors close.
         "this creature can block an additional creature each combat",
-        "as long as you control a swamp, this creature gets +1/+1",
-        "keldon warlord's power and toughness are each equal to the number of non-wall creatures you control",
-        "plague rats's power and toughness are each equal to the number of creatures named plague rats on the battlefield",
-        "as long as gaea's liege isn't attacking",
-        "nightmare's power and toughness are each equal to the number of swamps you control",
-        "gets +1/+1 as long as you control a swamp",
-        "this creature gets +1/+1 as long as you control a swamp",
-        "this creature can't be blocked by walls",
         "as long as this creature is untapped, all damage that would be dealt to you by unblocked creatures is dealt to this creature instead",
         "remove a corpse counter from this creature: regenerate this creature",
         "you may have this creature enter as a copy of any creature on the battlefield",
@@ -574,6 +663,7 @@ def _is_supported_static_creature_line(line: str) -> bool:
 
 def _parse_creature_program(
     oracle_text: str,
+    card_name: str | None = None,
 ) -> tuple[bool, str, str, tuple[OracleInstruction, ...], tuple[ParsedActivatedAbility, ...], tuple[ParsedTriggeredAbility, ...], tuple[str, ...]]:
     text = oracle_text.strip()
     if not text:
@@ -598,7 +688,7 @@ def _parse_creature_program(
             continue
 
         # 2. Triggered ability
-        trig = _parse_triggered_ability(line)
+        trig = _parse_triggered_ability(line, card_name)
         if trig is not None:
             if trig.supported:
                 triggered.append(trig)
@@ -620,7 +710,7 @@ def _parse_creature_program(
             continue
 
         # 3. Activated ability
-        ability = _parse_activated_ability(line)
+        ability = _parse_activated_ability(line, card_name)
         if ability is not None and ability.supported:
             activated.append(ability)
             if ability.instruction is not None:
@@ -630,42 +720,25 @@ def _parse_creature_program(
         # 4. Static text
         if _is_supported_static_creature_line(line):
             normalized = normalize_creature_line(line)
-            # Emit specific instruction kinds for dynamic P/T patterns so game.py
-            # never needs to parse oracle text to identify these behaviours.
-            if "power and toughness are each equal to the number of non-wall creatures" in normalized:
-                instructions.append(OracleInstruction("dynamic_pt_non_wall_creatures"))
-            elif "power and toughness are each equal to the number of creatures named plague rats" in normalized:
-                # Self-referential-name CDA (counts creatures sharing this card's
-                # name); the count is generic, only this text pattern is specific.
-                instructions.append(OracleInstruction("dynamic_pt_same_name"))
-            elif "power and toughness are each equal to the number of swamps" in normalized:
-                instructions.append(OracleInstruction("dynamic_pt_swamps"))
-            elif normalized.startswith("as long as gaea's liege isn't attacking"):
-                instructions.append(OracleInstruction("dynamic_pt_forests_gaea"))
-            elif (land_bonus_match := CONDITIONAL_LAND_BONUS_RE.search(normalized)):
-                power, toughness, land_word = land_bonus_match.groups()
-                instructions.append(OracleInstruction(
-                    "conditional_land_bonus", "",
-                    {"land_type": land_word, "power": int(power), "toughness": int(toughness)},
-                ))
-            elif (untapped_bonus_match := CONDITIONAL_UNTAPPED_BONUS_RE.search(normalized)):
-                power, toughness = untapped_bonus_match.groups()
-                instructions.append(OracleInstruction(
-                    "conditional_untapped_bonus", "",
-                    {"power": int(power), "toughness": int(toughness)},
-                ))
-            elif normalized == "this creature attacks each combat if able":
-                instructions.append(OracleInstruction("must_attack_each_combat"))
-            elif normalized == "this creature can't be blocked by walls":
-                instructions.append(OracleInstruction("cant_be_blocked_by_walls"))
-            elif normalized == "this creature can't attack unless defending player controls an island":
-                instructions.append(OracleInstruction("cant_attack_without_island"))
-            elif normalized == "this creature can't attack":
-                instructions.append(OracleInstruction("cant_attack"))
-            elif normalized == "this creature can't block":
-                instructions.append(OracleInstruction("cant_block"))
-            elif normalized == "this creature can't block creatures with power 2 or greater":
-                instructions.append(OracleInstruction("cant_block_power_2_or_greater"))
+            # Characteristic-defining P/T (CR 604.3). One instruction kind
+            # carrying what to count: these were four branches matching literals
+            # that embedded the card's own name, so a reprint or any
+            # functionally identical card compiled as unsupported.
+            if (dynamic_pt := dynamic_pt_for(normalized)) is not None:
+                instructions.append(
+                    OracleInstruction(dynamic_pt.kind, "", dynamic_pt.payload)
+                )
+            elif (bonus := static_bonus_for(normalized)) is not None:
+                instructions.append(OracleInstruction(bonus.kind, "", bonus.payload))
+            elif (restriction := combat_restriction_for(normalized)) is not None:
+                # Combat restrictions are templates, derived rather than listed
+                # (engine/combat_restrictions.py). The chain that used to sit
+                # here matched exact strings and hardcoded Island, so a card
+                # naming any other land type fell through to `static_line` and
+                # attacked freely while still reporting supported.
+                instructions.append(
+                    OracleInstruction(restriction.kind, "", restriction.payload)
+                )
             else:
                 instructions.append(OracleInstruction("static_line", normalized))
             static_lines.append(normalized)
@@ -689,26 +762,30 @@ def _parse_creature_program(
     )
 
 
-def _parse_noncreature_abilities(oracle_text: str) -> tuple[ParsedActivatedAbility, ...]:
+def _parse_noncreature_abilities(
+    oracle_text: str, card_name: str | None = None
+) -> tuple[ParsedActivatedAbility, ...]:
     abilities: list[ParsedActivatedAbility] = []
     for raw_line in oracle_text.splitlines():
         line = raw_line.strip()
         if not line or ":" not in line:
             continue
-        ability = _parse_activated_ability(line)
+        ability = _parse_activated_ability(line, card_name)
         if ability is not None:
             abilities.append(ability)
     return tuple(abilities)
 
 
-def _parse_noncreature_triggered(oracle_text: str) -> tuple[ParsedTriggeredAbility, ...]:
+def _parse_noncreature_triggered(
+    oracle_text: str, card_name: str | None = None
+) -> tuple[ParsedTriggeredAbility, ...]:
     """Extract triggered abilities from non-creature oracle text."""
     abilities: list[ParsedTriggeredAbility] = []
     for raw_line in oracle_text.splitlines():
         line = raw_line.strip()
         if not line:
             continue
-        trig = _parse_triggered_ability(line)
+        trig = _parse_triggered_ability(line, card_name)
         if trig is not None:
             abilities.append(trig)
     return tuple(abilities)
@@ -752,6 +829,17 @@ def expand_modal_activated_lines(oracle_text: str) -> str:
         i += 1
     return "\n".join(out)
 
+# Layouts the compiler can read straight from the top-level characteristics.
+# Every other layout (split, flip, transform, modal_dfc, adventure, meld, …)
+# leaves mana_cost and oracle_text empty and puts the real text in card_faces,
+# so compiling one as-is would classify it a supported vanilla — a silently
+# wrong answer rather than an error. Face-aware compilation is roadmap phase 3;
+# until then these are explicitly unsupported.
+SUPPORTED_LAYOUTS = frozenset({
+    "normal", "leveler", "class", "saga", "case", "planar", "scheme", "vanguard", "token",
+})
+
+
 # Unbounded cache: card definitions are immutable and the pool is finite, so
 # every distinct card compiles exactly once per process — even with thousands
 # of cards the programs are tiny compared to recompilation cost.
@@ -761,11 +849,17 @@ def _compile_card_oracle(
     primary_type: str,
     oracle_text: str,
     keywords: tuple[str, ...],
+    layout: str = "normal",
 ) -> OracleProgram:
     # Pyramids-style "{cost}: Choose one —" + bullets become one activated
     # ability per bullet before any other classification runs.
     oracle_text = expand_modal_activated_lines(oracle_text)
     normalized_text = _normalize_text(oracle_text)
+
+    if layout not in SUPPORTED_LAYOUTS:
+        return OracleProgram(
+            False, "unsupported", f"unsupported card layout: {layout}", normalized_text
+        )
 
     if any(keyword in keywords for keyword in UNSUPPORTED_KEYWORDS):
         return OracleProgram(False, "unsupported", "unsupported keyword", normalized_text)
@@ -783,8 +877,8 @@ def _compile_card_oracle(
         # ability lines (Desert's damage ping, Bazaar of Baghdad's draw-
         # discard, …) are parsed the same way artifacts' are, so lands with
         # abilities beyond mana become activatable too.
-        activated_abilities = _parse_noncreature_abilities(oracle_text)
-        triggered_abilities = _parse_noncreature_triggered(oracle_text)
+        activated_abilities = _parse_noncreature_abilities(oracle_text, name)
+        triggered_abilities = _parse_noncreature_triggered(oracle_text, name)
         return OracleProgram(
             True, "land_mana", "basic land support", normalized_text,
             activated_abilities=activated_abilities,
@@ -792,7 +886,7 @@ def _compile_card_oracle(
         )
 
     if primary_type == "creature":
-        supported, effect_kind, reason, instructions, activated, triggered, static_lines = _parse_creature_program(oracle_text)
+        supported, effect_kind, reason, instructions, activated, triggered, static_lines = _parse_creature_program(oracle_text, name)
         return OracleProgram(supported, effect_kind, reason, normalized_text, instructions, activated, triggered, static_lines)
 
     if primary_type in {"artifact", "enchantment", "instant", "sorcery"}:
@@ -800,9 +894,31 @@ def _compile_card_oracle(
             return OracleProgram(True, "permanent_vanilla", "no oracle text", normalized_text)
 
         instructions: list[OracleInstruction] = []
-        primary_instruction, _ = parse_primary_instruction(normalized_text, activated=False)
-        if primary_instruction is not None:
-            instructions.append(primary_instruction)
+        # Grammar first, per line. The legacy path below collapses the card's
+        # whole text to one string and keeps only the first rule that matches
+        # it, so a second sentence ("Draw a card. Each player discards a card.")
+        # was silently dropped. Parsing line by line is what fixes that.
+        # Modal bullets are excluded: they are alternatives collected into
+        # `modes` below, not effects the card performs. Letting one into the
+        # top-level list would make a "Choose one" spell always resolve
+        # whichever bullet the grammar happened to claim.
+        grammar_instructions = [
+            found[0]
+            for found in (
+                _grammar_instruction(stripped, name, spell_line_only=True)
+                for stripped in (
+                    raw_line.strip() for raw_line in oracle_text.splitlines()
+                )
+                if stripped and not stripped.startswith("•")
+            )
+            if found is not None
+        ]
+        if grammar_instructions:
+            instructions.extend(grammar_instructions)
+        else:
+            primary_instruction, _ = parse_primary_instruction(normalized_text, activated=False)
+            if primary_instruction is not None:
+                instructions.append(primary_instruction)
 
         # Static continuous co-effects (e.g. Conversion's "All Mountains are
         # Plains.") that follow a primary clause already claimed above.
@@ -821,8 +937,8 @@ def _compile_card_oracle(
         # first. Built from the original text to keep human-readable labels.
         modes = parse_modal_options(oracle_text)
 
-        activated_abilities = _parse_noncreature_abilities(oracle_text)
-        triggered_abilities = _parse_noncreature_triggered(oracle_text)
+        activated_abilities = _parse_noncreature_abilities(oracle_text, name)
+        triggered_abilities = _parse_noncreature_triggered(oracle_text, name)
 
         # Only mark as unsupported if all triggered abilities are unsupported
         # and no spell-pattern instructions were already matched (e.g. Howling Mine).
@@ -847,4 +963,6 @@ def _compile_card_oracle(
 
 
 def compile_card_oracle(card: CardDefinition) -> OracleProgram:
-    return _compile_card_oracle(card.name, card.primary_type, card.oracle_text, card.keywords)
+    return _compile_card_oracle(
+        card.name, card.primary_type, card.oracle_text, card.keywords, card.layout
+    )

@@ -2,82 +2,109 @@ from __future__ import annotations
 
 import re
 
-from typing import Callable
 
+from ..enter_effects import (
+    CHOOSE_COLOR_AND_OPPONENT_ON_ENTER,
+    CHOOSE_OPPONENT_ON_ENTER,
+    COPY_ARTIFACT_ON_ENTER,
+    COPY_CREATURE_ON_ENTER,
+    ENTERS_TAPPED,
+    ENTERS_WITH_SEVEN_PLUS_1_0_COUNTERS,
+    ENTERS_WITH_X_PLUS_1_1_COUNTERS,
+    LOSE_LIFE_EQUAL_TO_TOTAL_ON_ENTER,
+    NO_MAXIMUM_HAND_SIZE,
+    SPEND_WHITE_AS_RED,
+)
 from ..models import CardDefinition, Permanent, PlayerState
 from ..oracle import _COLOR_WORD_TO_SYMBOL, compile_card_oracle
 from ..pt import clear_base_pt, set_base_pt
 
 
-# Characteristic-defining P/T (CR 604.3 / layer 7a): instruction kind → count
-# function returning the value both power and toughness are set to. Adding a
-# CDA card = one compiler instruction kind + one entry here; the refresh loop
-# below never changes.
-def _count_non_wall_creatures(game, player: PlayerState, permanent: Permanent) -> int:
-    return sum(
-        1
-        for perm in player.battlefield
-        if perm.card.primary_type == "creature" and "wall" not in perm.card.type_line.lower()
-    )
+# Characteristic-defining P/T (CR 604.3 / layer 7a). There is no registry to
+# add to: the instruction describes what to count, so a card printed with one
+# of these templates needs no code here at all.
+def _count_dynamic_pt(
+    game, player: PlayerState, permanent: Permanent, payload: dict
+) -> int:
+    """Tally the objects a ``dynamic_pt_count`` instruction describes.
 
+    One counter for every characteristic-defining P/T, because they differ only
+    in *what* they count and *whose* battlefield they count it on — both of
+    which arrive on the payload (engine/characteristic_defining.py). The four
+    functions this replaced each hardcoded one card's answer to those two
+    questions.
 
-def _count_same_name(game, player: PlayerState, permanent: Permanent) -> int:
-    # Plague Rats: "power and toughness are each equal to the number of creatures
-    # named Plague Rats on the battlefield." Counts by the CDA permanent's own
-    # name, so any future self-referential-name creature reuses this with no new
-    # count function — the card name lives only in the compiler's text pattern.
-    return sum(
-        1 for p in game.players for perm in p.battlefield if perm.card.name == permanent.card.name
-    )
-
-
-def _count_swamps(game, player: PlayerState, permanent: Permanent) -> int:
-    return sum(
-        1
-        for perm in player.battlefield
-        if "swamp" in perm.card.type_line.lower()
-        or perm.metadata.get("land_type_override") == "swamp"
-    )
-
-
-def _count_forests_gaea(game, player: PlayerState, permanent: Permanent) -> int:
-    # Not attacking: forests its controller controls; attacking: forests the
-    # defending player controls.
-    if permanent.attacking and permanent.defending_player_index is not None:
-        reference_player = game.players[permanent.defending_player_index]
+    Types are read through ``has_type``/``is_creature`` (CR 613 layer 4), so an
+    animated land counts as a creature and a land turned into a Swamp counts as
+    a Swamp — the printed type line is not the authority on either.
+    """
+    scope = payload.get("scope", "you")
+    if scope == "all":
+        battlefields = [p.battlefield for p in game.players]
+    elif (
+        scope == "defender_when_attacking"
+        and permanent.attacking
+        and permanent.defending_player_index is not None
+    ):
+        battlefields = [game.players[permanent.defending_player_index].battlefield]
     else:
-        reference_player = player
-    return sum(
-        1
-        for perm in reference_player.battlefield
-        if "forest" in perm.card.type_line.lower()
-        or perm.metadata.get("land_type_override") == "forest"
-    )
+        battlefields = [player.battlefield]
+
+    what = payload.get("count")
+    excluded = payload.get("exclude_type")
+    land_type = payload.get("land_type")
+
+    total = 0
+    for battlefield in battlefields:
+        for perm in battlefield:
+            if what == "land":
+                total += bool(land_type and perm.has_type(str(land_type)))
+            elif what == "creature":
+                if perm.is_creature and not (excluded and perm.has_type(str(excluded))):
+                    total += 1
+            elif what == "same_name":
+                total += perm.card.name == permanent.card.name
+    return total
 
 
-DYNAMIC_PT: dict[str, Callable[["object", PlayerState, Permanent], int]] = {
-    "dynamic_pt_non_wall_creatures": _count_non_wall_creatures,
-    "dynamic_pt_same_name": _count_same_name,
-    "dynamic_pt_swamps": _count_swamps,
-    "dynamic_pt_forests_gaea": _count_forests_gaea,
-}
+def _add_static_pt(permanent: Permanent, power: int, toughness: int) -> None:
+    """Contribute a layer-7c modification to the *derived* buff channel.
+
+    ``derived_buff_power``/``derived_buff_toughness`` are cleared and rebuilt
+    from scratch by ``_refresh_dynamic_creatures`` on every recompute, so a
+    contribution here needs no record of itself. That is the difference from
+    adding to ``power_bonus``, which persists: anything written there has to be
+    subtracted again later, and a subtraction that does not exactly match its
+    addition compounds on every refresh — and CR 611.3a means the refresh runs
+    constantly. Aspect of Wolf shipped exactly that bug; see
+    tests/regressions/test_batch17.py.
+
+    The channel is cleared by the same function that rebuilds it. Splitting
+    those across two functions is how this class of bug gets back in: whoever
+    calls only the rebuilding half then doubles every contribution.
+    """
+    if power:
+        permanent.metadata["derived_buff_power"] = (
+            int(permanent.metadata.get("derived_buff_power", 0)) + power
+        )
+    if toughness:
+        permanent.metadata["derived_buff_toughness"] = (
+            int(permanent.metadata.get("derived_buff_toughness", 0)) + toughness
+        )
 
 
 def _apply_conditional_bonus(
     permanent: Permanent, metadata_key: str, active: bool, power: int, toughness: int
 ) -> None:
-    """Clear a previously-applied conditional +N/+N bonus and reapply it if
-    *active*. Shared by every "gets +N/+N as long as <condition>" static
-    ability (conditional_land_bonus, conditional_untapped_bonus, …) — each
-    must be idempotently recomputed on every continuous-effects refresh."""
-    prev_power, prev_toughness = permanent.metadata.get(metadata_key, (0, 0))
-    if prev_power or prev_toughness:
-        permanent.power_bonus -= prev_power
-        permanent.toughness_bonus -= prev_toughness
+    """A "gets +N/+N as long as <condition>" static ability
+    (conditional_land_bonus, conditional_untapped_bonus, …).
+
+    Derived, not accumulated: when the condition holds the bonus is contributed
+    to the recomputed channel, and when it stops holding nothing has to be
+    undone — the next recompute simply does not contribute it.
+    """
     if active:
-        permanent.power_bonus += power
-        permanent.toughness_bonus += toughness
-        permanent.metadata[metadata_key] = (power, toughness)
+        _add_static_pt(permanent, power, toughness)
     else:
         permanent.metadata[metadata_key] = (0, 0)
 
@@ -97,9 +124,13 @@ class PermanentStateMixin:
         program = compile_card_oracle(permanent.card)
         text = program.normalized_text
 
-        # enters tapped (static creature/permanent lines or normalized text)
-        if any(line for line in program.static_lines if "enters tapped" in line) or (
-            "enters tapped" in text and "unless" not in text
+        # enters tapped (static creature/permanent lines or normalized text).
+        # The phrases probed for here live in engine/enter_effects.py, which
+        # engine/grammar/registries.py also reads to tell the parser these lines
+        # are already implemented — one string, two readers, so they cannot
+        # drift apart.
+        if any(line for line in program.static_lines if ENTERS_TAPPED in line) or (
+            ENTERS_TAPPED in text and "unless" not in text
         ):
             permanent.tapped = True
 
@@ -111,8 +142,8 @@ class PermanentStateMixin:
         # caster with a genuine choice — several opponents, or a color to pick —
         # gets a prompt whose confirm_enter_choice overwrites the defaults
         # before anything consults them.
-        needs_color = "as this enchantment enters, choose a color and an opponent" in text
-        if needs_color or "as this artifact enters, choose an opponent" in text:
+        needs_color = CHOOSE_COLOR_AND_OPPONENT_ON_ENTER in text
+        if needs_color or CHOOSE_OPPONENT_ON_ENTER in text:
             opponents = [
                 i for i, p in enumerate(self.players) if i != caster_index and not p.lost
             ]
@@ -143,19 +174,19 @@ class PermanentStateMixin:
 
         # enters with fixed counters (Clockwork Beast). Track the counter count so
         # the end-of-combat trigger and the upkeep activated ability can adjust it.
-        if any("enters with seven +1/+0 counters on it" == line for line in program.static_lines) or "enters with seven +1/+0 counters on it" in text:
+        if any(ENTERS_WITH_SEVEN_PLUS_1_0_COUNTERS == line for line in program.static_lines) or ENTERS_WITH_SEVEN_PLUS_1_0_COUNTERS in text:
             permanent.power_bonus += 7
             permanent.metadata["plus_1_0_counters"] = 7
 
         # enters with X +1/+1 counters
-        if any("enters with x +1/+1 counters on it" == line for line in program.static_lines) or "enters with x +1/+1 counters on it" in text:
+        if any(ENTERS_WITH_X_PLUS_1_1_COUNTERS == line for line in program.static_lines) or ENTERS_WITH_X_PLUS_1_1_COUNTERS in text:
             x_value = permanent.metadata.get("cast_x_value")
             if isinstance(x_value, int) and x_value > 0:
                 permanent.power_bonus += x_value
                 permanent.toughness_bonus += x_value
 
         # copy-as-enter creature
-        if any("you may have this creature enter as a copy of any creature on the battlefield" == line for line in program.static_lines) or "you may have this creature enter as a copy of any creature on the battlefield" in text:
+        if any(COPY_CREATURE_ON_ENTER == line for line in program.static_lines) or COPY_CREATURE_ON_ENTER in text:
             source = self._resolve_copy_target(permanent, "creature")
             if source is None:
                 source = next(
@@ -171,7 +202,7 @@ class PermanentStateMixin:
                 self._apply_creature_copy(permanent, source)
 
         # copy-as-enter enchantment
-        if "you may have this enchantment enter as a copy of any artifact on the battlefield" in text:
+        if COPY_ARTIFACT_ON_ENTER in text:
             # Honor the artifact the player chose when casting (Copy Artifact);
             # fall back to the first artifact for AI/untargeted casts.
             source = self._resolve_copy_target(permanent, "artifact")
@@ -219,13 +250,13 @@ class PermanentStateMixin:
                 if "toughness" in src.raw and str(src.raw.get("toughness", "")).isdigit():
                     permanent.metadata["absolute_toughness"] = source.effective_toughness
 
-        if any(instr.kind == "spell_pattern" and instr.value == "you have no maximum hand size" for instr in program.instructions) or "you have no maximum hand size" in text:
+        if any(instr.kind == "spell_pattern" and instr.value == NO_MAXIMUM_HAND_SIZE for instr in program.instructions) or NO_MAXIMUM_HAND_SIZE in text:
             self.players[caster_index].has_no_max_hand_size = True
 
-        if "you may spend white mana as though it were red mana" in text:
+        if SPEND_WHITE_AS_RED in text:
             self.players[caster_index].can_spend_white_as_red = True
 
-        if "as this enchantment enters, you lose life equal to your life total" in text:
+        if LOSE_LIFE_EQUAL_TO_TOTAL_ON_ENTER in text:
             controller = self.players[caster_index]
             life_loss = controller.life
             controller.life -= life_loss
@@ -333,23 +364,16 @@ class PermanentStateMixin:
     def _refresh_aspect_of_wolf(self) -> None:
         """Aspect of Wolf: enchanted creature gets +X/+Y where X/Y are half the
         aura controller's Forest count (down/up). Recomputed continuously so it
-        tracks Forests entering/leaving the battlefield (CR 611.3a). Clear the
-        previous deltas, then reapply from every Aspect of Wolf still attached."""
-        for player in self.players:
-            for perm in player.battlefield:
-                prev = perm.metadata.pop("aspect_of_wolf_bonus", None)
-                if prev:
-                    perm.power_bonus -= int(prev[0])
-                    perm.toughness_bonus -= int(prev[1])
+        tracks Forests entering and leaving the battlefield (CR 611.3a).
+
+        Contributed to the derived buff channel, so several Aspects on one
+        creature simply add up and nothing needs unwinding.
+        """
         for controller in self.players:
             forests = sum(
                 1
                 for perm in controller.battlefield
-                if perm.card.primary_type == "land"
-                and (
-                    "forest" in perm.card.type_line.lower()
-                    or perm.metadata.get("land_type_override") == "forest"
-                )
+                if perm.card.primary_type == "land" and perm.has_type("forest")
             )
             x, y = forests // 2, (forests + 1) // 2
             for aura in controller.battlefield:
@@ -358,22 +382,25 @@ class PermanentStateMixin:
                 creature = aura.metadata.get("attached_to")
                 if creature is None or creature.card.primary_type != "creature":
                     continue
-                creature.power_bonus += x
-                creature.toughness_bonus += y
-                # Accumulate: with several Aspects on one creature the recorded
-                # total must match everything added, or the next clear pass
-                # under-subtracts and the leftover compounds every refresh.
-                prev_x, prev_y = creature.metadata.get("aspect_of_wolf_bonus") or (0, 0)
-                creature.metadata["aspect_of_wolf_bonus"] = (prev_x + x, prev_y + y)
+                _add_static_pt(creature, x, y)
 
     def _refresh_dynamic_creatures(self) -> None:
         # TODO(card-hooks): Kormus Bell / Living Lands are the only two land
         # animators today (an "animate all <type>" registry, keyed by name,
         # would be the extension point once a third one is added).
         all_permanents = [perm for player in self.players for perm in player.battlefield]
+        # Clear the derived layer-7c channel this method rebuilds. Everything
+        # contributed below is a *conditional* continuous effect, so it is
+        # recomputed from the current board rather than adjusted incrementally.
+        for perm in all_permanents:
+            perm.metadata.pop("derived_buff_power", None)
+            perm.metadata.pop("derived_buff_toughness", None)
         kormus_active = any(perm.card.name == "Kormus Bell" for perm in all_permanents)
         living_lands_active = any(perm.card.name == "Living Lands" for perm in all_permanents)
         self._refresh_static_land_types(all_permanents)
+        # Layer 4 before layer 7: a characteristic-defining P/T that counts
+        # creatures must see the lands this pass animates, not last pass's.
+        self._refresh_land_animation(all_permanents, kormus_active, living_lands_active)
         self._refresh_aspect_of_wolf()
 
         for player in self.players:
@@ -397,11 +424,15 @@ class PermanentStateMixin:
                 prog = compile_card_oracle(permanent.effective_card)
                 instr_kinds = {instr.kind for instr in prog.instructions}
 
-                # Characteristic-defining P/T (layer 7a) — registry-driven.
-                for kind, count_fn in DYNAMIC_PT.items():
-                    if kind in instr_kinds:
-                        value = count_fn(self, player, permanent)
-                        set_base_pt(permanent, value, value)
+                # Characteristic-defining P/T (CR 604.3, layer 7a). The
+                # instruction says what to count; there is one counter, and a
+                # new CDA card adds no code here at all.
+                dynamic_pt = next(
+                    (i for i in prog.instructions if i.kind == "dynamic_pt_count"), None
+                )
+                if dynamic_pt is not None:
+                    value = _count_dynamic_pt(self, player, permanent, dynamic_pt.payload)
+                    set_base_pt(permanent, value, value)
 
                 land_bonus_instr = next(
                     (i for i in prog.instructions if i.kind == "conditional_land_bonus"), None
@@ -409,11 +440,7 @@ class PermanentStateMixin:
                 if land_bonus_instr is not None:
                     land_type = land_bonus_instr.payload["land_type"]
                     has_land = any(
-                        perm.card.primary_type == "land"
-                        and (
-                            land_type in perm.card.type_line.lower()
-                            or perm.metadata.get("land_type_override") == land_type
-                        )
+                        perm.card.primary_type == "land" and perm.has_type(land_type)
                         for perm in player.battlefield
                     )
                     _apply_conditional_bonus(
@@ -430,94 +457,62 @@ class PermanentStateMixin:
                         int(untapped_bonus_instr.payload["power"]), int(untapped_bonus_instr.payload["toughness"]),
                     )
 
-                # Kormus Bell / Living Lands animate basic lands into 1/1 creatures
-                # while the source is on the battlefield. Recomputed every call so
-                # the lands revert the moment the animating enchantment leaves
-                # (CR 611.3a/b). A land-type override (Evil Presence / Phantasmal
-                # Terrain) REPLACES the printed type (CR 305.7), so an overridden
-                # land animates by its override, not its printed type line.
-                land_override = str(permanent.metadata.get("land_type_override", "")).lower()
-                effective_land_types = (
-                    land_override if land_override else permanent.card.type_line.lower()
-                )
-                is_animated_swamp = (
-                    kormus_active
-                    and permanent.card.primary_type == "land"
-                    and "swamp" in effective_land_types
-                )
-                is_animated_forest = (
-                    living_lands_active
-                    and permanent.card.primary_type == "land"
-                    and "forest" in effective_land_types
-                )
-                if is_animated_swamp or is_animated_forest:
-                    permanent.metadata["land_animated"] = True
-                    set_base_pt(permanent, 1, 1)
-                    if is_animated_swamp:
-                        permanent.metadata["color_override"] = "B"
-                elif permanent.metadata.get("land_animated"):
-                    # The animating source is gone: the land is no longer a creature.
-                    permanent.metadata.pop("land_animated", None)
-                    clear_base_pt(permanent)
-                    permanent.metadata.pop("color_override", None)
+    def _refresh_land_animation(
+        self, all_permanents: list[Permanent], kormus_active: bool, living_lands_active: bool
+    ) -> None:
+        """Kormus Bell / Living Lands animate basic lands into 1/1 creatures
+        while the source is on the battlefield (CR 613 layer 4).
+
+        Its own pass, ahead of everything that asks "is this a creature?".
+        This ran inside the same per-permanent loop as the layer-7a
+        characteristic-defining P/T below, so within a single refresh a CDA
+        counting creatures saw whatever the animation state had been at the
+        *end of the previous pass* — a land animated this pass counted only
+        from the next one. CR 613.1 applies layer 4 before layer 7 in one
+        application, not across successive ones.
+
+        Recomputed every call so the lands revert the moment the animating
+        enchantment leaves (CR 611.3a/b). A land-type override (Evil Presence /
+        Phantasmal Terrain) REPLACES the printed type (CR 305.7), so an
+        overridden land animates by its override, not its printed type line.
+        """
+        for permanent in all_permanents:
+            land_override = str(permanent.metadata.get("land_type_override", "")).lower()
+            effective_land_types = (
+                land_override if land_override else permanent.card.type_line.lower()
+            )
+            is_animated_swamp = (
+                kormus_active
+                and permanent.card.primary_type == "land"
+                and "swamp" in effective_land_types
+            )
+            is_animated_forest = (
+                living_lands_active
+                and permanent.card.primary_type == "land"
+                and "forest" in effective_land_types
+            )
+            if is_animated_swamp or is_animated_forest:
+                permanent.metadata["land_animated"] = True
+                set_base_pt(permanent, 1, 1)
+                if is_animated_swamp:
+                    permanent.metadata["color_override"] = "B"
+            elif permanent.metadata.get("land_animated"):
+                # The animating source is gone: the land is no longer a creature.
+                permanent.metadata.pop("land_animated", None)
+                clear_base_pt(permanent)
+                permanent.metadata.pop("color_override", None)
 
     def _has_keyword(self, permanent: Permanent, keyword: str) -> bool:
-        lower_keyword = keyword.lower()
-        # "Loses flying" (e.g. Earthbind's granted ability) removes flying
-        # regardless of its source — printed keyword or a granting effect.
-        if lower_keyword == "flying" and (
-            permanent.metadata.get("loses_flying", False)
-            or permanent.metadata.get("loses_flying_until_eot", False)
-        ):
-            return False
-        # Landwalk granted by a lord (Goblin King's mountainwalk, Lord of Atlantis's
-        # islandwalk) is tracked as a ``has_<walk>`` metadata flag; a Magical Hack
-        # remap can take a landwalk away via ``lost_<walk>``. Honor both so the
-        # keyword shows on the creature's strip and drives block legality alike.
-        if lower_keyword in ("islandwalk", "mountainwalk", "swampwalk", "forestwalk", "plainswalk"):
-            if permanent.metadata.get(f"lost_{lower_keyword}"):
-                return False
-            if permanent.metadata.get(f"has_{lower_keyword}"):
-                return True
-        if any(item.lower() == lower_keyword for item in permanent.card.keywords):
-            return True
-        # Keywords inherited from a copied creature (Clone / Vesuvan Doppelganger).
-        if any(item.lower() == lower_keyword for item in permanent.metadata.get("copied_keywords", ())):
-            return True
-        if lower_keyword == "flying" and (
-            permanent.metadata.get("gains_flying", False)
-            or permanent.metadata.get("gains_flying_until_eot", False)
-        ):
-            return True
-        if lower_keyword == "first strike" and permanent.metadata.get("gains_first_strike", False):
-            return True
-        if lower_keyword == "fear" and permanent.metadata.get("gains_fear", False):
-            return True
-        if lower_keyword == "reach" and permanent.metadata.get("gains_reach", False):
-            return True
-        if lower_keyword == "haste" and permanent.metadata.get("gains_haste", False):
-            return True
-        if lower_keyword == "trample" and (
-            permanent.metadata.get("gains_trample", False)
-            or permanent.metadata.get("gains_trample_until_eot", False)
-        ):
-            return True
-        # Banding granted by an activated ability (Helm of Chatzuk) — must show on
-        # the keyword strip and drive band declaration like printed banding.
-        if lower_keyword == "banding" and permanent.metadata.get("gains_banding_until_eot", False):
-            return True
-        if lower_keyword == "deathtouch" and permanent.metadata.get("has_deathtouch", False):
-            return True
-        # Fall back to oracle program static lines (e.g. test cards that put keyword in oracle_text).
-        # A lord line ("Other Merfolk ... have islandwalk") grants the keyword to
-        # OTHER creatures, not to the lord itself, so it must not match here.
-        program = compile_card_oracle(permanent.effective_card)
-        return any(
-            i.kind in ("keyword_line", "static_line")
-            and lower_keyword in i.value
-            and not i.value.startswith("other ")
-            for i in program.instructions
-        )
+        """Whether *permanent* currently has a keyword ability.
+
+        Printed abilities are part of the object's copiable values and so are
+        seeded before layer 1; grants and removals are continuous effects
+        sharing CR 613's layer 6, resolved by timestamp. That means a removal
+        can take a *printed* ability away and a later grant can put it back —
+        neither of which the previous per-keyword if-chain could express, since
+        it checked removals first and fell back to scanning oracle text.
+        """
+        return permanent.has_keyword(keyword)
 
     def _effective_colors(self, permanent: Permanent) -> set[str]:
         """The color symbols a permanent currently has (honoring color overrides

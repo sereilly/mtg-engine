@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import re
+from typing import Iterator
 
-from ..card_hooks import ON_LEAVE_BATTLEFIELD
+from ..card_hooks import ON_BECOMES_TAPPED, ON_LEAVE_BATTLEFIELD
 from ..models import CardDefinition, Permanent, PlayerState
 from ..oracle import compile_card_oracle
 from ..replacements import apply_replacements
 from ..trigger_utils import make_trigger_event, matching_triggers
 from ._constants import _MANA_SYMBOLS, _NO_PRIORITY_STEPS
+
 
 class GameHelpersMixin:
     def _find_controlled_permanent(
@@ -180,8 +182,9 @@ class GameHelpersMixin:
         # — return the stolen permanent to its original controller (CR 611.3 / 805.4a).
         self._revert_stolen_permanent(aura)
         # Animate Dead: "When this Aura leaves the battlefield, that creature's
-        # controller sacrifices it." A sacrifice can't be replaced by
-        # regeneration (CR 701.15e).
+        # controller sacrifices it." Sacrificing isn't destroying, so
+        # regeneration and other destruction replacements can't affect it
+        # (CR 701.21a).
         if aura.metadata.get("sacrifice_attached_on_leave"):
             controller_index = self.controller_index_of(attached)
             if controller_index is not None:
@@ -390,6 +393,55 @@ class GameHelpersMixin:
         if leave_hook is not None:
             leave_hook(self, player, permanent)
 
+    def become_tapped(self, permanent: "Permanent") -> bool:
+        """Turn *permanent* from untapped to tapped, firing "becomes tapped"
+        triggers (CR 701.26a). Returns whether it actually changed.
+
+        The single place a permanent becomes tapped. Before this the engine set
+        ``perm.tapped = True`` in seventeen places, so a trigger could only see
+        whichever of them its implementer happened to wire into — Lifetap
+        ("Whenever a Forest an opponent controls becomes tapped") was registered
+        on the tapped-for-mana path and silently missed every other way a Forest
+        gets tapped.
+
+        A permanent that *enters* the battlefield tapped never becomes tapped —
+        it was never untapped on the battlefield — so the enters-tapped path in
+        permanent_state.py deliberately does not come through here. Neither does
+        re-tapping something already tapped: CR 701.26a, "only untapped
+        permanents can be tapped", so there is no state change and no trigger.
+        """
+        if permanent.tapped:
+            return False
+        permanent.tapped = True
+        for source in self.all_permanents():
+            hook = ON_BECOMES_TAPPED.get(source.card.name)
+            if hook is not None:
+                hook(self, source, permanent)
+        return True
+
+    def all_permanents(self) -> "Iterator[Permanent]":
+        """Every permanent on every battlefield.
+
+        The engine opens this loop by hand in well over a hundred places. One
+        iterator is worth having on its own, but it is also the prerequisite for
+        CR 613 layer 2: control is currently modelled by *which battlefield list
+        a permanent sits in*, so making the controller a derived characteristic
+        means every one of those sites has to stop reading zone membership
+        directly first.
+        """
+        for player in self.players:
+            yield from list(player.battlefield)
+
+    def permanents_with_controller(self) -> "Iterator[tuple[int, Permanent]]":
+        """Every permanent paired with its controller's seat index."""
+        for index, player in enumerate(self.players):
+            for permanent in list(player.battlefield):
+                yield index, permanent
+
+    def permanents_matching(self, predicate) -> "Iterator[Permanent]":
+        """Every permanent satisfying *predicate*, across all battlefields."""
+        return (perm for perm in self.all_permanents() if predicate(perm))
+
     def _destroy_swept_permanents(
         self,
         player: PlayerState,
@@ -428,7 +480,7 @@ class GameHelpersMixin:
                 and not permanent.metadata.get("cant_be_regenerated_this_turn")
             ):
                 permanent.regeneration_shield -= 1
-                permanent.tapped = True
+                self.become_tapped(permanent)
                 if on_regenerate is not None:
                     on_regenerate(permanent)
                 survivors.append(permanent)
@@ -473,9 +525,20 @@ class GameHelpersMixin:
                     if trig.condition.kind != "creature_dies" or trig.instruction is None:
                         continue
                     instr = trig.instruction
-                    obs_text = observer.card.oracle_text.lower()
-                    pay_match = re.search(r"you may pay \{(\d+)\}", obs_text)
+                    if instr.kind == "may":
+                        # A grammar-lowered optional action carries its own cost
+                        # and consequence, so there is nothing to re-derive here.
+                        events.append(make_trigger_event(
+                            controller_index, observer, trig,
+                            trigger_context={"dead_name": dead_permanent.card.name},
+                        ))
+                        continue
                     if instr.kind == "target_gains_life":
+                        # Legacy shape: the optional cost lives in the card's
+                        # text rather than the instruction, so it has to be
+                        # re-read here and passed along as context.
+                        obs_text = observer.card.oracle_text.lower()
+                        pay_match = re.search(r"you may pay \{(\d+)\}", obs_text)
                         amount = int(instr.payload.get("amount", 1))
                         ctx: dict = {"life": amount, "dead_name": dead_permanent.card.name}
                         if pay_match:
@@ -485,7 +548,6 @@ class GameHelpersMixin:
                             effect_kind="triggered_target_gains_life",
                             trigger_context=ctx,
                         ))
-                    break
         self._enqueue_triggered_batch(events)
 
     def _put_permanent_onto_battlefield(

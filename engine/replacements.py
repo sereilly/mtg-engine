@@ -18,12 +18,24 @@ Event kinds and their payload keys:
 - ``damage_to_creature``: {permanent, amount, source}
 - ``damage_to_player``:   {player, amount}
 - ``would_die``:          {player, permanent}
+- ``discard``:            {player, card}
+- ``draw``:               {player, count, drawn}
+
+The last two are *interactive*: their interceptors offer a
+:class:`~engine.replacement_choices.ReplacementChoice` rather than applying
+the effect outright, and report what they did through ``payload["drawn"]``.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
+
+from .replacement_choices import (
+    ReplacementChoice,
+    offer_replacement_choice,
+    replacement_choice,
+)
 
 
 @dataclass
@@ -76,14 +88,24 @@ def apply_replacements(game, kind: str, payload: dict) -> tuple[bool, dict]:
 # LEA interceptors
 # ---------------------------------------------------------------------------
 
+# The oracle phrases these interceptors self-select on. Named constants rather
+# than inline literals because a second reader now needs the *exact* string:
+# engine/grammar/registries.py claims these lines for the grammar on the
+# strength of this file implementing them. A copy over there would be free to
+# drift, and a drifted copy would claim a line nothing implements — the silence
+# the grammar's full-consumption invariant exists to remove.
+LIFE_GAIN_TO_DRAW_TEXT = "if you would gain life, draw that many cards instead"
+DAMAGE_LIFE_FLOOR_TEXT = (
+    "damage that would reduce your life total to less than 1 reduces it to 1 instead"
+)
+
+
 @replacement_effect("life_gain")
 def _draw_instead_of_life_gain(game, payload: dict) -> ReplacementOutcome | None:
     """Lich: "If you would gain life, draw that many cards instead."""
     player = payload["player"]
     amount = payload["amount"]
-    if not game._player_controls_text(
-        player, "if you would gain life, draw that many cards instead"
-    ):
+    if not game._player_controls_text(player, LIFE_GAIN_TO_DRAW_TEXT):
         return None
     drawn = player.draw(amount)
     source = f" from {payload['source_name']}" if payload.get("source_name") else ""
@@ -104,9 +126,7 @@ def _floor_life_at_one(game, payload: dict) -> ReplacementOutcome | None:
     amount = payload["amount"]
     if amount <= 0:
         return None
-    if not game._player_controls_text(
-        player, "damage that would reduce your life total to less than 1 reduces it to 1 instead"
-    ):
+    if not game._player_controls_text(player, DAMAGE_LIFE_FLOOR_TEXT):
         return None
     floor_amount = max(0, player.life - 1)
     if floor_amount >= amount:
@@ -237,3 +257,160 @@ def _exile_instead_of_dying(game, payload: dict) -> ReplacementOutcome | None:
         payload["player"].exile.append(permanent.card)
     game.log.append(f"{permanent.card.name} was exiled instead of dying")
     return ReplacementOutcome(replaced=True)
+
+
+# ---------------------------------------------------------------------------
+# Interactive replacements (CR 614 + engine/replacement_choices.py)
+#
+# Each of these is optional or offers a choice, so it cannot simply mutate the
+# event: it offers a ReplacementChoice and the paired resolver finishes the job
+# once the chooser answers (immediately, for a non-interactive seat).
+# ---------------------------------------------------------------------------
+
+TOP_OF_LIBRARY_DISCARD_TEXT = (
+    "if an effect causes you to discard a card, discard it, but you may put it "
+    "on top of your library instead"
+)
+
+
+@replacement_effect("discard")
+def _top_of_library_instead_of_graveyard(game, payload: dict) -> ReplacementOutcome | None:
+    """Library of Leng: "If an effect causes you to discard a card, discard it,
+    but you may put it on top of your library instead of into your graveyard."
+
+    The discarded card is in no zone until the choice is answered — it has left
+    the hand and its destination is still undecided (CR 701.9c)."""
+    player = payload["player"]
+    if not game._player_controls_text(player, TOP_OF_LIBRARY_DISCARD_TEXT):
+        return None
+    card = payload["card"]
+    suspended, _ = offer_replacement_choice(
+        game,
+        ReplacementChoice(
+            kind="leng_discard",
+            player_index=game.players.index(player),
+            options=("top of library", "graveyard"),
+            default_option=0,
+            data={"card": card},
+        ),
+    )
+    if suspended:
+        game.log.append(
+            f"{player.name} discarded {card.name} — Library of Leng: "
+            "choose graveyard or top of library"
+        )
+    return ReplacementOutcome(replaced=True)
+
+
+@replacement_choice("leng_discard")
+def _resolve_leng_discard(game, choice: ReplacementChoice, option_index: int) -> int:
+    player = game.players[choice.player_index]
+    card = choice.data["card"]
+    if option_index == 0:
+        player.library.insert(0, card)
+        game.log.append(
+            f"{player.name} put discarded {card.name} on top of their library (Library of Leng)"
+        )
+    else:
+        player.graveyard.append(card)
+        game.log.append(f"{player.name} put discarded {card.name} into their graveyard")
+    return 0
+
+
+@replacement_effect("draw")
+def _draw_from_outside_the_game(game, payload: dict) -> ReplacementOutcome | None:
+    """Ring of Ma'rûf: the next draw is replaced by putting a card you own from
+    outside the game into your hand.
+
+    Nothing is drawn from the library, so this reports 0 cards drawn and a
+    "whenever you draw a card" effect correctly sees no draw. With no eligible
+    card there is nothing to take and the replacement is spent anyway
+    (CR 614.1). CR 407.3 keeps ante cards out of a game not played for ante.
+    """
+    player = payload["player"]
+    player_index = game.players.index(player)
+    if player_index not in game.outside_game_draw_replacements:
+        return None
+    game.outside_game_draw_replacements.discard(player_index)
+    available = game._outside_game_choices(player_index)
+    remaining = payload["count"] - 1
+    if not available:
+        game.log.append(
+            f"{player.name} has no cards outside the game to take (Ring of Ma'rûf)"
+        )
+        if remaining > 0:
+            player.draw(remaining)
+        payload["drawn"] = 0
+        return ReplacementOutcome(replaced=True)
+    suspended, drawn = offer_replacement_choice(
+        game,
+        ReplacementChoice(
+            kind="outside_game_draw",
+            player_index=player_index,
+            options=tuple(player.sideboard[i].name for i in available),
+            default_option=0,
+            # Sideboard positions behind each offered name, so a choice made
+            # against the filtered list still pulls the right card.
+            data={"sideboard_indices": available, "remaining_draws": remaining},
+        ),
+    )
+    if suspended:
+        game.log.append(
+            f"{player.name} looks through the cards they own from outside the game (Ring of Ma'rûf)"
+        )
+    payload["drawn"] = drawn
+    return ReplacementOutcome(replaced=True)
+
+
+@replacement_choice("outside_game_draw")
+def _resolve_outside_game_draw(game, choice: ReplacementChoice, option_index: int) -> int:
+    indices = choice.data.get("sideboard_indices") or list(range(len(choice.options)))
+    game._finish_outside_game_draw(choice.player_index, indices[option_index])
+    remaining = int(choice.data.get("remaining_draws", 0))
+    if remaining > 0:
+        game.players[choice.player_index].draw(remaining)
+    return 0
+
+
+@replacement_effect("draw")
+def _look_at_top_cards_and_draw_one(game, payload: dict) -> ReplacementOutcome | None:
+    """Aladdin's Lamp: the next draw is replaced by "look at the top X cards of
+    your library, draw one of them, then put the rest on the bottom in a random
+    order". The charge is spent even when the library is too short to look at
+    anything, in which case the draw happens normally (CR 614.1)."""
+    player = payload["player"]
+    player_index = game.players.index(player)
+    x = game.lamp_draw_replacements.get(player_index)
+    if not x:
+        return None
+    game.lamp_draw_replacements.pop(player_index, None)
+    x = min(int(x), len(player.library))
+    if x <= 0:
+        return None
+    suspended, drawn = offer_replacement_choice(
+        game,
+        ReplacementChoice(
+            kind="lamp_draw",
+            player_index=player_index,
+            options=tuple(card.name for card in player.library[:x]),
+            default_option=0,
+            data={"remaining_draws": payload["count"] - 1},
+        ),
+    )
+    if suspended:
+        game.log.append(
+            f"{player.name} looks at the top {x} card(s) of their library (Aladdin's Lamp)"
+        )
+    payload["drawn"] = drawn
+    return ReplacementOutcome(replaced=True)
+
+
+@replacement_choice("lamp_draw")
+def _resolve_lamp_draw(game, choice: ReplacementChoice, option_index: int) -> int:
+    player = game.players[choice.player_index]
+    looked_at = min(len(choice.options), len(player.library))
+    drawn = game._finish_lamp_draw(choice.player_index, option_index, looked_at)
+    remaining = int(choice.data.get("remaining_draws", 0))
+    if remaining > 0:
+        drawn += player.draw(remaining)
+    return drawn

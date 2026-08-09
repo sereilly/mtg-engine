@@ -13,6 +13,7 @@ from .registry import EFFECT_HANDLERS, EffectHandler, effect_handler
 from . import (  # noqa: E402,F401
     board_misc,
     combat,
+    control_flow,
     damage,
     destruction,
     life_and_game,

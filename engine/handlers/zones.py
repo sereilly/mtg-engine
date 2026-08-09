@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 def draw_target_cards(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     target = context.target
     count = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
-    drawn = game._draw_with_lamp(target, count)
+    drawn = game._draw_with_replacements(target, count)
     game.log.append(f"{target.name} drew {drawn} cards")
     return True, "resolved"
 
@@ -26,7 +26,7 @@ def draw_target_cards(game: Game, instruction: OracleInstruction, context: Oracl
 def draw_controller_cards(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     caster = context.caster
     card = context.card
-    drawn = game._draw_with_lamp(caster, int(instruction.payload.get("amount", 0)))
+    drawn = game._draw_with_replacements(caster, int(instruction.payload.get("amount", 0)))
     game.log.append(f"{card.name} drew {drawn} card")
     return True, "resolved"
 
@@ -35,7 +35,7 @@ def draw_controller_cards(game: Game, instruction: OracleInstruction, context: O
 def arm_lamp_draw_replacement(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Aladdin's Lamp: arm the controller's next draw this turn to become
     "look at the top X, choose one to draw, bottom the rest in a random
-    order". Consumed by Game._draw_with_lamp at the next draw."""
+    order". Consumed by Game._draw_with_replacements at the next draw."""
     caster = context.caster
     x = max(1, int(context.x_value or 0))
     game.lamp_draw_replacements[game.players.index(caster)] = x
@@ -49,7 +49,7 @@ def arm_lamp_draw_replacement(game: Game, instruction: OracleInstruction, contex
 def arm_outside_game_draw_replacement(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Ring of Ma'rûf: arm the controller's next draw this turn to become "put a
     card you own from outside the game into your hand" instead. Consumed by
-    Game._draw_with_lamp at the next draw."""
+    Game._draw_with_replacements at the next draw."""
     caster = context.caster
     game.outside_game_draw_replacements.add(game.players.index(caster))
     game.log.append(
@@ -217,7 +217,7 @@ def ante_self_then_clear_ante_and_draw(game: Game, instruction: OracleInstructio
             f"{card.name} put {len(others)} other card(s) {caster.name} owns "
             "from the ante into their graveyard"
         )
-    drawn = game._draw_with_lamp(caster, 1)
+    drawn = game._draw_with_replacements(caster, 1)
     game.log.append(f"{card.name} drew {drawn} card")
     return True, "resolved"
 

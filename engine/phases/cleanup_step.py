@@ -9,6 +9,7 @@ P/T buffs, damage prevention pools, and the EOT metadata flags. Creatures exiled
 """
 
 from ..models import Permanent
+from ..keywords import clear_until_eot_keywords
 from ..mixins._constants import _EOT_METADATA_KEYS
 
 
@@ -66,7 +67,7 @@ class CleanupStepMixin:
                 permanent.damage_marked = 0
                 permanent.damage_prevention_pool = 0
                 permanent.damage_prevention_source = None
-                # 614.8 / 701.15: an unused regeneration shield lasts only until
+                # 614.8 / 701.19a: an unused regeneration shield lasts only until
                 # the end of the turn it was created.
                 permanent.regeneration_shield = 0
                 temp_power = int(permanent.metadata.pop("temporary_power_bonus_until_eot", 0))
@@ -77,10 +78,12 @@ class CleanupStepMixin:
                     permanent.toughness_bonus -= temp_toughness
                 for key in _EOT_METADATA_KEYS:
                     permanent.metadata.pop(key, None)
-                # Sandals of Abdallah: the islandwalk grant (and its linked
-                # "when that creature dies this turn" destruction) expire now.
-                if permanent.metadata.pop("gains_islandwalk_until_eot", None):
-                    permanent.metadata.pop("has_islandwalk", None)
+                # Layer 6: until-end-of-turn ability grants and removals expire
+                # together, in one place, rather than needing a metadata key per
+                # keyword listed in _EOT_METADATA_KEYS.
+                clear_until_eot_keywords(permanent)
+                # Sandals of Abdallah: the linked "when that creature dies this
+                # turn" destruction expires with the islandwalk grant above.
                 permanent.metadata.pop("on_death_destroy_permanents", None)
         # 610.3: return all creatures exiled "until end of turn" to their owners' battlefields
         returned_from_exile = list(self.exile_until_eot)

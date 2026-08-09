@@ -258,10 +258,18 @@ class TestLibraryOfLengOptionalPrompt:
         assert game.pending_leng_discards == []
         assert p1.library[0] is bears
 
+    def _arm_leng_discard(self, game, card):
+        """Arm the prompt the way play does — a forced discard while the seat
+        controls Library of Leng — rather than hand-building engine state, so
+        this still covers the real path if the queue's shape changes."""
+        game.interactive_seats = {0}
+        game.players[0].battlefield.append(Permanent(card=_C["Library of Leng"]))
+        game._discard_card(game.players[0], card)
+
     def test_prompt_surfaces_via_api_and_blocks_other_actions(self):
         sid, session, game = _session()
         bears = _C["Grizzly Bears"]
-        game.pending_leng_discards.append({"player_index": 0, "card": bears})
+        self._arm_leng_discard(game, bears)
 
         state = client.get(f"/api/sessions/{sid}/state", params={"seat": 0}).json()
         info = state["leng_discard"]
@@ -287,7 +295,7 @@ class TestLibraryOfLengOptionalPrompt:
 
     def test_prompt_hidden_from_opponent(self):
         sid, session, game = _session()
-        game.pending_leng_discards.append({"player_index": 0, "card": _C["Grizzly Bears"]})
+        self._arm_leng_discard(game, _C["Grizzly Bears"])
         state = client.get(f"/api/sessions/{sid}/state", params={"seat": 1}).json()
         assert state["leng_discard"] is None
 

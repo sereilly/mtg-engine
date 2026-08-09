@@ -22,6 +22,7 @@ from engine.models import CardDefinition, Permanent, PlayerState
 
 import web.app as web_app
 from tests.helpers import LEA_PATH
+from engine.keywords import clear_until_eot_keywords, grant_keyword, remove_keyword
 
 
 # ---------------------------------------------------------------------------
@@ -923,14 +924,14 @@ def test_702_22e_band_persists_after_banding_is_removed():
     # The bander has banding only via a temporary grant; once declared, the band
     # must keep functioning even after the grant is gone (block still propagates).
     bander = Permanent(card=_mk_creature("Bander", 1, 1))
-    bander.metadata["gains_banding_until_eot"] = True
+    grant_keyword(bander, "banding", until_eot=True)
     ally = Permanent(card=_mk_creature("Ally", 2, 2))
     blocker = Permanent(card=_mk_creature("Blocker", 3, 3))
     game, p1, _ = _game([bander, ally], [blocker])
     _to_declare_attackers(game)
     assert game.declare_attackers(0, [0, 1], bands=[[0, 1]])[0]
     # Banding is stripped after the band is announced (702.22e).
-    bander.metadata.pop("gains_banding_until_eot", None)
+    clear_until_eot_keywords(bander)
     game.advance_combat_phase()  # declare_blockers
     assert game.combat_bands == [[0, 1]]            # band still recorded
     assert game.declare_blockers(1, {0: 0})[0]       # block only the ally
@@ -1171,7 +1172,7 @@ def test_grant_banding_until_end_of_turn_lets_a_creature_band():
     result = game.activate_permanent_ability(0, "Bander Helm", target_player_index=0)
     assert result.supported, result.details
     soldier_perm = p1.battlefield[1]
-    assert soldier_perm.metadata.get("gains_banding_until_eot")
+    assert soldier_perm.has_keyword("banding")
     assert game._creature_has_banding(soldier_perm)
 
     # The newly-granted bander (index 1) may band with the vanilla ally (index 2).

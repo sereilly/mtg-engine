@@ -12,6 +12,8 @@ cards/LEA_cards.json (+ any further set JSONs — web/app.py:CARD_PATHS)
    ▼
 CardDefinition (immutable)
    │  oracle.compile_card_oracle        ← cached: each card compiles once per process
+   │    ├─ engine/grammar/   per line: tokenize → AST → lower   (used when gated on)
+   │    └─ engine/parsing/   legacy @parse_rule registry        (fallback)
    ▼
 OracleProgram
    ├─ instructions          (primary effects, e.g. deal_damage)
@@ -23,18 +25,34 @@ OracleProgram
 EFFECT_HANDLERS[instruction.kind](game, instruction, context)   ← O(1) dict dispatch
 ```
 
+**Two front ends, one IR.** `engine/grammar/` is progressively replacing
+`engine/parsing/`; both lower to the same `OracleInstruction`, so they are
+directly comparable and can coexist per line. See "Grammar front end" below and
+`ROADMAP.md` for the migration plan.
+
 ## Packages
 
 | Package / module | Role |
 | --- | --- |
 | `engine/oracle_types.py` | Shared dataclasses (`OracleInstruction`, `OracleProgram`, …) and text helpers. No engine imports — safe to import from anywhere. |
+| `engine/events.py` | Trigger event bus: `emit(game, kind, **payload)` announces something that happened and enqueues every matching triggered ability in APNAP order. `@event_filter(kind)` registers per-kind applicability predicates ("…casts a *blue* spell"). Prefer this over adding another hand-placed `iter_triggered_abilities` scan. |
+| `engine/continuous.py` | The CR 613 layer system: layers, sublayers, timestamps, and dependency. Pure — it computes characteristics from effects and never touches game state, so it is tested directly against the rule text. |
+| `engine/layer_bridge.py` | Adapter from the engine's stored channels to `ContinuousEffect`s (layers 6 and 7 today). The seam that lets storage change without touching the rules logic. |
+| `engine/keywords.py` | Single write API for keyword abilities (layer 6): `grant_keyword` / `remove_keyword`, recorded in order with timestamps. Never set a `gains_<keyword>` flag by hand — grants and removals share a layer, so only the recorded order can decide which wins. |
+| `engine/grammar/` | Grammar front end: tokenizer → recursive-descent parser → typed AST → lowering to `OracleInstruction`. Progressively replacing `engine/parsing/`; see "Grammar front end" below. Imports only `oracle_types`. |
 | `engine/parsing/` | Declarative parse rules. Each `@parse_rule(order)` function maps a normalized oracle-text clause to `(OracleInstruction, effect_kind)`. First match in ascending order wins. `engine/parsing/common.py` hosts helpers shared across rules (number words, color-word scans, duration parsing, `parse_target_filter` for "target <noun phrase>" restrictions) — check there before adding a new one-off regex. |
 | `engine/oracle.py` | The compiler: tokenizes oracle text, classifies lines (keyword / triggered / activated / static), delegates effect clauses to `engine.parsing`, and caches one `OracleProgram` per card. |
 | `engine/handlers/` | Effect executors. Each `@effect_handler(kind)` function mutates game state for one instruction kind. Registered into `EFFECT_HANDLERS` and dispatched with a single dict lookup. `engine/handlers/_common.py` hosts shared helpers (`resolve_target_permanent`/`pick_target_permanent`, `permanent_matches_filter`, damage application). |
 | `engine/pt.py` | The single write API for power/toughness channels (`set_base_pt`, `add_pt_modifier`, `switch_pt`, `clear_base_pt`) — see "P/T channels" below. All P/T mutation should go through here, never direct metadata pokes. |
 | `engine/replacements.py` | CR 614 replacement-effect registry (`life_gain`, `damage_to_creature`, `would_die`, …). An interceptor may consume an event or adjust its amount before the default action runs; see "Replacement effects" below. |
+| `engine/prevention.py` | CR 615 damage-shield registry. Each `@prevention_effect(order)` function reports how many points it removes from one damage event; `apply_prevention` runs them in order over players and permanents alike. See "Prevention effects" below. |
 | `engine/tokens.py` | `make_token_card(...)` — the one place that builds a token's `CardDefinition`. A token-creating card is a parse rule emitting a generic `create_token` instruction, never a bespoke handler. |
 | `engine/cast_restrictions.py` | Text-keyed "Cast this spell only during..." timing gates — an ordered predicate table, since the restriction is the same for any card printed with that phrase (not name-specific). |
+| `engine/targeting.py` | Cast-time target kind derived from the compiled program — an Aura's `Enchant <subject>` line or an instruction's `type_filter`. The strangler seam replacing `legality.py`'s text cascade: it answers where the program carries evidence, `legality.py` answers otherwise, and a differential guard keeps them equal. |
+| `Game.become_tapped(permanent)` | The single untapped→tapped transition (CR 701.26a), firing "becomes tapped" triggers. Never set `perm.tapped = True` directly — a trigger registered on one tapping path silently misses every other, which is exactly how Lifetap came to ignore Icy Manipulator. Entering the battlefield tapped is *not* becoming tapped and deliberately bypasses it. |
+| `engine/cost_modifiers.py` | Text-keyed cost increases (CR 601.2f) — "<colour> spells cost {N} more to cast" and the activated-ability form. Applied once per taxing permanent on any battlefield. Increases only; reduction is deliberately absent until a card needs it. |
+| `engine/untap_restrictions.py` | Text-keyed untap-step restrictions (CR 502): skip the step, per-type untap limits, power- and color-gated blocks, and the "as long as this is untapped" qualifier that composes with any of them. Derived from oracle text, so a card printed with a known template needs no registration. |
+| `engine/draw_step_modifiers.py` | Text-keyed symmetric bonus draws (CR 504): "at the beginning of each player's draw step, that player draws an additional card", with the optional untapped-source clause. |
 | `engine/card_hooks.py` | Name-keyed registries for truly bespoke card behavior: spell-cast triggers, spell-resolved triggers, counterspell riders, leave-battlefield effects, untap-step restrictions, draw-step modifiers, mana-production modifiers, cost-tax modifiers. The only sanctioned place to reference a card by name — a short list of `# TODO(card-hooks)` markers in the mixins flags the handful of remaining single-card bespoke sites not yet worth generalizing. |
 | `engine/phases/` | One mixin per turn phase and per step within a phase (CR 500–514): `beginning_phase` + `untap_step`/`upkeep_step`/`draw_step`, `precombat_main_phase`, `combat_phase` + its five step modules, `postcombat_main_phase`, `ending_phase` + `end_step`/`cleanup_step`. Each is composed onto `Game`. See `engine/phases/__init__.py` for the full taxonomy. |
 | `engine/mixins/` | Cross-cutting game flow not tied to a single phase: turn-structure navigation and priority (`phase_steps`), per-turn/pregame management (`turn_management`), stack and casting, state-based actions, effects, helpers. Consumes compiled programs; should never parse oracle text itself. |
@@ -70,21 +88,118 @@ Work top-down; stop at the first step that covers the card.
    engine.
 5. **Tests.** Add a focused test per new rule/handler (see
    `tests/sets/test_lea_cards.py` for per-card patterns). The comprehensive-cast
-   sweep (`test_all_lea_cards_resolve_without_exception`) is driven by
-   `pytest_generate_tests` over the live catalog, so a new set's cards are
-   swept automatically — only add to that file's `SWEEP_EXCLUSIONS` if a card
-   needs setup the generic body can't provide.
+   sweep (`test_every_catalog_card_resolves_without_exception`) is driven by
+   `pytest_generate_tests` over the whole `cards/manifest.json` catalog, so a
+   new set is swept the moment it is ingested. Only add to that file's
+   `SWEEP_EXCLUSIONS` if a card needs setup the generic body can't provide.
 
-## P/T channels (scoped CR 613)
+## Grammar front end
 
-Power/toughness is computed by `Permanent.effective_power`/`effective_toughness`
-(engine/models.py) from a fixed set of metadata channels, applied in CR-613
-sublayer order: 7d switch (`pt_switched`) → 7b set (`absolute_power[_until_eot]`,
-until-eot wins) → 7c additive (`power_bonus`, `static_buff_power`,
-`attacking_buff_power`). There is no general timestamp/dependency-ordered
-layer system — last-write-wins on a 7b metadata key already gives the correct
-order for stack-resolved effects, and 7c is commutative addition, which covers
-every LEA/Arabian-Nights-era interaction. All writes go through `engine/pt.py`;
+`engine/grammar/` parses an oracle line into a typed AST and lowers it to the
+same `OracleInstruction` IR the parse rules emit. Modules:
+
+| Module | Role |
+| --- | --- |
+| `lexer.py` | Tokenizer. Keeps P/T as one token, preserves source spans for error offsets, strips reminder text (recording it), and collapses a card's self-references to a single `SELF` token so productions never need card names. |
+| `vocabulary.py` | Creature/land/artifact types, supertypes, and keywords loaded from `data/vocabulary/` (fetched by `scripts/fetch_vocabulary.py`). Never touches the network at import. |
+| `ast.py` | Frozen dataclass node inventory. Imports nothing from the engine. **Append-only** — repurposing a field invalidates every golden and ratchet entry at once. |
+| `amounts.py` / `nouns.py` | Quantity and object-phrase sub-parsers (`Fixed`/`Var`/`CountOf`/`ThatMuch`, `ObjectFilter`/`TargetSpec`/`PlayerRef`). |
+| `parser.py` | Line classification (keyword / activated / triggered / static / spell) and the recursive-descent statement grammar. |
+| `lower.py` | AST → instructions, emitting the payload keys the existing handlers already read. |
+
+Two properties define how it behaves:
+
+- **Full token consumption.** A production must account for every token of its
+  line; leftovers raise `GrammarError`. So "parsed" means "understood in full",
+  and a gap fails loudly (unsupported, with the clause named) rather than
+  resolving as something the card doesn't say. This is the structural fix for
+  the dropped-rider class that `scripts/parse_coverage.py`'s deletion probe
+  detects empirically.
+- **Category gating.** The grammar runs on every line, but its output is only
+  *used* when every category it lowered to is in
+  `engine.grammar.GRAMMAR_CATEGORIES`; otherwise the legacy rules handle the
+  line unchanged. Enabling a category is a one-line change made after
+  `tests/engine/test_grammar_differential.py` is green for it.
+
+Composition lives in the IR: `sequence`, `if_then`, `may`, and `for_each`
+(`engine/handlers/control_flow.py`) nest instruction tuples in their payloads,
+and `OracleExecutionContext.results` carries values between steps of one
+resolution ("deals X damage… you gain that much life"). That is what removes the
+need for fused kinds like `deal_damage_and_gain_life` — 28 of the legacy
+compiler's 120 kinds were conjunctions of this sort.
+
+Coverage is tracked in `GRAMMAR_COVERAGE.md` with floors in
+`scripts/grammar_ratchet.json`, guarded by `tests/engine/test_grammar_ratchet.py`.
+
+## Destruction is a state-based action
+
+Lethal damage (CR 704.5g) and deathtouch damage (704.5h) destroy creatures in
+`check_state_based_actions` and nowhere else. Effect handlers mark damage and
+stop — they do not sweep for deaths, and nothing else should either.
+
+This used to be the opposite: destruction happened only when an effect called
+`_destroy_marked_creatures()` by hand, at nine separate sites. Any new damage
+effect that forgot left a lethally damaged creature alive, and composed effects
+made that easy to hit, since a damage step no longer necessarily sits inside a
+handler that knows to run the sweep. If a new code path needs deaths applied
+before it continues, call `check_state_based_actions()` — that is CR 704.3, and
+it is what the phase steps do before handing out priority.
+
+## Continuous effects — the CR 613 layer system
+
+`engine/continuous.py` implements the layer system: effects are placed in
+layers 1–7, layer 7 is split into sublayers 7a–7d, and within a layer or
+sublayer effects apply in **timestamp** order — except where **dependency**
+(CR 613.8) overrides it. Dependency is detected generally, by asking what an
+effect *would* do before and after applying another, rather than by enumerating
+known card interactions; dependency loops fall back to timestamp order as
+613.8b requires, and the order is re-evaluated after every application (613.8c).
+
+Two consequences for anyone adding an effect:
+
+- **`modify` and `applies_to` must be pure.** Both are applied speculatively to
+  throwaway state while probing dependency, so they may run many times per
+  recompute. A side effect outside the `Characteristics` passed in will fire
+  spuriously.
+- **Ordering is a rule, not a coding convention.** Put an effect in its layer
+  and give it a timestamp; do not try to sequence it by where the code runs.
+
+`engine/layer_bridge.py` adapts the engine's stored channels into effects and is
+what `Permanent.effective_power`/`effective_toughness` and
+`Permanent.has_keyword` call. Keeping the adapter separate keeps the layer
+engine pure and testable directly against the rule text
+(`tests/rules/test_layers.py`), while the storage it reads from can move without
+the rules logic changing.
+
+**Layers 4–7 are live.** The accessors that read them:
+
+| Accessor | Layer |
+| --- | --- |
+| `Permanent.is_creature`, `Permanent.has_type` | 4 (type-changing) |
+| `Permanent.effective_colors` | 5 (colour-changing) |
+| `Permanent.has_keyword` | 6 (ability add/remove) |
+| `Permanent.effective_power` / `effective_toughness` | 7a–7d |
+
+A printed keyword is part of an object's copiable values, so it is *seeded*
+before layer 1; grants and removals are continuous effects recorded in order by
+`engine/keywords.py`. A removal can therefore take a printed ability away, and
+a later grant can put it back — CR 613.9's worked example, and neither was
+expressible when the engine stored one `gains_<keyword>` / `loses_<keyword>`
+flag per keyword and checked removals first.
+
+Layer 4 distinguishes *adding* a type (animation: a Kormus Bell Swamp is a
+creature **and** still a land) from *replacing* subtypes (Evil Presence: the
+land is a Swamp **instead of** a Forest). Ask `perm.has_type("swamp")` rather
+than comparing `metadata["land_type_override"]`, which only sees one of those.
+
+**Layer 7c splits by lifetime, and the split is load-bearing.** `power_bonus` is
+persistent (counters, one-shot boosts); `static_buff_*` and `derived_buff_*` are
+derived — cleared and rebuilt from the board on every recompute. A continuous
+effect that writes to the persistent channel has to subtract itself again later,
+and a subtraction that doesn't exactly match its addition compounds on every
+refresh, which CR 611.3a guarantees is constant. Each derived channel is cleared
+by the same function that rebuilds it; splitting those apart reintroduces the
+bug. All writes go through `engine/pt.py`;
 characteristic-defining P/T (layer 7a) is registry-driven via
 `engine.mixins.permanent_state.DYNAMIC_PT` (instruction kind → count
 function) — a new CDA card is one table entry, not a new branch.
@@ -99,6 +214,47 @@ interceptors in registration order; one may consume the event (skip the
 default action) or adjust `payload["amount"]` and let the chain continue.
 Interceptors self-select from game/permanent state, so the registry stays
 name-free.
+
+### Replacements that need a decision
+
+Some replacement effects are optional ("you *may* put it on top of your library
+instead") or let the player choose among outcomes ("look at the top X cards,
+draw one of them"). Those can't be applied inline — `apply_replacements` returns
+synchronously while a human's answer arrives on a later request.
+
+Such an interceptor *offers* a `ReplacementChoice` (`engine/replacement_choices.py`)
+carrying the seat, the option labels, a default, and whatever its resolver will
+need. An interactive seat gets it queued on `game.pending_replacement_choices`
+and the event is suspended — the affected card sits in no zone until
+`Game.resolve_replacement_choice` answers. Any other seat takes the default
+immediately. Both paths finish through the same `@replacement_choice(kind)`
+resolver, so there is one completion path rather than an inline AI branch and a
+`confirm_` method that must agree.
+
+Adding an interactive replacement is an interceptor plus a resolver — no new
+`Game` field, confirm method, or prompt plumbing. `pending_lamp_draw`,
+`pending_outside_game_draw` and `pending_leng_discards` remain as read-only
+views over the queue in the shapes the web layer reads.
+
+## Prevention effects
+
+Damage shields (CR 615) are a separate registry with the same shape,
+`engine/prevention.py`. A `@prevention_effect(order)` function inspects one
+event — `{recipient, amount, source, combat}`, where `recipient` is a
+`PlayerState` *or* a `Permanent` — and returns how many points it removes, or
+`None` to pass. `apply_prevention(game, event)` runs them in ascending order and
+stops as soon as nothing is left to prevent, so a shield is never spent on
+damage an earlier one already absorbed.
+
+Both models carry `damage_prevention_pool`, so the numeric shield of CR 615.7 is
+a single interceptor covering creatures and players; shields that only make
+sense for a player (Circle of Protection, Reverse Damage, Forcefield) check the
+recipient type themselves. `combat` marks the event as combat damage and is what
+scopes the blanket shields (Fog, Ebony Horse) — every other shield ignores it.
+
+Unlike parse rules, order here is semantic rather than a precedence tiebreak:
+under CR 616.1 the *affected player* chooses which applicable shield to apply,
+and the engine substitutes this fixed table. A duplicate order raises at import.
 
 ## Ordering conventions for parse rules
 
@@ -129,6 +285,12 @@ ordered.
   paid once per distinct card per process, regardless of how many games run.
 - **O(1) execution:** instruction dispatch is a dict lookup. Adding the
   1000th effect kind does not slow down the 1st.
+- **Parsing is not O(1), and it is the real growth term.** The legacy
+  `parse_primary_instruction` is a linear scan over the whole `@parse_rule`
+  registry for every clause, so compile cost is O(cards × clauses × rules) with
+  the rule count itself growing per card. The grammar front end replaces that
+  with O(tokens) recursive descent plus hash lookups, which is the main reason
+  it exists. See `ROADMAP.md`.
 - **Precompiled regexes:** trigger tables and parse rules compile their
   patterns at import. Python's internal regex cache (512 entries) is never
   relied on.

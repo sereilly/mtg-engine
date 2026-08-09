@@ -830,3 +830,48 @@ def test_614_12_etb_replacement_from_creature_oracle_text():
     game.cast_from_hand(0, "Sluggish Brute")
 
     assert p1.battlefield[0].tapped is True, "Creature's own ETB replacement caused it to enter tapped"
+
+
+# ---------------------------------------------------------------------------
+# 616.1 — several replacement and/or prevention effects on one event
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cr("616.1f")
+def test_616_1f_a_life_floor_reapplies_against_the_running_life_total():
+    """616.1f: after one effect is applied the process repeats, taking into
+    account only the effects that are *now* applicable. A "reduces it to 1
+    instead" floor therefore has nothing left to do once the life total is
+    already 1, so a second damage event that turn takes it no lower."""
+    floor_text = (
+        "damage that would reduce your life total to less than 1 reduces it to 1 instead"
+    )
+    ali = _mk_creature("Life Floor", power=1, toughness=3, oracle_text=floor_text)
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=ali)], life=5)
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    assert game._deal_damage_to_player(p1, 9) == 4, "only the damage down to 1 is dealt"
+    assert p1.life == 1
+    assert game._deal_damage_to_player(p1, 9) == 0, "the floor leaves nothing to deal"
+    assert p1.life == 1
+
+
+@pytest.mark.cr("616.1", "615.1")
+def test_616_1_prevention_and_replacement_both_apply_to_one_damage_event():
+    """A prevention shield and a damage replacement can both be attempting to
+    modify the same event. Each applies once and the results compose: the
+    shield absorbs its points, the floor caps what is left."""
+    floor_text = (
+        "damage that would reduce your life total to less than 1 reduces it to 1 instead"
+    )
+    ali = _mk_creature("Life Floor", power=1, toughness=3, oracle_text=floor_text)
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=ali)], life=4)
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    p1.damage_prevention_pool = 2
+
+    dealt = game._deal_damage_to_player(p1, 10)
+
+    assert p1.damage_prevention_pool == 0, "the shield applied"
+    assert dealt == 3, "10 damage, 2 prevented, the remaining 8 floored to 3"
+    assert p1.life == 1

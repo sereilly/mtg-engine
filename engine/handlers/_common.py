@@ -59,32 +59,33 @@ def apply_damage_to_creature(
     source,
     log_message: Callable[[int], str] | None = None,
 ) -> int:
-    """Mark non-combat damage on a single creature, then either destroy it as a
-    state-based action (which regeneration shields can replace, CR 704.5g /
-    701.15) or fire its "dealt damage" triggers. ``log_message`` receives the
-    damage actually dealt and is logged before the destruction check, so death
-    logs follow the damage log. Returns the damage dealt after prevention."""
+    """Mark non-combat damage on a single creature and fire its "dealt damage"
+    triggers if it survived.
+
+    Destruction is not this function's job: lethal damage is a state-based
+    action (CR 704.5g, regeneration replacing it per CR 701.19), checked in
+    ``check_state_based_actions``. Handlers used to have to call the sweep by
+    hand at nine separate sites, and any new damage effect that forgot left a
+    lethally damaged creature alive.
+
+    ``log_message`` receives the damage actually dealt. Returns that amount."""
     dealt = game._mark_damage_on_permanent(perm, amount, source=source)
     if log_message is not None:
         game.log.append(log_message(dealt))
-    if perm.damage_marked >= perm.effective_toughness:
-        game._destroy_marked_creatures()
-    elif dealt > 0:
+    if dealt > 0 and perm.damage_marked < perm.effective_toughness:
         game._fire_dealt_damage_triggers(perm)
     return dealt
 
 
 def permanent_effective_colors(perm: Permanent) -> set[str]:
-    """The color symbols a permanent currently has, honoring color overrides
-    (laces) and copied colors (Clone records ``copied_colors``; Vesuvan
-    Doppelganger deliberately doesn't, so its printed blue shows through)."""
-    override = perm.metadata.get("color_override")
-    if override:
-        return {override}
-    copied_colors = perm.metadata.get("copied_colors")
-    if copied_colors is not None:
-        return set(copied_colors)
-    return set(perm.card.colors)
+    """The color symbols a permanent currently has.
+
+    Computed through CR 613 layer 5, so colour overrides (the laces) and copied
+    colours (Clone records ``copied_colors``; Vesuvan Doppelganger deliberately
+    doesn't, so its printed blue shows through) are ordinary continuous effects
+    rather than a precedence chain written out by hand.
+    """
+    return perm.effective_colors
 
 
 def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
@@ -112,21 +113,35 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
         if attached is None or getattr(getattr(attached, "card", None), "primary_type", "") != "land":
             return False
 
-    type_line = perm.effective_card.type_line.lower()
+    def _has_type(name: str) -> bool:
+        # is_creature (not the printed line) so animated lands count.
+        return perm.is_creature if name == "creature" else perm.has_type(name)
+
     if type_filter:
         if type_filter == "artifact_or_enchantment":
             if not (perm.has_type("artifact") or perm.has_type("enchantment")):
                 return False
-        elif type_filter == "creature":
-            if not perm.is_creature:
+        elif isinstance(type_filter, (list, tuple)):
+            # A type union ("target artifact, creature, or land") — any match
+            # qualifies.
+            if not any(_has_type(name) for name in type_filter):
                 return False
-        elif type_filter not in type_line:
+        elif not _has_type(type_filter):
             return False
     if subtype_filter:
         # A single subtype string, or several OR'd alternatives ("Djinn or
         # Efreet") as a list — any one matching is enough.
+        #
+        # has_type, not the printed type line: a land turned into a Swamp by
+        # Magical Hack / Phantasmal Terrain / Evil Presence IS a Swamp under CR
+        # 613 layer 4, and this function promises destroy-target resolution,
+        # cast validation and the legality enumerator can never disagree about
+        # what a filter means. Reading the printed line made it disagree with
+        # layer 4 — the divergence is unreachable in the current pool (no card
+        # here filters on a basic land subtype) but reachable the moment one
+        # ships.
         subtypes = [subtype_filter] if isinstance(subtype_filter, str) else subtype_filter
-        if not any(s in type_line for s in subtypes):
+        if not any(perm.has_type(s) for s in subtypes):
             return False
     if tapped_only and not perm.tapped:
         return False
@@ -135,7 +150,7 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
         return False
     if exclude_colors and any(c in colors for c in exclude_colors):
         return False
-    if exclude_types and any(t in type_line for t in exclude_types):
+    if exclude_types and any(perm.has_type(t) for t in exclude_types):
         return False
     return True
 

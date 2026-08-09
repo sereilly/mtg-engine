@@ -45,7 +45,14 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from engine import card_hooks, load_cards  # noqa: E402
+from engine.card_loader import manifest_set_paths  # noqa: E402
+from engine.grammar import behavioural_payload  # noqa: E402
+from engine.grammar import compile_line as compile_grammar_line  # noqa: E402
+from engine.oracle_types import OracleInstruction  # noqa: E402
 from engine.cast_restrictions import CAST_RESTRICTIONS  # noqa: E402
+from engine.cost_modifiers import cost_modifiers_for  # noqa: E402
+from engine.draw_step_modifiers import draw_step_bonus_for  # noqa: E402
+from engine.untap_restrictions import untap_restriction_for  # noqa: E402
 from engine.oracle import (  # noqa: E402
     _is_supported_keyword_line,
     _is_supported_static_creature_line,
@@ -59,10 +66,7 @@ from engine.oracle import (  # noqa: E402
 from engine.parsing import parse_primary_instruction  # noqa: E402
 
 CARD_PATHS = [
-    REPO_ROOT / "cards" / "LEA_cards.json",
-    REPO_ROOT / "cards" / "LEB_cards.json",
-    REPO_ROOT / "cards" / "2ED_cards.json",
-    REPO_ROOT / "cards" / "ARN_cards.json",
+    *manifest_set_paths(),
 ]
 OUTPUT_PATH = REPO_ROOT / "PARSE_COVERAGE.md"
 
@@ -110,7 +114,7 @@ _MIXIN_TEXT_SCANS = (
     "you don't lose the game for having 0 or less life",                 # game_ending.py (Lich)
     "as this enchantment enters, you lose life equal to your life total",  # permanent_state.py:195 (Lich)
     "you have no maximum hand size",                                     # permanent_state.py:189 (Library of Leng)
-    "if an effect causes you to discard a card, discard it, but you may put it on top of your library instead",  # effects._discard_card (Library of Leng)
+    "if an effect causes you to discard a card, discard it, but you may put it on top of your library instead",  # replacements.py discard interceptor (Library of Leng)
     "you may play any number of lands on each of your turns",            # stack_casting._fastbond_count (Fastbond)
     "you may spend white mana as though it were red mana",               # permanent_state.py:192 (Sunglasses of Urza)
     "doesn't untap during your untap step",                              # untap_step.py (Time Vault, Basalt Monolith)
@@ -160,6 +164,9 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     ("aura enchant noun (oracle_instructions attach)", lambda s: s.startswith("enchant ")),
     ("aura static (oracle_instructions/permanent_state)", lambda s: _matches_any(s, _AURA_STATIC_PATTERNS)),
     ("cast_restrictions.py", lambda s: any(r.phrase in s for r in CAST_RESTRICTIONS)),
+    ("untap_restrictions.py", lambda s: untap_restriction_for(s) is not None),
+    ("draw_step_modifiers.py", lambda s: draw_step_bonus_for(s) is not None),
+    ("cost_modifiers.py", lambda s: bool(cost_modifiers_for(s))),
     ("activation gate (stack_casting)", lambda s: any(g in s for g in _ACTIVATION_GATES)),
     ("mixin text scan", lambda s: _matches_any(s, _MIXIN_TEXT_SCANS)),
     ("modal machinery", lambda s: s.startswith("choose one")),
@@ -244,6 +251,20 @@ HANDLER_CLAIMS: dict[str, tuple[str, ...]] = {
     ),
     # Word of Command's pending_word_of_command flow forces the chosen card.
     "peek_hand_and_force_play": ("the player plays that card if able",),
+    # handlers/damage.simulacrum_redirect gains the life before dealing the
+    # damage (damage.py:156-157) — the rule anchors on the damage sentence,
+    # so the life sentence is the *leading* one it also implements.
+    "simulacrum_redirect": ("you gain life equal to the damage dealt to you this turn",),
+    # Farmstead / Living Artifact grant an upkeep "pay a cost, if you do gain
+    # 1 life" ability. The rule anchors on the life gain; the cost half is
+    # run by the same upkeep optional-pay flow (upkeep_step.py).
+    "target_gains_life": (
+        'enchanted land has "at the beginning of your upkeep, you may pay {w}{w}',
+        "you may remove a vitality counter from this aura",
+    ),
+    # Magnetic Mountain's upkeep flow (upkeep_step) pays per tapped creature of
+    # the color and untaps each one it can afford.
+    "upkeep_pay_per_creature_untap_color": ("if the player does, untap those creatures",),
     # Cyclone's upkeep flow (upkeep_step) deals the pay-damage itself.
     "upkeep_wind_counter_pay_or_sacrifice": (
         "if you pay, this enchantment deals damage equal to the number of wind counters on it to each creature and each player",
@@ -254,6 +275,17 @@ HANDLER_CLAIMS: dict[str, tuple[str, ...]] = {
     "upkeep_destroy_least_power_creature": (
         "it can't be regenerated",
         "if two or more creatures are tied for least power, you choose one of them",
+    ),
+    # Power Sink: "Counter target spell unless its controller pays {X}." The
+    # counter handler arms the pending payment (handlers/stack.py); when it goes
+    # unpaid, mixins/stack_casting._resolve_mana_payment counters the spell and
+    # runs the ON_SPELL_COUNTERED hook, which is what taps the lands and empties
+    # the pool. One resolution, so the second sentence is the same handler's
+    # work rather than a step of its own — the grammar reads it as a rider on
+    # the counter (engine/grammar/parser.py _UNPAID_PENALTIES) and lowering
+    # refuses any penalty this flow does not perform.
+    "counter_top_stack_spell": (
+        "they tap all lands with mana abilities they control and lose all unspent mana",
     ),
     # Animate Dead: the attach flow arms sacrifice_attached_on_leave, honored
     # by _remove_aura_effects.
@@ -266,10 +298,9 @@ HANDLER_CLAIMS: dict[str, tuple[str, ...]] = {
 ACKNOWLEDGED: dict[str, dict[str, str]] = {
     "Shahrazad": {
         "players play a magic subgame, using their libraries as their decks": (
-            "subgames are far out of scope; the card resolves with the life-halving only"
-        ),
-        "each player who doesn't win the subgame loses half their life, rounded up": (
-            "applied directly to the non-caster instead of the subgame loser"
+            "subgames are far out of scope. The life clause IS implemented: the caster "
+            "is treated as the subgame winner and every other player loses half "
+            "their life, rounded up (handlers/life_and_game.opponents_lose_half_life)"
         ),
     },
     "Word of Command": {
@@ -344,15 +375,30 @@ def _sentences(text: str) -> list[str]:
     return [s.strip(" .") for s in _SENTENCE_SPLIT.split(text) if s.strip(" .")]
 
 
-def _rule_match(clause: str, activated: bool):
-    instruction, kind = parse_primary_instruction(clause, activated=activated)
-    return instruction, kind
+def _rule_match(clause: str, activated: bool, card_name: str | None = None):
+    """What claims *clause*: the grammar if it can, else the legacy rules.
+
+    Grammar first, mirroring the compiler. This keeps every downstream
+    mechanism working as legacy rules are deleted — including the deletion
+    probe, which gets stronger on grammar-claimed text: the full-consumption
+    invariant means removing a meaningful word usually makes the parse fail
+    outright rather than quietly producing the same instruction.
+    """
+    compiled = compile_grammar_line(clause, card_name=card_name)
+    if compiled.usable:
+        instructions = compiled.instructions
+        instruction = (
+            instructions[0] if len(instructions) == 1
+            else OracleInstruction("sequence", "", {"steps": instructions})
+        )
+        return instruction, "grammar"
+    return parse_primary_instruction(clause, activated=activated)
 
 
-def _probe(clause: str, activated: bool) -> tuple[str, ...]:
+def _probe(clause: str, activated: bool, card_name: str | None = None) -> tuple[str, ...]:
     """Words in *clause* whose deletion leaves the parse identical — i.e.
     words the parser demonstrably ignored."""
-    base_instr, base_kind = _rule_match(clause, activated)
+    base_instr, _ = _rule_match(clause, activated, card_name)
     if base_instr is None:
         return ()
     words = clause.split()
@@ -361,12 +407,12 @@ def _probe(clause: str, activated: bool) -> tuple[str, ...]:
         if word.lower().strip(".,;:'\"") in _PROBE_STOPWORDS:
             continue
         shorter = " ".join(words[:i] + words[i + 1:])
-        instr, kind = _rule_match(shorter, activated)
+        instr, _ = _rule_match(shorter, activated, card_name)
         if (
             instr is not None
             and instr.kind == base_instr.kind
-            and instr.payload == base_instr.payload
-            and kind == base_kind
+            and behavioural_payload(instr.payload)
+            == behavioural_payload(base_instr.payload)
         ):
             ignored.append(word)
     return tuple(ignored)
@@ -411,12 +457,12 @@ def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage
         ):
             coverage.claims.append((sentence, f"handler ← {owner_kind}"))
             return
-        instruction, _ = _rule_match(sentence, activated)
+        instruction, _ = _rule_match(sentence, activated, card.name)
         if instruction is not None:
             seen_kinds.add(instruction.kind)
             coverage.claims.append((sentence, f"parse rule → {instruction.kind}"))
             if run_probe:
-                ignored = _probe(sentence, activated)
+                ignored = _probe(sentence, activated, card.name)
                 if ignored:
                     coverage.probe_findings.append((sentence, ignored))
             return
@@ -437,38 +483,56 @@ def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage
         if not clause:
             return
         sents = _sentences(clause)
-        instruction, kind = _rule_match(clause, activated)
+        instruction, kind = _rule_match(clause, activated, card.name)
         if instruction is not None and len(sents) > 1:
             # A rule matched the whole clause — but a substring-anchored rule
             # may only have needed the first sentence(s). Claim the MINIMAL
             # sentence prefix that reproduces the identical parse; trailing
             # sentences must earn their own claim (this is what catches a
             # multi-sentence rider silently riding along).
+            # Compared on the instruction alone, not the effect_kind label: with
+            # two front ends in play a prefix may be claimed by the grammar and
+            # the full clause by a legacy rule, and the labels differ even when
+            # the produced instruction is identical. The instruction is what
+            # decides whether the trailing sentences mattered.
+            def _same(text: str) -> bool:
+                instr, _ = _rule_match(text, activated, card.name)
+                return (
+                    instr is not None
+                    and instr.kind == instruction.kind
+                    and behavioural_payload(instr.payload)
+                    == behavioural_payload(instruction.payload)
+                )
+
             for k in range(1, len(sents) + 1):
-                prefix = ". ".join(sents[:k])
-                prefix_instr, prefix_kind = _rule_match(prefix, activated)
-                if (
-                    prefix_instr is not None
-                    and prefix_instr.kind == instruction.kind
-                    and prefix_instr.payload == instruction.payload
-                    and prefix_kind == kind
-                ):
+                if _same(". ".join(sents[:k])):
                     break
-            claimed_prefix = ". ".join(sents[:k])
+            claimed, rest = sents[:k], sents[k:]
+            if k == len(sents):
+                # No prefix short of the whole clause reproduces the parse. The
+                # rule's anchor may still sit in a *trailing* sentence, in which
+                # case a prefix search can never find it and the leading
+                # sentences would be claimed without implementing anything —
+                # exactly the silent-rider bug this script exists to catch. Fall
+                # back to the smallest single sentence that reproduces it.
+                single = next((s for s in sents if _same(s)), None)
+                if single is not None:
+                    claimed, rest = [single], [s for s in sents if s != single]
             seen_kinds.add(instruction.kind)
-            coverage.claims.append((claimed_prefix, f"parse rule → {instruction.kind}"))
+            claimed_text = ". ".join(claimed)
+            coverage.claims.append((claimed_text, f"parse rule → {instruction.kind}"))
             if run_probe:
-                ignored = _probe(claimed_prefix, activated)
+                ignored = _probe(claimed_text, activated, card.name)
                 if ignored:
-                    coverage.probe_findings.append((claimed_prefix, ignored))
-            for sentence in sents[k:]:
+                    coverage.probe_findings.append((claimed_text, ignored))
+            for sentence in rest:
                 claim_sentence(sentence, activated, owner_kind=instruction.kind)
             return
         if instruction is not None:
             seen_kinds.add(instruction.kind)
             coverage.claims.append((clause, f"parse rule → {instruction.kind}"))
             if run_probe:
-                ignored = _probe(clause, activated)
+                ignored = _probe(clause, activated, card.name)
                 if ignored:
                     coverage.probe_findings.append((clause, ignored))
             return

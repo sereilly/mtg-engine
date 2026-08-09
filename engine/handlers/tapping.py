@@ -102,7 +102,7 @@ def tap_target_permanent(game: Game, instruction: OracleInstruction, context: Or
             fallback_on_invalid_choice=False,
         )
         if perm is not None:
-            perm.tapped = True
+            game.become_tapped(perm)
             game._turn_face_up(perm)
             game.log.append(f"Tapped {perm.card.name}")
         else:
@@ -137,7 +137,7 @@ def tap_target_player_lands_and_drain_mana(game: Game, instruction: OracleInstru
     card = context.card
     for perm in target.battlefield:
         if perm.card.primary_type == "land":
-            perm.tapped = True
+            game.become_tapped(perm)
     for sym in ("W", "U", "B", "R", "G", "C"):
         target.mana_pool[sym] = 0
     target.creature_only_mana.clear()

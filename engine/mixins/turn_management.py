@@ -215,18 +215,10 @@ class TurnManagementMixin:
         # Baghdad) can't be tapped for mana — without this, the color fallback
         # below would invent a green mana out of nothing.
         if not land.effective_produced_mana:
-            fallback_types = [
-                str(land.metadata.get("land_type_override", "")).lower(),
-                land.card.type_line.lower(),
-            ]
-            if not any(
-                basic in value
-                for value in fallback_types
-                for basic in ("plains", "island", "swamp", "mountain", "forest")
-            ):
+            if not land.basic_land_types:
                 return False
 
-        land.tapped = True
+        self.become_tapped(land)
         # City of Brass: "Whenever this land becomes tapped, it deals 1 damage
         # to you." Scoped to the mana-tap path (matching enchanted_land_tapped
         # below) rather than every tap site in the engine.
@@ -243,17 +235,9 @@ class TurnManagementMixin:
             else:
                 mana_symbol = produced[0]
         else:
-            land_types = [str(land.metadata.get("land_type_override", "")).lower(), land.card.type_line.lower()]
-            if any("plains" in value for value in land_types):
-                mana_symbol = "W"
-            elif any("island" in value for value in land_types):
-                mana_symbol = "U"
-            elif any("swamp" in value for value in land_types):
-                mana_symbol = "B"
-            elif any("mountain" in value for value in land_types):
-                mana_symbol = "R"
-            elif any("forest" in value for value in land_types):
-                mana_symbol = "G"
+            symbols = land.basic_land_mana
+            if symbols:
+                mana_symbol = symbols[0]
         player.mana_pool[mana_symbol] = player.mana_pool.get(mana_symbol, 0) + 1
 
         for source_index, source_player in enumerate(self.players):

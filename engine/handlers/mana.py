@@ -20,23 +20,12 @@ def drain_target_lands_mana(game: Game, instruction: OracleInstruction, context:
     for perm in target.battlefield:
         if perm.card.primary_type != "land" or perm.tapped:
             continue
-        perm.tapped = True
+        game.become_tapped(perm)
         if perm.card.produced_mana:
             sym = perm.card.produced_mana[0].upper()
         else:
-            land_type = str(perm.metadata.get("land_type_override", "")).lower() or perm.card.type_line.lower()
-            if "plains" in land_type:
-                sym = "W"
-            elif "island" in land_type:
-                sym = "U"
-            elif "swamp" in land_type:
-                sym = "B"
-            elif "mountain" in land_type:
-                sym = "R"
-            elif "forest" in land_type:
-                sym = "G"
-            else:
-                sym = "C"
+            symbols = perm.basic_land_mana
+            sym = symbols[0] if symbols else "C"
         mana_gained[sym] = mana_gained.get(sym, 0) + 1
     # Drain any existing unspent mana from target's pool too
     for sym in ("W", "U", "B", "R", "G", "C"):
@@ -112,8 +101,27 @@ def sacrifice_self_for_mana(game: Game, instruction: OracleInstruction, context:
 
 @effect_handler("add_mana_from_text")
 def add_mana_from_text(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Add mana to the controller's pool.
+
+    Prefers a structured ``pips`` payload — ``(("G", 1), ("C", 2))`` — over
+    re-reading the clause text. The text path remains for instructions the
+    legacy rules produce, which carry the clause rather than what it means; it
+    is one of the engine's inline oracle-text probes and goes away with them.
+    """
     caster = context.caster
     card = context.card
+
+    pips = instruction.payload.get("pips")
+    if pips:
+        added: list[str] = []
+        for symbol, count in pips:
+            if symbol not in caster.mana_pool:
+                continue
+            caster.mana_pool[symbol] += int(count)
+            added.append(f"{{{symbol}}}" * int(count))
+        game.log.append(f"{card.name} produced {''.join(added)}")
+        return True, "resolved"
+
     game._add_mana_from_text(
         caster,
         str(instruction.payload.get("oracle_text", card.oracle_text)),

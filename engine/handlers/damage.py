@@ -22,6 +22,16 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
 
     damage = resolve_amount(instruction.payload.get("amount", 0), x_value)
     target_perm_idx = context.target_permanent_index
+    # "…and N damage to you": a second damage instruction in the same sequence
+    # aimed at the source's controller rather than the spell's target. Reads the
+    # same "recipient" key target_gains_life has always used. Without it, "deal
+    # damage and also damage yourself" would need its own fused instruction kind
+    # (which is exactly what deal_damage_and_self_damage was).
+    if instruction.payload.get("recipient") == "caster":
+        dealt = game._deal_damage_to_player(caster, damage, source=source_permanent or card)
+        context.results["damage_dealt"] = dealt
+        game.log.append(f"{card.name} dealt {dealt} damage to {caster.name}")
+        return True, "resolved"
     # Fireball's cross-seat divided list: any mix of creatures and player faces
     # on both sides, each dealt damage // n ("divided evenly, rounded down").
     if context.divided_targets:
@@ -52,9 +62,6 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
             face = game.players[seat]
             dealt = game._deal_damage_to_player(face, per_target, source=card)
             game.log.append(f"{card.name} dealt {dealt} damage to {face.name}")
-        # Lethal damage destroys as a state-based action, which regeneration
-        # shields can replace (CR 704.5g / 701.15).
-        game._destroy_marked_creatures()
         return True, "resolved"
     # Support multiple target indices for spells like Fireball
     if isinstance(target_perm_idx, list):
@@ -72,9 +79,6 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
             game.log.append(f"{card.name} dealt {dealt} damage to {target_perm.card.name}")
             if dealt > 0 and target_perm.damage_marked < target_perm.effective_toughness:
                 game._fire_dealt_damage_triggers(target_perm)
-        # Lethal damage destroys as a state-based action, which regeneration
-        # shields can replace (CR 704.5g / 701.15).
-        game._destroy_marked_creatures()
         return True, "resolved"
     if isinstance(target_perm_idx, int) and not 0 <= target_perm_idx < len(target.battlefield):
         # CR 608.2b: a creature was targeted but is no longer on the
@@ -106,12 +110,16 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
                 target_perm.metadata["cant_be_regenerated_this_turn"] = True
             if instruction.payload.get("exile_if_dies"):
                 target_perm.metadata["exile_if_dies_this_turn"] = True
-        apply_damage_to_creature(
+        dealt = apply_damage_to_creature(
             game, target_perm, damage, source_permanent or card,
             log_message=lambda dealt: f"{card.name} dealt {dealt} damage to {target_perm.card.name}",
         )
+        # Recorded so a later instruction in the same resolution can read it
+        # ("You gain life equal to the damage dealt").
+        context.results["damage_dealt"] = dealt
     else:
         damage = game._deal_damage_to_player(target, damage, source=source_permanent or card)
+        context.results["damage_dealt"] = damage
         if source_permanent is not None:
             game.log.append(f"{card.name} dealt {damage} damage")
         else:
@@ -183,10 +191,6 @@ def deal_damage_and_self_damage(game: Game, instruction: OracleInstruction, cont
         target_perm = target.battlefield[target_perm_idx]
         dealt = game._mark_damage_on_permanent(target_perm, amount, source=card)
         game.log.append(f"{card.name} dealt {dealt} damage to {target_perm.card.name}")
-        if target_perm.damage_marked >= target_perm.effective_toughness:
-            # Lethal damage destroys as a state-based action, which regeneration
-            # shields can replace (CR 704.5g / 701.15).
-            game._destroy_marked_creatures()
     else:
         damage = game._deal_damage_to_player(target, amount, source=card)
         game.log.append(f"{card.name} dealt {damage} damage to {target.name}")
@@ -221,11 +225,10 @@ def deal_damage_and_gain_life(game: Game, instruction: OracleInstruction, contex
 
 
 def _has_flying(perm: Permanent) -> bool:
-    return bool(
-        "Flying" in perm.card.keywords
-        or perm.metadata.get("gains_flying")
-        or perm.metadata.get("gains_flying_until_eot")
-    )
+    """Flying from any source — printed, granted, or granted then removed.
+    Reading the grant flags directly would miss whichever route a future card
+    uses and would get grant-after-removal backwards (CR 613.9)."""
+    return perm.has_keyword("flying")
 
 
 def _mass_damage_players_and_creatures(game: Game, card, damage: int, creature_predicate) -> None:
@@ -237,7 +240,6 @@ def _mass_damage_players_and_creatures(game: Game, card, damage: int, creature_p
         for perm in list(player.battlefield):
             if perm.is_creature and creature_predicate(perm):
                 game._mark_damage_on_permanent(perm, damage, source=card)
-    game._destroy_marked_creatures()
 
 
 @effect_handler("earthquake_damage")
@@ -273,7 +275,6 @@ def deal_damage_each_attacking_creature(
             if perm.is_creature and perm.attacking:
                 game._mark_damage_on_permanent(perm, damage, source=card)
                 struck += 1
-    game._destroy_marked_creatures()
     game.log.append(f"{card.name} dealt {damage} damage to each of {struck} attacking creatures")
     return True, "resolved"
 

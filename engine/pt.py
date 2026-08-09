@@ -13,11 +13,22 @@ Channel → sublayer mapping:
   and are cleared in the cleanup step (see ``_EOT_METADATA_KEYS`` in
   engine/mixins/_constants.py). Competing setters resolve last-write-wins on
   the metadata key, which IS timestamp order for stack-resolved effects.
-- 7c (modify by +X/+Y): ``power_bonus`` / ``toughness_bonus`` attributes,
-  plus the ``static_buff_*`` metadata recomputed by lord passes and the
-  conditional ``attacking_buff_*`` channel. Until-end-of-turn boosts are
-  additionally tracked in ``temporary_*_bonus_until_eot`` metadata so the
-  cleanup step can subtract them.
+- 7c (modify by +X/+Y) splits by *lifetime*, which is what keeps it correct:
+
+  - ``power_bonus`` / ``toughness_bonus`` are **persistent** — counters and
+    one-shot modifications that stay until something removes them.
+    Until-end-of-turn boosts are additionally tracked in
+    ``temporary_*_bonus_until_eot`` metadata so the cleanup step can subtract
+    exactly what it added.
+  - ``static_buff_*`` (lord passes) and ``derived_buff_*`` (conditional
+    "as long as …" bonuses, Aspect of Wolf) are **derived**: cleared and
+    rebuilt from the current board on every continuous-effects recompute.
+    Nothing records what it contributed, because nothing has to take it back.
+
+  A continuous effect must never write to the persistent channel. Doing so
+  requires it to subtract itself later, and any mismatch compounds — CR 611.3a
+  means the recompute runs constantly. Aspect of Wolf shipped that bug.
+  Each derived channel is cleared by the same function that rebuilds it.
 - 7d (switch): ``pt_switched`` metadata flag (cleared at cleanup).
 """
 

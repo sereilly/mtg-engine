@@ -108,7 +108,7 @@ class TestHelmOfChatzukBanding:
             target_permanent_index=1,
         )
         assert result.supported, result.details
-        assert bear.metadata.get("gains_banding_until_eot") is True
+        assert bear.has_keyword("banding") is True
         # The granted keyword must register like printed banding — this drives
         # the UI keyword strip and the "Attack as Band" flow.
         assert game._has_keyword(bear, "banding") is True

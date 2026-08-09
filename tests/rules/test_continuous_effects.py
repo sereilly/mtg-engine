@@ -10,6 +10,8 @@ import pytest
 
 from engine import Game, PlayerState
 from engine.models import CardDefinition, Permanent
+from engine.keywords import grant_keyword, remove_keyword
+from dataclasses import replace
 
 
 # ---------------------------------------------------------------------------
@@ -713,24 +715,36 @@ def test_613_8_dependent_effects_applied_after_effects_they_depend_on():
 
 @pytest.mark.cr("613.9")
 def test_613_9_later_effect_overrides_earlier_effect_in_same_layer():
-    """613.9: Two effects in the same layer — the later one applies last.
+    """613.9: two effects in the same layer — the later one applies last.
 
-    Example: 'Gains flying' (T1) then 'loses flying' (T2). T2 wins.
-    We model this with the metadata keys used by the engine.
+    The rule's own worked example: an Aura granting flying and one removing it
+    do not depend on each other, so timestamp order decides. Crucially it
+    decides in *both* directions — a grant after a removal restores the
+    ability. The engine used to store one flag per keyword per direction and
+    check removals first, which made removal always win.
     """
-    creature = _mk_creature("Test Bird", 2, 2)
-    perm = Permanent(card=creature)
+    perm = Permanent(card=_mk_creature("Test Bird", 2, 2))
+    grant_keyword(perm, "flying")
+    remove_keyword(perm, "flying")
+    assert perm.has_keyword("flying") is False
 
-    # T1: gains flying
-    perm.metadata["gains_flying_until_eot"] = True
-    # T2: loses flying (later effect — wins)
-    perm.metadata["loses_flying_until_eot"] = True
+    perm = Permanent(card=_mk_creature("Test Bird", 2, 2))
+    remove_keyword(perm, "flying")
+    grant_keyword(perm, "flying")
+    assert perm.has_keyword("flying") is True
 
-    # The engine's _has_keyword would check these; with both set,
-    # the later "loses flying" should take precedence.
-    # Verify both flags are independently stored (engine resolves order).
-    assert perm.metadata.get("gains_flying_until_eot") is True
-    assert perm.metadata.get("loses_flying_until_eot") is True
+
+@pytest.mark.cr("613.9")
+def test_613_9_removal_beats_a_printed_keyword():
+    """A printed ability is part of the object's copiable values, so a later
+    removal still takes it away."""
+    bird = _mk_creature("Printed Bird", 2, 2)
+    bird = replace(bird, keywords=("Flying",))
+    perm = Permanent(card=bird)
+    assert perm.has_keyword("flying") is True
+
+    remove_keyword(perm, "flying")
+    assert perm.has_keyword("flying") is False
 
 
 # ---------------------------------------------------------------------------
@@ -764,13 +778,13 @@ def test_612_3_granted_abilities_not_modified_by_text_changing_effects():
     perm = Permanent(card=creature)
 
     # Flying is granted by an aura effect (not printed)
-    perm.metadata["gains_flying_until_eot"] = True
+    grant_keyword(perm, "flying")
 
     # A text-changing effect is applied (changes printed text)
     perm.metadata["text_modified"] = True
 
     # The granted flying should still be present (not removed by text change)
-    assert perm.metadata.get("gains_flying_until_eot") is True
+    assert perm.has_keyword("flying") is True
 
 
 # ---------------------------------------------------------------------------
@@ -791,7 +805,7 @@ def test_611_2a_eot_metadata_flags_cleared_at_cleanup():
     game = Game(players=[p1, p2])
 
     # Apply temporary effects
-    perm.metadata["gains_flying_until_eot"] = True
+    grant_keyword(perm, "flying", until_eot=True)
     perm.metadata["pt_switched"] = True
     perm.metadata["absolute_power_until_eot"] = 5
     perm.metadata["absolute_toughness_until_eot"] = 5
@@ -799,7 +813,7 @@ def test_611_2a_eot_metadata_flags_cleared_at_cleanup():
     game.resolve_cleanup_step(0)
 
     # All until-EOT effects should be cleared
-    assert not perm.metadata.get("gains_flying_until_eot")
+    assert not perm.has_keyword("flying")
     assert not perm.metadata.get("pt_switched")
     assert "absolute_power_until_eot" not in perm.metadata
     assert "absolute_toughness_until_eot" not in perm.metadata

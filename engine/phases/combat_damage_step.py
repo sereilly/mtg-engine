@@ -10,15 +10,7 @@ post-damage lethal-damage destruction, and the band/blocker lookup helpers.
 """
 
 from ..models import Permanent
-
-# Ebony Horse: "Prevent all combat damage that would be dealt to and dealt by
-# that creature this turn." — per-creature marker set by the
-# untap_attacker_and_prevent_combat_damage handler, cleared in cleanup.
-_COMBAT_SHIELD_KEY = "prevent_combat_damage_to_and_by_until_eot"
-
-
-def _combat_shielded(perm: Permanent | None) -> bool:
-    return perm is not None and bool(perm.metadata.get(_COMBAT_SHIELD_KEY))
+from ..replacements import apply_replacements
 
 
 class CombatDamageStepMixin:
@@ -172,46 +164,6 @@ class CombatDamageStepMixin:
             for b, split in blocker_damage_split.items()
         }
         return True, "blocker damage division recorded"
-
-    def _destroy_marked_creatures(self) -> None:
-        any_died = False
-        for player in self.players:
-            survivors: list[Permanent] = []
-            for permanent in player.battlefield:
-                if not permanent.is_creature:
-                    survivors.append(permanent)
-                    continue
-                # 704.5g: lethal damage; 704.5h: any damage from deathtouch source
-                has_lethal = permanent.damage_marked >= permanent.effective_toughness
-                has_deathtouch_hit = (
-                    permanent.metadata.get("received_deathtouch", False)
-                    and permanent.damage_marked > 0
-                    and permanent.effective_toughness > 0
-                )
-                if not has_lethal and not has_deathtouch_hit:
-                    survivors.append(permanent)
-                    continue
-                if permanent.regeneration_shield > 0 and not permanent.metadata.get(
-                    "cant_be_regenerated_this_turn"
-                ):
-                    permanent.regeneration_shield -= 1
-                    permanent.damage_marked = 0
-                    permanent.tapped = True
-                    permanent.metadata.pop("received_deathtouch", None)
-                    survivors.append(permanent)
-                    continue
-                self._permanent_to_graveyard(player, permanent)
-                self.log.append(f"{permanent.card.name} died from combat damage")
-                self._trigger_aura_death_effects(permanent, player)
-                any_died = True
-            player.battlefield = survivors
-        # Clear deathtouch flags from surviving creatures
-        for player in self.players:
-            for perm in player.battlefield:
-                perm.metadata.pop("received_deathtouch", None)
-        # 611.3b: recalculate lord buffs in case a lord died
-        if any_died:
-            self._recalculate_lord_buffs()
 
     def _needs_manual_damage_assignment(self) -> bool:
         """Return True when combat damage needs a player's assignment choice.
@@ -470,14 +422,14 @@ class CombatDamageStepMixin:
             blockers = self._attacker_all_blockers(attacker_idx)
             power_left = attacker.effective_power
             if not blockers:
-                if self.combat_damage_prevented_until_eot or _combat_shielded(attacker):
-                    continue
                 # A creature that was declared blocked (e.g. its blocker died to
                 # first-strike damage) is still "blocked" — it cannot deal damage
                 # to the defending player unless it has trample.
                 if attacker.blocked and not self._has_keyword(attacker, "trample"):
                     continue
-                damage = self._prevent_damage(defender, power_left, source=attacker)
+                damage = self._prevent_damage(
+                    defender, power_left, source=attacker, combat=True
+                )
                 if damage > 0:
                     defender_damage_events.append((defending_index, damage, attacker))
                     if self._has_keyword(attacker, "lifelink"):
@@ -525,13 +477,10 @@ class CombatDamageStepMixin:
                 return False, "assigned combat damage exceeds attacker power"
             if has_trample and power_left > 0 and trample_underlethal:
                 return False, "trample requires lethal damage assigned to each blocker"
-            if (
-                has_trample
-                and power_left > 0
-                and not self.combat_damage_prevented_until_eot
-                and not _combat_shielded(attacker)
-            ):
-                trample_damage = self._prevent_damage(defender, power_left, source=attacker)
+            if has_trample and power_left > 0:
+                trample_damage = self._prevent_damage(
+                    defender, power_left, source=attacker, combat=True
+                )
                 if trample_damage > 0:
                     defender_damage_events.append((defending_index, trample_damage, attacker))
                     if self._has_keyword(attacker, "lifelink"):
@@ -569,17 +518,19 @@ class CombatDamageStepMixin:
                         member = attacker_controller.battlefield[member_idx]
                         if self._is_protected_from(member, blocker):
                             continue
-                        # Ebony Horse: combat damage to or by the shielded creature.
-                        if _combat_shielded(member) or _combat_shielded(blocker):
-                            continue
-                        dealt = self._mark_damage_on_permanent(member, amount, source=blocker)
+                        dealt = self._mark_damage_on_permanent(
+                            member, amount, source=blocker, combat=True
+                        )
                         if dealt > 0:
                             self._record_damage_source(member, blocker)
                             self._fire_dealt_damage_triggers(member)
                             if self._has_keyword(blocker, "lifelink"):
                                 add_lifelink(defending_idx, dealt)
-                        if self._has_keyword(blocker, "deathtouch"):
-                            member.metadata["received_deathtouch"] = True
+                            # CR 702.2b: deathtouch destroys a creature that has
+                            # *been dealt* damage by the deathtouch source. Damage
+                            # prevented in full was never dealt (CR 615.6).
+                            if self._has_keyword(blocker, "deathtouch"):
+                                member.metadata["received_deathtouch"] = True
                     continue
                 # A blocker deals its combat damage to one of the creatures it blocks
                 # (CR 510.1c, defender's choice; default the first). A creature blocking
@@ -608,18 +559,18 @@ class CombatDamageStepMixin:
                 # CR 702.16e: damage from a source of the protected quality is prevented.
                 if self._is_protected_from(attacker, blocker):
                     continue
-                # Ebony Horse: combat damage to or by the shielded creature.
-                if _combat_shielded(attacker) or _combat_shielded(blocker):
-                    continue
-                dealt = self._mark_damage_on_permanent(attacker, blocker.effective_power, source=blocker)
+                dealt = self._mark_damage_on_permanent(
+                    attacker, blocker.effective_power, source=blocker, combat=True
+                )
                 if dealt > 0:
                     self._record_damage_source(attacker, blocker)
                     self._fire_dealt_damage_triggers(attacker)
                     if self._has_keyword(blocker, "lifelink"):
                         add_lifelink(defending_idx, dealt)
-                # 704.5h: mark attacker if blocker has deathtouch
-                if self._has_keyword(blocker, "deathtouch") and blocker.effective_power > 0:
-                    attacker.metadata["received_deathtouch"] = True
+                    # CR 702.2b / 704.5h: only damage actually dealt by a
+                    # deathtouch source counts; prevented damage never happened.
+                    if self._has_keyword(blocker, "deathtouch"):
+                        attacker.metadata["received_deathtouch"] = True
 
         for defending_idx, blocker_idx, damage, a_idx in attacker_damage_events:
             if defending_idx >= len(self.players):
@@ -636,25 +587,25 @@ class CombatDamageStepMixin:
             # CR 702.16e: protection prevents damage from the protected quality.
             if source_attacker is not None and self._is_protected_from(blocker_perm, source_attacker):
                 continue
-            # Ebony Horse: combat damage to or by the shielded creature.
-            if _combat_shielded(blocker_perm) or _combat_shielded(source_attacker):
-                continue
-            dealt = self._mark_damage_on_permanent(blocker_perm, damage, source=source_attacker)
+            dealt = self._mark_damage_on_permanent(
+                blocker_perm, damage, source=source_attacker, combat=True
+            )
             if dealt > 0:
                 if source_attacker is not None:
                     self._record_damage_source(blocker_perm, source_attacker)
                 self._fire_dealt_damage_triggers(blocker_perm)
                 if source_attacker is not None and self._has_keyword(source_attacker, "lifelink"):
                     add_lifelink(self.active_player_index, dealt)
-            # 704.5h: mark blocker if attacker has deathtouch
-            if source_attacker is not None and damage > 0:
-                if self._has_keyword(source_attacker, "deathtouch"):
+                # CR 702.2b / 704.5h: only damage actually dealt by a deathtouch
+                # source counts; prevented damage never happened.
+                if source_attacker is not None and self._has_keyword(source_attacker, "deathtouch"):
                     blocker_perm.metadata["received_deathtouch"] = True
 
-        total_player_damage = sum(dmg for _, dmg, _ in defender_damage_events)
+        # Accumulated as the events are applied, not from their recorded
+        # amounts: damage that gets redirected or replaced away never reduced
+        # anyone's life, and the log below reconstructs the before-life total by
+        # adding these numbers back.
         damage_by_defender: dict[int, int] = {}
-        for defending_idx, damage, _ in defender_damage_events:
-            damage_by_defender[defending_idx] = damage_by_defender.get(defending_idx, 0) + damage
         for defending_idx, damage, source_attacker in defender_damage_events:
             if defending_idx < 0 or defending_idx >= len(self.players):
                 continue
@@ -674,12 +625,29 @@ class CombatDamageStepMixin:
                 None,
             )
             if bodyguard is not None:
-                self._mark_damage_on_permanent(bodyguard, damage, source=source_attacker)
+                self._mark_damage_on_permanent(
+                    bodyguard, damage, source=source_attacker, combat=True
+                )
                 self.log.append(
                     f"{bodyguard.card.name} takes {damage} damage instead of {defender.name} (redirect)"
                 )
                 continue
+            # CR 614 replacements that modify damage dealt to a player (Ali from
+            # Cairo's life floor). Applied here rather than where the event was
+            # recorded, so that with several attackers each one sees the life
+            # total the previous one left behind — CR 616.1f re-checks which
+            # effects still apply after each application, and a floor effect
+            # stops applying once the life total is already at the floor.
+            consumed, payload = apply_replacements(
+                self, "damage_to_player", {"player": defender, "amount": damage}
+            )
+            if consumed:
+                continue
+            damage = payload["amount"]
             defender.life -= damage
+            damage_by_defender[defending_idx] = (
+                damage_by_defender.get(defending_idx, 0) + damage
+            )
             self._on_player_dealt_damage(defender, damage)
             # Eye for an Eye: combat damage counts too — the attacker's
             # controller takes the same amount. Applied here rather than by
@@ -695,10 +663,10 @@ class CombatDamageStepMixin:
             if 0 <= controller_index < len(self.players):
                 self._gain_life(self.players[controller_index], amount, source_name="lifelink")
 
-        self._destroy_marked_creatures()
         self.check_state_based_actions()
         self._prune_combat_state()
 
+        total_player_damage = sum(damage_by_defender.values())
         if total_player_damage > 0:
             for defending_idx, damage in sorted(damage_by_defender.items()):
                 if not (0 <= defending_idx < len(self.players)) or damage <= 0:

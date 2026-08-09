@@ -78,8 +78,33 @@ def test_validator_detects_a_silently_dropped_sentence():
 
 def test_deletion_probe_flags_ignored_rider_words():
     """Self-test: the probe must catch a rider a broad rule swallows — the
-    exact Hasran Ogress bug shape."""
+    exact Hasran Ogress bug shape.
+
+    Uses a clause still owned by a legacy substring rule. As categories migrate
+    to the grammar this self-test has to follow them, because the grammar makes
+    the bug structurally impossible rather than merely detectable (see the test
+    below).
+    """
     pc = _load_parse_coverage()
-    ignored = pc._probe("destroy target creature unless its controller pays {4}", activated=False)
-    assert "unless" in ignored
-    assert "pays" in ignored
+    ignored = pc._probe(
+        "this creature deals 2 damage to any target when the wumbus flurbles",
+        activated=True,
+    )
+    assert "wumbus" in ignored
+    assert "flurbles" in ignored
+
+
+def test_grammar_refuses_the_rider_shape_instead_of_swallowing_it():
+    """The structural half of the same guarantee.
+
+    The probe detects a swallowed rider after the fact; the grammar's
+    full-token-consumption rule prevents one. A clause whose trailing words the
+    grammar cannot account for is refused outright, so there is nothing for the
+    probe to find — which is why the Hasran Ogress shape no longer appears in
+    the destroy family at all.
+    """
+    from engine.grammar import compile_line
+
+    result = compile_line("Destroy target creature unless its controller pays {4}.")
+    assert not result.parsed
+    assert not result.usable

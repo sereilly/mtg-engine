@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 import re
 
-from ..card_hooks import ability_cost_tax, spell_cost_tax
+from ..cost_modifiers import ability_cost_tax, spell_cost_tax
 from ..cast_restrictions import check_cast_timing
 from ..classifier import CardClassification, classify_card
 from ..game_types import OracleExecutionContext, OracleStateMachine, SimulationResult, StackItem
@@ -194,36 +194,10 @@ class StackCastingMixin:
     def confirm_leng_discard(self, player_index: int, to_library: bool) -> bool:
         """Resolve the oldest pending Library of Leng destination choice for
         *player_index*: the discarded card goes on top of their library (the
-        optional CR 701.8e replacement) or into their graveyard."""
-        entry_index = next(
-            (
-                i
-                for i, entry in enumerate(self.pending_leng_discards)
-                if entry["player_index"] == player_index
-            ),
-            None,
+        optional CR 701.9c replacement) or into their graveyard."""
+        return self.resolve_replacement_choice(
+            player_index, 0 if to_library else 1, kind="leng_discard"
         )
-        if entry_index is None:
-            return False
-        entry = self.pending_leng_discards.pop(entry_index)
-        player = self.players[player_index]
-        card = entry["card"]
-        if to_library:
-            player.library.insert(0, card)
-            self.log.append(
-                f"{player.name} put discarded {card.name} on top of their library (Library of Leng)"
-            )
-        else:
-            player.graveyard.append(card)
-            self.log.append(f"{player.name} put discarded {card.name} into their graveyard")
-        return True
-
-    def auto_resolve_pending_leng_discards(self) -> None:
-        """Resolve all pending Library of Leng choices with the beneficial
-        top-of-library default (safety net for seats that stop being
-        interactive, e.g. a human seat handed to the AI)."""
-        while self.pending_leng_discards:
-            self.confirm_leng_discard(self.pending_leng_discards[0]["player_index"], True)
 
     _BASIC_LAND_TYPES = ("plains", "island", "swamp", "mountain", "forest")
 
@@ -555,16 +529,39 @@ class StackCastingMixin:
                 if remaining <= 0:
                     break
                 if perm.card.primary_type == "land" and not perm.tapped and perm.effective_produced_mana:
-                    perm.tapped = True
+                    self.become_tapped(perm)
                     remaining -= 1
-        if remaining == 0 and int(entry.get("life", 0) or 0) > 0:
+        if remaining != 0:
+            return
+        # A grammar-lowered "may" carries its consequence as instructions rather
+        # than as one of the three fixed fields above, so any effect can sit
+        # behind an optional cost.
+        if self._run_optional_branch(entry, "_on_accept"):
+            return
+        if int(entry.get("life", 0) or 0) > 0:
             self._gain_life(player, int(entry["life"]), entry["card_name"])
+
+    def _run_optional_branch(self, entry: dict, key: str) -> bool:
+        """Execute an optional-pay entry's instruction branch, if it has one.
+
+        Returns whether anything ran, so the legacy life/draw/damage fields stay
+        the fallback for entries that predate instruction branches.
+        """
+        steps = entry.get(key) or ()
+        context = entry.get("_context")
+        if not steps or context is None:
+            return False
+        for step in steps:
+            self._execute_oracle_instruction(step, context)
+        return True
 
     def _apply_optional_pay_decline(self, entry: dict) -> None:
         """The consequence of NOT paying an optional-pay prompt. Plain "may pay"
         riders (the color rods) have none; "unless you pay" entries (Hasran
         Ogress) carry a ``damage`` amount dealt to the player instead."""
         player = self.players[entry["player_index"]]
+        if self._run_optional_branch(entry, "_on_decline"):
+            return
         damage = int(entry.get("damage", 0) or 0)
         if damage > 0:
             source = entry.get("_source_permanent")
@@ -1171,7 +1168,7 @@ class StackCastingMixin:
                 details = f"{permanent.card.name} is already tapped"
                 self.log.append(details)
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
-            permanent.tapped = True
+            self.become_tapped(permanent)
 
         # All guards/costs passed — mark a "once each turn" ability as used.
         if once_each_turn:
@@ -1275,7 +1272,7 @@ class StackCastingMixin:
         if permanent is None or permanent.tapped:
             return False
 
-        permanent.tapped = True
+        self.become_tapped(permanent)
         self._turn_face_up(permanent)
         self.log.append(f"{controller.name} tapped {permanent_name}")
         return True

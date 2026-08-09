@@ -2,9 +2,6 @@ from __future__ import annotations
 
 _MANA_SYMBOLS = ("W", "U", "B", "R", "G", "C")
 _EOT_METADATA_KEYS = (
-    "gains_flying_until_eot",
-    "gains_banding_until_eot",
-    "gains_trample_until_eot",
     "cant_be_blocked_until_eot",
     "must_attack_until_eot",
     "destroy_if_did_not_attack_eot",
@@ -16,8 +13,6 @@ _EOT_METADATA_KEYS = (
     "absolute_toughness_until_eot",
     # Layer 7d power/toughness switch (613.4d)
     "pt_switched",
-    # Layer 6 "loses flying" effect
-    "loses_flying_until_eot",
     # Disintegrate-style riders that last only "this turn"
     "cant_be_regenerated_this_turn",
     "exile_if_dies_this_turn",
@@ -30,11 +25,6 @@ _EOT_METADATA_KEYS = (
     # Ebony Horse: combat-damage shield on the untapped attacker
     "prevent_combat_damage_to_and_by_until_eot",
 )
-
-# Map: artifact name → (color that triggers it, life gained).
-# Kept as an alias for backwards compatibility; the data now lives in
-# engine.card_hooks alongside the other per-card behavior registries.
-from ..card_hooks import COLOR_ROD_TRIGGERS as _COLOR_ROD_TRIGGERS  # noqa: E402
 
 _TURN_PHASES: tuple[str, ...] = (
     "beginning",

@@ -35,7 +35,7 @@ class TestBerserk:
         assert result.supported
         # +X/+0 where X is its power: Hill Giant 3 -> 6 power, and gains trample.
         assert giant.effective_power == 6
-        assert giant.metadata.get("gains_trample_until_eot") is True
+        assert giant.has_keyword("trample") is True
         assert bears.effective_power == 2  # untouched
 
     def test_requires_a_creature_target(self, cards):

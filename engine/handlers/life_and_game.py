@@ -26,6 +26,31 @@ def player_loses_game(game: Game, instruction: OracleInstruction, context: Oracl
 
 
 # Rule 104.2b: effect that states caster wins the game
+@effect_handler("opponents_lose_half_life")
+def opponents_lose_half_life(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Shahrazad's life clause, without the subgame.
+
+    The card says "each player who doesn't win the subgame loses half their
+    life, rounded up". The engine does not play subgames, so it resolves the
+    documented simplification: the caster is treated as the winner and every
+    other player pays. The log says so rather than reporting it as the real
+    card — a simplification the player can see is a different thing from a
+    card that quietly does nothing, which is what this used to do.
+    """
+    caster = context.caster
+    card = context.card
+    for player in game.players:
+        if player is caster or player.lost:
+            continue
+        loss = max(0, (player.life + 1) // 2)
+        player.life -= loss
+        game.log.append(
+            f"{card.name}: {player.name} loses {loss} life (half, rounded up) — "
+            "subgame not played; its caster is treated as the winner"
+        )
+    return True, "resolved"
+
+
 @effect_handler("player_wins_game")
 def player_wins_game(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     caster = context.caster
@@ -90,13 +115,20 @@ def target_gains_life(game: Game, instruction: OracleInstruction, context: Oracl
             return True, "resolved"
         game._gain_life(controller, life, card.name)
         return True, "resolved"
-    amount = instruction.payload.get("amount", 0)
     # "You gain N life" affects the controller; "target player gains N life"
     # affects the chosen target (CR 115.10b). Default to target for legacy
     # instructions that predate the recipient payload.
     recipient = instruction.payload.get("recipient", "target")
     gainer = context.caster if recipient == "caster" else context.target
-    life_gain = resolve_amount(amount, x_value)
+    # "You gain life equal to the damage dealt" — the amount is whatever the
+    # preceding damage instruction in this same resolution actually dealt, which
+    # it recorded in the context scratchpad. This is what lets damage-then-gain
+    # be two composable instructions instead of one fused kind.
+    source_key = instruction.payload.get("amount_from")
+    if source_key is not None:
+        life_gain = max(0, int(context.results.get(source_key, 0)))
+    else:
+        life_gain = resolve_amount(instruction.payload.get("amount", 0), x_value)
     game._gain_life(gainer, life_gain, card.name)
     return True, "resolved"
 

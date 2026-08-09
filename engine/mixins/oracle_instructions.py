@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import re
 
-from ..card_hooks import ON_SELF_RESOLVED, ON_SPELL_CAST, ON_SPELL_CAST_ANY
+from ..card_hooks import ON_SELF_RESOLVED
+from ..events import emit
 from ..game_types import OracleExecutionContext, OracleStateMachine
 from ..handlers import EFFECT_HANDLERS
 from ..models import CardDefinition, Permanent, PlayerState
 from ..oracle import OracleInstruction, _COLOR_WORD_TO_SYMBOL, compile_card_oracle
+from ..keywords import grant_keyword, remove_keyword
 
 
 class OracleInstructionsMixin:
@@ -67,22 +69,26 @@ class OracleInstructionsMixin:
         state_machine.run(instruction)
 
     def _apply_cast_triggers(self, caster_index: int, card: CardDefinition) -> None:
-        """Fire permanent triggers that respond to the controller casting a spell."""
-        caster = self.players[caster_index]
-        for permanent in caster.battlefield:
-            cast_hook = ON_SPELL_CAST.get(permanent.card.name)
-            if cast_hook is not None:
-                cast_hook(self, caster, permanent, card)
+        """Fire triggers that respond to this spell's *controller* casting it.
+
+        Announced on the event bus rather than looked up by card name: the
+        oracle compiler already recognizes these conditions, so a card written
+        "whenever you cast an enchantment spell" needs no registry entry.
+        """
+        emit(self, "you_cast_spell", subject=card, caster_index=caster_index)
+        emit(self, "enchantment_cast", subject=card, caster_index=caster_index)
 
     def _apply_spell_cast_any_triggers(self, caster_index: int, card: CardDefinition) -> None:
-        """Fire "whenever a player casts a [color] spell" triggers on any player's
-        battlefield (the Rod/Cup/Sphere cycle). Called as the spell is put on the
-        stack so the trigger goes on the stack above it (CR 603.3)."""
-        for controller in self.players:
-            for permanent in controller.battlefield:
-                cast_hook = ON_SPELL_CAST_ANY.get(permanent.card.name)
-                if cast_hook is not None:
-                    cast_hook(self, controller, permanent, card)
+        """Fire "whenever a player casts a [color] spell" triggers on any
+        player's battlefield (the Rod/Cup/Sphere cycle).
+
+        Called as the spell is put on the stack, so the trigger goes on the
+        stack above it (CR 603.3). The colour narrowing comes from each
+        trigger's own parsed condition, which is why one call covers the whole
+        cycle instead of five name-keyed hooks.
+        """
+        emit(self, "spell_cast", subject=card, caster_index=caster_index)
+        emit(self, "opponent_casts_spell", subject=card, caster_index=caster_index)
 
     def _apply_self_resolved_hook(
         self,
@@ -286,12 +292,12 @@ class OracleInstructionsMixin:
                 self.log.append(f"{target_creature.card.name} gains protection from aura")
 
             if "has first strike" in text or "enchanted creature has first strike" in text or "gains first strike" in text:
-                target_creature.metadata["gains_first_strike"] = True
+                grant_keyword(target_creature, "first strike")
                 self.log.append(f"{target_creature.card.name} gains first strike from {aura_permanent.card.name}")
 
                 # Fear: enchanted creature can't be blocked except by artifact creatures and/or black creatures
             if "has fear" in text or "enchanted creature has fear" in text or "gains fear" in text:
-                target_creature.metadata["gains_fear"] = True
+                grant_keyword(target_creature, "fear")
                 self.log.append(f"{target_creature.card.name} gains fear from {aura_permanent.card.name}")
 
             # Flying: some Auras grant flying to the enchanted creature.
@@ -303,17 +309,17 @@ class OracleInstructionsMixin:
                 or "gains flying" in text
             )
             if _grants_flying:
-                target_creature.metadata["gains_flying"] = True
+                grant_keyword(target_creature, "flying")
                 self.log.append(f"{target_creature.card.name} gains flying from {aura_permanent.card.name}")
 
             # Reach: e.g. Web's "Enchanted creature gets +0/+2 and has reach."
             if "has reach" in text or "gains reach" in text:
-                target_creature.metadata["gains_reach"] = True
+                grant_keyword(target_creature, "reach")
                 self.log.append(f"{target_creature.card.name} gains reach from {aura_permanent.card.name}")
 
             # Haste: enchanted creature can attack as though it had haste
             if "can attack as though it had haste" in text:
-                target_creature.metadata["gains_haste"] = True
+                grant_keyword(target_creature, "haste")
                 self.log.append(f"{target_creature.card.name} gains haste from {aura_permanent.card.name}")
 
             # Invisibility: enchanted creature can't be blocked except by Walls
@@ -332,19 +338,14 @@ class OracleInstructionsMixin:
 
             # Earthbind: on enter, if creature has flying, deal 2 damage and strip flying
             if "if enchanted creature has flying" in text and "deals 2 damage" in text:
-                has_flying = (
-                    "Flying" in target_creature.card.keywords
-                    or target_creature.metadata.get("gains_flying")
-                    or target_creature.metadata.get("gains_flying_until_eot")
-                )
-                if has_flying:
+                if target_creature.has_keyword("flying"):
                     self._mark_damage_on_permanent(target_creature, 2, source=aura_permanent)
-                    target_creature.metadata["loses_flying"] = True
+                    remove_keyword(target_creature, "flying")
                     self.log.append(f"{aura_permanent.card.name} dealt 2 damage to {target_creature.card.name} and stripped flying")
 
             # Paralyze: tap enchanted creature on enter and mark it as prevented from untapping
             if "tap enchanted creature" in text and "doesn't untap during its controller's untap step" in text:
-                target_creature.tapped = True
+                self.become_tapped(target_creature)
                 self._turn_face_up(target_creature)
                 target_creature.metadata["aura_prevents_untap"] = True
                 self.log.append(f"{aura_permanent.card.name} tapped {target_creature.card.name} and prevents it from untapping")

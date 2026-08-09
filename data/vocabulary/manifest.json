@@ -1,0 +1,17 @@
+{
+  "source": "https://api.scryfall.com/catalog/<name>",
+  "fetched_at": "2026-08-08",
+  "counts": {
+    "ability_words": 69,
+    "artifact_types": 20,
+    "card_types": 10,
+    "creature_types": 350,
+    "enchantment_types": 13,
+    "keyword_abilities": 220,
+    "keyword_actions": 78,
+    "land_types": 18,
+    "planeswalker_types": 99,
+    "spell_types": 6,
+    "supertypes": 7
+  }
+}

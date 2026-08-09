@@ -23,6 +23,7 @@ from engine.oracle import (
 )
 
 from tests.helpers import _mk_creature_card
+from tests.helpers import LEA_PATH
 
 # Canonical oracle-text (normalized) example for every trigger-condition kind.
 # When adding a pattern to a table, add its example here — the shadowing test
@@ -91,13 +92,25 @@ def test_every_pattern_has_an_example():
 
 
 def test_every_example_matches_its_own_pattern():
+    """Each trigger kind's canonical example must be matched by at least one of
+    that kind's patterns.
+
+    A kind can have several patterns — a narrowed form and its general one, as
+    with "casts a *blue* spell" ahead of "casts a spell". Requiring every
+    pattern to match the one example would make that impossible; requiring at
+    least one keeps the guard's real purpose, which is that no kind is
+    unreachable.
+    """
     for _, table in _TABLES:
+        patterns_by_kind: dict[str, list] = {}
         for kind, pattern in table:
+            patterns_by_kind.setdefault(kind, []).append(pattern)
+        for kind, patterns in patterns_by_kind.items():
             example = EXAMPLE_TEXTS.get(kind)
             if example is None:
                 continue  # covered by test_every_pattern_has_an_example
-            assert re.match(pattern, example), (
-                f"{kind}: canonical example {example!r} does not match its own pattern"
+            assert any(re.match(pattern, example) for pattern in patterns), (
+                f"{kind}: canonical example {example!r} matches none of its patterns"
             )
 
 
@@ -130,7 +143,7 @@ def test_attacks_or_blocks_compiles_to_specific_kind():
 
 
 def test_hypnotic_specter_compiles_to_specific_kind():
-    cards = {c.name: c for c in load_cards("cards/LEA_cards.json")}
+    cards = {c.name: c for c in load_cards(LEA_PATH)}
     program = compile_card_oracle(cards["Hypnotic Specter"])
     kinds = [ta.condition.kind for ta in program.triggered_abilities]
     assert kinds == ["hypnotic_specter_deals_damage"]

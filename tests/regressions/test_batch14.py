@@ -38,6 +38,7 @@ Clusters covered in this batch:
 from __future__ import annotations
 
 import random
+from engine.keywords import grant_keyword, remove_keyword
 from pathlib import Path
 
 import pytest
@@ -123,7 +124,7 @@ class TestBlazeOfGloryForcedBlocks:
         game = self._combat(cards)
         # Attacker One gains flying; the ground blocker can't block it, so only
         # Attacker Two is required ("if able").
-        game.players[0].battlefield[0].metadata["gains_flying_until_eot"] = True
+        grant_keyword(game.players[0].battlefield[0], "flying", until_eot=True)
         ok, msg = game.declare_blockers(1, {0: [1]})
         assert ok, msg
 

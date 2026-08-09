@@ -6,6 +6,7 @@ from ..models import Permanent
 from ..pt import set_base_pt
 from ._common import apply_temp_pt_boost, resolve_amount, resolve_target_permanent
 from .registry import effect_handler
+from ..keywords import grant_keyword
 
 if TYPE_CHECKING:
     from ..game import Game
@@ -22,7 +23,7 @@ def berserk_pump(game: Game, instruction: OracleInstruction, context: OracleExec
         # "+X/+0 until end of turn" — apply now and track it so cleanup removes it
         # if the creature survives (Berserk only destroys it if it attacked).
         apply_temp_pt_boost(target_perm, boost)
-        target_perm.metadata["gains_trample_until_eot"] = True
+        grant_keyword(target_perm, "trample", until_eot=True)
         # "At the beginning of the next end step, destroy that creature if it
         # attacked this turn." Mark it; the end step checks attacked_this_turn.
         target_perm.metadata["destroy_if_attacked_eot"] = True
@@ -190,7 +191,7 @@ def grant_self_flying_until_eot(game: Game, instruction: OracleInstruction, cont
     source_permanent = context.source_permanent
     if source_permanent is None:
         return False, "ability not implemented"
-    source_permanent.metadata["gains_flying_until_eot"] = True
+    grant_keyword(source_permanent, "flying", until_eot=True)
     game.log.append(f"{card.name} gains flying until end of turn")
     return True, "resolved"
 
@@ -200,7 +201,7 @@ def grant_target_flying_until_eot(game: Game, instruction: OracleInstruction, co
     card = context.card
     target_creature = resolve_target_permanent(context)
     if target_creature is not None:
-        target_creature.metadata["gains_flying_until_eot"] = True
+        grant_keyword(target_creature, "flying", until_eot=True)
         game.log.append(f"{target_creature.card.name} gains flying until end of turn from {card.name}")
     return True, "resolved"
 
@@ -209,17 +210,15 @@ def grant_target_flying_until_eot(game: Game, instruction: OracleInstruction, co
 def grant_islandwalk_and_linked_destroy(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Sandals of Abdallah: "Target creature gains islandwalk until end of
     turn. When that creature dies this turn, destroy this artifact." The grant
-    rides the has_islandwalk metadata channel (same one lords use); the death
-    link is recorded on the creature and drained by _permanent_to_graveyard +
-    the state-based sweep."""
+    is an until-end-of-turn layer-6 grant; the death link is recorded on the
+    creature and drained by _permanent_to_graveyard + the state-based sweep."""
     card = context.card
     source_permanent = context.source_permanent
     target_creature = resolve_target_permanent(context)
     if target_creature is None:
         game.log.append(f"{card.name}: no valid creature target")
         return True, "resolved"
-    target_creature.metadata["has_islandwalk"] = True
-    target_creature.metadata["gains_islandwalk_until_eot"] = True
+    grant_keyword(target_creature, "islandwalk", until_eot=True)
     if source_permanent is not None:
         links = target_creature.metadata.setdefault("on_death_destroy_permanents", [])
         if source_permanent not in links:
@@ -288,7 +287,7 @@ def grant_flying_and_delayed_destruction(game: Game, instruction: OracleInstruct
         context, player=caster, predicate=_is_legal, fallback_on_invalid_choice=False
     )
     if target_creature is not None:
-        target_creature.metadata["gains_flying_until_eot"] = True
+        grant_keyword(target_creature, "flying", until_eot=True)
         target_creature.metadata["destroy_at_next_end_step"] = True
         game.log.append(f"{target_creature.card.name} gains temporary flying and delayed destruction")
     else:

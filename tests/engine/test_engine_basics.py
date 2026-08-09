@@ -1,5 +1,6 @@
 from engine import Game, PlayerState, classify_card
 from engine.models import CardDefinition, Permanent
+from engine.keywords import grant_keyword, remove_keyword
 
 
 def _mk_card(name: str, type_line: str, oracle_text: str = "", colors: tuple[str, ...] = ()) -> CardDefinition:
@@ -259,7 +260,7 @@ def test_cleanup_step_discards_and_expires_temporary_effects():
     permanent = Permanent(card=creature, power_bonus=2, toughness_bonus=3)
     permanent.metadata["temporary_power_bonus_until_eot"] = 2
     permanent.metadata["temporary_toughness_bonus_until_eot"] = 3
-    permanent.metadata["gains_flying_until_eot"] = True
+    grant_keyword(permanent, "flying", until_eot=True)
     p1 = PlayerState(name="P1", hand=hand_cards, battlefield=[permanent], damage_prevention_pool=4)
     p2 = PlayerState(name="P2", combat_damage_cap_one_charges=1)
     game = Game(players=[p1, p2], combat_damage_prevented_until_eot=True)
@@ -271,7 +272,7 @@ def test_cleanup_step_discards_and_expires_temporary_effects():
     assert len(p1.graveyard) == 2
     assert permanent.power_bonus == 0
     assert permanent.toughness_bonus == 0
-    assert permanent.metadata.get("gains_flying_until_eot") is None
+    assert permanent.has_keyword("flying") is False
     assert p1.damage_prevention_pool == 0
     assert p2.combat_damage_cap_one_charges == 0
     assert game.combat_damage_prevented_until_eot is False

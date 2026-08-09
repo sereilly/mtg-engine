@@ -42,14 +42,19 @@ def iter_triggered_abilities(
     instruction_kinds: Container[str] | None = None,
     players: Sequence[PlayerState] | None = None,
     use_effective_card: bool = True,
-    first_match_only: bool = True,
+    first_match_only: bool = False,
 ) -> Iterator[tuple[int, Permanent, ParsedTriggeredAbility]]:
     """Scan battlefields for matching triggered abilities, yielding
     ``(controller_index, permanent, trig)`` in player-then-battlefield order
     (the order ``_enqueue_triggered_batch`` expects). ``controller_index`` is
     always the permanent controller's index into ``game.players``, also when a
-    ``players`` subset is scanned. ``first_match_only`` mirrors the pervasive
-    per-permanent ``break``: at most one trigger per permanent."""
+    ``players`` subset is scanned.
+
+    ``first_match_only`` caps the scan at one trigger per permanent. CR 603.3
+    says every ability whose condition is met triggers, so the default is off;
+    a permanent with two upkeep triggers fires both. Pass True only where a
+    call site genuinely wants a single representative match (a presence check
+    rather than a firing)."""
     for controller in (players if players is not None else game.players):
         controller_index = game.players.index(controller)
         for permanent in list(controller.battlefield):

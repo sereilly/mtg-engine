@@ -352,11 +352,16 @@ class DeclareBlockersStepMixin:
         if attacker.metadata.get("only_blockable_by_walls") and "wall" not in blocker.card.type_line.lower():
             return False
 
-        # Ironclaw Orcs: blocker can't block creatures with power 2 or greater
+        # "Can't block creatures with power N or greater" (Ironclaw Orcs). The
+        # threshold rides on the payload rather than the instruction kind, so a
+        # card printed with any other number is the same restriction.
         blocker_program = compile_card_oracle(blocker.effective_card)
-        if any(i.kind == "cant_block_power_2_or_greater" for i in blocker_program.instructions):
-            if attacker.effective_power >= 2:
-                return False
+        power_block = next(
+            (i for i in blocker_program.instructions if i.kind == "cant_block_power_n_or_greater"),
+            None,
+        )
+        if power_block is not None and attacker.effective_power >= int(power_block.payload["power"]):
+            return False
 
         # Landwalk (CR 702.14): the attacker can't be blocked if the defending
         # player controls a land of the matching basic type. The blocker is one of

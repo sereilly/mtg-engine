@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from .models import CardDefinition, Permanent, PlayerState
@@ -85,6 +85,14 @@ class OracleExecutionContext:
     # "A source of your choice" (Jade Monolith): the chosen damage source — a
     # battlefield Permanent or a stack spell's CardDefinition.
     chosen_source: object | None = None
+    # Scratchpad for values one instruction produces and a later instruction in
+    # the same resolution consumes ("deals X damage… you gain that much life").
+    # Compositional effects need this: once "deal damage and gain life" is two
+    # instructions instead of one fused kind, the second needs to know what the
+    # first actually did. Keyed by result name, e.g. "damage_dealt".
+    results: dict = field(default_factory=dict)
+    # The object currently being iterated by a "for each …" instruction.
+    iteration_target: Permanent | None = None
 
 
 class OracleStateMachine:
