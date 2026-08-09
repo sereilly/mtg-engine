@@ -1078,6 +1078,42 @@ The two shapes the production does not claim ("attacks each combat if able",
 that specifically, because the failure mode to fear is not "unclaimed" — it is
 a line that parses to zero instructions and looks handled.
 
+### After the combat restrictions, this pool has no low-hanging fruit left
+
+The re-ranked backlog made the next candidates obvious, and checking them
+turned out to matter more than implementing them.
+
+- **`modal line` (10 lines / 2 distinct)** is not a production. The failing
+  "line" is the header `Choose one —`; the bullets are separate lines, and the
+  grammar parses one line at a time. Lowering it needs multi-line context,
+  which is a change to the pipeline's shape rather than a new rule.
+- **`expected a quantity` (6 / 2)** is not about numbers — spelled-out numerals
+  already parse. It is `discards their hand`, and both cards behind it
+  (Wheel of Fortune, Contract from Below) currently compile to *card-named
+  fused instruction kinds* (`wheel_of_fortune`,
+  `discard_hand_ante_then_draw_seven`). Claiming them properly means
+  decomposing into a sequence and adding the handlers that sequence needs —
+  the conjunction-kind retirement, not a parser gap.
+- **`expected a colour after 'becomes'` (6 / 2)** I actually implemented, and
+  then reverted. The production worked on invented text and claimed **zero
+  lines in the pool**, because both real cards carry a duration the grammar
+  cannot read ("until this creature leaves the battlefield"). Coverage did not
+  move. Code that passes its own examples and claims nothing real is worse than
+  no code: it looks like progress in the diff.
+
+That last one is the lesson worth keeping: **measure what a production claims
+in the pool before keeping it**, not whether it parses the sentence you wrote to
+test it. The check is one line — count the pool lines whose instructions the new
+production produced.
+
+`unconsumed text` (36 / 18) turns out to sit behind several of these, and is
+itself 18 different trailing clauses. So after the combat restrictions, the
+remaining backlog for *this* pool is tail all the way down. The leverage has
+moved: further grammar work here optimises for 369 cards, while the open
+question for the roadmap's goal is whether any of it generalises. Ingesting a
+fifth set answers that empirically and would exercise every guard built in this
+pass against text none of them has seen.
+
 ### The static-ability cluster, and why it is a phase-6 job
 
 20 of the remaining lines fail with "static abilities need the CR 613 layers
