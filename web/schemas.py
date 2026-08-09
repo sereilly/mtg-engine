@@ -128,6 +128,12 @@ class CreateSessionRequest(BaseModel):
     # the same time instead of in turn order — each seat gets its own prompt
     # immediately and the game starts once everyone has kept (and bottomed).
     simultaneous_mulligan: bool = Field(default=False)
+    # CR 407.1: play this game for ante — every player antes one random card from
+    # their deck before the game starts and the winner keeps the ante zone. Off by
+    # default; while off, no seat's deck may contain a card that says "Remove this
+    # card from your deck before playing if you're not playing for ante" (CR 407.3),
+    # and random decks are built without them.
+    playing_for_ante: bool = Field(default=False)
     # Free-For-All only (mode="free_for_all"): one entry per seat (3 or 4 total).
     # host_*/guest_* fields above are unused in this mode.
     seats: list[SeatConfig] | None = Field(default=None)

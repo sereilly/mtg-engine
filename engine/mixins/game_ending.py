@@ -28,6 +28,9 @@ class GameEndingMixin:
         if not player.lost:
             player.lost = True
             self.log.append(f"{player.name} conceded and lost the game (104.3a)")
+            # A concession can decide the game without any state-based action
+            # running, so the ante is settled here too (CR 407.2).
+            self._maybe_award_ante()
 
     def get_winner(self) -> PlayerState | None:
         """Return the single player who has won the game, or None if the game is not yet won.
@@ -59,7 +62,11 @@ class GameEndingMixin:
         or targets) and any stack objects they control cease to exist; their
         hand/library/graveyard are left alone (inert history — nothing keys off
         a lost player's non-battlefield zones for gameplay purposes, since
-        ``opponents_of``/combat helpers already exclude lost players)."""
+        ``opponents_of``/combat helpers already exclude lost players).
+
+        CR 800.4n is an explicit exception to 800.4a: objects the departing
+        player owns in the ante zone do NOT leave the game — they stay there for
+        whoever eventually wins (CR 407.2) — so ``player.ante`` is untouched."""
         player = self.players[player_index]
         if player.battlefield:
             for permanent in player.battlefield:
@@ -518,5 +525,10 @@ class GameEndingMixin:
             newly_lost = [i for i, p in enumerate(self.players) if p.lost and i not in previously_lost]
             for idx in newly_lost:
                 self._eliminate_player(idx)
+
+        # CR 407.2: at the end of the game the winner becomes the owner of every
+        # card in the ante zone. A player can become the sole survivor here
+        # (life, empty library, poison), so settle it once the game is decided.
+        self._maybe_award_ante()
 
         return any_changed

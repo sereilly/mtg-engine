@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import random
 
+from engine.ante import is_ante_card
 from engine.models import CardDefinition
 
 
@@ -46,10 +47,16 @@ def _build_lands(rng: random.Random, cards: dict[str, CardDefinition], colors: l
     return lands
 
 
-def _eligible_nonlands(cards: dict[str, CardDefinition], colors: set[str]) -> list[CardDefinition]:
+def _eligible_nonlands(
+    cards: dict[str, CardDefinition], colors: set[str], allow_ante: bool = False
+) -> list[CardDefinition]:
     eligible: list[CardDefinition] = []
     for card in cards.values():
         if card.primary_type == "land":
+            continue
+        # CR 407.3: the ante cards belong in a deck only when the game is played
+        # for ante, so a random deck leaves them out unless it was asked for one.
+        if not allow_ante and is_ante_card(card):
             continue
         identity = set(card.color_identity)
         if not identity or identity.issubset(colors):
@@ -187,7 +194,14 @@ def build_deck_from_entries(
     return deck
 
 
-def build_random_deck(catalog: list[CardDefinition], color_count: int, seed: int) -> tuple[list[CardDefinition], list[str]]:
+def build_random_deck(
+    catalog: list[CardDefinition],
+    color_count: int,
+    seed: int,
+    allow_ante: bool = False,
+) -> tuple[list[CardDefinition], list[str]]:
+    """Build a random deck of ``color_count`` colors. ``allow_ante`` lets the
+    ante cards (CR 407.3) into the pool — only true for a game played for ante."""
     if not (1 <= color_count <= 5):
         raise ValueError("color_count must be between 1 and 5")
 
@@ -196,7 +210,7 @@ def build_random_deck(catalog: list[CardDefinition], color_count: int, seed: int
     selected_colors = _pick_colors(rng, color_count)
 
     lands = _build_lands(rng, cards, selected_colors)
-    pool = _eligible_nonlands(cards, set(selected_colors))
+    pool = _eligible_nonlands(cards, set(selected_colors), allow_ante)
     if not pool:
         raise ValueError("No nonland cards available for selected colors")
 

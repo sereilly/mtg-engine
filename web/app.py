@@ -645,6 +645,9 @@ def _deck_summary(deck: dict) -> dict:
         "description": deck.get("description", ""),
         "format": fmt,
         "legality": legality,
+        # CR 407.3: the ante cards anywhere in this deck. The game-setup deck
+        # pickers refuse a deck that has any unless the host is playing for ante.
+        "ante_names": legality.get("ante_names", []),
         "card_count": sum(e["count"] for e in entries),
         "colors": [c for c in ("W", "U", "B", "R", "G") if c in colors],
         "unsupported_count": sum(e["count"] for e in entries if e["status"] == "unsupported"),
@@ -1844,6 +1847,12 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
     win = _winner(session)
     if win is not None:
         session.status = "finished"
+        # CR 407.2: the winner becomes the owner of every card in the ante zone.
+        # The engine settles this itself when a state-based action or concession
+        # decides the game; this covers the web layer's own (Lich-aware) reading
+        # of who has lost. Idempotent, so re-serializing a finished game is free.
+        if win >= 0:
+            session.game.award_ante_to_winner(win)
 
     # Settle any AI player's Raging River left/right division so the human's
     # prompt sequencing (defender first, then attacker) can advance.
@@ -2054,9 +2063,15 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
     ):
         names = list(pending_outside["card_names"])
         sideboard = session.game.players[viewer_seat].sideboard
+        # The offered cards can be a subset of the sideboard (CR 407.3 keeps ante
+        # cards out of a non-ante game), so follow the recorded positions rather
+        # than assuming the names are a prefix of it.
+        offered = pending_outside.get("sideboard_indices") or list(range(len(names)))
         outside_game_draw_info = {
             "card_names": names,
-            "cards": [_serialize_card_summary(card) for card in sideboard[: len(names)]],
+            "cards": [
+                _serialize_card_summary(sideboard[i]) for i in offered if 0 <= i < len(sideboard)
+            ],
         }
 
     # Cuombajj Witches: the opposing chooser picks any target for the second
@@ -2259,6 +2274,9 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
     return {
         "session_id": session.id,
         "mode": session.mode,
+        # CR 407.1: whether this game is played for ante. Drives the ante pile in
+        # the board UI and tells a joining player which decks they may bring.
+        "playing_for_ante": session.playing_for_ante,
         "status": session.status,
         "current_phase": session.game.current_phase,
         "current_turn_phase": session.game.current_turn_phase,

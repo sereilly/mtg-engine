@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**182 / 566 tracked rules covered (32%)** — 602 tests, 0 unannotated.
+**188 / 570 tracked rules covered (32%)** — 648 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -17,7 +17,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [105. Colors](#105-colors) | 0/5 | 0% |
 | [106. Mana](#106-mana) | 4/13 | 30% |
 | [107. Numbers and Symbols](#107-numbers-and-symbols) | 0/18 | 0% |
-| [108. Cards](#108-cards) | 0/6 | 0% |
+| [108. Cards](#108-cards) | 1/6 | 16% |
 | [109. Objects](#109-objects) | 0/5 | 0% |
 | [110. Permanents](#110-permanents) | 0/5 | 0% |
 | [111. Tokens](#111-tokens) | 0/13 | 0% |
@@ -44,13 +44,14 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [304. Instants](#304-instants) | 0/5 | 0% |
 | [305. Lands](#305-lands) | 0/9 | 0% |
 | [307. Sorceries](#307-sorceries) | 0/5 | 0% |
-| [400. General](#400-general) | 4/12 | 33% |
+| [400. General](#400-general) | 5/12 | 41% |
 | [401. Library](#401-library) | 1/7 | 14% |
 | [402. Hand](#402-hand) | 2/3 | 66% |
 | [403. Battlefield](#403-battlefield) | 3/5 | 60% |
 | [404. Graveyard](#404-graveyard) | 1/3 | 33% |
 | [405. Stack](#405-stack) | 5/6 | 83% |
 | [406. Exile](#406-exile) | 2/8 | 25% |
+| [407. Ante](#407-ante) | 4/4 | 100% |
 | [500. General](#500-general) | 6/12 | 50% |
 | [501. Beginning Phase](#501-beginning-phase) | 1/1 | 100% |
 | [502. Untap Step](#502-untap-step) | 2/4 | 50% |
@@ -134,8 +135,8 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **104.1** A game ends immediately when a player wins, when the game is a draw, or when the game is restarted. *(6 tests)*
 - [x] **104.2** There are several ways to win the game. *(12 tests, subrules ab)*
-- [x] **104.3** There are several ways to lose the game. *(23 tests, subrules abcdefj)*
-- [x] **104.4** There are several ways for the game to be a draw. *(8 tests, subrules ac)*
+- [x] **104.3** There are several ways to lose the game. *(24 tests, subrules abcdefj)*
+- [x] **104.4** There are several ways for the game to be a draw. *(9 tests, subrules ac)*
 - [x] **104.5** If a player loses the game, that player leaves the game. If the game is a draw for a player, that... *(2 tests)*
 - [ ] **104.6** One card (Karn Liberated) restarts the game. All players still in the game when it restarts then ...
 
@@ -188,7 +189,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [ ] **108.1** Use the Oracle card reference when determining a card’s wording. A card’s Oracle text can be foun...
 - [ ] **108.2** When a rule or text on a card refers to a “card,” it means only a Magic card or an object represe...
-- [ ] **108.3** The owner of a card in the game is the player who started the game with it in their deck. If a ca...
+- [x] **108.3** The owner of a card in the game is the player who started the game with it in their deck. If a ca... *(2 tests)*
 - [ ] **108.4** A card doesn’t have a controller unless that card represents a permanent or spell; in those cases...
 - [ ] **108.5** Nontraditional Magic cards can’t start the game in any zone other than the command zone (see rule...
 - [ ] **108.6** For more information about cards, see section 2, “Parts of a Card.”
@@ -453,9 +454,9 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 400. General
 
-- [x] **400.1** A zone is a place where objects can be during a game. There are normally seven zones: library, ha... *(2 tests)*
-- [ ] **400.2** Public zones are zones in which all players can see the cards’ faces, except for those cards that...
-- [x] **400.3** If an object would go to any library, graveyard, or hand other than its owner’s, it goes to its o... *(4 tests)*
+- [x] **400.1** A zone is a place where objects can be during a game. There are normally seven zones: library, ha... *(4 tests)*
+- [x] **400.2** Public zones are zones in which all players can see the cards’ faces, except for those cards that... *(1 tests)*
+- [x] **400.3** If an object would go to any library, graveyard, or hand other than its owner’s, it goes to its o... *(5 tests)*
 - [ ] **400.4** Cards with certain card types can’t enter certain zones.
 - [x] **400.5** The order of objects in a library, in a graveyard, or on the stack can’t be changed except when e... *(1 tests)*
 - [ ] **400.6** If an object would move from one zone to another, determine what event is moving the object. If t...
@@ -515,6 +516,13 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **406.6** An object may have one ability printed on it that causes one or more cards to be exiled, and anot...
 - [ ] **406.7** If an object in the exile zone becomes exiled, it doesn’t change zones, but it becomes a new obje...
 - [ ] **406.8** Previously, the exile zone was called the “removed-from-the-game zone.” Cards that were printed w...
+
+### 407. Ante
+
+- [x] **407.1** Earlier versions of the Magic rules included an ante rule as a way of playing “for keeps.” Playin... *(4 tests)*
+- [x] **407.2** When playing for ante, each player puts one random card from their deck into the ante zone after ... *(17 tests)*
+- [x] **407.3** A few cards have the text “Remove this card from your deck before playing if you’re not playing f... *(16 tests)*
+- [x] **407.4** To ante an object is to put that object into the ante zone from whichever zone it’s currently in.... *(6 tests)*
 
 ### 500. General
 
@@ -891,7 +899,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **800.1** A multiplayer game is a game that begins with more than two players. This section contains additi...
 - [ ] **800.2** These rules consist of a series of options that can be added to a multiplayer game and a number o...
 - [ ] **800.3** Many multiplayer Magic tournaments have additional rules not included here, including rules for d...
-- [x] **800.4** Unlike two-player games, multiplayer games can continue after one or more players have left the g... *(5 tests, subrules a)*
+- [x] **800.4** Unlike two-player games, multiplayer games can continue after one or more players have left the g... *(7 tests, subrules an)*
 - [ ] **800.5** Unless a chosen variant or option prescribes otherwise, seating order is determined by any mutual...
 - [x] **800.6** In a multiplayer game, the first mulligan a player takes doesn’t count toward the number of cards... *(2 tests)*
 - [ ] **800.7** In a multiplayer game other than a Two-Headed Giant game, the starting player doesn’t skip the dr...

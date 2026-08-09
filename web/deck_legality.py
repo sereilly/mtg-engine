@@ -8,6 +8,13 @@ sideboard (CR 100.2a, 100.4a), the fifteen-card sideboard cap (CR 100.4a),
 singleton formats, and the restricted list. Basic lands are exempt from the copy
 limit (CR 100.2a), as are cards that opt out in their own text.
 
+One rule here is format-independent: CR 407.3 bars the "Remove this card from
+your deck before playing if you're not playing for ante" cards from a deck or
+sideboard unless the game is actually played for ante. It is checked even for
+Casual (which has no banlist at all), and the offending names are reported
+separately as ``ante_names`` so the game-setup UI can gate deck *selection* on
+the host's "Playing for ante" setting rather than only warn about it.
+
 The ``FORMATS`` table is the single source of truth for the rule parameters. It
 is shipped to the browser verbatim in the card-catalog payload, where
 ``web/static/legality.js`` runs the identical checks for personal (localStorage)
@@ -17,6 +24,8 @@ decks. Keep the two validators in step when changing the rules.
 from __future__ import annotations
 
 from typing import Any, Iterable, Mapping
+
+from engine.ante import is_ante_card
 
 # Each format: `scryfall_key` is the key to read out of a card's `legalities`
 # map (None means "no legality checking"); `min_deck`/`max_deck` bound the deck
@@ -134,12 +143,32 @@ def _tally(entries: Iterable[Mapping[str, Any]] | None) -> tuple[dict[str, int],
     return counts, total
 
 
+def deck_ante_names(
+    catalog_by_name: Mapping[str, Mapping[str, Any]],
+    *zones: Iterable[Mapping[str, Any]] | None,
+) -> list[str]:
+    """The ante cards (CR 407.3) present anywhere in the given zones, by display
+    name. Cards absent from the catalog can't be checked and are skipped."""
+    names: list[str] = []
+    for zone in zones:
+        counts, _ = _tally(zone)
+        for key in counts:
+            card = catalog_by_name.get(key)
+            if card is None or not is_ante_card(card):
+                continue
+            display = str(card.get("name", key))
+            if display not in names:
+                names.append(display)
+    return names
+
+
 def validate_deck(
     entries: Iterable[Mapping[str, Any]],
     fmt_key: str | None,
     catalog_by_name: Mapping[str, Mapping[str, Any]],
     sideboard: Iterable[Mapping[str, Any]] | None = None,
     commander: Iterable[Mapping[str, Any]] | None = None,
+    playing_for_ante: bool = False,
 ) -> dict[str, Any]:
     """Check a deck (and its sideboard/command zone) against a format's rules.
 
@@ -152,16 +181,39 @@ def validate_deck(
     command zone, while the minimum/maximum deck size (CR 100.2a, 100.5) counts
     the main deck (library) only.
 
-    Returns ``{"format", "legal", "problems": [str], "illegal_names": [str]}``.
+    ``playing_for_ante`` reflects whether the game this deck is headed for is
+    played for ante (CR 407.1). When False — the default, and what the deck
+    editor shows — the ante cards are illegal in the deck and the sideboard
+    alike (CR 407.3).
+
+    Returns ``{"format", "legal", "problems": [str], "illegal_names": [str],
+    "ante_names": [str]}``.
     """
     fmt = FORMATS_BY_KEY[normalize_format(fmt_key)]
+    # Each zone is walked twice (ante check, then the format checks), so a
+    # one-shot iterable is materialized before anything consumes it.
+    entries = list(entries or ())
+    sideboard = list(sideboard or ())
+    commander = list(commander or ())
     result: dict[str, Any] = {
         "format": fmt["key"],
         "legal": True,
         "problems": [],
         "illegal_names": [],
+        # Reported whether or not they're currently a problem, so the caller can
+        # tell "this deck needs an ante game" from "this deck is broken".
+        "ante_names": deck_ante_names(catalog_by_name, entries, sideboard, commander),
     }
+    # CR 407.3 is not a format rule — it holds in Casual (which has no banlist)
+    # exactly as it does in Vintage, so it is checked before the format bailout.
+    if not playing_for_ante:
+        for name in result["ante_names"]:
+            result["problems"].append(
+                f"{name} must be removed from the deck unless the game is played for ante."
+            )
+            result["illegal_names"].append(name)
     if fmt["scryfall_key"] is None:
+        result["legal"] = not result["problems"]
         return result
 
     problems: list[str] = result["problems"]
@@ -233,5 +285,8 @@ def validate_deck(
     elif cmd_total < min_cmd:
         problems.append(f"{label} requires {min_cmd} designated commander card(s) (found {cmd_total}).")
 
+    # An ante card is typically banned in the format too, so it can be flagged
+    # twice (each with its own reason) — the name itself is listed once.
+    result["illegal_names"] = list(dict.fromkeys(illegal))
     result["legal"] = not problems
     return result

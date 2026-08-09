@@ -245,6 +245,9 @@
       description: deck.description || "",
       format: fmt,
       legality: { legal: legality.legal, problems: legality.problems },
+      // CR 407.3: ante cards anywhere in this deck, mirroring the server's deck
+      // summary so the setup pickers gate personal and shared decks alike.
+      ante_names: legality.anteNames || [],
       card_count: cardCount,
       colors: ["W", "U", "B", "R", "G"].filter((c) => colors.has(c)),
       unsupported_count: unsupported,
@@ -275,17 +278,54 @@
     renderDeckSelectOptions();
   }
 
-  function makeDeckOption(deck) {
+  // CR 407.3: a deck holding ante cards can only be brought to a game played
+  // for ante, so those decks are unselectable in the game-setup pickers until
+  // the host ticks "Playing for ante". The deck editor's own load picker never
+  // blocks — you must still be able to open such a deck to edit it.
+  function deckAnteNames(deck) {
+    const names = deck.ante_names || deck.legality?.ante_names || [];
+    return Array.isArray(names) ? names : [];
+  }
+
+  function anteBlocks(deck) {
+    return deckAnteNames(deck).length > 0 && !window.isPlayingForAnte?.();
+  }
+
+  // Deck summaries are always validated as if the game were not played for
+  // ante, so each ante card contributes exactly one problem. In an ante-aware
+  // picker with ante turned on those problems no longer apply — drop them so a
+  // deck whose only flaw was "needs an ante game" reads as fine. Elsewhere (the
+  // deck editor's load list) they stand: the deck really is illegal for normal
+  // play.
+  function deckProblems(deck, { blockAnte = false } = {}) {
+    const problems = deck.legality?.problems || [];
+    if (!blockAnte || anteBlocks(deck)) return problems;
+    const anteNames = deckAnteNames(deck);
+    return problems.filter(
+      (p) => !anteNames.some((n) => p.startsWith(`${n} must be removed`)),
+    );
+  }
+
+  function makeDeckOption(deck, { blockAnte = false } = {}) {
     const option = document.createElement("option");
     option.value = deck.id;
     let label = `${deck.name} (${deck.card_count})`;
-    const illegal = deck.legality && deck.legality.legal === false;
+    const problems = deckProblems(deck, { blockAnte });
+    const illegal = problems.length > 0;
+    const blocked = blockAnte && anteBlocks(deck);
     if (deck.unknown_count > 0 || illegal) label += " ⚠";
+    if (blocked) label += " 🚫 ante only";
     option.textContent = label;
+    option.disabled = blocked;
     // Native title tooltip explains why the deck is flagged for its format.
     const tips = [];
+    if (blocked) {
+      tips.push(
+        `Contains ante card(s): ${deckAnteNames(deck).join(", ")}.\n` +
+        'Tick "Playing for ante" to use this deck (CR 407.3).',
+      );
+    }
     if (illegal) {
-      const problems = deck.legality.problems || [];
       const shown = problems.slice(0, 6).join("\n");
       const more = problems.length > 6 ? `\n…and ${problems.length - 6} more` : "";
       tips.push(`Not legal in ${window.Legality ? window.Legality.formatLabel(deck.format) : deck.format}:\n${shown}${more}`);
@@ -298,7 +338,7 @@
   // Populate a single <select> with the current deck list. Exposed on window so
   // app.js can call it for dynamically-created selects (e.g. Free-For-All seat
   // deck pickers) that aren't part of the fixed `configs` list below.
-  function populateDeckSelectElement(select, placeholder) {
+  function populateDeckSelectElement(select, placeholder, { blockAnte = true } = {}) {
     if (!select) return;
     const previous = select.value;
     select.innerHTML = "";
@@ -312,12 +352,13 @@
       if (decks.length === 0) continue;
       const group = document.createElement("optgroup");
       group.label = groupLabel;
-      for (const deck of decks) group.appendChild(makeDeckOption(deck));
+      for (const deck of decks) group.appendChild(makeDeckOption(deck, { blockAnte }));
       select.appendChild(group);
     }
-    if ([...select.options].some((o) => o.value === previous)) {
-      select.value = previous;
-    }
+    // A previously chosen deck that ante has just made unselectable falls back
+    // to the placeholder rather than staying picked but disabled.
+    const kept = [...select.options].find((o) => o.value === previous && !o.disabled);
+    select.value = kept ? previous : "";
   }
   window.populateDeckSelectElement = populateDeckSelectElement;
 
@@ -325,15 +366,23 @@
   // read a saved deck's display name for the multiplayer lobby roster.
   window.getDeckMeta = (id) => state.decks.find((d) => d.id === id) || null;
 
+  // Re-render every game-setup deck picker (app.js calls this when the host
+  // toggles "Playing for ante", which changes which decks are selectable).
+  window.refreshDeckSelectOptions = () => renderDeckSelectOptions();
+
   function renderDeckSelectOptions() {
     const configs = [
-      ["deckLoadSelect", "— Load a deck —"],
+      // The editor's load picker must reach every deck, including ante ones.
+      ["deckLoadSelect", "— Load a deck —", { blockAnte: false }],
       ["hostDeckSelect", "Random deck"],
       ["guestDeckSelect", "Random deck"],
-      ["joinDeckSelect", "Random deck"],
+      // A joining player can't see the host's ante setting from here, so their
+      // picker offers everything and the server rejects an ante deck brought to
+      // a non-ante game with an explanatory error (CR 407.3).
+      ["joinDeckSelect", "Random deck", { blockAnte: false }],
     ];
-    for (const [id, placeholder] of configs) {
-      populateDeckSelectElement(q(id), placeholder);
+    for (const [id, placeholder, options] of configs) {
+      populateDeckSelectElement(q(id), placeholder, options);
     }
     // Free-For-All seat deck selects are created dynamically by app.js; refresh
     // whichever of them currently exist in the DOM too.

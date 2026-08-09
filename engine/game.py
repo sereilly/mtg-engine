@@ -15,6 +15,7 @@ from .mixins import (
     EffectsMixin,
     GameHelpersMixin,
 )
+from .ante import AnteMixin
 from .legality import LegalityMixin
 # Per-phase and per-step turn-structure logic (CR 500–514) lives in engine.phases,
 # one mixin class per phase/step. See engine/phases/__init__.py for the taxonomy.
@@ -66,9 +67,20 @@ class Game(
     EffectsMixin,
     GameHelpersMixin,
     LegalityMixin,
+    AnteMixin,
 ):
     players: list[PlayerState]
     enforce_mana_costs: bool = False
+    # CR 407.1: playing for ante is an optional variation, off unless the host
+    # turns it on. While False no card is anted at the start of the game, the
+    # winner takes nothing, and cards carrying "Remove this card from your deck
+    # before playing if you're not playing for ante" are barred from decks,
+    # sideboards, and from being brought in from outside the game (CR 407.3).
+    playing_for_ante: bool = False
+    # Set once the ante has been handed to the winner (CR 407.2), so the
+    # transfer happens exactly once however often the end of the game is
+    # re-evaluated.
+    ante_awarded: bool = False
     turn: int = 1
     current_phase: str = "main"
     current_turn_phase: str = "precombat_main"

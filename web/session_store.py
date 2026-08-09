@@ -5,6 +5,7 @@ import random
 import secrets
 
 from engine import Game, PlayerState
+from engine.ante import ante_card_names
 from engine.game_history import GameHistory
 from engine.models import CardDefinition
 
@@ -29,6 +30,9 @@ class Session:
     # at join time for networked human_vs_human) stays deterministic with the host.
     seed: int = 0
     use_pregame: bool = False
+    # CR 407.1: this game is played for ante. Host setting, kept here so a
+    # rematch and any deck built at join time honour it too.
+    playing_for_ante: bool = False
     # Networked lobby (human_vs_human, or free_for_all with an open non-host human
     # seat): False while waiting for every human seat to join AND for a joined
     # player to explicitly start the game. True immediately for modes/configs that
@@ -159,14 +163,20 @@ class SessionStore:
         colors: int,
         seed: int,
         cards: list[dict] | None = None,
+        playing_for_ante: bool = False,
     ):
         # Inline cards (a personal/browser deck) win over a server-side id.
         if cards:
-            return build_deck_from_entries(self.catalog, cards, seed)
+            return _reject_ante_cards(
+                build_deck_from_entries(self.catalog, cards, seed), playing_for_ante
+            )
         if deck_id and self.deck_store is not None:
             deck = self.deck_store.get(deck_id)
-            return build_deck_from_entries(self.catalog, deck.get("cards", []), seed)
-        deck, _ = build_random_deck(self.catalog, colors, seed)
+            return _reject_ante_cards(
+                build_deck_from_entries(self.catalog, deck.get("cards", []), seed),
+                playing_for_ante,
+            )
+        deck, _ = build_random_deck(self.catalog, colors, seed, allow_ante=playing_for_ante)
         return deck
 
     def _build_seat_sideboard(
@@ -174,6 +184,7 @@ class SessionStore:
         deck_id: str | None,
         cards: list[dict] | None = None,
         sideboard: list[dict] | None = None,
+        playing_for_ante: bool = False,
     ):
         """The seat's "outside the game" cards (CR 100.4). Unshuffled — a
         sideboard has no order, and the player sees all of it when choosing.
@@ -184,7 +195,9 @@ class SessionStore:
             entries = deck_sideboard(self.deck_store.get(deck_id))
         if not entries:
             return []
-        return build_deck_from_entries(self.catalog, entries, seed=None)
+        return _reject_ante_cards(
+            build_deck_from_entries(self.catalog, entries, seed=None), playing_for_ante
+        )
 
     def create(self, request: CreateSessionRequest) -> Session:
         if request.mode == "free_for_all":
@@ -221,27 +234,28 @@ class SessionStore:
         host_deck_sideboard = _entries_to_dicts(request.host_deck_sideboard)
         guest_deck_sideboard = _entries_to_dicts(request.guest_deck_sideboard)
 
+        ante = request.playing_for_ante
         host_deck = self._build_seat_deck(
-            request.host_deck_id, request.host_colors, seed, host_deck_cards
+            request.host_deck_id, request.host_colors, seed, host_deck_cards, ante
         )
         host_side = self._build_seat_sideboard(
-            request.host_deck_id, host_deck_cards, host_deck_sideboard
+            request.host_deck_id, host_deck_cards, host_deck_sideboard, ante
         )
         if lobby_needed:
             guest_deck: list = []
             guest_side: list = []
         else:
             guest_deck = self._build_seat_deck(
-                request.guest_deck_id, request.guest_colors, seed + 1, guest_deck_cards
+                request.guest_deck_id, request.guest_colors, seed + 1, guest_deck_cards, ante
             )
             guest_side = self._build_seat_sideboard(
-                request.guest_deck_id, guest_deck_cards, guest_deck_sideboard
+                request.guest_deck_id, guest_deck_cards, guest_deck_sideboard, ante
             )
 
         p1 = PlayerState(name=request.host_name, library=host_deck, sideboard=host_side)
         p2 = PlayerState(name=guest_name, library=guest_deck, sideboard=guest_side)
 
-        game = Game(players=[p1, p2], enforce_mana_costs=True)
+        game = Game(players=[p1, p2], enforce_mana_costs=True, playing_for_ante=ante)
 
         session = Session(
             id=sid,
@@ -254,6 +268,7 @@ class SessionStore:
             seat_types=seat_types,
             seed=seed,
             use_pregame=use_pregame,
+            playing_for_ante=ante,
             simultaneous_mulligan=use_pregame and request.simultaneous_mulligan,
             game_started=not lobby_needed,
             host_deck_id=request.host_deck_id,
@@ -297,6 +312,7 @@ class SessionStore:
         seat_deck_names = [seat.deck_name for seat in seats]
 
         use_pregame = request.enable_pregame
+        ante = request.playing_for_ante
         open_seats = {i for i in range(len(seats)) if i != 0 and not seat_is_ai[i]}
         lobby_needed = use_pregame and bool(open_seats)
 
@@ -309,14 +325,16 @@ class SessionStore:
                     PlayerState(
                         name=seat_names[i],
                         library=self._build_seat_deck(
-                            seat_deck_ids[i], seat_colors[i], seed + i, seat_deck_cards_list[i]
+                            seat_deck_ids[i], seat_colors[i], seed + i,
+                            seat_deck_cards_list[i], ante,
                         ),
                         sideboard=self._build_seat_sideboard(
-                            seat_deck_ids[i], seat_deck_cards_list[i], seat_deck_sideboards[i]
+                            seat_deck_ids[i], seat_deck_cards_list[i],
+                            seat_deck_sideboards[i], ante,
                         ),
                     )
                 )
-        game = Game(players=players, enforce_mana_costs=True)
+        game = Game(players=players, enforce_mana_costs=True, playing_for_ante=ante)
 
         seat_types = {i: ("ai" if seat_is_ai[i] else "human") for i in range(len(seats))}
         joined_seats = set(range(len(seats)))
@@ -334,6 +352,7 @@ class SessionStore:
             seat_types=seat_types,
             seed=seed,
             use_pregame=use_pregame,
+            playing_for_ante=ante,
             simultaneous_mulligan=use_pregame and request.simultaneous_mulligan,
             game_started=not lobby_needed,
             seat_names=seat_names,
@@ -436,6 +455,24 @@ class SessionStore:
 
         guest_deck_cards = _entries_to_dicts(guest_deck_cards)
         guest_deck_sideboard = _entries_to_dicts(guest_deck_sideboard)
+
+        # Build the joining player's deck before taking the seat, so a deck that
+        # can't be used here (an unknown card, or an ante card in a game that
+        # isn't played for ante — CR 407.3) fails the join outright instead of
+        # half-seating them. Only built while the lobby is still open: in the
+        # legacy (no-lobby) path the deck was already built — and possibly dealt
+        # from — at creation time, so overwriting it would clobber live state.
+        library = sideboard = None
+        if not session.game_started:
+            library = self._build_seat_deck(
+                guest_deck_id, guest_colors, session.seed + target, guest_deck_cards,
+                session.playing_for_ante,
+            )
+            sideboard = self._build_seat_sideboard(
+                guest_deck_id, guest_deck_cards, guest_deck_sideboard,
+                session.playing_for_ante,
+            )
+
         session.joined_seats.add(target)
         session.game.players[target].name = guest_name
         if session.mode == "free_for_all":
@@ -453,16 +490,9 @@ class SessionStore:
             session.guest_deck_sideboard = guest_deck_sideboard
             session.guest_deck_name = guest_deck_name
 
-        # Only rebuild the library while the lobby is still open. In the legacy
-        # (no-lobby) path the deck was already built — and possibly dealt from —
-        # at creation time, so overwriting it here would clobber live game state.
-        if not session.game_started:
-            session.game.players[target].library = self._build_seat_deck(
-                guest_deck_id, guest_colors, session.seed + target, guest_deck_cards
-            )
-            session.game.players[target].sideboard = self._build_seat_sideboard(
-                guest_deck_id, guest_deck_cards, guest_deck_sideboard
-            )
+        if library is not None:
+            session.game.players[target].library = library
+            session.game.players[target].sideboard = sideboard
 
         return session, target
 
@@ -489,44 +519,48 @@ class SessionStore:
         state on the session is reset.
         """
         seed = secrets.randbits(32)
+        ante = session.playing_for_ante
         if session.mode == "free_for_all":
             players = [
                 PlayerState(
                     name=session.seat_names[i],
                     library=self._build_seat_deck(
                         session.seat_deck_ids[i], session.seat_colors[i], seed + i,
-                        session.seat_deck_cards_list[i],
+                        session.seat_deck_cards_list[i], ante,
                     ),
                     sideboard=self._build_seat_sideboard(
                         session.seat_deck_ids[i], session.seat_deck_cards_list[i],
-                        session.seat_deck_sideboards[i],
+                        session.seat_deck_sideboards[i], ante,
                     ),
                 )
                 for i in range(len(session.seat_names))
             ]
-            session.game = Game(players=players, enforce_mana_costs=True)
+            session.game = Game(players=players, enforce_mana_costs=True, playing_for_ante=ante)
         else:
             host_deck = self._build_seat_deck(
-                session.host_deck_id, session.host_colors, seed, session.host_deck_cards
+                session.host_deck_id, session.host_colors, seed, session.host_deck_cards, ante
             )
             guest_deck = self._build_seat_deck(
-                session.guest_deck_id, session.guest_colors, seed + 1, session.guest_deck_cards
+                session.guest_deck_id, session.guest_colors, seed + 1,
+                session.guest_deck_cards, ante,
             )
             p1 = PlayerState(
                 name=session.host_name,
                 library=host_deck,
                 sideboard=self._build_seat_sideboard(
-                    session.host_deck_id, session.host_deck_cards, session.host_deck_sideboard
+                    session.host_deck_id, session.host_deck_cards,
+                    session.host_deck_sideboard, ante,
                 ),
             )
             p2 = PlayerState(
                 name=session.guest_name,
                 library=guest_deck,
                 sideboard=self._build_seat_sideboard(
-                    session.guest_deck_id, session.guest_deck_cards, session.guest_deck_sideboard
+                    session.guest_deck_id, session.guest_deck_cards,
+                    session.guest_deck_sideboard, ante,
                 ),
             )
-            session.game = Game(players=[p1, p2], enforce_mana_costs=True)
+            session.game = Game(players=[p1, p2], enforce_mana_costs=True, playing_for_ante=ante)
         session.seed = seed
         session.current_turn = 0
         session.status = "active"
@@ -562,6 +596,22 @@ class SessionStore:
         session.mulligan_bottom_selected_by_seat = {}
         self._begin_pregame(session)
         return session
+
+
+def _reject_ante_cards(cards: list[CardDefinition], playing_for_ante: bool) -> list[CardDefinition]:
+    """CR 407.3: unless the game is played for ante, a deck or sideboard may not
+    contain the cards that say "Remove this card from your deck before playing if
+    you're not playing for ante". Raises ValueError naming them, which the API
+    layer turns into a 400 so the player can pick another deck (or turn ante on)."""
+    if playing_for_ante:
+        return cards
+    offenders = ante_card_names(cards)
+    if offenders:
+        raise ValueError(
+            f"{', '.join(offenders)} can only be played in a game played for ante — "
+            "enable \"Playing for ante\" or choose another deck (CR 407.3)"
+        )
+    return cards
 
 
 def _entries_to_dicts(entries) -> list[dict] | None:

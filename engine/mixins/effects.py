@@ -3,6 +3,7 @@ from __future__ import annotations
 import random
 import re
 
+from ..ante import is_ante_card
 from ..card_hooks import TOP_OF_LIBRARY_DISCARD_SOURCES, UNTAPPED_ARTIFACT_PROTECTORS
 from ..handlers._common import permanent_matches_filter, pick_target_permanent
 from ..models import CardDefinition, Permanent, PlayerState
@@ -582,9 +583,14 @@ class EffectsMixin:
         Returns 0 drawn cards — nothing is drawn from the library, so a
         "draw a card"-triggered effect correctly sees no draw. With an empty
         sideboard there is no card to take and the replacement is spent anyway
-        (CR 614.1: a replacement effect applies even when it does nothing)."""
+        (CR 614.1: a replacement effect applies even when it does nothing).
+
+        CR 407.3: unless the game is played for ante, an ante card "can't be
+        brought into the game from outside the game", so those are not offered.
+        """
         self.outside_game_draw_replacements.discard(player_index)
-        if not player.sideboard:
+        available = self._outside_game_choices(player_index)
+        if not available:
             self.log.append(
                 f"{player.name} has no cards outside the game to take (Ring of Ma'rûf)"
             )
@@ -593,16 +599,28 @@ class EffectsMixin:
         if player_index in self.interactive_seats:
             self.pending_outside_game_draw = {
                 "player_index": player_index,
-                "card_names": [c.name for c in player.sideboard],
+                "card_names": [player.sideboard[i].name for i in available],
+                # Sideboard positions behind each offered name, so a choice made
+                # against the filtered list still pulls the right card.
+                "sideboard_indices": available,
                 "remaining_draws": count - 1,
             }
             self.log.append(
                 f"{player.name} looks through the cards they own from outside the game (Ring of Ma'rûf)"
             )
             return 0
-        self._finish_outside_game_draw(player_index, 0)
+        self._finish_outside_game_draw(player_index, available[0])
         player.draw(count - 1)
         return 0
+
+    def _outside_game_choices(self, player_index: int) -> list[int]:
+        """Sideboard indices this player may bring into the game (CR 100.4).
+        Ante cards are excluded unless the game is played for ante (CR 407.3)."""
+        player = self.players[player_index]
+        return [
+            i for i, card in enumerate(player.sideboard)
+            if self.playing_for_ante or not is_ante_card(card)
+        ]
 
     def _finish_outside_game_draw(self, player_index: int, chosen_index: int) -> None:
         """Move the chosen sideboard card into hand."""
@@ -624,7 +642,11 @@ class EffectsMixin:
         if not (0 <= chosen_index < len(pending["card_names"])):
             return False
         self.pending_outside_game_draw = None
-        self._finish_outside_game_draw(player_index, chosen_index)
+        # The offered list can be a subset of the sideboard (CR 407.3 hides ante
+        # cards), so map the chosen offer back to its sideboard position.
+        indices = pending.get("sideboard_indices")
+        sideboard_index = indices[chosen_index] if indices else chosen_index
+        self._finish_outside_game_draw(player_index, sideboard_index)
         remaining = int(pending.get("remaining_draws", 0))
         if remaining > 0:
             self.players[player_index].draw(remaining)

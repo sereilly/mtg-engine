@@ -117,7 +117,9 @@ def discard_hand_ante_then_draw_seven(game: Game, instruction: OracleInstruction
     while caster.hand:
         caster.graveyard.append(caster.hand.pop(0))
     if caster.library:
-        caster.ante.append(caster.library.pop(0))
+        # CR 407.4: the caster owns the cards in their own library, so they are
+        # the player who can ante the top one.
+        game.ante_object(game.players.index(caster), caster.library.pop(0))
     drawn = caster.draw(7)
     game.log.append(f"{card.name} resolved: discarded hand and drew {drawn} cards")
     return True, "resolved"
@@ -127,9 +129,11 @@ def discard_hand_ante_then_draw_seven(game: Game, instruction: OracleInstruction
 def each_player_antes_top_card(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     card = context.card
     anted = 0
-    for player in game.players:
+    # CR 407.4: each player antes their own top card, so every ante is made by
+    # that card's owner.
+    for index, player in enumerate(game.players):
         if player.library:
-            player.ante.append(player.library.pop(0))
+            game.ante_object(index, player.library.pop(0))
             anted += 1
     game.log.append(f"{card.name} anted {anted} card(s)")
     return True, "resolved"
@@ -152,7 +156,9 @@ def exchange_ante_with_top_library(game: Game, instruction: OracleInstruction, c
     if not (0 <= chosen < len(caster.ante)):
         chosen = 0
     anted = caster.ante.pop(chosen)
-    caster.ante.append(caster.library.pop(0))
+    # CR 407.4: the replacement card comes off the caster's own library, so the
+    # caster is the player anting it.
+    game.ante_object(game.players.index(caster), caster.library.pop(0))
     caster.hand.append(anted)
     game.log.append(
         f"{card.name}: {caster.name} exchanged {anted.name} in the ante "
@@ -169,14 +175,15 @@ def ante_self_then_clear_ante_and_draw(game: Game, instruction: OracleInstructio
     The ante is the *effect*, not part of the cost, so the Bird moves from the
     battlefield to the ante zone (CR 407) on resolution. The "if you do" rider
     only happens when it actually got anted — a Bird that has already left the
-    battlefield antes nothing and the rest of the ability does nothing."""
+    battlefield antes nothing and the rest of the ability does nothing, and
+    neither does one activated by a player who doesn't own it: CR 407.4 makes
+    the owner the only player who can ante an object."""
     caster = context.caster
     card = context.card
     source_permanent = context.source_permanent
     if source_permanent is None:
         return False, "ability not implemented"
     owner_index = game.owner_index_of(source_permanent)
-    owner = game.players[owner_index] if owner_index is not None else caster
     controller = next(
         (p for p in game.players if any(perm is source_permanent for perm in p.battlefield)),
         None,
@@ -184,18 +191,25 @@ def ante_self_then_clear_ante_and_draw(game: Game, instruction: OracleInstructio
     if controller is None:
         game.log.append(f"{card.name} is no longer on the battlefield to ante")
         return True, "resolved"
+    # CR 407.4: only the owner can ante it. A stolen Bird (Control Magic, Old Man
+    # of the Sea) can be activated by its new controller, but the ante — and so
+    # the whole "if you do" rider — simply doesn't happen.
+    if not game.can_ante(game.players.index(caster), owner_index):
+        game.log.append(
+            f"{caster.name} doesn't own {card.name} and can't ante it (CR 407.4)"
+        )
+        return True, "resolved"
     # "All other cards you own from the ante" is everything the *ability's
     # controller* owns there before the Bird arrives — captured first, since a
     # CardDefinition is shared per name and identity alone couldn't tell a
     # previously anted copy apart from this one.
     others = list(caster.ante)
     controller.battlefield = [p for p in controller.battlefield if p is not source_permanent]
-    owner.ante.append(source_permanent.card)
+    game.ante_object(owner_index, source_permanent.card)
     game.log.append(f"{caster.name} anted {card.name}")
 
     # `others` is the exact prefix of caster.ante taken before the append, so
-    # slicing it off leaves only the newly anted Bird (or nothing, when the Bird
-    # was stolen and landed in its owner's ante instead).
+    # slicing it off leaves only the newly anted Bird.
     caster.ante = caster.ante[len(others):]
     caster.graveyard.extend(others)
     if others:

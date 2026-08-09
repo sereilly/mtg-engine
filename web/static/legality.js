@@ -74,6 +74,18 @@
       .includes("a deck can have any number of cards named");
   }
 
+  // CR 407.3: the cards that carry "Remove this card from your deck before
+  // playing if you're not playing for ante" may only be in a deck or sideboard
+  // when the game is actually played for ante. Mirrors engine/ante.py.
+  const ANTE_DECK_TEXT = "remove this card from your deck before playing if you're not playing for ante";
+
+  function isAnteCard(card) {
+    return String((card && card.oracle_text) || "")
+      .toLowerCase()
+      .replace(/’/g, "'")
+      .includes(ANTE_DECK_TEXT);
+  }
+
   // Copy limit for a legal/restricted card, or null for unlimited.
   function effectiveMaxCopies(card, fmt, status) {
     if (isBasicLand(card) || anyNumberAllowed(card)) return null;
@@ -135,12 +147,19 @@
 
   // Validate a whole deck. `entries`/`sideboard`/`commander` are [{name, count}];
   // `lookupCard(name)` resolves a name to a catalog card (or null). Returns
-  // {format, legal, problems:[str], illegalNames:Set}. Cards not in the catalog
-  // are skipped — they're surfaced separately as "not in catalog".
-  function validateDeck(entries, key, lookupCard, sideboard = null, commander = null) {
+  // {format, legal, problems:[str], illegalNames:Set, anteNames:[str]}. Cards
+  // not in the catalog are skipped — they're surfaced separately as "not in
+  // catalog". `playingForAnte` reflects the game the deck is headed for; when
+  // false (the default) its ante cards are illegal in every format (CR 407.3).
+  function validateDeck(entries, key, lookupCard, sideboard = null, commander = null, playingForAnte = false) {
     const fmt = getFormat(key);
-    const result = { format: fmt ? fmt.key : DEFAULT_FORMAT, legal: true, problems: [], illegalNames: new Set() };
-    if (!fmt || !fmt.scryfall_key) return result;
+    const result = {
+      format: fmt ? fmt.key : DEFAULT_FORMAT,
+      legal: true,
+      problems: [],
+      illegalNames: new Set(),
+      anteNames: [],
+    };
 
     const main = tally(entries);
     const side = tally(sideboard);
@@ -151,6 +170,21 @@
       ...[...side.counts.keys()].filter((n) => !main.counts.has(n)),
       ...[...cmd.counts.keys()].filter((n) => !main.counts.has(n) && !side.counts.has(n)),
     ];
+    // CR 407.3 is not a format rule — it holds in Casual (which has no banlist)
+    // exactly as it does in Vintage, so it is checked before the format bailout.
+    for (const name of names) {
+      const card = lookupCard(name);
+      if (!card || !isAnteCard(card)) continue;
+      if (!result.anteNames.includes(card.name)) result.anteNames.push(card.name);
+      if (!playingForAnte) {
+        result.problems.push(`${card.name} must be removed from the deck unless the game is played for ante.`);
+        result.illegalNames.add(card.name);
+      }
+    }
+    if (!fmt || !fmt.scryfall_key) {
+      result.legal = result.problems.length === 0;
+      return result;
+    }
     for (const name of names) {
       const card = lookupCard(name);
       if (!card) continue;
@@ -198,6 +232,7 @@
     cardStatus,
     cardProblem,
     copyLimit,
+    isAnteCard,
     validateDeck,
     DEFAULT_FORMAT,
   };

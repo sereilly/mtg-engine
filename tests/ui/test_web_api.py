@@ -429,7 +429,7 @@ def test_networked_hvh_join_builds_guest_deck_off_host_seed(monkeypatch):
     captured_seeds = []
     stub_deck = [_mk_card("Island", "", "Basic Land - Island", "") for _ in range(40)]
 
-    def _fake_build_random_deck(_cards_path, _colors, seed):
+    def _fake_build_random_deck(_cards_path, _colors, seed, allow_ante=False):
         captured_seeds.append(seed)
         return list(stub_deck), ["U"]
 

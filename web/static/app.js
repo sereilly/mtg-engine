@@ -820,6 +820,11 @@ function syncSeedControls() {
   q("customSeed").disabled = !useCustomSeed;
 }
 
+// CR 407.1: is the host setting up a game played for ante? Read by
+// deck-editor.js, which greys out decks holding ante cards while this is off
+// (CR 407.3). Defaults to false — the checkbox starts unticked.
+window.isPlayingForAnte = () => Boolean(q("playingForAnte")?.checked);
+
 function showMenuPage(name) {
   const applyVisibility = () => {
     for (const [key, element] of Object.entries(menuPages)) {
@@ -10374,6 +10379,7 @@ async function createSession() {
   syncSeedControls();
   const format = q("format")?.value || "standard";
   const useCustomSeed = q("useCustomSeed").checked;
+  const playingForAnte = window.isPlayingForAnte();
   savePlayerName(format === "free_for_all" ? q("ffaSeatName_0")?.value : q("hostName")?.value);
   let req;
   if (format === "free_for_all") {
@@ -10384,6 +10390,7 @@ async function createSession() {
       custom_seed: useCustomSeed ? Number(q("customSeed").value) : null,
       enable_pregame: true,
       simultaneous_mulligan: !!q("simultaneousMulligan")?.checked,
+      playing_for_ante: playingForAnte,
     };
   } else {
     const mode = q("mode").value;
@@ -10410,6 +10417,7 @@ async function createSession() {
       custom_seed: useCustomSeed ? Number(q("customSeed").value) : null,
       enable_pregame: true,
       simultaneous_mulligan: !!q("simultaneousMulligan")?.checked,
+      playing_for_ante: playingForAnte,
     };
   }
   const data = await postJson("/api/sessions", req);
@@ -10630,6 +10638,12 @@ q("ffaSeatCount")?.addEventListener("change", () => {
 
 q("useCustomSeed").addEventListener("change", () => {
   syncSeedControls();
+});
+
+// Turning ante on/off changes which decks may be chosen (CR 407.3), so the
+// deck pickers are rebuilt whenever it flips.
+q("playingForAnte")?.addEventListener("change", () => {
+  window.refreshDeckSelectOptions?.();
 });
 
 q("joinBtn").addEventListener("click", async () => {

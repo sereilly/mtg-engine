@@ -49,8 +49,9 @@ SCOPE: dict[str, str | tuple[str, ...]] = {
     **{s: "all" for s in ("200", "201", "202", "205", "207", "208")},
     # 3xx — Card Types present in the pool
     **{s: "all" for s in ("300", "301", "302", "303", "304", "305", "307")},
-    # 4xx — Zones (407 Ante and 408 Command excluded)
-    **{s: "all" for s in ("400", "401", "402", "403", "404", "405", "406")},
+    # 4xx — Zones (408 Command excluded; 407 Ante is implemented as an opt-in
+    # game variation, so the ante zone is tracked)
+    **{s: "all" for s in ("400", "401", "402", "403", "404", "405", "406", "407")},
     # 5xx — Turn Structure
     **{s: "all" for s in (
         "500", "501", "502", "503", "504", "505", "506", "507", "508", "509",

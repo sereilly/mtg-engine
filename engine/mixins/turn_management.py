@@ -33,13 +33,21 @@ class TurnManagementMixin:
 
         Hands are dealt starting with *starting_player_index* and proceeding
         in turn order.
+
+        CR 407.2 slots in between the two: when the game is played for ante,
+        each player antes one random card from their (already shuffled) deck
+        "after determining which player goes first but before players draw any
+        cards", so every library is shuffled first, the ante is seeded, and
+        only then are hands dealt.
         """
         order = list(range(starting_player_index, len(self.players))) + list(
             range(0, starting_player_index)
         )
         for i in order:
+            random.shuffle(self.players[i].library)
+        self.place_starting_ante(order)
+        for i in order:
             player = self.players[i]
-            random.shuffle(player.library)
             drawn = player.draw(7)
             self.log.append(f"{player.name} drew opening hand of {drawn} card(s)")
 

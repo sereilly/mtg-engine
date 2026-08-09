@@ -2224,7 +2224,7 @@ def test_create_session_uses_random_seed_by_default(monkeypatch):
     captured_seeds = []
     stub_deck = [_mk_card("Island", "", "Basic Land - Island", "") for _ in range(40)]
 
-    def _fake_build_random_deck(_cards_path, _colors, seed):
+    def _fake_build_random_deck(_cards_path, _colors, seed, allow_ante=False):
         captured_seeds.append(seed)
         return list(stub_deck), ["U"]
 
@@ -2249,7 +2249,7 @@ def test_create_session_uses_custom_seed_when_enabled(monkeypatch):
     captured_seeds = []
     stub_deck = [_mk_card("Island", "", "Basic Land - Island", "") for _ in range(40)]
 
-    def _fake_build_random_deck(_cards_path, _colors, seed):
+    def _fake_build_random_deck(_cards_path, _colors, seed, allow_ante=False):
         captured_seeds.append(seed)
         return list(stub_deck), ["U"]
 
