@@ -123,13 +123,8 @@ SUPPORTED_SPELL_PATTERNS = (
     "look at target player's hand",
     "draw a card",
     "add three mana of any one color",
-    "at the beginning of each player's draw step, if this artifact is untapped, that player draws an additional card",
     "at the beginning of your upkeep, sacrifice this enchantment unless you pay",
     "untapped creatures you control get +0/+2",
-    "players skip their untap steps",
-    "players can't untap more than one creature during their untap steps",
-    "as long as this artifact is untapped, players can't untap more than one land during their untap steps",
-    "creatures with power 3 or greater don't untap during their controllers' untap steps",
     "whenever a player taps a land for mana, that player adds one mana of any type that land produced",
     "this artifact becomes a 3/6 golem artifact creature until end of combat",
     "create a 1/1 colorless insect artifact creature token with flying named wasp",
@@ -150,10 +145,8 @@ SUPPORTED_SPELL_PATTERNS = (
     "gain",
     "each player chooses a number of lands they control equal to the number of lands controlled by the player who controls the fewest",
     "the next time an unblocked creature of your choice would deal combat damage to you this turn, prevent all but 1 of that damage",
-    "white spells cost {3} more to cast",
     "all swamps are 1/1 black creatures that are still lands",
     "all forests are 1/1 creatures that are still lands",
-    "you have no maximum hand size",
     "look at the top three cards of target player's library, then put them back in any order",
     "you may have that player shuffle",
     "change the text of target spell or permanent by replacing all instances of one basic land type with another",
@@ -164,7 +157,6 @@ SUPPORTED_SPELL_PATTERNS = (
     "put a mire counter on target non-swamp land",
     "remove target creature defending player controls from combat",
     "whenever one or more creatures you control attack, each defending player divides all creatures without flying",
-    "you may spend white mana as though it were red mana",
     "target creature gains banding until end of turn",
     "copy target instant or sorcery spell",
     "remove this card from your deck before playing if you're not playing for ante",
@@ -841,6 +833,48 @@ SUPPORTED_LAYOUTS = frozenset({
 })
 
 
+# ---------------------------------------------------------------------------
+# Support derived from the text-keyed rule tables
+# ---------------------------------------------------------------------------
+
+def _derived_static_claims(oracle_text: str, normalized_text: str) -> list[str]:
+    """Names of the rule tables that already implement this card's text.
+
+    These tables (untap_restrictions, draw_step_modifiers, cost_modifiers,
+    enter_effects) read a permanent's oracle text directly at the step that
+    needs them, so they need no instruction to *work*. They were nonetheless
+    absent from the support gate, which listed the same behaviours as whitelist
+    literals with the table's parameters baked in — "creatures with power **3**
+    or greater don't untap", "players can't untap more than **one** creature".
+
+    That is the false-negative half of the gate/dispatch split: a card printed
+    "power 4 or greater" was enforced correctly by the table and reported
+    **unsupported**, because the literal named a different number. Deriving
+    support from the tables that do the work means the parameter is data here
+    too.
+    """
+    from .cost_modifiers import cost_modifier_claims_line
+    from .draw_step_modifiers import draw_step_bonus_for
+    from .enter_effects import NO_MAXIMUM_HAND_SIZE, SPEND_WHITE_AS_RED
+    from .untap_restrictions import untap_restriction_for
+
+    claims: list[str] = []
+    if untap_restriction_for(oracle_text) is not None:
+        claims.append("untap_restrictions")
+    if draw_step_bonus_for(oracle_text) is not None:
+        claims.append("draw_step_modifiers")
+    if any(
+        cost_modifier_claims_line(normalize_creature_line(line))
+        for line in oracle_text.splitlines()
+    ):
+        claims.append("cost_modifiers")
+    if NO_MAXIMUM_HAND_SIZE in normalized_text:
+        claims.append("enter_effects.no_maximum_hand_size")
+    if SPEND_WHITE_AS_RED in normalized_text:
+        claims.append("enter_effects.spend_white_as_red")
+    return claims
+
+
 # Unbounded cache: card definitions are immutable and the pool is finite, so
 # every distinct card compiles exactly once per process — even with thousands
 # of cards the programs are tiny compared to recompilation cost.
@@ -944,6 +978,11 @@ def _compile_card_oracle(
                     f"unimplemented aura effect: {unclaimed[0]}",
                     normalized_text,
                 )
+
+        instructions.extend(
+            OracleInstruction("derived_static_rule", claim)
+            for claim in _derived_static_claims(oracle_text, normalized_text)
+        )
 
         instructions.extend(
             OracleInstruction("spell_pattern", pattern)

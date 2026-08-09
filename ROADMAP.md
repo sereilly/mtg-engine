@@ -739,6 +739,31 @@ this only makes the engine honest about what it can do. That distinction is the
 reason this was safe to land alongside parser work while the Aura rewrite
 itself stays a phase of its own.
 
+### The false-negative half, in the tables built this same session
+
+The noncreature gate had the mirror of the combat-restriction bug, and it was
+sitting inside work from earlier in this pass. `untap_restrictions.py`,
+`draw_step_modifiers.py` and `cost_modifiers.py` derive their behaviours
+generically — that was the entire point of extracting them. But the *support
+gate* still listed the same behaviours as whitelist literals with the tables'
+parameters baked in: "creatures with power **3** or greater don't untap",
+"players can't untap more than **one** creature", "**white** spells cost
+**{3}** more to cast".
+
+So a card printed "power 4 or greater" was enforced correctly by the table and
+reported **unsupported**. Implemented-but-unsupported is still a bug: the card
+is excluded from decks and from every coverage report while the engine plays it
+perfectly.
+
+The gate asks the tables now, through a `derived_static_rule` instruction that
+records *which* table claims the card — so support can be traced to the code
+carrying it without re-reading text. Eight whitelist literals deleted; 88 → 80.
+
+Worth stating plainly: extracting a derivation table does not finish the job.
+The table removed the duplication in the *dispatch* and left it in the *gate*,
+which is the same two-lists defect in a new place. When a behaviour moves to a
+table, the support check has to move with it.
+
 ### The static-ability cluster, and why it is a phase-6 job
 
 20 of the remaining lines fail with "static abilities need the CR 613 layers
