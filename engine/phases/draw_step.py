@@ -112,7 +112,7 @@ class DrawStepMixin:
 
         bonus = 0
         for permanent in self.all_permanents():
-            extra = draw_step_bonus_for(permanent.card.oracle_text)
+            extra = draw_step_bonus_for(permanent.effective_card.oracle_text)
             if extra is None:
                 continue
             if extra.requires_untapped and permanent.tapped:

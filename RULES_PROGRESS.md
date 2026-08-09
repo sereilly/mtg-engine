@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**198 / 570 tracked rules covered (34%)** — 802 tests, 0 unannotated.
+**198 / 570 tracked rules covered (34%)** — 808 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -729,7 +729,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 612. Text-Changing Effects
 
-- [x] **612.1** Some continuous effects change an object’s text. This can apply to any words or symbols printed o... *(1 tests)*
+- [x] **612.1** Some continuous effects change an object’s text. This can apply to any words or symbols printed o... *(3 tests)*
 - [ ] **612.2** A text-changing effect changes only those words that are used in the correct way (for example, a ...
 - [x] **612.3** Effects that add or remove abilities don’t change the text of the objects they affect, so any abi... *(1 tests)*
 - [ ] **612.4** A token’s subtypes and rules text are defined by the spell or ability that created the token. A t...
@@ -742,7 +742,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 613. Interaction of Continuous Effects
 
-- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(20 tests, subrules bdefg)*
+- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(24 tests, subrules bcdefg)*
 - [ ] **613.2** Within layer 1, apply effects in a series of sublayers in the order described below. Within each ...
 - [ ] **613.3** Within layers 2–6, apply effects from characteristic-defining abilities first (see rule 604.3), t...
 - [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(43 tests, subrules abcd)*

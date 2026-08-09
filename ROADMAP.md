@@ -967,6 +967,36 @@ Verified by reintroducing the bypass.
 is layer 1 (copies), layer 2 (control, which the earlier audit established is
 zone membership here rather than a stored flag) and layer 3 (text-changing).
 
+### Layer 3: apply the text change once, not at each reader
+
+Sleight of Mind replaces a colour word in a permanent's rules text. CR 613.1c
+puts that in layer 3 — *before* anything reads the text — and the engine applied
+it at each reader that had been taught about it. Protection honoured the remap.
+Magnetic Mountain went on blocking blue creatures and Gloom went on taxing white
+spells, their text notwithstanding.
+
+`Permanent.effective_card` applies it once, so the text-keyed tables (untap
+restrictions, cost modifiers, draw-step bonuses) never learn that text can
+change. The existing `_remap_color_filter` helper — a per-consumer patch applied
+to compiled colour filters — is the shape this replaces, and is exactly why the
+remap reached three readers and not the rest.
+
+Two details the implementation has to get right, both pinned:
+
+- **A swap must not collapse.** Remapping black→red *and* red→black by running
+  the substitutions in sequence turns every black into red, then every red —
+  including the ones just written — back into black. One pass over a single
+  alternation.
+- **Whole words only.** Without a word boundary, "red" rewrites the "red" inside
+  "requi**red**" and "conside**red**", and reminder text is full of both.
+
+The no-remap path returns the card object itself, unchanged and unallocated,
+because `effective_card` is read on nearly every rules query.
+
+**Layers 3, 4, 5, 6 and 7 now all resolve through the layer system.** Remaining:
+layer 1 (copies) and layer 2 (control, already established here as zone
+membership rather than a stored flag).
+
 ### The static-ability cluster, and why it is a phase-6 job
 
 20 of the remaining lines fail with "static abilities need the CR 613 layers

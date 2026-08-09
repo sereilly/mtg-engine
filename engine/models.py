@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import dataclasses
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -138,6 +140,54 @@ class CardDefinition:
         return self.printings[0] if self.printings else self.set_code
 
 
+# CR 613 layer 3 — text-changing effects.
+#
+# ``color_word_remap`` stores symbol -> symbol ({"B": "R"}); rewriting the rules
+# text needs the words. The result is cached per (card, remap) because
+# ``effective_card`` is read on nearly every rules query and building a
+# CardDefinition each time would be a per-call allocation on a hot path — and
+# because ``compile_card_oracle``'s cache is keyed on the text, so a stable
+# object keeps a remapped card compiling exactly once.
+_SYMBOL_TO_COLOR_WORD: dict[str, str] = {
+    "W": "white", "U": "blue", "B": "black", "R": "red", "G": "green",
+}
+_REMAPPED_CARDS: dict[tuple, "CardDefinition"] = {}
+
+
+def _with_color_words_remapped(card: "CardDefinition", remap: dict) -> "CardDefinition":
+    """*card* with its colour words replaced per *remap* (CR 612.1)."""
+    key = (id(card), tuple(sorted(remap.items())))
+    cached = _REMAPPED_CARDS.get(key)
+    if cached is not None:
+        return cached
+
+    pairs = [
+        (_SYMBOL_TO_COLOR_WORD[old], _SYMBOL_TO_COLOR_WORD[new])
+        for old, new in remap.items()
+        if old in _SYMBOL_TO_COLOR_WORD and new in _SYMBOL_TO_COLOR_WORD
+    ]
+    text = card.oracle_text
+    if pairs:
+        # One pass over the text with a single alternation, so a remap of
+        # black -> red alongside red -> black swaps rather than collapsing.
+        pattern = re.compile(
+            r"\b(" + "|".join(re.escape(old) for old, _ in pairs) + r")\b",
+            re.IGNORECASE,
+        )
+        replacements = {old: new for old, new in pairs}
+
+        def _sub(match: "re.Match") -> str:
+            word = match.group(0)
+            replacement = replacements[word.lower()]
+            return replacement.capitalize() if word[:1].isupper() else replacement
+
+        text = pattern.sub(_sub, text)
+
+    remapped = dataclasses.replace(card, oracle_text=text)
+    _REMAPPED_CARDS[key] = remapped
+    return remapped
+
+
 @dataclass
 class Permanent:
     card: CardDefinition
@@ -202,8 +252,20 @@ class Permanent:
         copier's identity, upkeep re-copy prompt, and name-keyed flows still
         work) but takes the copied creature's copiable values — including its
         activated and triggered abilities (CR 707.2). Ability compilation and
-        serialization must read this, not ``card``."""
-        return self.metadata.get("copied_card") or self.card
+        serialization must read this, not ``card``.
+
+        CR 613 layer 3 is applied here: a text-changing effect (Sleight of Mind
+        replacing a colour word) rewrites the rules text *before* anything reads
+        it. Applying it at each reader instead is how Magnetic Mountain went on
+        blocking blue creatures and Gloom went on taxing white spells after
+        their text said red — the remap reached only the readers that had been
+        taught about it.
+        """
+        base = self.metadata.get("copied_card") or self.card
+        remap = self.metadata.get("color_word_remap")
+        if not remap:
+            return base
+        return _with_color_words_remapped(base, remap)
 
     def has_type(self, card_type: str) -> bool:
         """Whether this permanent currently has the given card type or subtype.

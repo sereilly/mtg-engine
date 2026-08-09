@@ -120,7 +120,10 @@ def _tax(game, card, applies_to: str) -> tuple[int, list[str]]:
     total = 0
     names: list[str] = []
     for permanent in game.all_permanents():
-        for modifier in cost_modifiers_for(permanent.card.oracle_text):
+        # effective_card: a colour word rewritten by Sleight of Mind (CR 613
+        # layer 3) changes which spells this taxes, and the tax table should
+        # not have to know that text can change.
+        for modifier in cost_modifiers_for(permanent.effective_card.oracle_text):
             if modifier.applies_to != applies_to or not _matches(modifier, card):
                 continue
             total += modifier.amount

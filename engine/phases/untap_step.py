@@ -28,7 +28,10 @@ class UntapStepMixin:
         min_power_block: int | None = None
         blocked_colors: set[str] = set()
         for perm in self.all_permanents():
-            restriction = untap_restriction_for(perm.card.oracle_text)
+            # effective_card, so a CR 613 layer-3 text change (Sleight of Mind
+            # rewriting the colour word) is applied before the restriction is
+            # read — the table itself never learns text can change.
+            restriction = untap_restriction_for(perm.effective_card.oracle_text)
             if restriction is None:
                 continue
             if restriction.only_while_source_untapped and perm.tapped:
