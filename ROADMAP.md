@@ -833,6 +833,42 @@ Still to do in this phase: keyword grants, `only_blockable_by_walls`,
 `lure_active` and the rest of the flags `_apply_aura_effect` stamps directly;
 then layers 1 (copies), 2 (control) and 3 (text-changing).
 
+### Phase 6, second slice: keyword grants, and one reader that had to move
+
+Aura keyword grants now follow the P/T grant — derived from the Aura's text,
+stamped when it attached, collected at layer 6, gone when it leaves. Six Auras
+(Flight, Fear, Lance, Web, Burrowing, Fishliver Oil); the Wards and Consecrate
+Land are deliberately *not* claimed, because protection and
+can't-be-enchanted are metadata channels with their own checks and a
+`grant_abilities` entry would say layer 6 carries them when it does not.
+
+Landwalk is the interesting one. It was written as a `has_<walk>` flag straight
+onto the creature, and `_attacker_has_active_landwalk` read that flag — so the
+grant lived *outside* the layer system, and expressing removal needed a
+matching `lost_<walk>` flag. The combat check now asks for computed abilities
+and never learns an Aura exists.
+
+That is the shape of the remaining phase-6 work in miniature: moving an effect
+into the layers is easy, and the cost is finding every reader that was reaching
+around them. Two small lessons banked:
+
+- **Reminder text nearly hid the whole thing.** The first keyword pattern was
+  anchored and matched only Flight and Lance, because every other printing
+  carries "(It can't be blocked as long as…)". `oracle.normalize_creature_line`
+  strips reminders, but importing the compiler into `auras.py` is a cycle, so
+  the module needs its own one-line equivalent. An anchored pattern that
+  silently stops matching most cards is the same failure as a whitelist that
+  silently matches all of them.
+- **A test asserted the mechanism, not the behaviour.** Burrowing's test
+  checked `metadata["has_mountainwalk"] is True` and that the log said
+  "landwalk". Both were implementation detail, and both broke on a change that
+  kept the card working perfectly. It now asks whether the creature *has*
+  mountainwalk.
+
+Remaining: `only_blockable_by_walls`, `lure_active`, `aura_prevents_untap`,
+protection, and the linked one-shots (control theft, animation) — then layers 1
+(copies), 2 (control) and 3 (text-changing).
+
 ### The static-ability cluster, and why it is a phase-6 job
 
 20 of the remaining lines fail with "static abilities need the CR 613 layers

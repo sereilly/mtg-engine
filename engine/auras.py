@@ -248,9 +248,12 @@ def aura_static_pt_grant(oracle_text: str) -> tuple[int, int] | None:
     simply ceasing to contribute — there is nothing to subtract, and nothing
     that can drift out of step with what was added.
     """
-    for match in _STATIC_PT_GRANT.finditer(" ".join(oracle_text.lower().split())):
-        tail = oracle_text.lower()[match.end():].lstrip()
-        if tail.startswith("until end of turn"):
+    for raw_line in oracle_text.splitlines():
+        line = _line_text(raw_line)
+        match = _STATIC_PT_GRANT.search(line)
+        if match is None:
+            continue
+        if line[match.end():].lstrip().startswith("until end of turn"):
             continue
         return int(match.group(1)), int(match.group(2))
     return None
@@ -311,3 +314,53 @@ def detach_aura(aura, target) -> None:
         target.metadata.pop("attached_auras", None)
         if target.metadata.get("attached_aura") is aura:
             target.metadata.pop("attached_aura", None)
+
+
+# Reminder text. `oracle.normalize_creature_line` strips it, but importing the
+# compiler here would be a cycle (it imports this module), so the one-line
+# equivalent lives here. Without it an anchored pattern silently stops matching
+# every card whose printing carries a reminder — which is most of them.
+_REMINDER = re.compile(r"\([^)]*\)")
+
+
+def _line_text(raw_line: str) -> str:
+    return " ".join(_REMINDER.sub("", raw_line).strip().lower().split()).rstrip(".")
+
+# The keyword abilities an Aura grants while attached. Same treatment as the
+# P/T grant: derived from the Aura's text on every recompute and stamped with
+# its attach time, so removal is dropping a contribution rather than finding
+# and undoing a recorded grant.
+#
+# Landwalk is included. It reaches the same layer-6 channel as every other
+# keyword, so the combat check that consumes it must read *computed* abilities
+# rather than the raw `has_<walk>` flag the imperative path used to stamp.
+_GRANTABLE_KEYWORDS = (
+    "flying", "fear", "first strike", "double strike", "trample", "vigilance",
+    "haste", "reach", "banding", "defender", "shadow",
+    "swampwalk", "forestwalk", "islandwalk", "mountainwalk", "plainswalk",
+    "desertwalk",
+)
+
+_KEYWORD_GRANT = re.compile(
+    rf"^enchanted {_NOUN}(?: gets [+-]\d+/[+-]\d+ and)? has "
+    rf"(?P<keyword>{'|'.join(_GRANTABLE_KEYWORDS)})$"
+)
+
+
+def aura_keyword_grants(oracle_text: str) -> tuple[str, ...]:
+    """Keyword abilities an Aura grants to the permanent it enchants.
+
+    Only whole-line grants of a known keyword count. "Enchanted creature has
+    protection from black. This effect doesn't remove this Aura." and
+    'Enchanted land has "…"' are deliberately not matched: protection is a
+    metadata channel with its own checks, and a granted *quoted* ability is not
+    a keyword — claiming either here would say the layer-6 grant carries them
+    when it does not.
+    """
+    grants: list[str] = []
+    for raw_line in oracle_text.split("\n"):
+        line = _line_text(raw_line)
+        match = _KEYWORD_GRANT.match(line)
+        if match is not None:
+            grants.append(match.group("keyword"))
+    return tuple(grants)

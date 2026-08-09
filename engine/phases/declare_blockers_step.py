@@ -376,13 +376,15 @@ class DeclareBlockersStepMixin:
         if defender is None:
             return False
         for walk, land_type in _LANDWALK_TO_LAND_TYPE.items():
-            has_walk = attacker.metadata.get(f"has_{walk}") or any(
-                kw.lower() == walk for kw in attacker.card.keywords
-            )
-            # Magical Hack can remap a landwalk word away (swampwalk -> islandwalk).
-            if attacker.metadata.get(f"lost_{walk}"):
-                has_walk = False
-            if not has_walk:
+            # Computed through CR 613 layer 6, so a landwalk granted by an Aura
+            # (Burrowing, Fishliver Oil) counts alongside a printed one and
+            # ends when the Aura does — without this reader knowing an Aura
+            # exists. It used to read a `has_<walk>` flag the Aura stamped
+            # directly, which put the grant outside the layer system and needed
+            # a matching `lost_<walk>` flag to express removal; both are still
+            # collected into layer 6 for the effects that set them (Magical
+            # Hack remapping a landwalk word away).
+            if not self._has_keyword(attacker, walk):
                 continue
             for perm in defender.battlefield:
                 if perm.card.primary_type != "land":

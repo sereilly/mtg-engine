@@ -3905,8 +3905,11 @@ def test_burrowing_grants_mountainwalk_to_enchanted_creature(all_cards):
     assert result.supported
     bear_perm = p2.battlefield[0]
     assert bear_perm.metadata.get("attached_aura") is not None
-    assert bear_perm.metadata.get("has_mountainwalk") is True
-    assert any("landwalk" in line.lower() for line in game.log)
+    # The grant is a CR 613 layer-6 effect owned by the Aura, not a flag
+    # stamped on the creature, so this asks what the creature *has* rather than
+    # how the engine happens to record it.
+    assert game._has_keyword(bear_perm, "mountainwalk") is True
+    assert any("mountainwalk" in line.lower() for line in game.log)
 
 
 def test_celestial_prism_adds_mana_of_chosen_color(all_cards):

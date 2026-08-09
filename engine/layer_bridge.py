@@ -17,7 +17,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import TYPE_CHECKING
 
-from .auras import aura_static_pt_grant, auras_attached_to
+from .auras import aura_keyword_grants, aura_static_pt_grant, auras_attached_to
 from .continuous import (
     Characteristics,
     ContinuousEffect,
@@ -261,6 +261,22 @@ def collect_ability_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]
             effects.append(grant_abilities(only, [walk], timestamp=0, label=f"lord {walk}"))
         if perm.metadata.get(f"lost_{walk}"):
             effects.append(remove_abilities(only, [walk], timestamp=0, label=f"lost {walk}"))
+
+    # Layer 6 from each attached Aura, stamped with the moment it attached
+    # (CR 613.7b) — derived every recompute, so the grant ends when the Aura
+    # leaves without anything having to find and undo it.
+    for aura in auras_attached_to(perm):
+        granted = aura_keyword_grants(aura.card.oracle_text)
+        if not granted:
+            continue
+        effects.append(
+            grant_abilities(
+                only,
+                list(granted),
+                timestamp=int(aura.metadata.get("aura_timestamp", 0)),
+                label=f"aura:{aura.card.name}",
+            )
+        )
 
     for entry in ability_effects(perm):
         keyword = entry["keyword"]

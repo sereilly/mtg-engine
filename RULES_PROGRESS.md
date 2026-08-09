@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**196 / 570 tracked rules covered (34%)** — 786 tests, 0 unannotated.
+**196 / 570 tracked rules covered (34%)** — 789 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -742,7 +742,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 613. Interaction of Continuous Effects
 
-- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(18 tests, subrules bdeg)*
+- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(20 tests, subrules bdefg)*
 - [ ] **613.2** Within layer 1, apply effects in a series of sublayers in the order described below. Within each ...
 - [ ] **613.3** Within layers 2–6, apply effects from characteristic-defining abilities first (see rule 604.3), t...
 - [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(43 tests, subrules abcd)*
@@ -841,7 +841,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.7** First Strike *(5 tests, subrules b)*
 - [x] **702.9** Flying *(6 tests, subrules b)*
 - [x] **702.10** Haste *(2 tests, subrules bc)*
-- [x] **702.14** Landwalk *(3 tests, subrules c)*
+- [x] **702.14** Landwalk *(4 tests, subrules bc)*
 - [x] **702.15** Lifelink *(3 tests, subrules b)*
 - [x] **702.16** Protection *(31 tests, subrules abcdefghjkmn)*
 - [x] **702.17** Reach *(3 tests, subrules b)*

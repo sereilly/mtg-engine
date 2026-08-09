@@ -7,7 +7,7 @@ from ..events import emit
 from ..game_types import OracleExecutionContext, OracleStateMachine
 from ..handlers import EFFECT_HANDLERS
 from ..models import CardDefinition, Permanent, PlayerState
-from ..auras import attach_aura
+from ..auras import attach_aura, aura_keyword_grants
 from ..oracle import OracleInstruction, _COLOR_WORD_TO_SYMBOL, compile_card_oracle
 from ..keywords import grant_keyword, remove_keyword
 
@@ -275,19 +275,17 @@ class OracleInstructionsMixin:
             # _refresh_dynamic_creatures so it tracks Forests entering/leaving (CR
             # 611.3a) rather than being locked in at cast time. No flat bonus here.
 
-            # Landwalk/protection patterns are recognized in the compiled program;
-            # fall back to normalized-text checks for logging when necessary.
-            _walk_instrs = [instr for instr in program.instructions if instr.kind == "spell_pattern" and instr.value.startswith("has ") and "walk" in instr.value]
-            if _walk_instrs or ("has " in text and "walk" in text):
-                self.log.append(f"{target_creature.card.name} gains landwalk from {aura_permanent.card.name}")
-                for _wi in _walk_instrs:
-                    # e.g. "has mountainwalk" -> metadata key "has_mountainwalk"
-                    _meta_key = _wi.value.replace(" ", "_")
-                    target_creature.metadata[_meta_key] = True
-                if not _walk_instrs:
-                    for _walk_word in ("swampwalk", "mountainwalk", "islandwalk", "forestwalk", "plainswalk"):
-                        if f"has {_walk_word}" in text:
-                            target_creature.metadata[f"has_{_walk_word}"] = True
+            # Landwalk is a keyword like any other and reaches layer 6 through
+            # auras.aura_keyword_grants, so nothing is stamped here. It used to
+            # write a `has_<walk>` flag straight onto the creature, which meant
+            # the grant lived outside the layer system and had to be undone by
+            # name when the Aura left.
+            if aura_keyword_grants(aura_permanent.card.oracle_text):
+                self.log.append(
+                    f"{target_creature.card.name} gains "
+                    f"{', '.join(aura_keyword_grants(aura_permanent.card.oracle_text))}"
+                    f" from {aura_permanent.card.name}"
+                )
 
             if any("protection from" in instr.value for instr in program.instructions if instr.kind == "spell_pattern") or ("has protection from" in text):
                 # Parse the specific color and stamp metadata on the creature
@@ -298,14 +296,8 @@ class OracleInstructionsMixin:
                         target_creature.metadata[f"protection_from_{_prot_match.group(1).lower()}"] = True
                 self.log.append(f"{target_creature.card.name} gains protection from aura")
 
-            if "has first strike" in text or "enchanted creature has first strike" in text or "gains first strike" in text:
-                grant_keyword(target_creature, "first strike")
-                self.log.append(f"{target_creature.card.name} gains first strike from {aura_permanent.card.name}")
 
                 # Fear: enchanted creature can't be blocked except by artifact creatures and/or black creatures
-            if "has fear" in text or "enchanted creature has fear" in text or "gains fear" in text:
-                grant_keyword(target_creature, "fear")
-                self.log.append(f"{target_creature.card.name} gains fear from {aura_permanent.card.name}")
 
             # Flying: some Auras grant flying to the enchanted creature.
             # Exclude "if enchanted creature has flying" which is a conditional check, not a grant.
@@ -315,14 +307,8 @@ class OracleInstructionsMixin:
                 or ("enchanted creature has flying" in text and not _flying_conditional)
                 or "gains flying" in text
             )
-            if _grants_flying:
-                grant_keyword(target_creature, "flying")
-                self.log.append(f"{target_creature.card.name} gains flying from {aura_permanent.card.name}")
 
             # Reach: e.g. Web's "Enchanted creature gets +0/+2 and has reach."
-            if "has reach" in text or "gains reach" in text:
-                grant_keyword(target_creature, "reach")
-                self.log.append(f"{target_creature.card.name} gains reach from {aura_permanent.card.name}")
 
             # Haste: enchanted creature can attack as though it had haste
             if "can attack as though it had haste" in text:
