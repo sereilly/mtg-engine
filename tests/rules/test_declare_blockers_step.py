@@ -11,6 +11,7 @@ from __future__ import annotations
 import pytest
 
 from engine import Game
+from engine.auras import attach_aura
 from engine.models import CardDefinition, Permanent, PlayerState
 
 
@@ -39,6 +40,21 @@ def _mk_creature(
         keywords=keywords,
         produced_mana=(),
         raw={"name": name, "type_line": type_line, "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _lure_card() -> CardDefinition:
+    """Lure's printed text. The block requirement is read off this, so the test
+    exercises the same derivation the game does."""
+    return CardDefinition(
+        name="Lure", mana_cost="{1}{G}{G}", cmc=3.0,
+        type_line="Enchantment — Aura",
+        oracle_text=(
+            "Enchant creature\n"
+            "All creatures able to block enchanted creature do so."
+        ),
+        colors=("G",), color_identity=("G",), keywords=(), produced_mana=(),
+        raw={"name": "Lure", "type_line": "Enchantment — Aura"},
     )
 
 
@@ -198,10 +214,14 @@ def test_509_1c_lure_requires_all_able_creatures_to_block():
     omitting one is an illegal declaration.
     """
     lure_attacker = Permanent(card=_mk_creature("Lured", 3, 3))
-    lure_attacker.metadata["lure_active"] = True
+    # Attach a real Lure. The requirement is derived from the Auras attached to
+    # the creature (engine/auras.py), so it ends when the Aura does — there is
+    # no flag to set, and setting one describes a board that cannot occur.
+    lure = Permanent(card=_lure_card())
+    attach_aura(lure, lure_attacker)
     b1 = Permanent(card=_mk_creature("Blocker A", 2, 2))
     b2 = Permanent(card=_mk_creature("Blocker B", 2, 2))
-    p1 = PlayerState(name="P1", battlefield=[lure_attacker])
+    p1 = PlayerState(name="P1", battlefield=[lure_attacker, lure])
     p2 = PlayerState(name="P2", battlefield=[b1, b2])
     game = Game(players=[p1, p2])
     _to_declare_blockers(game, [0])

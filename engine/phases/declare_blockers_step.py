@@ -12,6 +12,7 @@ when a creature becomes blocked.
 import random
 import re
 
+from ..auras import aura_restriction_active
 from ..models import Permanent, PlayerState
 from ..oracle import compile_card_oracle
 from ..pt import add_pt_modifier
@@ -108,7 +109,7 @@ class DeclareBlockersStepMixin:
             if attacker_idx >= len(attacker_controller.battlefield):
                 continue
             attacker = attacker_controller.battlefield[attacker_idx]
-            if not attacker.metadata.get("lure_active"):
+            if not aura_restriction_active(attacker, "must_be_blocked_by_all_able"):
                 continue
             for blocker_idx, blocker in enumerate(defender.battlefield):
                 if not blocker.is_creature or blocker.tapped:
@@ -349,7 +350,9 @@ class DeclareBlockersStepMixin:
             return False
 
         # Invisibility: attacker can only be blocked by Walls
-        if attacker.metadata.get("only_blockable_by_walls") and "wall" not in blocker.card.type_line.lower():
+        # Invisibility. Asked of the Auras attached right now, so the
+        # restriction ends when the Aura does without anything clearing a flag.
+        if aura_restriction_active(attacker, "only_blockable_by_walls") and not blocker.has_type("wall"):
             return False
 
         # "Can't block creatures with power N or greater" (Ironclaw Orcs). The

@@ -196,3 +196,145 @@ def test_613_1f_a_granted_quoted_ability_is_not_claimed_as_a_keyword(catalog):
     assert aura_keyword_grants(catalog["Farmstead"].oracle_text) == ()
     assert aura_keyword_grants(catalog["White Ward"].oracle_text) == ()
     assert aura_keyword_grants(catalog["Consecrate Land"].oracle_text) == ()
+
+
+@pytest.mark.cr("509.1b")
+def test_509_1b_invisibility_restricts_blockers_only_while_attached(catalog):
+    """Restrictions are not characteristics, so CR 613's layers do not apply —
+    but the ownership does. The reader asks which Auras are attached now
+    instead of the Aura stamping a flag someone must remember to clear."""
+    attacker = _nosick(Permanent(card=catalog["Grizzly Bears"]))
+    blocker = _nosick(Permanent(card=catalog["Grizzly Bears"]))
+    p1 = PlayerState(name="P1", hand=[catalog["Invisibility"]], battlefield=[attacker])
+    p2 = PlayerState(name="P2", battlefield=[blocker])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    assert game._can_block_attacker(blocker, attacker) is True
+
+    game.cast_from_hand(0, "Invisibility", target_player_index=0, target_permanent_index=0)
+    assert game._can_block_attacker(blocker, attacker) is False
+
+    aura = next(p for p in p1.battlefield if p.card.name == "Invisibility")
+    game._remove_aura_effects(aura)
+    p1.battlefield.remove(aura)
+    assert game._can_block_attacker(blocker, attacker) is True
+
+
+@pytest.mark.cr("508.1a")
+def test_508_1a_animate_wall_permission_ends_with_the_aura(catalog):
+    wall = _nosick(Permanent(card=catalog["Wall of Stone"]))
+    p1 = PlayerState(name="P1", hand=[catalog["Animate Wall"]], battlefield=[wall])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+
+    assert game.can_attack(wall, 1) is False
+    game.cast_from_hand(0, "Animate Wall", target_player_index=0, target_permanent_index=0)
+    assert game.can_attack(wall, 1) is True
+
+    aura = next(p for p in p1.battlefield if p.card.name == "Animate Wall")
+    game._remove_aura_effects(aura)
+    p1.battlefield.remove(aura)
+    assert game.can_attack(wall, 1) is False
+
+
+@pytest.mark.cr("702.16c")
+def test_702_16c_ward_protection_ends_with_the_aura(catalog):
+    game, player, bear = _bear_with_auras(catalog, "Black Ward")
+    assert "B" in game._protection_colors(bear)
+
+    ward = next(p for p in player.battlefield if p.card.name == "Black Ward")
+    game._remove_aura_effects(ward)
+    player.battlefield.remove(ward)
+
+    assert "B" not in game._protection_colors(bear)
+
+
+@pytest.mark.cr("702.16c")
+def test_702_16c_protection_granted_outside_an_aura_still_counts(catalog):
+    """The metadata channel stays for protection granted with a lifetime of its
+    own. Deleting it because no card in the pool uses it would have made
+    CR 702.16c depend on the protection's *source*, which the rule does not."""
+    bear = Permanent(card=catalog["Grizzly Bears"])
+    player = PlayerState(name="P1", battlefield=[bear])
+    game = Game(players=[player, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+
+    bear.metadata["protection_from_white"] = True
+    assert "W" in game._protection_colors(bear)
+
+
+@pytest.mark.cr("502.1")
+def test_502_1_paralyze_untap_restriction_is_read_from_the_aura(catalog):
+    from engine.auras import aura_restriction_active
+
+    assert "doesnt_untap" in __import__(
+        "engine.auras", fromlist=["aura_restrictions"]
+    ).aura_restrictions(catalog["Paralyze"].oracle_text)
+
+    bear = Permanent(card=catalog["Grizzly Bears"], tapped=True)
+    player = PlayerState(name="P1", hand=[catalog["Paralyze"]], battlefield=[bear])
+    game = Game(players=[player, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.cast_from_hand(0, "Paralyze", target_player_index=0, target_permanent_index=0)
+
+    assert aura_restriction_active(bear, "doesnt_untap") is True
+    game.resolve_untap_step(0)
+    assert bear.tapped is True          # held down by the Aura
+
+    aura = next(p for p in player.battlefield if p.card.name == "Paralyze")
+    game._remove_aura_effects(aura)
+    player.battlefield.remove(aura)
+    game.resolve_untap_step(0)
+    assert bear.tapped is False         # and released the moment it leaves
+
+
+@pytest.mark.cr("302.6", "702.10b")
+def test_302_6_attack_as_though_hasty_does_not_permit_tap_abilities(catalog):
+    """Instill Energy says "can attack as though it had haste" — it does not
+    grant haste.
+
+    CR 302.6 has two clauses: a summoning-sick creature can't attack, and can't
+    activate a {T} ability. CR 702.10b says haste lifts *the attack clause*.
+    This wording lifts the same one clause and no more. Modelling it as a haste
+    grant lifted both, so a summoning-sick Llanowar Elves under Instill Energy
+    tapped for mana a turn early.
+    """
+    elves = Permanent(card=catalog["Llanowar Elves"])
+    player = PlayerState(
+        name="P1", hand=[catalog["Instill Energy"]], battlefield=[elves]
+    )
+    game = Game(players=[player, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    elves.metadata["summoning_sickness_turn"] = game.turn   # arrived this turn
+
+    game.cast_from_hand(
+        0, "Instill Energy", target_player_index=0, target_permanent_index=0
+    )
+
+    assert game.can_attack(elves, 1) is True          # the clause it does lift
+    assert game._has_keyword(elves, "haste") is False  # it is not a haste grant
+    result = game.activate_permanent_ability(0, "Llanowar Elves")
+    assert result.supported is False                   # the clause it does not
+    assert player.mana_pool["G"] == 0
+
+
+@pytest.mark.cr("302.6")
+def test_302_6_the_permission_ends_when_the_aura_leaves(catalog):
+    elves = Permanent(card=catalog["Llanowar Elves"])
+    player = PlayerState(
+        name="P1", hand=[catalog["Instill Energy"]], battlefield=[elves]
+    )
+    game = Game(players=[player, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    elves.metadata["summoning_sickness_turn"] = game.turn
+    game.cast_from_hand(
+        0, "Instill Energy", target_player_index=0, target_permanent_index=0
+    )
+    assert game.can_attack(elves, 1) is True
+
+    aura = next(p for p in player.battlefield if p.card.name == "Instill Energy")
+    game._remove_aura_effects(aura)
+    player.battlefield.remove(aura)
+
+    assert game.can_attack(elves, 1) is False

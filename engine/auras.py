@@ -364,3 +364,87 @@ def aura_keyword_grants(oracle_text: str) -> tuple[str, ...]:
         if match is not None:
             grants.append(match.group("keyword"))
     return tuple(grants)
+
+
+# ---------------------------------------------------------------------------
+# Restrictions an Aura imposes
+# ---------------------------------------------------------------------------
+#
+# These are not characteristics, so CR 613's layers do not apply to them — they
+# change how the game is played (what may block, what untaps, what may attack).
+# The ownership principle is the same one the layers gave P/T and keywords: the
+# reader asks whether any attached Aura imposes the restriction, instead of the
+# Aura stamping a flag on the permanent and something having to remember to
+# take it off again.
+#
+# Each name is the vocabulary the readers use; the pattern is the printed line.
+_RESTRICTIONS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (
+        re.compile(rf"^enchanted {_NOUN} can't be blocked except by walls$"),
+        "only_blockable_by_walls",
+    ),
+    (
+        re.compile(r"^all creatures able to block enchanted creature do so$"),
+        "must_be_blocked_by_all_able",
+    ),
+    (
+        re.compile(
+            rf"^enchanted {_NOUN} doesn't untap during its controller's untap step$"
+        ),
+        "doesnt_untap",
+    ),
+    (
+        re.compile(rf"^enchanted {_NOUN} can attack as though it didn't have defender$"),
+        "ignores_defender",
+    ),
+    (
+        # Instill Energy. NOT a haste grant: CR 702.10b lifts the attack clause
+        # of CR 302.6, and this wording lifts only that same clause. Granting
+        # the haste keyword instead also lifted the {T}-ability clause, so a
+        # summoning-sick Llanowar Elves under Instill Energy tapped for mana.
+        re.compile(rf"^enchanted {_NOUN} can attack as though it had haste$"),
+        "attacks_as_though_hasty",
+    ),
+)
+
+_PROTECTION_GRANT = re.compile(
+    rf"^enchanted {_NOUN} has protection from (?P<color>{_COLORS})\b"
+)
+
+
+def aura_restrictions(oracle_text: str) -> frozenset[str]:
+    """The named restrictions an Aura imposes while attached."""
+    found = {
+        name
+        for raw_line in oracle_text.splitlines()
+        for pattern, name in _RESTRICTIONS
+        if pattern.match(_line_text(raw_line))
+    }
+    return frozenset(found)
+
+
+def aura_protection_colors(oracle_text: str) -> frozenset[str]:
+    """Colour words an Aura grants protection from (the Ward cycle).
+
+    Colour *words*, not mana symbols: the caller maps them, and it is the one
+    that knows about text-changing remaps (Sleight of Mind).
+    """
+    found = set()
+    for raw_line in oracle_text.splitlines():
+        match = _PROTECTION_GRANT.match(_line_text(raw_line))
+        if match is not None:
+            found.add(match.group("color"))
+    return frozenset(found)
+
+
+def aura_restriction_active(permanent, name: str) -> bool:
+    """Whether any Aura attached to *permanent* imposes restriction *name*.
+
+    This is the whole of "does the restriction apply": when the Aura leaves it
+    stops being attached, so it stops being asked. Nothing is stamped and
+    nothing has to be cleaned up.
+    """
+    return any(
+        name in aura_restrictions(aura.card.oracle_text)
+        for aura in auras_attached_to(permanent)
+    )

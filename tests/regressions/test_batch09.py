@@ -138,8 +138,13 @@ class TestLureAttackPolicy:
     def test_ai_attacks_with_lured_creature(self, cards):
         attacker = Permanent(card=cards["Grizzly Bears"])
         attacker.metadata["summoning_sickness_turn"] = -99
-        attacker.metadata["lure_active"] = True
-        p1 = PlayerState(name="P1", battlefield=[attacker])
+        # A real Lure: the requirement is derived from the Auras attached right
+        # now (engine/auras.py), so stamping an internal flag no longer means
+        # anything — and a test that stamps one stops describing any real board.
+        lure = Permanent(card=cards["Lure"])
+        from engine.auras import attach_aura
+        attach_aura(lure, attacker)
+        p1 = PlayerState(name="P1", battlefield=[attacker, lure])
         # A big blocker that would normally make the AI decline the attack.
         blocker = Permanent(card=cards["Force of Nature"])
         p2 = PlayerState(name="P2", battlefield=[blocker], life=20)

@@ -3839,7 +3839,10 @@ def test_black_ward_grants_protection_from_black(all_cards):
 
     assert result.supported
     creature_perm = p2.battlefield[0]
-    assert creature_perm.metadata.get("protection_from_black") is True
+    # Protection is read off the attached Aura (engine/auras.py), not a flag
+    # stamped on the creature, so this asks what the creature is protected
+    # from rather than how the engine records it.
+    assert "B" in game._protection_colors(creature_perm)
 
 
 def test_blue_elemental_blast_counters_red_spell(all_cards):
@@ -4785,7 +4788,10 @@ def test_green_ward_grants_protection_from_green(all_cards):
 
     assert result.supported
     creature_perm = p1.battlefield[0]
-    assert creature_perm.metadata.get("protection_from_green") is True
+    # Protection is read off the attached Aura (engine/auras.py), not a flag
+    # stamped on the creature, so this asks what the creature is protected
+    # from rather than how the engine records it.
+    assert "G" in game._protection_colors(creature_perm)
 
 
 def test_fireball_targets_multiple_creatures_divides_damage(all_cards):
@@ -6120,7 +6126,7 @@ def test_red_ward_grants_protection_from_red(all_cards):
     result = game.cast_from_hand(0, "Red Ward", target_player_index=0, target_permanent_index=0)
 
     assert result.supported
-    assert p1.battlefield[0].metadata.get("protection_from_red") is True
+    assert "R" in game._protection_colors(p1.battlefield[0])
 
 
 def test_regrowth_returns_creature_from_graveyard_to_hand(all_cards):
@@ -7207,7 +7213,10 @@ def test_white_ward_grants_protection_from_white(all_cards):
 
     assert result.supported
     creature_perm = p2.battlefield[0]
-    assert creature_perm.metadata.get("protection_from_white") is True
+    # Protection is read off the attached Aura (engine/auras.py), not a flag
+    # stamped on the creature, so this asks what the creature is protected
+    # from rather than how the engine records it.
+    assert "W" in game._protection_colors(creature_perm)
 
 
 # ---------------------------------------------------------------------------
@@ -8680,7 +8689,7 @@ def test_blue_ward_grants_protection_from_blue(all_cards):
     result = game.cast_from_hand(0, "Blue Ward", target_player_index=1, target_permanent_index=0)
 
     assert result.supported
-    assert p2.battlefield[0].metadata.get("protection_from_blue") is True
+    assert "U" in game._protection_colors(p2.battlefield[0])
 
 
 def test_web_grants_toughness_bonus_and_reach(all_cards):

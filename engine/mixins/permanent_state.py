@@ -15,6 +15,7 @@ from ..enter_effects import (
     NO_MAXIMUM_HAND_SIZE,
     SPEND_WHITE_AS_RED,
 )
+from ..auras import aura_protection_colors, auras_attached_to
 from ..models import CardDefinition, Permanent, PlayerState
 from ..oracle import _COLOR_WORD_TO_SYMBOL, compile_card_oracle
 from ..pt import clear_base_pt, set_base_pt
@@ -567,6 +568,21 @@ class PermanentStateMixin:
                     symbol = _COLOR_WORD_TO_SYMBOL.get(word.strip())
                     if symbol:
                         colors.add(symbol)
+        # Two sources with different lifetimes, which is why both exist.
+        #
+        # An Aura's protection lasts exactly as long as it is attached, so it is
+        # read off the Aura (the Ward cycle) and ends when the Aura leaves with
+        # nothing having to remove it. That grant used to be stamped into the
+        # metadata channel below and cleaned up by name on removal.
+        for aura in auras_attached_to(permanent):
+            for word in aura_protection_colors(aura.card.oracle_text):
+                symbol = _COLOR_WORD_TO_SYMBOL.get(word)
+                if symbol:
+                    colors.add(symbol)
+        # The metadata channel remains for protection granted with a lifetime of
+        # its own (a spell granting it until end of turn). No card in the pool
+        # uses it today; it is how such a grant would be expressed, and CR
+        # 702.16c does not care where the protection came from.
         for key in permanent.metadata:
             if key.startswith("protection_from_"):
                 symbol = _COLOR_WORD_TO_SYMBOL.get(key[len("protection_from_"):])

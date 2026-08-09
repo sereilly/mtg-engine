@@ -9,6 +9,7 @@ pass. Also holds the attack-legality query (``can_attack``),
 "must attack if able" enforcement, and the banding-declaration validation.
 """
 
+from ..auras import aura_restriction_active
 from ..models import Permanent, PlayerState
 from ..oracle import compile_card_oracle
 from ..trigger_utils import matching_triggers
@@ -129,7 +130,12 @@ class DeclareAttackersStepMixin:
         return True, "declared attackers"
 
     def can_attack(self, attacker: Permanent, defending_player_index: int) -> bool:
-        if self._is_summoning_sick(attacker):
+        # "Can attack as though it had haste" (Instill Energy) lifts CR 302.6's
+        # attack clause only — not its {T}-ability clause, which is why it is a
+        # restriction here rather than a haste grant.
+        if self._is_summoning_sick(attacker) and not aura_restriction_active(
+            attacker, "attacks_as_though_hasty"
+        ):
             return False
 
         program = compile_card_oracle(attacker.effective_card)
@@ -160,7 +166,10 @@ class DeclareAttackersStepMixin:
         if "cant_attack" in instr_kinds:
             return False
 
-        if "Defender" in attacker.card.keywords and not attacker.metadata.get("can_attack_as_though_no_defender"):
+        # Animate Wall grants this while attached (auras.aura_restrictions).
+        if "Defender" in attacker.card.keywords and not aura_restriction_active(
+            attacker, "ignores_defender"
+        ):
             return False
 
         # Island Sanctuary: defending player is protected from non-flying, non-islandwalk attackers

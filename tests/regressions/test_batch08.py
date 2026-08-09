@@ -261,9 +261,14 @@ class TestContinuousEffectCleanup:
         p1 = PlayerState(name="P1", hand=[cards["Animate Wall"]], battlefield=[wall])
         game = _game(p1, PlayerState(name="P2"))
         game.cast_from_hand(0, "Animate Wall", target_player_index=0, target_permanent_index=0)
-        assert wall.metadata.get("can_attack_as_though_no_defender") is True
+        # Ask whether the Wall can attack, not how the engine records it. The
+        # permission is derived from the attached Aura (engine/auras.py), so
+        # there is no flag to set — and "can it attack" is what this regression
+        # is actually about.
+        wall.metadata["summoning_sickness_turn"] = -99
+        assert game.can_attack(wall, 1) is True
         self._remove(game, p1, "Animate Wall")
-        assert not wall.metadata.get("can_attack_as_though_no_defender")
+        assert game.can_attack(wall, 1) is False
 
     def test_wild_growth_bonus_mana_ends_when_aura_removed(self, cards):
         land = Permanent(card=cards["Forest"])

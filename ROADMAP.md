@@ -869,6 +869,39 @@ Remaining: `only_blockable_by_walls`, `lure_active`, `aura_prevents_untap`,
 protection, and the linked one-shots (control theft, animation) — then layers 1
 (copies), 2 (control) and 3 (text-changing).
 
+### Phase 6, third slice: the restriction flags, and a rules bug behind one
+
+The remaining flags an Aura stamped on its target are gone. These are not
+characteristics — they change how the game is played, so CR 613's layers do not
+apply — but the ownership does: the reader asks which Auras are attached now,
+instead of the Aura writing a flag someone must remember to clear.
+
+`only_blockable_by_walls`, `lure_active`, `aura_prevents_untap`,
+`can_attack_as_though_no_defender` and the Ward cycle's `protection_from_<colour>`
+all derive from the Aura. **Auras that still stamp anything on their target:
+5 of 44**, and the survivors are the genuinely layer-shaped ones
+(`land_type_override` for Evil Presence and Phantasmal Terrain, Consecrate
+Land's two flags) plus Animate Dead's linked one-shots.
+
+Protection needed a correction mid-way. Deleting the `protection_from_<colour>`
+metadata channel outright was too aggressive: an Aura's protection lasts while
+it is attached, but protection granted *with a lifetime of its own* (a spell,
+until end of turn) has nowhere else to live, and CR 702.16c does not care where
+the protection came from. Both sources are read; the Aura path is simply no
+longer the one that needs cleaning up.
+
+**A rules bug fell out of the audit.** Instill Energy reads "Enchanted creature
+can attack as though it had haste", and the engine granted the *haste keyword*.
+CR 302.6 has two clauses — a summoning-sick creature can't attack, and can't
+activate a `{T}` ability — and CR 702.10b says haste lifts the attack clause.
+This wording lifts that same one clause. Granting haste lifted both, so a
+summoning-sick Llanowar Elves under Instill Energy **tapped for mana a turn
+early**. It is a restriction now, not a keyword grant.
+
+That bug is the argument for this whole phase in one card: it was invisible
+while the effect was "a flag that means roughly haste", and obvious the moment
+the question became "what exactly does this Aura permit?".
+
 ### The static-ability cluster, and why it is a phase-6 job
 
 20 of the remaining lines fail with "static abilities need the CR 613 layers

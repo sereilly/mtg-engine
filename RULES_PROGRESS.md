@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**196 / 570 tracked rules covered (34%)** — 789 tests, 0 unannotated.
+**197 / 570 tracked rules covered (34%)** — 796 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -54,7 +54,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [407. Ante](#407-ante) | 4/4 | 100% |
 | [500. General](#500-general) | 6/12 | 50% |
 | [501. Beginning Phase](#501-beginning-phase) | 1/1 | 100% |
-| [502. Untap Step](#502-untap-step) | 2/4 | 50% |
+| [502. Untap Step](#502-untap-step) | 3/4 | 75% |
 | [503. Upkeep Step](#503-upkeep-step) | 1/2 | 50% |
 | [504. Draw Step](#504-draw-step) | 2/2 | 100% |
 | [505. Main Phase](#505-main-phase) | 3/6 | 50% |
@@ -411,7 +411,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **302.3** Creature subtypes are usually a single word long and are listed after a long dash: “Creature — Hu...
 - [ ] **302.4** Power and toughness are characteristics only creatures have.
 - [ ] **302.5** Creatures can attack and block. (See rule 508, “Declare Attackers Step,” and rule 509, “Declare B...
-- [x] **302.6** A creature’s activated ability with the tap symbol or the untap symbol in its activation cost can... *(2 tests)*
+- [x] **302.6** A creature’s activated ability with the tap symbol or the untap symbol in its activation cost can... *(4 tests)*
 - [ ] **302.7** Damage dealt to a creature by a source with neither wither nor infect is marked on that creature ...
 
 ### 303. Enchantments
@@ -545,7 +545,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 502. Untap Step
 
-- [ ] **502.1** First, all phased-in permanents with phasing that the active player controls phase out, and all p...
+- [x] **502.1** First, all phased-in permanents with phasing that the active player controls phase out, and all p... *(1 tests)*
 - [ ] **502.2** Second, if it’s day and the previous turn’s active player didn’t cast any spells during that turn...
 - [x] **502.3** Third, the active player determines which permanents they control will untap. Then they untap the... *(11 tests)*
 - [x] **502.4** No player receives priority during the untap step, so no spells can be cast or resolve and no abi... *(1 tests)*
@@ -586,7 +586,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 508. Declare Attackers Step
 
-- [x] **508.1** First, the active player declares attackers. This turn-based action doesn’t use the stack. To dec... *(8 tests, subrules adf)*
+- [x] **508.1** First, the active player declares attackers. This turn-based action doesn’t use the stack. To dec... *(9 tests, subrules adf)*
 - [x] **508.2** Second, the active player gets priority. (See rule 117, “Timing and Priority.”) *(2 tests)*
 - [ ] **508.3** Triggered abilities that trigger on attackers being declared may have different trigger conditions.
 - [ ] **508.4** If a creature is put onto the battlefield attacking, its controller chooses which defending playe...
@@ -597,7 +597,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 509. Declare Blockers Step
 
-- [x] **509.1** First, the defending player declares blockers. This turn-based action doesn’t use the stack. To d... *(20 tests, subrules abcghi)*
+- [x] **509.1** First, the defending player declares blockers. This turn-based action doesn’t use the stack. To d... *(21 tests, subrules abcghi)*
 - [x] **509.2** Second, the active player gets priority. (See rule 117, “Timing and Priority.”) *(4 tests, subrules a)*
 - [x] **509.3** Triggered abilities that trigger on blockers being declared may have different trigger conditions. *(5 tests, subrules acg)*
 - [x] **509.4** If a creature is put onto the battlefield blocking, its controller chooses which attacking creatu... *(1 tests)*
@@ -840,10 +840,10 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.4** Double Strike *(3 tests, subrules b)*
 - [x] **702.7** First Strike *(5 tests, subrules b)*
 - [x] **702.9** Flying *(6 tests, subrules b)*
-- [x] **702.10** Haste *(2 tests, subrules bc)*
+- [x] **702.10** Haste *(3 tests, subrules bc)*
 - [x] **702.14** Landwalk *(4 tests, subrules bc)*
 - [x] **702.15** Lifelink *(3 tests, subrules b)*
-- [x] **702.16** Protection *(31 tests, subrules abcdefghjkmn)*
+- [x] **702.16** Protection *(33 tests, subrules abcdefghjkmn)*
 - [x] **702.17** Reach *(3 tests, subrules b)*
 - [x] **702.18** Shroud *(3 tests, subrules a)*
 - [x] **702.19** Trample *(6 tests, subrules b)*

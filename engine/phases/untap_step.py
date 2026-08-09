@@ -9,6 +9,7 @@ derived from oracle text by engine/untap_restrictions.py — this module only
 aggregates and enforces them, so new restriction cards never touch it.
 """
 
+from ..auras import aura_restriction_active
 from ..handlers._common import permanent_effective_colors
 from ..untap_restrictions import (
     SELF_DOESNT_UNTAP_PHRASE,
@@ -222,7 +223,7 @@ class UntapStepMixin:
                     continue
                 if creatures_untapped >= max_untap_creatures:
                     continue
-                if permanent.metadata.get("aura_prevents_untap"):
+                if aura_restriction_active(permanent, "doesnt_untap"):
                     continue
                 creatures_untapped += 1
 

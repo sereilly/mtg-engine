@@ -289,11 +289,10 @@ class OracleInstructionsMixin:
 
             if any("protection from" in instr.value for instr in program.instructions if instr.kind == "spell_pattern") or ("has protection from" in text):
                 # Parse the specific color and stamp metadata on the creature
-                _prot_match = re.search(r"protection from (\w+)", text)
-                if _prot_match:
-                    _prot_color = _COLOR_WORD_TO_SYMBOL.get(_prot_match.group(1).lower())
-                    if _prot_color:
-                        target_creature.metadata[f"protection_from_{_prot_match.group(1).lower()}"] = True
+                # The colour is read off the Aura by
+                # permanent_state._protection_colors while it is attached, so
+                # nothing is stamped on the creature and nothing has to be
+                # unstamped when the Aura leaves.
                 self.log.append(f"{target_creature.card.name} gains protection from aura")
 
 
@@ -310,14 +309,18 @@ class OracleInstructionsMixin:
 
             # Reach: e.g. Web's "Enchanted creature gets +0/+2 and has reach."
 
-            # Haste: enchanted creature can attack as though it had haste
+            # "Can attack as though it had haste" is a restriction derived from
+            # the Aura (auras.aura_restrictions), not a haste grant — granting
+            # the keyword also let a summoning-sick creature use its {T}
+            # abilities, which CR 302.6/702.10b do not permit.
             if "can attack as though it had haste" in text:
-                grant_keyword(target_creature, "haste")
-                self.log.append(f"{target_creature.card.name} gains haste from {aura_permanent.card.name}")
+                self.log.append(
+                    f"{target_creature.card.name} can attack as though hasty "
+                    f"({aura_permanent.card.name})"
+                )
 
             # Invisibility: enchanted creature can't be blocked except by Walls
             if "can't be blocked except by walls" in text:
-                target_creature.metadata["only_blockable_by_walls"] = True
                 self.log.append(f"{target_creature.card.name} can only be blocked by Walls")
 
             # Attach the aura to the creature
@@ -325,7 +328,6 @@ class OracleInstructionsMixin:
 
             # Lure: all creatures able to block this creature must do so
             if "all creatures able to block enchanted creature do so" in text:
-                target_creature.metadata["lure_active"] = True
                 self.log.append(f"{target_creature.card.name} must be blocked by all able creatures (Lure)")
 
             # Earthbind: on enter, if creature has flying, deal 2 damage and strip flying
@@ -339,7 +341,6 @@ class OracleInstructionsMixin:
             if "tap enchanted creature" in text and "doesn't untap during its controller's untap step" in text:
                 self.become_tapped(target_creature)
                 self._turn_face_up(target_creature)
-                target_creature.metadata["aura_prevents_untap"] = True
                 self.log.append(f"{aura_permanent.card.name} tapped {target_creature.card.name} and prevents it from untapping")
 
             # Control effect: steal creature to caster's battlefield (e.g. Control Magic)
@@ -423,11 +424,9 @@ class OracleInstructionsMixin:
                 )
             if target_wall:
                 attach_aura(aura_permanent, target_wall)
-                target_wall.metadata["can_attack_as_though_no_defender"] = True
                 # Record the granted flag so it is undone when the Aura leaves
                 # (CR 611.3 — the Wall stops being able to attack). Otherwise the
                 # Wall could keep attacking after Animate Wall is removed.
-                aura_permanent.metadata["aura_granted_meta"] = ["can_attack_as_though_no_defender"]
                 self.log.append(f"{target_wall.card.name} can attack as though it didn't have defender")
         elif text.startswith("enchant artifact"):
             # Attach this Aura to the specified artifact (or first artifact found)

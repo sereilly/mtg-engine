@@ -7,6 +7,7 @@ from .cost_modifiers import spell_cost_tax
 from .classifier import classify_card
 from .game import Game
 from .mixins.stack_casting import aura_enchant_noun, permanent_matches_enchant_noun
+from .auras import aura_restriction_active
 from .models import CardDefinition, Permanent, PlayerState
 from .oracle import OracleInstruction, compile_card_oracle
 from .oracle_types import x_spend_color_from_text
@@ -196,7 +197,9 @@ def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
     # so the AI doesn't decline to attack with it (which would skip the defender's
     # block step entirely from the human's perspective).
     for idx in legal_attackers_list:
-        if idx not in forced and player.battlefield[idx].metadata.get("lure_active"):
+        if idx not in forced and aura_restriction_active(
+            player.battlefield[idx], "must_be_blocked_by_all_able"
+        ):
             forced.append(idx)
 
     opponent_blockers = [

@@ -600,7 +600,9 @@ class TestAnimateWall:
             0, "Animate Wall", target_player_index=1, target_permanent_index=0
         )
         assert result.supported
-        assert wall_perm.metadata.get("can_attack_as_though_no_defender") is True
+        # Derived from the attached Aura rather than stamped on the Wall.
+        wall_perm.metadata["summoning_sickness_turn"] = -99
+        assert game.can_attack(wall_perm, 0) is True
 
     def test_cannot_enchant_a_nonwall_creature(self, cards):
         bear = Permanent(card=cards["Grizzly Bears"])
