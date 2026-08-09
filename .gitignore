@@ -36,3 +36,7 @@ pip-wheel-metadata/
 
 # Local server logs (run-magic skill)
 logs/
+
+# Patch/merge backups — never source.
+*.orig
+*.rej
