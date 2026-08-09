@@ -2152,7 +2152,8 @@ function getPromptBoardTargeting(state = currentState) {
   if (getUpkeepPayInfo(state)) return null;
 
   // A target-bearing upkeep trigger (Vesuvan Doppelganger's re-copy, Erhnam
-  // Djinn's forestwalk grant) picks its creature off the board.
+  // Djinn's forestwalk grant, Serendib Djinn's land sacrifice) picks its
+  // permanent off the board — `needs_target` names the kind to highlight.
   const optionalTriggerInfo = getOptionalTriggerInfo(state);
   if (optionalTriggerInfo) {
     const current = (optionalTriggerInfo.pending || [])[0];
@@ -2820,22 +2821,25 @@ function applyOptionalTriggerPrompt(info) {
   body.textContent = promptText;
 
   // A target-bearing trigger (Vesuvan Doppelganger's upkeep re-copy, Erhnam
-  // Djinn's forestwalk grant) takes its target off the board: the legal
-  // creatures are highlighted and clicking one accepts the trigger with that
-  // target (see getPromptBoardTargeting). Plain triggers keep the simple Yes
-  // button. A mandatory trigger offers no decline — only the board click.
+  // Djinn's forestwalk grant, Serendib Djinn's land sacrifice) takes its target
+  // off the board: the legal permanents are highlighted and clicking one accepts
+  // the trigger with that target (see getPromptBoardTargeting). Plain triggers
+  // keep the simple Yes button. A mandatory trigger offers no decline — only the
+  // board click.
   const needsTarget = !!current?.needs_target;
   const validTargets = Array.isArray(current?.valid_targets) ? current.valid_targets : [];
   const hasBoardTargets = needsTarget && validTargets.length > 0;
+  // `needs_target` is the noun to highlight ("creature", "land", …).
+  const targetNoun = typeof current?.needs_target === "string" ? current.needs_target : "permanent";
   const yesBtn = `<button type="button" class="prompt-choice-btn" id="optionalTriggerYesBtn">Yes</button>`;
   const noBtn = `<button type="button" class="prompt-choice-btn" id="optionalTriggerNoBtn">No</button>`;
   steps.innerHTML = [
     `<div>Card: ${escapeHtml(cardName)}</div>`,
     `<div>Remaining decisions: ${pending.length}</div>`,
     hasBoardTargets && mandatory
-      ? `<div>Action: click a highlighted creature on the battlefield to choose it.</div>`
+      ? `<div>Action: click a highlighted ${escapeHtml(targetNoun)} on the battlefield to choose it.</div>`
       : hasBoardTargets
-      ? `<div>Action: click a highlighted creature on the battlefield to copy it, or decline.</div>` +
+      ? `<div>Action: click a highlighted ${escapeHtml(targetNoun)} on the battlefield to copy it, or decline.</div>` +
         `<div class="prompt-choice-row">${noBtn}</div>`
       : `<div class="prompt-choice-row">${yesBtn}${noBtn}</div>`,
   ].join("");
@@ -6258,6 +6262,7 @@ function renderDebugOptions(cards) {
 function setDebugMenuEnabled(enabled, canCastFree = false) {
   q("debugCardSearch").disabled = !enabled;
   q("debugAddToHandBtn").disabled = !enabled;
+  q("debugAddToSideboardBtn").disabled = !enabled;
   q("debugCastFreeBtn").disabled = !enabled || !canCastFree;
   q("debugCastFreeOpponentBtn").disabled = !enabled;
   q("debugForceAttackAllToggle").disabled = !enabled;
@@ -6346,6 +6351,25 @@ async function addDebugCardToHand() {
   await sendAction({ seat, action: "debug_add_to_hand", card_name: cardName });
   updateDebugStatus(`Added ${cardName} to your hand.`, "success");
   updateActionHint(`Debug: added ${cardName} to your hand.`);
+}
+
+// Cards you own from outside the game (CR 100.4) — a random deck starts with
+// none, so this is how Ring of Ma'rûf's replaced draw gets something to offer.
+async function addDebugCardToSideboard() {
+  if (!sessionId || seat === null) {
+    updateDebugStatus("Create or join a session first.", "error");
+    return;
+  }
+
+  const cardName = q("debugCardSearch").value.trim();
+  if (!cardName) {
+    updateDebugStatus("Type a card name before adding.", "error");
+    return;
+  }
+
+  await sendAction({ seat, action: "debug_add_to_sideboard", card_name: cardName });
+  updateDebugStatus(`Added ${cardName} to your cards outside the game.`, "success");
+  updateActionHint(`Debug: added ${cardName} outside the game.`);
 }
 
 async function castDebugCardForFree() {
@@ -7518,8 +7542,11 @@ function openZoneReveal(sections, { auto = false } = {}) {
   const titles = {
     "self-graveyard": "Your Graveyard",
     "self-exile": "Your Exile",
+    "self-ante": "Your Ante",
+    "self-sideboard": "Your Cards Outside the Game",
     "opp-graveyard": "Opponent Graveyard",
     "opp-exile": "Opponent Exile",
+    "opp-ante": "Opponent Ante",
   };
   overlay.querySelectorAll(".zone-reveal-section").forEach((el) => {
     el.classList.toggle("hidden", !sections.includes(el.dataset.zone));
@@ -9074,14 +9101,20 @@ function renderBoard(state) {
   q("selfDeckCount").textContent = me.library_count;
   q("selfGraveCount").textContent = me.graveyard.length;
   q("selfExileCount").textContent = (me.exile || []).length;
+  q("selfAnteCount").textContent = (me.ante || []).length;
+  q("selfSideboardCount").textContent = (me.sideboard || []).length;
   q("oppDeckCount").textContent = opp.library_count;
   q("oppGraveCount").textContent = opp.graveyard.length;
   q("oppExileCount").textContent = (opp.exile || []).length;
+  q("oppAnteCount").textContent = (opp.ante || []).length;
 
   renderZoneCards("selfGraveyardCards", me.graveyard, { zoneSeat: seat, zoneKind: "graveyard" });
   renderZoneCards("selfExileCards", me.exile || []);
+  renderZoneCards("selfAnteCards", me.ante || []);
+  renderZoneCards("selfSideboardCards", me.sideboard || []);
   renderZoneCards("oppGraveyardCards", opp.graveyard, { zoneSeat: oppSeat, zoneKind: "graveyard" });
   renderZoneCards("oppExileCards", opp.exile || []);
+  renderZoneCards("oppAnteCards", opp.ante || []);
 
   renderMana("selfMana", me.mana_pool, seat, me.creature_only_mana);
   renderMana("oppMana", opp.mana_pool, oppSeat, opp.creature_only_mana);
@@ -10900,6 +10933,14 @@ q("debugCardSearch").addEventListener("keydown", async (event) => {
 q("debugAddToHandBtn").addEventListener("click", async () => {
   try {
     await addDebugCardToHand();
+  } catch (e) {
+    updateDebugStatus(e.message, "error");
+  }
+});
+
+q("debugAddToSideboardBtn").addEventListener("click", async () => {
+  try {
+    await addDebugCardToSideboard();
   } catch (e) {
     updateDebugStatus(e.message, "error");
   }

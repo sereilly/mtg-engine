@@ -1199,6 +1199,15 @@ class StackCastingMixin:
                 f"{controller.name} exiled {permanent.card.name} to activate its ability"
             )
 
+        # "Sacrifice this artifact" (Black Lotus, Bottle of Suleiman) is likewise
+        # a cost, paid now — the ability still resolves from the graveyard.
+        if ability.cost.sacrifice_self:
+            controller.battlefield = [p for p in controller.battlefield if p is not permanent]
+            self._permanent_to_graveyard(controller, permanent)
+            self.log.append(
+                f"{controller.name} sacrificed {permanent.card.name} to activate its ability"
+            )
+
         instruction = ability.instruction
         if (
             instruction.kind in {"sacrifice_self_for_mana", "add_mana_from_text"}

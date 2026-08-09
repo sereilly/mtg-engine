@@ -175,13 +175,24 @@ def _banded_desert_shield(game, permanent) -> bool:
     """Camel's second clause: the shield also covers "creatures banded with
     this creature". Bands are only declared for the attacking player, so find
     the damaged creature's attacker index and scan its band for an attacking
-    Camel."""
+    Camel.
+
+    The band lasts for the rest of combat (CR 702.22e) and attacking creatures
+    stay attacking until the end of combat step ends (CR 511.3), so the shield
+    still covers a band-mate targeted by a Desert during that step.
+
+    The index lookup is by identity: Permanent is a plain dataclass, so
+    ``list.index`` compares field-by-field and would return a *different*,
+    identically-stated attacker — losing the shield on the creature that
+    actually is in the band.
+    """
     if not permanent.attacking:
         return False
     for player in game.players:
-        try:
-            index = player.battlefield.index(permanent)
-        except ValueError:
+        index = next(
+            (i for i, perm in enumerate(player.battlefield) if perm is permanent), None
+        )
+        if index is None:
             continue
         band = game._attacker_band(index)
         if not band:

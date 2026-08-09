@@ -1390,6 +1390,7 @@ class BattlefieldCanvas {
       const p = players[seatIdx] || {};
       const grave = Array.isArray(p.graveyard) ? p.graveyard : [];
       const exile = Array.isArray(p.exile) ? p.exile : [];
+      const ante = Array.isArray(p.ante) ? p.ante : [];
       const libraryCount = p.library_count ?? 0;
       if (libraryCount > 0) {
         piles.push({ seat: seatIdx, kind: "library", count: libraryCount, topCard: null, cx: 0, cy: 0, w: 0, h: 0 });
@@ -1399,6 +1400,18 @@ class BattlefieldCanvas {
       }
       if (exile.length > 0) {
         piles.push({ seat: seatIdx, kind: "exile", count: exile.length, topCard: exile[exile.length - 1], cx: 0, cy: 0, w: 0, h: 0 });
+      }
+      // The ante zone (CR 407) only exists in an ante game, so its pile appears
+      // the moment an ante card puts something there.
+      if (ante.length > 0) {
+        piles.push({ seat: seatIdx, kind: "ante", count: ante.length, topCard: ante[ante.length - 1], cx: 0, cy: 0, w: 0, h: 0 });
+      }
+      // Cards owned from outside the game (CR 100.4) — private, so the server
+      // only fills this array for its owner; other seats always see it empty and
+      // get no pile.
+      const sideboard = Array.isArray(p.sideboard) ? p.sideboard : [];
+      if (sideboard.length > 0) {
+        piles.push({ seat: seatIdx, kind: "sideboard", count: sideboard.length, topCard: sideboard[sideboard.length - 1], cx: 0, cy: 0, w: 0, h: 0 });
       }
     }
     this.zonePiles = piles;
@@ -1425,7 +1438,7 @@ class BattlefieldCanvas {
     if (!this.zonePiles.length) return;
     const n = this.currentState?.players?.length || 0;
     const stage = this.canvas.parentElement?.getBoundingClientRect();
-    const order = { library: 0, graveyard: 1, exile: 2 };
+    const order = { library: 0, graveyard: 1, exile: 2, ante: 3, sideboard: 4 };
     const slots = new Map(); // seat -> next slot index
     for (const pile of this.zonePiles.slice().sort((a, b) => order[a.kind] - order[b.kind])) {
       const slot = slots.get(pile.seat) || 0;
@@ -1510,7 +1523,7 @@ class BattlefieldCanvas {
   _drawZonePiles(ctx, seatFilter = null) {
     if (!this.zonePiles.length) return;
     const now = performance.now();
-    const labels = { library: "DECK", graveyard: "GRAVE", exile: "EXILE" };
+    const labels = { library: "DECK", graveyard: "GRAVE", exile: "EXILE", ante: "ANTE", sideboard: "OUTSIDE" };
     for (const pile of this.zonePiles) {
       if (seatFilter !== null && pile.seat !== seatFilter) continue;
       const x = pile.cx - pile.w / 2;

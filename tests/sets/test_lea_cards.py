@@ -9018,7 +9018,29 @@ def test_wooden_sphere_gains_life_on_green_creature_spell(all_cards):
     assert p1.life == starting_life + 1
 
 
-def test_darkpact_exchanges_top_library_card_with_simulated_ante(all_cards):
+def test_darkpact_exchanges_owned_ante_card_with_top_of_library(all_cards):
+    """"You own target card in the ante. Exchange that card with the top card of
+    your library." — the anted card comes back to hand and the library's top card
+    takes its place in the ante zone (CR 407)."""
+    darkpact = _get(all_cards, "Darkpact")
+    swamp = _get(all_cards, "Swamp")
+    lotus = _get(all_cards, "Black Lotus")
+    p1 = PlayerState(name="P1", hand=[darkpact], library=[swamp], ante=[lotus])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(0, "Darkpact")
+
+    assert result.supported
+    assert not p1.library
+    assert [c.name for c in p1.ante] == ["Swamp"]
+    assert any(c.name == "Black Lotus" for c in p1.hand)
+    assert any(c.name == "Darkpact" for c in p1.graveyard)
+
+
+def test_darkpact_with_nothing_owned_in_the_ante_does_nothing(all_cards):
+    """CR 608.2b: with no card of yours in the ante there is nothing to
+    exchange, so the library is left alone."""
     darkpact = _get(all_cards, "Darkpact")
     swamp = _get(all_cards, "Swamp")
     p1 = PlayerState(name="P1", hand=[darkpact], library=[swamp])
@@ -9028,10 +9050,8 @@ def test_darkpact_exchanges_top_library_card_with_simulated_ante(all_cards):
     result = game.cast_from_hand(0, "Darkpact")
 
     assert result.supported
-    # Simplified ante model: the top library card moves to the graveyard
-    assert not p1.library
-    assert any(c.name == "Swamp" for c in p1.graveyard)
-    assert any(c.name == "Darkpact" for c in p1.graveyard)
+    assert [c.name for c in p1.library] == ["Swamp"]
+    assert not p1.ante
 
 
 # ===========================================================================

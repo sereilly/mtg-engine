@@ -235,4 +235,10 @@ class UntapStepMixin:
 
         self.log.append(f"{player.name} untapped {untapped} permanent(s)")
         self._on_step_or_phase_end(phase, step)
+        # No player receives priority during the untap step (CR 502.3), so the
+        # first SBA check after it happens as the upkeep step opens — run it here
+        # so untapping is never observable without its consequences. Old Man of
+        # the Sea's steal lasts "for as long as this creature remains tapped":
+        # untapping it must hand the creature back before anyone sees the board.
+        self.check_state_based_actions()
         return untapped

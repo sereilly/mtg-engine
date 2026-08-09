@@ -1,15 +1,5 @@
 [
  {
-  "card": "Abu Ja'far",
-  "clause": "destroy all creatures blocking or blocked by it. they can't be regenerated",
-  "ignored": [
-   "blocking",
-   "or",
-   "blocked",
-   "by"
-  ]
- },
- {
   "card": "Aladdin's Lamp",
   "clause": "the next time you would draw a card this turn, instead look at the top x cards of your library, put all but one of them on the bottom of your library in a random order, then draw a card",
   "ignored": [
@@ -107,30 +97,6 @@
   "clause": "destroy target red permanent",
   "ignored": [
    "permanent"
-  ]
- },
- {
-  "card": "Bottle of Suleiman",
-  "clause": "flip a coin. if you win the flip, create a 5/5 colorless djinn artifact creature token with flying. if you lose the flip, this artifact deals 5 damage to you",
-  "ignored": [
-   "flip",
-   "coin.",
-   "if",
-   "win",
-   "flip,",
-   "create",
-   "5/5",
-   "colorless",
-   "djinn",
-   "artifact",
-   "creature",
-   "token",
-   "with",
-   "flying.",
-   "if",
-   "lose",
-   "flip,",
-   "artifact"
   ]
  },
  {
@@ -715,25 +681,6 @@
   "clause": "untap target creature",
   "ignored": [
    "creature"
-  ]
- },
- {
-  "card": "Jeweled Bird",
-  "clause": "ante this artifact. if you do, put all other cards you own from the ante into your graveyard, then draw a card",
-  "ignored": [
-   "ante",
-   "artifact.",
-   "if",
-   "do,",
-   "put",
-   "all",
-   "other",
-   "cards",
-   "own",
-   "from",
-   "ante",
-   "into",
-   "graveyard,"
   ]
  },
  {

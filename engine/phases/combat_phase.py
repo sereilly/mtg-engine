@@ -451,3 +451,59 @@ class CombatPhaseMixin:
             if perm.blocking_attacker_index is not None
         )
         return blocking == 1
+
+    def creatures_in_combat_with(self, permanent: Permanent) -> list[Permanent]:
+        """Every creature currently *blocking or blocked by* ``permanent``
+        (Abu Ja'far's death trigger). Resolved against the live combat maps —
+        band-propagated blocks (CR 702.22h) included — and returned as
+        Permanent objects, because callers capture this the moment the source
+        leaves the battlefield and act on it later (CR 603.10 last-known
+        information), after indices have shifted."""
+        opponents: list[Permanent] = []
+
+        def _add(perm: Permanent | None) -> None:
+            if perm is not None and perm is not permanent and not any(p is perm for p in opponents):
+                opponents.append(perm)
+
+        active = self.players[self.active_player_index] if self.players else None
+        # As an attacker: every creature blocking it.
+        if active is not None:
+            for attacker_idx, defending_idx in self.combat_attackers.items():
+                if not (0 <= attacker_idx < len(active.battlefield)):
+                    continue
+                if active.battlefield[attacker_idx] is not permanent:
+                    continue
+                if not (0 <= defending_idx < len(self.players)):
+                    continue
+                defender = self.players[defending_idx]
+                for blocker_idx in self._attacker_all_blockers(attacker_idx):
+                    if 0 <= blocker_idx < len(defender.battlefield):
+                        _add(defender.battlefield[blocker_idx])
+        # As a blocker: every attacker it's blocking.
+        for defending_idx, blocker_map in self.combat_blockers.items():
+            if not (0 <= defending_idx < len(self.players)):
+                continue
+            defender = self.players[defending_idx]
+            for blocker_idx, attacker_idxs in blocker_map.items():
+                if not (0 <= blocker_idx < len(defender.battlefield)):
+                    continue
+                if defender.battlefield[blocker_idx] is not permanent:
+                    continue
+                for attacker_idx in attacker_idxs:
+                    if active is not None and 0 <= attacker_idx < len(active.battlefield):
+                        _add(active.battlefield[attacker_idx])
+        # Band-propagated blocks (CR 702.22h): this creature is treated as
+        # blocking every band member its declared block extended to.
+        for attacker_idx, blocker_idxs in self.combat_band_blocks.items():
+            if active is None or not (0 <= attacker_idx < len(active.battlefield)):
+                continue
+            for defending_idx, blocker_map in self.combat_blockers.items():
+                if not (0 <= defending_idx < len(self.players)):
+                    continue
+                defender = self.players[defending_idx]
+                for blocker_idx in blocker_idxs:
+                    if 0 <= blocker_idx < len(defender.battlefield) and (
+                        defender.battlefield[blocker_idx] is permanent
+                    ):
+                        _add(active.battlefield[attacker_idx])
+        return opponents

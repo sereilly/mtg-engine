@@ -271,9 +271,12 @@ class GameHelpersMixin:
         if stolen is None or not (isinstance(owner_index, int) and 0 <= owner_index < len(self.players)):
             return
         for player in self.players:
-            if stolen in player.battlefield:
+            # Identity, not ``in``/``remove``: Permanent is a plain dataclass, so
+            # equality is field-by-field and an identically-stated copy on the
+            # other battlefield would be found (and removed) instead.
+            if any(perm is stolen for perm in player.battlefield):
                 if player is not self.players[owner_index]:
-                    player.battlefield.remove(stolen)
+                    player.battlefield = [p for p in player.battlefield if p is not stolen]
                     self.players[owner_index].battlefield.append(stolen)
                     # CR 302.6: returning to the owner is another control
                     # change, so the creature is summoning-sick again.
@@ -348,6 +351,27 @@ class GameHelpersMixin:
                 self.log.append(
                     f"{permanent.card.name}: a {payload.get('name', 'token')} will appear at the next end step"
                 )
+            # Abu Ja'far: "When this creature dies, destroy all creatures
+            # blocking or blocked by it." The combat relationship is gone once
+            # the battlefield is rebuilt, so it is captured here (CR 603.10)
+            # and the trigger resolves off the stack (CR 603.3).
+            combat_trig = next(matching_triggers(
+                permanent.effective_card,
+                condition_kinds={"dies"},
+                instruction_kinds={"destroy_creatures_in_combat_with_source"},
+            ), None)
+            if combat_trig is not None:
+                opponents = self.creatures_in_combat_with(permanent)
+                self._enqueue_triggered_ability(
+                    controller_index=self.players.index(player),
+                    source_permanent=permanent,
+                    card=permanent.card,
+                    instruction=combat_trig.instruction,
+                    effect_kind=combat_trig.effect_kind,
+                    ability_text=combat_trig.source_line,
+                    trigger_context={"combat_opponents": opponents},
+                )
+                self.log.append(f"{permanent.card.name} triggered (died in combat)")
         text = permanent.card.oracle_text.lower()
         if (
             "when this enchantment is put into a graveyard from the battlefield, you lose the game"

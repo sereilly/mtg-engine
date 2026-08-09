@@ -10,7 +10,7 @@ unclaimed text. Do not edit by hand.
 - Fully claimed: **367**
 - With acknowledged simplifications: **2**
 - With UNCLAIMED text (must fix or acknowledge): **0**
-- With deletion-probe findings (ignored words): **108**
+- With deletion-probe findings (ignored words): **105**
 
 ## Acknowledged simplifications
 
@@ -30,7 +30,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 
 | Card | Clause | Ignored words |
 | --- | --- | --- |
-| Abu Ja'far | `destroy all creatures blocking or blocked by it. they can't be regener` | blocking or blocked by |
 | Aladdin's Lamp | `the next time you would draw a card this turn, instead look at the top` | library, put all but one on bottom library in random order, draw card |
 | Aladdin's Ring | `this artifact deals 4 damage to any target` | artifact any target |
 | Animate Dead | `if it's on the battlefield, it loses "enchant creature card in a grave` | if it's on battlefield, loses "enchant creature card in graveyard" gains "enchant creature put onto battlefield with aura." attach aura |
@@ -39,7 +38,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Berserk | `target creature gains trample and gets +x/+0 until end of turn, where ` | where x power |
 | Black Vise | `this artifact deals x damage to that player, where x is the number of ` | artifact deals x damage player, where x |
 | Blue Elemental Blast | `destroy target red permanent` | permanent |
-| Bottle of Suleiman | `flip a coin. if you win the flip, create a 5/5 colorless djinn artifac` | flip coin. if win flip, create 5/5 colorless djinn artifact creature token with flying. if lose flip, artifact |
 | Brass Man | `you may pay {1}. if you do, untap this creature` | if do, |
 | Camouflage | `this turn, instead of declaring blockers, each defending player choose` | each defending player chooses any number creatures control divides into number piles equal number attacking creatures for whom player defending player |
 | Channel | `until end of turn, any time you could activate a mana ability, you may` | any time could activate mana ability, if do, |
@@ -86,7 +84,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Ivory Cup | `whenever a player casts a white spell, you may pay {1}. if you do, you` | whenever player casts white spell, may pay {1}. if do, |
 | Jade Monolith | `the next time a source of your choice would deal damage to target crea` | source deals damage instead |
 | Jandor's Saddlebags | `untap target creature` | creature |
-| Jeweled Bird | `ante this artifact. if you do, put all other cards you own from the an` | ante artifact. if do, put all other cards own from ante into graveyard, |
 | Jihad | `when the chosen player controls no nontoken permanents of the chosen c` | when chosen player controls no nontoken permanents chosen color, |
 | Juzám Djinn | `this creature deals 1 damage to you` | creature |
 | Karma | `this enchantment deals damage to that player equal to the number of sw` | enchantment player control |

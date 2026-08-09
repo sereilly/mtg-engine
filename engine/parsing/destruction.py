@@ -36,6 +36,22 @@ def destroy_all_artifacts_creatures_enchantments(text: str, activated: bool) -> 
     return None
 
 
+# Abu Ja'far: "When this creature dies, destroy all creatures blocking or
+# blocked by it. They can't be regenerated." Must out-rank the generic
+# "destroy all creatures" rule below, which would otherwise sweep the board.
+@parse_rule(53500)
+def destroy_creatures_in_combat_with_source(text: str, activated: bool) -> RuleResult:
+    if "destroy all creatures blocking or blocked by it" in text:
+        payload: dict[str, Any] = (
+            {"bypass_regeneration": True} if cant_be_regenerated(text) else {}
+        )
+        return (
+            OracleInstruction("destroy_creatures_in_combat_with_source", "", payload),
+            "spell_pattern",
+        )
+    return None
+
+
 @parse_rule(54000)
 def destroy_all_creatures(text: str, activated: bool) -> RuleResult:
     if "destroy all creatures" in text:

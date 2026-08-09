@@ -1005,6 +1005,9 @@ def _serialize_player(
         "library_count": len(player.library),
         "graveyard": [_serialize_card(card) for card in player.graveyard],
         "exile": [_serialize_card(card) for card in player.exile],
+        # The ante zone (CR 407) — public, like exile. Empty unless an ante card
+        # (Contract from Below, Demonic Attorney, Jeweled Bird) has resolved.
+        "ante": [_serialize_card(card) for card in player.ante],
         # Cards owned from outside the game (CR 100.4). Private, like the hand:
         # only their owner sees what's in it, everyone sees the count.
         "sideboard": (
@@ -2367,6 +2370,7 @@ def _first_opponent_seat(game, seat: int) -> int | None:
 # make the choice in front of them.
 _DEBUG_ANYTIME_ACTIONS = {
     "debug_add_to_hand",
+    "debug_add_to_sideboard",
     "debug_cast_free",
     "debug_add_mana",
     "debug_clear_summoning_sickness",
@@ -3933,6 +3937,7 @@ def _apply_raw_state(session: Session, raw: dict) -> None:
             "hand": _cards_from_raw(p_raw.get("hand")),
             "graveyard": _cards_from_raw(p_raw.get("graveyard")),
             "exile": _cards_from_raw(p_raw.get("exile")),
+            "ante": _cards_from_raw(p_raw.get("ante")),
             "battlefield": [_permanent_from_raw(pr) for pr in battlefield_raw],
             "battlefield_raw": battlefield_raw,
         })
@@ -3955,6 +3960,7 @@ def _apply_raw_state(session: Session, raw: dict) -> None:
             player.hand = built["hand"]
         player.graveyard = built["graveyard"]
         player.exile = built["exile"]
+        player.ante = built["ante"]
         player.battlefield = built["battlefield"]
 
     # Second pass: reconnect aura attachments now that every permanent exists.
@@ -5056,6 +5062,25 @@ def do_action(session_id: str, req: GameActionRequest):
         player = session.game.players[req.seat]
         player.hand.append(card)
         session.game.log.append(f"[Debug] {player.name} added {card.name} to hand.")
+
+    elif req.action == "debug_add_to_sideboard":
+        # Cards owned from outside the game (CR 100.4). Only a deck with an
+        # explicit sideboard starts with any, so this is the only way to give a
+        # random-deck game something for Ring of Ma'rûf's replaced draw to find.
+        if seat_type != "human":
+            raise HTTPException(status_code=400, detail="cannot issue debug action for AI seat")
+        if not req.card_name:
+            raise HTTPException(status_code=400, detail="card_name is required")
+
+        card = CARD_BY_NAME.get(req.card_name.strip().casefold())
+        if card is None:
+            raise HTTPException(status_code=404, detail="card not found")
+
+        player = session.game.players[req.seat]
+        player.sideboard.append(card)
+        session.game.log.append(
+            f"[Debug] {player.name} added {card.name} to their cards outside the game."
+        )
 
     elif req.action == "debug_cast_free":
         if seat_type != "human":

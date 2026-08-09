@@ -123,8 +123,12 @@ class EffectsMixin:
         card names outside card_hooks.py)."""
         if not permanent.has_type("artifact") or permanent.is_creature:
             return False
+        # Identity, not ``in``: Permanent is a plain dataclass, so ``in`` compares
+        # field-by-field and would match an opponent's identically-stated copy of
+        # the same artifact — protecting artifacts its controller doesn't control.
         controller = next(
-            (p for p in self.players if permanent in p.battlefield), None
+            (p for p in self.players if any(perm is permanent for perm in p.battlefield)),
+            None,
         )
         if controller is None:
             return False
@@ -706,39 +710,52 @@ class EffectsMixin:
             damage = payload["amount"]
             target.life -= damage
             self._on_player_dealt_damage(target, damage)
-            # Eye for an Eye: the damage still happens, and its source's
-            # controller is dealt the same amount. The caster picks "a source of
-            # your choice", so only damage from a matching source mirrors; a
-            # generic charge (no source picked) mirrors the next event from any
-            # source. One entry per damage event, and entries are finite, so a
-            # mirrored mirror can't loop forever.
-            matched_mirror = self._match_chosen_damage_source(target.mirror_damage_sources, source)
-            if damage > 0 and (matched_mirror is not None or target.mirror_damage_charges > 0):
-                if matched_mirror is not None:
-                    target.mirror_damage_sources.remove(matched_mirror)
-                else:
-                    target.mirror_damage_charges -= 1
-                mirror_index = (
-                    self.controller_index_of(source)
-                    if isinstance(source, Permanent)
-                    else None
-                )
-                if mirror_index is None:
-                    # A spell (or unknown) source: fall back to the first living
-                    # opponent — its caster in every two-player game.
-                    target_index = self.players.index(target)
-                    mirror_index = next(
-                        (i for i, p in enumerate(self.players) if i != target_index and not p.lost),
-                        None,
-                    )
-                if mirror_index is not None:
-                    victim = self.players[mirror_index]
-                    dealt = self._deal_damage_to_player(victim, damage, source=None)
-                    self.log.append(
-                        f"Eye for an Eye dealt {dealt} damage to {victim.name} "
-                        f"(mirroring the damage dealt to {target.name})"
-                    )
+            self._apply_mirror_damage(target, damage, source)
         return damage
+
+    def _apply_mirror_damage(self, target: PlayerState, damage: int, source) -> None:
+        """Eye for an Eye: the damage still happens, and its source's controller
+        is dealt the same amount.
+
+        The caster picks "a source of your choice", so only damage from a
+        matching source mirrors; a generic charge (no source picked) mirrors the
+        next event from any source. One entry per damage event, and entries are
+        finite, so a mirrored mirror can't loop forever.
+
+        Called from every path that reduces a player's life: _deal_damage_to_player
+        for spells and abilities, and the combat damage step directly (combat
+        damage applies prevention when the event is recorded, so it can't route
+        back through _deal_damage_to_player without double-preventing)."""
+        if damage <= 0:
+            return
+        matched_mirror = self._match_chosen_damage_source(target.mirror_damage_sources, source)
+        if matched_mirror is None and target.mirror_damage_charges <= 0:
+            return
+        if matched_mirror is not None:
+            target.mirror_damage_sources.remove(matched_mirror)
+        else:
+            target.mirror_damage_charges -= 1
+        mirror_index = (
+            self.controller_index_of(source)
+            if isinstance(source, Permanent)
+            else None
+        )
+        if mirror_index is None:
+            # A spell (or unknown) source: fall back to the first living
+            # opponent — its caster in every two-player game.
+            target_index = self.players.index(target)
+            mirror_index = next(
+                (i for i, p in enumerate(self.players) if i != target_index and not p.lost),
+                None,
+            )
+        if mirror_index is None:
+            return
+        victim = self.players[mirror_index]
+        dealt = self._deal_damage_to_player(victim, damage, source=None)
+        self.log.append(
+            f"Eye for an Eye dealt {dealt} damage to {victim.name} "
+            f"(mirroring the damage dealt to {target.name})"
+        )
 
     def _on_player_dealt_damage(self, target: PlayerState, damage: int) -> None:
         # Track total damage dealt to each player this turn (Simulacrum, etc.).
@@ -841,9 +858,14 @@ class EffectsMixin:
         target.battlefield.remove(chosen)
         return True
 
-    def _sacrifice_creature_for_mana(self, caster: PlayerState, chosen_index: int | None = None) -> CardDefinition | None:
-        # Sacrifice: the caster chooses which creature to sacrifice for the cost.
-        # Honor an explicit choice; otherwise sacrifice the first creature.
+    def _sacrifice_creature_for_mana(self, caster: PlayerState, chosen_index: int | None = None) -> Permanent | None:
+        """Sacrifice one of *caster*'s creatures for a cost/effect, returning the
+        sacrificed **Permanent** (not its card) so callers can still read the
+        characteristics it had on the battlefield — CR 608.2h last-known
+        information, which Diamond Valley's "equal to the sacrificed creature's
+        toughness" depends on."""
+        # The caster chooses which creature to sacrifice; honor an explicit
+        # choice, otherwise sacrifice the first creature.
         chosen = pick_target_permanent(caster, chosen_index)
         if chosen is None:
             return None
@@ -853,7 +875,7 @@ class EffectsMixin:
         owner = self.players[owner_idx] if owner_idx is not None else caster
         caster.battlefield.remove(chosen)
         owner.graveyard.append(chosen.card)
-        return chosen.card
+        return chosen
 
     def _apply_color_override(
         self,

@@ -19,6 +19,38 @@ _DELAYED_TOKEN_RE = re.compile(
     r"at the beginning of the next end step"
 )
 
+# Bottle of Suleiman: "Flip a coin. If you win the flip, create a 5/5 colorless
+# Djinn artifact creature token with flying. If you lose the flip, this artifact
+# deals 5 damage to you."
+_COIN_FLIP_TOKEN_OR_SELF_DAMAGE_RE = re.compile(
+    r"flip a coin\. if you win the flip, create an? (\d+)/(\d+) (\w+) (\w+) "
+    r"(artifact creature|creature) token(?: with (\w+))?\. "
+    r"if you lose the flip, this \w+ deals (\d+) damage to you"
+)
+
+
+# Must out-rank the generic "deals N damage" rule (order 37000), which would
+# otherwise claim only the losing branch and drop the flip entirely.
+@parse_rule(36800)
+def coin_flip_token_or_self_damage(text: str, activated: bool) -> RuleResult:
+    m = _COIN_FLIP_TOKEN_OR_SELF_DAMAGE_RE.search(text)
+    if not m:
+        return None
+    power, toughness, color_word, subtype, token_types, keyword, damage = m.groups()
+    color_sym = find_color_word(color_word, "{}")
+    name = subtype.capitalize()
+    type_line = f"{'Artifact Creature' if token_types == 'artifact creature' else 'Creature'} — {name}"
+    return _instruction(
+        "coin_flip_token_or_self_damage",
+        name=name,
+        power=int(power),
+        toughness=int(toughness),
+        type_line=type_line,
+        colors=(color_sym,) if color_sym else (),
+        keywords=(keyword.capitalize(),) if keyword else (),
+        damage=int(damage),
+    ), "activated_token" if activated else "spell_pattern"
+
 
 @parse_rule(48000)
 def mark_text_modified(text: str, activated: bool) -> RuleResult:

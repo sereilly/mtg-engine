@@ -153,7 +153,11 @@ def grant_extra_turn(game: Game, instruction: OracleInstruction, context: Oracle
 def sacrifice_creature_gain_life_by_toughness(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Diamond Valley: sacrifice one of the caster's own creatures, then gain
     life equal to the toughness it had. Reuses the same "sacrifice a creature"
-    resolution helper as the Sacrifice card / sacrifice_creature_for_black_mana."""
+    resolution helper as the Sacrifice card / sacrifice_creature_for_black_mana.
+
+    The toughness is the creature's *effective* toughness as it last existed on
+    the battlefield (CR 608.2h) — a Giant Tortoise sacrificed while untapped is
+    worth its +0/+3, not its printed 1."""
     caster = context.caster
     card = context.card
     chosen = context.target_permanent_index if isinstance(context.target_permanent_index, int) else None
@@ -161,7 +165,5 @@ def sacrifice_creature_gain_life_by_toughness(game: Game, instruction: OracleIns
     if sacrificed is None:
         game.log.append(f"{caster.name} had no creature to sacrifice")
         return True, "resolved"
-    raw_toughness = str(sacrificed.raw.get("toughness", "0"))
-    toughness = int(raw_toughness) if raw_toughness.isdigit() else 0
-    game._gain_life(caster, toughness, card.name)
+    game._gain_life(caster, max(0, sacrificed.effective_toughness), card.name)
     return True, "resolved"

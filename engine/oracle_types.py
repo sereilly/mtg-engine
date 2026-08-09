@@ -46,6 +46,10 @@ class ActivatedAbilityCost:
     # Ring of Ma'rûf: "{5}, {T}, Exile this artifact: ..." — activating exiles
     # the source permanent as part of the cost.
     exile_self: bool = False
+    # Black Lotus / Bottle of Suleiman: "…, Sacrifice this artifact: …" —
+    # activating sacrifices the source permanent as part of the cost, so the
+    # ability still resolves after it has left the battlefield (CR 603.6).
+    sacrifice_self: bool = False
 
 
 @dataclass(frozen=True)

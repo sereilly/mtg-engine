@@ -45,6 +45,24 @@ def each_player_antes_top_card(text: str, activated: bool) -> RuleResult:
     return None
 
 
+# Jeweled Bird: "{T}: Ante this artifact. If you do, put all other cards you own
+# from the ante into your graveyard, then draw a card." The ante is the effect
+# (the cost is just {T}), so this must claim the whole clause — the trailing
+# draw included — before the generic "draw a card" shorthand does.
+_ANTE_SELF_CLEAR_DRAW_RE = re.compile(
+    r"ante this (?:artifact|creature|enchantment|permanent|land)\. "
+    r"if you do, put all other cards you own from the ante into your graveyard, "
+    r"then draw a card"
+)
+
+
+@parse_rule(18500)
+def ante_self_then_clear_ante_and_draw(text: str, activated: bool) -> RuleResult:
+    if activated and _ANTE_SELF_CLEAR_DRAW_RE.search(text):
+        return _instruction("ante_self_then_clear_ante_and_draw"), "activated_ante"
+    return None
+
+
 @parse_rule(19000)
 def exchange_ante_with_top_library(text: str, activated: bool) -> RuleResult:
     if "you own target card in the ante. exchange that card with the top card of your library" in text:

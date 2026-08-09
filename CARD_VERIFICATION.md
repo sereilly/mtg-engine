@@ -4,12 +4,12 @@ Master record of which cards have been manually validated in-game. Generated aut
 
 - Total cards: **369**
 - Passed: **358**
-- Failed: **11**
-- Untested: **0**
+- Failed: **0**
+- Untested: **11**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
-| Abu Ja'far | ❌ fail | I blocked a creature and the blocking creature didn't die |
+| Abu Ja'far | ⬜ untested |  |
 | Air Elemental | ✅ pass |  |
 | Aladdin | ✅ pass |  |
 | Aladdin's Lamp | ✅ pass |  |
@@ -43,11 +43,11 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Blue Elemental Blast | ✅ pass |  |
 | Blue Ward | ✅ pass |  |
 | Bog Wraith | ✅ pass |  |
-| Bottle of Suleiman | ❌ fail | I won the coin flip but instead of creating a creature it did 5 damage to my opponent |
+| Bottle of Suleiman | ⬜ untested |  |
 | Braingeyser | ✅ pass |  |
 | Brass Man | ✅ pass |  |
 | Burrowing | ✅ pass |  |
-| Camel | ❌ fail | I attacked in a band with camel and then targeted the banded creature with a desert on the end combat step and it took damage. Not sure if that's intended or a bug |
+| Camel | ⬜ untested |  |
 | Camouflage | ✅ pass |  |
 | Castle | ✅ pass |  |
 | Celestial Prism | ✅ pass |  |
@@ -93,7 +93,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Desert | ✅ pass |  |
 | Desert Nomads | ✅ pass |  |
 | Desert Twister | ✅ pass |  |
-| Diamond Valley | ❌ fail | I sacrificed a giant tortoise, which should have healed me for 4 instead of 1 because it was untapped and had a toughness bonus |
+| Diamond Valley | ⬜ untested |  |
 | Dingus Egg | ✅ pass |  |
 | Disenchant | ✅ pass |  |
 | Disintegrate | ✅ pass |  |
@@ -113,9 +113,9 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Elephant Graveyard | ✅ pass |  |
 | Elvish Archers | ✅ pass |  |
 | Erg Raiders | ✅ pass |  |
-| Erhnam Djinn | ❌ fail | The creature targeting prompt should instead highlight all valid targets and let me choose one by clicking on it, rather than listing the cards in the prompt. If there are no valid targets, the prompt should be skipped entirely. |
+| Erhnam Djinn | ⬜ untested |  |
 | Evil Presence | ✅ pass |  |
-| Eye for an Eye | ❌ fail | I used this card on an attacking creature. Its controller should have taken damage when I took damage from the attack. |
+| Eye for an Eye | ⬜ untested |  |
 | False Orders | ✅ pass |  |
 | Farmstead | ✅ pass |  |
 | Fastbond | ✅ pass |  |
@@ -151,7 +151,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Green Ward | ✅ pass |  |
 | Grizzly Bears | ✅ pass |  |
 | Guardian Angel | ✅ pass |  |
-| Guardian Beast | ❌ fail | This card should only affect artifacts I control |
+| Guardian Beast | ⬜ untested |  |
 | Hasran Ogress | ✅ pass |  |
 | Healing Salve | ✅ pass |  |
 | Helm of Chatzuk | ✅ pass |  |
@@ -183,7 +183,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Jandor's Ring | ✅ pass |  |
 | Jandor's Saddlebags | ✅ pass |  |
 | Jayemdae Tome | ✅ pass |  |
-| Jeweled Bird | ❌ fail | This card should move into the ante zone when its ability is used |
+| Jeweled Bird | ⬜ untested |  |
 | Jihad | ✅ pass |  |
 | Juggernaut | ✅ pass |  |
 | Jump | ✅ pass |  |
@@ -243,7 +243,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Northern Paladin | ✅ pass |  |
 | Oasis | ✅ pass |  |
 | Obsianus Golem | ✅ pass |  |
-| Old Man of the Sea | ❌ fail | Untapping this card should give control of the controlled creature back to its owner |
+| Old Man of the Sea | ⬜ untested |  |
 | Orcish Artillery | ✅ pass |  |
 | Orcish Oriflamme | ✅ pass |  |
 | Oubliette | ✅ pass |  |
@@ -277,7 +277,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Resurrection | ✅ pass |  |
 | Reverse Damage | ✅ pass |  |
 | Righteousness | ✅ pass |  |
-| Ring of Ma'rûf | ❌ fail | This ability should replace my next draw with a window that shows my sideboard and lets me choose a card from it. |
+| Ring of Ma'rûf | ⬜ untested |  |
 | Roc of Kher Ridges | ✅ pass |  |
 | Rock Hydra | ✅ pass |  |
 | Rod of Ruin | ✅ pass |  |
@@ -296,7 +296,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Sea Serpent | ✅ pass |  |
 | Sedge Troll | ✅ pass |  |
 | Sengir Vampire | ✅ pass |  |
-| Serendib Djinn | ❌ fail | I didn't get to choose which land to sacrifice |
+| Serendib Djinn | ⬜ untested |  |
 | Serendib Efreet | ✅ pass |  |
 | Serra Angel | ✅ pass |  |
 | Shahrazad | ✅ pass |  |

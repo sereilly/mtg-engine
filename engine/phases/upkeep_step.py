@@ -294,6 +294,12 @@ class UpkeepStepMixin:
             if perm.is_creature and "wall" not in perm.effective_card.type_line.lower()
         ]
 
+    def _upkeep_land_sacrifice_candidates(self, controller) -> list[Permanent]:
+        """Legal choices for Serendib Djinn's upkeep "sacrifice a land": every
+        land its controller controls (you choose which of your own permanents a
+        sacrifice takes, CR 701.17a)."""
+        return [perm for perm in controller.battlefield if perm.card.primary_type == "land"]
+
     def _resolve_upkeep_trigger_target(
         self, card_name: str, trigger_targets: dict | None, candidates: list[Permanent]
     ) -> Permanent | None:
@@ -318,6 +324,25 @@ class UpkeepStepMixin:
         and UI reuse one channel — the difference is only that the player picks a
         target rather than answering yes/no, and can't decline.
         """
+        # instruction kind -> (choice kind, target-noun the UI highlights,
+        # prompt builder, candidate lookup).
+        targeted_kinds = {
+            "grant_forestwalk_until_next_upkeep": (
+                "upkeep_grant_forestwalk",
+                "creature",
+                lambda name: (
+                    f"{name}: choose a non-Wall creature an opponent controls "
+                    "to gain forestwalk until your next upkeep."
+                ),
+                self._forestwalk_grant_candidates,
+            ),
+            "upkeep_sacrifice_land_conditional_damage": (
+                "upkeep_sacrifice_land",
+                "land",
+                lambda name: f"{name}: choose a land to sacrifice.",
+                self._upkeep_land_sacrifice_candidates,
+            ),
+        }
         triggers: list[dict] = []
         seen: set[str] = set()
         controller = self.players[player_index]
@@ -326,23 +351,22 @@ class UpkeepStepMixin:
             for trig in program.triggered_abilities:
                 if trig.instruction is None or trig.condition.kind != "upkeep_self":
                     continue
-                if trig.instruction.kind != "grant_forestwalk_until_next_upkeep":
+                entry = targeted_kinds.get(trig.instruction.kind)
+                if entry is None:
                     continue
                 if perm.card.name in seen:
                     continue
-                candidates = self._forestwalk_grant_candidates(controller)
+                choice_kind, target_noun, build_prompt, find_candidates = entry
+                candidates = find_candidates(controller)
                 if not candidates:
                     continue
                 seen.add(perm.card.name)
                 triggers.append({
                     "card_name": perm.card.name,
-                    "kind": "upkeep_grant_forestwalk",
+                    "kind": choice_kind,
                     "mandatory": True,
-                    "prompt": (
-                        f"{perm.card.name}: choose a non-Wall creature an opponent "
-                        "controls to gain forestwalk until your next upkeep."
-                    ),
-                    "needs_target": "creature",
+                    "prompt": build_prompt(perm.card.name),
+                    "needs_target": target_noun,
                     "valid_targets": [
                         {"kind": "permanent", "seat": s, "index": i, "name": p.card.name}
                         for s, player in enumerate(self.players)
@@ -352,20 +376,28 @@ class UpkeepStepMixin:
                 })
         return triggers
 
-    def _force_sacrifice_first_land(self, controller, source) -> Permanent | None:
-        """Sacrifice the first land on *controller*'s battlefield to *source*'s
-        upkeep effect, logging it. Returns the sacrificed land so callers can
-        branch on its type (Serendib Djinn's "if it was an Island" damage), or
-        None if the player controls no land. No choice of which land is modeled
-        — the first is taken (the deterministic forced-sacrifice precedent shared
-        by every upkeep land-sacrifice effect)."""
+    def _force_sacrifice_first_land(self, controller, source, chosen: Permanent | None = None) -> Permanent | None:
+        """Sacrifice a land on *controller*'s battlefield to *source*'s upkeep
+        effect, logging it. Returns the sacrificed land so callers can branch on
+        its type (Serendib Djinn's "if it was an Island" damage), or None if the
+        player controls no land.
+
+        ``chosen`` is the land its controller picked (CR 701.17a: you choose
+        which of your own permanents a sacrifice takes). Without one — AI /
+        headless play, or an effect where another player does the choosing — the
+        first land is taken, the deterministic forced-sacrifice fallback."""
         for idx, land in enumerate(controller.battlefield):
-            if land.card.primary_type == "land":
-                removed = controller.battlefield.pop(idx)
-                controller.graveyard.append(removed.card)
-                self.log.append(f"{source.card.name} forced sacrifice of {removed.card.name}")
-                return removed
-        return None
+            if land.card.primary_type != "land":
+                continue
+            if chosen is not None and land is not chosen:
+                continue
+            removed = controller.battlefield.pop(idx)
+            controller.graveyard.append(removed.card)
+            self.log.append(f"{source.card.name} forced sacrifice of {removed.card.name}")
+            return removed
+        # A stale pick (the land left the battlefield since the prompt) still
+        # has to sacrifice something — fall back to the first land.
+        return self._force_sacrifice_first_land(controller, source) if chosen is not None else None
 
     def confirm_least_power_choice(
         self, player_index: int, target_seat: int, target_permanent_index: int
@@ -710,12 +742,17 @@ class UpkeepStepMixin:
                     if cond == "upkeep_self" and kind == "upkeep_sacrifice_land_conditional_damage":
                         # Serendib Djinn: "Sacrifice a land. If you sacrifice an
                         # Island this way, this creature deals 3 damage to you."
-                        # No choice is modeled for which land (matching the
-                        # existing Demonic-Hordes-style forced-land-sacrifice
-                        # precedent above) — the first land is sacrificed.
+                        # The controller chooses which land (CR 701.17a) through
+                        # the upkeep trigger-target channel; AI/headless play
+                        # falls back to the first land.
                         land_type = str(trig.instruction.payload.get("land_type", "")).lower()
                         damage_amt = int(trig.instruction.payload.get("damage", 0))
-                        removed = self._force_sacrifice_first_land(controller, permanent)
+                        chosen_land = self._resolve_upkeep_trigger_target(
+                            permanent.card.name,
+                            trigger_targets,
+                            self._upkeep_land_sacrifice_candidates(controller),
+                        )
+                        removed = self._force_sacrifice_first_land(controller, permanent, chosen_land)
                         if removed is not None:
                             was_matching_type = (
                                 land_type in removed.card.type_line.lower()

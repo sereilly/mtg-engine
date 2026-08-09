@@ -331,7 +331,15 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     cost_lower = cost_part.lower()
     discard_last_drawn = "discard the last card you drew this turn" in cost_lower
     exile_self = bool(re.search(r"\bexile this (artifact|creature|enchantment|permanent|land)\b", cost_lower))
-    return ActivatedAbilityCost(required, requires_tap, discard_last_drawn, exile_self)
+    # "Sacrifice this artifact" (Black Lotus, Bottle of Suleiman). Older
+    # printings name the card instead of saying "this artifact", so accept
+    # either wording.
+    sacrifice_self = bool(
+        re.search(r"\bsacrifice this (artifact|creature|enchantment|permanent|land)\b", cost_lower)
+    )
+    return ActivatedAbilityCost(
+        required, requires_tap, discard_last_drawn, exile_self, sacrifice_self
+    )
 
 
 # ---------------------------------------------------------------------------

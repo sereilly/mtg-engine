@@ -62,10 +62,11 @@ def sacrifice_creature_for_black_mana(game: Game, instruction: OracleInstruction
     laces' color choice)."""
     caster = context.caster
     chosen = context.target_permanent_index if isinstance(context.target_permanent_index, int) else None
-    sacrificed = game._sacrifice_creature_for_mana(caster, chosen_index=chosen)
-    if sacrificed is None:
+    sacrificed_perm = game._sacrifice_creature_for_mana(caster, chosen_index=chosen)
+    if sacrificed_perm is None:
         game.log.append(f"{caster.name} had no creature to sacrifice")
         return True, "resolved"
+    sacrificed = sacrificed_perm.card
     text = (context.card.oracle_text or "").lower()
     amount = int(sacrificed.cmc)
     if "1 plus the sacrificed creature's mana value" in text:
@@ -91,14 +92,20 @@ def sacrifice_creature_for_black_mana(game: Game, instruction: OracleInstruction
 
 @effect_handler("sacrifice_self_for_mana")
 def sacrifice_self_for_mana(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Black Lotus: "{T}, Sacrifice this artifact: Add three mana of any one
+    color." The sacrifice is a *cost*, paid by queue_permanent_ability's
+    ``sacrifice_self`` branch before this runs — this only adds the mana."""
     caster = context.caster
     card = context.card
     source_permanent = context.source_permanent
     if source_permanent is None:
         return False, "ability not implemented"
     caster.mana_pool[str(instruction.payload.get("color", "G"))] += int(instruction.payload.get("amount", 0))
-    caster.graveyard.append(source_permanent.card)
-    caster.battlefield = [perm for perm in caster.battlefield if perm is not source_permanent]
+    # Belt and braces for callers that reach this handler without going through
+    # the cost path (direct handler invocation in tests/scripts).
+    if any(perm is source_permanent for perm in caster.battlefield):
+        caster.battlefield = [perm for perm in caster.battlefield if perm is not source_permanent]
+        caster.graveyard.append(source_permanent.card)
     game.log.append(f"{card.name} sacrificed for mana")
     return True, "resolved"
 

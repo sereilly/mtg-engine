@@ -3,15 +3,15 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..models import CardDefinition, Permanent
+from ..oracle_types import OracleInstruction
 from ..pt import set_base_pt
 from ..tokens import make_token_card
-from ._common import resolve_amount, resolve_target_permanent
+from ._common import flip_coin, resolve_amount, resolve_target_permanent
 from .registry import effect_handler
 
 if TYPE_CHECKING:
     from ..game import Game
     from ..game_types import OracleExecutionContext
-    from ..oracle import OracleInstruction
 
 
 @effect_handler("steal_target_permanent_linked_to_self")
@@ -374,6 +374,25 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
         game.log.append(f"{card.name} created a {token_card.name} token")
     elif count > 1:
         game.log.append(f"{card.name} created {count} {token_card.name} tokens")
+    return True, "resolved"
+
+
+@effect_handler("coin_flip_token_or_self_damage")
+def coin_flip_token_or_self_damage(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Bottle of Suleiman: "Flip a coin. If you win the flip, create a 5/5
+    colorless Djinn artifact creature token with flying. If you lose the flip,
+    this artifact deals 5 damage to you." (CR 705) The losing branch damages the
+    ability's *controller*, not an opponent — "you" is the flipper."""
+    caster = context.caster
+    card = context.card
+    payload = instruction.payload
+    if flip_coin():
+        game.log.append(f"{card.name}: won the coin flip")
+        return create_token(game, OracleInstruction("create_token", "", dict(payload)), context)
+    amount = int(payload.get("damage", 0))
+    game.log.append(f"{card.name}: lost the coin flip")
+    dealt = game._deal_damage_to_player(caster, amount, source=card)
+    game.log.append(f"{card.name} dealt {dealt} damage to {caster.name}")
     return True, "resolved"
 
 

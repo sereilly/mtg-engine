@@ -85,6 +85,41 @@ def destroy_all_creatures(game: Game, instruction: OracleInstruction, context: O
     return True, "resolved"
 
 
+@effect_handler("destroy_creatures_in_combat_with_source")
+def destroy_creatures_in_combat_with_source(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Abu Ja'far: "When this creature dies, destroy all creatures blocking or
+    blocked by it. They can't be regenerated."
+
+    The source is already in the graveyard by the time this resolves, so the
+    victims are captured at fire time (CR 603.10 last-known information) and
+    passed in ``trigger_context["combat_opponents"]``. Each is destroyed only
+    if it is still on a battlefield — one that died to combat damage in the
+    same event is simply skipped."""
+    bypass_regen = instruction.payload.get("bypass_regeneration", False)
+    victims = (context.trigger_context or {}).get("combat_opponents")
+    if victims is None and context.source_permanent is not None:
+        # No capture (an ability invoked outside the death trigger): fall back
+        # to whatever combat relationship the source still has.
+        victims = game.creatures_in_combat_with(context.source_permanent)
+    victims = list(victims or ())
+    destroyed_names: list[str] = []
+    for player in game.players:
+        destroyed = game._destroy_swept_permanents(
+            player,
+            lambda p: any(p is victim for victim in victims),
+            allow_regeneration=not bypass_regen,
+        )
+        destroyed_names.extend(perm.card.name for perm in destroyed)
+    if destroyed_names:
+        game.log.append(
+            f"{context.card.name} destroyed {', '.join(destroyed_names)} "
+            "(blocking or blocked by it)"
+        )
+    else:
+        game.log.append(f"{context.card.name}: no creatures were blocking or blocked by it")
+    return True, "resolved"
+
+
 @effect_handler("destroy_all_artifacts_creatures_enchantments")
 def destroy_all_artifacts_creatures_enchantments(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     for player in game.players:

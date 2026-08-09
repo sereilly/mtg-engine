@@ -178,6 +178,11 @@ class PlayerState:
     # sideboard. Not a game zone — nothing moves here during play; effects such
     # as Ring of Ma'rûf move a card *from* here into hand.
     sideboard: list[CardDefinition] = field(default_factory=list)
+    # The ante zone (CR 407). One shared zone in paper, modeled per-player here
+    # because every ante effect in the pool acts on "cards you own in the ante"
+    # — Jeweled Bird antes itself and clears the rest, Darkpact swaps one out.
+    # Cards land here from Contract from Below / Demonic Attorney / Jeweled Bird.
+    ante: list[CardDefinition] = field(default_factory=list)
     mana_pool: dict[str, int] = field(
         default_factory=lambda: {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0}
     )

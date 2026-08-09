@@ -31,6 +31,7 @@ ActionKind = Literal[
     "resolve_optional_trigger",
     "pay_upkeep_prevention",
     "debug_add_to_hand",
+    "debug_add_to_sideboard",
     "debug_cast_free",
     "debug_cast_free_opponent",
     "debug_add_mana",

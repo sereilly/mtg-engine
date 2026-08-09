@@ -681,6 +681,11 @@ class CombatDamageStepMixin:
                 continue
             defender.life -= damage
             self._on_player_dealt_damage(defender, damage)
+            # Eye for an Eye: combat damage counts too — the attacker's
+            # controller takes the same amount. Applied here rather than by
+            # routing through _deal_damage_to_player, whose prevention pass has
+            # already run for this event.
+            self._apply_mirror_damage(defender, damage, source_attacker)
             # Attacker "deals damage to a player/opponent" triggers (Hypnotic Specter).
             if source_attacker is not None:
                 self._fire_combat_damage_to_player_triggers(source_attacker, defender, damage)
