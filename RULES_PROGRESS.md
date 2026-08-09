@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**197 / 570 tracked rules covered (34%)** — 796 tests, 0 unannotated.
+**198 / 570 tracked rules covered (34%)** — 802 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -42,7 +42,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [302. Creatures](#302-creatures) | 1/7 | 14% |
 | [303. Enchantments](#303-enchantments) | 7/7 | 100% |
 | [304. Instants](#304-instants) | 0/5 | 0% |
-| [305. Lands](#305-lands) | 0/9 | 0% |
+| [305. Lands](#305-lands) | 1/9 | 11% |
 | [307. Sorceries](#307-sorceries) | 0/5 | 0% |
 | [400. General](#400-general) | 5/12 | 41% |
 | [401. Library](#401-library) | 1/7 | 14% |
@@ -440,7 +440,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **305.4** Effects may also allow players to “put” lands onto the battlefield. This isn’t the same as “playi...
 - [ ] **305.5** Land subtypes are always a single word and are listed after a long dash. Land subtypes are also c...
 - [ ] **305.6** The basic land types are Plains, Island, Swamp, Mountain, and Forest. If an object uses the words...
-- [ ] **305.7** If an effect sets a land’s subtype to one or more of the basic land types, the land no longer has...
+- [x] **305.7** If an effect sets a land’s subtype to one or more of the basic land types, the land no longer has... *(5 tests)*
 - [ ] **305.8** Any land with the supertype “basic” is a basic land. Any land that doesn’t have this supertype is...
 - [ ] **305.9** If an object is both a land and another card type, it can be played only as a land. It can’t be c...
 
@@ -841,7 +841,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.7** First Strike *(5 tests, subrules b)*
 - [x] **702.9** Flying *(6 tests, subrules b)*
 - [x] **702.10** Haste *(3 tests, subrules bc)*
-- [x] **702.14** Landwalk *(4 tests, subrules bc)*
+- [x] **702.14** Landwalk *(5 tests, subrules bc)*
 - [x] **702.15** Lifelink *(3 tests, subrules b)*
 - [x] **702.16** Protection *(33 tests, subrules abcdefghjkmn)*
 - [x] **702.17** Reach *(3 tests, subrules b)*

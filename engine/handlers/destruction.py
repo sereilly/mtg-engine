@@ -3,6 +3,7 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
+from ..static_bonuses import singular_land_type
 from ..models import Permanent, PlayerState
 from .registry import effect_handler
 
@@ -152,14 +153,20 @@ def destroy_all_lands(game: Game, instruction: OracleInstruction, context: Oracl
 
 @effect_handler("destroy_all_lands_of_type")
 def destroy_all_lands_of_type(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    land_type = str(instruction.payload.get("land_type", "")).lower().rstrip("s")
+    # "Destroy all Islands" arrives plural; "Destroy all Plains" does not,
+    # because Plains is spelled the same either way. Stripping a trailing "s"
+    # unconditionally turned it into "plain", which no land has ever been — the
+    # old substring match hid that ("plain" is a substring of "plains"), and
+    # asking the layer system for an exact subtype does not.
+    land_type = singular_land_type(str(instruction.payload.get("land_type", "")))
 
     def _matches(perm: Permanent) -> bool:
         if perm.card.primary_type != "land":
             return False
-        # Printed or overridden land type
-        perm_type_line = (perm.metadata.get("land_type_override") or perm.card.type_line or "").lower()
-        return land_type in perm_type_line
+        # has_type, so CR 305.7 is applied in one place: a land whose subtype
+        # was set REPLACES its printed types, and asking the layer system is the
+        # only way every reader agrees about that.
+        return perm.has_type(land_type)
 
     for player in game.players:
         game._destroy_swept_permanents(player, _matches, allow_regeneration=False)

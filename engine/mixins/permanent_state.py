@@ -478,19 +478,15 @@ class PermanentStateMixin:
         overridden land animates by its override, not its printed type line.
         """
         for permanent in all_permanents:
-            land_override = str(permanent.metadata.get("land_type_override", "")).lower()
-            effective_land_types = (
-                land_override if land_override else permanent.card.type_line.lower()
-            )
             is_animated_swamp = (
                 kormus_active
                 and permanent.card.primary_type == "land"
-                and "swamp" in effective_land_types
+                and permanent.has_type("swamp")
             )
             is_animated_forest = (
                 living_lands_active
                 and permanent.card.primary_type == "land"
-                and "forest" in effective_land_types
+                and permanent.has_type("forest")
             )
             if is_animated_swamp or is_animated_forest:
                 permanent.metadata["land_animated"] = True

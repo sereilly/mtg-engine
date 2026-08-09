@@ -392,11 +392,7 @@ class DeclareBlockersStepMixin:
             for perm in defender.battlefield:
                 if perm.card.primary_type != "land":
                     continue
-                override = str(perm.metadata.get("land_type_override", "")).lower()
-                if override:
-                    if land_type in override:
-                        return True
-                elif land_type in perm.card.type_line.lower():
+                if perm.has_type(land_type):
                     return True
         return False
 

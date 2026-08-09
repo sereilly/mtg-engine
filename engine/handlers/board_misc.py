@@ -200,10 +200,9 @@ def mark_text_modified(game: Game, instruction: OracleInstruction, context: Orac
                 # The replaced word must actually appear in the land's current
                 # type (its override, if one is already in effect, else the
                 # printed type line) — replacing an absent word is a no-op.
-                current_type = str(
-                    target_perm.metadata.get("land_type_override") or target_perm.card.type_line
-                ).lower()
-                if old_type is not None and old_type not in current_type:
+                # The land's *current* type, which after an earlier change is
+                # the new one only (CR 305.7).
+                if old_type is not None and not target_perm.has_type(old_type):
                     game.log.append(
                         f"{card.name} had no effect: {target_perm.card.name} has no {old_type.title()} land type"
                     )

@@ -928,6 +928,45 @@ their metadata channel alongside the derived source, for the same reason
 protection did: a grant with a lifetime of its own has nowhere else to live,
 and the rules do not care where the quality came from.
 
+### Layer 4 finished: one answer to "what type is this?"
+
+`land_type_override` had 17 sites. Nine are writes (recording the effect, which
+is the point), one is the layer-4 builder that turns it into a CR 305.7 subtype
+*replacement* — and **seven were readers going around the layer system**, each
+with its own version of the rule. They did not agree with layer 4 or with each
+other.
+
+Two live bugs came out of it:
+
+- **A land was two types at once.** `legality.py` matched *printed type OR
+  override*, so a Mountain turned into an Island was a legal "target Mountain"
+  **and** a legal "target Island". CR 305.7 says the printed type is gone.
+- **Flashfires never destroyed Plains.** The handler stripped a trailing "s"
+  from the named type, and Plains is spelled the same singular and plural — so
+  it looked for "plain", a subtype no land has. The substring match hid it
+  perfectly, because "plain" *is* a substring of "plains". `singular_land_type`
+  checks the known types before guessing at the word's shape.
+
+The second bug is the one worth remembering: **the loose match was not just
+imprecise, it was concealing a second defect.** Tightening the reader is what
+made it visible, which is the argument for having one accessor rather than
+seven approximations.
+
+A test was written around the bug, too. `test_tsunami_destroys_all_islands`
+fabricated a type line of `"Basic Land - Islands"` — plural, a line no Magic
+card has ever had — with a comment explaining it was shaped that way so the
+substring check would match. It uses the printed cards now.
+
+`tests/engine/test_layer_reads.py` holds the line: a raw `land_type_override`
+read outside the layer-4 builder fails, with `card_hooks.py` acknowledged by
+name (Gaea's Liege reverting the override it set itself is bookkeeping, not a
+type question). A second test fails if that acknowledgement ever goes stale.
+Verified by reintroducing the bypass.
+
+**Layers 4, 5, 6 and 7 are now all read through the layer system.** What remains
+is layer 1 (copies), layer 2 (control, which the earlier audit established is
+zone membership here rather than a stored flag) and layer 3 (text-changing).
+
 ### The static-ability cluster, and why it is a phase-6 job
 
 20 of the remaining lines fail with "static abilities need the CR 613 layers

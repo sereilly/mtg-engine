@@ -886,8 +886,10 @@ class LegalityMixin:
             if land_filter:
                 if perm.card.primary_type != "land":
                     return False
-                override = str(perm.metadata.get("land_type_override", "")).lower()
-                return land_filter in type_line or override == land_filter
+                # CR 305.7: setting a land's subtype replaces its old ones, so
+                # a Mountain turned into an Island is NOT a legal "target
+                # Mountain". Matching printed-or-override made it both.
+                return perm.has_type(land_filter)
             # is_creature so animated lands (Kormus Bell / Living Lands) are legal
             # targets for creature-targeting spells, abilities, and Auras.
             if not perm.is_creature:
@@ -920,8 +922,9 @@ class LegalityMixin:
             if casting_aura and _cant_be_enchanted_by_auras(perm):
                 return False
             if spec.get("exclude_swamp"):
-                override = str(perm.metadata.get("land_type_override", "")).lower()
-                if "swamp" in type_line or override == "swamp":
+                # Same CR 305.7 point: a Swamp turned into an Island is no
+                # longer a Swamp, so "target non-Swamp land" may target it.
+                if perm.has_type("swamp"):
                     return False
             return True
         if kind == "permanent":

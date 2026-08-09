@@ -81,3 +81,18 @@ def static_bonus_for(normalized_line: str) -> StaticBonus | None:
             payload["land_type"] = groups["land_type"]
         return StaticBonus(kind, payload)
     return None
+
+
+def singular_land_type(word: str) -> str:
+    """The land subtype *word* names, however it was pluralised.
+
+    Four of the five basic types pluralise with a trailing "s"; Plains is
+    spelled identically singular and plural, so stripping one unconditionally
+    produces "plain" — a subtype no land has. Checking the known types first
+    means the shape of the word never has to be guessed.
+    """
+    lowered = word.strip().lower()
+    if lowered in BASIC_LAND_WORDS:
+        return lowered
+    trimmed = lowered.rstrip("s")
+    return trimmed if trimmed in BASIC_LAND_WORDS else lowered

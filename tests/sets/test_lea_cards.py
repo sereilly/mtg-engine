@@ -6720,10 +6720,13 @@ def test_tropical_island_taps_for_blue_mana(all_cards):
 
 def test_tsunami_destroys_all_islands(all_cards):
     tsunami = _get(all_cards, "Tsunami")
-    # Use a type_line containing the plural "Islands" so the engine's substring
-    # check ("islands" in type_line) correctly identifies lands to destroy.
-    island = _mk_card("Island", "Basic Land - Islands")
-    forest = _mk_card("Forest", "Basic Land - Forest")
+    # The real printed cards. This used to fabricate "Basic Land - Islands"
+    # (plural) so the engine's substring check would match — a type line no
+    # Magic card has ever had, written to fit the implementation rather than
+    # the game. The type question now goes through CR 613 layer 4, which asks
+    # for the exact subtype.
+    island = _get(all_cards, "Island")
+    forest = _get(all_cards, "Forest")
 
     p1 = PlayerState(name="P1", hand=[tsunami])
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=island), Permanent(card=forest)])
