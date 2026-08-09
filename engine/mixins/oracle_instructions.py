@@ -7,7 +7,7 @@ from ..events import emit
 from ..game_types import OracleExecutionContext, OracleStateMachine
 from ..handlers import EFFECT_HANDLERS
 from ..models import CardDefinition, Permanent, PlayerState
-from ..auras import attach_aura, aura_keyword_grants
+from ..auras import attach_aura, aura_animates_artifact, aura_keyword_grants
 from ..oracle import OracleInstruction, _COLOR_WORD_TO_SYMBOL, compile_card_oracle
 from ..keywords import grant_keyword, remove_keyword
 
@@ -456,37 +456,21 @@ class OracleInstructionsMixin:
                     aura_permanent.metadata["stolen_owner_index"] = self.players.index(target_player)
                     self.log.append(f"{aura_permanent.card.name} took control of {target_artifact.card.name}")
 
-            # Only animate if this Aura explicitly makes the artifact a creature (e.g. Animate Artifact)
-            if ("it's an artifact creature" in text or "becomes an artifact creature" in text) and target_artifact.card.primary_type != "creature":
-                new_type_line = target_artifact.card.type_line
-                if "creature" not in new_type_line.lower():
-                    new_type_line = (new_type_line + " Creature").strip()
-
-                new_raw = dict(target_artifact.card.raw)
-                power = toughness = max(1, int(target_artifact.card.cmc))
-                new_raw["power"] = str(power)
-                new_raw["toughness"] = str(toughness)
-
-                new_card = CardDefinition(
-                    name=target_artifact.card.name,
-                    mana_cost=target_artifact.card.mana_cost,
-                    cmc=target_artifact.card.cmc,
-                    type_line=new_type_line,
-                    oracle_text=target_artifact.card.oracle_text,
-                    colors=target_artifact.card.colors,
-                    color_identity=target_artifact.card.color_identity,
-                    keywords=target_artifact.card.keywords,
-                    produced_mana=target_artifact.card.produced_mana,
-                    raw=new_raw,
+            # Animation is NOT applied here. Animate Artifact adds the
+            # creature type at CR 613 layer 4 and sets P/T at layer 7b, both
+            # derived from the attached Aura (engine/auras.animating_auras,
+            # collected by layer_bridge). This used to rebuild the artifact's
+            # CardDefinition with "Creature" spliced into its type line and P/T
+            # baked into raw, swap it onto the permanent, and stash the original
+            # to restore on removal — remember-and-undo applied to the object's
+            # identity, and it clamped a mana value of 0 up to 1/1 so an
+            # animated Mox never died to CR 704.5f.
+            if aura_animates_artifact(aura_permanent.card.oracle_text):
+                self.log.append(
+                    f"{aura_permanent.card.name} animated {target_artifact.card.name} "
+                    "into an artifact creature"
                 )
 
-                # Snapshot the original (non-creature) card so the animation can be
-                # undone when this Aura leaves the battlefield (CR 611.3). Without
-                # this the artifact would keep its granted creature type and P/T —
-                # the UI would still show stale power/toughness labels.
-                target_artifact.metadata["pre_animate_card"] = target_artifact.card
-                target_artifact.card = new_card
-                self.log.append(f"{aura_permanent.card.name} animated {target_artifact.card.name} into an artifact creature")
         elif text.startswith("enchant enchantment"):
             # Attach this Aura to the specified enchantment (or first enchantment found)
             target_idx = target_player_index if target_player_index is not None else (1 - caster_index)

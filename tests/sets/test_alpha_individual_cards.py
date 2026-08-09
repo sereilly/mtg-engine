@@ -70,7 +70,13 @@ def _build_context_cards(all_cards: list[CardDefinition]) -> dict[str, CardDefin
         "mountain": by_name["Mountain"],
         "forest": by_name["Forest"],
         "grizzly_bears": by_name["Grizzly Bears"],
-        "black_lotus": by_name["Black Lotus"],
+        # Jayemdae Tome rather than Black Lotus as the stock artifact: mana
+        # value 4, not 0. Animate Artifact gives the enchanted artifact P/T
+        # equal to its mana value, so a Black Lotus animates to 0/0, dies to
+        # CR 704.5f and takes the Aura with it (CR 704.5m) — correct, but it
+        # makes every artifact-targeting card in this sweep test that instead
+        # of its own effect.
+        "artifact": by_name["Jayemdae Tome"],
         "bad_moon": by_name["Bad Moon"],
         "ancestral_recall": by_name["Ancestral Recall"],
     }
@@ -85,7 +91,7 @@ def _build_game_for_card(card: CardDefinition, all_cards: list[CardDefinition]) 
         battlefield=[
             Permanent(card=ctx["grizzly_bears"]),
             Permanent(card=ctx["plains"]),
-            Permanent(card=ctx["black_lotus"]),
+            Permanent(card=ctx["artifact"]),
             Permanent(card=ctx["bad_moon"]),
         ],
         graveyard=[ctx["grizzly_bears"]],
@@ -111,7 +117,7 @@ def _build_game_for_card(card: CardDefinition, all_cards: list[CardDefinition]) 
         battlefield=[
             Permanent(card=ctx["grizzly_bears"], tapped=True),
             Permanent(card=ctx["plains"]),
-            Permanent(card=ctx["black_lotus"]),
+            Permanent(card=ctx["artifact"]),
             Permanent(card=ctx["bad_moon"]),
         ],
         graveyard=[ctx["grizzly_bears"]],
@@ -356,7 +362,16 @@ def _assert_supported_effect(card: CardDefinition, game: Game, p1: PlayerState, 
         if "enter as a copy" in text:
             assert any(perm.metadata.get("copied_from") for perm in p1.battlefield)
         else:
-            assert any(perm.card.name == card.name for perm in p1.battlefield)
+            on_battlefield = any(perm.card.name == card.name for perm in p1.battlefield)
+            # A permanent whose own activated cost sacrifices it (Black Lotus)
+            # is in the graveyard once the sweep activates that ability — the
+            # ability working, not the permanent failing to enter. This used to
+            # pass only because an identical card sat on the stock battlefield,
+            # so the assertion was satisfied by a permanent that was never cast.
+            sacrificed_itself = "sacrifice this" in text and any(
+                c.name == card.name for c in p1.graveyard
+            )
+            assert on_battlefield or sacrificed_itself
 
     if text.startswith("whenever ") or text.startswith("at the beginning ") or text.startswith("as long as "):
         return

@@ -635,7 +635,9 @@ def test_animate_artifact_makes_artifact_into_creature(all_cards):
     assert result.supported
     # Target artifact should become an artifact creature with power/toughness equal to its mana value
     perm = p2.battlefield[0]
-    assert perm.card.primary_type == "creature"
+    # Animation is a CR 613 layer-4 effect owned by the Aura, so the printed
+    # card is untouched — ask whether the permanent *is* a creature.
+    assert perm.is_creature is True
     assert perm.effective_power == 3
     assert perm.effective_toughness == 3
     # The Aura should be on the caster's battlefield and attached

@@ -582,7 +582,16 @@ def test_601_2c_animate_artifact_can_be_cast_with_artifact_target():
         "Enchantment — Aura",
         "Enchant artifact\nAs long as enchanted artifact isn't a creature, it's an artifact creature with power and toughness each equal to its mana value.",
     )
-    artifact = _mk_card("Black Lotus", "Artifact", "{T}, Sacrifice Black Lotus: Add three mana of any one color.")
+    # Mana value 1, not 0 (the local _mk_card hardcodes cmc=0.0). Animate
+    # Artifact gives the artifact P/T equal to its mana value, so animating a
+    # 0-cost artifact produces a 0/0 that dies to CR 704.5f and takes the Aura
+    # with it under CR 704.5m — correct, but not what this test is about
+    # (601.2c: that it can be cast with an artifact target at all).
+    artifact = CardDefinition(
+        name="Sol Ring", mana_cost="{1}", cmc=1.0, type_line="Artifact",
+        oracle_text="{T}: Add {C}{C}.", colors=(), color_identity=(),
+        keywords=(), produced_mana=("C",), raw={"name": "Sol Ring", "type_line": "Artifact"},
+    )
     p1 = PlayerState(name="P1", hand=[aura])
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=artifact)])
     game = Game(players=[p1, p2])

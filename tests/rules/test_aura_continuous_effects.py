@@ -341,3 +341,94 @@ def test_302_6_the_permission_ends_when_the_aura_leaves(catalog):
     player.battlefield.remove(aura)
 
     assert game.can_attack(elves, 1) is False
+
+
+@pytest.mark.cr("613.1d", "704.5f")
+def test_613_1d_animate_artifact_sets_pt_to_mana_value(catalog):
+    """"...power and toughness each equal to its mana value."
+
+    The engine rebuilt the artifact's CardDefinition with "Creature" spliced
+    into its type line and P/T baked into raw, then stashed the original to
+    restore on removal. It also clamped the value to a minimum of 1, so a
+    0-mana-value artifact became a 1/1 and never died.
+    """
+    for name, expected in (("Sol Ring", 1), ("Jayemdae Tome", 4)):
+        artifact = Permanent(card=catalog[name])
+        player = PlayerState(
+            name="P1", hand=[catalog["Animate Artifact"]], battlefield=[artifact]
+        )
+        game = Game(players=[player, PlayerState(name="P2")])
+        game.enforce_mana_costs = False
+        game.cast_from_hand(
+            0, "Animate Artifact", target_player_index=0, target_permanent_index=0
+        )
+
+        assert artifact.is_creature is True
+        assert (artifact.effective_power, artifact.effective_toughness) == (
+            expected, expected,
+        ), name
+        # The printed card is untouched: this is a layer-4 effect, not a rewrite.
+        assert "creature" not in artifact.card.type_line.lower()
+
+
+@pytest.mark.cr("704.5f")
+def test_704_5f_a_zero_mana_value_artifact_animates_to_0_0_and_dies(catalog):
+    """A Black Lotus has mana value 0, so Animate Artifact makes it a 0/0 and
+    CR 704.5f puts it into the graveyard. The clamp to 1/1 kept it alive, and
+    the state-based action read the *printed* type line so it would not have
+    swept an animated permanent even at 0 toughness."""
+    lotus = Permanent(card=catalog["Black Lotus"])
+    player = PlayerState(
+        name="P1", hand=[catalog["Animate Artifact"]], battlefield=[lotus]
+    )
+    game = Game(players=[player, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+
+    game.cast_from_hand(
+        0, "Animate Artifact", target_player_index=0, target_permanent_index=0
+    )
+    assert (lotus.effective_power, lotus.effective_toughness) == (0, 0)
+
+    game.check_state_based_actions()
+
+    assert not any(p.card.name == "Black Lotus" for p in player.battlefield)
+    assert any(c.name == "Black Lotus" for c in player.graveyard)
+
+
+@pytest.mark.cr("611.3")
+def test_611_3_animation_ends_when_the_aura_leaves(catalog):
+    tome = Permanent(card=catalog["Jayemdae Tome"])
+    player = PlayerState(
+        name="P1", hand=[catalog["Animate Artifact"]], battlefield=[tome]
+    )
+    game = Game(players=[player, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.cast_from_hand(
+        0, "Animate Artifact", target_player_index=0, target_permanent_index=0
+    )
+    assert tome.is_creature is True
+
+    aura = next(p for p in player.battlefield if p.card.name == "Animate Artifact")
+    game._remove_aura_effects(aura)
+    player.battlefield.remove(aura)
+
+    assert tome.is_creature is False
+
+
+@pytest.mark.cr("613.1d")
+def test_613_1d_an_artifact_creature_is_not_animated_again(catalog):
+    """"As long as enchanted artifact *isn't a creature*". The condition reads
+    the printed type line: asking whether it is currently a creature would
+    include the type this very effect adds."""
+    from engine.auras import animating_auras
+
+    creature_artifact = Permanent(card=catalog["Clockwork Beast"])
+    player = PlayerState(name="P1", battlefield=[creature_artifact])
+    Game(players=[player, PlayerState(name="P2")])
+
+    from engine.auras import attach_aura
+
+    aura = Permanent(card=catalog["Animate Artifact"])
+    attach_aura(aura, creature_artifact)
+
+    assert animating_auras(creature_artifact) == []

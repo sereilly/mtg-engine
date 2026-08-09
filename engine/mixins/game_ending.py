@@ -260,7 +260,11 @@ class GameEndingMixin:
                 raw_t = str(perm.card.raw.get("toughness", "0"))
                 has_fixed_toughness = raw_t.lstrip("-").isdigit()
                 has_dynamic_toughness = not has_fixed_toughness and "absolute_toughness" not in perm.metadata
-                return perm.card.primary_type == "creature" and not has_dynamic_toughness and perm.effective_toughness <= 0
+                # is_creature (CR 613 layer 4), not the printed type line: an
+                # artifact animated by Animate Artifact, or a land animated by
+                # Kormus Bell, is a creature and CR 704.5f applies to it. Reading
+                # the printed type meant an animated Mox sat at 0/0 forever.
+                return perm.is_creature and not has_dynamic_toughness and perm.effective_toughness <= 0
 
             for player in self.players:
                 def _on_destroy_5f(perm: Permanent, player=player) -> None:

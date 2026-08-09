@@ -655,8 +655,12 @@ class PermanentStateMixin:
 
         # A copy uses the copied creature's copiable card (types + abilities), so
         # lord static abilities and subtype checks resolve against it (CR 707.2).
+        # ``Permanent.effective_card`` is that answer, and it also applies the
+        # CR 613 layer-3 text change — a local re-implementation of the copy half
+        # silently skipped the text half, which is the second-opinion bug this
+        # whole pass exists to remove.
         def _eff_card(perm: Permanent):
-            return perm.metadata.get("copied_card") or perm.card
+            return perm.effective_card
 
         # A Magical Hack land-word swap on the lord itself rewrites the walks its
         # text grants (mountainwalk -> islandwalk on Goblin King makes other

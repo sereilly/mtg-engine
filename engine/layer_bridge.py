@@ -17,7 +17,12 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import TYPE_CHECKING
 
-from .auras import aura_keyword_grants, aura_static_pt_grant, auras_attached_to
+from .auras import (
+    animating_auras,
+    aura_keyword_grants,
+    aura_static_pt_grant,
+    auras_attached_to,
+)
 from .continuous import (
     Characteristics,
     ContinuousEffect,
@@ -200,6 +205,21 @@ def collect_pt_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
                 modify_pt(only, power, toughness, timestamp=_DERIVED_TIMESTAMP, label=label)
             )
 
+    # 7b — Animate Artifact sets P/T to the artifact's mana value. A mana value
+    # of 0 really does mean 0/0: a Mox animated this way dies to CR 704.5f, and
+    # clamping it to 1/1 (as the card-rebuilding version did) kept it alive.
+    for aura in animating_auras(perm):
+        mana_value = int(perm.card.cmc)
+        effects.append(
+            set_pt(
+                only,
+                mana_value,
+                mana_value,
+                timestamp=int(aura.metadata.get("aura_timestamp", _DERIVED_TIMESTAMP)),
+                label=f"animated:{aura.card.name}",
+            )
+        )
+
     # 7c — Auras. Derived from each attached Aura's own text on every
     # recompute and stamped with the moment it became attached (CR 613.7b), so
     # detaching one is simply ceasing to contribute: there is no remembered
@@ -302,6 +322,14 @@ def collect_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
     if meta.get("land_animated") or meta.get("animate_until_end_of_combat"):
         effects.append(
             add_types(only, card_types=["creature"], timestamp=0, label="animated")
+        )
+
+    # Animate Artifact (CR 613.1d). Derived from the attached Aura, so the
+    # artifact stops being a creature the moment the Aura leaves — where the
+    # card-rebuilding version had to stash the original and restore it.
+    if animating_auras(perm):
+        effects.append(
+            add_types(only, card_types=["creature"], timestamp=0, label="animated artifact")
         )
 
     override = meta.get("land_type_override")

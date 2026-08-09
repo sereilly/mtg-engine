@@ -997,6 +997,49 @@ because `effective_card` is read on nearly every rules query.
 layer 1 (copies) and layer 2 (control, already established here as zone
 membership rather than a stored flag).
 
+### The last card-rewriting effect: Animate Artifact
+
+Animate Artifact was the remaining place where a *characteristic* change was
+made by rebuilding the object. It spliced "Creature" into the artifact's type
+line, baked P/T into `raw`, swapped the new `CardDefinition` onto the permanent,
+and stashed the original to restore on removal — remember-and-undo applied to
+the card's identity. It is now two derived effects from one line: layer 4 adds
+the creature type, layer 7b sets P/T, both read from the attached Aura.
+
+**Two rules bugs were inside that rewrite**, and they compounded:
+
+- The P/T was clamped to a minimum of 1, so an artifact with mana value 0
+  animated to 1/1 instead of 0/0.
+- CR 704.5f's state-based action tested `card.primary_type == "creature"` — the
+  *printed* type — so it would not have swept an animated permanent even at 0
+  toughness.
+
+Either alone would have been invisible. Together they meant Animate Artifact on
+a Mox or a Black Lotus produced an immortal 1/1 where the rules give a 0/0 that
+dies immediately. Both are fixed; the SBA reads `is_creature`.
+
+Two tests were passing for the wrong reason, and both are the same shape:
+
+- `test_601_2c_...` animated a Black Lotus and asserted the Aura was on the
+  battlefield. Correct behaviour now kills the Lotus and takes the Aura with it
+  (CR 704.5m), so the test needed an artifact with a nonzero mana value to be
+  about CR 601.2c at all.
+- The alpha sweep asserted "the cast permanent is on the battlefield" while an
+  *identical stock card* sat on the same battlefield. Black Lotus sacrifices
+  itself to its own mana ability, so the assertion had never once been
+  satisfied by the card under test. Changing the stock artifact exposed it.
+
+Also folded in: `permanent_state._eff_card` was a local re-implementation of
+`Permanent.effective_card` covering only the copy half, so it silently skipped
+the layer-3 text change added in the previous pass. A second opinion that was
+correct when written and wrong a commit later — which is the argument for the
+accessor, not for remembering to update both.
+
+**Every layer that changes a characteristic now resolves through the layer
+system.** What is left of layer 1 is copy *identity* (`copied_card`), which is
+already metadata-driven and read through `effective_card`; and layer 2, which
+this engine models as zone membership rather than a stored flag.
+
 ### The static-ability cluster, and why it is a phase-6 job
 
 20 of the remaining lines fail with "static abilities need the CR 613 layers

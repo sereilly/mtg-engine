@@ -468,3 +468,42 @@ def aura_restriction_active(permanent, name: str) -> bool:
         name in aura_restrictions(aura.card.oracle_text)
         for aura in auras_attached_to(permanent)
     )
+
+
+# Animate Artifact: "As long as enchanted artifact isn't a creature, it's an
+# artifact creature with power and toughness each equal to its mana value."
+#
+# Two layers from one line — layer 4 adds the creature type, layer 7b sets P/T —
+# which is why it cannot be expressed as a flag. The engine used to *rebuild the
+# CardDefinition* with "Creature" spliced into the type line and P/T baked in,
+# swap it onto the permanent, and stash the original to restore on removal: the
+# remember-and-undo shape, applied to the object's identity.
+_ANIMATE_ARTIFACT = re.compile(
+    r"^as long as enchanted artifact isn't a creature, it's an artifact creature "
+    r"with power and toughness each equal to its mana value$"
+)
+
+
+def aura_animates_artifact(oracle_text: str) -> bool:
+    """Whether this Aura animates the artifact it enchants."""
+    return any(
+        _ANIMATE_ARTIFACT.match(_line_text(raw_line))
+        for raw_line in oracle_text.splitlines()
+    )
+
+
+def animating_auras(permanent) -> list:
+    """Attached Auras that animate *permanent*, honouring "isn't a creature".
+
+    The condition is read from the permanent's **printed** type line rather than
+    its computed one: asking whether it is currently a creature would include
+    the creature type this very effect adds, and the answer would depend on
+    whether it had already been asked.
+    """
+    if "creature" in permanent.card.type_line.lower():
+        return []
+    return [
+        aura
+        for aura in auras_attached_to(permanent)
+        if aura_animates_artifact(aura.card.oracle_text)
+    ]

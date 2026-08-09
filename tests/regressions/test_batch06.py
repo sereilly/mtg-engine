@@ -38,7 +38,9 @@ class TestAnimateArtifact:
         game.resolve_stack()
 
         assert result.supported
-        assert "creature" in tome.card.type_line.lower()
+        # The printed type line is untouched: animation is a CR 613 layer-4
+        # effect owned by the Aura, not a rewrite of the card.
+        assert tome.is_creature is True
         assert tome.effective_power == 4 and tome.effective_toughness == 4
 
     def test_reverts_to_noncreature_when_aura_leaves(self, cards):
