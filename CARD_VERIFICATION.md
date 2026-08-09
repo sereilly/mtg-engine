@@ -3,13 +3,13 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **369**
-- Passed: **358**
+- Passed: **369**
 - Failed: **0**
-- Untested: **11**
+- Untested: **0**
 
 | Card | Status | Failure reason |
 | --- | --- | --- |
-| Abu Ja'far | ⬜ untested |  |
+| Abu Ja'far | ✅ pass |  |
 | Air Elemental | ✅ pass |  |
 | Aladdin | ✅ pass |  |
 | Aladdin's Lamp | ✅ pass |  |
@@ -43,11 +43,11 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Blue Elemental Blast | ✅ pass |  |
 | Blue Ward | ✅ pass |  |
 | Bog Wraith | ✅ pass |  |
-| Bottle of Suleiman | ⬜ untested |  |
+| Bottle of Suleiman | ✅ pass |  |
 | Braingeyser | ✅ pass |  |
 | Brass Man | ✅ pass |  |
 | Burrowing | ✅ pass |  |
-| Camel | ⬜ untested |  |
+| Camel | ✅ pass |  |
 | Camouflage | ✅ pass |  |
 | Castle | ✅ pass |  |
 | Celestial Prism | ✅ pass |  |
@@ -93,7 +93,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Desert | ✅ pass |  |
 | Desert Nomads | ✅ pass |  |
 | Desert Twister | ✅ pass |  |
-| Diamond Valley | ⬜ untested |  |
+| Diamond Valley | ✅ pass |  |
 | Dingus Egg | ✅ pass |  |
 | Disenchant | ✅ pass |  |
 | Disintegrate | ✅ pass |  |
@@ -113,9 +113,9 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Elephant Graveyard | ✅ pass |  |
 | Elvish Archers | ✅ pass |  |
 | Erg Raiders | ✅ pass |  |
-| Erhnam Djinn | ⬜ untested |  |
+| Erhnam Djinn | ✅ pass |  |
 | Evil Presence | ✅ pass |  |
-| Eye for an Eye | ⬜ untested |  |
+| Eye for an Eye | ✅ pass |  |
 | False Orders | ✅ pass |  |
 | Farmstead | ✅ pass |  |
 | Fastbond | ✅ pass |  |
@@ -151,7 +151,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Green Ward | ✅ pass |  |
 | Grizzly Bears | ✅ pass |  |
 | Guardian Angel | ✅ pass |  |
-| Guardian Beast | ⬜ untested |  |
+| Guardian Beast | ✅ pass |  |
 | Hasran Ogress | ✅ pass |  |
 | Healing Salve | ✅ pass |  |
 | Helm of Chatzuk | ✅ pass |  |
@@ -183,7 +183,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Jandor's Ring | ✅ pass |  |
 | Jandor's Saddlebags | ✅ pass |  |
 | Jayemdae Tome | ✅ pass |  |
-| Jeweled Bird | ⬜ untested |  |
+| Jeweled Bird | ✅ pass |  |
 | Jihad | ✅ pass |  |
 | Juggernaut | ✅ pass |  |
 | Jump | ✅ pass |  |
@@ -243,7 +243,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Northern Paladin | ✅ pass |  |
 | Oasis | ✅ pass |  |
 | Obsianus Golem | ✅ pass |  |
-| Old Man of the Sea | ⬜ untested |  |
+| Old Man of the Sea | ✅ pass |  |
 | Orcish Artillery | ✅ pass |  |
 | Orcish Oriflamme | ✅ pass |  |
 | Oubliette | ✅ pass |  |
@@ -277,7 +277,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Resurrection | ✅ pass |  |
 | Reverse Damage | ✅ pass |  |
 | Righteousness | ✅ pass |  |
-| Ring of Ma'rûf | ⬜ untested |  |
+| Ring of Ma'rûf | ✅ pass |  |
 | Roc of Kher Ridges | ✅ pass |  |
 | Rock Hydra | ✅ pass |  |
 | Rod of Ruin | ✅ pass |  |
@@ -296,7 +296,7 @@ Master record of which cards have been manually validated in-game. Generated aut
 | Sea Serpent | ✅ pass |  |
 | Sedge Troll | ✅ pass |  |
 | Sengir Vampire | ✅ pass |  |
-| Serendib Djinn | ⬜ untested |  |
+| Serendib Djinn | ✅ pass |  |
 | Serendib Efreet | ✅ pass |  |
 | Serra Angel | ✅ pass |  |
 | Shahrazad | ✅ pass |  |

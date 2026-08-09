@@ -1,5 +1,10 @@
 {
   "results": {
+    "Abu Ja'far": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786234428.1613116
+    },
     "Air Elemental": {
       "reason": "",
       "status": "pass",
@@ -165,6 +170,11 @@
       "status": "pass",
       "updated_at": 1782970150.6128771
     },
+    "Bottle of Suleiman": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786235373.3053536
+    },
     "Braingeyser": {
       "reason": "",
       "status": "pass",
@@ -179,6 +189,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782542361.3458302
+    },
+    "Camel": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786234540.6909993
     },
     "Camouflage": {
       "reason": "",
@@ -405,6 +420,11 @@
       "status": "pass",
       "updated_at": 1786226977.453732
     },
+    "Diamond Valley": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786234602.8408866
+    },
     "Dingus Egg": {
       "reason": "",
       "status": "pass",
@@ -500,10 +520,20 @@
       "status": "pass",
       "updated_at": 1786228072.2936523
     },
+    "Erhnam Djinn": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786234897.55039
+    },
     "Evil Presence": {
       "reason": "",
       "status": "pass",
       "updated_at": 1782022287.5750093
+    },
+    "Eye for an Eye": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786234435.9540532
     },
     "False Orders": {
       "reason": "",
@@ -680,6 +710,11 @@
       "status": "pass",
       "updated_at": 1782590169.0233815
     },
+    "Guardian Beast": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786234750.7371247
+    },
     "Hasran Ogress": {
       "reason": "",
       "status": "pass",
@@ -834,6 +869,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782007143.640714
+    },
+    "Jeweled Bird": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786235086.8727872
     },
     "Jihad": {
       "reason": "",
@@ -1130,6 +1170,11 @@
       "status": "pass",
       "updated_at": 1782542915.6789494
     },
+    "Old Man of the Sea": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786235256.9291842
+    },
     "Orcish Artillery": {
       "reason": "",
       "status": "pass",
@@ -1295,6 +1340,11 @@
       "status": "pass",
       "updated_at": 1782597780.5635235
     },
+    "Ring of Ma'rûf": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786235480.123106
+    },
     "Roc of Kher Ridges": {
       "reason": "",
       "status": "pass",
@@ -1384,6 +1434,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782542731.2588892
+    },
+    "Serendib Djinn": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1786235324.7348645
     },
     "Serendib Efreet": {
       "reason": "",
