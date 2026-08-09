@@ -10,52 +10,51 @@ Migration tracker for the oracle-text parser rewrite: how much of the card pool 
 | Lowered | That AST mapped onto executable instructions |
 | Executed | Instructions' categories are switched on, so the grammar's output runs |
 
-Categories currently switched on: `counters, counterspells, damage, destruction, evasion, life, mana, optional, prevention, pump, recolor, regeneration, tapping, tokens, turns, upkeep, zones`.
+Categories currently switched on: `combat_restrictions, counters, counterspells, damage, destruction, evasion, life, mana, optional, prevention, pump, recolor, regeneration, tapping, tokens, turns, upkeep, zones`.
 
 ## Coverage by set
 
 | Set | Cards | Lines | Parsed | Lowered | Executed | Cards executing |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 388 | 70.1% | 63.9% | 35.1% | 129 |
-| LEB | 292 | 389 | 70.2% | 64.0% | 35.2% | 130 |
-| 2ED | 292 | 389 | 70.2% | 64.0% | 35.2% | 130 |
-| ARN | 78 | 108 | 59.3% | 51.9% | 32.4% | 31 |
-| **All** | **952** | **1274** | **69.2%** | **63.0%** | **34.9%** | **420** |
+| LEA | 290 | 388 | 70.9% | 64.7% | 35.8% | 130 |
+| LEB | 292 | 389 | 71.0% | 64.8% | 36.0% | 131 |
+| 2ED | 292 | 389 | 71.0% | 64.8% | 36.0% | 131 |
+| ARN | 78 | 108 | 62.0% | 54.6% | 35.2% | 31 |
+| **All** | **952** | **1274** | **70.2%** | **63.9%** | **35.9%** | **423** |
 
-## Backlog — most common failure reasons
+## Backlog — failure reasons
 
-Each row is a production the grammar still needs, ordered by how many lines it would unlock. Reasons tied to a scheduled roadmap phase are annotated.
+**Lines** counts every failing line, so a card in four sets counts four times. **Distinct** counts the different sentences behind the reason, which is the number that predicts work: a reason covering 30 copies of one sentence needs one production, and a reason covering 30 different sentences needs something closer to 30. Sort by the ratio, not by the first column — a reason whose two columns are nearly equal is a long tail, not a missing production.
 
-| Lines | Reason | Scheduled |
-| ---: | --- | --- |
-| 199 | expected a subject |  |
-| 89 | unrecognized effect verb |  |
-| 52 | static abilities need the CR 613 layers engine | phase 6 (CR 613 layers) |
-| 36 | unconsumed text |  |
-| 18 | granted ability in quotes | phase 3 (quoted abilities) |
-| 12 | expected 'be' |  |
-| 10 | modal line | phase 3 (modal production) |
-| 9 | continuous pump needs the CR 613 layers engine | phase 6 (CR 613 layers) |
-| 6 | expected a quantity |  |
-| 6 | expected a colour after 'becomes' |  |
-| 4 | upkeep triggers are dispatched by fused instruction kind; a decomposed wrapper has no handler |  |
-| 4 | expected a keyword ability |  |
-| 4 | expected something to destroy |  |
-| 3 | no lowering for RawEffect |  |
-| 3 | only one mana of any colour has a handler; 3 does not |  |
-| 3 | expected the player whose hand is looked at |  |
-| 3 | no handler for non-targeted tap/untap |  |
-| 3 | expected 'mana' |  |
-| 3 | no tap-or-untap handler honours this restriction |  |
-| 1 | optional colored costs need a real cost-payment prompt |  |
-| 1 | expected a permanent to put counters on |  |
-| 1 | back-reference to 'damage_dealt' with no producer in this effect |  |
-| 1 | expected something to shield |  |
-| 1 | no untap handler honors this restriction |  |
+| Lines | Distinct | Reason | Scheduled |
+| ---: | ---: | --- | --- |
+| 199 | 78 | expected a subject |  |
+| 89 | 31 | unrecognized effect verb |  |
+| 52 | 20 | static abilities need the CR 613 layers engine | phase 6 (CR 613 layers) |
+| 36 | 18 | unconsumed text |  |
+| 18 | 6 | granted ability in quotes | phase 3 (quoted abilities) |
+| 10 | 2 | modal line | phase 3 (modal production) |
+| 9 | 3 | continuous pump needs the CR 613 layers engine | phase 6 (CR 613 layers) |
+| 6 | 2 | expected a quantity |  |
+| 6 | 2 | expected a colour after 'becomes' |  |
+| 4 | 2 | upkeep triggers are dispatched by fused instruction kind; a decomposed wrapper has no handler |  |
+| 4 | 2 | expected a keyword ability |  |
+| 4 | 2 | expected something to destroy |  |
+| 3 | 1 | no lowering for RawEffect |  |
+| 3 | 1 | only one mana of any colour has a handler; 3 does not |  |
+| 3 | 1 | expected the player whose hand is looked at |  |
+| 3 | 1 | no handler for non-targeted tap/untap |  |
+| 3 | 1 | expected 'mana' |  |
+| 3 | 1 | no tap-or-untap handler honours this restriction |  |
+| 1 | 1 | optional colored costs need a real cost-payment prompt |  |
+| 1 | 1 | expected a permanent to put counters on |  |
+| 1 | 1 | back-reference to 'damage_dealt' with no producer in this effect |  |
+| 1 | 1 | expected something to shield |  |
+| 1 | 1 | no untap handler honors this restriction |  |
 
 ## Cards executing through the grammar
 
-420 cards, 445 lines.
+423 cards, 457 lines.
 
 - **Aladdin's Ring**
   - `{8}, {T}: This artifact deals 4 damage to any target.`
@@ -160,6 +159,7 @@ Each row is a production the grammar still needs, ordered by how many lines it w
 - **Cuombajj Witches**
   - `{T}: This creature deals 1 damage to any target and 1 damage to any target of an opponent's choice.`
 - **Dandân**
+  - `This creature can't attack unless defending player controls an Island.`
   - `When you control no Islands, sacrifice this creature.`
 - **Dark Ritual**
   - `Add {B}{B}{B}.`
@@ -320,7 +320,12 @@ Each row is a production the grammar still needs, ordered by how many lines it w
   - `Whenever a player casts a red spell, you may pay {1}. If you do, you gain 1 life.`
   - `Whenever a player casts a red spell, you may pay {1}. If you do, you gain 1 life.`
   - `Whenever a player casts a red spell, you may pay {1}. If you do, you gain 1 life.`
+- **Ironclaw Orcs**
+  - `This creature can't block creatures with power 2 or greater.`
+  - `This creature can't block creatures with power 2 or greater.`
+  - `This creature can't block creatures with power 2 or greater.`
 - **Island Fish Jasconius**
+  - `This creature can't attack unless defending player controls an Island.`
   - `When you control no Islands, sacrifice this creature.`
 - **Island of Wak-Wak**
   - `{T}: Target creature with flying has base power 0 until end of turn.`
@@ -386,6 +391,7 @@ Each row is a production the grammar still needs, ordered by how many lines it w
   - `Whenever a player taps a land for mana, this enchantment deals 1 damage to that player.`
   - `Whenever a player taps a land for mana, this enchantment deals 1 damage to that player.`
 - **Merchant Ship**
+  - `This creature can't attack unless defending player controls an Island.`
   - `When you control no Islands, sacrifice this creature.`
 - **Mind Twist**
   - `Target player discards X cards at random.`
@@ -436,10 +442,13 @@ Each row is a production the grammar still needs, ordered by how many lines it w
 - **Piety**
   - `Blocking creatures get +0/+3 until end of turn.`
 - **Pirate Ship**
+  - `This creature can't attack unless defending player controls an Island.`
   - `{T}: This creature deals 1 damage to any target.`
   - `When you control no Islands, sacrifice this creature.`
+  - `This creature can't attack unless defending player controls an Island.`
   - `{T}: This creature deals 1 damage to any target.`
   - `When you control no Islands, sacrifice this creature.`
+  - `This creature can't attack unless defending player controls an Island.`
   - `{T}: This creature deals 1 damage to any target.`
   - `When you control no Islands, sacrifice this creature.`
 - **Power Sink**
@@ -522,8 +531,11 @@ Each row is a production the grammar still needs, ordered by how many lines it w
   - `At the beginning of each end step, put a corpse counter on this creature for each creature that died this turn.`
   - `Remove a corpse counter from this creature: Regenerate this creature.`
 - **Sea Serpent**
+  - `This creature can't attack unless defending player controls an Island.`
   - `When you control no Islands, sacrifice this creature.`
+  - `This creature can't attack unless defending player controls an Island.`
   - `When you control no Islands, sacrifice this creature.`
+  - `This creature can't attack unless defending player controls an Island.`
   - `When you control no Islands, sacrifice this creature.`
 - **Sedge Troll**
   - `{B}: Regenerate this creature.`

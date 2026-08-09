@@ -834,3 +834,23 @@ __all__ = [
     "SpellEffectLine", "TriggeredAbilityNode", "ActivatedAbilityNode",
     "StaticAbilityNode", "KeywordLine", "RegistryLine", "ModalNode",
 ]
+
+
+@dataclass(frozen=True)
+class CombatRestriction:
+    """``<subject> can't attack unless …`` / ``can't block creatures with …``.
+
+    A restriction on when the permanent may attack or block (CR 506, 509). It
+    is a *static* ability, but unlike most static shapes it does not wait on the
+    layers engine: it changes what a player may declare, not what the object's
+    characteristics are, and the combat steps already dispatch on the
+    instruction it lowers to.
+
+    ``kind`` is the instruction kind, and ``payload`` its data — the land type
+    or the power threshold — so the number and the noun stay parameters rather
+    than becoming part of the kind's name.
+    """
+
+    subject: Recipient
+    kind: str
+    payload: tuple[tuple[str, object], ...] = ()

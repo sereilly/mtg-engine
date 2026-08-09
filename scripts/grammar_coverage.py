@@ -79,6 +79,7 @@ def analyze() -> tuple[dict[str, Stats], Stats, collections.Counter, list[tuple[
     per_set: dict[str, Stats] = {}
     overall = Stats()
     reasons: collections.Counter = collections.Counter()
+    distinct_texts: dict[str, set[str]] = {}
     executed_lines: list[tuple[str, str]] = []
 
     for path in manifest_set_paths():
@@ -115,11 +116,20 @@ def analyze() -> tuple[dict[str, Stats], Stats, collections.Counter, list[tuple[
                     executed_lines.append((card.name, line))
                 if result.failure_reason:
                     reasons[result.failure_reason] += 1
+                    # Also track the distinct *texts* behind each reason. A
+                    # reason covering 30 lines that are 30 different sentences
+                    # needs 30 productions; one covering 30 copies of the same
+                    # sentence needs one. The line count alone cannot tell
+                    # those apart, and reprint sets multiply it by the number
+                    # of printings.
+                    distinct_texts.setdefault(result.failure_reason, set()).add(
+                        " ".join(line.split()).lower()
+                    )
             if card_executed:
                 stats.cards_executed += 1
                 overall.cards_executed += 1
 
-    return per_set, overall, reasons, executed_lines
+    return per_set, overall, reasons, executed_lines, distinct_texts
 
 
 def render(
@@ -127,6 +137,7 @@ def render(
     overall: Stats,
     reasons: collections.Counter,
     executed_lines: list[tuple[str, str]],
+    distinct_texts: dict[str, set[str]],
 ) -> str:
     lines: list[str] = []
     add = lines.append
@@ -169,19 +180,24 @@ def render(
     )
     add("")
 
-    add("## Backlog — most common failure reasons")
+    add("## Backlog — failure reasons")
     add("")
     add(
-        "Each row is a production the grammar still needs, ordered by how many "
-        "lines it would unlock. Reasons tied to a scheduled roadmap phase are "
-        "annotated."
+        "**Lines** counts every failing line, so a card in four sets counts "
+        "four times. **Distinct** counts the different sentences behind the "
+        "reason, which is the number that predicts work: a reason covering 30 "
+        "copies of one sentence needs one production, and a reason covering 30 "
+        "different sentences needs something closer to 30. Sort by the ratio, "
+        "not by the first column — a reason whose two columns are nearly equal "
+        "is a long tail, not a missing production."
     )
     add("")
-    add("| Lines | Reason | Scheduled |")
-    add("| ---: | --- | --- |")
+    add("| Lines | Distinct | Reason | Scheduled |")
+    add("| ---: | ---: | --- | --- |")
     for reason, count in reasons.most_common(25):
         scheduled = _ROADMAPPED_REASONS.get(reason, "")
-        add(f"| {count} | {reason} | {scheduled} |")
+        distinct = len(distinct_texts.get(reason, ()))
+        add(f"| {count} | {distinct} | {reason} | {scheduled} |")
     add("")
 
     add("## Cards executing through the grammar")
@@ -231,7 +247,7 @@ def main() -> int:
     parser.add_argument("--accept", action="store_true", help="re-snapshot the ratchet floors")
     args = parser.parse_args()
 
-    per_set, overall, reasons, executed_lines = analyze()
+    per_set, overall, reasons, executed_lines, distinct_texts = analyze()
     measures = _measures(per_set, overall)
 
     if args.check:
@@ -254,7 +270,9 @@ def main() -> int:
         )
         print(f"Wrote ratchet floors to {RATCHET_PATH}")
 
-    OUTPUT_PATH.write_text(render(per_set, overall, reasons, executed_lines), encoding="utf-8")
+    OUTPUT_PATH.write_text(
+        render(per_set, overall, reasons, executed_lines, distinct_texts), encoding="utf-8"
+    )
     print(f"Wrote {OUTPUT_PATH}")
     print(
         f"parsed {measures['ALL']['parsed_pct']}% | "

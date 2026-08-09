@@ -279,3 +279,46 @@ def test_grammar_compilation_is_deterministic(all_set_paths, seed):
     first = [compile_card_oracle(card) for card in cards]
     second = [compile_card_oracle(card) for card in cards]
     assert first == second
+
+
+def test_combat_restrictions_match_the_legacy_table_exactly():
+    """The grammar's combat restrictions must equal engine/combat_restrictions.py.
+
+    This is what let the category be switched on: not "the grammar produced
+    something", but "it produced the same instruction kind and the same payload
+    the legacy path produces", on every such line in the pool. The land type and
+    the power threshold are payload data on both sides, so a card naming
+    Mountain or a threshold of 4 is compared the same way.
+    """
+    from engine.card_loader import load_catalog
+    from engine.combat_restrictions import combat_restriction_for
+    from engine.grammar import compile_line
+    from engine.oracle import normalize_creature_line
+
+    # Shapes the grammar deliberately does not claim yet. They must keep
+    # *failing the parser*, not lowering to an empty instruction list — a line
+    # that parses to nothing is the silent drop this whole invariant exists to
+    # prevent.
+    unclaimed_kinds = {"must_attack_each_combat", "cant_be_blocked_by_walls", "cant_attack", "cant_block"}
+
+    compared = 0
+    for card in load_catalog():
+        for raw_line in card.oracle_text.split("\n"):
+            line = raw_line.strip()
+            if not line:
+                continue
+            legacy = combat_restriction_for(normalize_creature_line(line))
+            if legacy is None:
+                continue
+            result = compile_line(line, card_name=card.name)
+            if legacy.kind in unclaimed_kinds:
+                assert not result.parsed, (
+                    f"{card.name}: {line!r} is not claimed by the grammar yet, so "
+                    "it must fail the parser rather than parse to nothing"
+                )
+                continue
+            got = [(i.kind, i.payload) for i in result.instructions]
+            assert got == [(legacy.kind, legacy.payload)], f"{card.name}: {line!r}"
+            compared += 1
+
+    assert compared, "no combat-restriction lines were compared"

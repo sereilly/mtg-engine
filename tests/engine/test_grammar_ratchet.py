@@ -25,7 +25,9 @@ import grammar_coverage  # noqa: E402
 
 @pytest.fixture(scope="module")
 def measures():
-    per_set, overall, _, _ = grammar_coverage.analyze()
+    # Starred so an added analysis output does not break this fixture: the
+    # ratchet only ever wants the first two.
+    per_set, overall, *_ = grammar_coverage.analyze()
     return grammar_coverage._measures(per_set, overall)
 
 

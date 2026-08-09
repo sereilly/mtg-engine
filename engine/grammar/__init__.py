@@ -97,6 +97,12 @@ GRAMMAR_CATEGORIES: frozenset[str] = frozenset(
         "damage", "pump", "life", "destruction", "tapping", "optional", "zones",
         "mana", "regeneration", "counterspells", "prevention", "recolor", "upkeep",
         "turns", "evasion", "tokens", "counters",
+        # Enabled after the differential showed the grammar's payloads equal
+        # engine/combat_restrictions.py's on every such line in the pool. The
+        # two shapes it does NOT claim ("attacks each combat if able",
+        # "can't be blocked by Walls") still fail the parser by name rather
+        # than lowering to nothing.
+        "combat_restrictions",
     }
 )
 

@@ -1040,6 +1040,44 @@ system.** What is left of layer 1 is copy *identity* (`copied_card`), which is
 already metadata-driven and read through `effective_card`; and layer 2, which
 this engine models as zone membership rather than a stored flag.
 
+### The grammar backlog was ranked by symptom, not by leverage
+
+`GRAMMAR_COVERAGE.md` ordered its backlog by failing-line count and described
+each row as "a production the grammar still needs, ordered by how many lines it
+would unlock". Both halves of that were misleading, and acting on it would have
+meant spending the migration's effort in the wrong place.
+
+Counting distinct *sentences* per reason instead shows why:
+
+| Reason | Lines | Distinct | What it really is |
+| --- | ---: | ---: | --- |
+| expected a subject | 199 | 78 | a long tail — Chaos Orb, Lich, Fastbond, one production each |
+| unrecognized effect verb | 89 | 31 | also a tail |
+| expected 'be' | 12 | **2** | **one production, twelve lines** |
+| modal line | 10 | 2 | one production |
+| expected a quantity | 6 | 2 | one production |
+
+The top row is 78 different sentences wearing one error message. The rows worth
+doing are near the bottom, where a handful of distinct texts account for many
+lines. Reprints inflate the first column further — a card in four sets counts
+four times — which is why the ranking flattered the tail.
+
+The table now carries both columns and says to sort by the ratio. That is a
+permanent change to the work queue, not a one-off observation.
+
+**Acting on it:** `expected 'be'` turned out to be the combat-restriction
+family — "can't attack unless defending player controls a <land>" and "can't
+block creatures with power N or greater" — which the engine *already*
+implements through `engine/combat_restrictions.py`. The grammar simply could
+not read them. A production plus a lowering closes that, and the differential
+holds the grammar's payloads to the legacy table's byte for byte, which is what
+allowed the category to be switched on. Executed coverage 34.9% → 35.9%.
+
+The two shapes the production does not claim ("attacks each combat if able",
+"can't be blocked by Walls") still fail the parser *by name*. A test asserts
+that specifically, because the failure mode to fear is not "unclaimed" — it is
+a line that parses to zero instructions and looks handled.
+
 ### The static-ability cluster, and why it is a phase-6 job
 
 20 of the remaining lines fail with "static abilities need the CR 613 layers

@@ -100,6 +100,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "search_library": "zones",
     "grant_extra_turn": "turns",
     "grant_unblockable_to_low_power_target": "evasion",
+    # Restrictions on declaring attackers/blockers (CR 506, 509).
+    "cant_attack_without_land_type": "combat_restrictions",
+    "cant_block_power_n_or_greater": "combat_restrictions",
     "counter_top_stack_spell": "counterspells",
     "tap_or_untap_target": "tapping",
     "draw_target_cards": "zones",
@@ -1406,6 +1409,17 @@ _UNBLOCKABLE_POWER_LIMIT = ast.Comparison("le", ast.Fixed(2))
 _REST_OF_TURN = ("this_turn", "until_end_of_turn")
 
 
+def _lower_combat_restriction(node: ast.CombatRestriction) -> tuple[OracleInstruction, ...]:
+    """``can't attack unless …`` / ``can't block creatures with power N …``.
+
+    Lowers to the instruction kinds the combat steps already dispatch on, with
+    the payloads ``engine/combat_restrictions.py`` produces for the legacy path
+    — byte for byte, so the differential can hold the two to agreement rather
+    than merely to "both did something".
+    """
+    return (OracleInstruction(node.kind, "", dict(node.payload)),)
+
+
 def _lower_cant_be(node: ast.CantBe) -> tuple[OracleInstruction, ...]:
     """"Target creature can't be regenerated/blocked this turn."
 
@@ -1568,6 +1582,9 @@ def lower_statement(
 
     if isinstance(statement, ast.ExtraTurn):
         return _lower_extra_turn(statement)
+
+    if isinstance(statement, ast.CombatRestriction):
+        return _lower_combat_restriction(statement)
 
     if isinstance(statement, ast.CantBe):
         return _lower_cant_be(statement)
