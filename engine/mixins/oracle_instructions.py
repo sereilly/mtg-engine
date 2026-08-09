@@ -382,12 +382,9 @@ class OracleInstructionsMixin:
             # undoes it when the Aura leaves (CR 611.3) — e.g. Phantasmal Terrain /
             # Evil Presence's land-type change reverts to the printed type.
             granted_meta: list[str] = []
-            if "indestructible" in text:
-                target_land.metadata["is_indestructible"] = True
-                granted_meta.append("is_indestructible")
-            if "can't be enchanted by other auras" in text:
-                target_land.metadata["cant_be_enchanted_by_auras"] = True
-                granted_meta.append("cant_be_enchanted_by_auras")
+            # Consecrate Land's indestructible and can't-be-enchanted both
+            # derive from the Aura now (engine/auras.py), so neither is stamped
+            # and neither needs undoing when it leaves.
             if "enchanted land is a swamp" in text:
                 target_land.metadata["land_type_override"] = "swamp"
                 # The type change ends with the Aura, even though the override may

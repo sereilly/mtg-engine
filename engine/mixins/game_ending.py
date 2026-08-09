@@ -408,7 +408,7 @@ class GameEndingMixin:
                     if (
                         "Aura" in perm.card.type_line
                         and attached_to is not None
-                        and attached_to.metadata.get("cant_be_enchanted_by_auras")
+                        and self._cant_be_enchanted(attached_to)
                         and "can't be enchanted by other auras" not in perm.card.oracle_text.lower()
                     ):
                         self._permanent_to_graveyard(player, perm)

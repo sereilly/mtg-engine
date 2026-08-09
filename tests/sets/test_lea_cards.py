@@ -4007,7 +4007,10 @@ def test_consecrate_land_grants_indestructible_to_enchanted_land(all_cards):
 
     assert result.supported
     land_perm = p1.battlefield[0]
-    assert land_perm.metadata.get("is_indestructible") is True
+    # Both grants derive from the attached Aura (engine/auras.py), so these ask
+    # what the land *is* rather than which flags were stamped on it.
+    assert game._is_indestructible(land_perm) is True
+    assert game._cant_be_enchanted(land_perm) is True
     aura_perm = next(p for p in p1.battlefield if p.card.name == "Consecrate Land")
     assert aura_perm.metadata.get("attached_to") is land_perm
 
@@ -4056,13 +4059,15 @@ def test_consecrate_land_grant_ends_when_aura_leaves(all_cards):
 
     assert game.cast_from_hand(0, "Consecrate Land", target_player_index=0, target_permanent_index=0).supported
     land = p1.battlefield[0]
-    assert land.metadata.get("is_indestructible") is True
+    assert game._is_indestructible(land) is True
+    assert game._cant_be_enchanted(land) is True
 
-    # Destroying the Aura ends both continuous grants on the land.
+    # Destroying the Aura ends both continuous grants on the land — by the Aura
+    # no longer being attached, not by anything clearing what it wrote.
     result = game.cast_from_hand(1, "Disenchant", target_player_index=0, target_permanent_index=1)
     assert result.supported
-    assert land.metadata.get("is_indestructible") is not True
-    assert land.metadata.get("cant_be_enchanted_by_auras") is not True
+    assert game._is_indestructible(land) is False
+    assert game._cant_be_enchanted(land) is False
 
 
 def test_consecrate_land_graveyards_existing_other_auras_on_enter(all_cards):

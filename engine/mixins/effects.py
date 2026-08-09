@@ -6,6 +6,7 @@ import re
 from ..ante import is_ante_card
 from ..card_hooks import UNTAPPED_ARTIFACT_PROTECTORS
 from ..handlers._common import permanent_matches_filter, pick_target_permanent
+from ..auras import aura_restriction_active
 from ..models import CardDefinition, Permanent, PlayerState
 from ..prevention import apply_prevention
 from ..replacement_choices import pending_choices_for, resolve_choice
@@ -103,15 +104,24 @@ class EffectsMixin:
     def _is_indestructible(self, permanent: Permanent) -> bool:
         """CR 700.4: a permanent with indestructible can't be destroyed by 'destroy'
         effects or lethal damage. In LEA, Consecrate Land grants this to a land."""
-        return bool(permanent.metadata.get("is_indestructible")) or self._untapped_artifact_protector_active(permanent)
+        # Indestructible from an attached Aura (Consecrate Land) arrives through
+        # layer 6 like any other keyword, so it ends when the Aura does. The
+        # metadata flag stays for a grant with a lifetime of its own.
+        return (
+            bool(permanent.metadata.get("is_indestructible"))
+            or self._has_keyword(permanent, "indestructible")
+            or self._untapped_artifact_protector_active(permanent)
+        )
 
     def _cant_be_enchanted(self, permanent: Permanent) -> bool:
         """Whether an Aura can't be attached to *permanent* — either a per-permanent
         flag set by an effect, or Guardian Beast's continuous grant to the
         noncreature artifacts its controller controls while it's untapped."""
-        return bool(
-            permanent.metadata.get("cant_be_enchanted_by_auras")
-        ) or self._untapped_artifact_protector_active(permanent)
+        return (
+            bool(permanent.metadata.get("cant_be_enchanted_by_auras"))
+            or aura_restriction_active(permanent, "cant_be_enchanted_by_auras")
+            or self._untapped_artifact_protector_active(permanent)
+        )
 
     def _untapped_artifact_protector_active(self, permanent: Permanent) -> bool:
         """Guardian Beast-style: "As long as this creature is untapped,

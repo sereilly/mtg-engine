@@ -378,6 +378,15 @@ def _activated_requires_wall(card: CardDefinition) -> bool:
     return any(re.search(r"\btarget wall\b", line) for line in _activated_lines(card))
 
 
+def _cant_be_enchanted_by_auras(perm) -> bool:
+    """Aura-derived or flagged; one question, both sources."""
+    from .auras import aura_restriction_active
+
+    return bool(perm.metadata.get("cant_be_enchanted_by_auras")) or aura_restriction_active(
+        perm, "cant_be_enchanted_by_auras"
+    )
+
+
 def _activated_requires_aura_on_land(card: CardDefinition) -> bool:
     """Pyramids mode 1: "Destroy target Aura attached to a land." Must be
     recognized before the land classifier, whose regex would otherwise read
@@ -908,7 +917,7 @@ class LegalityMixin:
         if kind == "land":
             if perm.card.primary_type != "land":
                 return False
-            if casting_aura and perm.metadata.get("cant_be_enchanted_by_auras"):
+            if casting_aura and _cant_be_enchanted_by_auras(perm):
                 return False
             if spec.get("exclude_swamp"):
                 override = str(perm.metadata.get("land_type_override", "")).lower()

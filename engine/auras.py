@@ -347,6 +347,11 @@ _KEYWORD_GRANT = re.compile(
 )
 
 
+_COMPOUND_INDESTRUCTIBLE = re.compile(
+    rf"^enchanted {_NOUN} has indestructible and can't be enchanted by other auras$"
+)
+
+
 def aura_keyword_grants(oracle_text: str) -> tuple[str, ...]:
     """Keyword abilities an Aura grants to the permanent it enchants.
 
@@ -363,6 +368,12 @@ def aura_keyword_grants(oracle_text: str) -> tuple[str, ...]:
         match = _KEYWORD_GRANT.match(line)
         if match is not None:
             grants.append(match.group("keyword"))
+        elif _COMPOUND_INDESTRUCTIBLE.match(line):
+            # Consecrate Land prints one line carrying two effects. Its trailing
+            # clause is claimed separately as a restriction, so matching only
+            # the keyword half here drops nothing — which is the whole reason
+            # the compound is spelled out rather than matched loosely.
+            grants.append("indestructible")
     return tuple(grants)
 
 
@@ -396,6 +407,15 @@ _RESTRICTIONS: tuple[tuple[re.Pattern[str], str], ...] = (
     (
         re.compile(rf"^enchanted {_NOUN} can attack as though it didn't have defender$"),
         "ignores_defender",
+    ),
+    (
+        # The other half of Consecrate Land's compound line; the indestructible
+        # half is a layer-6 keyword grant (aura_keyword_grants).
+        re.compile(
+            rf"^enchanted {_NOUN} has indestructible and "
+            r"can't be enchanted by other auras$"
+        ),
+        "cant_be_enchanted_by_auras",
     ),
     (
         # Instill Energy. NOT a haste grant: CR 702.10b lifts the attack clause

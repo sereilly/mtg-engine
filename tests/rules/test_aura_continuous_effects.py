@@ -195,7 +195,10 @@ def test_613_1f_a_granted_quoted_ability_is_not_claimed_as_a_keyword(catalog):
 
     assert aura_keyword_grants(catalog["Farmstead"].oracle_text) == ()
     assert aura_keyword_grants(catalog["White Ward"].oracle_text) == ()
-    assert aura_keyword_grants(catalog["Consecrate Land"].oracle_text) == ()
+    # Consecrate Land's line carries two effects. The keyword half is claimed
+    # here and the trailing clause separately as a restriction, so the compound
+    # is fully accounted for rather than half-matched.
+    assert aura_keyword_grants(catalog["Consecrate Land"].oracle_text) == ("indestructible",)
 
 
 @pytest.mark.cr("509.1b")

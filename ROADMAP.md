@@ -902,6 +902,32 @@ That bug is the argument for this whole phase in one card: it was invisible
 while the effect was "a flag that means roughly haste", and obvious the moment
 the question became "what exactly does this Aura permit?".
 
+### Phase 6, fourth slice: Consecrate Land — and where the thread stops
+
+Consecrate Land prints one line carrying two effects: "Enchanted land has
+indestructible **and** can't be enchanted by other Auras." The indestructible
+half is a layer-6 keyword grant, the trailing clause a restriction. Both are
+claimed explicitly rather than by loosening the keyword pattern to tolerate a
+trailing "and …" — a pattern that matches half a line and ignores the rest is
+the dropped-rider bug, and this table exists to prevent it.
+
+**Auras that stamp metadata on their target: 2 of 44** (44 at the start of the
+phase). The two survivors are Evil Presence and Phantasmal Terrain, and they
+are where this thread deliberately stops.
+
+`land_type_override` is not an Aura problem. It has **17 readers** across the
+engine, several of which read it *instead of* `has_type` — the same layer-bypass
+class already fixed in the shared filter matcher — and it is written by
+non-Aura sources too (Magical Hack through `board_misc`, the upkeep step). It
+is layer 3 and layer 4 work with its own blast radius, not the tail of this
+one. Doing it here would mean touching seventeen call sites under the heading
+of an Aura change.
+
+Both remaining accessors (`_is_indestructible`, `_cant_be_enchanted`) keep
+their metadata channel alongside the derived source, for the same reason
+protection did: a grant with a lifetime of its own has nowhere else to live,
+and the rules do not care where the quality came from.
+
 ### The static-ability cluster, and why it is a phase-6 job
 
 20 of the remaining lines fail with "static abilities need the CR 613 layers
