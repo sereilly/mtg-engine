@@ -25,13 +25,29 @@ def _pool_trigger_pairs() -> dict[tuple[str, str], list[str]]:
     return pairs
 
 
+# Handlers written for a card whose set is implemented but not yet in the
+# manifest. Pending is not the same as dead: each names the card it serves, and
+# the entry has to be removed when that set lands — at which point the pair
+# becomes reachable and the guard covers it again.
+#
+# An entry that outlives its set is exactly the stale exemption this file warns
+# about, so keep the list short and delete on landing.
+PENDING_A_SET: dict[tuple[str, str], str] = {
+    ("upkeep_self", "upkeep_damage_unless_discard"): "Mishra's War Machine (3ED)",
+    ("upkeep_self", "upkeep_put_counter_on_self"): "Armageddon Clock (3ED)",
+}
+
+
 def test_every_registered_upkeep_effect_is_reachable_from_the_pool():
     """A registry entry no card can produce is dead code that still reads as
     support. Each key must be one the compiler actually emits — which also
     means this fails loudly if a parser change renames a condition or kind out
     from under a handler, instead of the handler silently never running."""
     pairs = _pool_trigger_pairs()
-    unreachable = sorted(key for key in UPKEEP_EFFECTS if key not in pairs)
+    unreachable = sorted(
+        key for key in UPKEEP_EFFECTS
+        if key not in pairs and key not in PENDING_A_SET
+    )
 
     assert not unreachable, (
         "upkeep effects registered for (condition, kind) pairs no card in the "

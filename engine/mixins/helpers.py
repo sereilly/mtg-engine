@@ -61,12 +61,25 @@ class GameHelpersMixin:
         Jade Statue animated until end of combat)."""
         return permanent.is_creature
 
+    def _controlled_since_turn_start(self, permanent: Permanent) -> bool:
+        """Whether *permanent* has been under its controller's control since
+        their most recent turn began (CR 302.6's condition).
+
+        The condition itself, separated from summoning sickness. CR 302.6 uses
+        it for creatures, and a card can name it directly for any permanent —
+        Rocket Launcher's "activate only if you've controlled this artifact
+        continuously since the beginning of your most recent turn" is the same
+        question about an artifact, and asking `_is_summoning_sick` would have
+        answered "no" purely because an artifact is not a creature.
+        """
+        return permanent.metadata.get("summoning_sickness_turn") != self.turn
+
     def _is_summoning_sick(self, permanent: Permanent) -> bool:
         if not self._is_creature(permanent):
             return False
         if self._has_keyword(permanent, "Haste"):
             return False
-        return permanent.metadata.get("summoning_sickness_turn") == self.turn
+        return not self._controlled_since_turn_start(permanent)
 
     def _advance_summoning_sickness(self, active_player_index: int) -> None:
         """Carry summoning sickness across other players' turns (CR 302.6).

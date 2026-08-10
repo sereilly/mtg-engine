@@ -78,3 +78,36 @@ def deal_n_damage(text: str, activated: bool) -> RuleResult:
         effect_kind = activated_kind(activated, "damage")
         return _instruction("deal_damage", amount=int(dmg_match.group(1))), effect_kind
     return None
+
+
+# Rocket Launcher: "{2}: This artifact deals 1 damage to any target. Destroy
+# this artifact at the beginning of the next end step. Activate only if you've
+# controlled this artifact continuously since the beginning of your most recent
+# turn."
+#
+# Both trailing sentences ride on the damage instruction's payload rather than
+# becoming instructions of their own: the destroy is a *consequence of having
+# activated*, and the control clause is a restriction on activating at all —
+# neither is a step in a sequence.
+_SELF_DESTROY_AT_END_RE = re.compile(
+    r"this \w+ deals (?P<amount>\d+) damage to any target\. destroy this \w+ "
+    r"at the beginning of the next end step"
+)
+
+
+@parse_rule(14_050)
+def damage_then_destroy_self_at_end_step(text: str, activated: bool) -> RuleResult:
+    match = _SELF_DESTROY_AT_END_RE.search(text)
+    if match is None:
+        return None
+    return (
+        _instruction(
+            "deal_damage",
+            amount=int(match.group("amount")),
+            destroys_source_at_end_step=True,
+            requires_control_since_turn_start=(
+                "continuously since the beginning of your most recent turn" in text
+            ),
+        ),
+        activated_kind(activated, "damage"),
+    )

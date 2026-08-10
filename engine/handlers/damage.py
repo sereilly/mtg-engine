@@ -20,6 +20,13 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
     source_permanent = context.source_permanent
     x_value = context.x_value
 
+    # Rocket Launcher: "Destroy this artifact at the beginning of the next end
+    # step." A consequence of having activated, so it is marked here rather
+    # than sequenced — the end step's existing delayed-destruction sweep does
+    # the rest (phases/end_step.py:_delayed_eot_removal).
+    if instruction.payload.get("destroys_source_at_end_step") and source_permanent is not None:
+        source_permanent.metadata["destroy_at_next_end_step"] = True
+
     damage = resolve_amount(instruction.payload.get("amount", 0), x_value)
     target_perm_idx = context.target_permanent_index
     # "…and N damage to you": a second damage instruction in the same sequence

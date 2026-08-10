@@ -171,6 +171,17 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # card. There is no instruction to point at, so without this channel a
     # card whose whole behaviour is one of these reads as unclaimed text.
     ("global_statics.py", lambda s: global_static_for(s) is not None),
+    # The rider of a global static that outlives its source. It is part of the
+    # same ability, matched on the two-sentence form, but arrives here as its
+    # own line.
+    ("global_statics.py (lingering rider)",
+     lambda s: s.startswith("if this enchantment leaves the battlefield, this effect continues")),
+    # Armageddon Clock's draw-step damage, resolved by
+    # phases/draw_step.py:_resolve_draw_step_counter_damage from the source's
+    # own text and its current counter count.
+    ("phases/draw_step.py (counter damage)",
+     lambda s: s.startswith("at the beginning of your draw step, this")
+     and "counters on it to each player" in s),
     ("draw_step_modifiers.py", lambda s: draw_step_bonus_for(s) is not None),
     ("cost_modifiers.py", lambda s: bool(cost_modifiers_for(s))),
     ("activation gate (stack_casting)", lambda s: any(g in s for g in _ACTIVATION_GATES)),

@@ -8,7 +8,14 @@ from ..oracle_types import _NUMBER_WORDS, _extract_mana_cost_from_text, _instruc
 from .base import RuleResult, parse_rule
 
 _DAMAGE_UNLESS_PAY_RE = re.compile(r"this \w+ deals (\d+) damage to you unless you pay")
-_SELF_DAMAGE_RE = re.compile(r"this creature deals (\d+) damage to you")
+# Negative lookahead on "unless": the damage is not unconditional when the
+# card offers an alternative, and matching the prefix anyway is how
+# Mishra's War Machine came to deal 3 every upkeep with no choice and no
+# tap while reporting supported.
+_SELF_DAMAGE_RE = re.compile(r"this creature deals (\d+) damage to you(?! unless)")
+_DAMAGE_UNLESS_DISCARD_RE = re.compile(
+    r"this creature deals (?P<amount>\d+) damage to you unless you discard a card"
+)
 _CREATURES_ABOVE_RE = re.compile(r"(\w+) or more creature cards above it")
 _SACRIFICE_LAND_CONDITIONAL_DAMAGE_RE = re.compile(
     r"sacrifice a land\. if you sacrifice an? (\w+) this way, this creature deals (\d+) damage to you"
@@ -187,3 +194,47 @@ def upkeep_pay_per_creature_untap_color(text: str, activated: bool) -> RuleResul
             "upkeep_pay_per_creature_untap_color", color="U", cost_per=4
         ), "upkeep_effect"
     return None
+
+
+@parse_rule(1_450)
+def upkeep_damage_unless_discard(text: str, activated: bool) -> RuleResult:
+    """"At the beginning of your upkeep, this creature deals N damage to you
+    unless you discard a card. If it deals damage to you this way, tap it."
+    (Mishra's War Machine.)
+
+    The tap is conditional on which branch was taken, so it rides on the
+    payload rather than being a second instruction: a sequence would tap
+    whether or not the damage happened.
+    """
+    match = _DAMAGE_UNLESS_DISCARD_RE.search(text)
+    if match is None:
+        return None
+    return (
+        _instruction(
+            "upkeep_damage_unless_discard",
+            amount=int(match.group("amount")),
+            taps_source="if it deals damage to you this way, tap it" in text,
+        ),
+        "upkeep_effect",
+    )
+
+
+_DOOM_COUNTER_RE = re.compile(r"put a (?P<kind>\w+) counter on this \w+$")
+
+
+@parse_rule(1_460)
+def upkeep_put_counter_on_self(text: str, activated: bool) -> RuleResult:
+    """"At the beginning of your upkeep, put a <kind> counter on this
+    <permanent>." (Armageddon Clock.)
+
+    The counter's name is payload, not part of the kind: Cyclone's wind
+    counters and Armageddon Clock's doom counters accumulate identically and
+    differ only in what a later clause counts.
+    """
+    match = _DOOM_COUNTER_RE.search(text)
+    if match is None:
+        return None
+    return (
+        _instruction("upkeep_put_counter_on_self", counter=match.group("kind")),
+        "upkeep_effect",
+    )

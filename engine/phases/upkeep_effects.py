@@ -189,6 +189,61 @@ class UpkeepEffectsMixin:
             permanent, self.players.index(controller), player_index, amount, trig.source_line
         )
 
+    @upkeep_effect("upkeep_self", "upkeep_damage_unless_discard")
+    def _on__upkeep_self__upkeep_damage_unless_discard(self, ctx: UpkeepContext) -> None:
+        """Mishra's War Machine: "deals N damage to you unless you discard a
+        card. If it deals damage to you this way, tap it."
+
+        Two riders the previous parse dropped, and they interact: the tap only
+        happens on the *damage* branch, so it cannot be a separate instruction.
+
+        With an empty hand there is no choice — discarding is impossible, so the
+        damage is taken and the source taps. With cards in hand the controller
+        chooses; headless and AI play discard, which is deterministic and keeps
+        the machine untapped, and an interactive prompt can replace it without
+        changing what the rules do here.
+        """
+        controller = ctx.controller
+        permanent = ctx.permanent
+        trig = ctx.trig
+        amount = int(trig.instruction.payload.get("amount", 0))
+        taps_source = bool(trig.instruction.payload.get("taps_source"))
+
+        if controller.hand:
+            discarded = controller.hand.pop(0)
+            controller.graveyard.append(discarded)
+            self.log.append(
+                f"{controller.name} discarded {discarded.name} to {permanent.card.name}"
+            )
+            return
+
+        ctx.enqueue_damage(
+            permanent,
+            self.players.index(controller),
+            ctx.player_index,
+            amount,
+            trig.source_line,
+        )
+        if taps_source:
+            self.become_tapped(permanent)
+            self.log.append(f"{permanent.card.name} tapped (it dealt damage this way)")
+
+    @upkeep_effect("upkeep_self", "upkeep_put_counter_on_self")
+    def _on__upkeep_self__upkeep_put_counter_on_self(self, ctx: UpkeepContext) -> None:
+        """Armageddon Clock: "put a doom counter on this artifact."
+
+        The counter's name comes from the payload, so the accumulation is one
+        handler for every card that counts something up on its own upkeep.
+        """
+        permanent = ctx.permanent
+        counter = str(ctx.trig.instruction.payload.get("counter", "doom"))
+        key = f"{counter}_counters"
+        permanent.metadata[key] = int(permanent.metadata.get(key, 0)) + 1
+        self.log.append(
+            f"{permanent.card.name} got a {counter} counter "
+            f"({permanent.metadata[key]} total)"
+        )
+
     @upkeep_effect("upkeep_each", "upkeep_pay_per_creature_untap_color")
     def _on__upkeep_each__upkeep_pay_per_creature_untap_color(self, ctx: UpkeepContext) -> None:
         controller = ctx.controller

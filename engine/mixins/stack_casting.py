@@ -905,6 +905,24 @@ class StackCastingMixin:
             return SimulationResult(permanent.card.name, False, "unsupported", details)
 
         program = compile_card_oracle(permanent.effective_card)
+
+        # "Activate only if you've controlled this artifact continuously since
+        # the beginning of your most recent turn" (Rocket Launcher). CR 302.6's
+        # clause applied to an artifact, so it reuses the same marker rather
+        # than inventing a second notion of "arrived too recently".
+        for ability in program.activated_abilities:
+            if ability.instruction is None:
+                continue
+            if not ability.instruction.payload.get("requires_control_since_turn_start"):
+                continue
+            if not self._controlled_since_turn_start(permanent):
+                details = (
+                    f"{permanent.card.name} has not been controlled continuously "
+                    "since the beginning of your most recent turn"
+                )
+                self.log.append(details)
+                return SimulationResult(permanent.card.name, False, "unsupported", details)
+
         target_idx = target_player_index if target_player_index is not None else (1 - controller_index)
         target_player = self.players[target_idx]
 

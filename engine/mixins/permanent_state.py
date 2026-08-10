@@ -118,7 +118,7 @@ class PermanentStateMixin:
         caster_index: int,
         target_player_index: int | None,
     ) -> None:
-        if permanent.card.primary_type in ("creature", "land"):
+        if permanent.card.primary_type in ("creature", "land", "artifact"):
             # Lands are stamped too: if a land later becomes a creature (Kormus Bell,
             # Living Lands) it must respect summoning sickness based on when it came
             # under control (CR 302.6). The marker is ignored for non-creature lands.

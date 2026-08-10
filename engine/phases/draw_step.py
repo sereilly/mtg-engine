@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 """Draw step (CR 504).
 
 The active player draws a card as a turn-based action. Bonus draws granted to
@@ -43,6 +45,32 @@ class DrawStepMixin:
             })
         return choices
 
+    _COUNTER_DAMAGE_RE = re.compile(
+        r"at the beginning of your draw step, this \w+ deals damage equal to "
+        r"the number of (?P<kind>\w+) counters on it to each player"
+    )
+
+    def _resolve_draw_step_counter_damage(self, player_index: int) -> None:
+        """Armageddon Clock's draw-step damage.
+
+        Only the *controller's* draw step fires it ("your draw step"), and the
+        damage goes to every player including them.
+        """
+        controller = self.players[player_index]
+        for permanent in list(controller.battlefield):
+            text = " ".join(permanent.effective_card.oracle_text.lower().split())
+            match = self._COUNTER_DAMAGE_RE.search(text)
+            if match is None:
+                continue
+            amount = int(permanent.metadata.get(f"{match.group('kind')}_counters", 0))
+            if amount <= 0:
+                continue
+            for victim in self.players:
+                self._deal_damage_to_player(victim, amount, source=permanent)
+            self.log.append(
+                f"{permanent.card.name} dealt {amount} damage to each player"
+            )
+
     def resolve_draw_step(
         self,
         player_index: int,
@@ -55,6 +83,13 @@ class DrawStepMixin:
         self._set_phase_and_step(phase, step)
         self._on_step_or_phase_begin(phase, step)
         player = self.players[player_index]
+
+        # "At the beginning of your draw step, this artifact deals damage equal
+        # to the number of <kind> counters on it to each player." (Armageddon
+        # Clock.) Derived from the source's own text and its current counter
+        # count, so the amount is never stored anywhere that could drift from
+        # the counters.
+        self._resolve_draw_step_counter_damage(player_index)
 
         # Nafs Asp: obligations armed against this player resolve now, before
         # the draw itself — "before that draw step" (a human is prompted via
