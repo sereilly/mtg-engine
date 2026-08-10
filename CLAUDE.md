@@ -362,10 +362,32 @@ touching anything that consumes randomness.
 
 ## Web layer
 
-`web/app.py` is the FastAPI app (`/api/...` routes + static UI in `web/static/`).
+`web/app.py` is the FastAPI app (`/api/...` routes + static UI in `web/static/`)
+and **nothing else** — it is the one place a route is declared. Everything it
+used to hold is a module beside it, **layered**: `web/__init__.py` declares the
+order in `LAYERS` and a module may import only from one *earlier* in it, guarded
+by `tests/ui/test_web_layering.py` (which catches a function-level import, the
+form that produces no `ImportError` and so rots silently).
+
+| Module | Job |
+| --- | --- |
+| `runtime.py` | the card pool, the three store instances, session lookup |
+| `events.py` | server-sent events — the one thing the API *pushes* |
+| `seats.py` | seat kind, who has lost, whether to hold priority |
+| `serialization.py` | engine object → client JSON, one function per kind |
+| `catalog.py` | the pool and decks as the client browses them |
+| `verification_report.py` | the verification tracker's read side |
+| `pregame.py` | coin flip and mulligans |
+| `turn_steps.py` | the beginning phase and the turn's boundaries |
+| `combat_prompts.py` | banding / multiblock / pile-division assignments |
+| `game_flow.py` | priority, phase advancement, AI stepping |
+| `state_view.py` | the whole-state payload a client polls |
+| `debug_actions.py` | Debug-Menu board manipulation, raw-state injection |
+| `actions.py` | the one dispatch over `ActionKind` |
+
 The card pool is `CARD_PATHS`, read from `cards/manifest.json` via
 `engine.card_loader.manifest_set_paths()` and loaded once into `CARD_CATALOG`
-at process startup. **Adding a set means ingesting it and appending one
+at process startup (`runtime.py`). **Adding a set means ingesting it and appending one
 manifest entry** — the web app, the test fixtures, and the coverage scripts all
 read that one registry. Reprints dedupe to a single card by `oracle_id` (first
 printing wins) with every printing recorded in `CardDefinition.printings`.
@@ -373,7 +395,9 @@ State lives in in-memory stores: `session_store.py`
 (games; takes the loaded catalog, not a path — never re-reads the JSON per
 session), `deck_store.py` (decks, incl. Moxfield import), `verification_store.py`.
 Game actions funnel through one endpoint, `POST /api/sessions/{id}/action`,
-dispatched by the `ActionKind` literal in `web/schemas.py`. Session `mode` must
+dispatched by the `ActionKind` literal in `web/schemas.py` — one chain in
+`web/actions.py`, because the preamble and tail around it apply to every action.
+Session `mode` must
 be one of the literals `human_vs_ai`, `ai_vs_ai`, `human_vs_human`,
 `free_for_all` (the last is 3–4 seats, configured per seat via the `seats`
 list instead of the host/guest field pairs).
@@ -383,7 +407,7 @@ kind plus the three loops that render the prompts a viewer may see, refuse the
 actions a pending prompt blocks, and answer AI-owned prompts with their
 defaults. All three read the registry (see `engine/pending_choices.py`), so a
 new prompt is covered by construction rather than by remembering three edits in
-`app.py`.
+the routes.
 
 The board UI is **canvas-rendered** (`web/static/battlefield-canvas.js`).
 

@@ -7,7 +7,7 @@ and which permanents/players are legal targets for a spell or ability by parsing
 oracle text client-side. That duplicated engine rules and drifted from them. This
 module centralises those queries on the backend so the server is the single source
 of truth: it computes the legal choices and the web layer ships them to the
-frontend (see ``web/app.py`` serialization), which only renders and validates
+frontend (see ``web/serialization.py``), which only renders and validates
 clicks against the supplied lists.
 
 Two concerns live here:

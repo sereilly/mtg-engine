@@ -36,7 +36,7 @@ only the first. A shield that answered "do I apply?" by decrementing itself
 would be spent on effects the player was merely asked about.
 
 **Legacy views.** The old field names survive as properties over this collection
-(see ``engine/models.py``), so ``web/app.py``'s payload, the AI simulator's
+(see ``engine/models.py``), so ``web/serialization.py``'s payload, the AI simulator's
 snapshot and the existing tests read exactly what they always did. They are
 derived on every read, so they cannot disagree with the shields.
 """

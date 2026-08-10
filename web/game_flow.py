@@ -1,0 +1,435 @@
+"""Priority and phase advancement: the game moving forward between
+HTTP requests.
+
+:func:`_advance_phase` is the engine of the whole app. It runs the next step's
+turn-based actions and keeps going until something has to stop it — a seat that
+holds priority, a pending decision, an outstanding combat assignment. The AI
+stepping functions sit here rather than in a module of their own because they
+are the *same* loop seen from the other side: an AI seat is one that never
+stops, so driving it is calling this until a human is owed something.
+"""
+
+from __future__ import annotations
+
+from fastapi import HTTPException
+
+from engine.ai_policy import (
+    choose_activation_action,
+    choose_cast_action,
+    choose_combat_blockers,
+    choose_combat_instant_cast_action,
+)
+
+from .prompts import auto_resolve_ai_prompts
+from .session_store import Session
+
+from .seats import (
+    _ai_should_hold,
+    _hold_priority_for_human,
+    _seat_type,
+    _self_should_hold,
+)
+from .turn_steps import (
+    _cleanup_discard_requirement,
+    _clear_cleanup_selection,
+    _has_island_sanctuary,
+    _resume_deferred_upkeep,
+    _start_next_turn,
+)
+from .combat_prompts import (
+    _ai_assign_combat_damage,
+    _ai_declare_attackers,
+    _band_blocker_assignment_pending,
+    _banding_assignment_pending,
+    _multiblock_split_pending,
+)
+
+
+def _auto_resolve_ai_pending(session: Session) -> None:
+    """Answer every prompt an AI seat owes, with that kind's recorded default.
+
+    One loop over the queue, so a newly registered prompt is covered by
+    construction. This was twelve near-identical functions — one per prompt,
+    each re-deriving the seat and calling a bespoke resolver — and the two the
+    list was missing (Aladdin's Lamp, Ring of Ma'rûf) would have stalled a seat
+    handed from a human to the AI. A missing entry does not misbehave; it hangs
+    the game on that seat forever.
+    """
+    auto_resolve_ai_prompts(session.game, lambda seat: _seat_type(session, seat))
+
+
+def _ai_step(session: Session) -> bool:
+    """Run one AI action for the current turn.
+
+    Returns True when the AI has nothing more to do this turn (caller should end
+    the turn).  Returns False when the AI queued a spell and passed priority to a
+    human opponent — the turn must NOT be ended yet; the human must act first.
+    """
+    seat = session.current_turn
+    game = session.game
+
+    _auto_resolve_ai_pending(session)
+
+    has_human_opponent = any(
+        _seat_type(session, s) == "human"
+        for s in range(len(game.players))
+        if s != seat
+    )
+
+    if game.priority_player_index is not None and game.priority_player_index != seat:
+        return False
+
+    # choose_cast_action covers sorcery-speed plays (enchantments, sorceries,
+    # creatures, artifacts, lands), which are legal only during the active player's
+    # main phase with an empty stack. Without this guard the AI would, e.g., drop an
+    # enchantment during the combat damage step. Instants are handled separately via
+    # _ai_respond_to_priority / the declare-blockers window.
+    sorcery_speed_ok = (
+        game.active_player_index == seat
+        and game.current_step in ("precombat_main", "postcombat_main")
+        and not game.stack
+    )
+    cast_action = choose_cast_action(game, seat) if sorcery_speed_ok else None
+    if cast_action is not None:
+        card_to_cast = game.players[seat].hand[cast_action.hand_index]
+        for permanent_index in cast_action.land_tap_indices:
+            permanent = game.players[seat].battlefield[permanent_index]
+            game.tap_land_for_mana(seat, permanent.card.name, permanent_index=permanent_index)
+
+        if has_human_opponent:
+            result = game.queue_from_hand(
+                seat,
+                card_to_cast.name,
+                target_player_index=cast_action.target_player_index,
+                target_permanent_index=cast_action.target_permanent_index,
+                x_value=cast_action.x_value,
+            )
+            if result.supported:
+                game.note_priority_action_taken(seat)
+                # NOTE (frontend FFA pass): route through the priority-exchange
+                # cascade rather than a bare engine pass. In a 3+ player (FFA)
+                # game, the seat right after `seat` in turn order may be a
+                # second AI player rather than the human — only this cascade
+                # (already used by the "pass_priority" action handler) drives
+                # that seat's response instead of stalling with priority stuck
+                # on an AI seat no client action can ever advance.
+                _run_priority_exchange(session, seat)
+                return False  # paused — human has priority over the spell on the stack
+        else:
+            game.cast_from_hand(
+                seat,
+                card_to_cast.name,
+                target_player_index=cast_action.target_player_index,
+                target_permanent_index=cast_action.target_permanent_index,
+                x_value=cast_action.x_value,
+            )
+            _auto_resolve_ai_pending(session)
+
+    activation_action = choose_activation_action(game, seat)
+    if activation_action is not None:
+        for permanent_index in activation_action.land_tap_indices:
+            permanent = game.players[seat].battlefield[permanent_index]
+            game.tap_land_for_mana(seat, permanent.card.name, permanent_index=permanent_index)
+        game.activate_permanent_ability(
+            seat,
+            activation_action.permanent_name,
+            target_player_index=activation_action.target_player_index,
+            permanent_index=activation_action.permanent_index,
+        )
+        _auto_resolve_ai_pending(session)
+
+    return True
+
+
+def _ai_respond_to_priority(session: Session, seat: int) -> str | None:
+    game = session.game
+    if not game.has_priority(seat):
+        return None
+
+    instant_action = choose_combat_instant_cast_action(game, seat)
+    if instant_action is not None:
+        card_to_cast = game.players[seat].hand[instant_action.hand_index]
+        for permanent_index in instant_action.land_tap_indices:
+            permanent = game.players[seat].battlefield[permanent_index]
+            game.tap_land_for_mana(seat, permanent.card.name, permanent_index=permanent_index)
+        result = game.queue_from_hand(
+            seat,
+            card_to_cast.name,
+            target_player_index=instant_action.target_player_index,
+            x_value=instant_action.x_value,
+        )
+        if result.supported:
+            game.note_priority_action_taken(seat)
+
+    if game.has_priority(seat):
+        return game.pass_priority(seat)
+    return None
+
+
+def _auto_advance_after_all_passed(session: Session, pass_result: str | None) -> None:
+    if pass_result != "all_passed_empty":
+        return
+
+    # A human caster still owes the Word of Command card choice — the game must
+    # not advance past it (an AI caster's choice was already auto-resolved). A
+    # chosen-but-unresolved spell is just a stack object; don't hold for it.
+    pending_woc = session.game.pending_word_of_command
+    if (
+        pending_woc is not None
+        and "chosen_hand_index" not in pending_woc
+        and _seat_type(session, pending_woc.get("caster_index")) == "human"
+    ):
+        return
+
+    # Advance turn structure automatically after both players pass with an empty stack.
+    _advance_phase(session)
+
+
+def _run_priority_exchange(session: Session, acting_seat: int) -> None:
+    result = session.game.pass_priority(acting_seat)
+
+    while True:
+        _auto_resolve_ai_pending(session)
+        _auto_advance_after_all_passed(session, result)
+
+        if result == "awaiting_choice":
+            # A triggered ability paused on the stack for an optional "you may pay /
+            # draw" choice (Soul Net, the color Rods, Verduran Enchantress). An AI
+            # chooser's pay was auto-resolved by _auto_resolve_ai_pending above (the
+            # ability left the stack), so keep resolving by passing priority again on
+            # the AI's behalf. A human chooser keeps the prompt — stop and surface it.
+            chooser = session.game.priority_player_index
+            human_pending = any(
+                e["player_index"] == chooser for e in session.game.pending_optional_pays
+            )
+            if not human_pending and chooser is not None and _seat_type(session, chooser) == "ai":
+                result = session.game.pass_priority(chooser)
+                continue
+            break
+
+        ai_priority_seat = session.game.priority_player_index
+        if (
+            result == "passed"
+            and ai_priority_seat is not None
+            and _seat_type(session, ai_priority_seat) == "ai"
+            and (ai_priority_seat != session.current_turn or bool(session.game.stack))
+        ):
+            result = _ai_respond_to_priority(session, ai_priority_seat)
+            continue
+
+        break
+
+
+def _advance_ai_turn(session: Session) -> None:
+    """Advance the AI's turn through its non-main steps after it has finished acting
+    in the current step.
+
+    Pauses to hand a human priority at any step they flagged on the phase rail. Stops
+    when a new main phase begins (so the AI can cast there on the next step), when the
+    turn ends, or when human input is required (e.g. declaring blockers).
+    """
+    for _safety in range(20):
+        game = session.game
+        step = game.current_step
+
+        if _ai_should_hold(session, step):
+            # Resolve the active player's turn-based action (declaring attackers)
+            # before handing priority to the human.
+            if step == "declare_attackers":
+                _ai_declare_attackers(session)
+            if _hold_priority_for_human(session):
+                return
+
+        prev_turn = session.current_turn
+        prev_phase = game.current_turn_phase
+        prev_step = step
+        _advance_phase(session)
+
+        if session.current_turn != prev_turn:
+            return  # the AI's turn has ended
+        if (
+            session.game.current_turn_phase == prev_phase
+            and session.game.current_step == prev_step
+        ):
+            return  # stuck waiting for human input (e.g. declare blockers)
+        # Stop at a main phase so the AI casts there (driven by the next ai_step).
+        if session.game.current_step in ("precombat_main", "postcombat_main"):
+            return
+
+
+def _advance_phase(session: Session) -> None:
+    game = session.game
+    # A human caster still owes the Word of Command card choice; hold the turn
+    # structure until they confirm (the choice happens while the spell resolves).
+    # Once chosen, the spell is just waiting on the stack — advance normally.
+    pending_woc = game.pending_word_of_command
+    if (
+        pending_woc is not None
+        and "chosen_hand_index" not in pending_woc
+        and _seat_type(session, pending_woc.get("caster_index")) == "human"
+    ):
+        return
+    phase = game.current_turn_phase
+    step = game.current_step
+
+    if phase == "beginning" and step in ("upkeep", "draw"):
+        # The phase-rail upkeep window has closed — resolve the upkeep itself now,
+        # prompting for the trigger decisions deliberately deferred past it. Runs
+        # before close_beginning_step so the step's own end (which empties mana
+        # pools, CR 500.4) doesn't strand mana the player floated to pay with.
+        if step == "upkeep" and session.upkeep_decisions_deferred:
+            _resume_deferred_upkeep(session, session.current_turn)
+            return
+        # Resume after a held upkeep/draw step on the AI's turn: close it and move on,
+        # holding again at the draw step if the human flagged it.
+        game.close_beginning_step()
+        # Island Sanctuary: the human must choose whether to skip their draw before
+        # the draw step resolves (CR 504 replacement choice). Pause for the prompt
+        # instead of drawing through it.
+        if (
+            step == "upkeep"
+            and _seat_type(session, session.current_turn) == "human"
+            and _has_island_sanctuary(game, session.current_turn)
+        ):
+            session.island_sanctuary_pending = True
+            return
+        if step == "upkeep" and _ai_should_hold(session, "draw"):
+            game.resolve_draw_step(session.current_turn, defer_priority=True)
+            _hold_priority_for_human(session)
+            return
+        if step == "upkeep" and _self_should_hold(session, "draw"):
+            game.resolve_draw_step(session.current_turn, defer_priority=True)
+            return
+        if step == "upkeep":
+            game.resolve_draw_step(session.current_turn)
+        game._enter_main_phase(precombat=True)
+        return
+
+    if phase == "precombat_main":
+        game._close_current_priority_step()
+        game.advance_combat_phase()
+        _clear_cleanup_selection(session)
+        return
+    if phase == "combat":
+        if (
+            step == "combat_damage"
+            and not game.combat_damage_resolved
+            and _seat_type(session, game.active_player_index) == "ai"
+        ):
+            # No human is assigning damage for the active AI. Resolve combat damage
+            # with a sensible default assignment so a multi-blocked attacker (which
+            # the engine defers for manual assignment) doesn't deadlock the step.
+            _ai_assign_combat_damage(session)
+        elif (
+            step == "combat_damage"
+            and not game.combat_damage_resolved
+            and _seat_type(session, game.active_player_index) == "human"
+            and game._needs_manual_damage_assignment()
+            and not game._manual_assignment_has_declared_multiblock()
+            and not _banding_assignment_pending(session)
+            and not _band_blocker_assignment_pending(session)
+            and not _multiblock_split_pending(session)
+        ):
+            # A human attacker declared a band whose block propagated to a single
+            # shared blocker (CR 702.22h), but no band member has banding to route
+            # (so there is no CR 702.22k choice) — auto-resolve a sensible default
+            # instead of looping forever waiting for an assignment that can't arrive.
+            # When there IS a 702.22k choice, _band_blocker_assignment_pending keeps
+            # this from firing so the active player's dialog can resolve it instead.
+            auto = game._build_auto_damage_assignment()
+            game.resolve_all_combat_damage(game.active_player_index, attacker_damage=auto)
+        if step == "declare_attackers" and not game.combat_attackers_locked:
+            _ai_declare_attackers(session)
+        if step == "declare_blockers":
+            combat_state = game.get_combat_state()
+            # CR 802.4: with 2+ defending players (FFA), each declares in APNAP
+            # order — _pending_block_declarer() names whichever one is up next,
+            # not a single fixed defender.
+            defender_index = game._pending_block_declarer()
+            if isinstance(defender_index, int) and _seat_type(session, defender_index) == "ai":
+                if not combat_state.get("blockers_locked", False):
+                    if game.is_camouflage_active() and combat_state.get("attackers"):
+                        # Camouflage: the AI defender divides its creatures into
+                        # random piles instead of declaring chosen blocks.
+                        ok, _ = game.resolve_camouflage_blocking(defender_index)
+                    else:
+                        blocker_pairs = choose_combat_blockers(game, defender_index)
+                        ok, _ = game.declare_blockers(defender_index, blocker_pairs)
+                        if not ok and blocker_pairs:
+                            ok, _ = game.declare_blockers(defender_index, {})
+                    if not ok:
+                        # Safety valve: never let AI declaration failures deadlock combat progression.
+                        game.combat_blockers = {}
+                        game.combat_blockers_locked = True
+                        game._prune_combat_state()
+                    instant_action = choose_combat_instant_cast_action(game, defender_index)
+                    if instant_action is not None:
+                        card_to_cast = game.players[defender_index].hand[instant_action.hand_index]
+                        for permanent_index in instant_action.land_tap_indices:
+                            permanent = game.players[defender_index].battlefield[permanent_index]
+                            game.tap_land_for_mana(defender_index, permanent.card.name, permanent_index=permanent_index)
+                        game.cast_from_hand(
+                            defender_index,
+                            card_to_cast.name,
+                            target_player_index=instant_action.target_player_index,
+                            x_value=instant_action.x_value,
+                        )
+                        return
+                    # CR 509.4: declaring blockers opened a priority window for the
+                    # active player. When a human attacker flagged the declare-blockers
+                    # stop on the phase rail, hold here so they can respond to the
+                    # blocks (combat tricks, block triggers on the stack) instead of
+                    # skipping straight to combat damage; the client advances again
+                    # once they pass priority or hit Next Phase.
+                    if (
+                        game.combat_attackers
+                        and game.priority_player_index is not None
+                        and _self_should_hold(session, "declare_blockers")
+                    ):
+                        return
+        # CR 510.4: the combat-damage step opens a priority window after damage is
+        # dealt. The engine normally auto-resolves that window and skips straight to
+        # end-of-combat when no manual damage assignment is needed — which silently
+        # ignores a combat_damage stop flagged on the phase rail. When either the
+        # active human (self) or a human opponent flagged it, tell the engine to hold
+        # the step open instead of skipping.
+        hold_damage = _self_should_hold(session, "combat_damage") or _ai_should_hold(
+            session, "combat_damage"
+        )
+        game.advance_combat_phase(allow_damage_skip=not hold_damage)
+        # On the AI's turn the engine leaves priority with the active AI; hand it to
+        # the human so they can act at the step they flagged (mirrors the upkeep/draw
+        # and declare-blockers holds). On the human's own turn the active player is
+        # already the human, so this is a no-op.
+        if (
+            hold_damage
+            and game.current_turn_phase == "combat"
+            and game.current_step == "combat_damage"
+            and game.combat_damage_resolved
+            and _seat_type(session, game.active_player_index) != "human"
+        ):
+            _hold_priority_for_human(session)
+        return
+    if phase == "postcombat_main":
+        game._close_current_priority_step()
+        game.resolve_end_step(session.current_turn)
+        _clear_cleanup_selection(session)
+        return
+    if step == "end":
+        game.close_end_step()
+        should_defer_cleanup = _seat_type(session, session.current_turn) == "human"
+        cleanup_completed = game.resolve_cleanup_step(
+            session.current_turn,
+            defer_discard_selection=should_defer_cleanup,
+        )
+        if not cleanup_completed:
+            session.cleanup_required_discards = _cleanup_discard_requirement(session)
+            session.cleanup_selected_indices = []
+            return
+        _start_next_turn(session)
+        return
+    if step == "cleanup":
+        if _cleanup_discard_requirement(session) > 0:
+            raise HTTPException(status_code=400, detail="select cleanup discards before advancing")
+        _start_next_turn(session)
+        return

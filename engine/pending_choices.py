@@ -21,7 +21,7 @@ and then neither displayed nor cleared.
 They are one table now. A choice is a :class:`PendingChoice` on
 ``Game.pending_choices``; a :class:`ChoiceSpec` registered here says how to
 answer it, what a non-interactive seat does instead, and how the web layer
-treats it. The three cascades in ``web/app.py`` loop over the queue instead of
+treats it. The three cascades in ``web/prompts.py`` loop over the queue instead of
 naming each kind, so adding an interactive choice is one ``register_choice``
 call plus the code that arms it — and
 ``tests/engine/test_pending_choices.py`` fails if any part is missing.

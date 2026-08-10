@@ -3488,6 +3488,122 @@ alongside it), pointing `HOOKS` at another module fails the vacuity check,
 renaming `_assert_expected` fails the staleness check, and restoring the dead
 mana-kind set fails the handler check naming both kinds.
 
+## The web layer, split on the same axis the stack was
+
+`web/app.py` was 4,930 lines and 144 definitions — the largest file in the repo,
+and the one place where serialization, the pregame state machine, turn driving,
+the AI loop, the debug menu and the action dispatch all sat next to the routes.
+It is the FastAPI app and **nothing else** now, at 567 lines, with thirteen
+modules beside it:
+
+| Module | Job | Defs | Lines |
+| --- | --- | ---: | ---: |
+| `runtime` | card pool, store instances, session lookup | 2 | 71 |
+| `events` | server-sent events — the one thing the API pushes | 2 | 55 |
+| `seats` | seat kind, who has lost, whether to hold priority | 11 | 155 |
+| `serialization` | engine object → client JSON, one function per kind | 21 | 708 |
+| `catalog` | the pool and decks as the client browses them | 6 | 173 |
+| `verification_report` | the verification tracker's read side | 2 | 93 |
+| `pregame` | coin flip and mulligans | 9 | 229 |
+| `turn_steps` | the beginning phase and the turn's boundaries | 23 | 430 |
+| `combat_prompts` | banding / multiblock / pile-division assignments | 14 | 362 |
+| `game_flow` | priority, phase advancement, AI stepping | 7 | 435 |
+| `state_view` | the whole-state payload a client polls | 5 | 386 |
+| `debug_actions` | Debug-Menu board manipulation, raw-state injection | 6 | 202 |
+| `actions` | the one dispatch over `ActionKind` | 5 | 1,451 |
+| `app` | the FastAPI app: routes, middleware, join URLs | 31 | 567 |
+
+**The axis is one module per stage of a session's life in the web layer**, which
+is the same move `engine/mixins/stack/` made for an object's life on the stack —
+before a session exists (`catalog`), the ground it lives in (`runtime`), who is
+sitting at it (`seats`), before turn one (`pregame`), a turn's boundaries
+(`turn_steps`), the game moving forward (`game_flow`), what the client sees
+(`serialization` → `state_view`), what the client does (`actions`).
+
+**The axis is also a *layering*, and that is the part with teeth.** `web.LAYERS`
+declares the order and a module may import only from one earlier in it; nothing
+imports upward, and the ordering constraint is checked mechanically as the split
+runs, so a bucket that reached sideways failed the build rather than shipping.
+Two facts fell out of enforcing it rather than asserting it. `_seat_deck_colors`
+and `_seat_deck_display_name` *look* like seat questions and would have put
+`seats` above `catalog`, closing a cycle back through `serialization`; their only
+caller is `_serialize_state`, so they are view code and belong in `state_view`.
+And the hold-priority predicates (`_ai_should_hold`, `_hold_priority_for_human`,
+`_self_should_hold`) are what makes `turn_steps` and `game_flow` separable at
+all: mutually recursive as written, they separate the moment the three
+predicates — which need no card data and no turn state — drop to `seats`.
+
+**Done with a script, phase 8's method, and the proof is two numbers.** Every
+top-level node kept its exact source text and its attached comment block, and
+per-module imports were recomputed from each bucket's actual free names. Then:
+**169 top-level definitions before, 169 after, 0 lost and 0 gained**; and
+**30 registered routes before, 30 after** — identical path, methods and name on
+every one. A separate pass diffed each node's *slice including its comments*
+straight off disk and found exactly one difference in 4,930 lines: `do_action`
+lost the `@app.post` decorator, which became
+`app.post(...)(do_action)` in `app.py`. Nothing else in the file changed by a
+character. That last check matters because the obvious comparison —
+`ast.get_source_segment` — does not see a decorator or a preceding comment, so
+the thing most likely to be dropped by hand is the thing it cannot report.
+
+**`web.app` stopped being the god-namespace.** 233 names were bound there; 101
+are now, and the 132 that went are the module's own imports plus definitions
+nothing outside `web/` ever read. Twenty-two are re-exported explicitly, with a
+comment saying why: they are the names tests and scripts reach for
+(`from web.app import _end_turn`, `web_app._advance_phase`), so the split needed
+**no edit outside `web/`** — except one, below. Re-exporting all 132 was the safe
+option and was rejected: a barrel that keeps every name importable from `app.py`
+guarantees nothing ever migrates off it, which is the shape the split exists to
+end.
+
+**One thing could not move, and one had to change.** `ALLOW_SHARED_DECK_WRITES`
+and the join-URL builders stay in `app.py` because tests monkeypatch them *on the
+`web.app` module object* — `monkeypatch.setattr(web_app, "_detect_local_ip", …)`
+only reaches a reader in the same namespace, so moving them would have left the
+patch setting an attribute nothing reads, and the test would have passed for the
+wrong reason on a real IP. They are route-shaped anyway (both read the incoming
+`Request`). The one outside edit is
+`tests/engine/test_pending_choices.py`, which greps the dispatch source for
+`req.action == "<kind>"`; it now reads `web/actions.py`.
+
+**The layering is guarded, and the guard was verified against the failure that
+does *not* announce itself.** `tests/ui/test_web_layering.py` reads `web.LAYERS`
+and rejects any intra-package import pointing at or above its own module, in all
+three spellings (`from .x`, `from web.x`, `import web.x`). A module-level cycle
+would fail at startup anyway; a *function-level* one would not, and that is what
+was injected — `from .state_view import _serialize_state` inside `seats._seat_type`
+leaves `import web.app` working perfectly and fails the guard on the line it sits
+on. A second guard fails if a new `web/*.py` is not placed in `LAYERS` at all,
+because a module the layering never mentions is a module the first guard never
+reads; verified by dropping an unlisted file in.
+
+**`actions.py` at 1,451 lines really is size, and is a separate job** — the same
+thing the stack split said about `stack_casting.py`. `do_action` is a 70-branch
+`if`/`elif` over `ActionKind` wrapped in a shared preamble (seat check, concede,
+pending-prompt refusal, priority bookkeeping) and a shared tail (snapshot, AI
+response, serialize) that apply to every branch. Splitting the branches out is a
+restructure of control flow, not a move, and it does not belong inside a change
+advertised as touching no behaviour. It stays one chain in one module, which is
+also what keeps the dispatch reviewable against the literal it dispatches on.
+
+Suite 4,292 → 4,297 (the five layering tests) in 14.1s, every guard green,
+388/388 supported, AI simulation unchanged at 10/10 games and 443 interactions.
+Verified in the running app as well as in tests: server starts clean, a
+human-vs-AI game reaches its opening hand, keeps, plays a land and ends a turn
+through `POST /action` while the AI takes its own, and the canvas board renders
+with life totals, phase rail and hand — zero console errors.
+
+**Found and deliberately left** (a behaviour change hidden in a 5,000-line move
+is unreviewable): the `_no_cache_assets` middleware matches a hardcoded set of
+asset paths, and three first-party scripts `index.html` actually loads —
+`/sfx.js`, `/music.js`, `/legality.js` — are not in it, so they alone are
+browser-cacheable while their siblings are not. The `?v=` query strings they
+carry are the real cache-bust today (and the middleware matches on `path`, so it
+never sees them), which is why nothing has noticed. Separately: `_serialize_state`
+mutates the game — `_ai_resolve_raging_river` and `award_ante_to_winner` — so
+`GET /state` is not a read. Both are documented idempotent and both predate this
+change.
+
 ---
 
 ## Standing invariants

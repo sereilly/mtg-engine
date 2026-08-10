@@ -26,7 +26,8 @@ from web.schemas import ActionKind
 
 REPO = Path(__file__).resolve().parents[2]
 ENGINE = REPO / "engine"
-APP_SOURCE = (REPO / "web" / "app.py").read_text(encoding="utf-8")
+# The one dispatch over ActionKind, split out of web/app.py into its own module.
+DISPATCH_SOURCE = (REPO / "web" / "actions.py").read_text(encoding="utf-8")
 ACTION_KINDS = set(get_args(ActionKind))
 
 
@@ -46,8 +47,8 @@ def _incomplete(kind: str, spec: ChoiceSpec) -> list[str]:
         problems.append("no renderer in web/prompts.py")
     if spec.action not in ACTION_KINDS:
         problems.append(f"action {spec.action!r} is not an ActionKind")
-    elif f'req.action == "{spec.action}"' not in APP_SOURCE:
-        problems.append(f"action {spec.action!r} is never dispatched in web/app.py")
+    elif f'req.action == "{spec.action}"' not in DISPATCH_SOURCE:
+        problems.append(f"action {spec.action!r} is never dispatched in web/actions.py")
     if not spec.prompt_key:
         problems.append("no prompt_key")
     return problems

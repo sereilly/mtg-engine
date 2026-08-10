@@ -1,4 +1,4 @@
-"""The derived `equivalent` verification status (web/app.py + behaviour_signature).
+"""The derived `equivalent` status (web/verification_report.py + behaviour_signature).
 
 An untested card whose behaviour class already contains a *passing* card is
 reported as `equivalent` rather than `untested`: the engine resolves it through

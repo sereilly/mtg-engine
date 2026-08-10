@@ -21,7 +21,7 @@ _NONCREATURE_TARGET = 21
 
 def _card_map(catalog: list[CardDefinition]) -> dict[str, CardDefinition]:
     """Name -> CardDefinition from an already-loaded catalog (no I/O — the
-    catalog is loaded once at process startup; see web/app.py:CARD_CATALOG)."""
+    catalog is loaded once at process startup; see web/runtime.py:CARD_CATALOG)."""
     return {card.name: card for card in catalog}
 
 
