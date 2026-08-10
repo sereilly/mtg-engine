@@ -5,7 +5,8 @@ release line — **137 sets, 33,594 printings, 26,113 unique cards** per
 `set_progress.json`.
 
 This document records the audit that motivated the work and the phased plan
-that follows from it. Phase 1 is done; phases 2–8 are not yet started.
+that follows from it. Phases 1, 2, 3 and 7 are done; 4, 5, 6 and 8 are partly
+done.
 
 ---
 
@@ -1444,6 +1445,122 @@ existing predicate over the whole pool, and the table cannot drift.
 
 `stack_casting.py` at 2,277 lines really is size, and is a separate job.
 
+### Phase 7 finished: the cast cascade is gone, and it was hiding a bug
+
+All four remaining items landed. `legality.py` is **970 → 775 lines, 49 → 29
+module-level functions, and 19 → 0 cast-time text predicates**; the cast half of
+the shadow parser no longer exists.
+
+**Fireball first, exactly as predicted.** The AST had carried `divided=True`
+since phase 1 and lowering dropped it, so the program said
+`deal_damage {amount: x}` — byte-identical to Lightning Bolt. Recording the
+division made the last holdout derivable and the test naming it failed on
+purpose, which is what a well-written exception test is for.
+
+**Then the flags, which were the actual remainder.** The kind was already
+derived for 98 of 99 cards, but the flags beside it — whose graveyard, only the
+caster's creatures, which colour on the stack — still came from text, so the
+second parser stayed alive for the interesting half. Only 17 cards carry a flag
+at all, and the evidence for nearly all of them was already in the program.
+
+The rule that made it clean: **a flag is read off the handler it describes, not
+off the card.** `reanimate_creature` calls
+`_reanimate_creature_to_battlefield(caster, caster, …)` — always the caster's own
+graveyard — so `own_graveyard_only` belongs to the kind, not to whether the words
+"your graveyard" appear. Animate Dead is the counter-case that proves it: it
+resolves through `_apply_aura_effect`, which pops the chosen index out of
+*whichever* graveyard was pointed at, so it derives the same kind without the
+flag. Two answers, both read from the code that runs.
+
+**Widening the differential from the kind to the whole spec found a live bug.**
+Reconstruction — "Return target artifact card from your graveyard to your hand",
+the artifact sibling of Raise Dead — classified as a *battlefield* artifact
+target. With no artifact in play the UI enumerated zero legal targets, so the
+spell was uncastable, while the engine resolved it perfectly when driven
+headlessly. That gap between "works in a test" and "works in the app" is the
+whole reason the two-parser problem matters. Fixed by reading the instruction's
+own `card_type` payload, and the graveyard picker now applies its handler's type
+test, which also makes an artifact *creature* card a legal choice (CR 205.2).
+
+Two gates were measured rather than assumed. Removing the instant/sorcery gate
+derives a cast target for **27 permanents that have none** — their abilities'
+instructions are hoisted into the card's instruction list — so the gate stays,
+and the one real exception (a permanent whose enters-the-battlefield trigger
+targets: Oubliette) is its own route rather than a loosening of it.
+
+**What replaced the differential.** It compared two answers; there is one now.
+In its place: a per-card table pinning the 26 specs that carry flags, and a
+ratchet asserting every supported card naming a target outside an activated or
+triggered ability derives its own prompt. Darkpact is the single
+acknowledgement — nothing enumerates the ante zone — and a second test fails if
+that acknowledgement goes stale.
+
+Verified in the running app, not only in tests: with an Ornithopter in the
+graveyard, Reconstruction's serialized `target_spec` goes from
+`{kind: artifact, valid_targets: []}` to
+`{kind: graveyard_creature, card_type: artifact, valid_targets: [Ornithopter]}`.
+
+### Phase 7 finished: the stack module, split and slimmed
+
+`stack_casting.py` held four jobs in 2,277 lines. It is `engine/mixins/stack/`
+now, one mixin per stage of an object's life on the stack, composed onto `Game`
+the way `engine/phases` composes one mixin per turn phase:
+
+| Module | Mixin | Methods | Lines |
+| --- | --- | ---: | ---: |
+| `casting` | `SpellCastingMixin` | 7 | 679 |
+| `activation` | `AbilityActivationMixin` | 4 | 557 |
+| `resolution` | `StackResolutionMixin` | 9 | 375 |
+| `choices` | `PendingChoicesMixin` | 33 | 680 |
+
+`choices` is the fourth because the pending-decision code was the largest
+cluster and belonged to no single stage. All 33 of its methods are the same
+triple — something arms a pending choice, a `confirm_*` answers it for an
+interactive seat, an `auto_resolve_pending_*` takes the default for the rest —
+and that pattern is only visible once they sit together rather than interleaved
+with the code that arms them.
+
+The split was **verified rather than trusted**: all 51 methods appear exactly
+once, and an AST comparison against the old module shows the only body changes
+are six function-local relative imports that gained a dot. Two module-level
+imports turned out to have been dead already.
+
+**And the stack item stopped growing per card.** `StackItem` had a typed field
+for every extra thing a caster could pick — a colour for the Lace cycle, a
+second for a text change, a cross-seat list for divided damage, a source for
+Jade Monolith — and each also became a field on `OracleExecutionContext`,
+because the handler that reads it lives on the far side of resolution. Two
+dataclass edits per card family, forever. They are one `choices` dict now:
+**StackItem 20 → 16 fields, OracleExecutionContext 15 → 11**. The typed keyword
+arguments on `cast_from_hand` stay — that is where a choice is *named* — so what
+the fold removes is the transport growing with it. `target_stack_name` was
+deleted outright rather than folded: it was the target's name, computed at
+construction from the reference sitting next to it.
+
+A dict trades field growth for a key that can be misspelled on one side and read
+as absent on the other, so `CHOICE_KEYS` declares them and a guard holds the
+engine to the declaration **in both directions** — a key in use but undeclared
+fails, a declared key nothing uses fails. Both verified by injection.
+
+The suite caught the exact failure that guard exists for, mid-change: after the
+reads moved, `_stack_item_colors` still guarded on
+`getattr(item, "new_color", None)` — now always None — so a Chaoslaced spell
+silently kept its printed colour. `getattr` with a default does not fail when the
+attribute goes away; it just starts answering "no".
+
+### What is left of the shadow parser
+
+The `_activated_*` cascade: **19 text predicates deciding what an *ability*
+targets**, the exact shape the cast side just shed. The seam already exists —
+`_FILTERABLE_ABILITY_KINDS` narrows the enumeration from the compiled
+instruction while the kind still comes from the line — so the migration is the
+one that just worked: a kind→spec table, payload for the cases one kind serves
+two specs, and a differential against the cascade until it can be deleted.
+
+It is a genuinely different question from the cast side (an ability picks its
+targets on activation, and a card may have several abilities that target
+differently), which is why it was not folded into this pass.
+
 ### The static-ability cluster, and why it is a phase-6 job
 
 20 of the remaining lines fail with "static abilities need the CR 613 layers
@@ -2054,7 +2171,21 @@ metadata (`land_animated`, `color_override`, `has_islandwalk`) migrate to typed
 effects. **Unblocks static-ability lowering** — which is why statics migrate
 last, and why the grammar currently parses them but declines to lower them.
 
-## Phase 7 — delete the shadow parser, decompose the stack 🟡 started
+## Phase 7 — delete the shadow parser, decompose the stack ✅ done
+
+**Final state.** Every supported card answers "what does this spell target?"
+from its compiled program — kind *and* flags. `legality.py`'s cast cascade is
+deleted (970 → 775 lines, 49 → 29 functions, 19 → 0 cast-time text predicates),
+`stack_casting.py` is four mixins in `engine/mixins/stack/`, and `StackItem` no
+longer grows a field per card family (20 → 16, with `OracleExecutionContext`
+15 → 11). Suite 3,941 → 3,963 tests, still under 20 seconds.
+
+The narrative, including the live bug the full-spec differential found
+(Reconstruction was uncastable through the UI) and the one piece deliberately
+left — the `_activated_*` cascade, the same 19-predicate shape for *ability*
+targets — is in "Phase 7 finished" above.
+
+The rest of this section is the record of how it got there.
 
 **Done — the seam exists and carries 50 cards.** `engine/targeting.py` answers
 "what does this spell target?" from the compiled program instead of re-reading
@@ -2120,11 +2251,10 @@ The lowering goldens likewise compare the behavioural payload — folding
 `targets` into all of them would bury the handler-compatibility contract they
 exist to state — with the new key given its own section.
 
-**Still open:** the remaining 310 cards (each arrives as its category migrates),
-the per-kind flags (`own_only`, stack filters, `sacrifice_cost`), deleting the
-cascade, splitting `stack_casting.py` (2,239 lines) into casting / resolution /
-ability-activation, and folding `StackItem`'s single-card fields into a payload
-dict.
+**All four of what was open here is now done** — the remaining cards, the
+per-kind flags, deleting the cascade, splitting `stack_casting.py`, and folding
+`StackItem`'s per-choice fields into a dict. See "Phase 7 finished" above for
+what each cost and what it turned up.
 
 ## Phase 8 — test restructuring for scale 🟡 partly done
 
