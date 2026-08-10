@@ -648,7 +648,7 @@ class CombatDamageStepMixin:
             damage_by_defender[defending_idx] = (
                 damage_by_defender.get(defending_idx, 0) + damage
             )
-            self._on_player_dealt_damage(defender, damage)
+            self._on_player_dealt_damage(defender, damage, attacker)
             # Eye for an Eye: combat damage counts too — the attacker's
             # controller takes the same amount. Applied here rather than by
             # routing through _deal_damage_to_player, whose prevention pass has

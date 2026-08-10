@@ -173,8 +173,22 @@ def peek_hand_and_force_play(text: str, activated: bool) -> RuleResult:
 def return_creature_from_graveyard_to_hand(text: str, activated: bool) -> RuleResult:
     if "from your graveyard to your hand" in text:
         # Raise Dead: "target CREATURE card"; Regrowth: "target card" — any type.
-        any_card = "creature card" not in text
-        return _instruction("return_creature_from_graveyard_to_hand", any_card=any_card), "spell_pattern"
+        # Reconstruction names *artifact* card, and reading that as "any type"
+        # would let it return a creature: the named type is a filter, so it is
+        # carried rather than collapsed into a boolean.
+        card_type = None
+        for name in ("creature", "artifact", "enchantment", "land", "instant", "sorcery"):
+            if f"{name} card" in text:
+                card_type = name
+                break
+        return (
+            _instruction(
+                "return_creature_from_graveyard_to_hand",
+                any_card=card_type is None,
+                card_type=card_type,
+            ),
+            "spell_pattern",
+        )
     return None
 
 

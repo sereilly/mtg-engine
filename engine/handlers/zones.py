@@ -351,16 +351,34 @@ def discard_x_target_cards(game: Game, instruction: OracleInstruction, context: 
 def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     caster = context.caster
     any_card = bool(instruction.payload.get("any_card"))
+    card_type = instruction.payload.get("card_type")
+
+    def _eligible(card) -> bool:
+        if any_card:
+            return True
+        return card_type is not None and card_type in card.type_line.lower()
     # Honor the caster's chosen graveyard card (Rule 601.2c). Regrowth
     # (any_card) accepts any type; Raise Dead only a creature card.
     idx = context.target_permanent_index
-    if isinstance(idx, int) and 0 <= idx < len(caster.graveyard) and (
-        any_card or caster.graveyard[idx].primary_type == "creature"
+    if isinstance(idx, int) and 0 <= idx < len(caster.graveyard) and _eligible(
+        caster.graveyard[idx]
     ):
         chosen = caster.graveyard.pop(idx)
         caster.hand.append(chosen)
         game.log.append(f"Returned {chosen.name} from graveyard to hand")
         return True, "resolved"
+    if card_type is not None and card_type != "creature":
+        chosen_index = next(
+            (i for i, c in enumerate(caster.graveyard) if _eligible(c)), None
+        )
+        if chosen_index is None:
+            game.log.append(f"No {card_type} card in graveyard to return")
+            return True, "resolved"
+        chosen = caster.graveyard.pop(chosen_index)
+        caster.hand.append(chosen)
+        game.log.append(f"Returned {chosen.name} from graveyard to hand")
+        return True, "resolved"
+
     returned = game._return_creature_from_graveyard(caster)
     if not returned and any_card and caster.graveyard:
         chosen = caster.graveyard.pop(0)

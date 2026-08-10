@@ -695,7 +695,7 @@ class EffectsMixin:
                 return 0
             damage = payload["amount"]
             target.life -= damage
-            self._on_player_dealt_damage(target, damage)
+            self._on_player_dealt_damage(target, damage, source)
             self._apply_mirror_damage(target, damage, source)
         return damage
 
@@ -743,10 +743,18 @@ class EffectsMixin:
             f"(mirroring the damage dealt to {target.name})"
         )
 
-    def _on_player_dealt_damage(self, target: PlayerState, damage: int) -> None:
+    def _on_player_dealt_damage(self, target: PlayerState, damage: int, source=None) -> None:
         # Track total damage dealt to each player this turn (Simulacrum, etc.).
         if damage > 0:
             target.damage_taken_this_turn += damage
+            # Reverse Polarity counts only what artifact sources dealt. Tracked
+            # as it happens because the sources are gone by the time the spell
+            # resolves — CR 603.10's last-known-information problem, avoided by
+            # not needing to look back.
+            source_perm = getattr(source, "card", source)
+            type_line = getattr(source_perm, "type_line", "") or ""
+            if "artifact" in str(type_line).lower():
+                target.artifact_damage_taken_this_turn += damage
         # Living Artifact: "Whenever you're dealt damage, put that many vitality
         # counters on this Aura." Counters accumulate on the enchantment so its
         # upkeep ability can later trade them for life (and the UI can show them).

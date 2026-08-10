@@ -107,3 +107,22 @@ def target_gains_n_life(text: str, activated: bool) -> RuleResult:
                 recipient=_life_recipient(text),
             ), effect_kind
     return None
+
+
+_ARTIFACT_DAMAGE_LIFE_RE = re.compile(
+    r"you gain x life, where x is twice the damage dealt to you so far this turn "
+    r"by artifacts?(?: sources)?"
+)
+
+
+# Ahead of the generic "gain X life" rule (68000): first match wins by
+# ascending order, so the more specific reading of the same opening words has to
+# come first or it never fires. The wording is matched from the *printed* text —
+# the card says "by artifacts", and a regex written from a truncated log said
+# "by artifact sources" and silently matched nothing.
+@parse_rule(63_950)
+def gain_twice_artifact_damage_taken(text: str, activated: bool) -> RuleResult:
+    """Reverse Polarity: gain twice the artifact-sourced damage taken this turn."""
+    if _ARTIFACT_DAMAGE_LIFE_RE.search(text):
+        return _instruction("gain_twice_artifact_damage_taken"), "spell_pattern"
+    return None

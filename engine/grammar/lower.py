@@ -824,16 +824,17 @@ def _lower_return_to_zone(node: ast.ReturnToZone) -> tuple[OracleInstruction, ..
         if destination.name == "hand":
             if destination.owner is None or destination.owner.kind != "you":
                 raise LoweringError("this handler returns cards to your own hand", node=node)
-            # The handler's single restriction: creature cards only, or any card.
-            if filt.card_types == ("creature",):
-                any_card = False
-            elif not filt.card_types:
-                any_card = True
-            else:
-                raise LoweringError("this handler reads creature-or-any, not a type", node=node)
+            # The named card type is a filter the handler applies, so it is
+            # carried rather than collapsed: reading "artifact card" as "any
+            # card" would let Reconstruction return a creature.
+            if len(filt.card_types) > 1:
+                raise LoweringError("this handler reads one card type", node=node)
+            card_type = filt.card_types[0] if filt.card_types else None
             return (
                 OracleInstruction(
-                    "return_creature_from_graveyard_to_hand", "", {"any_card": any_card}
+                    "return_creature_from_graveyard_to_hand",
+                    "",
+                    {"any_card": card_type is None, "card_type": card_type},
                 ),
             )
 

@@ -158,6 +158,7 @@ class TurnManagementMixin:
         self.outside_game_draw_replacements = set()
         for player in self.players:
             player.damage_taken_this_turn = 0
+            player.artifact_damage_taken_this_turn = 0
             player.cards_drawn_this_turn = []
 
     def start_turn(self, player_index: int) -> None:

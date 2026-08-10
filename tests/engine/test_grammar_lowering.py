@@ -536,12 +536,12 @@ def test_the_mana_payload_names_every_colour():
     (
         "Raise Dead",
         "Return target creature card from your graveyard to your hand.",
-        ("return_creature_from_graveyard_to_hand", {"any_card": False}),
+        ("return_creature_from_graveyard_to_hand", {"any_card": False, "card_type": "creature"}),
     ),
     (
         "Regrowth",
         "Return target card from your graveyard to your hand.",
-        ("return_creature_from_graveyard_to_hand", {"any_card": True}),
+        ("return_creature_from_graveyard_to_hand", {"any_card": True, "card_type": None}),
     ),
     (
         "Resurrection",
@@ -575,8 +575,8 @@ def test_the_type_word_is_what_separates_regrowth_from_raise_dead():
         "Return target card from your graveyard to your hand.", "Regrowth"
     )
 
-    assert creature_only[0][1] == {"any_card": False}
-    assert any_type[0][1] == {"any_card": True}
+    assert creature_only[0][1] == {"any_card": False, "card_type": "creature"}
+    assert any_type[0][1] == {"any_card": True, "card_type": None}
 
 
 def test_an_unreadable_narrowing_is_refused_rather_than_dropped():
@@ -593,16 +593,22 @@ def test_an_unreadable_narrowing_is_refused_rather_than_dropped():
     assert "restriction" in result.failure_reason
 
 
-def test_a_type_the_handler_cannot_express_is_refused():
-    """"Creature card or any card" is the entire vocabulary of the
-    graveyard-to-hand handler. An artifact-only version is a different card, not
-    this one with an extra word."""
+def test_the_named_card_type_is_carried_not_collapsed():
+    """The handler used to express only "creature card or any card", so an
+    artifact-only version was refused. It carries the named type now —
+    collapsing "artifact card" to "any card" would let Reconstruction return a
+    creature, which is the dropped-filter bug rather than a missing feature."""
     result = compile_line(
         "Return target artifact card from your graveyard to your hand.", card_name="Test"
     )
 
-    assert result.parsed
-    assert not result.lowered
+    assert result.parsed and result.lowered
+    assert [(i.kind, i.payload) for i in result.instructions] == [
+        (
+            "return_creature_from_graveyard_to_hand",
+            {"any_card": False, "card_type": "artifact"},
+        )
+    ]
 
 
 def test_whose_graveyard_is_load_bearing():

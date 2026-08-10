@@ -223,3 +223,74 @@ def test_removing_a_counter_that_is_not_there_is_a_no_op():
 
     assert game.activate_permanent_ability(0, "Armageddon Clock").supported is True
     assert clock.metadata.get("doom_counters", 0) == 0
+
+
+# ---------------------------------------------------------------------------
+# Reconstruction / Ivory Tower / Reverse Polarity
+# ---------------------------------------------------------------------------
+
+def test_reconstruction_returns_an_artifact_not_just_any_card(catalog):
+    """"Target artifact card" is a filter. The rule read anything that was not
+    "creature card" as "any card", so Reconstruction could have returned a
+    creature — a dropped filter, not a missing feature."""
+    card = _artifact(
+        "Reconstruction", "Return target artifact card from your graveyard to your hand.",
+        type_line="Sorcery",
+    )
+    player = PlayerState(
+        name="P1", hand=[card],
+        graveyard=[catalog["Grizzly Bears"], catalog["Sol Ring"]],
+    )
+    game = Game(players=[player, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+
+    game.cast_from_hand(0, "Reconstruction")
+
+    assert [c.name for c in player.hand] == ["Sol Ring"]
+    # Reconstruction itself is in the graveyard now, having resolved.
+    assert "Grizzly Bears" in [c.name for c in player.graveyard]
+    assert "Sol Ring" not in [c.name for c in player.graveyard]
+
+
+@pytest.mark.parametrize("cards_in_hand,expected", [(7, 23), (5, 21), (4, 20), (2, 20)])
+def test_ivory_tower_never_drains(catalog, cards_in_hand, expected):
+    """"Minus 4" with three cards in hand gains nothing; it does not drain."""
+    tower = _artifact(
+        "Ivory Tower",
+        "At the beginning of your upkeep, you gain X life, where X is the "
+        "number of cards in your hand minus 4.",
+    )
+    player = PlayerState(
+        name="P1", battlefield=[Permanent(card=tower)],
+        hand=[catalog["Forest"]] * cards_in_hand,
+    )
+    game = Game(players=[player, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+
+    game.resolve_upkeep(0)
+
+    assert player.life == expected
+
+
+def test_reverse_polarity_counts_only_artifact_damage(catalog):
+    """The artifact share is tracked as the damage happens, because the source
+    may be gone by the time the spell resolves."""
+    card = _artifact(
+        "Reverse Polarity",
+        "You gain X life, where X is twice the damage dealt to you so far this "
+        "turn by artifacts.",
+        type_line="Instant",
+    )
+    p1 = PlayerState(name="P1", hand=[card])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+
+    game._deal_damage_to_player(p1, 3, source=Permanent(card=catalog["Sol Ring"]))
+    game._deal_damage_to_player(p1, 2, source=Permanent(card=catalog["Grizzly Bears"]))
+    assert p1.artifact_damage_taken_this_turn == 3
+    assert p1.damage_taken_this_turn == 5
+
+    before = p1.life
+    game.cast_from_hand(0, "Reverse Polarity")
+
+    assert p1.life == before + 6          # twice the artifact damage only

@@ -238,3 +238,25 @@ def upkeep_put_counter_on_self(text: str, activated: bool) -> RuleResult:
         _instruction("upkeep_put_counter_on_self", counter=match.group("kind")),
         "upkeep_effect",
     )
+
+
+_HAND_SIZE_LIFE_RE = re.compile(
+    r"you gain x life, where x is the number of cards in your hand minus (?P<floor>\d+)"
+)
+
+
+@parse_rule(1_470)
+def upkeep_gain_life_over_hand_size(text: str, activated: bool) -> RuleResult:
+    """Ivory Tower: "At the beginning of your upkeep, you gain X life, where X
+    is the number of cards in your hand minus 4."
+
+    The threshold is payload, so the same handler serves any printing of this
+    template with a different number.
+    """
+    match = _HAND_SIZE_LIFE_RE.search(text)
+    if match is None:
+        return None
+    return (
+        _instruction("upkeep_gain_life_over_hand_size", floor=int(match.group("floor"))),
+        "upkeep_effect",
+    )

@@ -199,3 +199,16 @@ def sacrifice_creature_gain_life_by_toughness(game: Game, instruction: OracleIns
         return True, "resolved"
     game._gain_life(caster, max(0, sacrificed.effective_toughness), card.name)
     return True, "resolved"
+
+
+@effect_handler("gain_twice_artifact_damage_taken")
+def gain_twice_artifact_damage_taken(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Reverse Polarity. Zero artifact damage gains zero life, which is a real
+    outcome for this card rather than a failure to resolve."""
+    caster = context.caster
+    amount = 2 * max(0, caster.artifact_damage_taken_this_turn)
+    if amount:
+        game._gain_life(caster, amount, context.card.name)
+    else:
+        game.log.append(f"{context.card.name}: no artifact damage taken this turn")
+    return True, "resolved"

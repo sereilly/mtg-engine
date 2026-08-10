@@ -35,6 +35,7 @@ def _pool_trigger_pairs() -> dict[tuple[str, str], list[str]]:
 PENDING_A_SET: dict[tuple[str, str], str] = {
     ("upkeep_self", "upkeep_damage_unless_discard"): "Mishra's War Machine (3ED)",
     ("upkeep_self", "upkeep_put_counter_on_self"): "Armageddon Clock (3ED)",
+    ("upkeep_self", "upkeep_gain_life_over_hand_size"): "Ivory Tower (3ED)",
 }
 
 

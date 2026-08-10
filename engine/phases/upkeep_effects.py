@@ -244,6 +244,16 @@ class UpkeepEffectsMixin:
             f"({permanent.metadata[key]} total)"
         )
 
+    @upkeep_effect("upkeep_self", "upkeep_gain_life_over_hand_size")
+    def _on__upkeep_self__upkeep_gain_life_over_hand_size(self, ctx: UpkeepContext) -> None:
+        """Ivory Tower. Never negative: "minus 4" with three cards in hand
+        gains nothing, it does not drain."""
+        controller = ctx.controller
+        floor = int(ctx.trig.instruction.payload.get("floor", 0))
+        amount = max(0, len(controller.hand) - floor)
+        if amount:
+            self._gain_life(controller, amount, ctx.permanent.card.name)
+
     @upkeep_effect("upkeep_each", "upkeep_pay_per_creature_untap_color")
     def _on__upkeep_each__upkeep_pay_per_creature_untap_color(self, ctx: UpkeepContext) -> None:
         controller = ctx.controller

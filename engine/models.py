@@ -470,6 +470,10 @@ class PlayerState:
     mulligans_taken: int = 0
     poison_counters: int = 0
     damage_taken_this_turn: int = 0
+    # The artifact-sourced share of it (Reverse Polarity). Counted as the
+    # damage happens, because the source may be gone by the time a spell
+    # asks — the same reason combat triggers capture their victims.
+    artifact_damage_taken_this_turn: int = 0
     # Cards drawn this turn, in draw order — the last entry is "the last card you
     # drew this turn" (Jandor's Ring's discard cost). Every path that draws must
     # record here, so effects that replace a draw but still put a card in hand
