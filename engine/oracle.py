@@ -871,6 +871,23 @@ def _derived_static_claims(oracle_text: str, normalized_text: str) -> list[str]:
     return claims
 
 
+def _effect_handler_kinds() -> frozenset[str]:
+    """Instruction kinds with a registered handler.
+
+    Imported lazily and cached: ``engine.handlers`` imports the compiler, so a
+    module-level import here would be a cycle.
+    """
+    global _EFFECT_HANDLER_KINDS
+    if _EFFECT_HANDLER_KINDS is None:
+        from .handlers import EFFECT_HANDLERS
+
+        _EFFECT_HANDLER_KINDS = frozenset(EFFECT_HANDLERS)
+    return _EFFECT_HANDLER_KINDS
+
+
+_EFFECT_HANDLER_KINDS: frozenset[str] | None = None
+
+
 # Unbounded cache: card definitions are immutable and the pool is finite, so
 # every distinct card compiles exactly once per process — even with thousands
 # of cards the programs are tiny compared to recompilation cost.
@@ -998,6 +1015,33 @@ def _compile_card_oracle(
         # and no spell-pattern instructions were already matched (e.g. Howling Mine).
         if triggered_abilities and all(not t.supported for t in triggered_abilities) and not instructions:
             return OracleProgram(False, "unsupported", "unsupported triggered ability", normalized_text)
+
+        # A one-shot spell that resolves through no handler does nothing when
+        # cast. `spell_pattern` is a marker recording that a whitelist substring
+        # matched; it carries no behaviour, so a spell whose every instruction
+        # is one is supported on the strength of a string comparison. Shahrazad
+        # shipped that way, and ingesting Revised produced two more
+        # (Shatterstorm, Crumble) on first contact.
+        #
+        # tests/engine/test_no_hollow_support.py asserted this as a property of
+        # the pool; making it the compiler's own contract is what stops the next
+        # set introducing another. Permanents are excluded for the same reason
+        # that guard excludes them: they legitimately work through statics,
+        # auras, layers and the text-keyed step tables.
+        if (
+            primary_type in ("instant", "sorcery")
+            and instructions
+            and not modes
+            and not any(instruction.kind in _effect_handler_kinds() for instruction in instructions)
+            and not any(a.supported for a in activated_abilities)
+            and not triggered_abilities
+        ):
+            return OracleProgram(
+                False,
+                "unsupported",
+                "no handler implements this spell's effect",
+                normalized_text,
+            )
 
         if instructions or any(a.supported for a in activated_abilities) or triggered_abilities:
             return OracleProgram(

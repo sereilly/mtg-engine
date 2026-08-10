@@ -14,6 +14,7 @@ data-shape behaviors that were silently wrong before:
 from __future__ import annotations
 
 import json
+import pathlib
 import sys
 from pathlib import Path
 
@@ -92,13 +93,46 @@ def test_prices_are_not_committed(all_set_paths):
         assert '"prices"' not in Path(path).read_text(encoding="utf-8")
 
 
+# Cards in the pool the engine does not implement, each with the reason the
+# compiler gives. This is a ratchet, not a wish: a card may only appear here
+# deliberately, and a card *disappearing* from the pool's unsupported set is
+# progress that should shrink this list.
+#
+# Ingesting Revised added six. They are honest failures — the compiler names
+# what it cannot do rather than claiming support and resolving to nothing —
+# which is the property this file exists to protect.
+KNOWN_UNSUPPORTED = {
+    "Energy Flux",       # "All artifacts have '<upkeep sacrifice ability>'"
+    "Hurkyl's Recall",   # return all artifacts an owner owns to hand
+    "Millstone",         # mill
+    "Primal Clay",       # enters as one of three chosen bodies
+    "Shatterstorm",      # destroy all artifacts, no regeneration
+    "Crumble",           # destroy target artifact, its controller gains life
+}
+
+
 def test_whole_catalog_still_compiles_as_supported():
-    unsupported = [
-        (card.name, compile_card_oracle(card).reason)
+    """No card loses support silently.
+
+    A card that stops compiling is either a regression or a deliberate
+    reclassification; either way it has to be named here, so the diff shows it.
+    """
+    unsupported = {
+        card.name: compile_card_oracle(card).reason
         for card in load_catalog()
         if not compile_card_oracle(card).supported
-    ]
-    assert not unsupported, f"cards became unsupported: {unsupported}"
+    }
+    regressions = {n: r for n, r in unsupported.items() if n not in KNOWN_UNSUPPORTED}
+    assert not regressions, f"cards became unsupported: {regressions}"
+
+    # Only cards actually in the pool: the list names cards from a set that may
+    # not be ingested yet, and an entry for an absent card is not "fixed".
+    in_pool = {card.name for card in load_catalog()}
+    fixed = (KNOWN_UNSUPPORTED & in_pool) - set(unsupported)
+    assert not fixed, (
+        "these are supported now — remove them from KNOWN_UNSUPPORTED so the "
+        f"list keeps meaning 'not implemented': {sorted(fixed)}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -169,7 +203,24 @@ def test_pool_variable_pt_cards_are_flagged():
     """These are the pool's characteristic-defining-ability creatures; each is
     served by mixins.permanent_state.DYNAMIC_PT rather than printed digits."""
     flagged = {card.name for card in load_catalog() if card.has_variable_pt}
-    assert flagged == {"Gaea's Liege", "Keldon Warlord", "Nightmare", "Plague Rats"}
+    # Pool-relative: the set of CDA creatures grows with the manifest, and
+    # pinning the exact names made this fail on the first ingested set rather
+    # than on a real change. What matters is that every variable-P/T card is
+    # one the engine actually computes a value for.
+    from engine.characteristic_defining import dynamic_pt_for
+    from engine.oracle import normalize_creature_line
+
+    for name in flagged:
+        card = next(c for c in load_catalog() if c.name == name)
+        computed = any(
+            dynamic_pt_for(normalize_creature_line(line)) is not None
+            for line in card.oracle_text.splitlines()
+        )
+        program = compile_card_oracle(card)
+        assert computed or not program.supported, (
+            f"{name} has variable P/T, no characteristic-defining rule computes "
+            "it, and it still reports supported — it would enter play as 0/0"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -180,8 +231,28 @@ def test_pool_variable_pt_cards_are_flagged():
 def test_reprints_collapse_to_one_card_recording_every_printing():
     catalog = load_catalog()
     bolt = next(card for card in catalog if card.name == "Lightning Bolt")
-    assert bolt.printings == ("lea", "leb", "2ed")
+    # Read from the manifest rather than hardcoded: this test is about reprints
+    # collapsing to one card, and pinning the exact set list made it fail the
+    # moment a reprint set was appended — which is the case it exists to cover.
+    import json
+
+    from engine.card_loader import MANIFEST_PATH
+
+    manifest = json.loads(pathlib.Path(MANIFEST_PATH).read_text(encoding="utf-8"))
+    # Every set that actually contains the card, in manifest order.
+    expected = tuple(
+        entry["code"].lower()
+        for entry in manifest["sets"]
+        if any(
+            c["name"] == "Lightning Bolt"
+            for c in json.loads(
+                (pathlib.Path("cards") / entry["file"]).read_text(encoding="utf-8")
+            )
+        )
+    )
+    assert bolt.printings == expected
     assert bolt.original_printing == "lea"
+    assert len(set(bolt.printings)) == len(bolt.printings), "a set listed twice"
 
 
 def test_appending_a_set_never_changes_an_existing_original_printing(all_set_paths):

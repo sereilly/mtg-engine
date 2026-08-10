@@ -64,7 +64,14 @@ def test_validator_detects_a_silently_dropped_sentence():
         mana_cost="{1}",
         cmc=1.0,
         type_line="Sorcery",
-        oracle_text="Destroy target creature. Flurble the wumbus.",
+        # Two lines, not two sentences on one line. With both on one line the
+        # trailing nonsense stops the first clause parsing at all, so the card
+        # compiles to a bare `spell_pattern` marker — and the compiler now
+        # refuses to call such a spell supported, which would make this
+        # self-test unreachable rather than failing. Separate lines give the
+        # shape it means to test: a card that really is supported and really
+        # does carry a sentence nothing claims.
+        oracle_text="Destroy target creature.\nFlurble the wumbus.",
         colors=("B",),
         color_identity=("B",),
         keywords=(),

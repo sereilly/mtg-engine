@@ -1114,6 +1114,47 @@ question for the roadmap's goal is whether any of it generalises. Ingesting a
 fifth set answers that empirically and would exercise every guard built in this
 pass against text none of them has seen.
 
+### Ingesting a fifth set: what it actually cost
+
+Revised (3ED, 306 cards) was fetched, slimmed 64%, and registered. The pool went
+from 369 unique cards to **388** — 296 of Revised's cards deduped onto existing
+ones by `oracle_id`, which is the first real exercise `printings` has had.
+
+**Eight guards fired.** That is the result, and it is a good one: every one was
+either a real gap or a test with the four-set pool hardcoded into it.
+
+Real gaps, all of them the "supported but does nothing" class:
+
+- **Shatterstorm** and **Crumble** compiled to bare `spell_pattern` markers —
+  supported, no handler, no-ops on resolution. Exactly Shahrazad.
+- **Titania's Song** the same, as a permanent.
+- Four more (Armageddon Clock, Mishra's War Machine, Rocket Launcher, Titania's
+  Song) reported supported while carrying text nothing parses.
+
+Tests with the pool baked in: an exact printings tuple, an exact set of
+variable-P/T card names, an exact set list in the web API, and a
+"nothing is ever unsupported" assertion that cannot survive any real ingest.
+
+**The set data is reverted** — finishing the integration means implementing or
+classifying six cards and generalising four tests, which is its own piece of
+work, not a tail on this one. What is kept is everything the experiment
+exposed:
+
+- `test_no_hollow_support.py` asserted "no supported spell lacks a handler" as a
+  property of the pool. It is now the **compiler's contract**: a one-shot spell
+  whose instructions have no handler is reported unsupported, naming the
+  reason. Cost to the existing pool: zero cards. Revised would have added two.
+- `scripts/support_report.py` defaulted to `cards/LEA_cards.json`. It printed
+  Alpha's 290 cards while the pool had four sets, so "no unsupported cards" was
+  a true statement about a much smaller question than it appeared to answer. It
+  reads the manifest now, like everything else.
+- The pool-shaped tests are pool-relative, and the unsupported set is a named
+  ratchet rather than an assertion that it is empty.
+
+The honest summary: the engine's *guards* generalise — they caught every gap on
+first contact with unseen text, loudly and by name. The engine's *coverage* does
+not yet, and that is what the next set's worth of work buys.
+
 ### The static-ability cluster, and why it is a phase-6 job
 
 20 of the remaining lines fail with "static abilities need the CR 613 layers
