@@ -12,6 +12,7 @@ in the sibling step modules (``beginning_of_combat_step``, ``declare_attackers_s
 """
 
 from ..models import Permanent
+from ..resumption import run_resumable
 
 
 class CombatPhaseMixin:
@@ -208,26 +209,36 @@ class CombatPhaseMixin:
         # Auto-resolve and skip combat_damage when no manual assignment is needed.
         if combat_steps[next_idx] == "combat_damage" and not self._needs_manual_damage_assignment():
             auto = self._build_auto_damage_assignment()
-            self.resolve_combat_damage(self.active_player_index, attacker_damage=auto)
-            if not self.combat_damage_resolved:  # first-strike pass; do second
-                self.resolve_combat_damage(self.active_player_index, attacker_damage=auto)
-            if not allow_damage_skip:
-                # A player flagged the combat-damage step (hold priority). Combat
-                # damage has been dealt as the turn-based action (CR 510.1c); leave a
-                # priority window open for the active player (CR 510.4) instead of
-                # resolving the stack through to end-of-combat, so the flagged player
-                # can respond. The next advance (once players pass) moves on normally.
+
+            def deal_the_damage() -> None:
+                self.resolve_all_combat_damage(self.active_player_index, attacker_damage=auto)
+
+            def leave_the_damage_step() -> None:
+                if not allow_damage_skip:
+                    # A player flagged the combat-damage step (hold priority). Combat
+                    # damage has been dealt as the turn-based action (CR 510.1c); leave a
+                    # priority window open for the active player (CR 510.4) instead of
+                    # resolving the stack through to end-of-combat, so the flagged player
+                    # can respond. The next advance (once players pass) moves on normally.
+                    if self._receives_priority("combat_damage"):
+                        self.start_priority_window(self.active_player_index)
+                    return
                 if self._receives_priority("combat_damage"):
-                    self.start_priority_window(self.active_player_index)
-                return
-            if self._receives_priority("combat_damage"):
-                self._resolve_priority_window()
-            self._on_step_or_phase_end("combat", "combat_damage")
-            eoc_idx = next_idx + 1
-            if eoc_idx >= len(combat_steps):
-                self._enter_main_phase(precombat=False)
-                return
-            self._enter_combat_step(combat_steps[eoc_idx])
+                    self._resolve_priority_window()
+                self._on_step_or_phase_end("combat", "combat_damage")
+                eoc_idx = next_idx + 1
+                if eoc_idx >= len(combat_steps):
+                    self._enter_main_phase(precombat=False)
+                    return
+                self._enter_combat_step(combat_steps[eoc_idx])
+
+            # Leaving the step is the loop's *last step*, not work after it.
+            # Combat damage can stop to ask the affected player which effect
+            # applies first (CR 616.1e), and running on would open end of combat
+            # while the damage that step exists to deal was still owed
+            # (engine/resumption.py).
+            run_resumable(self, [deal_the_damage, leave_the_damage_step], lambda step: step())
+            return
 
     def _enter_combat_step(self, step: str) -> None:
         if step == "beginning_of_combat":

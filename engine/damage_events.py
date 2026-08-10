@@ -128,15 +128,12 @@ def deal_damage(game, event: dict, *, restart: Callable[[], Any] | None = None) 
     Re-running a single damage event is only enough when the work behind it is
     recorded, because damage is rarely the only thing in flight: a divided
     Fireball deals to each target in turn, a ``sequence`` has instructions
-    queued behind the one that stopped, and a spell still has CR 608.2m's
-    graveyard move to make. ``engine/resumption.py`` is what records that, and
-    the callers that pass ``asks=True`` are the ones running inside it.
-
-    **Combat damage does not, yet.** Its step has three nested loops and a tail
-    that owns the step's own completion flags, so making it resumable is a
-    larger restructure than the other two were; it passes neither ``asks`` nor a
-    ``restart``, so it cannot suspend and every seat takes the documented
-    default there.
+    queued behind the one that stopped, a spell still has CR 608.2m's graveyard
+    move to make, and the combat damage step has the rest of its blockers, its
+    attackers and its own completion flags. ``engine/resumption.py`` is what
+    records that, and the callers that pass ``asks=True`` (or their own
+    ``restart``, as the combat step's player-damage loop does) are the ones
+    running inside it. Every damage path now asks.
     """
     if event["amount"] <= 0:
         return DamageOutcome(consumed=False, dealt=0, result=0)

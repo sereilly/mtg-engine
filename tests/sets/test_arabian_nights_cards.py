@@ -1553,6 +1553,40 @@ def test_merchant_ship_gains_nothing_when_blocked(arn_by_name, all_cards):
     assert p1.life == 20  # blocked: no life
 
 
+def test_merchant_ship_gains_life_once_across_both_strike_passes(arn_by_name, all_cards):
+    """CR 510.4 gives a combat two damage steps when anything in it has first
+    strike, and the "attacked and wasn't blocked" trigger is fired from the
+    method that runs one step. A first striker attacking beside the Ship used to
+    hand the Ship's trigger to the stack once per step — 4 life instead of 2 —
+    because the guard on it tested ``combat_damage_resolved``, which the
+    first-strike pass deliberately leaves False."""
+    from tests.helpers import _game as _mk_game, _nosick as _clear_sick
+
+    ship = _clear_sick(Permanent(card=arn_by_name["Merchant Ship"]))
+    island = Permanent(card=_get(all_cards, "Island"))
+    # White Knight has first strike, so CR 510.4's second damage step exists.
+    knight = _clear_sick(Permanent(card=_get(all_cards, "White Knight")))
+    p1 = PlayerState(name="P1", battlefield=[ship, island, knight], life=20)
+    p2 = PlayerState(
+        name="P2", battlefield=[Permanent(card=_get(all_cards, "Island"))], life=20
+    )
+    game = _mk_game(p1, p2)
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    game.declare_attackers(0, [0, 2])
+    game.resolve_stack()
+
+    game._set_phase_and_step("combat", "combat_damage")
+    game.resolve_all_combat_damage(0)
+    game.resolve_stack()
+
+    assert game.combat_first_strike_done and game.combat_damage_resolved
+    assert (
+        game.log.count("Merchant Ship triggered (attacked and wasn't blocked)") == 1
+    ), "the trigger belongs to the combat, not to each of its damage steps"
+    assert p1.life == 22
+
+
 # ===========================================================================
 # Ebony Horse — untap + "prevent all combat damage dealt to and by"
 # ===========================================================================

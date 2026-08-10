@@ -2785,10 +2785,10 @@ def _ai_assign_combat_damage(session: Session) -> None:
     if _multiblock_split_pending(session):
         return
     auto = game._build_auto_damage_assignment()
-    game.resolve_combat_damage(game.active_player_index, attacker_damage=auto)
-    if not game.combat_damage_resolved:
-        # First-strike pass resolved; resolve the regular-damage pass too.
-        game.resolve_combat_damage(game.active_player_index, attacker_damage=auto)
+    # Both strike passes (CR 510.4). One call rather than two, so a first-strike
+    # pass that stops to ask a human defender something (CR 616.1e) records the
+    # second pass behind it instead of having it re-run the first.
+    game.resolve_all_combat_damage(game.active_player_index, attacker_damage=auto)
 
 
 def _hold_priority_for_human(session: Session) -> bool:
@@ -2956,9 +2956,7 @@ def _advance_phase(session: Session) -> None:
             # When there IS a 702.22k choice, _band_blocker_assignment_pending keeps
             # this from firing so the active player's dialog can resolve it instead.
             auto = game._build_auto_damage_assignment()
-            game.resolve_combat_damage(game.active_player_index, attacker_damage=auto)
-            if not game.combat_damage_resolved:
-                game.resolve_combat_damage(game.active_player_index, attacker_damage=auto)
+            game.resolve_all_combat_damage(game.active_player_index, attacker_damage=auto)
         if step == "declare_attackers" and not game.combat_attackers_locked:
             _ai_declare_attackers(session)
         if step == "declare_blockers":

@@ -271,9 +271,7 @@ def apply_replacements(
 
     Callers that cannot suspend simply do not pass it, and every seat takes the
     documented default. That is not a second code path so much as a missing
-    capability, stated at the one place that knows whether it exists: damage
-    has no restart because its callers read the number it returns for trample,
-    lifelink and triggers, and would have to defer all of that too.
+    capability, stated at the one place that knows whether it exists.
 
     Damage events should go through ``engine/damage_events.py`` instead, which
     contends these against the event's prevention shields as one set.

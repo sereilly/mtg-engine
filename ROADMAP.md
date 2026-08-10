@@ -2167,14 +2167,82 @@ The rule a loop has to follow — **it must be the last thing its function does*
 — is written where the mechanism is, because work after the loop does not run
 when a step suspends and nothing records it.
 
-**Still open: combat damage.** It is the one damage path that passes neither
-`asks` nor a `restart`, so it cannot suspend and takes the documented default.
-Its step is three nested loops (blockers by defender, by blocker, by band
-member) plus a tail that owns `combat_damage_resolved` and
-`combat_first_strike_done` — the step's own idea of how far through it is. That
-is a real restructure of the largest function in the phase layer rather than
-the two-line conversions the other three were, and it is now the only thing
-between this engine and 616.1e everywhere.
+**Done — combat damage asks, and the restructure it needed was a seam, not a
+rewrite.** This was the one damage path that passed neither `asks` nor a
+`restart`, and the entry above called it a real restructure rather than a
+two-line conversion. It was, but the shape it wanted turned out to be one the
+function already had and did not name: **the step is in two halves, and only one
+of them can be interrupted.** Assignment (CR 510.1) works out where every point
+goes and can be *refused* — a negative amount, a trampler holding back lethal —
+so it deals nothing while it can still say no. Dealing (CR 510.2) runs those
+recorded events and can be *suspended*. Naming that seam is what made the
+conversion mechanical: everything before it stays ordinary code that returns
+`(False, reason)`, everything after it is a step of a resumable loop and can
+return nothing at all.
+
+`resolve_combat_damage` was 380 lines with five loops and a tail. It is now
+guards, three extracted helpers (`_first_strike_pass_pending`,
+`_validate_blocker_damage_split`, `_assign_attacker_combat_damage`) and one
+`run_resumable` over four steps: blockers deal, attackers deal to blockers,
+attackers deal to players, `finish`. The blocker step is itself two nested
+resumable loops (by defender, by blocker) and a third inside the band-member
+split, so a suspension four loops deep unwinds innermost-first back out through
+them. `finish` — the lifelink gain, the state-based actions, the log lines and
+the `combat_first_strike_done` / `combat_damage_resolved` flags — is a *step*,
+not code after the loop, which is the whole rule restated: work written after a
+resumable loop does not run when one of its steps suspends, and here that would
+have been a combat that half-happened and then declared itself resolved.
+
+The player-damage loop is the one place that writes its own `restart` rather
+than passing `asks=True`, and the reason is CR 120.4's two numbers: the step
+applies `outcome.result` to the life total and tallies lifelink from
+`outcome.dealt`, so "re-run this call" is not enough — the re-run has to be the
+whole `hit()`, consequences included. `asks=True`'s generated thunk closes over
+one call; this one closes over both numbers' uses.
+
+**The strike passes were the sharp edge, and the caller was where it cut.**
+Every caller wrote "resolve, and resolve again if that was only the first-strike
+pass", keyed on `combat_damage_resolved`. That is safe exactly while a pass
+cannot be interrupted: a first-strike pass that suspends leaves the flag False,
+so the second call would have re-run the *first* strike — the damage twice, the
+question twice. The idiom is now `resolve_all_combat_damage`, a two-step
+resumable loop, and the second pass is recorded *behind* the first instead of
+racing it. `_advance_combat_step` got the same treatment one level up: leaving
+the damage step (priority window, step end, entering end of combat) is the last
+step of a loop whose first step is the damage, because otherwise answering a
+prompt would have found the game already in end of combat.
+
+**The bug it turned up: Merchant Ship gained 4 life.** "Whenever this creature
+attacks and isn't blocked" is fired from `resolve_combat_damage`, guarded by a
+comment claiming the method "runs once per combat (`combat_damage_resolved`)".
+It does not — the first-strike pass deliberately leaves that flag False, which
+is the entire point of it — so any first striker anywhere in the combat handed
+the Ship's trigger to the stack twice. Invisible for the same reason the
+attacker-attribution bug was: nothing in the pool had both an
+"attacks and isn't blocked" trigger and a reason to share a combat with first
+strike, so no test paired them. The guard is `combat_first_strike_done` now,
+which is the flag that actually marks the re-entry.
+
+Also found and corrected while citing it: **CR 510.5 does not exist.** The
+first-strike step is CR 510.4. The step module had been citing 510.5 since it
+was written.
+
+Nothing was refused, but two things were deliberately left alone. The manual
+assignment endpoint still calls `resolve_combat_damage` once rather than
+`resolve_all_combat_damage`, because one action is one pass there and the UI
+drives the second; a suspension in it is caught by the prompt gate, which
+refuses every action until answered. And 616.1 is still asked *per event* rather
+than once for the whole simultaneous step (CR 510.2) — two attackers into the
+same shielded player ask twice. That is right for the engine as built, which
+deals combat damage sequentially by documented design, but it is the place where
+"simultaneous" and "one contention set" would eventually have to be reconciled.
+
+Seven mutation checks, one per pinned line: drop the `restart`, flatten any of
+the three converted loops, restore the double-call idiom, move `finish` back
+after the loop, remove the trigger guard — each fails the test that pins it.
+4,082 tests, 12.0s. The AI simulation log is byte-identical to its
+pre-change baseline, which is the check that matters for the un-asked path:
+nothing about combat changed for a seat nobody is sitting in.
 
 **616.1a–d are deliberately not built.** They order *classes* of effect ahead of
 the free choice: self-replacement effects first (614.15), then control-on-entry,

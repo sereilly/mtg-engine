@@ -276,10 +276,11 @@ def test_616_1g_an_effect_on_a_contained_event_is_chosen_after_the_outer_one():
 
 @pytest.mark.cr("616.1e")
 def test_616_1e_a_damage_event_given_a_restart_asks_and_re_runs():
-    """Damage takes the default because no caller can supply a `restart` yet
-    (see `deal_damage` for the loop problem in the way), not because the
-    machinery is missing. Given one, a damage event asks exactly as a draw does
-    — so the day a caller can offer a re-run, this is what it gets.
+    """A damage event asks exactly as a draw does, given a caller that can offer
+    the re-run. Held at this level because every real path — spell damage,
+    combat damage — reaches CR 616.1e through this one contract, and it is
+    cheaper to see a broken restart here than three loops out
+    (tests/rules/test_resumption.py is where the loops are pinned).
 
     A Circle of Protection and a prevention pool are both applicable to one red
     source, which is the contention this pool reaches easily. Picking the pool

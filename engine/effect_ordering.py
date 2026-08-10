@@ -36,11 +36,11 @@ because there is nothing to roll back.
 
 The caller supplies the re-run, because an event is more than its replacements —
 a draw nothing replaces still has to draw — and only the caller knows what doing
-it again means. A caller that cannot offer one (damage: its callers read the
-number back for trample, lifelink and triggers, and would have to defer all of
-that too) simply does not, and every seat takes the default. That is a missing
-capability at one declared place rather than a branch scattered through the
-process.
+it again means. A caller that cannot offer one simply does not, and every seat
+takes the default there: a missing capability at one declared place rather than
+a branch scattered through the process. Every damage path can now offer one,
+combat included, because each carries its consequences as a ``then`` and each
+runs inside a loop that records the work behind it (``engine/resumption.py``).
 
 A non-interactive seat is never asked, so AI and headless play stay entirely
 synchronous.

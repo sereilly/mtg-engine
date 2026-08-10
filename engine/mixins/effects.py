@@ -710,9 +710,12 @@ class EffectsMixin:
         ``tests/engine/test_damage_continuations.py`` holds engine code to that.
 
         ``restart`` is what re-runs the event, and supplying it is what allows
-        the question to be asked at all. No caller supplies one yet: see
-        ``engine/damage_events.py`` for the loop problem that has to be solved
-        before one honestly can.
+        the question to be asked at all. ``asks=True`` builds the obvious one —
+        "re-run exactly this call" — and is only honest from inside a resumable
+        loop (``engine/resumption.py``), which is what records the work behind
+        the event. Pass ``restart`` yourself when the re-run has to be wider
+        than this call: the combat damage step does, because it applies the life
+        loss and tallies lifelink from the same outcome.
         """
         # Illusionary Mask: a face-down creature that would deal damage (e.g.
         # unblocked combat damage to a player) is turned face up first.

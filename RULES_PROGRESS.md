@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**204 / 570 tracked rules covered (35%)** — 845 tests, 0 unannotated.
+**204 / 570 tracked rules covered (35%)** — 851 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -604,14 +604,14 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 510. Combat Damage Step
 
-- [x] **510.1** First, the active player announces how each attacking creature assigns its combat damage, then th... *(11 tests, subrules acde)*
-- [x] **510.2** Second, all combat damage that’s been assigned is dealt simultaneously. This turn-based action do... *(5 tests)*
+- [x] **510.1** First, the active player announces how each attacking creature assigns its combat damage, then th... *(12 tests, subrules acde)*
+- [x] **510.2** Second, all combat damage that’s been assigned is dealt simultaneously. This turn-based action do... *(7 tests)*
 - [ ] **510.3** Third, the active player gets priority. (See rule 117, “Timing and Priority.”)
-- [x] **510.4** If at least one attacking or blocking creature has first strike (see rule 702.7) or double strike... *(1 tests)*
+- [x] **510.4** If at least one attacking or blocking creature has first strike (see rule 702.7) or double strike... *(2 tests)*
 
 ### 511. End of Combat Step
 
-- [x] **511.1** The end of combat step has no turn-based actions. Once it begins, the active player gets priority... *(1 tests)*
+- [x] **511.1** The end of combat step has no turn-based actions. Once it begins, the active player gets priority... *(2 tests)*
 - [x] **511.2** Abilities that trigger “at end of combat” trigger as the end of combat step begins. Effects that ... *(1 tests)*
 - [x] **511.3** As soon as the end of combat step ends, all creatures, battles, and planeswalkers are removed fro... *(1 tests)*
 
@@ -792,7 +792,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 616. Interaction of Replacement and/or Prevention Effects
 
-- [x] **616.1** If two or more replacement and/or prevention effects are attempting to modify the way an event af... *(25 tests, subrules efg)*
+- [x] **616.1** If two or more replacement and/or prevention effects are attempting to modify the way an event af... *(31 tests, subrules efg)*
 - [x] **616.2** A replacement or prevention effect can become applicable to an event as the result of another rep... *(1 tests)*
 
 ### 700. General
@@ -910,7 +910,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **802.2** As the combat phase starts, the attacking player doesn’t choose an opponent to become the defendi... *(1 tests)*
 - [x] **802.3** As the attacking player declares each attacking creature, they choose a defending player, a plane... *(3 tests, subrules a)*
 - [x] **802.4** If more than one player is being attacked, controls a planeswalker that’s being attacked, or prot... *(2 tests, subrules a)*
-- [x] **802.5** Combat damage is assigned in APNAP order. Other than that, the combat damage step proceeds just a... *(1 tests)*
+- [x] **802.5** Combat damage is assigned in APNAP order. Other than that, the combat damage step proceeds just a... *(2 tests)*
 
 ### 806. Free-for-All Variant
 

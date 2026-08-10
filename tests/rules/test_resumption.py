@@ -2,8 +2,9 @@
 
 CR 616.1e's choice interrupts a damage event part-way, and answering re-runs it.
 An event is usually one step of something larger: a divided Fireball's targets,
-a spell's remaining resolution. What these pin is that the rest of that larger
-thing still happens, and happens in the right order.
+a spell's remaining resolution, one attacker of several in the combat damage
+step. What these pin is that the rest of that larger thing still happens, and
+happens in the right order.
 
 The loop bookkeeping underneath is tests/engine/test_resumption.py.
 """
@@ -15,17 +16,56 @@ from dataclasses import replace
 import pytest
 
 from engine import Game, PlayerState
-from tests.helpers import CARDS_BY_NAME
+from engine.models import Permanent
+from tests.helpers import CARDS_BY_NAME, _mk_creature_card, _nosick
 
 
-def _shielded_player(life: int = 20):
+def _shielded_player(life: int = 20, pool: int = 5, name: str = "P1"):
     """A seat holding two shields that both apply to one red damage event — a
     Circle of Protection and a prevention pool, which is the CR 616.1e
     contention this pool reaches most easily."""
-    player = PlayerState(name="P1", life=life)
+    player = PlayerState(name=name, life=life)
     player.color_prevention_shields = ["R"]
-    player.damage_prevention_pool = 5
+    player.damage_prevention_pool = pool
     return player
+
+
+def _attacker(name: str, power: int, toughness: int, *, red: bool = True, first_strike: bool = False):
+    card = replace(
+        _mk_creature_card(name, power, toughness),
+        colors=("R",) if red else (),
+        keywords=("First strike",) if first_strike else (),
+        oracle_text="First strike" if first_strike else "",
+    )
+    return _nosick(Permanent(card=card))
+
+
+def _combat(attackers: list[Permanent], defenders: list[PlayerState], targets=None) -> Game:
+    """Seat 0 attacking with *attackers*, stopped at the combat damage step with
+    nothing resolved yet. ``targets`` names each attacker's own defending player
+    (CR 802.5); without it everything attacks seat 1."""
+    seat0 = PlayerState(
+        name="P0", battlefield=attackers, library=[_mk_creature_card("Filler", 1, 1)]
+    )
+    game = Game(players=[seat0, *defenders])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    ok, message = game.declare_attackers(
+        0, list(range(len(attackers))), attacker_targets=targets
+    )
+    assert ok, message
+    game.resolve_stack()
+    game._set_phase_and_step("combat", "combat_damage")
+    return game
+
+
+def _pick(game, seat: int, key: str) -> None:
+    """Answer the CR 616.1e prompt with a named effect."""
+    prompt = game.pending_choices_of("effect_order", seat)[0]
+    game.resolve_pending_choice(
+        "effect_order", seat, option_index=prompt.data["_keys"].index(key)
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -90,4 +130,216 @@ def test_616_1e_a_divided_spell_resumes_the_targets_behind_the_one_that_asked():
 
     assert victim.damage_prevention_pool == 2, "3 of the pool absorbed the shielded seat's share"
     assert third.life == 17, "the target behind the question was not lost"
+    assert game.resume_stack == [] and not game.effect_suspended
+
+
+# ---------------------------------------------------------------------------
+# The combat damage step
+# ---------------------------------------------------------------------------
+#
+# The largest loop in the engine, and the last damage path to reach CR 616.1e.
+# It is three nested loops (blockers by defender, by blocker, by band member),
+# two flat ones (attackers onto blockers, attackers onto players) and a tail
+# that owns the step's own progress flags. Every one of those is work that a
+# naive conversion drops on the floor the moment one event stops to ask.
+
+@pytest.mark.cr("616.1e", "510.2")
+def test_616_1e_combat_damage_asks_the_defending_player():
+    """One red attacker into a seat holding two applicable shields. Combat used
+    to be the one damage path that could not suspend, so every seat took the
+    default; it asks now, and the non-default answer is what happens."""
+    game = _combat([_attacker("Red Ogre", 3, 3)], [_shielded_player()])
+    game.interactive_seats = {1}
+    defender = game.players[1]
+
+    game.resolve_all_combat_damage(0)
+
+    assert game.pending_choices_of("effect_order", 1), "the defending player was asked"
+    assert defender.damage_prevention_pool == 5 and defender.color_prevention_shields == ["R"], (
+        "nothing was spent while the question was open"
+    )
+    assert not game.combat_damage_resolved, "and the step is not over"
+
+    _pick(game, 1, "_prevention_pool")
+
+    assert defender.damage_prevention_pool == 2, "the chosen shield absorbed the 3"
+    assert defender.color_prevention_shields == ["R"], (
+        "the Circle is the default and was not spent"
+    )
+    assert defender.life == 20
+    assert game.combat_damage_resolved, "the step finished once answered"
+    assert game.resume_stack == [] and not game.effect_suspended
+
+
+@pytest.mark.cr("616.1e", "510.2")
+def test_616_1e_a_non_interactive_defender_takes_the_default_synchronously():
+    """The same combat with nobody at the keyboard. AI and headless play must
+    stay entirely synchronous — nothing queued, nothing left owed — which is
+    what keeps scripts/simulate_ai_games.py deterministic per seed."""
+    game = _combat([_attacker("Red Ogre", 3, 3)], [_shielded_player()])
+    defender = game.players[1]
+
+    game.resolve_all_combat_damage(0)
+
+    assert not game.pending_choices_of("effect_order", 1), "no seat is interactive"
+    assert defender.color_prevention_shields == [], "the default (the Circle) applied"
+    assert defender.damage_prevention_pool == 5, "so the pool was not touched"
+    assert game.combat_damage_resolved
+    assert game.resume_stack == [] and not game.effect_suspended
+
+
+@pytest.mark.cr("616.1e", "802.5")
+def test_616_1e_a_suspended_attacker_does_not_take_the_rest_of_combat_with_it():
+    """The case a naive conversion silently drops, and the combat twin of the
+    second Fireball target. Two attackers, each with its own defending player
+    (CR 802.5): the first stops to ask, and the second must still deal its
+    damage when the answer arrives rather than being lost with the loop."""
+    game = _combat(
+        [_attacker("Red One", 2, 2), _attacker("Red Two", 3, 3)],
+        [_shielded_player(), PlayerState(name="P2", life=20)],
+        targets={0: 1, 1: 2},
+    )
+    game.interactive_seats = {1}
+    shielded, other = game.players[1], game.players[2]
+
+    game.resolve_all_combat_damage(0)
+
+    assert game.pending_choices_of("effect_order", 1), "the shielded seat was asked"
+    assert other.life == 20, "the other defender has not been dealt to yet"
+
+    _pick(game, 1, "_prevention_pool")
+
+    assert shielded.damage_prevention_pool == 3, "2 of the pool absorbed the first attacker"
+    assert shielded.life == 20
+    assert other.life == 17, "the attacker behind the question was not lost"
+    assert game.combat_damage_resolved
+    assert game.resume_stack == [] and not game.effect_suspended
+
+
+@pytest.mark.cr("616.1e", "510.4")
+def test_616_1e_a_suspended_first_strike_pass_still_gets_its_second_pass_once():
+    """The sharpest risk in making the step suspendable. CR 510.4 gives this
+    combat two damage steps, and the step's own ``combat_first_strike_done`` is
+    how it knows which one it is in. A first-strike pass that stops to ask
+    leaves that flag unset, so a caller that re-called on "not resolved yet"
+    would re-run the *first* strike; the second pass has to be recorded behind
+    the first instead, and run exactly once when the answer arrives.
+
+    The Red Lancer is red and first-striking, so its 2 contends with both
+    shields; the Grey Ogre is colourless and ordinary, so its 3 in the second
+    pass meets a pool the answer has already emptied and lands whole."""
+    game = _combat(
+        [
+            _attacker("Red Lancer", 2, 2, first_strike=True),
+            _attacker("Grey Ogre", 3, 3, red=False),
+        ],
+        [_shielded_player(pool=2)],
+    )
+    game.interactive_seats = {1}
+    defender = game.players[1]
+
+    game.resolve_all_combat_damage(0)
+
+    assert game.pending_choices_of("effect_order", 1), "the first-strike pass asked"
+    assert not game.combat_first_strike_done, "and did not finish while it waited"
+    assert defender.life == 20, "no combat damage has landed at all"
+
+    _pick(game, 1, "_prevention_pool")
+
+    assert defender.damage_prevention_pool == 0, "the pool absorbed the first striker's 2"
+    assert defender.color_prevention_shields == ["R"], "the Circle was not spent"
+    assert defender.life == 17, (
+        "the second pass dealt the Grey Ogre's 3 against an empty pool — 14 would "
+        "mean it ran twice, 19 that the first striker struck again"
+    )
+    assert game.log.count("Resolved first strike combat damage") == 1
+    assert game.log.count("Resolved combat damage") == 1
+    assert game.combat_first_strike_done and game.combat_damage_resolved
+    assert game.resume_stack == [] and not game.effect_suspended
+
+
+@pytest.mark.cr("616.1e", "510.1c")
+def test_616_1e_a_suspended_blocker_resumes_the_loops_it_was_nested_in():
+    """The deepest of the step's loops. Blockers deal by defender, by blocker,
+    by band member, and only then do the attackers deal — so a blocker's damage
+    stopping to ask has the rest of its own loop, both attacker loops and the
+    step's tail behind it, and every one of them has to be waiting rather than
+    already spent.
+
+    The contention is Jade Monolith's redirect against a prevention pool on one
+    attacker (CR 616.1g's pairing), whose controller is the seat asked."""
+    attacked, spared = _attacker("Attacker One", 2, 2), _attacker("Attacker Two", 2, 2)
+    attacked.damage_prevention_pool = 5
+    attacked.metadata["redirect_damage_to_player"] = 0
+    first, second = _attacker("Blocker One", 2, 3), _attacker("Blocker Two", 2, 3)
+    game = _combat([attacked, spared], [PlayerState(name="P1", battlefield=[first, second])])
+    game.interactive_seats = {0}
+    game._set_phase_and_step("combat", "declare_blockers")
+    ok, message = game.declare_blockers(1, {0: 0, 1: 1})
+    assert ok, message
+    game._set_phase_and_step("combat", "combat_damage")
+
+    game.resolve_all_combat_damage(0)
+
+    assert game.pending_choices_of("effect_order", 0), "the attacker's controller was asked"
+    assert (attacked.damage_marked, spared.damage_marked) == (0, 0)
+    assert (first.damage_marked, second.damage_marked) == (0, 0), (
+        "the attackers deal after the blockers, so none of that has happened either"
+    )
+
+    _pick(game, 0, "_prevention_pool")
+
+    assert attacked.damage_prevention_pool == 3, "the chosen shield absorbed the 2"
+    assert attacked.metadata.get("redirect_damage_to_player") == 0, (
+        "the redirect is the default and is still armed"
+    )
+    assert attacked.damage_marked == 0
+    assert spared.damage_marked == 2, "the blocker behind the question still dealt"
+    assert (first.damage_marked, second.damage_marked) == (2, 2), (
+        "and both attacker loops queued behind that one ran too"
+    )
+    assert game.combat_damage_resolved
+    assert game.resume_stack == [] and not game.effect_suspended
+
+
+@pytest.mark.cr("616.1e", "511.1")
+def test_616_1e_a_suspended_combat_does_not_advance_to_end_of_combat():
+    """One level further out than the step itself. The phase driver deals the
+    damage and *then* closes the step and enters end of combat (CR 511.1) — work
+    after a loop, which is exactly what does not run when a step suspends and is
+    not recorded. Leaving the step is the loop's last step now, so a combat
+    waiting on an answer stays in the combat damage step and finishes the whole
+    way through when it gets one."""
+    attacker = _attacker("Red Ogre", 3, 3)
+    seat0 = PlayerState(
+        name="P0", battlefield=[attacker], library=[_mk_creature_card("Filler", 1, 1)]
+    )
+    defender = _shielded_player()
+    defender.library = [_mk_creature_card("Filler", 1, 1)]
+    game = Game(players=[seat0, defender])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {1}
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # beginning of combat
+    game.advance_combat_phase()  # declare attackers
+    ok, message = game.declare_attackers(0, [0])
+    assert ok, message
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # declare blockers (auto-skipped: no blockers)
+    game._close_current_priority_step()
+
+    game.advance_combat_phase()  # combat damage, auto-resolved
+
+    assert game.pending_choices_of("effect_order", 1), "the defending player was asked"
+    assert game.current_step == "combat_damage", (
+        "the phase must not have left the step whose damage is still owed"
+    )
+    assert not game.combat_damage_resolved
+
+    _pick(game, 1, "_prevention_pool")
+
+    assert defender.damage_prevention_pool == 2 and defender.life == 20
+    assert game.combat_damage_resolved
+    assert game.current_step == "end_of_combat", "and the step closed once it was done"
     assert game.resume_stack == [] and not game.effect_suspended

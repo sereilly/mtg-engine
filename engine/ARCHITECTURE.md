@@ -342,9 +342,16 @@ that). And the work *behind* the event must be recorded, which is
 answering resumes the divided damage, the sequence, and the spell's graveyard
 move in that order. A loop using it must be the last thing its function does.
 
-Spell damage satisfies both and asks. **Combat damage does not yet** — three
-nested loops and a tail owning the step's completion flags — so it passes
-neither and takes the documented default.
+**Every damage path satisfies both and asks**, combat included. The combat
+damage step was the last to convert and the only one where it was a restructure
+rather than a two-line change: its dealing half is now nested resumable loops
+(blockers by defender, by blocker, by band member; then the two attacker loops),
+its tail — the lifelink gain, the state-based actions and the
+`combat_first_strike_done` / `combat_damage_resolved` flags — is the last *step*
+of the outermost loop rather than code after it, and both strike passes (CR
+510.4) run through one `resolve_all_combat_damage` so a first-strike pass that
+suspends records the second behind it instead of being re-run by a caller that
+saw "not resolved yet".
 
 `engine/damage_events.py` is where a *damage* event's members of both registries
 become the one candidate list the rule describes. `deal_damage(game, event)` is

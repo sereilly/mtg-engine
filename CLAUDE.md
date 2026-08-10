@@ -178,7 +178,9 @@ adding entries, not editing dispatch**:
   something larger: a loop records the rest of itself before each step, so
   answering resumes the targets, instructions and resolution tail behind it,
   innermost first. **A loop using it must be the last thing its function does.**
-  Spell damage asks; combat damage does not yet.
+  Every damage path asks, combat included — the combat damage step's dealing
+  half is nested resumable loops and its completion flags are the last step of
+  the outermost one.
 - `engine/damage_events.py` — a damage event start to finish. CR 120.4's two
   halves (the damage is dealt; then what was dealt is processed into its
   result), with 616.1's contention set — shields *and* replacements together —
