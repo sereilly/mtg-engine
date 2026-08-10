@@ -5,6 +5,11 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from ..land_animation import (
+    LAND_ANIMATION_KIND,
+    land_animation_in_text,
+    land_animation_payload,
+)
 from ..lord_buffs import LORD_BUFF_KIND, lord_buff_in_text, lord_buff_payload
 from ..oracle_types import _COLOR_WORD_TO_SYMBOL, OracleInstruction, _instruction
 from .base import RuleResult, parse_rule
@@ -19,18 +24,19 @@ def balance_resources(text: str, activated: bool) -> RuleResult:
     return None
 
 
-# Global buff / animate-land effects (e.g. Kormus Bell, Living Lands)
+# "All <land type>s are P/T [colour] creatures that are still lands" — Kormus
+# Bell, Living Lands, and every other printing of the template. Derived in full
+# by engine/land_animation.py, whose payload the animation refresh reads; this
+# replaced two rules that each spelled one card's land type into an instruction
+# *kind*, so a third land type was unsupported while the engine had every line
+# of code it needed.
 @parse_rule(113000)
-def animate_all_swamps(text: str, activated: bool) -> RuleResult:
-    if "all swamps are 1/1 black creatures that are still lands" in text:
-        return _instruction("animate_all_swamps"), "spell_pattern"
-    return None
-
-
-@parse_rule(114000)
-def animate_all_forests(text: str, activated: bool) -> RuleResult:
-    if "all forests are 1/1 creatures that are still lands" in text:
-        return _instruction("animate_all_forests"), "spell_pattern"
+def animate_all_lands(text: str, activated: bool) -> RuleResult:
+    animation = land_animation_in_text(text)
+    if animation is not None:
+        return OracleInstruction(
+            LAND_ANIMATION_KIND, "", land_animation_payload(animation)
+        ), "spell_pattern"
     return None
 
 

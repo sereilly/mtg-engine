@@ -55,8 +55,7 @@ def choose_cast_action(game: Game, player_index: int) -> CastAction | None:
         if (
             card.primary_type == "land"
             and game.enforce_mana_costs
-            and game.lands_played_this_turn.get(player_index, 0) >= 1
-            and game._fastbond_count(player_index) <= 0
+            and not game._may_play_another_land(player_index)
         ):
             continue
         if not _can_cast_with_targets(game, player_index, card):

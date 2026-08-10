@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**205 / 570 tracked rules covered (35%)** — 877 tests, 0 unannotated.
+**207 / 570 tracked rules covered (36%)** — 901 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -16,7 +16,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [104. Ending the Game](#104-ending-the-game) | 5/6 | 83% |
 | [105. Colors](#105-colors) | 0/5 | 0% |
 | [106. Mana](#106-mana) | 4/13 | 30% |
-| [107. Numbers and Symbols](#107-numbers-and-symbols) | 0/18 | 0% |
+| [107. Numbers and Symbols](#107-numbers-and-symbols) | 1/18 | 5% |
 | [108. Cards](#108-cards) | 1/6 | 16% |
 | [109. Objects](#109-objects) | 0/5 | 0% |
 | [110. Permanents](#110-permanents) | 0/5 | 0% |
@@ -42,7 +42,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [302. Creatures](#302-creatures) | 1/7 | 14% |
 | [303. Enchantments](#303-enchantments) | 7/7 | 100% |
 | [304. Instants](#304-instants) | 0/5 | 0% |
-| [305. Lands](#305-lands) | 1/9 | 11% |
+| [305. Lands](#305-lands) | 2/9 | 22% |
 | [307. Sorceries](#307-sorceries) | 0/5 | 0% |
 | [400. General](#400-general) | 5/12 | 41% |
 | [401. Library](#401-library) | 1/7 | 14% |
@@ -170,7 +170,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **107.2** If anything needs to use a number that can’t be determined, either as a result or in a calculatio...
 - [ ] **107.3** Many objects use the letter X as a placeholder for a number that needs to be determined. Some obj...
 - [ ] **107.4** The mana symbols are {W}, {U}, {B}, {R}, {G}, and {C}; the numerical symbols {0}, {1}, {2}, {3}, ...
-- [ ] **107.5** The tap symbol is {T}. The tap symbol in an activation cost means “Tap this permanent.” A permane...
+- [x] **107.5** The tap symbol is {T}. The tap symbol in an activation cost means “Tap this permanent.” A permane... *(2 tests)*
 - [ ] **107.6** The untap symbol is {Q}. The untap symbol in an activation cost means “Untap this permanent.” A p...
 - [ ] **107.7** Each activated ability of a planeswalker has a loyalty symbol in its cost. Positive loyalty symbo...
 - [ ] **107.8** The text box of a leveler card contains two level symbols, each of which is a keyword ability tha...
@@ -311,7 +311,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [ ] **120.1** Objects can deal damage to battles, creatures, planeswalkers, and players. This is generally detr...
 - [ ] **120.2** Any object can deal damage.
-- [x] **120.3** Damage may have one or more of the following results, depending on whether the recipient of the d... *(1 tests, subrules f)*
+- [x] **120.3** Damage may have one or more of the following results, depending on whether the recipient of the d... *(3 tests, subrules af)*
 - [x] **120.4** Damage is processed in a four-part sequence. *(6 tests, subrules bc)*
 - [ ] **120.5** Damage dealt to a creature, planeswalker, or battle doesn’t destroy it. Likewise, the source of t...
 - [ ] **120.6** Damage marked on a creature remains until the cleanup step, even if that permanent stops being a ...
@@ -435,7 +435,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 305. Lands
 
 - [ ] **305.1** A player who has priority may play a land card from their hand during a main phase of their turn ...
-- [ ] **305.2** A player can normally play one land during their turn; however, continuous effects may increase t...
+- [x] **305.2** A player can normally play one land during their turn; however, continuous effects may increase t... *(14 tests, subrules ab)*
 - [ ] **305.3** A player can’t play a land, for any reason, if it isn’t their turn. Ignore any part of an effect ...
 - [ ] **305.4** Effects may also allow players to “put” lands onto the battlefield. This isn’t the same as “playi...
 - [ ] **305.5** Land subtypes are always a single word and are listed after a long dash. Land subtypes are also c...
@@ -646,7 +646,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **602.2** To activate an ability is to put it onto the stack and pay its costs, so that it will eventually ... *(7 tests, subrules ab)*
 - [ ] **602.3** Some abilities specify that one of their controller’s opponents does something the controller wou...
 - [ ] **602.4** Activating an ability that alters costs won’t affect spells and abilities that are already on the...
-- [x] **602.5** A player can’t begin to activate an ability that’s prohibited from being activated. *(4 tests, subrules a)*
+- [x] **602.5** A player can’t begin to activate an ability that’s prohibited from being activated. *(6 tests, subrules a)*
 
 ### 603. Handling Triggered Abilities
 
@@ -725,7 +725,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [ ] **611.1** A continuous effect modifies characteristics of objects, modifies control of objects, or affects ...
 - [x] **611.2** A continuous effect may be generated by the resolution of a spell or ability. *(10 tests, subrules abc)*
-- [x] **611.3** A continuous effect may be generated by the static ability of an object. *(29 tests, subrules abc)*
+- [x] **611.3** A continuous effect may be generated by the static ability of an object. *(32 tests, subrules abc)*
 
 ### 612. Text-Changing Effects
 
@@ -742,7 +742,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 613. Interaction of Continuous Effects
 
-- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(31 tests, subrules bcdefg)*
+- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(44 tests, subrules bcdefg)*
 - [ ] **613.2** Within layer 1, apply effects in a series of sublayers in the order described below. Within each ...
 - [ ] **613.3** Within layers 2–6, apply effects from characteristic-defining abilities first (see rule 604.3), t...
 - [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(54 tests, subrules abcd)*

@@ -10,6 +10,7 @@ from ..models import CardDefinition, Permanent, PlayerState
 from ..auras import attach_aura, aura_animates_artifact, aura_keyword_grants
 from ..oracle import OracleInstruction, _COLOR_WORD_TO_SYMBOL, compile_card_oracle
 from ..keywords import grant_keyword, remove_keyword
+from ..land_animation import LAND_ANIMATION_KIND
 from ..lord_buffs import LORD_BUFF_KIND
 
 
@@ -119,10 +120,10 @@ class OracleInstructionsMixin:
     def _apply_global_buff(self, caster: PlayerState, source: CardDefinition) -> None:
         program = compile_card_oracle(source)
         for instr in program.instructions:
-            if instr.kind == "animate_all_swamps":
-                self._refresh_dynamic_creatures()
-                return
-            if instr.kind == "animate_all_forests":
+            if instr.kind == LAND_ANIMATION_KIND:
+                # Every "All <type>s are P/T creatures that are still lands"
+                # printing. Two branches keyed by land type stood here, one per
+                # card the engine happened to know (engine/land_animation.py).
                 self._refresh_dynamic_creatures()
                 return
             if instr.kind == LORD_BUFF_KIND:

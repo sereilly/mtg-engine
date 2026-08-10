@@ -300,12 +300,25 @@ class StackResolutionMixin:
                 if self.enforce_mana_costs:
                     self.lands_played_this_turn[caster_index] = self.lands_played_this_turn.get(caster_index, 0) + 1
                     if self.lands_played_this_turn.get(caster_index, 0) > 1:
-                        fastbond_count = self._fastbond_count(caster_index)
-                        if fastbond_count > 0:
+                        # "…if it wasn't the first land you played this turn,
+                        # ~ deals N damage to you". The rider is read off each
+                        # source's own text alongside the allowance it came
+                        # with, so the sources name themselves in the log
+                        # instead of the engine naming one of them.
+                        sources = [
+                            (permanent, allowance)
+                            for permanent, allowance in self._land_play_allowances(caster_index)
+                            if allowance.damage_per_extra_land
+                        ]
+                        if sources:
+                            total = sum(a.damage_per_extra_land for _, a in sources)
+                            names = ", ".join(
+                                dict.fromkeys(permanent.card.name for permanent, _ in sources)
+                            )
                             self._deal_damage_to_player(
-                                caster, fastbond_count,
+                                caster, total,
                                 then=lambda damage: self.log.append(
-                                    f"Fastbond dealt {damage} damage to {caster.name}"
+                                    f"{names} dealt {damage} damage to {caster.name}"
                                 ),
                             )
                 self._process_land_enters(caster_index)

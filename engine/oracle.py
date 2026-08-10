@@ -890,11 +890,19 @@ def _derived_static_claims(oracle_text: str, normalized_text: str) -> list[str]:
     from .draw_step_modifiers import draw_step_bonus_for
     from .enter_effects import enter_effect_line
     from .global_statics import global_static_for
+    from .land_play_allowance import land_play_allowance_for
     from .untap_restrictions import untap_restriction_for
 
     claims: list[str] = []
     if untap_restriction_for(oracle_text) is not None:
         claims.append("untap_restrictions")
+    # Extra land plays (Fastbond). The land-drop path derives the allowance from
+    # the permanent's own text, so the gate has to ask the same table — a
+    # wording the table cannot read must make the card unsupported rather than
+    # supported-with-the-permission-missing, which is what the name-keyed count
+    # this replaced produced.
+    if land_play_allowance_for(oracle_text) is not None:
+        claims.append("land_play_allowance")
     # A board-wide static (Titania's Song, Energy Flux) contributes its effects
     # through the CR 613 layer bridge and, for a granted ability, through the
     # affected permanent's effective card — so there is no instruction to

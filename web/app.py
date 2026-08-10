@@ -1787,8 +1787,7 @@ def _compute_playable_hand_indices(session: Session, player_index: int) -> list[
         for p in game.players
         for perm in p.battlefield
     )
-    fastbond_count = game._fastbond_count(player_index)
-    lands_played = game.lands_played_this_turn.get(player_index, 0)
+    may_play_land = game._may_play_another_land(player_index)
     current_turn = session.current_turn
     is_main_phase = game.current_phase == "main"
     stack_empty = not game.stack
@@ -1833,10 +1832,10 @@ def _compute_playable_hand_indices(session: Session, player_index: int) -> list[
         if not target_ok:
             continue
 
-        # Land play restriction (1 per turn unless Fastbond)
-        if card.primary_type == "land":
-            if lands_played >= 1 and fastbond_count <= 0:
-                continue
+        # Land play restriction: CR 305.2's one per turn, plus whatever the
+        # allowances on this seat's battlefield add (engine/land_play_allowance.py).
+        if card.primary_type == "land" and not may_play_land:
+            continue
 
         # Mana affordability for non-land cards
         if card.primary_type != "land" and game.enforce_mana_costs:

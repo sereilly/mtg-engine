@@ -121,8 +121,7 @@ class SpellCastingMixin:
         extra_generic_tax = 0
 
         if self.enforce_mana_costs and card.primary_type == "land":
-            lands_played = self.lands_played_this_turn.get(caster_index, 0)
-            if lands_played >= 1 and self._fastbond_count(caster_index) <= 0:
+            if not self._may_play_another_land(caster_index):
                 details = "already played a land this turn"
                 self.log.append(details)
                 return SimulationResult(card.name, False, classification.effect_kind, details)

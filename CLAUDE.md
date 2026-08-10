@@ -242,8 +242,15 @@ adding entries, not editing dispatch**:
   (spell-resolved and counterspell riders, leave-battlefield effects,
   draw-step modifiers, the Aura on a land tapped for mana).
   **This is the only sanctioned place to reference a card by name**; do not put
-  card names anywhere else in the engine (a few single-card exceptions are
-  marked `# TODO(card-hooks)` — migrate them if a second card needs the shape).
+  card names anywhere else in the engine. There are no `# TODO(card-hooks)`
+  exceptions left: the last three each turned out to be a template or a general
+  CR rule, not one card. Before writing a name, check by *behaviour* — give an
+  invented card the same printed text and see whether it works.
+- `engine/land_animation.py`, `engine/land_play_allowance.py` — the newest two
+  derivation tables: "All <type>s are P/T creatures that are still lands"
+  (CR 613 layers 4/5/7) and "You may play <N> additional lands on each of
+  your turns" (CR 305.2). Same model as `combat_restrictions.py`: the parameters
+  are payload, and the support gate reads the same table the dispatch does.
 - `engine/phases/upkeep_effects.py` — `@upkeep_effect(condition, kind)` handlers
   for the interactive pay-or-consequence upkeep triggers, keyed by the
   `(trigger condition, instruction kind)` pair the compiler produces. Everything

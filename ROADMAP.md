@@ -1822,6 +1822,57 @@ parameter a derivation cannot express does not stay unexpressed — it gets
 approximated somewhere, and the approximation is invisible because no test
 names it.
 
+### The last three `TODO(card-hooks)` sites: none of them was one card
+
+Three comments in the mixins said "single-card bespoke site; migrate if a second
+card needs the shape". Tested by *behaviour* — give an invented card the same
+printed text and see what happens — all three were already wrong, and each in a
+different way. The count is 0 now.
+
+- **Kormus Bell / Living Lands** were the combat-restriction bug exactly, with
+  both failure modes live at once. The gate was two `in text` literals emitting
+  instruction kinds that spelled the land type out (`animate_all_swamps` /
+  `animate_all_forests`), so a card printed "All Mountains are …" compiled
+  **unsupported**; the dispatch matched `perm.card.name == "Kormus Bell"`, so a
+  differently-named card with Kormus Bell's *exact* text compiled **supported
+  and animated nothing**. `engine/land_animation.py` derives the land type, the
+  P/T and the colour into one `animate_all_lands` payload. The P/T and the
+  colour were hardcoded 1/1 and black in the refresh, so those were two more
+  parameters the template could not carry.
+- **Fastbond** was the split at its widest. `_fastbond_count` counted permanents
+  *named "Fastbond"* and was read from four places — cast validation, the
+  land-drop damage, the AI's land policy, the web layer's playable list — while
+  `scripts/parse_coverage.py` claimed the *sentence* "you may play any number of
+  lands on each of your turns" for every card printing it. Claim pool-wide,
+  behaviour one name: an invented card with Fastbond's exact text compiled
+  supported, granted no extra land play and dealt no damage.
+  `engine/land_play_allowance.py` derives CR 305.2's count, covering the
+  "\[N] additional land(s)" forms the pool does not yet contain, and every gate
+  asks the one table — including `_derived_static_claims`.
+- **Basalt Monolith** was not a template at all; it was a *rule*. The branch
+  hand-picked between the card's {T} mana ability and its {3} untap ability by
+  tapped state, which is just CR 107.5 — an already-tapped permanent can't be
+  tapped again to pay {T}, so a card with both abilities has exactly one payable
+  ability in each state. The default selection asks that question now. An
+  identically-worded card under any other name previously tapped for mana once
+  and was then stuck tapped for good, its untap ability unreachable. A second
+  Basalt Monolith branch further down was **dead code** — the {T} cost has
+  already run `become_tapped` by then — confirmed by making it raise and running
+  the suite.
+
+Two things worth keeping from this. The first: "single card" is a claim about
+the *pool*, not about the code, and it expires silently — Fastbond's comment was
+true when written and the parse-coverage claim that contradicted it was added
+later, by someone closing a different gap. The second: a name-keyed dispatch and
+a CR rule implemented as a card special case look identical in a grep for card
+names, and they have opposite fixes. Only running the invented card tells them
+apart.
+
+Every guard was verified by injecting the bug it catches and reverting: the
+name-keyed animation dispatch, the hardcoded 1/1-black body, the animation gate
+losing its right anchor, the name-keyed land-play count, the gate no longer
+asking the allowance table, and both halves of the ability-selection default.
+
 ## Phase 4 — trigger event bus and a generic choice queue ✅ done
 
 **Done:**
@@ -2959,4 +3010,9 @@ Anything that weakens these is a regression regardless of what it enables:
    are pure functions of card text.
 4. **Ratchets only tighten.** Coverage floors, probe baselines, and accepted-diff
    lists shrink or hold — never grow without review.
-5. **Card names live only in `card_hooks.py`.**
+5. **Card names live only in `card_hooks.py`.** No `TODO(card-hooks)`
+   exceptions remain outside it. "Only one card does this" is a claim about the
+   *pool*, and it expires without anyone editing the comment — so before a name
+   goes anywhere else, give an invented card the same printed text and check
+   that it behaves. A name-keyed dispatch and a CR rule written as a card
+   special case grep identically and have opposite fixes.

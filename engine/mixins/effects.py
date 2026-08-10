@@ -8,6 +8,7 @@ from ..card_hooks import UNTAPPED_ARTIFACT_PROTECTORS
 from ..handlers._common import permanent_matches_filter, pick_target_permanent
 from ..auras import aura_restriction_active
 from ..damage_events import deal_damage
+from ..land_play_allowance import LandPlayAllowance, land_play_allowance_for
 from ..models import CardDefinition, Permanent, PlayerState
 from ..replacement_choices import pending_choices_for, resolve_choice
 from ..replacements import TOP_OF_LIBRARY_DISCARD_TEXT, apply_replacements
@@ -971,9 +972,35 @@ class EffectsMixin:
         ]
         self._enqueue_triggered_batch(events)
 
-    def _fastbond_count(self, player_index: int) -> int:
-        # TODO(card-hooks): single-card bespoke site; migrate if a second
-        # "extra land drops for damage" card appears.
-        if player_index < 0 or player_index >= len(self.players):
-            return 0
-        return sum(1 for permanent in self.players[player_index].battlefield if permanent.card.name == "Fastbond")
+    def _land_play_allowances(self, player_index: int) -> list[tuple[Permanent, LandPlayAllowance]]:
+        """Permanents granting *player_index* extra land plays, with what each grants.
+
+        Derived from each permanent's own printed text
+        (engine/land_play_allowance.py), not from its name. The single
+        ``card.name == "Fastbond"`` count this replaced was consulted from four
+        places, so a second printing of the template was wrong in four ways at
+        once.
+        """
+        if not (0 <= player_index < len(self.players)):
+            return []
+        found = []
+        for permanent in self.players[player_index].battlefield:
+            allowance = land_play_allowance_for(permanent.effective_card.oracle_text)
+            if allowance is not None:
+                found.append((permanent, allowance))
+        return found
+
+    def _may_play_another_land(self, player_index: int) -> bool:
+        """Whether the seat may still play a land this turn (CR 305.2).
+
+        One per turn, plus whatever the allowances on their battlefield add.
+        Every land-drop gate — cast validation, the AI's land policy, the web
+        layer's playable list — asks this one question, so they cannot disagree
+        about what a card grants.
+        """
+        allowed = 1
+        for _, allowance in self._land_play_allowances(player_index):
+            if allowance.extra is None:
+                return True
+            allowed += allowance.extra
+        return self.lands_played_this_turn.get(player_index, 0) < allowed

@@ -18,6 +18,11 @@ from ..enter_effects import (
 )
 from ..auras import aura_protection_colors, auras_attached_to
 from ..keywords import add_derived_grant, clear_derived_grants
+from ..land_animation import (
+    LAND_ANIMATION_KIND,
+    LandAnimation,
+    land_animation_from_payload,
+)
 from ..layer_bridge import QUALIFIED_BUFFS
 from ..lord_buffs import (
     GRANTED_ACTIVATED_ABILITIES,
@@ -417,9 +422,6 @@ class PermanentStateMixin:
                 _add_static_pt(creature, x, y)
 
     def _refresh_dynamic_creatures(self) -> None:
-        # TODO(card-hooks): Kormus Bell / Living Lands are the only two land
-        # animators today (an "animate all <type>" registry, keyed by name,
-        # would be the extension point once a third one is added).
         all_permanents = [perm for player in self.players for perm in player.battlefield]
         # Clear the derived layer-7c channel this method rebuilds. Everything
         # contributed below is a *conditional* continuous effect, so it is
@@ -427,13 +429,21 @@ class PermanentStateMixin:
         for perm in all_permanents:
             perm.metadata.pop("derived_buff_power", None)
             perm.metadata.pop("derived_buff_toughness", None)
-        kormus_active = any(perm.card.name == "Kormus Bell" for perm in all_permanents)
-        living_lands_active = any(perm.card.name == "Living Lands" for perm in all_permanents)
+        # Every land animator currently on the battlefield, read off the
+        # compiled program rather than matched by name. Two `card.name ==`
+        # comparisons stood here; the payload carries the land type, the P/T and
+        # the colour, so a third animator needs no code (engine/land_animation.py).
+        animations = [
+            land_animation_from_payload(instr.payload)
+            for perm in all_permanents
+            for instr in compile_card_oracle(perm.effective_card).instructions
+            if instr.kind == LAND_ANIMATION_KIND
+        ]
         self._refresh_global_statics(all_permanents)
         self._refresh_static_land_types(all_permanents)
         # Layer 4 before layer 7: a characteristic-defining P/T that counts
         # creatures must see the lands this pass animates, not last pass's.
-        self._refresh_land_animation(all_permanents, kormus_active, living_lands_active)
+        self._refresh_land_animation(all_permanents, animations)
         self._refresh_aspect_of_wolf()
 
         # "Attacking creatures you control get +X/+Y" (Orcish Oriflamme) used to
@@ -580,10 +590,15 @@ class PermanentStateMixin:
         return False
 
     def _refresh_land_animation(
-        self, all_permanents: list[Permanent], kormus_active: bool, living_lands_active: bool
+        self, all_permanents: list[Permanent], animations: list[LandAnimation]
     ) -> None:
-        """Kormus Bell / Living Lands animate basic lands into 1/1 creatures
-        while the source is on the battlefield (CR 613 layer 4).
+        """Land animators turn lands of a named type into creatures while the
+        source is on the battlefield (CR 613 layer 4).
+
+        *animations* is what the sources on the battlefield derive from their
+        own printed text (engine/land_animation.py). Nothing here knows which
+        cards they are: Kormus Bell's colour and Living Lands' silence about
+        colour are both payload.
 
         Its own pass, ahead of everything that asks "is this a creature?".
         This ran inside the same per-permanent loop as the layer-7a
@@ -599,21 +614,19 @@ class PermanentStateMixin:
         overridden land animates by its override, not its printed type line.
         """
         for permanent in all_permanents:
-            is_animated_swamp = (
-                kormus_active
-                and permanent.card.primary_type == "land"
-                and permanent.has_type("swamp")
+            animation = (
+                next(
+                    (a for a in animations if permanent.has_type(a.land_type)),
+                    None,
+                )
+                if permanent.card.primary_type == "land"
+                else None
             )
-            is_animated_forest = (
-                living_lands_active
-                and permanent.card.primary_type == "land"
-                and permanent.has_type("forest")
-            )
-            if is_animated_swamp or is_animated_forest:
+            if animation is not None:
                 permanent.metadata["land_animated"] = True
-                set_base_pt(permanent, 1, 1)
-                if is_animated_swamp:
-                    permanent.metadata["color_override"] = "B"
+                set_base_pt(permanent, animation.power, animation.toughness)
+                if animation.color:
+                    permanent.metadata["color_override"] = animation.color
             elif permanent.metadata.get("land_animated"):
                 # The animating source is gone: the land is no longer a creature.
                 permanent.metadata.pop("land_animated", None)

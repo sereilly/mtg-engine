@@ -333,6 +333,87 @@ def test_602_1b_timing_restriction_allows_activation_in_its_window():
     assert p1.life == 21  # "You gain 1 life" credits the controller
 
 
+# ---------------------------------------------------------------------------
+# Which of a card's abilities a caller that named none gets (602.5 / 107.5)
+#
+# `permanent.card.name == "Basalt Monolith"` stood in queue_permanent_ability,
+# hand-picking between that card's {T} mana ability and its {3} untap ability by
+# tapped state. It is not a card quirk: CR 107.5 says an already-tapped permanent
+# can't be tapped again to pay {T}, so a card with both abilities has exactly one
+# payable ability in each state and the choice follows from the rule. Pinned with
+# an invented card, whose costs and mana differ from the Monolith's — the
+# name-keyed version also matched on `cost.mana["generic"] == 3`.
+# ---------------------------------------------------------------------------
+
+_OBELISK_TEXT = (
+    "This artifact doesn't untap during your untap step.\n"
+    "{T}: Add {G}{G}.\n"
+    "{2}: Untap this artifact."
+)
+
+
+@pytest.mark.cr("602.5", "107.5")
+def test_602_5_default_ability_is_the_one_payable_in_the_current_state():
+    """An invented card with a {T} ability and an untap ability cycles.
+
+    Against the name-keyed version this card tapped for mana once and was then
+    stuck tapped for good: its untap ability was unreachable, because the
+    default was "first ability printed" and {T} can never be paid again.
+    """
+    obelisk = _mk_card("Granite Obelisk", "Artifact", _OBELISK_TEXT, mana_cost="{3}")
+    perm = Permanent(card=obelisk)
+    p1 = PlayerState(name="P1", battlefield=[perm])
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    assert game.activate_permanent_ability(0, "Granite Obelisk").supported
+    assert perm.tapped is True and p1.mana_pool["G"] == 2
+
+    assert game.activate_permanent_ability(0, "Granite Obelisk").supported
+    assert perm.tapped is False
+
+    assert game.activate_permanent_ability(0, "Granite Obelisk").supported
+    assert perm.tapped is True and p1.mana_pool["G"] == 4
+
+
+@pytest.mark.cr("107.5")
+def test_107_5_a_lone_tap_ability_still_reports_why_it_cannot_be_paid():
+    """Skipping unpayable abilities must not swallow the refusal.
+
+    A permanent whose only ability costs {T} has nothing to fall through to, so
+    it still reports "already tapped" rather than the vaguer "no implemented
+    activated ability" an empty selection would produce.
+    """
+    tapper = _mk_card("Chill Rod", "Artifact", "{T}: Tap target creature.")
+    perm = Permanent(card=tapper, tapped=True)
+    p1 = PlayerState(name="P1", battlefield=[perm])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=_bear())])
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(
+        0, "Chill Rod", target_player_index=1, target_permanent_index=0
+    )
+
+    assert result.supported is False
+    assert "already tapped" in result.details
+
+
+@pytest.mark.cr("602.5")
+def test_602_5_an_explicit_ability_index_still_names_the_ability():
+    """The state-aware default only applies when the caller named no ability;
+    an explicit index is still honoured, so a UI offering both abilities of a
+    multi-ability card keeps working."""
+    obelisk = _mk_card("Granite Obelisk", "Artifact", _OBELISK_TEXT, mana_cost="{3}")
+    perm = Permanent(card=obelisk)
+    p1 = PlayerState(name="P1", battlefield=[perm])
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    # Index 1 is the untap ability; on an untapped permanent it is legal and
+    # simply leaves it untapped (CR 107.6 has no bearing — {Q} is not its cost).
+    assert game.activate_permanent_ability(0, "Granite Obelisk", ability_index=1).supported
+    assert perm.tapped is False
+    assert p1.mana_pool["G"] == 0
+
+
 # ===========================================================================
 # Rule 603 — Handling Triggered Abilities
 # ===========================================================================

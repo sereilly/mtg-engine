@@ -185,42 +185,40 @@ class AbilityActivationMixin:
 
 
 
-        # TODO(card-hooks): bespoke untap-cost plumbing, single card — migrate
-        # to a card_hooks registry if a second card needs this shape.
-        # Special handling for Basalt Monolith: only allow tap if untapped, untap if tapped
-        if permanent.card.name == "Basalt Monolith" and len(program.activated_abilities) == 2:
-            tap_ability = None
-            untap_ability = None
-            for ab in program.activated_abilities:
-                if ab.cost.requires_tap:
-                    tap_ability = ab
-                elif ab.cost.mana.get("generic", 0) == 3 and not ab.cost.requires_tap:
-                    untap_ability = ab
-            if not permanent.tapped:
-                ability = tap_ability
-            else:
-                ability = untap_ability
-            # If trying to tap when tapped, or untap when untapped, block
-            if ability is None:
-                self.log.append(f"No implemented activated ability for {permanent.card.name} in current state")
-                return SimulationResult(permanent.card.name, False, "unsupported", "ability not implemented")
-            if ability == tap_ability and permanent.tapped:
-                self.log.append(f"Cannot tap Basalt Monolith when already tapped")
-                return SimulationResult(permanent.card.name, False, "unsupported", "already tapped")
-            if ability == untap_ability and not permanent.tapped:
-                self.log.append(f"Cannot untap Basalt Monolith when already untapped")
-                return SimulationResult(permanent.card.name, False, "unsupported", "already untapped")
-        elif ability_index is not None:
-            # The caller chose which ability to activate (cards with more than one
-            # activated ability, e.g. Rock Hydra's {R} prevention vs {R}{R}{R} pump).
-            usable = [
-                item
-                for item in program.activated_abilities
-                if item.supported and item.instruction is not None
-            ]
+        # Which of the card's abilities is being activated. An explicit
+        # ability_index names one (Rock Hydra's {R} prevention vs its {R}{R}{R}
+        # pump); otherwise the default is the first ability this permanent can
+        # actually pay for *in its current state*, not simply the first printed.
+        #
+        # CR 107.5: "A permanent that's already tapped can't be tapped again to
+        # pay the cost", so an ability costing {T} is simply not among the ones
+        # a tapped permanent can begin to activate (CR 602.5). A card with both a {T}
+        # ability and an untap ability — Basalt Monolith's "{T}: Add {C}{C}{C}"
+        # plus "{3}: Untap this artifact" — therefore has exactly one payable
+        # ability in each state, and choosing it needs no knowledge of which
+        # card it is. This was `permanent.card.name == "Basalt Monolith"`, and
+        # an identically-worded card under any other name tapped for mana once
+        # and was then stuck tapped for good, its untap ability unreachable.
+        usable = [
+            item
+            for item in program.activated_abilities
+            if item.supported and item.instruction is not None
+        ]
+        if ability_index is not None:
             ability = usable[ability_index] if 0 <= ability_index < len(usable) else None
         else:
-            ability = next((item for item in program.activated_abilities if item.supported and item.instruction is not None), None)
+            # The fallback to the first usable ability keeps refusals specific:
+            # a permanent whose only ability costs {T} still reports "already
+            # tapped" from the cost check below, rather than the vaguer "no
+            # implemented activated ability" a None here would produce.
+            ability = next(
+                (
+                    item
+                    for item in usable
+                    if not (item.cost.requires_tap and permanent.tapped)
+                ),
+                None,
+            ) or next(iter(usable), None)
 
         if ability is None or ability.instruction is None:
             # Zombie Master grants other Zombies '{B}: Regenerate this permanent.'
@@ -506,10 +504,12 @@ class AbilityActivationMixin:
             "sacrifice_creature_for_black_mana",
         }
         if instruction.kind in mana_like_kinds:
-            # For Basalt Monolith, block add_mana_from_text if untapped is required and it's already untapped
-            if permanent.card.name == "Basalt Monolith" and instruction.kind == "add_mana_from_text" and not permanent.tapped:
-                self.log.append(f"Cannot tap Basalt Monolith for mana when already untapped")
-                return SimulationResult(permanent.card.name, False, "unsupported", "already untapped")
+            # A second `card.name == "Basalt Monolith"` branch stood here,
+            # refusing add_mana_from_text while the permanent was untapped. It
+            # was unreachable: the {T} cost above has already run
+            # `become_tapped`, which sets `tapped` unconditionally (helpers.py),
+            # so a mana ability that pays {T} is always tapped by this point.
+            # Confirmed by making it raise and running the suite.
             state_machine = OracleStateMachine(
                 self,
                 OracleExecutionContext(

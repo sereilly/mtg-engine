@@ -53,6 +53,7 @@ from engine.cast_restrictions import CAST_RESTRICTIONS  # noqa: E402
 from engine.cost_modifiers import cost_modifiers_for  # noqa: E402
 from engine.draw_step_modifiers import draw_step_bonus_for  # noqa: E402
 from engine.global_statics import global_static_for  # noqa: E402
+from engine.land_play_allowance import land_play_line  # noqa: E402
 from engine.untap_restrictions import untap_restriction_for  # noqa: E402
 from engine.oracle import (  # noqa: E402
     _is_supported_keyword_line,
@@ -116,7 +117,6 @@ _MIXIN_TEXT_SCANS = (
     "as this enchantment enters, you lose life equal to your life total",  # permanent_state.py:195 (Lich)
     "you have no maximum hand size",                                     # permanent_state.py:189 (Library of Leng)
     "if an effect causes you to discard a card, discard it, but you may put it on top of your library instead",  # replacements.py discard interceptor (Library of Leng)
-    "you may play any number of lands on each of your turns",            # mixins/effects._fastbond_count, gated in stack/casting (Fastbond)
     "you may spend white mana as though it were red mana",               # permanent_state.py:192 (Sunglasses of Urza)
     "doesn't untap during your untap step",                              # untap_step.py (Time Vault, Basalt Monolith)
     "you may choose not to untap this creature during your untap step",  # untap_step.py (Old Man of the Sea)
@@ -166,6 +166,12 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     ("aura static (oracle_instructions/permanent_state)", lambda s: _matches_any(s, _AURA_STATIC_PATTERNS)),
     ("cast_restrictions.py", lambda s: any(r.phrase in s for r in CAST_RESTRICTIONS)),
     ("untap_restrictions.py", lambda s: untap_restriction_for(s) is not None),
+    # Extra land plays (Fastbond). This was a literal in _MIXIN_TEXT_SCANS
+    # pointing at a name-keyed count, so the sentence read as claimed for every
+    # card printing it while the code behind the claim fired for one name. The
+    # predicate now calls the same derivation the land-drop path and the support
+    # gate call.
+    ("land_play_allowance.py", lambda s: land_play_line(s) is not None),
     # A board-wide static contributes through the CR 613 layer bridge and,
     # for a granted ability, through the affected permanent's effective
     # card. There is no instruction to point at, so without this channel a
