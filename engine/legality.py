@@ -20,9 +20,16 @@ Two concerns live here:
   targets through the engine's own ``_validate_cast_targets`` so protection,
   colour/type filters, and shroud are enforced identically to resolution.
 
-The target-kind classification mirrors the (now-removed) client cascades exactly;
-keep the two ``_CAST`` / ``_ACTIVATED`` orderings faithful to the engine's parse
-rules when adding cards.
+**The cast-time half no longer reads oracle text.** ``cast_target_spec`` asks
+``engine/targeting.py``, which derives the whole spec — kind and flags — from
+the compiled program, so there is one parse of a card and nothing to keep in
+sync. What is left here is the *enumeration*: given a spec, which permanents,
+players, graveyard cards and stack items satisfy it.
+
+Activation is still classified from text by the ``_activated_*`` cascade below.
+It is the same shadow-parser shape and the same migration applies — an
+activated ability's compiled instruction already narrows the enumeration
+(``_FILTERABLE_ABILITY_KINDS``), but the *kind* still comes from the line.
 """
 
 import re
@@ -30,7 +37,6 @@ from types import SimpleNamespace
 
 from .handlers._common import permanent_matches_filter
 from .models import CardDefinition, Permanent
-from .mixins.stack_casting import aura_enchant_noun
 from .oracle import compile_card_oracle, expand_modal_activated_lines
 from .targeting import derive_cast_spec
 
@@ -53,7 +59,13 @@ def _oracle_lines(card: CardDefinition) -> list[str]:
 
 
 def _cast_lines(card: CardDefinition) -> list[str]:
-    """Lowercased oracle lines that are *not* activated abilities (cast effects)."""
+    """Lowercased oracle lines that are *not* activated abilities (cast effects).
+
+    Nothing here classifies a cast target from text any more — the complement of
+    :func:`_activated_lines` is kept because the guard that replaced the cascade
+    needs the same split to ask "does this card name a target as it is cast?",
+    and defining it twice is how the two would come to disagree.
+    """
     return [line.lower() for line in _oracle_lines(card) if not _ACTIVATED_LINE_RE.match(line)]
 
 
@@ -66,237 +78,14 @@ def _type_line(card: CardDefinition) -> str:
     return (card.type_line or "").lower()
 
 
-# ---------------------------------------------------------------------------
-# Cast-time target classification (mirrors the client cardRequiresTarget* cascade)
-# ---------------------------------------------------------------------------
-
-def _reanimates_own_graveyard_only(card: CardDefinition) -> bool:
-    return "your graveyard" in (card.oracle_text or "").lower()
-
-
-def _cast_requires_graveyard_creature(card: CardDefinition) -> bool:
-    text = (card.oracle_text or "").lower()
-    if "enchant creature card in a graveyard" in text:
-        return True
-    if "target creature card" in text and "graveyard" in text:
-        return True
-    return False
-
-
-def _cast_requires_graveyard_card(card: CardDefinition) -> bool:
-    """Regrowth: "Return target card from your graveyard to your hand." Targets any
-    card in a graveyard, not just a creature card."""
-    text = (card.oracle_text or "").lower()
-    return "target card from your graveyard" in text or (
-        "target card" in text and "graveyard" in text and "creature card" not in text
-    )
-
-
-def _cast_requires_land(card: CardDefinition) -> bool:
-    return any("target land" in t or "enchant land" in t for t in _cast_lines(card))
-
-
-def _cast_requires_artifact(card: CardDefinition) -> bool:
-    for t in _cast_lines(card):
-        if "enchant artifact" in t:
-            return True
-        # "target artifact, creature, or land" (Twiddle) is any permanent, not an
-        # artifact-only target — let it fall through to the permanent classification.
-        if "target artifact, creature, or land" in t:
-            continue
-        if "target artifact" in t and "artifact or enchantment" not in t:
-            return True
-    return False
-
-
-def _cast_offers_copy_creature(card: CardDefinition) -> bool:
-    return "enter as a copy of any creature on the battlefield" in (card.oracle_text or "").lower()
-
-
-def _cast_offers_copy_artifact(card: CardDefinition) -> bool:
-    return "enter as a copy of any artifact on the battlefield" in (card.oracle_text or "").lower()
-
-
-def _cast_requires_sacrifice_creature(card: CardDefinition) -> bool:
-    # Sacrifice: "As an additional cost to cast this spell, sacrifice a creature."
-    # The caster chooses which of their own creatures to sacrifice for the cost.
-    return "as an additional cost to cast this spell, sacrifice a creature" in (
-        card.oracle_text or ""
-    ).lower()
-
-
-def _cast_requires_creature(card: CardDefinition) -> bool:
-    if "enchant creature card in a graveyard" in (card.oracle_text or "").lower():
-        return False
-    for t in _cast_lines(card):
-        if "target creature card" in t:
-            continue
-        if "enchant creature" in t or "enchant wall" in t:
-            return True
-        if "destroy target" in t and (re.search(r"\bcreature\b", t) or re.search(r"\bwall\b", t)):
-            return True
-        if "target creature gets" in t or "target creature gains" in t:
-            return True
-        if "target blocking creature" in t:
-            return True
-        if "regenerate target creature" in t:
-            return True
-        if "exile target creature" in t:
-            return True
-        if "damage to target creature" in t:
-            return True
-        if "return target creature" in t:
-            return True
-        # Catch-all for any other "target creature" spell (Blaze of Glory's "target
-        # creature ... can block", False Orders' "remove target creature from
-        # combat", …). "target creature card" was already skipped above.
-        if "target creature" in t and "target artifact, creature, or land" not in t:
-            return True
-    return False
-
-
-def _cast_requires_permanent(card: CardDefinition) -> bool:
-    for t in _cast_lines(card):
-        if "target spell or permanent" in t:
-            return True
-        # "target artifact, creature, or land" (Twiddle) is any permanent.
-        if "target artifact, creature, or land" in t:
-            return True
-        if "target permanent" in t and "target land" not in t and "target creature" not in t:
-            return True
-        if "destroy target artifact or enchantment" in t:
-            return True
-        if "enchant enchantment" in t:
-            return True
-    return False
-
-
-def _cast_requires_source_of_choice(card: CardDefinition) -> bool:
-    # "The next time a source of your choice would deal damage to you this turn,
-    # ..." — the caster picks any source, a permanent on any battlefield or a
-    # spell on the stack (folded in via also_stack). Two spells share the shape:
-    # Reverse Damage (prevent it and gain that much life) and Eye for an Eye (the
-    # damage happens and is mirrored to the source's controller).
-    t = (card.oracle_text or "").lower()
-    if "source of your choice would deal damage to you this turn" not in t:
-        return False
-    return (
-        ("prevent that damage" in t and "gain life equal to the damage prevented" in t)
-        or "deals that much damage to that source's controller" in t
-    )
-
-
-def _cast_requires_spell_or_permanent(card: CardDefinition) -> bool:
-    # The "lace" recolor spells ("Target spell or permanent becomes <color>") may
-    # target either a permanent on the battlefield or a spell on the stack. The
-    # text-change spells ("change the text of target spell or permanent") keep the
-    # plain "permanent" classification — their own flows handle them.
-    return any("target spell or permanent becomes" in t for t in _cast_lines(card))
-
-
-def _cast_requires_stack_spell(card: CardDefinition) -> bool:
-    for t in _cast_lines(card):
-        if "counter target" in t or ("copy target" in t and "spell" in t):
-            return True
-    return False
-
-
-def _cast_requires_divided(card: CardDefinition) -> bool:
-    t = (card.oracle_text or "").lower()
-    return "divided" in t and "among any number of targets" in t
-
-
-def _cast_requires_any(card: CardDefinition) -> bool:
-    return any("any target" in t for t in _cast_lines(card))
-
-
-def _cast_requires_player(card: CardDefinition) -> bool:
-    # "target opponent" (Word of Command) is a player target too — it just can't
-    # be the caster, which _cast_targets_opponent_only flags for the enumerator.
-    return any("target player" in t or "target opponent" in t for t in _cast_lines(card))
-
-
-def _cast_targets_opponent_only(card: CardDefinition) -> bool:
-    """Word of Command: "Look at target opponent's hand ..." — the caster's own
-    seat is not a legal choice (CR 115.4)."""
-    return any("target opponent" in t for t in _cast_lines(card))
-
-
+# The colour a counterspell *ability* is restricted to (Deathgrip, Lifeforce).
+# The cast-time counterspells read this off their instruction's `color_filter`
+# payload instead; this is what remains until activation migrates too.
 def _stack_spell_color_filter(card: CardDefinition) -> str | None:
     m = re.search(r"counter target (\w+) spell", (card.oracle_text or "").lower())
     if not m:
         return None
     return _COLOR_WORD_TO_SYMBOL.get(m.group(1))
-
-
-def _stack_instant_sorcery_only(card: CardDefinition) -> bool:
-    return "copy target instant or sorcery spell" in (card.oracle_text or "").lower()
-
-
-def _land_excludes_swamp(card: CardDefinition) -> bool:
-    return "non-swamp land" in (card.oracle_text or "").lower()
-
-
-def _cast_requires_target_mountains(card: CardDefinition) -> bool:
-    # Volcanic Eruption: "Destroy X target Mountains." The controller picks the X
-    # Mountains to destroy (X = how many are chosen).
-    t = (card.oracle_text or "").lower()
-    return "destroy" in t and "target mountain" in t
-
-
-def _classify_cast(card: CardDefinition) -> dict:
-    """Return ``{"kind": ..., **flags}`` for the spell's cast-time target, mirroring
-    the client cascade order. Modal "Choose one —" spells are reported as ``modal``
-    so the UI runs its mode-choice flow (each mode carries its own spec)."""
-    if _cast_requires_graveyard_card(card):
-        return {"kind": "graveyard_creature", "own_graveyard_only": True, "any_card": True}
-    if _cast_requires_graveyard_creature(card):
-        return {"kind": "graveyard_creature", "own_graveyard_only": _reanimates_own_graveyard_only(card)}
-    if _cast_requires_target_mountains(card):
-        # A multi-target land selection: the player picks the Mountains and X equals
-        # the number chosen, so the divided flow skips its separate X prompt.
-        return {"kind": "divided", "land_filter": "mountain", "x_equals_targets": True}
-    if _cast_requires_land(card):
-        return {"kind": "land", "exclude_swamp": _land_excludes_swamp(card)}
-    if _cast_requires_artifact(card):
-        return {"kind": "artifact"}
-    if _cast_offers_copy_creature(card):
-        return {"kind": "creature", "optional": True}
-    if _cast_offers_copy_artifact(card):
-        return {"kind": "artifact", "optional": True}
-    if _cast_requires_source_of_choice(card):
-        # "A source of your choice" (any color): pick any permanent or stack spell.
-        # The engine prevents only damage from the chosen source (matched by
-        # identity), so no color filter is applied.
-        return {"kind": "permanent", "source_of_choice": True, "also_stack": True}
-    if _cast_requires_sacrifice_creature(card):
-        # The "creature" the player picks is their own, sacrificed as a cost — so
-        # the UI runs its creature-target flow but only the caster's creatures are
-        # offered (own_only), and the handler sacrifices the chosen one.
-        return {"kind": "creature", "own_only": True, "sacrifice_cost": True}
-    if _cast_requires_creature(card):
-        return {"kind": "creature", "enchant_wall": "enchant wall" in (card.oracle_text or "").lower()}
-    if _cast_requires_spell_or_permanent(card):
-        return {"kind": "spell_or_permanent"}
-    if _cast_requires_permanent(card):
-        return {"kind": "permanent", "enchant_enchantment": "enchant enchantment" in (card.oracle_text or "").lower()}
-    if _cast_requires_stack_spell(card):
-        return {
-            "kind": "stack",
-            "stack_color_filter": _stack_spell_color_filter(card),
-            "stack_instant_sorcery_only": _stack_instant_sorcery_only(card),
-            # Fork copies the chosen spell and lets the caster "choose new targets
-            # for the copy", so the UI runs a second target prompt after the spell
-            # is chosen rather than sending the cast immediately.
-            "copies_spell": "copy target" in (card.oracle_text or "").lower(),
-        }
-    if _cast_requires_divided(card):
-        return {"kind": "divided"}
-    if _cast_requires_any(card):
-        return {"kind": "any"}
-    if _cast_requires_player(card):
-        return {"kind": "player", "opponents_only": _cast_targets_opponent_only(card)}
-    return {"kind": "none"}
 
 
 def cast_target_kind(card: CardDefinition) -> str:
@@ -306,16 +95,18 @@ def cast_target_kind(card: CardDefinition) -> str:
     zone an already-recorded target index points into — a reanimation spell's
     ``target_permanent_index`` indexes a graveyard, not a battlefield.
 
-    Answered from the *compiled program* wherever it carries the evidence
-    (engine/targeting.py), and only otherwise by the text cascade below. That is
-    the strangler seam for deleting this module: as lowering starts emitting
-    target specs, more cards route through the derivation and the cascade
-    shrinks. tests/engine/test_targeting.py holds the two to agreement.
+    Answered entirely from the compiled program (engine/targeting.py). "none" is
+    the answer for a spell that chooses nothing as it is cast, and
+    tests/engine/test_targeting.py fails if a card that names a target starts
+    answering it.
     """
-    derived = derive_cast_spec(card, compile_card_oracle(card))
-    if derived is not None:
-        return derived["kind"]
-    return _classify_cast(card)["kind"]
+    return cast_spec_of(card)["kind"]
+
+
+def cast_spec_of(card: CardDefinition) -> dict:
+    """The cast-time target spec of *card* — kind plus the flags that narrow the
+    picker — or ``{"kind": "none"}`` when it chooses nothing as it is cast."""
+    return derive_cast_spec(card, compile_card_oracle(card)) or {"kind": "none"}
 
 
 # ---------------------------------------------------------------------------
@@ -668,11 +459,10 @@ class LegalityMixin:
         if len(program.modes) >= 2:
             return {"kind": "modal", "requires_target": False, "valid_targets": []}
         # The compiled program answers in full — the kind *and* the flags that
-        # narrow the picker (own_only, stack filters, sacrifice_cost, ...). The
-        # cascade below is consulted only for a card whose program describes no
-        # cast-time choice at all, and tests/engine/test_targeting.py holds the
-        # two to agreement over the whole pool.
-        spec = derive_cast_spec(card, program) or _classify_cast(card)
+        # narrow the picker (own_only, stack filters, sacrifice_cost, ...).
+        # There is no text cascade behind this any more: a program that
+        # describes no cast-time choice means the spell makes none.
+        spec = derive_cast_spec(card, program) or {"kind": "none"}
         spec["requires_target"] = spec["kind"] != "none"
         spec["valid_targets"] = self._enumerate_targets(caster_index, card, spec, for_cast=True)
         return spec

@@ -1,15 +1,23 @@
 """Guards for cast-time targeting derived from the compiled program.
 
-`engine/legality.py` is a second parser of oracle text, kept only for cards
-whose compiled program cannot answer. Two parsers of the same text must agree
-forever or the UI offers targets the engine rejects, so `engine/targeting.py`
-derives what it can from the program and this file holds the two together.
+`engine/legality.py` used to answer "what does this spell target?" with its own
+cascade of substring predicates — a second parser of the same text, which had to
+agree with the compiler forever or the UI would offer targets the engine
+rejects. `engine/targeting.py` replaced it, and these are the guards that made
+the replacement safe and now keep it that way.
 
-The differential caught two real bugs while the derivation was being written:
-Animate Dead ("Enchant creature card in a graveyard") derived as a battlefield
-creature, and every permanent with a targeted activated ability — Royal
-Assassin, Pyramids, King Suleiman — derived a cast-time target it does not have.
-Widening it from the kind to the whole spec caught a third: Reconstruction.
+While both existed, a differential over the whole pool held them to the same
+answer, and it caught three real bugs: Animate Dead ("Enchant creature card in a
+graveyard") derived as a battlefield creature; every permanent with a targeted
+activated ability — Royal Assassin, Pyramids, King Suleiman — derived a
+cast-time target it does not have; and, once the differential compared whole
+specs rather than kinds, Reconstruction turned out to be uncastable through the
+UI. The first two are named tests below. The third is the cascade being wrong,
+which is why deleting it was the fix.
+
+With the cascade gone there is nothing left to diff against, so two things
+replace it: a per-card table pinning the specs that carry flags, and a ratchet
+that fails if any supported card naming a target stops deriving its own prompt.
 """
 
 import re
@@ -17,7 +25,6 @@ import re
 import pytest
 
 from engine.card_loader import load_catalog
-from engine.legality import _classify_cast
 from engine.oracle import compile_card_oracle
 from engine.targeting import derive_cast_spec, derive_cast_target
 
@@ -25,51 +32,6 @@ from engine.targeting import derive_cast_spec, derive_cast_target
 @pytest.fixture(scope="module")
 def supported_cards():
     return [c for c in load_catalog() if compile_card_oracle(c).supported]
-
-
-def _flags(spec: dict) -> dict:
-    """A spec with its unset flags dropped.
-
-    The cascade spells out ``{"copies_spell": False}`` where the derivation
-    simply omits the key; every consumer reads these with a truthiness test, so
-    the two are the same spec and comparing them raw would report a difference
-    that is not one.
-    """
-    return {key: value for key, value in spec.items() if value not in (False, None)}
-
-
-# Reconstruction is the one card where the derivation deliberately disagrees,
-# because the cascade is wrong about it. "Return target artifact card from your
-# graveyard to your hand" classified as a *battlefield* artifact target, so the
-# UI offered artifacts in play — and with none in play it offered nothing at
-# all, making the spell uncastable while the engine resolved it perfectly when
-# driven headlessly. The derivation reads the instruction's own payload
-# (`card_type: artifact`), which is the same data its handler resolves from.
-_DELIBERATE_DIVERGENCES = {"Reconstruction"}
-
-
-def test_derivation_never_disagrees_with_the_text_cascade(supported_cards):
-    """Wherever the program carries the evidence, its answer must match what
-    the text cascade concluded — kind *and* flags. A disagreement is a real
-    defect either way: the UI and the engine would be working from different
-    ideas of what is targetable."""
-    mismatches = []
-    for card in supported_cards:
-        if card.name in _DELIBERATE_DIVERGENCES:
-            continue
-        derived = derive_cast_spec(card, compile_card_oracle(card))
-        if derived is None:
-            continue
-        # _classify_cast, not cast_target_spec: the latter now prefers the
-        # derivation, so comparing against it would compare it to itself.
-        expected = _flags(_classify_cast(card))
-        if _flags(derived) != expected:
-            mismatches.append((card.name, _flags(derived), expected))
-
-    assert not mismatches, (
-        "compiled-program targeting disagrees with legality.py "
-        f"(derived, cascade): {mismatches}"
-    )
 
 
 def test_reconstruction_picks_an_artifact_card_out_of_a_graveyard(supported_cards):
