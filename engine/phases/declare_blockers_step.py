@@ -501,7 +501,7 @@ class DeclareBlockersStepMixin:
         def block_destroy_instruction(perm: Permanent):
             trig = next(matching_triggers(
                 perm.effective_card,
-                condition_kinds={"cockatrice_blocks_or_blocked"},
+                condition_kinds={"creature_blocks_or_blocked_by_nonwall"},
                 instruction_kinds={"delayed_destroy_blocked_or_blocker"},
             ), None)
             return (trig.instruction, trig.source_line) if trig is not None else (None, None)

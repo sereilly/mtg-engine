@@ -10,7 +10,7 @@ unclaimed text. Do not edit by hand.
 - Fully claimed: **386**
 - With acknowledged simplifications: **2**
 - With UNCLAIMED text (must fix or acknowledge): **0**
-- With deletion-probe findings (ignored words): **94**
+- With deletion-probe findings (ignored words): **93**
 
 ## Acknowledged simplifications
 
@@ -82,7 +82,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Lich | `when this enchantment is put into a graveyard from the battlefield, yo` | when enchantment put into graveyard from battlefield, |
 | Lifelace | `target spell or permanent becomes green` | target spell or permanent |
 | Lightning Bolt | `lightning bolt deals 3 damage to any target` | lightning bolt any target |
-| Living Artifact | `if you do, you gain 1 life` | if do, |
 | Lord of the Pit | `sacrifice a creature other than this creature. if you can't, this crea` | if can't, |
 | Magical Hack | `change the text of target spell or permanent by replacing all instance` | with another |
 | Magnetic Mountain | `that player may choose any number of tapped blue creatures they contro` | player |
@@ -150,7 +149,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | handler ← upkeep_destroy_least_power_creature | 2 |
 | global_statics.py | 2 |
 | handler ← remove_creature_from_combat | 2 |
-| handler ← target_gains_life | 2 |
 | cost_modifiers.py | 2 |
 | handler ← mark_non_wall_target_to_attack | 2 |
 | handler ← force_active_player_creatures_to_attack | 2 |
@@ -162,6 +160,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | handler ← add_variable_power_counters_to_self | 1 |
 | handler ← upkeep_wind_counter_pay_or_sacrifice | 1 |
 | x spend color (stack/activation) | 1 |
+| handler ← target_gains_life | 1 |
 | land_play_allowance.py | 1 |
 | handler ← copy_top_stack_spell | 1 |
 | draw_step_modifiers.py | 1 |

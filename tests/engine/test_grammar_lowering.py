@@ -2854,3 +2854,215 @@ def test_a_semicolon_does_not_join_two_effect_sentences_into_keywords():
     result = compile_line("Destroy target creature; draw a card.", card_name="Test")
 
     assert not isinstance(result.node, grammar_ast.KeywordLine)
+
+
+# ---------------------------------------------------------------------------
+# Productions taken over from the "expected a subject" backlog
+#
+# Each of these replaces a legacy @parse_rule, so the golden is the payload that
+# rule produced -- byte for byte, because the handlers read these keys by name.
+# The refusals beside them are the point of the exercise: every one names a
+# wording the handler does *not* implement, which is what stops the production
+# becoming the substring match it replaced.
+# ---------------------------------------------------------------------------
+
+
+def test_damage_trigger_discard_matches_the_rule_it_replaces():
+    """Hypnotic Specter. The handler reads the damaged player out of the
+    trigger's captured context and takes no payload at all."""
+    assert _instructions(
+        "Whenever this creature deals damage to an opponent, "
+        "that player discards a card at random.",
+        "Hypnotic Specter",
+    ) == [("opponent_discards_random_card_on_damage", {})]
+
+
+def test_damage_trigger_discard_needs_a_trigger_that_records_a_damaged_player():
+    """The same sentence on any other trigger names a player nobody recorded,
+    so the handler would discard nothing while the card reported as supported."""
+    result = compile_line(
+        "Whenever this creature attacks, that player discards a card at random.",
+        card_name="Test",
+    )
+
+    assert result.parsed
+    assert not result.lowered
+
+
+def test_damage_trigger_discard_still_has_to_be_at_random():
+    """"At random" is what picks the handler, not a rider either could carry.
+
+    Without it the victim chooses which card goes, which is
+    ``discard_target_cards`` -- so the random reading must not claim the
+    sentence merely because the trigger matches."""
+    assert _instructions(
+        "Whenever this creature deals damage to an opponent, that player discards a card.",
+        "Test",
+    ) == [("discard_target_cards", {"amount": 1})]
+
+
+def test_removing_a_counter_matches_the_rule_it_replaces():
+    """Armageddon Clock. The counter's name is payload -- the accumulating side
+    (``upkeep_put_counter_on_self``) reads the same key, so the pair is one
+    template rather than a card."""
+    assert _instructions(
+        "{4}: Remove a doom counter from this artifact. "
+        "Any player may activate this ability but only during any upkeep step.",
+        "Armageddon Clock",
+    ) == [("remove_counter_from_self", {"counter": "doom"})]
+
+
+@pytest.mark.parametrize(
+    ("line", "why"),
+    [
+        ("Remove two doom counters from this artifact.", "decrements by exactly one"),
+        ("Remove a doom counter from target artifact.", "reads its own source"),
+    ],
+)
+def test_counter_removal_shapes_without_a_handler_refuse(line, why):
+    result = compile_line(line, card_name="Test")
+
+    assert result.parsed, why
+    assert not result.lowered, why
+
+
+def test_remove_does_not_claim_the_other_sentences_that_start_with_it():
+    """"Remove target creature ... from combat" and "remove all damage marked on
+    it" open the same way and are entirely different effects. They have to keep
+    failing on their own missing production, not on a counter kind they never
+    mentioned."""
+    for line in (
+        "Remove target creature defending player controls from combat.",
+        "The next time target land would be destroyed this turn, "
+        "remove all damage marked on it instead.",
+    ):
+        result = compile_line(line, card_name="Test")
+        assert not result.parsed
+        assert result.failure_reason == "expected a subject"
+
+
+@pytest.mark.parametrize(
+    ("line", "card", "mode"),
+    [
+        ("Change the text of target spell or permanent by replacing all "
+         "instances of one basic land type with another.", "Magical Hack", "land_type"),
+        ("Change the text of target spell or permanent by replacing all "
+         "instances of one color word with another.", "Sleight of Mind", "color_word"),
+    ],
+)
+def test_text_change_reads_the_swapped_vocabulary_as_payload(line, card, mode):
+    """The two printings are one sentence with one word changed, which is what
+    makes the vocabulary payload rather than part of the effect's name."""
+    assert _instructions(line, card) == [("mark_text_modified", {"mode": mode})]
+
+
+def test_a_text_change_the_engine_cannot_perform_is_not_claimed():
+    """``mark_text_modified`` substitutes land types and colour words. A card
+    naming a third vocabulary would reach it as a mode it ignores."""
+    result = compile_line(
+        "Change the text of target spell or permanent by replacing all "
+        "instances of one creature type with another.",
+        card_name="Test",
+    )
+
+    assert not result.parsed
+
+
+def test_text_change_describes_no_target():
+    """The Lace cycle's rule: the ``targets`` vocabulary cannot say "a spell on
+    the stack *or* a permanent", so describing it at all would drop one of the
+    two zones from the picker. ``engine/legality.py`` keeps answering."""
+    result = compile_line(
+        "Change the text of target spell or permanent by replacing all "
+        "instances of one color word with another.",
+        card_name="Sleight of Mind",
+    )
+
+    assert result.instructions[0].payload == {"mode": "color_word"}
+
+
+def test_linked_control_matches_the_rule_it_replaces():
+    """Aladdin. ``steal_target_permanent_linked_to_self`` takes no payload --
+    it finds the artifact itself and ends the control change from
+    ``ON_LEAVE_BATTLEFIELD``."""
+    assert _instructions(
+        "{1}{R}{R}, {T}: Gain control of target artifact for as long as you "
+        "control this creature.",
+        "Aladdin",
+    ) == [("steal_target_permanent_linked_to_self", {})]
+
+
+@pytest.mark.parametrize(
+    ("line", "why"),
+    [
+        ("Gain control of target artifact.",
+         "an untimed steal is a permanent control change, not this one"),
+        ("Gain control of target creature for as long as you control this creature.",
+         "the handler looks for an artifact in its own source"),
+    ],
+)
+def test_control_changes_without_the_linked_duration_refuse(line, why):
+    result = compile_line(line, card_name="Test")
+
+    assert not result.usable, why
+
+
+def test_exile_with_the_controller_life_gain_matches_the_rule_it_replaces():
+    """Swords to Plowshares. Fused because the handler is: it reads the power of
+    the creature it has just removed from the battlefield, which no pair of
+    independent instructions can do."""
+    assert _instructions(
+        "Exile target creature. Its controller gains life equal to its power.",
+        "Swords to Plowshares",
+    ) == [("exile_creature_gain_life_equal_to_power", {})]
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "Exile target creature.",
+        "Exile target artifact. Its controller gains life equal to its power.",
+        "Exile target creature. You gain life equal to its power.",
+    ],
+)
+def test_exile_shapes_the_fused_handler_does_not_implement_refuse(line):
+    """A bare exile would either gain life the card never offered or exile
+    silently; the fusion checks who gains the life and what was exiled."""
+    result = compile_line(line, card_name="Test")
+
+    assert result.parsed
+    assert not result.lowered
+
+
+def test_delayed_destroy_matches_the_rule_it_replaces():
+    """Thicket Basilisk and Cockatrice -- two cards, one sentence, so the
+    production earns its place over a per-card entry."""
+    assert _instructions(
+        "Whenever this creature blocks or becomes blocked by a non-Wall "
+        "creature, destroy that creature at end of combat.",
+        "Cockatrice",
+    ) == [("delayed_destroy_blocked_or_blocker", {})]
+
+
+def test_delayed_destroy_needs_the_trigger_that_binds_the_blocking_pair():
+    """The handler destroys the creature this one blocked or was blocked by,
+    which is a fact only that trigger knows."""
+    result = compile_line(
+        "Whenever this creature blocks, destroy that creature at end of combat.",
+        card_name="Test",
+    )
+
+    assert result.parsed
+    assert not result.lowered
+
+
+def test_a_destroy_delayed_to_the_end_step_is_not_claimed():
+    """Stone Giant and Nettling Imp defer to the next end step, which is a
+    different handler. Leaving those tokens unconsumed is what keeps them from
+    being destroyed a combat early."""
+    result = compile_line(
+        "Destroy that creature at the beginning of the next end step.",
+        card_name="Test",
+    )
+
+    assert not result.parsed

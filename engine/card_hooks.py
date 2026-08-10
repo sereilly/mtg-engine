@@ -15,6 +15,9 @@ closed: the condition's colour is captured into its payload and dispatched by
 Prefer that route before adding a registry entry here.
 
 Hook registries:
+- CARD_LINE_INSTRUCTIONS — the instruction one printed *line* of one card
+                        compiles to, when that line is a single card's text
+                        rather than a template. Read by engine/oracle.py.
 - ON_SELF_RESOLVED    — fired when the named instant/sorcery itself resolves
                         (keyed by the resolving card's own name), for bespoke
                         effects the single compiled instruction can't express.
@@ -44,6 +47,7 @@ from typing import TYPE_CHECKING, Callable
 
 from .auras import attach_aura, detach_aura
 from .land_types import end_land_type_change
+from .oracle_types import OracleInstruction
 
 if TYPE_CHECKING:
     from .game import Game
@@ -53,6 +57,347 @@ if TYPE_CHECKING:
 SelfResolvedHook = Callable[["Game", "PlayerState", "CardDefinition", int, "int | None"], None]
 SpellCounteredHook = Callable[["Game", "CardDefinition", "StackItem"], None]
 LeaveBattlefieldHook = Callable[["Game", "PlayerState", "Permanent"], None]
+
+
+# --------------------------------------------------------------------------
+# Per-line instructions for texts that are one card, not a template
+# --------------------------------------------------------------------------
+#
+# `engine/parsing/` is being deleted. Most of what it claimed is templating and
+# moves to a grammar production; the rest is a *single card's sentence* wired to
+# a handler written for that card — Chaos Orb's flip, Camouflage's blocker
+# piles, Shahrazad's subgame. The audit found 133 of its 168 rules were literal
+# substring matches, several encoding a whole card's text, and a grammar
+# production for one of those would be the same substring match wearing a
+# grammar hat: it would report the sentence as *understood* while claiming
+# nothing another card could ever share.
+#
+# So they come here instead, where a card name is what the file is for. This is
+# not new coverage and not a regression — it is the reading `engine/parsing/`
+# already had, moved to the registry that says out loud that it is per-card.
+#
+# **The entry bar is that no second card, real or plausibly printable, shares
+# the shape.** A sentence two cards could carry belongs in `engine/grammar/`,
+# where the second card gets it for free. When a line here grows a production,
+# its entry goes: the grammar is consulted first (engine/oracle.py), so a stale
+# entry would be dead rather than wrong — and `tests/engine/test_card_lines.py`
+# fails on one, because an entry that stops being load-bearing is an entry
+# nobody would notice was lying.
+#
+# Keys are the line as `oracle.normalize_creature_line` renders it: lowercased,
+# reminder text in parentheses removed, whitespace collapsed, trailing stop
+# dropped. The guard test builds them from the pool's own cards, so a key that
+# no longer matches a printed line fails rather than silently never matching.
+
+
+@dataclass(frozen=True)
+class CardLine:
+    """What one printed line of one card compiles to.
+
+    *effect_kind* is the label the legacy rule reported (``activated_prevent``,
+    ``upkeep_effect``, …). It feeds reporting — ``SimulationResult``,
+    ``scripts/support_report.py`` — rather than dispatch, and is carried here so
+    deleting the rule that produced it does not silently re-bucket the card.
+    """
+
+    instruction: OracleInstruction
+    effect_kind: str
+
+
+def _line(kind: str, effect_kind: str, **payload: object) -> CardLine:
+    return CardLine(OracleInstruction(kind, "", dict(payload)), effect_kind)
+
+
+CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
+    "Aladdin's Lamp": {
+        "{x}, {t}: the next time you would draw a card this turn, instead look at "
+        "the top x cards of your library, put all but one of them on the bottom of "
+        "your library in a random order, then draw a card. x can't be 0":
+            _line("arm_lamp_draw_replacement", "activated_draw"),
+    },
+    "Bottle of Suleiman": {
+        "{1}, sacrifice this artifact: flip a coin. if you win the flip, create a "
+        "5/5 colorless djinn artifact creature token with flying. if you lose the "
+        "flip, this artifact deals 5 damage to you":
+            _line(
+                "coin_flip_token_or_self_damage", "activated_token",
+                name="Djinn", power=5, toughness=5,
+                type_line="Artifact Creature — Djinn",
+                colors=(), keywords=("Flying",), damage=5,
+            ),
+    },
+    "Camouflage": {
+        "this turn, instead of declaring blockers, each defending player chooses "
+        "any number of creatures they control and divides them into a number of "
+        "piles equal to the number of attacking creatures for whom that player is "
+        "the defending player. creatures those players control that can block "
+        "additional creatures may likewise be put into additional piles. assign "
+        "each pile to a different one of those attacking creatures at random. each "
+        "creature in a pile that can block the creature that pile is assigned to "
+        "does so":
+            _line("randomize_blockers", "spell_pattern"),
+    },
+    "Channel": {
+        "until end of turn, any time you could activate a mana ability, you may "
+        "pay 1 life. if you do, add {c}":
+            _line("channel_life_for_mana", "spell_pattern"),
+    },
+    "Chaos Orb": {
+        "{1}, {t}: if this artifact is on the battlefield, flip it onto the "
+        "battlefield from a height of at least one foot. if this artifact turns "
+        "over completely at least once during the flip, destroy all nontoken "
+        "permanents it touches. then destroy this artifact":
+            _line("chaos_orb_flip", "activated_chaos_orb"),
+    },
+    # Only the first of the two lines carries the instruction: the handler bans
+    # the casting *and* sacrifices the permanents, so hooking the second line
+    # too would put the same effect on the card twice.
+    "City in a Bottle": {
+        "whenever one or more other nontoken permanents with a name originally "
+        "printed in the arabian nights expansion are on the battlefield, their "
+        "controllers sacrifice them":
+            _line("ban_and_sacrifice_set_permanents", "spell_pattern", set_code="arn"),
+    },
+    # "Put up to X +1/+0 counters on this creature" is templating the grammar
+    # already parses; the sentence after it is not. The cap is what makes the
+    # handler this card's — lowering the first sentence alone would let the
+    # counters past seven.
+    "Clockwork Beast": {
+        "{x}, {t}: put up to x +1/+0 counters on this creature. this ability can't "
+        "cause the total number of +1/+0 counters on this creature to be greater "
+        "than seven. activate only during your upkeep":
+            _line("add_variable_power_counters_to_self", "activated_counter"),
+    },
+    # The damage is dealt by the enchant-land pass in phases/upkeep_step.py,
+    # which reads the *amount* off this instruction. Deliberately not a trigger:
+    # compiling one makes the Aura deal its damage twice (pinned by
+    # test_cursed_land_deals_upkeep_damage_to_land_controller).
+    "Cursed Land": {
+        "at the beginning of the upkeep of enchanted land's controller, this aura "
+        "deals 1 damage to that player":
+            _line("deal_damage", "spell_pattern", amount=1),
+    },
+    "Cyclopean Tomb": {
+        "{2}, {t}: put a mire counter on target non-swamp land. that land is a "
+        "swamp for as long as it has a mire counter on it. activate only during "
+        "your upkeep":
+            _line("add_mire_counter_to_target_land", "activated_landtype"),
+    },
+    "Demonic Hordes": {
+        "at the beginning of your upkeep, unless you pay {b}{b}{b}, tap this "
+        "creature and sacrifice a land of an opponent's choice":
+            _line(
+                "upkeep_pay_or_tap_and_sacrifice_opponent_land", "upkeep_effect",
+                mana={"W": 0, "U": 0, "B": 3, "R": 0, "G": 0, "C": 0, "generic": 0},
+            ),
+    },
+    "Dragon Whelp": {
+        "{r}: this creature gets +1/+0 until end of turn. if this ability has been "
+        "activated four or more times this turn, sacrifice this creature at the "
+        "beginning of the next end step":
+            _line("pump_self_with_sacrifice_condition", "activated_pump"),
+    },
+    "Drop of Honey": {
+        "at the beginning of your upkeep, destroy the creature with the least "
+        "power. it can't be regenerated. if two or more creatures are tied for "
+        "least power, you choose one of them":
+            _line("upkeep_destroy_least_power_creature", "upkeep_effect"),
+    },
+    "Erg Raiders": {
+        "at the beginning of your end step, if this creature didn't attack this "
+        "turn, it deals 2 damage to you unless it came under your control this turn":
+            _line("end_step_damage_if_not_attacked", "triggered_damage", amount=2),
+    },
+    "Eye for an Eye": {
+        "the next time a source of your choice would deal damage to you this turn, "
+        "instead that source deals that much damage to you and eye for an eye "
+        "deals that much damage to that source's controller":
+            _line("arm_mirror_damage", "spell_pattern"),
+    },
+    "False Orders": {
+        "remove target creature defending player controls from combat. creatures "
+        "it was blocking that had become blocked by only that creature this combat "
+        "become unblocked. you may have it block an attacking creature of your choice":
+            _line("remove_creature_from_combat", "spell_pattern"),
+    },
+    "Forcefield": {
+        "{1}: the next time an unblocked creature of your choice would deal combat "
+        "damage to you this turn, prevent all but 1 of that damage":
+            _line("grant_forcefield_shield", "activated_prevent"),
+    },
+    # `copy_top_stack_spell` copies the top of the stack rather than the named
+    # target, and the two riders ("except that the copy is red", the optional
+    # retarget) are the handler's own. All three are Fork's, not a shape.
+    "Fork": {
+        "copy target instant or sorcery spell, except that the copy is red. you "
+        "may choose new targets for the copy":
+            _line("copy_top_stack_spell", "spell_pattern"),
+    },
+    "Ghazbán Ogre": {
+        "at the beginning of your upkeep, if a player has more life than each "
+        "other player, the player with the most life gains control of this creature":
+            _line("upkeep_most_life_gains_control", "upkeep_effect"),
+    },
+    # The first sentence is an ordinary numeric shield the grammar can read; the
+    # rest of the line grants an activatable emblem, which is ON_SELF_RESOLVED
+    # above. Claiming only the shield would drop the emblem silently, so the
+    # whole line is one entry and the two halves stay in the same file.
+    "Guardian Angel": {
+        "prevent the next x damage that would be dealt to any target this turn. "
+        "until end of turn, you may pay {1} any time you could cast an instant. if "
+        "you do, prevent the next 1 damage that would be dealt to that permanent "
+        "or player this turn":
+            _line(
+                "grant_prevention_shield", "spell_pattern",
+                amount="x", to_self=False, to_source=False,
+            ),
+    },
+    "Jade Monolith": {
+        "{1}: the next time a source of your choice would deal damage to target "
+        "creature this turn, that source deals that damage to you instead":
+            _line("jade_monolith_redirect", "activated_prevent"),
+    },
+    "Jeweled Bird": {
+        "{t}: ante this artifact. if you do, put all other cards you own from the "
+        "ante into your graveyard, then draw a card":
+            _line("ante_self_then_clear_ante_and_draw", "activated_ante"),
+    },
+    "Lord of the Pit": {
+        "at the beginning of your upkeep, sacrifice a creature other than this "
+        "creature. if you can't, this creature deals 7 damage to you":
+            _line(
+                "upkeep_sacrifice_other_creature_or_deal_damage", "upkeep_effect",
+                damage=7,
+            ),
+    },
+    # "attacks and isn't blocked" is not a condition the trigger tables carry:
+    # combat_damage_step.py finds this trigger by its `creature_attacks`
+    # condition and then re-reads the source line for the rider. Until that
+    # condition exists, a production would have to drop the rider — which is the
+    # legacy rule's bug, not a migration of it.
+    "Merchant Ship": {
+        "whenever this creature attacks and isn't blocked, you gain 2 life":
+            _line("target_gains_life", "spell_pattern", amount=2, recipient="caster"),
+    },
+    "Mijae Djinn": {
+        "whenever this creature attacks, flip a coin. if you lose the flip, remove "
+        "this creature from combat and tap it":
+            _line("coin_flip_remove_attacker_and_tap", "triggered_coin_flip"),
+    },
+    "Nafs Asp": {
+        "whenever this creature deals damage to a player, that player loses 1 life "
+        "at the beginning of their next draw step unless they pay {1} before that "
+        "draw step":
+            _line(
+                "arm_draw_step_life_loss_unless_pay", "triggered_delayed_life_loss",
+                amount=1, cost=1,
+            ),
+    },
+    "Nether Shadow": {
+        "at the beginning of your upkeep, if this card is in your graveyard with "
+        "three or more creature cards above it, you may put this card onto the "
+        "battlefield":
+            _line(
+                "upkeep_return_self_from_graveyard", "upkeep_effect",
+                min_creatures_above=3,
+            ),
+    },
+    "Nettling Imp": {
+        "{t}: choose target non-wall creature the active player has controlled "
+        "continuously since the beginning of the turn. that creature attacks this "
+        "turn if able. destroy it at the beginning of the next end step if it "
+        "didn't attack this turn. activate only during an opponent's turn, before "
+        "attackers are declared":
+            _line("mark_non_wall_target_to_attack", "activated_combat"),
+    },
+    # Aladdin's linked steal is a production (one condition, "for as long as you
+    # control this"); this one is not. Its duration is two conditions, one of
+    # them a comparison against the source's own power that is re-checked
+    # continuously in game_ending.py — there is no second card to share it with.
+    "Old Man of the Sea": {
+        "{t}: gain control of target creature with power less than or equal to "
+        "this creature's power for as long as this creature remains tapped and "
+        "that creature's power remains less than or equal to this creature's power":
+            _line("steal_creature_while_tapped_and_weaker", "activated_steal"),
+    },
+    "Personal Incarnation": {
+        "{0}: the next 1 damage that would be dealt to this creature this turn is "
+        "dealt to its owner instead. only this creatures owner may activate this "
+        "ability":
+            _line("redirect_one_damage_to_owner", "activated_prevent"),
+        "when this creature dies, its owner loses half their life, rounded up":
+            _line("owner_loses_half_life", "triggered_loss"),
+    },
+    "Pestilence": {
+        "at the beginning of the end step, if no creatures are on the battlefield, "
+        "sacrifice this enchantment":
+            _line("sacrifice_if_no_creatures", "triggered_sacrifice"),
+    },
+    "Pyramids": {
+        "{2}: the next time target land would be destroyed this turn, remove all "
+        "damage marked on it instead":
+            _line("shield_target_land_from_destruction", "activated_prevent"),
+    },
+    "Ring of Ma'rûf": {
+        "{5}, {t}, exile this artifact: the next time you would draw a card this "
+        "turn, instead put a card you own from outside the game into your hand":
+            _line("arm_outside_game_draw_replacement", "activated_draw"),
+    },
+    # Keyed on the additional-cost line, which is the sentence the handler
+    # performs both halves of. Metamorphosis prints the same cost line and a
+    # *different* effect (X mana of any one colour), and the legacy rule gave it
+    # this instruction — so it is deliberately not registered here: no handler
+    # adds any-colour mana from a sacrificed creature's mana value, and copying
+    # this entry onto it would re-state that as understood.
+    "Sacrifice": {
+        "as an additional cost to cast this spell, sacrifice a creature":
+            _line("sacrifice_creature_for_black_mana", "spell_pattern"),
+    },
+    "Sandals of Abdallah": {
+        "{2}, {t}: target creature gains islandwalk until end of turn. when that "
+        "creature dies this turn, destroy this artifact":
+            _line("grant_islandwalk_and_linked_destroy", "activated_keyword"),
+    },
+    "Serendib Djinn": {
+        "at the beginning of your upkeep, sacrifice a land. if you sacrifice an "
+        "island this way, this creature deals 3 damage to you":
+            _line(
+                "upkeep_sacrifice_land_conditional_damage", "upkeep_effect",
+                land_type="island", damage=3,
+            ),
+    },
+    "Shahrazad": {
+        "players play a magic subgame, using their libraries as their decks. each "
+        "player who doesn't win the subgame loses half their life, rounded up":
+            _line("opponents_lose_half_life", "spell_pattern"),
+    },
+    "Stone Giant": {
+        "{t}: target creature you control with toughness less than this creature's "
+        "power gains flying until end of turn. destroy that creature at the "
+        "beginning of the next end step":
+            _line("grant_flying_and_delayed_destruction", "activated_keyword"),
+    },
+    "Ydwen Efreet": {
+        "whenever this creature blocks, flip a coin. if you lose the flip, remove "
+        "this creature from combat and it can't block this turn. creatures it was "
+        "blocking that had become blocked by only this creature this combat become "
+        "unblocked":
+            _line("coin_flip_remove_blocker", "triggered_coin_flip"),
+    },
+}
+
+
+def card_line_instruction(card_name: str | None, normalized_line: str) -> CardLine | None:
+    """The registered reading of *normalized_line* on the card named *card_name*.
+
+    Both halves of the key matter. Keying on the text alone would make this a
+    second `engine/parsing/` — a table any card could match by wording — and
+    keying on the name alone would claim every line of the card, including the
+    ones a production already reads.
+    """
+    if not card_name:
+        return None
+    return CARD_LINE_INSTRUCTIONS.get(card_name, {}).get(normalized_line)
 
 
 def _guardian_angel(

@@ -76,6 +76,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # legacy rules for as long as those rules exist.
     "add_corpse_counters_for_each_creature_died": "counters",
     "add_plus1_counters_for_each_creature_died": "counters",
+    "remove_counter_from_self": "counters",
     "draw_then_discard_self": "zones",
     "target_gains_life": "life",
     "target_loses_life": "life",
@@ -86,6 +87,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "destroy_all_lands": "destruction",
     "destroy_all_lands_of_type": "destruction",
     "destroy_all_artifacts_creatures_enchantments": "destruction",
+    "delayed_destroy_blocked_or_blocker": "destruction",
     "tap_target_permanent": "tapping",
     "untap_target_permanent": "tapping",
     "untap_target_land": "tapping",
@@ -94,11 +96,19 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "grant_prevention_shield": "prevention",
     "prevent_all_combat_damage": "prevention",
     "recolor_target_from_text": "recolor",
+    # A printed text change (CR 612). Its own category rather than "recolor":
+    # the Lace cycle makes an object a colour, while this replaces a *word*
+    # wherever the object's text uses it, and one of the two modes does not
+    # touch colour at all.
+    "mark_text_modified": "text_change",
+    # A control change whose duration is linked to its source (CR 611.3).
+    "steal_target_permanent_linked_to_self": "control",
     "sacrifice_self": "zones",
     "upkeep_pay_or_sacrifice_enchantment": "upkeep",
     "upkeep_pay_or_sacrifice_self": "upkeep",
     "discard_target_cards": "zones",
     "discard_x_target_cards": "zones",
+    "opponent_discards_random_card_on_damage": "zones",
     "grant_regeneration_to_target_creature": "regeneration",
     "grant_regeneration_to_self": "regeneration",
     "grant_regeneration_to_enchanted_creature": "regeneration",
@@ -121,6 +131,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "tap_or_untap_target": "tapping",
     "draw_target_cards": "zones",
     "draw_controller_cards": "zones",
+    "exile_creature_gain_life_equal_to_power": "zones",
     "return_creature_from_graveyard_to_hand": "zones",
     "reanimate_creature": "zones",
     "bounce_target_creature": "zones",
@@ -650,6 +661,27 @@ _PER_DEATH_SUBJECT = ast.TargetSpec(
 _ANY_CREATURE_DIED = ast.DiedThisTurn(ast.ObjectFilter(card_types=("creature",)))
 
 
+def _lower_remove_counter(node: ast.RemoveCounter) -> tuple[OracleInstruction, ...]:
+    """``Remove a <kind> counter from this <permanent>`` (Armageddon Clock).
+
+    The counter's name is payload — it is the accumulating side's payload too
+    (``upkeep_put_counter_on_self``), so the pair is one template rather than a
+    card. What is *not* payload is the subject or the number:
+    ``remove_counter_from_self`` reads the ability's own source and decrements by
+    one, so anything else refuses rather than compiling onto a handler that
+    would quietly do that instead.
+    """
+    if not _is_source(node.subject):
+        raise LoweringError(
+            "the only counter-removal handler reads the ability's own source", node=node
+        )
+    if _amount_payload(node.count) != 1:
+        raise LoweringError("no handler removes more than one counter at a time", node=node)
+    return (
+        OracleInstruction("remove_counter_from_self", "", {"counter": node.counter}),
+    )
+
+
 def _lower_for_each(node: ast.ForEach) -> tuple[OracleInstruction, ...]:
     """"…put a <kind> counter on this creature for each creature that died this
     turn." (Scavenging Ghoul, Khabál Ghoul.)
@@ -740,7 +772,16 @@ _DESTROY_ALL_KINDS: dict[tuple[str, ...], str] = {
 _BASIC_LAND_TYPES = frozenset({"plains", "island", "swamp", "mountain", "forest"})
 
 
-def _lower_destroy(node: ast.Destroy) -> tuple[OracleInstruction, ...]:
+# Trigger events that bind the creature a delayed "destroy that creature at end
+# of combat" acts on. `delayed_destroy_blocked_or_blocker` reads the blocking
+# pair out of the trigger's own context and takes no payload at all, so the
+# sentence only means what it says while one of these fired.
+_BLOCK_PAIR_EVENTS = frozenset({"creature_blocks_or_blocked_by_nonwall"})
+
+
+def _lower_destroy(node: ast.Destroy, event: str | None = None) -> tuple[OracleInstruction, ...]:
+    if node.delay:
+        return _lower_delayed_destroy(node, event)
     if not isinstance(node.subject, ast.TargetSpec):
         raise LoweringError("destroy needs an object target", node=node)
     spec = node.subject
@@ -774,6 +815,37 @@ def _lower_destroy(node: ast.Destroy) -> tuple[OracleInstruction, ...]:
         payload["bypass_regeneration"] = True
     _describe_targets(payload, spec)
     return (OracleInstruction("destroy_target_permanent", "", payload),)
+
+
+def _lower_delayed_destroy(
+    node: ast.Destroy, event: str | None
+) -> tuple[OracleInstruction, ...]:
+    """"…destroy that creature at end of combat." (Thicket Basilisk, Cockatrice.)
+
+    The handler destroys the creature this one blocked or was blocked by, which
+    is a fact only the trigger knows — so the *event* is checked as strictly as
+    the subject is. Under any other trigger the same sentence names a creature
+    nobody recorded, and the handler would destroy nothing while the card
+    reported as supported.
+    """
+    if event not in _BLOCK_PAIR_EVENTS:
+        raise LoweringError(
+            "a delayed destroy at end of combat only has a handler on a "
+            "blocks-or-blocked trigger",
+            node=node,
+        )
+    spec = node.subject
+    if not isinstance(spec, ast.TargetSpec) or spec.quantifier != "that":
+        raise LoweringError(
+            "the end-of-combat destroy acts on the creature the trigger bound", node=node
+        )
+    if spec.filter != ast.ObjectFilter(card_types=("creature",)):
+        raise LoweringError("no delayed-destroy handler narrows what it destroys", node=node)
+    if node.no_regen:
+        raise LoweringError(
+            "the end-of-combat destroy handler does not bypass regeneration", node=node
+        )
+    return (OracleInstruction("delayed_destroy_blocked_or_blocker", "", {}),)
 
 
 def _lower_tap(node: ast.Tap | ast.Untap) -> tuple[OracleInstruction, ...]:
@@ -1033,7 +1105,19 @@ def _lower_counter_spell(node: ast.CounterSpell) -> tuple[OracleInstruction, ...
     return (OracleInstruction("counter_top_stack_spell", "", payload),)
 
 
-def _lower_discard(node: ast.Discard) -> tuple[OracleInstruction, ...]:
+# Trigger events that hand a damaged player to the effect after them. The
+# handler for "that player discards a card at random" reads which player took
+# the damage out of the trigger's captured context and nothing at all out of its
+# payload, so it is only a reading of the sentence while one of these fired —
+# under any other trigger the same words would name a player nobody recorded.
+_DAMAGED_PLAYER_EVENTS = frozenset({
+    "creature_deals_damage_to_opponent",
+    "deals_damage_to_player",
+    "creature_deals_combat_damage",
+})
+
+
+def _lower_discard(node: ast.Discard, event: str | None = None) -> tuple[OracleInstruction, ...]:
     """"Target player discards N cards [at random]."
 
     Only the targeted form has a handler; "you discard" and "each player
@@ -1056,6 +1140,18 @@ def _lower_discard(node: ast.Discard) -> tuple[OracleInstruction, ...]:
     if node.player.kind not in ("target_player", "that_player"):
         raise LoweringError(f"no discard handler for {node.player.kind!r}", node=node)
     amount = _amount_payload(node.count)
+    # "…, that player discards a card at random" on a damage trigger. The
+    # handler discards exactly one, at random, from the player the trigger
+    # recorded — so every part of that shape is checked rather than assumed, and
+    # a count, a chooser or a trigger other than those makes it fall through to
+    # the general forms below and be refused there.
+    if (
+        node.player.kind == "that_player"
+        and node.at_random
+        and amount == 1
+        and event in _DAMAGED_PLAYER_EVENTS
+    ):
+        return (OracleInstruction("opponent_discards_random_card_on_damage", "", {}),)
     payload: dict[str, object] = {}
     if amount == "x":
         if not node.at_random:
@@ -1121,6 +1217,47 @@ def _lower_become_color(node: ast.BecomeColor) -> tuple[OracleInstruction, ...]:
     # stack from the picker, so the description is omitted and legality.py
     # keeps answering `spell_or_permanent` until the vocabulary grows.
     return (OracleInstruction("recolor_target_from_text", "", {"target_color": node.color}),)
+
+
+_LINKED_STEAL_FILTER = ast.ObjectFilter(card_types=("artifact",))
+
+
+def _lower_gain_control(node: ast.GainControl) -> tuple[OracleInstruction, ...]:
+    """``Gain control of target artifact for as long as you control this
+    creature.`` (Aladdin, CR 611.3.)
+
+    ``steal_target_permanent_linked_to_self`` takes no payload at all: it looks
+    for an artifact in its own source code and ends the control change from
+    ``ON_LEAVE_BATTLEFIELD``. So the filter is compared for **equality** against
+    the one shape it implements rather than probed field by field — a
+    restriction the AST grows later then refuses here instead of being silently
+    ignored by a lowering written before it existed.
+
+    No ``targets`` description is emitted: ``engine/targeting.py`` already
+    answers "artifact" for this kind, and the payload has to stay byte-identical
+    to what the rule it replaces produced.
+    """
+    subject = node.subject
+    if not isinstance(subject, ast.TargetSpec) or subject.quantifier != "target":
+        raise LoweringError("the linked-control handler needs a named target", node=node)
+    if subject.filter != _LINKED_STEAL_FILTER:
+        raise LoweringError(
+            "the only linked-control handler gains control of an artifact", node=node
+        )
+    return (OracleInstruction("steal_target_permanent_linked_to_self", "", {}),)
+
+
+def _lower_change_text(node: ast.ChangeText) -> tuple[OracleInstruction, ...]:
+    """``Change the text of target spell or permanent …`` (CR 612).
+
+    No ``targets`` description is emitted, for the reason the Lace cycle
+    established: the vocabulary has no way to say "a spell on the stack *or* a
+    permanent", so describing it at all would drop one of the two zones from the
+    picker. ``engine/legality.py`` keeps answering ``spell_or_permanent``.
+    """
+    if not _is_target(node.subject):
+        raise LoweringError("a text change has to name what it changes", node=node)
+    return (OracleInstruction("mark_text_modified", "", {"mode": node.mode}),)
 
 
 def _lower_prevent_damage(node: ast.PreventDamage) -> tuple[OracleInstruction, ...]:
@@ -1223,6 +1360,60 @@ def _lower_sacrifice(node: ast.Sacrifice) -> tuple[OracleInstruction, ...]:
     if node.player.kind != "you":
         raise LoweringError("no handler for another player sacrificing", node=node)
     return (OracleInstruction("sacrifice_self", "", {}),)
+
+
+_EXILED_CREATURE = ast.ObjectFilter(card_types=("creature",))
+
+
+def _lower_exile(node: ast.Exile) -> tuple[OracleInstruction, ...]:
+    """Exiling on its own has no handler.
+
+    ``exile_creature_gain_life_equal_to_power`` is the pool's only exile, and it
+    performs both halves of Swords to Plowshares' sentence — so lowering a bare
+    ``Exile`` onto it would gain life the card never offered, and lowering it
+    onto nothing would exile silently. Refusing names the gap: a plain
+    ``exile_target`` handler is what a second card printing only the first
+    sentence would need.
+    """
+    raise LoweringError(
+        "no handler exiles without the fused life gain; a plain exile handler "
+        "does not exist yet",
+        node=node,
+    )
+
+
+def _fused_exile_then_controller_life(
+    steps: tuple[ast.Statement, ...]
+) -> tuple[OracleInstruction, ...] | None:
+    """"Exile target creature. Its controller gains life equal to its power."
+    (Swords to Plowshares.)
+
+    Fused because the handler is: it pops the creature off the battlefield and
+    reads ``effective_power`` from the object it just removed, which no pair of
+    independent instructions can do — the second one would be looking for a
+    permanent that is no longer there. Every part of the shape is checked
+    against what that handler implements, so a card exiling something else, or
+    paying the life to someone else, falls through and is refused by
+    :func:`_lower_exile` rather than borrowing this.
+
+    Returning None rather than raising leaves a near miss to be reported
+    against the effect it actually failed on.
+    """
+    if len(steps) != 2:
+        return None
+    exile, gain = steps
+    if not isinstance(exile, ast.Exile) or not isinstance(gain, ast.GainLife):
+        return None
+    subject = exile.subject
+    if not isinstance(subject, ast.TargetSpec) or subject.quantifier != "target":
+        return None
+    if subject.filter != _EXILED_CREATURE:
+        return None
+    if gain.player.kind != "controller":
+        return None
+    if gain.amount != ast.ThatMuch("its_power"):
+        return None
+    return (OracleInstruction("exile_creature_gain_life_equal_to_power", "", {}),)
 
 
 def _fused_draw_then_discard(
@@ -1622,12 +1813,14 @@ def lower_statement(
         return _lower_gain_keyword(statement)
     if isinstance(statement, ast.PutCounter):
         return _lower_put_counter(statement)
+    if isinstance(statement, ast.RemoveCounter):
+        return _lower_remove_counter(statement)
     if isinstance(statement, ast.GainLife):
         return _lower_gain_life(statement, produced)
     if isinstance(statement, ast.LoseLife):
         return _lower_lose_life(statement)
     if isinstance(statement, ast.Destroy):
-        return _lower_destroy(statement)
+        return _lower_destroy(statement, event)
     if isinstance(statement, (ast.Tap, ast.Untap)):
         return _lower_tap(statement)
     if isinstance(statement, ast.TapOrUntap):
@@ -1654,6 +1847,12 @@ def lower_statement(
     if isinstance(statement, ast.BecomeColor):
         return _lower_become_color(statement)
 
+    if isinstance(statement, ast.ChangeText):
+        return _lower_change_text(statement)
+
+    if isinstance(statement, ast.GainControl):
+        return _lower_gain_control(statement)
+
     if isinstance(statement, ast.PreventDamage):
         return _lower_prevent_damage(statement)
 
@@ -1664,7 +1863,7 @@ def lower_statement(
         return _lower_counter_spell(statement)
 
     if isinstance(statement, ast.Discard):
-        return _lower_discard(statement)
+        return _lower_discard(statement, event)
 
     if isinstance(statement, ast.ReturnToZone):
         return _lower_return_to_zone(statement)
@@ -1690,10 +1889,14 @@ def lower_statement(
     if isinstance(statement, ast.ForEach):
         return _lower_for_each(statement)
 
+    if isinstance(statement, ast.Exile):
+        return _lower_exile(statement)
+
     if isinstance(statement, ast.Sequence):
-        fused = _fused_draw_then_discard(statement.steps)
-        if fused is not None:
-            return fused
+        for fuse in (_fused_draw_then_discard, _fused_exile_then_controller_life):
+            fused = fuse(statement.steps)
+            if fused is not None:
+                return fused
         return _lower_steps(statement.steps, produced)
 
     if isinstance(statement, ast.Conditional):

@@ -444,6 +444,13 @@ class Discard:
 class Destroy:
     subject: Recipient
     no_regen: bool = False
+    # When the destruction happens, if not on resolution: "…at end of combat"
+    # is a delayed triggered ability (CR 603.7), not this effect with a rider.
+    # Carried here rather than as its own node because the subject, the
+    # regeneration clause and the timing are one sentence — but lowering treats
+    # a delayed destroy as a *different* handler, never the immediate one with a
+    # flag it might ignore.
+    delay: str = ""
 
 
 @dataclass(frozen=True)
@@ -455,6 +462,37 @@ class Sacrifice:
 @dataclass(frozen=True)
 class Exile:
     subject: Recipient
+
+
+@dataclass(frozen=True)
+class GainControl:
+    """``Gain control of <subject> for as long as <duration>.`` (CR 613 layer 2.)
+
+    *duration* is what ends the control change, and it is required rather than
+    defaulting to "permanently": an untimed steal (Control Magic) and a linked
+    one (Aladdin) revert under completely different circumstances, and a
+    production that let the clause be absent would also let it be *deleted*
+    with no change to what was lowered.
+    """
+
+    subject: Recipient
+    duration: str
+
+
+@dataclass(frozen=True)
+class ChangeText:
+    """``Change the text of <subject> by replacing all instances of one <mode>
+    with another.`` (CR 612 — Magical Hack, Sleight of Mind.)
+
+    *mode* names which vocabulary is swapped, because that is the whole
+    difference between the two printings and the only thing the handler reads.
+    It is a closed set: a wording naming some other vocabulary is a text change
+    the engine's substitution does not implement, and must fail to parse rather
+    than arrive here as a mode nothing knows.
+    """
+
+    subject: Recipient
+    mode: str
 
 
 @dataclass(frozen=True)
@@ -673,7 +711,8 @@ Effect = Union[
     Regenerate, CounterSpell, ReturnToZone, CreateToken, AddMana,
     AddManaForTappedLand, PreventDamage,
     SearchLibrary, Shuffle, ExtraTurn, WinGame, LoseGame, BecomeColor,
-    SacrificeUnlessPay, DamageUnlessPay, LookAtHand, CantBe, RawEffect,
+    SacrificeUnlessPay, DamageUnlessPay, LookAtHand, CantBe, ChangeText,
+    GainControl, RawEffect,
 ]
 
 
@@ -852,7 +891,8 @@ __all__ = [
     "LoseKeyword", "PutCounter", "RemoveCounter", "GainLife", "LoseLife", "Draw",
     "Discard", "Destroy", "Sacrifice", "Exile", "Tap", "Untap", "TapOrUntap",
     "Regenerate",
-    "BecomeColor", "SacrificeUnlessPay", "LookAtHand", "CantBe",
+    "BecomeColor", "SacrificeUnlessPay", "LookAtHand", "CantBe", "ChangeText",
+    "GainControl",
     "CounterSpell", "ReturnToZone", "CreateToken", "AddMana",
     "AddManaForTappedLand", "PreventDamage",
     "SearchLibrary", "Shuffle", "ExtraTurn", "WinGame", "LoseGame", "RawEffect",

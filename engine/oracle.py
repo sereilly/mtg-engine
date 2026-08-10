@@ -2,9 +2,22 @@
 
 Turns a card's oracle text into an OracleProgram: a set of instructions,
 activated abilities, triggered abilities, and static lines the game engine
-can execute. Effect-clause parsing is delegated to the declarative rule
-registry in engine.parsing; this module owns tokenizing, line classification
-(keyword / triggered / activated / static), and the per-card compile cache.
+can execute. This module owns tokenizing, line classification (keyword /
+triggered / activated / static), and the per-card compile cache.
+
+Reading an effect clause is delegated, and `_line_instruction` is where the
+three front ends meet, most general first:
+
+1. ``engine/grammar/`` — a real parser over Magic's templating. Whatever it
+   claims, it claims for every card printed the same way.
+2. ``engine/card_hooks.py``'s ``CARD_LINE_INSTRUCTIONS`` — one printed line of
+   one card, for sentences no second card could share. A production for those
+   would be a whole-card substring match wearing a grammar hat.
+3. ``engine/parsing/`` — the legacy ``@parse_rule`` registry, being deleted.
+
+Precedence follows from that ordering: a line the grammar learns to read stops
+reaching its card hook, which is what makes a superseded hook dead rather than
+wrong.
 """
 
 from __future__ import annotations
@@ -178,10 +191,10 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # specific forms must precede their generic prefixes. Guarded by
     # tests/engine/test_trigger_tables.py.
     ("creature_deals_combat_damage",r"whenever this creature deals combat damage to a player"),
-    ("hypnotic_specter_deals_damage", r"whenever this creature deals damage to an opponent"),
+    ("creature_deals_damage_to_opponent", r"whenever this creature deals damage to an opponent"),
     ("deals_damage_to_player",      r"whenever .+ deals damage to a player"),
     ("creature_deals_damage",       r"whenever this creature deals damage"),
-    ("cockatrice_blocks_or_blocked", r"whenever this creature blocks or becomes blocked by a non-wall creature"),
+    ("creature_blocks_or_blocked_by_nonwall", r"whenever this creature blocks or becomes blocked by a non-wall creature"),
     ("creature_attacks_or_blocks",  r"whenever this creature attacks or blocks"),
     ("creature_attacks",            r"whenever this creature attacks"),
     ("creature_blocks",             r"whenever this creature blocks"),
@@ -448,8 +461,8 @@ def _parse_triggered_ability(line: str, card_name: str | None = None) -> ParsedT
     # Extract any trailing "if ..." guard on the effect
     if_kind, clean_effect = _extract_if_condition(remainder)
 
-    instruction, effect_kind = _prefer_grammar(
-        _grammar_instruction(line, card_name),
+    instruction, effect_kind = _prefer_line_reading(
+        _line_instruction(line, card_name),
         parse_primary_instruction(clean_effect, activated=False),
     )
 
@@ -542,22 +555,84 @@ def _grammar_instruction(
     return instruction, effect_kind
 
 
-def _prefer_grammar(
-    grammar: tuple[OracleInstruction, str] | None,
+def _card_hook_instruction(
+    line: str,
+    card_name: str | None,
+    *,
+    spell_line_only: bool = False,
+) -> tuple[OracleInstruction, str] | None:
+    """The name-keyed reading of one line, for texts that are a single card.
+
+    The third front end, consulted only where the grammar declined. Most of what
+    ``engine/parsing/`` claimed is templating and belongs in a production; the
+    rest is one card's sentence bound to a handler written for it, and those
+    move to ``engine/card_hooks.py`` — the one file whose subject is a card's
+    name (see CARD_LINE_INSTRUCTIONS for the entry bar).
+
+    Kept out of :func:`_grammar_instruction` on purpose. That function is what
+    ``tests/engine/test_grammar_fallback_safety.py`` stubs to compile the pool
+    without the grammar; folding the hooks into it would stub those too and the
+    guard would report every hooked card as a loss.
+    """
+    from .card_hooks import card_line_instruction
+
+    found = card_line_instruction(card_name, normalize_creature_line(line))
+    if found is None:
+        return None
+    if spell_line_only and _is_ability_line(line):
+        return None
+    return found.instruction, found.effect_kind
+
+
+def _is_ability_line(line: str) -> bool:
+    """Whether *line* is an activated or triggered ability rather than a plain
+    effect the card's resolution carries out.
+
+    The same question ``spell_line_only`` asks of the grammar's node type, asked
+    of the raw text — an ability's effect must never enter an instant's or
+    sorcery's instruction list, or the spell would perform the ability when it
+    resolves.
+    """
+    normalized = normalize_creature_line(line)
+    if ":" in normalized:
+        return True
+    return _parse_trigger_condition(normalized)[0] is not None
+
+
+def _line_instruction(
+    line: str,
+    card_name: str | None,
+    *,
+    activated: bool = False,
+    spell_line_only: bool = False,
+) -> tuple[OracleInstruction, str] | None:
+    """The front ends that read one line, most general first: the grammar, then
+    the name-keyed card hooks."""
+    found = _grammar_instruction(
+        line, card_name, activated=activated, spell_line_only=spell_line_only
+    )
+    if found is not None:
+        return found
+    return _card_hook_instruction(line, card_name, spell_line_only=spell_line_only)
+
+
+def _prefer_line_reading(
+    reading: tuple[OracleInstruction, str] | None,
     legacy: tuple[OracleInstruction | None, str],
 ) -> tuple[OracleInstruction | None, str]:
-    """Take the grammar's instruction when it has one, but keep the legacy
-    ``effect_kind`` label where the legacy rules also matched.
+    """Take the per-line reading's instruction when there is one, but keep the
+    legacy ``effect_kind`` label where the legacy rules also matched.
 
-    The label feeds reporting (``SimulationResult``, the support report) rather
-    than dispatch, so holding it steady keeps the migration's diff to the thing
-    that actually matters — the instruction.
+    *reading* is what :func:`_line_instruction` produced — the grammar's, or the
+    card hooks'. The label feeds reporting (``SimulationResult``, the support
+    report) rather than dispatch, so holding it steady keeps the migration's
+    diff to the thing that actually matters — the instruction.
     """
     legacy_instruction, legacy_kind = legacy
-    if grammar is None:
+    if reading is None:
         return legacy_instruction, legacy_kind
-    instruction, grammar_kind = grammar
-    return instruction, (legacy_kind if legacy_instruction is not None else grammar_kind)
+    instruction, reading_kind = reading
+    return instruction, (legacy_kind if legacy_instruction is not None else reading_kind)
 
 
 # ---------------------------------------------------------------------------
@@ -579,8 +654,8 @@ def _parse_activated_ability(line: str, card_name: str | None = None) -> ParsedA
         return None
 
     effect_text = normalized.split(":", 1)[1].strip()
-    instruction, effect_kind = _prefer_grammar(
-        _grammar_instruction(line, card_name, activated=True),
+    instruction, effect_kind = _prefer_line_reading(
+        _line_instruction(line, card_name, activated=True),
         parse_primary_instruction(effect_text, activated=True),
     )
     supported = instruction is not None
@@ -883,7 +958,7 @@ def _noncreature_line_instructions(
         if not line or line.startswith("•"):
             continue
 
-        found = _grammar_instruction(line, card_name, spell_line_only=True)
+        found = _line_instruction(line, card_name, spell_line_only=True)
         if found is not None:
             instructions.append(found[0])
             continue
@@ -906,7 +981,7 @@ def _noncreature_line_instructions(
         # triggered one whose condition the legacy trigger table refuses
         # (Cursed Land). Its instruction used to arrive from the whole-text
         # parse or from parse_static_coeffects re-reading the card.
-        static = _grammar_instruction(line, card_name)
+        static = _line_instruction(line, card_name)
         if static is not None:
             instructions.append(static[0])
     return instructions

@@ -274,7 +274,14 @@ adding entries, not editing dispatch**:
   timing gates (an ordered predicate table; genuinely textual, not per-card).
 - `engine/card_hooks.py` — name-keyed registries for truly bespoke behavior
   (spell-resolved and counterspell riders, leave-battlefield effects,
-  draw-step modifiers, the Aura on a land tapped for mana).
+  draw-step modifiers, the Aura on a land tapped for mana) plus
+  `CARD_LINE_INSTRUCTIONS`, the instruction one printed *line* of one card
+  compiles to. The compiler reads it after the grammar refuses and before the
+  legacy rules, so a line that later grows a production makes its entry dead
+  rather than wrong — and `tests/engine/test_card_lines.py` fails on a dead
+  one. The entry bar is that **no second card, real or plausibly printable,
+  shares the shape**: a sentence two cards could carry belongs in
+  `engine/grammar/`, where the second card gets it for free.
   **This is the only sanctioned place to key behavior on a card name**, enforced
   across `engine/` by `tests/engine/test_card_name_reads.py`: a name in a
   comparison is dispatch and fails there; a name in a log line, a prompt label

@@ -10,18 +10,18 @@ Migration tracker for the oracle-text parser rewrite: how much of the card pool 
 | Lowered | That AST mapped onto executable instructions |
 | Executed | Instructions' categories are switched on, so the grammar's output runs |
 
-Categories currently switched on: `combat_restrictions, counters, counterspells, damage, destruction, evasion, life, mana, optional, prevention, pump, recolor, regeneration, static_buffs, tapping, tokens, turns, upkeep, zones`.
+Categories currently switched on: `combat_restrictions, control, counters, counterspells, damage, destruction, evasion, life, mana, optional, prevention, pump, recolor, regeneration, static_buffs, tapping, text_change, tokens, turns, upkeep, zones`.
 
 ## Coverage by set
 
 | Set | Cards | Lines | Parsed | Lowered | Executed | Cards executing |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 388 | 74.7% | 73.2% | 38.7% | 140 |
-| LEB | 292 | 389 | 74.8% | 73.3% | 38.8% | 141 |
-| 2ED | 292 | 389 | 74.8% | 73.3% | 38.8% | 141 |
-| ARN | 78 | 108 | 62.0% | 56.5% | 35.2% | 31 |
-| 3ED | 296 | 389 | 74.3% | 71.5% | 37.8% | 137 |
-| **All** | **1248** | **1663** | **73.8%** | **71.7%** | **38.3%** | **590** |
+| LEA | 290 | 388 | 76.5% | 74.7% | 40.2% | 146 |
+| LEB | 292 | 389 | 76.6% | 74.8% | 40.4% | 147 |
+| 2ED | 292 | 389 | 76.6% | 74.8% | 40.4% | 147 |
+| ARN | 78 | 108 | 63.0% | 57.4% | 36.1% | 32 |
+| 3ED | 296 | 389 | 76.3% | 73.3% | 39.6% | 144 |
+| **All** | **1248** | **1663** | **75.6%** | **73.3%** | **39.9%** | **616** |
 
 ## Backlog — failure reasons
 
@@ -29,16 +29,16 @@ Categories currently switched on: `combat_restrictions, counters, counterspells,
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 224 | 73 | expected a subject |  |
-| 95 | 27 | unrecognized effect verb |  |
+| 197 | 65 | expected a subject |  |
+| 91 | 26 | unrecognized effect verb |  |
 | 40 | 21 | unconsumed text |  |
 | 24 | 7 | granted ability in quotes | phase 3 (quoted abilities) |
 | 13 | 2 | modal line | phase 3 (modal production) |
+| 10 | 3 | upkeep triggers are dispatched by fused instruction kind; a decomposed wrapper has no handler |  |
 | 8 | 2 | expected a quantity |  |
 | 7 | 2 | expected a colour after 'becomes' |  |
 | 7 | 4 | expected a keyword ability |  |
 | 7 | 3 | a conditional static bonus is derived by engine/static_bonuses.py |  |
-| 6 | 2 | upkeep triggers are dispatched by fused instruction kind; a decomposed wrapper has no handler |  |
 | 5 | 2 | expected something to destroy |  |
 | 4 | 1 | no lowering for RawEffect |  |
 | 4 | 1 | no handler for non-targeted tap/untap |  |
@@ -51,14 +51,16 @@ Categories currently switched on: `combat_restrictions, counters, counterspells,
 | 2 | 1 | back-reference to 'damage_dealt' with no producer in this effect |  |
 | 2 | 1 | expected something to shield |  |
 | 2 | 1 | no untap handler honors this restriction |  |
+| 1 | 1 | expected what to gain control of |  |
 | 1 | 1 | expected a destination zone after 'return' |  |
 | 1 | 1 | counters on a non-source subject |  |
-| 1 | 1 | no handler for doom counters |  |
 
 ## Cards executing through the grammar
 
-590 cards, 637 lines.
+616 cards, 663 lines.
 
+- **Aladdin**
+  - `{1}{R}{R}, {T}: Gain control of target artifact for as long as you control this creature.`
 - **Aladdin's Ring**
   - `{8}, {T}: This artifact deals 4 damage to any target.`
   - `{8}, {T}: This artifact deals 4 damage to any target.`
@@ -78,6 +80,8 @@ Categories currently switched on: `combat_restrictions, counters, counterspells,
   - `Destroy all lands.`
   - `Destroy all lands.`
   - `Destroy all lands.`
+- **Armageddon Clock**
+  - `{4}: Remove a doom counter from this artifact. Any player may activate this ability but only during any upkeep step.`
 - **Army of Allah**
   - `Attacking creatures get +2/+0 until end of turn.`
 - **Atog**
@@ -169,6 +173,11 @@ Categories currently switched on: `combat_restrictions, counters, counterspells,
 - **City of Brass**
   - `Whenever this land becomes tapped, it deals 1 damage to you.`
   - `{T}: Add one mana of any color.`
+- **Cockatrice**
+  - `Whenever this creature blocks or becomes blocked by a non-Wall creature, destroy that creature at end of combat.`
+  - `Whenever this creature blocks or becomes blocked by a non-Wall creature, destroy that creature at end of combat.`
+  - `Whenever this creature blocks or becomes blocked by a non-Wall creature, destroy that creature at end of combat.`
+  - `Whenever this creature blocks or becomes blocked by a non-Wall creature, destroy that creature at end of combat.`
 - **Conservator**
   - `{3}, {T}: Prevent the next 2 damage that would be dealt to you this turn.`
   - `{3}, {T}: Prevent the next 2 damage that would be dealt to you this turn.`
@@ -391,6 +400,11 @@ Categories currently switched on: `combat_restrictions, counters, counterspells,
   - `Hurricane deals X damage to each creature with flying and each player.`
   - `Hurricane deals X damage to each creature with flying and each player.`
   - `Hurricane deals X damage to each creature with flying and each player.`
+- **Hypnotic Specter**
+  - `Whenever this creature deals damage to an opponent, that player discards a card at random.`
+  - `Whenever this creature deals damage to an opponent, that player discards a card at random.`
+  - `Whenever this creature deals damage to an opponent, that player discards a card at random.`
+  - `Whenever this creature deals damage to an opponent, that player discards a card at random.`
 - **Ice Storm**
   - `Destroy target land.`
   - `Destroy target land.`
@@ -496,6 +510,11 @@ Categories currently switched on: `combat_restrictions, counters, counterspells,
   - `Other Merfolk get +1/+1 and have islandwalk. (They can't be blocked as long as defending player controls an Island.)`
   - `Other Merfolk get +1/+1 and have islandwalk. (They can't be blocked as long as defending player controls an Island.)`
   - `Other Merfolk get +1/+1 and have islandwalk. (They can't be blocked as long as defending player controls an Island.)`
+- **Magical Hack**
+  - `Change the text of target spell or permanent by replacing all instances of one basic land type with another. (For example, you may change "swampwalk" to "plainswalk." This effect lasts indefinitely.)`
+  - `Change the text of target spell or permanent by replacing all instances of one basic land type with another. (For example, you may change "swampwalk" to "plainswalk." This effect lasts indefinitely.)`
+  - `Change the text of target spell or permanent by replacing all instances of one basic land type with another. (For example, you may change "swampwalk" to "plainswalk." This effect lasts indefinitely.)`
+  - `Change the text of target spell or permanent by replacing all instances of one basic land type with another. (For example, you may change "swampwalk" to "plainswalk." This effect lasts indefinitely.)`
 - **Mana Flare**
   - `Whenever a player taps a land for mana, that player adds one mana of any type that land produced.`
   - `Whenever a player taps a land for mana, that player adds one mana of any type that land produced.`
@@ -730,6 +749,11 @@ Categories currently switched on: `combat_restrictions, counters, counterspells,
   - `Destroy target land.`
   - `Destroy target land.`
   - `Destroy target land.`
+- **Sleight of Mind**
+  - `Change the text of target spell or permanent by replacing all instances of one color word with another. (For example, you may change "target black spell" to "target blue spell." This effect lasts indefinitely.)`
+  - `Change the text of target spell or permanent by replacing all instances of one color word with another. (For example, you may change "target black spell" to "target blue spell." This effect lasts indefinitely.)`
+  - `Change the text of target spell or permanent by replacing all instances of one color word with another. (For example, you may change "target black spell" to "target blue spell." This effect lasts indefinitely.)`
+  - `Change the text of target spell or permanent by replacing all instances of one color word with another. (For example, you may change "target black spell" to "target blue spell." This effect lasts indefinitely.)`
 - **Sol Ring**
   - `{T}: Add {C}{C}.`
   - `{T}: Add {C}{C}.`
@@ -763,6 +787,11 @@ Categories currently switched on: `combat_restrictions, counters, counterspells,
   - `Target player gains X life.`
   - `Target player gains X life.`
   - `Target player gains X life.`
+- **Swords to Plowshares**
+  - `Exile target creature. Its controller gains life equal to its power.`
+  - `Exile target creature. Its controller gains life equal to its power.`
+  - `Exile target creature. Its controller gains life equal to its power.`
+  - `Exile target creature. Its controller gains life equal to its power.`
 - **Terror**
   - `Destroy target nonartifact, nonblack creature. It can't be regenerated.`
   - `Destroy target nonartifact, nonblack creature. It can't be regenerated.`
@@ -773,6 +802,11 @@ Categories currently switched on: `combat_restrictions, counters, counterspells,
   - `{5}, {T}: Create a 1/1 colorless Insect artifact creature token with flying named Wasp. (It can't be blocked except by creatures with flying or reach.)`
   - `{5}, {T}: Create a 1/1 colorless Insect artifact creature token with flying named Wasp. (It can't be blocked except by creatures with flying or reach.)`
   - `{5}, {T}: Create a 1/1 colorless Insect artifact creature token with flying named Wasp. (It can't be blocked except by creatures with flying or reach.)`
+- **Thicket Basilisk**
+  - `Whenever this creature blocks or becomes blocked by a non-Wall creature, destroy that creature at end of combat.`
+  - `Whenever this creature blocks or becomes blocked by a non-Wall creature, destroy that creature at end of combat.`
+  - `Whenever this creature blocks or becomes blocked by a non-Wall creature, destroy that creature at end of combat.`
+  - `Whenever this creature blocks or becomes blocked by a non-Wall creature, destroy that creature at end of combat.`
 - **Thoughtlace**
   - `Target spell or permanent becomes blue. (Mana symbols on that permanent remain unchanged.)`
   - `Target spell or permanent becomes blue. (Mana symbols on that permanent remain unchanged.)`

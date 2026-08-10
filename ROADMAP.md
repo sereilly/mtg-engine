@@ -3606,6 +3606,102 @@ change.
 
 ---
 
+## Deleting `engine/parsing/`: the "expected a subject" bucket, split two ways
+
+The deletion criterion is mechanical: compile the whole manifest pool twice,
+once with `parse_primary_instruction` / `parse_modal_options` /
+`parse_static_coeffects` stubbed, and diff each card's program. It started this
+pass at **110 cards changing, 69 losing support**, and the largest single reason
+the grammar gave was "expected a subject" — 61 distinct lines.
+
+**The triage was the work; writing the productions was not.** The bucket splits
+cleanly once you ask the only question that matters: *could a second card, real
+or plausibly printable, carry this sentence?*
+
+**Six lines were templates and became productions.** Each reproduces the legacy
+rule's payload byte for byte, and each carries the refusals that stop it
+becoming the substring match it replaced:
+
+| Production | Cards | What it refuses, and why |
+| --- | --- | --- |
+| `that player discards a card at random` on a damage trigger | Hypnotic Specter | any trigger that does not record a damaged player — the handler reads the victim out of the trigger's context, so elsewhere the sentence names nobody |
+| `remove [a\|N] <kind> counter(s) from <subject>` as an effect | Armageddon Clock | more than one counter, and any subject but the source; also declines "remove target creature … from combat" so those keep their own failure |
+| `change the text of <target> by replacing all instances of one <vocabulary> with another` | Magical Hack, Sleight of Mind | a vocabulary outside the two the substitution performs |
+| `gain control of <target> for as long as you control this <permanent>` | Aladdin | an absent duration, and any filter but artifact — the handler looks for an artifact in its own source |
+| `exile <target>. Its controller gains life equal to its power.` | Swords to Plowshares | a bare exile, naming the handler that does not exist yet |
+| `destroy that creature at end of combat` | Thicket Basilisk, Cockatrice | any other trigger, and the end-*step* delay (Stone Giant, Nettling Imp), which is a different handler |
+
+**Thirty-nine lines across 38 cards were one card's text, and went to
+`card_hooks.CARD_LINE_INSTRUCTIONS`.** Chaos Orb's flip, Camouflage's blocker
+piles, Shahrazad's subgame, Cyclopean Tomb's mire counters, the four coin-flip
+and "next time … instead" fused kinds. A grammar production for any of them
+would be the same whole-card substring match wearing a grammar hat — the defect
+the audit measured (133 of 168 rules were literal substring matches, several
+encoding whole card texts) and the thing the deletion exists to stop inheriting.
+`card_hooks.py` is where a card's name is the point, so the reading moves there
+unchanged and *honestly labelled*.
+
+The registry is keyed by **(card name, normalized line)** — not by name alone,
+which would claim lines a production already reads, and not by text alone, which
+would make it a second `engine/parsing/`. `engine/oracle.py` consults it after
+the grammar and before the legacy rules, so a line that later grows a production
+makes its entry **dead rather than wrong**. Three guards
+(`tests/engine/test_card_lines.py`), each fault-injected:
+
+* a key must match a printed line of that card in the pool — a hand-typed key
+  that drifts is a hook that can never fire, and a missing hook is
+  indistinguishable from a card nobody hooked;
+* every entry must still supply an instruction *with the legacy rules stubbed* —
+  which is what makes a dead entry fail rather than linger as a card's apparent
+  implementation while the real one is elsewhere;
+* every entry must read its line the way the rule it replaced did. This one
+  retires with `engine/parsing/`; the first two do not.
+
+**Refusals, with the missing code named.** Not everything in the bucket was
+implementable, and three cases were refused rather than papered over:
+
+- **"When there are no creatures on the battlefield, sacrifice this
+  enchantment."** (Drop of Honey.) The *effect* half already lowers. The
+  condition is not in `WHEN_TRIGGER_PATTERNS` and nothing dispatches it, so
+  adding a phrase would compile a trigger the game has never fired — coverage
+  rising while nothing changes, which is worse than the gap.
+- **"Remove this card from your deck before playing if you're not playing for
+  ante."** (Contract from Below and three others.) Nothing implements it; it is
+  a `spell_pattern` marker. Claiming it would report a rule the engine does not
+  apply.
+- **Metamorphosis.** It prints Sacrifice's additional-cost line and a different
+  effect (X mana of any one colour), and the legacy rule hands it *Sacrifice's*
+  black-mana instruction. Registering that would re-state a wrong reading as
+  understood, so only Sacrifice is hooked and Metamorphosis keeps its gap: no
+  handler adds any-colour mana sized by a sacrificed creature's mana value.
+
+**Two card names left the engine on the way.** The Hypnotic Specter production
+would have put `hypnotic_specter_deals_damage` into `engine/grammar/parser.py`,
+and the Basilisk one `cockatrice_blocks_or_blocked` — both trigger-condition
+kinds named after a card, in violation of standing invariant 5 and in a file
+that is supposed to be about templating. They are now
+`creature_deals_damage_to_opponent` and
+`creature_blocks_or_blocked_by_nonwall`. The behaviour-class snapshot is a list
+of card-name sets rather than signature hashes, so a pure rename left it
+untouched.
+
+**A near miss the guards caught.** `_line_instruction` composes the grammar and
+the hooks, and the obvious place to put the hook lookup was inside
+`_grammar_instruction` — where `tests/engine/test_grammar_fallback_safety.py`
+stubs it to compile the pool without the grammar. That would have stubbed the
+hooks too and made the guard report every hooked card as an instruction loss.
+The two front ends stay separate functions for exactly that reason.
+
+Result: **110 → 66 cards changing, 69 → 38 losing support.** Grammar coverage
+73.2% → 75.6% parsed, 71.1% → 73.3% lowered, 37.6% → 39.9% executed; the probe
+baseline tightened by one (the grammar now claims Living Artifact's optional
+counter removal, so its dropped-rider finding stopped occurring). What remains
+in this bucket is four cards whose "expected a subject" line is not their
+blocker — Contract from Below, Drain Life, Gaea's Liege and Siren's Call each
+fail on a line in a *different* backlog reason.
+
+---
+
 ## Standing invariants
 
 Anything that weakens these is a regression regardless of what it enables:

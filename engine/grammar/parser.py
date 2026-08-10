@@ -51,7 +51,19 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
      ("a", "creature", "dealt", "damage", "by", "this", "creature", "this", "turn", "dies")),
     ("creature_dies", ("a", "creature", "dies")),
     ("creature_deals_combat_damage", ("this", "creature", "deals", "combat", "damage", "to", "a", "player")),
+    # Narrowed to an opponent (Hypnotic Specter). Must precede the unnarrowed
+    # form below, which is a strict prefix of it: matching that first would name
+    # a condition the legacy table does not — the disagreement
+    # `test_every_executed_trigger_agrees_with_the_legacy_condition_table`
+    # exists to catch — and strand "to an opponent" besides.
+    ("creature_deals_damage_to_opponent",
+     ("this", "creature", "deals", "damage", "to", "an", "opponent")),
     ("creature_deals_damage", ("this", "creature", "deals", "damage")),
+    # The Basilisk cycle's event. Precedes "this creature blocks", which is a
+    # strict prefix of it: matching that first would name a condition nothing
+    # dispatches for these cards and strand the rest of the clause.
+    ("creature_blocks_or_blocked_by_nonwall",
+     ("this", "creature", "blocks", "or", "becomes", "blocked", "by", "a", "non-wall", "creature")),
     ("creature_attacks_or_blocks", ("this", "creature", "attacks", "or", "blocks")),
     ("creature_attacks", ("this", "creature", "attacks")),
     ("creature_blocks", ("this", "creature", "blocks")),
@@ -551,6 +563,123 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
     return ast.ForEach(iterated, placement)
 
 
+def _parse_remove_counter(stream: TokenStream) -> ast.RemoveCounter | None:
+    """``Remove [a|N] <kind> counter(s) from <subject>`` as an *effect*.
+
+    The mirror of :func:`_parse_counter_removal_cost`, which reads the same
+    words left of an ability's colon. Both are needed and neither subsumes the
+    other: Armageddon Clock pays {4} and removes a counter as the effect, while
+    Scavenging Ghoul removes one *to* activate.
+
+    Returns None — cursor untouched — when what follows "remove" is not a
+    counter at all. "Remove target creature defending player controls from
+    combat" and "remove all damage marked on it" open the same way and are
+    entirely different effects, so they have to keep failing on their own
+    missing production instead of on a counter kind they never mentioned.
+    """
+    mark = stream.mark()
+    stream.expect_word("remove")
+    if stream.accept_word("a", "an"):
+        count: ast.Amount = ast.Fixed(1)
+    else:
+        try:
+            count = parse_amount(stream)
+        except GrammarError:
+            stream.reset(mark)
+            return None
+    try:
+        counter = _expect_counter_kind(stream, " to remove").text
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("counter", "counters"):
+        stream.reset(mark)
+        return None
+    stream.expect_word("from")
+    subject = parse_recipient(stream)
+    if subject is None:
+        raise stream.error("expected what to remove a counter from")
+    return ast.RemoveCounter(subject, counter, count)
+
+
+def _parse_gain_control(stream: TokenStream) -> ast.GainControl | None:
+    """``Gain control of <subject> for as long as you control this <permanent>.``
+
+    Returns None — cursor untouched — unless the line really opens "gain
+    control": "gains flying", "you gain 3 life" and "gains control of this
+    creature" (Ghazbán Ogre, whose subject comes first) all begin with the same
+    verb and are read elsewhere.
+
+    The duration clause is *required*, and only the one shape a handler
+    implements is admitted. An untimed "gain control of target creature" is a
+    permanent control change; a differently-timed one (Old Man of the Sea's two
+    conditions) reverts on things nothing here watches. Both would be this
+    production's sentence with the ending changed, so both have to fail rather
+    than borrow the linked duration.
+    """
+    mark = stream.mark()
+    stream.expect_word("gain")
+    if not stream.accept_word("control"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("of"):
+        stream.reset(mark)
+        return None
+    subject = parse_recipient(stream)
+    if subject is None:
+        raise stream.error("expected what to gain control of")
+    if not stream.accept_phrase("for", "as", "long", "as", "you", "control", "this"):
+        raise stream.error(
+            "no handler for a control change without the source-linked duration"
+        )
+    # The noun after "this" names the source's own type and adds nothing the
+    # payload carries, but it still has to be consumed for the line to be
+    # accounted for in full.
+    if stream.peek_word() is None:
+        raise stream.error("expected the permanent the control change is linked to")
+    stream.advance()
+    return ast.GainControl(subject, "while_you_control_source")
+
+
+# Vocabularies a printed text change can swap, one literal phrase per mode
+# (CR 612.1). Closed on purpose: `mark_text_modified` substitutes exactly these
+# two, and a card naming a third — a creature type, a card name — is a text
+# change the engine does not perform. Listing the phrases keeps that card
+# failing here instead of reaching the handler as a mode it will ignore.
+_TEXT_CHANGE_MODES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("land_type", ("basic", "land", "type")),
+    ("color_word", ("color", "word")),
+)
+
+
+def _parse_change_text(stream: TokenStream) -> ast.ChangeText:
+    """``Change the text of <subject> by replacing all instances of one <what>
+    with another.`` (Magical Hack, Sleight of Mind.)
+
+    One production for the pair: they are the same sentence with one word
+    changed, which is what makes the swapped vocabulary payload rather than part
+    of the effect's name. Every word between the subject and the mode is
+    required — "all instances of **one**" is what says a single word is
+    replaced everywhere, and a card replacing something else, or only the first
+    instance, would be a different effect wearing this one's sentence.
+    """
+    stream.expect_word("change")
+    stream.expect_word("the")
+    stream.expect_word("text")
+    stream.expect_word("of")
+    subject = parse_recipient(stream)
+    if subject is None:
+        raise stream.error("expected what to change the text of")
+    if not stream.accept_phrase("by", "replacing", "all", "instances", "of", "one"):
+        raise stream.error("expected 'by replacing all instances of one'")
+    for mode, phrase in _TEXT_CHANGE_MODES:
+        if stream.accept_phrase(*phrase):
+            if not stream.accept_phrase("with", "another"):
+                raise stream.error("expected 'with another'")
+            return ast.ChangeText(subject, mode)
+    raise stream.error("no text substitution replaces this")
+
+
 def _parse_zone(stream: TokenStream) -> ast.Zone:
     """A zone destination: ``your hand``, ``the battlefield``, ``its owner's hand``.
 
@@ -612,9 +741,15 @@ def _parse_destroy(stream: TokenStream) -> ast.Statement:
     keep "destroy all creatures" from being eaten by "destroy target".
     """
     stream.expect_word("destroy")
-    subject = parse_recipient(stream)
+    subject = _parse_that_object(stream) or parse_recipient(stream)
     if subject is None:
         raise stream.error("expected something to destroy")
+
+    # "…at end of combat" (CR 603.7). Only this one delay: a destruction
+    # deferred to the next end step is a different handler, so leaving those
+    # tokens unconsumed is what keeps Stone Giant and Nettling Imp failing
+    # loudly instead of being destroyed a step early.
+    delay = "end_of_combat" if stream.accept_phrase("at", "end", "of", "combat") else ""
 
     no_regen = False
     mark = stream.mark()
@@ -625,7 +760,32 @@ def _parse_destroy(stream: TokenStream) -> ast.Statement:
         no_regen = True
     else:
         stream.reset(mark)
-    return ast.Destroy(subject, no_regen=no_regen)
+    return ast.Destroy(subject, no_regen=no_regen, delay=delay)
+
+
+def _parse_that_object(stream: TokenStream) -> ast.TargetSpec | None:
+    """``that <card type>`` — the object a trigger already named.
+
+    Not a target: the trigger bound it when it fired, so nothing is chosen on
+    resolution. It gets its own quantifier rather than being read as an ordinary
+    noun phrase, so a lowering written for "target creature" can never receive
+    it — the two reach completely different handlers, and the ones that take a
+    bound object read it out of the trigger's context instead of the payload.
+
+    Deliberately local to the destroy production. The phrase turns up all over
+    the pool ("tap that creature", "that player discards"), and teaching the
+    shared noun parser to claim it would let every one of those lines lower
+    through a filter naming a card type nobody bound.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("that"):
+        return None
+    noun = stream.peek_word()
+    if noun is None or noun not in CARD_TYPES:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    return ast.TargetSpec("that", ast.ObjectFilter(card_types=(noun,)))
 
 
 def _parse_tap_untap(stream: TokenStream) -> ast.Statement:
@@ -1206,6 +1366,16 @@ def _parse_subject_verb(stream: TokenStream) -> ast.Statement:
         return _parse_tap_untap(stream)
     if stream.at_word("put"):
         return _parse_put_counter(stream)
+    if stream.at_word("remove"):
+        removal = _parse_remove_counter(stream)
+        if removal is not None:
+            return removal
+    if stream.at_word("change"):
+        return _parse_change_text(stream)
+    if stream.at_word("gain"):
+        control = _parse_gain_control(stream)
+        if control is not None:
+            return control
     if stream.at_word("create"):
         return _parse_create_token(stream)
     if stream.at_word("return"):
@@ -1230,6 +1400,12 @@ def _parse_subject_verb(stream: TokenStream) -> ast.Statement:
         if subject is None:
             raise stream.error("expected something to regenerate")
         return ast.Regenerate(subject)
+    if stream.at_word("exile"):
+        stream.advance()
+        subject = parse_recipient(stream)
+        if subject is None:
+            raise stream.error("expected something to exile")
+        return ast.Exile(subject)
     if stream.at_word("add"):
         return _parse_add_mana(stream)
     if stream.at_word("look"):

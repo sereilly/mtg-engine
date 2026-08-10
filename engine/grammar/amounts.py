@@ -90,6 +90,16 @@ def parse_equal_to(stream: TokenStream) -> ast.Amount | None:
     if stream.accept_phrase("damage", "dealt"):
         return ast.ThatMuch("damage_dealt")
 
+    # "equal to its power" — a characteristic of the object the *preceding*
+    # step acted on, not a value in the resolution scratchpad. Nothing records
+    # it, so `_PRODUCES` never names it and any lowering that reads a bare
+    # occurrence is refused for want of a producer; only a lowering that
+    # computes the power itself (the fused exile-and-gain-life handler) accepts
+    # it. That is the intended asymmetry: the words are recognized, and what
+    # they need is a handler rather than a parse.
+    if stream.accept_phrase("its", "power"):
+        return ast.ThatMuch("its_power")
+
     stream.reset(mark)
     return None
 

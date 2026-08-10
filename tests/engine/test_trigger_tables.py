@@ -3,7 +3,7 @@
 The tables in engine/oracle.py are matched with an unanchored ``re.match`` in
 listed order, so a pattern that is a strict prefix of a later pattern's
 canonical text silently swallows it (this happened to
-``creature_attacks_or_blocks`` and ``hypnotic_specter_deals_damage``). Each
+``creature_attacks_or_blocks`` and ``creature_deals_damage_to_opponent``). Each
 pattern gets a canonical example text here; every earlier pattern must fail to
 match every later pattern's example.
 """
@@ -35,8 +35,8 @@ EXAMPLE_TEXTS: dict[str, str] = {
     "creature_you_control_dies": "whenever a creature you control dies",
     "creature_deals_damage": "whenever this creature deals damage",
     "creature_deals_combat_damage": "whenever this creature deals combat damage to a player",
-    "cockatrice_blocks_or_blocked": "whenever this creature blocks or becomes blocked by a non-wall creature",
-    "hypnotic_specter_deals_damage": "whenever this creature deals damage to an opponent",
+    "creature_blocks_or_blocked_by_nonwall": "whenever this creature blocks or becomes blocked by a non-wall creature",
+    "creature_deals_damage_to_opponent": "whenever this creature deals damage to an opponent",
     "creature_attacks": "whenever this creature attacks",
     "creature_blocks": "whenever this creature blocks",
     "creature_becomes_blocked": "whenever this creature becomes blocked",
@@ -147,4 +147,4 @@ def test_hypnotic_specter_compiles_to_specific_kind():
     cards = {c.name: c for c in load_cards(LEA_PATH)}
     program = compile_card_oracle(cards["Hypnotic Specter"])
     kinds = [ta.condition.kind for ta in program.triggered_abilities]
-    assert kinds == ["hypnotic_specter_deals_damage"]
+    assert kinds == ["creature_deals_damage_to_opponent"]

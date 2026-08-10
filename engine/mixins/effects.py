@@ -67,7 +67,7 @@ class EffectsMixin:
                 attacker.effective_card,
                 condition_kinds={
                     "creature_deals_damage",
-                    "hypnotic_specter_deals_damage",
+                    "creature_deals_damage_to_opponent",
                     "deals_damage_to_player",
                     "creature_deals_combat_damage",
                 },
