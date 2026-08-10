@@ -2440,8 +2440,8 @@ def test_gaeas_liege_activation_targets_chosen_land(all_cards):
     )
 
     assert result.supported
-    assert p2.battlefield[0].metadata.get("land_type_override") is None
-    assert p2.battlefield[1].metadata.get("land_type_override") == "forest"
+    assert p2.battlefield[0].changed_land_types == ()
+    assert p2.battlefield[1].changed_land_types == ("forest",)
 
 
 def test_sirens_call_cannot_be_cast_during_your_own_turn(all_cards):

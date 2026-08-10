@@ -312,10 +312,10 @@ class TestContinuousEffectCleanup:
         game.activate_permanent_ability(
             0, "Gaea's Liege", permanent_index=0, target_player_index=1, target_permanent_index=0
         )
-        assert plains.metadata.get("land_type_override") == "forest"
+        assert plains.changed_land_types == ("forest",)
         p1.battlefield.remove(liege)
         game._permanent_to_graveyard(p1, liege)
-        assert plains.metadata.get("land_type_override") is None
+        assert plains.changed_land_types == ()
 
 
 # ---------------------------------------------------------------------------

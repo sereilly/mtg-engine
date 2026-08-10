@@ -324,13 +324,10 @@ class LegalityMixin:
         if ability_index is not None:
             usable = usable[ability_index:ability_index + 1] if 0 <= ability_index < len(usable) else []
         spec, spec_ability = _activation_spec(usable)
-        # A Sleight of Mind text change on this permanent retargets a color-word
-        # counter (Lifeforce black -> red), so the UI must offer the new color's
-        # spells rather than the printed one's.
-        if spec.get("stack_color_filter"):
-            spec["stack_color_filter"] = self._remap_color_filter(
-                source_permanent, spec["stack_color_filter"]
-            )
+        # A Sleight of Mind text change retargets a color-word counter
+        # (Lifeforce black -> red) with no step here: the spec was derived from
+        # the effective card, whose text layer 3 already rewrote, so the UI is
+        # offered the new colour's spells by construction.
         # The narrowing the *spec* does not carry, taken from the same ability's
         # instruction: Royal Assassin's tapped-only, King Suleiman's subtype,
         # Pyramids' "attached to a land". Reading it off the ability that

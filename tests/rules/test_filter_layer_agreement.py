@@ -12,6 +12,7 @@ types.
 import pytest
 
 from engine import Game, PlayerState
+from engine.land_types import change_land_type
 from engine.models import CardDefinition, Permanent
 
 
@@ -51,7 +52,7 @@ def test_613_1d_a_filter_reads_the_layer_4_subtype_not_the_printed_line():
     assert permanent_matches_filter(island, swamp_filter) is False
     assert permanent_matches_filter(island, island_filter) is True
 
-    island.metadata["land_type_override"] = "swamp"
+    change_land_type(island, "swamp", source="test")
 
     assert island.has_type("swamp") is True
     assert island.has_type("island") is False

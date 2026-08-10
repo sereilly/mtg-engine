@@ -1,18 +1,27 @@
-"""Guard: "what type is this?" has exactly one answer.
+"""Guard: "what type is this?" and "what does this say?" have one answer each.
 
-``land_type_override`` is how a land-type change is *recorded*. CR 613 layer 4
-turns it into a subtype replacement (CR 305.7), and ``Permanent.has_type`` is
-the only thing that applies that rule. Every other reader that went to the raw
-metadata — or to ``card.type_line`` — was a second opinion, and they did not
-agree:
+A land-type change is a CR 613 layer-4 effect (CR 305.7: setting a basic land
+subtype *replaces* the old ones); a word swap is a layer-3 text change. Both are
+now **recorded contributions** — ``engine/land_types.py`` and
+``engine/text_changes.py`` — collected by exactly one reader each, and asked
+through ``Permanent.has_type`` / ``Permanent.basic_land_types`` and
+``Permanent.effective_card``.
+
+Every other reader that went to the storage directly was a second opinion, and
+they did not agree:
 
   * legality matched *printed type OR override*, so a Mountain turned into an
     Island was a legal "target Mountain" and a legal "target Island" at once.
   * mass destruction matched by substring, which hid that the handler stripped
     a trailing "s" from the named type and turned "Plains" into "plain".
   * landwalk, animation and Magical Hack each had their own version.
+  * three consumers patched a Sleight of Mind colour remap onto an already
+    remapped value, applying layer 3 twice.
 
-Writers are fine — recording the effect is the point. This pins the reads.
+Writers go through the write API, which is why the raw keys are pinned too: a
+stamped value has to be un-stamped by whoever wrote it, and only ever
+*wholesale* — which is how one effect ending took another effect's type change
+with it.
 """
 
 import pathlib
@@ -20,50 +29,104 @@ import re
 
 import pytest
 
-ENGINE = pathlib.Path(__file__).resolve().parents[2] / "engine"
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+ENGINE = ROOT / "engine"
 
-# The one place that may consume the raw key: the layer-4 builder that turns it
-# into a continuous effect. Everything else must ask has_type.
-ALLOWED_READERS = {
-    "layer_bridge.py",
+# The write APIs. Only these may touch the storage keys.
+STORAGE_OWNERS = {
+    "land_types.py": ("land_type_effects", "derived_land_type_changes"),
+    "text_changes.py": ("text_change_effects",),
 }
 
-# Reading the key to undo an effect you yourself recorded is bookkeeping, not a
-# type question. Each entry names why.
-ACKNOWLEDGED = {
-    "card_hooks.py": "Gaea's Liege reverts only the override it set itself",
+# Who may consume the recorded contributions: one reader per channel, the one
+# that applies the layer. Everything else asks the accessor on Permanent.
+ACCESSOR_READERS = {
+    # layer 4 — engine/layer_bridge.py builds the CR 305.7 subtype replacement.
+    "land_type_changes": {"land_types.py", "layer_bridge.py"},
+    # layer 3 — Permanent.effective_card folds the text changes, once.
+    "apply_text_changes": {"text_changes.py", "models.py"},
 }
 
-_READ = re.compile(r'metadata\.get\(\s*"land_type_override"')
+# Reading a channel to undo an effect you yourself recorded used to need an
+# acknowledgement here (Gaea's Liege reverting its own Forest). It does not any
+# more: ``end_land_type_change(land, source=self)`` drops one contribution
+# without asking what the land currently is. Kept as a mechanism, with the
+# staleness check below, so the next one that appears has to justify itself.
+ACKNOWLEDGED: dict[str, str] = {}
+
+# The metadata key the whole family used to be stamped under. It is gone; this
+# is the ratchet that keeps it gone.
+_RETIRED_KEY = "land_type_override"
 
 
-def _raw_reads() -> list[tuple[str, int, str]]:
+def _engine_files() -> list[pathlib.Path]:
+    return sorted(ENGINE.rglob("*.py"))
+
+
+def _hits(pattern: re.Pattern, skip: set[str]) -> list[tuple[str, int, str]]:
     found = []
-    for path in sorted(ENGINE.rglob("*.py")):
-        if path.name in ALLOWED_READERS or path.name in ACKNOWLEDGED:
+    for path in _engine_files():
+        if path.name in skip:
             continue
         for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-            if _READ.search(line):
+            if pattern.search(line):
                 found.append((str(path.relative_to(ENGINE)), number, line.strip()))
     return found
 
 
-def test_land_type_is_read_through_the_layer_system():
-    offenders = _raw_reads()
+@pytest.mark.parametrize("owner,keys", sorted(STORAGE_OWNERS.items()))
+def test_the_storage_keys_are_touched_only_by_their_write_api(owner, keys):
+    """A raw ``metadata["land_type_effects"]`` poke outside the write API is a
+    contribution nothing else can end, or an ending nothing else recorded."""
+    pattern = re.compile("|".join(re.escape(f'"{key}"') for key in keys))
+    offenders = _hits(pattern, skip=set(STORAGE_OWNERS) | set(ACKNOWLEDGED))
     assert not offenders, (
-        "raw land_type_override read(s) outside the layer-4 builder — ask "
-        "permanent.has_type(...) so CR 305.7's replacement is applied in one "
-        "place:\n"
+        f"raw {'/'.join(keys)} access outside engine/{owner} — record the effect "
+        "through its write API so removal is dropping a contribution:\n"
         + "\n".join(f"  {f}:{n}: {t}" for f, n, t in offenders)
     )
 
 
-@pytest.mark.parametrize("name,reason", sorted(ACKNOWLEDGED.items()))
-def test_acknowledged_readers_still_exist(name, reason):
-    """An acknowledgement for a file that no longer reads the key is a stale
-    exemption, and a stale exemption is how the next raw read gets a free pass."""
-    path = next((p for p in ENGINE.rglob(name)), None)
-    assert path is not None, f"{name} no longer exists; drop its acknowledgement"
-    assert _READ.search(path.read_text(encoding="utf-8")), (
-        f"{name} no longer reads land_type_override ({reason}); drop its acknowledgement"
+@pytest.mark.parametrize("accessor,allowed", sorted(ACCESSOR_READERS.items()))
+def test_each_channel_has_exactly_one_consumer(accessor, allowed):
+    """The contributions are applied by the layer, in one place. A second
+    consumer is a second opinion about what the effects add up to — which is
+    what layer 4's audit found seven of, and layer 3's three."""
+    pattern = re.compile(rf"\b{re.escape(accessor)}\s*\(")
+    offenders = _hits(pattern, skip=allowed | set(ACKNOWLEDGED))
+    assert not offenders, (
+        f"{accessor}() called outside {sorted(allowed)} — ask permanent.has_type / "
+        "permanent.basic_land_types / permanent.effective_card so the layer is "
+        "applied in one place:\n"
+        + "\n".join(f"  {f}:{n}: {t}" for f, n, t in offenders)
     )
+
+
+def test_the_stamped_land_type_override_is_gone():
+    """The single-string channel every land-type effect used to share. Two
+    effects on one land could not both be recorded in it, and neither could be
+    ended without ending the other."""
+    offenders = _hits(re.compile(re.escape(_RETIRED_KEY)), skip=set())
+    assert not offenders, (
+        f"{_RETIRED_KEY} is back — a land-type change is a contribution with a "
+        "source and a timestamp (engine/land_types.py), not a stamped value:\n"
+        + "\n".join(f"  {f}:{n}: {t}" for f, n, t in offenders)
+    )
+
+
+def test_no_acknowledgement_has_gone_stale():
+    """An acknowledgement for a file that no longer needs it is a stale
+    exemption, and a stale exemption is how the next raw read gets a free pass.
+    Vacuously true while there are none — which is the state to keep."""
+    stale = []
+    for name, reason in sorted(ACKNOWLEDGED.items()):
+        path = next((p for p in ENGINE.rglob(name)), None)
+        if path is None:
+            stale.append(f"{name} no longer exists")
+            continue
+        text = path.read_text(encoding="utf-8")
+        keys = [key for keys in STORAGE_OWNERS.values() for key in keys]
+        wanted = [*(f'"{key}"' for key in keys), *ACCESSOR_READERS]
+        if not any(token in text for token in wanted):
+            stale.append(f"{name} no longer reads the storage ({reason})")
+    assert not stale, "drop the stale acknowledgement(s): " + "; ".join(stale)

@@ -115,7 +115,7 @@ class TestGaeasLiege:
         game.resolve_stack()
 
         assert result.supported
-        assert swamp.metadata.get("land_type_override") == "forest"
+        assert swamp.changed_land_types == ("forest",)
         # The bug: the count was stale until the next step. It must be current now
         # (two Forests: the original plus the swamp just converted).
         assert liege.effective_power == 2

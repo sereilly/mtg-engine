@@ -204,11 +204,11 @@ class TestLandTypeOverrideReverts:
         game = _game(p1, p2)
         result = game.cast_from_hand(0, "Evil Presence", target_player_index=0, target_permanent_index=0)
         assert result.supported
-        assert mountain.metadata.get("land_type_override") == "swamp"
+        assert mountain.changed_land_types == ("swamp",)
         aura = next(p for p in p1.battlefield if p.card.name == "Evil Presence")
         game._permanent_to_graveyard(p1, aura)
         p1.battlefield.remove(aura)
-        assert mountain.metadata.get("land_type_override") is None
+        assert mountain.changed_land_types == ()
         assert mountain.effective_produced_mana == ("R",)
 
     def test_phantasmal_terrain_override_reverts_when_aura_destroyed(self, cards):
@@ -220,11 +220,11 @@ class TestLandTypeOverrideReverts:
         assert result.supported
         assert game.pending_land_type_choice is not None
         assert game.confirm_land_type(0, "island") is True
-        assert mountain.metadata.get("land_type_override") == "island"
+        assert mountain.changed_land_types == ("island",)
         aura = next(p for p in p1.battlefield if p.card.name == "Phantasmal Terrain")
         game._permanent_to_graveyard(p1, aura)
         p1.battlefield.remove(aura)
-        assert mountain.metadata.get("land_type_override") is None
+        assert mountain.changed_land_types == ()
 
 
 # ---------------------------------------------------------------------------

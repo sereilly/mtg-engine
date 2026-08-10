@@ -42,7 +42,7 @@ def test_gaeas_liege_activation_turns_land_into_forest(all_cards):
     result = game.activate_permanent_ability(0, "Gaea's Liege", target_player_index=1)
 
     assert result.supported
-    assert p2.battlefield[0].metadata.get("land_type_override") == "forest"
+    assert p2.battlefield[0].changed_land_types == ("forest",)
 
 
 def test_badlands_produces_black_or_red_mana(all_cards):

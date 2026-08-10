@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import dataclasses
-import re
 from dataclasses import dataclass, field
 from typing import Any
 
 from . import shields as _shields
+# Safe at module level: text_changes imports only the layer system's timestamp
+# counter, nothing from here. effective_card is read on nearly every rules
+# query, so this is not a function-local import.
+from .text_changes import apply_text_changes, has_text_changes, text_changes
 
 # Basic land subtype → the mana symbol it taps for. Used when a land's type has
 # been overridden (e.g. Evil Presence makes a land a Swamp).
@@ -142,20 +145,6 @@ class CardDefinition:
         return self.printings[0] if self.printings else self.set_code
 
 
-# CR 613 layer 3 — text-changing effects.
-#
-# ``color_word_remap`` stores symbol -> symbol ({"B": "R"}); rewriting the rules
-# text needs the words. The result is cached per (card, remap) because
-# ``effective_card`` is read on nearly every rules query and building a
-# CardDefinition each time would be a per-call allocation on a hot path — and
-# because ``compile_card_oracle``'s cache is keyed on the text, so a stable
-# object keeps a remapped card compiling exactly once.
-_SYMBOL_TO_COLOR_WORD: dict[str, str] = {
-    "W": "white", "U": "blue", "B": "black", "R": "red", "G": "green",
-}
-_REMAPPED_CARDS: dict[tuple, "CardDefinition"] = {}
-
-
 def _with_granted_abilities(
     card: "CardDefinition", granted: tuple[str, ...]
 ) -> "CardDefinition":
@@ -170,40 +159,6 @@ def _with_granted_abilities(
 
 
 _GRANTED_CARDS: dict[tuple, "CardDefinition"] = {}
-
-
-def _with_color_words_remapped(card: "CardDefinition", remap: dict) -> "CardDefinition":
-    """*card* with its colour words replaced per *remap* (CR 612.1)."""
-    key = (id(card), tuple(sorted(remap.items())))
-    cached = _REMAPPED_CARDS.get(key)
-    if cached is not None:
-        return cached
-
-    pairs = [
-        (_SYMBOL_TO_COLOR_WORD[old], _SYMBOL_TO_COLOR_WORD[new])
-        for old, new in remap.items()
-        if old in _SYMBOL_TO_COLOR_WORD and new in _SYMBOL_TO_COLOR_WORD
-    ]
-    text = card.oracle_text
-    if pairs:
-        # One pass over the text with a single alternation, so a remap of
-        # black -> red alongside red -> black swaps rather than collapsing.
-        pattern = re.compile(
-            r"\b(" + "|".join(re.escape(old) for old, _ in pairs) + r")\b",
-            re.IGNORECASE,
-        )
-        replacements = {old: new for old, new in pairs}
-
-        def _sub(match: "re.Match") -> str:
-            word = match.group(0)
-            replacement = replacements[word.lower()]
-            return replacement.capitalize() if word[:1].isupper() else replacement
-
-        text = pattern.sub(_sub, text)
-
-    remapped = dataclasses.replace(card, oracle_text=text)
-    _REMAPPED_CARDS[key] = remapped
-    return remapped
 
 
 @dataclass
@@ -276,16 +231,20 @@ class Permanent:
         serialization must read this, not ``card``.
 
         CR 613 layer 3 is applied here: a text-changing effect (Sleight of Mind
-        replacing a colour word) rewrites the rules text *before* anything reads
-        it. Applying it at each reader instead is how Magnetic Mountain went on
-        blocking blue creatures and Gloom went on taxing white spells after
-        their text said red — the remap reached only the readers that had been
-        taught about it.
+        replacing a colour word, Magical Hack replacing a basic land type)
+        rewrites the rules text, the type line and the keywords parsed off them
+        *before* anything reads any of it. Applying it at each reader instead is
+        how Magnetic Mountain went on blocking blue creatures and Gloom went on
+        taxing white spells after their text said red — the remap reached only
+        the readers that had been taught about it.
+
+        The changes are recorded, ordered and applied by
+        ``engine/text_changes.py``; two of them do not commute, so the fold is
+        oldest-first rather than a merged substitution table.
         """
         base = self.metadata.get("copied_card") or self.card
-        remap = self.metadata.get("color_word_remap")
-        if remap:
-            base = _with_color_words_remapped(base, remap)
+        if has_text_changes(self):
+            base = apply_text_changes(base, text_changes(self))
 
         # An ability granted by a board-wide static (Energy Flux) is appended to
         # the effective text, so the compiler produces it like any printed
@@ -343,6 +302,21 @@ class Permanent:
 
         subtypes = computed_types(self)[1]
         return tuple(land_type for land_type in _LAND_TYPE_MANA if land_type in subtypes)
+
+    @property
+    def changed_land_types(self) -> tuple[str, ...]:
+        """The basic land types this land has *instead of* its printed ones.
+
+        Empty when nothing has changed them. Derived by comparing layer 4's
+        answer with the physical card, so it covers a layer-4 subtype
+        replacement (Evil Presence, a mire counter) and a layer-3 text change
+        rewriting the type line (Magical Hack) without either having to
+        announce itself. The UI's "this is a Swamp now" badge reads it.
+        """
+        current = self.basic_land_types
+        if not current or set(current) == _printed_basic_types(self.card.type_line):
+            return ()
+        return current
 
     @property
     def basic_land_mana(self) -> tuple[str, ...]:

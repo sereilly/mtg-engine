@@ -23,6 +23,11 @@ from ..land_animation import (
     LandAnimation,
     land_animation_from_payload,
 )
+from ..land_types import (
+    add_derived_land_type,
+    clear_derived_land_types,
+    static_source_timestamp,
+)
 from ..layer_bridge import QUALIFIED_BUFFS
 from ..lord_buffs import (
     GRANTED_ACTIVATED_ABILITIES,
@@ -369,34 +374,45 @@ class PermanentStateMixin:
 
     def _refresh_static_land_types(self, all_permanents: list[Permanent]) -> None:
         """Apply static basic-land-type changes (e.g. Conversion: "All Mountains
-        are Plains."). Recomputed every call so a land reverts to its printed type
-        the moment the source enchantment leaves the battlefield (CR 611.3a/b).
+        are Plains."). Recomputed every call so a land reverts the moment the
+        source enchantment leaves the battlefield (CR 611.3a/b).
 
-        The applied override is tagged with ``static_land_type_source`` so it can be
-        reverted without clobbering a one-shot override from another effect (e.g.
-        Phantasmal Terrain), which leaves that tag unset.
+        The *derived* land-type channel, cleared and rebuilt here together — a
+        static's contribution is not recorded, because CR 611.3a means this runs
+        constantly and a recorded one would accumulate an entry per pass. The
+        recorded channel (an Aura's, a mire counter's) is untouched, so a
+        Conversion leaving can no longer take a Phantasmal Terrain's type with
+        it; the two are separate contributions and layer 4 sorts them by
+        timestamp.
         """
-        changes: list[tuple[str, str]] = []
+        changes: list[tuple[str, str, Permanent]] = []
         for perm in all_permanents:
             for instr in compile_card_oracle(perm.effective_card).instructions:
                 if instr.kind == "static_land_type_change":
                     changes.append(
-                        (instr.payload.get("from_type", ""), instr.payload.get("to_type", ""))
+                        (
+                            instr.payload.get("from_type", ""),
+                            instr.payload.get("to_type", ""),
+                            perm,
+                        )
                     )
         for perm in all_permanents:
+            clear_derived_land_types(perm)
             if perm.card.primary_type != "land":
                 continue
-            new_type = None
-            for from_type, to_type in changes:
-                if from_type and from_type in perm.card.type_line.lower():
-                    new_type = to_type
+            # The permanent's *effective* type line: layer 3 runs before layer 4,
+            # so a land Magical Hack has rewritten into a Mountain is one of the
+            # "All Mountains" Conversion means.
+            printed = perm.effective_card.type_line.lower()
+            for from_type, to_type, source in changes:
+                if from_type and from_type in printed:
+                    add_derived_land_type(
+                        perm,
+                        to_type,
+                        timestamp=static_source_timestamp(source),
+                        label=source.card.name,
+                    )
                     break
-            if new_type:
-                perm.metadata["land_type_override"] = new_type
-                perm.metadata["static_land_type_source"] = True
-            elif perm.metadata.get("static_land_type_source"):
-                perm.metadata.pop("land_type_override", None)
-                perm.metadata.pop("static_land_type_source", None)
 
     def _refresh_aspect_of_wolf(self) -> None:
         """Aspect of Wolf: enchanted creature gets +X/+Y where X/Y are half the
@@ -718,11 +734,11 @@ class PermanentStateMixin:
                 symbol = _COLOR_WORD_TO_SYMBOL.get(key[len("protection_from_"):])
                 if symbol:
                     colors.add(symbol)
-        # Sleight of Mind: a color-word remap on this permanent replaces the color
-        # words in its text, so "protection from blue" becomes "protection from red".
-        remap = permanent.metadata.get("color_word_remap")
-        if remap:
-            colors = {remap.get(c, c) for c in colors}
+        # No Sleight of Mind step here: the clause above was read off
+        # ``effective_card``, whose text layer 3 has already rewritten, so
+        # "protection from blue" already reads "protection from red". Remapping
+        # again applied the change twice — invisible for the one-effect case
+        # only because the second application had nothing left to match.
         return colors
 
     def _is_protected_from(self, victim: Permanent, source: Permanent) -> bool:
@@ -809,22 +825,11 @@ class PermanentStateMixin:
         def _eff_card(perm: Permanent):
             return perm.effective_card
 
-        # A Magical Hack land-word swap on the lord itself rewrites the walks its
-        # text grants (mountainwalk -> islandwalk on Goblin King makes other
-        # Goblins islandwalkers). It is board state rather than printed text, so
-        # it is applied to what the table derived rather than inside it.
-        def _remap_keywords(source_perm: Permanent, keywords: tuple[str, ...]) -> list[str]:
-            remap = source_perm.metadata.get("land_word_remap") or {}
-            if not remap:
-                return list(keywords)
-            remapped = []
-            for keyword in keywords:
-                if keyword.endswith("walk"):
-                    stem = keyword[: -len("walk")]
-                    remapped.append(f"{remap.get(stem, stem)}walk")
-                else:
-                    remapped.append(keyword)
-            return remapped
+        # A Magical Hack land-word swap on the lord itself needs nothing here.
+        # It rewrites the walk in the lord's *text* (mountainwalk ->
+        # islandwalk on Goblin King), so the buff this loop derives is compiled
+        # from the changed line and already says islandwalk. Patching the
+        # derived keywords a second time was the layer-3-at-each-reader shape.
 
         def _matches(target_perm: Permanent, source_perm: Permanent, buff: LordBuff) -> bool:
             """Every field of the derived filter, checked through the CR 613
@@ -859,7 +864,7 @@ class PermanentStateMixin:
                     scope = (
                         [ctrl_player] if buff.filter.controller == "you" else self.players
                     )
-                    keywords = _remap_keywords(source_perm, buff.keywords)
+                    keywords = list(buff.keywords)
                     flag = (
                         GRANTED_ACTIVATED_ABILITIES[buff.granted_ability]
                         if buff.granted_ability

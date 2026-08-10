@@ -16,6 +16,7 @@ from engine.ai_policy import (
 from engine import Game, PlayerState, classify_card, load_cards
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle, lex_oracle_text, parse_activated_ability_cost
+from engine.land_types import change_land_type
 import json
 from web.app import app, store
 from tests.helpers import (
@@ -1057,7 +1058,7 @@ def test_evil_presence_makes_land_a_swamp(all_cards):
 
     assert result.supported
     land_perm = p2.battlefield[0]
-    assert land_perm.metadata.get("land_type_override") == "swamp"
+    assert land_perm.changed_land_types == ("swamp",)
 
 
 def test_farmstead_grants_life_at_upkeep_when_paid(all_cards):
@@ -1423,7 +1424,7 @@ def test_lifetap_reads_the_current_forest_type_not_the_printed_one(all_cards):
     longer does."""
     lifetap = _get(all_cards, "Lifetap")
     plains = Permanent(card=_get(all_cards, "Plains"))
-    plains.metadata["land_type_override"] = "forest"
+    change_land_type(plains, "forest", source="test")
 
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=lifetap)], life=20)
     p2 = PlayerState(name="P2", battlefield=[plains], life=20)
@@ -1585,10 +1586,10 @@ def test_phantasmal_terrain_overrides_enchanted_land_type(all_cards):
     assert result.supported
     # The land type is not changed until the controller finishes the basic-land-type
     # choice (the spell does not resolve the change before the prompt is answered).
-    assert p2.battlefield[0].metadata.get("land_type_override") is None
+    assert p2.battlefield[0].changed_land_types == ()
     assert game.pending_land_type_choice is not None
     assert game.confirm_land_type(0, "swamp") is True
-    assert p2.battlefield[0].metadata.get("land_type_override") == "swamp"
+    assert p2.battlefield[0].changed_land_types == ("swamp",)
 
 
 def test_power_leak_deals_upkeep_damage_to_enchanted_enchantment_controller(all_cards):

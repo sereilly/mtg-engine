@@ -11,6 +11,7 @@ from ..auras import attach_aura, aura_animates_artifact, aura_keyword_grants
 from ..oracle import OracleInstruction, _COLOR_WORD_TO_SYMBOL, compile_card_oracle
 from ..keywords import grant_keyword, remove_keyword
 from ..land_animation import LAND_ANIMATION_KIND
+from ..land_types import change_land_type
 from ..lord_buffs import LORD_BUFF_KIND
 
 
@@ -358,34 +359,31 @@ class OracleInstructionsMixin:
                 self.log.append(f"{aura_permanent.card.name} found no land target")
                 return
             attach_aura(aura_permanent, target_land)
-            # Record every metadata key this Aura grants so _remove_aura_effects
-            # undoes it when the Aura leaves (CR 611.3) — e.g. Phantasmal Terrain /
-            # Evil Presence's land-type change reverts to the printed type.
-            granted_meta: list[str] = []
-            # Consecrate Land's indestructible and can't-be-enchanted both
-            # derive from the Aura now (engine/auras.py), so neither is stamped
-            # and neither needs undoing when it leaves.
+            # Nothing is stamped on the land any more, so there is no
+            # `aura_granted_meta` to record here. The land-type change is a
+            # layer-4 contribution keyed on this Aura (engine/land_types.py) and
+            # _remove_aura_effects ends it by source, leaving whatever *else*
+            # still says the land is a type; Consecrate Land's indestructible
+            # and can't-be-enchanted both derive from the Aura (engine/auras.py).
             if "enchanted land is a swamp" in text:
-                target_land.metadata["land_type_override"] = "swamp"
-                # The type change ends with the Aura, even though the override may
-                # be (re)set later for the chosen-type variant (confirm_land_type).
-                granted_meta.append("land_type_override")
+                change_land_type(
+                    target_land, "swamp",
+                    source=aura_permanent, label=aura_permanent.card.name,
+                )
             elif "enchanted land is the chosen type" in text:
-                granted_meta.append("land_type_override")
                 # Phantasmal Terrain: "As this Aura enters, choose a basic land type."
                 # The land's type is NOT changed yet — we arm a pending choice and the
                 # controller picks the type (a human via the prompt, an AI via the
-                # auto-resolver). Only then is land_type_override set (confirm_land_type),
-                # so the spell never visibly "resolves" the land change before the
-                # player finishes the choice.
+                # auto-resolver). Only then is the contribution recorded
+                # (confirm_land_type), so the spell never visibly "resolves" the
+                # land change before the player finishes the choice.
                 self.arm_pending_choice(
                     "land_type_choice", caster_index,
                     card_name=aura_permanent.card.name,
                     land_owner_index=target_idx,
                     land_index=target_player.battlefield.index(target_land),
+                    _aura=aura_permanent,
                 )
-            if granted_meta:
-                aura_permanent.metadata["aura_granted_meta"] = granted_meta
             self.log.append(f"{aura_permanent.card.name} enchants {target_land.card.name}")
         elif text.startswith("enchant wall"):
             target_wall = None

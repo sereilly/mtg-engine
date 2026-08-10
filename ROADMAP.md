@@ -983,7 +983,10 @@ substring check would match. It uses the printed cards now.
 read outside the layer-4 builder fails, with `card_hooks.py` acknowledged by
 name (Gaea's Liege reverting the override it set itself is bookkeeping, not a
 type question). A second test fails if that acknowledgement ever goes stale.
-Verified by reintroducing the bypass.
+Verified by reintroducing the bypass. *(That acknowledgement is gone, and the
+staleness test is what removed it — see "Layers 3 and 4 have write APIs" below.
+It was not only bookkeeping: reading the type back to decide whether to clear it
+was wrong on any land something newer had changed.)*
 
 **Layers 4, 5, 6 and 7 are now all read through the layer system.** What remains
 is layer 1 (copies), layer 2 (control, which the earlier audit established is
@@ -1011,6 +1014,12 @@ Two details the implementation has to get right, both pinned:
   alternation.
 - **Whole words only.** Without a word boundary, "red" rewrites the "red" inside
   "requi**red**" and "conside**red**", and reminder text is full of both.
+
+*The first is superseded in part — see "Layers 3 and 4 have write APIs, and both
+needed timestamps" below.* One pass over a single alternation is right for the
+substitutions **within one effect**, and is still pinned there. Storing *two*
+Sleights of Mind in one merged table was the mistake: CR 613.7 applies them in
+timestamp order, and doing so gives neither of the answers a merged table can.
 
 The no-remap path returns the card object itself, unchanged and unallocated,
 because `effective_card` is read on nearly every rules query.
@@ -2883,8 +2892,8 @@ were caught by existing tests rather than by inspection.
 | --- | --- |
 | 1 copy | constructors only — the engine models copies with metadata overrides |
 | 2 control | constructors + tests; storage not wired |
-| 3 text | constructors only |
-| 4 type | **live** |
+| 3 text | **live** — `engine/text_changes.py`, applied by `Permanent.effective_card` |
+| 4 type | **live** — `engine/land_types.py` records the CR 305.7 replacements |
 | 5 colour | **live** |
 | 6 abilities | **live** |
 | 7 P/T | **live** |
@@ -2926,17 +2935,85 @@ occurrences). `tests/rules/test_layers.py` pins the current
 control-as-zone-membership model so the day it changes is deliberate rather
 than incidental.
 
-**Still open:** layer 2 storage (behind the 129 iteration sites above) and
-layer 3 (text-changing) storage.
-Twenty `land_type_override` references remain, but most are *writes* (the
-storage layer 4 reads) or spots that need the override's raw value rather than a
-yes/no answer — the UI payload, Magical Hack's text remap, Gaea's Liege's
-revert. Those want layer 3 and a proper write API, not another `has_type` swap.
+**Still open:** layer 2 storage (behind the 129 iteration sites above).
 
 And layer 1, the deep one: modelling copies as real copiable values instead of
 stamped `absolute_power`/`copied_colors` overrides. That is what would let
 `effective_card` disappear, and it is the source of the two seeding subtleties
 this phase already tripped over.
+
+### Layers 3 and 4 have write APIs, and both needed timestamps
+
+`land_type_override` was the last stamped characteristic: one string on the
+land, written by six different effects and un-written by five of them. Each
+writer had to remember what it stamped, and could only ever un-stamp
+*everything* — so an Aura leaving took a mire counter's Swamp with it, and a
+second effect on the same land silently overwrote the first with no way to get
+it back.
+
+It is two write APIs now, following `engine/pt.py` and `engine/keywords.py`:
+
+- **`engine/land_types.py`** (layer 4). `change_land_type(land, type,
+  source=…)` records a contribution; `end_land_type_change(land, source=…)`
+  drops that one. `layer_bridge` turns each into its own CR 305.7 subtype
+  replacement carrying its own timestamp, and a second *derived* channel holds
+  Conversion's static — cleared and rebuilt each recompute, the split
+  `engine/keywords.py` has for the same reason.
+- **`engine/text_changes.py`** (layer 3). One entry per text-changing effect,
+  applied oldest-first by `Permanent.effective_card` over the rules text, the
+  type line and the parsed keywords.
+
+**Both layers needed the timestamps to be real, and neither commutes** — which
+is the opposite of what phase 6 found for Auras, where every effect sharing
+`_DERIVED_TIMESTAMP = 0` was invisible only because addition commutes. CR 305.7
+makes each land-type change a *replacement*, so the newest wins and the reverse
+order gives the other answer; a text change rewrites the text the previous one
+produced, so black→red then red→black leaves every one of those words reading
+**black**, not swapped. `land_type_changes()` deliberately returns storage
+order rather than sorting, so the layer engine's timestamps are what order them
+and a wrong stamp is a failing test rather than a hidden no-op.
+
+**Three bugs came out of it.**
+
+- **Merging two Sleights of Mind into one substitution table produced an answer
+  neither order gives.** `{"B": "R"}` plus `{"R": "B"}` in one dict, applied in
+  a single pass, is a *swap*; CR 613.7 says apply them in order, which leaves
+  both words black. The single-pass alternation is still exactly right for the
+  substitutions *within* one effect — that is what stops a swap collapsing —
+  and it is now the primitive (`one_pass`) that the per-effect fold sits on top
+  of, rather than the whole model.
+- **Layer 3 was being applied twice, in three places.** `_remap_color_filter`,
+  `_protection_colors`' trailing remap and `_recalculate_lord_buffs`'
+  `_remap_keywords` each patched a value that had *already* been read off
+  `effective_card`. With one Sleight of Mind the second application had nothing
+  left to match, so it was invisible; with two it compounded. All three are
+  gone — the previous pass had named `_remap_color_filter` as the shape
+  `effective_card` replaces and then left it in place.
+- **Magical Hack was modelled in the wrong layer, and as two different
+  effects.** "Replacing all instances of one basic land type with another" is a
+  text change (CR 612.1 covers the type line), not a subtype replacement. It
+  was a layer-4 stamp on a land and a separate word-remap plus a
+  `has_<new>walk`/`lost_<old>walk` flag pair on a creature, so the two branches
+  could disagree and the flags had to be kept in step by hand. It is one
+  `change_land_word` call now; the keyword follows because the keyword is
+  parsed off the changed text.
+
+**The Gaea's Liege acknowledgement in `tests/engine/test_layer_reads.py` is
+gone.** It existed because the revert read the stored type back and cleared it
+if it still said "forest" — bookkeeping, but also wrong: on a land something
+newer had changed, the Liege's effect went on applying invisibly, and on an
+Evil Presence Swamp the clear reverted the land to its *printed* Mountain.
+Dropping a contribution by source asks nothing about the current type, so the
+exemption had nothing left to cover. The guard's staleness test is what caught
+it, exactly as designed; the guard itself now pins the new invariant (nothing
+outside the two write APIs touches the storage, and each channel has exactly
+one consumer) and every part of it was verified by injecting the bug it catches.
+
+One acknowledged limitation, pinned by a test: **"Plains" is spelled the same
+singular and plural**, so a text change naming it is read as singular — the
+reading a type line uses, and the one that changes what the land is. "All
+Plains are …" would come out a letter short. No permanent in this pool writes
+that phrase; `singular_land_type` guards the same trap from the other side.
 
 ## Phase 6 (original scope) — CR 613 layer system
 

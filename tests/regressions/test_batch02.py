@@ -174,7 +174,7 @@ class TestEvilPresence:
         )
 
         assert result.supported
-        assert forest.metadata.get("land_type_override") == "swamp"
+        assert forest.changed_land_types == ("swamp",)
         # The land is now a Swamp: it produces black, not green.
         assert forest.effective_produced_mana == ("B",)
         game.tap_land_for_mana(1, "Forest", chosen_color="G", permanent_index=0)

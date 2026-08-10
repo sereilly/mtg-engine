@@ -124,7 +124,7 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], str], ...] = (
     ),
     (
         re.compile(r"^enchanted land is (?:a [a-z]+|the chosen type)$"),
-        "Evil Presence / Phantasmal Terrain — land_type_override (layer 4)",
+        "Evil Presence / Phantasmal Terrain — land-type change (layer 4)",
     ),
     (
         re.compile(r"^as this aura enters, choose a basic land type$"),

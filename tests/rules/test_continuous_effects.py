@@ -11,6 +11,7 @@ import pytest
 from engine import Game, PlayerState
 from engine.models import CardDefinition, Permanent
 from engine.keywords import grant_keyword, remove_keyword
+from engine.text_changes import change_land_word
 from dataclasses import replace
 
 
@@ -755,36 +756,46 @@ def test_613_9_removal_beats_a_printed_keyword():
 @pytest.mark.cr("612.1")
 def test_612_1_text_changing_effect_modifies_rules_text():
     """612.1: A text-changing effect modifies the text of an object.
-    This engine-level test verifies that the text_modified metadata flag can be
-    set to indicate a text-changing effect has been applied.
+
+    The keyword follows because it is *parsed off the changed text*, not because
+    something remembered to pair a "gained islandwalk" flag with a "lost
+    forestwalk" one. That pairing was the old model, and two flags that have to
+    agree is one flag too many.
     """
     creature = _mk_creature("Test Creature", 2, 2, oracle_text="Forestwalk")
     perm = Permanent(card=creature)
+    assert perm.has_keyword("forestwalk") is True
 
-    # A text-changing effect changes "Forest" to "Island" (Forestwalk → Islandwalk)
-    perm.metadata["text_modified"] = True
-    perm.metadata["has_islandwalk"] = True  # Result of the text change
+    change_land_word(perm, "forest", "island")
 
-    assert perm.metadata.get("text_modified") is True
-    assert perm.metadata.get("has_islandwalk") is True
+    assert perm.effective_card.oracle_text == "Islandwalk"
+    assert perm.has_keyword("islandwalk") is True
+    assert perm.has_keyword("forestwalk") is False
 
 
 @pytest.mark.cr("612.3")
 def test_612_3_granted_abilities_not_modified_by_text_changing_effects():
     """612.3: Abilities granted to an object by other effects are not modified
     by text-changing effects that affect that object. Only printed text changes.
+
+    Structural rather than incidental: the grant is a layer-6 contribution and
+    the text change is layer 3, so the change is applied to the card *before*
+    the grant is ever considered and has nothing of the grant's to reach.
     """
-    creature = _mk_creature("Test Creature", 2, 2)
+    creature = _mk_creature("Test Creature", 2, 2, oracle_text="Forestwalk")
     perm = Permanent(card=creature)
 
-    # Flying is granted by an aura effect (not printed)
-    grant_keyword(perm, "flying")
+    # Forestwalk is granted rather than printed on this one.
+    granted = Permanent(card=_mk_creature("Plain Creature", 2, 2))
+    grant_keyword(granted, "forestwalk")
 
-    # A text-changing effect is applied (changes printed text)
-    perm.metadata["text_modified"] = True
+    change_land_word(perm, "forest", "island")
+    change_land_word(granted, "forest", "island")
 
-    # The granted flying should still be present (not removed by text change)
-    assert perm.has_keyword("flying") is True
+    # The printed one moved; the granted one did not.
+    assert perm.has_keyword("islandwalk") is True
+    assert granted.has_keyword("forestwalk") is True
+    assert granted.has_keyword("islandwalk") is False
 
 
 # ---------------------------------------------------------------------------

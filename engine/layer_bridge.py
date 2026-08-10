@@ -39,6 +39,7 @@ from .continuous import (
     switch_pt,
 )
 from .keywords import ability_effects, derived_grants
+from .land_types import land_type_changes
 from .lord_buffs import QUALIFIER_FIELDS
 
 if TYPE_CHECKING:
@@ -400,15 +401,20 @@ def collect_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
                 add_types(only, card_types=["creature"], timestamp=0, label=static.name)
             )
 
-    override = meta.get("land_type_override")
-    if override:
+    # CR 305.7: setting a land's subtype *replaces* its old ones, so two of
+    # these on one land do not commute — the newer contribution is what the land
+    # is. They are collected rather than merged, and each carries the timestamp
+    # of the effect that recorded it, so 613.7 decides that and not the order the
+    # writes happened to run in (engine/land_types.py).
+    for change in land_type_changes(perm):
+        land_type = str(change["land_type"])
         effects.append(
             add_types(
                 only,
-                subtypes=[str(override).lower()],
+                subtypes=[land_type],
                 replace_subtypes=True,
-                timestamp=0,
-                label=f"is a {override}",
+                timestamp=int(change.get("timestamp", 0)),
+                label=f"is a {land_type}",
             )
         )
 

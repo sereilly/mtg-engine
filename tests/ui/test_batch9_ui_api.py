@@ -110,7 +110,7 @@ def test_phantasmal_terrain_prompts_controller_for_land_type():
         json={"seat": 0, "action": "land_type_confirm", "land_type": "mountain"},
     )
     assert resp.status_code == 200
-    assert land.metadata.get("land_type_override") == "mountain"
+    assert land.changed_land_types == ("mountain",)
     assert game.pending_land_type_choice is None
 
 

@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ..land_types import MIRE_COUNTER, change_land_type
 from ..models import CardDefinition, Permanent
 from ..oracle_types import OracleInstruction
 from ..pt import set_base_pt
+from ..text_changes import LAND_TYPE_WORDS, change_color_word, change_land_word
 from ..tokens import make_token_card
 from ._common import flip_coin, resolve_amount, resolve_target_permanent
 from .registry import effect_handler
@@ -166,15 +168,10 @@ def balance_resources(game: Game, instruction: OracleInstruction, context: Oracl
     return True, "pending_balance"
 
 
-# Mana symbol → the basic land type Magical Hack swaps a land to (CR 305.7). The
-# chosen replacement type is passed through as the cast's "new color".
-_SYMBOL_TO_LAND_TYPE = {
-    "W": "plains",
-    "U": "island",
-    "B": "swamp",
-    "R": "mountain",
-    "G": "forest",
-}
+# Mana symbol → the basic land type Magical Hack names. The chosen replacement
+# type is passed through as the cast's "new color"; the mapping itself lives
+# with the text-change API, which is what has to know the words.
+_SYMBOL_TO_LAND_TYPE = LAND_TYPE_WORDS
 
 
 @effect_handler("mark_text_modified")
@@ -195,60 +192,53 @@ def mark_text_modified(game: Game, instruction: OracleInstruction, context: Orac
     new_symbol = (context.choices.get("new_color") or "").upper()
     old_symbol = (context.choices.get("old_color") or "").upper()
 
-    # Magical Hack: replace one basic land type with another. On a land this swaps
-    # the land type (and the mana it makes); on a creature it remaps that landwalk
-    # (swampwalk → islandwalk). It does NOT change the permanent's color.
+    # Magical Hack: "replacing all instances of one basic land type with
+    # another". One text change (CR 612.1 / 613 layer 3), whatever the permanent
+    # is: on a land the word is in the type line, so the land's subtypes and the
+    # mana ability CR 305.6 gives it change; on a creature it is in the rules
+    # text, so "swampwalk" becomes "islandwalk" — including inside a lord's
+    # grant line. It does NOT change the permanent's color.
     if mode == "land_type":
         new_type = _SYMBOL_TO_LAND_TYPE.get(new_symbol)
         old_type = _SYMBOL_TO_LAND_TYPE.get(old_symbol)
-        if target_perm is not None and new_type:
-            if target_perm.card.primary_type == "land":
-                # The replaced word must actually appear in the land's current
-                # type (its override, if one is already in effect, else the
-                # printed type line) — replacing an absent word is a no-op.
-                # The land's *current* type, which after an earlier change is
-                # the new one only (CR 305.7).
-                if old_type is not None and not target_perm.has_type(old_type):
-                    game.log.append(
-                        f"{card.name} had no effect: {target_perm.card.name} has no {old_type.title()} land type"
-                    )
-                    return True, "resolved"
-                target_perm.metadata["land_type_override"] = new_type
-                game.log.append(f"{card.name} changed {target_perm.card.name} into a {new_type.title()}")
-            elif target_perm.is_creature:
-                # Magical Hack rewrites existing words: the old land type must
-                # actually appear in the creature's printed text. That covers a
-                # printed landwalk (Bog Wraith's "Swampwalk") AND a land word
-                # inside a granted ability (Goblin King's "Other Goblins get
-                # +1/+1 and have mountainwalk.") — but never grants islandwalk
-                # from nothing (White Knight).
-                printed_text = (target_perm.card.oracle_text or "").lower()
-                if old_type and old_type in printed_text:
-                    # Word-level remap: read wherever the engine interprets this
-                    # card's text (lord walk grants) and shown by the UI as a
-                    # struck-out/replacement text edit.
-                    remap = target_perm.metadata.setdefault("land_word_remap", {})
-                    remap[old_type] = new_type
-                    # A landwalk the creature itself has also swaps as a keyword.
-                    if game._has_keyword(target_perm, f"{old_type}walk"):
-                        target_perm.metadata[f"has_{new_type}walk"] = True
-                        target_perm.metadata[f"lost_{old_type}walk"] = True
-                    game.log.append(f"{card.name} changed {old_type} to {new_type} in {target_perm.card.name}'s text")
-                    game._recalculate_lord_buffs()
-                else:
-                    game.log.append(
-                        f"{card.name} had no effect: {target_perm.card.name} has no"
-                        f" {old_type.title() if old_type else 'matching'} land type in its text"
-                    )
+        if old_type is None and target_perm is not None:
+            # A cast that named only the replacement (a headless or AI cast, and
+            # every call site before the "from" word existed): on a land the
+            # word being replaced can only be the type it currently has.
+            current = target_perm.basic_land_types
+            old_type = current[0] if len(current) == 1 else None
+        if target_perm is not None and new_type and old_type:
+            # Magical Hack rewrites existing words: the old land type must
+            # actually be written somewhere on the permanent. That covers a
+            # printed type line ("Basic Land — Mountain"), a printed landwalk
+            # (Bog Wraith's "Swampwalk") and a land word inside a granted
+            # ability (Goblin King's "Other Goblins … have mountainwalk") — but
+            # never grants islandwalk from nothing (White Knight). The
+            # *effective* text, so a second Hack rewrites what the first wrote.
+            effective = target_perm.effective_card
+            written = " ".join(
+                (effective.type_line, effective.oracle_text, *effective.keywords)
+            ).lower()
+            if old_type in written:
+                change_land_word(target_perm, old_type, new_type, label=card.name)
+                game.log.append(
+                    f"{card.name} changed {old_type} to {new_type} in {target_perm.card.name}'s text"
+                )
+                game._recalculate_lord_buffs()
+            else:
+                game.log.append(
+                    f"{card.name} had no effect: {target_perm.card.name} has no"
+                    f" {old_type.title()} land type in its text"
+                )
         return True, "resolved"
 
     # Sleight of Mind: replace one color word with another in the target's text.
-    # Stored as a per-permanent remap consumed where the engine reads that text's
-    # color (e.g. protection from <color>). It does NOT recolor the permanent.
+    # Recorded as an ordered layer-3 contribution and applied once, by
+    # Permanent.effective_card. It does NOT recolor the permanent.
     if mode == "color_word":
-        if target_perm is not None and old_symbol and new_symbol:
-            remap = target_perm.metadata.setdefault("color_word_remap", {})
-            remap[old_symbol] = new_symbol
+        if target_perm is not None and change_color_word(
+            target_perm, old_symbol, new_symbol, label=card.name
+        ):
             game.log.append(f"{card.name} changed {old_symbol} text to {new_symbol} on {target_perm.card.name}")
         return True, "resolved"
 
@@ -280,14 +270,19 @@ def change_target_land_type(game: Game, instruction: OracleInstruction, context:
         context, predicate=lambda p: p.card.primary_type == "land"
     )
     if target_land is not None:
-        target_land.metadata["land_type_override"] = str(instruction.payload.get("land_type", "forest"))
-        game.log.append(f"{target_land.card.name} became a Forest")
-        # "...until this creature leaves the battlefield." Track the lands this
-        # source forested so the revert hook can undo them when it leaves (CR 611.3).
+        land_type = str(instruction.payload.get("land_type", "forest"))
+        # "...until this creature leaves the battlefield." The contribution is
+        # keyed on the source, so the revert hook drops exactly this one and
+        # whatever else says the land is something (an Evil Presence Swamp)
+        # reasserts itself (CR 611.3).
         source = context.source_permanent
+        change_land_type(
+            target_land, land_type, source=source, label=context.card.name
+        )
+        game.log.append(f"{target_land.card.name} became a Forest")
         if source is not None:
             forested = source.metadata.setdefault("forested_lands", [])
-            if target_land not in forested:
+            if not any(land is target_land for land in forested):
                 forested.append(target_land)
         # Forest count just changed; recompute characteristic-defining P/T now so
         # Gaea's Liege reflects the new total immediately (not at the next step).
@@ -319,7 +314,11 @@ def add_mire_counter_to_target_land(game: Game, instruction: OracleInstruction, 
         return True, "resolved"
 
     target_land.metadata["mire_counter"] = True
-    target_land.metadata["land_type_override"] = "swamp"
+    # Keyed on the counter, not on the Tomb: "for as long as it has a mire
+    # counter on it" outlives the artifact that put it there.
+    change_land_type(
+        target_land, "swamp", source=MIRE_COUNTER, label=context.card.name
+    )
     game.log.append(f"{target_land.card.name} got a mire counter and became a Swamp")
 
     # Remember this land on the activating artifact so its death trigger can later

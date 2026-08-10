@@ -182,11 +182,12 @@ engine pure and testable directly against the rule text
 (`tests/rules/test_layers.py`), while the storage it reads from can move without
 the rules logic changing.
 
-**Layers 4–7 are live.** The accessors that read them:
+**Layers 3–7 are live.** The accessors that read them:
 
 | Accessor | Layer |
 | --- | --- |
-| `Permanent.is_creature`, `Permanent.has_type` | 4 (type-changing) |
+| `Permanent.effective_card` | 3 (text-changing) |
+| `Permanent.is_creature`, `Permanent.has_type`, `Permanent.basic_land_types` | 4 (type-changing) |
 | `Permanent.effective_colors` | 5 (colour-changing) |
 | `Permanent.has_keyword` | 6 (ability add/remove) |
 | `Permanent.effective_power` / `effective_toughness` | 7a–7d |
@@ -200,8 +201,27 @@ flag per keyword and checked removals first.
 
 Layer 4 distinguishes *adding* a type (animation: a Kormus Bell Swamp is a
 creature **and** still a land) from *replacing* subtypes (Evil Presence: the
-land is a Swamp **instead of** a Forest). Ask `perm.has_type("swamp")` rather
-than comparing `metadata["land_type_override"]`, which only sees one of those.
+land is a Swamp **instead of** a Forest, CR 305.7). Ask `perm.has_type("swamp")`
+or `perm.basic_land_types`; nothing else may read the storage, which
+`tests/engine/test_layer_reads.py` enforces.
+
+**Layers 3 and 4 record contributions, not values.** `engine/text_changes.py`
+holds each text change (a colour word, a basic land type, and every written
+form of it) with a timestamp; `engine/land_types.py` holds each land-type
+change with a timestamp *and a source*. Removal is dropping one contribution,
+so an effect ending restores what the others still say rather than the printed
+characteristic — a Gaea's Liege Forest ending on an Evil Presence Swamp leaves
+a Swamp. **Neither layer commutes**, which is what the timestamps are for: two
+land-type changes each *replace*, and two text changes each rewrite what the
+previous one produced. Both were previously a single stamped value that only
+one effect could occupy at a time.
+
+Layer 3 is applied by `Permanent.effective_card`, which rewrites the rules
+text, the type line and the parsed keywords — so a Magical Hack land swap and a
+Sleight of Mind colour swap are one effect each, and every text-keyed table
+downstream (untap restrictions, cost taxes, protection colours, lord grants)
+reads the changed text without knowing text can change. The no-change path
+returns the card object itself, unallocated.
 
 **Layer 7c splits by lifetime, and the split is load-bearing.** `power_bonus` is
 persistent (counters, one-shot boosts); `static_buff_*`, `derived_buff_*` and

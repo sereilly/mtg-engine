@@ -149,7 +149,7 @@ class TestMagicalHack:
         )
 
         assert result.supported
-        assert forest.metadata.get("land_type_override") == "island"
+        assert forest.changed_land_types == ("island",)
         # The land now taps for blue, not green (CR 305.7).
         assert forest.effective_produced_mana == ("U",)
         game.tap_land_for_mana(1, "Forest", chosen_color="G", permanent_index=0)

@@ -24,6 +24,7 @@ from __future__ import annotations
 import random
 
 from ...auras import attach_aura
+from ...land_types import change_land_type
 from ...models import CardDefinition, Permanent
 from ...pending_choices import CHOICE_SPECS, PendingChoice, register_choice, spec_for
 from ...replacement_choices import pending_choices_for
@@ -353,7 +354,12 @@ class PendingChoicesMixin:
         idx = choice.data["land_index"]
         if 0 <= idx < len(owner.battlefield):
             land = owner.battlefield[idx]
-            land.metadata["land_type_override"] = land_type
+            # Keyed on the Aura, so the change ends when the Aura does — and
+            # ends only its own contribution.
+            change_land_type(
+                land, land_type,
+                source=choice.data.get("_aura"), label=choice.data["card_name"],
+            )
             self.log.append(
                 f"{choice.data['card_name']}: enchanted land becomes a {land_type.title()}"
             )

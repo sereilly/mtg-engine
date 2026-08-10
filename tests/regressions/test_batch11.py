@@ -305,7 +305,7 @@ class TestMagicalHackRequiresExistingWord:
             old_color="U", new_color="R",
         )
         assert result.supported
-        assert forest.metadata.get("land_type_override") is None
+        assert forest.changed_land_types == ()
         # forest -> mountain works.
         p1.hand.append(cards["Magical Hack"])
         game.cast_from_hand(
@@ -313,7 +313,7 @@ class TestMagicalHackRequiresExistingWord:
             target_player_index=1, target_permanent_index=0,
             old_color="G", new_color="R",
         )
-        assert forest.metadata.get("land_type_override") == "mountain"
+        assert forest.changed_land_types == ("mountain",)
 
 
 # ---------------------------------------------------------------------------

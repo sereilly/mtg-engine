@@ -17,6 +17,7 @@ import itertools
 
 import pytest
 
+from engine.land_types import change_land_type
 from engine.layer_bridge import computed_pt
 from engine.models import CardDefinition, Permanent
 
@@ -274,7 +275,7 @@ def test_a_basic_land_type_change_replaces_the_subtype():
     perm = Permanent(card=forest)
     assert perm.has_type("forest") is True
 
-    perm.metadata["land_type_override"] = "swamp"
+    change_land_type(perm, "swamp", source="test")
     assert perm.has_type("swamp") is True
     assert perm.has_type("forest") is False
 

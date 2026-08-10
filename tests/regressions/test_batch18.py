@@ -43,6 +43,7 @@ from fastapi.testclient import TestClient
 from engine import Game, PlayerState
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
+from engine.land_types import change_land_type
 from tests.helpers import _game, _nosick
 from tests.helpers import CARDS_BY_NAME as _C
 from web.app import app, store, _begin_turn
@@ -494,7 +495,7 @@ class TestMerchantShip:
 
     def test_hacked_land_type_override_counts_as_island(self, arn_by_name):
         mountain = Permanent(card=_C["Mountain"])
-        mountain.metadata["land_type_override"] = "island"
+        change_land_type(mountain, "island", source="test")
         game, ship = self._ship_game(arn_by_name, [mountain])
         assert game.can_attack(ship, 1) is True
 

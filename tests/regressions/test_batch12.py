@@ -18,6 +18,7 @@ from fastapi.testclient import TestClient
 
 from engine import Game, PlayerState, load_cards
 from engine.models import Permanent
+from engine.land_types import change_land_type
 from tests.helpers import _game, _nosick
 from tests.helpers import CARDS_BY_NAME as _C
 from web.app import app, store
@@ -111,7 +112,7 @@ class TestAnimatedLandTypeOverride:
         game = _game(p1, p2)
         result = game.cast_from_hand(0, "Evil Presence", target_player_index=0, target_permanent_index=1)
         assert result.supported
-        assert mountain.metadata.get("land_type_override") == "swamp"
+        assert mountain.changed_land_types == ("swamp",)
         game._refresh_dynamic_creatures()
         assert mountain.metadata.get("land_animated") is True
         assert (mountain.effective_power, mountain.effective_toughness) == (1, 1)
@@ -121,7 +122,7 @@ class TestAnimatedLandTypeOverride:
         # type is no longer a Swamp, so Kormus Bell must NOT animate it.
         bell = Permanent(card=cards["Kormus Bell"])
         swamp = _nosick(Permanent(card=cards["Swamp"]))
-        swamp.metadata["land_type_override"] = "mountain"
+        change_land_type(swamp, "mountain", source="test")
         p1 = PlayerState(name="P1", battlefield=[bell, swamp])
         p2 = PlayerState(name="P2")
         game = _game(p1, p2)

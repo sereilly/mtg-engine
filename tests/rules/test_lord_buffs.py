@@ -19,6 +19,7 @@ import pytest
 
 from engine import Game, PlayerState
 from engine.models import CardDefinition, Permanent
+from engine.text_changes import change_land_word
 
 
 def _card(name: str, type_line: str, oracle_text: str, *, colors=(), power="2",
@@ -262,7 +263,7 @@ def test_a_text_change_on_the_lord_moves_the_walk_it_grants(cards):
     """Magical Hack on Goblin King: the land word in its text is replaced, so
     other Goblins get islandwalk instead of mountainwalk (CR 613 layer 3)."""
     king = Permanent(card=cards["Goblin King"])
-    king.metadata["land_word_remap"] = {"mountain": "island"}
+    change_land_word(king, "mountain", "island")
     goblin = Permanent(card=cards["Mons's Goblin Raiders"])
     _game([king, goblin])
 

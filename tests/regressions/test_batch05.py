@@ -141,7 +141,7 @@ class TestConversion:
         game = _game(p1, p2)
 
         game.cast_from_hand(0, "Conversion", target_player_index=0)
-        assert mountain.metadata.get("land_type_override") == "plains"
+        assert mountain.changed_land_types == ("plains",)
 
         # It now taps for white.
         game.tap_land_for_mana(0, "Mountain", chosen_color="W", permanent_index=0)
@@ -150,7 +150,7 @@ class TestConversion:
         conversion = next(p for p in p1.battlefield if p.card.name == "Conversion")
         p1.battlefield.remove(conversion)
         game._refresh_dynamic_creatures()
-        assert mountain.metadata.get("land_type_override") is None
+        assert mountain.changed_land_types == ()
 
 
 # ---------------------------------------------------------------------------
@@ -633,7 +633,7 @@ class TestMagicalHack:
         game.resolve_stack()
 
         assert result.supported
-        assert forest.metadata.get("land_type_override") == "island"
+        assert forest.changed_land_types == ("island",)
         game.tap_land_for_mana(1, "Forest", chosen_color="U", permanent_index=0)
         assert p2.mana_pool.get("U", 0) == 1
 

@@ -287,7 +287,7 @@ def test_cyclopean_tomb_marks_land_as_swamp(all_cards):
     assert result.supported
     mired = p2.battlefield[0]
     assert mired.metadata.get("mire_counter") is True
-    assert mired.metadata.get("land_type_override") == "swamp"
+    assert mired.changed_land_types == ("swamp",)
     # The land is now a Swamp: it taps for black, not white.
     assert mired.effective_produced_mana == ("B",)
 
@@ -362,7 +362,7 @@ def test_cyclopean_tomb_death_frees_mired_lands_over_upkeeps(all_cards):
     game.resolve_upkeep(0)
     freed_first = [perm for perm in (plains_perm, forest_perm) if perm.metadata.get("mire_counter") is None]
     assert len(freed_first) == 1
-    assert freed_first[0].metadata.get("land_type_override") is None
+    assert freed_first[0].changed_land_types == ()
 
     # An opponent's upkeep does not advance the controller's obligation.
     game.resolve_upkeep(1)
@@ -406,7 +406,7 @@ def test_cyclopean_tomb_death_trigger_fires_on_board_wipe(all_cards):
 
     game.resolve_upkeep(0)
     assert plains_perm.metadata.get("mire_counter") is None
-    assert plains_perm.metadata.get("land_type_override") is None
+    assert plains_perm.changed_land_types == ()
 
 
 def test_sunglasses_of_urza_sets_white_as_red_flag(all_cards):

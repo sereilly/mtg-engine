@@ -28,6 +28,7 @@ from engine import Game, PlayerState, load_cards
 from engine.models import Permanent
 from engine.ai_policy import choose_attackers
 from engine.oracle import compile_card_oracle
+from engine.text_changes import changed_words
 from tests.helpers import _damage_dealt, _game
 
 
@@ -265,14 +266,14 @@ class TestPhantasmalTerrain:
         # The land's type must NOT change until the controller finishes the choice
         # (the reported bug: the spell resolved the land change before the prompt).
         game, land = self._setup(cards)
-        assert land.metadata.get("land_type_override") is None
+        assert land.changed_land_types == ()
         assert game.pending_land_type_choice is not None
         assert game.pending_land_type_choice["player_index"] == 0
 
     def test_confirm_overrides_land_type(self, cards):
         game, land = self._setup(cards)
         assert game.confirm_land_type(0, "mountain") is True
-        assert land.metadata.get("land_type_override") == "mountain"
+        assert land.changed_land_types == ("mountain",)
         assert game.pending_land_type_choice is None
 
     def test_invalid_type_and_wrong_player_rejected(self, cards):
@@ -764,7 +765,7 @@ class TestMagicalHackLand:
         game.queue_from_hand(0, "Magical Hack", target_player_index=1, target_permanent_index=0, new_color="U")
         while game.stack:
             game.resolve_top_of_stack()
-        assert forest.metadata.get("land_type_override") == "island"
+        assert forest.changed_land_types == ("island",)
         # And it now taps for blue rather than green.
         game.tap_land_for_mana(1, "Forest", chosen_color="U", permanent_index=0)
         assert p2.mana_pool.get("U") == 1
@@ -782,8 +783,10 @@ class TestMagicalHackLand:
         game = _game(p1, p2)
         assert game._attacker_has_active_landwalk(wraith, blocker) is True  # swampwalk vs Swamp
         game.cast_from_hand(0, "Magical Hack", target_player_index=0, target_permanent_index=0, old_color="B", new_color="U")
-        assert wraith.metadata.get("lost_swampwalk") is True
-        assert wraith.metadata.get("has_islandwalk") is True
+        # The keyword follows the text: the change rewrote "Swampwalk" where it
+        # is written, so nothing had to pair a "lost" flag with a "gained" one.
+        assert wraith.has_keyword("islandwalk") is True
+        assert wraith.has_keyword("swampwalk") is False
         # Still unblockable via the Island (islandwalk now), but...
         assert game._attacker_has_active_landwalk(wraith, blocker) is True
         # ...with the Island gone, swampwalk no longer applies (it was remapped).
@@ -793,8 +796,8 @@ class TestMagicalHackLand:
 
 # ---------------------------------------------------------------------------
 # Sleight of Mind — "replace all instances of one color word with another." It
-# stores a per-permanent color-word remap (consumed where the engine reads that
-# text's colors, e.g. protection) rather than recoloring the permanent.
+# records a layer-3 text change on the permanent, applied once by
+# effective_card, rather than recoloring the permanent.
 # ---------------------------------------------------------------------------
 
 class TestSleightOfMind:
@@ -806,7 +809,7 @@ class TestSleightOfMind:
         game = _game(p1, p2)
         assert game._protection_colors(bk) == {"W"}
         game.cast_from_hand(0, "Sleight of Mind", target_player_index=1, target_permanent_index=0, old_color="W", new_color="R")
-        assert bk.metadata.get("color_word_remap") == {"W": "R"}
+        assert changed_words(bk) == [{"from": "white", "to": "red"}]
         assert game._protection_colors(bk) == {"R"}     # protection from red now
         assert bk.metadata.get("color_override") is None  # not recolored
 

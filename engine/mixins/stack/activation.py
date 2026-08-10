@@ -250,9 +250,10 @@ class AbilityActivationMixin:
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
 
         if ability.instruction.kind == "counter_top_stack_spell":
-            color_filter = self._remap_color_filter(
-                permanent, ability.instruction.payload.get("color_filter")
-            )
+            # Already text-changed: the ability came from
+            # ``compile_card_oracle(permanent.effective_card)`` above, so layer 3
+            # has been applied once and must not be applied again here.
+            color_filter = ability.instruction.payload.get("color_filter")
             if target_stack_item is not None:
                 # A specific spell was chosen — it must itself be a legal target.
                 if target_stack_item not in self.stack or (

@@ -16,6 +16,7 @@ from engine.ai_policy import (
 from engine import Game, PlayerState, classify_card, load_cards
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle, lex_oracle_text, parse_activated_ability_cost
+from engine.text_changes import changed_words
 import json
 from web.app import app, store
 from tests.helpers import (
@@ -347,7 +348,7 @@ def test_sleight_of_mind_retargets_lifeforce_counter_to_red(all_cards):
     )
     assert result.supported
     lifeforce_perm = p1.battlefield[0]
-    assert lifeforce_perm.metadata.get("color_word_remap") == {"B": "R"}
+    assert changed_words(lifeforce_perm) == [{"from": "black", "to": "red"}]
 
     # P2 casts Lightning Bolt (a red spell); Lifeforce can now counter it.
     game.queue_from_hand(1, "Lightning Bolt", target_player_index=0)

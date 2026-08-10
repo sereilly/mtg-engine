@@ -14,6 +14,7 @@ dispatches. A new upkeep card is an entry there, never a branch here.
 import re
 
 from ..handlers._common import permanent_effective_colors
+from ..land_types import MIRE_COUNTER, end_land_type_change
 from ..models import Permanent
 from ..oracle import OracleInstruction, compile_card_oracle
 from ..trigger_utils import iter_triggered_abilities, matching_triggers
@@ -194,7 +195,10 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             if lands:
                 freed = lands.pop(0)
                 freed.metadata.pop("mire_counter", None)
-                freed.metadata.pop("land_type_override", None)
+                # The counter is what the type change hung on, so removing it
+                # drops that one contribution — not every land-type effect on
+                # the land, which is what clearing the stored type did.
+                end_land_type_change(freed, source=MIRE_COUNTER)
                 self.log.append(f"Mire counter removed from {freed.card.name}")
             if lands:
                 obligation["lands"] = lands

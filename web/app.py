@@ -32,6 +32,7 @@ from engine.legality import cast_target_kind
 from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle
 from engine.targeting import usable_activated_abilities
+from engine.text_changes import changed_words
 
 from .prompts import (
     PromptContext,
@@ -216,46 +217,19 @@ def _shield_source_payload(source_name: str | None) -> dict | None:
     return _card_preview(card)
 
 
-# A text-changing spell rewrites a word in the target's oracle text: Sleight of
-# Mind swaps a color word (stored as a symbol->symbol color_word_remap), Magical
-# Hack swaps a basic land type / landwalk. These maps turn the stored symbols
-# back into the printed words so the UI can show the change.
-_SYMBOL_TO_COLOR_WORD = {"W": "white", "U": "blue", "B": "black", "R": "red", "G": "green"}
-
-
 def _text_change_replacements(perm: Permanent) -> list[dict]:
     """Word-level oracle-text edits applied to this permanent by a text-changing
     spell, as ``{"from": old_word, "to": new_word}`` entries. The UI renders the
-    old word struck through and the new word in gold. Covers Sleight of Mind
-    (color words) and Magical Hack (landwalk remapped on a creature)."""
-    changes: list[dict] = []
-    seen: set[tuple[str, str]] = set()
+    old word struck through and the new word in gold.
 
-    def add(old: str | None, new: str | None) -> None:
-        if old and new and old != new and (old, new) not in seen:
-            seen.add((old, new))
-            changes.append({"from": old, "to": new})
-
-    for old_sym, new_sym in (perm.metadata.get("color_word_remap") or {}).items():
-        add(_SYMBOL_TO_COLOR_WORD.get(old_sym), _SYMBOL_TO_COLOR_WORD.get(new_sym))
-
-    # Magical Hack's land-word swap: every instance of the old basic land type
-    # in the card's text is replaced — both the bare word ("Mountain") and its
-    # landwalk compound ("mountainwalk", e.g. inside Goblin King's grant line).
-    for old_word, new_word in (perm.metadata.get("land_word_remap") or {}).items():
-        add(old_word, new_word)
-        add(f"{old_word}walk", f"{new_word}walk")
-
-    # Magical Hack on a creature remaps a landwalk word (e.g. swampwalk -> islandwalk),
-    # tracked as paired has_<new>walk / lost_<old>walk markers.
-    gained = [k[len("has_"):] for k, v in perm.metadata.items()
-              if k.startswith("has_") and k.endswith("walk") and v]
-    lost = [k[len("lost_"):] for k, v in perm.metadata.items()
-            if k.startswith("lost_") and k.endswith("walk") and v]
-    for old_walk, new_walk in zip(lost, gained):
-        add(old_walk, new_walk)
-
-    return changes
+    Derived from the layer-3 contributions (``engine/text_changes.py``), so it
+    covers Sleight of Mind's colour word and Magical Hack's basic land type
+    together and reports the *net* edit — two changes that chain (black -> red,
+    then red -> green) are the one edit a player actually sees. The compound
+    forms ("mountainwalk", "Mountains") follow from the bare word and are not
+    listed separately.
+    """
+    return changed_words(perm)
 
 
 def _serialize_permanent(perm: Permanent, game: Game) -> dict:
@@ -328,7 +302,11 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         "shield_source": _shield_source_payload(perm.damage_prevention_source),
         "summoning_sick": game._is_summoning_sick(perm),
         "is_token": bool(perm.metadata.get("is_token", False)),
-        "land_type_override": perm.metadata.get("land_type_override"),
+        # The basic land type(s) an effect has given this land, when they are
+        # not the printed ones — derived through layer 4 rather than read off a
+        # stored value, so a layer-3 text change (Magical Hack) badges the same
+        # way a layer-4 replacement (Evil Presence, a mire counter) does.
+        "land_type_override": " ".join(perm.changed_land_types) or None,
         "mire_counter": bool(perm.metadata.get("mire_counter", False)),
         # Both flags go through the engine's own predicates rather than reading
         # the metadata flag directly: Guardian Beast grants them continuously to

@@ -9,6 +9,7 @@ import pytest
 
 from engine import Game, PlayerState, load_cards
 from engine.models import CardDefinition, Permanent
+from engine.text_changes import changed_words
 from tests.helpers import LEA_PATH
 
 
@@ -313,12 +314,12 @@ def test_bug5_banding_granted_to_chosen_target(all_cards):
 # It changes "all instances of one color word with another" (e.g. "protection
 # from blue" -> "protection from red"); it must NOT recolor the permanent. The
 # from/to words are threaded through the cast path (old_color/new_color) and the
-# handler stores a per-permanent color_word_remap consumed at color read sites.
+# handler records a layer-3 text change, applied once by effective_card.
 # ---------------------------------------------------------------------------
 
 def test_bug6_sleight_of_mind_stores_color_word_remap(all_cards):
-    """Casting Sleight of Mind with old_color/new_color stores a color-word remap
-    on the target (and does not recolor it)."""
+    """Casting Sleight of Mind with old_color/new_color records a colour-word
+    text change on the target (and does not recolor it)."""
     sleight = _get(all_cards, "Sleight of Mind")
     blue_enchantment = _mk_card(
         "Blue Ward",
@@ -342,7 +343,10 @@ def test_bug6_sleight_of_mind_stores_color_word_remap(all_cards):
 
     assert result.supported
     perm = p2.battlefield[0]
-    assert perm.metadata.get("color_word_remap") == {"U": "R"}
+    # The change is recorded, and applied once — the permanent's text now reads
+    # red where it read blue (CR 613 layer 3).
+    assert changed_words(perm) == [{"from": "blue", "to": "red"}]
+    assert "protection from red" in perm.effective_card.oracle_text
     # It must NOT recolor the permanent (the old, incorrect behavior).
     assert perm.metadata.get("color_override") is None
 

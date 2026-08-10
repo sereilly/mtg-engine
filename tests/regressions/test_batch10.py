@@ -331,8 +331,8 @@ class TestPhantasmalTerrainDefersChoice:
         p1 = PlayerState(name="P1", battlefield=[land])
         game = _game(p0, p1)
         game.cast_from_hand(0, "Phantasmal Terrain", target_player_index=1, target_permanent_index=0)
-        assert land.metadata.get("land_type_override") is None  # not changed yet
+        assert land.changed_land_types == ()  # not changed yet
         assert game.pending_land_type_choice is not None
         assert game.confirm_land_type(0, "mountain") is True
-        assert land.metadata.get("land_type_override") == "mountain"
+        assert land.changed_land_types == ("mountain",)
         assert game.pending_land_type_choice is None

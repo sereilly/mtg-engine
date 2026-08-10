@@ -505,7 +505,7 @@ def _assert_supported_effect(card: CardDefinition, game: Game, p1: PlayerState, 
         return
 
     if "target land becomes a forest" in text:
-        assert any(perm.metadata.get("land_type_override") == "forest" for perm in p2.battlefield)
+        assert any(perm.changed_land_types == ("forest",) for perm in p2.battlefield)
         return
 
     if "choose target non-wall creature" in text:

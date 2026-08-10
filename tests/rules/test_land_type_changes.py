@@ -4,20 +4,21 @@ Covers:
   305.7  — setting a land's subtype replaces its old land types
   613.1d — layer 4: type-changing effects
 
-The engine records a land-type change as ``land_type_override`` metadata, which
-CR 613 layer 4 turns into a subtype *replacement*. That part was right. What was
-wrong is that seven readers went around the layer system and asked the raw
-metadata (or the printed type line) themselves, and they did not all agree with
-it — or with each other.
+The engine records a land-type change as a contribution
+(``engine/land_types.py``), which CR 613 layer 4 turns into a subtype
+*replacement*. That part was always right. What was wrong is that seven readers
+went around the layer system and asked the storage (or the printed type line)
+themselves, and they did not all agree with it — or with each other.
 
-These use an override rather than casting Magical Hack / Phantasmal Terrain so
-the rule is tested rather than one card's path to it.
+These record the change directly rather than casting Magical Hack / Phantasmal
+Terrain, so the rule is tested rather than one card's path to it.
 """
 
 import pytest
 
 from engine import Game, PlayerState
 from engine.card_loader import load_catalog
+from engine.land_types import change_land_type
 from engine.models import Permanent
 
 
@@ -40,7 +41,7 @@ def test_305_7_a_changed_land_loses_its_printed_type(catalog):
     _game(mountain)
     assert mountain.has_type("mountain") is True
 
-    mountain.metadata["land_type_override"] = "island"
+    change_land_type(mountain, "island", source="test")
 
     assert mountain.has_type("island") is True
     assert mountain.has_type("mountain") is False
@@ -56,7 +57,7 @@ def test_305_7_targeting_respects_the_replacement(catalog):
 
     assert game._permanent_matches_target_kind(mountain, "divided", spec, False) is True
 
-    mountain.metadata["land_type_override"] = "island"
+    change_land_type(mountain, "island", source="test")
 
     assert game._permanent_matches_target_kind(mountain, "divided", spec, False) is False
     assert game._permanent_matches_target_kind(
@@ -68,7 +69,7 @@ def test_305_7_targeting_respects_the_replacement(catalog):
 def test_305_7_mass_destruction_follows_the_current_type(catalog):
     """Tsunami destroys Islands. A Forest turned into an Island is an Island."""
     forest = Permanent(card=catalog["Forest"])
-    forest.metadata["land_type_override"] = "island"
+    change_land_type(forest, "island", source="test")
     plain_forest = Permanent(card=catalog["Forest"])
     game, p1, p2 = _game(forest, plain_forest, hand=[catalog["Tsunami"]])
 
@@ -128,6 +129,115 @@ def test_702_14b_landwalk_reads_the_current_land_type(catalog):
     # A Forest is no obstacle to islandwalk.
     assert game._can_block_attacker(blocker, attacker) is True
 
-    forest.metadata["land_type_override"] = "island"
+    change_land_type(forest, "island", source="test")
 
     assert game._can_block_attacker(blocker, attacker) is False
+
+
+# ---------------------------------------------------------------------------
+# 613.7 — two of these on one land, and what happens when one ends
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("613.7", "305.7")
+def test_613_7_two_land_type_changes_resolve_in_timestamp_order(catalog):
+    """**Type changes do not commute.** CR 305.7 makes each one a *replacement*,
+    so what the land is is whatever the newest effect says — and the reverse
+    order gives the other answer. A single stamped value could record only one
+    of them, so which survived was whichever code path happened to write last.
+    """
+    from engine.land_types import LAND_TYPE_EFFECTS
+
+    forest = Permanent(card=catalog["Forest"])
+    _game(forest)
+    change_land_type(forest, "island", source="first")
+    change_land_type(forest, "swamp", source="second")
+    assert forest.basic_land_types == ("swamp",)
+
+    other = Permanent(card=catalog["Forest"])
+    _game(other)
+    change_land_type(other, "swamp", source="first")
+    change_land_type(other, "island", source="second")
+    assert other.basic_land_types == ("island",)
+
+    # And it is the *timestamps* deciding, not the order the contributions
+    # happen to sit in. Storage order is not sorted on the way out precisely so
+    # that this can be asked: reversed, the answer must not move.
+    other.metadata[LAND_TYPE_EFFECTS] = list(reversed(other.metadata[LAND_TYPE_EFFECTS]))
+    assert other.basic_land_types == ("island",)
+
+
+@pytest.mark.cr("611.3", "613.7")
+def test_611_3_ending_one_change_leaves_the_other_applying(catalog):
+    """Removal is dropping *one* contribution. The land goes back to what the
+    remaining effects say, not to its printed type — Gaea's Liege's Forest
+    ending on a land Evil Presence has made a Swamp leaves a Swamp.
+    """
+    from engine.land_types import end_land_type_change
+
+    mountain = Permanent(card=catalog["Mountain"])
+    _game(mountain)
+    change_land_type(mountain, "swamp", source="evil presence")
+    change_land_type(mountain, "forest", source="gaea's liege")
+    assert mountain.basic_land_types == ("forest",)
+
+    assert end_land_type_change(mountain, source="gaea's liege") is True
+
+    assert mountain.basic_land_types == ("swamp",)
+    assert mountain.has_type("mountain") is False
+
+
+@pytest.mark.cr("613.7b")
+def test_613_7b_re_recording_the_same_source_replaces_its_own_contribution(catalog):
+    """One effect applies once however often it is re-resolved, and it takes the
+    newer timestamp. Appending instead would leave a stale contribution that
+    only ordering hid."""
+    forest = Permanent(card=catalog["Forest"])
+    _game(forest)
+    change_land_type(forest, "island", source="aura")
+    change_land_type(forest, "swamp", source="aura")
+
+    from engine.land_types import land_type_changes
+
+    assert [c["land_type"] for c in land_type_changes(forest)] == ["swamp"]
+    assert forest.basic_land_types == ("swamp",)
+
+
+@pytest.mark.cr("611.3", "305.7")
+def test_611_3_gaeas_liege_leaving_restores_the_aura_type_not_the_printed_one(catalog):
+    """The two real cards behind the rule above.
+
+    Evil Presence makes a Mountain a Swamp; Gaea's Liege then makes it a Forest
+    "until this creature leaves the battlefield". When the Liege dies its
+    contribution is dropped and Evil Presence's is still there, so the land is a
+    Swamp — not the Mountain it was printed as. The Liege used to revert by
+    reading the stored type back and clearing it if it still said "forest",
+    which took Evil Presence's change with it and needed an acknowledgement in
+    the layer-read guard to say so.
+    """
+    from tests.helpers import _nosick
+
+    mountain = Permanent(card=catalog["Mountain"])
+    liege = _nosick(Permanent(card=catalog["Gaea's Liege"]))
+    # Its power and toughness are the number of Forests its controller has, so
+    # without one it is 0/0 and CR 704.5f sweeps it before the test starts.
+    p1 = PlayerState(
+        name="P1",
+        hand=[catalog["Evil Presence"]],
+        battlefield=[liege, Permanent(card=catalog["Forest"])],
+    )
+    p2 = PlayerState(name="P2", battlefield=[mountain])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    game.cast_from_hand(0, "Evil Presence", target_player_index=1, target_permanent_index=0)
+    assert mountain.basic_land_types == ("swamp",)
+
+    game.activate_permanent_ability(
+        0, "Gaea's Liege", target_player_index=1, target_permanent_index=0
+    )
+    assert mountain.basic_land_types == ("forest",)
+
+    game._permanent_to_graveyard(p1, liege)
+
+    assert mountain.basic_land_types == ("swamp",)
