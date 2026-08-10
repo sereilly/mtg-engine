@@ -1417,6 +1417,33 @@ What remains of `legality.py` is not targeting: it is 970 lines of which the
 cast-target cascade is one part, and `stack_casting.py` is still 2,277 lines.
 Neither blocks anything; both are size rather than duplication now.
 
+### What is actually left in `legality.py`, measured
+
+Correcting an earlier claim of mine: I said the remainder of phase 7 was "size
+rather than duplication". Measuring it says otherwise. `legality.py` has **49
+module-level functions, 19 of which read raw oracle text** — every one a second
+answer to a question the compiled program could give:
+
+    _cast_requires_graveyard_creature   _cast_requires_graveyard_card
+    _cast_requires_artifact             _cast_requires_land
+    _cast_offers_copy_creature          _cast_offers_copy_artifact
+    _cast_requires_sacrifice_creature   _cast_requires_creature
+    _cast_requires_source_of_choice     _cast_requires_divided
+    _reanimates_own_graveyard_only      … and the line splitters they share
+
+So the cast-*target* cascade is done (98 of 99 cards derive), but the cast-
+*requirement* predicates are the same duplication one layer over: they decide
+whether a spell needs a graveyard creature, an artifact on the battlefield, a
+sacrifice, and so on, by re-reading text the instruction kinds already encode.
+
+The migration path is the one that just worked for targets, and in the same
+order: a kind→requirement table for the cases the kind settles outright; payload
+for the cases one kind serves two requirements; recursion into `sequence`. The
+agreement guard generalises too — compare each derived requirement against the
+existing predicate over the whole pool, and the table cannot drift.
+
+`stack_casting.py` at 2,277 lines really is size, and is a separate job.
+
 ### The static-ability cluster, and why it is a phase-6 job
 
 20 of the remaining lines fail with "static abilities need the CR 613 layers
