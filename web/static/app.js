@@ -1514,13 +1514,20 @@ function cardRequiresTargetAny(card) { return specKind(card) === "any"; }
 function cardRequiresDividedDamage(card) { return specKind(card) === "divided"; }
 function cardRequiresTargetStackSpell(card) { return specKind(card) === "stack"; }
 
+// What a graveyard-return prompt is asking the player to click. Regrowth takes
+// any card (any_card), Reconstruction an artifact card (card_type), Raise Dead
+// and the reanimation spells a creature card.
+function graveyardCardNoun(spec) {
+  if (spec?.any_card) return "card";
+  return `${spec?.card_type || "creature"} card`;
+}
+
 function startCastGraveyardCreatureTargetPrompt(card, castAction = "cast") {
   const cardName = normalizeCardName(card);
   if (!cardName) return;
   const spec = targetSpecOf(card);
   const ownGraveyardOnly = !!spec.own_graveyard_only;
-  // Regrowth targets ANY card in the graveyard (any_card), not only creatures.
-  const noun = spec.any_card ? "card" : "creature card";
+  const noun = graveyardCardNoun(spec);
   const verb = spec.any_card ? "return" : "reanimate";
   if ((spec.valid_targets || []).length === 0) {
     clearPendingHandCast();
@@ -4723,11 +4730,12 @@ function renderActivationPrompt() {
       body.textContent = "Click a glowing spell on the stack to choose which one to target.";
       steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
     } else if (pendingCastTarget.targetKind === "graveyard_creature") {
-      // Regrowth targets any card; Animate Dead / Resurrection a creature card.
-      // Never fall through to the player-select fallback — the target is always
-      // a card in a graveyard, not a player.
+      // Regrowth targets any card; Animate Dead / Resurrection a creature card;
+      // Reconstruction an artifact card. Never fall through to the
+      // player-select fallback — the target is always a card in a graveyard,
+      // not a player.
       const spec = targetSpecOf(pendingCastTarget.card);
-      const noun = spec?.any_card ? "card" : "creature card";
+      const noun = graveyardCardNoun(spec);
       const where = spec?.own_graveyard_only ? "your graveyard" : "a graveyard";
       body.textContent = `Click a glowing ${noun} in ${where} to choose the target.`;
       steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;

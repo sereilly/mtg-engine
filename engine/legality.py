@@ -32,7 +32,7 @@ from .handlers._common import permanent_matches_filter
 from .models import CardDefinition, Permanent
 from .mixins.stack_casting import aura_enchant_noun
 from .oracle import compile_card_oracle, expand_modal_activated_lines
-from .targeting import derive_cast_target
+from .targeting import derive_cast_spec
 
 # An oracle line that begins with a mana/tap cost followed by a colon is an
 # activated ability ("{T}: ..."), not a cast-time effect. The cost may mix
@@ -312,9 +312,9 @@ def cast_target_kind(card: CardDefinition) -> str:
     target specs, more cards route through the derivation and the cascade
     shrinks. tests/engine/test_targeting.py holds the two to agreement.
     """
-    derived = derive_cast_target(card, compile_card_oracle(card))
+    derived = derive_cast_spec(card, compile_card_oracle(card))
     if derived is not None:
-        return derived
+        return derived["kind"]
     return _classify_cast(card)["kind"]
 
 
@@ -667,16 +667,12 @@ class LegalityMixin:
         program = compile_card_oracle(card)
         if len(program.modes) >= 2:
             return {"kind": "modal", "requires_target": False, "valid_targets": []}
-        spec = _classify_cast(card)
-        # The compiled program decides the *kind* wherever it carries the
-        # evidence; the cascade below supplies the per-kind flags it does not
-        # model yet (own_only, stack filters, sacrifice_cost, ...). Proven equal
-        # on every derivable card by tests/engine/test_targeting.py, so this is
-        # a seam rather than a behaviour change — and it makes the derivation
-        # load-bearing for the target picker, not just for serialization.
-        derived = derive_cast_target(card, program)
-        if derived is not None:
-            spec["kind"] = derived
+        # The compiled program answers in full — the kind *and* the flags that
+        # narrow the picker (own_only, stack filters, sacrifice_cost, ...). The
+        # cascade below is consulted only for a card whose program describes no
+        # cast-time choice at all, and tests/engine/test_targeting.py holds the
+        # two to agreement over the whole pool.
+        spec = derive_cast_spec(card, program) or _classify_cast(card)
         spec["requires_target"] = spec["kind"] != "none"
         spec["valid_targets"] = self._enumerate_targets(caster_index, card, spec, for_cast=True)
         return spec
@@ -939,11 +935,30 @@ class LegalityMixin:
     def _enumerate_graveyard_creatures(self, caster_index: int, spec: dict) -> list[dict]:
         targets: list[dict] = []
         any_card = spec.get("any_card")
+        # Reconstruction returns an *artifact* card; Raise Dead a creature card.
+        # One template with the type as data, which is why the picker takes it
+        # from the spec instead of assuming the creature case.
+        #
+        # The two branches test differently because their handlers do, and a
+        # picker that offers what resolution then refuses is the bug this module
+        # exists to prevent. `return_creature_from_graveyard_to_hand` asks
+        # whether the type appears in the card's type line, so an Ornithopter —
+        # an *artifact* creature — is a legal Reconstruction target (CR 205.2);
+        # the reanimators ask `primary_type`, which is narrower.
+        card_type = spec.get("card_type")
+
+        def eligible(card) -> bool:
+            if any_card:
+                return True
+            if card_type is not None:
+                return card_type in card.type_line.lower()
+            return card.primary_type == "creature"
+
         for seat, player in enumerate(self.players):
             if spec.get("own_graveyard_only") and seat != caster_index:
                 continue
             for idx, card in enumerate(player.graveyard):
-                if any_card or card.primary_type == "creature":
+                if eligible(card):
                     targets.append({"kind": "graveyard", "seat": seat, "index": idx, "name": card.name})
         return targets
 

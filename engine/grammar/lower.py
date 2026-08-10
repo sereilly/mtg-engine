@@ -430,8 +430,14 @@ def _lower_damage(node: ast.DealDamage) -> tuple[OracleInstruction, ...]:
 
     # Divided damage (Fireball) picks its targets at cast time and carries them
     # on the stack item, so the noun phrase here is "any number of targets"
-    # rather than a resolvable recipient.
+    # rather than a resolvable recipient. The *handler* therefore needs nothing
+    # from the recipient — but the caster still has to be prompted for the
+    # targets, and "deal_damage {amount: x}" alone cannot say so: it is the same
+    # payload Lightning Bolt produces. Recording the division here is what lets
+    # engine/targeting.py raise the divided prompt from the compiled program
+    # rather than from a "divided" substring in legality.py.
     if node.riders.divided:
+        payload["targets"] = {"quantifier": "divided", "kind": "divided"}
         return (OracleInstruction("deal_damage", "", payload),)
 
     # Damage aimed at the source's own controller rather than the spell's

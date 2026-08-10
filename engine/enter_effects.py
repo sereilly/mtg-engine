@@ -115,6 +115,29 @@ def _normalized(line: str) -> str:
     return " ".join(line.strip().lower().split()).rstrip(".")
 
 
+def copy_on_enter_type(normalized_text: str) -> str | None:
+    """``"creature"`` / ``"artifact"`` if *normalized_text* offers a copy choice
+    as the permanent enters (CR 707.9a), else ``None``.
+
+    The substring probe :meth:`_initialize_permanent_state` runs, asked as a
+    question instead of repeated as a literal. Two callers need the answer for
+    different reasons — the mixin to *perform* the copy, and
+    ``engine/targeting.py`` to raise the picker that chooses what to copy — and
+    the pair must never disagree about which cards offer one.
+
+    Deliberately a substring probe rather than :func:`enter_effect_line`, which
+    is whole-line and therefore declines Vesuvan Doppelganger (its copy line
+    carries a granted upkeep ability the mixin does not perform). The card still
+    copies as it enters, so it still needs the picker; asking the narrower
+    question here would silently drop its prompt.
+    """
+    if COPY_CREATURE_ON_ENTER in normalized_text:
+        return "creature"
+    if COPY_ARTIFACT_ON_ENTER in normalized_text:
+        return "artifact"
+    return None
+
+
 def enter_effect_line(line: str) -> str | None:
     """The entry-state phrase *line* consists of in full, or ``None``.
 
@@ -141,6 +164,7 @@ __all__ = [
     "LOSE_LIFE_EQUAL_TO_TOTAL_ON_ENTER",
     "NO_MAXIMUM_HAND_SIZE",
     "SPEND_WHITE_AS_RED",
+    "copy_on_enter_type",
     "enter_effect_line",
 ]
 

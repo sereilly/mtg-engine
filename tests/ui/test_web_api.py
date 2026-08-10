@@ -1997,7 +1997,11 @@ def test_fork_serializes_copies_spell_flag_in_hand():
     counter = next(c for c in hand if c["name"] == "Counterspell")
     assert fork["target_spec"]["kind"] == "stack"
     assert fork["target_spec"]["copies_spell"] is True
-    assert counter["target_spec"].get("copies_spell") is False
+    # Absent rather than False: the spec is derived from Counterspell's compiled
+    # program, which sets only the flags that apply. Every reader tests it for
+    # truthiness (`!!targetSpecOf(card).copies_spell`), so a missing key and an
+    # explicit False are the same answer.
+    assert not counter["target_spec"].get("copies_spell")
 
 
 def test_fork_copy_retargets_to_a_second_creature_via_http():
