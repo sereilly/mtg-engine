@@ -119,6 +119,22 @@ def _assert_expected(
     caster_index: int,
     target_index: int,
 ) -> str | None:
+    """What each card of the decklist above is expected to have done.
+
+    **These card names stay.** The engine's standing rule is that names live only
+    in ``card_hooks.py``, and ``ai_policy``'s valuations were derived out for
+    exactly that reason — but this is a *test oracle*, and a test oracle derived
+    from the system under test asserts nothing. Measured: compile Lightning Bolt
+    with its damage mis-parsed as 1, cast it, and the printed expectation below
+    fires ("damage did not match prevention/cap effects") while the same check
+    reading ``deal_damage``'s payload expects 1, sees 1, and passes. The numbers
+    here are read off the printed card by a human on purpose; that independence
+    is the whole value of the check.
+
+    The decay this *is* exposed to is the decklist moving out from under it — an
+    expectation for a card ``_build_deck`` no longer plays stops firing with
+    nothing failing. ``tests/ai/test_ai_simulator.py`` holds the two in step.
+    """
     before_target = before[target_index]
     after_target = after[target_index]
 

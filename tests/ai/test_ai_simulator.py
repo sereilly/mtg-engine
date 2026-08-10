@@ -1,11 +1,59 @@
-from pathlib import Path
+import ast
+import pathlib
 
 import pytest
 
 from engine import Game, PlayerState
-from engine.ai_simulator import run_ai_simulation
+from engine.ai_simulator import _build_deck, run_ai_simulation
 from engine.models import Permanent
 from tests.helpers import LEA_PATH
+
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+
+
+def _expected_card_names() -> set[str]:
+    """The card names ``_assert_expected`` branches on, read from the source.
+
+    An AST read rather than a hand-kept list: a list would be the third place
+    these names live, and it would go stale the same way the thing it guards
+    would."""
+    tree = ast.parse((ROOT / "engine" / "ai_simulator.py").read_text(encoding="utf-8"))
+    function = next(
+        node for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "_assert_expected"
+    )
+    found: set[str] = set()
+    for node in ast.walk(function):
+        if not isinstance(node, ast.Compare):
+            continue
+        operands = [node.left, *node.comparators]
+        if not any(isinstance(item, ast.Attribute) and item.attr == "name" for item in operands):
+            continue
+        found.update(
+            item.value for item in operands
+            if isinstance(item, ast.Constant) and isinstance(item.value, str)
+        )
+    return found
+
+
+def test_every_simulator_expectation_names_a_card_the_deck_plays(all_cards):
+    """``_assert_expected`` is allowed its card names — it is a test oracle, and
+    one derived from the compiled program would be a tautology (a Lightning Bolt
+    mis-parsed to 1 damage deals 1 and matches its own derived expectation).
+
+    What it is *not* immune to is the decklist drifting: an expectation for a
+    card ``_build_deck`` stopped playing never fires again, and nothing fails.
+    That is the same "the comment expired without anyone editing it" decay the
+    name rule exists for, so it gets a guard rather than a promise."""
+    deck = {card.name for card in _build_deck({c.name: c for c in all_cards}, seed=1)}
+    expected = _expected_card_names()
+
+    assert expected, "no card-name expectations found — did _assert_expected move?"
+    orphaned = sorted(expected - deck)
+    assert not orphaned, (
+        "engine/ai_simulator.py::_assert_expected checks cards the simulator's "
+        f"decklist no longer plays, so the checks never run: {orphaned}"
+    )
 
 
 @pytest.mark.slow

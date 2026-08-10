@@ -3402,6 +3402,92 @@ reported the trend. The number to keep honest is the baseline, not the budget.
 Making the suite faster is still worth doing — 132 sets are still to come, and
 per-set tests are the part that grows with them.
 
+## The name rule was never checked, and it had already decayed
+
+Invariant 5 said card names live only in `card_hooks.py`. It was written down
+here, repeated in `CLAUDE.md` and in `ARCHITECTURE.md`, and **nothing had ever
+tested it**. `engine/ai_policy.py` carried eight name comparisons and
+`engine/ai_simulator.py` five, none of them acknowledged anywhere.
+
+The interesting question was whether they were in scope at all. They are not
+rules code: an AI heuristic naming a card is tuning, and generalising tuning
+sounds like building a card-valuation model. So the sites were classified by
+what each name *stood in for*, and the answer settled it — **all eight in
+`ai_policy` stood in for something already in the compiled program**, and the
+decay was measurable in the current pool, not hypothetical:
+
+| Site | The name stood for | Measured today |
+| --- | --- | --- |
+| `"Disenchant"` targeting | a targeted destroy, valued by the opponent's board | Shatter, Terror, Stone Rain and Desert Twister print the template, were not named, and the AI **aimed all four at its own permanents** — Shatter resolved onto its own Howling Mine |
+| `"Ancestral Recall"` ×2 | drawing more cards than the library holds (CR 704.5b) | Braingeyser is the same sentence with X; with two cards left the AI cast it at itself for X=2 and emptied its own library |
+| `"Jayemdae Tome"` | a draw ability with an empty library | Jandor's Ring draws the same card and had no guard |
+| `"Lightning Bolt"` lethal | `damage >= opponent's life` — that card's damage spelled out | every other burn spell got nothing |
+| `"Black Lotus"` | a permanent whose value *is* mana | every Mox, Sol Ring and Basalt Monolith got nothing |
+| `"Unsummon"` | returning a creature to hand | one card in the pool, but the same shape |
+| `"Counterspell"` | countering a spell | **dead**: Counterspell's oracle text *is* "counter target spell", so the text probe beside it already matched |
+
+`engine/ai_valuation.py` derives all of it from `compile_card_oracle`, in the
+style of `cost_modifiers.py` / `lord_buffs.py` / `land_play_allowance.py`, and
+`tests/ai/test_ai_valuation.py` pins every property with an **invented** card
+printing the template under a name the engine has never seen — a test naming
+only the real card passes against the broken version, which is exactly how these
+survived.
+
+**The AI's decisions did not move where they were already right.** The 10-game
+seeded simulation is byte-identical, 443 interactions, and the suite is
+unchanged. Every decision that *did* change is one of the rows above.
+
+Three findings beyond the brief, all the same decay one level down:
+
+- **`{"add_mana", "black_lotus_add_mana"}`** gated "don't activate a mana ability
+  for its own sake", and **neither instruction kind still existed** — both had
+  been renamed out from under it. So the AI tapped its Moxen for mana that
+  emptied unspent and *sacrificed Black Lotus* to do it. The replacement is a
+  named constant held to registered `EFFECT_HANDLERS` entries by a test; putting
+  the original set back makes that test fail naming both dead kinds.
+- **`"disenchant" in text` / `"unsummon" in text`** — a card's *name* searched
+  for inside its own oracle text. No card in the pool contains either, so both
+  probes had never fired.
+- `_can_cast_with_targets` still reads a permanent's activated ability out of
+  `OracleProgram.instructions` (they are mirrored there), so the AI will not cast
+  Royal Assassin or Northern Paladin unless the opponent already has something
+  the *ability* could destroy. Left alone deliberately — it is the same trap,
+  but no card name is involved and fixing it widens the behaviour delta.
+
+### The simulator's assertions are a different case, and the difference is measurable
+
+`ai_simulator._assert_expected` names five cards to assert what each did. It
+looks like the same defect and is not: it is a **test oracle**, and a test oracle
+derived from the system under test asserts nothing. Measured, not argued —
+compile Lightning Bolt with its damage mis-parsed as 1, cast it, and the printed
+expectation fires while the same check reading `deal_damage`'s payload expects 1,
+sees 1, and passes. The numbers are read off the printed card by a human on
+purpose.
+
+It has a real decay mode all the same, just not this one: the decklist can move
+out from under it, and an expectation for a card `_build_deck` no longer plays
+stops firing with nothing failing. That now has a guard which reads the names
+out of the source and checks them against the deck.
+
+### The guard, and what it scans for
+
+`tests/engine/test_card_name_reads.py` is the mechanism the invariant never had.
+It scans `engine/` for a card name **deciding behaviour** — a comparison or
+membership test against `<something>.name` — with `card_hooks.py` excluded, an
+`ACKNOWLEDGED` dict keyed `path::function`, and a staleness test.
+
+Scanning every string constant was tried first and is too blunt: `Sacrifice`,
+`Channel` and `Lich` are all card names *and* all appear as ordinary log and
+prompt labels. A name in a log line is data; a name in an `if` is dispatch. Basic
+lands are exempt because a basic land's name is also a land subtype, and subtypes
+are vocabulary data.
+
+All four tests were verified by injecting the bug each exists to catch: putting
+`card.name == "Disenchant"` back fails the scan (and three behaviour tests
+alongside it), pointing `HOOKS` at another module fails the vacuity check,
+renaming `_assert_expected` fails the staleness check, and restoring the dead
+mana-kind set fails the handler check naming both kinds.
+
 ---
 
 ## Standing invariants
@@ -3419,9 +3505,24 @@ Anything that weakens these is a regression regardless of what it enables:
    are pure functions of card text.
 4. **Ratchets only tighten.** Coverage floors, probe baselines, and accepted-diff
    lists shrink or hold — never grow without review.
-5. **Card names live only in `card_hooks.py`.** No `TODO(card-hooks)`
-   exceptions remain outside it. "Only one card does this" is a claim about the
+5. **No card name decides behaviour outside `card_hooks.py`** — anywhere under
+   `engine/`, heuristics and AI code included. The rule is about *dispatch*, not
+   mention: a name in a log line, a prompt label or a fixture decklist is data;
+   a name in an `if` is a claim, and `tests/engine/test_card_name_reads.py`
+   enforces exactly that shape. "Only one card does this" is a claim about the
    *pool*, and it expires without anyone editing the comment — so before a name
    goes anywhere else, give an invented card the same printed text and check
    that it behaves. A name-keyed dispatch and a CR rule written as a card
    special case grep identically and have opposite fixes.
+
+   Two things this covers that the earlier wording did not, both found by
+   writing the guard rather than by reading the rule. **Heuristics are in
+   scope.** A weight is tuning and stays tuning, but *which cards a weight
+   reaches* is a claim about the pool and decays exactly like a parse rule —
+   `ai_policy` named eight cards and aimed four unnamed removal spells at its own
+   board. Derive the reach (`engine/ai_valuation.py`) and keep the weight.
+   **Test oracles are out of scope, with their reason measured.**
+   `ai_simulator._assert_expected` asserts a card did what the *printed* card
+   says; deriving that from the compiled program makes it a tautology, and the
+   only exemptions that stay are ones where the tautology has actually been
+   demonstrated. An acknowledgement carries the measurement, not an opinion.

@@ -275,11 +275,16 @@ adding entries, not editing dispatch**:
 - `engine/card_hooks.py` — name-keyed registries for truly bespoke behavior
   (spell-resolved and counterspell riders, leave-battlefield effects,
   draw-step modifiers, the Aura on a land tapped for mana).
-  **This is the only sanctioned place to reference a card by name**; do not put
-  card names anywhere else in the engine. There are no `# TODO(card-hooks)`
-  exceptions left: the last three each turned out to be a template or a general
-  CR rule, not one card. Before writing a name, check by *behaviour* — give an
-  invented card the same printed text and see whether it works.
+  **This is the only sanctioned place to key behavior on a card name**, enforced
+  across `engine/` by `tests/engine/test_card_name_reads.py`: a name in a
+  comparison is dispatch and fails there; a name in a log line, a prompt label
+  or a fixture decklist is data and does not. There are no `# TODO(card-hooks)`
+  exceptions left: every one turned out to be a template or a general CR rule,
+  not one card. Before writing a name, check by *behaviour* — give an invented
+  card the same printed text and see whether it works. **AI heuristics are in
+  scope**: a weight is tuning and stays in `engine/ai_policy.py`, but which
+  cards a weight reaches is a claim about the pool and is derived from the
+  compiled program in `engine/ai_valuation.py`.
 - `engine/land_animation.py`, `engine/land_play_allowance.py` — the newest two
   derivation tables: "All <type>s are P/T creatures that are still lands"
   (CR 613 layers 4/5/7) and "You may play <N> additional lands on each of

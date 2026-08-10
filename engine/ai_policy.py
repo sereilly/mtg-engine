@@ -3,9 +3,19 @@ from __future__ import annotations
 from dataclasses import dataclass
 import re
 
+from .ai_valuation import (
+    cards_drawn_by_controller,
+    cards_drawn_by_target,
+    counters_a_spell,
+    destroyed_permanent_filter,
+    is_mana_ability,
+    mana_ability_amount,
+    returns_creature_to_hand,
+)
 from .cost_modifiers import spell_cost_tax
 from .classifier import classify_card
 from .game import Game
+from .handlers._common import permanent_matches_filter
 from .mixins.stack import aura_enchant_noun, permanent_matches_enchant_noun
 from .auras import aura_restriction_active
 from .models import CardDefinition, Permanent, PlayerState
@@ -61,16 +71,19 @@ def choose_cast_action(game: Game, player_index: int) -> CastAction | None:
         if not _can_cast_with_targets(game, player_index, card):
             continue
 
-        target = _choose_target_for_spell(card, player_index, game)
+        # X first: an X-draw spell's target choice depends on how many cards it
+        # would draw (a spell that empties your own library is aimed elsewhere),
+        # so the value has to exist before the target is picked.
+        x_value = _pick_x_value(game, player, card)
+        if x_value == 0:
+            continue
+        target = _choose_target_for_spell(card, player_index, game, x_value)
         target_permanent_index: int | None = None
         if aura_enchant_noun(card) is not None:
             aura_choice = _choose_aura_target(game, player_index, card)
             if aura_choice is None:
                 continue  # Aura spells require a legal target (Rule 115.1b)
             target, target_permanent_index = aura_choice
-        x_value = _pick_x_value(game, player, card)
-        if x_value == 0:
-            continue
         tap_indices: tuple[int, ...] = ()
 
         if game.enforce_mana_costs and card.primary_type != "land":
@@ -116,7 +129,12 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
         if ability is None or ability.instruction is None:
             continue
 
-        if ability.instruction.kind in {"add_mana", "black_lotus_add_mana"}:
+        # A mana ability is activated to *pay* for something (_plan_taps_for_cost
+        # arranges that), never for its own sake: mana added here empties at the
+        # end of the step, and Black Lotus sacrifices itself to add it. The set
+        # this replaced named two instruction kinds that no longer exist, so the
+        # skip had silently stopped happening — see MANA_ABILITY_KINDS.
+        if is_mana_ability(ability.instruction):
             continue
 
         target = _choose_target_for_instruction(ability.instruction, player_index, game)
@@ -137,7 +155,7 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
                 continue
             land_taps = tuple(plan)
 
-        score = _score_activation(game, player_index, permanent, ability.instruction, target)
+        score = _score_activation(game, player_index, ability.instruction, target)
         if score <= 0.0:
             continue
         candidate = ActivationAction(
@@ -424,8 +442,8 @@ def _score_tutor_choice(game: Game, player_index: int, card: CardDefinition) -> 
     if not classify_card(card).supported:
         return -50.0
 
-    target = _choose_target_for_spell(card, player_index, game)
     x_value = _pick_x_value(game, player, card)
+    target = _choose_target_for_spell(card, player_index, game, x_value)
     score = _score_cast(game, player_index, card, target, x_value)
 
     lands_available = sum(
@@ -473,7 +491,11 @@ def _stack_response_bonus(game: Game, caster_index: int, card: CardDefinition, t
     lowered = card.oracle_text.lower()
     bonus = 0.0
 
-    if "counter target spell" in lowered or card.name == "Counterspell":
+    # Countering is only worth holding up against a spell this card may legally
+    # be aimed at, which is why the profile carries the colour restriction
+    # rather than the caller assuming there is none.
+    counter = counters_a_spell(card)
+    if counter is not None and counter.can_counter(top.card):
         bonus += 6.0
 
     if top.target_player_index == caster_index:
@@ -485,7 +507,11 @@ def _stack_response_bonus(game: Game, caster_index: int, card: CardDefinition, t
     if _extract_damage(card) > 0 and target_index == choose_attack_target(game, caster_index):
         bonus += 1.0
 
-    if "destroy" in lowered or "disenchant" in lowered or "unsummon" in lowered:
+    # Removal is worth a little in response. The probes here used to be
+    # ``"disenchant" in lowered or "unsummon" in lowered`` — a card's *name*
+    # looked for inside its own oracle text, which no card in the pool contains,
+    # so both were dead and only the generic "destroy" ever fired.
+    if "destroy" in lowered or destroyed_permanent_filter(card) is not None or returns_creature_to_hand(card):
         bonus += 0.75
 
     return bonus
@@ -617,16 +643,24 @@ def _choose_aura_target(game: Game, caster_index: int, card: CardDefinition) -> 
     return None
 
 
-def _choose_target_for_spell(card: CardDefinition, caster_index: int, game: Game) -> int:
-    self_score = _score_spell_target(card, caster_index, caster_index, game)
+def _choose_target_for_spell(
+    card: CardDefinition, caster_index: int, game: Game, x_value: int | None = None
+) -> int:
+    self_score = _score_spell_target(card, caster_index, caster_index, game, x_value)
     opponent_index = choose_attack_target(game, caster_index)
-    opp_score = _score_spell_target(card, caster_index, opponent_index, game)
+    opp_score = _score_spell_target(card, caster_index, opponent_index, game, x_value)
     if self_score >= opp_score:
         return caster_index
     return opponent_index
 
 
-def _score_spell_target(card: CardDefinition, caster_index: int, target_index: int, game: Game) -> float:
+def _score_spell_target(
+    card: CardDefinition,
+    caster_index: int,
+    target_index: int,
+    game: Game,
+    x_value: int | None = None,
+) -> float:
     caster = game.players[caster_index]
     target = game.players[target_index]
     text = card.oracle_text.lower()
@@ -634,9 +668,13 @@ def _score_spell_target(card: CardDefinition, caster_index: int, target_index: i
     score = 0.0
     if "draw" in text:
         if target_index == caster_index:
-            # Targeting self when library has <= 3 cards would exhaust it and cause a
-            # loss via rule 704.5b on the next draw step; redirect to the opponent instead.
-            if card.name == "Ancestral Recall" and len(caster.library) <= 3:
+            # Drawing more cards than the library holds is a loss by CR 704.5b on
+            # the next draw; redirect to the opponent instead. How many cards the
+            # spell draws is read off the compiled instruction, so "Target player
+            # draws X cards" is covered at the X the caster picked and not only
+            # the one card printed "three".
+            drawn = cards_drawn_by_target(card, x_value)
+            if drawn is not None and len(caster.library) <= drawn:
                 score -= 100.0
             else:
                 score += 5.0
@@ -667,23 +705,28 @@ def _score_spell_target(card: CardDefinition, caster_index: int, target_index: i
         else:
             score -= 6.0
 
-    if card.name == "Unsummon":
+    # Interaction aimed at a player's board, valued by what that board offers.
+    # Both used to be one card name each; the two templates they stood for are
+    # printed on nine cards in this pool alone, and the seven that were not
+    # named aimed themselves at the AI's own permanents.
+    if returns_creature_to_hand(card):
         if target_index == caster_index:
             return -50.0
-        creatures = [
-            perm for perm in game.controlled_by(target) if perm.card.primary_type == "creature"
-        ]
+        creatures = [perm for perm in game.controlled_by(target) if perm.is_creature]
         return 2.0 + max((perm.effective_power for perm in creatures), default=0)
 
-    if card.name == "Disenchant":
+    destroy_filter = destroyed_permanent_filter(card)
+    if destroy_filter is not None:
         if target_index == caster_index:
             return -50.0
-        artifacts_or_enchantments = [
-            perm
-            for perm in game.controlled_by(target)
-            if perm.card.primary_type in {"artifact", "enchantment"}
+        # The engine's own matcher, so the AI counts exactly the permanents it
+        # would be allowed to choose. An unfiltered "destroy target permanent"
+        # carries an empty filter and matches them all.
+        destroyable = [
+            perm for perm in game.controlled_by(target)
+            if permanent_matches_filter(perm, destroy_filter)
         ]
-        return 2.0 + len(artifacts_or_enchantments) * 1.5
+        return 2.0 + len(destroyable) * 1.5
 
     if "target opponent" in text:
         score += 3.0 if target_index != caster_index else -10.0
@@ -726,25 +769,38 @@ def _score_cast(game: Game, caster_index: int, card: CardDefinition, target_inde
     if card.primary_type in {"artifact", "enchantment"}:
         score += 0.8
 
-    score += _score_spell_target(card, caster_index, target_index, game)
+    score += _score_spell_target(card, caster_index, target_index, game, x_value)
 
     if x_value is not None:
         score += min(4.0, x_value * 0.6)
 
-    if card.name == "Ancestral Recall":
-        score += 8.0
-        # Never self-target when 3 or fewer library cards remain — drawing 3 leaves library
-        # at 0, causing a 704.5b loss on the next draw step.
-        if target_index == caster_index and len(caster.library) <= 3:
+    # Card advantage: the cards this spell draws, less the one spent casting it.
+    # The weight is tuning; which cards it applies to is not, and it used to be
+    # a flat +8.0 for one name — worth exactly 4.0 per net card at the three
+    # that name draws, and nothing at all to every other draw spell.
+    drawn = cards_drawn_by_target(card, x_value)
+    if drawn is not None:
+        score += 4.0 * (drawn - 1)
+        # Never self-target a draw that outruns the library: CR 704.5b on the
+        # next draw step.
+        if target_index == caster_index and len(caster.library) <= drawn:
             return -100.0
-    elif card.name == "Lightning Bolt" and target_index == opponent_index and opponent.life <= 3:
+
+    # Burn that closes the game outranks everything. The threshold used to read
+    # ``card.name == "Lightning Bolt" and opponent.life <= 3`` — which is that
+    # card's damage spelled out, so any other lethal burn spell got nothing.
+    damage = _extract_damage(card) or _estimate_x_damage(game, caster, card)
+    if damage > 0 and target_index == opponent_index and opponent.life <= damage:
         score += 12.0
-    elif card.name == "Black Lotus":
+
+    # A mana source is worth playing early when there is something to spend the
+    # mana on, and worth nothing at all when mana costs are not enforced. True
+    # of every Mox, Sol Ring and Basalt Monolith here; only Black Lotus was named.
+    if mana_ability_amount(card) is not None:
         if game.enforce_mana_costs:
             hand_nonlands = sum(1 for hand_card in caster.hand if hand_card.primary_type != "land")
             score += 2.0 if hand_nonlands >= 2 else 0.5
         else:
-            # Mana costs not enforced — Black Lotus provides no benefit, make it unattractive
             score -= 2.0
 
     return score
@@ -753,10 +809,12 @@ def _score_cast(game: Game, caster_index: int, card: CardDefinition, target_inde
 def _score_activation(
     game: Game,
     player_index: int,
-    permanent: Permanent,
     instruction: OracleInstruction,
     target_index: int,
 ) -> float:
+    """Score one activated ability. The *source permanent* is deliberately not a
+    parameter: the last thing that read it asked for its name, and everything an
+    activation is worth is in the instruction it puts on the stack."""
     score = 1.0
 
     if instruction.kind == "deal_damage":
@@ -770,21 +828,28 @@ def _score_activation(
             score += 10.0
     elif instruction.kind == "draw_target_cards":
         score += 5.0 if target_index == player_index else 0.0
-    elif instruction.kind in {"add_mana", "black_lotus_add_mana"}:
+    elif is_mana_ability(instruction):
         score += 2.5
     elif instruction.kind == "grant_banding_to_target":
         score += 0.5
     else:
         score += 1.5
 
-    if permanent.card.name == "Jayemdae Tome" and not game.players[player_index].library:
+    # Drawing more cards than the library holds loses the game (CR 704.5b). This
+    # was ``permanent.card.name == "Jayemdae Tome" and not library`` — that card's
+    # one-card draw spelled out, so Jandor's Ring drew the AI to death.
+    drawn = cards_drawn_by_controller(instruction)
+    if drawn is not None and len(game.players[player_index].library) < drawn:
         return -100.0
 
     return score
 
 
 def _choose_target_for_instruction(instruction: OracleInstruction, caster_index: int, game: Game) -> int:
-    if instruction.kind in {"draw_target_cards", "gain_life", "prevent_damage", "black_lotus_add_mana"}:
+    if is_mana_ability(instruction):
+        # Mana goes to its controller's pool; the ability has no other target.
+        return caster_index
+    if instruction.kind in {"draw_target_cards", "gain_life", "prevent_damage"}:
         return caster_index
     # "deal_damage"/"destroy_target"/etc., and the fallback for any other
     # proactive effect: target an opponent (MVP heuristic, see
