@@ -129,10 +129,7 @@ def affected_seat(game, affected) -> int | None:
     for index, player in enumerate(game.players):
         if player is affected:
             return index
-    for index, player in enumerate(game.players):
-        if any(permanent is affected for permanent in player.battlefield):
-            return index
-    return None
+    return game.controller_index_of(affected)
 
 
 #: Returned by an ``ask`` hook that has queued a prompt instead of answering.

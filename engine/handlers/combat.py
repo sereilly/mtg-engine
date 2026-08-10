@@ -187,7 +187,7 @@ def mark_non_wall_target_to_attack(game: Game, instruction: OracleInstruction, c
     target_creature = next(
         (
             perm
-            for perm in target.battlefield
+            for perm in game.controlled_by(target)
             if perm.is_creature and "wall" not in perm.card.type_line.lower()
         ),
         None,
@@ -203,9 +203,8 @@ def mark_non_wall_target_to_attack(game: Game, instruction: OracleInstruction, c
 
 @effect_handler("force_active_player_creatures_to_attack")
 def force_active_player_creatures_to_attack(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    active = game.players[game.active_player_index]
     marked: list[str] = []
-    for permanent in active.battlefield:
+    for permanent in game.controlled_by(game.active_player_index):
         if not permanent.is_creature:
             continue
         permanent.metadata["must_attack_until_eot"] = True

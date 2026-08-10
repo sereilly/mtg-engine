@@ -137,7 +137,7 @@ class DrawStepMixin:
         has_sanctuary = any(
             (modifier := DRAW_STEP_MODIFIERS.get(perm.card.name)) is not None
             and modifier.optional_skip_grants_protection
-            for perm in player.battlefield
+            for perm in self.controlled_by(player)
         )
         if has_sanctuary and sanctuary_choice is not False:
             player.island_sanctuary_protected = True

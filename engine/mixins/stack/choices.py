@@ -395,7 +395,7 @@ class PendingChoicesMixin:
                 return False
         # The permanent may already be gone (e.g. destroyed at instant speed);
         # the choice then has nothing to apply to, but the prompt still clears.
-        if any(perm is permanent for p in self.players for perm in p.battlefield):
+        if self.is_on_battlefield(permanent):
             permanent.metadata["chosen_player_index"] = opponent_index
             chose = f"{self.players[player_index].name} chose {self.players[opponent_index].name}"
             if color is not None:
@@ -736,7 +736,7 @@ class PendingChoicesMixin:
             return True
         untapped_land_mana = sum(
             1
-            for perm in player.battlefield
+            for perm in self.controlled_by(player)
             if perm.card.primary_type == "land" and not perm.tapped and perm.effective_produced_mana
         )
         return floating + untapped_land_mana >= amount
@@ -758,7 +758,7 @@ class PendingChoicesMixin:
                 remaining -= 1
         # Tap untapped lands to cover any generic remainder ({1}).
         if remaining > 0:
-            for perm in player.battlefield:
+            for perm in self.controlled_by(player):
                 if remaining <= 0:
                     break
                 if perm.card.primary_type == "land" and not perm.tapped and perm.effective_produced_mana:

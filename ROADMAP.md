@@ -991,6 +991,8 @@ was wrong on any land something newer had changed.)*
 **Layers 4, 5, 6 and 7 are now all read through the layer system.** What remains
 is layer 1 (copies), layer 2 (control, which the earlier audit established is
 zone membership here rather than a stored flag) and layer 3 (text-changing).
+*(Layer 2 is done — see "Layer 2: the readers first, then the storage" below.
+Zone membership is the projection now, not the storage.)*
 
 ### Layer 3: apply the text change once, not at each reader
 
@@ -1026,7 +1028,7 @@ because `effective_card` is read on nearly every rules query.
 
 **Layers 3, 4, 5, 6 and 7 now all resolve through the layer system.** Remaining:
 layer 1 (copies) and layer 2 (control, already established here as zone
-membership rather than a stored flag).
+membership rather than a stored flag). *(Layer 2 is done — see below.)*
 
 ### The last card-rewriting effect: Animate Artifact
 
@@ -1069,7 +1071,10 @@ accessor, not for remembering to update both.
 **Every layer that changes a characteristic now resolves through the layer
 system.** What is left of layer 1 is copy *identity* (`copied_card`), which is
 already metadata-driven and read through `effective_card`; and layer 2, which
-this engine models as zone membership rather than a stored flag.
+this engine models as zone membership rather than a stored flag. *(Superseded:
+layer 2 resolves through the layer system too — `engine/control.py` records the
+contributions and the battlefield lists became its projection. See "Layer 2:
+the readers first, then the storage".)*
 
 ### The grammar backlog was ranked by symptom, not by leverage
 
@@ -2891,7 +2896,7 @@ were caught by existing tests rather than by inspection.
 | Layer | Status |
 | --- | --- |
 | 1 copy | constructors only — the engine models copies with metadata overrides |
-| 2 control | constructors + tests; storage not wired |
+| 2 control | **live** — `engine/control.py` records the contributions, `Game.controller_index_of` computes through them |
 | 3 text | **live** — `engine/text_changes.py`, applied by `Permanent.effective_card` |
 | 4 type | **live** — `engine/land_types.py` records the CR 305.7 replacements |
 | 5 colour | **live** |
@@ -2920,27 +2925,120 @@ per-card text parsing behind seeding is cached on the same immutable fields
 `compile_card_oracle` keys on. That took `is_creature` from 4.6µs to 2.8µs and
 `effective_power` from 8.1µs to 6.1µs, and the suite back under nine seconds.
 
-**Layer 2 is structurally different from the others, and that is the finding.**
-Layers 4–7 were flags a reader consulted, so wiring them meant changing the
-reader. Control is not stored at all — a control change *moves the permanent
-between `player.battlefield` lists*, so "who controls this" is answered by which
-list it is in. Making the controller a derived characteristic means every site
-that reads zone membership has to stop doing so first, and there are **129** of
-them.
+**Layer 2 was structurally different from the others, and that was the
+finding.** Layers 4–7 were flags a reader consulted, so wiring them meant
+changing the reader. Control was not stored at all — a control change *moved
+the permanent between `player.battlefield` lists*, so "who controls this" was
+answered by which list it was in. Making the controller a derived
+characteristic meant every site that read zone membership had to stop doing so
+first, and there were **172** of them — 165 in `engine/`, 7 in `web/`.
 
-`Game.all_permanents` / `permanents_with_controller` / `permanents_matching`
-are that seam, and also close the audit's largest duplication hotspot (the
-open-coded `for player: for perm in player.battlefield` double loop, 27
-occurrences). `tests/rules/test_layers.py` pins the current
-control-as-zone-membership model so the day it changes is deliberate rather
-than incidental.
+**Done, in that order.** See "Layer 2: the readers first, then the storage"
+below for what the migration cost and what it found.
 
-**Still open:** layer 2 storage (behind the 129 iteration sites above).
+Still open is layer 1, the deep one: modelling copies as real copiable values
+instead of stamped `absolute_power`/`copied_colors` overrides. That is what
+would let `effective_card` disappear, and it is the source of the two seeding
+subtleties this phase already tripped over.
 
-And layer 1, the deep one: modelling copies as real copiable values instead of
-stamped `absolute_power`/`copied_colors` overrides. That is what would let
-`effective_card` disappear, and it is the source of the two seeding subtleties
-this phase already tripped over.
+### Layer 2: the readers first, then the storage
+
+**Step 1 — the readers.** `Game.all_permanents` /
+`permanents_with_controller` / `permanents_matching` existed as a seam but only
+25 call sites used it, because it could not answer the question most sites were
+actually asking: *what does one seat control*. Four methods were added, and
+they are now the whole of what may read zone membership:
+
+| Seam method | The question |
+| --- | --- |
+| `all_permanents()` | every permanent on the battlefield |
+| `permanents_with_controller()` | ditto, paired with the controlling seat |
+| `controlled_by(seat)` | what one seat controls |
+| `permanents_matching(pred)` | the filtered form |
+| `controller_index_of(perm)` | who controls this — **CR 613 layer 2** |
+| `controls(seat, perm)` | does this seat control it |
+| `is_on_battlefield(perm)` | is it there at all |
+
+172 open-coded iteration/membership sites (165 `engine/`, 7 `web/`) went down
+to **8**: six in one AI-simulator snapshot comparison over detached
+`PlayerState` clones, one positional target-resolver, and one inside the seam
+itself. 23 more survive structurally as zone *writes* — the
+`X.battlefield = [p for p in X.battlefield if p is not gone]` rebuild and the
+`survivors` loop — which the guard exempts by *shape* rather than by name, so
+the exemption cannot go stale.
+
+**Two live bugs came out of the migration, and they are the same bug.**
+`permanent in player.battlefield` compares `Permanent` **by value** — it is a
+mutable dataclass with a generated `__eq__` — so it answers yes for an
+opponent's identically-stated copy of the same card:
+
+- CR 704.5m read that way, so an Aura whose enchanted creature had died stayed
+  on the battlefield as long as *some* player had an identical creature in an
+  identical state.
+- The world rule (704.5k) and role rule (704.5y) then called `.remove()` on the
+  same value match, which removes the look-alike rather than the permanent the
+  sweep chose.
+
+`controls` / `is_on_battlefield` compare by identity. This is the same class as
+the Camel band-shield `list.index` bug from batch 22, which is the argument for
+one accessor over eleven hand-written scans.
+
+**Step 2 — the storage.** With the readers behind the seam, control became a
+recorded contribution:
+
+- **`engine/control.py`** — `change_control(permanent, seat, source=…)` records
+  one with a CR 613.7 timestamp; `end_control_change(permanent, source=…)`
+  drops that one and nothing else; `base_controller_index` holds the value
+  layer 2 starts from (CR 613.1's copiable characteristic), written once when
+  the permanent enters and never again.
+- **`engine/layer_bridge.py`** — `collect_control_effects` turns each into a
+  layer-2 `ContinuousEffect`; `computed_controller` applies them. A permanent
+  with no control effect skips the layer engine entirely, which is what keeps
+  `controller_index_of` at 0.79µs.
+- **`Game.take_control` / `end_control_changes_from` / `_sync_control`** — the
+  battlefield lists are the **projection** of the derived controller, not the
+  storage for it. One synchronizer moves permanents to match, and it is also
+  the single place CR 302.6 is stamped, so a permanent changing hands cannot be
+  marked summoning-sick by one control path and not by another.
+
+Gone: `_take_control_linked`, `_revert_stolen_permanent`,
+`stolen_owner_index`. Control Magic, Steal Artifact, Aladdin, Old Man of the
+Sea and Ghazbán Ogre are all one `take_control` call now, and their durations
+end by dropping a contribution.
+
+**The bug that justifies the storage change.** Steal Artifact and then Aladdin
+on the same artifact, with the Aura destroyed first and Aladdin lost second,
+handed the artifact to the Aura's controller — a player who by then controlled
+nothing that gave it to them, and who did not own it either. Remember-and-undo
+cannot express "two effects, ended out of order", exactly as the single stamped
+land-type string could not express two land-type changes. Ending a contribution
+is an *absence* now: whatever is left applies in timestamp order, and if
+nothing is left the permanent returns to the seat it entered under. Pinned in
+`tests/regressions/test_batch23.py` and, as a layer property, in
+`tests/rules/test_layers.py`.
+
+Ownership came free with it. CR 108.3 used to be read off the *thief*
+(`stolen_owner_index`), so a second theft overwrote the first one's answer and
+a twice-stolen permanent could die into the wrong graveyard. It reads
+`base_controller_index` now, which no theft touches.
+
+**The guard.** `tests/engine/test_control_reads.py` is the layer-4 sibling: a
+raw `player.battlefield` iteration or `in` test outside `engine/mixins/helpers.py`
+fails, with each genuine exception acknowledged by `path::function` (so it
+survives line edits) and a second test that fails when an acknowledgement goes
+stale. Verified by injecting each: reintroducing a raw read, migrating an
+acknowledged function, and renaming a seam method.
+
+**What is deliberately *not* done, measured.** 266 sites still address a
+permanent **positionally** — `player.battlefield[i]`, `len(...)`,
+`enumerate(...)` — concentrated in the combat steps (72), the web API (26) and
+the AI policy (19). That is the wire protocol: the browser names a permanent by
+its slot on a controller's battlefield, and the engine's declare-attackers /
+declare-blockers maps are keyed by those indices. It is a separate axis from
+control, and it stays correct only because `_sync_control` keeps the projection
+honest — a permanent that changed hands changes slot. Replacing slots with
+stable permanent ids is the follow-on, and it reaches the JSON contract and the
+canvas renderer, not just the engine.
 
 ### Layers 3 and 4 have write APIs, and both needed timestamps
 

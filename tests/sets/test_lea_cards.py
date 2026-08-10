@@ -2587,7 +2587,7 @@ def test_sirens_call_exempts_creature_stolen_this_turn(all_cards):
 
     # The active player steals P1's bear mid-turn: it is summoning-sick again
     # (CR 302.6) and was not controlled continuously since the turn began.
-    assert game._take_control_linked(theft_source, bear, p2) is True
+    assert game.take_control(bear, p2, source=theft_source) is True
     assert bear.metadata.get("summoning_sickness_turn") == game.turn
     assert game._is_summoning_sick(bear) is True
 

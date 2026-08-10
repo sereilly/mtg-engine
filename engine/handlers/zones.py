@@ -184,10 +184,8 @@ def ante_self_then_clear_ante_and_draw(game: Game, instruction: OracleInstructio
     if source_permanent is None:
         return False, "ability not implemented"
     owner_index = game.owner_index_of(source_permanent)
-    controller = next(
-        (p for p in game.players if any(perm is source_permanent for perm in p.battlefield)),
-        None,
-    )
+    controller_seat = game.controller_index_of(source_permanent)
+    controller = game.players[controller_seat] if controller_seat is not None else None
     if controller is None:
         game.log.append(f"{card.name} is no longer on the battlefield to ante")
         return True, "resolved"

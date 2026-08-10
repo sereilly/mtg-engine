@@ -68,12 +68,11 @@ class GameEndingMixin:
         player owns in the ante zone do NOT leave the game — they stay there for
         whoever eventually wins (CR 407.2) — so ``player.ante`` is untouched."""
         player = self.players[player_index]
-        if player.battlefield:
-            for permanent in player.battlefield:
-                self.log.append(
-                    f"{permanent.card.name} leaves the game ({player.name} left the game, CR 800.4a)"
-                )
-            player.battlefield = []
+        for permanent in self.controlled_by(player_index):
+            self.log.append(
+                f"{permanent.card.name} leaves the game ({player.name} left the game, CR 800.4a)"
+            )
+        player.battlefield = []
         # CR 800.4a: stack objects this player owns/controls cease to exist.
         self.stack = [item for item in self.stack if item.caster_index != player_index]
         self.log.append(f"{player.name} has left the game (CR 800.4a)")
@@ -146,7 +145,7 @@ class GameEndingMixin:
             # (Serendib Djinn, Island Fish Jasconius already covered by no_islands).
             # Modeled alongside SBAs so it fires immediately when the last
             # matching land leaves, not only at the next upkeep (CR 603.8).
-            for player in self.players:
+            for seat, player in enumerate(self.players):
                 survivors_ss: list[Permanent] = []
                 for perm in player.battlefield:
                     needs_island = next(matching_triggers(
@@ -161,9 +160,11 @@ class GameEndingMixin:
                     ), None) is not None
                     controls_island = any(
                         p.card.primary_type == "land" and p.has_type("island")
-                        for p in player.battlefield
+                        for p in self.controlled_by(seat)
                     )
-                    controls_any_land = any(p.card.primary_type == "land" for p in player.battlefield)
+                    controls_any_land = any(
+                        p.card.primary_type == "land" for p in self.controlled_by(seat)
+                    )
                     if (needs_island and not controls_island) or (needs_any_land and not controls_any_land):
                         self._permanent_to_graveyard(player, perm)
                         reason = "controls no lands" if needs_any_land and not controls_any_land else "controls no Islands"
@@ -228,11 +229,11 @@ class GameEndingMixin:
             for perm in self.all_permanents():
                 if not perm.metadata.get("stolen_while_tapped_and_weaker"):
                     continue
-                stolen = perm.metadata.get("stolen_permanent")
+                stolen = next(iter(self.permanents_controlled_via(perm)), None)
                 if stolen is None:
                     continue
                 if not perm.tapped or stolen.effective_power > perm.effective_power:
-                    self._revert_stolen_permanent(perm)
+                    self.end_control_changes_from(perm)
                     perm.metadata.pop("stolen_while_tapped_and_weaker", None)
                     changed = True
 
@@ -322,9 +323,8 @@ class GameEndingMixin:
             # actions were checked", so the marker is one-shot: anything still
             # alive after the sweep (its damage was prevented down to nothing)
             # must not carry the flag into a later, unrelated damage event.
-            for player in self.players:
-                for perm in player.battlefield:
-                    perm.metadata.pop("received_deathtouch", None)
+            for perm in self.all_permanents():
+                perm.metadata.pop("received_deathtouch", None)
 
             # 704.5i: planeswalker with 0 loyalty → graveyard
             def _zero_loyalty(perm: Permanent) -> bool:
@@ -359,16 +359,16 @@ class GameEndingMixin:
                         changed = True
 
             # 704.5k: world rule — keep only the most recently timestamped world permanent
-            world_perms: list[tuple[PlayerState, int, Permanent]] = []
-            for player in self.players:
-                for idx, perm in enumerate(player.battlefield):
-                    if "World" in perm.card.type_line:
-                        world_perms.append((player, idx, perm))
+            world_perms: list[tuple[PlayerState, Permanent]] = [
+                (self.players[seat], perm)
+                for seat, perm in self.permanents_with_controller()
+                if "World" in perm.card.type_line
+            ]
             if len(world_perms) > 1:
                 # Keep last (most recent timestamp = highest position), remove rest
-                for player, idx, perm in world_perms[:-1]:
-                    if perm in player.battlefield:
-                        player.battlefield.remove(perm)
+                for player, perm in world_perms[:-1]:
+                    if self.controls(player, perm):
+                        player.battlefield = [p for p in player.battlefield if p is not perm]
                         self._permanent_to_graveyard(player, perm)
                         self.log.append(f"{perm.card.name} put into graveyard (704.5k: world rule)")
                 changed = True
@@ -383,7 +383,7 @@ class GameEndingMixin:
                 attached_to = perm.metadata.get("attached_to")
                 if attached_to is None:
                     return True
-                return not any(attached_to in p.battlefield for p in self.players)
+                return not self.is_on_battlefield(attached_to)
 
             def _on_destroy_5m(perm: Permanent) -> None:
                 reason = (
@@ -447,70 +447,64 @@ class GameEndingMixin:
 
             # CR 702.16d: Equipment with a quality the equipped permanent has
             # protection from becomes unattached, but stays on the battlefield.
-            for player in self.players:
-                for perm in player.battlefield:
-                    if "Equipment" not in perm.card.type_line:
-                        continue
-                    attached_to = perm.metadata.get("attached_to")
-                    if attached_to is None:
-                        continue
-                    protection = self._protection_colors(attached_to)
-                    if protection and (protection & self._effective_colors(perm)):
-                        perm.metadata["attached_to"] = None
-                        self.log.append(
-                            f"{perm.card.name} became unattached (702.16d: equipped permanent has protection)"
-                        )
-                        changed = True
+            for perm in self.all_permanents():
+                if "Equipment" not in perm.card.type_line:
+                    continue
+                attached_to = perm.metadata.get("attached_to")
+                if attached_to is None:
+                    continue
+                protection = self._protection_colors(attached_to)
+                if protection and (protection & self._effective_colors(perm)):
+                    perm.metadata["attached_to"] = None
+                    self.log.append(
+                        f"{perm.card.name} became unattached (702.16d: equipped permanent has protection)"
+                    )
+                    changed = True
 
             # 704.5n: Equipment attached to illegal permanent → becomes unattached (stays on battlefield)
-            for player in self.players:
-                for perm in player.battlefield:
-                    if "Equipment" not in perm.card.type_line:
-                        continue
-                    attached_to = perm.metadata.get("attached_to")
-                    if attached_to is None:
-                        continue
-                    on_bf = any(attached_to in p.battlefield for p in self.players)
-                    if not on_bf:
-                        perm.metadata["attached_to"] = None
-                        self.log.append(f"{perm.card.name} became unattached (704.5n: equipped creature left battlefield)")
-                        changed = True
+            for perm in self.all_permanents():
+                if "Equipment" not in perm.card.type_line:
+                    continue
+                attached_to = perm.metadata.get("attached_to")
+                if attached_to is None:
+                    continue
+                if not self.is_on_battlefield(attached_to):
+                    perm.metadata["attached_to"] = None
+                    self.log.append(f"{perm.card.name} became unattached (704.5n: equipped creature left battlefield)")
+                    changed = True
 
             # 704.5p: non-Aura, non-Equipment, non-Role permanent in attached state → unattach
-            for player in self.players:
-                for perm in player.battlefield:
-                    if "Aura" in perm.card.type_line or "Equipment" in perm.card.type_line or "Role" in perm.card.type_line:
-                        continue
-                    if perm.metadata.get("attached_to") is not None:
-                        perm.metadata["attached_to"] = None
-                        self.log.append(f"{perm.card.name} became unattached (704.5p: illegal attached state)")
-                        changed = True
+            for perm in self.all_permanents():
+                if "Aura" in perm.card.type_line or "Equipment" in perm.card.type_line or "Role" in perm.card.type_line:
+                    continue
+                if perm.metadata.get("attached_to") is not None:
+                    perm.metadata["attached_to"] = None
+                    self.log.append(f"{perm.card.name} became unattached (704.5p: illegal attached state)")
+                    changed = True
 
             # 704.5q: +1/+1 and -1/-1 counter cancellation
-            for player in self.players:
-                for perm in player.battlefield:
-                    plus = perm.metadata.get("plus_counters", 0)
-                    minus = perm.metadata.get("minus_counters", 0)
-                    if plus > 0 and minus > 0:
-                        cancel = min(plus, minus)
-                        perm.metadata["plus_counters"] = plus - cancel
-                        perm.metadata["minus_counters"] = minus - cancel
-                        self.log.append(f"{perm.card.name}: cancelled {cancel} +1/+1 and -1/-1 counters (704.5q)")
-                        changed = True
+            for perm in self.all_permanents():
+                plus = perm.metadata.get("plus_counters", 0)
+                minus = perm.metadata.get("minus_counters", 0)
+                if plus > 0 and minus > 0:
+                    cancel = min(plus, minus)
+                    perm.metadata["plus_counters"] = plus - cancel
+                    perm.metadata["minus_counters"] = minus - cancel
+                    self.log.append(f"{perm.card.name}: cancelled {cancel} +1/+1 and -1/-1 counters (704.5q)")
+                    changed = True
 
             # 704.5r: counter cap enforcement
-            for player in self.players:
-                for perm in player.battlefield:
-                    cap_info = _parse_counter_cap(perm.card.oracle_text)
-                    if cap_info is None:
-                        continue
-                    cap, counter_type = cap_info
-                    counter_key = f"{counter_type}_counters"
-                    current = perm.metadata.get(counter_key, 0)
-                    if current > cap:
-                        perm.metadata[counter_key] = cap
-                        self.log.append(f"{perm.card.name}: trimmed {counter_type} counters to {cap} (704.5r)")
-                        changed = True
+            for perm in self.all_permanents():
+                cap_info = _parse_counter_cap(perm.card.oracle_text)
+                if cap_info is None:
+                    continue
+                cap, counter_type = cap_info
+                counter_key = f"{counter_type}_counters"
+                current = perm.metadata.get(counter_key, 0)
+                if current > cap:
+                    perm.metadata[counter_key] = cap
+                    self.log.append(f"{perm.card.name}: trimmed {counter_type} counters to {cap} (704.5r)")
+                    changed = True
 
             # 704.5s: Saga at or past final chapter → sacrifice
             def _saga_done(perm: Permanent) -> bool:
@@ -530,30 +524,32 @@ class GameEndingMixin:
                     changed = True
 
             # 704.5y: Role rule — per creature per controller, keep only the most recent Role
-            for player in self.players:
-                for perm in player.battlefield:
-                    if perm.card.primary_type != "creature":
+            for perm in self.all_permanents():
+                if perm.card.primary_type != "creature":
+                    continue
+                # Find all Roles attached to this creature, grouped by controller.
+                # The seam yields each seat's permanents in battlefield order, so
+                # "most recent" is still the last one collected.
+                roles_by_ctrl: dict[int, list[Permanent]] = {}
+                for ctrl_idx, role_perm in self.permanents_with_controller():
+                    if "Role" not in role_perm.card.type_line:
                         continue
-                    # Find all Roles attached to this creature, grouped by controller
-                    roles_by_ctrl: dict[int, list[tuple[int, Permanent]]] = {}
-                    for ctrl_idx, ctrl_player in enumerate(self.players):
-                        for role_idx, role_perm in enumerate(ctrl_player.battlefield):
-                            if "Role" not in role_perm.card.type_line:
-                                continue
-                            if role_perm.metadata.get("attached_to") is not perm:
-                                continue
-                            roles_by_ctrl.setdefault(ctrl_idx, []).append((role_idx, role_perm))
-                    for ctrl_idx, roles in roles_by_ctrl.items():
-                        if len(roles) <= 1:
-                            continue
-                        ctrl_player = self.players[ctrl_idx]
-                        # Keep the last (most recent), remove the rest
-                        for _, role_perm in roles[:-1]:
-                            if role_perm in ctrl_player.battlefield:
-                                ctrl_player.battlefield.remove(role_perm)
-                                self._permanent_to_graveyard(ctrl_player, role_perm)
-                                self.log.append(f"{role_perm.card.name} put into graveyard (704.5y: role rule)")
-                        changed = True
+                    if role_perm.metadata.get("attached_to") is not perm:
+                        continue
+                    roles_by_ctrl.setdefault(ctrl_idx, []).append(role_perm)
+                for ctrl_idx, roles in roles_by_ctrl.items():
+                    if len(roles) <= 1:
+                        continue
+                    ctrl_player = self.players[ctrl_idx]
+                    # Keep the last (most recent), remove the rest
+                    for role_perm in roles[:-1]:
+                        if self.controls(ctrl_player, role_perm):
+                            ctrl_player.battlefield = [
+                                p for p in ctrl_player.battlefield if p is not role_perm
+                            ]
+                            self._permanent_to_graveyard(ctrl_player, role_perm)
+                            self.log.append(f"{role_perm.card.name} put into graveyard (704.5y: role rule)")
+                    changed = True
 
             if changed:
                 any_changed = True

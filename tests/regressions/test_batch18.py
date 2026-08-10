@@ -558,11 +558,13 @@ class TestOldManOfTheSea:
     def test_headless_keeps_it_tapped_while_steal_is_live(self, arn_by_name):
         old_man = _nosick(Permanent(card=arn_by_name["Old Man of the Sea"], tapped=True))
         stolen = _nosick(Permanent(card=_C["Grizzly Bears"]))
-        old_man.metadata["stolen_while_tapped_and_weaker"] = True
-        old_man.metadata["stolen_permanent"] = stolen
-        p1 = PlayerState(name="P1", battlefield=[old_man, stolen])
-        p2 = PlayerState(name="P2")
+        p1 = PlayerState(name="P1", battlefield=[old_man])
+        p2 = PlayerState(name="P2", battlefield=[stolen])
         game = _game(p1, p2)
+        assert game.take_control(
+            stolen, 0, source=old_man,
+            extra_meta={"stolen_while_tapped_and_weaker": True},
+        )
         game.resolve_untap_step(0)
         assert old_man.tapped is True  # keeping the steal is the sensible default
 

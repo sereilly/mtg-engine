@@ -136,7 +136,7 @@ class UntapStepMixin:
         # they controlled at the beginning of this turn"). Lands tapped going into
         # the turn don't count, so tapping out before your turn avoids the damage.
         self.untapped_lands_at_turn_start[player_index] = sum(
-            1 for perm in player.battlefield
+            1 for perm in self.controlled_by(player)
             if perm.card.primary_type == "land" and not perm.tapped
         )
         # Island Sanctuary protection lasts until the player's next turn begins
@@ -209,7 +209,7 @@ class UntapStepMixin:
                         continue
                 elif (
                     permanent.metadata.get("stolen_while_tapped_and_weaker")
-                    and permanent.metadata.get("stolen_permanent") is not None
+                    and self.permanents_controlled_via(permanent)
                 ):
                     continue
 

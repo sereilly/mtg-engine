@@ -96,7 +96,7 @@ def _build_deck(cards: dict[str, CardDefinition], seed: int) -> list[CardDefinit
     return deck
 
 
-def _zone_counter(player: PlayerState) -> Counter[str]:
+def _zone_counter(game: Game, player: PlayerState) -> Counter[str]:
     counter: Counter[str] = Counter()
     for card in player.library:
         counter[card.name] += 1
@@ -104,7 +104,7 @@ def _zone_counter(player: PlayerState) -> Counter[str]:
         counter[card.name] += 1
     for card in player.graveyard:
         counter[card.name] += 1
-    for permanent in player.battlefield:
+    for permanent in game.controlled_by(player):
         # Ignore generated tokens in zone conservation checks.
         if permanent.metadata.get("is_token"):
             continue
@@ -159,7 +159,7 @@ def _assert_expected(
     return None
 
 
-def _clone_player(player: PlayerState) -> PlayerState:
+def _clone_player(game: Game, player: PlayerState) -> PlayerState:
     return PlayerState(
         name=player.name,
         life=player.life,
@@ -174,7 +174,7 @@ def _clone_player(player: PlayerState) -> PlayerState:
                 regeneration_shield=perm.regeneration_shield,
                 metadata=dict(perm.metadata),
             )
-            for perm in player.battlefield
+            for perm in game.controlled_by(player)
         ],
         graveyard=list(player.graveyard),
         mana_pool=dict(player.mana_pool),
@@ -186,7 +186,7 @@ def _clone_player(player: PlayerState) -> PlayerState:
 
 
 def _snap(game: Game) -> tuple[PlayerState, PlayerState]:
-    return (_clone_player(game.players[0]), _clone_player(game.players[1]))
+    return (_clone_player(game, game.players[0]), _clone_player(game, game.players[1]))
 
 
 def run_ai_simulation(
@@ -212,7 +212,7 @@ def run_ai_simulation(
         for i in range(len(game.players)):
             game.keep_hand(i)
 
-        initial_counters = [_zone_counter(p1), _zone_counter(p2)]
+        initial_counters = [_zone_counter(game, p1), _zone_counter(game, p2)]
         log_cursor = 0
         report.log_lines.append(f"=== Game {game_index} ===")
 
@@ -291,7 +291,7 @@ def run_ai_simulation(
                 log_cursor = len(game.log)
 
                 for idx, player in enumerate(game.players):
-                    if _zone_counter(player) != initial_counters[idx]:
+                    if _zone_counter(game, player) != initial_counters[idx]:
                         report.issues.append(
                             InteractionIssue(game_index, turn, f"Zone conservation failed for {player.name}")
                         )

@@ -375,8 +375,8 @@ class DeclareBlockersStepMixin:
         return True
 
     def _attacker_has_active_landwalk(self, attacker: Permanent, blocker: Permanent) -> bool:
-        defender = next((p for p in self.players if blocker in p.battlefield), None)
-        if defender is None:
+        defender_index = self.controller_index_of(blocker)
+        if defender_index is None:
             return False
         for walk, land_type in _LANDWALK_TO_LAND_TYPE.items():
             # Computed through CR 613 layer 6, so a landwalk granted by an Aura
@@ -389,7 +389,7 @@ class DeclareBlockersStepMixin:
             # Hack remapping a landwalk word away).
             if not self._has_keyword(attacker, walk):
                 continue
-            for perm in defender.battlefield:
+            for perm in self.controlled_by(defender_index):
                 if perm.card.primary_type != "land":
                     continue
                 if perm.has_type(land_type):

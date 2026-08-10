@@ -287,10 +287,11 @@ class StackResolutionMixin:
                 and card.oracle_text.lower().split("\n")[0].strip().startswith("enchant")
                 and permanent.metadata.get("attached_to") is None
             ):
-                for player in self.players:
-                    if permanent in player.battlefield:
-                        player.battlefield.remove(permanent)
-                        break
+                holder = self.controller_index_of(permanent)
+                if holder is not None:
+                    self.players[holder].battlefield = [
+                        p for p in self.players[holder].battlefield if p is not permanent
+                    ]
                 caster.graveyard.append(card)
                 self.log.append(f"{card.name} had no legal target and was put into {caster.name}'s graveyard")
                 self._refresh_dynamic_creatures()

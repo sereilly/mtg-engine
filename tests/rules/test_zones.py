@@ -476,14 +476,14 @@ def test_121_1_draw_effect_of_a_spell_draws_from_the_top():
 
 def _steal_setup():
     """P1 controls a thief source that stole P2's creature (Control Magic
-    shape, recorded via the engine's linked-steal metadata)."""
+    shape, recorded as a CR 613 layer-2 contribution from the thief)."""
     creature = Permanent(card=_mk_creature("Stolen Bear"))
     thief = Permanent(card=_mk_card("Thief Aura", "Enchantment - Aura", "You control enchanted creature."))
     p1 = PlayerState(name="P1", battlefield=[thief])
     p2 = PlayerState(name="P2", battlefield=[creature])
     game = Game(players=[p1, p2])
-    assert game._take_control_linked(thief, creature, p1)
-    assert creature in p1.battlefield  # now controlled by P1
+    assert game.take_control(creature, p1, source=thief)
+    assert any(p is creature for p in p1.battlefield)  # now controlled by P1
     return game, p1, p2, creature
 
 

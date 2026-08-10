@@ -425,13 +425,13 @@ def test_302_6_creature_is_summoning_sick_after_control_change():
     game.turn = 3  # bear has no sickness marker: controlled since long ago
     assert game._is_summoning_sick(bear) is False
 
-    assert game._take_control_linked(theft_source, bear, p2) is True
+    assert game.take_control(bear, p2, source=theft_source) is True
 
     assert bear.metadata.get("summoning_sickness_turn") == game.turn
     assert game._is_summoning_sick(bear) is True
 
     # Returning to its owner is another control change: sick again there too.
-    game._revert_stolen_permanent(theft_source)
+    game.end_control_changes_from(theft_source)
     assert any(p is bear for p in p1.battlefield)
     assert game._is_summoning_sick(bear) is True
 

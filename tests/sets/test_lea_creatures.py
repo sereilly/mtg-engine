@@ -1517,11 +1517,13 @@ def test_personal_incarnation_thief_cannot_activate_but_owner_can(all_cards):
     incarnation = _get(all_cards, "Personal Incarnation")
     incarnation_perm = Permanent(card=incarnation)
     theft_source = Permanent(card=_mk_card("Theft Source", "Artifact"))
-    theft_source.metadata["stolen_permanent"] = incarnation_perm
-    theft_source.metadata["stolen_owner_index"] = 0
-    p1 = PlayerState(name="P1", battlefield=[theft_source])   # owner (seat 0)
-    p2 = PlayerState(name="P2", battlefield=[incarnation_perm])  # controller
+    p1 = PlayerState(name="P1", battlefield=[theft_source, incarnation_perm])  # owner (seat 0)
+    p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
+    # The theft is a layer-2 contribution, so the base controller (seat 0) is
+    # still recorded on the permanent and is what CR 108.3 ownership reads.
+    assert game.take_control(incarnation_perm, 1, source=theft_source)
+    assert any(p is incarnation_perm for p in p2.battlefield)
 
     # The thief controls it but does not own it: activation is illegal.
     result = game.activate_permanent_ability(1, "Personal Incarnation")

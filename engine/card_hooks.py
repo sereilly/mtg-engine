@@ -81,7 +81,7 @@ ON_SELF_RESOLVED: dict[str, SelfResolvedHook] = {
 
 def _power_sink(game: Game, counter_card: CardDefinition, countered: StackItem) -> None:
     ctrl = game.players[countered.caster_index]
-    for perm in ctrl.battlefield:
+    for perm in game.controlled_by(countered.caster_index):
         if perm.card.primary_type == "land":
             game.become_tapped(perm)
     ctrl.mana_pool = {k: 0 for k in ctrl.mana_pool}
@@ -156,7 +156,7 @@ def _revert_linked_steal_on_leave(game: Game, owner: PlayerState, permanent: Per
     # Artifact revert when their Aura leaves. Old Man's other end conditions
     # (untaps / stolen power exceeds its own) are swept continuously in
     # game_ending.py.
-    game._revert_stolen_permanent(permanent)
+    game.end_control_changes_from(permanent)
 
 
 def _oubliette_leaves(game: Game, owner: PlayerState, permanent: Permanent) -> None:
@@ -356,12 +356,15 @@ def _kudzu_on_land_tapped(
     # choice was supplied and there is a land to move to. Headless/AI play keeps
     # the deterministic "first other land" default below.
     if new_land is None and defer_choice and any(
-        p.card.primary_type == "land" for p in player.battlefield
+        p.card.primary_type == "land" for p in game.controlled_by(controller_index)
     ):
         game.arm_pending_choice("kudzu_reattach", controller_index, aura=aura)
         return
     if new_land is None:
-        new_land = next((p for p in player.battlefield if p.card.primary_type == "land"), None)
+        new_land = next(
+            (p for p in game.controlled_by(controller_index) if p.card.primary_type == "land"),
+            None,
+        )
     if new_land is not None:
         attach_aura(aura, new_land)
         game.log.append(f"Kudzu attached to {new_land.card.name}")

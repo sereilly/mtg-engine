@@ -69,7 +69,7 @@ class CleanupStepMixin:
             player.mirror_damage_sources = []
             player.channel_active_until_eot = False
             player.prevent_one_damage_emblems = []
-            for permanent in player.battlefield:
+            for permanent in self.controlled_by(player):
                 permanent.damage_marked = 0
                 clear_shields(permanent)
                 # 614.8 / 701.19a: an unused regeneration shield lasts only until

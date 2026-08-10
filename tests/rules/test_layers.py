@@ -323,44 +323,128 @@ def test_ordering_is_reevaluated_after_each_application():
 
 
 # ---------------------------------------------------------------------------
-# 613.1b — layer 2 (control) is not wired yet; this documents why
+# 613.1b — layer 2 (control) is live: control is a recorded contribution
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.cr("613.1b")
-def test_control_is_still_modelled_as_zone_membership():
-    """Layer 2 has a constructor and passes its own test above, but nothing
-    collects control changes into the system — because the engine does not
-    *store* a controller to collect.
-
-    A control change moves the permanent between ``player.battlefield`` lists,
-    so "who controls this" is answered by which list it is in. Making the
-    controller a derived characteristic means every site that reads zone
-    membership has to stop doing so first; ``Game.all_permanents`` and
-    ``permanents_with_controller`` exist as the seam for that.
-
-    This test pins the current model so the day it changes is deliberate.
-    """
+def _bear_board():
     from engine import Game, PlayerState
     from engine.models import CardDefinition, Permanent
 
-    card = CardDefinition(
-        name="Bear", mana_cost="", cmc=0.0, type_line="Creature — Bear", oracle_text="",
-        colors=(), color_identity=(), keywords=(), produced_mana=(),
-        raw={"name": "Bear", "type_line": "Creature — Bear", "power": "2", "toughness": "2"},
-        power="2", toughness="2",
-    )
-    bear = Permanent(card=card)
-    mine = PlayerState(name="P1", battlefield=[bear], life=20)
-    theirs = PlayerState(name="P2", life=20)
-    game = Game(players=[mine, theirs])
+    def _card(name: str) -> CardDefinition:
+        return CardDefinition(
+            name=name, mana_cost="", cmc=0.0, type_line="Creature — Bear", oracle_text="",
+            colors=(), color_identity=(), keywords=(), produced_mana=(),
+            raw={"name": name, "type_line": "Creature — Bear", "power": "2", "toughness": "2"},
+            power="2", toughness="2",
+        )
 
-    assert [perm for _, perm in game.permanents_with_controller() if perm is bear]
+    bear = Permanent(card=_card("Bear"))
+    thief_a = Permanent(card=_card("Thief A"))
+    thief_b = Permanent(card=_card("Thief B"))
+    mine = PlayerState(name="P1", battlefield=[bear], life=20)
+    theirs = PlayerState(name="P2", battlefield=[thief_a, thief_b], life=20)
+    return Game(players=[mine, theirs]), bear, thief_a, thief_b
+
+
+@pytest.mark.cr("613.1b")
+def test_a_control_change_is_a_recorded_effect_not_a_move():
+    """Layer 2 is collected into the system like every other layer: the effect
+    is recorded on the permanent with its source, and the battlefield lists are
+    the *projection* of what the layer says — not the storage for it."""
+    from engine.control import control_changes, has_control_change
+
+    game, bear, thief, _ = _bear_board()
+    assert game.controller_index_of(bear) == 0
+    assert not has_control_change(bear)
+
+    assert game.take_control(bear, 1, source=thief)
+
+    assert game.controller_index_of(bear) == 1
+    assert [entry["source"] for entry in control_changes(bear)] == [thief]
+    # The projection agrees, so every reader behind the seam sees it too.
+    assert [p for p in game.controlled_by(1) if p is bear]
+    assert not [p for p in game.controlled_by(0) if p is bear]
+
+
+@pytest.mark.cr("613.7")
+def test_the_later_control_effect_wins():
+    """Two effects in the same layer are ordered by timestamp, so the newer
+    theft decides — not whichever code path happened to run last."""
+    game, bear, thief_a, thief_b = _bear_board()
+
+    assert game.take_control(bear, 1, source=thief_a)
+    assert game.take_control(bear, 0, source=thief_b)
     assert game.controller_index_of(bear) == 0
 
-    mine.battlefield.remove(bear)
-    theirs.battlefield.append(bear)
+    # Re-recording from the older source takes a *fresh* timestamp, which is
+    # what makes it the later effect and hands control back.
+    assert game.take_control(bear, 1, source=thief_a)
     assert game.controller_index_of(bear) == 1
+
+
+@pytest.mark.cr("613.7", "611.3")
+def test_ending_one_control_effect_leaves_the_other_applying():
+    """The bug that motivated wiring the layer. With two thefts recorded and
+    the *older* one ended first, remember-and-undo handed the permanent to the
+    seat the newer thief had stored as "previous controller" — a seat that by
+    then controlled nothing giving it. A contribution ending is an absence:
+    whatever is left decides."""
+    game, bear, thief_a, thief_b = _bear_board()
+
+    game.take_control(bear, 1, source=thief_a)   # older: P2 takes the bear
+    game.take_control(bear, 0, source=thief_b)   # newer: P1 takes it back
+    assert game.controller_index_of(bear) == 0
+
+    # The *newer* effect ends first. The older one has not gone anywhere, so
+    # P2 controls the bear again — this is the case remember-and-undo could
+    # not express, because thief_b's remembered "previous controller" was P2
+    # only by coincidence and thief_a's was the seat it had already left.
+    game.end_control_changes_from(thief_b)
+    assert game.controller_index_of(bear) == 1
+
+    # And ending the last one returns it to the base controller, not to
+    # whichever seat happened to hold it before the most recent theft.
+    game.end_control_changes_from(thief_a)
+    assert game.controller_index_of(bear) == 0
+
+
+@pytest.mark.cr("613.1b", "108.3")
+def test_the_base_controller_survives_every_theft():
+    """CR 613 applies layers to *copiable* values; for control that is the seat
+    the permanent entered under. Keeping it separate from the current
+    controller is what lets an ended effect revert correctly — and it is the
+    same value CR 108.3 ownership reads when a stolen permanent dies."""
+    from engine.control import base_controller
+
+    game, bear, thief_a, thief_b = _bear_board()
+    game.take_control(bear, 1, source=thief_a)
+    game.take_control(bear, 1, source=thief_b)
+
+    assert base_controller(bear) == 0
+    assert game.owner_index_of(bear) == 0
+    assert game.controller_index_of(bear) == 1
+
+
+@pytest.mark.cr("613.1b")
+def test_the_battlefield_lists_never_disagree_with_the_layer():
+    """The projection invariant. Every reader migrated onto the seam reads the
+    zone lists (``controlled_by``, the web payload's per-seat battlefield), so
+    a permanent whose list disagreed with layer 2 would give two answers to the
+    same question — the failure mode layer 4's audit found seven of."""
+    game, bear, thief_a, thief_b = _bear_board()
+    for step in (
+        lambda: game.take_control(bear, 1, source=thief_a),
+        lambda: game.take_control(bear, 0, source=thief_b),
+        lambda: game.end_control_changes_from(thief_b),
+        lambda: game.end_control_changes_from(thief_a),
+    ):
+        step()
+        for seat, permanent in game.permanents_with_controller():
+            assert game.controller_index_of(permanent) == seat, (
+                f"{permanent.card.name} is on seat {seat}'s battlefield but layer 2 "
+                f"says {game.controller_index_of(permanent)}"
+            )
 
 
 @pytest.mark.cr("613.1b")

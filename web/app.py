@@ -240,11 +240,18 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
     attached_to_index: int | None = None
     attached_to_seat: int | None = None
     if attached_to is not None:
-        for seat_idx, player in enumerate(game.players):
-            if attached_to in player.battlefield:
-                attached_to_index = player.battlefield.index(attached_to)
-                attached_to_seat = seat_idx
-                break
+        attached_to_seat = game.controller_index_of(attached_to)
+        if attached_to_seat is not None:
+            # Positional: the UI addresses a permanent by its slot on its
+            # controller's battlefield, so the *index* is what the payload needs.
+            attached_to_index = next(
+                (
+                    i
+                    for i, p in enumerate(game.players[attached_to_seat].battlefield)
+                    if p is attached_to
+                ),
+                None,
+            )
 
     # A color override (Thoughtlace/Lifelace) replaces the printed colors
     # entirely; a copied color (Clone) replaces them too, while Vesuvan
@@ -462,7 +469,7 @@ def _gloom_white_tax(card, game: Game | None) -> int:
     """The extra generic mana Gloom adds to a white spell's cost (0 otherwise)."""
     if game is None or "W" not in card.colors:
         return 0
-    has_gloom = any(perm.card.name == "Gloom" for p in game.players for perm in p.battlefield)
+    has_gloom = any(perm.card.name == "Gloom" for perm in game.all_permanents())
     return 3 if has_gloom else 0
 
 
@@ -953,7 +960,7 @@ def _serialize_player(
     else:
         hand = ["<hidden>"] * len(player.hand)
 
-    battlefield = [_serialize_permanent(perm, game) for perm in player.battlefield]
+    battlefield = [_serialize_permanent(perm, game) for perm in game.controlled_by(seat)]
     # The viewer's own permanents carry the target spec for their activated ability
     # (kind + legal targets) so the UI can drive activation targeting from backend
     # data rather than parsing the ability text client-side.
@@ -1125,7 +1132,9 @@ def _consume_draw_step_life_loss(session: Session) -> dict[str, bool] | None:
 
 
 def _has_island_sanctuary(game, player_index: int) -> bool:
-    return any(p.card.name == "Island Sanctuary" for p in game.players[player_index].battlefield)
+    return any(
+        p.card.name == "Island Sanctuary" for p in game.controlled_by(player_index)
+    )
 
 
 def _upkeep_pay_pending(session: Session) -> list[dict]:
@@ -1754,17 +1763,13 @@ def _compute_playable_hand_indices(session: Session, player_index: int) -> list[
 
     # Potential mana = current pool + what each untapped land could produce
     potential_pool: dict[str, int] = dict(player.mana_pool)
-    for perm in player.battlefield:
+    for perm in game.controlled_by(player_index):
         if not perm.tapped and perm.card.primary_type == "land":
             for color in perm.effective_produced_mana:
                 sym = color.upper()
                 potential_pool[sym] = potential_pool.get(sym, 0) + 1
 
-    has_gloom = any(
-        perm.card.name == "Gloom"
-        for p in game.players
-        for perm in p.battlefield
-    )
+    has_gloom = any(perm.card.name == "Gloom" for perm in game.all_permanents())
     may_play_land = game._may_play_another_land(player_index)
     current_turn = session.current_turn
     is_main_phase = game.current_phase == "main"
@@ -2725,7 +2730,7 @@ def _ai_resolve_raging_river(session: Session) -> None:
     if isinstance(defender_index, int) and 0 <= defender_index < len(game.players):
         divide_count = sum(
             1
-            for p in game.players[defender_index].battlefield
+            for p in game.controlled_by(defender_index)
             if game._is_creature(p) and not game._has_keyword(p, "flying")
         )
 

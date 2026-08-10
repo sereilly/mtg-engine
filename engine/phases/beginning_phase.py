@@ -18,9 +18,8 @@ class BeginningPhaseMixin:
         tapped, you may skip that turn instead. If you do, untap this artifact."
         The UI surfaces this as a beginning-of-turn prompt.
         """
-        player = self.players[player_index]
         options: list[str] = []
-        for permanent in player.battlefield:
+        for permanent in self.controlled_by(player_index):
             text = permanent.card.oracle_text.lower()
             if (
                 permanent.tapped
@@ -40,7 +39,11 @@ class BeginningPhaseMixin:
             return False
         player = self.players[player_index]
         permanent = next(
-            (p for p in player.battlefield if p.card.name == permanent_name and p.tapped),
+            (
+                p
+                for p in self.controlled_by(player_index)
+                if p.card.name == permanent_name and p.tapped
+            ),
             None,
         )
         if permanent is None:
@@ -61,7 +64,11 @@ class BeginningPhaseMixin:
             return False
         player = self.players[player_index]
         permanent = next(
-            (p for p in player.battlefield if p.card.name == permanent_name and p.tapped),
+            (
+                p
+                for p in self.controlled_by(player_index)
+                if p.card.name == permanent_name and p.tapped
+            ),
             None,
         )
         if permanent is None:

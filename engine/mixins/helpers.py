@@ -5,7 +5,16 @@ from typing import Iterator
 
 from ..card_hooks import ON_LEAVE_BATTLEFIELD
 from ..auras import detach_aura
+from ..control import (
+    base_controller,
+    change_control,
+    control_changes,
+    end_control_change,
+    has_control_change,
+    set_base_controller,
+)
 from ..events import emit
+from ..layer_bridge import computed_controller
 from ..land_types import end_land_type_change
 from ..models import CardDefinition, Permanent, PlayerState
 from ..oracle import compile_card_oracle
@@ -21,6 +30,10 @@ class GameHelpersMixin:
         permanent_name: str,
         permanent_index: int | None = None,
     ) -> tuple[int, Permanent] | None:
+        # Positional, deliberately: the web layer addresses a permanent by its
+        # *slot* on its controller's battlefield, so this returns the index into
+        # that list and not just the permanent. It is the one question the
+        # control seam cannot answer, because the seam has no slots.
         if permanent_index is not None:
             if permanent_index < 0 or permanent_index >= len(controller.battlefield):
                 return None
@@ -84,15 +97,14 @@ class GameHelpersMixin:
         so their marker falls behind ``self.turn`` — that is how they shed sickness
         as their turn begins.
         """
-        for index, player in enumerate(self.players):
+        for index, permanent in self.permanents_with_controller():
             if index == active_player_index:
                 continue
-            for permanent in player.battlefield:
-                if (
-                    self._is_creature(permanent)
-                    and permanent.metadata.get("summoning_sickness_turn") == self.turn - 1
-                ):
-                    permanent.metadata["summoning_sickness_turn"] = self.turn
+            if (
+                self._is_creature(permanent)
+                and permanent.metadata.get("summoning_sickness_turn") == self.turn - 1
+            ):
+                permanent.metadata["summoning_sickness_turn"] = self.turn
 
     def _public_phase_name(self, phase: str, step: str) -> str:
         if phase in {"precombat_main", "postcombat_main"}:
@@ -112,16 +124,15 @@ class GameHelpersMixin:
         return f"{edge}:{phase}:{step}"
 
     def _expire_tagged_effects(self, tag: str) -> None:
-        for player in self.players:
-            for permanent in player.battlefield:
-                expires = permanent.metadata.get("expires_at")
-                if expires != tag:
-                    continue
-                key = permanent.metadata.get("expires_key")
-                if isinstance(key, str):
-                    permanent.metadata.pop(key, None)
-                permanent.metadata.pop("expires_at", None)
-                permanent.metadata.pop("expires_key", None)
+        for permanent in self.all_permanents():
+            expires = permanent.metadata.get("expires_at")
+            if expires != tag:
+                continue
+            key = permanent.metadata.get("expires_key")
+            if isinstance(key, str):
+                permanent.metadata.pop(key, None)
+            permanent.metadata.pop("expires_at", None)
+            permanent.metadata.pop("expires_key", None)
 
     def _on_step_or_phase_begin(self, phase: str, step: str) -> None:
         # 500.4
@@ -184,9 +195,12 @@ class GameHelpersMixin:
         if pre_animate_card is not None:
             attached.card = pre_animate_card
         detach_aura(aura, attached)
-        # Control effects (Control Magic, Steal Artifact) revert when the Aura leaves
-        # — return the stolen permanent to its original controller (CR 611.3 / 805.4a).
-        self._revert_stolen_permanent(aura)
+        # Control effects (Control Magic, Steal Artifact) end when the Aura
+        # leaves (CR 611.3 / 805.4a). Dropping the contribution is the whole
+        # removal: whatever other layer-2 effect is still on the permanent
+        # decides where it goes, and if none is, it returns to its base
+        # controller.
+        self.end_control_changes_from(aura)
         # Animate Dead: "When this Aura leaves the battlefield, that creature's
         # controller sacrifices it." Sacrificing isn't destroying, so
         # regeneration and other destruction replacements can't affect it
@@ -201,13 +215,17 @@ class GameHelpersMixin:
                     f"{controller.name} sacrificed {attached.card.name} ({aura.card.name} left the battlefield)"
                 )
 
-    def controller_index_of(self, permanent: Permanent) -> int | None:
-        """Index of the player whose battlefield currently holds *permanent*, or
-        None if it is on no battlefield (already left / phased out).
+    def _holding_seat(self, permanent: Permanent) -> int | None:
+        """The seat whose battlefield list physically holds *permanent*, or None.
+
+        The **zone** question, not the control one. Only the seam and the code
+        that writes the zone may ask it; everything else wants
+        :meth:`controller_index_of`, which applies layer 2 on top of this.
 
         Matches by identity, not ``in``: Permanent is a dataclass with value
         equality, so ``in`` would match a look-alike (an opponent's copy of the
-        same card in the same state) after this object has left the battlefield."""
+        same card in the same state) after this object has left the battlefield.
+        """
         return next(
             (
                 i
@@ -217,85 +235,142 @@ class GameHelpersMixin:
             None,
         )
 
+    def controller_index_of(self, permanent: Permanent) -> int | None:
+        """Who controls *permanent* — CR 613 layer 2 — or None if it is on no
+        battlefield (already left / phased out).
+
+        Computed, not stored: the base controller (whoever put it onto the
+        battlefield) with every recorded control-changing effect applied in
+        timestamp order. ``_sync_control`` keeps the battlefield lists as the
+        projection of this answer, so ``controlled_by`` and the web payload see
+        the same thing without each applying the layer themselves.
+        """
+        seat = self._holding_seat(permanent)
+        if seat is None:
+            return None
+        if not has_control_change(permanent):
+            return seat
+        base = base_controller(permanent)
+        return computed_controller(permanent, seat if base is None else base)
+
     def owner_index_of(self, permanent: Permanent) -> int | None:
         """Index of the player who owns *permanent*'s card (CR 108.3), for
         routing it to the right graveyard/hand when it leaves the battlefield
-        (CR 400.3). The engine doesn't track ownership on the Permanent; every
-        control effect in the supported pool is linked and records the
-        pre-theft controller on its source (``stolen_owner_index``), which is
-        the owner whenever owner and controller differ."""
+        (CR 400.3).
+
+        The base controller is the owner whenever the two differ, because every
+        way a permanent enters play in this pool puts it under its owner's
+        control. That used to be read off the *thief* (``stolen_owner_index``),
+        which meant a second theft overwrote the first one's answer."""
         # Reanimation (Animate Dead on an opponent's creature card) records the
         # owner directly on the permanent.
         meta_owner = permanent.metadata.get("owner_player_index")
         if isinstance(meta_owner, int) and 0 <= meta_owner < len(self.players):
             return meta_owner
-        for player in self.players:
-            for perm in player.battlefield:
-                if perm.metadata.get("stolen_permanent") is permanent:
-                    idx = perm.metadata.get("stolen_owner_index")
-                    if isinstance(idx, int) and 0 <= idx < len(self.players):
-                        return idx
+        base = base_controller(permanent)
+        if base is not None and 0 <= base < len(self.players):
+            return base
         return self.controller_index_of(permanent)
 
-    def _take_control_linked(
+    def take_control(
         self,
-        source: Permanent,
-        target_perm: Permanent,
-        new_controller: PlayerState,
+        permanent: Permanent,
+        seat,
         *,
+        source: Permanent,
         extra_meta: dict | None = None,
     ) -> bool:
-        """Move *target_perm* under *new_controller* and record the theft on
-        *source* (``stolen_permanent``/``stolen_owner_index``) so
-        :meth:`_revert_stolen_permanent` can undo it when the linked duration
-        ends. The inverse of that revert. Returns False (a no-op) if the target
-        is on no battlefield. ``extra_meta`` tags the steal with a caller's own
-        revert-condition marker (e.g. Old Man of the Sea's tapped-and-weaker)."""
-        owner_index = self.controller_index_of(target_perm)
-        if owner_index is None:
+        """Record *source*'s CR 613 layer-2 effect giving *seat* control of
+        *permanent*, then project it onto the battlefield lists.
+
+        Returns False (a no-op) if the target is on no battlefield.
+        ``extra_meta`` tags the *source* with its own revert-condition marker
+        (Old Man of the Sea's tapped-and-weaker), which is a condition to check
+        and not a value to restore.
+        """
+        holding = self._holding_seat(permanent)
+        if holding is None:
             return False
-        self.players[owner_index].battlefield.remove(target_perm)
-        new_controller.battlefield.append(target_perm)
-        # CR 302.6: a creature has summoning sickness since it came under its
-        # controller's control, not since it entered the battlefield — a stolen
-        # creature can't attack or use {T} abilities the turn it changes hands
-        # (and counts as not "controlled continuously since the turn began" for
-        # effects like Siren's Call).
-        if self._is_creature(target_perm):
-            target_perm.metadata["summoning_sickness_turn"] = self.turn
-        source.metadata["stolen_permanent"] = target_perm
-        source.metadata["stolen_owner_index"] = owner_index
+        # A board built by hand (a test, a debug menu) never recorded a base, so
+        # the seat it is sitting on now is the base — captured before the
+        # contribution, which is the whole point of keeping the two apart.
+        if base_controller(permanent) is None:
+            set_base_controller(permanent, holding)
+        change_control(permanent, self.seat_index(seat), source=source)
         if extra_meta:
             source.metadata.update(extra_meta)
+        self._sync_control()
         return True
 
-    def _revert_stolen_permanent(self, source: Permanent) -> None:
-        """Return whatever *source* stole (via ``stolen_permanent``/
-        ``stolen_owner_index`` metadata) to its original controller. Shared by
-        Aura-based control effects (Control Magic, Steal Artifact — reverted
-        when the Aura leaves) and Aladdin's linked-duration ability (reverted
-        by the ON_LEAVE_BATTLEFIELD hook when Aladdin itself leaves)."""
-        stolen = source.metadata.get("stolen_permanent")
-        owner_index = source.metadata.get("stolen_owner_index")
-        if stolen is None or not (isinstance(owner_index, int) and 0 <= owner_index < len(self.players)):
-            return
-        for player in self.players:
-            # Identity, not ``in``/``remove``: Permanent is a plain dataclass, so
-            # equality is field-by-field and an identically-stated copy on the
-            # other battlefield would be found (and removed) instead.
-            if any(perm is stolen for perm in player.battlefield):
-                if player is not self.players[owner_index]:
-                    player.battlefield = [p for p in player.battlefield if p is not stolen]
-                    self.players[owner_index].battlefield.append(stolen)
-                    # CR 302.6: returning to the owner is another control
-                    # change, so the creature is summoning-sick again.
-                    if self._is_creature(stolen):
-                        stolen.metadata["summoning_sickness_turn"] = self.turn
-                    self.log.append(
-                        f"{stolen.card.name} returns to {self.players[owner_index].name}'s control "
-                        f"({source.card.name} left the battlefield)"
-                    )
-                break
+    def end_control_changes_from(self, source: Permanent) -> None:
+        """Drop every control effect *source* recorded, and re-project.
+
+        The inverse of :meth:`take_control`, and deliberately not an *undo*:
+        it removes one contribution and lets whatever is left decide. Control
+        Magic ending while Aladdin still holds the artifact leaves Aladdin's
+        effect applying; both ending returns the permanent to its base
+        controller. The old remember-the-previous-controller version could
+        express neither, and handed the permanent to whoever the thief happened
+        to have recorded — a player that by then controlled nothing giving it.
+        """
+        dropped = [
+            (seat, permanent)
+            for seat, permanent in list(self.permanents_with_controller())
+            if end_control_change(permanent, source=source)
+        ]
+        self._sync_control()
+        for seat, permanent in dropped:
+            now = self.controller_index_of(permanent)
+            if now is not None and now != seat:
+                self.log.append(
+                    f"{permanent.card.name} returns to {self.players[now].name}'s control "
+                    f"({source.card.name} left the battlefield)"
+                )
+
+    def permanents_controlled_via(self, source: Permanent) -> list[Permanent]:
+        """Every permanent *source* currently has a control effect on."""
+        return [
+            permanent
+            for permanent in self.all_permanents()
+            if any(entry["source"] is source for entry in control_changes(permanent))
+        ]
+
+    def _sync_control(self) -> None:
+        """Move every permanent whose battlefield list disagrees with layer 2.
+
+        The battlefield lists are a *projection* of the derived controller, not
+        the storage for it. Keeping them in step here is what lets the 164
+        migrated readers — and the whole web payload, which addresses a
+        permanent by its slot on a controller's battlefield — keep asking the
+        seam without any of them applying the layer themselves.
+
+        It is also the single place CR 302.6 is stamped: a permanent changes
+        hands exactly when this moves it, so "summoning sick since it came
+        under your control" cannot be applied by one control path and forgotten
+        by another.
+        """
+        for holding, permanent in list(self.permanents_with_controller()):
+            base = base_controller(permanent)
+            if base is None or not (0 <= base < len(self.players)):
+                # Nothing has ever taken control of it and it never recorded a
+                # base: it is where it belongs, whatever list that is.
+                if not has_control_change(permanent):
+                    continue
+                base = holding
+                set_base_controller(permanent, holding)
+            derived = computed_controller(permanent, base)
+            if derived == holding or not (0 <= derived < len(self.players)):
+                continue
+            self.players[holding].battlefield = [
+                p for p in self.players[holding].battlefield if p is not permanent
+            ]
+            self.players[derived].battlefield.append(permanent)
+            # CR 302.6: a creature is summoning-sick since it came under its
+            # controller's control, not since it entered the battlefield — a
+            # permanent that changes hands can't attack or use {T} abilities
+            # this turn, in either direction.
+            if self._is_creature(permanent):
+                permanent.metadata["summoning_sickness_turn"] = self.turn
 
     def _permanent_to_graveyard(self, player: PlayerState, permanent: Permanent) -> None:
         """Move a permanent to the graveyard. Tokens (704.5d) cease to exist instead."""
@@ -428,16 +503,27 @@ class GameHelpersMixin:
         emit(self, "permanent_becomes_tapped", subject=permanent)
         return True
 
-    def all_permanents(self) -> "Iterator[Permanent]":
-        """Every permanent on every battlefield.
+    # ------------------------------------------------------------------
+    # The control seam (CR 613 layer 2)
+    #
+    # "Which permanents are on the battlefield", "which does this player
+    # control" and "is this permanent still there" are asked all over the
+    # engine, and each of them used to be answered by opening
+    # ``player.battlefield`` by hand. That is not a zone question with an
+    # incidental control answer — it *is* the control question, because this
+    # engine models control as which battlefield list a permanent sits in.
+    #
+    # Everything below is the one place that reads zone membership. Wiring
+    # layer 2 means changing these four methods and nothing else; a reader that
+    # goes around them is a second opinion about who controls what, which is the
+    # bug class ``tests/engine/test_control_reads.py`` guards.
+    #
+    # Each iterator snapshots the list it walks, so a caller may destroy or
+    # steal permanents while iterating without skipping the next one.
+    # ------------------------------------------------------------------
 
-        The engine opens this loop by hand in well over a hundred places. One
-        iterator is worth having on its own, but it is also the prerequisite for
-        CR 613 layer 2: control is currently modelled by *which battlefield list
-        a permanent sits in*, so making the controller a derived characteristic
-        means every one of those sites has to stop reading zone membership
-        directly first.
-        """
+    def all_permanents(self) -> "Iterator[Permanent]":
+        """Every permanent on the battlefield, in seat order."""
         for player in self.players:
             yield from list(player.battlefield)
 
@@ -447,9 +533,41 @@ class GameHelpersMixin:
             for permanent in list(player.battlefield):
                 yield index, permanent
 
+    def seat_index(self, seat) -> int:
+        """*seat* as a seat index, whether it arrived as one or as a
+        :class:`PlayerState`. By identity: ``self.players.index(player)`` is an
+        equality search over a mutable dataclass, so two seats that happen to
+        hold equal state would resolve to the same index."""
+        if isinstance(seat, int):
+            return seat
+        return next(i for i, player in enumerate(self.players) if player is seat)
+
+    def controlled_by(self, seat) -> "Iterator[Permanent]":
+        """Every permanent *seat* controls. Takes a seat index or a
+        :class:`PlayerState`, because both spellings are already in use and the
+        question is the same one either way."""
+        player = self.players[seat] if isinstance(seat, int) else seat
+        return iter(list(player.battlefield))
+
+    def controls(self, seat, permanent: Permanent) -> bool:
+        """Whether *seat* controls *permanent*, by identity — the replacement
+        for ``permanent in player.battlefield``, which compares by value."""
+        return self.controller_index_of(permanent) == self.seat_index(seat)
+
     def permanents_matching(self, predicate) -> "Iterator[Permanent]":
         """Every permanent satisfying *predicate*, across all battlefields."""
         return (perm for perm in self.all_permanents() if predicate(perm))
+
+    def is_on_battlefield(self, permanent: Permanent) -> bool:
+        """Whether *permanent* is on the battlefield, **by identity**.
+
+        ``permanent in player.battlefield`` is the shape this replaces, and it
+        was wrong: :class:`Permanent` is a dataclass with value equality, so
+        ``in`` answers yes for a look-alike — an opponent's untouched copy of
+        the same card — after this object has left. That made an Aura whose
+        enchanted creature had died survive CR 704.5m as long as some other
+        player had an identical creature in an identical state."""
+        return any(perm is permanent for perm in self.all_permanents())
 
     def _destroy_swept_permanents(
         self,
@@ -513,50 +631,48 @@ class GameHelpersMixin:
         resolves; it is enqueued only when it qualifies.
         """
         events: list[dict] = []
-        for controller in self.players:
-            controller_index = self.players.index(controller)
-            for observer in list(controller.battlefield):
-                if observer is dead_permanent:
+        for controller_index, observer in self.permanents_with_controller():
+            if observer is dead_permanent:
+                continue
+            program = compile_card_oracle(observer.card)
+            for trig in program.triggered_abilities:
+                # Sengir Vampire: "Whenever a creature dealt damage by this
+                # creature this turn dies, put a +1/+1 counter on this creature."
+                if (
+                    trig.condition.kind == "creature_dealt_damage_by_self_dies"
+                    and trig.instruction is not None
+                    and trig.instruction.kind == "add_counter_to_self"
+                ):
+                    damagers = dead_permanent.metadata.get("damaged_by_sources_this_turn", [])
+                    if observer in damagers:
+                        events.append(make_trigger_event(controller_index, observer, trig))
                     continue
-                program = compile_card_oracle(observer.card)
-                for trig in program.triggered_abilities:
-                    # Sengir Vampire: "Whenever a creature dealt damage by this
-                    # creature this turn dies, put a +1/+1 counter on this creature."
-                    if (
-                        trig.condition.kind == "creature_dealt_damage_by_self_dies"
-                        and trig.instruction is not None
-                        and trig.instruction.kind == "add_counter_to_self"
-                    ):
-                        damagers = dead_permanent.metadata.get("damaged_by_sources_this_turn", [])
-                        if observer in damagers:
-                            events.append(make_trigger_event(controller_index, observer, trig))
-                        continue
-                    if trig.condition.kind != "creature_dies" or trig.instruction is None:
-                        continue
-                    instr = trig.instruction
-                    if instr.kind == "may":
-                        # A grammar-lowered optional action carries its own cost
-                        # and consequence, so there is nothing to re-derive here.
-                        events.append(make_trigger_event(
-                            controller_index, observer, trig,
-                            trigger_context={"dead_name": dead_permanent.card.name},
-                        ))
-                        continue
-                    if instr.kind == "target_gains_life":
-                        # Legacy shape: the optional cost lives in the card's
-                        # text rather than the instruction, so it has to be
-                        # re-read here and passed along as context.
-                        obs_text = observer.card.oracle_text.lower()
-                        pay_match = re.search(r"you may pay \{(\d+)\}", obs_text)
-                        amount = int(instr.payload.get("amount", 1))
-                        ctx: dict = {"life": amount, "dead_name": dead_permanent.card.name}
-                        if pay_match:
-                            ctx["optional_pay_cost"] = int(pay_match.group(1))
-                        events.append(make_trigger_event(
-                            controller_index, observer, trig,
-                            effect_kind="triggered_target_gains_life",
-                            trigger_context=ctx,
-                        ))
+                if trig.condition.kind != "creature_dies" or trig.instruction is None:
+                    continue
+                instr = trig.instruction
+                if instr.kind == "may":
+                    # A grammar-lowered optional action carries its own cost
+                    # and consequence, so there is nothing to re-derive here.
+                    events.append(make_trigger_event(
+                        controller_index, observer, trig,
+                        trigger_context={"dead_name": dead_permanent.card.name},
+                    ))
+                    continue
+                if instr.kind == "target_gains_life":
+                    # Legacy shape: the optional cost lives in the card's
+                    # text rather than the instruction, so it has to be
+                    # re-read here and passed along as context.
+                    obs_text = observer.card.oracle_text.lower()
+                    pay_match = re.search(r"you may pay \{(\d+)\}", obs_text)
+                    amount = int(instr.payload.get("amount", 1))
+                    ctx: dict = {"life": amount, "dead_name": dead_permanent.card.name}
+                    if pay_match:
+                        ctx["optional_pay_cost"] = int(pay_match.group(1))
+                    events.append(make_trigger_event(
+                        controller_index, observer, trig,
+                        effect_kind="triggered_target_gains_life",
+                        trigger_context=ctx,
+                    ))
         self._enqueue_triggered_batch(events)
 
     def _put_permanent_onto_battlefield(
@@ -566,6 +682,11 @@ class GameHelpersMixin:
         target_player_index: int | None,
     ) -> None:
         self.players[controller_index].battlefield.append(permanent)
+        # CR 613.1: the value layer 2 starts from. Recorded on entry and never
+        # written again, so an ending control effect reverts to the seat that
+        # put the permanent into play rather than to whichever seat held it
+        # most recently.
+        set_base_controller(permanent, controller_index)
         self._initialize_permanent_state(permanent, controller_index, target_player_index)
         # 611.3a/611.3c: static abilities apply as permanents enter. Recalculate
         # lord buffs so the new permanent immediately receives applicable bonuses,

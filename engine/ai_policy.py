@@ -123,7 +123,9 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
         if ability.instruction.kind == "grant_banding_to_target":
             # Banding grants go to the controller's own creatures.
             target = player_index
-            target_creatures = [perm for perm in game.players[player_index].battlefield if perm.card.primary_type == "creature"]
+            target_creatures = [
+        perm for perm in game.controlled_by(player_index) if perm.card.primary_type == "creature"
+    ]
             if not target_creatures:
                 continue
 
@@ -203,7 +205,7 @@ def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
 
     opponent_blockers = [
         perm
-        for perm in opponent.battlefield
+        for perm in game.controlled_by(opponent)
         if perm.card.primary_type == "creature" and not perm.tapped
     ]
     if not opponent_blockers:
@@ -426,7 +428,9 @@ def _score_tutor_choice(game: Game, player_index: int, card: CardDefinition) -> 
     x_value = _pick_x_value(game, player, card)
     score = _score_cast(game, player_index, card, target, x_value)
 
-    lands_available = sum(1 for perm in player.battlefield if perm.card.primary_type == "land") + sum(
+    lands_available = sum(
+        1 for perm in game.controlled_by(player) if perm.card.primary_type == "land"
+    ) + sum(
         1 for hand_card in player.hand if hand_card.primary_type == "land"
     )
     if card.primary_type == "land":
@@ -436,7 +440,7 @@ def _score_tutor_choice(game: Game, player_index: int, card: CardDefinition) -> 
         else:
             score -= 4.0
     elif game.enforce_mana_costs:
-        pool = _preview_pool_with_all_untapped_lands(player)
+        pool = _preview_pool_with_all_untapped_lands(game, player)
         required = game._parse_mana_cost(
             card.mana_cost,
             x_value=x_value if x_value is not None else 0,
@@ -555,7 +559,9 @@ def _can_cast_with_targets(game: Game, caster_index: int, card: CardDefinition) 
         kind = instruction.kind
 
         if kind == "bounce_target_creature":
-            return any(perm.card.primary_type == "creature" for perm in opponent.battlefield)
+            return any(
+                perm.card.primary_type == "creature" for perm in game.controlled_by(opponent)
+            )
 
         if kind == "destroy_target_permanent":
             type_filter = instruction.payload.get("type_filter")
@@ -563,16 +569,21 @@ def _can_cast_with_targets(game: Game, caster_index: int, card: CardDefinition) 
             if type_filter or color_filter:
                 text = card.oracle_text.lower()
                 if "target artifact or enchantment" in text:
-                    return any(perm.card.primary_type in {"artifact", "enchantment"} for perm in opponent.battlefield)
+                    return any(
+                        perm.card.primary_type in {"artifact", "enchantment"}
+                        for perm in game.controlled_by(opponent)
+                    )
                 return any(
                     (not type_filter or perm.card.primary_type == type_filter)
                     and (not color_filter or color_filter in perm.card.colors)
-                    for perm in opponent.battlefield
+                    for perm in game.controlled_by(opponent)
                 )
 
         if kind in {"pump_target_creature_until_eot", "grant_regeneration_to_target_creature",
                     "grant_target_flying_until_eot", "berserk_pump"}:
-            return any(perm.card.primary_type == "creature" for perm in caster.battlefield)
+            return any(
+                perm.card.primary_type == "creature" for perm in game.controlled_by(caster)
+            )
 
     return True
 
@@ -659,7 +670,9 @@ def _score_spell_target(card: CardDefinition, caster_index: int, target_index: i
     if card.name == "Unsummon":
         if target_index == caster_index:
             return -50.0
-        creatures = [perm for perm in target.battlefield if perm.card.primary_type == "creature"]
+        creatures = [
+            perm for perm in game.controlled_by(target) if perm.card.primary_type == "creature"
+        ]
         return 2.0 + max((perm.effective_power for perm in creatures), default=0)
 
     if card.name == "Disenchant":
@@ -667,7 +680,7 @@ def _score_spell_target(card: CardDefinition, caster_index: int, target_index: i
             return -50.0
         artifacts_or_enchantments = [
             perm
-            for perm in target.battlefield
+            for perm in game.controlled_by(target)
             if perm.card.primary_type in {"artifact", "enchantment"}
         ]
         return 2.0 + len(artifacts_or_enchantments) * 1.5
@@ -696,7 +709,11 @@ def _score_cast(game: Game, caster_index: int, card: CardDefinition, target_inde
     opponent = game.players[opponent_index]
 
     if card.primary_type == "land":
-        untapped_lands = sum(1 for perm in caster.battlefield if perm.card.primary_type == "land" and not perm.tapped)
+        untapped_lands = sum(
+            1
+            for perm in game.controlled_by(caster)
+            if perm.card.primary_type == "land" and not perm.tapped
+        )
         return 1.0 if untapped_lands < 4 else 0.2
 
     score = 1.5
@@ -823,7 +840,7 @@ def _pick_x_value(game: Game, player: PlayerState, card: CardDefinition) -> int 
 
 
 def _max_affordable_x(game: Game, player: PlayerState, card: CardDefinition) -> int:
-    pool = _preview_pool_with_all_untapped_lands(player)
+    pool = _preview_pool_with_all_untapped_lands(game, player)
     extra_tax = _extra_generic_tax(game, card)
 
     x_color = x_spend_color_from_text(card.oracle_text)
@@ -834,9 +851,9 @@ def _max_affordable_x(game: Game, player: PlayerState, card: CardDefinition) -> 
     return 0
 
 
-def _preview_pool_with_all_untapped_lands(player: PlayerState) -> dict[str, int]:
+def _preview_pool_with_all_untapped_lands(game: Game, player: PlayerState) -> dict[str, int]:
     pool = {symbol: player.mana_pool.get(symbol, 0) for symbol in _MANA_SYMBOLS}
-    for permanent in player.battlefield:
+    for permanent in game.controlled_by(player):
         if permanent.card.primary_type != "land" or permanent.tapped:
             continue
         symbol = _land_symbol(permanent)

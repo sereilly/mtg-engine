@@ -59,8 +59,7 @@ class CombatPhaseMixin:
         if attacker_index == defender_index:
             return False
 
-        attacker_player = self.players[attacker_index]
-        for attacker in attacker_player.battlefield:
+        for attacker in self.controlled_by(attacker_index):
             if not attacker.is_creature:
                 continue
             if attacker.tapped:
@@ -79,9 +78,8 @@ class CombatPhaseMixin:
         if not self.combat_attackers:
             return False
 
-        defender = self.players[defender_index]
         attacker_controller = self.players[self.active_player_index]
-        for blocker in defender.battlefield:
+        for blocker in self.controlled_by(defender_index):
             if not blocker.is_creature or blocker.tapped:
                 continue
             # CR 802.4a: this defender can only block attackers aimed at them.
@@ -150,8 +148,7 @@ class CombatPhaseMixin:
             if defender_index is None:
                 defender_index = next(iter(self.combat_defending_players()), None)
             if isinstance(defender_index, int):
-                defender = self.players[defender_index]
-                if any(p.is_creature and not p.tapped for p in defender.battlefield):
+                if any(p.is_creature and not p.tapped for p in self.controlled_by(defender_index)):
                     return  # awaiting the defender's pile assignment
                 self.resolve_camouflage_blocking(defender_index)
             return
@@ -280,15 +277,14 @@ class CombatPhaseMixin:
         self.combat_first_strike_done = False
         self.combat_attackers_locked = False
         self.combat_blockers_locked = False
-        for player in self.players:
-            for permanent in player.battlefield:
-                permanent.attacking = False
-                permanent.defending_player_index = None
-                permanent.blocked = False
-                permanent.blocking_attacker_controller = None
-                permanent.blocking_attacker_index = None
-                if clear_damage_marked:
-                    permanent.damage_marked = 0
+        for permanent in self.all_permanents():
+            permanent.attacking = False
+            permanent.defending_player_index = None
+            permanent.blocked = False
+            permanent.blocking_attacker_controller = None
+            permanent.blocking_attacker_index = None
+            if clear_damage_marked:
+                permanent.damage_marked = 0
         # Clearing attacking status can change dynamic P/T (e.g. Gaea's Liege
         # reverts from the defender's Forest count to its controller's).
         self._refresh_dynamic_creatures()
@@ -366,13 +362,12 @@ class CombatPhaseMixin:
             if perm.blocked
         }
 
-        for player in self.players:
-            for permanent in player.battlefield:
-                permanent.attacking = False
-                permanent.defending_player_index = None
-                permanent.blocked = False
-                permanent.blocking_attacker_controller = None
-                permanent.blocking_attacker_index = None
+        for permanent in self.all_permanents():
+            permanent.attacking = False
+            permanent.defending_player_index = None
+            permanent.blocked = False
+            permanent.blocking_attacker_controller = None
+            permanent.blocking_attacker_index = None
 
         all_blocked_attacker_idxs: set[int] = {
             a for blocker_map in self.combat_blockers.values() for atks in blocker_map.values() for a in atks
@@ -444,9 +439,7 @@ class CombatPhaseMixin:
         attacking."""
         if not permanent.attacking:
             return False
-        attacking = sum(
-            1 for player in self.players for perm in player.battlefield if perm.attacking
-        )
+        attacking = sum(1 for perm in self.all_permanents() if perm.attacking)
         return attacking == 1
 
     def creature_blocking_alone(self, permanent: Permanent) -> bool:
@@ -457,8 +450,7 @@ class CombatPhaseMixin:
             return False
         blocking = sum(
             1
-            for player in self.players
-            for perm in player.battlefield
+            for perm in self.all_permanents()
             if perm.blocking_attacker_index is not None
         )
         return blocking == 1

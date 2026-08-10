@@ -17,7 +17,7 @@ def drain_target_lands_mana(game: Game, instruction: OracleInstruction, context:
     card = context.card
     # Tap each of target's untapped lands and collect the mana they would produce
     mana_gained: dict[str, int] = {}
-    for perm in target.battlefield:
+    for perm in game.controlled_by(target):
         if perm.card.primary_type != "land" or perm.tapped:
             continue
         game.become_tapped(perm)
@@ -92,7 +92,7 @@ def sacrifice_self_for_mana(game: Game, instruction: OracleInstruction, context:
     caster.mana_pool[str(instruction.payload.get("color", "G"))] += int(instruction.payload.get("amount", 0))
     # Belt and braces for callers that reach this handler without going through
     # the cost path (direct handler invocation in tests/scripts).
-    if any(perm is source_permanent for perm in caster.battlefield):
+    if game.controls(caster, source_permanent):
         caster.battlefield = [perm for perm in caster.battlefield if perm is not source_permanent]
         caster.graveyard.append(source_permanent.card)
     game.log.append(f"{card.name} sacrificed for mana")

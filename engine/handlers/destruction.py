@@ -46,15 +46,14 @@ def volcanic_eruption(game: Game, instruction: OracleInstruction, context: Oracl
                 if _is_mountain(perm):
                     chosen.append((target, perm))
     if not chosen:
-        for player in game.players:
-            for perm in player.battlefield:
-                if _is_mountain(perm) and len(chosen) < x_value:
-                    chosen.append((player, perm))
+        for seat, perm in game.permanents_with_controller():
+            if _is_mountain(perm) and len(chosen) < x_value:
+                chosen.append((game.players[seat], perm))
 
     chosen = chosen[:x_value]
     destroyed = 0
     for owner, perm in chosen:
-        if perm in owner.battlefield and not game._is_indestructible(perm):
+        if game.controls(owner, perm) and not game._is_indestructible(perm):
             owner.battlefield.remove(perm)
             game._permanent_to_graveyard(owner, perm)
             game._process_land_dies(game.players.index(owner))
@@ -213,9 +212,8 @@ def chaos_orb_flip(game: Game, instruction: OracleInstruction, context: OracleEx
     source_permanent = context.source_permanent
     # Collect all permanents from all players except Chaos Orb itself
     candidates: list[tuple[PlayerState, Permanent]] = [
-        (player, perm)
-        for player in game.players
-        for perm in player.battlefield
+        (game.players[seat], perm)
+        for seat, perm in game.permanents_with_controller()
         if perm is not source_permanent
     ]
     num_to_destroy = random.randint(0, min(2, len(candidates)))
@@ -226,11 +224,11 @@ def chaos_orb_flip(game: Game, instruction: OracleInstruction, context: OracleEx
         game.log.append(f"Chaos Orb flip destroyed {victim_perm.card.name}")
     # Always destroy Chaos Orb itself
     if source_permanent is not None:
-        for player in game.players:
-            if source_permanent in player.battlefield:
-                player.battlefield = [p for p in player.battlefield if p is not source_permanent]
-                game._permanent_to_graveyard(player, source_permanent)
-                break
+        holder = game.controller_index_of(source_permanent)
+        if holder is not None:
+            player = game.players[holder]
+            player.battlefield = [p for p in player.battlefield if p is not source_permanent]
+            game._permanent_to_graveyard(player, source_permanent)
     game.log.append("Chaos Orb was destroyed after flip")
     return True, "resolved"
 
@@ -258,7 +256,7 @@ def destroy_artifact_controller_gains_mana_value(
         if candidate.has_type("artifact"):
             artifact = candidate
     if artifact is None:
-        artifact = next((p for p in target.battlefield if p.has_type("artifact")), None)
+        artifact = next((p for p in game.controlled_by(target) if p.has_type("artifact")), None)
     if artifact is None:
         game.log.append(f"{context.card.name} did nothing: no artifact to destroy")
         return True, "resolved"

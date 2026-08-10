@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 
 from ..card_hooks import ON_SELF_RESOLVED
+from ..control import BASE_CONTROLLER, CONTROL_EFFECTS
 from ..events import emit
 from ..game_types import OracleExecutionContext, OracleStateMachine
 from ..handlers import EFFECT_HANDLERS
@@ -21,7 +22,12 @@ from ..lord_buffs import LORD_BUFF_KIND
 # on removal detached every *other* Aura too. The capture-anything heuristic is
 # the next thing phase 6 replaces with owned effects; until then it must at
 # least not eat its own bookkeeping.
-_ATTACHMENT_KEYS = frozenset({"attached_aura", "attached_auras"})
+# Keys ``aura_granted_meta`` must never claim: an attachment link, and the
+# CR 613 layer-2 control channel, which belongs to every source that recorded a
+# contribution and not to whichever Aura happened to write last.
+_ATTACHMENT_KEYS = frozenset({
+    "attached_aura", "attached_auras", CONTROL_EFFECTS, BASE_CONTROLLER,
+})
 
 
 class OracleInstructionsMixin:
@@ -224,7 +230,7 @@ class OracleInstructionsMixin:
                         target_creature = candidate
             else:
                 target_creature = next(
-                    (perm for perm in target_player.battlefield if perm.is_creature),
+                    (perm for perm in self.controlled_by(target_player) if perm.is_creature),
                     None,
                 )
             if not target_creature:
@@ -324,15 +330,11 @@ class OracleInstructionsMixin:
                 self._turn_face_up(target_creature)
                 self.log.append(f"{aura_permanent.card.name} tapped {target_creature.card.name} and prevents it from untapping")
 
-            # Control effect: steal creature to caster's battlefield (e.g. Control Magic)
+            # Control effect: a CR 613 layer-2 contribution from this Aura
+            # (e.g. Control Magic). Recorded, not performed — the Aura leaving
+            # drops the contribution rather than restoring a remembered seat.
             if "you control enchanted creature" in text:
-                if target_creature in target_player.battlefield:
-                    target_player.battlefield.remove(target_creature)
-                    self.players[caster_index].battlefield.append(target_creature)
-                    # Remember the original controller so control reverts when the
-                    # Aura leaves the battlefield (CR 611.3 / 805.4a).
-                    aura_permanent.metadata["stolen_permanent"] = target_creature
-                    aura_permanent.metadata["stolen_owner_index"] = self.players.index(target_player)
+                if self.take_control(target_creature, caster_index, source=aura_permanent):
                     self.log.append(f"{aura_permanent.card.name} took control of {target_creature.card.name}")
 
             # P/T is no longer recorded here: it is derived from the Aura on
@@ -354,7 +356,10 @@ class OracleInstructionsMixin:
                 if candidate.card.primary_type == "land":
                     target_land = candidate
             if target_land is None and target_permanent_index is None:
-                target_land = next((p for p in target_player.battlefield if p.card.primary_type == "land"), None)
+                target_land = next(
+                    (p for p in self.controlled_by(target_player) if p.card.primary_type == "land"),
+                    None,
+                )
             if target_land is None:
                 self.log.append(f"{aura_permanent.card.name} found no land target")
                 return
@@ -394,7 +399,11 @@ class OracleInstructionsMixin:
                         target_wall = candidate
             else:
                 target_wall = next(
-                    (perm for perm in target_player.battlefield if "wall" in perm.card.type_line.lower()),
+                    (
+                        perm
+                        for perm in self.controlled_by(target_player)
+                        if "wall" in perm.card.type_line.lower()
+                    ),
                     None,
                 )
             if target_wall:
@@ -415,7 +424,14 @@ class OracleInstructionsMixin:
                     if candidate.card.primary_type == "artifact":
                         target_artifact = candidate
             if target_artifact is None and target_permanent_index is None:
-                target_artifact = next((perm for perm in target_player.battlefield if perm.card.primary_type == "artifact"), None)
+                target_artifact = next(
+                    (
+                        perm
+                        for perm in self.controlled_by(target_player)
+                        if perm.card.primary_type == "artifact"
+                    ),
+                    None,
+                )
 
             if target_artifact is None:
                 return
@@ -423,15 +439,10 @@ class OracleInstructionsMixin:
             # Attach metadata links
             attach_aura(aura_permanent, target_artifact)
 
-            # Control effect: steal artifact to caster's battlefield (e.g. Steal Artifact)
+            # Control effect: a CR 613 layer-2 contribution from this Aura
+            # (e.g. Steal Artifact). Same shape as Control Magic's above.
             if "you control enchanted artifact" in text:
-                if target_artifact in target_player.battlefield:
-                    target_player.battlefield.remove(target_artifact)
-                    self.players[caster_index].battlefield.append(target_artifact)
-                    # Remember the original controller so control reverts when the
-                    # Aura leaves the battlefield (CR 611.3 / 805.4a).
-                    aura_permanent.metadata["stolen_permanent"] = target_artifact
-                    aura_permanent.metadata["stolen_owner_index"] = self.players.index(target_player)
+                if self.take_control(target_artifact, caster_index, source=aura_permanent):
                     self.log.append(f"{aura_permanent.card.name} took control of {target_artifact.card.name}")
 
             # Animation is NOT applied here. Animate Artifact adds the
@@ -461,7 +472,14 @@ class OracleInstructionsMixin:
                     if candidate.card.primary_type == "enchantment":
                         target_enchantment = candidate
             if target_enchantment is None and target_permanent_index is None:
-                target_enchantment = next((perm for perm in target_player.battlefield if perm.card.primary_type == "enchantment"), None)
+                target_enchantment = next(
+                    (
+                        perm
+                        for perm in self.controlled_by(target_player)
+                        if perm.card.primary_type == "enchantment"
+                    ),
+                    None,
+                )
 
             if target_enchantment is None:
                 self.log.append(f"{aura_permanent.card.name} found no enchantment target")

@@ -23,6 +23,7 @@ from .auras import (
     aura_static_pt_grant,
     auras_attached_to,
 )
+from .control import control_changes, has_control_change
 from .global_statics import global_statics_applying_to
 from .continuous import (
     Characteristics,
@@ -30,6 +31,7 @@ from .continuous import (
     State,
     add_types,
     apply_layers,
+    change_control,
     grant_abilities,
     modify_pt,
     remove_abilities,
@@ -421,6 +423,44 @@ def collect_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
     return effects
 
 
+def collect_control_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
+    """Layer 2: control-changing effects (Control Magic, Steal Artifact,
+    Aladdin, Old Man of the Sea, Ghazbán Ogre).
+
+    Each contribution recorded in ``engine/control.py`` becomes its own effect
+    carrying its own timestamp, so two thefts of the same permanent are ordered
+    by CR 613.7 and not by which code path ran last — and one of them ending
+    leaves the other still applying, which the previous remember-the-previous-
+    controller model could not express.
+    """
+    only = scope_only(oid)
+    return [
+        change_control(
+            only,
+            int(entry["controller_index"]),
+            timestamp=int(entry["timestamp"]),
+            label=f"control:{entry['source'].card.name}",
+        )
+        for entry in control_changes(perm)
+    ]
+
+
+def computed_controller(perm: Permanent, base_seat: int) -> int:
+    """The seat that controls *perm* after layer 2, starting from *base_seat*.
+
+    The fast path matters: this is asked by ``Game.controller_index_of``, which
+    sits under targeting, triggers and every "creatures you control" filter. A
+    permanent nothing has ever taken control of skips the layer engine entirely.
+    """
+    if not has_control_change(perm):
+        return base_seat
+    oid = id(perm)
+    state: State = {oid: Characteristics(controller_index=base_seat)}
+    apply_layers(collect_control_effects(perm, oid), state)
+    result = state[oid].controller_index
+    return base_seat if result is None else result
+
+
 def collect_color_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
     """Layer 5: colour-changing effects (the laces, "becomes red")."""
     only = scope_only(oid)
@@ -494,4 +534,7 @@ def computed_pt(perm: Permanent) -> tuple[int, int]:
     return (char.power or 0, char.toughness or 0)
 
 
-__all__ = ["collect_pt_effects", "computed_pt", "seed_characteristics"]
+__all__ = [
+    "collect_control_effects", "collect_pt_effects", "computed_controller",
+    "computed_pt", "seed_characteristics",
+]

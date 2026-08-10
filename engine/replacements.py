@@ -392,7 +392,7 @@ def _protecting_bodyguard(game, payload: dict):
     return next(
         (
             permanent
-            for permanent in payload["recipient"].battlefield
+            for permanent in game.controlled_by(payload["recipient"])
             if not permanent.tapped
             and VETERAN_BODYGUARD_TEXT in (permanent.card.oracle_text or "").lower()
         ),
@@ -490,7 +490,8 @@ def _redirect_one_damage_to_owner(game, payload: dict) -> ReplacementOutcome | N
     amount = payload["amount"]
     redirect = int(permanent.metadata.get("redirect_one_damage_to_owner_until_eot", 0))
     permanent.metadata["redirect_one_damage_to_owner_until_eot"] = redirect - 1
-    owner = next((p for p in game.players if permanent in p.battlefield), None)
+    owner_seat = game.controller_index_of(permanent)
+    owner = game.players[owner_seat] if owner_seat is not None else None
     if owner is not None:
         game._deal_damage_to_player(owner, 1)
         game.log.append(f"1 damage redirected from {permanent.card.name} to {owner.name}")

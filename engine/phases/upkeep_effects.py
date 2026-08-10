@@ -271,7 +271,7 @@ class UpkeepEffectsMixin:
         cost_per = int(trig.instruction.payload.get("cost_per", 0))
         victim = self.players[player_index]
         untapped_names = []
-        for perm in victim.battlefield:
+        for perm in self.controlled_by(player_index):
             if not (perm.is_creature and perm.tapped):
                 continue
             if color not in permanent_effective_colors(perm):
@@ -293,9 +293,8 @@ class UpkeepEffectsMixin:
         permanent = ctx.permanent
         player_index = ctx.player_index
         trig = ctx.trig
-        victim = self.players[player_index]
         swamp_count = sum(
-            1 for perm in victim.battlefield if perm.has_type("swamp")
+            1 for perm in self.controlled_by(player_index) if perm.has_type("swamp")
         )
         _enqueue_upkeep_damage(
             permanent, self.players.index(controller), player_index, swamp_count, trig.source_line
@@ -313,11 +312,7 @@ class UpkeepEffectsMixin:
         attached = permanent.metadata.get("attached_to")
         if attached is None:
             return
-        attached_controller_idx = next(
-            (i for i, p in enumerate(self.players) if attached in p.battlefield),
-            None,
-        )
-        if attached_controller_idx != player_index:
+        if self.controller_index_of(attached) != player_index:
             return
         amount = int(trig.instruction.payload.get("amount", 1))
         victim = self.players[player_index]
@@ -432,11 +427,7 @@ class UpkeepEffectsMixin:
         attached = permanent.metadata.get("attached_to")
         if attached is None:
             return
-        attached_controller_idx = next(
-            (i for i, p in enumerate(self.players) if attached in p.battlefield),
-            None,
-        )
-        if attached_controller_idx != player_index:
+        if self.controller_index_of(attached) != player_index:
             return
         payer = self.players[player_index]
         mana = trig.instruction.payload.get("mana", {})
@@ -545,8 +536,12 @@ class UpkeepEffectsMixin:
             if len(leaders) == 1:
                 sole_leader = leaders[0]
         if sole_leader is not None and sole_leader is not controller:
-            controller.battlefield.remove(permanent)
-            sole_leader.battlefield.append(permanent)
+            # A resolving ability's control change lasts indefinitely (CR
+            # 611.2b), so it is a layer-2 contribution from the Ogre itself.
+            # Re-recording on a later upkeep replaces it with a fresh
+            # timestamp, which is how the lead moving from one player to
+            # another is expressed without anyone tracking a previous value.
+            self.take_control(permanent, sole_leader, source=permanent)
             self.log.append(
                 f"{sole_leader.name} gains control of {permanent.card.name} (most life)"
             )
@@ -562,9 +557,8 @@ class UpkeepEffectsMixin:
         # (confirm_least_power_choice); AI/headless play breaks
         # the tie by battlefield scan order.
         candidates = [
-            (owner, perm)
-            for owner in self.players
-            for perm in owner.battlefield
+            (self.players[seat], perm)
+            for seat, perm in self.permanents_with_controller()
             if perm.is_creature
         ]
         if candidates:
@@ -673,7 +667,7 @@ class UpkeepEffectsMixin:
         permanent = ctx.permanent
         has_island = any(
             perm.card.primary_type == "land" and perm.has_type("island")
-            for perm in controller.battlefield
+            for perm in self.controlled_by(controller)
         )
         if not has_island:
             controller.battlefield = [p for p in controller.battlefield if p is not permanent]

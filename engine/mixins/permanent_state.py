@@ -234,8 +234,7 @@ class PermanentStateMixin:
                 source = next(
                     (
                         perm
-                        for player in self.players
-                        for perm in player.battlefield
+                        for perm in self.all_permanents()
                         if perm is not permanent and perm.card.primary_type == "creature"
                     ),
                     None,
@@ -252,8 +251,7 @@ class PermanentStateMixin:
                 source = next(
                     (
                         perm
-                        for player in self.players
-                        for perm in player.battlefield
+                        for perm in self.all_permanents()
                         if perm is not permanent and perm.card.primary_type == "artifact"
                     ),
                     None,
@@ -425,11 +423,11 @@ class PermanentStateMixin:
         for controller in self.players:
             forests = sum(
                 1
-                for perm in controller.battlefield
+                for perm in self.controlled_by(controller)
                 if perm.card.primary_type == "land" and perm.has_type("forest")
             )
             x, y = forests // 2, (forests + 1) // 2
-            for aura in controller.battlefield:
+            for aura in self.controlled_by(controller):
                 if "half the number of forests you control" not in aura.card.oracle_text.lower():
                     continue
                 creature = aura.metadata.get("attached_to")
@@ -438,7 +436,7 @@ class PermanentStateMixin:
                 _add_static_pt(creature, x, y)
 
     def _refresh_dynamic_creatures(self) -> None:
-        all_permanents = [perm for player in self.players for perm in player.battlefield]
+        all_permanents = list(self.all_permanents())
         # Clear the derived layer-7c channel this method rebuilds. Everything
         # contributed below is a *conditional* continuous effect, so it is
         # recomputed from the current board rather than adjusted incrementally.
@@ -468,43 +466,43 @@ class PermanentStateMixin:
         # buff now — engine/lord_buffs.py derives the qualifier and
         # _recalculate_lord_buffs contributes it — so there is nothing here to
         # keep in step with it.
-        for player in self.players:
-            for permanent in player.battlefield:
-                prog = compile_card_oracle(permanent.effective_card)
-                instr_kinds = {instr.kind for instr in prog.instructions}
+        for seat, permanent in self.permanents_with_controller():
+            player = self.players[seat]
+            prog = compile_card_oracle(permanent.effective_card)
+            instr_kinds = {instr.kind for instr in prog.instructions}
 
-                # Characteristic-defining P/T (CR 604.3, layer 7a). The
-                # instruction says what to count; there is one counter, and a
-                # new CDA card adds no code here at all.
-                dynamic_pt = next(
-                    (i for i in prog.instructions if i.kind == "dynamic_pt_count"), None
-                )
-                if dynamic_pt is not None:
-                    value = _count_dynamic_pt(self, player, permanent, dynamic_pt.payload)
-                    set_base_pt(permanent, value, value)
+            # Characteristic-defining P/T (CR 604.3, layer 7a). The
+            # instruction says what to count; there is one counter, and a
+            # new CDA card adds no code here at all.
+            dynamic_pt = next(
+                (i for i in prog.instructions if i.kind == "dynamic_pt_count"), None
+            )
+            if dynamic_pt is not None:
+                value = _count_dynamic_pt(self, player, permanent, dynamic_pt.payload)
+                set_base_pt(permanent, value, value)
 
-                land_bonus_instr = next(
-                    (i for i in prog.instructions if i.kind == "conditional_land_bonus"), None
+            land_bonus_instr = next(
+                (i for i in prog.instructions if i.kind == "conditional_land_bonus"), None
+            )
+            if land_bonus_instr is not None:
+                land_type = land_bonus_instr.payload["land_type"]
+                has_land = any(
+                    perm.card.primary_type == "land" and perm.has_type(land_type)
+                    for perm in self.controlled_by(seat)
                 )
-                if land_bonus_instr is not None:
-                    land_type = land_bonus_instr.payload["land_type"]
-                    has_land = any(
-                        perm.card.primary_type == "land" and perm.has_type(land_type)
-                        for perm in player.battlefield
-                    )
-                    _apply_conditional_bonus(
-                        permanent, "conditional_land_bonus", has_land,
-                        int(land_bonus_instr.payload["power"]), int(land_bonus_instr.payload["toughness"]),
-                    )
+                _apply_conditional_bonus(
+                    permanent, "conditional_land_bonus", has_land,
+                    int(land_bonus_instr.payload["power"]), int(land_bonus_instr.payload["toughness"]),
+                )
 
-                untapped_bonus_instr = next(
-                    (i for i in prog.instructions if i.kind == "conditional_untapped_bonus"), None
+            untapped_bonus_instr = next(
+                (i for i in prog.instructions if i.kind == "conditional_untapped_bonus"), None
+            )
+            if untapped_bonus_instr is not None:
+                _apply_conditional_bonus(
+                    permanent, "conditional_untapped_bonus", not permanent.tapped,
+                    int(untapped_bonus_instr.payload["power"]), int(untapped_bonus_instr.payload["toughness"]),
                 )
-                if untapped_bonus_instr is not None:
-                    _apply_conditional_bonus(
-                        permanent, "conditional_untapped_bonus", not permanent.tapped,
-                        int(untapped_bonus_instr.payload["power"]), int(untapped_bonus_instr.payload["toughness"]),
-                    )
 
     @staticmethod
     def _apply_chosen_body(permanent: Permanent, body: dict) -> None:
@@ -673,7 +671,7 @@ class PermanentStateMixin:
         deterministic default for Jihad's "choose a color" (a color the chosen
         opponent actually controls keeps the enchantment alive)."""
         counts: dict[str, int] = {}
-        for perm in player.battlefield:
+        for perm in self.controlled_by(player):
             if perm.metadata.get("is_token"):
                 continue
             for color in self._effective_colors(perm):
@@ -691,7 +689,7 @@ class PermanentStateMixin:
             return False
         return any(
             not perm.metadata.get("is_token") and color in self._effective_colors(perm)
-            for perm in self.players[seat].battlefield
+            for perm in self.controlled_by(seat)
         )
 
     def _protection_colors(self, permanent: Permanent) -> set[str]:
@@ -780,7 +778,7 @@ class PermanentStateMixin:
         the absence of a contribution rather than a delta someone has to
         remember and subtract (CR 611.3b).
         """
-        all_perms = [perm for player in self.players for perm in player.battlefield]
+        all_perms = list(self.all_permanents())
 
         # Step 1: clear the derived channels this function owns.
         for perm in all_perms:
@@ -850,35 +848,35 @@ class PermanentStateMixin:
             return True
 
         # Step 2: re-apply from every permanent currently on the battlefield.
-        for ctrl_player in self.players:
-            for source_perm in ctrl_player.battlefield:
-                program = compile_card_oracle(_eff_card(source_perm))
-                for instr in program.instructions:
-                    if instr.kind != LORD_BUFF_KIND:
-                        continue
-                    buff = lord_buff_from_payload(instr.payload)
-                    if buff.condition and not self._lord_buff_condition(
-                        source_perm, buff.condition
-                    ):
-                        continue
-                    scope = (
-                        [ctrl_player] if buff.filter.controller == "you" else self.players
-                    )
-                    keywords = list(buff.keywords)
-                    flag = (
-                        GRANTED_ACTIVATED_ABILITIES[buff.granted_ability]
-                        if buff.granted_ability
-                        else None
-                    )
-                    for player in scope:
-                        for target_perm in player.battlefield:
-                            if not _matches(target_perm, source_perm, buff):
-                                continue
-                            _add_static_buff(target_perm, buff)
-                            for keyword in keywords:
-                                add_derived_grant(target_perm, keyword)
-                            if flag is not None:
-                                _grant_ability(target_perm, flag)
+        for ctrl_seat, source_perm in self.permanents_with_controller():
+            ctrl_player = self.players[ctrl_seat]
+            program = compile_card_oracle(_eff_card(source_perm))
+            for instr in program.instructions:
+                if instr.kind != LORD_BUFF_KIND:
+                    continue
+                buff = lord_buff_from_payload(instr.payload)
+                if buff.condition and not self._lord_buff_condition(
+                    source_perm, buff.condition
+                ):
+                    continue
+                scope = (
+                    [ctrl_player] if buff.filter.controller == "you" else self.players
+                )
+                keywords = list(buff.keywords)
+                flag = (
+                    GRANTED_ACTIVATED_ABILITIES[buff.granted_ability]
+                    if buff.granted_ability
+                    else None
+                )
+                for player in scope:
+                    for target_perm in self.controlled_by(player):
+                        if not _matches(target_perm, source_perm, buff):
+                            continue
+                        _add_static_buff(target_perm, buff)
+                        for keyword in keywords:
+                            add_derived_grant(target_perm, keyword)
+                        if flag is not None:
+                            _grant_ability(target_perm, flag)
 
     # Conditions a lord buff may hang on, keyed by what engine/lord_buffs.py
     # derives. A condition that table can name with no predicate here would be a

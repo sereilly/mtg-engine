@@ -115,7 +115,7 @@ class EndStepMixin:
 
         # Pestilence-style: "...if there are no creatures on the battlefield,
         # sacrifice this." The intervening-if is re-checked when the trigger resolves.
-        all_perms = [p for pl in self.players for p in pl.battlefield]
+        all_perms = list(self.all_permanents())
         has_creatures = any(p.is_creature for p in all_perms)
         if not has_creatures:
             for controller_index, permanent, trig in iter_triggered_abilities(

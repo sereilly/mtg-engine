@@ -232,10 +232,8 @@ def _becomes_tapped_filter(
 
 
 def _controller_of(game: Game, permanent: Permanent) -> PlayerState:
-    for player in game.players:
-        if permanent in player.battlefield:
-            return player
-    return game.players[0]
+    seat = game.controller_index_of(permanent)
+    return game.players[0 if seat is None else seat]
 
 
 __all__ = ["EVENT_FILTERS", "Event", "collect", "emit", "event_filter"]

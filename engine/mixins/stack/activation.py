@@ -239,11 +239,7 @@ class AbilityActivationMixin:
         if ability.instruction.kind == "grant_banding_to_target":
             # Helm of Chatzuk targets any creature (the chosen target_player; falls
             # back to any creature on the battlefield when no target was supplied).
-            has_valid_target = any(
-                perm.is_creature
-                for player in self.players
-                for perm in player.battlefield
-            )
+            has_valid_target = any(perm.is_creature for perm in self.all_permanents())
             if not has_valid_target:
                 details = "no valid creature target for banding effect"
                 self.log.append("No valid creature target for banding effect")

@@ -97,10 +97,8 @@ class EffectsMixin:
     def _controller_index_of(self, permanent: Permanent) -> int:
         """Index of the player who currently controls *permanent* (0 if not found —
         e.g. a permanent already removed from the battlefield)."""
-        for i, player in enumerate(self.players):
-            if permanent in player.battlefield:
-                return i
-        return 0
+        index = self.controller_index_of(permanent)
+        return 0 if index is None else index
 
     def _is_indestructible(self, permanent: Permanent) -> bool:
         """CR 700.4: a permanent with indestructible can't be destroyed by 'destroy'
@@ -140,15 +138,13 @@ class EffectsMixin:
         # Identity, not ``in``: Permanent is a plain dataclass, so ``in`` compares
         # field-by-field and would match an opponent's identically-stated copy of
         # the same artifact — protecting artifacts its controller doesn't control.
-        controller = next(
-            (p for p in self.players if any(perm is permanent for perm in p.battlefield)),
-            None,
-        )
-        if controller is None:
+        controller_seat = self.controller_index_of(permanent)
+        if controller_seat is None:
             return False
+        controller = self.players[controller_seat]
         return any(
             perm.card.name in UNTAPPED_ARTIFACT_PROTECTORS and not perm.tapped
-            for perm in controller.battlefield
+            for perm in self.controlled_by(controller)
         )
 
     def _controls_top_of_library_discard(self, player: PlayerState) -> bool:
@@ -176,14 +172,13 @@ class EffectsMixin:
         card_set = card.original_printing.lower()
         if not card_set:
             return None
-        for player in self.players:
-            for perm in player.battlefield:
-                for instr in compile_card_oracle(perm.effective_card).instructions:
-                    if (
-                        instr.kind == "ban_and_sacrifice_set_permanents"
-                        and str(instr.payload.get("set_code", "")).lower() == card_set
-                    ):
-                        return perm.card.name
+        for perm in self.all_permanents():
+            for instr in compile_card_oracle(perm.effective_card).instructions:
+                if (
+                    instr.kind == "ban_and_sacrifice_set_permanents"
+                    and str(instr.payload.get("set_code", "")).lower() == card_set
+                ):
+                    return perm.card.name
         return None
 
     def _destroy_target_permanent(
@@ -492,7 +487,9 @@ class EffectsMixin:
             sources.append(source)
 
     def _player_controls_text(self, player: PlayerState, phrase: str) -> bool:
-        return any(phrase in perm.card.oracle_text.lower() for perm in player.battlefield)
+        return any(
+            phrase in perm.card.oracle_text.lower() for perm in self.controlled_by(player)
+        )
 
     def _draw_with_replacements(self, player: PlayerState, count: int) -> int:
         """Draw ``count`` cards for *player*, letting an armed draw replacement
@@ -810,7 +807,7 @@ class EffectsMixin:
         # counters on this Aura." Counters accumulate on the enchantment so its
         # upkeep ability can later trade them for life (and the UI can show them).
         if damage > 0:
-            for perm in target.battlefield:
+            for perm in self.controlled_by(target):
                 if "put that many vitality counters" in perm.card.oracle_text.lower():
                     perm.metadata["vitality_counters"] = int(perm.metadata.get("vitality_counters", 0)) + damage
                     self.log.append(
@@ -984,7 +981,7 @@ class EffectsMixin:
         if not (0 <= player_index < len(self.players)):
             return []
         found = []
-        for permanent in self.players[player_index].battlefield:
+        for permanent in self.controlled_by(player_index):
             allowance = land_play_allowance_for(permanent.effective_card.oracle_text)
             if allowance is not None:
                 found.append((permanent, allowance))

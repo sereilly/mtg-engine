@@ -22,20 +22,19 @@ class EndOfCombatStepMixin:
         # End-of-combat triggered abilities fire before combat state is cleared,
         # while "attacked or blocked this combat" is still known.
         self._fire_end_of_combat_triggers()
-        for player in self.players:
-            for permanent in player.battlefield:
-                if permanent.metadata.get("animate_until_end_of_combat"):
-                    permanent.metadata.pop("animate_until_end_of_combat", None)
-                    permanent.metadata.pop("absolute_power", None)
-                    permanent.metadata.pop("absolute_toughness", None)
-                permanent.metadata.pop("blocked_this_combat", None)
+        for permanent in self.all_permanents():
+            if permanent.metadata.get("animate_until_end_of_combat"):
+                permanent.metadata.pop("animate_until_end_of_combat", None)
+                permanent.metadata.pop("absolute_power", None)
+                permanent.metadata.pop("absolute_toughness", None)
+            permanent.metadata.pop("blocked_this_combat", None)
         self.combat_damage_prevented_until_eot = False
         for player in self.players:
             # CR 615.3: a shield whose duration is this combat expires here.
             # Which shields those are is data on the shield, so this sweep does
             # not have to know that Forcefield's is the only one.
             clear_shields(player, END_OF_COMBAT)
-            for permanent in player.battlefield:
+            for permanent in self.controlled_by(player):
                 clear_shields(permanent, END_OF_COMBAT)
         self._reset_combat_state(clear_damage_marked=False)
         if self._receives_priority(step):
@@ -52,25 +51,24 @@ class EndOfCombatStepMixin:
             "at end of combat, if this creature attacked or blocked this combat, "
             "remove a +1/+0 counter from it"
         )
-        for player in self.players:
-            for permanent in player.battlefield:
-                program = compile_card_oracle(permanent.effective_card)
-                if not any(clockwork_line == line for line in program.static_lines):
-                    continue
-                attacked_or_blocked = permanent.metadata.get(
-                    "attacked_this_turn"
-                ) or permanent.metadata.get("blocked_this_combat")
-                if not attacked_or_blocked:
-                    continue
-                counters = int(permanent.metadata.get("plus_1_0_counters", 0))
-                if counters <= 0:
-                    continue
-                permanent.metadata["plus_1_0_counters"] = counters - 1
-                permanent.power_bonus -= 1
-                self.log.append(
-                    f"{permanent.card.name} removes a +1/+0 counter at end of combat "
-                    f"({counters - 1} remaining)"
-                )
+        for permanent in self.all_permanents():
+            program = compile_card_oracle(permanent.effective_card)
+            if not any(clockwork_line == line for line in program.static_lines):
+                continue
+            attacked_or_blocked = permanent.metadata.get(
+                "attacked_this_turn"
+            ) or permanent.metadata.get("blocked_this_combat")
+            if not attacked_or_blocked:
+                continue
+            counters = int(permanent.metadata.get("plus_1_0_counters", 0))
+            if counters <= 0:
+                continue
+            permanent.metadata["plus_1_0_counters"] = counters - 1
+            permanent.power_bonus -= 1
+            self.log.append(
+                f"{permanent.card.name} removes a +1/+0 counter at end of combat "
+                f"({counters - 1} remaining)"
+            )
 
         self._resolve_end_of_combat_destruction()
 

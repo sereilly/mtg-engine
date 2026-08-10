@@ -36,7 +36,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         floating_left = sum(player.mana_pool.values()) - sum(colored.values())
         untapped_land_mana = sum(
             1
-            for perm in player.battlefield
+            for perm in self.controlled_by(player)
             if perm.card.primary_type == "land" and not perm.tapped and perm.effective_produced_mana
         )
         return floating_left + untapped_land_mana >= generic
@@ -54,7 +54,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                 player.mana_pool[sym] -= 1
                 remaining -= 1
         if remaining > 0:
-            for perm in player.battlefield:
+            for perm in self.controlled_by(player):
                 if remaining <= 0:
                     break
                 if perm.card.primary_type == "land" and not perm.tapped and perm.effective_produced_mana:
@@ -95,48 +95,46 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         # creature's controller, that player may pay {N}. If they do, untap the
         # creature." The aura may be controlled by either player, so scan every
         # battlefield for one whose enchanted creature this player controls.
-        for owner in self.players:
-            for permanent in owner.battlefield:
-                attached = permanent.metadata.get("attached_to")
-                if attached is None or attached not in controller.battlefield:
-                    continue
-                trig = next(matching_triggers(
-                    permanent.effective_card,
-                    condition_kinds={"upkeep_enchanted_controller"},
-                    instruction_kinds={"upkeep_pay_to_untap_enchanted"},
-                ), None)
-                if trig is not None:
-                    choices.append({
-                        "card_name": permanent.card.name,
-                        "mana": trig.instruction.payload.get("mana", {}),
-                        "kind": trig.instruction.kind,
-                        "damage": 0,
-                    })
+        for permanent in self.all_permanents():
+            attached = permanent.metadata.get("attached_to")
+            if attached is None or not self.controls(controller, attached):
+                continue
+            trig = next(matching_triggers(
+                permanent.effective_card,
+                condition_kinds={"upkeep_enchanted_controller"},
+                instruction_kinds={"upkeep_pay_to_untap_enchanted"},
+            ), None)
+            if trig is not None:
+                choices.append({
+                    "card_name": permanent.card.name,
+                    "mana": trig.instruction.payload.get("mana", {}),
+                    "kind": trig.instruction.kind,
+                    "damage": 0,
+                })
 
         # Farmstead-style enchant-land grants: "Enchanted land has 'At the beginning
         # of your upkeep, you may pay {N}. If you do, you gain X life.'" The enchanted
         # land's controller (player_index) may pay for the life.
-        for owner in self.players:
-            for permanent in owner.battlefield:
-                if permanent.card.primary_type != "enchantment":
-                    continue
-                attached = permanent.metadata.get("attached_to")
-                if attached is None or attached not in controller.battlefield:
-                    continue
-                text = compile_card_oracle(permanent.effective_card).normalized_text
-                if not text.startswith("enchant land") or "you may pay" not in text or "you gain" not in text:
-                    continue
-                pay_match = re.search(r"you may pay ((?:\{[wubrgc]\})+)", text)
-                mana: dict[str, int] = {}
-                if pay_match:
-                    for sym in re.findall(r"\{([wubrg])\}", pay_match.group(1)):
-                        mana[sym.upper()] = mana.get(sym.upper(), 0) + 1
-                choices.append({
-                    "card_name": permanent.card.name,
-                    "mana": mana,
-                    "kind": "upkeep_pay_to_gain_life",
-                    "damage": 0,
-                })
+        for permanent in self.all_permanents():
+            if permanent.card.primary_type != "enchantment":
+                continue
+            attached = permanent.metadata.get("attached_to")
+            if attached is None or not self.controls(controller, attached):
+                continue
+            text = compile_card_oracle(permanent.effective_card).normalized_text
+            if not text.startswith("enchant land") or "you may pay" not in text or "you gain" not in text:
+                continue
+            pay_match = re.search(r"you may pay ((?:\{[wubrgc]\})+)", text)
+            mana: dict[str, int] = {}
+            if pay_match:
+                for sym in re.findall(r"\{([wubrg])\}", pay_match.group(1)):
+                    mana[sym.upper()] = mana.get(sym.upper(), 0) + 1
+            choices.append({
+                "card_name": permanent.card.name,
+                "mana": mana,
+                "kind": "upkeep_pay_to_gain_life",
+                "damage": 0,
+            })
         return choices
 
     def get_upkeep_mana_prevention_triggers(self, player_index: int) -> list[dict]:
@@ -146,24 +144,23 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         """
         victim = self.players[player_index]
         triggers: list[dict] = []
-        for controller in self.players:
-            for permanent in controller.battlefield:
-                if "prevent x of that damage" not in permanent.card.oracle_text.lower():
-                    continue
-                attached = permanent.metadata.get("attached_to")
-                if attached is None or attached not in victim.battlefield:
-                    continue
-                trig = next(matching_triggers(
-                    permanent.effective_card,
-                    condition_kinds={"upkeep_enchanted_controller"},
-                    instruction_kinds={"deal_damage"},
-                ), None)
-                if trig is not None:
-                    triggers.append({
-                        "card_name": permanent.card.name,
-                        "kind": "upkeep_pay_to_prevent_damage",
-                        "damage": int(trig.instruction.payload.get("amount", 1)),
-                    })
+        for permanent in self.all_permanents():
+            if "prevent x of that damage" not in permanent.card.oracle_text.lower():
+                continue
+            attached = permanent.metadata.get("attached_to")
+            if attached is None or not self.controls(victim, attached):
+                continue
+            trig = next(matching_triggers(
+                permanent.effective_card,
+                condition_kinds={"upkeep_enchanted_controller"},
+                instruction_kinds={"deal_damage"},
+            ), None)
+            if trig is not None:
+                triggers.append({
+                    "card_name": permanent.card.name,
+                    "kind": "upkeep_pay_to_prevent_damage",
+                    "damage": int(trig.instruction.payload.get("amount", 1)),
+                })
         return triggers
 
     def _process_mire_cleanups(self, player_index: int) -> None:
@@ -180,7 +177,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             return
 
         def _on_battlefield(land) -> bool:
-            return any(land in player.battlefield for player in self.players)
+            return self.is_on_battlefield(land)
 
         surviving: list = []
         for obligation in self.mire_cleanup_obligations:
@@ -252,7 +249,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             })
         # Living Artifact: "At the beginning of your upkeep, you may remove a
         # vitality counter from this Aura. If you do, you gain 1 life."
-        for perm in self.players[player_index].battlefield:
+        for perm in self.controlled_by(player_index):
             if "you may remove a vitality counter" not in perm.card.oracle_text.lower():
                 continue
             if int(perm.metadata.get("vitality_counters", 0)) <= 0:
@@ -295,19 +292,20 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
     def _forestwalk_grant_candidates(self, controller) -> list[Permanent]:
         """Legal targets for Erhnam Djinn's upkeep grant: "target non-Wall
         creature an opponent controls"."""
+        controller_seat = self.seat_index(controller)
         return [
             perm
-            for opponent in self.players
-            if opponent is not controller
-            for perm in opponent.battlefield
-            if perm.is_creature and "wall" not in perm.effective_card.type_line.lower()
+            for seat, perm in self.permanents_with_controller()
+            if seat != controller_seat
+            and perm.is_creature
+            and "wall" not in perm.effective_card.type_line.lower()
         ]
 
     def _upkeep_land_sacrifice_candidates(self, controller) -> list[Permanent]:
         """Legal choices for Serendib Djinn's upkeep "sacrifice a land": every
         land its controller controls (you choose which of your own permanents a
         sacrifice takes, CR 701.17a)."""
-        return [perm for perm in controller.battlefield if perm.card.primary_type == "land"]
+        return [perm for perm in self.controlled_by(controller) if perm.card.primary_type == "land"]
 
     def _resolve_upkeep_trigger_target(
         self, card_name: str, trigger_targets: dict | None, candidates: list[Permanent]
@@ -355,7 +353,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         triggers: list[dict] = []
         seen: set[str] = set()
         controller = self.players[player_index]
-        for perm in controller.battlefield:
+        for perm in self.controlled_by(player_index):
             program = compile_card_oracle(perm.effective_card)
             for trig in program.triggered_abilities:
                 if trig.instruction is None or trig.condition.kind != "upkeep_self":
@@ -423,7 +421,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         return [
             perm
             for perm in (choice.data.get("_candidate_perms") or [])
-            if any(perm is p for pl in self.players for p in pl.battlefield)
+            if self.is_on_battlefield(perm)
         ]
 
     def confirm_least_power_choice(
@@ -466,7 +464,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         if not live:
             return
         victim = live[0]
-        owner = next(pl for pl in self.players if any(p is victim for p in pl.battlefield))
+        owner = self.players[self.controller_index_of(victim)]
         self._destroy_least_power_creature(owner, victim, choice.data["card_name"])
 
     def resolve_upkeep(self, player_index: int, human_choices: dict[str, bool] | None = None, optional_choices: dict[str, bool] | None = None, defer_priority: bool = False, mana_prevention: dict[str, int] | None = None, sacrifice_choices: dict[str, int] | None = None, trigger_targets: dict[str, tuple[int, int]] | None = None) -> None:
@@ -478,11 +476,10 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         # Erhnam Djinn: a granted forestwalk (or similar) lasting "until your
         # next upkeep" expires now, at the start of that same upkeep, before
         # this turn's own upkeep triggers (which might grant a fresh one) run.
-        for owner in self.players:
-            for perm in owner.battlefield:
-                if perm.metadata.get("forestwalk_until_next_upkeep_of") == player_index:
-                    perm.metadata.pop("has_forestwalk", None)
-                    perm.metadata.pop("forestwalk_until_next_upkeep_of", None)
+        for perm in self.all_permanents():
+            if perm.metadata.get("forestwalk_until_next_upkeep_of") == player_index:
+                perm.metadata.pop("has_forestwalk", None)
+                perm.metadata.pop("forestwalk_until_next_upkeep_of", None)
         # Non-interactive "at the beginning of upkeep" triggers (fixed upkeep damage)
         # are collected here and put on the stack (CR 603.3); they resolve through the
         # upkeep priority window. The pay-or-consequence triggers below stay inline
@@ -500,144 +497,129 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                 "trigger_context": {"victim_player_index": victim_idx, "amount": int(amount)},
             })
 
-        for controller in self.players:
-            for permanent in controller.battlefield:
-                program = compile_card_oracle(permanent.effective_card)
-                for trig in program.triggered_abilities:
-                    if trig.instruction is None:
-                        continue
-                    kind = trig.instruction.kind
-                    cond = trig.condition.kind
+        for controller_seat, permanent in self.permanents_with_controller():
+            controller = self.players[controller_seat]
+            program = compile_card_oracle(permanent.effective_card)
+            for trig in program.triggered_abilities:
+                if trig.instruction is None:
+                    continue
+                kind = trig.instruction.kind
+                cond = trig.condition.kind
 
-                    # "at the beginning of YOUR upkeep" only fires during the controller's own upkeep.
-                    if cond == "upkeep_self" and controller is not self.players[player_index]:
-                        break
+                # "at the beginning of YOUR upkeep" only fires during the controller's own upkeep.
+                if cond == "upkeep_self" and controller_seat != player_index:
+                    break
 
-                    handler = UPKEEP_EFFECTS.get((cond, kind))
-                    if handler is not None:
-                        handler(self, UpkeepContext(
-                            game=self,
-                            player_index=player_index,
-                            controller=controller,
-                            permanent=permanent,
-                            trig=trig,
-                            cond=cond,
-                            kind=kind,
-                            human_choices=human_choices,
-                            optional_choices=optional_choices,
-                            mana_prevention=mana_prevention,
-                            sacrifice_choices=sacrifice_choices,
-                            trigger_targets=trigger_targets,
-                            enqueue_damage=_enqueue_upkeep_damage,
-                        ))
-                        break
+                handler = UPKEEP_EFFECTS.get((cond, kind))
+                if handler is not None:
+                    handler(self, UpkeepContext(
+                        game=self,
+                        player_index=player_index,
+                        controller=controller,
+                        permanent=permanent,
+                        trig=trig,
+                        cond=cond,
+                        kind=kind,
+                        human_choices=human_choices,
+                        optional_choices=optional_choices,
+                        mana_prevention=mana_prevention,
+                        sacrifice_choices=sacrifice_choices,
+                        trigger_targets=trigger_targets,
+                        enqueue_damage=_enqueue_upkeep_damage,
+                    ))
+                    break
 
         # Handle enchant-land auras with upkeep damage (e.g. Cursed Land)
-        for controller in self.players:
-            for permanent in controller.battlefield:
-                if permanent.card.primary_type != "enchantment":
-                    continue
-                prog = compile_card_oracle(permanent.effective_card)
-                text = prog.normalized_text
-                if not text.startswith("enchant land"):
-                    continue
-                attached_land = permanent.metadata.get("attached_to")
-                if attached_land is None:
-                    continue
-                # Find which player controls the enchanted land
-                land_controller_idx = next(
-                    (i for i, p in enumerate(self.players) if attached_land in p.battlefield),
-                    None,
-                )
-                if land_controller_idx != player_index:
-                    continue
-                instr = next((i for i in prog.instructions if i.kind == "deal_damage"), None)
-                if instr is None:
-                    continue
-                amount = int(instr.payload.get("amount", 1))
-                _enqueue_upkeep_damage(permanent, self.players.index(controller), player_index, amount)
+        for controller_seat, permanent in self.permanents_with_controller():
+            if permanent.card.primary_type != "enchantment":
+                continue
+            prog = compile_card_oracle(permanent.effective_card)
+            text = prog.normalized_text
+            if not text.startswith("enchant land"):
+                continue
+            attached_land = permanent.metadata.get("attached_to")
+            if attached_land is None:
+                continue
+            # Find which player controls the enchanted land
+            if self.controller_index_of(attached_land) != player_index:
+                continue
+            instr = next((i for i in prog.instructions if i.kind == "deal_damage"), None)
+            if instr is None:
+                continue
+            amount = int(instr.payload.get("amount", 1))
+            _enqueue_upkeep_damage(permanent, controller_seat, player_index, amount)
 
         # Unstable Mutation: enchant-creature auras that decay the enchanted
         # creature at the beginning of its controller's upkeep. The counters
         # are real -1/-1 counters, not an aura grant — they stay if the Aura
         # leaves, and 704.5f/704.5q apply.
         mutation_decay_applied = False
-        for controller in self.players:
-            for permanent in controller.battlefield:
-                if permanent.card.primary_type != "enchantment":
-                    continue
-                trig = next(matching_triggers(
-                    permanent.effective_card,
-                    condition_kinds={"upkeep_enchanted_controller"},
-                    instruction_kinds={"add_minus1_counter_to_enchanted"},
-                ), None)
-                if trig is None:
-                    continue
-                attached = permanent.metadata.get("attached_to")
-                if attached is None:
-                    continue
-                creature_controller_idx = next(
-                    (i for i, p in enumerate(self.players) if attached in p.battlefield),
-                    None,
-                )
-                if creature_controller_idx != player_index:
-                    continue
-                attached.power_bonus -= 1
-                attached.toughness_bonus -= 1
-                mutation_decay_applied = True
-                self.log.append(
-                    f"{permanent.card.name}: {attached.card.name} gets a -1/-1 counter"
-                )
+        for permanent in self.all_permanents():
+            if permanent.card.primary_type != "enchantment":
+                continue
+            trig = next(matching_triggers(
+                permanent.effective_card,
+                condition_kinds={"upkeep_enchanted_controller"},
+                instruction_kinds={"add_minus1_counter_to_enchanted"},
+            ), None)
+            if trig is None:
+                continue
+            attached = permanent.metadata.get("attached_to")
+            if attached is None:
+                continue
+            if self.controller_index_of(attached) != player_index:
+                continue
+            attached.power_bonus -= 1
+            attached.toughness_bonus -= 1
+            mutation_decay_applied = True
+            self.log.append(
+                f"{permanent.card.name}: {attached.card.name} gets a -1/-1 counter"
+            )
         if mutation_decay_applied:
             # 704.5f: a creature decayed to 0 toughness dies now.
             self.check_state_based_actions()
 
         # Handle enchant-land auras with optional upkeep life gain (e.g. Farmstead)
-        for controller in self.players:
-            for permanent in controller.battlefield:
-                if permanent.card.primary_type != "enchantment":
-                    continue
-                prog = compile_card_oracle(permanent.effective_card)
-                text = prog.normalized_text
-                if not text.startswith("enchant land"):
-                    continue
-                attached_land = permanent.metadata.get("attached_to")
-                if attached_land is None:
-                    continue
-                land_controller_idx = next(
-                    (i for i, p in enumerate(self.players) if attached_land in p.battlefield),
-                    None,
-                )
-                if land_controller_idx != player_index:
-                    continue
-                instr = next((i for i in prog.instructions if i.kind == "target_gains_life"), None)
-                if instr is None:
-                    continue
-                # Parse the optional mana payment from text (e.g. "you may pay {w}{w}")
-                pay_match = re.search(r"you may pay ((?:\{[wubrgcWUBRGC]\})+)", text)
-                gainer = self.players[player_index]
-                paid = False
-                if pay_match:
-                    cost_str = pay_match.group(1).upper()
-                    cost: dict[str, int] = {}
-                    for sym in re.findall(r"\{([WUBRG])\}", cost_str):
-                        cost[sym] = cost.get(sym, 0) + 1
-                    can_pay = all(gainer.mana_pool.get(sym, 0) >= cnt for sym, cnt in cost.items())
-                    # Honor a human's decision (from the upkeep-pay prompt) when given;
-                    # otherwise auto-pay when able (beneficial default for AI/headless).
-                    if human_choices is not None and permanent.card.name in human_choices:
-                        wants_pay = bool(human_choices[permanent.card.name])
-                    else:
-                        wants_pay = can_pay
-                    if wants_pay and can_pay:
-                        for sym, cnt in cost.items():
-                            gainer.mana_pool[sym] -= cnt
-                        paid = True
+        for permanent in self.all_permanents():
+            if permanent.card.primary_type != "enchantment":
+                continue
+            prog = compile_card_oracle(permanent.effective_card)
+            text = prog.normalized_text
+            if not text.startswith("enchant land"):
+                continue
+            attached_land = permanent.metadata.get("attached_to")
+            if attached_land is None:
+                continue
+            if self.controller_index_of(attached_land) != player_index:
+                continue
+            instr = next((i for i in prog.instructions if i.kind == "target_gains_life"), None)
+            if instr is None:
+                continue
+            # Parse the optional mana payment from text (e.g. "you may pay {w}{w}")
+            pay_match = re.search(r"you may pay ((?:\{[wubrgcWUBRGC]\})+)", text)
+            gainer = self.players[player_index]
+            paid = False
+            if pay_match:
+                cost_str = pay_match.group(1).upper()
+                cost: dict[str, int] = {}
+                for sym in re.findall(r"\{([WUBRG])\}", cost_str):
+                    cost[sym] = cost.get(sym, 0) + 1
+                can_pay = all(gainer.mana_pool.get(sym, 0) >= cnt for sym, cnt in cost.items())
+                # Honor a human's decision (from the upkeep-pay prompt) when given;
+                # otherwise auto-pay when able (beneficial default for AI/headless).
+                if human_choices is not None and permanent.card.name in human_choices:
+                    wants_pay = bool(human_choices[permanent.card.name])
                 else:
-                    paid = True  # No payment required
-                if paid:
-                    amount = int(instr.payload.get("amount", 1))
-                    self._gain_life(gainer, amount, permanent.card.name)
+                    wants_pay = can_pay
+                if wants_pay and can_pay:
+                    for sym, cnt in cost.items():
+                        gainer.mana_pool[sym] -= cnt
+                    paid = True
+            else:
+                paid = True  # No payment required
+            if paid:
+                amount = int(instr.payload.get("amount", 1))
+                self._gain_life(gainer, amount, permanent.card.name)
 
         # Graveyard-recursion upkeep triggers (e.g. Nether Shadow). These abilities
         # function from the owner's graveyard, so they aren't covered by the

@@ -19,9 +19,9 @@ if TYPE_CHECKING:
 @effect_handler("steal_target_permanent_linked_to_self")
 def steal_target_permanent_linked_to_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Aladdin: "Gain control of target artifact for as long as you control
-    this creature." The theft is recorded on Aladdin itself (not an Aura), so
-    ON_LEAVE_BATTLEFIELD["Aladdin"] can revert it via _revert_stolen_permanent
-    when Aladdin leaves the battlefield."""
+    this creature." The control change is a CR 613 layer-2 contribution keyed
+    on Aladdin itself (not on an Aura), so ON_LEAVE_BATTLEFIELD["Aladdin"] ends
+    it with end_control_changes_from when Aladdin leaves the battlefield."""
     caster = context.caster
     card = context.card
     source_permanent = context.source_permanent
@@ -36,7 +36,7 @@ def steal_target_permanent_linked_to_self(game: Game, instruction: OracleInstruc
     if target_perm is None:
         game.log.append(f"{card.name}: no valid artifact target")
         return True, "resolved"
-    if not game._take_control_linked(source_permanent, target_perm, caster):
+    if not game.take_control(target_perm, caster, source=source_permanent):
         return True, "resolved"
     game.log.append(f"{card.name} gains control of {target_perm.card.name}")
     return True, "resolved"
@@ -64,10 +64,10 @@ def steal_creature_while_tapped_and_weaker(game: Game, instruction: OracleInstru
     if target_perm is None:
         game.log.append(f"{card.name}: no valid creature target")
         return True, "resolved"
-    if not game._take_control_linked(
-        source_permanent,
+    if not game.take_control(
         target_perm,
         caster,
+        source=source_permanent,
         extra_meta={"stolen_while_tapped_and_weaker": True},
     ):
         return True, "resolved"
@@ -97,17 +97,15 @@ def sacrifice_if_no_creatures(game: Game, instruction: OracleInstruction, contex
     source = context.source_permanent
     if source is None:
         return True, "resolved"
-    has_creatures = any(
-        p.is_creature for pl in game.players for p in pl.battlefield
-    )
+    has_creatures = any(p.is_creature for p in game.all_permanents())
     if has_creatures:
         return True, "resolved"
-    for pl in game.players:
-        if source in pl.battlefield:
-            pl.battlefield.remove(source)
-            pl.graveyard.append(source.card)
-            game.log.append(f"{source.card.name} sacrificed at end step (no creatures)")
-            break
+    holder = game.controller_index_of(source)
+    if holder is not None:
+        pl = game.players[holder]
+        pl.battlefield = [p for p in pl.battlefield if p is not source]
+        pl.graveyard.append(source.card)
+        game.log.append(f"{source.card.name} sacrificed at end step (no creatures)")
     return True, "resolved"
 
 
@@ -138,7 +136,7 @@ def end_step_damage_if_not_attacked(game: Game, instruction: OracleInstruction, 
 @effect_handler("balance_resources")
 def balance_resources(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     def _count(player, kind):
-        return sum(1 for perm in player.battlefield if perm.card.primary_type == kind)
+        return sum(1 for perm in game.controlled_by(player) if perm.card.primary_type == kind)
 
     min_lands = min(_count(p, "land") for p in game.players)
     min_creatures = min(_count(p, "creature") for p in game.players)

@@ -59,7 +59,7 @@ def untap_attacker_and_prevent_combat_damage(game: Game, instruction: OracleInst
     caster = context.caster
     perm = resolve_target_permanent(
         context,
-        predicate=lambda p: p.is_creature and p.attacking and any(p is q for q in caster.battlefield),
+        predicate=lambda p: p.is_creature and p.attacking and game.controls(caster, p),
         fallback_players=(caster,),
         fallback_on_invalid_choice=False,
     )
@@ -135,7 +135,7 @@ def tap_or_untap_target(game: Game, instruction: OracleInstruction, context: Ora
 def tap_target_player_lands_and_drain_mana(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     target = context.target
     card = context.card
-    for perm in target.battlefield:
+    for perm in game.controlled_by(target):
         if perm.card.primary_type == "land":
             game.become_tapped(perm)
     for sym in ("W", "U", "B", "R", "G", "C"):

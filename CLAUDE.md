@@ -224,11 +224,29 @@ adding entries, not editing dispatch**:
   that needs it, since it clamps at zero and there is nothing to verify against.
 - `engine/continuous.py` + `engine/layer_bridge.py` — the CR 613 layer system.
   Characteristics are **computed**, not stored: `has_type`, `is_creature`,
-  `effective_power`, `has_keyword` and the colour accessors all resolve through
-  it. Layers 3–7 are live. Anything asking "what type/colour/P/T is this?" must
-  go through these accessors — reading `card.type_line` or a metadata flag
-  instead is how the same question ends up with several disagreeing answers,
-  which is the bug class `tests/engine/test_layer_reads.py` guards.
+  `effective_power`, `has_keyword`, the colour accessors and
+  `Game.controller_index_of` all resolve through it. Layers 2–7 are live.
+  Anything asking "what type/colour/P/T is this?" must go through these
+  accessors — reading `card.type_line` or a metadata flag instead is how the
+  same question ends up with several disagreeing answers, which is the bug
+  class `tests/engine/test_layer_reads.py` guards.
+- `engine/control.py` — CR 613 layer 2. A control change is a **contribution**
+  (`change_control(permanent, seat, source=…)`) with a timestamp, not a move;
+  ending one is `end_control_change(permanent, source=…)`, and whatever
+  contributions remain decide. `base_controller_index` is the seat the
+  permanent entered under and is never rewritten, so an ended effect reverts
+  correctly and CR 108.3 ownership reads off it.
+- **The control seam on `Game`** — `all_permanents()`,
+  `permanents_with_controller()`, `controlled_by(seat)`,
+  `permanents_matching(pred)`, `controller_index_of(perm)`,
+  `controls(seat, perm)`, `is_on_battlefield(perm)`, all in
+  `engine/mixins/helpers.py`. **Never iterate `player.battlefield` directly**:
+  this engine keeps the battlefield lists as the *projection* of the derived
+  controller (`Game._sync_control`), so a raw read is a second opinion about
+  who controls what — and `in`/`.remove()` on them compares `Permanent` by
+  value, which matches an opponent's look-alike. Guarded by
+  `tests/engine/test_control_reads.py`; zone *writes* (rebuilding the list) are
+  exempt by shape.
 - `engine/auras.py` — what an Aura's effect lines say and whether the engine
   implements them. Gates support (an Aura whose effect is unimplemented is
   reported unsupported rather than entering play and doing nothing) and derives

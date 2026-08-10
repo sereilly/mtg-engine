@@ -385,8 +385,7 @@ class SpellCastingMixin:
                 # Disenchant on one's own artifact) is enough to make the cast legal.
                 has_target = any(
                     self._destroy_target_legal(primary.payload, p)
-                    for pl in self.players
-                    for p in pl.battlefield
+                    for p in self.all_permanents()
                 )
                 if not has_target:
                     return False, f"no valid target for {card.name}"
@@ -415,11 +414,7 @@ class SpellCastingMixin:
                     not battlefield[target_permanent_index].is_creature
                 ):
                     return False, f"no valid target for {card.name}"
-            elif not any(
-                p.is_creature
-                for pl in self.players
-                for p in pl.battlefield
-            ):
+            elif not any(p.is_creature for p in self.all_permanents()):
                 return False, f"no valid target for {card.name}"
 
         elif primary.kind in (
@@ -451,11 +446,7 @@ class SpellCastingMixin:
                     battlefield[target_permanent_index]
                 ):
                     return False, f"no valid target for {card.name}"
-            elif not any(
-                _legal_pump_target(p)
-                for pl in self.players
-                for p in pl.battlefield
-            ):
+            elif not any(_legal_pump_target(p) for p in self.all_permanents()):
                 return False, f"no valid target for {card.name}"
 
         elif primary.kind in ("tap_target_permanent", "untap_target_permanent"):
@@ -512,7 +503,7 @@ class SpellCastingMixin:
                     not battlefield[target_permanent_index].is_creature
                 ):
                     return False, f"no valid target for {card.name}"
-            elif not any(p.is_creature for p in caster.battlefield):
+            elif not any(p.is_creature for p in self.controlled_by(caster)):
                 return False, f"no valid target for {card.name}"
 
         elif primary.kind == "copy_top_stack_spell":

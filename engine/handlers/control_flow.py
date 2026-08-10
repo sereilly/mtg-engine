@@ -82,7 +82,7 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         count = sum(
             1
             for player in players
-            for permanent in player.battlefield
+            for permanent in game.controlled_by(player)
             if permanent_matches_filter(permanent, filters)
         )
         wanted = payload.get("count")

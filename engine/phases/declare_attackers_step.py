@@ -157,10 +157,9 @@ class DeclareAttackersStepMixin:
             # a land turned into the named type counts, matching the upkeep
             # "no_islands" check. Scoped to lands so a creature subtype like
             # "Island Fish" never satisfies the restriction.
-            defending = self.players[defending_player_index]
             return any(
                 perm.card.primary_type == "land" and perm.has_type(required)
-                for perm in defending.battlefield
+                for perm in self.controlled_by(defending_player_index)
             )
 
         if "cant_attack" in instr_kinds:
