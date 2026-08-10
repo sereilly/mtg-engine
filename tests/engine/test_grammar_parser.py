@@ -191,7 +191,11 @@ def test_triggered_ability_event_kind_matches_the_legacy_vocabulary():
 
 
 def test_static_line_is_classified_as_static_not_a_spell_effect():
-    node = parse_line("Enchanted creature gets +0/+2.")
+    """A lord's anthem is a continuous effect, not a one-shot pump. (An Aura's
+    "Enchanted creature gets +0/+2" used to be the example here; it is now
+    claimed as a RegistryLine, because layer 7c already derives it from the
+    attached Aura — see test_grammar_lowering.)"""
+    node = parse_line("Other Merfolk get +1/+1.")
     assert isinstance(node, ast.StaticAbilityNode)
 
 

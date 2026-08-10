@@ -131,16 +131,34 @@ def test_pump_enchanted_creature():
     ]
 
 
-def test_durationless_anthem_is_static_and_waits_for_the_layers_engine():
+def test_a_durationless_anthem_lowers_to_the_continuous_consumer():
     """Crusade's "White creatures get +1/+1" is a continuous effect with no
-    duration, so it belongs in CR 613's layer system rather than the
-    until-end-of-turn boost channel. The grammar parses it (the colour and
-    scope survive in the AST) but declines to lower it, leaving the card on the
-    legacy path until roadmap phase 6."""
+    duration, and it was refused here for years as "needs the CR 613 layers
+    engine". It never did: ``buff_creatures_global`` has two consumers, and on
+    a *permanent* the one that runs is ``_recalculate_lord_buffs``, which
+    re-derives the buff on every recompute. That is the continuous reading, so
+    the grammar emits the same instruction the legacy rule always emitted."""
     result = compile_line("White creatures get +1/+1.")
-    assert result.parsed and not result.lowered
-    assert "613" in result.failure_reason
-    assert result.node.effect.subject.filter.colors == ("W",)
+    assert result.lowered
+    assert [i.kind for i in result.instructions] == ["buff_creatures_global"]
+    assert result.instructions[0].payload == {
+        "power": 1, "toughness": 1, "all": True, "color": "W"
+    }
+
+
+def test_an_anthem_qualifier_the_continuous_consumer_ignores_is_refused():
+    """The trap that keeps the lowering above honest. ``_recalculate_lord_buffs``
+    reads the colour and the controller and nothing else — it never looks at
+    ``attacking_only``, and untapped-only is a different instruction kind. So
+    Orcish Oriflamme lowered onto the same kind would buff every creature its
+    controller has, permanently, and Castle would buff tapped ones."""
+    for line, card in [
+        ("Attacking creatures you control get +1/+0.", "Orcish Oriflamme"),
+        ("Untapped creatures you control get +0/+2.", "Castle"),
+    ]:
+        result = compile_line(line, card_name=card)
+        assert not result.lowered, line
+        assert "would be dropped" in result.failure_reason, line
 
 
 def test_attacking_creatures_buff_keeps_the_qualifier():
@@ -291,11 +309,17 @@ def test_back_reference_without_a_producer_is_refused():
 # ---------------------------------------------------------------------------
 
 
-def test_static_pump_is_refused_pending_layers():
+def test_an_auras_static_pt_is_claimed_by_the_code_that_derives_it():
+    """This used to be refused as "needs the CR 613 layers engine". It isn't:
+    since phase 6 the grant is derived from the attached Aura's own text at
+    layer 7c on every recompute. There is nothing to lower — an instruction
+    here would apply the bonus a second time — so the line is accounted for by
+    ``auras.py`` and lowers to no instructions at all."""
     result = compile_line("Enchanted creature gets +0/+2.")
     assert result.parsed
-    assert not result.lowered
-    assert "613" in result.failure_reason
+    assert result.lowered
+    assert result.instructions == ()
+    assert result.node.registry == "auras"
 
 
 # ---------------------------------------------------------------------------
@@ -823,18 +847,28 @@ def test_a_restriction_with_no_duration_is_a_static_ability():
     assert "static" in result.failure_reason
 
 
-@pytest.mark.parametrize("line,card_name", [
-    ("Enchanted creature can't be blocked except by Walls.", "Invisibility"),
-    ("This creature can't be blocked by Walls.", "Juggernaut"),
-])
-def test_a_blocking_exception_clause_fails_full_consumption(line, card_name):
-    """These say *who* the restriction does not apply to. Consuming the
+def test_a_blocking_exception_clause_fails_full_consumption():
+    """This says *who* the restriction does not apply to. Consuming the
     exception without modelling it would turn a conditional restriction into an
     absolute one — Juggernaut would become unblockable by anything. Leaving the
-    tokens makes the line fail loudly and fall back instead."""
-    result = compile_line(line, card_name=card_name)
+    tokens makes the line fail loudly and fall back instead.
+
+    Invisibility prints the same shape and is deliberately *not* here: its
+    exception is modelled, by ``auras.aura_restriction_active``, so the line is
+    claimed rather than refused (see the test below)."""
+    result = compile_line("This creature can't be blocked by Walls.", card_name="Juggernaut")
 
     assert not result.parsed
+
+
+def test_an_auras_block_restriction_is_claimed_because_it_is_modelled():
+    result = compile_line(
+        "Enchanted creature can't be blocked except by Walls.", card_name="Invisibility"
+    )
+
+    assert result.lowered
+    assert result.instructions == ()
+    assert result.node.registry == "auras"
 
 
 def test_an_unmodelled_restriction_participle_is_refused():
@@ -1161,21 +1195,36 @@ def test_counted_prevention_is_never_scoped_to_combat():
         ("Enchanted creature has flying.", "Flight"),
         ("Enchanted creature has first strike.", "Lance"),
         ("Enchanted creature has islandwalk.", "Fishliver Oil"),
-        ("Other Zombie creatures have swampwalk.", "Zombie Master"),
     ],
 )
-def test_continuous_keyword_grants_parse_but_refuse_to_lower(line, card):
-    """These are continuous effects (CR 613), not one-shot ones: with no
-    duration the keyword is granted for as long as the Aura or lord is on the
-    battlefield. Every keyword-grant handler sets an until-end-of-turn flag the
-    cleanup step wipes, so lowering onto one would grant flying for a single
-    turn and then silently stop. Parsing is what puts these cards in front of
-    the layers work instead of leaving them as unreadable lines."""
+def test_an_auras_keyword_grant_is_claimed_by_the_code_that_derives_it(line, card):
+    """The hazard these lines pose is unchanged and is why they must never be
+    *lowered*: with no duration the keyword lasts as long as the Aura does,
+    while every keyword-grant handler sets an until-end-of-turn flag the
+    cleanup step wipes — so lowering onto one would grant flying for a single
+    turn and then silently stop.
+
+    The answer is not a phase-6 lowering, though; it is that layer 6 already
+    carries them, derived from the attached Aura. Zero instructions is the
+    correct output, and the claim names the derivation."""
     result = compile_line(line, card_name=card)
 
     assert result.parsed, result.failure_reason
+    assert result.lowered
+    assert result.instructions == ()
+    assert result.node.registry == "auras"
+
+
+def test_a_lords_keyword_grant_still_refuses():
+    """The sibling that is *not* claimed, so the boundary is visible: a lord's
+    grant to other creatures is applied by _recalculate_lord_buffs off a bare
+    ``static_line``, not by anything in auras.py, so nothing here may account
+    for it."""
+    result = compile_line("Other Zombie creatures have swampwalk.", card_name="Zombie Master")
+
+    assert result.parsed, result.failure_reason
     assert not result.lowered
-    assert "613" in result.failure_reason
+    assert "_recalculate_lord_buffs" in result.failure_reason
 
 
 def test_has_base_power_still_reaches_its_own_production():
@@ -1313,17 +1362,22 @@ def test_self_untap_restrictions_are_accounted_for_by_the_untap_step(line, card)
     assert result.instructions == ()
 
 
-def test_paralyzes_untap_restriction_is_not_claimed():
+def test_paralyzes_untap_restriction_is_claimed_by_the_aura_not_the_untap_registry():
     """"Enchanted creature doesn't untap during its controller's untap step" is
-    one half of a fused Aura instruction in mixins/oracle_instructions.py, not a
-    line the untap step's self-referential scan reads. Claiming it here would
-    call a card accounted for on the strength of code that never looks at it."""
+    not a line the untap step's *self-referential* scan reads, and claiming it
+    from ``untap_restrictions`` would call a card accounted for on the strength
+    of code that never looks at it. That still holds.
+
+    What changed is that something else does look at it: phase 6 moved the
+    restriction onto the Aura, and ``phases/untap_step.py`` now asks
+    ``aura_restriction_active(permanent, "doesnt_untap")``. So the line is
+    claimed — by the registry that implements it, and only that one."""
     result = compile_line(
         "Enchanted creature doesn't untap during its controller's untap step.",
         card_name="Paralyze",
     )
 
-    assert not result.parsed
+    assert result.node.registry == "auras"
 
 
 def test_registry_claims_stay_stricter_than_their_enforcement():
@@ -2619,7 +2673,11 @@ def test_as_long_as_lines_stay_unlowered_and_unusable():
 
     assert not result.lowered
     assert not result.usable
-    assert result.failure_reason == "static abilities need the CR 613 layers engine"
+    # The refusal now names what actually carries the line, rather than a phase
+    # that turned out not to be blocking it.
+    assert result.failure_reason == (
+        "a conditional static bonus is derived by engine/static_bonuses.py"
+    )
 
 
 def test_an_as_long_as_condition_the_grammar_cannot_model_is_not_claimed():

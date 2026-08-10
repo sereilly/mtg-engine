@@ -49,6 +49,11 @@ _KEYWORDS = (
 # family), which is why they are written as patterns rather than listed.
 _TEMPLATES: tuple[tuple[re.Pattern[str], str], ...] = (
     # --- static modifications to the enchanted permanent -------------------
+    # Everything from here down to the `_TRIGGER_TEMPLATES` boundary is a
+    # *continuous* effect: while the Aura is attached, the engine derives it
+    # from the Aura's own text on every recompute. None of it produces an
+    # OracleInstruction, so `aura_continuous_claim` reports these lines as
+    # already implemented rather than as a lowering the grammar owes.
     (
         # "Enchanted creature gets +2/+2." / "gets -1/-0" / "gets +0/+2 and has
         # reach" / "gets +0/+2 and has '{W}: ... until end of turn.'"
@@ -133,6 +138,10 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], str], ...] = (
         "Animate Artifact — layer 4 animation",
     ),
     # --- upkeep triggers -----------------------------------------------------
+    # From here down the line *does* compile to something — a triggered ability
+    # or an activated one — so these are not continuous claims and the grammar
+    # must be free to lower them itself. `_CONTINUOUS_TEMPLATE_COUNT` below is
+    # the boundary.
     (
         re.compile(
             rf"^at the beginning of the upkeep of enchanted {_NOUN}'s controller, "
@@ -490,6 +499,60 @@ def aura_animates_artifact(oracle_text: str) -> bool:
         _ANIMATE_ARTIFACT.match(_line_text(raw_line))
         for raw_line in oracle_text.splitlines()
     )
+
+
+# ---------------------------------------------------------------------------
+# Which lines the derivations above already account for
+# ---------------------------------------------------------------------------
+
+# The whole-line forms of the grants above. Each is built from the *same*
+# pattern source the derivation matches with, so a claim here cannot outlive
+# the code that carries it out — the rule engine/grammar/registries.py works
+# under. Where a derivation is already `^…$` anchored per line it is asked
+# directly and needs no companion here.
+_STATIC_PT_LINE = re.compile(rf"^enchanted {_NOUN} {_STATIC_PT_GRANT.pattern}$")
+# The Ward cycle's trailing sentence, spelled out rather than left open-ended:
+# it is part of the same effect (an Aura granting protection is not removed by
+# it), and an "and whatever follows" claim is the one way this could swallow
+# text nothing implements.
+_PROTECTION_TAIL = r"(?:\. this effect doesn't remove this aura)?"
+_PROTECTION_LINE = re.compile(_PROTECTION_GRANT.pattern + _PROTECTION_TAIL + "$")
+
+
+def aura_continuous_claim(line: str) -> str | None:
+    """Name the code implementing *line* as a continuous Aura effect, or None.
+
+    Continuous here means "applied while the Aura is attached, derived from the
+    Aura's own text, with no ``OracleInstruction`` anywhere": the P/T grant
+    (layer 7c), the keyword grants (layer 6), the protection cycle, the combat
+    and untap restrictions, the artifact animation. The grammar must not lower
+    these — the engine is already applying them, and an instruction would apply
+    them twice.
+
+    Deliberately narrower than :func:`aura_effect_claim` at both ends. It stops
+    short of the Aura's triggered and activated abilities, which *do* compile to
+    instructions and which a claim here would silently shadow; and it claims
+    only what one of the derivation functions above actually matches, so the
+    shapes those do not implement (Aspect of Wolf's board-derived P/T, the
+    control change, the land-type override) stay visible in the backlog rather
+    than being called done by a table that merely recognizes them.
+
+    Takes a raw printed line: reminder text is stripped here, because most
+    printings of these Auras carry it and an anchored pattern would otherwise
+    stop matching almost all of them.
+    """
+    normalized = _line_text(line)
+    if _STATIC_PT_LINE.match(normalized):
+        return "static P/T grant (layer 7c) — auras.aura_static_pt_grant"
+    if aura_keyword_grants(normalized):
+        return "keyword grant (layer 6) — auras.aura_keyword_grants"
+    if aura_restrictions(normalized):
+        return "combat/untap restriction — auras.aura_restriction_active"
+    if _PROTECTION_LINE.match(normalized):
+        return "protection grant — auras.aura_protection_colors"
+    if aura_animates_artifact(normalized):
+        return "artifact animation (layers 4 and 7b) — auras.animating_auras"
+    return None
 
 
 def animating_auras(permanent) -> list:

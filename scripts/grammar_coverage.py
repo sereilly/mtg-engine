@@ -44,12 +44,22 @@ RATCHET_PATH = REPO_ROOT / "scripts" / "grammar_ratchet.json"
 # Failure reasons that are expected and not worth chasing: these name whole
 # feature areas the roadmap schedules later, so they would otherwise dominate
 # the backlog listing and hide the actionable entries.
+#
+# Keep this honest. Everything static used to be labelled "phase 6", and when
+# that claim was finally checked *none* of it was waiting on the layers engine:
+# the Aura grants were already derived at layers 6 and 7c, the anthems already
+# had a continuous consumer, and the rest belonged to sidecar tables. A schedule
+# entry against the wrong phase is worse than none — it makes work look blocked
+# that nobody is blocked on, and it hides the real owner.
 _ROADMAPPED_REASONS = {
     "static abilities need the CR 613 layers engine": "phase 6 (CR 613 layers)",
     "modal line": "phase 3 (modal production)",
     "granted ability in quotes": "phase 3 (quoted abilities)",
     "continuous pump needs the CR 613 layers engine": "phase 6 (CR 613 layers)",
     "continuous keyword grant needs the CR 613 layers engine": "phase 6 (CR 613 layers)",
+    "a lord's continuous buff to other creatures is applied by "
+    "_recalculate_lord_buffs off a bare static_line, with no derivation "
+    "table to delegate a claim to": "needs a lord-buff derivation table",
 }
 
 

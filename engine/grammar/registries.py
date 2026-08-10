@@ -27,6 +27,7 @@ instruction, the entry goes with it.
 
 from __future__ import annotations
 
+from ..auras import aura_continuous_claim
 from ..cast_restrictions import CAST_RESTRICTIONS
 from ..cost_modifiers import cost_modifier_claims_line
 from ..draw_step_modifiers import draw_step_bonus_for
@@ -114,6 +115,20 @@ def registry_for_line(line: str) -> str | None:
     # targeting.py knows is not really implemented — it is defaulted — so it
     # stays unclaimed and visible in the backlog.
     if enchant_line_subject(line) is not None:
+        return "auras"
+
+    # engine/auras.py — an Aura's *continuous* effect lines: the P/T grant
+    # (layer 7c), the keyword grants (layer 6), the protection cycle, the combat
+    # and untap restrictions, the control and type changes. Since phase 6 these
+    # are derived from the attached Aura's own text on every recompute, so there
+    # is no instruction to lower and emitting one would apply the effect twice.
+    #
+    # This is not a phase-6 gap, which is what the backlog said: the layers
+    # carry these already. `aura_continuous_claim` is narrower than
+    # `aura_effect_claim` on purpose — it stops before the Aura's triggered and
+    # activated abilities, which do compile to instructions and which a claim
+    # here would silently shadow.
+    if aura_continuous_claim(line) is not None:
         return "auras"
 
     # engine/draw_step_modifiers.py — CR 504 symmetric bonus draw (Howling

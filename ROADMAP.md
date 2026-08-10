@@ -1612,6 +1612,67 @@ each, with no remaining cluster large enough to move the number in a single
 step. That is the shape of the rest of phase 3 — steady, verifiable,
 production-by-production work of the kind above, not a few big wins.
 
+### The "phase 6" row was wrong, and none of it was blocked
+
+*(Checked after phase 4; the table above is left as it stood.)*
+
+The static row said 50 lines were waiting on the CR 613 layers engine. When
+that claim was finally tested against the code, **not one of the 23 distinct
+sentences behind it was blocked on layers at all** — and the row had been
+growing for four phases while phase 6 landed the layers underneath it.
+
+| What they really were | Distinct lines | Owner |
+| --- | ---: | --- |
+| Aura P/T, keyword, protection, restriction and animation grants | 12 | already derived at layers 6/7c by `engine/auras.py` (phase 6, slices 1–4) |
+| Continuous anthems ("Black creatures get +1/+1") | 3 | already had a continuous consumer — `_recalculate_lord_buffs` |
+| Conditional self-bonus ("as long as you control a Forest") | 3 | `engine/static_bonuses.py` |
+| Lord buffs ("Other Goblins get +1/+1 and have mountainwalk") | 3 | `_recalculate_lord_buffs`, off a bare `static_line` |
+| Anthems with a qualifier that consumer ignores | 2 | need their own instruction kinds |
+
+The Aura lines are `RegistryLine`s now, claimed by the derivation functions
+themselves rather than by a copy of their patterns — `aura_continuous_claim`
+asks `aura_keyword_grants` / `aura_restrictions` / the P/T and protection
+matchers, so a claim cannot outlive the code that carries it out. It stops
+deliberately short of the Aura's *triggered and activated* abilities, which do
+compile to instructions and which a claim would silently shadow.
+
+The anthems now lower to `buff_creatures_global` — the same instruction the
+legacy rule always emitted. That kind has two consumers, and the reason the
+refusal looked right for so long is that only one of them is obvious: the spell
+handler locks its set in at resolution (CR 611.2c), while on a *permanent*
+`_recalculate_lord_buffs` re-derives it on every recompute. The second one is
+the continuous reading, and it was there the whole time.
+
+**The trap in doing it**, and why the lowering is narrow: that continuous
+consumer reads the colour and the controller and *nothing else*. Lowering
+Orcish Oriflamme's "Attacking creatures you control get +1/+0" onto the same
+kind would buff every creature its controller has, permanently — and Castle
+would buff tapped ones. The filter is compared for **equality** against the
+shape the consumer implements rather than probed field by field, so a filter
+field added later cannot slip past a check written before it existed.
+
+**Coverage: 70.4 → 73.2% parsed, 63.9 → 69.9% lowered, 35.8 → 36.4% executed**,
+and the backlog's phase-6 row is **gone** — no line is attributed to it. What
+replaced it are reasons that name an owner: `static_bonuses.py`, a lord-buff
+derivation table that does not exist yet, or the two anthem shapes that need
+their own kinds.
+
+Seven tests asserted the old refusal and each was re-pointed rather than
+deleted, because most of them were guarding something still true. The
+keyword-grant test's hazard is unchanged and is exactly why these must never be
+*lowered* — every keyword-grant handler sets an until-end-of-turn flag the
+cleanup step wipes, so lowering "Enchanted creature has flying" onto one would
+grant flying for a single turn and then silently stop. Zero instructions is the
+correct output, not a missing one. Paralyze's test is the sharpest case: its
+premise — "claiming this would credit a card on the strength of code that never
+looks at it" — was *true when written* and was made false by phase 6 moving the
+restriction onto the Aura. It asserts the new reader by name now.
+
+**The generalisable rule:** a backlog entry blaming a phase is a claim about
+code, and it decays exactly like a stale comment — except that it decays into
+work looking blocked that nobody is blocked on. Re-check them when the phase
+they name lands, not when someone finally gets to them.
+
 ## Phase 4 — trigger event bus and a generic choice queue ✅ done
 
 **Done:**

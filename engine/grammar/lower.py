@@ -502,12 +502,32 @@ def _signed(amount: ast.Amount, negative: bool) -> int | str:
     return value
 
 
+# A continuous effect with no duration is refused, but *why* differs by subject,
+# and the difference is the whole point: for most of these the engine is already
+# applying the effect somewhere else, so "waiting on the layers engine" was the
+# wrong answer. Naming the real owner is what keeps the backlog honest — and
+# what stops someone lowering one of them on the assumption that nothing runs it.
+def _durationless_reason(subject) -> str:
+    if _is_enchanted(subject):
+        # Unreachable in practice: engine/grammar/registries.py claims these
+        # lines before any effect production sees them. Kept correct anyway, so
+        # a wording that slips past the claim reports the right owner.
+        return "an Aura's continuous grant is derived by engine/auras.py"
+    if isinstance(subject, ast.TargetSpec) and subject.filter.other_than_source:
+        return (
+            "a lord's continuous buff to other creatures is applied by "
+            "_recalculate_lord_buffs off a bare static_line, with no derivation "
+            "table to delegate a claim to"
+        )
+    return "continuous pump needs the CR 613 layers engine"
+
+
 def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
     power = _signed(node.power, node.power_negative)
     toughness = _signed(node.toughness, node.toughness_negative)
 
     if node.duration.kind is None:
-        raise LoweringError("continuous pump needs the CR 613 layers engine", node=node)
+        raise LoweringError(_durationless_reason(node.subject), node=node)
 
     if _is_enchanted(node.subject):
         return (
@@ -569,7 +589,10 @@ _KEYWORD_GRANTS: dict[tuple[str, str], str] = {
 
 def _lower_gain_keyword(node: ast.GainKeyword) -> tuple[OracleInstruction, ...]:
     if node.duration.kind is None:
-        raise LoweringError("continuous keyword grant needs the CR 613 layers engine", node=node)
+        reason = _durationless_reason(node.subject)
+        if reason.startswith("continuous pump"):
+            reason = "continuous keyword grant needs the CR 613 layers engine"
+        raise LoweringError(reason, node=node)
     if len(node.keywords) != 1:
         raise LoweringError("multi-keyword grant has no instruction kind", node=node)
     scope = "self" if _is_source(node.subject) else ("target" if _is_target(node.subject) else None)
@@ -1764,8 +1787,71 @@ def lower_ability(node: ast.AbilityNode) -> tuple[OracleInstruction, ...]:
         # duplicate an effect the engine is already applying.
         return ()
     if isinstance(node, ast.StaticAbilityNode):
-        raise LoweringError("static abilities need the CR 613 layers engine", node=node)
+        return _lower_static_ability(node)
     raise LoweringError(f"no lowering for {type(node).__name__}", node=node)
+
+
+def _lower_static_ability(node: ast.StaticAbilityNode) -> tuple[OracleInstruction, ...]:
+    """The one static shape the engine already applies continuously.
+
+    "Black creatures get +1/+1." on a permanent (Bad Moon, Crusade, Gauntlet of
+    Might) is not waiting on anything: ``buff_creatures_global`` has *two*
+    consumers, and while the spell handler locks its set in at resolution
+    (CR 611.2c), ``_recalculate_lord_buffs`` re-derives it from the source
+    permanent's compiled program on every recompute — which is exactly the
+    continuous reading. Emitting the same instruction the legacy rule emits is
+    therefore correct, not an approximation.
+
+    Everything else still refuses, and the reason matters more than the refusal:
+
+    - **A condition** ("as long as you control a Forest") belongs to
+      ``engine/static_bonuses.py``, which derives the bonus from the text.
+    - **A qualifier the continuous consumer does not read.** This is the trap.
+      That consumer honours colour and controller and *nothing else* — it never
+      looks at ``attacking_only``, and untapped-only has a separate instruction
+      kind. So Orcish Oriflamme lowered here would buff every creature its
+      controller has, all the time, and Castle would buff tapped ones. The
+      filter is compared for **equality** against the shape the consumer
+      implements rather than probed field by field, so a filter field added
+      later cannot slip past this check by being one nobody thought to exclude.
+    """
+    if node.condition is not None:
+        raise LoweringError(
+            "a conditional static bonus is derived by engine/static_bonuses.py",
+            node=node,
+        )
+    effect = node.effect
+    subject = getattr(effect, "subject", None)
+    if isinstance(subject, ast.TargetSpec) and subject.filter.other_than_source:
+        raise LoweringError(_durationless_reason(subject), node=node)
+    if not isinstance(effect, ast.Pump) or not isinstance(subject, ast.TargetSpec):
+        raise LoweringError("static abilities need the CR 613 layers engine", node=node)
+    if subject.quantifier != "all":
+        raise LoweringError("static abilities need the CR 613 layers engine", node=node)
+
+    filt = subject.filter
+    expected = ast.ObjectFilter(
+        card_types=("creature",), colors=filt.colors, controller=filt.controller
+    )
+    if filt != expected:
+        raise LoweringError(
+            "_recalculate_lord_buffs reads only the colour and the controller, so "
+            "any other restriction on the buffed creatures would be dropped",
+            node=node,
+        )
+    if len(filt.colors) > 1:
+        raise LoweringError("the continuous global buff carries one colour", node=node)
+
+    payload: dict[str, object] = {
+        "power": _signed(effect.power, effect.power_negative),
+        "toughness": _signed(effect.toughness, effect.toughness_negative),
+        # "you control" scopes the anthem to its controller; without it every
+        # player's creatures get it (Bad Moon, Crusade).
+        "all": filt.controller != "you",
+    }
+    if filt.colors:
+        payload["color"] = filt.colors[0]
+    return (OracleInstruction("buff_creatures_global", "", payload),)
 
 
 # Control-flow wrappers take the categories of whatever they wrap, so gating

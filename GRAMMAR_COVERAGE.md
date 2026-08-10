@@ -16,12 +16,12 @@ Categories currently switched on: `combat_restrictions, counters, counterspells,
 
 | Set | Cards | Lines | Parsed | Lowered | Executed | Cards executing |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 388 | 70.9% | 64.7% | 35.8% | 130 |
-| LEB | 292 | 389 | 71.0% | 64.8% | 36.0% | 131 |
-| 2ED | 292 | 389 | 71.0% | 64.8% | 36.0% | 131 |
-| ARN | 78 | 108 | 62.0% | 54.6% | 35.2% | 31 |
-| 3ED | 296 | 389 | 71.2% | 63.8% | 35.5% | 128 |
-| **All** | **1248** | **1663** | **70.4%** | **63.9%** | **35.8%** | **551** |
+| LEA | 290 | 388 | 74.0% | 71.1% | 36.6% | 133 |
+| LEB | 292 | 389 | 74.0% | 71.2% | 36.8% | 134 |
+| 2ED | 292 | 389 | 74.0% | 71.2% | 36.8% | 134 |
+| ARN | 78 | 108 | 62.0% | 56.5% | 35.2% | 31 |
+| 3ED | 296 | 389 | 73.8% | 69.7% | 36.0% | 130 |
+| **All** | **1248** | **1663** | **73.2%** | **69.9%** | **36.4%** | **562** |
 
 ## Backlog — failure reasons
 
@@ -29,16 +29,17 @@ Categories currently switched on: `combat_restrictions, counters, counterspells,
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 255 | 81 | expected a subject |  |
-| 115 | 32 | unrecognized effect verb |  |
-| 69 | 20 | static abilities need the CR 613 layers engine | phase 6 (CR 613 layers) |
-| 46 | 23 | unconsumed text |  |
+| 231 | 75 | expected a subject |  |
+| 99 | 28 | unrecognized effect verb |  |
+| 40 | 21 | unconsumed text |  |
 | 24 | 7 | granted ability in quotes | phase 3 (quoted abilities) |
 | 13 | 2 | modal line | phase 3 (modal production) |
-| 12 | 3 | continuous pump needs the CR 613 layers engine | phase 6 (CR 613 layers) |
+| 12 | 3 | a lord's continuous buff to other creatures is applied by _recalculate_lord_buffs off a bare static_line, with no derivation table to delegate a claim to | needs a lord-buff derivation table |
+| 8 | 2 | _recalculate_lord_buffs reads only the colour and the controller, so any other restriction on the buffed creatures would be dropped |  |
 | 8 | 2 | expected a quantity |  |
 | 7 | 2 | expected a colour after 'becomes' |  |
 | 7 | 4 | expected a keyword ability |  |
+| 7 | 3 | a conditional static bonus is derived by engine/static_bonuses.py |  |
 | 6 | 2 | upkeep triggers are dispatched by fused instruction kind; a decomposed wrapper has no handler |  |
 | 5 | 2 | expected something to destroy |  |
 | 4 | 1 | no lowering for RawEffect |  |
@@ -53,11 +54,10 @@ Categories currently switched on: `combat_restrictions, counters, counterspells,
 | 2 | 1 | expected something to shield |  |
 | 2 | 1 | no untap handler honors this restriction |  |
 | 1 | 1 | expected a destination zone after 'return' |  |
-| 1 | 1 | counters on a non-source subject |  |
 
 ## Cards executing through the grammar
 
-551 cards, 595 lines.
+562 cards, 606 lines.
 
 - **Aladdin's Ring**
   - `{8}, {T}: This artifact deals 4 damage to any target.`
@@ -82,6 +82,11 @@ Categories currently switched on: `combat_restrictions, counters, counterspells,
   - `Attacking creatures get +2/+0 until end of turn.`
 - **Atog**
   - `Sacrifice an artifact: This creature gets +2/+2 until end of turn.`
+- **Bad Moon**
+  - `Black creatures get +1/+1.`
+  - `Black creatures get +1/+1.`
+  - `Black creatures get +1/+1.`
+  - `Black creatures get +1/+1.`
 - **Basalt Monolith**
   - `{T}: Add {C}{C}{C}.`
   - `{3}: Untap this artifact.`
@@ -178,6 +183,11 @@ Categories currently switched on: `combat_restrictions, counters, counterspells,
   - `Counter target spell.`
   - `Counter target spell.`
   - `Counter target spell.`
+- **Crusade**
+  - `White creatures get +1/+1.`
+  - `White creatures get +1/+1.`
+  - `White creatures get +1/+1.`
+  - `White creatures get +1/+1.`
 - **Crystal Rod**
   - `Whenever a player casts a blue spell, you may pay {1}. If you do, you gain 1 life.`
   - `Whenever a player casts a blue spell, you may pay {1}. If you do, you gain 1 life.`
@@ -311,6 +321,10 @@ Categories currently switched on: `combat_restrictions, counters, counterspells,
   - `Whenever this creature is dealt damage, put a +1/+1 counter on it.`
   - `Whenever this creature is dealt damage, put a +1/+1 counter on it.`
   - `Whenever this creature is dealt damage, put a +1/+1 counter on it.`
+- **Gauntlet of Might**
+  - `Red creatures get +1/+1.`
+  - `Red creatures get +1/+1.`
+  - `Red creatures get +1/+1.`
 - **Giant Growth**
   - `Target creature gets +3/+3 until end of turn.`
   - `Target creature gets +3/+3 until end of turn.`
