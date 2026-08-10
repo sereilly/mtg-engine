@@ -1553,18 +1553,78 @@ reads moved, `_stack_item_colors` still guarded on
 silently kept its printed colour. `getattr` with a default does not fail when the
 attribute goes away; it just starts answering "no".
 
-### What is left of the shadow parser
+### The shadow parser is gone: the ability cascade went the way of the cast one
 
-The `_activated_*` cascade: **19 text predicates deciding what an *ability*
-targets**, the exact shape the cast side just shed. The seam already exists —
-`_FILTERABLE_ABILITY_KINDS` narrows the enumeration from the compiled
-instruction while the kind still comes from the line — so the migration is the
-one that just worked: a kind→spec table, payload for the cases one kind serves
-two specs, and a differential against the cascade until it can be deleted.
+*(The section that stood here described the `_activated_*` cascade as the last
+piece left. This is what happened to it.)*
 
-It is a genuinely different question from the cast side (an ability picks its
-targets on activation, and a card may have several abilities that target
-differently), which is why it was not folded into this pass.
+**19 text predicates → 1.** `legality.py` is **775 → 587 lines, 29 → 9
+module-level functions**, and nothing in it classifies a target from text any
+more except a single named residue (below). `derive_activation_spec` in
+`engine/targeting.py` reads an *ability's* compiled instruction, using the same
+tables the cast side already used — because what an instruction targets is a
+property of the instruction, not of whether a spell or an ability produced it.
+`grant_target_flying_until_eot` is Jump on the cast side and Flying Carpet's
+ability on the other, and both want the same creature picker.
+
+**Per ability, which is the whole difference from the cast side.** A spell picks
+its targets once (CR 115.1a); an ability picks them each time it is activated
+(CR 115.1c), and one permanent may carry several that pick differently. So the
+function takes an ability, and `activation_target_spec` scans a permanent's
+abilities in order for the first that chooses anything — which is also what
+makes a land with a mana ability still raise its real prompt.
+
+**The differential ran at two levels, and only the second is a behaviour
+claim.** Level one compared specs for all 114 usable activated abilities in the
+pool; level two put every supported permanent on a populated board and compared
+the *targets each spec enumerates* — 222 serialized specs, each permanent's
+default prompt plus each of its abilities. Level two is what mattered: a spec
+difference is only a difference if it changes what the player is offered.
+
+**One live bug, and it was in the half the cascade could see.** Ebony Horse —
+"{2}, {T}: Untap target attacking creature **you control**" — classified as
+`{kind: creature, attacking_only}`. The cascade read "target attacking creature"
+and stopped, so the UI offered the *opponent's* attackers too. The handler does
+not: it resolves through a predicate requiring the creature be attacking and on
+the activating player's battlefield, and an explicit choice failing that fizzles
+rather than falling back. Picking one of the offered targets spent the {2} and
+the tap, logged "Ebony Horse ability resolved", and did nothing whatsoever.
+`own_only` is read off that predicate, which is exactly why the derivation has
+it and a reading of the words did not.
+
+Two more abilities disagreed for the opposite reason: King Suleiman ("Destroy
+target Djinn or Efreet") and Elephant Graveyard ("Regenerate target Elephant")
+name no card type, so the cascade saw no target at all and
+`activation_target_spec` needed a rescue clause that reached into the compiled
+instruction *after* classifying. The derivation reads that instruction to begin
+with, so the rescue is deleted.
+
+**What was refused, and why that is the better answer.** Jandor's Saddlebags —
+"{3}, {T}: Untap target creature." — lowers to `untap_target_permanent`, whose
+handler untaps whatever it is handed (`predicate=lambda p: True`). The grammar
+*already* refuses to lower a restricted untap onto that kind, in those words:
+"no untap handler honors this restriction". So the program carries no evidence
+of the restriction, and the only derivation the kind honestly supports is
+"permanent" — which would offer lands for an ability that may only untap a
+creature, and the handler would untap the land. Inventing the evidence in a
+legacy rule to satisfy the picker would put the engine's two answers back out of
+step, which is the defect this whole migration removes. So the derivation
+refuses and one text pattern survives, in `_UNDERIVABLE_ABILITY_TARGETS`, with
+a test asserting the grammar still refuses that line — the day the untap handler
+honours its filter, that test fails and the pattern is deleted with it.
+
+Rocket Launcher was the other refusal, and it was fixable rather than
+structural: its rule's regex matched `damage to any target` and then threw the
+match away, exactly the shape Fireball had on the cast side. Recording what the
+regex proved made it derivable — `targets` is a description no handler reads, so
+this cost no behaviour change.
+
+**What replaced the differential.** A table pinning all 18 specs that carry a
+flag plus a representative of each plain kind, a ratchet asserting every ability
+whose line names a target derives its own prompt, and an exact two-directional
+census of what still reaches the text fallback — a new card falling through
+fails, and so does an acknowledgement whose card now derives. All fifteen of
+those guards were verified by injecting the bug each exists to catch.
 
 ### The static-ability cluster, and why it is a phase-6 job
 
@@ -2511,9 +2571,12 @@ longer grows a field per card family (20 → 16, with `OracleExecutionContext`
 15 → 11). Suite 3,941 → 3,963 tests, still under 20 seconds.
 
 The narrative, including the live bug the full-spec differential found
-(Reconstruction was uncastable through the UI) and the one piece deliberately
-left — the `_activated_*` cascade, the same 19-predicate shape for *ability*
-targets — is in "Phase 7 finished" above.
+(Reconstruction was uncastable through the UI), is in "Phase 7 finished" above.
+The one piece deliberately left — the `_activated_*` cascade, the same
+19-predicate shape for *ability* targets — was finished afterwards and is
+recorded in "The shadow parser is gone" above: 19 text predicates → 1,
+`legality.py` 775 → 587 lines, and one more live bug (Ebony Horse offered
+targets its own handler refused).
 
 The rest of this section is the record of how it got there.
 

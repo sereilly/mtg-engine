@@ -31,6 +31,7 @@ from engine.behaviour_signature import equivalent_peer, peers_by_card
 from engine.legality import cast_target_kind
 from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle
+from engine.targeting import usable_activated_abilities
 
 from .prompts import (
     PromptContext,
@@ -985,11 +986,7 @@ def _serialize_player(
             # (Pyramids): one spec per usable ability, indexed like the
             # ability_index the activate action takes.
             perm = player.battlefield[idx]
-            program = compile_card_oracle(perm.effective_card)
-            usable = [
-                ab for ab in program.activated_abilities
-                if ab.supported and ab.instruction is not None
-            ]
+            usable = usable_activated_abilities(compile_card_oracle(perm.effective_card))
             if len(usable) > 1:
                 perm_dict["ability_target_specs"] = [
                     game.activation_target_spec(seat, idx, ability_index=k)
@@ -3776,11 +3773,7 @@ def do_action(session_id: str, req: GameActionRequest):
         # unreachable.
         land_as_mana_tap = permanent.card.primary_type == "land"
         if land_as_mana_tap:
-            program = compile_card_oracle(permanent.effective_card)
-            usable = [
-                ab for ab in program.activated_abilities
-                if ab.supported and ab.instruction is not None
-            ]
+            usable = usable_activated_abilities(compile_card_oracle(permanent.effective_card))
             mana_kinds = {"add_mana_from_text", "sacrifice_self_for_mana", "sacrifice_creature_for_black_mana"}
             chosen_ability = None
             if req.ability_index is not None and 0 <= req.ability_index < len(usable):

@@ -108,6 +108,13 @@ def damage_then_destroy_self_at_end_step(text: str, activated: bool) -> RuleResu
             requires_control_since_turn_start=(
                 "continuously since the beginning of your most recent turn" in text
             ),
+            # The regex above already proved the words "any target" are in the
+            # line, so recording what it matched costs nothing and is what lets
+            # engine/targeting.py raise this ability's prompt from the compiled
+            # program rather than from a second reading of the text. `targets`
+            # is a description, not an instruction to the handler — see
+            # GRAMMAR_ONLY_PAYLOAD_KEYS.
+            targets={"quantifier": "any_target", "kind": "any"},
         ),
         activated_kind(activated, "damage"),
     )

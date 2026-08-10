@@ -1,4 +1,4 @@
-"""Cast-time targeting derived from the compiled program (CR 115).
+"""Targeting derived from the compiled program (CR 115, CR 602.2b).
 
 `engine/legality.py` used to answer "what does this spell target?" by re-reading
 the oracle text with ~40 substring predicates — a second parser of the same
@@ -27,6 +27,16 @@ means "this spell chooses nothing as it is cast". Every supported card in the
 pool now answers, and `tests/engine/test_targeting.py` fails if one that
 mentions a target stops doing so — a parser change cannot quietly take the
 evidence away.
+
+**Activated abilities ask the same question one level down.** A spell picks its
+targets once, as it is cast; an ability picks them each time it is activated,
+and one card may carry several abilities that target differently (Pyramids
+destroys an Aura or shields a land). So :func:`derive_activation_spec` takes an
+*ability*, not a card, and runs the same instruction evidence over that
+ability's own instruction — the tables below are shared, because what an
+instruction kind targets does not depend on whether a spell or an ability
+produced it. `legality.py` classified activation from text until this existed;
+`tests/engine/test_activation_targeting.py` holds the replacement in place.
 """
 
 from __future__ import annotations
@@ -111,16 +121,60 @@ _TYPE_FILTER_TO_KIND = {
 }
 
 
-# Instruction kinds whose whole cast-time spec is fixed by the kind itself. A
-# lace always targets a spell or permanent; a graveyard-return always targets a
-# card in a graveyard. `legality.py` used to read that off the card's *text*;
-# the compiled program already carries it in the kind.
+def _kind_for_type_filter(type_filter) -> str | None:
+    """*type_filter* as a target kind, or None when nothing describes it.
+
+    A filter may name a *union* of types — Icy Manipulator's "target artifact,
+    creature, or land" lowers to ``["artifact", "creature", "land"]``. No single
+    picker matches a union, so it takes the general permanent picker and
+    ``permanent_matches_filter`` narrows it back down at enumeration time, the
+    same way it does at resolution.
+    """
+    if isinstance(type_filter, (list, tuple)):
+        return "permanent"
+    return _TYPE_FILTER_TO_KIND.get(type_filter)
+
+
+def _narrowing_flags(source: dict) -> dict:
+    """The picker-narrowing flags *source* (a filter or a payload) carries.
+
+    These are the restrictions the enumerator itself applies
+    (`_permanent_matches_target_kind`), as opposed to the ones it delegates to
+    the instruction's own filter through `_ability_target_legal`. Both are read
+    from the same compiled payload; only the vocabulary differs.
+    """
+    flags: dict = {}
+    for key in ("attacking_only", "flying_only"):
+        if source.get(key):
+            flags[key] = True
+    if source.get("subtype_filter") == "wall":
+        # The picker's name for a Wall subtype filter (Ali Baba, Dwarven
+        # Demolition Team). Kept as a flag rather than left to the instruction
+        # filter so a Wall-only prompt reads the same whether the narrowing
+        # came from the ability's payload or from an Aura's "Enchant Wall".
+        flags["wall_only"] = True
+    color = source.get("color_filter")
+    if color:
+        flags["color_filter"] = color
+    return flags
+
+
+# Instruction kinds whose whole spec is fixed by the kind itself. A lace always
+# targets a spell or permanent; a graveyard-return always targets a card in a
+# graveyard. `legality.py` used to read that off the card's *text*; the compiled
+# program already carries it in the kind.
 #
 # The flags beside a kind describe the same thing the kind's *handler* does, so
 # they are read off the handler rather than off the card. `reanimate_creature`
 # calls `_reanimate_creature_to_battlefield(caster, caster, …)` — always the
 # caster's own graveyard — so `own_graveyard_only` belongs to the kind and not
 # to whether the words "your graveyard" happen to appear.
+#
+# One table, consulted by the cast side and the activation side alike: what an
+# instruction targets is a property of the instruction, not of whether a spell
+# or an ability produced it. `grant_target_flying_until_eot` is Jump when a
+# spell carries it and Flying Carpet's ability when a permanent does, and both
+# want the same creature picker.
 _KIND_TO_SPEC: dict[str, dict] = {
     "recolor_target_from_text": {"kind": "spell_or_permanent"},
     "mark_text_modified": {"kind": "permanent"},
@@ -128,7 +182,6 @@ _KIND_TO_SPEC: dict[str, dict] = {
     "berserk_pump": {"kind": "creature"},
     "grant_unlimited_blocking": {"kind": "creature"},
     "deal_damage_and_gain_life": {"kind": "any"},
-    "grant_prevention_shield": {"kind": "any"},
     "target_gains_life": {"kind": "any"},
     "remove_creature_from_combat": {"kind": "creature"},
     "grant_target_flying_until_eot": {"kind": "creature"},
@@ -174,6 +227,66 @@ _KIND_TO_SPEC: dict[str, dict] = {
     "sacrifice_creature_for_black_mana": {
         "kind": "creature", "own_only": True, "sacrifice_cost": True,
     },
+    # --- kinds that reach the picker through an activated ability -----------
+    #
+    # Each of these resolves through `resolve_target_permanent(context)` with
+    # the default predicate — `p.is_creature` — so "creature" is what the code
+    # that runs the ability accepts, not what the printed line says.
+    "grant_banding_to_target": {"kind": "creature"},
+    "grant_islandwalk_and_linked_destroy": {"kind": "creature"},
+    "grant_flying_and_delayed_destruction": {"kind": "creature"},
+    "grant_unblockable_to_low_power_target": {"kind": "creature"},
+    "steal_creature_while_tapped_and_weaker": {"kind": "creature"},
+    "deny_regeneration_to_target": {"kind": "creature"},
+    "pump_target_creature_until_eot": {"kind": "creature"},
+    "grant_regeneration_to_target_creature": {"kind": "creature"},
+    "mark_non_wall_target_to_attack": {"kind": "creature"},
+    # `add_counter_to_target` is emitted by exactly one rule, whose text test is
+    # "put a +1/+1 counter on target creature" — the creature restriction is
+    # part of what the kind means. (It has no registered handler, so the ability
+    # currently resolves to nothing; that is a separate gap, and offering the
+    # prompt the printed card asks for is not the place to fix it.)
+    "add_counter_to_target": {"kind": "creature"},
+    # Three effects that act on a *player*: the handler reads `context.target`,
+    # a seat, and never looks at the battlefield.
+    "mill_target_player": {"kind": "player"},
+    "look_at_target_hand": {"kind": "player"},
+    "discard_target_cards": {"kind": "player"},
+    # Cuombajj Witches. Its handler delegates the controller's half to
+    # `deal_damage`, which takes a player or a permanent; the opponent's half is
+    # a pending choice made after resolution, not a target chosen here.
+    "deal_damage_and_opponent_choice": {"kind": "any"},
+    # Aladdin: `resolve_target_permanent(..., predicate=p.has_type("artifact"))`.
+    # The kind's name says "permanent", the code it runs says artifact.
+    "steal_target_permanent_linked_to_self": {"kind": "artifact"},
+    # Gaea's Liege and Pyramids' second mode: both resolve through a
+    # `primary_type == "land"` predicate.
+    "change_target_land_type": {"kind": "land"},
+    "shield_target_land_from_destruction": {"kind": "land"},
+    # Cyclopean Tomb's handler refuses a Swamp outright
+    # (`primary_type == "land" and not _is_swamp(p)`), so the exclusion belongs
+    # to the kind rather than to the words "non-Swamp" appearing on the card.
+    "add_mire_counter_to_target_land": {"kind": "land", "exclude_swamp": True},
+    # Forcefield: "an unblocked creature of your choice would deal combat damage
+    # to you" — the controller picks one of the attackers that got through.
+    "grant_forcefield_shield": {"kind": "creature", "unblocked_attacker": True},
+    # Jade Monolith picks twice: the creature it shields, and the damage source
+    # whose damage is redirected. `requires_source` is what tells the UI to run
+    # the second prompt.
+    "jade_monolith_redirect": {"kind": "creature", "requires_source": True},
+    # Diamond Valley's "Sacrifice a creature" is part of the activation cost, so
+    # the creature is the controller's own and the prompt says "sacrifice" —
+    # the same spec the cast-side additional cost above derives.
+    "sacrifice_creature_gain_life_by_toughness": {
+        "kind": "creature", "own_only": True, "sacrifice_cost": True,
+    },
+    # Ebony Horse: "Untap target attacking creature you control." Its handler
+    # requires `p.attacking` *and* that the creature is on the activating
+    # player's battlefield, and an explicit choice that fails either test
+    # fizzles — so both narrowings are the ability's, and both belong here.
+    "untap_attacker_and_prevent_combat_damage": {
+        "kind": "creature", "attacking_only": True, "own_only": True,
+    },
 }
 
 
@@ -207,10 +320,50 @@ def _graveyard_return_spec(payload: dict) -> dict:
     return spec
 
 
+def _prevention_shield_spec(payload: dict) -> dict | None:
+    """A "prevent the next N damage" shield, and who is being shielded.
+
+    One kind, four answers, and the payload settles which: the shield sits on
+    the caster (Conservator), on the source permanent itself (Rock Hydra), on a
+    *source of the named colour* the controller chooses (the Circles of
+    Protection), or on a target the ability picks (Oasis, Samite Healer,
+    Guardian Angel). The first two choose nothing at all, which is why this
+    returns None rather than a spec.
+    """
+    if payload.get("to_self") or payload.get("to_source"):
+        return None
+    if payload.get("protection_kind") == "color":
+        # The chosen source may be a permanent of that colour on any
+        # battlefield, or a spell of that colour on the stack; `also_stack`
+        # folds both into one prompt because the engine matches the shield by
+        # colour rather than by identity.
+        return {
+            "kind": "permanent",
+            "color_filter": payload.get("prevention_color"),
+            "also_stack": True,
+        }
+    return _from_targets_payload(payload.get("targets")) or {"kind": "any"}
+
+
+def _set_base_pt_spec(payload: dict) -> dict:
+    """"Target creature ... has base power 0 until end of turn", narrowed to the
+    creatures the printed line allows.
+
+    Island of Wak-Wak reaches only fliers and Singing Tree only attackers; the
+    enumerator applies both itself, so unlike a subtype or tapped restriction
+    they have to reach the spec rather than being left to the instruction
+    filter. Sorceress Queen's "other than this creature" does not appear here
+    because `_ability_target_legal` already excludes the source.
+    """
+    return {"kind": "creature", **_narrowing_flags(payload)}
+
+
 # One kind, several specs, decided by payload.
 _KIND_TO_SPEC_FROM_PAYLOAD = {
     "counter_top_stack_spell": _counter_spec,
     "return_creature_from_graveyard_to_hand": _graveyard_return_spec,
+    "grant_prevention_shield": _prevention_shield_spec,
+    "set_base_pt_target_until_eot": _set_base_pt_spec,
 }
 
 
@@ -271,12 +424,13 @@ def derive_cast_target(card, program) -> str | None:
 
 
 def _from_instructions(instructions) -> dict | None:
-    """The first cast-time spec any instruction in *instructions* describes.
+    """The first spec any instruction in *instructions* describes.
 
-    Recurses into `sequence` steps: a spell written as two steps carries its
+    Recurses into `sequence` steps: an effect written as two steps carries its
     targeting on the step that targets (Psionic Blast's damage to any target,
-    followed by its self-damage), and stopping at the wrapper would leave an
-    otherwise fully-described spell with no prompt.
+    followed by its self-damage; Orcish Artillery's ability, the same shape),
+    and stopping at the wrapper would leave an otherwise fully-described effect
+    with no prompt.
     """
     for instruction in instructions:
         if instruction.kind == "sequence":
@@ -284,27 +438,37 @@ def _from_instructions(instructions) -> dict | None:
             if nested is not None:
                 return nested
             continue
-        described = _from_targets_payload(instruction.payload.get("targets"))
-        if described is not None:
-            return described
-        type_filter = instruction.payload.get("type_filter")
-        if type_filter:
-            kind = _TYPE_FILTER_TO_KIND.get(type_filter)
-            if kind is not None:
-                return {"kind": kind}
-            continue
-        from_payload = _KIND_TO_SPEC_FROM_PAYLOAD.get(instruction.kind)
-        if from_payload is not None:
-            return from_payload(instruction.payload)
-        by_kind = _KIND_TO_SPEC.get(instruction.kind)
-        if by_kind is not None:
-            return dict(by_kind)
+        spec = _from_instruction(instruction)
+        if spec is not None:
+            return spec
 
     return None
 
 
+def _from_instruction(instruction) -> dict | None:
+    """The spec one instruction describes, or None when it describes none."""
+    # A kind with several specs settles its own case first, because it is the
+    # only reader that knows how to combine its payload with its `targets`
+    # description — a colour-restricted counterspell carries both, and the
+    # generic targets reading would drop the colour.
+    from_payload = _KIND_TO_SPEC_FROM_PAYLOAD.get(instruction.kind)
+    if from_payload is not None:
+        return from_payload(instruction.payload)
+    described = _from_targets_payload(instruction.payload.get("targets"))
+    if described is not None:
+        return described
+    type_filter = instruction.payload.get("type_filter")
+    if type_filter:
+        kind = _kind_for_type_filter(type_filter)
+        if kind is None:
+            return None
+        return {"kind": kind, **_narrowing_flags(instruction.payload)}
+    by_kind = _KIND_TO_SPEC.get(instruction.kind)
+    return dict(by_kind) if by_kind is not None else None
+
+
 def _from_targets_payload(targets) -> dict | None:
-    """The cast-time spec from a grammar-lowered ``targets`` description.
+    """The spec from a grammar-lowered ``targets`` description.
 
     This is the evidence the legacy rules never recorded: it is what tells
     Lightning Bolt ("any target") apart from Earthbind ("target creature with
@@ -329,9 +493,48 @@ def _from_targets_payload(targets) -> dict | None:
     if kind != "object":
         return None
     filt = targets.get("filter") or {}
+    flags = _narrowing_flags(filt)
     type_filter = filt.get("type_filter")
     if not type_filter:
         # A targeted object with no type restriction is any permanent.
-        return {"kind": "permanent"}
-    derived = _TYPE_FILTER_TO_KIND.get(type_filter)
-    return {"kind": derived} if derived is not None else None
+        return {"kind": "permanent", **flags}
+    derived = _kind_for_type_filter(type_filter)
+    return {"kind": derived, **flags} if derived is not None else None
+
+
+def derive_activation_spec(ability) -> dict | None:
+    """What *ability* chooses when it is activated, or None when it chooses
+    nothing (CR 602.2b).
+
+    Per ability rather than per card, and that is the whole difference from the
+    cast side: a spell picks its targets once, while a permanent may carry
+    several abilities that pick differently — Pyramids destroys an Aura with
+    one and shields a land with the other, and classifying the *card* can only
+    give one answer to a question with two.
+
+    None is a positive answer ("this ability targets nothing"), not an absence,
+    for the same reason it is on the cast side: the guard in
+    `tests/engine/test_activation_targeting.py` fails if an ability whose line
+    names a target answers None, so a parser change cannot turn a missing
+    derivation into a silently target-free ability.
+    """
+    if not getattr(ability, "supported", False):
+        return None
+    instruction = getattr(ability, "instruction", None)
+    if instruction is None:
+        return None
+    return _from_instructions((instruction,))
+
+
+def usable_activated_abilities(program):
+    """The activated abilities of *program* the engine can actually run.
+
+    An unsupported ability, or one that compiled to no instruction, is not
+    activatable — so it is not offered a target prompt, and it is not counted
+    when the web layer indexes a permanent's abilities. Shared so the index the
+    UI sends back means the same ability the engine derived a spec for.
+    """
+    return [
+        ability for ability in program.activated_abilities
+        if ability.supported and ability.instruction is not None
+    ]

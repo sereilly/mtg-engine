@@ -114,6 +114,33 @@ def test_115_1c_activated_ability_target_validated_at_activation(cards):
     assert all(perm.card.name != "Gray Ogre" for perm in p2.battlefield)
 
 
+@pytest.mark.cr("115.1c", "602.2b")
+def test_115_1c_the_whole_target_description_narrows_the_legal_choices(cards, arn_by_name):
+    """An activated ability's target description is read in full, including the
+    part that names a controller.
+
+    Ebony Horse untaps "target attacking creature **you control**", so an
+    opponent's attacker is not a legal choice (115.1c, via 602.2b/601.2c). The
+    engine used to classify this from the ability's text and stopped at
+    "attacking creature", offering the defender's attackers as well; the choice
+    is derived from the ability's compiled instruction now, and both halves of
+    the restriction survive.
+    """
+    horse = _perm(arn_by_name["Ebony Horse"])
+    mine = _perm(cards["Grizzly Bears"], tapped=True)
+    theirs = _perm(cards["Hill Giant"], tapped=True)
+    mine.attacking = theirs.attacking = True
+    idle = _perm(cards["Gray Ogre"])  # yours, but not attacking
+    p1 = PlayerState(name="P1", battlefield=[horse, mine, idle])
+    p2 = PlayerState(name="P2", battlefield=[theirs])
+    game = _two_player_game(p1, p2)
+
+    spec = game.activation_target_spec(0, 0)
+
+    assert spec["requires_target"] is True
+    assert [(t["seat"], t["name"]) for t in spec["valid_targets"]] == [(0, "Grizzly Bears")]
+
+
 # ---------------------------------------------------------------------------
 # Rule 115.2 — Only objects matching the target description are legal targets.
 # ---------------------------------------------------------------------------

@@ -29,9 +29,10 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from engine import PlayerState
-from engine.legality import _activated_lines, _classify_activation
+from engine.legality import _activated_lines
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
+from engine.targeting import derive_activation_spec, usable_activated_abilities
 from tests.helpers import _game, _nosick
 from tests.helpers import CARDS_BY_NAME as _C
 from web.app import app, store, _end_turn
@@ -171,7 +172,11 @@ class TestDiamondValley:
         assert lines[0].startswith("{t}, sacrifice a creature:")
 
     def test_activation_spec_asks_for_one_of_your_own_creatures(self, arn_by_name):
-        spec = _classify_activation(arn_by_name["Diamond Valley"])
+        # Derived from the ability's compiled instruction, not from its text —
+        # `sacrifice_creature_gain_life_by_toughness` sacrifices one of the
+        # activating player's own creatures, which is what the spec says.
+        program = compile_card_oracle(arn_by_name["Diamond Valley"])
+        spec = derive_activation_spec(usable_activated_abilities(program)[0])
         assert spec["kind"] == "creature"
         assert spec["own_only"] is True
         # Labels the prompt "sacrifice", not "target".
@@ -202,7 +207,8 @@ class TestDiamondValley:
             card = _C.get(name) or arn_by_name[name]
             assert len(_activated_lines(card)) == 1, name
             # None of them target anything on activation.
-            assert _classify_activation(card)["kind"] == "none", name
+            abilities = usable_activated_abilities(compile_card_oracle(card))
+            assert [derive_activation_spec(ab) for ab in abilities] == [None], name
 
     def test_client_labels_the_pick_as_a_sacrifice(self):
         assert "sacrifice_cost" in APP_JS

@@ -189,11 +189,17 @@ adding entries, not editing dispatch**:
 - `engine/tokens.py` — `make_token_card(...)`, paired with the generic
   `create_token` instruction kind. A token-making card is one parse rule, never
   a bespoke handler.
-- `engine/targeting.py` — cast-time target kind derived from the *compiled
-  program* (Aura enchant line, instruction `type_filter`), replacing part of
-  `legality.py`'s text cascade. Returns None when the program lacks the
-  evidence, and `legality.py` falls back; a guard test holds the two to
-  agreement and ratchets how many cards still need the fallback.
+- `engine/targeting.py` — what a spell or an ability targets, derived from the
+  *compiled program* (Aura enchant line, instruction kind, `targets` /
+  `type_filter` payloads) rather than from a second reading of the oracle text.
+  `derive_cast_spec` answers per card, `derive_activation_spec` per **ability**
+  — an ability picks its targets on activation (CR 115.1c) and one permanent may
+  carry several that target differently. Both share one kind→spec table: what an
+  instruction targets does not depend on whether a spell or an ability produced
+  it. Returns None when the program lacks the evidence rather than guessing; the
+  guards in `tests/engine/test_targeting.py` and
+  `tests/engine/test_activation_targeting.py` ratchet what still needs
+  `legality.py`'s one surviving text fallback.
 - `engine/cost_modifiers.py` — text-keyed cost taxes (CR 601.2f): "<colour>
   spells cost {N} more to cast", "activated abilities of <colour> <type>s cost
   {N} more to activate". Increases only; reduction should arrive with the card

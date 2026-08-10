@@ -20,25 +20,29 @@ Two concerns live here:
   targets through the engine's own ``_validate_cast_targets`` so protection,
   colour/type filters, and shroud are enforced identically to resolution.
 
-**The cast-time half no longer reads oracle text.** ``cast_target_spec`` asks
-``engine/targeting.py``, which derives the whole spec — kind and flags — from
-the compiled program, so there is one parse of a card and nothing to keep in
-sync. What is left here is the *enumeration*: given a spec, which permanents,
-players, graveyard cards and stack items satisfy it.
+**Neither half reads oracle text to classify a target any more.**
+``cast_target_spec`` asks ``engine/targeting.py``, which derives the whole spec
+— kind and flags — from the compiled program; ``activation_target_spec`` asks
+the same module for the spec of one *ability*, since a permanent may carry
+several that target differently. There is one parse of a card and nothing to
+keep in sync. What is left here is the *enumeration*: given a spec, which
+permanents, players, graveyard cards and stack items satisfy it.
 
-Activation is still classified from text by the ``_activated_*`` cascade below.
-It is the same shadow-parser shape and the same migration applies — an
-activated ability's compiled instruction already narrows the enumeration
-(``_FILTERABLE_ABILITY_KINDS``), but the *kind* still comes from the line.
+One line shape survives as a text fallback, named and measured in
+:data:`_UNDERIVABLE_ABILITY_TARGETS`, because the program genuinely cannot
+describe it.
 """
 
 import re
-from types import SimpleNamespace
 
 from .handlers._common import permanent_matches_filter
 from .models import CardDefinition, Permanent
 from .oracle import compile_card_oracle, expand_modal_activated_lines
-from .targeting import derive_cast_spec
+from .targeting import (
+    derive_activation_spec,
+    derive_cast_spec,
+    usable_activated_abilities,
+)
 
 # An oracle line that begins with a mana/tap cost followed by a colon is an
 # activated ability ("{T}: ..."), not a cast-time effect. The cost may mix
@@ -47,9 +51,6 @@ from .targeting import derive_cast_spec
 # up to the colon — barring a period, which would mean the colon belongs to a
 # later sentence rather than to a cost.
 _ACTIVATED_LINE_RE = re.compile(r"^\s*\{[^}]+\}[^:.]*:")
-# "target land" plus qualified variants ("target non-Swamp land").
-_TARGET_LAND_RE = re.compile(r"target (?:[\w-]+ )*land\b")
-_COLOR_WORD_TO_SYMBOL = {"white": "W", "blue": "U", "black": "B", "red": "R", "green": "G"}
 
 
 def _oracle_lines(card: CardDefinition) -> list[str]:
@@ -78,16 +79,6 @@ def _type_line(card: CardDefinition) -> str:
     return (card.type_line or "").lower()
 
 
-# The colour a counterspell *ability* is restricted to (Deathgrip, Lifeforce).
-# The cast-time counterspells read this off their instruction's `color_filter`
-# payload instead; this is what remains until activation migrates too.
-def _stack_spell_color_filter(card: CardDefinition) -> str | None:
-    m = re.search(r"counter target (\w+) spell", (card.oracle_text or "").lower())
-    if not m:
-        return None
-    return _COLOR_WORD_TO_SYMBOL.get(m.group(1))
-
-
 def cast_target_kind(card: CardDefinition) -> str:
     """The target kind of *card* cast from hand, without enumerating targets.
 
@@ -109,66 +100,6 @@ def cast_spec_of(card: CardDefinition) -> dict:
     return derive_cast_spec(card, compile_card_oracle(card)) or {"kind": "none"}
 
 
-# ---------------------------------------------------------------------------
-# Activated-ability target classification (mirrors the client activatedAbility* cascade)
-# ---------------------------------------------------------------------------
-
-def _activated_destroy_permanent_color(card: CardDefinition):
-    """Returns a colour symbol, ``None`` (uncoloured "destroy target permanent"),
-    or the sentinel ``False`` meaning no such ability exists at all."""
-    for line in _activated_lines(card):
-        m = re.search(r"destroy target (white|blue|black|red|green)? ?permanent", line)
-        if m:
-            return _COLOR_WORD_TO_SYMBOL.get(m.group(1)) if m.group(1) else None
-    return False
-
-
-def _activated_color_protection_source(card: CardDefinition):
-    """Circle of Protection: "{cost}: The next time a <color> source of your choice
-    would deal damage to you this turn, prevent that damage." Returns the color
-    symbol of the source the controller chooses, or None when no such ability."""
-    for line in _activated_lines(card):
-        m = re.search(r"a (white|blue|black|red|green) source of your choice would deal damage to you", line)
-        if m:
-            return _COLOR_WORD_TO_SYMBOL.get(m.group(1))
-    return None
-
-
-def _activated_requires_creature(card: CardDefinition) -> bool:
-    for line in _activated_lines(card):
-        if "target artifact, creature, or land" in line:
-            continue  # any-permanent target (Icy Manipulator), handled separately
-        if (("destroy target" in line or "choose target" in line)
-                and (re.search(r"\bcreature\b", line) or re.search(r"\bwall\b", line))):
-            return True
-        if "damage to target creature" in line:
-            return True
-        # Catch-all for any other "target creature" ability (Dwarven Warriors'
-        # "target creature ... can't be blocked", etc.). "target attacking
-        # creature" (Singing Tree) doesn't contain "target creature" as a
-        # contiguous substring, so it needs its own check.
-        if "target creature" in line or "target attacking creature" in line:
-            return True
-    return False
-
-
-def _activated_requires_attacking_creature(card: CardDefinition) -> bool:
-    """Singing Tree: "Target attacking creature has base power 0 until end
-    of turn." — restricts legal targets to currently-attacking creatures."""
-    return any("target attacking creature" in line for line in _activated_lines(card))
-
-
-def _activated_requires_flying_creature(card: CardDefinition) -> bool:
-    """Island of Wak-Wak: "Target creature with flying has base power 0
-    until end of turn." — restricts legal targets to fliers."""
-    return any("target creature with flying" in line for line in _activated_lines(card))
-
-
-def _activated_requires_wall(card: CardDefinition) -> bool:
-    """Ali Baba: "{R}: Tap target Wall." — restricts legal targets to Walls."""
-    return any(re.search(r"\btarget wall\b", line) for line in _activated_lines(card))
-
-
 def _cant_be_enchanted_by_auras(perm) -> bool:
     """Aura-derived or flagged; one question, both sources."""
     from .auras import aura_restriction_active
@@ -178,75 +109,13 @@ def _cant_be_enchanted_by_auras(perm) -> bool:
     )
 
 
-def _activated_requires_aura_on_land(card: CardDefinition) -> bool:
-    """Pyramids mode 1: "Destroy target Aura attached to a land." Must be
-    recognized before the land classifier, whose regex would otherwise read
-    "...a land" as a land target."""
-    return any("target aura attached to a land" in line for line in _activated_lines(card))
-
-
-def _activated_requires_sacrifice_creature(card: CardDefinition) -> bool:
-    """Diamond Valley: "{T}, Sacrifice a creature: …" — the "creature" chosen
-    is the caster's own, sacrificed as (part of) the cost, mirroring the
-    cast-side "as an additional cost to cast this spell, sacrifice a
-    creature" handling."""
-    return any("sacrifice a creature" in line for line in _activated_lines(card))
-
-
-def _activated_requires_artifact(card: CardDefinition) -> bool:
-    """Aladdin: "{1}{R}{R}, {T}: Gain control of target artifact ..." — mirrors
-    the cast-side artifact classifier, including its carve-out for "target
-    artifact, creature, or land" (Icy Manipulator), which is an any-permanent
-    target rather than an artifact-only one."""
-    for line in _activated_lines(card):
-        if "target artifact, creature, or land" in line:
-            continue
-        if "target artifact" in line and "artifact or enchantment" not in line:
-            return True
-    return False
-
-
-def _activated_requires_permanent(card: CardDefinition) -> bool:
-    # "Tap target artifact, creature, or land" (Icy Manipulator) targets any
-    # permanent; "target permanent" abilities likewise.
-    for line in _activated_lines(card):
-        if "target artifact, creature, or land" in line:
-            return True
-        if "target permanent" in line:
-            return True
-    return False
-
-
-def _activated_requires_creature_grant(card: CardDefinition) -> bool:
-    return any(
-        "target creature" in line and ("gains" in line or "gets" in line)
-        for line in _activated_lines(card)
-    )
-
-
-def _activated_requires_land(card: CardDefinition) -> bool:
-    return any(_TARGET_LAND_RE.search(line) for line in _activated_lines(card))
-
-
-def _activated_land_excludes_swamp(card: CardDefinition) -> bool:
-    return any(_TARGET_LAND_RE.search(line) and "non-swamp land" in line for line in _activated_lines(card))
-
-
-def _activated_requires_stack_spell(card: CardDefinition) -> bool:
-    return any("counter target" in line and "spell" in line for line in _activated_lines(card))
-
-
-def _activated_requires_any(card: CardDefinition) -> bool:
-    return any("any target" in line for line in _activated_lines(card))
-
-
-def _activated_requires_player(card: CardDefinition) -> bool:
-    return any("target player" in line for line in _activated_lines(card))
-
+# ---------------------------------------------------------------------------
+# Activated-ability target classification
+# ---------------------------------------------------------------------------
 
 # Activated-ability instruction kinds whose payload carries a finer target
-# restriction than the text-derived kind (a tapped/coloured destroy, a non-Wall
-# attack mark). The enumerator gates candidates through these so an ability offers
+# restriction than the kind alone (a tapped/coloured destroy, a non-Wall attack
+# mark). The enumerator gates candidates through these so an ability offers
 # exactly what it could legally affect, matching its resolution.
 _FILTERABLE_ABILITY_KINDS = {
     "destroy_target_permanent",
@@ -260,96 +129,53 @@ _FILTERABLE_ABILITY_KINDS = {
 }
 
 
-def _ability_target_instruction(card: CardDefinition):
-    """The activated ability's instruction whose payload restricts its targets,
-    or None when no activated ability needs finer-than-kind filtering."""
-    for ability in compile_card_oracle(card).activated_abilities:
-        instruction = getattr(ability, "instruction", None)
-        if instruction is not None and instruction.kind in _FILTERABLE_ABILITY_KINDS:
-            return instruction
+# What is left of the shadow parser: line shapes whose *compiled program* cannot
+# say what they target, matched against the ability's own line.
+#
+# "Untap target creature" (Jandor's Saddlebags) lowers to
+# `untap_target_permanent`, whose handler untaps whatever it is handed —
+# `_tap_or_untap_target` passes `predicate=lambda p: True`. The grammar already
+# refuses to lower a restricted untap onto that kind for exactly this reason
+# ("no untap handler honors this restriction", engine/grammar/lower.py), so the
+# instruction reaches here with an empty payload. Deriving "permanent" off the
+# kind would be honest about the handler and wrong about the card: the UI would
+# offer lands for an ability that may only untap a creature, and the handler
+# would untap the land. So the derivation refuses, and this reads the line.
+#
+# It goes away when that handler honours its filter — at which point the
+# grammar lowers the line with its restriction, the derivation answers, and
+# tests/engine/test_activation_targeting.py fails on this entry being stale.
+_UNDERIVABLE_ABILITY_TARGETS: tuple[tuple[re.Pattern, dict], ...] = (
+    (re.compile(r"\buntap target creature\b"), {"kind": "creature"}),
+)
+
+
+def _fallback_activation_spec(source_line: str) -> dict | None:
+    """The spec of an ability line the compiled program cannot describe."""
+    lowered = (source_line or "").lower()
+    for pattern, spec in _UNDERIVABLE_ABILITY_TARGETS:
+        if pattern.search(lowered):
+            return dict(spec)
     return None
 
 
-def _instruction_targets_by_subtype(instruction) -> bool:
-    """Whether *instruction* targets creatures named only by subtype — King
-    Suleiman's "target Djinn or Efreet", Elephant Graveyard's "target Elephant".
-    Such a line never contains the word "creature", so the text classifiers
-    can't see the target; the compiled filter can."""
-    if instruction is None or not instruction.payload.get("subtype_filter"):
-        return False
-    # A subtype filter on a non-creature target (a land subtype, say) isn't a
-    # creature prompt.
-    return instruction.payload.get("type_filter", "creature") == "creature"
+def _activation_spec(abilities) -> tuple[dict, object | None]:
+    """The spec of the first of *abilities* that chooses anything, with the
+    ability it came from.
 
-
-def _activated_requires_unblocked_attacker(card: CardDefinition) -> bool:
-    # Forcefield: "an unblocked creature of your choice would deal combat damage to
-    # you" — the controller picks one of the unblocked attackers.
-    return any("unblocked creature of your choice" in line for line in _activated_lines(card))
-
-
-def _activated_requires_source_and_creature(card: CardDefinition) -> bool:
-    # Jade Monolith: "The next time a source of your choice would deal damage to
-    # target creature this turn, that source deals that damage to you instead."
-    # Two choices: the creature (primary target) and the damage source.
-    return any(
-        "a source of your choice would deal damage to target creature" in line
-        for line in _activated_lines(card)
-    )
-
-
-def _classify_activation(card: CardDefinition) -> dict:
-    if _activated_requires_unblocked_attacker(card):
-        return {"kind": "creature", "unblocked_attacker": True}
-    cop_color = _activated_color_protection_source(card)
-    if cop_color is not None:
-        # The chosen source can be a permanent of that color on any battlefield, or
-        # a spell of that color on the stack. also_stack folds stack spells into the
-        # permanent-target prompt (the engine matches prevention by color).
-        return {"kind": "permanent", "color_filter": cop_color, "also_stack": True}
-    if _activated_requires_source_and_creature(card):
-        # Before the generic creature check, which would otherwise swallow it.
-        return {"kind": "creature", "requires_source": True}
-    if _activated_requires_attacking_creature(card):
-        # Before the generic creature check, which would otherwise swallow it.
-        return {"kind": "creature", "attacking_only": True}
-    if _activated_requires_flying_creature(card):
-        # Before the generic creature check, which would otherwise swallow it.
-        return {"kind": "creature", "flying_only": True}
-    if _activated_requires_wall(card):
-        # Ali Baba — before the generic creature check.
-        return {"kind": "creature", "wall_only": True}
-    if _activated_requires_sacrifice_creature(card):
-        # Before the generic creature check, which would otherwise swallow it.
-        # sacrifice_cost mirrors the cast-side spec so the UI can say
-        # "sacrifice" rather than "target" (Diamond Valley).
-        return {"kind": "creature", "own_only": True, "sacrifice_cost": True}
-    if _activated_requires_creature(card):
-        return {"kind": "creature"}
-    if _activated_requires_artifact(card):
-        # Aladdin — before the permanent classifier, which would otherwise offer
-        # every permanent for what is an artifact-only target.
-        return {"kind": "artifact"}
-    if _activated_requires_aura_on_land(card):
-        # Pyramids — before the land classifier. The destroy instruction's
-        # attached_to_land filter narrows the enumeration to Auras on lands.
-        return {"kind": "permanent"}
-    if _activated_requires_permanent(card):
-        return {"kind": "permanent"}
-    color = _activated_destroy_permanent_color(card)
-    if color is not False:
-        return {"kind": "permanent", "color_filter": color}
-    if _activated_requires_land(card):
-        return {"kind": "land", "exclude_swamp": _activated_land_excludes_swamp(card)}
-    if _activated_requires_creature_grant(card):
-        return {"kind": "creature"}
-    if _activated_requires_stack_spell(card):
-        return {"kind": "stack", "stack_color_filter": _stack_spell_color_filter(card)}
-    if _activated_requires_any(card):
-        return {"kind": "any"}
-    if _activated_requires_player(card):
-        return {"kind": "player"}
-    return {"kind": "none"}
+    Called with one ability when the UI named which one is being activated, and
+    with all of a permanent's usable abilities for the default prompt a
+    single-ability permanent shows. Scanning in order is what makes the two
+    agree: a mana ability chooses nothing, so Desert's default prompt is its
+    damage ability's, exactly as it was when a per-card cascade produced it.
+    """
+    for ability in abilities:
+        spec = derive_activation_spec(ability)
+        if spec is None:
+            spec = _fallback_activation_spec(getattr(ability, "source_line", ""))
+        if spec is not None:
+            return spec, ability
+    return {"kind": "none"}, None
 
 
 class LegalityMixin:
@@ -478,10 +304,15 @@ class LegalityMixin:
         self, controller_index: int, permanent_index: int, ability_index: int | None = None
     ) -> dict:
         """Target spec for activating the ability of the permanent at
-        ``permanent_index`` on ``controller_index``'s battlefield. With
-        ``ability_index`` (multi-ability cards whose abilities target
-        differently — Pyramids), the spec is computed from that ability's own
-        line rather than the whole card."""
+        ``permanent_index`` on ``controller_index``'s battlefield: the target
+        kind plus every legal target. With ``ability_index`` (multi-ability
+        cards whose abilities target differently — Pyramids), the spec is that
+        one ability's; without it, the first ability that chooses anything.
+
+        Derived from the compiled program (engine/targeting.py), per ability
+        rather than per card — the question "what does this ability target?" has
+        one answer per ability and a card-level classifier could only give one
+        answer for all of them."""
         player = self.players[controller_index]
         if not (0 <= permanent_index < len(player.battlefield)):
             return {"kind": "none", "requires_target": False, "valid_targets": []}
@@ -489,25 +320,10 @@ class LegalityMixin:
         # effective_card so a copy (Clone / Vesuvan Doppelganger) offers the
         # copied creature's activated abilities (CR 707.2).
         card = source_permanent.effective_card
-        chosen_ability = None
+        usable = usable_activated_abilities(compile_card_oracle(card))
         if ability_index is not None:
-            usable = [
-                ab for ab in compile_card_oracle(card).activated_abilities
-                if ab.supported and ab.instruction is not None
-            ]
-            if 0 <= ability_index < len(usable):
-                chosen_ability = usable[ability_index]
-        if chosen_ability is not None:
-            # A stand-in whose oracle text is just this ability's line: every
-            # _activated_* classifier reads only oracle_text.
-            line_card = SimpleNamespace(
-                name=card.name,
-                type_line=card.type_line,
-                oracle_text=chosen_ability.source_line or "",
-            )
-            spec = _classify_activation(line_card)
-        else:
-            spec = _classify_activation(card)
+            usable = usable[ability_index:ability_index + 1] if 0 <= ability_index < len(usable) else []
+        spec, spec_ability = _activation_spec(usable)
         # A Sleight of Mind text change on this permanent retargets a color-word
         # counter (Lifeforce black -> red), so the UI must offer the new color's
         # spells rather than the printed one's.
@@ -515,22 +331,18 @@ class LegalityMixin:
             spec["stack_color_filter"] = self._remap_color_filter(
                 source_permanent, spec["stack_color_filter"]
             )
-        if chosen_ability is not None:
-            ability_instruction = (
-                chosen_ability.instruction
-                if chosen_ability.instruction.kind in _FILTERABLE_ABILITY_KINDS
-                else None
-            )
-        else:
-            ability_instruction = _ability_target_instruction(card)
-        if spec["kind"] == "none" and _instruction_targets_by_subtype(ability_instruction):
-            # King Suleiman ("Destroy target Djinn or Efreet"), Elephant Graveyard
-            # ("Regenerate target Elephant"): the line names a creature subtype and
-            # never the word "creature", so the textual classifiers above see no
-            # target at all. The compiled instruction's filters — which are what
-            # resolution enforces — do, so the prompt is derived from them and
-            # _ability_target_legal narrows the list to the named subtype.
-            spec["kind"] = "creature"
+        # The narrowing the *spec* does not carry, taken from the same ability's
+        # instruction: Royal Assassin's tapped-only, King Suleiman's subtype,
+        # Pyramids' "attached to a land". Reading it off the ability that
+        # supplied the spec is what keeps a two-ability permanent from narrowing
+        # one ability's prompt with the other ability's filter.
+        ability_instruction = (
+            spec_ability.instruction
+            if spec_ability is not None
+            and spec_ability.instruction is not None
+            and spec_ability.instruction.kind in _FILTERABLE_ABILITY_KINDS
+            else None
+        )
         spec["requires_target"] = spec["kind"] != "none"
         spec["valid_targets"] = self._enumerate_targets(
             controller_index, card, spec, for_cast=False,
