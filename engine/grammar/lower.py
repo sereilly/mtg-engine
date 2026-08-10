@@ -67,6 +67,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "target_gains_life": "life",
     "target_loses_life": "life",
     "destroy_target_permanent": "destruction",
+    "destroy_all_artifacts": "destruction",
     "destroy_all_creatures": "destruction",
     "destroy_all_enchantments": "destruction",
     "destroy_all_lands": "destruction",
@@ -683,6 +684,7 @@ def _lower_gain_life(
 
 # "Destroy all X" shapes with a dedicated sweep handler.
 _DESTROY_ALL_KINDS: dict[tuple[str, ...], str] = {
+    ("artifact",): "destroy_all_artifacts",
     ("creature",): "destroy_all_creatures",
     ("enchantment",): "destroy_all_enchantments",
     ("land",): "destroy_all_lands",

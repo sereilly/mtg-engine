@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**198 / 570 tracked rules covered (34%)** — 812 tests, 0 unannotated.
+**199 / 570 tracked rules covered (34%)** — 816 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -84,7 +84,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [615. Prevention Effects](#615-prevention-effects) | 7/13 | 53% |
 | [616. Interaction of Replacement and/or Prevention Effects](#616-interaction-of-replacement-andor-prevention-effects) | 1/2 | 50% |
 | [700. General](#700-general) | 0/15 | 0% |
-| [701. Keyword Actions](#701-keyword-actions) | 3/16 | 18% |
+| [701. Keyword Actions](#701-keyword-actions) | 4/16 | 25% |
 | [702. Keyword Abilities](#702-keyword-abilities) | 18/18 | 100% |
 | [703. Turn-Based Actions](#703-turn-based-actions) | 0/4 | 0% |
 | [704. State-Based Actions](#704-state-based-actions) | 4/8 | 50% |
@@ -819,13 +819,13 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **701.3** Attach *(4 tests, subrules a)*
 - [ ] **701.5** Cast
 - [ ] **701.6** Counter
-- [ ] **701.7** Create
+- [x] **701.7** Create *(3 tests, subrules a)*
 - [ ] **701.8** Destroy
 - [x] **701.9** Discard *(4 tests, subrules ac)*
 - [ ] **701.12** Exchange
 - [ ] **701.13** Exile
 - [ ] **701.18** Play
-- [x] **701.19** Regenerate *(14 tests, subrules ac)*
+- [x] **701.19** Regenerate *(15 tests, subrules ac)*
 - [ ] **701.20** Reveal
 - [ ] **701.21** Sacrifice
 - [ ] **701.23** Search

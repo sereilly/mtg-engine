@@ -71,15 +71,55 @@ def volcanic_eruption(game: Game, instruction: OracleInstruction, context: Oracl
     return True, "resolved"
 
 
-@effect_handler("destroy_all_creatures")
-def destroy_all_creatures(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    bypass_regen = instruction.payload.get("bypass_regeneration", False)
+# "Destroy all <types>" — one sweep, parameterised by the types it names and
+# whether regeneration may replace the destruction.
+#
+# These were four handlers with the same three lines of body, differing only in
+# those two values, and adding "destroy all artifacts" (Shatterstorm) would have
+# made a fifth. The kinds stay distinct because the compiler, the grammar's
+# lowering table and the behaviour snapshots all key on them; only the bodies
+# are shared.
+#
+# Types are read through has_type/is_creature (CR 613 layer 4), so a Copy
+# Artifact copy counts as both its types and an animated land counts as a
+# creature.
+_SWEEP_TYPES: dict[str, tuple[tuple[str, ...], bool]] = {
+    # kind -> (types any of which qualifies, regeneration allowed)
+    "destroy_all_creatures": (("creature",), True),
+    "destroy_all_artifacts": (("artifact",), True),
+    "destroy_all_enchantments": (("enchantment",), False),
+    "destroy_all_lands": (("land",), False),
+    "destroy_all_artifacts_creatures_enchantments": (
+        ("artifact", "creature", "enchantment"),
+        True,
+    ),
+}
+
+
+def _sweep_by_type(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    types, regeneration_allowed = _SWEEP_TYPES[instruction.kind]
+    # "They can't be regenerated" on a card whose family normally allows it.
+    if instruction.payload.get("bypass_regeneration"):
+        regeneration_allowed = False
+
+    def _matches(perm: Permanent) -> bool:
+        return any(
+            perm.is_creature if name == "creature" else perm.has_type(name)
+            for name in types
+        )
+
     for player in game.players:
         game._destroy_swept_permanents(
-            player, lambda p: p.is_creature, allow_regeneration=not bypass_regen
+            player, _matches, allow_regeneration=regeneration_allowed
         )
-    game.log.append("All creatures were destroyed")
+    game.log.append(f"All {', '.join(types)}s were destroyed")
     return True, "resolved"
+
+
+for _kind in _SWEEP_TYPES:
+    effect_handler(_kind)(_sweep_by_type)
 
 
 @effect_handler("destroy_creatures_in_combat_with_source")
@@ -114,40 +154,6 @@ def destroy_creatures_in_combat_with_source(game: Game, instruction: OracleInstr
         )
     else:
         game.log.append(f"{context.card.name}: no creatures were blocking or blocked by it")
-    return True, "resolved"
-
-
-@effect_handler("destroy_all_artifacts_creatures_enchantments")
-def destroy_all_artifacts_creatures_enchantments(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    for player in game.players:
-        # has_type/is_creature so copies keep all their types (a Copy
-        # Artifact copy is an Artifact Enchantment) and animated lands
-        # count as creatures.
-        game._destroy_swept_permanents(
-            player,
-            lambda p: p.is_creature or p.has_type("artifact") or p.has_type("enchantment"),
-        )
-    game.log.append("All artifacts, creatures, and enchantments were destroyed")
-    return True, "resolved"
-
-
-@effect_handler("destroy_all_enchantments")
-def destroy_all_enchantments(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    for player in game.players:
-        game._destroy_swept_permanents(
-            player, lambda p: p.has_type("enchantment"), allow_regeneration=False
-        )
-    game.log.append("All enchantments were destroyed")
-    return True, "resolved"
-
-
-@effect_handler("destroy_all_lands")
-def destroy_all_lands(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    for player in game.players:
-        game._destroy_swept_permanents(
-            player, lambda p: p.card.primary_type == "land", allow_regeneration=False
-        )
-    game.log.append("All lands were destroyed")
     return True, "resolved"
 
 

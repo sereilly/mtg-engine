@@ -1155,6 +1155,26 @@ The honest summary: the engine's *guards* generalise — they caught every gap o
 first contact with unseen text, loudly and by name. The engine's *coverage* does
 not yet, and that is what the next set's worth of work buys.
 
+### Starting the Revised backlog with the part that generalises
+
+Of the six cards Revised could not compile, Shatterstorm ("Destroy all
+artifacts. They can't be regenerated.") was the one whose gap was not about
+Shatterstorm. The engine had four `destroy_all_*` handlers — creatures,
+enchantments, lands, and the artifacts-creatures-enchantments triple — with
+*identical three-line bodies*, differing only in which types qualify and
+whether regeneration may replace the destruction. "Destroy all artifacts" would
+have been a fifth copy, and every future noun another.
+
+Both are parameters now. One sweep is registered under all five kinds; the
+kinds stay distinct because the compiler, the grammar's lowering table and the
+behaviour snapshots key on them, but there is one body. Adding artifacts was
+then a single table row, and Shatterstorm compiles and resolves correctly
+without Revised being in the pool.
+
+A test asserts every kind in the table has a handler, because the registration
+is a loop: a kind added to the table but not seen by that loop would be a
+silent no-op, which is the failure this file spent the session removing.
+
 ### The static-ability cluster, and why it is a phase-6 job
 
 20 of the remaining lines fail with "static abilities need the CR 613 layers
