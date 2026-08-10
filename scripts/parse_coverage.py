@@ -116,12 +116,12 @@ _MIXIN_TEXT_SCANS = (
     "as this enchantment enters, you lose life equal to your life total",  # permanent_state.py:195 (Lich)
     "you have no maximum hand size",                                     # permanent_state.py:189 (Library of Leng)
     "if an effect causes you to discard a card, discard it, but you may put it on top of your library instead",  # replacements.py discard interceptor (Library of Leng)
-    "you may play any number of lands on each of your turns",            # stack_casting._fastbond_count (Fastbond)
+    "you may play any number of lands on each of your turns",            # mixins/effects._fastbond_count, gated in stack/casting (Fastbond)
     "you may spend white mana as though it were red mana",               # permanent_state.py:192 (Sunglasses of Urza)
     "doesn't untap during your untap step",                              # untap_step.py (Time Vault, Basalt Monolith)
     "you may choose not to untap this creature during your untap step",  # untap_step.py (Old Man of the Sea)
     "if you would begin your turn while this artifact is tapped, you may skip that turn instead",  # beginning_phase.py (Time Vault)
-    "this spell costs {1} more to cast for each target beyond the first",  # stack_casting.py:1210 (Fireball)
+    "this spell costs {1} more to cast for each target beyond the first",  # stack/casting.queue_from_hand (Fireball)
     "enters tapped",                                                     # permanent_state.py:100
     "whenever enchanted land is tapped for mana, its controller adds an additional",  # turn_management.py:285 (Wild Growth)
     "when enchanted creature dies, this aura deals damage equal to that creature's toughness",  # _trigger_aura_death_effects (Creature Bond)
@@ -137,7 +137,7 @@ _MIXIN_TEXT_SCANS = (
 )
 
 _ACTIVATION_GATES = (
-    # queue_permanent_ability's per-ability textual gates (stack_casting.py).
+    # queue_permanent_ability's per-ability textual gates (stack/activation.py).
     "activate only during your upkeep",
     "only during your turn",
     "once each turn",
@@ -184,10 +184,10 @@ CHANNELS: tuple[tuple[str, object], ...] = (
      and "counters on it to each player" in s),
     ("draw_step_modifiers.py", lambda s: draw_step_bonus_for(s) is not None),
     ("cost_modifiers.py", lambda s: bool(cost_modifiers_for(s))),
-    ("activation gate (stack_casting)", lambda s: any(g in s for g in _ACTIVATION_GATES)),
+    ("activation gate (stack/activation)", lambda s: any(g in s for g in _ACTIVATION_GATES)),
     ("mixin text scan", lambda s: _matches_any(s, _MIXIN_TEXT_SCANS)),
     ("modal machinery", lambda s: s.startswith("choose one")),
-    ("x spend color (stack_casting)", lambda s: bool(re.match(r"^spend only (?:white|blue|black|red|green) mana on x$", s))),
+    ("x spend color (stack/activation)", lambda s: bool(re.match(r"^spend only (?:white|blue|black|red|green) mana on x$", s))),
     ("ante boilerplate (deck construction, not gameplay)", lambda s: s.startswith("remove this card from your deck before playing")),
 )
 
@@ -295,7 +295,7 @@ HANDLER_CLAIMS: dict[str, tuple[str, ...]] = {
     ),
     # Power Sink: "Counter target spell unless its controller pays {X}." The
     # counter handler arms the pending payment (handlers/stack.py); when it goes
-    # unpaid, mixins/stack_casting._resolve_mana_payment counters the spell and
+    # unpaid, mixins/stack/choices._resolve_mana_payment counters the spell and
     # runs the ON_SPELL_COUNTERED hook, which is what taps the lands and empties
     # the pool. One resolution, so the second sentence is the same handler's
     # work rather than a step of its own — the grammar reads it as a rider on

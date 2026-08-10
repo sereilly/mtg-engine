@@ -213,7 +213,7 @@ def test_704_5e_countered_spell_copy_ceases_to_exist_instead_of_going_to_graveya
 
     This is the scenario in this engine where 704.5e is actually reachable: Fork's
     copy already skips the graveyard when it resolves normally (see the ``is_copy``
-    check in stack_casting.py's ``_run_stack_item_resolution``), but countering the
+    check in stack/resolution.py's ``_run_stack_item_resolution``), but countering the
     copy before it resolves used to append its (shared) card object to the
     countering player's graveyard as a side effect of reusing the same ``card``
     reference as the original spell."""

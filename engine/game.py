@@ -9,7 +9,10 @@ from .mixins import (
     GameEndingMixin,
     TurnManagementMixin,
     PhaseStepsMixin,
-    StackCastingMixin,
+    SpellCastingMixin,
+    AbilityActivationMixin,
+    StackResolutionMixin,
+    PendingChoicesMixin,
     OracleInstructionsMixin,
     PermanentStateMixin,
     EffectsMixin,
@@ -61,7 +64,12 @@ class Game(
     # Cross-cutting flow and supporting machinery
     TurnManagementMixin,
     PhaseStepsMixin,
-    StackCastingMixin,
+    # The stack (CR 405): one mixin per stage of an object's life on it.
+    # See engine/mixins/stack/__init__.py.
+    SpellCastingMixin,
+    AbilityActivationMixin,
+    StackResolutionMixin,
+    PendingChoicesMixin,
     OracleInstructionsMixin,
     PermanentStateMixin,
     EffectsMixin,

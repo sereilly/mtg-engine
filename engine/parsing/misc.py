@@ -135,7 +135,7 @@ def create_wasp_token(text: str, activated: bool) -> RuleResult:
 # battlefield, their controllers sacrifice them. Players can't cast spells or
 # play lands with a name originally printed in the Arabian Nights expansion."
 # One instruction covers both clauses (checked continuously as a state-based
-# action / at cast time — see game_ending.py and stack_casting.py) since a
+# action / at cast time — see game_ending.py and mixins/stack/casting.py) since a
 # single distinctive phrase ("originally printed in the ... expansion")
 # identifies the whole effect regardless of which clause matched first.
 _ORIGINALLY_PRINTED_IN_RE = re.compile(r"originally printed in the (.+?) expansion")

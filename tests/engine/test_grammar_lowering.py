@@ -1261,7 +1261,7 @@ def test_other_does_not_swallow_the_postmodifier_wording():
 )
 def test_aura_enchant_lines_are_accounted_for_by_the_targeting_registry(line, card):
     """An Aura's attachment restriction is not an effect and never becomes one:
-    ``mixins/stack_casting.aura_enchant_noun`` reads it to decide which
+    ``mixins/stack/casting.aura_enchant_noun`` reads it to decide which
     permanents the Aura may be cast onto, and ``targeting.derive_cast_target``
     reads it to tell the UI what to offer. An instruction here would duplicate a
     restriction the engine already applies at cast time."""
@@ -1867,7 +1867,7 @@ def test_discard_last_drawn_cost_lets_its_effect_through():
 
 
 def test_costs_never_become_instructions():
-    """A cost is paid by mixins/stack_casting from ``ActivatedAbilityCost``,
+    """A cost is paid by mixins/stack/activation from ``ActivatedAbilityCost``,
     which the *legacy* compiler parses off the same line. If a cost also
     lowered to an instruction the ability would charge it twice — most visibly
     for Jandor's Ring, which would discard on activation and again on
@@ -1978,7 +1978,7 @@ def test_one_mana_of_any_color_keeps_the_clause_text():
 
     ``add_mana_from_text``'s any-colour path is ``_add_mana_from_text`` probing
     for the literal phrase, with the chosen symbol arriving separately as
-    ``color`` (injected by mixins/stack_casting when ``any_color`` is set).
+    ``color`` (injected by mixins/stack/activation when ``any_color`` is set).
     Structured pips would say nothing that path can read, so the payload stays
     byte-identical to the legacy rule's — which is what keeps Birds of
     Paradise, City of Brass and Celestial Prism producing mana at all."""

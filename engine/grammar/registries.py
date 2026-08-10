@@ -79,7 +79,7 @@ def registry_for_line(line: str) -> str | None:
     normalized = _normalized(line)
 
     # engine/cast_restrictions.py — "Cast this spell only during …" (CR 601.3e),
-    # looped by check_cast_timing() from mixins/stack_casting.cast_from_hand.
+    # looped by check_cast_timing() from mixins/stack/casting.cast_from_hand.
     # That consumer matches by substring against the card's whole text; the
     # equality here is deliberately stricter, so a line that is a timing
     # restriction *plus something else* stays unaccounted for.
@@ -102,7 +102,7 @@ def registry_for_line(line: str) -> str | None:
     if self_untap_line(line) is not None:
         return "untap_restrictions"
 
-    # engine/targeting.py + engine/mixins/stack_casting.py — an Aura's
+    # engine/targeting.py + engine/mixins/stack/casting.py — an Aura's
     # "Enchant <subject>" attachment restriction (CR 702.5). It is not an effect
     # at all: `aura_enchant_noun` reads it to decide which permanents the Aura
     # may legally be cast onto, and `derive_cast_target` reads it to tell the UI

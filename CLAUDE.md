@@ -206,8 +206,12 @@ adding entries, not editing dispatch**:
   phase/step turn-based logic here.
 - `engine/mixins/` — cross-cutting game flow *not* tied to a single phase:
   turn-structure navigation and priority (`phase_steps`), per-turn/pregame
-  management (`turn_management`), stack/casting, state-based actions, effects,
-  helpers. Consumes compiled programs; must never parse oracle text.
+  management (`turn_management`), state-based actions, effects, helpers.
+  Consumes compiled programs; must never parse oracle text.
+- `engine/mixins/stack/` — the stack (CR 405), one mixin per stage of an
+  object's life on it: `casting` (CR 601), `activation` (CR 602), `resolution`
+  (CR 603/608), and `choices` — the arm / `confirm_*` / `auto_resolve_pending_*`
+  queue that every part-way-through decision goes through.
 
 `engine/oracle.py` is the compiler (tokenize → classify lines as
 keyword/triggered/activated/static → delegate effect clauses to `engine.parsing`).

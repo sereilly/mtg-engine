@@ -8588,7 +8588,7 @@ def test_every_catalog_card_resolves_without_exception(all_cards, catalog_by_nam
     LEA scaffolding (basics, a Grizzly Bears, a Black Lotus, a Bad Moon), which
     is deliberately generic — the card under test comes from the full catalog.
     """
-    from engine.mixins.stack_casting import aura_enchant_noun, permanent_matches_enchant_noun
+    from engine.mixins.stack import aura_enchant_noun, permanent_matches_enchant_noun
 
     card = catalog_by_name[card_name]
     island = _island(all_cards)

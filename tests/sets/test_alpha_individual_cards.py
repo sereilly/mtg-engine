@@ -4,7 +4,7 @@ import re
 from collections import Counter
 from dataclasses import dataclass
 from engine import Game, PlayerState, classify_card, load_cards
-from engine.mixins.stack_casting import aura_enchant_noun, permanent_matches_enchant_noun
+from engine.mixins.stack import aura_enchant_noun, permanent_matches_enchant_noun
 from engine.models import CardDefinition, Permanent
 from tests.helpers import LEA_PATH
 

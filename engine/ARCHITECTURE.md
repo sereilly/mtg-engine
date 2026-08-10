@@ -20,7 +20,7 @@ OracleProgram
    ├─ activated_abilities   (cost + instruction)
    ├─ triggered_abilities   (TriggerCondition + instruction)
    └─ static_lines          (keywords, static buffs)
-   │  Game mixins (stack_casting → oracle_instructions)
+   │  Game mixins (stack/casting → oracle_instructions)
    ▼
 EFFECT_HANDLERS[instruction.kind](game, instruction, context)   ← O(1) dict dispatch
 ```
@@ -60,7 +60,8 @@ directly comparable and can coexist per line. See "Grammar front end" below and
 | `engine/draw_step_modifiers.py` | Text-keyed symmetric bonus draws (CR 504): "at the beginning of each player's draw step, that player draws an additional card", with the optional untapped-source clause. |
 | `engine/card_hooks.py` | Name-keyed registries for truly bespoke card behavior: spell-cast triggers, spell-resolved triggers, counterspell riders, leave-battlefield effects, untap-step restrictions, draw-step modifiers, mana-production modifiers, cost-tax modifiers. The only sanctioned place to reference a card by name — a short list of `# TODO(card-hooks)` markers in the mixins flags the handful of remaining single-card bespoke sites not yet worth generalizing. |
 | `engine/phases/` | One mixin per turn phase and per step within a phase (CR 500–514): `beginning_phase` + `untap_step`/`upkeep_step`/`draw_step`, `precombat_main_phase`, `combat_phase` + its five step modules, `postcombat_main_phase`, `ending_phase` + `end_step`/`cleanup_step`. Each is composed onto `Game`. See `engine/phases/__init__.py` for the full taxonomy. |
-| `engine/mixins/` | Cross-cutting game flow not tied to a single phase: turn-structure navigation and priority (`phase_steps`), per-turn/pregame management (`turn_management`), stack and casting, state-based actions, effects, helpers. Consumes compiled programs; should never parse oracle text itself. |
+| `engine/mixins/` | Cross-cutting game flow not tied to a single phase: turn-structure navigation and priority (`phase_steps`), per-turn/pregame management (`turn_management`), state-based actions, effects, helpers. Consumes compiled programs; should never parse oracle text itself. |
+| `engine/mixins/stack/` | The stack (CR 405), one mixin per stage of an object's life on it: `casting` (CR 601), `activation` (CR 602), `resolution` (CR 603/608), and `choices` — the arm / `confirm_*` / `auto_resolve_pending_*` queue every part-way-through decision uses. |
 
 ## Adding support for a new card
 

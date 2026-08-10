@@ -97,7 +97,7 @@ def cost_modifier_claims_line(line: str) -> bool:
     *whole* line, leaving nothing over? "White spells cost {3} more to cast."
     does; "This spell costs {1} more to cast for each target beyond the first."
     matches no template at all (Fireball's surcharge is applied in
-    mixins/stack_casting.py instead).
+    mixins/stack/ instead).
     """
     text = line.strip().lower().rstrip(".")
     return any(

@@ -6,7 +6,7 @@ import re
 from .cost_modifiers import spell_cost_tax
 from .classifier import classify_card
 from .game import Game
-from .mixins.stack_casting import aura_enchant_noun, permanent_matches_enchant_noun
+from .mixins.stack import aura_enchant_noun, permanent_matches_enchant_noun
 from .auras import aura_restriction_active
 from .models import CardDefinition, Permanent, PlayerState
 from .oracle import OracleInstruction, compile_card_oracle

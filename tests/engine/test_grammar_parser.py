@@ -258,7 +258,7 @@ def test_trailing_activation_restriction_is_consumed_not_dropped():
     """"Activate only during your upkeep." belongs to the ability, not its
     effect. The grammar must account for the tokens — a line it cannot fully
     consume is refused outright — while enforcement stays where it already is,
-    on the raw ability text in mixins/stack_casting.py."""
+    on the raw ability text in mixins/stack/activation.py."""
     from engine.grammar import compile_line
 
     result = compile_line(
@@ -358,7 +358,7 @@ def test_registry_line_produces_no_instructions_and_never_executes(line: str, re
     "line",
     [
         # Not a template cost_modifiers.py knows — Fireball's surcharge lives in
-        # mixins/stack_casting.py, and claiming it here would be a lie about
+        # mixins/stack/activation.py, and claiming it here would be a lie about
         # which code runs it.
         "This spell costs {1} more to cast for each target beyond the first.",
         # A timing restriction no CAST_RESTRICTIONS entry carries.

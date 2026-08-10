@@ -943,7 +943,7 @@ _COUNTER_UNLESS_PAYS_X = (("X", 1),)
 
 # Penalties for declining that cost which the counter flow performs while it
 # counters (engine/card_hooks.py ON_SPELL_COUNTERED, run from
-# mixins/stack_casting._resolve_mana_payment). Declared here so a penalty the
+# mixins/stack/choices._resolve_mana_payment). Declared here so a penalty the
 # engine does not perform refuses instead of riding along unimplemented; the
 # matching parse-coverage claim lives in HANDLER_CLAIMS in
 # scripts/parse_coverage.py.
@@ -1244,7 +1244,7 @@ def _lower_add_mana(node: ast.AddMana) -> tuple[OracleInstruction, ...]:
     player-chosen shape that lowers, and it is the exception that keeps the
     text. ``add_mana_from_text``'s any-colour branch is ``_add_mana_from_text``
     probing for the literal phrase "one mana of any color"; the chosen symbol
-    arrives separately as ``color``, injected by mixins/stack_casting when
+    arrives separately as ``color``, injected by mixins/stack/activation when
     ``any_color`` is set. Structured pips would say nothing the handler could
     read, so the clause rides along in ``oracle_text`` exactly as the legacy
     rule wrote it — which is what :attr:`ast.AddMana.source_text` exists for,

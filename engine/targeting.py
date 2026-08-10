@@ -57,7 +57,7 @@ _WHOLE_ENCHANT_LINE = re.compile(rf"^enchant ({'|'.join(_ENCHANT_SUBJECTS)})$")
 # absent here and present on the spell-side reanimation below.
 _ENCHANT_GRAVEYARD_LINE = re.compile(r"^enchant creature card in a graveyard\b", re.MULTILINE)
 
-# Reminder text, stripped exactly as mixins/stack_casting.aura_enchant_noun
+# Reminder text, stripped exactly as mixins/stack/casting.aura_enchant_noun
 # strips it — "Enchant creature (Target a creature as you cast this. …)" is the
 # same restriction as a bare "Enchant creature", and two consumers of one line
 # must not read it differently.
@@ -77,7 +77,7 @@ def enchant_line_subject(line: str) -> str | None:
 
     The trailing ``$`` is load-bearing: it keeps "Enchant creature card in a
     graveyard" (Animate Dead) out. Neither derivation here nor
-    ``mixins/stack_casting.aura_enchant_noun`` implements that line — both
+    ``mixins/stack/casting.aura_enchant_noun`` implements that line — both
     deliberately refuse it, because it names a graveyard card rather than a
     battlefield permanent — so claiming it would report a reanimation Aura's
     attachment rule as handled while nothing handles it.

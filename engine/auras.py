@@ -214,7 +214,7 @@ def unclaimed_aura_lines(normalized_lines: list[str], card_name: str = "") -> li
     """The Aura effect lines among *normalized_lines* nothing here claims.
 
     The "Enchant <noun>" line itself is the targeting restriction, consumed by
-    ``targeting.py``/``stack_casting.aura_enchant_noun``, and is not an effect.
+    ``targeting.py``/``stack/casting.aura_enchant_noun``, and is not an effect.
     """
     return [
         line

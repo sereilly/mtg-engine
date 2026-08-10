@@ -140,7 +140,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | static-line table | 39 |
 | mixin text scan | 32 |
 | aura static (oracle_instructions/permanent_state) | 31 |
-| activation gate (stack_casting) | 15 |
+| activation gate (stack/activation) | 15 |
 | card_hooks bespoke (name-keyed) | 9 |
 | cast_restrictions.py | 5 |
 | untap_restrictions.py | 5 |
@@ -162,7 +162,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | handler ← grant_unlimited_blocking | 1 |
 | handler ← add_variable_power_counters_to_self | 1 |
 | handler ← upkeep_wind_counter_pay_or_sacrifice | 1 |
-| x spend color (stack_casting) | 1 |
+| x spend color (stack/activation) | 1 |
 | handler ← copy_top_stack_spell | 1 |
 | draw_step_modifiers.py | 1 |
 | handler ← upkeep_pay_per_creature_untap_color | 1 |
