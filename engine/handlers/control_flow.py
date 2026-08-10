@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ..resumption import run_resumable
 from ._common import permanent_matches_filter
 from .registry import effect_handler
 
@@ -39,12 +40,21 @@ def _run(game: Game, steps: tuple, context: OracleExecutionContext) -> tuple[boo
 
     The context is deliberately *not* copied: results recorded by one step
     ("damage_dealt") must be visible to the next.
+
+    Run through ``run_resumable`` so a step that stops to ask the player
+    something (CR 616.1e) takes the steps behind it with it: they are recorded
+    and run when the answer arrives, rather than executing against a step that
+    has not happened yet. That is also why the loop is the last thing here —
+    ``resolved`` is folded in as each step goes, not tallied afterwards.
     """
-    resolved = False
-    for step in steps:
+    outcome = {"resolved": False}
+
+    def run_step(step) -> None:
         supported, _ = game._execute_oracle_instruction(step, context)
-        resolved = resolved or supported
-    return True, "resolved" if resolved else "no effect"
+        outcome["resolved"] = outcome["resolved"] or supported
+
+    run_resumable(game, steps, run_step)
+    return True, "resolved" if outcome["resolved"] else "no effect"
 
 
 @effect_handler("sequence")

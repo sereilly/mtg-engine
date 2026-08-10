@@ -2081,20 +2081,40 @@ Protection and a prevention pool contend over one red source, the affected
 player is asked, and picking the pool — the opposite of the default — spends the
 pool and leaves the Circle.
 
-**Still open: the loops.** No caller supplies a `restart` yet, and the reason
-turned out to be neither the consequences nor resumability. It is that damage is
-rarely the only thing in flight. A divided Fireball deals to each target in
-turn, the combat damage step walks its recorded events, and any damage inside a
-`sequence` has instructions queued behind it. Suspend event N of a loop and the
-answer re-runs event N while N+1 onwards are lost — a worse failure than not
-asking, so the `restart` is caller-supplied and nothing supplies one.
+**Done — the loops are the re-runnable unit, and spell damage asks.**
+`engine/resumption.py` is a resume stack: a loop records the rest of itself
+before each step and drops that record once the step gets through, so what is
+left when something suspends is exactly the work still owed, innermost last.
+Answering re-runs the suspended event and then unwinds, which is why a
+suspension two loops deep resumes the divided damage first and the sequence
+after — the innermost loop is the one whose next step comes soonest.
 
-What it needs is for the *loop* to be the re-runnable unit: somewhere to record
-how far it got and a resumption that picks up there. There are exactly three
-such loops — `handlers/control_flow.sequence`, the divided-damage branch of
-`handlers/damage.deal_damage`, and `phases/combat_damage_step`. That is a
-bounded, well-defined job, and it is the last thing between this engine and
-616.1e everywhere.
+Three places convert: `control_flow._run` (every spell's instructions), the
+divided-damage branch of `handlers/damage.deal_damage`, and the *tail* of spell
+resolution. That last one was not on the original list and is the one that
+would have been missed: CR 608.2m puts the card into the graveyard as the final
+part of resolution, so finishing regardless would bin a spell whose damage was
+still waiting on an answer. Word of Command already needed the same care for
+its own reason, which is why the tail was separable at all.
+
+A Lightning Bolt into a player holding a Circle of Protection and a prevention
+pool now asks, leaves the spell on the stack while it waits, and finishes
+properly when answered — including a Fireball divided over two players, where
+the second target used to be the thing that would have been silently dropped.
+Both are mutation-checked against the loop conversion they depend on.
+
+The rule a loop has to follow — **it must be the last thing its function does**
+— is written where the mechanism is, because work after the loop does not run
+when a step suspends and nothing records it.
+
+**Still open: combat damage.** It is the one damage path that passes neither
+`asks` nor a `restart`, so it cannot suspend and takes the documented default.
+Its step is three nested loops (blockers by defender, by blocker, by band
+member) plus a tail that owns `combat_damage_resolved` and
+`combat_first_strike_done` — the step's own idea of how far through it is. That
+is a real restructure of the largest function in the phase layer rather than
+the two-line conversions the other three were, and it is now the only thing
+between this engine and 616.1e everywhere.
 
 **616.1a–d are deliberately not built.** They order *classes* of effect ahead of
 the free choice: self-replacement effects first (614.15), then control-on-entry,

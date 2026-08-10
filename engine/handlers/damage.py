@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..models import Permanent
+from ..resumption import run_resumable
 from ._common import apply_damage_to_creature, resolve_amount, resolve_target_permanent
 from .registry import effect_handler
 
@@ -56,7 +57,7 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
             game.log.append(f"{card.name} dealt {dealt} damage to {caster.name}")
 
         game._deal_damage_to_player(
-            caster, damage, source=source_permanent or card, then=_report
+            caster, damage, source=source_permanent or card, then=_report, asks=True
         )
         return True, "resolved"
     # Fireball's cross-seat divided list: any mix of creatures and player faces
@@ -75,25 +76,31 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
             return True, "resolved"
         per_target = damage // n
         # Creatures first (highest index first so removals can't shift earlier
-        # indices), then faces.
-        for seat, index in sorted(
+        # indices), then faces. One resumable list rather than two loops: a
+        # target that stops to ask the player something has to take the targets
+        # behind it with it, and "behind it" spans both groups.
+        ordered = sorted(
             (e for e in entries if e[1] is not None), key=lambda e: e[1], reverse=True
-        ):
+        ) + [e for e in entries if e[1] is None]
+
+        def hit(entry) -> None:
+            seat, index = entry
+            if index is None:
+                face = game.players[seat]
+                game._deal_damage_to_player(
+                    face, per_target, source=card, asks=True,
+                    then=lambda dealt: game.log.append(
+                        f"{card.name} dealt {dealt} damage to {face.name}"
+                    ),
+                )
+                return
             target_perm = game.players[seat].battlefield[index]
             game._mark_damage_on_permanent(
-                target_perm, per_target, source=source_permanent or card,
+                target_perm, per_target, source=source_permanent or card, asks=True,
                 then=_damage_reporter(game, card, target_perm),
             )
-        for seat, index in entries:
-            if index is not None:
-                continue
-            face = game.players[seat]
-            game._deal_damage_to_player(
-                face, per_target, source=card,
-                then=lambda dealt, face=face: game.log.append(
-                    f"{card.name} dealt {dealt} damage to {face.name}"
-                ),
-            )
+
+        run_resumable(game, ordered, hit)
         return True, "resolved"
     # Support multiple target indices for spells like Fireball
     if isinstance(target_perm_idx, list):
@@ -148,6 +155,7 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
             # Recorded so a later instruction in the same resolution can read it
             # ("You gain life equal to the damage dealt").
             then=lambda dealt: context.results.__setitem__("damage_dealt", dealt),
+            asks=True,
         )
     else:
         def _report(damage: int) -> None:
@@ -158,7 +166,7 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
                 game.log.append(f"{target.name} took {damage} damage")
 
         game._deal_damage_to_player(
-            target, damage, source=source_permanent or card, then=_report
+            target, damage, source=source_permanent or card, then=_report, asks=True
         )
     return True, "resolved"
 
@@ -268,6 +276,7 @@ def deal_damage_and_gain_life(game: Game, instruction: OracleInstruction, contex
                 game, target_perm, damage, card,
                 log_message=lambda dealt: f"{card.name} dealt {dealt} damage to {target_perm.card.name}",
                 then=lambda dealt: game._gain_life(caster, dealt, card.name),
+                asks=True,
             )
             return True, "resolved"
     def _report(damage: int) -> None:
@@ -277,7 +286,7 @@ def deal_damage_and_gain_life(game: Game, instruction: OracleInstruction, contex
         # would otherwise gain life equal to nothing and never come back to it.
         game._gain_life(caster, damage, card.name)
 
-    game._deal_damage_to_player(target, damage, source=card, then=_report)
+    game._deal_damage_to_player(target, damage, source=card, then=_report, asks=True)
     return True, "resolved"
 
 

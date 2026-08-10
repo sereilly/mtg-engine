@@ -27,6 +27,7 @@ from ...auras import attach_aura
 from ...models import CardDefinition, Permanent
 from ...pending_choices import CHOICE_SPECS, PendingChoice, register_choice, spec_for
 from ...replacement_choices import pending_choices_for
+from ...resumption import resume_after_answer
 
 class PendingChoicesMixin:
     # -- The queue ----------------------------------------------------------
@@ -1050,7 +1051,12 @@ class PendingChoicesMixin:
         # Nothing was applied when the prompt was armed, so the event is re-run
         # rather than resumed — and it reaches the same round, finds the
         # recorded answer, and carries on.
+        self.effect_suspended = False
         choice.data["_restart"]()
+        # Then every loop that was waiting on this event, innermost first. The
+        # re-run above only redid the one step; the rest of the work it was part
+        # of is on the resume stack (engine/resumption.py).
+        resume_after_answer(self)
         return True
 
     def _default_effect_order(self, choice: PendingChoice) -> None:

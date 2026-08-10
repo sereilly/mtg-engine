@@ -331,10 +331,20 @@ The re-run is supplied by the caller as a `restart` thunk, because an event is
 more than its replacements — a draw nothing replaces still has to draw. Passing
 one is a caller declaring "this event can suspend"; a suspended event reports
 `consumed` so the caller skips the default action and the re-run does it
-properly. `_draw_with_replacements` passes one. **Damage does not**: its callers
-read the returned number for trample, lifelink and triggers, so deferring the
-event means deferring all of that, and every seat takes the documented default
-there. Non-interactive seats are never asked anywhere.
+properly. Non-interactive seats are never asked anywhere.
+
+Two things have to be true before a caller can offer a re-run. Its own
+consequences must be *inside* the event — damage callers pass them as `then`,
+so a suspended event does not get logged as 0 damage or gain life equal to
+nothing (`tests/engine/test_damage_continuations.py` holds engine code to
+that). And the work *behind* the event must be recorded, which is
+`engine/resumption.py`: a loop registers the rest of itself before each step, so
+answering resumes the divided damage, the sequence, and the spell's graveyard
+move in that order. A loop using it must be the last thing its function does.
+
+Spell damage satisfies both and asks. **Combat damage does not yet** — three
+nested loops and a tail owning the step's completion flags — so it passes
+neither and takes the documented default.
 
 `engine/damage_events.py` is where a *damage* event's members of both registries
 become the one candidate list the rule describes. `deal_damage(game, event)` is

@@ -173,8 +173,12 @@ adding entries, not editing dispatch**:
   would make the contenders uncountable. Purity is also what lets the choice be
   *asked*: at a contended round nothing has been applied, so the event is simply
   re-run once answered. A caller that can be re-run passes a `restart` thunk to
-  `apply_replacements`; one that can't (damage — its callers read the number
-  back) takes the documented default.
+  `apply_replacements`, or `asks=True` to a damage entry point.
+- `engine/resumption.py` — what makes that safe when the event was one step of
+  something larger: a loop records the rest of itself before each step, so
+  answering resumes the targets, instructions and resolution tail behind it,
+  innermost first. **A loop using it must be the last thing its function does.**
+  Spell damage asks; combat damage does not yet.
 - `engine/damage_events.py` — a damage event start to finish. CR 120.4's two
   halves (the damage is dealt; then what was dealt is processed into its
   result), with 616.1's contention set — shields *and* replacements together —

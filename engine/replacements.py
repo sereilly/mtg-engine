@@ -241,6 +241,9 @@ def order_prompt_asker(kind: str, restart: Callable[[], Any]) -> Callable:
             f"{game.players[chooser_index].name} must choose which effect applies "
             f"first ({', '.join(c.label or c.key for c in applicable)})"
         )
+        # Stops the loop this event was a step of, so it does not run on past a
+        # step that has not happened (engine/resumption.py).
+        game.effect_suspended = True
         return SUSPENDED
 
     return ask

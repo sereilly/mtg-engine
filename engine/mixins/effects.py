@@ -351,7 +351,7 @@ class EffectsMixin:
 
     def _mark_damage_on_permanent(
         self, permanent, amount: int, source=None, combat: bool = False, *, then=None,
-        restart=None,
+        restart=None, asks: bool = False,
     ) -> int:
         """Mark *amount* damage on a creature after applying its prevention
         shields. Returns the damage actually marked (0 if fully prevented).
@@ -370,6 +370,12 @@ class EffectsMixin:
         # Personal Incarnation) and the shields protecting this creature contend
         # as one set for what is dealt, and the result — damage marked — is
         # processed after. engine/damage_events.py runs both halves.
+        if asks and restart is None:
+            def restart():
+                self._mark_damage_on_permanent(
+                    permanent, amount, source=source, combat=combat, then=then, asks=True
+                )
+
         outcome = deal_damage(
             self,
             {"recipient": permanent, "amount": amount, "source": source, "combat": combat},
@@ -680,7 +686,8 @@ class EffectsMixin:
         self.log.append(f"{target.name} gained {amount} life{source} ({before} -> {target.life})")
 
     def _deal_damage_to_player(
-        self, target: PlayerState, amount: int, source=None, *, then=None, restart=None
+        self, target: PlayerState, amount: int, source=None, *, then=None, restart=None,
+        asks: bool = False,
     ) -> int:
         """Deal damage to a player and fire 'whenever you're dealt damage'
         triggers (e.g. Lich). ``source`` (a Permanent or spell CardDefinition)
@@ -711,6 +718,17 @@ class EffectsMixin:
         # unblocked combat damage to a player) is turned face up first.
         if amount > 0:
             self._turn_face_up(source)
+        if asks and restart is None:
+            # "Re-run exactly this call" — which is what the answer needs, since
+            # `then` carries the consequences and the enclosing loop records the
+            # work behind it. Only pass asks=True from inside a resumable loop
+            # (engine/resumption.py); otherwise the work behind this event is
+            # not recorded anywhere and would be lost.
+            def restart():
+                self._deal_damage_to_player(
+                    target, amount, source, then=then, asks=True
+                )
+
         outcome = deal_damage(
             self,
             {"recipient": target, "amount": amount, "source": source, "combat": False},

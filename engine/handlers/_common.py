@@ -59,6 +59,7 @@ def apply_damage_to_creature(
     source,
     log_message: Callable[[int], str] | None = None,
     then: Callable[[int], None] | None = None,
+    asks: bool = False,
 ) -> int:
     """Mark non-combat damage on a single creature and fire its "dealt damage"
     triggers if it survived.
@@ -83,7 +84,7 @@ def apply_damage_to_creature(
         if then is not None:
             then(dealt)
 
-    return game._mark_damage_on_permanent(perm, amount, source=source, then=finish)
+    return game._mark_damage_on_permanent(perm, amount, source=source, then=finish, asks=asks)
 
 
 def permanent_effective_colors(perm: Permanent) -> set[str]:

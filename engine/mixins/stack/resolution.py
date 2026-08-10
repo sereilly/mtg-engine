@@ -13,6 +13,7 @@ from ...classifier import CardClassification, classify_card
 from ...game_types import OracleExecutionContext, OracleStateMachine, StackItem
 from ...models import CardDefinition, Permanent
 from ...oracle import OracleInstruction, compile_card_oracle
+from ...resumption import run_resumable
 
 class StackResolutionMixin:
     def _enqueue_triggered_ability(
@@ -314,33 +315,44 @@ class StackResolutionMixin:
         target_idx = target_player_index if target_player_index is not None else (1 - caster_index)
         target = self.players[target_idx]
 
-        self._apply_spell_text(
-            caster,
-            target,
-            card,
-            target_permanent_index=target_permanent_index,
-            x_value=x_value,
-            new_color=new_color,
-            stack_target=stack_target,
-            mode_index=chosen_mode_index,
-            old_color=old_color,
-            divided_targets=divided_targets,
-        )
-        self._apply_self_resolved_hook(caster_index, card, target_idx, target_permanent_index)
-        pending_woc = self.pending_choice_of("word_of_command")
-        if (
-            pending_woc is not None
-            and "_spell_card" not in pending_woc.data
-            and pending_woc.data.get("card_name") == card.name
-        ):
-            # Word of Command is still resolving while the caster chooses a card
-            # from the target's hand; it goes to the graveyard only when
-            # confirm_word_of_command finishes the resolution.
-            pending_woc.data["_spell_card"] = card
-            pending_woc.data["_spell_caster_index"] = caster_index
-            return
-        caster.graveyard.append(card)
-        self.log.append(f"{card.name} resolved and moved to graveyard")
+        def apply_text() -> None:
+            self._apply_spell_text(
+                caster,
+                target,
+                card,
+                target_permanent_index=target_permanent_index,
+                x_value=x_value,
+                new_color=new_color,
+                stack_target=stack_target,
+                mode_index=chosen_mode_index,
+                old_color=old_color,
+                divided_targets=divided_targets,
+            )
+
+        def finish() -> None:
+            self._apply_self_resolved_hook(caster_index, card, target_idx, target_permanent_index)
+            pending_woc = self.pending_choice_of("word_of_command")
+            if (
+                pending_woc is not None
+                and "_spell_card" not in pending_woc.data
+                and pending_woc.data.get("card_name") == card.name
+            ):
+                # Word of Command is still resolving while the caster chooses a
+                # card from the target's hand; it goes to the graveyard only when
+                # confirm_word_of_command finishes the resolution.
+                pending_woc.data["_spell_card"] = card
+                pending_woc.data["_spell_caster_index"] = caster_index
+                return
+            caster.graveyard.append(card)
+            self.log.append(f"{card.name} resolved and moved to graveyard")
+
+        # CR 608.2m puts the card into the graveyard as the *last* part of
+        # resolution, which matters once a spell's effect can stop to ask the
+        # player something: finishing here regardless would bin the card while
+        # its damage was still waiting on an answer. Word of Command already
+        # needed the same care for its own reason, and is the reason `finish`
+        # was a separable step to begin with.
+        run_resumable(self, [apply_text, finish], lambda step: step())
     def _apply_self_enters_battlefield_triggers(
         self,
         controller_index: int,

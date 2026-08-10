@@ -181,6 +181,14 @@ class Game(
     # effect. Popped once the event gets through, so a later contention asks
     # afresh rather than inheriting a stale answer.
     effect_order_answers: dict = field(default_factory=dict)
+    # Set while an event is waiting on a decision, so the loop that was running
+    # it stops instead of carrying on past a step that has not happened. Cleared
+    # when the answer arrives. See engine/resumption.py.
+    effect_suspended: bool = False
+    # What each interrupted loop still owes, innermost last. Empty except while a
+    # decision is outstanding; a leftover entry means a loop recorded a
+    # continuation nobody came back for.
+    resume_stack: list = field(default_factory=list)
     # Seats controlled by a human, set by the web layer each action. Empty in
     # headless/AI play, so forced sacrifices there resolve inline without a prompt.
     interactive_seats: set[int] = field(default_factory=set)

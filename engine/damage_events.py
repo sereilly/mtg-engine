@@ -125,23 +125,18 @@ def deal_damage(game, event: dict, *, restart: Callable[[], Any] | None = None) 
     own consequences — see ``Game._deal_damage_to_player``'s ``then``, which is
     how every damage caller now passes them in.
 
-    **No caller supplies one yet, and the reason is loops.** Re-running a single
-    damage event is only enough when it is the only thing in flight, and damage
-    is usually one of several: a divided Fireball deals to each target in turn,
-    the combat damage step walks its recorded events, and any damage inside a
-    ``sequence`` has instructions queued behind it. Suspend event N of a loop
-    and the answer re-runs event N while N+1 onwards are simply lost — a much
-    worse failure than not asking.
+    Re-running a single damage event is only enough when the work behind it is
+    recorded, because damage is rarely the only thing in flight: a divided
+    Fireball deals to each target in turn, a ``sequence`` has instructions
+    queued behind the one that stopped, and a spell still has CR 608.2m's
+    graveyard move to make. ``engine/resumption.py`` is what records that, and
+    the callers that pass ``asks=True`` are the ones running inside it.
 
-    What that needs is for the *loop* to be the re-runnable unit: somewhere to
-    record how far it got, and a resumption that picks up there. Three places
-    have such a loop (``handlers/control_flow.sequence``, the divided-damage
-    branch of ``handlers/damage.deal_damage``, and
-    ``phases/combat_damage_step``), which is a bounded job and a well-defined
-    one, but it is a different job from this. Until then damage takes the
-    documented default, and
-    ``test_616_1e_a_damage_event_given_a_restart_asks_and_re_runs`` keeps this
-    path honest by exercising it with a restart of its own.
+    **Combat damage does not, yet.** Its step has three nested loops and a tail
+    that owns the step's own completion flags, so making it resumable is a
+    larger restructure than the other two were; it passes neither ``asks`` nor a
+    ``restart``, so it cannot suspend and every seat takes the documented
+    default there.
     """
     if event["amount"] <= 0:
         return DamageOutcome(consumed=False, dealt=0, result=0)
