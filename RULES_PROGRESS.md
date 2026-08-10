@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**208 / 570 tracked rules covered (36%)** — 919 tests, 0 unannotated.
+**214 / 570 tracked rules covered (37%)** — 941 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -79,7 +79,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [610. One-Shot Effects](#610-one-shot-effects) | 2/5 | 40% |
 | [611. Continuous Effects](#611-continuous-effects) | 2/3 | 66% |
 | [612. Text-Changing Effects](#612-text-changing-effects) | 3/10 | 30% |
-| [613. Interaction of Continuous Effects](#613-interaction-of-continuous-effects) | 6/11 | 54% |
+| [613. Interaction of Continuous Effects](#613-interaction-of-continuous-effects) | 7/11 | 63% |
 | [614. Replacement Effects](#614-replacement-effects) | 9/17 | 52% |
 | [615. Prevention Effects](#615-prevention-effects) | 7/13 | 53% |
 | [616. Interaction of Replacement and/or Prevention Effects](#616-interaction-of-replacement-andor-prevention-effects) | 2/2 | 100% |
@@ -89,7 +89,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [703. Turn-Based Actions](#703-turn-based-actions) | 0/4 | 0% |
 | [704. State-Based Actions](#704-state-based-actions) | 4/8 | 50% |
 | [705. Flipping a Coin](#705-flipping-a-coin) | 0/3 | 0% |
-| [707. Copying Objects](#707-copying-objects) | 0/14 | 0% |
+| [707. Copying Objects](#707-copying-objects) | 5/14 | 35% |
 | [800. General](#800-general) | 2/7 | 28% |
 | [802. Attack Multiple Players Option](#802-attack-multiple-players-option) | 4/5 | 80% |
 | [806. Free-for-All Variant](#806-free-for-all-variant) | 0/3 | 0% |
@@ -743,7 +743,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 613. Interaction of Continuous Effects
 
 - [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(46 tests, subrules bcdefg)*
-- [ ] **613.2** Within layer 1, apply effects in a series of sublayers in the order described below. Within each ...
+- [x] **613.2** Within layer 1, apply effects in a series of sublayers in the order described below. Within each ... *(7 tests, subrules ac)*
 - [ ] **613.3** Within layers 2–6, apply effects from characteristic-defining abilities first (see rule 604.3), t...
 - [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(54 tests, subrules abcd)*
 - [x] **613.5** The application of continuous effects as described by the layer system is continually and automat... *(2 tests)*
@@ -880,14 +880,14 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 707. Copying Objects
 
 - [ ] **707.1** Some objects become or turn another object into a “copy” of a spell, permanent, or card. Some eff...
-- [ ] **707.2** When copying an object, the copy acquires the copiable values of the original object’s characteri...
-- [ ] **707.3** The copy’s copiable values become the copied information, as modified by the copy’s status (see r...
-- [ ] **707.4** Some effects cause a permanent that’s copying a permanent to copy a different object while remain...
-- [ ] **707.5** An object that enters the battlefield “as a copy” or “that’s a copy” of another object becomes a ...
+- [x] **707.2** When copying an object, the copy acquires the copiable values of the original object’s characteri... *(13 tests, subrules ab)*
+- [x] **707.3** The copy’s copiable values become the copied information, as modified by the copy’s status (see r... *(2 tests)*
+- [x] **707.4** Some effects cause a permanent that’s copying a permanent to copy a different object while remain... *(2 tests)*
+- [x] **707.5** An object that enters the battlefield “as a copy” or “that’s a copy” of another object becomes a ... *(2 tests)*
 - [ ] **707.6** When copying a permanent, any choices that have been made for that permanent aren’t copied. Inste...
 - [ ] **707.7** If a pair of linked abilities are copied, those abilities will be similarly linked to one another...
 - [ ] **707.8** When copying a melded permanent or other double-faced permanent, use the copiable values of the f...
-- [ ] **707.9** Copy effects may include modifications or exceptions to the copying process.
+- [x] **707.9** Copy effects may include modifications or exceptions to the copying process. *(12 tests, subrules abc)*
 - [ ] **707.10** To copy a spell, activated ability, or triggered ability means to put a copy of it onto the stack...
 - [ ] **707.11** If an effect refers to a permanent by name, the effect still tracks that permanent even if it cha...
 - [ ] **707.12** An effect that instructs a player to cast a copy of an object (and not just copy a spell) follows...

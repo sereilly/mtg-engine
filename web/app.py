@@ -342,7 +342,7 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         ),
         # Name of the creature this permanent is a copy of (Clone / Vesuvan
         # Doppelganger), so the UI can badge the copy.
-        "copied_from": perm.metadata.get("copied_from"),
+        "copied_from": perm.copied_from,
     }
 
 

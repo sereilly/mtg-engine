@@ -73,7 +73,7 @@ class TestVesuvanDoppelganger:
         game.resolve_stack()
 
         assert result.supported
-        copy = next(p for p in p1.battlefield if p.metadata.get("copied_from") == "White Knight")
+        copy = next(p for p in p1.battlefield if p.copied_from == "White Knight")
         assert game._has_keyword(copy, "first strike") is True
 
     def test_copies_flying_keyword(self, cards):
@@ -87,7 +87,7 @@ class TestVesuvanDoppelganger:
         )
         game.resolve_stack()
 
-        copy = next(p for p in p1.battlefield if p.metadata.get("copied_from") == "Mahamoti Djinn")
+        copy = next(p for p in p1.battlefield if p.copied_from == "Mahamoti Djinn")
         assert game._has_keyword(copy, "flying") is True
 
 

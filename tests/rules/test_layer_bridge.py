@@ -13,10 +13,12 @@ answer. The individual cases double as documentation of what each channel is.
 
 from __future__ import annotations
 
+import dataclasses
 import itertools
 
 import pytest
 
+from engine.copies import EXCEPT_COLOR, become_copy
 from engine.land_types import change_land_type
 from engine.layer_bridge import computed_pt
 from engine.models import CardDefinition, Permanent
@@ -300,22 +302,50 @@ def test_a_colour_override_replaces_the_printed_colour():
     assert perm.effective_colors == {"R"}
 
 
-@pytest.mark.cr("613.1e")
-def test_copied_colours_apply_but_an_absent_record_leaves_the_printed_colour():
-    """Clone records the colours it copied; Vesuvan Doppelganger deliberately
-    does not, so its printed blue shows through."""
-    card = CardDefinition(
-        name="Doppelganger", mana_cost="", cmc=0.0, type_line="Creature — Shapeshifter",
+@pytest.mark.cr("613.2c", "707.2a", "707.9c")
+def test_a_copys_colours_are_settled_in_layer_one_not_layer_five():
+    """A copy's colours are a *copiable value*, so they arrive in the seed.
+
+    This test used to assert the opposite — that ``copied_colors`` applied as a
+    layer-5 effect and that an absent record left the printed colour — which is
+    what made Vesuvan Doppelganger's exception unwriteable: "keeps its own
+    colour" and "the copied artifact had no colours to record" were the same
+    state. Under layer 1 the two are different contributions, and both are
+    checked here.
+    """
+    doppelganger = CardDefinition(
+        name="Doppelganger", mana_cost="{3}{U}", cmc=4.0, type_line="Creature — Shapeshifter",
         oracle_text="", colors=("U",), color_identity=("U",), keywords=(), produced_mana=(),
         raw={"name": "Doppelganger", "type_line": "Creature — Shapeshifter",
              "power": "0", "toughness": "0"},
         power="0", toughness="0",
     )
-    perm = Permanent(card=card)
+    perm = Permanent(card=doppelganger)
     assert perm.effective_colors == {"U"}
 
-    perm.metadata["copied_colors"] = ["G"]
-    assert perm.effective_colors == {"G"}
+    green = Permanent(
+        card=dataclasses.replace(_creature("6", "4"), colors=("G",), color_identity=("G",))
+    )
+
+    # Clone: every copiable value, colour included.
+    clone = Permanent(card=doppelganger)
+    become_copy(clone, green)
+    assert clone.effective_colors == {"G"}
+    assert (clone.effective_power, clone.effective_toughness) == (6, 4)
+
+    # Vesuvan Doppelganger: everything except colour (CR 707.9c), so the blue
+    # derived from its own mana cost is retained *by the fold*, positively.
+    vesuvan = Permanent(card=doppelganger)
+    become_copy(vesuvan, green, copies=EXCEPT_COLOR)
+    assert vesuvan.effective_colors == {"U"}
+    assert (vesuvan.effective_power, vesuvan.effective_toughness) == (6, 4)
+
+    # A copy of a colourless object is colourless — not "kept its own colour
+    # because nothing was recorded", which is what the stamped model gave.
+    colourless = Permanent(card=_creature("1", "1"))
+    copy = Permanent(card=doppelganger)
+    become_copy(copy, colourless)
+    assert copy.effective_colors == set()
 
 
 @pytest.mark.cr("613.4")

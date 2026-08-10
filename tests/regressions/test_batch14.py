@@ -166,7 +166,7 @@ class TestCopyArtifactOverlay:
         game = _game(p1, PlayerState(name="P2"))
         result = game.cast_from_hand(0, "Copy Artifact", target_player_index=0, target_permanent_index=0)
         assert result.supported
-        copy = next(p for p in p1.battlefield if p is not sol and p.metadata.get("copied_from") == "Sol Ring")
+        copy = next(p for p in p1.battlefield if p is not sol and p.copied_from == "Sol Ring")
         return game, p1, copy
 
     def test_copy_is_an_overlay_not_a_card_swap(self, cards):

@@ -324,7 +324,7 @@ def test_clone_copies_existing_creature_stats_on_entry(all_cards):
 
     assert result.supported
     clone_perm = next(perm for perm in p1.battlefield if perm.card.name == "Clone")
-    assert clone_perm.metadata.get("copied_from") == "Big Bear"
+    assert clone_perm.copied_from == "Big Bear"
     assert clone_perm.effective_power == 2
     assert clone_perm.effective_toughness == 2
 
@@ -1141,7 +1141,7 @@ def test_vesuvan_doppelganger_copies_creature_on_entry(all_cards):
 
     assert result.supported
     perm = p1.battlefield[0]
-    assert perm.metadata.get("copied_from") == "Serra Angel"
+    assert perm.copied_from == "Serra Angel"
     assert perm.effective_power == 4
     assert perm.effective_toughness == 4
 

@@ -467,3 +467,18 @@ def test_all_permanents_spans_every_battlefield():
     assert {perm.card.name for perm in game.all_permanents()} == {"A", "B"}
     assert {index for index, _ in game.permanents_with_controller()} == {0, 1}
     assert [p.card.name for p in game.permanents_matching(lambda p: p.card.name == "B")] == ["B"]
+
+
+@pytest.mark.cr("613.2a", "613.2c")
+def test_a_layer_one_effect_is_refused_rather_than_silently_dropped():
+    """613.2c: after layer 1 the object's characteristics *are* its copiable
+    values, so layer 1 produces the state this function is handed — it is not
+    something applied over it. ``apply_layers`` starts at layer 2, so a layer-1
+    effect passed in would be dropped without a word, which is the one way a
+    copy could go back to being invisible. Copy effects are recorded in
+    ``engine/copies.py`` and folded into the seed."""
+    stray = ContinuousEffect(
+        layer=1, modify=lambda char: None, applies_to=_everything, label="copy of X",
+    )
+    with pytest.raises(ValueError, match="engine/copies.py"):
+        apply_layers([stray], _state(o1=_creature(2, 2)))

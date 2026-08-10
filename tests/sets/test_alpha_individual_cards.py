@@ -360,7 +360,7 @@ def _assert_supported_effect(card: CardDefinition, game: Game, p1: PlayerState, 
         # A "copy as it enters" permanent takes on the copied object's name (Copy
         # Artifact becomes the artifact it copies), so match by the copy marker.
         if "enter as a copy" in text:
-            assert any(perm.metadata.get("copied_from") for perm in p1.battlefield)
+            assert any(perm.copied_from for perm in p1.battlefield)
         else:
             on_battlefield = any(perm.card.name == card.name for perm in p1.battlefield)
             # A permanent whose own activated cost sacrifices it (Black Lotus)

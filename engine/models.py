@@ -5,9 +5,10 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from . import shields as _shields
-# Safe at module level: text_changes imports only the layer system's timestamp
-# counter, nothing from here. effective_card is read on nearly every rules
-# query, so this is not a function-local import.
+# Safe at module level: copies and text_changes import only the layer system's
+# timestamp counter, nothing from here. effective_card is read on nearly every
+# rules query, so this is not a function-local import.
+from .copies import copiable_card, copied_name
 from .text_changes import apply_text_changes, has_text_changes, text_changes
 
 # Basic land subtype → the mana symbol it taps for. Used when a land's type has
@@ -187,18 +188,6 @@ class Permanent:
         """The CR 615 shields protecting this permanent (``engine/shields.py``)."""
         return _shields.shields_on(self)
 
-    def _base_stat(self, key: str) -> int:
-        """Printed power/toughness as a number, or 0 when it is variable.
-
-        A variable stat ("*", "1+*") is supplied by the characteristic-defining
-        registry (``mixins.permanent_state.DYNAMIC_PT``) writing an
-        ``absolute_power``/``absolute_toughness`` override, which the callers of
-        this method consult first — so returning 0 here is the base case for a
-        CDA, not a claim that the creature is 0/0.
-        """
-        value = self.card.base_power if key == "power" else self.card.base_toughness
-        return value if value is not None else 0
-
     @property
     def effective_produced_mana(self) -> tuple[str, ...]:
         """Mana this permanent produces, honoring a land-type override.
@@ -221,28 +210,44 @@ class Permanent:
         return self.effective_card.produced_mana
 
     @property
+    def copied_from(self) -> str | None:
+        """The name of the object this permanent is currently a copy of.
+
+        Derived from the layer-1 contribution (``engine/copies.py``), not
+        stamped beside it: a permanent that is not a copy has nothing to report,
+        and one that re-copies reports the newest copy without anything having
+        to overwrite an old answer.
+        """
+        return copied_name(self)
+
+    @property
     def effective_card(self) -> "CardDefinition":
         """The card whose printed characteristics this permanent currently has.
 
-        A copy (Clone / Vesuvan Doppelganger) keeps its own ``card`` (so the
-        copier's identity, upkeep re-copy prompt, and name-keyed flows still
-        work) but takes the copied creature's copiable values — including its
-        activated and triggered abilities (CR 707.2). Ability compilation and
-        serialization must read this, not ``card``.
+        **Layers 1 and 3 of CR 613, in that order**, over the printed card.
 
-        CR 613 layer 3 is applied here: a text-changing effect (Sleight of Mind
-        replacing a colour word, Magical Hack replacing a basic land type)
+        Layer 1 (``engine/copies.py``): a copy (Clone / Vesuvan Doppelganger /
+        Copy Artifact) keeps its own ``card`` — so the copier's identity and its
+        zone-change reversion still work — while its *copiable values* are the
+        copied object's (CR 707.2), including its activated and triggered
+        abilities. Ability compilation and serialization must read this, not
+        ``card``.
+
+        Layer 3 (``engine/text_changes.py``): a text-changing effect (Sleight of
+        Mind replacing a colour word, Magical Hack replacing a basic land type)
         rewrites the rules text, the type line and the keywords parsed off them
         *before* anything reads any of it. Applying it at each reader instead is
         how Magnetic Mountain went on blocking blue creatures and Gloom went on
         taxing white spells after their text said red — the remap reached only
         the readers that had been taught about it.
 
-        The changes are recorded, ordered and applied by
-        ``engine/text_changes.py``; two of them do not commute, so the fold is
-        oldest-first rather than a merged substitution table.
+        The order is the rule and not a convenience: layer 1 runs first, so a
+        text change on the *copy* rewrites the copied text, while a text change
+        on the *source* is not copied at all (CR 707.2's last sentence). Two
+        text changes do not commute, so that fold is oldest-first rather than a
+        merged substitution table.
         """
-        base = self.metadata.get("copied_card") or self.card
+        base = copiable_card(self)
         if has_text_changes(self):
             base = apply_text_changes(base, text_changes(self))
 

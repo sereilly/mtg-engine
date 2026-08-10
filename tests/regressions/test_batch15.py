@@ -106,7 +106,7 @@ class TestCopyArtifactIsBothTypes:
         game = _game(p1, p2)
         result = game.cast_from_hand(0, "Copy Artifact", target_player_index=1)
         assert result.supported
-        perm = next(p for p in p1.battlefield if p.metadata.get("copied_from") == "Black Lotus")
+        perm = next(p for p in p1.battlefield if p.copied_from == "Black Lotus")
         return game, p1, p2, perm
 
     def test_copy_has_both_types(self, cards):

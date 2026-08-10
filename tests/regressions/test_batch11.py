@@ -362,7 +362,7 @@ class TestVesuvanDoppelganger:
 
     def test_copy_stays_blue(self, cards):
         game, p1, p2, dop = self._enter_as_copy(cards)
-        assert dop.metadata["copied_from"] == "Craw Wurm"
+        assert dop.copied_from == "Craw Wurm"
         assert dop.effective_power == 6 and dop.effective_toughness == 4
         assert game._effective_colors(dop) == {"U"}
 
@@ -382,7 +382,7 @@ class TestVesuvanDoppelganger:
             optional_choices={"Vesuvan Doppelganger": True},
             trigger_targets={"Vesuvan Doppelganger": (1, 0)},
         )
-        assert dop.metadata["copied_from"] == "Black Knight"
+        assert dop.copied_from == "Black Knight"
         assert dop.effective_power == 2 and dop.effective_toughness == 2
         assert game._effective_colors(dop) == {"U"}
         # The granted ability persists — it offers the prompt again next upkeep.
@@ -391,7 +391,7 @@ class TestVesuvanDoppelganger:
     def test_declined_recopy_keeps_the_current_copy(self, cards):
         game, p1, p2, dop = self._enter_as_copy(cards)
         game.resolve_upkeep(0, optional_choices={"Vesuvan Doppelganger": False})
-        assert dop.metadata["copied_from"] == "Craw Wurm"
+        assert dop.copied_from == "Craw Wurm"
 
     def test_clone_copies_color(self, cards):
         wurm = Permanent(card=cards["Craw Wurm"])
@@ -400,7 +400,7 @@ class TestVesuvanDoppelganger:
         game = _game(p1, p2)
         game.cast_from_hand(0, "Clone", target_player_index=0, target_permanent_index=0)
         clone = p1.battlefield[-1]
-        assert clone.metadata["copied_from"] == "Craw Wurm"
+        assert clone.copied_from == "Craw Wurm"
         assert game._effective_colors(clone) == {"G"}
 
 

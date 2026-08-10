@@ -90,10 +90,10 @@ def apply_damage_to_creature(
 def permanent_effective_colors(perm: Permanent) -> set[str]:
     """The color symbols a permanent currently has.
 
-    Computed through CR 613 layer 5, so colour overrides (the laces) and copied
-    colours (Clone records ``copied_colors``; Vesuvan Doppelganger deliberately
-    doesn't, so its printed blue shows through) are ordinary continuous effects
-    rather than a precedence chain written out by hand.
+    Computed through the layer system, so a colour override (the laces) is an
+    ordinary layer-5 continuous effect rather than a step in a precedence chain
+    written out by hand — and a copy's colours arrive in layer 1 before it, as
+    the copiable value CR 707.2a says they are.
     """
     return perm.effective_colors
 

@@ -108,7 +108,7 @@ class TestClone:
 
         assert result.supported
         clone = next(p for p in p1.battlefield if p.card.name == "Clone")
-        assert clone.metadata.get("copied_from") == "Hill Giant"
+        assert clone.copied_from == "Hill Giant"
         assert (clone.effective_power, clone.effective_toughness) == (3, 3)
 
 

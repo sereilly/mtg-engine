@@ -206,6 +206,19 @@ def apply_layers(effects: Iterable[ContinuousEffect], state: State) -> State:
     """
     pending = list(effects)
 
+    # 613.2c: after layer 1 has been applied, the object's characteristics *are*
+    # its copiable values — so layer 1 is what produces the seed, not something
+    # applied over it. A layer-1 effect handed to this function would be
+    # silently dropped by the loop below, which is the one way a copy could go
+    # back to being invisible; refuse it instead.
+    stray = [e for e in pending if e.layer == LAYER_COPY]
+    if stray:
+        raise ValueError(
+            "layer 1 is applied by seeding, not by apply_layers — record the "
+            "copy through engine/copies.py: "
+            + ", ".join(e.label or "<unlabelled>" for e in stray)
+        )
+
     for layer in (LAYER_CONTROL, LAYER_TEXT, LAYER_TYPE, LAYER_COLOR, LAYER_ABILITY):
         group = [e for e in pending if e.layer == layer]
         if group:

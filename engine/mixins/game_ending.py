@@ -258,7 +258,13 @@ class GameEndingMixin:
 
             # 704.5f: creature with toughness 0 or less → graveyard (regeneration cannot replace)
             def _zero_toughness(perm: Permanent) -> bool:
-                raw_t = str(perm.card.raw.get("toughness", "0"))
+                # ``effective_card``, not ``card``: a copy's printed toughness is
+                # the copied object's (CR 613 layer 1). Reading the copier's own
+                # would call a Clone of a variable-P/T creature "fixed at 0" and
+                # sweep it in the window before the characteristic-defining
+                # ability has been counted — the same printed-vs-effective bug
+                # the animated-Mox sweep had.
+                raw_t = str(perm.effective_card.raw.get("toughness", "0"))
                 has_fixed_toughness = raw_t.lstrip("-").isdigit()
                 has_dynamic_toughness = not has_fixed_toughness and "absolute_toughness" not in perm.metadata
                 # is_creature (CR 613 layer 4), not the printed type line: an

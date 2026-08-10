@@ -1028,7 +1028,10 @@ because `effective_card` is read on nearly every rules query.
 
 **Layers 3, 4, 5, 6 and 7 now all resolve through the layer system.** Remaining:
 layer 1 (copies) and layer 2 (control, already established here as zone
-membership rather than a stored flag). *(Layer 2 is done — see below.)*
+membership rather than a stored flag). *(Both are done — see below. Layer 1 did
+**not** retire `effective_card`, which this section predicted it would; it
+retired the *other* half of it, and the measurement of what is left is in
+"Layer 1: a copy is a value, not five stamps".)*
 
 ### The last card-rewriting effect: Animate Artifact
 
@@ -2886,16 +2889,19 @@ collected into the system and drive the accessors:
 - `Permanent.effective_colors` computes through layer 5, replacing the
   hand-written precedence chain of colour override → copied colours → printed.
 
-Seeding needed care: the engine models a copy by stamping
-`absolute_power`/`absolute_toughness`, which apply in 7b, so the seed must use
-the permanent's *own* printed stats or the copy is counted twice. Likewise
-colours seed from the permanent's own card, because Vesuvan Doppelganger
-deliberately records no copied colours so its printed blue shows through. Both
-were caught by existing tests rather than by inspection.
+Seeding needed care *while copies were stamped*: `absolute_power`/
+`absolute_toughness` apply in 7b, so the seed had to use the permanent's *own*
+printed stats or the copy was counted twice; and colours had to seed from the
+permanent's own card, because Vesuvan Doppelganger recorded no copied colours so
+its printed blue would show through. Both were caught by existing tests rather
+than by inspection — and **both are gone now that layer 1 is real**: every field
+of the seed reads the same `effective_card`, and the exception lives in the copy
+effect instead of in the seam. See "Layer 1: a copy is a value, not five
+stamps" below.
 
 | Layer | Status |
 | --- | --- |
-| 1 copy | constructors only — the engine models copies with metadata overrides |
+| 1 copy | **live** — `engine/copies.py` records the copiable values, `Permanent.effective_card` folds them |
 | 2 control | **live** — `engine/control.py` records the contributions, `Game.controller_index_of` computes through them |
 | 3 text | **live** — `engine/text_changes.py`, applied by `Permanent.effective_card` |
 | 4 type | **live** — `engine/land_types.py` records the CR 305.7 replacements |
@@ -2936,10 +2942,123 @@ first, and there were **172** of them — 165 in `engine/`, 7 in `web/`.
 **Done, in that order.** See "Layer 2: the readers first, then the storage"
 below for what the migration cost and what it found.
 
-Still open is layer 1, the deep one: modelling copies as real copiable values
-instead of stamped `absolute_power`/`copied_colors` overrides. That is what
-would let `effective_card` disappear, and it is the source of the two seeding
-subtleties this phase already tripped over.
+Layer 1 was the last one open — modelling copies as real copiable values
+instead of stamped `absolute_power`/`copied_colors` overrides. It is done; see
+"Layer 1: a copy is a value, not five stamps" below, including the measurement
+that says `effective_card` **stays**, which is not what this paragraph used to
+predict.
+
+### Layer 1: a copy is a value, not five stamps
+
+CR 613.2c is the whole design: after layer 1 has been applied, the object's
+characteristics **are** its copiable values. So layer 1 is not an effect applied
+over a seed — it is what produces the seed, which is why `engine/copies.py`
+answers with a `CardDefinition` and not with a `ContinuousEffect`, and why
+`apply_layers` now *refuses* a layer-1 effect rather than silently dropping it
+(it starts at layer 2).
+
+The stamped model kept a copy's answer in five places — `copied_card`,
+`copied_colors`, `copied_keywords`, `may_recopy_each_upkeep`, and
+`absolute_power`/`absolute_toughness` — and **CR 707.2's boundary was violated
+by four of them.** That rule reads: the copiable values are the printed values
+"as modified by other copy effects … Other effects (including type-changing and
+text-changing effects), status, counters, and stickers are not copied." A stamp
+records an *answer*; the rule asks where the answer came from, which a stamp
+cannot say.
+
+Four live bugs, all of that one shape:
+
+- **`absolute_power` is layer 7b's channel.** A copy read its P/T out of it, so
+  whatever a *non-copy* effect had set on the source came with it. A creature
+  set to base 0/5 was copied as a 0/5.
+- **`copied_card` was the source permanent's own `card`**, which is not its
+  copiable values when the source is itself a copy (CR 707.3). A Clone of a
+  Clone of a Craw Wurm came out a blue 0/0 Shapeshifter *named Clone* — its P/T
+  right by luck, because that came from the stamp, and its name, types, colours
+  and abilities all wrong.
+- **Copy Artifact read the source's `effective_card`**, which already has layer 3
+  folded into it — so a Sleight of Mind on the artifact was copied, which
+  CR 707.2's last sentence forbids.
+- **`copied_colors` was only written when there were colours to write.** So "this
+  effect declines colour" (CR 707.9c) and "the copied object was colourless"
+  were the same absent record, and **Copy Artifact copying a Sol Ring produced a
+  blue Sol Ring.** This is the exact failure the "expressed by omitting a stamp"
+  model guarantees.
+
+`engine/copies.py` records one contribution instead: the copied object's
+copiable values (`copiable_card(source)`, so CR 707.2's "as modified by other
+copy effects" is one call), the set of characteristics this effect *takes*, the
+CR 707.9 modifications it declares, a source and a CR 613.7 timestamp.
+`become_copy` / `end_copy` / `copiable_card`, the same shape as
+`engine/control.py` and `engine/land_types.py`; re-recording from the same
+source replaces rather than appends, which is what Vesuvan's upkeep re-copy
+(CR 707.4) needs and what stops a once-per-upkeep ability growing the fold by an
+entry every turn.
+
+**Vesuvan Doppelganger's exception is named positively.** `copies=EXCEPT_COLOR`
+says the effect takes name, mana cost, types, text and P/T; CR 707.9c's "the
+affected objects instead retain their original values" is then a *rule of the
+fold*. The blue survives for a reason a test can read (`copy_effects(dop)[-1]
+["copies"]`), and — the point — it is now distinguishable from copying something
+colourless. Which exception applies is read off the copier's own printed text
+(`copy_exceptions`), text-keyed like `cast_restrictions.py`, so all three
+templates in the pool ("doesn't copy that creature's color", "it's an
+enchantment in addition to its other types", "and it has …") work for a card
+this engine has never seen.
+
+**`effective_card` stays, and the measurement is why.** This roadmap predicted
+layer 1 would let it disappear. It does not, and it was never going to: layer 1
+is only *half* of what `effective_card` is. Of its **56** call sites in
+`engine/` and `web/`, **38** want the compiled program — the copy's activated
+and triggered abilities and static lines — and **8** want the rules text for a
+text-keyed table; 4 more want the type line as text and 6 another printed field.
+Not one of them is a characteristic the layer system can answer. Retiring it
+needs two things layer 1 does not provide:
+
+1. **Layer 3 rewrites text, and `Characteristics` has no text field.** A text
+   change has to be folded into something card-shaped for the text-keyed tables
+   to read.
+2. **Layer 6 here carries keyword *strings*, not abilities.** `Characteristics.
+   abilities` is a `set[str]` of keywords; a copy's `{T}: deal 1 damage` is not
+   in it. **332 of the pool's 388 cards** carry at least one ability that is not
+   a keyword string, so "get the copy's abilities from layer 6" would mean layer
+   6 holding compiled `OracleProgram` fragments — a much larger change than
+   layer 1, and the actual blocker.
+
+What layer 1 *did* change is what `effective_card` computes: it is now exactly
+"layer 1, then layer 3", stated in that order in its docstring, instead of
+"whatever `copied_card` was stamped with, then layer 3". The fast path is
+intact and measured — no copy and no text change returns `self.card` itself,
+unallocated, at **0.52µs** (0.52µs before). A copy costs 1.19µs and returns a
+*cached* card object, so `compile_card_oracle` still compiles it once.
+
+Also gone with the stamps: `Permanent._base_stat` (its only readers were the
+copy stamps), the `copied_colors` branch of layer 5, the `copied_keywords`
+branch of layer 6 — a copy's keywords are printed abilities of the copied card
+and belong in the seed, where a layer-6 *removal* can take them away rather than
+being outranked by a grant stamped at timestamp 0 — and `copied_from`, which is
+derived from the contribution now (`Permanent.copied_from`) rather than stamped
+beside it.
+
+One reader had to move for a reason worth recording: CR 704.5f's zero-toughness
+sweep asked whether a creature's printed toughness was variable by reading
+`perm.card.raw` — the *copier's* card. Under the stamped model a copy's P/T was
+written at copy time, so a Clone of a Nightmare was never seen mid-flight; under
+layer 1 the characteristic-defining ability supplies it on the next recompute,
+and reading the copier's printed "0" would have swept the copy in between. It
+reads `effective_card` now — the same printed-vs-effective correction the
+animated-Mox sweep needed.
+
+**The guard** is `tests/engine/test_copy_reads.py`, the layer-2 and layer-4
+sibling: the storage key is touched only by the write API, `copiable_card` is
+folded in exactly one place, `become_copy` is called from exactly one, the five
+retired stamp keys are ratcheted out, and `engine/copies.py` may not name a
+layer-7 channel — because a copy that writes `absolute_power` is a copy that
+cannot tell a printed 2/2 from a 2/2 something else set, which is the first bug
+above. Every part was verified by injecting the bug it catches (twelve
+injections, twelve failures), including the two seeding subtleties: reverting
+the colour seed to `perm.card` fails four tests, and making Vesuvan copy colour
+after all fails two.
 
 ### Layer 2: the readers first, then the storage
 

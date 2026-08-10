@@ -1668,7 +1668,7 @@ class TestBlueCards:
 
         assert result.supported
         clone_perm = next(p for p in p1.battlefield if p.card.name == "Clone")
-        assert clone_perm.metadata.get("copied_from") == "Shivan Dragon"
+        assert clone_perm.copied_from == "Shivan Dragon"
 
     def test_control_magic_steals_creature(self, all_cards):
         ctrl = _get(all_cards, "Control Magic")

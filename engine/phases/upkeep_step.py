@@ -13,6 +13,7 @@ dispatches. A new upkeep card is an entry there, never a branch here.
 
 import re
 
+from ..copies import RECOPY_EACH_UPKEEP, grants_ability
 from ..handlers._common import permanent_effective_colors
 from ..land_types import MIRE_COUNTER, end_land_type_change
 from ..models import Permanent
@@ -266,7 +267,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         # upkeep, you may have this creature become a copy of target creature."
         # Carries a creature-target choice alongside the yes/no.
         for perm_index, perm in enumerate(self.players[player_index].battlefield):
-            if not perm.metadata.get("may_recopy_each_upkeep"):
+            if not grants_ability(perm, RECOPY_EACH_UPKEEP):
                 continue
             if perm.card.name in seen:
                 continue
@@ -647,7 +648,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         # player-chosen creature. Declined (or target-less) prompts do nothing;
         # AI/headless runs (optional_choices is None) keep the current copy.
         for perm in list(owner.battlefield):
-            if not perm.metadata.get("may_recopy_each_upkeep"):
+            if not grants_ability(perm, RECOPY_EACH_UPKEEP):
                 continue
             if optional_choices is None or not optional_choices.get(perm.card.name, False):
                 continue
@@ -662,7 +663,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             if source is None:
                 self.log.append(f"{perm.card.name}: no valid creature chosen to copy")
                 continue
-            self._apply_creature_copy(perm, source)
+            self._apply_copy(perm, source)
             self.log.append(f"{perm.card.name} becomes a copy of {source.card.name}")
             self._refresh_dynamic_creatures()
 

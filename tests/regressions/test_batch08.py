@@ -466,7 +466,7 @@ class TestMiscEngineFixes:
         p1 = PlayerState(name="P1", hand=[cards["Copy Artifact"]], battlefield=[sol])
         game = _game(p1, PlayerState(name="P2"))
         game.cast_from_hand(0, "Copy Artifact", target_player_index=0, target_permanent_index=0)
-        copy = next(p for p in p1.battlefield if p is not sol and p.metadata.get("copied_from") == "Sol Ring")
+        copy = next(p for p in p1.battlefield if p is not sol and p.copied_from == "Sol Ring")
         # It copies the artifact's name, abilities and produced mana, and is also an Enchantment.
         assert copy.effective_card.name == "Sol Ring"
         assert "enchantment" in copy.effective_card.type_line.lower()

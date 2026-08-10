@@ -82,15 +82,6 @@ def qualifier_holds(perm: Permanent, qualifier: str) -> bool:
     return _QUALIFIER_HOLDS[qualifier](perm)
 
 
-def _printed(perm: Permanent, key: str) -> int | None:
-    # The permanent's own printed stats, not the copied card's. The engine
-    # models a copy by stamping absolute_power/absolute_toughness, which apply
-    # in 7b and override this seed — so reading the copied card here would
-    # double-count the copy rather than layer over it.
-    card = perm.card
-    return card.base_power if key == "power" else card.base_toughness
-
-
 @lru_cache(maxsize=None)
 def _printed_shape(
     type_line: str, name: str, oracle_text: str, keywords: tuple[str, ...]
@@ -114,7 +105,16 @@ def _printed_shape(
 
 
 def seed_characteristics(perm: Permanent) -> Characteristics:
-    """An object's copiable values — where layer application starts (613.1).
+    """An object's copiable values — where layer application starts (613.2c).
+
+    Every field reads the *same* card: ``effective_card`` is layer 1 (the copy)
+    and then layer 3 (the text change), and CR 613.2c says the result of layer 1
+    **is** the copiable values. While copies were stamped as overrides this
+    function could not do that — colour had to seed from ``perm.card`` so
+    Vesuvan Doppelganger's blue survived, and P/T had to seed from ``perm.card``
+    so the copy's ``absolute_power`` stamp did not get counted twice in 7b. Both
+    of those were the stamped model showing through the seam; layer 1 puts the
+    exception where it belongs, in the copy effect.
 
     ``None`` power/toughness means the printed value is variable ("*"), so a
     characteristic-defining ability in 7a supplies it. That is the distinction
@@ -124,18 +124,13 @@ def seed_characteristics(perm: Permanent) -> Characteristics:
     card_types, subtypes = _printed_shape(
         card.type_line, card.name, card.oracle_text, card.keywords
     )
-    card_types, subtypes = set(card_types), set(subtypes)
     return Characteristics(
-        card_types=card_types,
-        subtypes=subtypes,
-        # Colour comes from the permanent's own card: a copy that takes on its
-        # source's colours records them in `copied_colors`, which applies as a
-        # layer-5 effect. Vesuvan Doppelganger deliberately records none, so its
-        # printed blue shows through.
-        colors=set(perm.card.colors),
+        card_types=set(card_types),
+        subtypes=set(subtypes),
+        colors=set(card.colors),
         abilities=_printed_abilities(card),
-        power=_printed(perm, "power"),
-        toughness=_printed(perm, "toughness"),
+        power=card.base_power,
+        toughness=card.base_toughness,
     )
 
 
@@ -307,13 +302,11 @@ def collect_ability_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]
     only = scope_only(oid)
     effects: list[ContinuousEffect] = []
 
-    # Keywords a copy takes on (Clone, Vesuvan Doppelganger) are part of its
-    # copiable values, so they sort before anything granted afterwards.
-    copied = perm.metadata.get("copied_keywords") or ()
-    if copied:
-        effects.append(
-            grant_abilities(only, [k.lower() for k in copied], timestamp=0, label="copied")
-        )
+    # Nothing here for a copy's keywords: they are part of its copiable values
+    # (CR 707.2a — the abilities are derived from the copied rules text), so
+    # they arrive in the seed with everything else printed, where a layer-6
+    # removal can take them away. Granting them *in layer 6* instead made them
+    # outrank a removal that was recorded earlier.
 
     # Deathtouch is stamped as a flag by the combat code rather than granted
     # through the keyword API; collect it so layer 6 sees it too.
@@ -462,17 +455,18 @@ def computed_controller(perm: Permanent, base_seat: int) -> int:
 
 
 def collect_color_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
-    """Layer 5: colour-changing effects (the laces, "becomes red")."""
-    only = scope_only(oid)
-    meta = perm.metadata
+    """Layer 5: colour-changing effects (the laces, "becomes red").
 
-    override = meta.get("color_override")
-    if override:
-        return [set_colors(only, [override], timestamp=0, label="colour override")]
-    copied = meta.get("copied_colors")
-    if copied is not None:
-        return [set_colors(only, list(copied), timestamp=0, label="copied colours")]
-    return []
+    A copy's colours are *not* here. CR 707.2a derives them from the copied mana
+    cost, which makes them a copiable value settled in layer 1 — and modelling
+    them as a layer-5 effect is what made Vesuvan Doppelganger's exception
+    inexpressible, because "keeps its own colour" then had to mean "no effect was
+    recorded", which is also what a copy of a colourless artifact looked like.
+    """
+    override = perm.metadata.get("color_override")
+    if not override:
+        return []
+    return [set_colors(scope_only(oid), [override], timestamp=0, label="colour override")]
 
 
 def computed_characteristics(perm: Permanent) -> Characteristics:

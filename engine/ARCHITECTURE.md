@@ -39,6 +39,7 @@ directly comparable and can coexist per line. See "Grammar front end" below and
 | `engine/continuous.py` | The CR 613 layer system: layers, sublayers, timestamps, and dependency. Pure — it computes characteristics from effects and never touches game state, so it is tested directly against the rule text. |
 | `engine/layer_bridge.py` | Adapter from the engine's stored channels to `ContinuousEffect`s (layers 6 and 7 today). The seam that lets storage change without touching the rules logic. |
 | `engine/keywords.py` | Single write API for keyword abilities (layer 6): `grant_keyword` / `remove_keyword`, recorded in order with timestamps. Never set a `gains_<keyword>` flag by hand — grants and removals share a layer, so only the recorded order can decide which wins. |
+| `engine/copies.py` | Single write API for copy effects (layer 1, CR 707): `become_copy` records the copied object's *copiable* values, the characteristics this effect takes (`copies=EXCEPT_COLOR` for Vesuvan Doppelganger), CR 707.9's modifications, a source and a timestamp; `copiable_card` folds them. Nothing about a copy is stamped onto the copy — a stamp records an answer, and CR 707.2 is a question about where the answer came from. |
 | `engine/grammar/` | Grammar front end: tokenizer → recursive-descent parser → typed AST → lowering to `OracleInstruction`. Progressively replacing `engine/parsing/`; see "Grammar front end" below. Imports only `oracle_types`. |
 | `engine/parsing/` | Declarative parse rules. Each `@parse_rule(order)` function maps a normalized oracle-text clause to `(OracleInstruction, effect_kind)`. First match in ascending order wins. `engine/parsing/common.py` hosts helpers shared across rules (number words, color-word scans, duration parsing, `parse_target_filter` for "target <noun phrase>" restrictions) — check there before adding a new one-off regex. |
 | `engine/oracle.py` | The compiler: tokenizes oracle text, classifies lines (keyword / triggered / activated / static), delegates effect clauses to `engine.parsing`, and caches one `OracleProgram` per card. |
@@ -186,14 +187,29 @@ the rules logic changing.
 
 | Accessor | Layer |
 | --- | --- |
-| `Permanent.effective_card` | 3 (text-changing) |
+| `Permanent.effective_card` | 1 (copy), then 3 (text-changing) |
+| `Permanent.copied_from` | 1 (copy) |
 | `Permanent.is_creature`, `Permanent.has_type`, `Permanent.basic_land_types` | 4 (type-changing) |
 | `Permanent.effective_colors` | 5 (colour-changing) |
 | `Permanent.has_keyword` | 6 (ability add/remove) |
 | `Permanent.effective_power` / `effective_toughness` | 7a–7d |
 
+**Layer 1 produces the seed rather than applying over it.** CR 613.2c: once
+layer 1 has been applied, the object's characteristics *are* its copiable
+values. So `engine/copies.py` answers with a `CardDefinition` — the copied
+object's copiable values, folded by `copiable_card` and read by
+`effective_card` — and `apply_layers` refuses a layer-1 `ContinuousEffect`
+rather than silently dropping it. A copy effect records what it *takes*
+(`copies=EXCEPT_COLOR` is Vesuvan Doppelganger) plus CR 707.9's modifications,
+so an exception is a named value and not an unwritten stamp. Nothing about a
+copy is stamped onto the copy: P/T, colours, types and abilities are all read
+back through the layers from the recorded contribution, which is what keeps
+CR 707.2's boundary — printed values as modified by *copy* effects, and nothing
+else. `tests/engine/test_copy_reads.py` enforces it.
+
 A printed keyword is part of an object's copiable values, so it is *seeded*
-before layer 1; grants and removals are continuous effects recorded in order by
+by layer 1 rather than granted afterwards; grants and removals are continuous
+effects recorded in order by
 `engine/keywords.py`. A removal can therefore take a printed ability away, and
 a later grant can put it back — CR 613.9's worked example, and neither was
 expressible when the engine stored one `gains_<keyword>` / `loses_<keyword>`

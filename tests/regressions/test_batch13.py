@@ -30,6 +30,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from engine import Game, PlayerState, load_cards
+from engine.copies import become_copy
 from engine.models import CardDefinition, Permanent
 from tests.helpers import _game, _nosick
 from tests.helpers import CARDS_BY_NAME as _C
@@ -329,8 +330,7 @@ class TestCopyGainsAbilities:
         session = store.get(sid)
         tim = Permanent(card=_C["Prodigal Sorcerer"])
         clone = Permanent(card=_C["Clone"])
-        clone.metadata["copied_from"] = "Prodigal Sorcerer"
-        clone.metadata["copied_card"] = _C["Prodigal Sorcerer"]
+        become_copy(clone, tim)
         session.game.players[0].battlefield = [tim, clone]
         state = client.get(f"/api/sessions/{sid}/state", params={"seat": 0}).json()
         serialized = state["players"][0]["battlefield"][1]

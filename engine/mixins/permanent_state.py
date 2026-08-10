@@ -17,6 +17,7 @@ from ..enter_effects import (
     SPEND_WHITE_AS_RED,
 )
 from ..auras import aura_protection_colors, auras_attached_to
+from .. import copies
 from ..keywords import add_derived_grant, clear_derived_grants
 from ..land_animation import (
     LAND_ANIMATION_KIND,
@@ -240,7 +241,7 @@ class PermanentStateMixin:
                     None,
                 )
             if source is not None:
-                self._apply_creature_copy(permanent, source)
+                self._apply_copy(permanent, source)
 
         # copy-as-enter enchantment
         if COPY_ARTIFACT_ON_ENTER in text:
@@ -257,38 +258,14 @@ class PermanentStateMixin:
                     None,
                 )
             if source is not None:
-                # CR 707.2 / 706.10c: become a copy of the artifact (its name, types,
-                # abilities, produced mana) "except it's an enchantment in addition to
-                # its other types." Like the creature copiers (Clone / Vesuvan
-                # Doppelganger) the copy is a runtime overlay: ``permanent.card``
-                # stays Copy Artifact and ``copied_card`` carries the copied
-                # characteristics, so the overlay evaporates when the permanent
-                # changes zones and the card reverts to Copy Artifact.
-                src = source.effective_card
-                src_type = src.type_line
-                new_type = src_type if "enchantment" in src_type.lower() else (src_type + " Enchantment").strip()
-                copied_card = CardDefinition(
-                    name=src.name,
-                    mana_cost=src.mana_cost,
-                    cmc=src.cmc,
-                    type_line=new_type,
-                    oracle_text=src.oracle_text,
-                    colors=src.colors,
-                    color_identity=src.color_identity,
-                    keywords=src.keywords,
-                    produced_mana=src.produced_mana,
-                    raw=dict(src.raw) if isinstance(src.raw, dict) else src.raw,
-                )
-                permanent.metadata["copied_from"] = src.name
-                permanent.metadata["copied_card"] = copied_card
-                if src.keywords:
-                    permanent.metadata["copied_keywords"] = list(src.keywords)
-                if src.colors:
-                    permanent.metadata["copied_colors"] = list(src.colors)
-                if "power" in src.raw and str(src.raw.get("power", "")).isdigit():
-                    permanent.metadata["absolute_power"] = source.effective_power
-                if "toughness" in src.raw and str(src.raw.get("toughness", "")).isdigit():
-                    permanent.metadata["absolute_toughness"] = source.effective_toughness
+                # CR 707.2 with CR 707.9b's exception ("it's an enchantment in
+                # addition to its other types"), recorded as a layer-1
+                # contribution. ``permanent.card`` stays Copy Artifact, so the
+                # copy evaporates when the permanent changes zones; what it
+                # copies is the artifact's *copiable* values, which is why this
+                # no longer reads ``source.effective_card`` — a text change on
+                # the artifact is not copied (CR 707.2's last sentence).
+                self._apply_copy(permanent, source)
 
         if any(instr.kind == "spell_pattern" and instr.value == NO_MAXIMUM_HAND_SIZE for instr in program.instructions) or NO_MAXIMUM_HAND_SIZE in text:
             self.players[caster_index].has_no_max_hand_size = True
@@ -302,49 +279,28 @@ class PermanentStateMixin:
             controller.life -= life_loss
             self.log.append(f"{permanent.card.name}: {controller.name} lost {life_loss} life on entry")
 
-    def _apply_creature_copy(self, permanent: Permanent, source: Permanent) -> None:
-        """Make *permanent* a copy of *source* (CR 707.2): P/T, types/abilities
-        (via ``copied_card``) and printed keywords. Used both when a copier
-        enters (Clone / Vesuvan Doppelganger) and when Vesuvan's upkeep ability
-        re-copies a different creature.
+    def _apply_copy(self, permanent: Permanent, source: Permanent) -> None:
+        """Make *permanent* a copy of *source* — CR 613 layer 1a, recorded by
+        ``engine/copies.py``.
 
-        Color is copied only when the copier's own text doesn't exclude it —
-        Vesuvan's "except it doesn't copy that creature's color" keeps it blue.
+        One entry point for all three copiers, because CR 707.2 is one rule: the
+        copy takes the copied object's *copiable* values, and the exceptions
+        each card prints (Vesuvan Doppelganger's colour, Copy Artifact's added
+        type, Vesuvan's granted re-copy ability) are read off the copier's own
+        text by :func:`engine.copies.copy_exceptions`. Also used when Vesuvan's
+        upkeep ability re-copies a different creature (CR 707.4), which is the
+        same contribution re-recorded with a newer timestamp.
+
+        What is deliberately *not* here: any stamped result. P/T, colours,
+        keywords and types are all read back off the recorded contribution, so
+        a non-copy effect on the source (a +1/+1 counter, an Aura, an animation,
+        a text change, a "base power 0") cannot leak into the copy.
         """
-        copier_text = compile_card_oracle(permanent.card).normalized_text
-        permanent.metadata["copied_from"] = source.card.name
-        # CR 707.2: a copy takes on the copied creature's copiable values —
-        # including its types/subtypes and abilities. Keep the source card so
-        # subtype checks and static abilities (e.g. copying Lord of Atlantis:
-        # the copy is a Merfolk and itself grants islandwalk to other Merfolk)
-        # resolve against the copied creature, not the copier's own card.
-        permanent.metadata["copied_card"] = source.card
-        # Copiable P/T is the PRINTED value (or what the source itself copied) —
-        # never counters, auras or lord buffs on the source (CR 707.2). Static
-        # buffs then re-apply dynamically to the copy based on its own qualities.
-        permanent.metadata["absolute_power"] = int(
-            source.metadata.get("absolute_power", source._base_stat("power"))
+        copies.become_copy(
+            permanent,
+            source,
+            **copies.copy_exceptions(compile_card_oracle(permanent.card).normalized_text),
         )
-        permanent.metadata["absolute_toughness"] = int(
-            source.metadata.get("absolute_toughness", source._base_stat("toughness"))
-        )
-        # CR 707.2 / 711.10: a copy gains the copied creature's printed
-        # keyword abilities (first strike, flying, trample, …). Stamp them
-        # so _has_keyword reports them even though permanent.card is still
-        # the copier's own (Clone / Vesuvan Doppelganger) definition.
-        if source.card.keywords:
-            permanent.metadata["copied_keywords"] = list(source.card.keywords)
-        else:
-            permanent.metadata.pop("copied_keywords", None)
-        if "doesn't copy that creature's color" in copier_text:
-            permanent.metadata.pop("copied_colors", None)
-        else:
-            permanent.metadata["copied_colors"] = list(source.card.colors)
-        # Vesuvan Doppelganger's granted upkeep ability ("you may have this
-        # creature become a copy of target creature ... and it has this
-        # ability") persists across every re-copy.
-        if "become a copy of target creature" in copier_text:
-            permanent.metadata["may_recopy_each_upkeep"] = True
         self._recalculate_lord_buffs()
 
     def _resolve_copy_target(self, permanent: Permanent, primary_type: str) -> Permanent | None:
