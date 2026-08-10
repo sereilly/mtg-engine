@@ -1916,10 +1916,49 @@ replaced away no longer shows up as life lost. Redirecting a whole combat to
 Veteran Bodyguard used to log "took 8 combat damage (life: 28 → 20)" against a
 player whose life never moved.
 
-**Still open in this phase.** CR 616.1 gives the *affected player* the choice
-of which applicable effect to apply; the engine applies a fixed order instead.
-That is now a single documented table rather than a cascade spread across two
-functions, so it is one place to change when there is a UI to ask through.
+**Done — CR 616.1's process, and the split that was blocking it.**
+`engine/effect_ordering.py` implements the rule: gather every effect that
+applies, choose one, apply it, then re-ask the rest against what is now true
+(616.1f). `apply_prevention` runs through it.
+
+The reason this was unimplementable before is worth stating, because it is a
+shape that recurs: **an effect answered "do I apply?" by applying itself.** The
+guard and the work were one function, so there was no way to ask how many
+effects were in contention without running one of them — and running one is
+precisely what 616.1 says you may not do until the player has chosen. Every
+shield now carries an `applies` predicate, and the guard *moved* there rather
+than being copied: the shield body starts after the decision, so the two cannot
+drift into disagreeing. `test_616_1_applicability_is_asked_without_applying_anything`
+pins the other half of that contract — the predicate must be pure, because a
+predicate that consumed a charge would spend shields on effects the player was
+only asked about.
+
+616.1f is a real behaviour change and not just structure: applying one effect
+can change which others apply, and the loop re-gathers instead of walking a list
+decided up front. Forcefield capping 6 damage to 1 and then a 5-point pool
+spending only 1 of itself is the case, and it is now arrived at by re-asking
+rather than by the amount happening to be mutated in place.
+
+**Still open in this phase, and precisely what.** Two things, both named in
+`prevention.py`'s docstring so they are visible where the work would happen:
+
+- **The choice is not asked.** `choose_effect` takes the documented default
+  (lowest order) for every seat. Not because the choice never matters — a
+  Circle of Protection and a prevention pool are both applicable to one damage
+  event, which this card pool reaches easily — but because a damage event
+  cannot suspend: prevention runs inside `_deal_damage_to_player`, which returns
+  an `int` to callers deep in combat and resolution loops. Phase 4 built the
+  prompt machinery this needs; what is missing is a *resumable* damage event.
+  `OrderingTrace.had_a_choice` already records when the question was live, so
+  the prompt has both a seat and a trigger waiting for it.
+- **Replacements are still a separate pass**, so a damage event's replacements
+  and its shields are two contention sets rather than the one CR 616.1
+  describes. Closing it is the same `applies` split applied to
+  `engine/replacements.py` — mechanical now that the pattern exists, but it
+  touches interceptors whose guards are entangled with the values they compute,
+  and the default order has to keep reproducing today's two orders (permanent:
+  replace-then-prevent; player: prevent-then-replace) or the change is not
+  behaviour-preserving.
 
 Prevention and replacement also remain separate pipelines, and the player and
 permanent paths order them oppositely — but that is now a reasoned choice

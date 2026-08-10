@@ -274,16 +274,51 @@ def test_616_1_prevention_order_is_total_and_unambiguous():
     """Which shield is consumed first is a rules-visible decision, so the
     registry must impose one unambiguous order — no two shields may share an
     order, and a collision fails at import rather than as a rare misplay."""
-    orders = [order for order, _ in PREVENTION_EFFECTS]
+    orders = [candidate.order for candidate in PREVENTION_EFFECTS]
     assert orders == sorted(orders)
     assert len(orders) == len(set(orders)), "two prevention effects share an order"
 
     with pytest.raises(ValueError, match="already used"):
-        prevention_effect(orders[0])(lambda game, event: None)
+        prevention_effect(orders[0], applies=lambda game, event: True)(
+            lambda game, event: None
+        )
 
-    assert [order for order, _ in PREVENTION_EFFECTS] == orders, (
+    assert [candidate.order for candidate in PREVENTION_EFFECTS] == orders, (
         "a rejected registration must not be added to the table"
     )
+
+
+@pytest.mark.cr("616.1")
+def test_616_1_applicability_is_asked_without_applying_anything():
+    """The predicate CR 616.1 counts contenders with must not *do* anything.
+    A predicate that consumed its shield would spend charges on effects the
+    player was only asked about and may not have chosen."""
+    player = PlayerState(name="P1", life=20)
+    player.damage_prevention_pool = 3
+    player.color_prevention_shields = ["R"]
+    player.reverse_damage_charges = 1
+    game = Game(players=[player, PlayerState(name="P2")])
+    event = {"recipient": player, "amount": 5, "source": None, "combat": False}
+
+    before = (
+        player.damage_prevention_pool,
+        list(player.color_prevention_shields),
+        player.reverse_damage_charges,
+        player.life,
+    )
+    applicable = [c.key for c in PREVENTION_EFFECTS if c.applies(game, event)]
+    after = (
+        player.damage_prevention_pool,
+        list(player.color_prevention_shields),
+        player.reverse_damage_charges,
+        player.life,
+    )
+
+    assert after == before, "asking which shields apply consumed one"
+    # Two shields are genuinely in contention here, which is the case 616.1 is
+    # about: a numeric pool and a Reverse Damage charge. (The Circle needs a red
+    # source, so it correctly declines an event with no source.)
+    assert len(applicable) >= 2, applicable
 
 
 # ---------------------------------------------------------------------------
