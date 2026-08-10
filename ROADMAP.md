@@ -183,11 +183,27 @@ Baseline: 25.3% of lines parsed, 19.0% lowered, 8.3% executed.
   and after conversion; `tests/engine/test_card_format.py` holds the format,
   layout, variable-P/T, and reprint-identity invariants going forward.
 
-Still open from this phase's original scope: `scripts/retrieve_oracle.py`,
-`run_duel.py`, `simulate_ai_games.py`, `support_report.py`, and
-`tests/helpers.py` still default to LEA-only paths. That is deliberate — they
-are single-set tools by design — but they should take a `--set` argument
-resolved through the manifest rather than a hardcoded filename.
+**Closed later:** the five stragglers this phase left naming
+`cards/LEA_cards.json`. Two had already been fixed by the time anyone came back
+to the entry — `support_report.py` while chasing the Revised experiment, and
+`tests/helpers.py` when the per-set fixtures landed — so the paragraph claiming
+five was two-fifths wrong, which is the ordinary decay rate of a backlog note
+about code. The other three now take **`--set <CODE>` / `--all` / `--cards
+<path>`** through `scripts/set_argument.py`, resolved against the manifest.
+
+The interesting part was not the plumbing but what the default should be.
+`run_duel.py` and `simulate_ai_games.py` really are single-set by design: each
+plays one fixed decklist, so their default is the *code* `LEA` and a set that
+cannot supply the list stops rather than quietly playing a shorter game.
+`retrieve_oracle.py` was not — it was single-set by accident, and a lookup tool
+that could not see four of the five sets answered "Library of Alexandria" with
+Library of Leng's text. It defaults to the whole pool now, which is the same
+call `support_report.py` had already made for the same reason: a report over a
+silently smaller pool is a true answer to a question nobody asked.
+
+Guarded by `tests/engine/test_script_set_argument.py`, which holds the loud
+failure (an unknown code exits naming the codes that exist) and extends the
+tests' no-spelled-out-filenames rule to `scripts/`.
 
 ## Phase 3 — grammar wave 2, first legacy deletions ✅ done
 

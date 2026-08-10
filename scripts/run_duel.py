@@ -5,9 +5,23 @@ import random
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from engine import Game, PlayerState, load_cards
+from set_argument import add_set_argument, resolve_set
+
+# The duel is a fixed script, so it names the cards it plays. Which set supplies
+# them is the argument.
+SAMPLE_DECK = (
+    "Island",
+    "Island",
+    "Island",
+    "Counterspell",
+    "Ancestral Recall",
+    "Lightning Bolt",
+    "Serra Angel",
+)
 
 
 def _card_lookup(cards):
@@ -15,28 +29,33 @@ def _card_lookup(cards):
 
 
 def _sample_library(lookup, seed: int):
-    names = [
-        "Island",
-        "Island",
-        "Island",
-        "Counterspell",
-        "Ancestral Recall",
-        "Lightning Bolt",
-        "Serra Angel",
-    ]
-    cards = [lookup[name] for name in names if name in lookup]
+    cards = [lookup[name] for name in SAMPLE_DECK if name in lookup]
     random.Random(seed).shuffle(cards)
     return cards
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run a short scripted duel simulation")
-    parser.add_argument("--cards", default="cards/LEA_cards.json", help="Path to LEA cards JSON")
+    add_set_argument(parser, default="LEA")
     parser.add_argument("--seed", default=7, type=int, help="Deterministic shuffle seed")
-    args = parser.parse_args()
+    return parser
 
-    cards = load_cards(Path(args.cards))
-    lookup = _card_lookup(cards)
+
+def main() -> int:
+    parser = build_parser()
+    args = parser.parse_args()
+    selection = resolve_set(parser, args)
+
+    lookup = _card_lookup(load_cards(selection.paths))
+    missing = [name for name in dict.fromkeys(SAMPLE_DECK) if name not in lookup]
+    if len(missing) == len(dict.fromkeys(SAMPLE_DECK)):
+        # Every scripted card absent means empty libraries, and an empty duel
+        # prints a log of nothing and a pair of untouched life totals — a run
+        # that looks like a pass. Say so instead.
+        parser.error(
+            f"{selection.label} has none of the scripted duel's cards "
+            f"({', '.join(missing)}), so there is no duel to run"
+        )
 
     p1 = PlayerState(name="Alice", library=_sample_library(lookup, args.seed))
     p2 = PlayerState(name="Bob", library=_sample_library(lookup, args.seed + 1))
@@ -56,6 +75,9 @@ def main() -> int:
     if any(card.name == "Lightning Bolt" for card in p1.hand):
         game.cast_from_hand(0, "Lightning Bolt", target_player_index=1)
 
+    print(f"Set: {selection.label}")
+    if missing:
+        print(f"Not in this set, skipped: {', '.join(missing)}")
     print("Simulation log:")
     for line in game.log:
         print(f"- {line}")

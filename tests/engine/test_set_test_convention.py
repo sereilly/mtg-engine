@@ -72,8 +72,17 @@ def test_conftest_has_no_new_per_set_fixtures():
 def test_no_test_spells_out_a_card_filename():
     """``cards/manifest.json`` is the registry. A hardcoded filename is a second
     list to keep in step, and the one that broke this before was the catalog
-    sweep reading LEA directly — which is why Arabian Nights went unswept."""
-    pattern = re.compile(r"""["'][A-Za-z0-9]+_cards\.json["']""")
+    sweep reading LEA directly — which is why Arabian Nights went unswept.
+
+    A path prefix is allowed between the opening quote and the set code,
+    because the form that actually shipped was a quoted `cards/LEA_cards.json`
+    — path prefix and all — and
+    the pattern used to anchor on the quote sitting immediately before the
+    code — so it matched no path-prefixed spelling, which is to say none of
+    the ones anyone writes. The closing quote must follow ``.json`` directly,
+    which is what keeps prose naming a file (a docstring, a comment recording
+    why the sweep moved) from reading as a second registry."""
+    pattern = re.compile(r"""["'][\w/\\.-]*[A-Za-z0-9]+_cards\.json["']""")
     offenders = [
         f"{path.relative_to(REPO)}:{i}"
         for path in TESTS.rglob("*.py")

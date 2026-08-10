@@ -129,7 +129,8 @@ Invoke-WebRequest -UseBasicParsing -Method Post "http://127.0.0.1:8010/api/sessi
 .\.venv\Scripts\python.exe scripts/run_duel.py
 
 # Card-support coverage report:
-.\.venv\Scripts\python.exe scripts/support_report.py     # -> all categories supported, none unsupported
+.\.venv\Scripts\python.exe scripts/support_report.py     # whole manifest pool -> all categories supported, none unsupported
+.\.venv\Scripts\python.exe scripts/support_report.py --set ARN   # one set, by its code in cards/manifest.json
 ```
 
 ## Test

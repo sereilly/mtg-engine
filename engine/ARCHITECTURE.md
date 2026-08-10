@@ -7,7 +7,7 @@ in a category module; dispatch is data-driven.
 ## Pipeline
 
 ```
-cards/LEA_cards.json (+ any further set JSONs — web/app.py:CARD_PATHS)
+cards/manifest.json → the set JSONs it registers (card_loader.manifest_set_paths)
    │  card_loader.load_cards
    ▼
 CardDefinition (immutable)
@@ -74,9 +74,9 @@ Work top-down; stop at the first step that covers the card.
 
 1. **Already covered?** If the card's oracle text matches existing parse rules
    (run `compile_card_oracle(card)` and check `supported`), nothing to do.
-   `python scripts/support_report.py --cards <set.json>` reports coverage for
-   an entire set at once, and the "creature text too complex" reason now
-   names the specific unrecognized line.
+   `python scripts/support_report.py` reports coverage for the whole manifest
+   pool and `--set <CODE>` for one set, and the "creature text too complex"
+   reason now names the specific unrecognized line.
 2. **New text pattern, existing effect.** Add one `@parse_rule` to the matching
    category module in `engine/parsing/` that returns an existing instruction
    kind. Reuse `engine/parsing/common.py` helpers (number words, color words,

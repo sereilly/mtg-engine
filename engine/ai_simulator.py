@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Sequence
 import random
 
 from .ai_policy import choose_activation_action, choose_cast_action, choose_search_library_index
@@ -44,7 +45,10 @@ def _resolve_pending_choices(game: Game) -> None:
 
 def _find(cards: dict[str, CardDefinition], name: str) -> CardDefinition:
     if name not in cards:
-        raise ValueError(f"Missing required card in LEA data: {name}")
+        # Named the pool "LEA data" back when the path was hardcoded; the pool
+        # is now whichever set the caller chose, and a set that lacks a card
+        # this decklist needs has to say which card rather than which set file.
+        raise ValueError(f"the card pool has no {name!r}, which the simulator's deck needs")
     return cards[name]
 
 
@@ -185,7 +189,12 @@ def _snap(game: Game) -> tuple[PlayerState, PlayerState]:
     return (_clone_player(game.players[0]), _clone_player(game.players[1]))
 
 
-def run_ai_simulation(cards_path: Path, games: int = 10, seed: int = 1337, max_turns: int = 18) -> SimulationReport:
+def run_ai_simulation(
+    cards_path: Path | Sequence[Path],
+    games: int = 10,
+    seed: int = 1337,
+    max_turns: int = 18,
+) -> SimulationReport:
     cards = {card.name: card for card in load_cards(cards_path)}
     report = SimulationReport(games_requested=games, games_completed=0, interaction_count=0)
     rng = random.Random(seed)

@@ -117,27 +117,43 @@ def load_cards(path: Union[str, Path, Sequence[Union[str, Path]]]) -> list[CardD
     ]
 
 
-def manifest_set_path(code: str, manifest_path: str | Path = MANIFEST_PATH) -> Path:
-    """The JSON for one set, by its code (``"ARN"``).
+def manifest_sets(manifest_path: str | Path = MANIFEST_PATH) -> list[dict]:
+    """Every set entry in ``cards/manifest.json``, in printing order.
+
+    The one place the manifest file is read; everything below is a projection of
+    it. An entry carries the set's ``code``, ``name``, ``released`` date and
+    ``file``, so a caller that wants to *name* the set in output — a script
+    reporting which pool it just covered — does not have to open the manifest
+    a second time and risk disagreeing with this one about what ships.
+    """
+    manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+    return list(manifest["sets"])
+
+
+def manifest_set(code: str, manifest_path: str | Path = MANIFEST_PATH) -> dict:
+    """One set's manifest entry, by its code (``"ARN"``).
 
     Raises on an unknown code, naming the ones that exist. A missing set that
     resolved to an empty pool would make every test over it pass vacuously,
     which is the same silent-wrongness the engine refuses everywhere else.
     """
-    manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
-    base = Path(manifest_path).parent
+    entries = manifest_sets(manifest_path)
     wanted = code.strip().upper()
-    for entry in manifest["sets"]:
+    for entry in entries:
         if entry["code"].upper() == wanted:
-            return base / entry["file"]
-    known = ", ".join(entry["code"] for entry in manifest["sets"])
+            return entry
+    known = ", ".join(entry["code"] for entry in entries)
     raise KeyError(f"no set {code!r} in the manifest; it ships {known}")
+
+
+def manifest_set_path(code: str, manifest_path: str | Path = MANIFEST_PATH) -> Path:
+    """The JSON for one set, by its code (``"ARN"``). Raises on an unknown code."""
+    return Path(manifest_path).parent / manifest_set(code, manifest_path)["file"]
 
 
 def manifest_set_codes(manifest_path: str | Path = MANIFEST_PATH) -> list[str]:
     """Every set code the engine ships, in printing order."""
-    manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
-    return [entry["code"] for entry in manifest["sets"]]
+    return [entry["code"] for entry in manifest_sets(manifest_path)]
 
 
 def manifest_set_paths(manifest_path: str | Path = MANIFEST_PATH) -> list[Path]:
@@ -147,9 +163,8 @@ def manifest_set_paths(manifest_path: str | Path = MANIFEST_PATH) -> list[Path]:
     it existed the same ordered list was copy-pasted across the web app, the
     test fixtures, and five scripts, so adding a set meant editing all of them.
     """
-    manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
     base = Path(manifest_path).parent
-    return [base / entry["file"] for entry in manifest["sets"]]
+    return [base / entry["file"] for entry in manifest_sets(manifest_path)]
 
 
 def load_catalog(manifest_path: str | Path = MANIFEST_PATH) -> list[CardDefinition]:

@@ -55,10 +55,18 @@ Then open `http://127.0.0.1:8010/` on the host machine.
 To join from another computer on the same network, open `http://<your-local-ip>:8010/`.
 The app's generated Join URL uses your local IP when accessed via localhost.
 
+## Choosing a set
+
+The scripts below name a set by its **code** in `cards/manifest.json`, never by
+filename: `--set ARN` for one set, `--all` for the whole pool. An unknown code
+exits naming the codes that ship, because a `--set` resolving to an empty pool
+would let every one of these tools report success over nothing.
+
 ## Run Scripted Duel
 
 ```powershell
-.\.venv\Scripts\python.exe scripts/run_duel.py
+.\.venv\Scripts\python.exe scripts/run_duel.py             # Limited Edition Alpha (default)
+.\.venv\Scripts\python.exe scripts/run_duel.py --set 3ED   # any set that has the scripted cards
 ```
 
 ## AI Simulation
@@ -66,14 +74,15 @@ The app's generated Join URL uses your local IP when accessed via localhost.
 AI-vs-AI games are fully deterministic for a given seed (the simulator seeds every RNG the engine uses):
 
 ```powershell
-.\.venv\Scripts\python.exe scripts/simulate_ai_games.py
+.\.venv\Scripts\python.exe scripts/simulate_ai_games.py             # Limited Edition Alpha (default)
+.\.venv\Scripts\python.exe scripts/simulate_ai_games.py --set 2ED
 ```
 
 ## Support Coverage Report
 
 ```powershell
-.\.venv\Scripts\python.exe scripts/support_report.py                                # LEA (default)
-.\.venv\Scripts\python.exe scripts/support_report.py --cards cards/ARN_cards.json   # any set JSON
+.\.venv\Scripts\python.exe scripts/support_report.py               # the whole manifest pool (default)
+.\.venv\Scripts\python.exe scripts/support_report.py --set ARN     # one set, by code
 ```
 
 ## Card Verification

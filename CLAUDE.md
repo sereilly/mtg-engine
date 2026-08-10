@@ -62,9 +62,10 @@ count) is the `SCOPE` dict in that script — widen it as the engine grows.
 python -m uvicorn web.app:app --host 127.0.0.1 --port 8010   # then open http://127.0.0.1:8010/
 
 # Engine scripts
-python scripts/run_duel.py            # scripted deterministic duel, no server
-python scripts/simulate_ai_games.py   # AI-vs-AI batch; deterministic per seed
-python scripts/support_report.py      # per-category card-support coverage
+python scripts/run_duel.py            # scripted deterministic duel, no server (default LEA)
+python scripts/simulate_ai_games.py   # AI-vs-AI batch; deterministic per seed (default LEA)
+python scripts/support_report.py      # per-category card-support coverage (whole pool)
+python scripts/retrieve_oracle.py "Black Lotus"   # oracle text by name (whole pool)
 python scripts/set_progress.py        # regenerate SET_PROGRESS.md (per-set implementation tracker); --refresh re-fetches Scryfall data
 python scripts/rules_progress.py      # regenerate RULES_PROGRESS.md (CR test-coverage tracker); --check fails on unannotated tests
 python scripts/behaviour_classes.py   # regenerate BEHAVIOUR_CLASSES.md (behavioural-equivalence tracker); --check fails on drift, --accept re-snapshots
@@ -74,6 +75,14 @@ python scripts/fetch_vocabulary.py    # re-fetch data/vocabulary/*.json from Scr
 python scripts/ingest_set.py 3ED --fetch   # add a new set: download from Scryfall into the engine's card format
 python scripts/ingest_set.py --all --check # report card-file sizes without writing
 ```
+
+**Naming a set:** every script that runs over a set takes `--set <CODE>` /
+`--all` / `--cards <path>`, resolved through `cards/manifest.json` by
+`scripts/set_argument.py` — never a spelled-out filename, which is a second
+copy of the registry. An unknown code exits naming the codes that ship, because
+a `--set` resolving to an empty pool would let `support_report.py` report
+perfect coverage over zero cards and `simulate_ai_games.py` report a clean run
+it never had. Guarded by `tests/engine/test_script_set_argument.py`.
 
 **Parse coverage:** `scripts/parse_coverage.py` verifies that every sentence of
 every supported card's oracle text is claimed by a known consumer (parse rules,
@@ -291,7 +300,7 @@ buffs, lowest precedence).
 Work top-down, stop at the first step that covers it (recipe in
 `engine/ARCHITECTURE.md`):
 1. Already covered? (`compile_card_oracle(card).supported`) → done.
-   `python scripts/support_report.py --cards <set.json>` reports coverage for
+   `python scripts/support_report.py --set <CODE>` reports coverage for
    a whole set; unsupported creatures now name the specific unrecognized line.
 2. New text, existing effect → add one `@parse_rule` returning an existing kind
    (reuse `engine/parsing/common.py` helpers where they fit).
