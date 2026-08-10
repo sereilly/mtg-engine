@@ -109,6 +109,12 @@ GRAMMAR_CATEGORIES: frozenset[str] = frozenset(
         # front ends read that one table, so agreement is structural rather than
         # a coincidence to be re-checked.
         "static_buffs",
+        # A board-wide static over lands: Kormus Bell's animation, Conversion's
+        # type change. Both arrive through engine/grammar/derived.py, which
+        # hands over the derivation table's own instruction rather than building
+        # one — so "the grammar agrees with the table" is an identity, not a
+        # comparison the differential has to make.
+        "land_statics",
     }
 )
 

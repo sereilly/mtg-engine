@@ -441,6 +441,18 @@ class Discard:
 
 
 @dataclass(frozen=True)
+class Mill:
+    """"Target player mills N cards." (CR 701.13a, Millstone.)
+
+    A zone change like :class:`Draw`, and kept separate from it for the same
+    reason draw and discard are separate: the cards move library-to-graveyard
+    without ever being in a hand, so nothing about drawing describes it.
+    """
+    player: PlayerRef
+    count: Amount = field(default_factory=lambda: Fixed(1))
+
+
+@dataclass(frozen=True)
 class Destroy:
     subject: Recipient
     no_regen: bool = False
@@ -706,7 +718,7 @@ class RawEffect:
 
 Effect = Union[
     DealDamage, Pump, SetBasePT, GainKeyword, LoseKeyword, PutCounter, RemoveCounter,
-    GainLife, LoseLife, Draw, Discard, Destroy, Sacrifice, Exile, Tap, Untap,
+    GainLife, LoseLife, Draw, Discard, Mill, Destroy, Sacrifice, Exile, Tap, Untap,
     TapOrUntap,
     Regenerate, CounterSpell, ReturnToZone, CreateToken, AddMana,
     AddManaForTappedLand, PreventDamage,
@@ -866,6 +878,29 @@ class RegistryLine:
 
 
 @dataclass(frozen=True)
+class DerivedLine:
+    """A line whose instruction a derivation table computes in full.
+
+    "All Swamps are 1/1 black creatures that are still lands." (Kormus Bell),
+    "All Mountains are Plains." (Conversion), Jihad's conditional anthem. Each
+    is a template with parameters, and for each of them one engine module
+    already derives those parameters from the printed sentence and hands the
+    consumer a payload — so a production here would be a second reading of the
+    same text, free to disagree with the first.
+
+    Unlike :class:`RegistryLine` this *does* lower, to exactly the instruction
+    the table produces (``engine/grammar/derived.py`` names the table for each
+    shape). ``table`` labels the node; nothing dispatches on it. ``text`` is the
+    line verbatim, and the lowering re-asks the same pure matcher rather than
+    carrying an instruction through the AST — one function, two callers, nothing
+    to drift.
+    """
+
+    table: str
+    text: str
+
+
+@dataclass(frozen=True)
 class ModalNode:
     choose_count: int
     options: tuple[SpellEffectLine, ...]
@@ -873,7 +908,7 @@ class ModalNode:
 
 AbilityNode = Union[
     SpellEffectLine, TriggeredAbilityNode, ActivatedAbilityNode,
-    StaticAbilityNode, KeywordLine, RegistryLine, ModalNode,
+    StaticAbilityNode, KeywordLine, RegistryLine, DerivedLine, ModalNode,
 ]
 
 
@@ -889,7 +924,7 @@ __all__ = [
     # effects
     "Effect", "DamageRiders", "DealDamage", "Pump", "SetBasePT", "GainKeyword",
     "LoseKeyword", "PutCounter", "RemoveCounter", "GainLife", "LoseLife", "Draw",
-    "Discard", "Destroy", "Sacrifice", "Exile", "Tap", "Untap", "TapOrUntap",
+    "Discard", "Mill", "Destroy", "Sacrifice", "Exile", "Tap", "Untap", "TapOrUntap",
     "Regenerate",
     "BecomeColor", "SacrificeUnlessPay", "LookAtHand", "CantBe", "ChangeText",
     "GainControl",
@@ -901,7 +936,7 @@ __all__ = [
     # abilities
     "AbilityNode", "TriggerEvent", "KeywordInstance", "ActivationRestriction",
     "SpellEffectLine", "TriggeredAbilityNode", "ActivatedAbilityNode",
-    "StaticAbilityNode", "KeywordLine", "RegistryLine", "ModalNode",
+    "StaticAbilityNode", "KeywordLine", "RegistryLine", "DerivedLine", "ModalNode",
 ]
 
 

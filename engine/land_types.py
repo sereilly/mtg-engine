@@ -28,6 +28,9 @@ forever.
 
 from __future__ import annotations
 
+import re
+from dataclasses import dataclass
+from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 
 from .continuous import next_timestamp
@@ -183,9 +186,91 @@ def land_type_changes(perm: Permanent) -> tuple[dict, ...]:
     )
 
 
+# ---------------------------------------------------------------------------
+# The static reading: "All <type>s are <type>s." (Conversion, Blood Moon)
+# ---------------------------------------------------------------------------
+#
+# A derivation table for the same reason engine/land_animation.py is one. The
+# rule this replaces spelled the five basics into a regex of its own and matched
+# with `.search` over the card's whole collapsed text, so "All Deserts are
+# Islands" was unsupported while `_recalculate_derived_land_types` — which reads
+# only the payload — had every line of code it needed, and a sentence saying
+# more than this could match on a fragment.
+#
+# The support gate and the grammar both delegate here, so what is claimed and
+# what is applied are one function.
+
+# The instruction kind a derived static land-type change compiles to.
+STATIC_LAND_TYPE_KIND = "static_land_type_change"
+
+
+@dataclass(frozen=True)
+class StaticLandTypeChange:
+    """Lands of one type are another type while the source is on the battlefield.
+
+    Both types are singular and lowercase, which is the form
+    ``_recalculate_derived_land_types`` compares against a land's type line.
+    """
+
+    from_type: str
+    to_type: str
+
+
+@lru_cache(maxsize=1)
+def _land_types() -> frozenset[str]:
+    # Imported lazily: the grammar package imports engine-level derivation
+    # modules, so a module-level import here would close a cycle.
+    from .grammar import vocabulary
+
+    return vocabulary.LAND_TYPES
+
+
+def _land_subtype(word: str) -> str | None:
+    """The land type *word* names, however it was pluralised.
+
+    The catalog stores singulars and "Plains" is its own plural, so each
+    candidate stem is tried *against the catalog* instead of a shape being
+    assumed — the same reason ``land_animation._land_subtype`` works this way.
+    """
+    land_types = _land_types()
+    for candidate in (word, word[:-1]):
+        if candidate and candidate in land_types:
+            return candidate
+    return None
+
+
+# Anchored at both ends. "All Mountains are 1/1 red creatures that are still
+# lands" is a *different* template (engine/land_animation.py) and must not be
+# read as a type change with its animation clause dropped, so the pattern
+# admits nothing after the second noun.
+_STATIC_TYPE_RE = re.compile(r"^all (?P<from>[a-z'-]+) are (?P<to>[a-z'-]+)$")
+
+
+def static_land_type_change_for(normalized_line: str) -> StaticLandTypeChange | None:
+    """The static land-type change *normalized_line* imposes, or None.
+
+    Takes an already-normalized line (``oracle.normalize_creature_line``), with
+    or without its trailing period.
+    """
+    match = _STATIC_TYPE_RE.match(normalized_line.strip().lower().rstrip("."))
+    if match is None:
+        return None
+    from_type = _land_subtype(match.group("from"))
+    to_type = _land_subtype(match.group("to"))
+    if from_type is None or to_type is None:
+        return None
+    return StaticLandTypeChange(from_type=from_type, to_type=to_type)
+
+
+def static_land_type_change_payload(change: StaticLandTypeChange) -> dict[str, object]:
+    """*change* as an ``OracleInstruction`` payload."""
+    return {"from_type": change.from_type, "to_type": change.to_type}
+
+
 __all__ = [
     "DERIVED_LAND_TYPES", "LAND_TYPE_EFFECTS", "MIRE_COUNTER",
-    "STATIC_SOURCE_TIMESTAMP", "add_derived_land_type", "change_land_type",
-    "clear_derived_land_types", "end_land_type_change", "land_type_changes",
-    "static_source_timestamp",
+    "STATIC_LAND_TYPE_KIND", "STATIC_SOURCE_TIMESTAMP", "StaticLandTypeChange",
+    "add_derived_land_type", "change_land_type", "clear_derived_land_types",
+    "end_land_type_change", "land_type_changes", "static_land_type_change_for",
+    "static_land_type_change_payload", "static_source_timestamp",
 ]

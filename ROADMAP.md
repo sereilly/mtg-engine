@@ -3700,6 +3700,111 @@ in this bucket is four cards whose "expected a subject" line is not their
 blocker — Contract from Below, Drain Life, Gaea's Liege and Siren's Call each
 fail on a line in a *different* backlog reason.
 
+
+---
+
+## Deleting `engine/parsing/`: the last bucket, and where a table already knew
+
+Wave C opened at **66 cards changing, 38 losing support** and closed at **5 and
+1**. Same criterion as before — compile the manifest pool twice, once with
+`parse_primary_instruction` / `parse_static_coeffects` stubbed, and diff each
+card's program — and the same triage question. What was new was a third answer
+to it, sitting between "template" and "one card's text".
+
+### The cheapest tool was the one that writes no grammar at all
+
+Agent D's `RegistryLine` claims a line by asking the code that implements it,
+never by copying its phrases into the parser. Four of this wave's lines had an
+implementing table that produces an **instruction**, which `RegistryLine` cannot
+carry — it lowers to nothing by contract. `engine/grammar/derived.py` is its
+sibling for those: the table matches the line *and* computes the payload, and
+the lowering hands that over unchanged.
+
+| Table | Lines |
+| --- | --- |
+| `engine/land_animation.py` | Kormus Bell, Living Lands |
+| `engine/land_types.py` | Conversion |
+| `engine/lord_buffs.py` | Jihad's conditional anthem |
+
+`static_land_type_change_for` is new; the rule it replaces spelled the five
+basics into a regex of its own and matched with `.search` over the card's whole
+collapsed text, so "All Deserts are Islands" was unsupported while the consumer
+— which reads only the payload — had every line of code it needed. It is now
+derived from `data/vocabulary/land_types.json` and anchored at both ends, and
+`tests/rules/test_land_type_changes.py` pins it with invented cards.
+
+**The ordering is the whole safety argument.** `parse_line` runs every
+production first and consults the tables only after a `GrammarError`, so a table
+can reach nothing a production could read. Left the other way round,
+`lord_buff_for` claims six anthems the static-buff production already owns —
+measured by injecting exactly that swap, which is what
+`test_a_derived_claim_only_ever_reaches_a_line_no_production_reads` reports.
+
+Jihad also showed why these are appended as **co-effects** rather than claimed as
+line instructions. Claiming its anthem as a line makes the compiler's whole-text
+fallback stop running, which silently drops the *other* sentences' reading and
+trips the differential guard on instruction count. `parse_static_coeffects`
+already existed for that exact shape — a continuous static coexisting with a
+clause that claimed the card — so the grammar's derivations join it there, ahead
+of it, with the same de-dupe by kind.
+
+Fastbond needed no instruction at all: `land_play_line` already claims both
+halves of its template, so both are `RegistryLine`s and the `deal_damage` the
+whole-text fallback was inventing for the rider simply goes away.
+
+### Three productions, and one compiler stage that was in the wrong package
+
+- **`<player> mills <n> cards`** (Millstone). Refuses any miller but the target:
+  `mill_target_player` mills `context.target` and reads no player from its
+  payload, so "you mill three cards" would compile cleanly and mill whoever
+  happened to be targeted.
+- **`you may pay {N}. If you do, untap this <permanent>`** on an upkeep trigger
+  (Mana Vault, Brass Man, Island Fish Jasconius). Fused, like every upkeep
+  shape, because the dispatcher is keyed on the (condition, kind) pair.
+  Recognised on the *node*, before `lower_statement` runs — the generic `may`
+  lowering refuses a coloured optional cost, rightly, and Island Fish pays
+  {U}{U}{U}. Paralyze stays a hook: its payer is the enchanted permanent's
+  controller and its object is "the creature", a definite noun phrase with no
+  antecedent in its own clause.
+- **Modal spells moved into `engine/oracle.py`.** Splitting `Choose one —` into
+  bullets is line classification, which the compiler owns; each bullet's effect
+  already went through the grammar. `parse_modal_options` lived in
+  `engine/parsing/__init__.py` purely by history, and with it there the deletion
+  would have taken Blue Elemental Blast, Red Elemental Blast and Healing Salve
+  with it. A modal spell's card-level instruction is its first mode's — the
+  bullets are alternatives, and the whole-text reading of one is a spell that
+  does every mode at once.
+
+### Fifty-one lines went to `card_hooks.CARD_LINE_INSTRUCTIONS`
+
+Generated from each line's own legacy reading rather than transcribed, so the
+"same instruction, same effect_kind" guard was satisfied by construction rather
+than by proofreading. Four of them are earlier refusals finally getting an
+honest home instead of a widened production: Black Lotus's three-mana
+any-colour, Rukh Egg's token name under CR 111.4, Twiddle's `may` on a spell
+path, and Jandor's Saddlebags' filtered untap.
+
+### What remains, and the ratchet that holds it there
+
+`tests/engine/test_legacy_rule_removal.py` is the deletion criterion as a test:
+compile the pool with the legacy rules stubbed, and assert the cards that change
+are exactly two named lists, each entry naming the code involved. One card loses
+support — **Metamorphosis**, refused twice now for the same reason: no handler
+adds player-chosen-colour mana sized by a sacrificed creature's mana value, and
+the legacy rule hands it *Sacrifice's* black-mana instruction.
+
+Four more change shape without losing support, and all four are the same thing:
+the whole-text fallback invented an instruction for a sentence the engine
+implements somewhere else. Fastbond's `deal_damage` (the land-drop path derives
+it), Island Sanctuary's `draw_controller_cards` (the card skips a draw, it does
+not take one), Jihad's `sacrifice_self` (read only through a trigger condition
+no table has), Lich's `player_loses_game` (an instruction on an enchantment's
+mirror, which nothing resolves). Those disappear when the fallback does.
+
+Grammar coverage 75.6% → **77.2% parsed**, 73.3% → **75.3% lowered**, 39.9% →
+**41.4% executed**. 4,350 tests, 388/388 supported, AI simulation unchanged at
+10/10 and 443 interactions.
+
 ---
 
 ## Standing invariants

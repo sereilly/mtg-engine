@@ -10,18 +10,18 @@ Migration tracker for the oracle-text parser rewrite: how much of the card pool 
 | Lowered | That AST mapped onto executable instructions |
 | Executed | Instructions' categories are switched on, so the grammar's output runs |
 
-Categories currently switched on: `combat_restrictions, control, counters, counterspells, damage, destruction, evasion, life, mana, optional, prevention, pump, recolor, regeneration, static_buffs, tapping, text_change, tokens, turns, upkeep, zones`.
+Categories currently switched on: `combat_restrictions, control, counters, counterspells, damage, destruction, evasion, land_statics, life, mana, optional, prevention, pump, recolor, regeneration, static_buffs, tapping, text_change, tokens, turns, upkeep, zones`.
 
 ## Coverage by set
 
 | Set | Cards | Lines | Parsed | Lowered | Executed | Cards executing |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 388 | 76.5% | 74.7% | 40.2% | 146 |
-| LEB | 292 | 389 | 76.6% | 74.8% | 40.4% | 147 |
-| 2ED | 292 | 389 | 76.6% | 74.8% | 40.4% | 147 |
-| ARN | 78 | 108 | 63.0% | 57.4% | 36.1% | 32 |
-| 3ED | 296 | 389 | 76.3% | 73.3% | 39.6% | 144 |
-| **All** | **1248** | **1663** | **75.6%** | **73.3%** | **39.9%** | **616** |
+| LEA | 290 | 388 | 78.1% | 76.5% | 41.5% | 148 |
+| LEB | 292 | 389 | 78.1% | 76.6% | 41.6% | 149 |
+| 2ED | 292 | 389 | 78.1% | 76.6% | 41.6% | 149 |
+| ARN | 78 | 108 | 63.9% | 60.2% | 38.9% | 34 |
+| 3ED | 296 | 389 | 78.1% | 75.8% | 41.6% | 148 |
+| **All** | **1248** | **1663** | **77.2%** | **75.3%** | **41.4%** | **628** |
 
 ## Backlog — failure reasons
 
@@ -29,24 +29,23 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 197 | 65 | expected a subject |  |
-| 91 | 26 | unrecognized effect verb |  |
-| 40 | 21 | unconsumed text |  |
-| 24 | 7 | granted ability in quotes | phase 3 (quoted abilities) |
+| 193 | 64 | expected a subject |  |
+| 74 | 21 | unrecognized effect verb |  |
+| 39 | 20 | unconsumed text |  |
+| 20 | 6 | granted ability in quotes | phase 3 (quoted abilities) |
 | 13 | 2 | modal line | phase 3 (modal production) |
-| 10 | 3 | upkeep triggers are dispatched by fused instruction kind; a decomposed wrapper has no handler |  |
 | 8 | 2 | expected a quantity |  |
 | 7 | 2 | expected a colour after 'becomes' |  |
 | 7 | 4 | expected a keyword ability |  |
 | 7 | 3 | a conditional static bonus is derived by engine/static_bonuses.py |  |
 | 5 | 2 | expected something to destroy |  |
 | 4 | 1 | no lowering for RawEffect |  |
+| 4 | 1 | upkeep triggers are dispatched by fused instruction kind; a decomposed wrapper has no handler |  |
 | 4 | 1 | no handler for non-targeted tap/untap |  |
 | 4 | 1 | expected 'mana' |  |
 | 3 | 1 | only one mana of any colour has a handler; 3 does not |  |
 | 3 | 1 | expected the player whose hand is looked at |  |
 | 3 | 1 | no tap-or-untap handler honours this restriction |  |
-| 2 | 1 | optional colored costs need a real cost-payment prompt |  |
 | 2 | 1 | expected a permanent to put counters on |  |
 | 2 | 1 | back-reference to 'damage_dealt' with no producer in this effect |  |
 | 2 | 1 | expected something to shield |  |
@@ -54,10 +53,11 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | 1 | 1 | expected what to gain control of |  |
 | 1 | 1 | expected a destination zone after 'return' |  |
 | 1 | 1 | counters on a non-source subject |  |
+| 1 | 1 | no handler for doom counters |  |
 
 ## Cards executing through the grammar
 
-616 cards, 663 lines.
+628 cards, 689 lines.
 
 - **Aladdin**
   - `{1}{R}{R}, {T}: Gain control of target artifact for as long as you control this creature.`
@@ -131,6 +131,9 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Target player draws X cards.`
   - `Target player draws X cards.`
   - `Target player draws X cards.`
+- **Brass Man**
+  - `At the beginning of your upkeep, you may pay {1}. If you do, untap this creature.`
+  - `At the beginning of your upkeep, you may pay {1}. If you do, untap this creature.`
 - **Castle**
   - `Untapped creatures you control get +0/+2.`
   - `Untapped creatures you control get +0/+2.`
@@ -185,9 +188,13 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `{3}, {T}: Prevent the next 2 damage that would be dealt to you this turn.`
 - **Conversion**
   - `At the beginning of your upkeep, sacrifice this enchantment unless you pay {W}{W}.`
+  - `All Mountains are Plains.`
   - `At the beginning of your upkeep, sacrifice this enchantment unless you pay {W}{W}.`
+  - `All Mountains are Plains.`
   - `At the beginning of your upkeep, sacrifice this enchantment unless you pay {W}{W}.`
+  - `All Mountains are Plains.`
   - `At the beginning of your upkeep, sacrifice this enchantment unless you pay {W}{W}.`
+  - `All Mountains are Plains.`
 - **Copper Tablet**
   - `At the beginning of each player's upkeep, this artifact deals 1 damage to that player.`
   - `At the beginning of each player's upkeep, this artifact deals 1 damage to that player.`
@@ -430,8 +437,10 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `This creature can't block creatures with power 2 or greater.`
   - `This creature can't block creatures with power 2 or greater.`
 - **Island Fish Jasconius**
+  - `At the beginning of your upkeep, you may pay {U}{U}{U}. If you do, untap this creature.`
   - `This creature can't attack unless defending player controls an Island.`
   - `When you control no Islands, sacrifice this creature.`
+  - `At the beginning of your upkeep, you may pay {U}{U}{U}. If you do, untap this creature.`
   - `This creature can't attack unless defending player controls an Island.`
   - `When you control no Islands, sacrifice this creature.`
 - **Island of Wak-Wak**
@@ -449,6 +458,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `{4}, {T}: Draw a card.`
   - `{4}, {T}: Draw a card.`
   - `{4}, {T}: Draw a card.`
+- **Jihad**
+  - `White creatures get +2/+1 as long as the chosen player controls a nontoken permanent of the chosen color.`
 - **Jump**
   - `Target creature gains flying until end of turn.`
   - `Target creature gains flying until end of turn.`
@@ -467,6 +478,11 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `At the beginning of each end step, put a +1/+1 counter on this creature for each creature that died this turn.`
 - **King Suleiman**
   - `{T}: Destroy target Djinn or Efreet.`
+- **Kormus Bell**
+  - `All Swamps are 1/1 black creatures that are still lands.`
+  - `All Swamps are 1/1 black creatures that are still lands.`
+  - `All Swamps are 1/1 black creatures that are still lands.`
+  - `All Swamps are 1/1 black creatures that are still lands.`
 - **Ley Druid**
   - `{T}: Untap target land.`
   - `{T}: Untap target land.`
@@ -495,6 +511,11 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Lightning Bolt deals 3 damage to any target.`
   - `Lightning Bolt deals 3 damage to any target.`
   - `Lightning Bolt deals 3 damage to any target.`
+- **Living Lands**
+  - `All Forests are 1/1 creatures that are still lands.`
+  - `All Forests are 1/1 creatures that are still lands.`
+  - `All Forests are 1/1 creatures that are still lands.`
+  - `All Forests are 1/1 creatures that are still lands.`
 - **Living Wall**
   - `{1}: Regenerate this creature.`
   - `{1}: Regenerate this creature.`
@@ -521,9 +542,13 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Whenever a player taps a land for mana, that player adds one mana of any type that land produced.`
   - `Whenever a player taps a land for mana, that player adds one mana of any type that land produced.`
 - **Mana Vault**
+  - `At the beginning of your upkeep, you may pay {4}. If you do, untap this artifact.`
   - `{T}: Add {C}{C}{C}.`
+  - `At the beginning of your upkeep, you may pay {4}. If you do, untap this artifact.`
   - `{T}: Add {C}{C}{C}.`
+  - `At the beginning of your upkeep, you may pay {4}. If you do, untap this artifact.`
   - `{T}: Add {C}{C}{C}.`
+  - `At the beginning of your upkeep, you may pay {4}. If you do, untap this artifact.`
   - `{T}: Add {C}{C}{C}.`
 - **Manabarbs**
   - `Whenever a player taps a land for mana, this enchantment deals 1 damage to that player.`
@@ -533,6 +558,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 - **Merchant Ship**
   - `This creature can't attack unless defending player controls an Island.`
   - `When you control no Islands, sacrifice this creature.`
+- **Millstone**
+  - `{2}, {T}: Target player mills two cards.`
 - **Mind Twist**
   - `Target player discards X cards at random.`
   - `Target player discards X cards at random.`
@@ -904,6 +931,10 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `{T}: Target creature gets +1/+1 until end of turn.`
 - **Zombie Master**
   - `Other Zombie creatures have swampwalk. (They can't be blocked as long as defending player controls a Swamp.)`
+  - `Other Zombies have "{B}: Regenerate this permanent."`
   - `Other Zombie creatures have swampwalk. (They can't be blocked as long as defending player controls a Swamp.)`
+  - `Other Zombies have "{B}: Regenerate this permanent."`
   - `Other Zombie creatures have swampwalk. (They can't be blocked as long as defending player controls a Swamp.)`
+  - `Other Zombies have "{B}: Regenerate this permanent."`
   - `Other Zombie creatures have swampwalk. (They can't be blocked as long as defending player controls a Swamp.)`
+  - `Other Zombies have "{B}: Regenerate this permanent."`

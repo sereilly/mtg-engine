@@ -47,7 +47,7 @@ from .combat_restrictions import combat_restriction_for
 from .lord_buffs import LORD_BUFF_KIND, lord_buff_for, lord_buff_payload
 from .static_bonuses import static_bonus_for
 from .grammar import ast as grammar_ast, compile_line as compile_grammar_line
-from .parsing import parse_modal_options, parse_primary_instruction, parse_static_coeffects
+from .parsing import parse_primary_instruction, parse_static_coeffects
 from .parsing.base import activated_kind
 
 __all__ = [
@@ -542,6 +542,11 @@ def _grammar_instruction(
     compiled = compile_grammar_line(line, card_name=card_name)
     if not compiled.usable:
         return None
+    if isinstance(compiled.node, grammar_ast.DerivedLine):
+        # A derivation table's board-wide static is a *co-effect*, collected by
+        # _grammar_static_coeffects after the per-line pass rather than here.
+        # See that function for why the position matters.
+        return None
     if spell_line_only and not isinstance(compiled.node, grammar_ast.SpellEffectLine):
         return None
 
@@ -553,6 +558,35 @@ def _grammar_instruction(
     category = next(iter(sorted(compiled.categories)), "effect")
     effect_kind = activated_kind(activated, _CATEGORY_EFFECT_KINDS.get(category, category))
     return instruction, effect_kind
+
+
+def _grammar_static_coeffects(
+    oracle_text: str, card_name: str | None
+) -> tuple[OracleInstruction, ...]:
+    """Board-wide continuous statics a derivation table reads off one line.
+
+    Kormus Bell's "All Swamps are 1/1 black creatures that are still lands.",
+    Conversion's "All Mountains are Plains.", Jihad's conditional anthem — each
+    derived in full by an engine table (``engine/grammar/derived.py`` names
+    them) and each a *co-effect*: it coexists with whatever else the card says
+    rather than being the effect the card's resolution carries out.
+
+    Collected here, after the per-line pass, for the same reason
+    ``parse_static_coeffects`` is: a card can state one of these alongside a
+    clause that already claimed the card's instruction (Conversion's upkeep
+    cost, Jihad's enter-choice and sacrifice trigger). Claiming it as an
+    ordinary line instruction would *suppress* the whole-card reading of those
+    other sentences, which is a different program, not a better one.
+    """
+    coeffects: list[OracleInstruction] = []
+    for raw_line in oracle_text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        compiled = compile_grammar_line(line, card_name=card_name)
+        if compiled.usable and isinstance(compiled.node, grammar_ast.DerivedLine):
+            coeffects.extend(compiled.instructions)
+    return tuple(coeffects)
 
 
 def _card_hook_instruction(
@@ -614,6 +648,70 @@ def _line_instruction(
     if found is not None:
         return found
     return _card_hook_instruction(line, card_name, spell_line_only=spell_line_only)
+
+
+_CHOOSE_ONE_RE = re.compile(r"choose one\b", re.IGNORECASE)
+
+
+def _normalize_mode_clause(label: str) -> str:
+    """One modal bullet, reduced the way an effect clause is.
+
+    Lowercased, reminder text dropped, whitespace collapsed, trailing stop
+    removed — so a bullet can be handed to the same readers a whole line goes
+    to.
+    """
+    cleaned = _PARENTHETICAL_RE.sub("", label.lower())
+    return _WHITESPACE_RE.sub(" ", cleaned).strip().rstrip(".")
+
+
+def _mode_reading(label: str, card_name: str | None) -> tuple[OracleInstruction, str] | None:
+    """A modal bullet's ``(instruction, effect_kind)``, or None.
+
+    ``effect_kind`` is "spell_pattern" for every bullet the front ends claim,
+    not the grammar's category label. A mode is one alternative of a spell, and
+    the label is what ``SimulationResult`` and the support report bucket the
+    *card* by — so it names the reading's shape, exactly as it did when the
+    legacy registry produced it.
+    """
+    found = _line_instruction(label, card_name)
+    if found is None:
+        return None
+    return found[0], "spell_pattern"
+
+
+def _modal_options(oracle_text: str, card_name: str | None) -> tuple[ModalOption, ...]:
+    """The bullets of a "Choose one —" spell, one :class:`ModalOption` each.
+
+    Splitting the bullets is line classification, which is this module's job;
+    each bullet's *effect* then goes to the same front ends an ordinary line
+    does (:func:`_line_instruction`, then the legacy rules). A mode is supported
+    exactly when its own clause is, which is why a card with one readable mode
+    and one unreadable one still resolves the readable one.
+
+    Modal **activated** abilities never reach here: ``expand_modal_activated_lines``
+    has already rewritten them into one ordinary ability line per bullet, so a
+    bullet arriving here is always one alternative of a spell.
+    """
+    if "•" not in oracle_text or not _CHOOSE_ONE_RE.search(oracle_text):
+        return ()
+
+    # Everything from the first bullet onward is the list of modes; the text
+    # before it ("Choose one —") is just the preamble.
+    _, _, body = oracle_text.partition("•")
+    options: list[ModalOption] = []
+    for raw in body.split("•"):
+        label = _WHITESPACE_RE.sub(" ", raw.strip()).strip()
+        if not label:
+            continue
+        instruction, effect_kind = _prefer_line_reading(
+            _mode_reading(label, card_name),
+            parse_primary_instruction(_normalize_mode_clause(label), activated=False),
+        )
+        # The original casing is kept for the UI's mode picker.
+        options.append(
+            ModalOption(label.rstrip("."), instruction, effect_kind, instruction is not None)
+        )
+    return tuple(options)
 
 
 def _prefer_line_reading(
@@ -1181,15 +1279,35 @@ def _compile_card_oracle(
             triggered_abilities,
             whole_card=primary_type in {"artifact", "enchantment"},
         )
+        # "Choose one —" modal spells: parse each bullet as a selectable mode so
+        # the game can resolve the player's chosen mode rather than always the
+        # first. Built from the original text to keep human-readable labels.
+        modes = _modal_options(oracle_text, name)
+
         if not instructions:
-            primary_instruction, _ = parse_primary_instruction(normalized_text, activated=False)
-            if primary_instruction is not None:
-                instructions.append(primary_instruction)
+            # A modal spell's card-level instruction is its *first* mode's — the
+            # bullets are alternatives, so there is no other honest candidate,
+            # and the stack executes this list when nothing chose a mode. The
+            # whole-text fallback below never sees a bullet: it collapses the
+            # card to one string, where "counter target red spell. destroy
+            # target red permanent" reads as a spell that does both.
+            if modes and modes[0].instruction is not None:
+                instructions.append(modes[0].instruction)
+            else:
+                primary_instruction, _ = parse_primary_instruction(normalized_text, activated=False)
+                if primary_instruction is not None:
+                    instructions.append(primary_instruction)
 
         # Static continuous co-effects (e.g. Conversion's "All Mountains are
         # Plains.") that follow a primary clause already claimed above and that
-        # no line above claimed for itself.
-        for coeffect in parse_static_coeffects(normalized_text):
+        # no line above claimed for itself. The grammar's derivation-table
+        # readings come first, so a card whose static the tables already derive
+        # keeps that reading and the legacy re-read of the same sentence is
+        # dropped by the de-dupe.
+        for coeffect in (
+            *_grammar_static_coeffects(oracle_text, name),
+            *parse_static_coeffects(normalized_text),
+        ):
             if coeffect.kind not in {i.kind for i in instructions}:
                 instructions.append(coeffect)
 
@@ -1221,11 +1339,6 @@ def _compile_card_oracle(
             for pattern in SUPPORTED_SPELL_PATTERNS
             if pattern in normalized_text
         )
-
-        # "Choose one —" modal spells: parse each bullet as a selectable mode so
-        # the game can resolve the player's chosen mode rather than always the
-        # first. Built from the original text to keep human-readable labels.
-        modes = parse_modal_options(oracle_text)
 
         # Only mark as unsupported if all triggered abilities are unsupported
         # and no spell-pattern instructions were already matched (e.g. Howling Mine).

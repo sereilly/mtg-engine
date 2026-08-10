@@ -139,7 +139,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | aura static (oracle_instructions/permanent_state) | 31 |
 | mixin text scan | 31 |
 | activation gate (stack/activation) | 15 |
-| card_hooks bespoke (name-keyed) | 7 |
+| card_hooks bespoke (name-keyed) | 9 |
 | cast_restrictions.py | 5 |
 | untap_restrictions.py | 5 |
 | ante boilerplate (deck construction, not gameplay) | 4 |
@@ -151,7 +151,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | handler ← remove_creature_from_combat | 2 |
 | cost_modifiers.py | 2 |
 | handler ← mark_non_wall_target_to_attack | 2 |
-| handler ← force_active_player_creatures_to_attack | 2 |
 | handler ← reanimate_creature | 1 |
 | phases/draw_step.py (counter damage) | 1 |
 | handler ← balance_resources | 1 |

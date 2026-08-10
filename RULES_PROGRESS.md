@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**214 / 570 tracked rules covered (37%)** — 941 tests, 0 unannotated.
+**214 / 570 tracked rules covered (37%)** — 945 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -440,7 +440,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **305.4** Effects may also allow players to “put” lands onto the battlefield. This isn’t the same as “playi...
 - [ ] **305.5** Land subtypes are always a single word and are listed after a long dash. Land subtypes are also c...
 - [ ] **305.6** The basic land types are Plains, Island, Swamp, Mountain, and Forest. If an object uses the words...
-- [x] **305.7** If an effect sets a land’s subtype to one or more of the basic land types, the land no longer has... *(7 tests)*
+- [x] **305.7** If an effect sets a land’s subtype to one or more of the basic land types, the land no longer has... *(11 tests)*
 - [ ] **305.8** Any land with the supertype “basic” is a basic land. Any land that doesn’t have this supertype is...
 - [ ] **305.9** If an object is both a land and another card type, it can be played only as a land. It can’t be c...
 
@@ -742,7 +742,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 613. Interaction of Continuous Effects
 
-- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(46 tests, subrules bcdefg)*
+- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(48 tests, subrules bcdefg)*
 - [x] **613.2** Within layer 1, apply effects in a series of sublayers in the order described below. Within each ... *(7 tests, subrules ac)*
 - [ ] **613.3** Within layers 2–6, apply effects from characteristic-defining abilities first (see rule 604.3), t...
 - [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(54 tests, subrules abcd)*

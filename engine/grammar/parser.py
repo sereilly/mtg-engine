@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from . import ast
 from .amounts import expect_pt, parse_amount, parse_equal_to
+from .derived import derived_instruction_for_line
 from .errors import GrammarError
 from .lexer import (
     BULLET, DASH, GToken, MANA, PT, PUNCT, QUOTE, SELF, WORD, render, tokenize,
@@ -828,6 +829,19 @@ def _parse_discard(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
     return ast.Discard(player, count, at_random)
 
 
+def _parse_mill(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
+    """``<player> mills <n> cards`` (CR 701.13a).
+
+    The count is an ordinary amount rather than a digit, because the printed
+    template spells small numbers out ("mills two cards") and Magic reprints it
+    with every number there is.
+    """
+    stream.expect_word("mills", "mill")
+    count = parse_amount(stream)
+    stream.expect_word("card", "cards")
+    return ast.Mill(player, count)
+
+
 def _parse_token_keywords(stream: TokenStream) -> tuple[str, ...]:
     """The ``with <keyword>[, <keyword>][ and <keyword>]`` tail of a token spec."""
     keywords: list[str] = []
@@ -1469,6 +1483,8 @@ def _parse_subject_verb(stream: TokenStream) -> ast.Statement:
             return _parse_draw(stream, source_spec)
         if token.text in ("discards", "discard") and isinstance(source_spec, ast.PlayerRef):
             return _parse_discard(stream, source_spec)
+        if token.text in ("mills", "mill") and isinstance(source_spec, ast.PlayerRef):
+            return _parse_mill(stream, source_spec)
         if token.text == "becomes":
             return _parse_become_color(stream, source_spec)
         if token.text in ("can't", "cannot"):
@@ -2159,7 +2175,25 @@ def parse_line(line: str, *, card_name: str | None = None) -> ast.AbilityNode:
     """Parse one oracle-text line into an :class:`AbilityNode`.
 
     Raises :class:`GrammarError` when the line cannot be accounted for in full.
+
+    The derivation tables (``engine/grammar/derived.py``) are consulted **only**
+    once every production has refused the line. That ordering is the whole
+    safety argument for them: a table matching on text is exactly the shape this
+    migration is deleting, so it may only ever reach sentences no production
+    could read, and can never shadow one. ``engine/lord_buffs.py`` would happily
+    claim "Other Goblins get +1/+1" — it never gets the chance, because that
+    line parses.
     """
+    try:
+        return _parse_line(line, card_name=card_name)
+    except GrammarError:
+        derived = derived_instruction_for_line(line)
+        if derived is not None:
+            return ast.DerivedLine(derived[0], line)
+        raise
+
+
+def _parse_line(line: str, *, card_name: str | None = None) -> ast.AbilityNode:
     lexed = tokenize(line, card_name=card_name)
     if not lexed.tokens:
         raise GrammarError("empty line", line=line)

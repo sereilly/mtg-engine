@@ -2790,15 +2790,52 @@ def test_as_long_as_lines_stay_unlowered_and_unusable():
 
 
 def test_an_as_long_as_condition_the_grammar_cannot_model_is_not_claimed():
-    """Jihad's condition ("the chosen player controls a nontoken permanent of
-    the chosen color") is outside the condition vocabulary. Claiming the line
-    anyway would report a card as understood while its whole restriction had
-    been dropped."""
-    assert not compile_line(
+    """The ``as long as`` production still refuses Jihad's condition — it is
+    outside the grammar's condition vocabulary — and what claims the line
+    instead carries the condition rather than dropping it.
+
+    Both halves matter. Claiming the line *without* the condition would report a
+    card as understood while its whole restriction had gone missing, which is
+    what the production refusing prevents. The line is nonetheless accounted
+    for, by ``engine/lord_buffs.py`` through ``engine/grammar/derived.py``: that
+    table is the code ``_recalculate_lord_buffs`` dispatches on, so the
+    condition in the payload is the one the board is evaluated against.
+    """
+    from engine.grammar import ast as grammar_ast
+    from engine.grammar.parser import _parse_static_condition_line
+    from engine.grammar.lexer import tokenize
+    from engine.grammar.stream import TokenStream
+
+    line = (
         "White creatures get +2/+1 as long as the chosen player controls a "
-        "nontoken permanent of the chosen color.",
-        card_name="Jihad",
-    ).parsed
+        "nontoken permanent of the chosen color."
+    )
+    lexed = tokenize(line, card_name="Jihad")
+    assert _parse_static_condition_line(TokenStream(lexed.tokens, line)) is None
+
+    result = compile_line(line, card_name="Jihad")
+    assert isinstance(result.node, grammar_ast.DerivedLine)
+    assert result.node.table == "lord_buffs"
+    assert result.instructions[0].payload["condition"] == "chosen_color_permanent"
+
+
+def test_an_as_long_as_condition_no_table_models_is_refused_outright():
+    """The other half of the same rule: a condition neither the grammar nor
+    ``engine/lord_buffs.CONDITIONS`` models takes the whole line down.
+
+    A near miss on Jihad's own wording, so it is the *condition* being unknown
+    that decides it and nothing else. This is what stops the derivation-table
+    fallback becoming a way to claim any "as long as" sentence: the table
+    refuses an unmodelled condition rather than deriving an unconditional anthem
+    from it.
+    """
+    result = compile_line(
+        "White creatures get +2/+1 as long as the chosen player controls a "
+        "nontoken permanent of the chosen type.",
+        card_name="Test",
+    )
+
+    assert not result.parsed
 
 
 def test_as_long_as_never_claims_a_one_shot_effect():
@@ -3066,3 +3103,115 @@ def test_a_destroy_delayed_to_the_end_step_is_not_claimed():
     )
 
     assert not result.parsed
+
+
+# ---------------------------------------------------------------------------
+# Milling (CR 701.13a)
+# ---------------------------------------------------------------------------
+
+def test_target_player_mills_a_spelled_out_count():
+    assert _instructions("Target player mills two cards.", card_name="Millstone") == [
+        ("mill_target_player", {"amount": 2})
+    ]
+
+
+def test_target_player_mills_one_card():
+    """The singular noun is the same production, not a second rule with a
+    hand-picked precedence — which is what the count being an ordinary amount
+    buys."""
+    assert _instructions("Target player mills a card.", card_name="Test") == [
+        ("mill_target_player", {"amount": 1})
+    ]
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "You mill three cards.",
+        "Each player mills a card.",
+    ],
+)
+def test_a_mill_whose_miller_is_not_the_target_refuses(line):
+    """``mill_target_player`` mills ``context.target`` and reads no player from
+    its payload. Both of these are real printed templates, and both would
+    compile cleanly onto that handler and mill whoever happened to be
+    targeted."""
+    result = compile_line(line, card_name="Test")
+
+    assert result.parsed
+    assert not result.lowered
+    assert result.failure_reason.startswith("mill_target_player mills the chosen target")
+
+
+# ---------------------------------------------------------------------------
+# The pay-to-untap upkeep trigger (Mana Vault, Brass Man, Island Fish Jasconius)
+# ---------------------------------------------------------------------------
+
+def test_upkeep_pay_to_untap_lowers_to_the_fused_kind():
+    """The upkeep dispatcher is keyed on (condition, instruction kind) and this
+    handler implements the whole prompt, so the decomposed `may(pay, untap)` a
+    faithful reading would produce has nowhere to go."""
+    assert _instructions(
+        "At the beginning of your upkeep, you may pay {4}. If you do, untap this artifact.",
+        card_name="Mana Vault",
+    ) == [
+        (
+            "upkeep_pay_to_untap_self",
+            {"mana": {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0, "generic": 4}},
+        )
+    ]
+
+
+def test_upkeep_pay_to_untap_carries_a_coloured_cost():
+    """Island Fish Jasconius pays {U}{U}{U}. The generic ``may`` lowering
+    refuses a coloured optional cost — rightly, since its prompt cannot charge
+    one — so this shape has to be recognized before the statement is lowered,
+    not after."""
+    assert _instructions(
+        "At the beginning of your upkeep, you may pay {U}{U}{U}. If you do, untap this creature.",
+        card_name="Island Fish Jasconius",
+    ) == [
+        (
+            "upkeep_pay_to_untap_self",
+            {"mana": {"W": 0, "U": 3, "B": 0, "R": 0, "G": 0, "C": 0, "generic": 0}},
+        )
+    ]
+
+
+def test_the_pay_to_untap_shape_is_name_agnostic():
+    """One production, not three cards: an invented permanent printed with the
+    same sentence gets the same instruction."""
+    assert _instructions(
+        "At the beginning of your upkeep, you may pay {2}. If you do, untap this enchantment.",
+        card_name="Invented Clock",
+    ) == [
+        (
+            "upkeep_pay_to_untap_self",
+            {"mana": {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0, "generic": 2}},
+        )
+    ]
+
+
+def test_upkeep_pay_to_untap_refuses_a_subject_that_is_not_the_source():
+    """The handler untaps ``ctx.permanent`` and takes no target, so untapping
+    anything else is a different card that would compile onto it."""
+    result = compile_line(
+        "At the beginning of your upkeep, you may pay {4}. If you do, untap target creature.",
+        card_name="Test",
+    )
+
+    assert result.parsed
+    assert not result.lowered
+
+
+def test_a_pay_to_untap_on_another_trigger_is_not_the_fused_kind():
+    """The registry entry is (``upkeep_self``, ``upkeep_pay_to_untap_self``).
+    The same sentence under a different trigger reaches no handler keyed to that
+    pair, so it must not borrow this one's kind — it takes the ordinary
+    decomposed reading, which the triggered-ability resolution path executes."""
+    result = compile_line(
+        "At the beginning of your end step, you may pay {4}. If you do, untap this artifact.",
+        card_name="Test",
+    )
+
+    assert [instruction.kind for instruction in result.instructions] == ["may"]

@@ -140,11 +140,9 @@ def _compile_without_legacy_rules(catalog_by_name) -> dict:
     """
     saved = (
         oracle.parse_primary_instruction,
-        oracle.parse_modal_options,
         oracle.parse_static_coeffects,
     )
     oracle.parse_primary_instruction = lambda text, activated=False: (None, "")
-    oracle.parse_modal_options = lambda text: None
     oracle.parse_static_coeffects = lambda *args, **kwargs: ()
     oracle._compile_card_oracle.cache_clear()
     try:
@@ -155,7 +153,6 @@ def _compile_without_legacy_rules(catalog_by_name) -> dict:
     finally:
         (
             oracle.parse_primary_instruction,
-            oracle.parse_modal_options,
             oracle.parse_static_coeffects,
         ) = saved
         oracle._compile_card_oracle.cache_clear()

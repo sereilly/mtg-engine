@@ -32,8 +32,11 @@ from ..lord_buffs import (
     grantable_keywords,
     lord_buff_payload,
 )
+from ..land_animation import LAND_ANIMATION_KIND
+from ..land_types import STATIC_LAND_TYPE_KIND
 from ..oracle_types import OracleInstruction
 from . import ast
+from .derived import derived_instruction_for_line
 from .errors import LoweringError
 
 # Which migration category each lowered instruction belongs to. The gate in
@@ -63,6 +66,14 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # readings of the same printed sentence answer to different rules
     # (CR 611.2c vs 611.3a). Sharing a switch would tie them together.
     LORD_BUFF_KIND: "static_buffs",
+    # A permanent's board-wide static effect on *lands* (CR 613 layer 4):
+    # Kormus Bell animating every Swamp, Conversion turning every Mountain into
+    # a Plains. Their own category rather than "static_buffs" because the two
+    # answer to different layers and to different consumers —
+    # `_refresh_dynamic_creatures` and `_recalculate_derived_land_types` — so
+    # one switch would tie two migrations together.
+    LAND_ANIMATION_KIND: "land_statics",
+    STATIC_LAND_TYPE_KIND: "land_statics",
     "set_base_pt_target_until_eot": "pump",
     "grant_target_flying_until_eot": "pump",
     "grant_self_flying_until_eot": "pump",
@@ -106,6 +117,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "sacrifice_self": "zones",
     "upkeep_pay_or_sacrifice_enchantment": "upkeep",
     "upkeep_pay_or_sacrifice_self": "upkeep",
+    "upkeep_pay_to_untap_self": "upkeep",
     "discard_target_cards": "zones",
     "discard_x_target_cards": "zones",
     "opponent_discards_random_card_on_damage": "zones",
@@ -131,6 +143,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "tap_or_untap_target": "tapping",
     "draw_target_cards": "zones",
     "draw_controller_cards": "zones",
+    "mill_target_player": "zones",
     "exile_creature_gain_life_equal_to_power": "zones",
     "return_creature_from_graveyard_to_hand": "zones",
     "reanimate_creature": "zones",
@@ -1462,6 +1475,26 @@ def _lower_draw(node: ast.Draw) -> tuple[OracleInstruction, ...]:
     return (OracleInstruction(kind, "", payload),)
 
 
+def _lower_mill(node: ast.Mill) -> tuple[OracleInstruction, ...]:
+    """"Target player mills N cards." (CR 701.13a, Millstone.)
+
+    ``mill_target_player`` mills ``context.target`` and reads no player from its
+    payload, so only a *chosen* player lowers. "You mill three cards" and "each
+    player mills a card" are real templates Magic prints, and both would compile
+    cleanly onto this handler and mill whoever happened to be targeted — so they
+    refuse by name until a handler exists that takes the miller.
+    """
+    if node.player.kind != "target_player":
+        raise LoweringError(
+            "mill_target_player mills the chosen target; no handler mills "
+            f"{node.player.kind!r}",
+            node=node,
+        )
+    payload: dict[str, object] = {"amount": _amount_payload(node.count)}
+    _describe_targets(payload, node.player)
+    return (OracleInstruction("mill_target_player", "", payload),)
+
+
 def _lower_add_mana(node: ast.AddMana) -> tuple[OracleInstruction, ...]:
     """Emit the mana as structured pips rather than clause text.
 
@@ -1827,6 +1860,8 @@ def lower_statement(
         return _lower_tap_or_untap(statement)
     if isinstance(statement, ast.Draw):
         return _lower_draw(statement)
+    if isinstance(statement, ast.Mill):
+        return _lower_mill(statement)
     if isinstance(statement, ast.AddMana):
         return _lower_add_mana(statement)
     if isinstance(statement, ast.AddManaForTappedLand):
@@ -2001,6 +2036,52 @@ def _lower_condition(condition: ast.Condition) -> dict[str, object]:
     raise LoweringError(f"no lowering for condition {type(condition).__name__}", node=condition)
 
 
+def _fused_upkeep_pay_to_untap(
+    node: ast.TriggeredAbilityNode,
+) -> tuple[OracleInstruction, ...] | None:
+    """"At the beginning of your upkeep, you may pay {N}. If you do, untap this
+    <permanent>." (Mana Vault, Basalt Monolith, Brass Man, Island Fish Jasconius.)
+
+    Fused for the reason every upkeep shape is fused: the dispatcher in
+    ``engine/phases/upkeep_effects.py`` is keyed on the (trigger condition,
+    instruction kind) pair, and ``upkeep_pay_to_untap_self``'s handler
+    implements the whole prompt — the pay/decline choice, the affordability
+    check and the untap. A decomposed ``may(pay, untap_self)`` is a truer
+    reading of the sentence and has no handler at all.
+
+    Recognised on the **node**, before ``lower_statement`` runs, because two of
+    the four cards would never reach a post-hoc check: the generic ``may``
+    lowering refuses a coloured optional cost outright (Island Fish Jasconius
+    pays {U}{U}{U}), and the refusal is right for every other card that takes
+    that path. Only the fused kind's own handler knows how to charge one.
+
+    Returns None — not a refusal — for anything that is not exactly this shape,
+    so a near miss ("…untap target creature", "…and you gain 1 life") drops back
+    to the ordinary lowering and is refused there by name.
+    """
+    if node.event.kind != "upkeep_self" or node.intervening_if is not None:
+        return None
+    statement = node.statement
+    if not isinstance(statement, ast.May):
+        return None
+    if statement.action is not None or statement.otherwise is not None:
+        return None
+    if not isinstance(statement.cost, ast.ManaCost) or not _is_you(statement.actor):
+        return None
+    # The consequence is untapping the source and nothing else. `untap_self`'s
+    # handler is not consulted here — the fused handler untaps `ctx.permanent`
+    # directly — so the subject is checked against the source rather than
+    # against what any untap lowering would accept.
+    then = statement.then
+    if not isinstance(then, ast.Untap) or not _is_source(then.subject):
+        return None
+    return (
+        OracleInstruction(
+            "upkeep_pay_to_untap_self", "", {"mana": _full_mana_payload(statement.cost)}
+        ),
+    )
+
+
 def lower_ability(node: ast.AbilityNode) -> tuple[OracleInstruction, ...]:
     """Lower a whole ability line. Keyword and static lines carry no
     instructions of their own — they are recorded by the compiler as keyword or
@@ -2008,6 +2089,9 @@ def lower_ability(node: ast.AbilityNode) -> tuple[OracleInstruction, ...]:
     if isinstance(node, ast.SpellEffectLine):
         return lower_statement(node.statement)
     if isinstance(node, ast.TriggeredAbilityNode):
+        fused = _fused_upkeep_pay_to_untap(node)
+        if fused is not None:
+            return fused
         instructions = lower_statement(node.statement, event=node.event.kind)
         # An upkeep trigger is dispatched by the (condition, instruction kind)
         # pair in engine/phases/upkeep_effects.py, whose handlers are written
@@ -2049,6 +2133,21 @@ def lower_ability(node: ast.AbilityNode) -> tuple[OracleInstruction, ...]:
         # text (see engine/grammar/registries.py). Emitting anything here would
         # duplicate an effect the engine is already applying.
         return ()
+    if isinstance(node, ast.DerivedLine):
+        # The table computed the instruction when it claimed the line; asking it
+        # again is what keeps this a delegation rather than a copy. It cannot
+        # answer differently — every matcher in engine/grammar/derived.py is a
+        # pure function of the text the node carries verbatim — but if the table
+        # is ever narrowed out from under a node, refusing here is the loud
+        # failure rather than an instruction nothing derives.
+        derived = derived_instruction_for_line(node.text)
+        if derived is None:  # pragma: no cover - defensive
+            raise LoweringError(
+                f"engine/grammar/derived.py no longer derives {node.table!r} "
+                "for this line",
+                node=node,
+            )
+        return (derived[1],)
     if isinstance(node, ast.StaticAbilityNode):
         return _lower_static_ability(node)
     raise LoweringError(f"no lowering for {type(node).__name__}", node=node)

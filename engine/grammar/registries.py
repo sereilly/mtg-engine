@@ -32,6 +32,7 @@ from ..cast_restrictions import CAST_RESTRICTIONS
 from ..cost_modifiers import cost_modifier_claims_line
 from ..draw_step_modifiers import draw_step_bonus_for
 from ..enter_effects import enter_effect_line
+from ..land_play_allowance import land_play_line
 from ..replacements import (
     DAMAGE_LIFE_FLOOR_TEXT,
     LIFE_GAIN_TO_DRAW_TEXT,
@@ -141,6 +142,24 @@ def registry_for_line(line: str) -> str | None:
     # the scan those two use.
     if cost_modifier_claims_line(line):
         return "cost_modifiers"
+
+    # engine/land_play_allowance.py — CR 305.2/505.5b extra land plays
+    # (Fastbond), derived from the permanent's own text by the land-drop path in
+    # mixins/turn_management and by the support gate. Both halves of the
+    # template are claimed: the permission clause and the self-damage rider that
+    # may accompany it, which `land_play_allowance_for` reads together into one
+    # allowance. `land_play_line` is the per-line form of that derivation and is
+    # anchored at both ends, so a sentence saying more than either half stays
+    # unclaimed.
+    #
+    # The rider is a "whenever" trigger by wording and *not* one by
+    # implementation: no trigger table matches it, and the damage is dealt by
+    # the land-drop path itself. Claiming it here is what stops the compiler's
+    # whole-text fallback inventing a bare `deal_damage` for the card — an
+    # instruction on the permanent's mirror that nothing reading that mirror
+    # ever dispatches.
+    if land_play_line(line) is not None:
+        return "land_play_allowance"
 
     if any(normalized == phrase + tail for phrase, tail in _REPLACEMENT_LINES):
         return "replacements"

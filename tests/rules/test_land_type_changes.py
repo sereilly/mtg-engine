@@ -19,7 +19,7 @@ import pytest
 from engine import Game, PlayerState
 from engine.card_loader import load_catalog
 from engine.land_types import change_land_type
-from engine.models import Permanent
+from engine.models import CardDefinition, Permanent
 
 
 @pytest.fixture(scope="module")
@@ -241,3 +241,70 @@ def test_611_3_gaeas_liege_leaving_restores_the_aura_type_not_the_printed_one(ca
     game._permanent_to_graveyard(p1, liege)
 
     assert mountain.basic_land_types == ("swamp",)
+
+
+# ---------------------------------------------------------------------------
+# The static reading: "All <type>s are <type>s." (Conversion)
+# ---------------------------------------------------------------------------
+#
+# Derived by engine/land_types.py from the printed sentence, so a card printed
+# with the template needs no code at all. Every property below is pinned with an
+# **invented** card: the rule it replaces spelled the five basics into a regex
+# and matched with `.search` over the card's whole collapsed text, and a test
+# naming only Conversion passes against that.
+
+def _static_card(name: str, oracle_text: str) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="{2}", cmc=2.0, type_line="Enchantment",
+        oracle_text=oracle_text, colors=(), color_identity=(), keywords=(),
+        produced_mana=(), raw={"name": name, "type_line": "Enchantment"},
+    )
+
+
+@pytest.mark.cr("305.7", "613.1d")
+def test_305_7_a_static_type_change_is_keyed_on_the_line_not_the_card_name(catalog):
+    """An invented enchantment with Conversion's template changes the board."""
+    from engine.oracle import compile_card_oracle
+
+    program = compile_card_oracle(_static_card("Inversion", "All Islands are Swamps."))
+    kinds = {instruction.kind: instruction.payload for instruction in program.instructions}
+
+    assert program.supported
+    assert kinds["static_land_type_change"] == {"from_type": "island", "to_type": "swamp"}
+
+
+@pytest.mark.cr("305.7", "613.1d")
+def test_305_7_a_static_type_change_applies_to_the_board(catalog):
+    """End to end through the layer system, not just the payload."""
+    island = Permanent(card=catalog["Island"])
+    p1 = PlayerState(name="P1", battlefield=[
+        Permanent(card=_static_card("Inversion", "All Islands are Swamps."))
+    ])
+    p2 = PlayerState(name="P2", battlefield=[island])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game._recompute_continuous_effects()
+
+    assert island.basic_land_types == ("swamp",)
+
+
+@pytest.mark.cr("305.7")
+def test_305_7_an_animation_clause_is_not_read_as_a_bare_type_change():
+    """"All Swamps are 1/1 black creatures that are still lands" is the *other*
+    template (engine/land_animation.py). Reading it here would drop the body
+    and the colour while reporting the line understood."""
+    from engine.land_types import static_land_type_change_for
+
+    assert static_land_type_change_for(
+        "all swamps are 1/1 black creatures that are still lands"
+    ) is None
+
+
+@pytest.mark.cr("305.7")
+def test_305_7_a_type_the_catalog_does_not_know_refuses():
+    """The land types come from data/vocabulary, not a list of the five basics —
+    so a real subtype outside them works and an invented word does not."""
+    from engine.land_types import static_land_type_change_for
+
+    assert static_land_type_change_for("all deserts are islands") is not None
+    assert static_land_type_change_for("all wombats are islands") is None
