@@ -20,8 +20,8 @@ Categories currently switched on: `combat_restrictions, counters, counterspells,
 | LEB | 292 | 389 | 71.0% | 64.8% | 36.0% | 131 |
 | 2ED | 292 | 389 | 71.0% | 64.8% | 36.0% | 131 |
 | ARN | 78 | 108 | 62.0% | 54.6% | 35.2% | 31 |
-| 3ED | 296 | 389 | 71.2% | 63.5% | 35.2% | 127 |
-| **All** | **1248** | **1663** | **70.4%** | **63.8%** | **35.7%** | **550** |
+| 3ED | 296 | 389 | 71.2% | 63.8% | 35.5% | 128 |
+| **All** | **1248** | **1663** | **70.4%** | **63.9%** | **35.8%** | **551** |
 
 ## Backlog — failure reasons
 
@@ -53,11 +53,11 @@ Categories currently switched on: `combat_restrictions, counters, counterspells,
 | 2 | 1 | expected something to shield |  |
 | 2 | 1 | no untap handler honors this restriction |  |
 | 1 | 1 | expected a destination zone after 'return' |  |
-| 1 | 1 | this handler reads creature-or-any, not a type |  |
+| 1 | 1 | counters on a non-source subject |  |
 
 ## Cards executing through the grammar
 
-550 cards, 594 lines.
+551 cards, 595 lines.
 
 - **Aladdin's Ring**
   - `{8}, {T}: This artifact deals 4 damage to any target.`
@@ -575,6 +575,8 @@ Categories currently switched on: `combat_restrictions, counters, counterspells,
   - `Return target creature card from your graveyard to your hand.`
   - `Return target creature card from your graveyard to your hand.`
   - `Return target creature card from your graveyard to your hand.`
+- **Reconstruction**
+  - `Return target artifact card from your graveyard to your hand.`
 - **Red Elemental Blast**
   - `• Counter target blue spell.`
   - `• Destroy target blue permanent.`

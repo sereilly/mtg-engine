@@ -34,21 +34,21 @@ def test_every_supported_card_text_is_claimed_or_acknowledged():
     unclaimed, stale_ack, new_probe, stale_probe = pc.collect_findings(coverages)
 
     assert not unclaimed, (
-        "supported cards with oracle text nothing parses or claims — fix the "
+        "[UNCLAIMED] supported cards with oracle text nothing parses or claims — fix the "
         "parser, add the implementing channel to CHANNELS, or acknowledge the "
         f"simplification in ACKNOWLEDGED: {unclaimed}"
     )
     assert not stale_ack, (
-        f"ACKNOWLEDGED entries that no longer occur — remove them: {stale_ack}"
+        f"[STALE-ACK] ACKNOWLEDGED entries that no longer occur — remove them: {stale_ack}"
     )
     assert not new_probe, (
-        "a parse rule matched these clauses while ignoring words it used to "
+        "[PROBE] a parse rule matched these clauses while ignoring words it used to "
         "consume (or the clause is new) — review for silently-dropped riders, "
         "then fix the rule or run scripts/parse_coverage.py --accept-probe: "
         f"{dict(list(new_probe.items())[:5])}"
     )
     assert not stale_probe, (
-        "probe-baseline entries that no longer occur — rerun "
+        "[STALE-PROBE] probe-baseline entries that no longer occur — rerun "
         f"scripts/parse_coverage.py --accept-probe: {stale_probe[:5]}"
     )
 

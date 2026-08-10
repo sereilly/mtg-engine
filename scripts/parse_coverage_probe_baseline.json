@@ -897,6 +897,14 @@
   ]
  },
  {
+  "card": "Reconstruction",
+  "clause": "return target artifact card from your graveyard to your hand",
+  "ignored": [
+   "return",
+   "target"
+  ]
+ },
+ {
   "card": "Regrowth",
   "clause": "return target card from your graveyard to your hand",
   "ignored": [
@@ -924,6 +932,18 @@
    "source",
    "choice",
    "way"
+  ]
+ },
+ {
+  "card": "Rocket Launcher",
+  "clause": "this artifact deals 1 damage to any target. destroy this artifact at the beginning of the next end step. activate only if you've controlled this artifact continuously since the beginning of your most recent turn",
+  "ignored": [
+   "activate",
+   "only",
+   "if",
+   "you've",
+   "controlled",
+   "artifact"
   ]
  },
  {
@@ -967,6 +987,13 @@
   ]
  },
  {
+  "card": "Shatterstorm",
+  "clause": "destroy all artifacts. they can't be regenerated",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Simulacrum",
   "clause": "simulacrum deals damage to target creature you control equal to the damage dealt to you this turn",
   "ignored": [
@@ -979,6 +1006,20 @@
   "ignored": [
    "with",
    "another"
+  ]
+ },
+ {
+  "card": "The Rack",
+  "clause": "this artifact deals x damage to that player, where x is 3 minus the number of cards in their hand",
+  "ignored": [
+   "artifact",
+   "deals",
+   "x",
+   "damage",
+   "player,",
+   "where",
+   "x",
+   "3"
   ]
  },
  {

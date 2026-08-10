@@ -1340,6 +1340,29 @@ number is not "how many cards are left" but "how much smaller is each round",
 and it is: 6, 3, 3, with the last two rounds costing riders and windows rather
 than architecture.
 
+### Revised is in: 388 cards, 388 supported
+
+The fifth set landed. 306 cards ingested, 296 deduping onto existing ones by
+`oracle_id`; the pool went 369 → **388 unique, 388 supported, 0 unsupported**.
+
+It cost, in rounds: **6 cards → 3 → 3 → 1 → 0**, plus one seam (board-wide
+statics reaching the layer bridge), two engine features (a continuous effect
+that outlives its source; a step-scoped activation window open to any player),
+and four pool-shaped tests generalised. The later rounds bought riders and
+timing vocabulary rather than architecture — which is the shape you want, since
+delayed one-shots and step windows recur in every set after this one.
+
+The last obstacle was not a card. Four new parse rules tripped the deletion
+probe, and it took three turns to see why: **the probe's output and the
+unclaimed-sentence output are both `(card, sentence)` pairs**, so a
+payload-only reading of the failure pointed at the wrong assertion entirely.
+The findings, once actually read, were benign — filler words in long phrases,
+with the distinguishing words retained — and the baseline was re-accepted after
+review, which is what the probe is for.
+
+The durable fix is in the test: the four assertions are tagged `[UNCLAIMED]`,
+`[STALE-ACK]`, `[PROBE]` and `[STALE-PROBE]`, so the failure names itself.
+
 ### The static-ability cluster, and why it is a phase-6 job
 
 20 of the remaining lines fail with "static abilities need the CR 613 layers

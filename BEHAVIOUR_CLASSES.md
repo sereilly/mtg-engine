@@ -4,8 +4,8 @@ Cards the engine resolves through the same code paths, differing only in values 
 
 A card whose class contains a **verified** card needs no separate manual pass: it exercises no engine path that card didn't. This is weaker than checking the card — it inherits its peer's correctness, and cannot catch a card whose data breaks a generic path.
 
-- Cards in the catalog: **369**
-- Distinct behaviours: **322**
+- Cards in the catalog: **388**
+- Distinct behaviours: **341**
 - Cards sharing a behaviour with another: **65** in **18** classes
 - Unverified cards covered by a verified peer: **0**
 

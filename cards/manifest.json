@@ -24,6 +24,12 @@
       "name": "Arabian Nights",
       "released": "1993-12-17",
       "file": "ARN_cards.json"
+    },
+    {
+      "code": "3ED",
+      "name": "Revised Edition",
+      "released": "1994-04-11",
+      "file": "3ED_cards.json"
     }
   ]
 }

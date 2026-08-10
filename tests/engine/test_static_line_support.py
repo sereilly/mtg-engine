@@ -76,6 +76,9 @@ IMPLEMENTED_ELSEWHERE: dict[str, str] = {
         "phases/combat_damage_step.py (Veteran Bodyguard)",
     "other ":
         "mixins/effects.py:_recalculate_lord_buffs (Zombie Master and the lords)",
+    "as this creature enters, it becomes your choice of":
+        "enter_effects.choosable_bodies, applied by "
+        "permanent_state._apply_chosen_body (Primal Clay)",
     "protection from ":
         "handlers/_common.py protection checks",
 }

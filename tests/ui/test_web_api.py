@@ -2829,7 +2829,10 @@ def test_catalog_lists_every_set_a_card_was_printed_in():
     # filtered set's version, and the Alpha printing matches the entry's own.
     images = [s["image_uri"] for s in bolt["sets"]]
     assert all(images)
-    assert len(set(images)) == 3
+    # One distinct image per printing, however many printings there are —
+    # pinning the count made this fail on the first ingested set rather than on
+    # a printing that lost its art, which is what it means to check.
+    assert len(set(images)) == len(expected)
     assert images[0] == bolt["image_uri"]
 
     # Filtering by membership yields the full set, not just the delta: Beta and
