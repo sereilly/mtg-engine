@@ -600,6 +600,14 @@ def _is_supported_static_creature_line(line: str) -> bool:
     # (loud) instead.
     if combat_restriction_for(normalized) is not None:
         return True
+    # "As this creature enters, it becomes your choice of <body>, …"
+    # (Primal Clay). Carried out by _initialize_permanent_state, which reads the
+    # bodies from this same parser — so what is claimed here and what is applied
+    # cannot describe different cards.
+    from .enter_effects import choosable_bodies
+
+    if choosable_bodies(normalized):
+        return True
     static_patterns = (
         "this creature enters with seven +1/+0 counters on it",
         "this creature enters with x +1/+1 counters on it",

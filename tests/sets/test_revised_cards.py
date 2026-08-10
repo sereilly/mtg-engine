@@ -308,3 +308,76 @@ def test_energy_flux_grant_ends_when_it_leaves(catalog):
     game._refresh_dynamic_creatures()
 
     assert game.get_upkeep_pay_triggers(0) == []
+
+
+# ---------------------------------------------------------------------------
+# Primal Clay — enters as one of three bodies
+# ---------------------------------------------------------------------------
+
+def _clay(catalog):
+    return dataclasses.replace(
+        catalog["Grizzly Bears"], name="Primal Clay", mana_cost="{4}", cmc=4.0,
+        type_line="Artifact Creature — Shapeshifter",
+        oracle_text=(
+            "As this creature enters, it becomes your choice of a 3/3 artifact "
+            "creature, a 2/2 artifact creature with flying, or a 1/6 Wall "
+            "artifact creature with defender in addition to its other types."
+        ),
+        raw={"name": "Primal Clay", "type_line": "Artifact Creature — Shapeshifter",
+             "power": "*", "toughness": "*"},
+    )
+
+
+def test_primal_clay_bodies_are_parsed_from_the_text(catalog):
+    """A template, not a card: any "your choice of <body>, <body>, or <body>"
+    creature reads the same way."""
+    from engine.enter_effects import choosable_bodies
+
+    assert choosable_bodies(_clay(catalog).oracle_text) == (
+        {"power": 3, "toughness": 3, "keyword": ""},
+        {"power": 2, "toughness": 2, "keyword": "flying"},
+        {"power": 1, "toughness": 6, "keyword": "defender"},
+    )
+
+
+def test_primal_clay_enters_as_the_first_body_by_default(catalog):
+    """Headless and AI play must never block on the choice. The default is the
+    first body *printed*, not the strongest — picking "best" would be the engine
+    deciding strategy, and in a different order from the prompt."""
+    card = _clay(catalog)
+    assert compile_card_oracle(card).supported
+
+    player = PlayerState(name="P1", hand=[card])
+    game = Game(players=[player, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.cast_from_hand(0, "Primal Clay")
+    clay = player.battlefield[0]
+
+    assert (clay.effective_power, clay.effective_toughness) == (3, 3)
+    # The card's *text* names flying and defender, so a keyword scan over the
+    # oracle text grants them; a body that does not have them must not keep them.
+    assert game._has_keyword(clay, "flying") is False
+    assert game._has_keyword(clay, "defender") is False
+
+
+@pytest.mark.parametrize(
+    "option,expected",
+    [(0, (3, 3, False, False)), (1, (2, 2, True, False)), (2, (1, 6, False, True))],
+)
+def test_primal_clay_choice_replaces_the_body(catalog, option, expected):
+    player = PlayerState(name="P1", hand=[_clay(catalog)])
+    game = Game(players=[player, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.cast_from_hand(0, "Primal Clay")
+    clay = player.battlefield[0]
+
+    game.pending_body_choice = {
+        "controller_index": 0, "card_name": "Primal Clay",
+        "permanent": clay, "options": clay.metadata["body_options"],
+    }
+    assert game.confirm_enter_body_choice(0, option) is True
+
+    power, toughness, flying, defender = expected
+    assert (clay.effective_power, clay.effective_toughness) == (power, toughness)
+    assert game._has_keyword(clay, "flying") is flying
+    assert game._has_keyword(clay, "defender") is defender

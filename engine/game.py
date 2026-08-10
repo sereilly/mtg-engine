@@ -268,6 +268,10 @@ class Game(
     # {"controller_index", "card_name", "permanent", "needs_color",
     #  "opponents": [seats], "default_seat", "default_color"}.
     pending_enter_choice: dict | None = None
+    # "As this creature enters, it becomes your choice of <body>…"
+    # (Primal Clay). A body is applied at once so headless play never
+    # blocks; this offers an interactive controller the replacement.
+    pending_body_choice: dict | None = None
     # Drop of Honey: "destroy the creature with the least power. If two or more
     # creatures are tied for least power, you choose one of them." Armed during
     # the controller's upkeep when the tie is real and the controller is a human

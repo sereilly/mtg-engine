@@ -29,6 +29,8 @@ claiming it would report as understood a wording nothing implements.
 
 from __future__ import annotations
 
+import re
+
 # --- CR 614.1c entry state, engine/mixins/permanent_state.py ---------------
 
 # "This artifact enters tapped." (Nevinyrral's Disk, Time Vault). The mixin
@@ -141,3 +143,43 @@ __all__ = [
     "SPEND_WHITE_AS_RED",
     "enter_effect_line",
 ]
+
+
+# "As this creature enters, it becomes your choice of a 3/3 artifact creature,
+# a 2/2 artifact creature with flying, or a 1/6 Wall artifact creature with
+# defender in addition to its other types." (Primal Clay.)
+#
+# The bodies are parsed from the text rather than listed, so this is the
+# template and not the card: any "your choice of <body>, <body>, or <body>"
+# creature reads the same way.
+CHOOSE_BODY_ON_ENTER = "it becomes your choice of"
+
+_BODY_RE = re.compile(
+    r"a (?P<power>\d+)/(?P<toughness>\d+)(?P<rest>[^,]*?)(?=,|$| or )"
+)
+
+
+def choosable_bodies(oracle_text: str) -> tuple[dict, ...]:
+    """The bodies a "your choice of" creature may enter as.
+
+    Each is ``{"power", "toughness", "keyword"}``. The keyword is whatever the
+    body grants ("with flying", "with defender"); a body granting none has an
+    empty string, which is a body, not a missing one.
+    """
+    lowered = " ".join(oracle_text.lower().split())
+    if CHOOSE_BODY_ON_ENTER not in lowered:
+        return ()
+    clause = lowered.split(CHOOSE_BODY_ON_ENTER, 1)[1]
+    bodies: list[dict] = []
+    for match in _BODY_RE.finditer(clause):
+        rest = match.group("rest")
+        keyword = ""
+        with_match = re.search(r"with (\w+)", rest)
+        if with_match:
+            keyword = with_match.group(1)
+        bodies.append({
+            "power": int(match.group("power")),
+            "toughness": int(match.group("toughness")),
+            "keyword": keyword,
+        })
+    return tuple(bodies)

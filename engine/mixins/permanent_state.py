@@ -13,6 +13,7 @@ from ..enter_effects import (
     ENTERS_WITH_X_PLUS_1_1_COUNTERS,
     LOSE_LIFE_EQUAL_TO_TOTAL_ON_ENTER,
     NO_MAXIMUM_HAND_SIZE,
+    choosable_bodies,
     SPEND_WHITE_AS_RED,
 )
 from ..auras import aura_protection_colors, auras_attached_to
@@ -134,6 +135,32 @@ class PermanentStateMixin:
             ENTERS_TAPPED in text and "unless" not in text
         ):
             permanent.tapped = True
+
+        # "As this creature enters, it becomes your choice of <body>, <body>,
+        # or <body>." (Primal Clay.) A body is applied immediately so headless
+        # and AI play never blocks, and an interactive controller is offered the
+        # choice; confirm_enter_body_choice replaces it.
+        #
+        # The default is the FIRST body printed, not the biggest: the card lists
+        # them in a fixed order and picking "best" would be this code deciding
+        # strategy on the player's behalf, differently from how the prompt they
+        # are about to answer is ordered.
+        bodies = choosable_bodies(text)
+        if bodies:
+            # Options first: _apply_chosen_body clears the keywords of the
+            # *other* bodies before granting the chosen one's, and the card's
+            # text mentions every body's keyword — so the compiler reads
+            # "with flying" off Primal Clay and grants it. Applying a body
+            # before the options are recorded leaves that stray grant in place.
+            permanent.metadata["body_options"] = list(bodies)
+            self._apply_chosen_body(permanent, bodies[0])
+            if caster_index in self.interactive_seats and len(bodies) > 1:
+                self.pending_body_choice = {
+                    "controller_index": caster_index,
+                    "card_name": permanent.card.name,
+                    "permanent": permanent,
+                    "options": list(bodies),
+                }
 
         # "As this artifact enters, choose an opponent." (Black Vise) /
         # "As this enchantment enters, choose a color and an opponent." (Jihad)
@@ -458,6 +485,42 @@ class PermanentStateMixin:
                         permanent, "conditional_untapped_bonus", not permanent.tapped,
                         int(untapped_bonus_instr.payload["power"]), int(untapped_bonus_instr.payload["toughness"]),
                     )
+
+    @staticmethod
+    def _apply_chosen_body(permanent: Permanent, body: dict) -> None:
+        """Set a "your choice of" creature's P/T and granted keyword.
+
+        Base P/T through engine/pt.py (layer 7b) and the keyword through the
+        layer-6 grant API, so the body is the object's characteristics rather
+        than a rewritten card — the mistake Animate Artifact used to make.
+        """
+        from ..keywords import grant_keyword, remove_keyword
+
+        for option in permanent.metadata.get("body_options") or ():
+            if option.get("keyword"):
+                remove_keyword(permanent, option["keyword"])
+        set_base_pt(permanent, int(body["power"]), int(body["toughness"]))
+        if body.get("keyword"):
+            grant_keyword(permanent, body["keyword"])
+
+    def confirm_enter_body_choice(self, player_index: int, option_index: int) -> bool:
+        """Answer a pending "your choice of <body>" prompt."""
+        pending = self.pending_body_choice
+        if pending is None or pending["controller_index"] != player_index:
+            return False
+        options = pending["options"]
+        if not (0 <= option_index < len(options)):
+            return False
+        permanent = pending["permanent"]
+        self._apply_chosen_body(permanent, options[option_index])
+        chosen = options[option_index]
+        self.log.append(
+            f"{permanent.card.name} entered as a "
+            f"{chosen['power']}/{chosen['toughness']}"
+            + (f" with {chosen['keyword']}" if chosen["keyword"] else "")
+        )
+        self.pending_body_choice = None
+        return True
 
     def _refresh_global_statics(self, all_permanents: list[Permanent]) -> None:
         """Record which permanents each board-wide static currently applies to.
