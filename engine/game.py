@@ -166,61 +166,17 @@ class Game(
     priority_player_index: int | None = None
     priority_pass_count: int = 0
     untapped_lands_at_turn_start: dict[int, int] = field(default_factory=dict)
-    pending_search_library: dict | None = None
-    pending_reorder_library: dict | None = None
-    # A non-random "discards a card" effect (Disrupting Scepter) awaiting the
-    # discarding player's choice of which card(s), and — if they control Library of
-    # Leng — whether to put each on top of their library instead of the graveyard.
-    # Shape: {"player_index", "count", "allow_top_of_library"}.
-    pending_discard: dict | None = None
-    # Balance: each player sacrifices lands/creatures and discards down to the
-    # lowest count, choosing which. Shape: {"plans": {player_index: {"lands": n,
-    # "creatures": n, "hand": n}}} where each n is how many to remove of that type.
-    pending_balance: dict | None = None
-    # A forced sacrifice (Lich: "sacrifice that many nontoken permanents") awaiting
-    # the sacrificing player's choice of which permanent(s). Shape: {"player_index",
-    # "count", "reason"}. Only armed for seats in ``interactive_seats`` (human
-    # players); AI/headless play resolves the sacrifice inline with a deterministic
-    # heuristic (permanents whose death loses the game are kept for last).
-    pending_sacrifice: dict | None = None
+    # Every decision a seat owes part-way through a spell, an ability or a turn
+    # step — a library search, a discard, Balance's removals, Power Sink's
+    # payment, Word of Command's borrowed card. One queue rather than one field
+    # per card: ``kind`` selects the spec in engine/pending_choices.py that says
+    # how to answer it, what a non-interactive seat does instead, and how the web
+    # layer renders and gates it. The ``pending_<name>`` views the web layer and
+    # the tests read are derived from this list (engine/mixins/stack/choices.py).
+    pending_choices: list = field(default_factory=list)
     # Seats controlled by a human, set by the web layer each action. Empty in
     # headless/AI play, so forced sacrifices there resolve inline without a prompt.
     interactive_seats: set[int] = field(default_factory=set)
-    # "You may pay {1}. If you do, gain N life" triggers that fire when a spell
-    # resolves (the color rods: Wooden Sphere, Throne of Bone, …). Each entry is
-    # {"card_name", "player_index", "cost", "life"} awaiting a yes/no decision.
-    pending_optional_pays: list[dict] = field(default_factory=list)
-    # Glasses of Urza / Jayemdae-style "look at target player's hand": the most
-    # recent reveal, surfaced to the UI as {"viewer_index", "target_index",
-    # "card_names"}. Cleared once the viewer dismisses it.
-    pending_hand_reveal: dict | None = None
-    # Phantasmal Terrain: "As this Aura enters, choose a basic land type." Awaiting
-    # the controller's choice of which basic land type the enchanted land becomes.
-    # Shape: {"player_index", "card_name", "land_owner_index", "land_index"}. The
-    # land type is NOT changed until the choice is confirmed (confirm_land_type), so
-    # the spell never visibly resolves the change before the prompt is answered; an
-    # AI controller's choice is auto-resolved deterministically by the web layer.
-    pending_land_type_choice: dict | None = None
-    # Power Sink: "Counter target spell unless its controller pays {X}." After Power
-    # Sink resolves, the targeted spell stays on the stack while its controller is
-    # asked to pay {X} (tap lands, then pay or decline). Shape: {"player_index",
-    # "amount", "card_name" (the counter spell), "stack_item" (the target spell)}.
-    # Headless/AI play auto-resolves this deterministically (pay if able, else the
-    # spell is countered and the rider applies).
-    pending_mana_payment: dict | None = None
-    # Kudzu: "That land's controller may attach this Aura to a land of their
-    # choice." After the enchanted land is destroyed, a human controller picks the
-    # land to re-enchant. Shape: {"player_index", "aura"} (the detached Permanent).
-    # AI/headless play re-attaches deterministically without arming this.
-    pending_kudzu_reattach: dict | None = None
-    # Illusionary Mask: "{X}: you may cast a creature card whose cost X could pay,
-    # face down as a 2/2." Awaiting the controller's choice of which hand creature.
-    # Shape: {"player_index", "max_cmc", "card_name"}. The controller may decline.
-    pending_face_down_cast: dict | None = None
-    # Word of Command: "Look at target opponent's hand and choose a card; that
-    # player plays it." Awaiting the caster's choice of which of the target's cards
-    # to force. Shape: {"caster_index", "target_index", "card_name", "hand"}.
-    pending_word_of_command: dict | None = None
     # Replacement effects suspended on a player's decision — the optional or
     # choose-one ones (Library of Leng's discard destination, Aladdin's Lamp's
     # look-at-the-top-X, Ring of Ma'rûf's outside-the-game card). Each entry is a
@@ -252,11 +208,6 @@ class Game(
     # {"player_index", "amount", "cost", "source_name"}. Populated by the
     # arm_draw_step_life_loss_unless_pay handler, resolved in resolve_draw_step.
     pending_draw_step_life_loss: list = field(default_factory=list)
-    # Cuombajj Witches: "...and 1 damage to any target of an opponent's choice."
-    # Awaiting the opposing (human) chooser's pick of any target. Shape:
-    # {"chooser_index", "amount", "card_name", "_source_permanent"}. AI/headless
-    # choosers resolve inline with a deterministic heuristic instead.
-    pending_opponent_damage: dict | None = None
     # Aladdin's Lamp: an armed "the next time you would draw a card this turn,
     # instead look at the top X..." replacement per player. Shape:
     # {player_index: X}. Consumed by the next draw that player makes this turn;
@@ -268,29 +219,10 @@ class Game(
     outside_game_draw_replacements: set = field(default_factory=set)
     # Both of the above are *armed state*, like a prevention shield. The
     # suspended draw itself waits on pending_replacement_choices.
-    # "As this [artifact/enchantment] enters, choose an opponent [and a color]."
-    # (Black Vise; Jihad adds a color.) Deterministic defaults are stamped on the
-    # permanent immediately so headless/AI play never blocks; an interactive
-    # caster with a genuine choice (several opponents, or a color to pick) gets
-    # this prompt, whose confirm_enter_choice overwrites the defaults. Shape:
-    # {"controller_index", "card_name", "permanent", "needs_color",
-    #  "opponents": [seats], "default_seat", "default_color"}.
-    pending_enter_choice: dict | None = None
-    # "As this creature enters, it becomes your choice of <body>…"
-    # (Primal Clay). A body is applied at once so headless play never
-    # blocks; this offers an interactive controller the replacement.
-    pending_body_choice: dict | None = None
     # Global statics whose source has left but whose effect continues
     # until end of turn (Titania's Song). Cleared at cleanup.
     lingering_global_statics: list = field(default_factory=list)
     _global_static_sources_last: list = field(default_factory=list)
-    # Drop of Honey: "destroy the creature with the least power. If two or more
-    # creatures are tied for least power, you choose one of them." Armed during
-    # the controller's upkeep when the tie is real and the controller is a human
-    # seat; AI/headless play breaks the tie deterministically inline. Shape:
-    # {"controller_index", "card_name", "candidates": [{"seat", "index",
-    #  "name"}, ...], "_candidate_perms": [Permanent, ...]}.
-    pending_least_power_choice: dict | None = None
 
     def __post_init__(self) -> None:
         # Preserve legacy external phase naming while internally tracking phase/step.

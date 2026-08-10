@@ -31,16 +31,15 @@ class SimulationReport:
         return not self.issues
 
 
-def _resolve_pending_search(game: Game) -> None:
-    pending = game.pending_search_library
-    if pending is None:
-        return
-    choice = choose_search_library_index(game, pending["caster_index"], card_type=pending.get("card_type", "any"))
-    if choice is None:
-        random.shuffle(game.players[pending["caster_index"]].library)
-        game.pending_search_library = None
-    else:
-        game.confirm_search_library(pending["caster_index"], choice)
+# The prompts a headless simulation answers for itself, in the order it answers
+# them. Naming the kinds rather than draining the whole queue keeps the order
+# fixed: a library search consumes randomness, so which prompt is answered first
+# is part of what a seed reproduces.
+_SIMULATED_CHOICES = ("search_library", "discard", "balance", "optional_pay")
+
+
+def _resolve_pending_choices(game: Game) -> None:
+    game.auto_resolve_pending_choices(kinds=_SIMULATED_CHOICES)
 
 
 def _find(cards: dict[str, CardDefinition], name: str) -> CardDefinition:
@@ -239,10 +238,7 @@ def run_ai_simulation(cards_path: Path, games: int = 10, seed: int = 1337, max_t
                         target_player_index=cast_action.target_player_index,
                         x_value=cast_action.x_value,
                     )
-                    _resolve_pending_search(game)
-                    game.auto_resolve_pending_discard()
-                    game.auto_resolve_pending_balance()
-                    game.auto_resolve_pending_optional_pays()
+                    _resolve_pending_choices(game)
                     after = _snap(game)
                     report.interaction_count += 1
                     report.log_lines.append(
@@ -274,10 +270,7 @@ def run_ai_simulation(cards_path: Path, games: int = 10, seed: int = 1337, max_t
                         target_player_index=activation_action.target_player_index,
                         permanent_index=activation_action.permanent_index,
                     )
-                    _resolve_pending_search(game)
-                    game.auto_resolve_pending_discard()
-                    game.auto_resolve_pending_balance()
-                    game.auto_resolve_pending_optional_pays()
+                    _resolve_pending_choices(game)
                     report.interaction_count += 1
                     report.log_lines.append(
                         f"G{game_index} T{turn} {active_player.name} "

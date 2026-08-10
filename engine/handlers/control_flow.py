@@ -121,9 +121,8 @@ def may(game: Game, instruction: OracleInstruction, context: OracleExecutionCont
     only express "gain N life", "draw N cards" or "take N damage", so every card
     outside that vocabulary needed its own name-keyed hook.
 
-    The prompt itself still rides ``pending_optional_pays`` — replacing that
-    with the generic pending-choice queue is the rest of roadmap phase 4 — but
-    the *consequence* no longer has a fixed shape.
+    The prompt is an ``optional_pay`` entry on the generic pending-choice queue,
+    and the *consequence* has no fixed shape.
     """
     actor = instruction.payload.get("actor", "you")
     player = context.caster if actor == "you" else context.target
@@ -139,7 +138,6 @@ def may(game: Game, instruction: OracleInstruction, context: OracleExecutionCont
 
     entry = {
         "card_name": context.card.name,
-        "player_index": player_index,
         "cost": int(cost or 0),
         "life": 0,
         "_source_permanent": context.source_permanent,
@@ -159,7 +157,7 @@ def may(game: Game, instruction: OracleInstruction, context: OracleExecutionCont
         amount = on_accept[0].payload.get("amount")
         if isinstance(amount, int):
             entry["life"] = amount
-    game.pending_optional_pays.append(entry)
+    game.arm_pending_choice("optional_pay", player_index, **entry)
     return True, "resolved"
 
 

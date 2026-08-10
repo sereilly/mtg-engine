@@ -60,6 +60,7 @@ ActionKind = Literal[
     "word_of_command_confirm",
     "opponent_damage_choose",
     "enter_choice_confirm",
+    "body_choice_confirm",
     "least_power_choice_confirm",
     "lamp_draw_confirm",
     "outside_game_draw_confirm",

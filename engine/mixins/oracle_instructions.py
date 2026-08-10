@@ -400,12 +400,12 @@ class OracleInstructionsMixin:
                 # auto-resolver). Only then is land_type_override set (confirm_land_type),
                 # so the spell never visibly "resolves" the land change before the
                 # player finishes the choice.
-                self.pending_land_type_choice = {
-                    "player_index": caster_index,
-                    "card_name": aura_permanent.card.name,
-                    "land_owner_index": target_idx,
-                    "land_index": target_player.battlefield.index(target_land),
-                }
+                self.arm_pending_choice(
+                    "land_type_choice", caster_index,
+                    card_name=aura_permanent.card.name,
+                    land_owner_index=target_idx,
+                    land_index=target_player.battlefield.index(target_land),
+                )
             if granted_meta:
                 aura_permanent.metadata["aura_granted_meta"] = granted_meta
             self.log.append(f"{aura_permanent.card.name} enchants {target_land.card.name}")

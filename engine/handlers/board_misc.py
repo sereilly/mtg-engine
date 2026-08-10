@@ -155,7 +155,9 @@ def balance_resources(game: Game, instruction: OracleInstruction, context: Oracl
         game.log.append("Balance: nothing to normalize")
         return True, "resolved"
 
-    game.pending_balance = {"plans": plans}
+    # Each player owes their own removals, so each gets their own queued choice.
+    for idx, plan in plans.items():
+        game.arm_pending_choice("balance", idx, plan=plan)
     game.log.append("Balance: each player chooses what to sacrifice and discard")
     return True, "pending_balance"
 
@@ -405,11 +407,9 @@ def cast_face_down_creature(game: Game, instruction: OracleInstruction, context:
     if not eligible:
         game.log.append(f"{card.name}: no eligible creature in hand to cast face-down (X={max_cmc})")
         return True, "resolved"
-    game.pending_face_down_cast = {
-        "player_index": controller_index,
-        "max_cmc": max_cmc,
-        "card_name": card.name,
-    }
+    game.arm_pending_choice(
+        "face_down_cast", controller_index, max_cmc=max_cmc, card_name=card.name
+    )
     game.log.append(f"{card.name}: choose a creature (mana value <= {max_cmc}) to cast face down")
     return True, "resolved"
 

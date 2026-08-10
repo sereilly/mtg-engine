@@ -371,10 +371,13 @@ def test_primal_clay_choice_replaces_the_body(catalog, option, expected):
     game.cast_from_hand(0, "Primal Clay")
     clay = player.battlefield[0]
 
-    game.pending_body_choice = {
-        "controller_index": 0, "card_name": "Primal Clay",
-        "permanent": clay, "options": clay.metadata["body_options"],
-    }
+    # Only an interactive controller is offered the replacement; every other
+    # seat keeps the first printed body applied as the creature entered.
+    game.interactive_seats = {0}
+    game.arm_pending_choice(
+        "body_choice", 0, card_name="Primal Clay",
+        permanent=clay, options=clay.metadata["body_options"],
+    )
     assert game.confirm_enter_body_choice(0, option) is True
 
     power, toughness, flying, defender = expected

@@ -100,27 +100,32 @@ class PhaseStepsMixin:
             # player who must choose; the ability leaves the stack when they answer
             # (confirm_optional_pay) or the AI auto-resolves it.
             paused = next(
-                (e for e in self.pending_optional_pays if e.get("_stack_item") in self.stack),
+                (
+                    c for c in self.pending_choices_of("optional_pay")
+                    if c.data.get("_stack_item") in self.stack
+                ),
                 None,
             )
             if paused is not None:
-                self.priority_player_index = paused["player_index"]
+                self.priority_player_index = paused.player_index
                 return "awaiting_choice"
             # Power Sink: the targeted spell stays on the stack while its controller
             # is asked to pay {X}. Hand them priority so they can tap lands and pay.
-            if self.pending_mana_payment is not None:
-                self.priority_player_index = self.pending_mana_payment["player_index"]
+            payment = self.pending_choice_of("mana_payment")
+            if payment is not None:
+                self.priority_player_index = payment.player_index
                 return "awaiting_choice"
             # Word of Command stays on the stack while the caster chooses a card
             # from the target's hand; hand the caster priority to answer. Once the
             # choice is recorded the spell is just a stack object waiting on the
             # normal priority release, so fall through to the usual handling.
+            woc = self.pending_choice_of("word_of_command")
             if (
-                self.pending_word_of_command is not None
-                and self.pending_word_of_command.get("_stack_item") in self.stack
-                and "chosen_hand_index" not in self.pending_word_of_command
+                woc is not None
+                and woc.data.get("_stack_item") in self.stack
+                and "chosen_hand_index" not in woc.data
             ):
-                self.priority_player_index = self.pending_word_of_command["caster_index"]
+                self.priority_player_index = woc.player_index
                 return "awaiting_choice"
             # 704.3: state-based actions are checked before any player would
             # receive priority after a spell or ability resolves (e.g. an Aura

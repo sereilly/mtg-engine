@@ -154,13 +154,12 @@ class PermanentStateMixin:
             # before the options are recorded leaves that stray grant in place.
             permanent.metadata["body_options"] = list(bodies)
             self._apply_chosen_body(permanent, bodies[0])
-            if caster_index in self.interactive_seats and len(bodies) > 1:
-                self.pending_body_choice = {
-                    "controller_index": caster_index,
-                    "card_name": permanent.card.name,
-                    "permanent": permanent,
-                    "options": list(bodies),
-                }
+            if len(bodies) > 1:
+                self.arm_pending_choice(
+                    "body_choice", caster_index,
+                    card_name=permanent.card.name, permanent=permanent,
+                    options=list(bodies),
+                )
 
         # "As this artifact enters, choose an opponent." (Black Vise) /
         # "As this enchantment enters, choose a color and an opponent." (Jihad)
@@ -189,16 +188,13 @@ class PermanentStateMixin:
                 # Jihad's anthem is conditioned on the stored choices, and the
                 # entry recalculation ran before they were stamped — recompute.
                 self._recalculate_lord_buffs()
-            if caster_index in self.interactive_seats and (needs_color or len(opponents) > 1):
-                self.pending_enter_choice = {
-                    "controller_index": caster_index,
-                    "card_name": permanent.card.name,
-                    "permanent": permanent,
-                    "needs_color": needs_color,
-                    "opponents": opponents,
-                    "default_seat": chosen,
-                    "default_color": default_color,
-                }
+            if needs_color or len(opponents) > 1:
+                self.arm_pending_choice(
+                    "enter_choice", caster_index,
+                    card_name=permanent.card.name, permanent=permanent,
+                    needs_color=needs_color, opponents=opponents,
+                    default_seat=chosen, default_color=default_color,
+                )
 
         # enters with fixed counters (Clockwork Beast). Track the counter count so
         # the end-of-combat trigger and the upkeep activated ability can adjust it.
@@ -505,21 +501,21 @@ class PermanentStateMixin:
 
     def confirm_enter_body_choice(self, player_index: int, option_index: int) -> bool:
         """Answer a pending "your choice of <body>" prompt."""
-        pending = self.pending_body_choice
-        if pending is None or pending["controller_index"] != player_index:
-            return False
-        options = pending["options"]
+        return self.resolve_pending_choice("body_choice", player_index, option_index=option_index)
+
+    def _resolve_body_choice(self, choice, option_index: int) -> bool:
+        options = choice.data["options"]
         if not (0 <= option_index < len(options)):
             return False
-        permanent = pending["permanent"]
-        self._apply_chosen_body(permanent, options[option_index])
+        permanent = choice.data["permanent"]
         chosen = options[option_index]
+        self._apply_chosen_body(permanent, chosen)
         self.log.append(
             f"{permanent.card.name} entered as a "
             f"{chosen['power']}/{chosen['toughness']}"
             + (f" with {chosen['keyword']}" if chosen["keyword"] else "")
         )
-        self.pending_body_choice = None
+        self.discard_pending_choice(choice)
         return True
 
     def _refresh_global_statics(self, all_permanents: list[Permanent]) -> None:

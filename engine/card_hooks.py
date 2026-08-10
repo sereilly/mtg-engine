@@ -213,7 +213,6 @@ def _resolve_optional_pay_trigger(game: Game, item: StackItem) -> None:
         return
     entry: dict = {
         "card_name": ev["card_name"],
-        "player_index": player_index,
         "cost": cost,
         "life": int(ev.get("life", 0)),
     }
@@ -221,7 +220,7 @@ def _resolve_optional_pay_trigger(game: Game, item: StackItem) -> None:
         entry["draw"] = ev["draw"]
     if "prompt" in ev:
         entry["prompt"] = ev["prompt"]
-    game.pending_optional_pays.append(entry)
+    game.arm_pending_choice("optional_pay", player_index, **entry)
 
 
 # hook_key → resolver.
@@ -401,13 +400,13 @@ def _kudzu_on_land_tapped(
         and player.battlefield[reattach_index].card.primary_type == "land"
     ):
         new_land = player.battlefield[reattach_index]
-    # A human controller picks the land to re-enchant: defer when no choice was
-    # supplied and there is a land to move to. Headless/AI play keeps the
-    # deterministic "first other land" default below.
+    # A controller who is being asked picks the land to re-enchant: defer when no
+    # choice was supplied and there is a land to move to. Headless/AI play keeps
+    # the deterministic "first other land" default below.
     if new_land is None and defer_choice and any(
         p.card.primary_type == "land" for p in player.battlefield
     ):
-        game.pending_kudzu_reattach = {"player_index": controller_index, "aura": aura}
+        game.arm_pending_choice("kudzu_reattach", controller_index, aura=aura)
         return
     if new_land is None:
         new_land = next((p for p in player.battlefield if p.card.primary_type == "land"), None)

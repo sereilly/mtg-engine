@@ -102,14 +102,11 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
                     f"{target.card.name} is not countered by {card.name}"
                 )
                 return True, "resolved"
-            game.pending_mana_payment = {
-                "player_index": target.caster_index,
-                "amount": cost,
-                "card_name": card.name,
-                "counter_card": card,
-                "stack_item": target,
-                "_new": True,
-            }
+            game.arm_pending_choice(
+                "mana_payment", target.caster_index,
+                amount=cost, card_name=card.name, counter_card=card,
+                stack_item=target, _new=True,
+            )
             game.log.append(
                 f"{card.name}: {game.players[target.caster_index].name} must pay "
                 f"{{{cost}}} or {target.card.name} is countered"

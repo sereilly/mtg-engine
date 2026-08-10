@@ -211,9 +211,10 @@ class TestCuombajjWitches:
 
     def test_prompt_blocks_chooser_actions_via_api(self):
         sid, session, game = _session()
-        game.pending_opponent_damage = {
-            "chooser_index": 0, "caster_index": 1, "amount": 1, "card_name": "Cuombajj Witches",
-        }
+        game.interactive_seats = {0}
+        game.arm_pending_choice(
+            "opponent_damage", 0, caster_index=1, amount=1, card_name="Cuombajj Witches",
+        )
         resp = client.post(
             f"/api/sessions/{sid}/action", json={"seat": 0, "action": "pass_priority"}
         )

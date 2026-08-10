@@ -122,45 +122,49 @@ class StackResolutionMixin:
         # spell heads to the graveyard. The forced spell is left on the stack on
         # the interactive path (pause_for_choices) so it gets its own priority
         # round; headless loops drain it on their next iteration.
-        if (
-            self.pending_word_of_command is not None
-            and self.pending_word_of_command.get("_stack_item") is self.stack[-1]
-        ):
-            pending = self.pending_word_of_command
-            if "chosen_hand_index" not in pending:
+        waiting_woc = self.pending_choice_of("word_of_command")
+        if waiting_woc is not None and waiting_woc.data.get("_stack_item") is self.stack[-1]:
+            if "chosen_hand_index" not in waiting_woc.data:
                 return False
-            self.pending_word_of_command = None
+            self.discard_pending_choice(waiting_woc)
             self._finish_word_of_command(
-                pending, pending["chosen_hand_index"], auto_resolve_forced=False
+                waiting_woc.data, waiting_woc.data["chosen_hand_index"],
+                auto_resolve_forced=False, caster_index=waiting_woc.player_index,
             )
             return True
 
         item = self.stack.pop()
-        pays_before = len(self.pending_optional_pays)
-        woc_before = self.pending_word_of_command
+        pays_before = len(self.pending_choices_of("optional_pay"))
+        woc_before = self.pending_choice_of("word_of_command")
         self._run_stack_item_resolution(item)
         # Power Sink armed a pending "pay {X} or be countered" for the targeted
         # spell's controller. On the human priority path leave it for the prompt;
         # headless/AI resolves it deterministically (pay if able, else countered).
-        if self.pending_mana_payment is not None and self.pending_mana_payment.get("_new"):
-            self.pending_mana_payment.pop("_new", None)
+        payment = self.pending_choice_of("mana_payment")
+        if payment is not None and payment.data.get("_new"):
+            payment.data.pop("_new", None)
             if not pause_for_choices:
                 self._auto_resolve_mana_payment()
-        if pause_for_choices and len(self.pending_optional_pays) > pays_before:
+        new_pays = self.pending_choices_of("optional_pay")[pays_before:]
+        if pause_for_choices and new_pays:
             # The ability raised an optional pay/draw choice — keep it on the stack
             # until the choice is submitted (the only effect so far is registering the
             # prompt; the life gain / draw happens on confirm). Link each new prompt
             # entry to this stack item so confirming it removes the ability.
             self.stack.append(item)
-            for entry in self.pending_optional_pays[pays_before:]:
-                entry["_stack_item"] = item
+            for pay in new_pays:
+                pay.data["_stack_item"] = item
         # Word of Command pauses mid-resolution for the caster's card choice
         # (CR 608.2: the spell is still resolving). Keep it on the stack until
         # confirm_word_of_command finishes the resolution and removes it.
-        woc_after = self.pending_word_of_command
-        if woc_after is not None and woc_after is not woc_before and "_stack_item" not in woc_after:
+        woc_after = self.pending_choice_of("word_of_command")
+        if (
+            woc_after is not None
+            and woc_after is not woc_before
+            and "_stack_item" not in woc_after.data
+        ):
             self.stack.append(item)
-            woc_after["_stack_item"] = item
+            woc_after.data["_stack_item"] = item
         return True
     def _run_stack_item_resolution(self, item: StackItem) -> None:
         # A triggered ability with a name-keyed resolve-time hook (Rod/Cup/Sphere,
@@ -319,17 +323,17 @@ class StackResolutionMixin:
             divided_targets=divided_targets,
         )
         self._apply_self_resolved_hook(caster_index, card, target_idx, target_permanent_index)
-        pending_woc = self.pending_word_of_command
+        pending_woc = self.pending_choice_of("word_of_command")
         if (
             pending_woc is not None
-            and "_spell_card" not in pending_woc
-            and pending_woc.get("card_name") == card.name
+            and "_spell_card" not in pending_woc.data
+            and pending_woc.data.get("card_name") == card.name
         ):
             # Word of Command is still resolving while the caster chooses a card
             # from the target's hand; it goes to the graveyard only when
             # confirm_word_of_command finishes the resolution.
-            pending_woc["_spell_card"] = card
-            pending_woc["_spell_caster_index"] = caster_index
+            pending_woc.data["_spell_card"] = card
+            pending_woc.data["_spell_caster_index"] = caster_index
             return
         caster.graveyard.append(card)
         self.log.append(f"{card.name} resolved and moved to graveyard")

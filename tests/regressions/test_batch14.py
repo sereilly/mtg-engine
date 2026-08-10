@@ -703,12 +703,11 @@ class TestWordOfCommandHoldsTheGame:
         session = store.get(sid)
         game = session.game
         game.players[1].hand = [_C["Lightning Bolt"], _C["Forest"]]
-        game.pending_word_of_command = {
-            "caster_index": 0,
-            "target_index": 1,
-            "card_name": "Word of Command",
-            "hand": [c.name for c in game.players[1].hand],
-        }
+        game.arm_pending_choice(
+            "word_of_command", 0,
+            target_index=1, card_name="Word of Command",
+            hand=[c.name for c in game.players[1].hand],
+        )
         return sid, session, game
 
     def test_caster_actions_are_blocked_until_the_choice(self):

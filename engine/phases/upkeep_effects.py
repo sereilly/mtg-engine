@@ -563,11 +563,14 @@ class UpkeepEffectsMixin:
                 if perm.effective_power == least
             ]
             controller_index = self.players.index(controller)
-            if len(tied) > 1 and controller_index in self.interactive_seats:
-                self.pending_least_power_choice = {
-                    "controller_index": controller_index,
-                    "card_name": permanent.card.name,
-                    "candidates": [
+            if len(tied) > 1:
+                # A real tie is the controller's choice. An interactive seat is
+                # prompted; every other seat takes the kind's default (the first
+                # tied creature in battlefield scan order) as this is armed.
+                armed = self.arm_pending_choice(
+                    "least_power_choice", controller_index,
+                    card_name=permanent.card.name,
+                    candidates=[
                         {
                             "seat": self.players.index(owner),
                             "index": next(
@@ -577,20 +580,16 @@ class UpkeepEffectsMixin:
                         }
                         for owner, victim in tied
                     ],
-                    "_candidate_perms": [victim for _, victim in tied],
-                }
-                self.log.append(
-                    f"{permanent.card.name}: {controller.name} chooses which "
-                    "creature tied for least power to destroy"
+                    _candidate_perms=[victim for _, victim in tied],
                 )
+                if armed is not None:
+                    self.log.append(
+                        f"{permanent.card.name}: {controller.name} chooses which "
+                        "creature tied for least power to destroy"
+                    )
             else:
                 owner, victim = tied[0]
-                owner.battlefield = [p for p in owner.battlefield if p is not victim]
-                self._permanent_to_graveyard(owner, victim)
-                self.log.append(
-                    f"{permanent.card.name} destroyed {victim.card.name} "
-                    "(least power; it can't be regenerated)"
-                )
+                self._destroy_least_power_creature(owner, victim, permanent.card.name)
 
     @upkeep_effect("upkeep_self", "upkeep_sacrifice_other_creature_or_deal_damage")
     def _on__upkeep_self__upkeep_sacrifice_other_creature_or_deal_damage(self, ctx: UpkeepContext) -> None:

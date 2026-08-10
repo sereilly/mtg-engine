@@ -23,8 +23,6 @@ from engine.ai_policy import (
     choose_cast_action,
     choose_combat_blockers,
     choose_combat_instant_cast_action,
-    choose_reorder_library_order,
-    choose_search_library_index,
     legal_attackers,
 )
 from engine.card_loader import load_cards, manifest_set_paths
@@ -34,6 +32,12 @@ from engine.legality import cast_target_kind
 from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle
 
+from .prompts import (
+    PromptContext,
+    auto_resolve_ai_prompts,
+    blocking_prompt,
+    render_prompts,
+)
 from .deck_builder import build_random_deck
 from .deck_legality import FORMATS, normalize_format, validate_deck
 from .deck_store import (
@@ -1914,304 +1918,18 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
             "creature_max": untap_options.get("creature_max"),
         }
 
-    search_library_info = None
-    pending_search = session.game.pending_search_library
-    if pending_search is not None:
-        caster_seat = pending_search["caster_index"]
-        if viewer_seat is None or viewer_seat == caster_seat:
-            caster = session.game.players[caster_seat]
-            search_library_info = {
-                "caster_seat": caster_seat,
-                "count": pending_search["count"],
-                "card_type": pending_search["card_type"],
-                "cards": [_serialize_card_summary(card) for card in caster.library],
-            }
-
-    reorder_library_info = None
-    pending_reorder = session.game.pending_reorder_library
-    if pending_reorder is not None and _seat_type(session, pending_reorder["caster_index"]) != "ai":
-        caster_seat = pending_reorder["caster_index"]
-        if viewer_seat is None or viewer_seat == caster_seat:
-            target = session.game.players[pending_reorder["target_index"]]
-            top_count = pending_reorder["top_count"]
-            reorder_library_info = {
-                "caster_seat": caster_seat,
-                "target_seat": pending_reorder["target_index"],
-                "top_count": top_count,
-                "may_shuffle": bool(pending_reorder.get("may_shuffle")),
-                "target_name": target.name,
-                "cards": [_serialize_card_summary(card) for card in target.library[:top_count]],
-            }
-
-    # Disrupting Scepter: the discarding player chooses which card(s) to discard,
-    # and — with Library of Leng — whether to put them on top of their library.
-    discard_info = None
-    pending_discard = session.game.pending_discard
-    if pending_discard is not None and _seat_type(session, pending_discard["player_index"]) != "ai":
-        discarder_seat = pending_discard["player_index"]
-        if viewer_seat is None or viewer_seat == discarder_seat:
-            discarder = session.game.players[discarder_seat]
-            discard_info = {
-                "player_seat": discarder_seat,
-                "count": pending_discard["count"],
-                "allow_top_of_library": bool(pending_discard.get("allow_top_of_library")),
-                "cards": [_serialize_card_summary(card) for card in discarder.hand],
-            }
-
-    # Library of Leng: a card was discarded (random/forced/cleanup) and its
-    # controller may put it on top of their library instead of the graveyard.
-    # Surfaced only to the choosing player, one card at a time.
-    leng_discard_info = None
-    for leng_entry in session.game.pending_leng_discards:
-        leng_seat = leng_entry["player_index"]
-        if viewer_seat is None or viewer_seat == leng_seat:
-            leng_discard_info = {
-                "player_seat": leng_seat,
-                "card": _serialize_card_summary(leng_entry["card"]),
-                "remaining": sum(
-                    1 for e in session.game.pending_leng_discards if e["player_index"] == leng_seat
-                ),
-            }
-            break
-
-    # Balance: surface the viewing player's own sacrifice/discard plan with the
-    # battlefield (lands/creatures) and hand they choose from.
-    balance_info = None
-    pending_balance = session.game.pending_balance
-    if pending_balance is not None:
-        my_plan = None
-        if viewer_seat is not None and _seat_type(session, viewer_seat) != "ai":
-            my_plan = pending_balance["plans"].get(viewer_seat)
-        if my_plan is not None:
-            me_player = session.game.players[viewer_seat]
-            balance_info = {
-                "player_seat": viewer_seat,
-                "lands_to_sacrifice": my_plan["lands"],
-                "creatures_to_sacrifice": my_plan["creatures"],
-                "cards_to_discard": my_plan["hand"],
-                "lands": [
-                    {"index": i, **_serialize_card_summary(p.card)}
-                    for i, p in enumerate(me_player.battlefield)
-                    if p.card.primary_type == "land"
-                ],
-                "creatures": [
-                    {"index": i, **_serialize_card_summary(p.card)}
-                    for i, p in enumerate(me_player.battlefield)
-                    if p.card.primary_type == "creature"
-                ],
-                "hand": [_serialize_card_summary(card) for card in me_player.hand],
-            }
-
-    # Forced sacrifice (Lich, Lord of the Pit): surface the sacrificing player's
-    # choice of which permanent(s) to sacrifice, with every eligible permanent (so
-    # the UI can list and highlight them). Shown only to that (human) player.
-    sacrifice_info = None
-    sacrifice_state = session.game.pending_sacrifice_state()
-    if sacrifice_state is not None:
-        sac_seat = sacrifice_state["player_index"]
-        if (
-            (viewer_seat is None or viewer_seat == sac_seat)
-            and _seat_type(session, sac_seat) != "ai"
-        ):
-            sac_player = session.game.players[sac_seat]
-            sacrifice_info = {
-                "player_seat": sac_seat,
-                "count": sacrifice_state["count"],
-                "reason": sacrifice_state["reason"],
-                "permanents": [
-                    {"index": i, **_serialize_card_summary(sac_player.battlefield[i].card)}
-                    for i in sacrifice_state["valid_indices"]
-                ],
-            }
-
-    # Color rods (Wooden Sphere, …): the controller's pending "pay {1}: gain life"
-    # yes/no decisions, shown only to that player.
-    optional_pay_info = None
-    if session.game.pending_optional_pays and viewer_seat is not None:
-        # Strip private keys (e.g. the linked stack-item reference, which isn't
-        # JSON-serializable) before sending the prompt to the client.
-        mine = [
-            {k: v for k, v in e.items() if not k.startswith("_")}
-            for e in session.game.pending_optional_pays
-            if e["player_index"] == viewer_seat and _seat_type(session, viewer_seat) != "ai"
-        ]
-        if mine:
-            optional_pay_info = {"pending": mine}
-
-    # Aladdin's Lamp: the replaced draw's revealed top cards, shown only to the
-    # drawing player.
-    lamp_draw_info = None
-    pending_lamp = session.game.pending_lamp_draw
-    if (
-        pending_lamp is not None
-        and viewer_seat is not None
-        and pending_lamp.get("player_index") == viewer_seat
-        and _seat_type(session, viewer_seat) != "ai"
-    ):
-        # The looked-at cards are still on top of the library until the choice is
-        # confirmed, so serialize them from there for the visual picker (art +
-        # hover preview). card_names stays as the authoritative order/length.
-        names = list(pending_lamp["card_names"])
-        library = session.game.players[viewer_seat].library
-        lamp_draw_info = {
-            "card_names": names,
-            "cards": [_serialize_card_summary(card) for card in library[: len(names)]],
-        }
-
-    # Ring of Ma'rûf: the replaced draw — the owner picks a card from outside the
-    # game (their sideboard). Shown only to that player.
-    outside_game_draw_info = None
-    pending_outside = session.game.pending_outside_game_draw
-    if (
-        pending_outside is not None
-        and viewer_seat is not None
-        and pending_outside.get("player_index") == viewer_seat
-        and _seat_type(session, viewer_seat) != "ai"
-    ):
-        names = list(pending_outside["card_names"])
-        sideboard = session.game.players[viewer_seat].sideboard
-        # The offered cards can be a subset of the sideboard (CR 407.3 keeps ante
-        # cards out of a non-ante game), so follow the recorded positions rather
-        # than assuming the names are a prefix of it.
-        offered = pending_outside.get("sideboard_indices") or list(range(len(names)))
-        outside_game_draw_info = {
-            "card_names": names,
-            "cards": [
-                _serialize_card_summary(sideboard[i]) for i in offered if 0 <= i < len(sideboard)
-            ],
-        }
-
-    # Cuombajj Witches: the opposing chooser picks any target for the second
-    # damage packet. Surface the prompt only to the chooser.
-    opponent_damage_info = None
-    pending_opp_damage = session.game.pending_opponent_damage
-    if (
-        pending_opp_damage is not None
-        and viewer_seat is not None
-        and pending_opp_damage.get("chooser_index") == viewer_seat
-        and _seat_type(session, viewer_seat) != "ai"
-    ):
-        opp_targets: list[dict] = [
-            {"kind": "player", "seat": seat} for seat in range(len(session.game.players))
-        ]
-        for seat, pl in enumerate(session.game.players):
-            for idx, perm in enumerate(pl.battlefield):
-                if perm.is_creature:
-                    opp_targets.append(
-                        {"kind": "permanent", "seat": seat, "index": idx,
-                         "key": f"{seat}-{idx}", "name": perm.card.name}
-                    )
-        opponent_damage_info = {
-            "card_name": pending_opp_damage["card_name"],
-            "amount": pending_opp_damage["amount"],
-            "valid_targets": opp_targets,
-        }
-
-    # Phantasmal Terrain: the controller chooses the enchanted land's basic land
-    # type. Surface the prompt only to that (human) player.
-    land_type_choice_info = None
-    pending_land_type = session.game.pending_land_type_choice
-    if (
-        pending_land_type is not None
-        and viewer_seat is not None
-        and pending_land_type["player_index"] == viewer_seat
-        and _seat_type(session, viewer_seat) != "ai"
-    ):
-        land_type_choice_info = {
-            "card_name": pending_land_type["card_name"],
-            "options": ["plains", "island", "swamp", "mountain", "forest"],
-        }
-
-    # Black Vise / Jihad: "as this enters, choose an opponent [and a color]".
-    # Surface the prompt only to the (human) controller who owes the choice.
-    enter_choice_info = None
-    pending_enter = session.game.pending_enter_choice
-    if (
-        pending_enter is not None
-        and viewer_seat is not None
-        and pending_enter["controller_index"] == viewer_seat
-        and _seat_type(session, viewer_seat) != "ai"
-    ):
-        enter_choice_info = {
-            "card_name": pending_enter["card_name"],
-            "needs_color": bool(pending_enter["needs_color"]),
-            "opponents": [
-                {"seat": seat, "name": session.game.players[seat].name}
-                for seat in pending_enter["opponents"]
-            ],
-            "default_seat": pending_enter["default_seat"],
-            "default_color": pending_enter["default_color"],
-            "colors": ["W", "U", "B", "R", "G"] if pending_enter["needs_color"] else [],
-        }
-
-    # Drop of Honey: the controller picks which of the creatures tied for least
-    # power is destroyed. Surface the prompt only to that (human) player.
-    least_power_choice_info = None
-    pending_least = session.game.pending_least_power_choice
-    if (
-        pending_least is not None
-        and viewer_seat is not None
-        and pending_least["controller_index"] == viewer_seat
-        and _seat_type(session, viewer_seat) != "ai"
-    ):
-        least_power_choice_info = {
-            "card_name": pending_least["card_name"],
-            "candidates": [dict(entry) for entry in pending_least["candidates"]],
-        }
-
-    # Power Sink: the targeted spell's controller is asked to pay {X} (tap lands,
-    # then pay or decline) or their spell is countered. Surface to that human only.
-    mana_payment_info = None
-    pending_pay = session.game.pending_mana_payment
-    if (
-        pending_pay is not None
-        and viewer_seat is not None
-        and pending_pay["player_index"] == viewer_seat
-        and _seat_type(session, viewer_seat) != "ai"
-    ):
-        target_item = pending_pay.get("stack_item")
-        mana_payment_info = {
-            "card_name": pending_pay["card_name"],
-            "amount": int(pending_pay["amount"]),
-            "spell_name": target_item.card.name if target_item is not None else None,
-        }
-
-    # Kudzu: after the enchanted land is destroyed, its controller chooses which
-    # land to re-enchant. Surface the candidate lands only to that (human) player.
-    kudzu_reattach_info = None
-    pending_kudzu = session.game.pending_kudzu_reattach
-    if (
-        pending_kudzu is not None
-        and viewer_seat is not None
-        and pending_kudzu["player_index"] == viewer_seat
-        and _seat_type(session, viewer_seat) != "ai"
-    ):
-        owner = session.game.players[pending_kudzu["player_index"]]
-        kudzu_reattach_info = {
-            "lands": [
-                {"index": i, "name": p.card.name}
-                for i, p in enumerate(owner.battlefield)
-                if p.card.primary_type == "land"
-            ],
-        }
-
-    # Word of Command: the caster looks at the target's hand and chooses a card to
-    # force. Surfaced only to the (human) caster, and only while the choice is
-    # still owed — once chosen the spell just waits on the stack for priority.
-    word_of_command_info = None
-    pending_woc = session.game.pending_word_of_command
-    if (
-        pending_woc is not None
-        and "chosen_hand_index" not in pending_woc
-        and viewer_seat is not None
-        and pending_woc["caster_index"] == viewer_seat
-        and _seat_type(session, viewer_seat) != "ai"
-    ):
-        target = session.game.players[pending_woc["target_index"]]
-        word_of_command_info = {
-            "target_name": target.name,
-            "choices": [{"hand_index": i, "name": c.name} for i, c in enumerate(target.hand)],
-        }
+    # Every prompt a seat owes, rendered by web/prompts.py from the one registry
+    # in engine/pending_choices.py. This used to be a per-card cascade here: a
+    # block of visibility rules and a payload builder for each of eighteen
+    # prompts, with nothing checking that a newly armed prompt got one.
+    prompt_payloads = render_prompts(
+        PromptContext(
+            game=session.game,
+            viewer_seat=viewer_seat,
+            serialize_card=_serialize_card_summary,
+            seat_type=lambda seat: _seat_type(session, seat),
+        )
+    )
 
     # Time Vault: the begin-of-turn "skip your turn to untap" decision, shown only
     # to the active human player while they decide.
@@ -2222,42 +1940,6 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         and _seat_type(session, session.current_turn) != "ai"
     ):
         time_vault_info = {"permanents": list(session.time_vault_pending)}
-
-    # Illusionary Mask: the controller chooses which hand creature (mana value
-    # within X) to cast face down as a 2/2. Surfaced only to that (human) player.
-    face_down_cast_info = None
-    pending_fd = session.game.pending_face_down_cast
-    if (
-        pending_fd is not None
-        and viewer_seat is not None
-        and pending_fd["player_index"] == viewer_seat
-        and _seat_type(session, viewer_seat) != "ai"
-    ):
-        owner = session.game.players[pending_fd["player_index"]]
-        max_cmc = int(pending_fd.get("max_cmc", 0))
-        face_down_cast_info = {
-            "card_name": pending_fd["card_name"],
-            "max_cmc": max_cmc,
-            "choices": [
-                {"hand_index": i, "name": c.name, "cmc": int(c.cmc or 0)}
-                for i, c in enumerate(owner.hand)
-                if c.primary_type == "creature" and int(c.cmc or 0) <= max_cmc
-            ],
-        }
-
-    # Glasses of Urza: surface a revealed hand only to the player who looked.
-    hand_reveal_info = None
-    pending_reveal = session.game.pending_hand_reveal
-    if pending_reveal is not None:
-        viewer_index = pending_reveal["viewer_index"]
-        if viewer_seat is None or viewer_seat == viewer_index:
-            revealed = session.game.players[pending_reveal["target_index"]]
-            hand_reveal_info = {
-                "viewer_seat": viewer_index,
-                "target_seat": pending_reveal["target_index"],
-                "target_name": revealed.name,
-                "cards": [_serialize_card_summary(card) for card in revealed.hand],
-            }
 
     # Combat legality: which creatures may legally attack (declare-attackers step)
     # and every legal blocker→attacker pairing (declare-blockers step), computed by
@@ -2339,9 +2021,6 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
             if session.optional_untap_pending and viewer_seat == session.current_turn
             else None
         ),
-        "opponent_damage_choice": opponent_damage_info,
-        "lamp_draw": lamp_draw_info,
-        "outside_game_draw": outside_game_draw_info,
         "upkeep_pay": _build_upkeep_pay_info(session, viewer_seat),
         "upkeep_mana_prevention": _build_upkeep_mana_prevention_info(session, viewer_seat),
         "optional_trigger": _build_optional_trigger_info(session, viewer_seat),
@@ -2351,23 +2030,9 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "raging_river": _build_raging_river_info(session, viewer_seat),
         "camouflage": _build_camouflage_info(session, viewer_seat),
         "island_sanctuary_pending": session.island_sanctuary_pending and viewer_seat == session.current_turn,
-        "search_library": search_library_info,
-        "reorder_library": reorder_library_info,
-        "discard_select": discard_info,
-        "leng_discard": leng_discard_info,
-        "balance_select": balance_info,
-        "sacrifice_select": sacrifice_info,
-        "optional_pay": optional_pay_info,
-        "hand_reveal": hand_reveal_info,
-        "land_type_choice": land_type_choice_info,
-        "enter_choice": enter_choice_info,
-        "least_power_choice": least_power_choice_info,
-        "mana_payment": mana_payment_info,
-        "kudzu_reattach": kudzu_reattach_info,
-        "face_down_cast": face_down_cast_info,
         "time_vault": time_vault_info,
-        "word_of_command": word_of_command_info,
         "pregame": _build_pregame_info(session, viewer_seat),
+        **prompt_payloads,
     }
 
 
@@ -2578,185 +2243,17 @@ def _build_public_join_url(request: Request, session_id: str) -> str | None:
     return f"{request.url.scheme}://{netloc}/index.html?session={session_id}"
 
 
-def _auto_resolve_ai_pending_search(session: Session) -> None:
-    """Resolve a pending library search immediately when the searcher is an AI seat."""
-    game = session.game
-    while True:
-        pending = game.pending_search_library
-        if pending is None:
-            return
-        caster_seat = pending["caster_index"]
-        if _seat_type(session, caster_seat) != "ai":
-            return
-        caster = game.players[caster_seat]
-        choice = choose_search_library_index(game, caster_seat, card_type=pending.get("card_type", "any"))
-        if choice is None:
-            random.shuffle(caster.library)
-            game.pending_search_library = None
-            game.log.append(f"{caster.name} searched their library and found nothing")
-            continue
-        if not game.confirm_search_library(caster_seat, choice):
-            game.pending_search_library = None
-            return
-
-
-def _auto_resolve_ai_pending_reorder(session: Session) -> None:
-    """Resolve a pending library reorder immediately when the caster is an AI seat.
-
-    AI players take the action headlessly — no "Reorder top of library" UI is shown.
-    """
-    game = session.game
-    pending = game.pending_reorder_library
-    if pending is None:
-        return
-    caster_seat = pending["caster_index"]
-    if _seat_type(session, caster_seat) != "ai":
-        return
-    new_order = choose_reorder_library_order(
-        game, caster_seat, pending["target_index"], pending["top_count"]
-    )
-    if not game.confirm_reorder_library(caster_seat, new_order):
-        game.pending_reorder_library = None
-
-
-def _auto_resolve_ai_pending_discard(session: Session) -> None:
-    """Resolve a pending non-random discard immediately when the discarding player
-    is an AI seat (the human keeps their interactive prompt)."""
-    game = session.game
-    pending = game.pending_discard
-    if pending is None:
-        return
-    if _seat_type(session, pending["player_index"]) != "ai":
-        return
-    game.auto_resolve_pending_discard()
-
-
-def _auto_resolve_ai_pending_balance(session: Session) -> None:
-    """Resolve each AI player's Balance plan; the human keeps their interactive
-    sacrifice/discard choice."""
-    game = session.game
-    pending = game.pending_balance
-    if pending is None:
-        return
-    for player_index in list(pending["plans"].keys()):
-        if _seat_type(session, player_index) == "ai":
-            game.auto_resolve_pending_balance(only_player_index=player_index)
-
-
-def _auto_resolve_ai_pending_sacrifice(session: Session) -> None:
-    """Resolve an AI player's forced sacrifice (Lich) with the deterministic
-    heuristic; a human keeps their interactive choice of which permanent(s)."""
-    game = session.game
-    pending = game.pending_sacrifice
-    if pending is None:
-        return
-    if _seat_type(session, pending["player_index"]) == "ai":
-        game.auto_resolve_pending_sacrifice()
-
-
-def _auto_resolve_ai_pending_optional_pays(session: Session) -> None:
-    """Pay each AI player's pending color-rod "pay {1}: gain life" triggers; the
-    human keeps their yes/no prompt."""
-    game = session.game
-    for entry in list(game.pending_optional_pays):
-        if _seat_type(session, entry["player_index"]) == "ai":
-            game.auto_resolve_pending_optional_pays(only_player_index=entry["player_index"])
-
-
-def _auto_resolve_ai_pending_land_type(session: Session) -> None:
-    """Keep the provisional default (island) for an AI Phantasmal Terrain; only a
-    human controller gets to pick the basic land type."""
-    game = session.game
-    pending = game.pending_land_type_choice
-    if pending is not None and _seat_type(session, pending["player_index"]) == "ai":
-        game.confirm_land_type(pending["player_index"], "island")
-
-
-def _auto_resolve_ai_pending_mana_payment(session: Session) -> None:
-    """Resolve an AI controller's Power Sink payment deterministically: pay {X} from
-    its mana pool if able, otherwise let the spell be countered."""
-    game = session.game
-    pending = game.pending_mana_payment
-    if pending is not None and _seat_type(session, pending["player_index"]) == "ai":
-        game._auto_resolve_mana_payment()
-
-
-def _auto_resolve_ai_pending_kudzu(session: Session) -> None:
-    """Re-attach an AI's Kudzu to its first available land (deterministic)."""
-    game = session.game
-    pending = game.pending_kudzu_reattach
-    if pending is not None and _seat_type(session, pending["player_index"]) == "ai":
-        owner = game.players[pending["player_index"]]
-        idx = next(
-            (i for i, p in enumerate(owner.battlefield) if p.card.primary_type == "land"),
-            None,
-        )
-        if idx is None:
-            game.pending_kudzu_reattach = None
-        else:
-            game.confirm_kudzu_reattach(pending["player_index"], idx)
-
-
-def _auto_resolve_ai_pending_face_down(session: Session) -> None:
-    """Cast an AI's Illusionary Mask face-down creature — the first eligible hand
-    creature (mana value within X). Determinism for headless play."""
-    game = session.game
-    pending = game.pending_face_down_cast
-    if pending is None or _seat_type(session, pending["player_index"]) != "ai":
-        return
-    player = game.players[pending["player_index"]]
-    max_cmc = int(pending.get("max_cmc", 0))
-    idx = next(
-        (i for i, c in enumerate(player.hand)
-         if c.primary_type == "creature" and int(c.cmc or 0) <= max_cmc),
-        None,
-    )
-    game.confirm_face_down_cast(pending["player_index"], idx if idx is not None else -1)
-
-
-def _auto_resolve_ai_pending_word_of_command(session: Session) -> None:
-    """Resolve an AI caster's Word of Command — force the first card in the target's
-    hand (deterministic for headless play)."""
-    game = session.game
-    pending = game.pending_word_of_command
-    if pending is None or _seat_type(session, pending["caster_index"]) != "ai":
-        return
-    target = game.players[pending["target_index"]]
-    game.confirm_word_of_command(pending["caster_index"], 0 if target.hand else -1)
-
-
-def _auto_resolve_ai_pending_replacement_choices(session: Session) -> None:
-    """Safety net: a suspended replacement choice (Library of Leng's discard
-    destination, Aladdin's Lamp's revealed cards, Ring of Ma'rûf's outside-the-
-    game card) is only armed for human seats, but if a choosing seat is (now)
-    AI-controlled, take the choice's recorded default.
-
-    Generic over the queue, so every interactive replacement is covered by
-    construction — the lamp and Ring prompts previously had no safety net and
-    would have stalled a seat handed from a human to the AI."""
-    game = session.game
-    for choice in list(game.pending_replacement_choices):
-        if _seat_type(session, choice.player_index) == "ai":
-            game.resolve_replacement_choice(
-                choice.player_index, choice.default_option, kind=choice.kind
-            )
-
-
 def _auto_resolve_ai_pending(session: Session) -> None:
-    """Resolve any AI-owned pending choices (library search, library reorder,
-    discard, balance, optional pays)."""
-    _auto_resolve_ai_pending_search(session)
-    _auto_resolve_ai_pending_reorder(session)
-    _auto_resolve_ai_pending_discard(session)
-    _auto_resolve_ai_pending_balance(session)
-    _auto_resolve_ai_pending_sacrifice(session)
-    _auto_resolve_ai_pending_optional_pays(session)
-    _auto_resolve_ai_pending_land_type(session)
-    _auto_resolve_ai_pending_mana_payment(session)
-    _auto_resolve_ai_pending_kudzu(session)
-    _auto_resolve_ai_pending_face_down(session)
-    _auto_resolve_ai_pending_word_of_command(session)
-    _auto_resolve_ai_pending_replacement_choices(session)
+    """Answer every prompt an AI seat owes, with that kind's recorded default.
+
+    One loop over the queue, so a newly registered prompt is covered by
+    construction. This was twelve near-identical functions — one per prompt,
+    each re-deriving the seat and calling a bespoke resolver — and the two the
+    list was missing (Aladdin's Lamp, Ring of Ma'rûf) would have stalled a seat
+    handed from a human to the AI. A missing entry does not misbehave; it hangs
+    the game on that seat forever.
+    """
+    auto_resolve_ai_prompts(session.game, lambda seat: _seat_type(session, seat))
 
 
 def _ai_step(session: Session) -> bool:
@@ -4166,74 +3663,13 @@ def do_action(session_id: str, req: GameActionRequest):
         raise HTTPException(status_code=400, detail="choose Island Sanctuary draw option before other actions")
 
     _auto_resolve_ai_pending(session)
-    if session.game.pending_search_library is not None and req.action not in {"search_library_confirm"} | _DEBUG_ANYTIME_ACTIONS:
-        raise HTTPException(status_code=400, detail="complete library search before other actions")
-    if session.game.pending_reorder_library is not None and req.action not in {"reorder_library_confirm"} | _DEBUG_ANYTIME_ACTIONS:
-        raise HTTPException(status_code=400, detail="complete library reorder before other actions")
-    if session.game.pending_discard is not None and req.action not in {"discard_confirm"} | _DEBUG_ANYTIME_ACTIONS:
-        raise HTTPException(status_code=400, detail="complete discard before other actions")
-    if (
-        session.game.pending_balance is not None
-        and req.seat in session.game.pending_balance["plans"]
-        and req.action not in {"balance_confirm"} | _DEBUG_ANYTIME_ACTIONS
-    ):
-        raise HTTPException(status_code=400, detail="complete Balance sacrifices before other actions")
-    if (
-        session.game.pending_sacrifice is not None
-        and req.seat == session.game.pending_sacrifice["player_index"]
-        and req.action not in {"sacrifice_confirm"} | _DEBUG_ANYTIME_ACTIONS
-    ):
-        raise HTTPException(status_code=400, detail="complete forced sacrifice before other actions")
-    if (
-        any(e["player_index"] == req.seat for e in session.game.pending_optional_pays)
-        and req.action not in {"resolve_optional_pay"} | _DEBUG_ANYTIME_ACTIONS
-    ):
-        raise HTTPException(status_code=400, detail="resolve the pay-for-life trigger before other actions")
-    if (
-        session.game.pending_opponent_damage is not None
-        and session.game.pending_opponent_damage.get("chooser_index") == req.seat
-        and req.action not in {"opponent_damage_choose"} | _DEBUG_ANYTIME_ACTIONS
-    ):
-        raise HTTPException(status_code=400, detail="choose a target for the opponent-choice damage before other actions")
-    if (
-        session.game.pending_lamp_draw is not None
-        and session.game.pending_lamp_draw.get("player_index") == req.seat
-        and req.action not in {"lamp_draw_confirm"} | _DEBUG_ANYTIME_ACTIONS
-    ):
-        raise HTTPException(status_code=400, detail="choose a card for Aladdin's Lamp before other actions")
-    if (
-        session.game.pending_outside_game_draw is not None
-        and session.game.pending_outside_game_draw.get("player_index") == req.seat
-        and req.action not in {"outside_game_draw_confirm"} | _DEBUG_ANYTIME_ACTIONS
-    ):
-        raise HTTPException(status_code=400, detail="choose a card from outside the game before other actions")
-    if (
-        session.game.pending_word_of_command is not None
-        and "chosen_hand_index" not in session.game.pending_word_of_command
-        and session.game.pending_word_of_command.get("caster_index") == req.seat
-        and req.action not in {"word_of_command_confirm"} | _DEBUG_ANYTIME_ACTIONS
-    ):
-        raise HTTPException(status_code=400, detail="choose the Word of Command card before other actions")
-    if (
-        any(e["player_index"] == req.seat for e in session.game.pending_leng_discards)
-        and req.action not in {"leng_discard_confirm"} | _DEBUG_ANYTIME_ACTIONS
-    ):
-        raise HTTPException(
-            status_code=400,
-            detail="choose where the discarded card goes (Library of Leng) before other actions",
-        )
-    if (
-        session.game.pending_enter_choice is not None
-        and session.game.pending_enter_choice.get("controller_index") == req.seat
-        and req.action not in {"enter_choice_confirm"} | _DEBUG_ANYTIME_ACTIONS
-    ):
-        raise HTTPException(status_code=400, detail="choose an opponent (and color) for the entering permanent before other actions")
-    if (
-        session.game.pending_least_power_choice is not None
-        and session.game.pending_least_power_choice.get("controller_index") == req.seat
-        and req.action not in {"least_power_choice_confirm"} | _DEBUG_ANYTIME_ACTIONS
-    ):
-        raise HTTPException(status_code=400, detail="choose which creature tied for least power is destroyed before other actions")
+    # A prompt the acting seat owes refuses every action but the one that
+    # answers it. Driven by the registry, so a new prompt cannot ship able to be
+    # played around — the failure the eighteen hand-written checks this replaces
+    # had no protection against.
+    blocking = blocking_prompt(session.game, req.seat, req.action, frozenset(_DEBUG_ANYTIME_ACTIONS))
+    if blocking is not None:
+        raise HTTPException(status_code=400, detail=blocking[0].blocked_detail)
 
     if req.action in {
         "cast",
@@ -5012,6 +4448,14 @@ def do_action(session_id: str, req: GameActionRequest):
         if not session.game.confirm_enter_choice(req.seat, req.target_seat, req.mana_color):
             raise HTTPException(status_code=400, detail="invalid enter choice")
 
+    elif req.action == "body_choice_confirm":
+        # Primal Clay: the controller picks which printed body the creature
+        # entered as (hand_index = position in the offered options).
+        if req.hand_index is None:
+            raise HTTPException(status_code=400, detail="hand_index (body option index) is required")
+        if not session.game.confirm_enter_body_choice(req.seat, req.hand_index):
+            raise HTTPException(status_code=400, detail="no body choice is pending for you")
+
     elif req.action == "least_power_choice_confirm":
         # Drop of Honey: the controller picks which of the creatures tied for
         # least power is destroyed (target_seat + target_permanent_index).
@@ -5092,9 +4536,7 @@ def do_action(session_id: str, req: GameActionRequest):
                 _finish_beginning_phase(session, pidx)
 
     elif req.action == "dismiss_hand_reveal":
-        pending = session.game.pending_hand_reveal
-        if pending is not None and req.seat == pending["viewer_index"]:
-            session.game.pending_hand_reveal = None
+        session.game.dismiss_hand_reveal(req.seat)
 
     elif req.action == "ai_step":
         if _seat_type(session, session.current_turn) != "ai":

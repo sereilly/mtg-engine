@@ -106,12 +106,10 @@ def target_gains_life(game: Game, instruction: OracleInstruction, context: Oracl
         cost = tctx.get("optional_pay_cost")
         if cost is not None:
             if game._player_can_pay_generic(controller, int(cost)):
-                game.pending_optional_pays.append({
-                    "card_name": card.name,
-                    "player_index": game.players.index(controller),
-                    "cost": int(cost),
-                    "life": life,
-                })
+                game.arm_pending_choice(
+                    "optional_pay", game.players.index(controller),
+                    card_name=card.name, cost=int(cost), life=life,
+                )
             return True, "resolved"
         game._gain_life(controller, life, card.name)
         return True, "resolved"

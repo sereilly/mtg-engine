@@ -452,20 +452,27 @@ class EffectsMixin:
     ) -> bool:
         """Resolve the pending opponent-chosen damage (Cuombajj Witches) with the
         chooser's pick. Returns False when no such choice is pending for them."""
-        pending = self.pending_opponent_damage
-        if pending is None or pending["chooser_index"] != chooser_index:
-            return False
+        return self.resolve_pending_choice(
+            "opponent_damage", chooser_index,
+            target_seat=target_seat, target_permanent_index=target_permanent_index,
+        )
+
+    def _resolve_opponent_damage_choice(
+        self, choice, target_seat: int, target_permanent_index: int | None
+    ) -> bool:
         if not (0 <= target_seat < len(self.players)):
             return False
-        self.pending_opponent_damage = None
-        self._apply_opponent_damage_choice(pending, target_seat, target_permanent_index)
+        self.discard_pending_choice(choice)
+        self._apply_opponent_damage_choice(choice.data, target_seat, target_permanent_index)
         return True
 
-    def _auto_resolve_opponent_damage_choice(self, pending: dict) -> None:
+    def _default_opponent_damage_choice(self, choice) -> None:
         """Deterministic chooser policy for AI/headless play: kill one of the
         activator's creatures if the damage is lethal to it (largest power
         first), otherwise hit the activator's face."""
-        chooser_index = pending["chooser_index"]
+        self.discard_pending_choice(choice)
+        pending = choice.data
+        chooser_index = choice.player_index
         amount = int(pending["amount"])
         target_seat = pending.get("caster_index")
         if not (isinstance(target_seat, int) and 0 <= target_seat < len(self.players)):

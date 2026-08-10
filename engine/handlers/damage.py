@@ -298,15 +298,11 @@ def self_damage_unless_pay(game: Game, instruction: OracleInstruction, context: 
     card = context.card
     amount = int(instruction.payload.get("amount", 0))
     cost = int(instruction.payload.get("cost", 0))
-    entry = {
-        "card_name": card.name,
-        "player_index": game.players.index(caster),
-        "cost": cost,
-        "life": 0,
-        "damage": amount,
-        "_source_permanent": context.source_permanent,
-    }
-    game.pending_optional_pays.append(entry)
+    game.arm_pending_choice(
+        "optional_pay", game.players.index(caster),
+        card_name=card.name, cost=cost, life=0, damage=amount,
+        _source_permanent=context.source_permanent,
+    )
     game.log.append(
         f"{caster.name} may pay {{{cost}}} or {card.name} deals {amount} damage to them"
     )
@@ -330,18 +326,14 @@ def deal_damage_and_opponent_choice(game: Game, instruction: OracleInstruction, 
     if chooser_index is None:
         return True, "resolved"
     amount = int(instruction.payload.get("opponent_amount", instruction.payload.get("amount", 0)))
-    pending = {
-        "chooser_index": chooser_index,
-        "caster_index": caster_index,
-        "amount": amount,
-        "card_name": context.card.name,
-        "_source_permanent": context.source_permanent,
-    }
-    if chooser_index in game.interactive_seats:
-        game.pending_opponent_damage = pending
+    # An interactive chooser is prompted; every other seat takes the kind's
+    # deterministic default the moment this is armed.
+    if game.arm_pending_choice(
+        "opponent_damage", chooser_index,
+        caster_index=caster_index, amount=amount, card_name=context.card.name,
+        _source_permanent=context.source_permanent,
+    ) is not None:
         game.log.append(
             f"{game.players[chooser_index].name} chooses any target for {context.card.name}'s {amount} damage"
         )
-        return True, "resolved"
-    game._auto_resolve_opponent_damage_choice(pending)
     return True, "resolved"

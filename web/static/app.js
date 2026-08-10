@@ -953,7 +953,7 @@ function combatDamageAssignmentPending(state = currentState) {
 }
 
 function hasBlockingPromptForAutoPass(state = currentState) {
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getBodyChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
   return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingAbilityChoice || pendingChannel || pendingAttackTarget);
 }
 
@@ -1949,6 +1949,14 @@ function getEnterChoiceInfo(state = currentState) {
   return info;
 }
 
+// Primal Clay: "As this creature enters, it becomes your choice of <body>."
+function getBodyChoiceInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.body_choice;
+  if (!info || !Array.isArray(info.options) || info.options.length === 0) return null;
+  return info;
+}
+
 // Drop of Honey: the tie-break choice among creatures tied for least power.
 function getLeastPowerChoiceInfo(state = currentState) {
   if (!state || seat === null) return null;
@@ -2459,6 +2467,7 @@ function isAnyPromptActive(state = currentState) {
   if (getOpponentDamageInfo(state)) return true;
   if (getLampDrawInfo(state) || getOutsideGameDrawInfo(state)) return true;
   if (getLandTypeChoiceInfo(state)) return true;
+  if (getBodyChoiceInfo(state)) return true;
   if (getManaPaymentInfo(state)) return true;
   if (getBandBlockerInfo(state)) return true;
   if (getMultiblockInfo(state)) return true;
@@ -2481,7 +2490,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getBodyChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -3443,6 +3452,53 @@ function applyLandTypeChoicePrompt(info) {
         seat,
         action: "land_type_confirm",
         land_type: btn.dataset.landType,
+      });
+    });
+  });
+}
+
+// Primal Clay: "As this creature enters, it becomes your choice of a 3/3, a 2/2
+// with flying, or a 1/6 Wall with defender." The first printed body is already
+// applied, so this offers to replace it.
+function applyBodyChoicePrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  const cardName = info.card_name || "Primal Clay";
+  title.textContent = "Choose what it enters as";
+  body.textContent = `${cardName}: pick the body it becomes.`;
+  const buttons = info.options
+    .map((option) => {
+      const label = option.keyword
+        ? `${option.power}/${option.toughness} with ${option.keyword}`
+        : `${option.power}/${option.toughness}`;
+      return (
+        `<button type="button" class="prompt-choice-btn" data-body-index="${option.index}">` +
+        `${escapeHtml(label)}</button>`
+      );
+    })
+    .join("");
+  steps.innerHTML = `<div class="prompt-choice-column">${buttons}</div>`;
+
+  steps.querySelectorAll("[data-body-index]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await sendAction({
+        seat,
+        action: "body_choice_confirm",
+        hand_index: Number(btn.dataset.bodyIndex),
       });
     });
   });
@@ -4493,6 +4549,12 @@ function renderActivationPrompt() {
   const enterChoiceInfo = getEnterChoiceInfo();
   if (enterChoiceInfo) {
     applyEnterChoicePrompt(enterChoiceInfo);
+    return;
+  }
+
+  const bodyChoiceInfo = getBodyChoiceInfo();
+  if (bodyChoiceInfo) {
+    applyBodyChoicePrompt(bodyChoiceInfo);
     return;
   }
 

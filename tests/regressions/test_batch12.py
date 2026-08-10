@@ -219,11 +219,9 @@ class TestHandRevealSerialization:
         sid, session, game = _session()
         game.players[0].battlefield = [Permanent(card=_C["Glasses of Urza"])]
         game.players[1].hand = [_C["Grizzly Bears"]]
-        game.pending_hand_reveal = {
-            "viewer_index": 0,
-            "target_index": 1,
-            "card_names": ["Grizzly Bears"],
-        }
+        game.arm_pending_choice(
+            "hand_reveal", 0, target_index=1, card_names=["Grizzly Bears"]
+        )
 
         viewer_state = client.get(f"/api/sessions/{sid}/state", params={"seat": 0}).json()
         assert _hand_names(viewer_state, 1) == ["Grizzly Bears"]
@@ -236,7 +234,7 @@ class TestHandRevealSerialization:
     def test_hand_hidden_again_after_reveal_dismissed(self):
         sid, session, game = _session()
         game.players[1].hand = [_C["Grizzly Bears"]]
-        game.pending_hand_reveal = {"viewer_index": 0, "target_index": 1, "card_names": ["Grizzly Bears"]}
+        game.arm_pending_choice("hand_reveal", 0, target_index=1, card_names=["Grizzly Bears"])
         resp = client.post(
             f"/api/sessions/{sid}/action",
             json={"seat": 0, "action": "dismiss_hand_reveal"},

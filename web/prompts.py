@@ -1,0 +1,421 @@
+"""Rendering, gating and auto-answering the prompts a seat owes.
+
+``engine/pending_choices.py`` is the registry: one :class:`ChoiceSpec` per kind
+of interactive decision, saying how it is answered, what a non-interactive seat
+does instead, which action answers it and what message refuses everything else.
+This module is the web half — one renderer per kind, and the three loops that
+used to be three hand-written cascades in ``app.py``, one branch per prompt:
+
+* :func:`render_prompts`     — the payload the board UI reads, per viewer
+* :func:`blocking_prompt`    — the prompt that refuses an action, if any
+* :func:`auto_resolve_ai_prompts` — every AI-owned prompt takes its default
+
+Those three plus the registry's ``resolve``/``default`` are the five parts a
+prompt needs. They used to be five unrelated edits; a prompt with any of them
+missing looked fine until it was played (Primal Clay shipped with three
+missing). ``tests/engine/test_pending_choices.py`` now fails if a kind is
+registered with no renderer, or armed with no spec.
+
+Renderers take the *list* of that kind's currently visible choices, because a
+seat can owe several of the same prompt at once (the colour rods) and the board
+shows them as one panel.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any, Callable
+
+from engine.pending_choices import CHOICE_SPECS, public_data
+
+
+@dataclass(frozen=True)
+class PromptContext:
+    """What a renderer is allowed to reach for.
+
+    Passed in rather than imported so this module has no cycle back into
+    ``app.py``, and so what the presentation layer depends on stays visible.
+    """
+
+    game: Any
+    viewer_seat: int | None
+    serialize_card: Callable[[Any], dict]
+    seat_type: Callable[[int], str]
+
+
+Renderer = Callable[[PromptContext, list], "dict | None"]
+
+PROMPT_RENDERERS: dict[str, Renderer] = {}
+
+
+def prompt_renderer(kind: str) -> Callable[[Renderer], Renderer]:
+    """Register the renderer for one kind of prompt.
+
+    The kind must already be registered in the engine — a renderer for a prompt
+    nothing arms is dead code that reads like coverage.
+    """
+
+    def decorator(fn: Renderer) -> Renderer:
+        if kind not in CHOICE_SPECS:
+            raise ValueError(f"no pending choice registered for prompt {kind!r}")
+        if kind in PROMPT_RENDERERS:
+            raise ValueError(f"prompt {kind!r} already rendered by {PROMPT_RENDERERS[kind].__name__}")
+        PROMPT_RENDERERS[kind] = fn
+        return fn
+
+    return decorator
+
+
+# ---------------------------------------------------------------------------
+# The three loops
+# ---------------------------------------------------------------------------
+
+def visible_choices(ctx: PromptContext, spec) -> list:
+    """The choices of *spec*'s kind this viewer may see.
+
+    A prompt belongs to the seat that owes it. A seatless viewer (a spectator,
+    or the single-payload API) sees only the kinds marked ``spectator_visible``,
+    and an AI seat's prompt is hidden unless the kind says otherwise — the AI
+    answers it itself, so showing it would be a prompt nobody can act on.
+    """
+    out = []
+    for kind_spec, choice in ctx.game.iter_pending_prompts():
+        if kind_spec is not spec:
+            continue
+        if ctx.viewer_seat is None:
+            if not spec.spectator_visible:
+                continue
+        elif ctx.viewer_seat != choice.player_index:
+            continue
+        if spec.hidden_for_ai and ctx.seat_type(choice.player_index) == "ai":
+            continue
+        if not spec.open_for(ctx.game, choice):
+            continue
+        out.append(choice)
+    return out
+
+
+def render_prompts(ctx: PromptContext) -> dict:
+    """``{prompt_key: payload or None}`` for every registered kind.
+
+    Every key is always present, so the board UI never has to tell "no prompt"
+    from "this build doesn't know that prompt".
+    """
+    payloads: dict[str, dict | None] = {}
+    for kind, spec in CHOICE_SPECS.items():
+        choices = visible_choices(ctx, spec)
+        renderer = PROMPT_RENDERERS.get(kind)
+        payloads[spec.prompt_key] = renderer(ctx, choices) if (choices and renderer) else None
+    return payloads
+
+
+def blocking_prompt(game, seat: int, action: str, exempt_actions: frozenset[str]) -> tuple[Any, Any] | None:
+    """The first prompt that refuses *action* from *seat*, as ``(spec, choice)``.
+
+    A kind with no ``blocked_detail`` never refuses anything: it is a
+    notification, or a decision the rest of the game can carry on around.
+    """
+    for spec, choice in game.iter_pending_prompts():
+        if spec.blocked_detail is None:
+            continue
+        if not spec.blocks_every_seat and choice.player_index != seat:
+            continue
+        if not spec.open_for(game, choice):
+            continue
+        if action in exempt_actions or action == spec.action:
+            continue
+        return spec, choice
+    return None
+
+
+def auto_resolve_ai_prompts(game, seat_type: Callable[[int], str]) -> None:
+    """Take the default on every prompt owed by an AI seat.
+
+    Generic over the queue, so a new prompt is covered the moment it is
+    registered. That matters more than it sounds: a prompt with no auto-answer
+    does not misbehave, it *stalls the game forever* on an AI seat, and only in
+    a session where that card happens to be drawn.
+    """
+    # Answering one prompt can arm the next (a search that finds a card that
+    # discards), so drain until nothing AI-owned is left. The bound is a
+    # backstop against a default that fails to clear its own prompt.
+    for _ in range(100):
+        target = next(
+            (
+                choice
+                for _spec, choice in game.iter_pending_prompts()
+                if seat_type(choice.player_index) == "ai"
+            ),
+            None,
+        )
+        if target is None:
+            return
+        game.auto_resolve_choice(target)
+
+
+# ---------------------------------------------------------------------------
+# Renderers, one per kind
+# ---------------------------------------------------------------------------
+
+@prompt_renderer("search_library")
+def _search_library(ctx: PromptContext, choices: list) -> dict:
+    choice = choices[0]
+    caster = ctx.game.players[choice.player_index]
+    return {
+        "caster_seat": choice.player_index,
+        "count": choice.data["count"],
+        "card_type": choice.data["card_type"],
+        "cards": [ctx.serialize_card(card) for card in caster.library],
+    }
+
+
+@prompt_renderer("reorder_library")
+def _reorder_library(ctx: PromptContext, choices: list) -> dict:
+    choice = choices[0]
+    target = ctx.game.players[choice.data["target_index"]]
+    top_count = choice.data["top_count"]
+    return {
+        "caster_seat": choice.player_index,
+        "target_seat": choice.data["target_index"],
+        "top_count": top_count,
+        "may_shuffle": bool(choice.data.get("may_shuffle")),
+        "target_name": target.name,
+        "cards": [ctx.serialize_card(card) for card in target.library[:top_count]],
+    }
+
+
+@prompt_renderer("discard")
+def _discard(ctx: PromptContext, choices: list) -> dict:
+    choice = choices[0]
+    discarder = ctx.game.players[choice.player_index]
+    return {
+        "player_seat": choice.player_index,
+        "count": choice.data["count"],
+        "allow_top_of_library": bool(choice.data.get("allow_top_of_library")),
+        "cards": [ctx.serialize_card(card) for card in discarder.hand],
+    }
+
+
+@prompt_renderer("leng_discard")
+def _leng_discard(ctx: PromptContext, choices: list) -> dict:
+    """Library of Leng: one card at a time, with how many are still queued."""
+    choice = choices[0]
+    return {
+        "player_seat": choice.player_index,
+        "card": ctx.serialize_card(choice.data["card"]),
+        "remaining": sum(1 for c in choices if c.player_index == choice.player_index),
+    }
+
+
+@prompt_renderer("balance")
+def _balance(ctx: PromptContext, choices: list) -> dict:
+    choice = choices[0]
+    seat = choice.player_index
+    plan = choice.data["plan"]
+    player = ctx.game.players[seat]
+    return {
+        "player_seat": seat,
+        "lands_to_sacrifice": plan["lands"],
+        "creatures_to_sacrifice": plan["creatures"],
+        "cards_to_discard": plan["hand"],
+        "lands": [
+            {"index": i, **ctx.serialize_card(p.card)}
+            for i, p in enumerate(player.battlefield)
+            if p.card.primary_type == "land"
+        ],
+        "creatures": [
+            {"index": i, **ctx.serialize_card(p.card)}
+            for i, p in enumerate(player.battlefield)
+            if p.card.primary_type == "creature"
+        ],
+        "hand": [ctx.serialize_card(card) for card in player.hand],
+    }
+
+
+@prompt_renderer("sacrifice")
+def _sacrifice(ctx: PromptContext, choices: list) -> dict:
+    """Every eligible permanent, so the board can list and highlight them."""
+    choice = choices[0]
+    state = ctx.game._sacrifice_prompt(choice)
+    player = ctx.game.players[choice.player_index]
+    return {
+        "player_seat": choice.player_index,
+        "count": state["count"],
+        "reason": state["reason"],
+        "permanents": [
+            {"index": i, **ctx.serialize_card(player.battlefield[i].card)}
+            for i in state["valid_indices"]
+        ],
+    }
+
+
+@prompt_renderer("optional_pay")
+def _optional_pay(ctx: PromptContext, choices: list) -> dict:
+    """The colour rods and friends: a seat can owe several at once."""
+    return {"pending": [
+        {**public_data(choice), "player_index": choice.player_index} for choice in choices
+    ]}
+
+
+@prompt_renderer("hand_reveal")
+def _hand_reveal(ctx: PromptContext, choices: list) -> dict:
+    choice = choices[0]
+    revealed = ctx.game.players[choice.data["target_index"]]
+    return {
+        "viewer_seat": choice.player_index,
+        "target_seat": choice.data["target_index"],
+        "target_name": revealed.name,
+        "cards": [ctx.serialize_card(card) for card in revealed.hand],
+    }
+
+
+@prompt_renderer("land_type_choice")
+def _land_type_choice(ctx: PromptContext, choices: list) -> dict:
+    return {
+        "card_name": choices[0].data["card_name"],
+        "options": ["plains", "island", "swamp", "mountain", "forest"],
+    }
+
+
+@prompt_renderer("mana_payment")
+def _mana_payment(ctx: PromptContext, choices: list) -> dict:
+    data = choices[0].data
+    target_item = data.get("stack_item")
+    return {
+        "card_name": data["card_name"],
+        "amount": int(data["amount"]),
+        "spell_name": target_item.card.name if target_item is not None else None,
+    }
+
+
+@prompt_renderer("kudzu_reattach")
+def _kudzu_reattach(ctx: PromptContext, choices: list) -> dict:
+    owner = ctx.game.players[choices[0].player_index]
+    return {
+        "lands": [
+            {"index": i, "name": p.card.name}
+            for i, p in enumerate(owner.battlefield)
+            if p.card.primary_type == "land"
+        ],
+    }
+
+
+@prompt_renderer("face_down_cast")
+def _face_down_cast(ctx: PromptContext, choices: list) -> dict:
+    choice = choices[0]
+    owner = ctx.game.players[choice.player_index]
+    max_cmc = int(choice.data.get("max_cmc", 0))
+    return {
+        "card_name": choice.data["card_name"],
+        "max_cmc": max_cmc,
+        "choices": [
+            {"hand_index": i, "name": c.name, "cmc": int(c.cmc or 0)}
+            for i, c in enumerate(owner.hand)
+            if c.primary_type == "creature" and int(c.cmc or 0) <= max_cmc
+        ],
+    }
+
+
+@prompt_renderer("word_of_command")
+def _word_of_command(ctx: PromptContext, choices: list) -> dict:
+    target = ctx.game.players[choices[0].data["target_index"]]
+    return {
+        "target_name": target.name,
+        "choices": [{"hand_index": i, "name": c.name} for i, c in enumerate(target.hand)],
+    }
+
+
+@prompt_renderer("opponent_damage")
+def _opponent_damage(ctx: PromptContext, choices: list) -> dict:
+    """Cuombajj Witches: "any target", so every player face and every creature."""
+    data = choices[0].data
+    targets: list[dict] = [
+        {"kind": "player", "seat": seat} for seat in range(len(ctx.game.players))
+    ]
+    for seat, player in enumerate(ctx.game.players):
+        for idx, perm in enumerate(player.battlefield):
+            if perm.is_creature:
+                targets.append(
+                    {"kind": "permanent", "seat": seat, "index": idx,
+                     "key": f"{seat}-{idx}", "name": perm.card.name}
+                )
+    return {
+        "card_name": data["card_name"],
+        "amount": data["amount"],
+        "valid_targets": targets,
+    }
+
+
+@prompt_renderer("enter_choice")
+def _enter_choice(ctx: PromptContext, choices: list) -> dict:
+    data = choices[0].data
+    return {
+        "card_name": data["card_name"],
+        "needs_color": bool(data["needs_color"]),
+        "opponents": [
+            {"seat": seat, "name": ctx.game.players[seat].name}
+            for seat in data["opponents"]
+        ],
+        "default_seat": data["default_seat"],
+        "default_color": data["default_color"],
+        "colors": ["W", "U", "B", "R", "G"] if data["needs_color"] else [],
+    }
+
+
+@prompt_renderer("body_choice")
+def _body_choice(ctx: PromptContext, choices: list) -> dict:
+    """Primal Clay: "it becomes your choice of <body>". The first printed body
+    is already applied, so the prompt offers to replace it."""
+    data = choices[0].data
+    return {
+        "card_name": data["card_name"],
+        "options": [
+            {
+                "index": i,
+                "power": body["power"],
+                "toughness": body["toughness"],
+                "keyword": body.get("keyword"),
+            }
+            for i, body in enumerate(data["options"])
+        ],
+    }
+
+
+@prompt_renderer("least_power_choice")
+def _least_power_choice(ctx: PromptContext, choices: list) -> dict:
+    data = choices[0].data
+    return {
+        "card_name": data["card_name"],
+        "candidates": [dict(entry) for entry in data["candidates"]],
+    }
+
+
+@prompt_renderer("lamp_draw")
+def _lamp_draw(ctx: PromptContext, choices: list) -> dict:
+    """Aladdin's Lamp: the looked-at cards are still on top of the library until
+    the choice is confirmed, so serialize them from there for the visual picker.
+    ``card_names`` stays the authoritative order and length."""
+    choice = choices[0]
+    names = list(choice.options)
+    library = ctx.game.players[choice.player_index].library
+    return {
+        "card_names": names,
+        "cards": [ctx.serialize_card(card) for card in library[: len(names)]],
+    }
+
+
+@prompt_renderer("outside_game_draw")
+def _outside_game_draw(ctx: PromptContext, choices: list) -> dict:
+    """Ring of Ma'rûf: the offered cards can be a subset of the sideboard (CR
+    407.3 keeps ante cards out of a non-ante game), so follow the recorded
+    positions rather than assuming the names are a prefix of it."""
+    choice = choices[0]
+    names = list(choice.options)
+    sideboard = ctx.game.players[choice.player_index].sideboard
+    offered = choice.data.get("sideboard_indices") or list(range(len(names)))
+    return {
+        "card_names": names,
+        "cards": [
+            ctx.serialize_card(sideboard[i]) for i in offered if 0 <= i < len(sideboard)
+        ],
+    }

@@ -98,11 +98,11 @@ def draw_then_discard_self(game: Game, instruction: OracleInstruction, context: 
     if actual_discard <= 0:
         return True, "resolved"
     player_index = game.players.index(caster)
-    game.pending_discard = {
-        "player_index": player_index,
-        "count": actual_discard,
-        "allow_top_of_library": game._controls_top_of_library_discard(caster),
-    }
+    game.arm_pending_choice(
+        "discard", player_index,
+        count=actual_discard,
+        allow_top_of_library=game._controls_top_of_library_discard(caster),
+    )
     game.log.append(f"{caster.name} must choose {actual_discard} card(s) to discard")
     return True, "pending_discard"
 
@@ -248,11 +248,11 @@ def timetwister(game: Game, instruction: OracleInstruction, context: OracleExecu
 def search_library(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     caster = context.caster
     caster_index = game.players.index(caster)
-    game.pending_search_library = {
-        "caster_index": caster_index,
-        "count": instruction.payload.get("count", 1),
-        "card_type": instruction.payload.get("card_type", "any"),
-    }
+    game.arm_pending_choice(
+        "search_library", caster_index,
+        count=instruction.payload.get("count", 1),
+        card_type=instruction.payload.get("card_type", "any"),
+    )
     game.log.append(f"{caster.name} is searching their library")
     return True, "pending_search_library"
 
@@ -267,12 +267,10 @@ def reorder_target_library_top(game: Game, instruction: OracleInstruction, conte
     # "You may have that player shuffle" (Natural Selection) lets the caster
     # optionally shuffle the target's library after reordering.
     may_shuffle = "you may have that player shuffle" in context.card.oracle_text.lower()
-    game.pending_reorder_library = {
-        "caster_index": caster_index,
-        "target_index": target_index,
-        "top_count": top_count,
-        "may_shuffle": may_shuffle,
-    }
+    game.arm_pending_choice(
+        "reorder_library", caster_index,
+        target_index=target_index, top_count=top_count, may_shuffle=may_shuffle,
+    )
     game.log.append(f"{caster.name} is looking at the top {top_count} cards of {target.name}'s library")
     return True, "pending_reorder_library"
 
@@ -288,11 +286,11 @@ def discard_target_cards(game: Game, instruction: OracleInstruction, context: Or
     # chooses which card. Defer to a pending choice; the UI prompts the human and
     # the AI auto-resolves it. Library of Leng lets them choose top-of-library.
     player_index = game.players.index(target)
-    game.pending_discard = {
-        "player_index": player_index,
-        "count": actual,
-        "allow_top_of_library": game._controls_top_of_library_discard(target),
-    }
+    game.arm_pending_choice(
+        "discard", player_index,
+        count=actual,
+        allow_top_of_library=game._controls_top_of_library_discard(target),
+    )
     game.log.append(f"{target.name} must choose {actual} card(s) to discard")
     return True, "pending_discard"
 
@@ -323,7 +321,8 @@ def _resolve_one_discard(game: Game, player_index: int, hand_index: int, to_libr
     if not (0 <= hand_index < len(player.hand)):
         return False
     card = player.hand.pop(hand_index)
-    allow_top = bool(game.pending_discard and game.pending_discard.get("allow_top_of_library"))
+    choice = game.pending_choice_of("discard", player_index)
+    allow_top = bool(choice is not None and choice.data.get("allow_top_of_library"))
     if to_library and allow_top:
         player.library.insert(0, card)
         game.log.append(f"{player.name} discarded {card.name} to the top of their library (Library of Leng)")
@@ -507,12 +506,11 @@ def peek_hand_and_force_play(game: Game, instruction: OracleInstruction, context
         return True, "resolved"
     caster_index = game.players.index(caster)
     target_index = game.players.index(target)
-    game.pending_word_of_command = {
-        "caster_index": caster_index,
-        "target_index": target_index,
-        "card_name": card.name,
-        "hand": [c.name for c in target.hand],
-    }
+    game.arm_pending_choice(
+        "word_of_command", caster_index,
+        target_index=target_index, card_name=card.name,
+        hand=[c.name for c in target.hand],
+    )
     game.log.append(f"{card.name}: {caster.name} looks at {target.name}'s hand to choose a card to force")
     return True, "resolved"
 
@@ -525,11 +523,15 @@ def look_at_target_hand(game: Game, instruction: OracleInstruction, context: Ora
     # Record the reveal so the UI can show the viewer the actual cards in the
     # target player's hand (Glasses of Urza). The viewer is the ability's
     # controller; the target is the player whose hand is looked at.
-    game.pending_hand_reveal = {
-        "viewer_index": game.players.index(viewer),
-        "target_index": game.players.index(target),
-        "card_names": [c.name for c in target.hand],
-    }
+    viewer_index = game.players.index(viewer)
+    # Only the most recent reveal is shown, so a second look replaces the first
+    # rather than queueing behind it.
+    game.clear_pending_choices("hand_reveal", viewer_index)
+    game.arm_pending_choice(
+        "hand_reveal", viewer_index,
+        target_index=game.players.index(target),
+        card_names=[c.name for c in target.hand],
+    )
     seen = len(target.hand)
     game.log.append(f"{card.name}: {viewer.name} looked at {target.name}'s hand ({seen} cards)")
     return True, "resolved"
