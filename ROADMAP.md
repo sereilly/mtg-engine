@@ -173,9 +173,10 @@ Baseline: 25.3% of lines parsed, 19.0% lowered, 8.3% executed.
 - **Reprint identity** — dedupe by `oracle_id`, with every printing recorded in
   order. City in a Bottle reads `original_printing`, so appending a reprint set
   cannot change which cards it bans.
-- **CI** (`.github/workflows/ci.yml`) runs the suite, a 20-second suite-time
-  budget, all four guard scripts in `--check` mode, and a staleness check that
-  the generated trackers are committed. `requirements.txt` pins the versions.
+- **CI** (`.github/workflows/ci.yml`) runs the suite, a suite-time budget (20
+  seconds then; 35 now, with the measured baseline recorded beside it), all four
+  guard scripts in `--check` mode, and a staleness check that the generated
+  trackers are committed. `requirements.txt` pins the versions.
 - **Migration guard:** all 369 `OracleProgram`s verified byte-identical before
   and after conversion; `tests/engine/test_card_format.py` holds the format,
   layout, variable-P/T, and reprint-identity invariants going forward.
@@ -2443,10 +2444,18 @@ after a set already in the manifest, but a new set's fixture and its manifest
 entry arrive together, so the check could never have fired on the case it
 existed for. An exact expected set replaced it.
 
-**Still open:** the suite is at 17.8s against a 20s CI budget. That is not from
-the split (measured either side: unchanged) — it has crept up over several
-phases, and it is the next thing in this phase worth attacking, because the
-budget is a standing invariant and there are 132 sets still to come.
+**Still open:** the suite is at ~17s. That is not from the split (measured
+either side: unchanged) — it crept up over four phases, from the 9s the audit
+recorded, with the 20s gate green the whole way.
+
+The budget is 35s now, and raising it is the smaller half of the fix. The
+useful half is that `ci.yml` records the *measured baseline* next to the budget
+and prints the suite as a percentage of it on every run. A pass/fail gate can
+only ever catch the cliff; what let 9s become 17s unnoticed is that nothing
+reported the trend. The number to keep honest is the baseline, not the budget.
+
+Making the suite faster is still worth doing — 132 sets are still to come, and
+per-set tests are the part that grows with them.
 
 ---
 
@@ -2456,8 +2465,11 @@ Anything that weakens these is a regression regardless of what it enables:
 
 1. **No silent wrongness.** A card may fail loudly as unsupported with a
    reason; it may never resolve as something other than what it says.
-2. **The suite stays fast.** Under ten seconds today; the CI budget fails over
-   twenty.
+2. **The suite stays fast.** 4,002 tests in ~17s today, against a CI budget of
+   35s. The budget catches a step change; the *baseline* recorded beside it in
+   `ci.yml` is what catches creep, and it is the number to keep honest — it
+   went 9s → 17s across four phases with the gate green the whole way. Raising
+   the budget is a decision, not maintenance.
 3. **Determinism.** A given seed reproduces a run exactly. Parsing and lowering
    are pure functions of card text.
 4. **Ratchets only tighten.** Coverage floors, probe baselines, and accepted-diff

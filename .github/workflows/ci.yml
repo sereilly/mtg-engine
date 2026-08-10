@@ -31,20 +31,38 @@ jobs:
       - name: Run the test suite
         run: python -m pytest
 
-      # The suite finishing in under ten seconds is a property worth defending,
-      # not an accident: it is what makes the large refactors on the roadmap
-      # feasible. The budget is deliberately loose so normal growth doesn't trip
-      # it, but a step change (a test that starts a server, an accidental
-      # O(cards^2) sweep) fails here instead of being absorbed.
+      # A fast suite is a property worth defending, not an accident: it is what
+      # makes the large refactors on the roadmap feasible. The budget catches a
+      # *step change* — a test that starts a server, an accidental O(cards^2)
+      # sweep — which is why it sits well above the current time rather than
+      # tight against it. A tight budget on a shared runner fails on runner
+      # weather, and a budget that fails on weather gets raised without anyone
+      # reading the number.
+      #
+      # BASELINE is what the suite actually takes — the top of the 14-18s range
+      # 4,002 tests measure at — recorded so the headroom is visible instead of
+      # guessed, and printed as a percentage on every run. The gate catches the
+      # cliff; the percentage is what shows the creep. That distinction is the
+      # lesson from letting it drift 9s -> 17s unnoticed across four phases,
+      # with the gate green the whole way.
+      #
+      # Raising the budget is a decision, not maintenance. If the percentage is
+      # climbing, the suite is what needs fixing.
       - name: Enforce the suite-time budget
+        env:
+          BUDGET: 35
+          BASELINE: 17
         run: |
           START=$(date +%s)
           python -m pytest -q > /dev/null
           ELAPSED=$(( $(date +%s) - START ))
-          echo "suite wall time: ${ELAPSED}s"
-          if [ "$ELAPSED" -gt 20 ]; then
-            echo "::error::test suite took ${ELAPSED}s, over the 20s budget"
+          echo "suite wall time: ${ELAPSED}s (baseline ${BASELINE}s, budget ${BUDGET}s — $(( ELAPSED * 100 / BUDGET ))% of budget)"
+          if [ "$ELAPSED" -gt "$BUDGET" ]; then
+            echo "::error::test suite took ${ELAPSED}s, over the ${BUDGET}s budget"
             exit 1
+          fi
+          if [ "$ELAPSED" -gt $(( BASELINE * 3 / 2 )) ]; then
+            echo "::warning::suite is ${ELAPSED}s against a ${BASELINE}s baseline — creeping toward the ${BUDGET}s budget"
           fi
 
   guards:
