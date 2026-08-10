@@ -19,8 +19,9 @@ from engine.models import Permanent
 # Set composition
 # ===========================================================================
 
-def test_beta_is_alpha_plus_its_two_missing_cards(all_cards, leb_cards):
-    lea_names = {c.name for c in all_cards}
+def test_beta_is_alpha_plus_its_two_missing_cards(set_cards):
+    leb_cards = set_cards("LEB")
+    lea_names = {c.name for c in set_cards("LEA")}
     leb_names = {c.name for c in leb_cards}
 
     assert len(leb_cards) == 292
@@ -28,12 +29,14 @@ def test_beta_is_alpha_plus_its_two_missing_cards(all_cards, leb_cards):
     assert lea_names - leb_names == set()
 
 
-def test_unlimited_matches_beta_card_list(leb_cards, unlimited_cards):
+def test_unlimited_matches_beta_card_list(set_cards):
+    leb_cards, unlimited_cards = set_cards("LEB"), set_cards("2ED")
     assert len(unlimited_cards) == 292
     assert {c.name for c in unlimited_cards} == {c.name for c in leb_cards}
 
 
-def test_all_beta_and_unlimited_cards_are_supported(leb_cards, unlimited_cards):
+def test_all_beta_and_unlimited_cards_are_supported(set_cards):
+    leb_cards, unlimited_cards = set_cards("LEB"), set_cards("2ED")
     for card in (*leb_cards, *unlimited_cards):
         program = classify_card(card)
         assert program.supported, f"{card.name}: {program.reason}"
@@ -43,8 +46,8 @@ def test_all_beta_and_unlimited_cards_are_supported(leb_cards, unlimited_cards):
 # Circle of Protection: Black
 # ===========================================================================
 
-def test_circle_of_protection_black_activation_sets_prevention(leb_by_name):
-    cop = leb_by_name["Circle of Protection: Black"]
+def test_circle_of_protection_black_activation_sets_prevention(set_pool):
+    cop = set_pool("LEB")["Circle of Protection: Black"]
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=cop)])
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
@@ -59,8 +62,8 @@ def test_circle_of_protection_black_activation_sets_prevention(leb_by_name):
 # Volcanic Island
 # ===========================================================================
 
-def test_volcanic_island_taps_for_blue_mana(leb_by_name):
-    volcanic = leb_by_name["Volcanic Island"]
+def test_volcanic_island_taps_for_blue_mana(set_pool):
+    volcanic = set_pool("LEB")["Volcanic Island"]
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=volcanic)])
     game = Game(players=[p1, PlayerState(name="P2")])
 
@@ -70,8 +73,8 @@ def test_volcanic_island_taps_for_blue_mana(leb_by_name):
     assert p1.mana_pool.get("U", 0) == 1
 
 
-def test_volcanic_island_taps_for_red_mana(leb_by_name):
-    volcanic = leb_by_name["Volcanic Island"]
+def test_volcanic_island_taps_for_red_mana(set_pool):
+    volcanic = set_pool("LEB")["Volcanic Island"]
     p1 = PlayerState(name="P1", battlefield=[Permanent(card=volcanic)])
     game = Game(players=[p1, PlayerState(name="P2")])
 

@@ -10,13 +10,14 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from engine import load_cards
+from engine.card_loader import manifest_set_path
 from engine.models import Permanent
 from web.app import app, store
 from tests.helpers import LEA_PATH
 
 client = TestClient(app)
 
-ARN_PATH = LEA_PATH.parent / "ARN_cards.json"
+ARN_PATH = manifest_set_path("ARN")
 _CARDS = {c.name: c for c in load_cards(LEA_PATH)}
 _CARDS.update({c.name: c for c in load_cards(ARN_PATH)})
 

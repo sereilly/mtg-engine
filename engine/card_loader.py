@@ -117,6 +117,29 @@ def load_cards(path: Union[str, Path, Sequence[Union[str, Path]]]) -> list[CardD
     ]
 
 
+def manifest_set_path(code: str, manifest_path: str | Path = MANIFEST_PATH) -> Path:
+    """The JSON for one set, by its code (``"ARN"``).
+
+    Raises on an unknown code, naming the ones that exist. A missing set that
+    resolved to an empty pool would make every test over it pass vacuously,
+    which is the same silent-wrongness the engine refuses everywhere else.
+    """
+    manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+    base = Path(manifest_path).parent
+    wanted = code.strip().upper()
+    for entry in manifest["sets"]:
+        if entry["code"].upper() == wanted:
+            return base / entry["file"]
+    known = ", ".join(entry["code"] for entry in manifest["sets"])
+    raise KeyError(f"no set {code!r} in the manifest; it ships {known}")
+
+
+def manifest_set_codes(manifest_path: str | Path = MANIFEST_PATH) -> list[str]:
+    """Every set code the engine ships, in printing order."""
+    manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+    return [entry["code"] for entry in manifest["sets"]]
+
+
 def manifest_set_paths(manifest_path: str | Path = MANIFEST_PATH) -> list[Path]:
     """Every set JSON listed in ``cards/manifest.json``, in printing order.
 

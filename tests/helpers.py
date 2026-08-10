@@ -11,11 +11,14 @@ import web.app as web_app
 import web.session_store as web_session_store
 from web.app import app, store
 from engine import Game, PlayerState, load_cards
+from engine.card_loader import manifest_set_path
 from engine.models import CardDefinition, Permanent
 
 client = TestClient(app)
 
-LEA_PATH = Path(__file__).resolve().parent.parent / "cards" / "LEA_cards.json"
+# Resolved through cards/manifest.json rather than spelled out, so the filename
+# lives in one place — the registry every other reader already uses.
+LEA_PATH = manifest_set_path("LEA")
 # Loaded once per process; CardDefinition is immutable, so sharing is safe.
 CARDS_BY_NAME = {c.name: c for c in load_cards(LEA_PATH)}
 
