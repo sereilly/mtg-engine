@@ -7,7 +7,7 @@ import re
 from typing import Any
 
 from ..oracle_types import OracleInstruction, _instruction
-from .base import RuleResult, parse_rule
+from .base import RuleResult, activated_kind, parse_rule
 from .common import find_color_word
 
 # Rukh Egg: "create a 4/4 red Bird creature token with flying at the
@@ -177,3 +177,26 @@ def add_mire_counter(text: str, activated: bool) -> RuleResult:
     if activated and "put a mire counter on target non-swamp land" in text:
         return _instruction("add_mire_counter_to_target_land"), "activated_landtype"
     return None
+
+
+_REMOVE_COUNTER_FROM_SELF_RE = re.compile(
+    r"remove a (?P<kind>\w+) counter from this \w+"
+)
+
+
+@parse_rule(81_450)
+def remove_counter_from_self(text: str, activated: bool) -> RuleResult:
+    """"Remove a <kind> counter from this <permanent>." (Armageddon Clock.)
+
+    Only as an *effect*. Scavenging Ghoul's "remove a corpse counter from this
+    creature: regenerate this creature" spends one as a cost, which the cost
+    parser reads from the clause left of the colon — this rule sees only what
+    is right of it.
+    """
+    match = _REMOVE_COUNTER_FROM_SELF_RE.search(text)
+    if match is None:
+        return None
+    return (
+        _instruction("remove_counter_from_self", counter=match.group("kind")),
+        activated_kind(activated, "counters"),
+    )

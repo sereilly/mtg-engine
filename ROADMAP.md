@@ -1307,6 +1307,39 @@ That is one coherent piece of work, and it is worth more than these three cards:
 delayed one-shots and step-scoped activation windows are two of the commonest
 templates in every set after this one.
 
+### Armageddon Clock's third ability, and what Revised still yields
+
+The last named blocker is done. "{4}: Remove a doom counter from this artifact.
+Any player may activate this ability but only during any upkeep step" needed two
+things, and they are separate checks that both have to pass:
+
+- **the permission** — "any player may activate", which already existed;
+- **the window** — "only during any upkeep step", scoped to a *step* rather
+  than to a player's own step. The engine had "activate only during **your**
+  upkeep" (Cyclopean Tomb, the Clockwork creatures); this is the same step with
+  the ownership dropped, which is precisely what lets an opponent wind the Clock
+  down. That is the whole point of the card: it threatens everyone, so everyone
+  may slow it.
+
+The counter-removal effect is payload-keyed on the counter's name, matching the
+accumulation side, so the pair is one template rather than one card.
+
+**Revised still does not land, and the list keeps growing rather than shrinking
+by the same amount each time.** Ingesting it now gives 388 cards, **388
+supported, 0 unsupported** — and three more cards with unclaimed text: Ivory
+Tower and Reverse Polarity ("you gain X life, where X is …" computed from board
+state) and Reconstruction ("return target artifact card from your graveyard to
+your hand", which has a creature-only sibling already).
+
+That pattern is the honest finding of this whole exercise. Each pass through the
+set implements what the last pass found and surfaces a new layer — six cards,
+then three, now three more — because the guards only report what a card *claims*
+and cannot report what it will claim once the blocking card compiles. **A set is
+not a fixed amount of work discoverable up front; it converges.** The useful
+number is not "how many cards are left" but "how much smaller is each round",
+and it is: 6, 3, 3, with the last two rounds costing riders and windows rather
+than architecture.
+
 ### The static-ability cluster, and why it is a phase-6 job
 
 20 of the remaining lines fail with "static abilities need the CR 613 layers

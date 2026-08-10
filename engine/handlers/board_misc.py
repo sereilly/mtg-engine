@@ -412,3 +412,28 @@ def cast_face_down_creature(game: Game, instruction: OracleInstruction, context:
     }
     game.log.append(f"{card.name}: choose a creature (mana value <= {max_cmc}) to cast face down")
     return True, "resolved"
+
+
+@effect_handler("remove_counter_from_self")
+def remove_counter_from_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Armageddon Clock: "Remove a doom counter from this artifact."
+
+    The counter's name is payload, matching the accumulation side
+    (phases/upkeep_effects.py), so the pair is one template rather than a card.
+    Removing from zero is a no-op, not a negative count.
+    """
+    permanent = context.source_permanent
+    if permanent is None:
+        return True, "resolved"
+    counter = str(instruction.payload.get("counter", "doom"))
+    key = f"{counter}_counters"
+    current = int(permanent.metadata.get(key, 0))
+    if current <= 0:
+        game.log.append(f"{permanent.card.name} has no {counter} counter to remove")
+        return True, "resolved"
+    permanent.metadata[key] = current - 1
+    game.log.append(
+        f"Removed a {counter} counter from {permanent.card.name} "
+        f"({permanent.metadata[key]} left)"
+    )
+    return True, "resolved"

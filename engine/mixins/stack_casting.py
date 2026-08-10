@@ -1052,6 +1052,16 @@ class StackCastingMixin:
         # ability (ability_index 0) must stay usable at any time.
         ability_lower = (ability.source_line or permanent.card.oracle_text).lower()
 
+        # "Only during any upkeep step." (Armageddon Clock.) A window scoped to
+        # a *step* rather than to a player's own step — the "any player may
+        # activate" permission is checked separately above, and the two
+        # together are what let an opponent wind the Clock back down.
+        if "only during any upkeep step" in ability_lower:
+            if self.current_step != "upkeep":
+                details = f"{permanent.card.name} can only be activated during an upkeep step"
+                self.log.append(details)
+                return SimulationResult(permanent.card.name, False, "unsupported", details)
+
         # "Activate only during your upkeep." (Cyclopean Tomb, the Clockwork
         # creatures, Rock Hydra's pump). Legal only on the controller's own upkeep.
         if "activate only during your upkeep" in ability_lower:

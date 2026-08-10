@@ -171,3 +171,55 @@ def test_armageddon_clock_deals_no_damage_before_a_counter_exists():
     game.resolve_draw_step(0)
 
     assert (p1.life, p2.life) == (20, 20)
+
+
+@pytest.mark.cr("602.5")
+def test_armageddon_clock_counter_removal_is_gated_to_an_upkeep_step():
+    """"Only during any upkeep step" — a window scoped to a *step* rather than
+    to a player's own step, which is what lets an opponent use it."""
+    clock = Permanent(card=_artifact("Armageddon Clock", CLOCK_TEXT))
+    p1 = PlayerState(name="P1", battlefield=[clock], library=[])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.resolve_upkeep(0)
+    game.resolve_upkeep(0)
+    assert clock.metadata["doom_counters"] == 2
+
+    game._set_phase_and_step("precombat_main", "main")
+    assert game.activate_permanent_ability(0, "Armageddon Clock").supported is False
+    assert clock.metadata["doom_counters"] == 2
+
+    game._set_phase_and_step("beginning", "upkeep")
+    assert game.activate_permanent_ability(0, "Armageddon Clock").supported is True
+    assert clock.metadata["doom_counters"] == 1
+
+
+@pytest.mark.cr("602.5")
+def test_armageddon_clock_can_be_wound_down_by_the_opponent():
+    """"Any player may activate this ability." The permission and the step
+    window are separate checks, and both have to pass — together they are the
+    whole point of the card: the Clock threatens everyone, so everyone may
+    slow it."""
+    clock = Permanent(card=_artifact("Armageddon Clock", CLOCK_TEXT))
+    p1 = PlayerState(name="P1", battlefield=[clock], library=[])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.resolve_upkeep(0)
+    game.resolve_upkeep(0)
+    game._set_phase_and_step("beginning", "upkeep")
+
+    result = game.activate_permanent_ability(1, "Armageddon Clock", source_controller_index=0)
+
+    assert result.supported is True
+    assert clock.metadata["doom_counters"] == 1
+
+
+def test_removing_a_counter_that_is_not_there_is_a_no_op():
+    clock = Permanent(card=_artifact("Armageddon Clock", CLOCK_TEXT))
+    p1 = PlayerState(name="P1", battlefield=[clock], library=[])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game._set_phase_and_step("beginning", "upkeep")
+
+    assert game.activate_permanent_ability(0, "Armageddon Clock").supported is True
+    assert clock.metadata.get("doom_counters", 0) == 0
