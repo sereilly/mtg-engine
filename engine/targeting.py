@@ -95,6 +95,24 @@ _TYPE_FILTER_TO_KIND = {
 }
 
 
+# Instruction kinds whose target is fixed by the kind itself. A lace always
+# targets a spell or permanent; a graveyard-return always targets a card in a
+# graveyard. `legality.py` reads that off the card's *text*; the compiled
+# program already carries it in the kind, so these cards need no shadow parse.
+#
+# Each entry must agree with what `legality.cast_target_kind` answers for the
+# same card — the guard below holds them to it, because a derived answer that
+# disagrees with the fallback would change which prompt the UI raises.
+_KIND_TO_TARGET_KIND: dict[str, str] = {
+    "recolor_target_from_text": "spell_or_permanent",
+    "mark_text_modified": "permanent",
+    "counter_top_stack_spell": "stack",
+    "berserk_pump": "creature",
+    "grant_unlimited_blocking": "creature",
+    "deal_damage_and_gain_life": "any",
+}
+
+
 def derive_cast_target(card, program) -> str | None:
     """The cast-time target kind of *card*, or None when the compiled program
     does not carry enough to say.
@@ -121,6 +139,9 @@ def derive_cast_target(card, program) -> str | None:
         type_filter = instruction.payload.get("type_filter")
         if type_filter:
             return _TYPE_FILTER_TO_KIND.get(type_filter)
+        by_kind = _KIND_TO_TARGET_KIND.get(instruction.kind)
+        if by_kind is not None:
+            return by_kind
 
     return None
 

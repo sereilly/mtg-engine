@@ -99,9 +99,9 @@ def test_shadow_parser_reliance_does_not_grow(supported_cards):
         1 for c in supported_cards if derive_cast_target(c, compile_card_oracle(c)) is not None
     )
 
-    assert derivable >= 59, (
+    assert derivable >= 76, (
         f"only {derivable} cards derive their cast target from the compiled "
-        "program (was 59) — a parser change removed targeting evidence"
+        "program (was 76) — a parser change removed targeting evidence"
     )
 
 

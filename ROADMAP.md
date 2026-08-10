@@ -1363,6 +1363,31 @@ review, which is what the probe is for.
 The durable fix is in the test: the four assertions are tagged `[UNCLAIMED]`,
 `[STALE-ACK]`, `[PROBE]` and `[STALE-PROBE]`, so the failure names itself.
 
+### Phase 7: moving cards off the shadow parser by instruction kind
+
+`legality.py` answers "what does this spell target?" by re-reading the card's
+text — a second parser every new card has to satisfy. `targeting.py` replaces it
+card by card, and the useful measurement is not how many cards fall back (324)
+but how many actually *need* to: only **84 supported cards mention "target" at
+all**, and only **35** are spells or Auras that pick one as they are cast.
+
+Some of those need no text at all. A lace always targets a spell or permanent;
+a counterspell always targets the stack; a graveyard-return always targets a
+card in a graveyard. **The instruction kind already says so**, so those cards
+can be answered from the compiled program with a small kind→target table rather
+than a text cascade. Derivable cards: **64 → 76**.
+
+The existing agreement guard earned its keep immediately: it compares a derived
+answer against the *raw* text cascade (not `cast_target_kind`, which now
+prefers the derivation and would be comparing the thing to itself), and it
+caught two wrong entries in the first table I wrote — a counterspell answered
+"spell" where the cascade says "stack", and a text-changer "spell_or_permanent"
+where it says "permanent". Both would have changed which prompt the UI raises,
+for cards that work today.
+
+I also wrote a second agreement test before noticing that one existed and was
+stricter. Deleted; the lesson is to read the guard file before adding to it.
+
 ### The static-ability cluster, and why it is a phase-6 job
 
 20 of the remaining lines fail with "static abilities need the CR 613 layers
