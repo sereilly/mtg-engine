@@ -493,7 +493,14 @@ class EffectsMixin:
         if count <= 0:
             return player.draw(count)
         consumed, payload = apply_replacements(
-            self, "draw", {"player": player, "count": count, "drawn": 0}
+            self,
+            "draw",
+            {"player": player, "count": count, "drawn": 0},
+            # A draw can suspend: "the replacement took it, the cards arrive
+            # when you answer" is already this method's contract, so CR 616.1e's
+            # choice can be put to the player here. Re-running this call is what
+            # the answer resumes, which is why the thunk is the call itself.
+            restart=lambda: self._draw_with_replacements(player, count),
         )
         if consumed:
             return int(payload["drawn"])

@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**203 / 570 tracked rules covered (35%)** — 832 tests, 0 unannotated.
+**204 / 570 tracked rules covered (35%)** — 841 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -82,7 +82,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [613. Interaction of Continuous Effects](#613-interaction-of-continuous-effects) | 6/11 | 54% |
 | [614. Replacement Effects](#614-replacement-effects) | 9/17 | 52% |
 | [615. Prevention Effects](#615-prevention-effects) | 7/13 | 53% |
-| [616. Interaction of Replacement and/or Prevention Effects](#616-interaction-of-replacement-andor-prevention-effects) | 1/2 | 50% |
+| [616. Interaction of Replacement and/or Prevention Effects](#616-interaction-of-replacement-andor-prevention-effects) | 2/2 | 100% |
 | [700. General](#700-general) | 0/15 | 0% |
 | [701. Keyword Actions](#701-keyword-actions) | 4/16 | 25% |
 | [702. Keyword Abilities](#702-keyword-abilities) | 18/18 | 100% |
@@ -323,7 +323,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 121. Drawing a Card
 
 - [x] **121.1** A player draws a card by putting the top card of their library into their hand. This is done as a... *(3 tests)*
-- [x] **121.2** Cards may only be drawn one at a time. If a player is instructed to draw multiple cards, that pla... *(1 tests)*
+- [x] **121.2** Cards may only be drawn one at a time. If a player is instructed to draw multiple cards, that pla... *(2 tests)*
 - [ ] **121.3** If there are no cards in a player’s library and an effect offers that player the choice to draw a...
 - [x] **121.4** A player who attempts to draw a card from a library with no cards in it loses the game the next t... *(3 tests)*
 - [ ] **121.5** If an effect moves cards from a player’s library to that player’s hand without using the word “dr...
@@ -756,7 +756,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 614. Replacement Effects
 
-- [x] **614.1** Some continuous effects are replacement effects. Like prevention effects (see rule 615), replacem... *(21 tests, subrules abcd)*
+- [x] **614.1** Some continuous effects are replacement effects. Like prevention effects (see rule 615), replacem... *(22 tests, subrules abcd)*
 - [ ] **614.2** Some replacement effects apply to damage from a source. See rule 609.7.
 - [ ] **614.3** There are no special restrictions on casting a spell or activating an ability that generates a re...
 - [x] **614.4** Replacement effects must exist before the appropriate event occurs—they can’t “go back in time” a... *(2 tests)*
@@ -792,8 +792,8 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 616. Interaction of Replacement and/or Prevention Effects
 
-- [x] **616.1** If two or more replacement and/or prevention effects are attempting to modify the way an event af... *(15 tests, subrules ef)*
-- [ ] **616.2** A replacement or prevention effect can become applicable to an event as the result of another rep...
+- [x] **616.1** If two or more replacement and/or prevention effects are attempting to modify the way an event af... *(22 tests, subrules efg)*
+- [x] **616.2** A replacement or prevention effect can become applicable to an event as the result of another rep... *(1 tests)*
 
 ### 700. General
 

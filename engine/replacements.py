@@ -66,7 +66,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
-from .effect_ordering import Candidate, affected_seat, apply_in_order
+from .effect_ordering import (
+    SUSPENDED,
+    Candidate,
+    affected_seat,
+    apply_in_order,
+    choose_effect,
+)
 from .replacement_choices import (
     ReplacementChoice,
     offer_replacement_choice,
@@ -198,24 +204,94 @@ def take_replaced(event: dict) -> bool:
     return bool(event.pop(REPLACED, False))
 
 
-def apply_replacements(game, kind: str, payload: dict) -> tuple[bool, dict]:
+def order_prompt_asker(kind: str, restart: Callable[[], Any]) -> Callable:
+    """An ``ask`` hook for :func:`~engine.effect_ordering.apply_in_order` that
+    puts CR 616.1e's choice to the affected player.
+
+    *restart* re-runs the whole event once the answer arrives. It has to be the
+    caller's own re-invocation, not a resumption of this process: an event is
+    more than its replacements — a draw that nothing replaces still has to draw
+    — so only the caller knows what "do this event again" means. Nothing has
+    been applied when the prompt is queued, so re-running is exact rather than
+    approximate.
+
+    A non-interactive seat answers immediately with the default, so AI and
+    headless play never queue and never suspend.
+    """
+
+    def ask(game, chooser_index, applicable):
+        recorded = _recorded_order(game, kind, chooser_index)
+        if recorded is not None:
+            by_key = {c.key: c for c in applicable}
+            for key in recorded:
+                if key in by_key:
+                    return by_key[key]
+            return choose_effect(game, chooser_index, applicable)
+        if chooser_index is None or chooser_index not in game.interactive_seats:
+            return choose_effect(game, chooser_index, applicable)
+        game.arm_pending_choice(
+            "effect_order",
+            chooser_index,
+            event_kind=kind,
+            options=[c.label or c.key for c in applicable],
+            _keys=[c.key for c in applicable],
+            _restart=restart,
+        )
+        game.log.append(
+            f"{game.players[chooser_index].name} must choose which effect applies "
+            f"first ({', '.join(c.label or c.key for c in applicable)})"
+        )
+        return SUSPENDED
+
+    return ask
+
+
+def _recorded_order(game, kind: str, seat: int | None) -> tuple[str, ...] | None:
+    return getattr(game, "effect_order_answers", {}).get((kind, seat))
+
+
+def apply_replacements(
+    game, kind: str, payload: dict, *, restart: Callable[[], Any] | None = None
+) -> tuple[bool, dict]:
     """Run *kind*'s interceptors over the event under CR 616.1.
 
     Returns ``(consumed, payload)`` — when ``consumed`` is True the caller
     must skip the default action; otherwise ``payload["amount"]`` may have
     been reduced by partial replacements.
 
+    Pass *restart* — a thunk that re-runs the whole event — to let CR 616.1e's
+    choice be **asked** when more than one effect applies. Passing it is the
+    caller declaring "this event can suspend": the answer arrives on a later
+    request, so the caller must be able to report the event as taken care of
+    and let the restart finish it. A suspended event reports ``consumed`` True
+    for exactly that reason.
+
+    Callers that cannot suspend simply do not pass it, and every seat takes the
+    documented default. That is not a second code path so much as a missing
+    capability, stated at the one place that knows whether it exists: damage
+    has no restart because its callers read the number it returns for trample,
+    lifelink and triggers, and would have to defer all of that too.
+
     Damage events should go through ``engine/damage_events.py`` instead, which
-    contends these against the event's prevention shields as one set. The one
-    exception is combat damage to a player, whose shields ran earlier.
+    contends these against the event's prevention shields as one set.
     """
-    apply_in_order(
+    seat = affected_seat(game, payload.get("recipient") or payload.get("player"))
+    trace = apply_in_order(
         game,
         payload,
         replacement_candidates(kind),
-        chooser_index=affected_seat(game, payload.get("recipient") or payload.get("player")),
+        chooser_index=seat,
         stop=was_replaced,
+        ask=None if restart is None else order_prompt_asker(kind, restart),
     )
+    if trace.suspended:
+        # Nothing was applied and a prompt is queued. "Consumed" is the honest
+        # answer to the caller's only question — do not carry out the default
+        # action — and the restart will run the event properly.
+        take_replaced(payload)
+        return True, payload
+    if trace.applied:
+        getattr(game, "effect_order_answers", {}).pop((kind, seat), None)
     return take_replaced(payload), payload
 
 

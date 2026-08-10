@@ -244,6 +244,36 @@ def test_120_7_each_combat_event_is_attributed_to_the_creature_that_dealt_it():
     assert p2.artifact_damage_taken_this_turn == 2, "only the artifact's 2 counts"
 
 
+@pytest.mark.cr("616.1g")
+def test_616_1g_an_effect_on_a_contained_event_is_chosen_after_the_outer_one():
+    """"One replacement effect may apply to an event, and another may apply to
+    an event contained within the first. The second can't be chosen until after
+    the first has been chosen."
+
+    Jade Monolith's redirect makes a new damage event *inside* its own
+    application, so the shields on the redirect's destination are only ever
+    gathered once the redirect has been chosen — the ordering falls out of the
+    inner event happening within `apply`, not from a rule about it. What the
+    outer choice settles is whether the inner event exists at all: the
+    creature's own shield is never spent, because the damage left."""
+    bear = Permanent(card=_mk_creature_card("Bear", 2, 2))
+    bear.damage_prevention_pool = 5
+    bear.metadata["redirect_damage_to_player"] = 1
+    p1 = PlayerState(name="P1", battlefield=[bear], life=20)
+    p2 = PlayerState(name="P2", life=20)
+    p2.damage_prevention_pool = 2
+    game = Game(players=[p1, p2])
+
+    game._mark_damage_on_permanent(bear, 3, source=None)
+
+    assert bear.damage_marked == 0 and bear.damage_prevention_pool == 5, (
+        "the outer choice sent the damage away, so the creature's shield was "
+        "never in contention for it"
+    )
+    assert p2.damage_prevention_pool == 0, "the inner event contended over its own shield"
+    assert p2.life == 19, "3 redirected, 2 prevented"
+
+
 @pytest.mark.cr("120.8")
 def test_120_8_a_zero_damage_event_spends_nothing():
     """"If a source would deal 0 damage, it does not deal damage at all" — so no

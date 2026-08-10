@@ -167,10 +167,14 @@ adding entries, not editing dispatch**:
   written once. A new "prevent …" card is an entry here, never a branch in a
   damage path.
 - `engine/effect_ordering.py` — CR 616.1, the process both registries above run
-  through: gather every applicable effect, choose one, apply it, re-ask the rest
-  (616.1f). That is why applicability is a *separate, pure* predicate — an
-  effect that answered "do I apply?" by applying itself would make the
-  contenders uncountable.
+  through: gather every applicable effect, let the affected player choose one,
+  apply it, re-ask the rest (616.1f). That is why applicability is a *separate,
+  pure* predicate — an effect that answered "do I apply?" by applying itself
+  would make the contenders uncountable. Purity is also what lets the choice be
+  *asked*: at a contended round nothing has been applied, so the event is simply
+  re-run once answered. A caller that can be re-run passes a `restart` thunk to
+  `apply_replacements`; one that can't (damage — its callers read the number
+  back) takes the documented default.
 - `engine/damage_events.py` — a damage event start to finish. CR 120.4's two
   halves (the damage is dealt; then what was dealt is processed into its
   result), with 616.1's contention set — shields *and* replacements together —

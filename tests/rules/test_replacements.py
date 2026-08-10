@@ -212,6 +212,110 @@ def test_121_2_each_of_several_draws_is_replaceable_on_its_own():
     assert "Black Lotus" in [c.name for c in p1.hand]
 
 
+# --- 616.1e: the affected player chooses ------------------------------------
+
+
+def _two_armed_draw_replacements(interactive: bool):
+    """A seat with both of this pool's draw replacements armed — Ring of Ma'rûf
+    and Aladdin's Lamp — which is the reachable CR 616.1e contention."""
+    game, p1, _ = _two_player_game()
+    p1.library = [CARDS_BY_NAME["Lightning Bolt"], CARDS_BY_NAME["Fireball"]]
+    p1.sideboard = [CARDS_BY_NAME["Black Lotus"]]
+    game.outside_game_draw_replacements.add(0)
+    game.lamp_draw_replacements[0] = 2
+    if interactive:
+        game.interactive_seats = {0}
+    return game, p1
+
+
+@pytest.mark.cr("616.1e")
+def test_616_1e_the_affected_player_is_asked_which_effect_applies_first():
+    """Two replacements are attempting to modify one draw, so the rule gives
+    the choice to the player. The event suspends on the prompt."""
+    game, p1 = _two_armed_draw_replacements(interactive=True)
+
+    drawn = game._draw_with_replacements(p1, 1)
+
+    prompts = game.pending_choices_of("effect_order", 0)
+    assert len(prompts) == 1
+    assert sorted(prompts[0].data["options"]) == ["Aladdin's Lamp", "Ring of Ma'rûf"]
+    assert drawn == 0, "the draw waits for the answer"
+
+
+@pytest.mark.cr("616.1e")
+def test_616_1e_arming_the_prompt_applies_nothing():
+    """The property that makes suspending safe: because every applicability
+    predicate is pure, the process reaches the prompt having done *nothing*, so
+    answering can re-run the event from the top rather than resume it. If
+    arming the prompt spent a charge, the re-run would spend a second one."""
+    game, p1 = _two_armed_draw_replacements(interactive=True)
+
+    game._draw_with_replacements(p1, 1)
+
+    assert 0 in game.outside_game_draw_replacements, "the Ring is still armed"
+    assert game.lamp_draw_replacements == {0: 2}, "the Lamp is still armed"
+    assert p1.hand == [] and len(p1.library) == 2, "no card moved"
+
+
+@pytest.mark.cr("616.1e")
+def test_616_1e_the_answer_decides_which_effect_is_spent():
+    """Answering re-runs the draw, which reaches the same contention, finds the
+    recorded answer and applies it. Picking the Lamp leaves the Ring armed —
+    the opposite of the default order, so this cannot pass by accident."""
+    game, p1 = _two_armed_draw_replacements(interactive=True)
+    game._draw_with_replacements(p1, 1)
+    lamp = next(
+        i for i, o in enumerate(game.pending_choices_of("effect_order", 0)[0].data["options"])
+        if o == "Aladdin's Lamp"
+    )
+
+    assert game.resolve_pending_choice("effect_order", 0, option_index=lamp) is True
+
+    assert game.lamp_draw_replacements == {}, "the chosen effect applied"
+    assert 0 in game.outside_game_draw_replacements, "the other is untouched and still armed"
+    assert not game.pending_choices_of("effect_order", 0), "the prompt is answered"
+    # And the event really finished rather than stalling half-done: the Lamp's
+    # own "which of the top cards do you take" prompt is now the one waiting.
+    assert game.pending_lamp_draw is not None
+    assert game.confirm_lamp_draw(0, 0) is True
+    assert [c.name for c in p1.hand] == ["Lightning Bolt"]
+
+
+@pytest.mark.cr("616.1e")
+def test_616_1e_the_default_reproduces_the_documented_order():
+    game, p1 = _two_armed_draw_replacements(interactive=True)
+    game._draw_with_replacements(p1, 1)
+
+    game.resolve_pending_choice("effect_order", 0, option_index=0)
+
+    assert 0 not in game.outside_game_draw_replacements, "the Ring went first"
+    assert game.lamp_draw_replacements == {0: 2}, "the Lamp is still armed"
+
+
+@pytest.mark.cr("616.1e")
+def test_616_1e_a_non_interactive_seat_is_never_asked():
+    """AI and headless play must not queue or suspend — they take the
+    documented default inline, exactly as before the prompt existed."""
+    game, p1 = _two_armed_draw_replacements(interactive=False)
+
+    game._draw_with_replacements(p1, 1)
+
+    assert not game.pending_choices_of("effect_order", 0)
+    assert 0 not in game.outside_game_draw_replacements, "the default applied inline"
+    assert game.effect_order_answers == {}, "and left nothing recorded"
+
+
+@pytest.mark.cr("616.1e")
+def test_616_1e_an_answer_does_not_outlive_its_event():
+    """A recorded answer is popped once the event it was for gets through, so a
+    later contention asks again instead of silently inheriting it."""
+    game, p1 = _two_armed_draw_replacements(interactive=True)
+    game._draw_with_replacements(p1, 1)
+    game.resolve_pending_choice("effect_order", 0, option_index=0)
+
+    assert game.effect_order_answers == {}
+
+
 @pytest.mark.cr("614.1")
 def test_unknown_kind_is_a_no_op():
     consumed, payload = apply_replacements(None, "_no_such_kind", {"amount": 2})

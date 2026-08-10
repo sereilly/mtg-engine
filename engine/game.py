@@ -174,6 +174,13 @@ class Game(
     # layer renders and gates it. The ``pending_<name>`` views the web layer and
     # the tests read are derived from this list (engine/mixins/stack/choices.py).
     pending_choices: list = field(default_factory=list)
+    # CR 616.1e answers, keyed by (event kind, choosing seat): the order a player
+    # picked for the effects contending over one event. Written when an
+    # effect_order prompt is answered and read by the re-run of that event, which
+    # is how the process reaches the same round again and applies the chosen
+    # effect. Popped once the event gets through, so a later contention asks
+    # afresh rather than inheriting a stale answer.
+    effect_order_answers: dict = field(default_factory=dict)
     # Seats controlled by a human, set by the web layer each action. Empty in
     # headless/AI play, so forced sacrifices there resolve inline without a prompt.
     interactive_seats: set[int] = field(default_factory=set)

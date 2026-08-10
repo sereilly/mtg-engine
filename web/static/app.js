@@ -953,7 +953,7 @@ function combatDamageAssignmentPending(state = currentState) {
 }
 
 function hasBlockingPromptForAutoPass(state = currentState) {
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getBodyChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
   return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingAbilityChoice || pendingChannel || pendingAttackTarget);
 }
 
@@ -1931,6 +1931,18 @@ function getOptionalPayInfo(state = currentState) {
   return info;
 }
 
+// CR 616.1e: two or more replacement/prevention effects are attempting to modify
+// one event, and the affected player picks which applies first. The event has
+// not happened yet — nothing is applied until this is answered.
+function getEffectOrderInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.effect_order;
+  if (!info) return null;
+  if (info.player_seat !== seat) return null;
+  if (!Array.isArray(info.options) || info.options.length < 2) return null;
+  return info;
+}
+
 function getLandTypeChoiceInfo(state = currentState) {
   if (!state || seat === null) return null;
   const info = state.land_type_choice;
@@ -2466,6 +2478,7 @@ function isAnyPromptActive(state = currentState) {
   if (getOptionalUntapInfo(state)) return true;
   if (getOpponentDamageInfo(state)) return true;
   if (getLampDrawInfo(state) || getOutsideGameDrawInfo(state)) return true;
+  if (getEffectOrderInfo(state)) return true;
   if (getLandTypeChoiceInfo(state)) return true;
   if (getBodyChoiceInfo(state)) return true;
   if (getManaPaymentInfo(state)) return true;
@@ -2490,7 +2503,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getBodyChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -3452,6 +3465,47 @@ function applyLandTypeChoicePrompt(info) {
         seat,
         action: "land_type_confirm",
         land_type: btn.dataset.landType,
+      });
+    });
+  });
+}
+
+function applyEffectOrderPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  title.textContent = "Choose which effect applies first";
+  body.textContent =
+    "Several effects are trying to change the same event. Pick the one to apply " +
+    "first; the rest are reconsidered afterwards.";
+  const buttons = info.options
+    .map(
+      (label, index) =>
+        `<button type="button" class="prompt-choice-btn" data-effect-order="${index}">` +
+        `${escapeHtml(label)}</button>`
+    )
+    .join("");
+  steps.innerHTML = `<div class="prompt-choice-column">${buttons}</div>`;
+
+  steps.querySelectorAll("[data-effect-order]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await sendAction({
+        seat,
+        action: "effect_order_confirm",
+        option_index: Number(btn.dataset.effectOrder),
       });
     });
   });
@@ -4537,6 +4591,12 @@ function renderActivationPrompt() {
   const optionalPayInfo = getOptionalPayInfo();
   if (optionalPayInfo) {
     applyOptionalPayPrompt(optionalPayInfo);
+    return;
+  }
+
+  const effectOrderInfo = getEffectOrderInfo();
+  if (effectOrderInfo) {
+    applyEffectOrderPrompt(effectOrderInfo);
     return;
   }
 

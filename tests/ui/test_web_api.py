@@ -3031,3 +3031,55 @@ def test_debug_tap_works_on_an_opponents_permanent():
     response = _board_action(sid, "debug_tap_permanent", 1, 0)
     assert response.status_code == 200, response.text
     assert bear.tapped
+
+
+def test_effect_order_prompt_is_shown_gates_actions_and_can_be_answered():
+    """CR 616.1e end to end through the web layer.
+
+    Two replacements are attempting to modify one draw — Ring of Ma'rûf and
+    Aladdin's Lamp, both armed — so the affected player picks which applies
+    first. The engine can only arm the prompt; whether a human ever *sees* it is
+    the web layer's half, and a prompt that is armed and never rendered is the
+    exact failure this registry exists to prevent.
+    """
+    created = client.post(
+        "/api/sessions",
+        json={"mode": "human_vs_human", "seed": 4242},
+    ).json()
+    sid = created["session_id"]
+    session = store.get(sid)
+    game = session.game
+    p0 = game.players[0]
+    p0.sideboard = [_mk_creature_card("Outside Card", 1, 1)]
+    game.interactive_seats = {0}
+    game.outside_game_draw_replacements.add(0)
+    game.lamp_draw_replacements[0] = 2
+
+    library_before = len(p0.library)
+    hand_before = len(p0.hand)
+    game._draw_with_replacements(p0, 1)
+
+    state = client.get(f"/api/sessions/{sid}/state?seat=0").json()
+    prompt = state["effect_order"]
+    assert prompt is not None, "the prompt was armed but never rendered"
+    assert prompt["player_seat"] == 0
+    assert sorted(prompt["options"]) == ["Aladdin's Lamp", "Ring of Ma'rûf"]
+    assert len(p0.library) == library_before and len(p0.hand) == hand_before, (
+        "the draw waits for the answer"
+    )
+
+    blocked = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "pass_priority"},
+    )
+    assert blocked.status_code == 400, "the event is mid-flight; no seat should act"
+
+    lamp = prompt["options"].index("Aladdin's Lamp")
+    confirm = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "effect_order_confirm", "option_index": lamp},
+    )
+    assert confirm.status_code == 200, confirm.text
+    assert game.lamp_draw_replacements == {}, "the chosen effect applied"
+    assert 0 in game.outside_game_draw_replacements, "the other is still armed"
+    assert confirm.json()["effect_order"] is None, "the prompt is gone"

@@ -2034,28 +2034,57 @@ rather than assumed:
 4,018 tests, 12.8s. The three fixes are mutation-checked: each new test fails
 when the specific line it pins is reverted.
 
-**Still open in this phase, and precisely what.** One thing:
+**Done — the choice is asked, and it cost far less than the last entry
+predicted.** That entry said asking needed continuation-passing through the
+whole effect layer. It was measuring the wrong thing: what a prompt needs is not
+the ability to *resume* an event, it is the ability to *re-run* one — and the
+`applies` split had already bought that without anyone noticing.
 
-- **The choice is not asked.** `choose_effect` takes the documented default
-  (lowest order) for every seat. Not because the choice never matters — a
-  Circle of Protection and a prevention pool are both applicable to one damage
-  event, which this card pool reaches easily — but because a damage event
-  cannot suspend: `deal_damage` runs inside `_deal_damage_to_player`, which
-  returns an `int` to callers deep in combat and resolution loops.
-  `OrderingTrace.had_a_choice` already records when the question was live, so
-  the prompt has a seat and a trigger waiting for it.
+Every applicability predicate is pure. So at the moment `apply_in_order` reaches
+a contended round, **nothing has been applied yet**. The process can be
+abandoned there and the whole event re-run later: it reaches the same round
+against the same state, finds the same contenders, and now has the recorded
+answer. No continuation, no snapshot, no rollback, because there is nothing yet
+to undo. (A snapshot would have been actively wrong here — the engine compares
+damage sources and band members by identity, which a deep copy breaks.)
 
-  Unlike the combat split above, this one really is structural, and it is worth
-  saying what it costs so nobody re-scopes it as small. This engine has no
-  continuation mechanism: every pending choice either finishes its effect in its
-  resolver, or is armed where the rest of the effect does not need to run.
-  Neither is available here, because the caller needs the damage number *now* —
-  for trample math, lifelink, triggers, "gain life equal to the damage dealt".
-  Suspending mid-event therefore means deferring the consequences too, at ~25
-  call sites across handlers, phases and mixins, which is continuation-passing
-  through the whole effect layer. That is a project, not a session, and a
-  half-converted version is the two-paths defect in its worst form: some damage
-  asks and some does not.
+616.1e is an `effect_order` pending choice, registered like every other prompt,
+so `tests/engine/test_pending_choices.py` covered the renderer, the action and
+the gate by construction. The re-run is a `restart` thunk the caller passes to
+`apply_replacements`; passing it *is* the caller declaring "this event can
+suspend", and a suspended event reports `consumed` so the caller skips the
+default action and the re-run does it properly. A non-interactive seat is never
+asked, so AI and headless play stay synchronous.
+
+The reachable contention is Ring of Ma'rûf and Aladdin's Lamp both armed over
+one draw, and the choice is real: picking the Lamp leaves the Ring armed, which
+is the opposite of the default order.
+
+**Damage still takes the default**, and this is now a one-line property rather
+than a paragraph of hedging: `deal_damage` passes no `restart`, because its
+callers read the number back for trample, lifelink and "gain life equal to the
+damage dealt". Deferring the event means deferring all of that. What that needs
+is a damage event whose *consequences* can be re-run too — a much smaller
+question than the one the previous entry posed, and now the only thing between
+this engine and 616.1e everywhere.
+
+**616.1a–d are deliberately not built.** They order *classes* of effect ahead of
+the free choice: self-replacement effects first (614.15), then control-on-entry,
+then copy-on-entry, then back-face-up. Not one of them has a member in this
+pool's registries — entry replacements live in `enter_effects.py` and never
+reach this process — so building the class machinery would be four empty
+branches, which is the same call the roadmap already made about cost reduction.
+`OrderingTrace.unasked` records the one situation that would need them sooner
+(616.2 making a fresh effect applicable mid-event), so it surfaces rather than
+passing silently.
+
+**616.1g needs no code.** "The second effect can't be chosen until after the
+first" falls out of a contained event happening *inside* the outer effect's
+`apply` — Jade Monolith's redirect creates its damage event there, so the
+destination's shields are only ever gathered once the redirect has been chosen.
+Pinned by a test rather than left as a claim.
+
+4,028 tests.
 
 **Done — the turn-step registries are text-keyed.** `UNTAP_RESTRICTIONS` and
 the bonus-draw half of `DRAW_STEP_MODIFIERS` were name-keyed tables holding

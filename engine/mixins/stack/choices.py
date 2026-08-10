@@ -1009,6 +1009,48 @@ class PendingChoicesMixin:
     # never hang; we log and break rather than raise.
     MAX_SETTLE_ITERS = 2000
 
+    # ------------------------------------------------------------------
+    # CR 616.1e — which of several applicable effects applies first
+    # ------------------------------------------------------------------
+
+    def _record_effect_order(self, choice: PendingChoice, option_index: int) -> None:
+        """Store the picked effect ahead of the rest, in their default order.
+
+        The answer is one pick, not a full ordering, because that is all CR
+        616.1e needs from the player each round — but the process may reach a
+        second contended round on its way through, and by then it is past the
+        point where it can ask again. Recording the pick *followed by* the
+        default order gives every later round an answer that is consistent with
+        the one the player gave.
+        """
+        keys = list(choice.data["_keys"])
+        picked = keys[option_index]
+        self.effect_order_answers[(choice.data["event_kind"], choice.player_index)] = tuple(
+            [picked] + [key for key in keys if key != picked]
+        )
+
+    def _resolve_effect_order(self, choice: PendingChoice, option_index: int) -> bool:
+        keys = choice.data["_keys"]
+        if not (0 <= option_index < len(keys)):
+            return False
+        self.discard_pending_choice(choice)
+        self._record_effect_order(choice, option_index)
+        self.log.append(
+            f"{self.players[choice.player_index].name} applies "
+            f"{choice.data['options'][option_index]} first"
+        )
+        # Nothing was applied when the prompt was armed, so the event is re-run
+        # rather than resumed — and it reaches the same round, finds the
+        # recorded answer, and carries on.
+        choice.data["_restart"]()
+        return True
+
+    def _default_effect_order(self, choice: PendingChoice) -> None:
+        """The documented default (the first option, which the asker listed in
+        default order). Reached when a seat stops being interactive with the
+        prompt still queued."""
+        self._resolve_effect_order(choice, 0)
+
 
 # ---------------------------------------------------------------------------
 # The prompt table
@@ -1019,6 +1061,21 @@ class PendingChoicesMixin:
 # rest is what the web layer needs to render the prompt, gate the actions
 # around it and route the action that answers it. A kind whose behaviour lives
 # in another mixin is registered here anyway, so this stays the one index.
+
+register_choice(
+    "effect_order",
+    resolve=lambda game, choice, r: game._resolve_effect_order(choice, r["option_index"]),
+    default=lambda game, choice: game._default_effect_order(choice),
+    action="effect_order_confirm",
+    prompt_key="effect_order",
+    blocked_detail="choose which effect applies first before other actions",
+    # The event this interrupts has not happened yet — a draw that is waiting on
+    # the answer has not drawn, damage waiting on it has not been dealt — so no
+    # seat should be acting on a board that is mid-event.
+    blocks_every_seat=True,
+    spectator_visible=True,
+    hidden_for_ai=False,
+)
 
 register_choice(
     "search_library",

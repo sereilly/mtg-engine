@@ -48,6 +48,7 @@ ActionKind = Literal[
     "leng_discard_confirm",
     "balance_confirm",
     "sacrifice_confirm",
+    "effect_order_confirm",
     "resolve_optional_pay",
     "land_type_confirm",
     "confirm_mana_payment",
@@ -229,6 +230,9 @@ class GameActionRequest(BaseModel):
     # Forced sacrifice (Lich): the battlefield indices the player chooses to
     # sacrifice, sent with `sacrifice_confirm`.
     sacrifice_indices: list[int] | None = None
+    # CR 616.1e: which of the effects contending over one event applies first,
+    # as an index into the prompt's `options`. Sent with `effect_order_confirm`.
+    option_index: int | None = None
     # Raging River: map of battlefield/attacker index → "left"/"right" pile label,
     # sent with assign_defender_piles / assign_attacker_piles.
     piles: dict[int, str] | None = None

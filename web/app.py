@@ -4535,6 +4535,15 @@ def do_action(session_id: str, req: GameActionRequest):
             if marker == "begin_turn":
                 _finish_beginning_phase(session, pidx)
 
+    elif req.action == "effect_order_confirm":
+        # CR 616.1e: the affected player picks which of the effects contending
+        # over one event applies first. Answering re-runs the event, so this
+        # returns with the draw made or the damage dealt.
+        if not session.game.resolve_pending_choice(
+            "effect_order", req.seat, option_index=int(req.option_index or 0)
+        ):
+            raise HTTPException(status_code=400, detail="no effect order pending for you")
+
     elif req.action == "dismiss_hand_reveal":
         session.game.dismiss_hand_reveal(req.seat)
 

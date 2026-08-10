@@ -157,6 +157,20 @@ def auto_resolve_ai_prompts(game, seat_type: Callable[[int], str]) -> None:
 # Renderers, one per kind
 # ---------------------------------------------------------------------------
 
+@prompt_renderer("effect_order")
+def _effect_order(ctx: PromptContext, choices: list) -> dict:
+    """CR 616.1e: which of the effects attempting to modify one event applies
+    first. The options are labelled with the effects themselves, in the order
+    the engine would take by default, so the first option is "whatever would
+    have happened anyway"."""
+    choice = choices[0]
+    return {
+        "player_seat": choice.player_index,
+        "event_kind": choice.data["event_kind"],
+        "options": list(choice.data["options"]),
+    }
+
+
 @prompt_renderer("search_library")
 def _search_library(ctx: PromptContext, choices: list) -> dict:
     choice = choices[0]

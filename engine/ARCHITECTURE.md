@@ -314,6 +314,28 @@ rule unimplementable — counting the contenders would mean running one, which i
 exactly what 616.1 forbids before the choice is made. The predicate must not
 consume a charge, because an effect that is asked about may then not be chosen.
 
+### Asking the choice (616.1e)
+
+The choice belongs to the affected player, and `apply_in_order` puts it to them
+through its `ask` hook — an `effect_order` pending choice, registered like every
+other prompt.
+
+Purity is what makes suspending cheap. When a contended round is reached,
+*nothing has been applied yet*, so the process can be abandoned and the **whole
+event re-run** later: it arrives at the same round with the same contenders and
+the recorded answer waiting. No continuation, no snapshot, no rollback — there
+is nothing yet to undo. (Snapshotting would in fact be wrong here: the engine
+compares damage sources and band members by identity, which a deep copy breaks.)
+
+The re-run is supplied by the caller as a `restart` thunk, because an event is
+more than its replacements — a draw nothing replaces still has to draw. Passing
+one is a caller declaring "this event can suspend"; a suspended event reports
+`consumed` so the caller skips the default action and the re-run does it
+properly. `_draw_with_replacements` passes one. **Damage does not**: its callers
+read the returned number for trample, lifelink and triggers, so deferring the
+event means deferring all of that, and every seat takes the documented default
+there. Non-interactive seats are never asked anywhere.
+
 `engine/damage_events.py` is where a *damage* event's members of both registries
 become the one candidate list the rule describes. `deal_damage(game, event)` is
 the entry point every damage path uses — there is deliberately no shields-only

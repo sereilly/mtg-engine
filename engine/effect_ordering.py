@@ -25,18 +25,25 @@ partial replacement lowers the amount, a shield is consumed, a redirect moves
 the damage to a different recipient. The loop re-gathers after every
 application instead of walking a list decided up front.
 
-**The choice has one seat.** :func:`choose_effect` is where the affected player
-would be asked. It takes the default today — the documented order below — and
-the reason is not that the choice does not matter but that a damage event cannot
-currently suspend: prevention runs inside ``_deal_damage_to_player``, which
-returns an ``int`` to callers deep in combat and resolution loops. Asking a
-human there needs the event to be resumable, which is its own piece of work.
-Where an event *can* suspend, replacement choices already prompt properly — see
-``engine/replacement_choices.py``.
+**The choice is asked, and asking needs nothing to be undone.** 616.1e is the
+affected player's, and :func:`apply_in_order` puts it to them through the
+``ask`` hook. What makes that possible without continuations or snapshots is the
+first point above: predicates are pure, so at the moment a contended round is
+reached, *nothing has happened yet*. The process can be abandoned there and the
+whole event re-run later against the same state, arriving at the same round with
+the same contenders and the answer now recorded. Suspending is free precisely
+because there is nothing to roll back.
 
-So the ordering half of 616.1 is implemented and the asking half has one
-documented seat rather than being spread across two cascades. That is the
-distinction the roadmap's phase 5 was tracking.
+The caller supplies the re-run, because an event is more than its replacements —
+a draw nothing replaces still has to draw — and only the caller knows what doing
+it again means. A caller that cannot offer one (damage: its callers read the
+number back for trample, lifelink and triggers, and would have to defer all of
+that too) simply does not, and every seat takes the default. That is a missing
+capability at one declared place rather than a branch scattered through the
+process.
+
+A non-interactive seat is never asked, so AI and headless play stay entirely
+synchronous.
 
 Note that 616.1 is not the *only* sequencing a damage event has. CR 120.4 splits
 one into "damage is dealt" and "what was dealt is processed into its results",
@@ -80,11 +87,21 @@ class OrderingTrace:
 
     applied: list[str] = field(default_factory=list)
     contended: list[tuple[str, ...]] = field(default_factory=list)
+    #: The process stopped to ask the affected player which effect applies
+    #: first. **Nothing was applied** — see :func:`apply_in_order` for why that
+    #: is what makes suspending safe. The caller must not carry on with the
+    #: event; answering the prompt restarts it.
+    suspended: bool = False
+    #: Rounds that contended but took the default because the process was
+    #: already under way (CR 616.2 can make a fresh effect applicable after one
+    #: has been applied, and by then the prefix is no longer pure). Empty for
+    #: every card in this pool; recorded rather than asserted so the day one
+    #: arrives it is visible instead of silent.
+    unasked: list[tuple[str, ...]] = field(default_factory=list)
 
     @property
     def had_a_choice(self) -> bool:
-        """Whether the affected player was ever in a position to choose. This
-        is the signal a prompt would hang off."""
+        """Whether the affected player was ever in a position to choose."""
         return any(len(round_) > 1 for round_ in self.contended)
 
 
@@ -118,14 +135,17 @@ def affected_seat(game, affected) -> int | None:
     return None
 
 
-def choose_effect(game, chooser_index: int | None, candidates: list[Candidate]) -> Candidate:
-    """Which of several applicable effects to apply next (CR 616.1e).
+#: Returned by an ``ask`` hook that has queued a prompt instead of answering.
+SUSPENDED = object()
 
-    The affected player's choice. Today every seat takes the documented default
-    — the lowest ``order`` — because the events this runs inside cannot suspend
-    to ask (see the module docstring). This is the one function to change when
-    they can, and ``OrderingTrace.had_a_choice`` already records when the
-    question was live.
+
+def choose_effect(game, chooser_index: int | None, candidates: list[Candidate]) -> Candidate:
+    """The default choice (CR 616.1e): the lowest ``order``.
+
+    What a non-interactive seat takes, and what every seat takes on an event
+    that cannot suspend to ask. Any single order is a legal set of 616.1e
+    choices, so this is a correct game, just not always the one the player
+    would have picked.
     """
     return min(candidates, key=lambda candidate: candidate.order)
 
@@ -137,6 +157,7 @@ def apply_in_order(
     *,
     chooser_index: int | None = None,
     stop: Callable[[Any, dict], bool] | None = None,
+    ask: Callable[[Any, int | None, list[Candidate]], Any] | None = None,
 ) -> OrderingTrace:
     """Apply *candidates* to *event* following CR 616.1.
 
@@ -144,6 +165,24 @@ def apply_in_order(
     because the previous application may have changed the answer. ``stop`` ends
     the process early — a consumed event has nothing left for anything to
     modify.
+
+    ``ask`` is how the affected player is consulted (616.1e). It is called only
+    on a round with more than one applicable effect, and only **before anything
+    has been applied**. It returns the chosen candidate, or :data:`SUSPENDED`
+    to mean "a prompt is queued; stop".
+
+    That "before anything has been applied" restriction is the whole trick, and
+    it is worth being explicit about why it is safe rather than merely
+    convenient. Every ``applies`` predicate is pure, so the work done before the
+    first application is *nothing at all* — the process can be abandoned
+    mid-round and re-run from the top later against the same game state and
+    reach the same round with the same contenders. Suspending needs no snapshot,
+    no continuation and no rollback, because there is nothing yet to undo.
+
+    Once one effect has been applied that is no longer true, so a later round
+    that contends takes the default and is recorded in ``trace.unasked``. In
+    this pool that cannot happen: applying an effect only ever makes predicates
+    go true→false, so if any round contends the first one did.
     """
     trace = OrderingTrace()
     remaining = list(candidates)
@@ -154,11 +193,18 @@ def apply_in_order(
         if not applicable:
             return trace
         trace.contended.append(tuple(c.key for c in applicable))
-        chosen = (
-            applicable[0]
-            if len(applicable) == 1
-            else choose_effect(game, chooser_index, applicable)
-        )
+        if len(applicable) == 1:
+            chosen = applicable[0]
+        elif ask is None or trace.applied:
+            if ask is not None:
+                trace.unasked.append(tuple(c.key for c in applicable))
+            chosen = choose_effect(game, chooser_index, applicable)
+        else:
+            answer = ask(game, chooser_index, applicable)
+            if answer is SUSPENDED:
+                trace.suspended = True
+                return trace
+            chosen = answer
         chosen.apply(game, event)
         trace.applied.append(chosen.key)
         # An effect applies once per event. Re-gathering is about the *others*
