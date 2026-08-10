@@ -398,6 +398,7 @@ class PermanentStateMixin:
             perm.metadata.pop("derived_buff_toughness", None)
         kormus_active = any(perm.card.name == "Kormus Bell" for perm in all_permanents)
         living_lands_active = any(perm.card.name == "Living Lands" for perm in all_permanents)
+        self._refresh_global_statics(all_permanents)
         self._refresh_static_land_types(all_permanents)
         # Layer 4 before layer 7: a characteristic-defining P/T that counts
         # creatures must see the lands this pass animates, not last pass's.
@@ -457,6 +458,51 @@ class PermanentStateMixin:
                         permanent, "conditional_untapped_bonus", not permanent.tapped,
                         int(untapped_bonus_instr.payload["power"]), int(untapped_bonus_instr.payload["toughness"]),
                     )
+
+    def _refresh_global_statics(self, all_permanents: list[Permanent]) -> None:
+        """Record which permanents each board-wide static currently applies to.
+
+        The list holds the **source permanents**, not a materialised effect, so
+        `layer_bridge` derives the characteristics from the source's text on
+        every recompute — and a source leaving the battlefield ends its effect
+        by dropping out of this list. That is the same shape attached Auras use,
+        and it is why there is no flag here to clear.
+
+        Rebuilt from scratch each pass rather than adjusted, for the reason
+        recorded on `_add_static_pt`: an adjustment that does not exactly match
+        what it undid compounds, and CR 611.3a means this runs constantly.
+        """
+        from ..global_statics import global_static_for
+
+        sources = [
+            (perm, static)
+            for perm in all_permanents
+            if (static := global_static_for(perm.card.oracle_text)) is not None
+        ]
+        for perm in all_permanents:
+            applying = [
+                source
+                for source, static in sources
+                if source is not perm and self._global_static_applies(static, perm)
+            ]
+            if applying:
+                perm.metadata["global_static_sources"] = applying
+            else:
+                perm.metadata.pop("global_static_sources", None)
+
+    @staticmethod
+    def _global_static_applies(static, permanent: Permanent) -> bool:
+        """Whether *static* covers *permanent*.
+
+        "Noncreature artifact" reads the **printed** type line for the creature
+        half: asking whether it is currently a creature would include the type
+        this very effect adds, and the answer would then depend on whether it
+        had already been asked.
+        """
+        if static.applies_to == "noncreature_artifact":
+            printed = permanent.card.type_line.lower()
+            return "artifact" in printed and "creature" not in printed
+        return False
 
     def _refresh_land_animation(
         self, all_permanents: list[Permanent], kormus_active: bool, living_lands_active: bool

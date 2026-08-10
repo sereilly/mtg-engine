@@ -172,3 +172,82 @@ def test_crumble_reads_the_mana_value_before_destroying(catalog):
 
     assert p2.battlefield == []
     assert p2.life == before              # Black Lotus's mana value is 0
+
+
+# ---------------------------------------------------------------------------
+# Titania's Song — a static that changes objects its source does not own
+# ---------------------------------------------------------------------------
+
+def _song(catalog):
+    return dataclasses.replace(
+        catalog["Bad Moon"], name="Titania's Song", mana_cost="{3}{G}", cmc=4.0,
+        oracle_text=(
+            "Each noncreature artifact loses all abilities and becomes an "
+            "artifact creature with power and toughness each equal to its mana value."
+        ),
+    )
+
+
+@pytest.mark.cr("613.1d", "613.1f")
+def test_titanias_song_animates_noncreature_artifacts_at_their_mana_value(catalog):
+    tome = Permanent(card=catalog["Jayemdae Tome"])       # mana value 4
+    bears = Permanent(card=catalog["Grizzly Bears"])
+    player = PlayerState(name="P1", battlefield=[tome, bears])
+    game = Game(players=[player, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game._refresh_dynamic_creatures()
+    assert tome.is_creature is False
+
+    player.battlefield.append(Permanent(card=_song(catalog)))
+    game._refresh_dynamic_creatures()
+
+    assert tome.is_creature is True
+    assert (tome.effective_power, tome.effective_toughness) == (4, 4)
+    # A creature is not a *noncreature* artifact, and Grizzly Bears is neither.
+    assert (bears.effective_power, bears.effective_toughness) == (2, 2)
+
+
+@pytest.mark.cr("611.3")
+def test_titanias_song_effect_ends_when_the_source_leaves(catalog):
+    """The affected permanent holds a reference to the *source*, not a copy of
+    the effect, so removal is the source dropping out of that list — the same
+    shape attached Auras use, and the reason there is no flag to clear."""
+    tome = Permanent(card=catalog["Jayemdae Tome"])
+    song = Permanent(card=_song(catalog))
+    player = PlayerState(name="P1", battlefield=[tome, song])
+    game = Game(players=[player, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game._refresh_dynamic_creatures()
+    assert tome.is_creature is True
+
+    player.battlefield.remove(song)
+    game._refresh_dynamic_creatures()
+
+    assert tome.is_creature is False
+
+
+@pytest.mark.cr("613.1f")
+def test_titanias_song_removes_activated_abilities_too(catalog):
+    """"Loses all abilities" means the activated ones. Layer 6 removes keyword
+    abilities, but an activated ability is read from the compiled program, so
+    the loss has to be enforced where activation is authorised — otherwise the
+    card is half-implemented and a Tome keeps drawing cards."""
+    tome = Permanent(card=catalog["Jayemdae Tome"])
+    tome.metadata["summoning_sickness_turn"] = -99
+    song = Permanent(card=_song(catalog))
+    player = PlayerState(
+        name="P1", battlefield=[tome, song], library=[catalog["Forest"]] * 5
+    )
+    game = Game(players=[player, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game._refresh_dynamic_creatures()
+
+    result = game.activate_permanent_ability(0, "Jayemdae Tome")
+    assert result.supported is False
+    assert player.hand == []
+
+    player.battlefield.remove(song)
+    game._refresh_dynamic_creatures()
+
+    assert game.activate_permanent_ability(0, "Jayemdae Tome").supported is True
+    assert len(player.hand) == 1

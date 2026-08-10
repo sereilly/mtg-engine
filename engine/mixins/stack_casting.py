@@ -891,6 +891,19 @@ class StackCastingMixin:
             self.log.append(details)
             return SimulationResult(permanent.card.name, False, "unsupported", details)
 
+        # "Loses all abilities" (Titania's Song) means the activated ones too.
+        # Layer 6 removes keyword abilities, but an activated ability is read
+        # from the compiled program rather than the ability channel, so removal
+        # has to be enforced where activation is authorised. Without this the
+        # card would be half-implemented: a Jayemdae Tome under Titania's Song
+        # would lose nothing it visibly had and keep drawing cards.
+        from ..global_statics import global_statics_applying_to
+
+        if any(static.removes_abilities for static in global_statics_applying_to(permanent)):
+            details = f"{permanent.card.name} has lost all abilities"
+            self.log.append(details)
+            return SimulationResult(permanent.card.name, False, "unsupported", details)
+
         program = compile_card_oracle(permanent.effective_card)
         target_idx = target_player_index if target_player_index is not None else (1 - controller_index)
         target_player = self.players[target_idx]

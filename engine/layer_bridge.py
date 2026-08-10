@@ -23,6 +23,7 @@ from .auras import (
     aura_static_pt_grant,
     auras_attached_to,
 )
+from .global_statics import global_statics_applying_to
 from .continuous import (
     Characteristics,
     ContinuousEffect,
@@ -220,6 +221,13 @@ def collect_pt_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
             )
         )
 
+    for static in global_statics_applying_to(perm):
+        if static.pt_from_mana_value:
+            value = int(perm.card.cmc)
+            effects.append(
+                set_pt(only, value, value, timestamp=_DERIVED_TIMESTAMP, label=static.name)
+            )
+
     # 7c — Auras. Derived from each attached Aura's own text on every
     # recompute and stamped with the moment it became attached (CR 613.7b), so
     # detaching one is simply ceasing to contribute: there is no remembered
@@ -298,6 +306,17 @@ def collect_ability_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]
             )
         )
 
+    # Board-wide statics (Titania's Song). Derived from the source permanent
+    # recorded on this one, so the removal ends when the source leaves.
+    for static in global_statics_applying_to(perm):
+        if static.removes_abilities:
+            effects.append(
+                remove_abilities(
+                    only, sorted(_printed_abilities(perm.effective_card)),
+                    timestamp=0, label=static.name,
+                )
+            )
+
     for entry in ability_effects(perm):
         keyword = entry["keyword"]
         stamp = int(entry["timestamp"])
@@ -331,6 +350,12 @@ def collect_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
         effects.append(
             add_types(only, card_types=["creature"], timestamp=0, label="animated artifact")
         )
+
+    for static in global_statics_applying_to(perm):
+        if static.adds_creature_type:
+            effects.append(
+                add_types(only, card_types=["creature"], timestamp=0, label=static.name)
+            )
 
     override = meta.get("land_type_override")
     if override:
