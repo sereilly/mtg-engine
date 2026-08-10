@@ -61,7 +61,7 @@ directly comparable and can coexist per line. See "Grammar front end" below and
 | `engine/card_hooks.py` | Name-keyed registries for truly bespoke card behavior: spell-cast triggers, spell-resolved triggers, counterspell riders, leave-battlefield effects, untap-step restrictions, draw-step modifiers, mana-production modifiers, cost-tax modifiers. The only sanctioned place to reference a card by name — a short list of `# TODO(card-hooks)` markers in the mixins flags the handful of remaining single-card bespoke sites not yet worth generalizing. |
 | `engine/phases/` | One mixin per turn phase and per step within a phase (CR 500–514): `beginning_phase` + `untap_step`/`upkeep_step`/`draw_step`, `precombat_main_phase`, `combat_phase` + its five step modules, `postcombat_main_phase`, `ending_phase` + `end_step`/`cleanup_step`. Each is composed onto `Game`. See `engine/phases/__init__.py` for the full taxonomy. |
 | `engine/mixins/` | Cross-cutting game flow not tied to a single phase: turn-structure navigation and priority (`phase_steps`), per-turn/pregame management (`turn_management`), state-based actions, effects, helpers. Consumes compiled programs; should never parse oracle text itself. |
-| `engine/mixins/stack/` | The stack (CR 405), one mixin per stage of an object's life on it: `casting` (CR 601), `activation` (CR 602), `resolution` (CR 603/608), and `choices` — the arm / `confirm_*` / `auto_resolve_pending_*` queue every part-way-through decision uses. |
+| `engine/mixins/stack/` | The stack (CR 405), one mixin per stage of an object's life on it: `casting` (CR 601), `activation` (CR 602), `resolution` (CR 603/608), and `choices` — the `pending_choices` queue every part-way-through decision uses, plus the table registering them. |
 
 ## Adding support for a new card
 
@@ -241,6 +241,46 @@ Adding an interactive replacement is an interceptor plus a resolver — no new
 `Game` field, confirm method, or prompt plumbing. `pending_lamp_draw`,
 `pending_outside_game_draw` and `pending_leng_discards` remain as read-only
 views over the queue in the shapes the web layer reads.
+
+## Pending choices
+
+Every other decision a seat owes part-way through a spell, an ability or a turn
+step — a library search, a discard, Balance's removals, Power Sink's payment,
+Word of Command's borrowed card — is a `PendingChoice` on
+`Game.pending_choices`, with a `ChoiceSpec` registered in
+`engine/pending_choices.py` (the table itself lives at the bottom of
+`engine/mixins/stack/choices.py`).
+
+A prompt has five parts: something arms it, a **resolver**, a **default** for
+non-interactive seats, a **renderer**, and an **action** that answers it. The
+spec carries the last four plus the gating metadata — the 400 message that
+refuses other actions, whether the whole game waits or only the choosing seat,
+whether a spectator sees it, and whether a non-interactive seat takes the
+default the moment it is armed (`default_at_arm`) or stays queued for the
+auto-resolver.
+
+```
+handler / upkeep effect / entry replacement
+  → game.arm_pending_choice(kind, seat, **data)
+      interactive seat  → queued on game.pending_choices
+      other seat        → spec.default(...) now, or on the next auto-resolve pass
+  → web/prompts.py renders it, refuses other actions, and answers AI-owned ones
+  → confirm_*  → game.resolve_pending_choice(kind, seat, **response) → spec.resolve
+```
+
+The web layer loops over `game.iter_pending_prompts()` rather than naming each
+kind, and that iterator spans **both** queues — a suspended `ReplacementChoice`
+carries the same `kind`/`player_index`/`data` attributes, so no adapter is
+needed. `pending_<name>` properties remain as read-only views derived from the
+queue, each taking its seat from `choice.player_index` so the two cannot drift.
+
+Adding an interactive choice is one `register_choice(...)`, one renderer, and
+the code that arms it; `tests/engine/test_pending_choices.py` fails if a kind is
+armed with no spec, registered with no renderer, or given an action `web/app.py`
+never dispatches. That last check exists because the failure is silent and
+asymmetric: a missing default *hangs an AI seat forever*, a missing gate lets a
+player act around their own prompt, and a missing renderer means the prompt is
+armed and never shown — which is exactly what Primal Clay shipped with.
 
 ## Prevention effects
 

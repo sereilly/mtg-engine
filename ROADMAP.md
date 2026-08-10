@@ -5,7 +5,7 @@ release line — **137 sets, 33,594 printings, 26,113 unique cards** per
 `set_progress.json`.
 
 This document records the audit that motivated the work and the phased plan
-that follows from it. Phases 1, 2, 3 and 7 are done; 4, 5, 6 and 8 are partly
+that follows from it. Phases 1, 2, 3, 4 and 7 are done; 5, 6 and 8 are partly
 done.
 
 ---
@@ -1612,7 +1612,7 @@ each, with no remaining cluster large enough to move the number in a single
 step. That is the shape of the rest of phase 3 — steady, verifiable,
 production-by-production work of the kind above, not a few big wins.
 
-## Phase 4 — trigger event bus and a generic choice queue 🟡 partly done
+## Phase 4 — trigger event bus and a generic choice queue ✅ done
 
 **Done:**
 
@@ -1689,12 +1689,10 @@ surface when something else starts depending on them:
   is even on the stack). Converting them mechanically would widen `emit` until
   it was the old API renamed. They convert when they need new behavior, as the
   dies-trigger site just did.
-- The optional-action prompt still rides `pending_optional_pays`. It now
-  carries instruction branches rather than a fixed life/draw/damage vocabulary,
-  so it is no longer a *limit* — but it is still one of the twenty one-card
-  fields. One shim remains: a plain "gain N life" consequence is mirrored into
-  the legacy `life` field so the prompt UI keeps describing what accepting
-  does. That goes away when the choice carries its own description.
+- The optional-action prompt still rode `pending_optional_pays`. It carried
+  instruction branches rather than a fixed life/draw/damage vocabulary, so it
+  was no longer a *limit* — but it was still one of the one-card fields.
+  *(Folded into the choice queue below.)*
 **Done — `resolve_upkeep`'s if-chain is a registry.** It dispatched 20 card
 shapes with hand-written `if cond == … and kind == …` branches, ~430 lines
 inside a turn-structure method, so supporting an upkeep card meant editing
@@ -1729,8 +1727,77 @@ handled — by its own graveyard scan, since it fires from the graveyard rather
 than the battlefield — so it is an explicit, reasoned exception with its own
 staleness check rather than a hole in the guard.
 
-- `Game.pending_choices` replacing the 20 `pending_*` fields remains the bulk of
-  this phase.
+### Done — one queue, and the three cascades that hung off it
+
+`Game.pending_choices` replaces the sixteen one-card `pending_*` fields. A
+decision is a `PendingChoice` (kind, seat, payload) and a `ChoiceSpec`
+registered in `engine/pending_choices.py`; `web/prompts.py` holds the renderers.
+**19 kinds registered, 14 of which refuse other actions.** `web/app.py` lost
+**603 lines** (5,506 → 4,948).
+
+The fields were never the expensive part. Each prompt needed *five* things —
+something to arm it, a resolver, a default for non-interactive seats, a
+renderer, and an action that answers it — spread across five files with nothing
+holding them together, and the failure modes are silent and asymmetric:
+
+| Missing part | What happens |
+| --- | --- |
+| default | the AI seat never answers and **the game hangs forever** |
+| gate | the player acts around their own prompt |
+| renderer / action | the prompt is armed, never shown, never cleared |
+
+All three shipped. `_auto_resolve_ai_pending` was twelve near-identical
+functions and was **missing two** — Aladdin's Lamp and Ring of Ma'rûf had no
+safety net, so a seat handed from a human to the AI would have stalled on them.
+The blocking cascade was eighteen hand-written `if` statements. And **Primal
+Clay's "choose your body" prompt had three of the five missing**: armed for a
+human controller, then no renderer, no action, and no auto-answer — the
+controller silently got the first printed body and the field was never cleared.
+It is wired up now, with a board panel, and verified end to end in the running
+app: the prompt renders, clicking *1/6 with defender* applies it, and the
+`pass_priority` the prompt was refusing is accepted afterwards.
+
+`tests/engine/test_pending_choices.py` makes that class mechanical rather than
+a rule to remember. It reads the registry, so a kind registered with no
+renderer, or given an action `web/app.py` never dispatches, or armed with no
+spec at all, fails — each verified by injection, and each fired with exactly the
+right name. A per-kind gating test also pins that a prompt never refuses the
+action that answers it (a deadlock) and that a bystander seat is only held up by
+the kinds that stop the whole game.
+
+Four things the migration turned up, worth keeping:
+
+- **A queue is not a field, and one distinction was hiding in that.** Balance
+  owes *every* player their own removals; the single `pending_balance` field
+  held one `{"plans": {...}}` table for all of them, and `pending_sacrifice`
+  could only hold one seat's — a second seat's forced sacrifice resolved itself
+  inline rather than waiting. Both are one choice per seat now, and the legacy
+  view rebuilds the plan table from them.
+- **Two seat fields, one authority.** Every prompt carried its seat inside its
+  payload (`caster_index`, `chooser_index`, `controller_index`, …). The queued
+  choice owns it now and the compatibility views derive their key from
+  `choice.player_index`, so the two spellings cannot disagree.
+- **Where the "is this seat interactive?" test belongs is per kind, not
+  universal.** Most prompts gate at arm time — a non-interactive seat never
+  queues one, because the resolution they interrupt has to finish. Kudzu does
+  not: whether the controller is asked at all is the *caller's* `defer_choice`,
+  since a tap that already names the land re-attaches inline. Making that a
+  spec flag (`default_at_arm`) rather than a convention is what let the
+  difference stay visible; treating it as universal broke Kudzu's regression
+  test on the first run.
+- **The AI simulator drains kinds by name, not queue order.** A library search
+  shuffles, so *which* prompt is answered first is part of what a seed
+  reproduces. `auto_resolve_pending_choices(kinds=…)` takes an ordered tuple for
+  exactly that reason, and the seeded AI-behaviour tests are unchanged.
+
+**Not done, deliberately:** the 23 existing trigger fire sites still stay put,
+for the reasons above — they convert when they need new behavior. And a plain
+"gain N life" consequence is still mirrored into the legacy `life` field so the
+optional-pay prompt can describe what accepting does; that goes away when the
+choice carries its own description, which is now a one-field change to a spec
+rather than a change to a `Game` field.
+
+3,992 tests, 14.3s.
 
 ## Phase 5 — unified replacement effects and hook generalization 🟡 started
 

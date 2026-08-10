@@ -141,6 +141,16 @@ adding entries, not editing dispatch**:
   resolver finishes it. Interactive seats queue on
   `game.pending_replacement_choices`; every other seat takes the default at
   once, through that same resolver. Two registrations, no new `Game` field.
+- `engine/pending_choices.py` — every *other* decision a seat owes part-way
+  through a spell, an ability or a turn step (a discard, a library search,
+  Balance's removals, Power Sink's payment). One `PendingChoice` queue on
+  `Game.pending_choices` and one `ChoiceSpec` per kind, registered in the table
+  at the bottom of `engine/mixins/stack/choices.py`: how it is answered, what a
+  non-interactive seat does instead, which action answers it, and how the web
+  layer renders and gates it. `web/prompts.py` holds the renderers and the three
+  loops that drive it. Adding a prompt is one `register_choice` + one renderer +
+  the code that arms it — never a new `Game` field, and never another branch in
+  a per-card cascade.
 - `engine/prevention.py` — CR 615 damage shields, `@prevention_effect(order)`
   functions over one `{recipient, amount, source, combat}` event. `recipient` is
   a player *or* a permanent, so a shield that applies to both is written once.
@@ -210,8 +220,8 @@ adding entries, not editing dispatch**:
   Consumes compiled programs; must never parse oracle text.
 - `engine/mixins/stack/` — the stack (CR 405), one mixin per stage of an
   object's life on it: `casting` (CR 601), `activation` (CR 602), `resolution`
-  (CR 603/608), and `choices` — the arm / `confirm_*` / `auto_resolve_pending_*`
-  queue that every part-way-through decision goes through.
+  (CR 603/608), and `choices` — the `pending_choices` queue every
+  part-way-through decision goes through, plus the table registering them.
 
 `engine/oracle.py` is the compiler (tokenize → classify lines as
 keyword/triggered/activated/static → delegate effect clauses to `engine.parsing`).
@@ -280,6 +290,13 @@ dispatched by the `ActionKind` literal in `web/schemas.py`. Session `mode` must
 be one of the literals `human_vs_ai`, `ai_vs_ai`, `human_vs_human`,
 `free_for_all` (the last is 3–4 seats, configured per seat via the `seats`
 list instead of the host/guest field pairs).
+
+`web/prompts.py` owns every interactive prompt's presentation: one renderer per
+kind plus the three loops that render the prompts a viewer may see, refuse the
+actions a pending prompt blocks, and answer AI-owned prompts with their
+defaults. All three read the registry (see `engine/pending_choices.py`), so a
+new prompt is covered by construction rather than by remembering three edits in
+`app.py`.
 
 The board UI is **canvas-rendered** (`web/static/battlefield-canvas.js`).
 
