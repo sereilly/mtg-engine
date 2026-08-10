@@ -5,7 +5,7 @@ release line — **137 sets, 33,594 printings, 26,113 unique cards** per
 `set_progress.json`.
 
 This document records the audit that motivated the work and the phased plan
-that follows from it. Phases 1, 2, 3, 4 and 7 are done; 5, 6 and 8 are partly
+that follows from it. Phases 1, 2, 3, 4, 7 and 8 are done; 5 and 6 are partly
 done.
 
 ---
@@ -2384,7 +2384,7 @@ per-kind flags, deleting the cascade, splitting `stack_casting.py`, and folding
 `StackItem`'s per-choice fields into a dict. See "Phase 7 finished" above for
 what each cost and what it turned up.
 
-## Phase 8 — test restructuring for scale 🟡 partly done
+## Phase 8 — test restructuring for scale ✅ done
 
 **Done:**
 
@@ -2401,9 +2401,52 @@ what each cost and what it turned up.
   and web-API tests. The suite now runs from any directory; it previously
   failed collection anywhere but the repo root.
 
-**Still open:** splitting the 9,370-line `tests/sets/test_lea_cards.py` by
-category, a fixture factory to stop conftest growing per set, and a documented
-per-set test convention for the 137-set march.
+### Done — the convention, the factory, and the split
+
+`tests/sets/README.md` is the convention, and
+`tests/engine/test_set_test_convention.py` enforces the parts a test can check.
+
+**The factory.** `conftest.py` grew a path fixture, a cards fixture and a
+by-name fixture every time a set was ingested — three or four declarations
+whose entire content was a set code. `set_pool("ARN")` / `set_cards("ARN")`
+resolve any set through the manifest, so **a new set needs no change to
+`conftest.py` at all**. `cards`/`all_cards` (LEA) and `arn_cards`/`arn_by_name`
+are grandfathered — thousands of call sites between them — and the guard is an
+exact expected-fixture set, so *any* addition fails and has to be argued for.
+
+An unknown code raises and names the codes that exist. That is the whole reason
+the factory is not a dict lookup: a missing set resolving to an empty pool makes
+every test over it pass without testing anything.
+
+**The split.** 9,402 lines → the largest per-set file is now 2,598, split by the
+printed type of the card each test names (creatures 106 tests, enchantments 92,
+instants 64, artifacts 60, sorceries 40, lands 19). 87% of the tests name their
+card in the function name, which is what made the split mechanical rather than a
+judgement call per test.
+
+Done with a script, not by hand: every top-level node keeps its exact source
+text and its preceding comment block, per-file imports are recomputed from what
+each bucket actually uses, and the 908 collected node IDs were compared before
+and after — 0 lost. 9,400 lines of hand-moved game tests is exactly where a
+silently dropped test hides.
+
+**The catalog sweep moved out of `tests/sets/` entirely.** It parametrizes over
+the whole manifest, so it was never a LEA test — and it sat in
+`test_lea_cards.py` reading `cards/LEA_cards.json` directly, which is precisely
+why Arabian Nights, a set the tracker called complete, went unswept for as long
+as it did. It lives in `tests/engine/test_catalog_sweep.py` now, and no test
+anywhere spells out a `cards/*.json` filename; the guard scans for it.
+
+Each of the four guards was verified by injecting the bug it exists to catch.
+The first draft of the fixture guard **did not fire**: it flagged fixtures named
+after a set already in the manifest, but a new set's fixture and its manifest
+entry arrive together, so the check could never have fired on the case it
+existed for. An exact expected set replaced it.
+
+**Still open:** the suite is at 17.8s against a 20s CI budget. That is not from
+the split (measured either side: unchanged) — it has crept up over several
+phases, and it is the next thing in this phase worth attacking, because the
+budget is a standing invariant and there are 132 sets still to come.
 
 ---
 

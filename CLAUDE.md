@@ -27,7 +27,7 @@ All Python runs through the workspace venv (Windows / PowerShell):
 python -m pytest                                  # full suite
 python -m pytest -m "not slow"                    # skip the AI-simulation batch tests
 python -m pytest tests/ui/test_web_api.py -q      # one file
-python -m pytest tests/sets/test_lea_cards.py::test_name -q   # one test
+python -m pytest tests/sets/test_lea_creatures.py::test_name -q   # one test
 python -m pytest tests/regressions -q             # in-game bug regressions (batched by fix round)
 ```
 
@@ -38,6 +38,14 @@ Tests are organized by subject — put new tests in the matching subfolder:
 keywords, replacements), `tests/sets/` (per-card tests for a specific set),
 `tests/regressions/` (in-game bug regressions). Shared fixtures live in
 `tests/conftest.py` and helpers in `tests/helpers.py`, both at the root.
+
+**Per-set tests follow `tests/sets/README.md`**, enforced by
+`tests/engine/test_set_test_convention.py`. In short: get a set's cards from
+`set_pool("ARN")` / `set_cards("ARN")` — never a new `conftest.py` fixture and
+never a spelled-out `cards/*.json` path; split a per-set file by the printed
+type of the card each test names once it outgrows one file
+(`test_lea_creatures.py`, `test_lea_instants.py`, …); and put anything
+pool-wide in `tests/engine/`, not in a set's file.
 
 Every test in `tests/rules/` **must** carry a `@pytest.mark.cr("508.1a", ...)`
 marker citing the Comprehensive Rules rule(s) it verifies (numbered rule or
@@ -255,14 +263,16 @@ Work top-down, stop at the first step that covers it (recipe in
    `engine/replacements.py`.
 4. Bespoke behavior → register a hook in `card_hooks.py` keyed by name (or a
    `cast_restrictions.py` entry for a textual timing gate).
-5. Add a focused test (per-card patterns: `tests/sets/test_lea_cards.py` for LEA,
-   `tests/sets/test_arabian_nights_cards.py` for ARN). Test fixtures keep the
-   per-set pools separate — `all_cards`/`cards` are the LEA pool,
-   `arn_cards`/`arn_by_name` the ARN pool — so name lookups stay unambiguous;
-   `catalog`/`catalog_by_name` are the whole manifest pool for anything
-   pool-wide (see `tests/conftest.py`). The comprehensive-cast sweep
-   (`test_every_catalog_card_resolves_without_exception`) parametrizes over the
-   whole manifest catalog, so a newly ingested set is swept automatically.
+5. Add a focused test in `tests/sets/`, in the file for that set and that card's
+   printed type — `tests/sets/test_lea_creatures.py`,
+   `tests/sets/test_arabian_nights_cards.py`, and so on
+   (`tests/sets/README.md`). Fixtures keep the per-set pools separate so name
+   lookups stay unambiguous: `set_pool("<CODE>")` for any set,
+   `all_cards`/`cards` (LEA) and `arn_cards`/`arn_by_name` as grandfathered
+   aliases; `catalog`/`catalog_by_name` are the whole manifest pool, for
+   pool-wide work only. The comprehensive-cast sweep
+   (`tests/engine/test_catalog_sweep.py`) parametrizes over the whole manifest,
+   so a newly ingested set is swept automatically.
 
 Cards whose text falls outside recognized patterns degrade gracefully: classified
 unsupported with an explicit reason, never crashing simulation.
