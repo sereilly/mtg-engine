@@ -110,7 +110,32 @@ _KIND_TO_TARGET_KIND: dict[str, str] = {
     "berserk_pump": "creature",
     "grant_unlimited_blocking": "creature",
     "deal_damage_and_gain_life": "any",
+    "grant_prevention_shield": "any",
+    "target_gains_life": "any",
+    "remove_creature_from_combat": "creature",
+    "grant_target_flying_until_eot": "creature",
+    "simulacrum_redirect": "creature",
+    "exile_creature_gain_life_equal_to_power": "creature",
+    "bounce_target_creature": "creature",
+    "destroy_artifact_controller_gains_mana_value": "artifact",
+    "volcanic_eruption": "divided",
+    "reanimate_creature": "graveyard_creature",
+    "exchange_ante_with_top_library": "none",
+    "tap_or_untap_target": "permanent",
+    "drain_target_lands_mana": "player",
+    "tap_target_player_lands_and_drain_mana": "player",
+    "reorder_target_library_top": "player",
+    "peek_hand_and_force_play": "player",
+    "return_all_owned_artifacts_to_hand": "player",
+    "copy_top_stack_spell": "stack",
 }
+
+# One kind, two targets: a graveyard return names the card type it may take, so
+# the payload decides. Reconstruction targets an artifact card, Raise Dead a
+# creature card — the same instruction with different data, which is exactly why
+# the type is payload rather than part of the kind.
+def _graveyard_return_target(payload: dict) -> str:
+    return "artifact" if payload.get("card_type") == "artifact" else "graveyard_creature"
 
 
 def derive_cast_target(card, program) -> str | None:
@@ -132,13 +157,31 @@ def derive_cast_target(card, program) -> str | None:
     if "instant" not in type_line and "sorcery" not in type_line:
         return None
 
-    for instruction in program.instructions:
+    return _from_instructions(program.instructions)
+
+
+def _from_instructions(instructions) -> str | None:
+    """The first target kind any instruction in *instructions* describes.
+
+    Recurses into `sequence` steps: a spell written as two steps carries its
+    targeting on the step that targets (Psionic Blast's damage to any target,
+    followed by its self-damage), and stopping at the wrapper would send an
+    otherwise fully-described spell to the shadow parser.
+    """
+    for instruction in instructions:
+        if instruction.kind == "sequence":
+            nested = _from_instructions(instruction.payload.get("steps") or ())
+            if nested is not None:
+                return nested
+            continue
         described = _from_targets_payload(instruction.payload.get("targets"))
         if described is not None:
             return described
         type_filter = instruction.payload.get("type_filter")
         if type_filter:
             return _TYPE_FILTER_TO_KIND.get(type_filter)
+        if instruction.kind == "return_creature_from_graveyard_to_hand":
+            return _graveyard_return_target(instruction.payload)
         by_kind = _KIND_TO_TARGET_KIND.get(instruction.kind)
         if by_kind is not None:
             return by_kind

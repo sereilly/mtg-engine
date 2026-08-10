@@ -99,9 +99,9 @@ def test_shadow_parser_reliance_does_not_grow(supported_cards):
         1 for c in supported_cards if derive_cast_target(c, compile_card_oracle(c)) is not None
     )
 
-    assert derivable >= 76, (
+    assert derivable >= 98, (
         f"only {derivable} cards derive their cast target from the compiled "
-        "program (was 76) — a parser change removed targeting evidence"
+        "program (was 98) — a parser change removed targeting evidence"
     )
 
 
@@ -118,3 +118,26 @@ def test_the_grammar_supplies_evidence_the_legacy_rules_never_recorded(supported
     assert payloads, "Lightning Bolt's damage instruction should describe its target"
     assert payloads[0]["targets"]["kind"] == "any"
     assert derive_cast_target(bolt, program) == "any"
+
+
+def test_only_fireball_still_needs_the_shadow_parser_for_its_cast_target(supported_cards):
+    """The end state of this migration, named.
+
+    Every supported spell or Aura that picks a target as it is cast now answers
+    from its compiled program — except Fireball, whose program carries
+    `deal_damage {amount: "x"}` and nothing about division. That is not a gap in
+    the table: the evidence genuinely is not there, and `None` means "ask the
+    fallback", which is the honest answer. It becomes derivable when the damage
+    lowering records the divided-target description, not by adding a guess here.
+    """
+    from engine.targeting import derive_cast_target
+
+    gaps = [
+        card.name
+        for card in supported_cards
+        if any(t in card.type_line.lower() for t in ("instant", "sorcery", "aura"))
+        and "target" in card.oracle_text.lower()
+        and derive_cast_target(card, compile_card_oracle(card)) is None
+    ]
+
+    assert gaps == ["Fireball"], f"expected only Fireball to fall back, got {gaps}"

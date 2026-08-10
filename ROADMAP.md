@@ -1388,6 +1388,35 @@ for cards that work today.
 I also wrote a second agreement test before noticing that one existed and was
 stricter. Deleted; the lesson is to read the guard file before adding to it.
 
+### Phase 7: the cast-target cascade is down to one card
+
+Every supported spell or Aura that picks a target as it is cast now answers from
+its **compiled program** — 64 → 76 → 97 → **98 derivable**, with the single
+exception of Fireball.
+
+Three levers, in order of how much each bought:
+
+1. **The instruction kind often *is* the answer.** A lace targets a spell or
+   permanent, a counterspell the stack, a bounce a creature. A kind→target table
+   answered 33 cards with no text reading at all.
+2. **One kind, two targets, decided by payload.** A graveyard return names the
+   card type it may take — Reconstruction an artifact card, Raise Dead a
+   creature card. Same instruction, different data, which is why the type is
+   payload and not part of the kind.
+3. **Recursing into `sequence`.** A spell written as two steps carries its
+   targeting on the step that targets; stopping at the wrapper sent an
+   otherwise fully-described spell to the shadow parser.
+
+**Fireball is left deliberately.** Its program is `deal_damage {amount: "x"}`
+and says nothing about division, so `None` — "ask the fallback" — is the honest
+answer. It becomes derivable when the damage lowering records the divided-target
+description, not by guessing in the table. A test names it, so the day that
+lowering lands, the test fails and the exception gets deleted.
+
+What remains of `legality.py` is not targeting: it is 970 lines of which the
+cast-target cascade is one part, and `stack_casting.py` is still 2,277 lines.
+Neither blocks anything; both are size rather than duplication now.
+
 ### The static-ability cluster, and why it is a phase-6 job
 
 20 of the remaining lines fail with "static abilities need the CR 613 layers
