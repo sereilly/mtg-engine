@@ -89,7 +89,7 @@ class TestLordOfAtlantis:
 
         game.cast_from_hand(0, "Lord of Atlantis")
         assert merfolk.effective_power == 2
-        assert merfolk.metadata.get("has_islandwalk") is True
+        assert merfolk.has_keyword("islandwalk")
 
     def test_merfolk_entering_after_the_lord_also_benefits(self, cards):
         p1 = PlayerState(
@@ -106,7 +106,7 @@ class TestLordOfAtlantis:
             if p.card.name == "Merfolk of the Pearl Trident"
         )
         assert late.effective_power == 2
-        assert late.metadata.get("has_islandwalk") is True
+        assert late.has_keyword("islandwalk")
 
     def test_buff_and_islandwalk_revert_when_lord_leaves(self, cards):
         merfolk = _nosick(Permanent(card=cards["Merfolk of the Pearl Trident"]))
@@ -119,7 +119,7 @@ class TestLordOfAtlantis:
         _destroy(game, p1, lord)
 
         assert merfolk.effective_power == 1
-        assert merfolk.metadata.get("has_islandwalk") is not True
+        assert not merfolk.has_keyword("islandwalk")
 
 
 class TestNightmare:

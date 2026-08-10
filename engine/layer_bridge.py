@@ -38,7 +38,8 @@ from .continuous import (
     set_pt,
     switch_pt,
 )
-from .keywords import ability_effects
+from .keywords import ability_effects, derived_grants
+from .lord_buffs import QUALIFIER_FIELDS
 
 if TYPE_CHECKING:
     from .models import Permanent
@@ -47,6 +48,35 @@ if TYPE_CHECKING:
 # timestamp of their own; they are all layer 7c, where order does not matter
 # because addition commutes.
 _DERIVED_TIMESTAMP = 0
+
+# Derived layer-7c contributions from a lord buff whose filter names a state the
+# buffed creature must be in. ``{qualifier: (power, toughness)}``, cleared and
+# rebuilt by ``_recalculate_lord_buffs``; the qualifier itself is checked here,
+# at read time.
+QUALIFIED_BUFFS = "lord_buff_while"
+
+_QUALIFIER_HOLDS = {
+    "attacking": lambda perm: bool(perm.attacking),
+    # CR 509.1a: a creature is blocking once it has been declared as a blocker.
+    "blocking": lambda perm: perm.blocking_attacker_index is not None,
+    "tapped": lambda perm: bool(perm.tapped),
+    "untapped": lambda perm: not perm.tapped,
+}
+
+# The derivation table and the code that evaluates it must not be two lists: a
+# qualifier the table can produce with nothing here to check it would be a buff
+# applied unconditionally, which is the failure this whole family had. Raised
+# rather than asserted, so `python -O` cannot switch the check off.
+if set(_QUALIFIER_HOLDS) != set(QUALIFIER_FIELDS):  # pragma: no cover - import guard
+    raise RuntimeError(
+        "lord_buffs.QUALIFIER_FIELDS and layer_bridge._QUALIFIER_HOLDS disagree: "
+        f"{sorted(set(QUALIFIER_FIELDS) ^ set(_QUALIFIER_HOLDS))}"
+    )
+
+
+def qualifier_holds(perm: Permanent, qualifier: str) -> bool:
+    """Whether *perm* is currently in the state *qualifier* names."""
+    return _QUALIFIER_HOLDS[qualifier](perm)
 
 
 def _printed(perm: Permanent, key: str) -> int | None:
@@ -192,14 +222,16 @@ def collect_pt_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
             "conditional buffs",
         ),
     ]
-    if perm.attacking:
-        modifications.append(
-            (
-                int(meta.get("attacking_buff_power", 0)),
-                int(meta.get("attacking_buff_toughness", 0)),
-                "attacking buffs",
-            )
-        )
+    # A lord buff whose filter names a *state* ("attacking creatures you
+    # control", "untapped creatures you control") is contributed by the
+    # recompute but evaluated here, when power and toughness are read. That is
+    # the difference CR 611.3a needs: a creature that taps between two
+    # recomputes stops meeting "untapped" the instant it taps, not when the
+    # board next happens to be recalculated. Castle's +0/+2 survived its own
+    # creature attacking until this moved.
+    for qualifier, (power, toughness) in sorted((meta.get(QUALIFIED_BUFFS) or {}).items()):
+        if qualifier_holds(perm, qualifier):
+            modifications.append((int(power), int(toughness), f"lord buff while {qualifier}"))
     for power, toughness, label in modifications:
         if power or toughness:
             effects.append(
@@ -254,9 +286,10 @@ def collect_pt_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
     return effects
 
 
-# Landwalk flags a lord grants are *derived* — cleared and rebuilt on every
-# continuous-effects pass — so they carry no timestamp of their own and sort
-# before anything explicitly granted.
+# Landwalk stamped as a metadata flag rather than granted through the keyword
+# API — an upkeep effect's forestwalk grant, a text-changing effect swapping one
+# walk for another. Collected so layer 6 sees them too; they carry no timestamp
+# of their own and sort before anything explicitly granted.
 _LANDWALKS = ("islandwalk", "mountainwalk", "swampwalk", "forestwalk", "plainswalk")
 
 
@@ -286,9 +319,19 @@ def collect_ability_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]
 
     for walk in _LANDWALKS:
         if perm.metadata.get(f"has_{walk}"):
-            effects.append(grant_abilities(only, [walk], timestamp=0, label=f"lord {walk}"))
+            effects.append(grant_abilities(only, [walk], timestamp=0, label=f"granted {walk}"))
         if perm.metadata.get(f"lost_{walk}"):
             effects.append(remove_abilities(only, [walk], timestamp=0, label=f"lost {walk}"))
+
+    # Abilities a board-wide source grants right now (a lord's "other Goblins …
+    # have mountainwalk"). Derived every recompute, so the grant ends when the
+    # lord leaves without anything having to find and undo it — and not
+    # restricted to landwalk, which is all the flag channel above could carry.
+    granted = derived_grants(perm)
+    if granted:
+        effects.append(
+            grant_abilities(only, list(granted), timestamp=0, label="lord grant")
+        )
 
     # Layer 6 from each attached Aura, stamped with the moment it attached
     # (CR 613.7b) — derived every recompute, so the grant ends when the Aura

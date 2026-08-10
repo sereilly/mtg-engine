@@ -172,12 +172,18 @@ class DeclareAttackersStepMixin:
         ):
             return False
 
-        # Island Sanctuary: defending player is protected from non-flying, non-islandwalk attackers
+        # Island Sanctuary: defending player is protected from non-flying,
+        # non-islandwalk attackers. Both keywords are asked through layer 6, so
+        # islandwalk granted by a lord counts — reading the metadata flag and
+        # the printed keyword list separately missed every other route to the
+        # ability, which is the bug class tests/engine/test_layer_reads.py
+        # guards.
         defending = self.players[defending_player_index]
         if defending.island_sanctuary_protected:
-            has_flying = self._has_keyword(attacker, "flying")
-            has_islandwalk = attacker.metadata.get("has_islandwalk") or "Islandwalk" in attacker.card.keywords
-            if not (has_flying or has_islandwalk):
+            if not (
+                self._has_keyword(attacker, "flying")
+                or self._has_keyword(attacker, "islandwalk")
+            ):
                 return False
 
         return True

@@ -1738,6 +1738,90 @@ code, and it decays exactly like a stale comment — except that it decays into
 work looking blocked that nobody is blocked on. Re-check them when the phase
 they name lands, not when someone finally gets to them.
 
+### The lord anthem gets its table, and two bugs come out with it
+
+`engine/lord_buffs.py` is that missing derivation table. "Other Goblins get
++1/+1 and have mountainwalk", "Black creatures get +1/+1", "Attacking creatures
+you control get +1/+0" and "Untapped creatures you control get +0/+2" are one
+template with parameters — **who** (colour, creature subtype, "other",
+controller scope, and a state qualifier) and **what** (a P/T delta, keyword
+abilities, a granted activated ability) — and everything is derived from the
+printed sentence. Nine cards now compile through it; the two backlog rows it
+was blocking (20 lines, 5 distinct sentences) are gone.
+
+Both halves of the two-lists defect were live here, in the same family:
+
+- The support gate's entire test for a lord line was the prefix `"other "`, so
+  "Other Goblins glimmer uncontrollably." compiled as supported and did
+  nothing. The gate asks the table now.
+- The qualified anthems could not be expressed at all, so each had its own
+  instruction kind whose *parse rule spelled out one card's numbers*
+  (`"attacking creatures you control get +1/+0"`,
+  `"untapped creatures you control get +0/+2"`). A card printed +2/+0 was
+  unsupported while the engine had every line of code it needed. Both rules are
+  deleted; the qualifier is payload.
+
+**Two real bugs, and both were in the qualifier the consumer ignored:**
+
+1. **Castle buffed creatures that had stopped being untapped.** The bonus was
+   contributed when the board was *recomputed*, and nothing recomputes when a
+   creature taps — so a 2/2 attacking under Castle stayed a 2/4 for the whole
+   declare-attackers step, which is where priority is held and blocks are
+   decided. A state qualifier now goes into a derived channel that
+   `layer_bridge` evaluates when P/T is *read*, which is what CR 611.3a's "at
+   any given moment" actually says. `attacking_buff_*` — the one qualified
+   channel that already worked, for exactly this reason — is generalised into
+   it rather than sitting next to it.
+2. **No anthem reached an animated land.** The consumer skipped a permanent on
+   `card.primary_type != "creature"` — the printed type line, which layer 4 is
+   precisely what overrides. Kormus Bell's Swamps are 1/1 *black* creatures and
+   Bad Moon gives black creatures +1/+1, so CR 613.1 makes them 2/2; they were
+   1/1. Types and subtypes are asked through `is_creature`/`has_type` now.
+   `tests/rules/test_layers.py` had covered this interaction *in the abstract*
+   since phase 6 — the layer engine was right and the code feeding it was not,
+   which is the shape a bridge bug takes.
+
+**CR 611.2c is the line that must not be crossed**, and it is now drawn by the
+text rather than by which consumer happens to run. "Attacking creatures get
++2/+0 **until end of turn**" is Army of Allah: a one-shot effect that locks its
+set in at resolution, and it keeps `buff_creatures_global` and its spell
+handler, untouched. A static ability has no duration and is re-derived every
+recompute. `lord_buff_for` refuses any clause carrying a duration, so the two
+readings can no longer arrive at the same instruction by accident — where
+before they shared a kind and were told apart only by whether the object was on
+the battlefield.
+
+The grammar lowers all of it now, and the safety property survives the move:
+the filter is **rebuilt from what `LordBuffFilter` holds and compared for
+equality** against the one the parser produced, so a restriction the table has
+no field for refuses instead of being dropped, and a field added to
+`ObjectFilter` later is refused by default rather than ignored by a check that
+predates it. `_looks_static` also learned that a *conjunction* of durationless
+effects is a static ability — judging one effect at a time is why "Other
+Goblins get +1/+1 and have mountainwalk" was on a different lowering path from
+the anthem that says the same kind of thing.
+
+Two smaller things fell out. `behaviour_signature` sorted instruction triples
+naturally, so two instructions sharing a kind and value fell through to
+comparing their payload *dicts* and raised — Zombie Master is the first card in
+the pool with two of one kind, and it crashed the whole signature rather than
+merging anything. And Island Sanctuary asked for islandwalk by reading a
+metadata flag *and* the printed keyword list, so it saw the routes to the
+ability someone had told it about; it asks layer 6 now, which is what the lord's
+grant has always been.
+
+**Coverage: 69.9 → 71.1% lowered, 36.4 → 37.6% executed** (parsed unchanged at
+73.2% — these lines already parsed). Every guard added was verified by
+reintroducing the bug it exists to catch, including the `"other "` prefix, the
+missing channel clear, the read-time qualifier, the printed-type-line read and
+the vacuous filter comparison.
+
+**The generalisable rule, again and from the other side:** the qualifier that
+had no home in the table was also the qualifier the consumer got wrong. A
+parameter a derivation cannot express does not stay unexpressed — it gets
+approximated somewhere, and the approximation is invisible because no test
+names it.
+
 ## Phase 4 — trigger event bus and a generic choice queue ✅ done
 
 **Done:**

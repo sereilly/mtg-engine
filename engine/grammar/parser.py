@@ -1827,9 +1827,18 @@ def _attach_riders(statement: ast.Statement, riders: ast.DamageRiders) -> ast.St
 
 def _looks_static(statement: ast.Statement) -> bool:
     """A continuous effect with no duration on a non-targeted subject is a
-    static ability. Those wait on the CR 613 layers engine (roadmap phase 6),
-    so they are parsed for ratchet credit but refused at lowering rather than
-    approximated with metadata pokes."""
+    static ability.
+
+    A *conjunction* of them is one too — "Other Goblins get +1/+1 and have
+    mountainwalk" is a single static ability with two halves, not a spell
+    effect. It reached ``SpellEffectLine`` only because this predicate looked at
+    one effect at a time, which put the lord lines on a different lowering path
+    from the anthem lines that say exactly the same kind of thing.
+    """
+    if isinstance(statement, ast.Conjunction):
+        return bool(statement.effects) and all(
+            _looks_static(effect) for effect in statement.effects
+        )
     if isinstance(statement, ast.Pump):
         return statement.duration.kind is None and (
             not isinstance(statement.subject, ast.TargetSpec)

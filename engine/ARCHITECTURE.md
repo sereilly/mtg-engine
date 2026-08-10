@@ -57,6 +57,7 @@ directly comparable and can coexist per line. See "Grammar front end" below and
 | `engine/auras.py` | What an Aura's effect lines say and whether the engine implements them. Two jobs: the **support gate** requires every effect line of an Aura to be claimed here, so an Aura whose effect is unimplemented is reported unsupported instead of entering play and doing nothing; and the **derivations** an Aura's continuous effects are read from while it is attached (static P/T, keyword grants, combat/untap restrictions, protection colours, artifact animation). Removal is the Aura ceasing to be attached — there is no remembered delta to subtract. `attach_aura`/`detach_aura` keep `attached_to` and `attached_auras` in step; `attached_aura` is a single slot a second Aura overwrites, so the list is the authority. |
 | `engine/characteristic_defining.py` | Characteristic-defining power/toughness (CR 604.3) — "<name>'s power and toughness are each equal to the number of X". The possessive subject is the card's own name, which normalization does not replace, so these were four literals containing four card names. One `dynamic_pt_count` instruction now carries what to count (`land`/`creature`/`same_name`) and whose battlefield to count it on. |
 | `engine/static_bonuses.py` | Conditional static P/T bonuses (CR 613 layer 7c) — "gets +N/+N as long as you control a <land>", "as long as it's untapped". Both printed word orders, because only the trailing one was ever dispatched while the leading one sat in the support gate as a literal naming Swamp. Also `singular_land_type`, since Plains is spelled the same singular and plural. |
+| `engine/lord_buffs.py` | The lord/anthem template (CR 611.3a, layers 6 and 7c) — "Other Goblins get +1/+1 and have mountainwalk", "Black creatures get +1/+1", "Attacking creatures you control get +1/+0". Derives **who** (colour, creature subtype, "other", controller scope, and a state qualifier: attacking/blocking/tapped/untapped) and **what** (P/T delta, keyword abilities, a granted activated ability). The support gate, both parser front ends and `_recalculate_lord_buffs` all read this one table. A clause carrying a **duration** is deliberately not claimed: that is the spell reading of the same sentence, which locks its set in at resolution (CR 611.2c) and stays on `buff_creatures_global`. |
 | `engine/combat_restrictions.py` | Text-keyed combat restrictions (CR 506, 509): "can't attack unless defending player controls a <land type>", "attacks each combat if able", "can't be blocked by Walls", "can't block creatures with power N or greater". The land type and the threshold are payload data, not part of the instruction kind. The support gate consults this table rather than listing the same sentences, so a rider the table does not recognize fails loudly instead of compiling to a bare static line. |
 | `engine/enter_effects.py` | Entry-state phrases `_initialize_permanent_state` carries out (enters tapped, enters with counters, enter-as-a-copy, choose-on-enter, no maximum hand size, spend white as red). `enter_effect_line` is the whole-line matcher; the compiler's support gate and `engine/grammar/registries.py` both read it, so the phrases cannot drift between what is implemented and what is claimed. |
 | `engine/draw_step_modifiers.py` | Text-keyed symmetric bonus draws (CR 504): "at the beginning of each player's draw step, that player draws an additional card", with the optional untapped-source clause. |
@@ -201,13 +202,27 @@ land is a Swamp **instead of** a Forest). Ask `perm.has_type("swamp")` rather
 than comparing `metadata["land_type_override"]`, which only sees one of those.
 
 **Layer 7c splits by lifetime, and the split is load-bearing.** `power_bonus` is
-persistent (counters, one-shot boosts); `static_buff_*` and `derived_buff_*` are
-derived — cleared and rebuilt from the board on every recompute. A continuous
+persistent (counters, one-shot boosts); `static_buff_*`, `derived_buff_*` and
+`lord_buff_while` are derived — cleared and rebuilt from the board on every
+recompute. A continuous
 effect that writes to the persistent channel has to subtract itself again later,
 and a subtraction that doesn't exactly match its addition compounds on every
 refresh, which CR 611.3a guarantees is constant. Each derived channel is cleared
 by the same function that rebuilds it; splitting those apart reintroduces the
-bug. All writes go through `engine/pt.py`;
+bug.
+
+`lord_buff_while` splits again, by *when the contribution is evaluated*. It maps
+a state qualifier ("attacking", "blocking", "tapped", "untapped") to its P/T
+delta, and `layer_bridge.qualifier_holds` checks the qualifier when power and
+toughness are **read** — not when the board was last recomputed. Nothing
+recomputes when a creature taps, so a bonus contributed at recompute time
+outlives its own condition: Castle's "Untapped creatures you control get +0/+2"
+stayed on a creature for the whole declare-attackers step after it had attacked.
+The qualifier vocabulary is `lord_buffs.QUALIFIER_FIELDS`, and a qualifier with
+no predicate to evaluate it raises at import rather than applying
+unconditionally.
+
+All writes go through `engine/pt.py`;
 characteristic-defining P/T (layer 7a) is registry-driven via
 `engine.mixins.permanent_state.DYNAMIC_PT` (instruction kind → count
 function) — a new CDA card is one table entry, not a new branch.

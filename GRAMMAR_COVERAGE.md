@@ -10,18 +10,18 @@ Migration tracker for the oracle-text parser rewrite: how much of the card pool 
 | Lowered | That AST mapped onto executable instructions |
 | Executed | Instructions' categories are switched on, so the grammar's output runs |
 
-Categories currently switched on: `combat_restrictions, counters, counterspells, damage, destruction, evasion, life, mana, optional, prevention, pump, recolor, regeneration, tapping, tokens, turns, upkeep, zones`.
+Categories currently switched on: `combat_restrictions, counters, counterspells, damage, destruction, evasion, life, mana, optional, prevention, pump, recolor, regeneration, static_buffs, tapping, tokens, turns, upkeep, zones`.
 
 ## Coverage by set
 
 | Set | Cards | Lines | Parsed | Lowered | Executed | Cards executing |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 388 | 74.0% | 71.1% | 36.6% | 133 |
-| LEB | 292 | 389 | 74.0% | 71.2% | 36.8% | 134 |
-| 2ED | 292 | 389 | 74.0% | 71.2% | 36.8% | 134 |
+| LEA | 290 | 388 | 74.0% | 72.4% | 37.9% | 138 |
+| LEB | 292 | 389 | 74.0% | 72.5% | 38.0% | 139 |
+| 2ED | 292 | 389 | 74.0% | 72.5% | 38.0% | 139 |
 | ARN | 78 | 108 | 62.0% | 56.5% | 35.2% | 31 |
-| 3ED | 296 | 389 | 73.8% | 69.7% | 36.0% | 130 |
-| **All** | **1248** | **1663** | **73.2%** | **69.9%** | **36.4%** | **562** |
+| 3ED | 296 | 389 | 73.8% | 71.0% | 37.3% | 135 |
+| **All** | **1248** | **1663** | **73.2%** | **71.1%** | **37.6%** | **582** |
 
 ## Backlog — failure reasons
 
@@ -34,8 +34,6 @@ Categories currently switched on: `combat_restrictions, counters, counterspells,
 | 40 | 21 | unconsumed text |  |
 | 24 | 7 | granted ability in quotes | phase 3 (quoted abilities) |
 | 13 | 2 | modal line | phase 3 (modal production) |
-| 12 | 3 | a lord's continuous buff to other creatures is applied by _recalculate_lord_buffs off a bare static_line, with no derivation table to delegate a claim to | needs a lord-buff derivation table |
-| 8 | 2 | _recalculate_lord_buffs reads only the colour and the controller, so any other restriction on the buffed creatures would be dropped |  |
 | 8 | 2 | expected a quantity |  |
 | 7 | 2 | expected a colour after 'becomes' |  |
 | 7 | 4 | expected a keyword ability |  |
@@ -54,10 +52,12 @@ Categories currently switched on: `combat_restrictions, counters, counterspells,
 | 2 | 1 | expected something to shield |  |
 | 2 | 1 | no untap handler honors this restriction |  |
 | 1 | 1 | expected a destination zone after 'return' |  |
+| 1 | 1 | counters on a non-source subject |  |
+| 1 | 1 | no handler for doom counters |  |
 
 ## Cards executing through the grammar
 
-562 cards, 606 lines.
+582 cards, 626 lines.
 
 - **Aladdin's Ring**
   - `{8}, {T}: This artifact deals 4 damage to any target.`
@@ -127,6 +127,11 @@ Categories currently switched on: `combat_restrictions, counters, counterspells,
   - `Target player draws X cards.`
   - `Target player draws X cards.`
   - `Target player draws X cards.`
+- **Castle**
+  - `Untapped creatures you control get +0/+2.`
+  - `Untapped creatures you control get +0/+2.`
+  - `Untapped creatures you control get +0/+2.`
+  - `Untapped creatures you control get +0/+2.`
 - **Celestial Prism**
   - `{2}, {T}: Add one mana of any color.`
   - `{2}, {T}: Add one mana of any color.`
@@ -340,6 +345,11 @@ Categories currently switched on: `combat_restrictions, counters, counterspells,
   - `{R}: This creature gains flying until end of turn.`
   - `{R}: This creature gains flying until end of turn.`
   - `{R}: This creature gains flying until end of turn.`
+- **Goblin King**
+  - `Other Goblins get +1/+1 and have mountainwalk.`
+  - `Other Goblins get +1/+1 and have mountainwalk.`
+  - `Other Goblins get +1/+1 and have mountainwalk.`
+  - `Other Goblins get +1/+1 and have mountainwalk.`
 - **Granite Gargoyle**
   - `{R}: This creature gets +0/+1 until end of turn.`
   - `{R}: This creature gets +0/+1 until end of turn.`
@@ -473,6 +483,11 @@ Categories currently switched on: `combat_restrictions, counters, counterspells,
   - `{T}: Add {G}.`
   - `{T}: Add {G}.`
   - `{T}: Add {G}.`
+- **Lord of Atlantis**
+  - `Other Merfolk get +1/+1 and have islandwalk. (They can't be blocked as long as defending player controls an Island.)`
+  - `Other Merfolk get +1/+1 and have islandwalk. (They can't be blocked as long as defending player controls an Island.)`
+  - `Other Merfolk get +1/+1 and have islandwalk. (They can't be blocked as long as defending player controls an Island.)`
+  - `Other Merfolk get +1/+1 and have islandwalk. (They can't be blocked as long as defending player controls an Island.)`
 - **Mana Vault**
   - `{T}: Add {C}{C}{C}.`
   - `{T}: Add {C}{C}{C}.`
@@ -530,6 +545,11 @@ Categories currently switched on: `combat_restrictions, counters, counterspells,
   - `{T}: This creature deals 2 damage to any target and 3 damage to you.`
   - `{T}: This creature deals 2 damage to any target and 3 damage to you.`
   - `{T}: This creature deals 2 damage to any target and 3 damage to you.`
+- **Orcish Oriflamme**
+  - `Attacking creatures you control get +1/+0.`
+  - `Attacking creatures you control get +1/+0.`
+  - `Attacking creatures you control get +1/+0.`
+  - `Attacking creatures you control get +1/+0.`
 - **Pestilence**
   - `{B}: This enchantment deals 1 damage to each creature and each player.`
   - `{B}: This enchantment deals 1 damage to each creature and each player.`
@@ -835,3 +855,8 @@ Categories currently switched on: `combat_restrictions, counters, counterspells,
   - `Destroy all creatures. They can't be regenerated.`
 - **Wyluli Wolf**
   - `{T}: Target creature gets +1/+1 until end of turn.`
+- **Zombie Master**
+  - `Other Zombie creatures have swampwalk. (They can't be blocked as long as defending player controls a Swamp.)`
+  - `Other Zombie creatures have swampwalk. (They can't be blocked as long as defending player controls a Swamp.)`
+  - `Other Zombie creatures have swampwalk. (They can't be blocked as long as defending player controls a Swamp.)`
+  - `Other Zombie creatures have swampwalk. (They can't be blocked as long as defending player controls a Swamp.)`

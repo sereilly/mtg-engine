@@ -25,6 +25,16 @@ if TYPE_CHECKING:
 # Key under which a permanent's ordered grants/removals live.
 ABILITY_EFFECTS = "ability_effects"
 
+# Key under which *derived* grants live — abilities a permanent has because of
+# something else on the battlefield right now (a lord's "other Goblins have
+# mountainwalk"). They carry no timestamp of their own because they are not
+# recorded: the channel is cleared and rebuilt from the board on every
+# continuous-effects recompute, exactly like the derived layer-7c P/T channels.
+#
+# Recording them through :func:`grant_keyword` instead would append one entry
+# per recompute forever, and CR 611.3a means the recompute runs constantly.
+DERIVED_GRANTS = "derived_ability_grants"
+
 
 def _record(perm: Permanent, keyword: str, *, grant: bool, until_eot: bool) -> None:
     effects = perm.metadata.setdefault(ABILITY_EFFECTS, [])
@@ -66,7 +76,30 @@ def ability_effects(perm: Permanent) -> list[dict]:
     return list(perm.metadata.get(ABILITY_EFFECTS) or ())
 
 
+def clear_derived_grants(perm: Permanent) -> None:
+    """Drop the grants derived from the current board (CR 611.3b).
+
+    Called by the same function that rebuilds them. Splitting the clear from the
+    rebuild is how a derived channel turns into an accumulating one.
+    """
+    perm.metadata.pop(DERIVED_GRANTS, None)
+
+
+def add_derived_grant(perm: Permanent, keyword: str) -> None:
+    """Layer 6: *perm* has *keyword* for as long as the source keeps granting it."""
+    granted = perm.metadata.setdefault(DERIVED_GRANTS, [])
+    lowered = keyword.lower()
+    if lowered not in granted:
+        granted.append(lowered)
+
+
+def derived_grants(perm: Permanent) -> tuple[str, ...]:
+    """The abilities *perm* currently has from a board-wide source."""
+    return tuple(perm.metadata.get(DERIVED_GRANTS) or ())
+
+
 __all__ = [
-    "ABILITY_EFFECTS", "ability_effects", "clear_until_eot_keywords",
+    "ABILITY_EFFECTS", "DERIVED_GRANTS", "ability_effects", "add_derived_grant",
+    "clear_derived_grants", "clear_until_eot_keywords", "derived_grants",
     "grant_keyword", "remove_keyword",
 ]

@@ -132,12 +132,12 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 
 | Channel | Sentences claimed |
 | --- | --- |
-| parse rule | 298 |
+| parse rule | 292 |
 | activation cost | 113 |
 | trigger table | 75 |
 | keyword table | 56 |
+| static-line table | 45 |
 | aura enchant noun (oracle_instructions attach) | 44 |
-| static-line table | 39 |
 | mixin text scan | 32 |
 | aura static (oracle_instructions/permanent_state) | 31 |
 | activation gate (stack/activation) | 15 |

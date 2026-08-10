@@ -24,6 +24,14 @@ from __future__ import annotations
 
 import dataclasses
 
+from ..lord_buffs import (
+    LORD_BUFF_KIND,
+    LordBuff,
+    LordBuffFilter,
+    QUALIFIER_FIELDS,
+    grantable_keywords,
+    lord_buff_payload,
+)
 from ..oracle_types import OracleInstruction
 from . import ast
 from .errors import LoweringError
@@ -50,6 +58,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "pump_self": "pump",
     "pump_enchanted_creature": "pump",
     "buff_creatures_global": "pump",
+    # A permanent's continuous anthem/lord buff. Its own category rather than
+    # "pump": that one is a one-shot boost with a duration, and these two
+    # readings of the same printed sentence answer to different rules
+    # (CR 611.2c vs 611.3a). Sharing a switch would tie them together.
+    LORD_BUFF_KIND: "static_buffs",
     "set_base_pt_target_until_eot": "pump",
     "grant_target_flying_until_eot": "pump",
     "grant_self_flying_until_eot": "pump",
@@ -513,12 +526,6 @@ def _durationless_reason(subject) -> str:
         # lines before any effect production sees them. Kept correct anyway, so
         # a wording that slips past the claim reports the right owner.
         return "an Aura's continuous grant is derived by engine/auras.py"
-    if isinstance(subject, ast.TargetSpec) and subject.filter.other_than_source:
-        return (
-            "a lord's continuous buff to other creatures is applied by "
-            "_recalculate_lord_buffs off a bare static_line, with no derivation "
-            "table to delegate a claim to"
-        )
     return "continuous pump needs the CR 613 layers engine"
 
 
@@ -1791,29 +1798,124 @@ def lower_ability(node: ast.AbilityNode) -> tuple[OracleInstruction, ...]:
     raise LoweringError(f"no lowering for {type(node).__name__}", node=node)
 
 
+def _lord_filter(filt: ast.ObjectFilter) -> LordBuffFilter:
+    """The derivation table's view of *filt*, dropping nothing silently.
+
+    Only the fields ``engine/lord_buffs.py`` carries are read here; whether that
+    lost anything is decided by :func:`_object_filter_of` rebuilding the filter
+    and the caller comparing the two for **equality**. Probing field by field
+    ("refuse if attacking, refuse if tapped, …") is how a filter field added to
+    the AST later slips past a check written before it existed — which is the
+    exact failure this family already had once, when the consumer read the
+    colour and the controller and ignored the rest of the sentence.
+    """
+    qualifier = next(
+        (
+            name
+            for name, (field_name, value) in QUALIFIER_FIELDS.items()
+            if getattr(filt, field_name) is value
+        ),
+        None,
+    )
+    return LordBuffFilter(
+        colors=filt.colors,
+        subtypes=filt.subtypes,
+        controller=filt.controller,
+        other_than_source=filt.other_than_source,
+        qualifier=qualifier,
+    )
+
+
+def _object_filter_of(lord: LordBuffFilter) -> ast.ObjectFilter:
+    """*lord* back as an ``ObjectFilter`` — the round trip the equality uses."""
+    fields: dict[str, object] = {
+        "card_types": ("creature",),
+        "colors": lord.colors,
+        "subtypes": lord.subtypes,
+        "controller": lord.controller,
+        "other_than_source": lord.other_than_source,
+    }
+    if lord.qualifier is not None:
+        field_name, value = QUALIFIER_FIELDS[lord.qualifier]
+        fields[field_name] = value
+    return ast.ObjectFilter(**fields)
+
+
+def _lower_lord_effects(
+    node: ast.StaticAbilityNode, effects: tuple[ast.Statement, ...]
+) -> LordBuff:
+    """The buff *effects* describe. They must all share one subject: "Other
+    Goblins get +1/+1 and have mountainwalk" is one ability over one set."""
+    subjects = {getattr(effect, "subject", None) for effect in effects}
+    if len(subjects) != 1:
+        raise LoweringError("a static ability over two different subjects", node=node)
+    subject = subjects.pop()
+    if not isinstance(subject, ast.TargetSpec) or subject.quantifier != "all":
+        raise LoweringError("static abilities need the CR 613 layers engine", node=node)
+
+    power = toughness = 0
+    keywords: list[str] = []
+    for effect in effects:
+        if isinstance(effect, ast.Pump):
+            power = _signed(effect.power, effect.power_negative)
+            toughness = _signed(effect.toughness, effect.toughness_negative)
+            if not isinstance(power, int) or not isinstance(toughness, int):
+                raise LoweringError("a variable continuous buff has no channel", node=node)
+        elif isinstance(effect, ast.GainKeyword):
+            for keyword in effect.keywords:
+                if keyword not in grantable_keywords():
+                    raise LoweringError(
+                        f"engine/lord_buffs.py grants no {keyword!r} at layer 6", node=node
+                    )
+                keywords.append(keyword)
+        else:
+            raise LoweringError("static abilities need the CR 613 layers engine", node=node)
+
+    lord_filter = _lord_filter(subject.filter)
+    if _object_filter_of(lord_filter) != subject.filter:
+        raise LoweringError(
+            "engine/lord_buffs.py carries no such restriction on the buffed "
+            "creatures, so _recalculate_lord_buffs would drop it",
+            node=node,
+        )
+    # A *union* is a separate question from a missing field, and the round trip
+    # above cannot answer it: the table's own text parser reads one colour and
+    # one subtype, so a grammar-only union would be a payload no printed card
+    # produces and no test covers. Whether "white or blue creatures" means an
+    # OR is decided when a card needs it.
+    if len(lord_filter.colors) > 1 or len(lord_filter.subtypes) > 1:
+        raise LoweringError(
+            "engine/lord_buffs.py derives one colour and one subtype; a union "
+            "has no matching rule behind it",
+            node=node,
+        )
+    return LordBuff(lord_filter, power, toughness, tuple(keywords))
+
+
 def _lower_static_ability(node: ast.StaticAbilityNode) -> tuple[OracleInstruction, ...]:
-    """The one static shape the engine already applies continuously.
+    """A continuous buff to a set of creatures, derived by ``engine/lord_buffs.py``.
 
-    "Black creatures get +1/+1." on a permanent (Bad Moon, Crusade, Gauntlet of
-    Might) is not waiting on anything: ``buff_creatures_global`` has *two*
-    consumers, and while the spell handler locks its set in at resolution
-    (CR 611.2c), ``_recalculate_lord_buffs`` re-derives it from the source
-    permanent's compiled program on every recompute — which is exactly the
-    continuous reading. Emitting the same instruction the legacy rule emits is
-    therefore correct, not an approximation.
+    "Black creatures get +1/+1" (Bad Moon, Crusade, Gauntlet of Might), "Other
+    Goblins get +1/+1 and have mountainwalk" (Goblin King, Lord of Atlantis),
+    "Attacking creatures you control get +1/+0" (Orcish Oriflamme) and "Untapped
+    creatures you control get +0/+2" (Castle) are one template with parameters,
+    and ``_recalculate_lord_buffs`` now honours every one of them.
 
-    Everything else still refuses, and the reason matters more than the refusal:
+    **This is not the spell reading of the same sentence, and must not become
+    it.** "Attacking creatures get +2/+0 *until end of turn*" is Army of Allah:
+    a one-shot effect that locks its set in at resolution (CR 611.2c) and keeps
+    ``buff_creatures_global``. Duration is what separates them, and a line
+    carrying one never reaches this function — it lowers through ``_lower_pump``.
+
+    What still refuses, and why the reason names code:
 
     - **A condition** ("as long as you control a Forest") belongs to
       ``engine/static_bonuses.py``, which derives the bonus from the text.
-    - **A qualifier the continuous consumer does not read.** This is the trap.
-      That consumer honours colour and controller and *nothing else* — it never
-      looks at ``attacking_only``, and untapped-only has a separate instruction
-      kind. So Orcish Oriflamme lowered here would buff every creature its
-      controller has, all the time, and Castle would buff tapped ones. The
-      filter is compared for **equality** against the shape the consumer
-      implements rather than probed field by field, so a filter field added
-      later cannot slip past this check by being one nobody thought to exclude.
+    - **A restriction the table does not carry.** The filter is rebuilt from
+      what ``LordBuffFilter`` holds and compared for **equality** against the
+      one the parser produced, so anything lost in that round trip refuses. A
+      field added to ``ObjectFilter`` later is refused by default rather than
+      ignored by a check that predates it.
     """
     if node.condition is not None:
         raise LoweringError(
@@ -1821,37 +1923,9 @@ def _lower_static_ability(node: ast.StaticAbilityNode) -> tuple[OracleInstructio
             node=node,
         )
     effect = node.effect
-    subject = getattr(effect, "subject", None)
-    if isinstance(subject, ast.TargetSpec) and subject.filter.other_than_source:
-        raise LoweringError(_durationless_reason(subject), node=node)
-    if not isinstance(effect, ast.Pump) or not isinstance(subject, ast.TargetSpec):
-        raise LoweringError("static abilities need the CR 613 layers engine", node=node)
-    if subject.quantifier != "all":
-        raise LoweringError("static abilities need the CR 613 layers engine", node=node)
-
-    filt = subject.filter
-    expected = ast.ObjectFilter(
-        card_types=("creature",), colors=filt.colors, controller=filt.controller
-    )
-    if filt != expected:
-        raise LoweringError(
-            "_recalculate_lord_buffs reads only the colour and the controller, so "
-            "any other restriction on the buffed creatures would be dropped",
-            node=node,
-        )
-    if len(filt.colors) > 1:
-        raise LoweringError("the continuous global buff carries one colour", node=node)
-
-    payload: dict[str, object] = {
-        "power": _signed(effect.power, effect.power_negative),
-        "toughness": _signed(effect.toughness, effect.toughness_negative),
-        # "you control" scopes the anthem to its controller; without it every
-        # player's creatures get it (Bad Moon, Crusade).
-        "all": filt.controller != "you",
-    }
-    if filt.colors:
-        payload["color"] = filt.colors[0]
-    return (OracleInstruction("buff_creatures_global", "", payload),)
+    effects = effect.effects if isinstance(effect, ast.Conjunction) else (effect,)
+    buff = _lower_lord_effects(node, effects)
+    return (OracleInstruction(LORD_BUFF_KIND, "", lord_buff_payload(buff)),)
 
 
 # Control-flow wrappers take the categories of whatever they wrap, so gating

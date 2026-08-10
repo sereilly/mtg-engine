@@ -758,7 +758,7 @@ def test_goblin_king_buffs_other_goblins_with_mountainwalk(all_cards):
     goblin_perm = p1.battlefield[0]
     assert goblin_perm.effective_power == 3
     assert goblin_perm.effective_toughness == 3
-    assert goblin_perm.metadata.get("has_mountainwalk") is True
+    assert goblin_perm.has_keyword("mountainwalk")
 
 
 def test_hurloon_minotaur_classifies_supported(all_cards):
@@ -824,7 +824,7 @@ def test_lord_of_atlantis_buffs_other_merfolk_with_islandwalk(all_cards):
     merfolk_perm = p1.battlefield[0]
     assert merfolk_perm.effective_power == 2
     assert merfolk_perm.effective_toughness == 2
-    assert merfolk_perm.metadata.get("has_islandwalk") is True
+    assert merfolk_perm.has_keyword("islandwalk")
 
 
 def test_lord_of_the_pit_upkeep_sacrifices_creature(all_cards):
@@ -1361,7 +1361,7 @@ def test_zombie_master_grants_swampwalk_and_regeneration_to_other_zombies(all_ca
 
     assert result.supported
     # "Other Zombie creatures have swampwalk."
-    assert zombie_perm.metadata.get("has_swampwalk") is True
+    assert zombie_perm.has_keyword("swampwalk")
     # 'Other Zombies have "{B}: Regenerate this permanent."'
     assert zombie_perm.metadata.get("granted_regen_ability") is True
     regen = game.activate_permanent_ability(0, "Scathe Zombies")

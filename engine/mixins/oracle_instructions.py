@@ -10,6 +10,7 @@ from ..models import CardDefinition, Permanent, PlayerState
 from ..auras import attach_aura, aura_animates_artifact, aura_keyword_grants
 from ..oracle import OracleInstruction, _COLOR_WORD_TO_SYMBOL, compile_card_oracle
 from ..keywords import grant_keyword, remove_keyword
+from ..lord_buffs import LORD_BUFF_KIND
 
 
 # Attachment bookkeeping, not a granted characteristic. `aura_granted_meta` is
@@ -124,40 +125,16 @@ class OracleInstructionsMixin:
             if instr.kind == "animate_all_forests":
                 self._refresh_dynamic_creatures()
                 return
-            if instr.kind == "buff_attacking_creatures":
-                # Static ability (Orcish Oriflamme: "Attacking creatures you control
-                # get +1/+0"). Applied dynamically to *attacking* creatures only via
-                # _refresh_dynamic_creatures / effective P/T, never as a flat buff to
-                # every creature the controller has.
-                self._refresh_dynamic_creatures()
-                return
-            if instr.kind == "buff_untapped_creatures":
-                # Castle-style static buff. Dynamically recalculated (611.3a) so it
-                # tracks tap state and is removed when the source leaves (611.3b).
+            if instr.kind == LORD_BUFF_KIND:
+                # Every "<some creatures> get +X/+Y [and have <keyword>]" static
+                # ability, whatever it names: colour anthem, subtype lord, or one
+                # qualified by a state. Recalculated dynamically (611.3a) so the
+                # buff and any granted ability reach creatures entering later and
+                # end when the source leaves (611.3b). Four branches keyed by
+                # instruction kind and by two `static_line` text probes stood
+                # here, one per shape the consumer happened to implement.
                 self._recalculate_lord_buffs()
                 return
-            if instr.kind == "buff_creatures_global":
-                # Static ability: dynamically recalculated (611.3a). Use
-                # static_buff_power / static_buff_toughness so the buff can
-                # be removed when the lord leaves (611.3b) and applied to new
-                # creatures as they enter (611.3c).
-                self._recalculate_lord_buffs()
-                return
-
-            if instr.kind == "static_line" and instr.value.startswith("other ") and " get +" in instr.value:
-                # Lord-style "Other [Subtype] get +A/+B [and have <landwalk>]."
-                # Recalculated dynamically so the buff (and any granted landwalk)
-                # reaches creatures entering later and ends when the lord leaves.
-                self._recalculate_lord_buffs()
-                return
-
-            # Zombie Master style: "Other Zombie creatures have swampwalk." /
-            # 'Other Zombies have "{B}: Regenerate this permanent."' Recalculated
-            # dynamically so the grants reach Zombies entering later and end when
-            # the lord leaves the battlefield (611.3a/611.3b).
-            if instr.kind == "static_line" and instr.value.startswith("other ") and " have " in instr.value:
-                self._recalculate_lord_buffs()
-                continue
 
     def _apply_aura_effect(
         self,

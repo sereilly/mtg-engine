@@ -199,7 +199,7 @@ class TestLandwalkLords:
         p2 = PlayerState(name="P2", battlefield=[mountain, blocker])
         game = _game(p1, p2)
         game._recalculate_lord_buffs()
-        assert gob.metadata.get("has_mountainwalk") is True
+        assert gob.has_keyword("mountainwalk")
         # The goblin can't be blocked while the defender controls a Mountain.
         assert game._can_block_attacker(blocker, gob) is False
         # The King itself has no mountainwalk ("other" Goblins), so it is blockable.
@@ -214,7 +214,7 @@ class TestLandwalkLords:
         p2 = PlayerState(name="P2", battlefield=[island, blocker])
         game = _game(p1, p2)
         game._recalculate_lord_buffs()
-        assert mer.metadata.get("has_islandwalk") is True
+        assert mer.has_keyword("islandwalk")
         assert game._can_block_attacker(blocker, mer) is False
 
     def test_lord_buff_removed_when_lord_leaves(self, cards):
@@ -224,10 +224,10 @@ class TestLandwalkLords:
         p2 = PlayerState(name="P2")
         game = _game(p1, p2)
         game._recalculate_lord_buffs()
-        assert gob.metadata.get("has_mountainwalk") is True
+        assert gob.has_keyword("mountainwalk")
         p1.battlefield.remove(king)
         game._recalculate_lord_buffs()
-        assert not gob.metadata.get("has_mountainwalk")
+        assert not gob.has_keyword("mountainwalk")
 
     def test_vesuvan_doppelganger_copying_lord_of_atlantis(self, cards):
         loa = Permanent(card=cards["Lord of Atlantis"])
@@ -239,11 +239,11 @@ class TestLandwalkLords:
         dop.metadata["copy_target"] = (0, 0)  # copy the Lord of Atlantis
         game._put_permanent_onto_battlefield(0, dop, None)
         # The copy becomes a Merfolk lord: it receives the other lord's buff/walk...
-        assert dop.metadata.get("has_islandwalk") is True
+        assert dop.has_keyword("islandwalk")
         assert dop.metadata.get("static_buff_power") == 1
         # ...and the plain merfolk now benefits from BOTH lords.
         assert mer.metadata.get("static_buff_power") == 2
-        assert mer.metadata.get("has_islandwalk") is True
+        assert mer.has_keyword("islandwalk")
 
 
 # ---------------------------------------------------------------------------
@@ -581,7 +581,7 @@ class TestMoreCombatAndAbilities:
         p2 = PlayerState(name="P2", battlefield=[swamp, blocker])
         game = _game(p1, p2)
         game._recalculate_lord_buffs()
-        assert zombie.metadata.get("has_swampwalk") is True
+        assert zombie.has_keyword("swampwalk")
         assert game._can_block_attacker(blocker, zombie) is False
 
     def test_kormus_bell_swamp_can_attack(self, cards):

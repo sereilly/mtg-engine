@@ -36,6 +36,7 @@ import pytest
 from engine.card_loader import load_catalog
 from engine.characteristic_defining import dynamic_pt_for
 from engine.combat_restrictions import combat_restriction_for
+from engine.lord_buffs import lord_buff_for
 from engine.oracle import (
     _is_supported_static_creature_line,
     compile_card_oracle,
@@ -74,8 +75,6 @@ IMPLEMENTED_ELSEWHERE: dict[str, str] = {
         "phases/declare_blockers_step.py:_max_blocks_for (Two-Headed Giant of Foriys)",
     "as long as this creature is untapped, all damage that would be dealt to you":
         "phases/combat_damage_step.py (Veteran Bodyguard)",
-    "other ":
-        "mixins/effects.py:_recalculate_lord_buffs (Zombie Master and the lords)",
     "as this creature enters, it becomes your choice of":
         "enter_effects.choosable_bodies, applied by "
         "permanent_state._apply_chosen_body (Primal Clay)",
@@ -90,6 +89,7 @@ def _derived(normalized: str) -> bool:
         dynamic_pt_for(normalized) is not None
         or combat_restriction_for(normalized) is not None
         or static_bonus_for(normalized) is not None
+        or lord_buff_for(normalized) is not None
     )
 
 
@@ -147,6 +147,16 @@ def test_the_acknowledgement_list_has_no_dead_entries():
         "This creature can't attack unless you control a Wall.",
         "As long as you control a Wall, this creature gets +1/+1.",
         "This creature gets +1/+1 as long as you control a Zombie.",
+        # The gate admitted every line starting "other " — a prefix, not a
+        # template — so a lord whose effect the engine does not implement
+        # reported supported and did nothing. All four of these are the shape
+        # engine/lord_buffs.py refuses: an unmodelled effect, an unimplemented
+        # keyword, an activated ability at a cost nothing charges, and an
+        # unmodelled "as long as".
+        "Other Goblins glimmer uncontrollably.",
+        "Other Goblins get +1/+1 and have shadow.",
+        'Other Zombies have "{5}: Regenerate this permanent."',
+        "Other Goblins get +1/+1 as long as you control a Mountain.",
     ],
 )
 def test_an_unimplemented_rider_is_reported_unsupported(text):

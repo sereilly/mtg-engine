@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from ..lord_buffs import LORD_BUFF_KIND, lord_buff_in_text, lord_buff_payload
 from ..oracle_types import _COLOR_WORD_TO_SYMBOL, OracleInstruction, _instruction
 from .base import RuleResult, parse_rule
 
@@ -62,17 +63,20 @@ def static_land_type_change(text: str, activated: bool) -> RuleResult:
     return None
 
 
+# A continuous "other creatures get …" static ability, derived in full by
+# engine/lord_buffs.py. Ordered ahead of the generic buff rule below because it
+# is the more specific reading of the same sentence: that rule keeps only the
+# spell form, which is the one carrying a duration (CR 611.2c).
+#
+# This replaced two rules that each spelled out one card's numbers —
+# "attacking creatures you control get +1/+0" and "untapped creatures you
+# control get +0/+2" — so a card printed with the same template and different
+# numbers was unsupported while the engine had every line of code it needed.
 @parse_rule(115000)
-def buff_attacking_creatures(text: str, activated: bool) -> RuleResult:
-    if "attacking creatures you control get +1/+0" in text:
-        return _instruction("buff_attacking_creatures", power=1, toughness=0), "spell_pattern"
-    return None
-
-
-@parse_rule(116000)
-def buff_untapped_creatures(text: str, activated: bool) -> RuleResult:
-    if "untapped creatures you control get +0/+2" in text:
-        return _instruction("buff_untapped_creatures", power=0, toughness=2), "spell_pattern"
+def lord_buff(text: str, activated: bool) -> RuleResult:
+    buff = lord_buff_in_text(text)
+    if buff is not None:
+        return OracleInstruction(LORD_BUFF_KIND, "", lord_buff_payload(buff)), "spell_pattern"
     return None
 
 
@@ -95,10 +99,5 @@ def buff_creatures_global(text: str, activated: bool) -> RuleResult:
         # the parse-coverage deletion probe (the qualifier was being dropped).
         if re.search(r"\bblocking creatures get\b", text):
             payload["blocking_only"] = True
-        # Jihad: the anthem only applies while the chosen player controls a
-        # nontoken permanent of the chosen color (choices stamped at ETB;
-        # evaluated in _recalculate_lord_buffs).
-        if "as long as the chosen player controls a nontoken permanent of the chosen color" in text:
-            payload["requires_chosen_color_permanent"] = True
         return OracleInstruction("buff_creatures_global", "", payload), "spell_pattern"
     return None

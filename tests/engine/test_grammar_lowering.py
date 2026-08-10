@@ -133,32 +133,58 @@ def test_pump_enchanted_creature():
 
 def test_a_durationless_anthem_lowers_to_the_continuous_consumer():
     """Crusade's "White creatures get +1/+1" is a continuous effect with no
-    duration, and it was refused here for years as "needs the CR 613 layers
-    engine". It never did: ``buff_creatures_global`` has two consumers, and on
-    a *permanent* the one that runs is ``_recalculate_lord_buffs``, which
-    re-derives the buff on every recompute. That is the continuous reading, so
-    the grammar emits the same instruction the legacy rule always emitted."""
+    duration, so it is a static ability re-derived on every recompute
+    (CR 611.3a) — not the one-shot spell buff that shares its wording."""
     result = compile_line("White creatures get +1/+1.")
     assert result.lowered
-    assert [i.kind for i in result.instructions] == ["buff_creatures_global"]
-    assert result.instructions[0].payload == {
-        "power": 1, "toughness": 1, "all": True, "color": "W"
-    }
+    assert [i.kind for i in result.instructions] == ["lord_buff"]
+    assert result.instructions[0].payload == {"power": 1, "toughness": 1, "colors": ["W"]}
 
 
-def test_an_anthem_qualifier_the_continuous_consumer_ignores_is_refused():
-    """The trap that keeps the lowering above honest. ``_recalculate_lord_buffs``
-    reads the colour and the controller and nothing else — it never looks at
-    ``attacking_only``, and untapped-only is a different instruction kind. So
-    Orcish Oriflamme lowered onto the same kind would buff every creature its
-    controller has, permanently, and Castle would buff tapped ones."""
-    for line, card in [
-        ("Attacking creatures you control get +1/+0.", "Orcish Oriflamme"),
-        ("Untapped creatures you control get +0/+2.", "Castle"),
+def test_an_anthem_qualifier_is_carried_rather_than_dropped():
+    """The trap this lowering was held back by for a phase: the continuous
+    consumer read the colour and the controller and nothing else, so Orcish
+    Oriflamme lowered alongside Crusade would have buffed every creature its
+    controller has, permanently, and Castle would have buffed tapped ones.
+
+    ``engine/lord_buffs.py`` derives the qualifier and the consumer honours it,
+    so the answer is no longer a refusal — but it is still the *filter* that
+    decides, which is what the next test pins."""
+    for line, card, qualifier in [
+        ("Attacking creatures you control get +1/+0.", "Orcish Oriflamme", "attacking"),
+        ("Untapped creatures you control get +0/+2.", "Castle", "untapped"),
     ]:
         result = compile_line(line, card_name=card)
-        assert not result.lowered, line
-        assert "would be dropped" in result.failure_reason, line
+        assert result.lowered, result.failure_reason
+        payload = result.instructions[0].payload
+        assert payload["while"] == qualifier, line
+        assert payload["controller"] == "you", line
+
+
+def test_a_restriction_the_table_cannot_carry_is_refused_not_widened():
+    """The safety property survives the lowering. The filter is rebuilt from
+    what ``LordBuffFilter`` holds and compared for **equality** against the one
+    the parser produced, so a restriction the table has no field for refuses
+    instead of being silently dropped — and a field added to ``ObjectFilter``
+    later is refused by default rather than ignored by a check that predates
+    it."""
+    result = compile_line("Creatures with flying get +1/+1.", card_name="Invented Anthem")
+
+    assert result.parsed, result.failure_reason
+    assert not result.lowered
+    assert "engine/lord_buffs.py" in result.failure_reason
+
+
+def test_a_subtype_union_refuses_rather_than_taking_the_first():
+    """The round trip cannot catch this one — a union survives it intact — so it
+    is refused on its own terms. The table's text parser reads one subtype, so a
+    grammar-only union would be a payload no printed card produces and no test
+    covers."""
+    result = compile_line("Other Djinn or Efreet get +1/+1.", card_name="Invented Lord")
+
+    assert result.parsed, result.failure_reason
+    assert not result.lowered
+    assert "union" in result.failure_reason
 
 
 def test_attacking_creatures_buff_keeps_the_qualifier():
@@ -1215,16 +1241,31 @@ def test_an_auras_keyword_grant_is_claimed_by_the_code_that_derives_it(line, car
     assert result.node.registry == "auras"
 
 
-def test_a_lords_keyword_grant_still_refuses():
-    """The sibling that is *not* claimed, so the boundary is visible: a lord's
-    grant to other creatures is applied by _recalculate_lord_buffs off a bare
-    ``static_line``, not by anything in auras.py, so nothing here may account
-    for it."""
+def test_a_lords_keyword_grant_lowers_to_its_own_table():
+    """The sibling case, and the boundary is still visible: a lord's grant to
+    *other* creatures is not an Aura grant, so auras.py may not account for it —
+    it lowers to ``lord_buff``, whose consumer contributes the keyword to the
+    derived layer-6 channel for as long as the lord is there."""
     result = compile_line("Other Zombie creatures have swampwalk.", card_name="Zombie Master")
 
     assert result.parsed, result.failure_reason
+    assert result.lowered
+    assert [i.kind for i in result.instructions] == ["lord_buff"]
+    assert result.instructions[0].payload == {
+        "power": 0, "toughness": 0, "subtypes": ["zombie"], "other": True,
+        "keywords": ["swampwalk"],
+    }
+    assert not hasattr(result.node, "registry"), "an Aura registry must not claim a lord line"
+
+
+def test_a_keyword_layer_6_does_not_carry_refuses_by_name():
+    """An unimplemented keyword must take the line down rather than lower the
+    P/T half and drop the grant — the dropped-rider bug class, in the sentence
+    that first produced it."""
+    result = compile_line("Other Goblins get +1/+1 and have shadow.", card_name="Invented Lord")
+
     assert not result.lowered
-    assert "_recalculate_lord_buffs" in result.failure_reason
+    assert "shadow" in result.failure_reason and "lord_buffs" in result.failure_reason
 
 
 def test_has_base_power_still_reaches_its_own_production():
@@ -1245,29 +1286,41 @@ def test_has_base_power_still_reaches_its_own_production():
 def test_lord_conjunction_keeps_both_halves():
     """"Other Goblins get +1/+1 and have mountainwalk" is one sentence stating
     two continuous effects. Reading only the pump would drop the landwalk
-    silently — the dropped-rider bug class — so the conjunction is parsed whole
-    and refused whole."""
+    silently — the dropped-rider bug class — so the conjunction is lowered as
+    one buff carrying both halves.
+
+    It is also a *static ability*: the whole conjunction has no duration, which
+    is what ``_looks_static`` now asks. Judging one effect at a time put these
+    lines on a different lowering path from the anthems that say the same kind
+    of thing."""
     result = compile_line(
         "Other Goblins get +1/+1 and have mountainwalk.", card_name="Goblin King"
     )
 
-    assert result.parsed and not result.lowered
-    kinds = [type(effect).__name__ for effect in result.node.statement.effects]
+    assert result.parsed and result.lowered
+    kinds = [type(effect).__name__ for effect in result.node.effect.effects]
     assert kinds == ["Pump", "GainKeyword"]
+    assert result.instructions[0].payload == {
+        "power": 1, "toughness": 1, "subtypes": ["goblin"], "other": True,
+        "keywords": ["mountainwalk"],
+    }
 
 
 def test_other_excludes_the_source_rather_than_being_dropped():
     """A lord does not pump itself. "Other" sets the same ``other_than_source``
     field the postmodifier "other than this creature" sets, so any lowering that
     already honours one honours both. Ignoring the word would make Goblin King a
-    3/3."""
+    3/3, and CR 613 does not exempt a static ability's own source unless the
+    card says so — which is why it is a derived field rather than an
+    assumption."""
     result = compile_line(
         "Other Goblins get +1/+1 and have mountainwalk.", card_name="Goblin King"
     )
-    pump = result.node.statement.effects[0]
+    pump = result.node.effect.effects[0]
 
     assert pump.subject.filter.other_than_source is True
     assert pump.subject.filter.subtypes == ("goblin",)
+    assert result.instructions[0].payload["other"] is True
 
 
 def test_other_does_not_swallow_the_postmodifier_wording():

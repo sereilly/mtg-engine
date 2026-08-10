@@ -57,9 +57,11 @@ _ROADMAPPED_REASONS = {
     "granted ability in quotes": "phase 3 (quoted abilities)",
     "continuous pump needs the CR 613 layers engine": "phase 6 (CR 613 layers)",
     "continuous keyword grant needs the CR 613 layers engine": "phase 6 (CR 613 layers)",
-    "a lord's continuous buff to other creatures is applied by "
-    "_recalculate_lord_buffs off a bare static_line, with no derivation "
-    "table to delegate a claim to": "needs a lord-buff derivation table",
+    # The lord-buff entries that stood here are gone, not rescheduled:
+    # engine/lord_buffs.py is that derivation table, and both front ends lower
+    # through it. A scheduled reason retires when the code lands, in the same
+    # commit — an entry naming work that is done is the stale-comment failure
+    # this dict's own docstring warns about.
 }
 
 

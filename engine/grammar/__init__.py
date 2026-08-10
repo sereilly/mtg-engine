@@ -103,6 +103,12 @@ GRAMMAR_CATEGORIES: frozenset[str] = frozenset(
         # "can't be blocked by Walls") still fail the parser by name rather
         # than lowering to nothing.
         "combat_restrictions",
+        # A permanent's continuous anthem or lord buff. Enabled after the
+        # differential showed the grammar's payload equal to what
+        # engine/lord_buffs.py derives for every such line in the pool — both
+        # front ends read that one table, so agreement is structural rather than
+        # a coincidence to be re-checked.
+        "static_buffs",
     }
 )
 

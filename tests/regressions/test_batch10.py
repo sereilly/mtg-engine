@@ -150,7 +150,7 @@ class TestLandwalkLordsEntryOrder:
         game.cast_from_hand(0, "Merfolk of the Pearl Trident")
         game.cast_from_hand(0, "Lord of Atlantis")
         mer = next(p for p in p0.battlefield if p.card.name == "Merfolk of the Pearl Trident")
-        assert mer.metadata.get("has_islandwalk") is True
+        assert mer.has_keyword("islandwalk")
         assert game._can_block_attacker(p1.battlefield[1], mer) is False
 
     def test_goblin_cast_after_king_gets_mountainwalk(self, cards):
@@ -167,7 +167,7 @@ class TestLandwalkLordsEntryOrder:
         game.cast_from_hand(0, "Goblin King")
         game.cast_from_hand(0, "Mons's Goblin Raiders")
         gob = next(p for p in p0.battlefield if p.card.name == "Mons's Goblin Raiders")
-        assert gob.metadata.get("has_mountainwalk") is True
+        assert gob.has_keyword("mountainwalk")
         assert game._can_block_attacker(p1.battlefield[1], gob) is False
 
     def test_granted_landwalk_shows_on_keyword_strip_not_on_lord(self, cards):

@@ -60,7 +60,7 @@ class TestGoblinKing:
 
     def test_other_goblins_gain_mountainwalk_metadata(self, cards):
         game, p1, p2, raider, blocker = self._setup(cards)
-        assert raider.metadata.get("has_mountainwalk") is True
+        assert raider.has_keyword("mountainwalk")
 
     def test_mountainwalker_is_unblockable_when_defender_controls_a_mountain(self, cards):
         game, p1, p2, raider, blocker = self._setup(cards)

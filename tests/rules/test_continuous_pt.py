@@ -121,3 +121,88 @@ def test_counters_and_derived_bonuses_add_together(cards, arn_by_name):
     ape.power_bonus += 3  # a counter, not an effect
     game._recompute_continuous_effects()
     assert ape.effective_power == before + 3
+
+
+# ---------------------------------------------------------------------------
+# The lord-buff channels. Two more derived channels answer to the same
+# property, and one of them (the state-qualified buff) is read *outside* the
+# recompute, so drift there would be invisible to the tests above.
+# ---------------------------------------------------------------------------
+
+
+def _lord_board(cards):
+    """Crusade (unqualified anthem) and Castle (untapped-only) over one bear."""
+    bear = Permanent(card=cards["Savannah Lions"])  # white, so Crusade reaches it
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[bear, Permanent(card=cards["Crusade"]), Permanent(card=cards["Castle"])],
+        life=20,
+    )
+    p2 = PlayerState(name="P2", life=20)
+    return Game(players=[p1, p2]), bear
+
+
+@pytest.mark.cr("611.3a", "613.4c")
+def test_repeated_recomputes_do_not_drift_for_lord_buffs(cards):
+    game, bear = _lord_board(cards)
+
+    game._recompute_continuous_effects()
+    once = (bear.effective_power, bear.effective_toughness)
+    assert once == (3, 4), "Crusade's +1/+1 and Castle's +0/+2 on a 2/1"
+
+    for _ in range(25):
+        game._recompute_continuous_effects()
+
+    assert (bear.effective_power, bear.effective_toughness) == once
+
+
+@pytest.mark.cr("611.3a")
+def test_lord_buffs_do_not_leak_into_the_counter_channel(cards):
+    game, bear = _lord_board(cards)
+
+    for _ in range(10):
+        game._recompute_continuous_effects()
+
+    assert bear.power_bonus == 0 and bear.toughness_bonus == 0
+
+
+@pytest.mark.cr("611.3a")
+def test_a_qualified_lord_buff_does_not_accumulate_across_recomputes(cards):
+    """The qualified channel is a dict keyed by qualifier, and its contributions
+    are summed. Rebuilding it without clearing it first would add Castle's
+    +0/+2 again on every pass — invisible while the creature is tapped, which is
+    exactly when nobody is looking."""
+    from engine.layer_bridge import QUALIFIED_BUFFS
+
+    game, bear = _lord_board(cards)
+    for _ in range(10):
+        game._recompute_continuous_effects()
+
+    assert bear.metadata[QUALIFIED_BUFFS] == {"untapped": (0, 2)}
+
+
+@pytest.mark.cr("611.3a", "611.3b", "613.1f")
+def test_a_lord_granted_keyword_does_not_outlive_its_source(cards):
+    """Layer 6's derived channel answers to the same invariant, but its symptom
+    is different: the grant is a set, so re-adding it is idempotent and a
+    missing clear shows up only when the source *leaves*. That is the assertion
+    that makes clearing load-bearing, and repeating the recompute first is what
+    makes sure the answer is not an artifact of the first pass."""
+    from engine.keywords import DERIVED_GRANTS
+
+    king = Permanent(card=cards["Goblin King"])
+    goblin = Permanent(card=cards["Mons's Goblin Raiders"])
+    p1 = PlayerState(name="P1", battlefield=[king, goblin], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+
+    for _ in range(10):
+        game._recompute_continuous_effects()
+
+    assert goblin.metadata[DERIVED_GRANTS] == ["mountainwalk"]
+    assert goblin.has_keyword("mountainwalk")
+
+    p1.battlefield.remove(king)
+    game._recompute_continuous_effects()
+
+    assert not goblin.metadata.get(DERIVED_GRANTS)
+    assert not goblin.has_keyword("mountainwalk")

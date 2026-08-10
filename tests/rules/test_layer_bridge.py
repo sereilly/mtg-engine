@@ -38,8 +38,18 @@ def _reference_pt(perm: Permanent) -> tuple[int, int]:
     comparing against it would compare the new implementation with itself. This
     is the old one, preserved so the differential keeps meaning something:
     7d switch → 7b set (until-end-of-turn beating permanent) → 7c additive.
+
+    One channel was *renamed* under it rather than reimplemented:
+    ``attacking_buff_power`` was the only state-qualified buff the engine could
+    express, and it is now one entry in ``lord_buff_while`` alongside the
+    untapped one Castle needs. The arithmetic below — including the bug on the
+    switch branch — is unchanged, which is the whole point of keeping it.
     """
     meta = perm.metadata
+
+    def _qualified(stat: str) -> int:
+        index = 0 if stat == "power" else 1
+        return int((meta.get("lord_buff_while") or {}).get("attacking", (0, 0))[index])
 
     def _base(key: str) -> int:
         card = perm.card
@@ -63,7 +73,7 @@ def _reference_pt(perm: Permanent) -> tuple[int, int]:
             base = _base(stat)
         total = base + _mods(stat)
         if include_attacking and perm.attacking:
-            total += int(meta.get(f"attacking_buff_{stat}", 0))
+            total += _qualified(stat)
         return total
 
     if meta.get("pt_switched"):
@@ -151,10 +161,24 @@ def test_attacking_only_buffs_agree_in_both_states():
     for attacking in (False, True):
         perm = Permanent(card=_creature())
         perm.attacking = attacking
-        perm.metadata["attacking_buff_power"] = 2
-        perm.metadata["attacking_buff_toughness"] = 1
+        perm.metadata["lord_buff_while"] = {"attacking": (2, 1)}
         current, layered = _both(perm)
         assert current == layered, f"disagreed while attacking={attacking}"
+
+
+@pytest.mark.cr("613.4c", "611.3a")
+def test_an_untapped_only_buff_is_evaluated_when_pt_is_read():
+    """Castle's "Untapped creatures you control get +0/+2". The qualifier is
+    checked here rather than when the board was last recomputed, so a creature
+    that taps — by attacking, or for a cost — loses the bonus at once. It used
+    to be contributed unconditionally at recompute time, which left an attacking
+    creature holding +0/+2 until the next state-based-action check."""
+    perm = Permanent(card=_creature())
+    perm.metadata["lord_buff_while"] = {"untapped": (0, 2)}
+    assert computed_pt(perm) == (2, 4)
+
+    perm.tapped = True
+    assert computed_pt(perm) == (2, 2)
 
 
 @pytest.mark.cr("613.4a")
@@ -203,7 +227,7 @@ def test_switching_carries_the_attacking_buff_across():
     """
     perm = Permanent(card=_creature("1", "4"))
     perm.attacking = True
-    perm.metadata["attacking_buff_power"] = 2
+    perm.metadata["lord_buff_while"] = {"attacking": (2, 0)}
     perm.metadata["pt_switched"] = True
 
     reference = _reference_pt(perm)

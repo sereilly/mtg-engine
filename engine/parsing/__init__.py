@@ -128,13 +128,14 @@ def parse_static_coeffects(text: str) -> list[OracleInstruction]:
     result = global_effects.static_land_type_change(text, False)
     if result is not None:
         instructions.append(result[0])
-    # Jihad: a conditional static anthem ("White creatures get +2/+1 as long as
-    # the chosen player controls a nontoken permanent of the chosen color")
-    # sharing the card with an enter-choice line and a sacrifice trigger, so
-    # parse_primary_instruction never reaches it (the trigger's sacrifice
-    # clause matches first on the full text).
-    result = global_effects.buff_creatures_global(text, False)
-    if result is not None and result[0].payload.get("requires_chosen_color_permanent"):
+    # A continuous anthem sharing its card with other sentences, so
+    # parse_primary_instruction never reaches it — Jihad's is preceded by an
+    # enter-choice line and followed by a sacrifice trigger, and the trigger's
+    # clause matches first on the full text. The caller drops this if the card
+    # already produced a `lord_buff` (engine/oracle.py de-dupes co-effects by
+    # kind), so a card whose anthem the grammar already claimed is unaffected.
+    result = global_effects.lord_buff(text, False)
+    if result is not None:
         instructions.append(result[0])
     return instructions
 

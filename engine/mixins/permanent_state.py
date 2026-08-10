@@ -17,6 +17,14 @@ from ..enter_effects import (
     SPEND_WHITE_AS_RED,
 )
 from ..auras import aura_protection_colors, auras_attached_to
+from ..keywords import add_derived_grant, clear_derived_grants
+from ..layer_bridge import QUALIFIED_BUFFS
+from ..lord_buffs import (
+    GRANTED_ACTIVATED_ABILITIES,
+    LORD_BUFF_KIND,
+    LordBuff,
+    lord_buff_from_payload,
+)
 from ..models import CardDefinition, Permanent, PlayerState
 from ..oracle import _COLOR_WORD_TO_SYMBOL, compile_card_oracle
 from ..pt import clear_base_pt, set_base_pt
@@ -428,23 +436,13 @@ class PermanentStateMixin:
         self._refresh_land_animation(all_permanents, kormus_active, living_lands_active)
         self._refresh_aspect_of_wolf()
 
+        # "Attacking creatures you control get +X/+Y" (Orcish Oriflamme) used to
+        # be counted here, into a channel of its own, because the lord-buff
+        # consumer could not express a state qualifier. It is an ordinary lord
+        # buff now — engine/lord_buffs.py derives the qualifier and
+        # _recalculate_lord_buffs contributes it — so there is nothing here to
+        # keep in step with it.
         for player in self.players:
-            # Static "Attacking creatures you control get +X/+Y" sources (Orcish
-            # Oriflamme). The bonus only applies while a creature is attacking, so it
-            # is stored in metadata and added by effective_power/toughness when the
-            # creature has attacking == True.
-            attacking_buff_power = 0
-            attacking_buff_toughness = 0
-            for perm in player.battlefield:
-                for instr in compile_card_oracle(perm.effective_card).instructions:
-                    if instr.kind == "buff_attacking_creatures":
-                        attacking_buff_power += int(instr.payload.get("power", 0))
-                        attacking_buff_toughness += int(instr.payload.get("toughness", 0))
-            for perm in player.battlefield:
-                if perm.card.primary_type == "creature":
-                    perm.metadata["attacking_buff_power"] = attacking_buff_power
-                    perm.metadata["attacking_buff_toughness"] = attacking_buff_toughness
-
             for permanent in player.battlefield:
                 prog = compile_card_oracle(permanent.effective_card)
                 instr_kinds = {instr.kind for instr in prog.instructions}
@@ -736,43 +734,56 @@ class PermanentStateMixin:
         return True
 
     def _recalculate_lord_buffs(self) -> None:
-        """Recalculate static-ability buffs from all lords on the battlefield.
+        """Apply every lord buff on the battlefield (CR 611.3a, layers 6 and 7c).
 
-        Per rule 611.3a, static abilities are not 'locked in' — they apply
-        dynamically whenever their criteria are met. This method resets and
-        recomputes all static_buff_power / static_buff_toughness values so that
-        newly-entered creatures immediately receive relevant lord buffs, and
-        creatures whose lords have left the battlefield lose those buffs.
+        A static ability is not locked in: it applies whenever its criteria are
+        met, so this is recomputed from the current board rather than adjusted
+        incrementally. What each source gives and who it reaches is derived from
+        its own printed sentence by ``engine/lord_buffs.py`` — this method reads
+        that table and honours every field of it. Before the table it read the
+        colour and the controller off a bare ``static_line`` and nothing else,
+        with the subtype lords re-parsed by a second regex further down, so a
+        subtype, an "other", or a state qualifier had to become either a new
+        instruction kind or a silently dropped restriction.
+
+        Nothing accumulates. Every channel written below is cleared by this same
+        function immediately before it is rebuilt, which is what makes removal
+        the absence of a contribution rather than a delta someone has to
+        remember and subtract (CR 611.3b).
         """
-        # Step 1: Clear all existing static-ability-derived bonuses. Lord-granted
-        # landwalk flags are tracked per permanent so they can be cleared and
-        # recomputed too (611.3b — the grant ends when the lord leaves), without
-        # disturbing landwalk granted by an Aura or printed on the card.
-        for player in self.players:
-            for perm in player.battlefield:
-                perm.metadata.pop("static_buff_power", None)
-                perm.metadata.pop("static_buff_toughness", None)
-                lord_walks = perm.metadata.pop("_lord_walk_flags", None)
-                if lord_walks:
-                    for flag in lord_walks:
-                        perm.metadata.pop(flag, None)
-                # A lord-granted activated ability (Zombie Master's regenerate)
-                # ends when the lord leaves, exactly like lord-granted landwalk.
-                if perm.metadata.pop("_lord_granted_regen", None):
-                    perm.metadata.pop("granted_regen_ability", None)
+        all_perms = [perm for player in self.players for perm in player.battlefield]
 
-        def _add_static_buff(perm: Permanent, power: int, toughness: int) -> None:
-            perm.metadata["static_buff_power"] = (
-                int(perm.metadata.get("static_buff_power", 0)) + power
-            )
-            perm.metadata["static_buff_toughness"] = (
-                int(perm.metadata.get("static_buff_toughness", 0)) + toughness
-            )
+        # Step 1: clear the derived channels this function owns.
+        for perm in all_perms:
+            perm.metadata.pop("static_buff_power", None)
+            perm.metadata.pop("static_buff_toughness", None)
+            perm.metadata.pop(QUALIFIED_BUFFS, None)
+            clear_derived_grants(perm)
+            for flag in perm.metadata.pop("_lord_granted_flags", None) or ():
+                perm.metadata.pop(flag, None)
 
-        def _grant_lord_walk(perm: Permanent, walk: str) -> None:
-            flag = f"has_{walk}"
+        def _add_static_buff(perm: Permanent, buff: LordBuff) -> None:
+            if not (buff.power or buff.toughness):
+                return
+            qualifier = buff.filter.qualifier
+            if qualifier is None:
+                perm.metadata["static_buff_power"] = (
+                    int(perm.metadata.get("static_buff_power", 0)) + buff.power
+                )
+                perm.metadata["static_buff_toughness"] = (
+                    int(perm.metadata.get("static_buff_toughness", 0)) + buff.toughness
+                )
+                return
+            # A qualified buff is contributed here but *evaluated* when P/T is
+            # read (layer_bridge.qualifier_holds), so it tracks a creature
+            # tapping or attacking between recomputes.
+            qualified = perm.metadata.setdefault(QUALIFIED_BUFFS, {})
+            power, toughness = qualified.get(qualifier, (0, 0))
+            qualified[qualifier] = (power + buff.power, toughness + buff.toughness)
+
+        def _grant_ability(perm: Permanent, flag: str) -> None:
             perm.metadata[flag] = True
-            tracked = perm.metadata.setdefault("_lord_walk_flags", [])
+            tracked = perm.metadata.setdefault("_lord_granted_flags", [])
             if flag not in tracked:
                 tracked.append(flag)
 
@@ -787,123 +798,77 @@ class PermanentStateMixin:
 
         # A Magical Hack land-word swap on the lord itself rewrites the walks its
         # text grants (mountainwalk -> islandwalk on Goblin King makes other
-        # Goblins islandwalkers).
-        def _remap_walks(source_perm: Permanent, walks: list[str]) -> list[str]:
+        # Goblins islandwalkers). It is board state rather than printed text, so
+        # it is applied to what the table derived rather than inside it.
+        def _remap_keywords(source_perm: Permanent, keywords: tuple[str, ...]) -> list[str]:
             remap = source_perm.metadata.get("land_word_remap") or {}
             if not remap:
-                return walks
-            return [f"{remap.get(w[: -len('walk')], w[: -len('walk')])}walk" for w in walks]
+                return list(keywords)
+            remapped = []
+            for keyword in keywords:
+                if keyword.endswith("walk"):
+                    stem = keyword[: -len("walk")]
+                    remapped.append(f"{remap.get(stem, stem)}walk")
+                else:
+                    remapped.append(keyword)
+            return remapped
 
-        # Step 2: Re-apply static buffs from every permanent currently on battlefield
+        def _matches(target_perm: Permanent, source_perm: Permanent, buff: LordBuff) -> bool:
+            """Every field of the derived filter, checked through the CR 613
+            accessors — an animated Swamp is a creature by layer 4 before a
+            creature anthem is considered in layer 7c, and the printed type line
+            is not the authority on either that or the subtype."""
+            filt = buff.filter
+            if not target_perm.is_creature:
+                return False
+            if filt.other_than_source and target_perm is source_perm:
+                return False
+            if filt.colors and not (
+                set(filt.colors) & self._effective_colors(target_perm)
+            ):
+                return False
+            if any(not target_perm.has_type(subtype) for subtype in filt.subtypes):
+                return False
+            return True
+
+        # Step 2: re-apply from every permanent currently on the battlefield.
         for ctrl_player in self.players:
             for source_perm in ctrl_player.battlefield:
-                prog = compile_card_oracle(_eff_card(source_perm))
-                for instr in prog.instructions:
-                    if instr.kind == "buff_creatures_global":
-                        # Jihad: "as long as the chosen player controls a
-                        # nontoken permanent of the chosen color."
-                        if instr.payload.get(
-                            "requires_chosen_color_permanent"
-                        ) and not self._chosen_color_permanent_condition(source_perm):
-                            continue
-                        color_sym = instr.payload.get("color")
-                        power = int(instr.payload.get("power", 0))
-                        toughness = int(instr.payload.get("toughness", 0))
-                        target_players = self.players if instr.payload.get("all") else [ctrl_player]
-                        for tp in target_players:
-                            for target_perm in tp.battlefield:
-                                if target_perm.card.primary_type != "creature":
-                                    continue
-                                # Honors color overrides (Lace) and copied colors
-                                # (Clone), and keeps Vesuvan Doppelganger blue.
-                                actual_colors = self._effective_colors(target_perm)
-                                if color_sym and color_sym not in actual_colors:
-                                    continue
-                                _add_static_buff(target_perm, power, toughness)
-
-                    # Castle-style "Untapped creatures you control get +X/+Y." The
-                    # bonus is recomputed every call so it tracks tap state and ends
-                    # when the source leaves (611.3a/611.3b).
-                    elif instr.kind == "buff_untapped_creatures":
-                        power = int(instr.payload.get("power", 0))
-                        toughness = int(instr.payload.get("toughness", 0))
-                        for target_perm in ctrl_player.battlefield:
-                            if target_perm.card.primary_type != "creature":
-                                continue
-                            if target_perm.tapped:
-                                continue
-                            _add_static_buff(target_perm, power, toughness)
-
-                    # Lord-style "Other [Subtype] get +A/+B [and have <landwalk>]."
-                    # (e.g. Lord of Atlantis, Goblin King). Applied dynamically so it
-                    # reaches creatures entering later and is removed when the lord
-                    # leaves the battlefield.
-                    elif (
-                        instr.kind == "static_line"
-                        and instr.value.startswith("other ")
-                        and " get +" in instr.value
+                program = compile_card_oracle(_eff_card(source_perm))
+                for instr in program.instructions:
+                    if instr.kind != LORD_BUFF_KIND:
+                        continue
+                    buff = lord_buff_from_payload(instr.payload)
+                    if buff.condition and not self._lord_buff_condition(
+                        source_perm, buff.condition
                     ):
-                        lord_match = re.search(
-                            r"other (\w+)s? get \+(\d+)/\+(\d+)(.*)", instr.value
-                        )
-                        if not lord_match:
-                            continue
-                        subtype_raw = lord_match.group(1).lower()
-                        subtype = subtype_raw[:-1] if subtype_raw.endswith("s") else subtype_raw
-                        power = int(lord_match.group(2))
-                        toughness = int(lord_match.group(3))
-                        rest = lord_match.group(4).lower()
-                        granted_walks = _remap_walks(source_perm, [
-                            w
-                            for w in ("islandwalk", "mountainwalk", "swampwalk", "forestwalk", "plainswalk")
-                            if w in rest
-                        ])
-                        for player in self.players:
-                            for target_perm in player.battlefield:
-                                if target_perm.card.primary_type != "creature":
-                                    continue
-                                if subtype not in _eff_card(target_perm).type_line.lower():
-                                    continue
-                                if target_perm is source_perm:  # "other"
-                                    continue
-                                _add_static_buff(target_perm, power, toughness)
-                                for walk in granted_walks:
-                                    _grant_lord_walk(target_perm, walk)
+                        continue
+                    scope = (
+                        [ctrl_player] if buff.filter.controller == "you" else self.players
+                    )
+                    keywords = _remap_keywords(source_perm, buff.keywords)
+                    flag = (
+                        GRANTED_ACTIVATED_ABILITIES[buff.granted_ability]
+                        if buff.granted_ability
+                        else None
+                    )
+                    for player in scope:
+                        for target_perm in player.battlefield:
+                            if not _matches(target_perm, source_perm, buff):
+                                continue
+                            _add_static_buff(target_perm, buff)
+                            for keyword in keywords:
+                                add_derived_grant(target_perm, keyword)
+                            if flag is not None:
+                                _grant_ability(target_perm, flag)
 
-                    # "Other [Subtype] ... have <landwalk / activated ability>"
-                    # with no +X/+X buff (Zombie Master: "Other Zombie creatures
-                    # have swampwalk." / 'Other Zombies have "{B}: Regenerate
-                    # this permanent."').
-                    elif (
-                        instr.kind == "static_line"
-                        and instr.value.startswith("other ")
-                        and " have " in instr.value
-                        and (
-                            "regenerate this permanent" in instr.value
-                            or any(w in instr.value for w in
-                                   ("islandwalk", "mountainwalk", "swampwalk", "forestwalk", "plainswalk"))
-                        )
-                    ):
-                        sub_match = re.search(r"other (\w+?)s?\b", instr.value)
-                        if not sub_match:
-                            continue
-                        subtype = sub_match.group(1).lower()
-                        granted_walks = _remap_walks(source_perm, [
-                            w
-                            for w in ("islandwalk", "mountainwalk", "swampwalk", "forestwalk", "plainswalk")
-                            if w in instr.value
-                        ])
-                        grants_regen = "regenerate this permanent" in instr.value
-                        for player in self.players:
-                            for target_perm in player.battlefield:
-                                if target_perm.card.primary_type != "creature":
-                                    continue
-                                if subtype not in _eff_card(target_perm).type_line.lower():
-                                    continue
-                                if target_perm is source_perm:  # "other"
-                                    continue
-                                for walk in granted_walks:
-                                    _grant_lord_walk(target_perm, walk)
-                                if grants_regen:
-                                    target_perm.metadata["granted_regen_ability"] = True
-                                    target_perm.metadata["_lord_granted_regen"] = True
+    # Conditions a lord buff may hang on, keyed by what engine/lord_buffs.py
+    # derives. A condition that table can name with no predicate here would be a
+    # buff applied unconditionally, which is the failure this whole family had;
+    # tests/engine/test_lord_buff_table.py holds the two lists to each other.
+    _LORD_BUFF_CONDITIONS = {
+        "chosen_color_permanent": "_chosen_color_permanent_condition",
+    }
+
+    def _lord_buff_condition(self, source_perm: Permanent, condition: str) -> bool:
+        return getattr(self, self._LORD_BUFF_CONDITIONS[condition])(source_perm)

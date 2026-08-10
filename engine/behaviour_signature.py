@@ -102,24 +102,41 @@ def behaviour_signature(card) -> str:
             # Sol Ring's {C}{C} is not Mox Emerald's {G}.
             "mana_produced": len(card.produced_mana or ()),
             "text": _mask(program.normalized_text or ""),
+            # Sorted by repr, not naturally: two instructions of the same kind
+            # and value fall through to comparing their payload *dicts*, which
+            # raises. Zombie Master is the first card in the pool with two of
+            # one kind ("Other Zombies have swampwalk" / '… have "{B}:
+            # Regenerate this permanent."'), and it crashed the whole signature
+            # rather than merging anything — a latent break, not a masking bug.
+            # `_mask_value` already builds its dicts from sorted items, so their
+            # reprs are stable.
             "instructions": sorted(
-                [instr.kind, _mask(instr.value), _mask_value(instr.payload)]
-                for instr in program.instructions
+                (
+                    [instr.kind, _mask(instr.value), _mask_value(instr.payload)]
+                    for instr in program.instructions
+                ),
+                key=repr,
             ),
             "triggered": sorted(
-                [
-                    trig.condition.kind,
-                    trig.instruction.kind if trig.instruction else None,
-                    _mask_value(trig.instruction.payload if trig.instruction else {}),
-                ]
-                for trig in program.triggered_abilities
+                (
+                    [
+                        trig.condition.kind,
+                        trig.instruction.kind if trig.instruction else None,
+                        _mask_value(trig.instruction.payload if trig.instruction else {}),
+                    ]
+                    for trig in program.triggered_abilities
+                ),
+                key=repr,
             ),
             "activated": sorted(
-                [
-                    ability.instruction.kind if ability.instruction else None,
-                    _mask_value(ability.instruction.payload if ability.instruction else {}),
-                ]
-                for ability in program.activated_abilities
+                (
+                    [
+                        ability.instruction.kind if ability.instruction else None,
+                        _mask_value(ability.instruction.payload if ability.instruction else {}),
+                    ]
+                    for ability in program.activated_abilities
+                ),
+                key=repr,
             ),
             "statics": sorted(_mask(line) for line in program.static_lines),
         },

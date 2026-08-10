@@ -31,6 +31,7 @@ from .oracle_types import (
 from .characteristic_defining import dynamic_pt_for
 from .auras import unclaimed_aura_lines
 from .combat_restrictions import combat_restriction_for
+from .lord_buffs import LORD_BUFF_KIND, lord_buff_for, lord_buff_payload
 from .static_bonuses import static_bonus_for
 from .grammar import ast as grammar_ast, compile_line as compile_grammar_line
 from .parsing import parse_modal_options, parse_primary_instruction, parse_static_coeffects
@@ -600,6 +601,14 @@ def _is_supported_static_creature_line(line: str) -> bool:
     # (loud) instead.
     if combat_restriction_for(normalized) is not None:
         return True
+    # A lord's continuous buff to other creatures. The gate used to admit the
+    # bare prefix "other ", which is a template in disguise: "Other Goblins
+    # glimmer uncontrollably." compiled as supported and did nothing. It asks
+    # the derivation table the consumer dispatches on, so an unimplemented
+    # keyword, an unrecognized granted ability or an unmodelled condition is now
+    # reported unsupported rather than admitted and dropped.
+    if lord_buff_for(normalized) is not None:
+        return True
     # "As this creature enters, it becomes your choice of <body>, …"
     # (Primal Clay). Carried out by _initialize_permanent_state, which reads the
     # bodies from this same parser — so what is claimed here and what is applied
@@ -619,11 +628,14 @@ def _is_supported_static_creature_line(line: str) -> bool:
         # blocked by walls" are gated above by combat_restriction_for, whose
         # patterns are anchored. Listing them here too would restore the prefix
         # hole those anchors close.
+        # "other " is deliberately NOT here. It was the whole support test for a
+        # lord line — a prefix admitting any sentence that began with the word —
+        # and it is now `lord_buff_for` above, which claims the sentence end to
+        # end or not at all.
         "this creature can block an additional creature each combat",
         "as long as this creature is untapped, all damage that would be dealt to you by unblocked creatures is dealt to this creature instead",
         "remove a corpse counter from this creature: regenerate this creature",
         "you may have this creature enter as a copy of any creature on the battlefield",
-        "other ",
         # Desert Nomads / Camel: static shield against Desert lands' damage
         # ability. Handled by a replacement-effect interceptor (checked
         # against oracle text directly) rather than a compiled instruction —
@@ -648,8 +660,6 @@ def _is_supported_static_creature_line(line: str) -> bool:
         # ability, which cares about the CURRENT tapped state, not this line.
         "you may choose not to untap this creature during your untap step",
     )
-    if normalized.startswith("other ") and " get +" in normalized:
-        return True
     return any(normalized.startswith(pattern) for pattern in static_patterns)
 
 
@@ -726,6 +736,14 @@ def _parse_creature_program(
                 )
             elif (bonus := static_bonus_for(normalized)) is not None:
                 instructions.append(OracleInstruction(bonus.kind, "", bonus.payload))
+            elif (lord := lord_buff_for(normalized)) is not None:
+                # The lord line the gate just admitted, carried as data. The
+                # consumer used to re-parse `static_line`'s text with two
+                # regexes of its own, which is how the gate and the dispatch came
+                # to disagree about what "other " meant.
+                instructions.append(
+                    OracleInstruction(LORD_BUFF_KIND, "", lord_buff_payload(lord))
+                )
             elif (restriction := combat_restriction_for(normalized)) is not None:
                 # Combat restrictions are templates, derived rather than listed
                 # (engine/combat_restrictions.py). The chain that used to sit
