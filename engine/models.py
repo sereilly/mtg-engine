@@ -5,6 +5,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from . import shields as _shields
+
 # Basic land subtype → the mana symbol it taps for. Used when a land's type has
 # been overridden (e.g. Evil Presence makes a land a Swamp).
 _LAND_TYPE_MANA = {
@@ -218,14 +220,17 @@ class Permanent:
     blocking_attacker_controller: int | None = None
     blocking_attacker_index: int | None = None
     damage_marked: int = 0
-    # "Prevent the next N damage that would be dealt to this creature this turn"
-    # (Healing Salve's prevention mode, Samite Healer, …). Consumed as damage —
-    # combat or spell — would be marked, and cleared during cleanup.
+    # CR 615 prevention shields. These two are *views* over
+    # ``engine/shields.py``'s collection (installed below the class), kept under
+    # their old names because the web payload and the UI read them; the state
+    # they report is one generic list, not a field per card.
     damage_prevention_pool: int = 0
-    # Name of the card/effect that granted the current prevention pool, so the UI
-    # can show its art when the shield badge is hovered. Cleared with the pool
-    # (when fully consumed or during cleanup).
     damage_prevention_source: str | None = None
+
+    @property
+    def prevention_shields(self) -> list["_shields.Shield"]:
+        """The CR 615 shields protecting this permanent (``engine/shields.py``)."""
+        return _shields.shields_on(self)
 
     def _base_stat(self, key: str) -> int:
         """Printed power/toughness as a number, or 0 when it is variable.
@@ -390,6 +395,21 @@ class Permanent:
         return computed_pt(self)[1]
 
 
+# CR 615's shields protect "a player or a permanent" alike, so a permanent gets
+# the same two views a player does. Installed after the dataclass so the
+# generated ``__init__`` keeps accepting them by name (the AI simulator's clone
+# and several tests construct a recipient with a pool already on it) while the
+# value itself lives only in the shield collection.
+Permanent.damage_prevention_pool = _shields.pool_view(
+    """Points held by this permanent's "prevent the next N damage" shields
+    (CR 615.7). A view over ``engine/shields.py``; assigning replaces them."""
+)
+Permanent.damage_prevention_source = _shields.badge_view(
+    """Name of the card that granted this permanent's newest live shield, for
+    the UI's shield badge. Derived, so a spent shield takes its badge with it."""
+)
+
+
 @dataclass
 class PlayerState:
     name: str
@@ -415,29 +435,17 @@ class PlayerState:
     # here joins the pool only when paying for a creature spell (spent before
     # unrestricted mana) and empties whenever the regular pool does.
     creature_only_mana: dict[str, int] = field(default_factory=dict)
+    # CR 615 prevention shields. These four, plus ``reverse_damage_sources``
+    # below and the read-only ``damage_prevention_color``, are *views* over
+    # ``engine/shields.py``'s one generic collection (installed below the
+    # class), not stored state: the names survive because the web payload, the
+    # AI simulator and the existing tests read them, but a new shield needs no
+    # new field here.
     damage_prevention_pool: int = 0
-    # Name of the card/effect that granted the player's current prevention pool,
-    # surfaced as a hover preview on the life pill's shield badge.
     damage_prevention_source: str | None = None
-    # Color symbol of the source a Circle of Protection shield is set against
-    # (e.g. "R" for Circle of Protection: Red), for UI display.
-    damage_prevention_color: str | None = None
-    # Circle of Protection shields: one color symbol per active shield. Each
-    # prevents the entire next damage event from a source of that color this turn
-    # ("prevent that damage"), then is consumed. Cleared during cleanup.
     color_prevention_shields: list[str] = field(default_factory=list)
     combat_damage_cap_one_charges: int = 0
-    # Forcefield: "The next time an unblocked creature of your choice would deal
-    # combat damage to you this turn, prevent all but 1 of that damage." Each entry
-    # is a chosen attacking Permanent; the next damage from it to this player is
-    # capped to 1, then the entry is consumed. Cleared at end of combat / cleanup.
     forcefield_capped_sources: list = field(default_factory=list)
-    # Reverse Damage: "The next time a source of your choice would deal damage to
-    # you this turn, prevent that damage. You gain life equal to the damage
-    # prevented this way." Each charge prevents the entire next damage event to
-    # the player and gains that much life, then is consumed. Cleared at cleanup.
-    # This is the generic fallback used when no specific source was chosen (AI /
-    # headless casts); a human pick is recorded in reverse_damage_sources instead.
     reverse_damage_charges: int = 0
     # Eye for an Eye: one-shot "the next damage dealt to you this turn is also
     # dealt to its source's controller" charges. Consumed in
@@ -450,10 +458,8 @@ class PlayerState:
     # source is mirrored back to that source's controller, then the entry is
     # consumed. Cleared at cleanup.
     mirror_damage_sources: list = field(default_factory=list)
-    # Reverse Damage with a chosen "source of your choice": the specific Permanent
-    # or spell (a CardDefinition) the caster picked. Only damage from a matching
-    # source is prevented and converted to life, then the entry is consumed.
-    # Cleared at cleanup.
+    # The chosen-source half of the Reverse Damage shields above; a view over the
+    # same collection (see the prevention block near the top of this class).
     reverse_damage_sources: list = field(default_factory=list)
     has_no_max_hand_size: bool = False
     can_spend_white_as_red: bool = False
@@ -503,3 +509,66 @@ class PlayerState:
             if any(c is card for c in self.hand):
                 return card
         return None
+
+    @property
+    def prevention_shields(self) -> list["_shields.Shield"]:
+        """The CR 615 shields protecting this player (``engine/shields.py``).
+        The state behind every prevention view above."""
+        return _shields.shields_on(self)
+
+
+# CR 615's shields, under the names the rest of the codebase already reads.
+# Each is derived from ``engine/shields.py``'s one collection on every access, so
+# the view and the state cannot disagree; assigning rebuilds the shields the name
+# stood for, which is how the cleanup sweep and the tests that arm a shield
+# directly keep working. Adding a *new* kind of shield adds nothing here.
+PlayerState.damage_prevention_pool = _shields.pool_view(
+    """Points held by this player's "prevent the next N damage" shields
+    (CR 615.7). Several such effects are several shields; this is their total."""
+)
+PlayerState.damage_prevention_source = _shields.badge_view(
+    """Name of the card that granted this player's newest live shield, shown as a
+    hover preview on the life pill's shield badge."""
+)
+PlayerState.damage_prevention_color = _shields.color_badge_view(
+    """Colour of the newest live Circle of Protection shield, for UI display.
+    Read-only: the colour is what the shield matches its source against
+    (CR 615.9), so there is nothing to set that isn't a shield."""
+)
+PlayerState.color_prevention_shields = _shields.list_view(
+    _shields.PREVENT_FROM_COLOR,
+    "color",
+    _shields.make_color_shield,
+    """Circle of Protection shields: one colour symbol per live shield. Each
+    prevents the entire next damage event from a source of that colour this turn,
+    then is consumed (CR 615.9)."""
+)
+PlayerState.combat_damage_cap_one_charges = _shields.charge_view(
+    _shields.PREVENT_ALL_BUT,
+    _shields.make_capped_charge,
+    """Forcefield shields armed without a chosen attacker (AI / headless
+    activations): the next damage event from any source is capped to 1."""
+)
+PlayerState.forcefield_capped_sources = _shields.list_view(
+    _shields.PREVENT_ALL_BUT,
+    "source",
+    _shields.make_capped_source,
+    """Forcefield: "The next time an unblocked creature of your choice would deal
+    combat damage to you this turn, prevent all but 1 of that damage." One entry
+    per chosen attacker; expires at end of combat."""
+)
+PlayerState.reverse_damage_charges = _shields.charge_view(
+    _shields.PREVENT_AND_GAIN_LIFE,
+    _shields.make_life_gain_charge,
+    """Reverse Damage shields armed without a chosen source (AI / headless
+    casts): the next damage event from any source is prevented and gained as
+    life."""
+)
+PlayerState.reverse_damage_sources = _shields.list_view(
+    _shields.PREVENT_AND_GAIN_LIFE,
+    "source",
+    _shields.make_life_gain_source,
+    """Reverse Damage: "The next time a source of your choice would deal damage
+    to you this turn, prevent that damage. You gain life equal to the damage
+    prevented this way." One entry per chosen source (CR 615.5, 615.8)."""
+)

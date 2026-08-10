@@ -6,6 +6,17 @@ replacement effects (CR 614, ``engine/replacements.py``) each shield is a
 registered interceptor that self-selects from game state, so supporting a new
 kind of shield means registering a function — never editing a cascade.
 
+**The state is generic too.** This registry's shields once read a
+``PlayerState`` field named after the card that granted them
+(``forcefield_capped_sources``, ``reverse_damage_charges``,
+``color_prevention_shields``), so "register a function" was only half true: the
+other half was a new field on a model the web payload, the AI simulator and
+forty tests read. A shield is now a :class:`~engine.shields.Shield` in one
+collection on its recipient — what it answers to, how much it absorbs, how many
+uses remain, how long it lasts — and the old names survive as views over that
+collection. Adding a shield is one registration plus a ``Shield``; see
+``engine/shields.py``.
+
 Preventers run in ascending ``order`` over one event payload::
 
     {"recipient": PlayerState | Permanent, "amount": int, "source": Any | None,
@@ -20,9 +31,10 @@ never consumed by damage an earlier one already absorbed — and a 0-damage even
 consumes no shield at all (CR 614.7a).
 
 Recipients are deliberately not split by type: ``Permanent`` and ``PlayerState``
-both carry ``damage_prevention_pool``, so the numeric shield of CR 615.7 is one
-interceptor covering creatures and players alike. Shields that only exist for
-players guard on the recipient type themselves.
+both carry the shield collection, so the numeric shield of CR 615.7 is one
+interceptor covering creatures and players alike. A shield whose additional
+effect needs a player (Reverse Damage's life gain) guards on the recipient type
+itself.
 
 **Ordering (CR 616.1).** When several prevention and/or replacement effects
 could apply to one event, the rules give the *affected* player the choice of
@@ -43,9 +55,6 @@ raises at import if the union ever collides. There is deliberately no
 shields-only entry point here — a caller holding half a contention set is the
 shape this pipeline exists to remove, and ``shield_candidates`` hands the halves
 over rather than running them.
-
-Still not done here: the choice is not *asked*. A damage event cannot currently
-suspend — see ``effect_ordering.choose_effect``.
 """
 
 from __future__ import annotations
@@ -55,6 +64,15 @@ from typing import Any, Callable, Optional
 
 from .effect_ordering import Candidate
 from .models import PlayerState
+from .shields import (
+    PREVENT_ALL_BUT,
+    PREVENT_AND_GAIN_LIFE,
+    PREVENT_FROM_COLOR,
+    PREVENT_NEXT_N,
+    Shield,
+    drop_spent,
+    shields_on,
+)
 
 # Order bands. Blanket combat shields run first: they are flags rather than
 # charges, so applying one costs the recipient nothing, and letting it go first
@@ -164,12 +182,6 @@ def source_colors(source) -> tuple[str, ...]:
     return tuple(getattr(card, "colors", ()) or ())
 
 
-def _clear_reverse_damage_badge(target: PlayerState) -> None:
-    # Drop the life-pill shield badge once no Reverse Damage shield remains.
-    if not target.reverse_damage_sources and target.reverse_damage_charges <= 0:
-        target.damage_prevention_source = None
-
-
 # Ebony Horse: "Prevent all combat damage that would be dealt to and dealt by
 # that creature this turn." — a per-creature marker set by the
 # untap_attacker_and_prevent_combat_damage handler, cleared in cleanup.
@@ -185,21 +197,104 @@ def combat_shielded(perm) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Applicability (CR 616.1)
+# Reading the collection (CR 616.1's pure half)
 # ---------------------------------------------------------------------------
 #
-# "Does this shield apply?" separated from "apply it", because 616.1 has to know
-# how many effects are in contention *before* any of them runs. Each predicate
-# below is the guard its shield used to open with — moved, not copied, so the
+# "Does this shield apply?" is separated from "apply it", because 616.1 has to
+# know how many effects are in contention *before* any of them runs. The guard
+# each shield used to open with *moved* here rather than being copied, so the
 # shield body starts after the decision and the two cannot drift. Predicates are
-# pure: none of them consumes a charge, since a shield that is asked about may
-# then not be chosen.
+# pure: none of them spends a charge, since a shield that is asked about may
+# then not be chosen — ``Shield.would_prevent`` computes, ``Shield.spend``
+# mutates, and only the second is reachable from an ``apply``.
 
 
-def _player_event(event: dict) -> bool:
-    """Shields that exist only for players. A creature is covered by the
-    numeric pool and the blanket combat shields, nothing else here."""
-    return event["amount"] > 0 and isinstance(event["recipient"], PlayerState)
+def _source_matches(game, shield: Shield, source) -> bool:
+    """Whether *shield* answers damage from *source*.
+
+    Two independent narrowings, both rechecked at damage time rather than
+    locked in when the shield was armed (CR 615.9): the chosen source of
+    CR 615.8, matched the way every other chosen-source effect in the engine
+    matches one, and the source *property* a Circle of Protection names. A
+    shield recording neither answers to any source.
+    """
+    if shield.source is not None:
+        if game._match_chosen_damage_source([shield.source], source) is None:
+            return False
+    if shield.color is not None and shield.color not in source_colors(source):
+        return False
+    return True
+
+
+def _live(game, event: dict, kind: str, *, chosen: bool | None = None):
+    """Shields of *kind* on the event's recipient that could modify this event.
+
+    *chosen* selects one half of the order space: True for shields naming a
+    source, False for the "any source" fallback an AI or headless activation
+    arms. They are separate registrations because they take separate default
+    orders, and CR 616.1e's default is rules-visible.
+    """
+    recipient = event["recipient"]
+    amount = event["amount"]
+    for shield in shields_on(recipient):
+        if shield.kind != kind or shield.spent:
+            continue
+        if chosen is not None and (shield.source is not None) != chosen:
+            continue
+        if not _source_matches(game, shield, event.get("source")):
+            continue
+        if shield.would_prevent(amount) <= 0:
+            continue
+        yield shield
+
+
+def _arms(kind: str, *, chosen: bool | None = None, player_only: bool = False) -> Applicability:
+    """The applicability predicate for a shield of *kind*: is one armed that
+    would remove at least a point from this event?
+
+    "Would remove a point" rather than merely "is armed" is the deliberate
+    reading, and it is the one place this differs from Aladdin's Lamp — see
+    ``_forcefield_chosen_attacker``, which is the shield it could bite.
+    """
+
+    def applies(game, event: dict) -> bool:
+        if player_only and not isinstance(event["recipient"], PlayerState):
+            return False
+        return next(_live(game, event, kind, chosen=chosen), None) is not None
+
+    return applies
+
+
+def _spend(game, event: dict, kind: str, *, chosen: bool | None = None, rider=None):
+    """Apply the recipient's shields of *kind* to this event.
+
+    Draining every matching shield rather than one is what keeps CR 615.7's
+    "such effects count only the amount of damage" true when a recipient holds
+    two numeric pools: the pair behaves as the single total the old integer
+    field held. A whole-instance shield takes the event to 0 on its first
+    application and the loop stops there, so exactly one is consumed.
+
+    *rider* is CR 615.5's "additional effect, which may refer to the amount of
+    damage that was prevented" — run after the prevention, with the shields that
+    did it, never before.
+    """
+    remaining = event["amount"]
+    prevented = 0
+    used: list[Shield] = []
+    for shield in list(_live(game, event, kind, chosen=chosen)):
+        take = shield.would_prevent(remaining)
+        if take <= 0:
+            continue
+        shield.spend(take)
+        used.append(shield)
+        prevented += take
+        remaining -= take
+        if remaining <= 0:
+            break
+    drop_spent(event["recipient"])
+    if rider is not None and prevented > 0:
+        rider(game, event, used, prevented)
+    return PreventionOutcome(prevented=prevented)
 
 
 def _applies_all_combat(game, event: dict) -> bool:
@@ -212,59 +307,16 @@ def _applies_combat_to_and_by(game, event: dict) -> bool:
     )
 
 
-def _applies_forcefield_chosen(game, event: dict) -> bool:
-    source = event.get("source")
-    return (
-        event["amount"] > 1
-        and source is not None
-        and isinstance(event["recipient"], PlayerState)
-        and source in event["recipient"].forcefield_capped_sources
-    )
-
-
-def _applies_forcefield_generic(game, event: dict) -> bool:
-    return (
-        event["amount"] > 1
-        and isinstance(event["recipient"], PlayerState)
-        and event["recipient"].combat_damage_cap_one_charges > 0
-    )
-
-
-def _applies_reverse_chosen(game, event: dict) -> bool:
-    if not _player_event(event):
-        return False
-    return game._match_chosen_damage_source(
-        event["recipient"].reverse_damage_sources, event.get("source")
-    ) is not None
-
-
-def _applies_reverse_generic(game, event: dict) -> bool:
-    return _player_event(event) and event["recipient"].reverse_damage_charges > 0
-
-
-def _matching_cop_color(event: dict) -> str | None:
-    """The colour shield this source trips, if any — shared by the predicate
-    and the shield so "which colour applies" has one answer."""
-    recipient = event["recipient"]
-    if not recipient.color_prevention_shields:
-        return None
-    return next(
-        (c for c in source_colors(event.get("source")) if c in recipient.color_prevention_shields),
-        None,
-    )
-
-
-def _applies_circle_of_protection(game, event: dict) -> bool:
-    return _player_event(event) and _matching_cop_color(event) is not None
-
-
-def _applies_pool(game, event: dict) -> bool:
-    return event["amount"] > 0 and event["recipient"].damage_prevention_pool > 0
-
-
 # ---------------------------------------------------------------------------
 # Shields
 # ---------------------------------------------------------------------------
+#
+# The first two are turn-wide flags rather than shields a recipient holds, which
+# is why they read a game flag and a permanent's marker instead of the
+# collection: nothing is consumed, so there is no charge, no lifetime and no
+# remaining-uses bookkeeping for a Shield to carry. Ebony Horse's also has to be
+# readable off the damage's *source* ("dealt to and dealt by"), which a
+# recipient-keyed collection cannot express.
 
 @prevention_effect(COMBAT_BLANKET, applies=_applies_all_combat)
 def _prevent_all_combat_damage(game, event: dict) -> PreventionOutcome | None:
@@ -282,94 +334,82 @@ def _prevent_combat_damage_to_and_by(game, event: dict) -> PreventionOutcome | N
     return PreventionOutcome(prevented=event["amount"])
 
 
-@prevention_effect(SOURCE_CAP, applies=_applies_forcefield_chosen)
+@prevention_effect(SOURCE_CAP, applies=_arms(PREVENT_ALL_BUT, chosen=True))
 def _forcefield_chosen_attacker(game, event: dict) -> PreventionOutcome | None:
     """Forcefield: "The next time an unblocked creature of your choice would
     deal combat damage to you this turn, prevent all but 1 of that damage."
-    The chosen attacker is consumed by the damage it caps."""
-    recipient = event["recipient"]
-    amount = event["amount"]
-    recipient.forcefield_capped_sources.remove(event["source"])
-    return PreventionOutcome(prevented=amount - 1)
+    The chosen attacker is consumed by the damage it caps.
+
+    A shield that would prevent nothing does not apply, so a chosen attacker
+    dealing exactly 1 leaves it armed. That is the one place this pool's shields
+    could have taken Aladdin's Lamp's shape instead — a charge spent even when
+    it does nothing (CR 614.1) — and CR 615.8 arguably says they should. It is
+    left as it was rather than changed under cover of a refactor; see
+    ROADMAP.md's phase 5 entry."""
+    return _spend(game, event, PREVENT_ALL_BUT, chosen=True)
 
 
-@prevention_effect(GENERIC_CAP, applies=_applies_forcefield_generic)
+@prevention_effect(GENERIC_CAP, applies=_arms(PREVENT_ALL_BUT, chosen=False))
 def _forcefield_generic(game, event: dict) -> PreventionOutcome | None:
     """Forcefield activated without recording a chosen attacker (AI / headless):
     the next damage event from any source is capped to 1."""
-    recipient = event["recipient"]
-    amount = event["amount"]
-    recipient.combat_damage_cap_one_charges -= 1
-    return PreventionOutcome(prevented=amount - 1)
+    return _spend(game, event, PREVENT_ALL_BUT, chosen=False)
 
 
-def _reverse_damage(game, recipient: PlayerState, amount: int) -> PreventionOutcome:
+def _gain_prevented_life(game, event: dict, used: list[Shield], prevented: int) -> None:
     # CR 615.5: the prevention happens first, then the rest of the effect —
     # here a life gain referring to the amount prevented.
-    game.log.append(f"Reverse Damage prevented {amount} damage to {recipient.name}")
-    game._gain_life(recipient, amount, source_name="Reverse Damage")
-    return PreventionOutcome(prevented=amount)
+    recipient = event["recipient"]
+    game.log.append(f"Reverse Damage prevented {prevented} damage to {recipient.name}")
+    game._gain_life(recipient, prevented, source_name="Reverse Damage")
 
 
-@prevention_effect(SOURCE_SHIELD, applies=_applies_reverse_chosen)
+@prevention_effect(
+    SOURCE_SHIELD, applies=_arms(PREVENT_AND_GAIN_LIFE, chosen=True, player_only=True)
+)
 def _reverse_damage_chosen_source(game, event: dict) -> PreventionOutcome | None:
     """Reverse Damage: "The next time a source of your choice would deal damage
     to you this turn, prevent that damage. You gain life equal to the damage
     prevented this way." The whole instance is prevented regardless of its size
     (CR 615.8)."""
-    recipient = event["recipient"]
-    amount = event["amount"]
-    matched = game._match_chosen_damage_source(
-        recipient.reverse_damage_sources, event.get("source")
-    )
-    recipient.reverse_damage_sources.remove(matched)
-    _clear_reverse_damage_badge(recipient)
-    return _reverse_damage(game, recipient, amount)
+    return _spend(game, event, PREVENT_AND_GAIN_LIFE, chosen=True, rider=_gain_prevented_life)
 
 
-@prevention_effect(GENERIC_SHIELD, applies=_applies_reverse_generic)
+@prevention_effect(
+    GENERIC_SHIELD, applies=_arms(PREVENT_AND_GAIN_LIFE, chosen=False, player_only=True)
+)
 def _reverse_damage_generic(game, event: dict) -> PreventionOutcome | None:
     """Reverse Damage cast without recording a chosen source (AI / headless):
     the next damage event from any source is prevented and gained as life."""
-    recipient = event["recipient"]
-    amount = event["amount"]
-    recipient.reverse_damage_charges -= 1
-    _clear_reverse_damage_badge(recipient)
-    return _reverse_damage(game, recipient, amount)
+    return _spend(game, event, PREVENT_AND_GAIN_LIFE, chosen=False, rider=_gain_prevented_life)
 
 
-@prevention_effect(COLOR_SHIELD, applies=_applies_circle_of_protection)
+def _log_color_prevention(game, event: dict, used: list[Shield], prevented: int) -> None:
+    game.log.append(
+        f"Circle of Protection prevented {prevented} damage to "
+        f"{event['recipient'].name} from a {used[0].color} source"
+    )
+
+
+@prevention_effect(COLOR_SHIELD, applies=_arms(PREVENT_FROM_COLOR, player_only=True))
 def _circle_of_protection(game, event: dict) -> PreventionOutcome | None:
     """Circle of Protection: "The next time a <color> source of your choice
     would deal damage to you this turn, prevent that damage." One shield per
     activation, matched against the source's colors at damage time (CR 615.9)
     and prevented in full."""
+    return _spend(game, event, PREVENT_FROM_COLOR, rider=_log_color_prevention)
+
+
+def _log_pool_prevention(game, event: dict, used: list[Shield], prevented: int) -> None:
     recipient = event["recipient"]
-    amount = event["amount"]
-    color = _matching_cop_color(event)
-    recipient.color_prevention_shields.remove(color)
-    if not recipient.color_prevention_shields:
-        recipient.damage_prevention_color = None
-        recipient.damage_prevention_source = None
-    game.log.append(
-        f"Circle of Protection prevented {amount} damage to {recipient.name} "
-        f"from a {color} source"
-    )
-    return PreventionOutcome(prevented=amount)
+    if not isinstance(recipient, PlayerState):
+        game.log.append(f"Prevented {prevented} damage to {recipient.card.name}")
 
 
-@prevention_effect(POOL, applies=_applies_pool)
+@prevention_effect(POOL, applies=_arms(PREVENT_NEXT_N))
 def _prevention_pool(game, event: dict) -> PreventionOutcome | None:
     """"Prevent the next N damage that would be dealt to <recipient> this turn"
     (Healing Salve's prevention mode, Samite Healer, Rock Hydra, …). Each point
     prevented reduces the shield by 1; the remainder is dealt normally
     (CR 615.7). The one shield that protects creatures as well as players."""
-    recipient = event["recipient"]
-    amount = event["amount"]
-    prevented = min(amount, recipient.damage_prevention_pool)
-    recipient.damage_prevention_pool -= prevented
-    if recipient.damage_prevention_pool <= 0:
-        recipient.damage_prevention_source = None
-    if not isinstance(recipient, PlayerState):
-        game.log.append(f"Prevented {prevented} damage to {recipient.card.name}")
-    return PreventionOutcome(prevented=prevented)
+    return _spend(game, event, PREVENT_NEXT_N, rider=_log_pool_prevention)

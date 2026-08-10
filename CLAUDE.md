@@ -175,6 +175,13 @@ adding entries, not editing dispatch**:
   `recipient` is a player *or* a permanent, so a shield that applies to both is
   written once. A new "prevent …" card is an entry here, never a branch in a
   damage path.
+- `engine/shields.py` — the *state* those interceptors read: one `Shield`
+  collection per recipient carrying what it answers to, how much it absorbs,
+  how many uses remain and its lifetime. Adding a shield is one registration
+  plus a `Shield` — never a new `PlayerState` field and never a clearing line in
+  a turn step, because the sweeps read `lifetime`. The old per-card field names
+  (`damage_prevention_pool`, `color_prevention_shields`, …) survive as views
+  over the collection for the web payload and the AI simulator.
 - `engine/effect_ordering.py` — CR 616.1, the process both registries above run
   through: gather every applicable effect, let the affected player choose one,
   apply it, re-ask the rest (616.1f). That is why applicability is a *separate,

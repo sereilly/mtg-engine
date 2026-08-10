@@ -11,6 +11,7 @@ P/T buffs, damage prevention pools, and the EOT metadata flags. Creatures exiled
 from ..models import Permanent
 from ..keywords import clear_until_eot_keywords
 from ..mixins._constants import _EOT_METADATA_KEYS
+from ..shields import clear_shields
 
 
 class CleanupStepMixin:
@@ -59,22 +60,18 @@ class CleanupStepMixin:
 
         self.combat_damage_prevented_until_eot = False
         for player in self.players:
-            player.damage_prevention_pool = 0
-            player.damage_prevention_source = None
-            player.damage_prevention_color = None
-            player.color_prevention_shields = []
-            player.combat_damage_cap_one_charges = 0
-            player.forcefield_capped_sources = []
-            player.reverse_damage_charges = 0
+            # CR 615.3: every prevention shield lasts until it is used up or its
+            # duration expires, and "until end of turn" expires here. One sweep
+            # over the collection rather than a line per card-named field —
+            # which is also why a new kind of shield needs no line here.
+            clear_shields(player)
             player.mirror_damage_charges = 0
-            player.reverse_damage_sources = []
             player.mirror_damage_sources = []
             player.channel_active_until_eot = False
             player.prevent_one_damage_emblems = []
             for permanent in player.battlefield:
                 permanent.damage_marked = 0
-                permanent.damage_prevention_pool = 0
-                permanent.damage_prevention_source = None
+                clear_shields(permanent)
                 # 614.8 / 701.19a: an unused regeneration shield lasts only until
                 # the end of the turn it was created.
                 permanent.regeneration_shield = 0

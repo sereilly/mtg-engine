@@ -2,6 +2,7 @@
 
 Covers:
   615.1  — Prevention effects act as shields around a player or permanent
+  615.3  — A shield lasts until it is used up or its duration expires
   615.5  — A prevention effect may carry an additional effect referring to the
            amount prevented (Reverse Damage's life gain)
   615.7  — Numeric shields ("prevent the next N damage") reduce by 1 per point;
@@ -15,16 +16,33 @@ Covers:
            each consumed at most once
 
 These exercise engine/prevention.py, the registry that replaced the hardcoded
-prevention cascade. The per-card end-to-end behavior (casting Reverse Damage,
-activating a Circle of Protection, Forcefield in combat) is covered by the set
-and regression suites; this file pins the rule semantics of the pipeline.
+prevention cascade, and engine/shields.py, the one collection its interceptors
+read instead of a field named after a card. The per-card end-to-end behavior
+(casting Reverse Damage, activating a Circle of Protection, Forcefield in
+combat) is covered by the set and regression suites; this file pins the rule
+semantics of the pipeline, including that a brand-new kind of shield takes no
+change to PlayerState, the web layer, or any turn step.
 """
 
 import pytest
 
 from engine import Game, PlayerState
 from engine.models import CardDefinition, Permanent
-from engine.prevention import PREVENTION_EFFECTS, prevention_effect
+from engine.prevention import (
+    PREVENTION_EFFECTS,
+    PreventionOutcome,
+    prevention_effect,
+)
+from engine.shields import (
+    END_OF_COMBAT,
+    END_OF_TURN,
+    PREVENT_FROM_COLOR,
+    PREVENT_NEXT_N,
+    Shield,
+    add_shield,
+    drop_spent,
+    shields_on,
+)
 from tests.helpers import _damage_dealt
 
 
@@ -424,6 +442,148 @@ def test_616_1_blanket_shield_does_not_spend_a_consumable_shield():
     assert p1.damage_prevention_pool == 4
     assert p1.reverse_damage_charges == 1
     assert p1.life == 20, "a prevented event carries no life gain rider"
+
+
+# ---------------------------------------------------------------------------
+# The collection is generic (CR 615.1, 615.3)
+# ---------------------------------------------------------------------------
+
+def _shield_snapshot(recipient) -> list[tuple]:
+    """Everything about a recipient's shields that applying one could change.
+    Compared across a predicate call, so a predicate that spent a use — or
+    quietly re-armed one — shows up rather than being invisible in a total."""
+    return [
+        (s.kind, s.amount, s.leave, s.uses, id(s.source), s.color, s.lifetime)
+        for s in shields_on(recipient)
+    ]
+
+
+@pytest.mark.cr("615.1")
+def test_615_1_a_new_shield_is_one_registration_and_a_shield():
+    """The point of the collection: supporting a card that shields its
+    controller takes an interceptor and a ``Shield``. No PlayerState field, no
+    cleanup line, no web plumbing — this registers one at runtime and drives it
+    through the generic damage entry point.
+
+    The proof is the body: nothing below names a field, and the shield is armed
+    by putting it on the player rather than by inventing somewhere to put it.
+    """
+    kind = "_test_halve_from_artifacts"
+
+    @prevention_effect(
+        99,
+        applies=lambda game, event: any(
+            s.kind == kind and not s.spent and s.would_prevent(event["amount"]) > 0
+            for s in shields_on(event["recipient"])
+        ),
+    )
+    def _halve(game, event):
+        """A shield no card in the pool has: absorbs 2 points, twice."""
+        shield = next(s for s in shields_on(event["recipient"]) if s.kind == kind)
+        prevented = shield.would_prevent(event["amount"])
+        shield.spend(prevented)
+        drop_spent(event["recipient"])
+        return PreventionOutcome(prevented=prevented)
+
+    try:
+        game, p1, _ = _game()
+        add_shield(p1, Shield(kind=kind, amount=2, uses=2))
+
+        assert _damage_dealt(game, p1, 5) == 3, "absorbed its 2 points"
+        assert _damage_dealt(game, p1, 5) == 5, "and is used up"
+        assert shields_on(p1) == []
+    finally:
+        PREVENTION_EFFECTS[:] = [c for c in PREVENTION_EFFECTS if c.key != "_halve"]
+
+
+@pytest.mark.cr("615.3")
+def test_615_3_a_shield_expires_with_the_duration_it_records():
+    """"Such effects last until they're used up or their duration has expired."
+    Which duration is data on the shield, so the end-of-combat sweep takes the
+    combat-scoped one and leaves the turn-scoped one — without either sweep
+    knowing which card granted which."""
+    game, p1, _ = _game()
+    add_shield(p1, Shield(kind=PREVENT_NEXT_N, amount=3, uses=None, lifetime=END_OF_TURN))
+    add_shield(p1, Shield(kind=PREVENT_NEXT_N, amount=4, uses=None, lifetime=END_OF_COMBAT))
+    assert p1.damage_prevention_pool == 7
+
+    game.start_turn(0)
+    game._close_current_priority_step()
+    for _ in range(5):  # beginning of combat → … → end of combat
+        game.advance_combat_phase()
+
+    assert p1.damage_prevention_pool == 3, "the combat-scoped shield expired, the other did not"
+
+    game.resolve_cleanup_step(0)
+
+    assert p1.damage_prevention_pool == 0
+    assert shields_on(p1) == []
+
+
+@pytest.mark.cr("615.7")
+def test_615_7_several_numeric_shields_hold_one_total():
+    """"Such effects count only the amount of damage; the number of events or
+    sources dealing it doesn't matter." Two 2-point shields on one player
+    absorb 4 of a 5-point event between them, which is what the single running
+    total they replaced always did."""
+    game, p1, _ = _game()
+    add_shield(p1, Shield(kind=PREVENT_NEXT_N, amount=2, uses=None, source_name="Healing Salve"))
+    add_shield(p1, Shield(kind=PREVENT_NEXT_N, amount=2, uses=None, source_name="Samite Healer"))
+
+    assert p1.damage_prevention_pool == 4
+    assert _damage_dealt(game, p1, 5) == 1
+    assert p1.damage_prevention_pool == 0
+
+
+@pytest.mark.cr("616.1")
+def test_616_1_asking_a_shield_leaves_the_collection_untouched():
+    """The stronger form of the purity contract above: nothing about any shield
+    may change while CR 616.1 is only counting contenders. Read off the shields
+    themselves rather than off a total, because a predicate that spent one of
+    two identical shields is invisible in a total."""
+    game, p1, p2 = _game()
+    red_ogre = Permanent(card=_mk_creature("Red Ogre", colors=("R",)))
+    p2.battlefield.append(red_ogre)
+    p1.damage_prevention_pool = 3
+    p1.color_prevention_shields.append("R")
+    p1.reverse_damage_charges = 1
+    p1.forcefield_capped_sources.append(red_ogre)
+    event = {"recipient": p1, "amount": 6, "source": red_ogre, "combat": True}
+
+    before = _shield_snapshot(p1)
+    applicable = [c.key for c in PREVENTION_EFFECTS if c.applies(game, event)]
+
+    assert _shield_snapshot(p1) == before, "asking which shields apply changed one"
+    assert len(applicable) >= 3, applicable
+
+
+@pytest.mark.cr("615.1")
+def test_615_1_the_legacy_names_are_views_over_the_collection():
+    """The old per-card field names still read and write, because the web
+    payload, the AI simulator and forty tests use them — but they are derived
+    from the collection on every access, so the two cannot drift apart. This is
+    the contract that let the state move without those layers changing."""
+    game, p1, p2 = _game()
+    ogre = Permanent(card=_mk_creature("Ogre"))
+    p2.battlefield.append(ogre)
+
+    # Writing through a legacy name arms a real shield.
+    p1.damage_prevention_pool = 4
+    p1.color_prevention_shields.append("R")
+    p1.reverse_damage_sources.append(ogre)
+    kinds = sorted(s.kind for s in shields_on(p1))
+    assert kinds == sorted([PREVENT_NEXT_N, PREVENT_FROM_COLOR, "prevent_and_gain_life"])
+
+    # Arming a shield directly shows up under the legacy name.
+    add_shield(p1, Shield(kind=PREVENT_NEXT_N, amount=2, uses=None))
+    assert p1.damage_prevention_pool == 6
+
+    # And spending it in play withdraws the name, badge included.
+    p1.damage_prevention_source = "Healing Salve"
+    assert p1.damage_prevention_color == "R"
+    _damage_dealt(game, p1, 9, source=ogre)
+    assert p1.reverse_damage_sources == []
+    assert p1.damage_prevention_pool == 6, "a whole-instance shield spends no pool"
 
 
 @pytest.mark.cr("615.1")

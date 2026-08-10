@@ -2,6 +2,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ..shields import (
+    add_shield,
+    make_capped_charge,
+    make_capped_source,
+    make_color_shield,
+    make_life_gain_charge,
+    make_life_gain_source,
+    make_numeric_pool,
+)
 from ._common import resolve_amount, resolve_target_permanent
 from .registry import effect_handler
 
@@ -10,6 +19,18 @@ if TYPE_CHECKING:
     from ..game_types import OracleExecutionContext
     from ..models import PlayerState
     from ..oracle import OracleInstruction
+
+
+def _grant_pool(recipient, amount: int, source_name: str | None) -> None:
+    """Arm one CR 615.7 numeric shield on *recipient*.
+
+    A shield rather than an addition to a running total: several "prevent the
+    next N damage" effects on one recipient are several effects, each with its
+    own granting card for the badge. What they hold together is still the one
+    number ``damage_prevention_pool`` reports.
+    """
+    if amount > 0:
+        add_shield(recipient, make_numeric_pool(amount, source_name))
 
 
 def apply_prevention_shield(
@@ -28,12 +49,10 @@ def apply_prevention_shield(
         and target.battlefield[target_permanent_index].is_creature
     ):
         permanent = target.battlefield[target_permanent_index]
-        permanent.damage_prevention_pool += amount
-        permanent.damage_prevention_source = source_name
+        _grant_pool(permanent, amount, source_name)
         game.log.append(f"{permanent.card.name} gains prevention shield for {amount} damage")
         return permanent.card.name
-    target.damage_prevention_pool += amount
-    target.damage_prevention_source = source_name
+    _grant_pool(target, amount, source_name)
     game.log.append(f"{target.name} gains prevention shield for {amount} damage")
     return target.name
 
@@ -54,11 +73,14 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
         # arms one color-scoped shield that prevents the entire next damage event
         # from a source of that color (CR 615) — distinct from the generic numeric
         # prevention pool so it only stops matching-colored damage.
-        for _ in range(max(1, amount)):
-            caster.color_prevention_shields.append(prevention_color)
-        if prevention_color:
-            caster.damage_prevention_color = prevention_color
-        caster.damage_prevention_source = source_name
+        #
+        # Only when a colour was actually recorded: CR 615.9 rechecks the
+        # source's properties against the shield's, so a shield naming no colour
+        # can never match anything. The legacy parse rule can still produce one
+        # from a card whose text has no colour word, and arming nothing is what
+        # the old list-of-None amounted to.
+        for _ in range(max(1, amount) if prevention_color else 0):
+            add_shield(caster, make_color_shield(prevention_color, source_name))
         # The chosen source (if the controller picked a specific permanent) is
         # recorded only for the log; matching is by color.
         chosen_perm = resolve_target_permanent(context, predicate=lambda p: True, fallback_players=())
@@ -70,8 +92,7 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
         return True, "resolved"
 
     if instruction.payload.get("to_self"):
-        caster.damage_prevention_pool += amount
-        caster.damage_prevention_source = source_name
+        _grant_pool(caster, amount, source_name)
         game.log.append(f"{caster.name} gains prevention shield for {amount} damage")
         return True, "resolved"
 
@@ -81,8 +102,7 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
     if instruction.payload.get("to_source"):
         source_perm = context.source_permanent
         if source_perm is not None:
-            source_perm.damage_prevention_pool += amount
-            source_perm.damage_prevention_source = source_name
+            _grant_pool(source_perm, amount, source_name)
             game.log.append(
                 f"{source_perm.card.name} gains prevention shield for {amount} damage"
             )
@@ -113,16 +133,16 @@ def grant_reverse_damage_shield(game: Game, instruction: OracleInstruction, cont
         chosen = context.stack_target.card
     else:
         chosen = resolve_target_permanent(context, predicate=lambda p: True, fallback_players=())
+    granted_by = context.card.name if context.card else None
     if chosen is not None:
-        caster.reverse_damage_sources.append(chosen)
+        add_shield(caster, make_life_gain_source(chosen, granted_by))
         source_card = getattr(chosen, "card", chosen)
         game.log.append(
             f"{caster.name} armed a Reverse Damage shield against {getattr(source_card, 'name', 'a source')}"
         )
     else:
-        caster.reverse_damage_charges += 1
+        add_shield(caster, make_life_gain_charge(granted_by))
         game.log.append(f"{caster.name} armed a Reverse Damage shield")
-    caster.damage_prevention_source = context.card.name if context.card else None
     return True, "resolved"
 
 
@@ -134,10 +154,10 @@ def grant_forcefield_shield(game: Game, instruction: OracleInstruction, context:
     # activations that supply no target.
     chosen = resolve_target_permanent(context, fallback_players=())
     if chosen is not None:
-        caster.forcefield_capped_sources.append(chosen)
+        add_shield(caster, make_capped_source(chosen))
         game.log.append(f"Forcefield will prevent all but 1 combat damage from {chosen.card.name}")
     else:
-        caster.combat_damage_cap_one_charges += 1
+        add_shield(caster, make_capped_charge())
         game.log.append("Forcefield shield granted")
     return True, "resolved"
 

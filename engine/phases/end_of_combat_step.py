@@ -9,6 +9,7 @@ combat" is still known, then clears until-end-of-combat effects and combat state
 
 from ..models import Permanent
 from ..oracle import compile_card_oracle
+from ..shields import END_OF_COMBAT, clear_shields
 
 
 class EndOfCombatStepMixin:
@@ -30,8 +31,12 @@ class EndOfCombatStepMixin:
                 permanent.metadata.pop("blocked_this_combat", None)
         self.combat_damage_prevented_until_eot = False
         for player in self.players:
-            player.combat_damage_cap_one_charges = 0
-            player.forcefield_capped_sources = []
+            # CR 615.3: a shield whose duration is this combat expires here.
+            # Which shields those are is data on the shield, so this sweep does
+            # not have to know that Forcefield's is the only one.
+            clear_shields(player, END_OF_COMBAT)
+            for permanent in player.battlefield:
+                clear_shields(permanent, END_OF_COMBAT)
         self._reset_combat_state(clear_damage_marked=False)
         if self._receives_priority(step):
             self._resolve_priority_window()

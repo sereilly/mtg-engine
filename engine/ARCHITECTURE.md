@@ -310,12 +310,32 @@ Damage shields (CR 615) are a separate registry with the same shape,
 `engine/prevention.py`. A `@prevention_effect(order, applies=…)` function
 inspects one event — `{recipient, amount, source, combat}`, where `recipient` is
 a `PlayerState` *or* a `Permanent` — and returns how many points it removes, or
-`None` to pass. Both models carry `damage_prevention_pool`, so the numeric
-shield of CR 615.7 is a single interceptor covering creatures and players;
-shields that only make sense for a player (Circle of Protection, Reverse Damage,
-Forcefield) check the recipient type themselves. `combat` marks the event as
-combat damage and is what scopes the blanket shields (Fog, Ebony Horse) — every
-other shield ignores it.
+`None` to pass. `combat` marks the event as combat damage and is what scopes the
+blanket shields (Fog, Ebony Horse) — every other shield ignores it.
+
+The *state* is generic too. A shield is a `Shield` in one collection on its
+recipient (`engine/shields.py`): what it answers to (`source`, `color`), how
+much it absorbs (`amount` points, `leave` points let through), how many `uses`
+remain, and its `lifetime`. Both models carry the collection, so CR 615.7's
+numeric shield is one interceptor covering creatures and players; shields whose
+additional effect needs a player (Reverse Damage's life gain) check the
+recipient type themselves. `kind` names the interceptor that consumes the
+shield, so state and behaviour cannot drift.
+
+`Shield.would_prevent` computes and `Shield.spend` mutates — the split CR 616.1
+needs, since a predicate that consumed a charge would spend shields the player
+was only asked about.
+
+**Adding a shield is one `@prevention_effect` plus a `Shield`.** No
+`PlayerState` field, no clearing line in the cleanup or end-of-combat step (the
+sweeps read `lifetime`), and no change to the web payload. The old per-card
+field names (`damage_prevention_pool`, `color_prevention_shields`,
+`forcefield_capped_sources`, `reverse_damage_charges`/`_sources`,
+`combat_damage_cap_one_charges`) survive as views over the collection, derived
+on every read, so the web layer and the AI simulator keep reading what they
+always did. `damage_prevention_color` is the one read-only view: the colour is
+what its shield matches the source against (CR 615.9), so there is nothing to
+set that isn't a shield.
 
 ## Effect ordering (CR 616.1)
 

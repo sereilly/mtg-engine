@@ -2524,11 +2524,110 @@ are choices raised by resolving spells and turn-based actions, which need the
 answer routed back into a partly-executed effect rather than into a resolver
 that owns the whole event.
 
-The per-card `PlayerState` fields the shields read (`forcefield_capped_sources`,
-`reverse_damage_charges`, `color_prevention_shields`, …) are deliberately
-untouched: they are the *state* an interceptor reads, and replacing them with a
-generic shield list is a separate change that reaches the web payload and the
-AI simulator. Splitting it kept this one behavior-preserving.
+**Done — a shield's state is generic too, and the old field names are views.**
+The entry above deferred this: the `PlayerState` fields the shields read
+(`forcefield_capped_sources`, `reverse_damage_charges`,
+`color_prevention_shields`, …) were the *state* an interceptor reads, and
+replacing them reaches the web payload and the AI simulator. It is done, by the
+same route the interactive replacements took — a narrow generic mechanism with
+the old names surviving as thin views — and neither of those layers changed.
+
+`engine/shields.py` holds a `Shield`: what it answers to (`source`, `color`),
+how much it absorbs (`amount` points, `leave` points let through), how many
+`uses` remain, and its `lifetime`. One collection per recipient, on `Permanent`
+as well as `PlayerState`, because CR 615.1's shield goes around "whatever
+they're affecting". `kind` names the interceptor that consumes the shield, which
+is the only link back to behaviour — and it is named for what the shield does,
+never for the card that granted it.
+
+**Six fields gone, six names kept.** `damage_prevention_pool`,
+`damage_prevention_source`, `color_prevention_shields`,
+`combat_damage_cap_one_charges`, `forcefield_capped_sources`,
+`reverse_damage_charges` and `reverse_damage_sources` are properties now, read
+*and* written — a test still says `p1.damage_prevention_pool = 3` and a
+regression test still says `p2.reverse_damage_sources.append(barbs)`, which is
+why the list views write through rather than returning a derived copy that
+would swallow the append. Derived on every access, so a view and its shields
+cannot disagree; the badge that outlived its pool is now impossible rather than
+cleared by a line per card.
+
+`damage_prevention_color` is the one that could not be a settable view, and the
+reason is worth stating rather than working around: the colour is not
+decoration, it is what the shield matches its source against (CR 615.9).
+Assigning it would either invent a shield or silently widen an existing one to
+match every source. It is read-only, and the cleanup line that used to null it
+is gone with the rest of the sweep.
+
+Three things fell out that the fields had been holding apart:
+
+- **The turn-step sweeps are lifetime-driven.** Cleanup was eight assignments
+  per player plus two per permanent; end of combat was two more, and they were
+  the only place that knew Forcefield's shield expires a step earlier than
+  everything else. Both are now `clear_shields(recipient[, lifetime])`, and a
+  new shield joins them by recording its duration.
+- **Two numeric shields are two shields.** "Prevent the next N damage" was a
+  single running integer, so a second Healing Salve added to the first and its
+  granting card overwrote the badge. They are separate shields now, each with
+  its own source name, and the pool interceptor drains across them — which is
+  CR 615.7's "such effects count only the amount of damage; the number of events
+  or sources dealing it doesn't matter", and reproduces the old total exactly.
+- **A colourless Circle of Protection shield is no longer armed at all.** The
+  legacy parse rule can produce one from a card whose text names no colour word;
+  it used to become a `None` in the colour list that could never match anything.
+  Not arming it is the same behaviour said out loud, and it keeps the matcher
+  free of a kind-specific branch.
+
+**Deliberately unchanged: the registration set and every order.** The chosen-
+source and any-source halves of Forcefield and Reverse Damage are still four
+registrations at four orders rather than two, and the numeric pool is still one
+contender rather than one per shield. Merging either would be tidier code and a
+*rules-visible* change: CR 616.1's contention set is what the `effect_order`
+prompt is over, so collapsing two candidates into one removes a question the
+affected player is currently asked. That is a decision about the rules, not
+about the state, and it does not belong in this commit.
+
+**The Aladdin's Lamp shape is here, and it is Forcefield.** The Lamp's charge is
+spent even when the library is too short to look at anything (CR 614.1), so its
+predicate is "armed", not "will do something". A generic shield predicate wants
+to be "there is a matching shield", and that would have quietly given Forcefield
+the same shape: a chosen attacker dealing exactly 1 would spend the shield on
+preventing nothing. The predicate is `would_prevent(amount) > 0` instead, which
+is exactly what the old `amount > 1` guard meant.
+
+Which reading is right is a live question and the rules do not settle it
+directly. CR 615.12a — "a prevention effect is applied to any particular
+unpreventable damage event just once" — says a one-shot shield *is* used up by
+an event it prevents nothing of, and by analogy a cap facing 1 damage should be
+too. That is an analogy, not the rule, and `MagicCompRules.txt` has nothing
+closer. So it is measured rather than guessed: making the cap spend itself on a
+0-point application is a two-line change, and the suite (4,210) and the AI
+simulation (10/10 games, 443 interactions) are both green with it — *nothing
+pins either reading*. It is left as it was, because a rules change with no test
+either way should arrive as its own commit with the test that decides it, not
+inside a refactor advertised as behaviour-preserving.
+
+Two shields stayed out of the collection, and for one reason each. Fog's
+"prevent all combat damage this turn" is a game flag — nothing is consumed, so
+there is no charge, no lifetime and no remaining use for a `Shield` to carry.
+Ebony Horse's is a per-creature marker that has to be readable off the damage's
+*source* as well as its recipient ("dealt to and dealt by"), which a
+recipient-keyed collection cannot express.
+
+`tests/rules/test_prevention.py` proves the mechanism is open the way
+`test_replacement_choices.py` does: it registers a shield no card in the pool
+has — absorbs 2 points, twice — at runtime, arms it by putting a `Shield` on a
+player, and drives it through `deal_damage`. The test body names no field,
+because there is no longer a field to name. Five guards, each verified by
+injecting the bug it catches: `shields_on` not persisting the collection, the
+end-of-combat sweep ignoring `lifetime`, `_spend` stopping at the first pool,
+`drop_spent` keeping a used-up shield, and the pool view storing instead of
+deriving. The purity guard is the sharper one — it snapshots the shields
+themselves rather than a total, and catches a predicate that mutates a shield's
+`lifetime`, which the existing total-based purity test cannot see.
+
+4,205 → 4,210 tests, 12.5s. The web payload, `web/static/`, the AI simulator and
+every existing test are untouched; the AI simulation is unchanged at 10/10 games
+and 443 interactions.
 
 **Done — the two land-tapping trigger templates parse, and the last mana hooks
 go.** The entry above named the blocker precisely and it was a *parser* one, so
