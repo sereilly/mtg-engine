@@ -43,9 +43,23 @@ class GlobalStatic:
     removes_abilities: bool = False
     adds_creature_type: bool = False
     pt_from_mana_value: bool = False
+    # An ability the static *grants*, as the text the granted ability would be
+    # printed with. Appending it to the affected permanent's effective card
+    # means the compiler produces the ability normally and every consumer — the
+    # upkeep step, the UI, the coverage scripts — sees it without knowing this
+    # module exists.
+    grants_ability: str = ""
 
 
 _TEMPLATES: tuple[tuple[re.Pattern[str], GlobalStatic], ...] = (
+    (
+        # Energy Flux. The granted ability is a whole printed sentence, so it is
+        # captured and re-emitted rather than described: anything else would be
+        # this module deciding what "sacrifice unless you pay" means, which the
+        # upkeep tables already know.
+        re.compile(r"^all artifacts have \"(?P<ability>.+)\"$"),
+        GlobalStatic(name="energy_flux", applies_to="artifact"),
+    ),
     (
         re.compile(
             r"^each noncreature artifact loses all abilities and becomes an "
@@ -73,8 +87,20 @@ def global_static_for(oracle_text: str) -> GlobalStatic | None:
     for raw_line in oracle_text.splitlines():
         line = _line(raw_line)
         for pattern, static in _TEMPLATES:
-            if pattern.match(line):
-                return static
+            match = pattern.match(line)
+            if match is None:
+                continue
+            granted = match.groupdict().get("ability")
+            if granted:
+                return GlobalStatic(
+                    name=static.name,
+                    applies_to=static.applies_to,
+                    removes_abilities=static.removes_abilities,
+                    adds_creature_type=static.adds_creature_type,
+                    pt_from_mana_value=static.pt_from_mana_value,
+                    grants_ability=granted,
+                )
+            return static
     return None
 
 

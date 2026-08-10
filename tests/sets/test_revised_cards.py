@@ -251,3 +251,60 @@ def test_titanias_song_removes_activated_abilities_too(catalog):
 
     assert game.activate_permanent_ability(0, "Jayemdae Tome").supported is True
     assert len(player.hand) == 1
+
+
+# ---------------------------------------------------------------------------
+# Energy Flux — a static that *grants* an ability board-wide
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cr("613.1f")
+def test_energy_flux_grants_the_upkeep_cost_to_every_artifact(catalog):
+    """The granted ability is appended to each artifact's effective card, so the
+    compiler produces it like a printed one and the upkeep step finds it without
+    knowing a static granted it."""
+    flux = dataclasses.replace(
+        catalog["Bad Moon"], name="Energy Flux", mana_cost="{2}{U}", cmc=3.0,
+        oracle_text=(
+            'All artifacts have "At the beginning of your upkeep, sacrifice '
+            'this artifact unless you pay {2}."'
+        ),
+    )
+    assert compile_card_oracle(flux).supported
+
+    ring = Permanent(card=catalog["Sol Ring"])
+    bears = Permanent(card=catalog["Grizzly Bears"])
+    player = PlayerState(name="P1", battlefield=[ring, bears])
+    game = Game(players=[player, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game._refresh_dynamic_creatures()
+    assert game.get_upkeep_pay_triggers(0) == []
+
+    player.battlefield.append(Permanent(card=flux))
+    game._refresh_dynamic_creatures()
+
+    triggers = game.get_upkeep_pay_triggers(0)
+    assert [t["card_name"] for t in triggers] == ["Sol Ring"]
+    assert triggers[0]["mana"]["generic"] == 2
+
+
+@pytest.mark.cr("611.3")
+def test_energy_flux_grant_ends_when_it_leaves(catalog):
+    flux = dataclasses.replace(
+        catalog["Bad Moon"], name="Energy Flux", mana_cost="{2}{U}", cmc=3.0,
+        oracle_text=(
+            'All artifacts have "At the beginning of your upkeep, sacrifice '
+            'this artifact unless you pay {2}."'
+        ),
+    )
+    ring = Permanent(card=catalog["Sol Ring"])
+    flux_perm = Permanent(card=flux)
+    player = PlayerState(name="P1", battlefield=[ring, flux_perm])
+    game = Game(players=[player, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game._refresh_dynamic_creatures()
+    assert len(game.get_upkeep_pay_triggers(0)) == 1
+
+    player.battlefield.remove(flux_perm)
+    game._refresh_dynamic_creatures()
+
+    assert game.get_upkeep_pay_triggers(0) == []

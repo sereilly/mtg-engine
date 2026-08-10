@@ -499,6 +499,8 @@ class PermanentStateMixin:
         this very effect adds, and the answer would then depend on whether it
         had already been asked.
         """
+        if static.applies_to == "artifact":
+            return permanent.has_type("artifact")
         if static.applies_to == "noncreature_artifact":
             printed = permanent.card.type_line.lower()
             return "artifact" in printed and "creature" not in printed

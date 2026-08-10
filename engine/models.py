@@ -154,6 +154,22 @@ _SYMBOL_TO_COLOR_WORD: dict[str, str] = {
 _REMAPPED_CARDS: dict[tuple, "CardDefinition"] = {}
 
 
+def _with_granted_abilities(
+    card: "CardDefinition", granted: tuple[str, ...]
+) -> "CardDefinition":
+    """*card* with abilities a static grants appended to its rules text."""
+    key = (id(card), granted)
+    cached = _GRANTED_CARDS.get(key)
+    if cached is None:
+        text = chr(10).join(filter(None, (card.oracle_text, *granted)))
+        cached = dataclasses.replace(card, oracle_text=text)
+        _GRANTED_CARDS[key] = cached
+    return cached
+
+
+_GRANTED_CARDS: dict[tuple, "CardDefinition"] = {}
+
+
 def _with_color_words_remapped(card: "CardDefinition", remap: dict) -> "CardDefinition":
     """*card* with its colour words replaced per *remap* (CR 612.1)."""
     key = (id(card), tuple(sorted(remap.items())))
@@ -263,9 +279,23 @@ class Permanent:
         """
         base = self.metadata.get("copied_card") or self.card
         remap = self.metadata.get("color_word_remap")
-        if not remap:
-            return base
-        return _with_color_words_remapped(base, remap)
+        if remap:
+            base = _with_color_words_remapped(base, remap)
+
+        # An ability granted by a board-wide static (Energy Flux) is appended to
+        # the effective text, so the compiler produces it like any printed
+        # ability and the upkeep step, the UI and the coverage scripts all see
+        # it without knowing a static granted it.
+        from .global_statics import global_statics_applying_to
+
+        granted = [
+            static.grants_ability
+            for static in global_statics_applying_to(self)
+            if static.grants_ability
+        ]
+        if granted:
+            base = _with_granted_abilities(base, tuple(granted))
+        return base
 
     def has_type(self, card_type: str) -> bool:
         """Whether this permanent currently has the given card type or subtype.

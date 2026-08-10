@@ -851,11 +851,19 @@ def _derived_static_claims(oracle_text: str, normalized_text: str) -> list[str]:
     from .cost_modifiers import cost_modifier_claims_line
     from .draw_step_modifiers import draw_step_bonus_for
     from .enter_effects import enter_effect_line
+    from .global_statics import global_static_for
     from .untap_restrictions import untap_restriction_for
 
     claims: list[str] = []
     if untap_restriction_for(oracle_text) is not None:
         claims.append("untap_restrictions")
+    # A board-wide static (Titania's Song, Energy Flux) contributes its effects
+    # through the CR 613 layer bridge and, for a granted ability, through the
+    # affected permanent's effective card — so there is no instruction to
+    # produce, and without this the source card would report unsupported while
+    # working perfectly.
+    if global_static_for(oracle_text) is not None:
+        claims.append("global_statics")
     if draw_step_bonus_for(oracle_text) is not None:
         claims.append("draw_step_modifiers")
     if any(
