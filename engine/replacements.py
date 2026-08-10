@@ -8,15 +8,13 @@ does not happen).
 
 Interceptors self-select from game state (metadata flags, oracle-text
 probes), so the registry stays name-free — bespoke per-card registration
-belongs in engine/card_hooks.py. Registration order within a kind is the
-order interceptors run, mirroring how the inline checks were historically
-sequenced.
+belongs in engine/card_hooks.py.
 
 Event kinds and their payload keys:
 
 - ``life_gain``:          {player, amount, source_name}
-- ``damage_to_creature``: {permanent, amount, source}
-- ``damage_to_player``:   {player, amount}
+- ``damage_to_creature``: {recipient, amount, source}
+- ``damage_to_player``:   {recipient, amount, source}
 - ``would_die``:          {player, permanent}
 - ``discard``:            {player, card}
 - ``draw``:               {player, count, drawn}
@@ -24,6 +22,25 @@ Event kinds and their payload keys:
 The last two are *interactive*: their interceptors offer a
 :class:`~engine.replacement_choices.ReplacementChoice` rather than applying
 the effect outright, and report what they did through ``payload["drawn"]``.
+
+The two damage kinds spell their subject ``recipient`` rather than
+``permanent``/``player`` because a damage event is *one* event shared with
+engine/prevention.py — see the ordering note below.
+
+**Ordering (CR 616.1).** Interceptors do not run as a fixed chain. Each carries
+an ``applies`` predicate and an ``order``, and ``engine/effect_ordering.py``
+gathers everything applicable, applies one, then re-asks the rest against what
+is now true (616.1f). The predicate is the guard the interceptor used to open
+with, *moved* rather than copied, so the body starts after the decision and the
+two cannot drift; and it must be pure, because an effect that is asked about may
+then not be chosen.
+
+Order is a per-kind space — two kinds are never in contention — with one
+exception that matters. CR 616.1 does not separate replacement from prevention:
+a damage event's replacements and its shields are *one* contention set. So the
+two damage kinds share an order space with ``engine/prevention.py``, and
+``engine/damage_events.py`` is where the union is formed and where a collision
+between the two registries raises at import.
 """
 
 from __future__ import annotations
@@ -31,6 +48,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
+from .effect_ordering import Candidate, affected_seat, apply_in_order
 from .replacement_choices import (
     ReplacementChoice,
     offer_replacement_choice,
@@ -52,36 +70,139 @@ class ReplacementOutcome:
 
 
 Interceptor = Callable[[Any, dict], Optional[ReplacementOutcome]]
+Applicability = Callable[[Any, dict], bool]
 
-REPLACEMENTS: dict[str, list[Interceptor]] = {}
+REPLACEMENTS: dict[str, list[Candidate]] = {}
+
+# ---------------------------------------------------------------------------
+# Orders (CR 616.1's default choice)
+# ---------------------------------------------------------------------------
+#
+# Damage kinds: one space with engine/prevention.py's shields (10–600 there).
+# Which side runs first is a real decision and the two damage kinds answer it
+# oppositely, on purpose:
+#
+#   - To a *permanent*, the replacements are redirects. They run before the
+#     shields, because a shield spent on damage that then leaves for another
+#     recipient is a shield wasted on nothing.
+#   - To a *player*, the replacement is a floor that has to read the life total
+#     it is flooring against. It runs after the shields, so it floors what the
+#     shields actually left.
+#
+# CR 616.1e permits either; these are the defaults a non-interactive seat takes.
+REDIRECT_WHOLE_EVENT = 1  # Jade Monolith
+REDIRECT_ONE_POINT = 2  # Personal Incarnation
+SOURCE_TYPE_SHIELD = 3  # Desert Nomads / Camel
+LIFE_FLOOR = 700  # Ali from Cairo — after every shield (POOL is 600)
+
+# Kinds with a contention set of their own. Small numbers, spaced, no relation
+# to the damage space above.
+LIFE_GAIN_TO_DRAW = 10  # Lich
+EXILE_INSTEAD_OF_DYING = 10  # Disintegrate's "exile it instead"
+DISCARD_DESTINATION = 10  # Library of Leng
+DRAW_FROM_OUTSIDE = 10  # Ring of Ma'rûf
+DRAW_LOOKING_AT_TOP = 20  # Aladdin's Lamp
+
+# Set on the event once an interceptor consumes it. It lives on the payload
+# because the payload is the one piece of state the 616.1 loop threads through
+# every candidate — and it is popped by the entry points below, so it never
+# escapes to a caller.
+REPLACED = "_replaced"
 
 
-def replacement_effect(kind: str) -> Callable[[Interceptor], Interceptor]:
-    """Register an interceptor for an event kind (run in registration order)."""
+def replacement_effect(
+    kind: str, order: int, *, applies: Applicability
+) -> Callable[[Interceptor], Interceptor]:
+    """Register an interceptor for an event kind.
+
+    ``applies`` answers "would this effect apply to this event?" and is
+    **required**: CR 616.1 has to count the effects in contention before running
+    any of them, which an interceptor that answers by applying itself makes
+    impossible. It must be pure.
+
+    A duplicate order within a kind raises at import, matching ``@parse_rule``
+    and ``@prevention_effect``: with the default choice being the lowest order,
+    a collision is a real ambiguity about which effect replaces the event first.
+    """
 
     def decorator(fn: Interceptor) -> Interceptor:
-        REPLACEMENTS.setdefault(kind, []).append(fn)
+        registered = REPLACEMENTS.setdefault(kind, [])
+        for existing in registered:
+            if existing.order == order:
+                raise ValueError(
+                    f"replacement_effect({kind!r}) order {order} already used by "
+                    f"{existing.key}; pick a free slot"
+                )
+        registered.append(
+            Candidate(key=fn.__name__, order=order, applies=applies, apply=fn,
+                      label=(fn.__doc__ or fn.__name__).split(":")[0].strip())
+        )
+        registered.sort(key=lambda candidate: candidate.order)
         return fn
 
     return decorator
 
 
+def _record(game, event: dict, interceptor: Interceptor) -> None:
+    """Apply one interceptor and fold its outcome into the event, so the next
+    round of CR 616.1f asks the rest about what is actually left."""
+    outcome = interceptor(game, event)
+    if outcome is None:
+        return
+    if outcome.new_amount is not None:
+        event["amount"] = outcome.new_amount
+    if outcome.replaced:
+        event[REPLACED] = True
+
+
+def replacement_candidates(kind: str) -> list[Candidate]:
+    """*kind*'s interceptors as CR 616.1 candidates, with the outcome bookkeeping
+    already wired into ``apply``.
+
+    The counterpart of ``prevention.shield_candidates``: a damage event's
+    contenders are both lists together, and neither caller should have to
+    re-implement what applying one does to the event.
+    """
+    return [
+        Candidate(
+            key=c.key, order=c.order, applies=c.applies, label=c.label,
+            apply=lambda g, e, fn=c.apply: _record(g, e, fn),
+        )
+        for c in REPLACEMENTS.get(kind, ())
+    ]
+
+
+def was_replaced(game, event: dict) -> bool:
+    """Whether the event has been consumed — nothing further can modify what no
+    longer happens, so this is the 616.1 loop's stop condition."""
+    return bool(event.get(REPLACED))
+
+
+def take_replaced(event: dict) -> bool:
+    """Read and clear the consumed flag, so the marker never escapes to a
+    caller reading the payload it passed in."""
+    return bool(event.pop(REPLACED, False))
+
+
 def apply_replacements(game, kind: str, payload: dict) -> tuple[bool, dict]:
-    """Run *kind*'s interceptors over the event.
+    """Run *kind*'s interceptors over the event under CR 616.1.
 
     Returns ``(consumed, payload)`` — when ``consumed`` is True the caller
     must skip the default action; otherwise ``payload["amount"]`` may have
     been reduced by partial replacements.
+
+    Damage events should go through ``engine/damage_events.py`` instead, which
+    contends these against the event's prevention shields as one set. The one
+    exception is combat damage to a player, whose shields ran earlier.
     """
-    for interceptor in REPLACEMENTS.get(kind, ()):
-        outcome = interceptor(game, payload)
-        if outcome is None:
-            continue
-        if outcome.new_amount is not None:
-            payload["amount"] = outcome.new_amount
-        if outcome.replaced:
-            return True, payload
-    return False, payload
+    apply_in_order(
+        game,
+        payload,
+        replacement_candidates(kind),
+        chooser_index=affected_seat(game, payload.get("recipient") or payload.get("player")),
+        stop=was_replaced,
+    )
+    return take_replaced(payload), payload
 
 
 # ---------------------------------------------------------------------------
@@ -100,13 +221,15 @@ DAMAGE_LIFE_FLOOR_TEXT = (
 )
 
 
-@replacement_effect("life_gain")
+def _applies_life_gain_to_draw(game, payload: dict) -> bool:
+    return game._player_controls_text(payload["player"], LIFE_GAIN_TO_DRAW_TEXT)
+
+
+@replacement_effect("life_gain", LIFE_GAIN_TO_DRAW, applies=_applies_life_gain_to_draw)
 def _draw_instead_of_life_gain(game, payload: dict) -> ReplacementOutcome | None:
     """Lich: "If you would gain life, draw that many cards instead."""
     player = payload["player"]
     amount = payload["amount"]
-    if not game._player_controls_text(player, LIFE_GAIN_TO_DRAW_TEXT):
-        return None
     drawn = player.draw(amount)
     source = f" from {payload['source_name']}" if payload.get("source_name") else ""
     game.log.append(
@@ -115,43 +238,64 @@ def _draw_instead_of_life_gain(game, payload: dict) -> ReplacementOutcome | None
     return ReplacementOutcome(replaced=True)
 
 
-@replacement_effect("damage_to_player")
+def _floored_amount(game, payload: dict) -> int | None:
+    """How much of this damage would still reduce life once the floor applies,
+    or None when the floor has nothing to do. Shared by the predicate and the
+    interceptor so "does the floor apply" and "what does it floor to" have one
+    answer."""
+    recipient = payload["recipient"]
+    amount = payload["amount"]
+    if amount <= 0 or not game._player_controls_text(recipient, DAMAGE_LIFE_FLOOR_TEXT):
+        return None
+    floor_amount = max(0, recipient.life - 1)
+    return None if floor_amount >= amount else floor_amount
+
+
+def _applies_life_floor(game, payload: dict) -> bool:
+    return _floored_amount(game, payload) is not None
+
+
+@replacement_effect("damage_to_player", LIFE_FLOOR, applies=_applies_life_floor)
 def _floor_life_at_one(game, payload: dict) -> ReplacementOutcome | None:
     """Ali from Cairo: "Damage that would reduce your life total to less than
     1 reduces it to 1 instead." Clamped via new_amount (the damage instance
     still "happened" for tracking purposes; only how much it reduces life is
     capped), matching how Personal Incarnation's partial redirect already
     treats amount adjustments."""
-    player = payload["player"]
-    amount = payload["amount"]
-    if amount <= 0:
-        return None
-    if not game._player_controls_text(player, DAMAGE_LIFE_FLOOR_TEXT):
-        return None
-    floor_amount = max(0, player.life - 1)
-    if floor_amount >= amount:
-        return None
-    return ReplacementOutcome(new_amount=floor_amount)
+    return ReplacementOutcome(new_amount=_floored_amount(game, payload))
 
 
-@replacement_effect("damage_to_creature")
+def _jade_monolith_seat(game, payload: dict) -> int | None:
+    """The seat Jade Monolith's redirect would send this damage to, or None when
+    it does not apply — the chosen source has to match, and an unrecorded choice
+    matches anything (legacy / AI activations)."""
+    recipient = payload["recipient"]
+    if payload["amount"] <= 0:
+        return None
+    seat = recipient.metadata.get("redirect_damage_to_player")
+    if not (isinstance(seat, int) and 0 <= seat < len(game.players)):
+        return None
+    chosen_source = recipient.metadata.get("redirect_damage_source")
+    if not game._damage_source_matches(chosen_source, payload.get("source")):
+        return None
+    return seat
+
+
+def _applies_jade_monolith(game, payload: dict) -> bool:
+    return _jade_monolith_seat(game, payload) is not None
+
+
+@replacement_effect(
+    "damage_to_creature", REDIRECT_WHOLE_EVENT, applies=_applies_jade_monolith
+)
 def _redirect_damage_to_player(game, payload: dict) -> ReplacementOutcome | None:
     """Jade Monolith: "The next time a source of your choice would deal damage
     to target creature this turn, that source deals that damage to you
     instead." Redirects the whole instance (combat damage included) — but only
     when the damage comes from the chosen source."""
-    permanent = payload["permanent"]
+    permanent = payload["recipient"]
     amount = payload["amount"]
-    redirect_idx = permanent.metadata.get("redirect_damage_to_player")
-    if not (
-        isinstance(redirect_idx, int)
-        and 0 <= redirect_idx < len(game.players)
-        and amount > 0
-    ):
-        return None
-    chosen_source = permanent.metadata.get("redirect_damage_source")
-    if not game._damage_source_matches(chosen_source, payload.get("source")):
-        return None
+    redirect_idx = _jade_monolith_seat(game, payload)
     permanent.metadata.pop("redirect_damage_to_player", None)
     permanent.metadata.pop("redirect_damage_source", None)
     game._deal_damage_to_player(game.players[redirect_idx], amount)
@@ -161,16 +305,23 @@ def _redirect_damage_to_player(game, payload: dict) -> ReplacementOutcome | None
     return ReplacementOutcome(replaced=True)
 
 
-@replacement_effect("damage_to_creature")
+def _applies_redirect_one_damage(game, payload: dict) -> bool:
+    charges = int(
+        payload["recipient"].metadata.get("redirect_one_damage_to_owner_until_eot", 0)
+    )
+    return charges > 0 and payload["amount"] > 0
+
+
+@replacement_effect(
+    "damage_to_creature", REDIRECT_ONE_POINT, applies=_applies_redirect_one_damage
+)
 def _redirect_one_damage_to_owner(game, payload: dict) -> ReplacementOutcome | None:
     """Personal Incarnation: "The next 1 damage that would be dealt to this
     creature this turn is dealt to its owner instead." One point per charge,
     replaced before the rest is marked."""
-    permanent = payload["permanent"]
+    permanent = payload["recipient"]
     amount = payload["amount"]
     redirect = int(permanent.metadata.get("redirect_one_damage_to_owner_until_eot", 0))
-    if not (redirect > 0 and amount > 0):
-        return None
     permanent.metadata["redirect_one_damage_to_owner_until_eot"] = redirect - 1
     owner = next((p for p in game.players if permanent in p.battlefield), None)
     if owner is not None:
@@ -227,32 +378,43 @@ def _banded_desert_shield(game, permanent) -> bool:
     return False
 
 
-@replacement_effect("damage_to_creature")
+def _applies_desert_shield(game, payload: dict) -> bool:
+    """The whole of this effect is its guard — being shielded from Deserts does
+    not do anything to the event beyond consuming it — so the predicate carries
+    all three ways a creature can be covered."""
+    permanent = payload["recipient"]
+    if not _is_desert(payload.get("source")):
+        return False
+    text = (permanent.card.oracle_text or "").lower()
+    return (
+        "prevent all damage that would be dealt to this creature by deserts" in text
+        or (_CAMEL_SHIELD_TEXT in text and permanent.attacking)
+        or _banded_desert_shield(game, permanent)
+    )
+
+
+@replacement_effect(
+    "damage_to_creature", SOURCE_TYPE_SHIELD, applies=_applies_desert_shield
+)
 def _prevent_desert_damage(game, payload: dict) -> ReplacementOutcome | None:
     """Desert Nomads: "Prevent all damage that would be dealt to this
     creature by Deserts." / Camel: same shield while attacking, extended to
     creatures banded with it. Checked against oracle text directly (like
     Lich's life-gain replacement) rather than a compiled instruction."""
-    permanent = payload["permanent"]
-    if not _is_desert(payload.get("source")):
-        return None
-    text = (permanent.card.oracle_text or "").lower()
-    if "prevent all damage that would be dealt to this creature by deserts" in text:
-        return ReplacementOutcome(replaced=True)
-    if _CAMEL_SHIELD_TEXT in text and permanent.attacking:
-        return ReplacementOutcome(replaced=True)
-    if _banded_desert_shield(game, permanent):
-        return ReplacementOutcome(replaced=True)
-    return None
+    return ReplacementOutcome(replaced=True)
 
 
-@replacement_effect("would_die")
+def _applies_exile_instead_of_dying(game, payload: dict) -> bool:
+    return bool(payload["permanent"].metadata.get("exile_if_dies_this_turn"))
+
+
+@replacement_effect(
+    "would_die", EXILE_INSTEAD_OF_DYING, applies=_applies_exile_instead_of_dying
+)
 def _exile_instead_of_dying(game, payload: dict) -> ReplacementOutcome | None:
     """Disintegrate-style: "if it would die this turn, exile it instead." The
     permanent never reaches the graveyard, so no dies-triggers fire (CR 614)."""
     permanent = payload["permanent"]
-    if not permanent.metadata.get("exile_if_dies_this_turn"):
-        return None
     if not permanent.metadata.get("is_token", False):
         payload["player"].exile.append(permanent.card)
     game.log.append(f"{permanent.card.name} was exiled instead of dying")
@@ -273,7 +435,11 @@ TOP_OF_LIBRARY_DISCARD_TEXT = (
 )
 
 
-@replacement_effect("discard")
+def _applies_leng_discard(game, payload: dict) -> bool:
+    return game._player_controls_text(payload["player"], TOP_OF_LIBRARY_DISCARD_TEXT)
+
+
+@replacement_effect("discard", DISCARD_DESTINATION, applies=_applies_leng_discard)
 def _top_of_library_instead_of_graveyard(game, payload: dict) -> ReplacementOutcome | None:
     """Library of Leng: "If an effect causes you to discard a card, discard it,
     but you may put it on top of your library instead of into your graveyard."
@@ -281,8 +447,6 @@ def _top_of_library_instead_of_graveyard(game, payload: dict) -> ReplacementOutc
     The discarded card is in no zone until the choice is answered — it has left
     the hand and its destination is still undecided (CR 701.9c)."""
     player = payload["player"]
-    if not game._player_controls_text(player, TOP_OF_LIBRARY_DISCARD_TEXT):
-        return None
     card = payload["card"]
     suspended, _ = offer_replacement_choice(
         game,
@@ -317,7 +481,11 @@ def _resolve_leng_discard(game, choice: ReplacementChoice, option_index: int) ->
     return 0
 
 
-@replacement_effect("draw")
+def _applies_outside_game_draw(game, payload: dict) -> bool:
+    return game.players.index(payload["player"]) in game.outside_game_draw_replacements
+
+
+@replacement_effect("draw", DRAW_FROM_OUTSIDE, applies=_applies_outside_game_draw)
 def _draw_from_outside_the_game(game, payload: dict) -> ReplacementOutcome | None:
     """Ring of Ma'rûf: the next draw is replaced by putting a card you own from
     outside the game into your hand.
@@ -329,8 +497,6 @@ def _draw_from_outside_the_game(game, payload: dict) -> ReplacementOutcome | Non
     """
     player = payload["player"]
     player_index = game.players.index(player)
-    if player_index not in game.outside_game_draw_replacements:
-        return None
     game.outside_game_draw_replacements.discard(player_index)
     available = game._outside_game_choices(player_index)
     remaining = payload["count"] - 1
@@ -372,7 +538,15 @@ def _resolve_outside_game_draw(game, choice: ReplacementChoice, option_index: in
     return 0
 
 
-@replacement_effect("draw")
+def _applies_lamp_draw(game, payload: dict) -> bool:
+    """Armed, not "will do something". The charge is spent even when the library
+    turns out to be too short to look at anything (CR 614.1), so the short-library
+    case has to be inside the effect rather than in front of it — a predicate
+    that declined there would leave the charge unspent."""
+    return bool(game.lamp_draw_replacements.get(game.players.index(payload["player"])))
+
+
+@replacement_effect("draw", DRAW_LOOKING_AT_TOP, applies=_applies_lamp_draw)
 def _look_at_top_cards_and_draw_one(game, payload: dict) -> ReplacementOutcome | None:
     """Aladdin's Lamp: the next draw is replaced by "look at the top X cards of
     your library, draw one of them, then put the rest on the bottom in a random
@@ -380,10 +554,7 @@ def _look_at_top_cards_and_draw_one(game, payload: dict) -> ReplacementOutcome |
     anything, in which case the draw happens normally (CR 614.1)."""
     player = payload["player"]
     player_index = game.players.index(player)
-    x = game.lamp_draw_replacements.get(player_index)
-    if not x:
-        return None
-    game.lamp_draw_replacements.pop(player_index, None)
+    x = game.lamp_draw_replacements.pop(player_index)
     x = min(int(x), len(player.library))
     if x <= 0:
         return None

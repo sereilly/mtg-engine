@@ -35,11 +35,17 @@ only the aggregate outcome can differ, and only when one recipient holds two
 applicable shields at once — a Circle of Protection and a prevention pool, say,
 which this card pool reaches easily.
 
-Two things are deliberately not done here. The choice is not *asked*: a damage
-event cannot currently suspend (see ``effect_ordering.choose_effect``). And
-replacement effects are still a separate pass, so a damage event's replacements
-and its shields are two contention sets rather than the one CR 616.1 describes —
-closing that needs the same ``applies`` split on ``engine/replacements.py``.
+The shields are only *half* of a damage event's contenders: CR 616.1 does not
+separate prevention from replacement, so the orders below share one space with
+the damage entries in ``engine/replacements.py`` and the union is what actually
+runs. ``engine/damage_events.py`` is where the two are put together, and it
+raises at import if the union ever collides. ``apply_prevention`` below is the
+shields-only entry point, kept for the one caller that genuinely has half an
+event: combat damage applies shields when the event is *recorded* (so lifelink
+and the recorded amount agree) and its replacements when life is applied.
+
+Still not done here: the choice is not *asked*. A damage event cannot currently
+suspend — see ``effect_ordering.choose_effect``.
 """
 
 from __future__ import annotations
@@ -47,7 +53,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
-from .effect_ordering import Candidate, apply_in_order
+from .effect_ordering import Candidate, affected_seat, apply_in_order
 from .models import PlayerState
 
 # Order bands. Blanket combat shields run first: they are flags rather than
@@ -111,7 +117,7 @@ def prevention_effect(order: int, *, applies: Applicability) -> Callable[[Preven
     return decorator
 
 
-def _spent(game, event: dict) -> bool:
+def spent(game, event: dict) -> bool:
     """Nothing left to prevent, so nothing more can apply (CR 615.7's "any
     remaining damage is dealt normally")."""
     return event["amount"] <= 0
@@ -125,8 +131,31 @@ def _consume(game, event: dict, preventer: Preventer) -> None:
         event["amount"] = max(0, event["amount"] - outcome.prevented)
 
 
+def shield_candidates() -> list[Candidate]:
+    """Every shield as a CR 616.1 candidate, with the amount bookkeeping already
+    wired into ``apply``.
+
+    Exposed rather than kept private because a damage event's contenders are the
+    shields *and* the replacements, and whoever unions the two must not have to
+    re-implement what applying a shield does to the event.
+    """
+    return [
+        Candidate(
+            key=c.key, order=c.order, applies=c.applies, label=c.label,
+            apply=lambda g, e, fn=c.apply: _consume(g, e, fn),
+        )
+        for c in PREVENTION_EFFECTS
+    ]
+
+
 def apply_prevention(game, event: dict) -> int:
     """Run the prevention shields over *event*; return the unprevented damage.
+
+    The shields-only half of a damage event, for the caller that has only that
+    half — combat damage, which applies shields at the moment the event is
+    recorded. Everything else goes through ``engine/damage_events.py``, which
+    contends these shields against the event's replacements as CR 616.1
+    describes.
 
     Shields are applied in CR 616.1 order — every applicable one is gathered,
     one is chosen (the affected player's choice; the default is the documented
@@ -140,33 +169,14 @@ def apply_prevention(game, event: dict) -> int:
         # unchanged rather than clamped: combat passes raw power here, which can
         # be negative for a creature shrunk below 0.
         return event["amount"]
-    recipient = event["recipient"]
     apply_in_order(
         game,
         event,
-        [
-            Candidate(
-                key=c.key, order=c.order, applies=c.applies, label=c.label,
-                apply=lambda g, e, fn=c.apply: _consume(g, e, fn),
-            )
-            for c in PREVENTION_EFFECTS
-        ],
-        chooser_index=_recipient_seat(game, recipient),
-        stop=_spent,
+        shield_candidates(),
+        chooser_index=affected_seat(game, event["recipient"]),
+        stop=spent,
     )
     return event["amount"]
-
-
-def _recipient_seat(game, recipient) -> int | None:
-    """The seat CR 616.1 gives the choice to: the affected player, or the
-    affected permanent's controller."""
-    if isinstance(recipient, PlayerState):
-        return next((i for i, p in enumerate(game.players) if p is recipient), None)
-    return next(
-        (i for i, p in enumerate(game.players)
-         if any(perm is recipient for perm in p.battlefield)),
-        None,
-    )
 
 
 # ---------------------------------------------------------------------------

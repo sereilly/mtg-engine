@@ -45,7 +45,9 @@ directly comparable and can coexist per line. See "Grammar front end" below and
 | `engine/handlers/` | Effect executors. Each `@effect_handler(kind)` function mutates game state for one instruction kind. Registered into `EFFECT_HANDLERS` and dispatched with a single dict lookup. `engine/handlers/_common.py` hosts shared helpers (`resolve_target_permanent`/`pick_target_permanent`, `permanent_matches_filter`, damage application). |
 | `engine/pt.py` | The single write API for power/toughness channels (`set_base_pt`, `add_pt_modifier`, `switch_pt`, `clear_base_pt`) — see "P/T channels" below. All P/T mutation should go through here, never direct metadata pokes. |
 | `engine/replacements.py` | CR 614 replacement-effect registry (`life_gain`, `damage_to_creature`, `would_die`, …). An interceptor may consume an event or adjust its amount before the default action runs; see "Replacement effects" below. |
-| `engine/prevention.py` | CR 615 damage-shield registry. Each `@prevention_effect(order)` function reports how many points it removes from one damage event; `apply_prevention` runs them in order over players and permanents alike. See "Prevention effects" below. |
+| `engine/prevention.py` | CR 615 damage-shield registry. Each `@prevention_effect(order, applies=…)` function reports how many points it removes from one damage event, over players and permanents alike. See "Prevention effects" below. |
+| `engine/effect_ordering.py` | CR 616.1: gather every applicable replacement and prevention effect, choose one, apply it, re-ask the rest. Both registries run through it, which is why each registration carries a pure `applies` predicate. See "Effect ordering" below. |
+| `engine/damage_events.py` | The one place a damage event's shields and its replacements become the single contention set CR 616.1 describes. `modify_damage(game, event)` is what every damage path calls; the two registries share one order space and a collision between them raises at import. |
 | `engine/tokens.py` | `make_token_card(...)` — the one place that builds a token's `CardDefinition`. A token-creating card is a parse rule emitting a generic `create_token` instruction, never a bespoke handler. |
 | `engine/cast_restrictions.py` | Text-keyed "Cast this spell only during..." timing gates — an ordered predicate table, since the restriction is the same for any card printed with that phrase (not name-specific). |
 | `engine/targeting.py` | Cast-time target kind derived from the compiled program — an Aura's `Enchant <subject>` line or an instruction's `type_filter`. The strangler seam replacing `legality.py`'s text cascade: it answers where the program carries evidence, `legality.py` answers otherwise, and a differential guard keeps them equal. |
@@ -215,9 +217,10 @@ function) — a new CDA card is one table entry, not a new branch.
 "If X would happen, Y instead" effects (Lich, Disintegrate's exile-instead,
 Jade Monolith's redirect, …) are interceptors registered in
 `engine/replacements.py` by event kind (`life_gain`, `damage_to_creature`,
-`would_die`). `apply_replacements(game, kind, payload)` runs the kind's
-interceptors in registration order; one may consume the event (skip the
-default action) or adjust `payload["amount"]` and let the chain continue.
+`would_die`). Each registration is a pure `applies` predicate plus the effect
+itself; `apply_replacements(game, kind, payload)` runs them through CR 616.1
+(see "Effect ordering" below). An interceptor may consume the event (skip the
+default action) or adjust `payload["amount"]` and let the process continue.
 Interceptors self-select from game/permanent state, so the registry stays
 name-free.
 
@@ -285,22 +288,40 @@ armed and never shown — which is exactly what Primal Clay shipped with.
 ## Prevention effects
 
 Damage shields (CR 615) are a separate registry with the same shape,
-`engine/prevention.py`. A `@prevention_effect(order)` function inspects one
-event — `{recipient, amount, source, combat}`, where `recipient` is a
-`PlayerState` *or* a `Permanent` — and returns how many points it removes, or
-`None` to pass. `apply_prevention(game, event)` runs them in ascending order and
-stops as soon as nothing is left to prevent, so a shield is never spent on
-damage an earlier one already absorbed.
+`engine/prevention.py`. A `@prevention_effect(order, applies=…)` function
+inspects one event — `{recipient, amount, source, combat}`, where `recipient` is
+a `PlayerState` *or* a `Permanent` — and returns how many points it removes, or
+`None` to pass. Both models carry `damage_prevention_pool`, so the numeric
+shield of CR 615.7 is a single interceptor covering creatures and players;
+shields that only make sense for a player (Circle of Protection, Reverse Damage,
+Forcefield) check the recipient type themselves. `combat` marks the event as
+combat damage and is what scopes the blanket shields (Fog, Ebony Horse) — every
+other shield ignores it.
 
-Both models carry `damage_prevention_pool`, so the numeric shield of CR 615.7 is
-a single interceptor covering creatures and players; shields that only make
-sense for a player (Circle of Protection, Reverse Damage, Forcefield) check the
-recipient type themselves. `combat` marks the event as combat damage and is what
-scopes the blanket shields (Fog, Ebony Horse) — every other shield ignores it.
+## Effect ordering (CR 616.1)
 
-Unlike parse rules, order here is semantic rather than a precedence tiebreak:
-under CR 616.1 the *affected player* chooses which applicable shield to apply,
-and the engine substitutes this fixed table. A duplicate order raises at import.
+Replacement and prevention effects are not two pipelines that happen to run one
+after the other. CR 616.1 gathers everything applicable to an event, lets the
+affected player choose one, applies it, then repeats over what is *still*
+applicable (616.1f). `engine/effect_ordering.py` is that process and the only
+place either registry decides what runs next.
+
+Which is why every registration is split in two: a pure `applies` predicate and
+the effect. An effect that answers "do I apply?" by applying itself makes the
+rule unimplementable — counting the contenders would mean running one, which is
+exactly what 616.1 forbids before the choice is made. The predicate must not
+consume a charge, because an effect that is asked about may then not be chosen.
+
+`engine/damage_events.py` is where a *damage* event's members of both registries
+become the one candidate list the rule describes; `modify_damage(game, event)`
+is the entry point every damage path uses. Combat damage to a player is the one
+exception, splitting its shields (applied when the event is recorded) from its
+replacements (applied with the life loss), for reasons documented at both sites.
+
+Unlike parse rules, order here is semantic rather than a precedence tiebreak: it
+is the *default choice* a non-interactive seat makes, so the two registries share
+one order space for damage and a collision between them raises at import — as
+does a duplicate within either one.
 
 ## Ordering conventions for parse rules
 

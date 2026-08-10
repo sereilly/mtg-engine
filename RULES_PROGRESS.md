@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**199 / 570 tracked rules covered (34%)** — 817 tests, 0 unannotated.
+**199 / 570 tracked rules covered (34%)** — 827 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -756,7 +756,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 614. Replacement Effects
 
-- [x] **614.1** Some continuous effects are replacement effects. Like prevention effects (see rule 615), replacem... *(20 tests, subrules abcd)*
+- [x] **614.1** Some continuous effects are replacement effects. Like prevention effects (see rule 615), replacem... *(21 tests, subrules abcd)*
 - [ ] **614.2** Some replacement effects apply to damage from a source. See rule 609.7.
 - [ ] **614.3** There are no special restrictions on casting a spell or activating an ability that generates a re...
 - [x] **614.4** Replacement effects must exist before the appropriate event occurs—they can’t “go back in time” a... *(2 tests)*
@@ -792,7 +792,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 616. Interaction of Replacement and/or Prevention Effects
 
-- [x] **616.1** If two or more replacement and/or prevention effects are attempting to modify the way an event af... *(8 tests, subrules f)*
+- [x] **616.1** If two or more replacement and/or prevention effects are attempting to modify the way an event af... *(17 tests, subrules ef)*
 - [ ] **616.2** A replacement or prevention effect can become applicable to an event as the result of another rep...
 
 ### 700. General

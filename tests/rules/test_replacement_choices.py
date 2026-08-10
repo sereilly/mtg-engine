@@ -187,11 +187,13 @@ def test_614_1_a_new_interactive_replacement_needs_only_two_registrations():
     """
     text = "if you would discard a card, you may exile it instead"
 
-    @replacement_effect("discard")
+    @replacement_effect(
+        "discard",
+        99,
+        applies=lambda game, payload: game._player_controls_text(payload["player"], text),
+    )
     def _exile_instead(game, payload):
         player = payload["player"]
-        if not game._player_controls_text(player, text):
-            return None
         offer_replacement_choice(
             game,
             ReplacementChoice(
@@ -225,7 +227,9 @@ def test_614_1_a_new_interactive_replacement_needs_only_two_registrations():
         assert game.resolve_replacement_choice(0, 0) is True
         assert bears in p1.exile
     finally:
-        REPLACEMENTS["discard"].remove(_exile_instead)
+        REPLACEMENTS["discard"] = [
+            c for c in REPLACEMENTS["discard"] if c.key != "_exile_instead"
+        ]
         del CHOICE_RESOLVERS["_test_exile_discard"]
 
 

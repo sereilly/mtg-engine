@@ -7,8 +7,11 @@ one is applied; and then the process repeats over whatever is *still* applicable
 (616.1f). Any single fixed order is one legal set of those choices, which is why
 running a hardcoded cascade is usually right and occasionally not.
 
-This module is that process, and it is the only place either pipeline decides
-what runs next. Three things follow from putting it here:
+This module is that process, and it is the only place either registry decides
+what runs next. Both feed it: ``engine/prevention.py`` (CR 615 shields) and
+``engine/replacements.py`` (CR 614), with ``engine/damage_events.py`` putting a
+damage event's members of both into the one candidate list the rule describes.
+Three things follow from putting the process here:
 
 **Applicability is separable from application.** An effect used to answer "do I
 apply?" by applying itself — the guard and the work were one function, so there
@@ -34,6 +37,12 @@ Where an event *can* suspend, replacement choices already prompt properly — se
 So the ordering half of 616.1 is implemented and the asking half has one
 documented seat rather than being spread across two cascades. That is the
 distinction the roadmap's phase 5 was tracking.
+
+One event still reaches the process in halves: combat damage to a player applies
+its shields when the event is recorded and its replacements when life is
+applied, because those are two different moments for reasons of its own.
+``engine/damage_events.py`` says why, and it is the same missing piece — a
+suspendable damage event — that :func:`choose_effect` is waiting on.
 """
 
 from __future__ import annotations
@@ -84,6 +93,30 @@ class OrderingTrace:
 # applicable set, so this is a backstop against an effect whose predicate stays
 # True after it runs — a bug, but one that must not hang the game.
 MAX_ROUNDS = 64
+
+
+def affected_seat(game, affected) -> int | None:
+    """The seat CR 616.1 gives the choice to: the affected player, or the
+    affected permanent's controller.
+
+    Duck-typed on identity rather than on a type, so this module keeps importing
+    nothing from the engine and both registries can share one answer to "whose
+    choice is this?" — a question every candidate list has to answer the same
+    way or the prompt would go to different seats depending on which registry
+    happened to gather the event.
+
+    None when the event names no affected object, or names one that has left the
+    battlefield: the process still runs, it just has no seat to ask.
+    """
+    if affected is None:
+        return None
+    for index, player in enumerate(game.players):
+        if player is affected:
+            return index
+    for index, player in enumerate(game.players):
+        if any(permanent is affected for permanent in player.battlefield):
+            return index
+    return None
 
 
 def choose_effect(game, chooser_index: int | None, candidates: list[Candidate]) -> Candidate:

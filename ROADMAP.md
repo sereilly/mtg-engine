@@ -1939,8 +1939,43 @@ decided up front. Forcefield capping 6 damage to 1 and then a 5-point pool
 spending only 1 of itself is the case, and it is now arrived at by re-asking
 rather than by the amount happening to be mutated in place.
 
-**Still open in this phase, and precisely what.** Two things, both named in
-`prevention.py`'s docstring so they are visible where the work would happen:
+**Done — replacements got the same split, and a damage event is now one
+contention set.** `engine/replacements.py` was the other half: every interceptor
+carries an `applies` predicate and an explicit order, and `apply_replacements`
+runs through `effect_ordering` instead of walking its list. Registration order
+no longer decides anything, which was the quiet hazard in the old registry — an
+import moving would have changed which effect replaced an event first, silently.
+
+The predicates were, as expected, entangled with the values they compute, and
+each one was resolved by extracting the value rather than duplicating the test:
+`_floored_amount` answers both "does Ali from Cairo apply?" and "what does it
+floor to", `_jade_monolith_seat` answers both "does the redirect apply?" and
+"to whom". Aladdin's Lamp is the interesting exception — its charge is spent
+even when the library is too short to look at anything (CR 614.1), so its
+predicate is "armed", not "will do something", and the short-library case stays
+*inside* the effect. A predicate that declined there would leave the charge
+unspent, which is a rules difference, not a refactor.
+
+`engine/damage_events.py` is then the union: a damage event's shields and its
+replacements are gathered into one candidate list, one is applied, and the rest
+are re-asked — across both registries, which is what CR 616.1 actually says. Two
+things that were structurally impossible before are now just true: the contender
+count is right (counting from one registry could only undercount, and that count
+is what the future prompt's choice is over), and 616.1f's re-check spans the
+seam instead of stopping at the end of each pass.
+
+The two registries share one order space for damage, so the defaults reproduce
+the old two-pass result exactly — damage to a permanent is redirected before it
+is shielded (a shield spent on damage that then leaves is wasted); damage to a
+player is shielded before it is floored (the floor has to read the life total the
+shields left). Both were already reasoned choices; they are now *the same kind of
+thing* as every other order in the two tables, which is why a collision between
+the registries had to become an import-time failure — neither table can see the
+other's orders, so `_assert_one_order_space` is the check only the union can
+make. The change is deliberately behaviour-preserving: 4,012 tests, 19.5s, no
+existing assertion moved.
+
+**Still open in this phase, and precisely what.** One thing now, in two places:
 
 - **The choice is not asked.** `choose_effect` takes the documented default
   (lowest order) for every seat. Not because the choice never matters — a
@@ -1951,26 +1986,14 @@ rather than by the amount happening to be mutated in place.
   prompt machinery this needs; what is missing is a *resumable* damage event.
   `OrderingTrace.had_a_choice` already records when the question was live, so
   the prompt has both a seat and a trigger waiting for it.
-- **Replacements are still a separate pass**, so a damage event's replacements
-  and its shields are two contention sets rather than the one CR 616.1
-  describes. Closing it is the same `applies` split applied to
-  `engine/replacements.py` — mechanical now that the pattern exists, but it
-  touches interceptors whose guards are entangled with the values they compute,
-  and the default order has to keep reproducing today's two orders (permanent:
-  replace-then-prevent; player: prevent-then-replace) or the change is not
-  behaviour-preserving.
-
-Prevention and replacement also remain separate pipelines, and the player and
-permanent paths order them oppositely — but that is now a reasoned choice
-rather than an accident, and 616.1e permits either. Damage to a *permanent*
-replaces before it prevents, because the replacements there are redirects (Jade
-Monolith, Personal Incarnation) and applying the shield first would spend it on
-damage that then leaves for another recipient. Damage to a *player* prevents
-before it replaces, because the replacement there is a floor that has to read
-the life total it is flooring against, which means running immediately before
-the life loss. Unifying them properly means implementing 616.1's choice, not
-picking one fixed order — and the two constraints above are what that choice
-would be selecting between.
+- **Combat damage to a player still reaches the process in halves**, and it is
+  the same blocker wearing different clothes. That path applies its shields when
+  the event is *recorded* — so lifelink and the recorded amount agree on the
+  number — and its replacements when life is applied, so that with several
+  attackers each one's floor sees what the previous one left. Those are two
+  moments, and joining them needs the event to survive between them, which is
+  the resumable damage event above. Both sites say so, and it is the only damage
+  path that does not go through `damage_events.modify_damage`.
 
 **Done — the turn-step registries are text-keyed.** `UNTAP_RESTRICTIONS` and
 the bonus-draw half of `DRAW_STEP_MODIFIERS` were name-keyed tables holding

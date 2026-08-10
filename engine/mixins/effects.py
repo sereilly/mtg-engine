@@ -7,6 +7,7 @@ from ..ante import is_ante_card
 from ..card_hooks import UNTAPPED_ARTIFACT_PROTECTORS
 from ..handlers._common import permanent_matches_filter, pick_target_permanent
 from ..auras import aura_restriction_active
+from ..damage_events import modify_damage
 from ..models import CardDefinition, Permanent, PlayerState
 from ..prevention import apply_prevention
 from ..replacement_choices import pending_choices_for, resolve_choice
@@ -323,31 +324,18 @@ class EffectsMixin:
     def _prevent_damage(
         self, target: PlayerState, damage: int, source=None, combat: bool = False
     ) -> int:
-        """Run the prevention shields protecting *target* over an incoming damage
-        event (CR 615). Returns the unprevented remainder. Which shields exist
-        and in what order they apply lives in engine/prevention.py."""
+        """Run *only* the prevention shields protecting *target* over an incoming
+        damage event (CR 615), returning the unprevented remainder.
+
+        Half a CR 616.1 contention set, for the caller that has only half an
+        event: the combat damage step applies shields at the moment damage is
+        recorded and its replacements when life is applied. Everything else deals
+        damage through `_deal_damage_to_player` / `_mark_damage_on_permanent`,
+        which run both halves together (engine/damage_events.py).
+        """
         return apply_prevention(
             self,
             {"recipient": target, "amount": damage, "source": source, "combat": combat},
-        )
-
-    def _prevent_permanent_damage(
-        self, permanent, damage: int, source=None, combat: bool = False
-    ) -> int:
-        """The same shields, protecting a creature rather than a player. The
-        player-only shields self-select out, so a creature is covered by the
-        numeric pool (CR 615.7) and the blanket combat shields."""
-        return max(
-            0,
-            apply_prevention(
-                self,
-                {
-                    "recipient": permanent,
-                    "amount": damage,
-                    "source": source,
-                    "combat": combat,
-                },
-            ),
         )
 
     def _damage_source_matches(self, chosen, source) -> bool:
@@ -391,16 +379,20 @@ class EffectsMixin:
         if amount > 0:
             self._turn_face_up(permanent)
             self._turn_face_up(source)
-        # CR 614 replacement effects (Jade Monolith full redirect, Personal
-        # Incarnation 1-point redirect) run before the prevention pool.
-        consumed, payload = apply_replacements(
-            self, "damage_to_creature",
-            {"permanent": permanent, "amount": amount, "source": source},
+        # One CR 616.1 contention set: the redirects (Jade Monolith, Personal
+        # Incarnation) and the shields protecting this creature are all
+        # attempting to modify the same event, and engine/damage_events.py
+        # applies them one at a time, re-asking after each.
+        consumed, amount = modify_damage(
+            self,
+            {"recipient": permanent, "amount": amount, "source": source, "combat": combat},
         )
         if consumed:
             return 0
-        amount = payload["amount"]
-        dealt = self._prevent_permanent_damage(permanent, amount, source=source, combat=combat)
+        # Clamped here rather than in the event: combat passes raw power, which
+        # is negative for a creature shrunk below 0, and a damage event with
+        # nothing in it comes back as it went in.
+        dealt = max(0, amount)
         if dealt > 0:
             permanent.damage_marked += dealt
         return dealt
@@ -690,17 +682,19 @@ class EffectsMixin:
         # unblocked combat damage to a player) is turned face up first.
         if amount > 0:
             self._turn_face_up(source)
-        damage = self._prevent_damage(target, amount, source=source)
+        # One CR 616.1 contention set: the shields protecting this player and the
+        # replacements that modify damage dealt to them (Ali from Cairo's life
+        # floor) are gathered together and applied one at a time. The combat
+        # damage step is the exception — it applies the shields when the event is
+        # recorded, so it runs the replacement half at its own life-application
+        # site instead.
+        consumed, damage = modify_damage(
+            self,
+            {"recipient": target, "amount": amount, "source": source, "combat": False},
+        )
+        if consumed:
+            return 0
         if damage > 0:
-            # CR 614 replacement (Ali from Cairo's life floor) adjusts how much
-            # of the damage actually reduces life. The combat damage step runs
-            # this same pass at its own life-application site.
-            consumed, payload = apply_replacements(
-                self, "damage_to_player", {"player": target, "amount": damage}
-            )
-            if consumed:
-                return 0
-            damage = payload["amount"]
             target.life -= damage
             self._on_player_dealt_damage(target, damage, source)
             self._apply_mirror_damage(target, damage, source)

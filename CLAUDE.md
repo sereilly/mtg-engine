@@ -143,6 +143,8 @@ adding entries, not editing dispatch**:
   direct metadata pokes; see "P/T channels" in `engine/ARCHITECTURE.md`.
 - `engine/replacements.py` — CR 614 "if X would happen, Y instead" interceptors,
   registered by event kind (`life_gain`, `damage_to_creature`, `would_die`).
+  Each registration is a pure `applies` predicate plus the effect, and an
+  explicit `order` — see `engine/effect_ordering.py`.
 - `engine/replacement_choices.py` — for a replacement that is optional or offers
   a choice: the interceptor offers a `ReplacementChoice` (seat, option labels,
   default) instead of applying the effect, and a `@replacement_choice(kind)`
@@ -159,10 +161,18 @@ adding entries, not editing dispatch**:
   loops that drive it. Adding a prompt is one `register_choice` + one renderer +
   the code that arms it — never a new `Game` field, and never another branch in
   a per-card cascade.
-- `engine/prevention.py` — CR 615 damage shields, `@prevention_effect(order)`
-  functions over one `{recipient, amount, source, combat}` event. `recipient` is
-  a player *or* a permanent, so a shield that applies to both is written once.
-  A new "prevent …" card is an entry here, never a branch in a damage path.
+- `engine/prevention.py` — CR 615 damage shields, `@prevention_effect(order,
+  applies=…)` functions over one `{recipient, amount, source, combat}` event.
+  `recipient` is a player *or* a permanent, so a shield that applies to both is
+  written once. A new "prevent …" card is an entry here, never a branch in a
+  damage path.
+- `engine/effect_ordering.py` + `engine/damage_events.py` — CR 616.1, the
+  process both registries above run through: gather every applicable effect,
+  choose one, apply it, re-ask the rest (616.1f). That is why applicability is a
+  *separate, pure* predicate — an effect that answered "do I apply?" by applying
+  itself would make the contenders uncountable. `damage_events.modify_damage` is
+  where a damage event's shields and replacements become one contention set, so
+  order is compared across the two registries and a collision raises at import.
 - `engine/tokens.py` — `make_token_card(...)`, paired with the generic
   `create_token` instruction kind. A token-making card is one parse rule, never
   a bespoke handler.

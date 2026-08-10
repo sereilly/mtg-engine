@@ -633,13 +633,18 @@ class CombatDamageStepMixin:
                 )
                 continue
             # CR 614 replacements that modify damage dealt to a player (Ali from
-            # Cairo's life floor). Applied here rather than where the event was
-            # recorded, so that with several attackers each one sees the life
-            # total the previous one left behind — CR 616.1f re-checks which
-            # effects still apply after each application, and a floor effect
-            # stops applying once the life total is already at the floor.
+            # Cairo's life floor). This is the one damage path whose CR 616.1
+            # contention set is split across two moments: the shields ran where
+            # the event was recorded, so lifelink and the recorded amount agree
+            # on the number, and the replacements run here so that with several
+            # attackers each one sees the life total the previous one left
+            # behind — 616.1f's re-check, which a floor effect needs to stop
+            # applying once the life total is already at the floor. Rejoining
+            # them needs a damage event that can suspend (engine/damage_events.py).
             consumed, payload = apply_replacements(
-                self, "damage_to_player", {"player": defender, "amount": damage}
+                self,
+                "damage_to_player",
+                {"recipient": defender, "amount": damage, "source": source_attacker},
             )
             if consumed:
                 continue
