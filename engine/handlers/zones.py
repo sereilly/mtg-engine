@@ -515,3 +515,49 @@ def look_at_target_hand(game: Game, instruction: OracleInstruction, context: Ora
     seen = len(target.hand)
     game.log.append(f"{card.name}: {viewer.name} looked at {target.name}'s hand ({seen} cards)")
     return True, "resolved"
+
+
+@effect_handler("mill_target_player")
+def mill_target_player(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """CR 701.13a: put the top N cards of a player's library into their
+    graveyard.
+
+    Milling fewer than N because the library ran out is not a loss — CR 704.5b
+    only fires when a player actually *attempts to draw* from an empty library,
+    so this stops at whatever is there.
+    """
+    target = context.target
+    amount = int(instruction.payload.get("amount", 1) or 1)
+    milled = 0
+    for _ in range(amount):
+        if not target.library:
+            break
+        target.graveyard.append(target.library.pop(0))
+        milled += 1
+    game.log.append(f"{target.name} milled {milled} card(s)")
+    return True, "resolved"
+
+
+@effect_handler("return_all_owned_artifacts_to_hand")
+def return_all_owned_artifacts_to_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Hurkyl's Recall: "Return all artifacts target player owns to their hand."
+
+    Owns, not controls. An artifact the target player owns but an opponent has
+    stolen still returns, and to the *owner's* hand (CR 400.3) — which is why
+    this asks ``owner_index_of`` rather than reading the battlefield it happens
+    to be sitting on.
+    """
+    owner_index = game.players.index(context.target)
+    returned = 0
+    for player in game.players:
+        for permanent in list(player.battlefield):
+            if not permanent.has_type("artifact"):
+                continue
+            if game.owner_index_of(permanent) != owner_index:
+                continue
+            player.battlefield.remove(permanent)
+            game.players[owner_index].hand.append(permanent.card)
+            game._remove_aura_effects(permanent)
+            returned += 1
+    game.log.append(f"Returned {returned} artifact(s) to {context.target.name}'s hand")
+    return True, "resolved"

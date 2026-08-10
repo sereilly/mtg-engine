@@ -244,3 +244,35 @@ def look_at_target_hand(text: str, activated: bool) -> RuleResult:
     if activated and "look at target player's hand" in text:
         return _instruction("look_at_target_hand"), "activated_look"
     return None
+
+
+# "Target player mills N cards." (Millstone, and every mill card since.) The
+# count is a parameter: cards print it as a numeral or a number word, and
+# baking either into the rule would mean a new rule per number.
+_MILL_RE = re.compile(
+    r"target player mills (?P<count>\w+) cards?"
+)
+
+
+@parse_rule(18_700)
+def target_player_mills(text: str, activated: bool) -> RuleResult:
+    match = _MILL_RE.search(text)
+    if match is None:
+        return None
+    count = _parse_number_token(match.group("count"))
+    if count is None:
+        return None
+    return _instruction("mill_target_player", amount=count), activated_kind(activated, "mill")
+
+
+# "Return all artifacts target player owns to their hand." (Hurkyl's Recall.)
+# Ownership, not control: a stolen artifact goes back to the hand of the player
+# who owns it, and the engine already distinguishes the two (owner_index_of).
+@parse_rule(19_500)
+def return_all_owned_artifacts_to_hand(text: str, activated: bool) -> RuleResult:
+    if "return all artifacts target player owns to their hand" in text:
+        return (
+            _instruction("return_all_owned_artifacts_to_hand"),
+            activated_kind(activated, "bounce"),
+        )
+    return None

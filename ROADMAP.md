@@ -1175,6 +1175,40 @@ A test asserts every kind in the table has a handler, because the registration
 is a loop: a kind added to the table but not seen by that loop would be a
 silent no-op, which is the failure this file spent the session removing.
 
+### Three of Revised's six, and why the other three are one job
+
+Implemented, each verified against the printed text with the set still out of
+the manifest:
+
+- **Millstone** — mill, as a template. The count is a parameter, spelled out or
+  numeric, so this is the mechanic rather than the card. Milling into an empty
+  library stops there and does **not** lose the game: CR 704.5b fires on an
+  attempted *draw*, and conflating the two is the classic mill bug.
+- **Hurkyl's Recall** — "all artifacts target player **owns**". Ownership, not
+  control, so a stolen artifact returns to its owner's hand (CR 400.3); the
+  engine already distinguishes the two and this asks `owner_index_of`.
+- **Crumble** — destroy, then its controller gains life equal to its mana
+  value. Deliberately one handler and not a `sequence`: the second clause is
+  about *the object the first destroyed*, and by the time a second step ran that
+  permanent is in a graveyard. `results` carries values, not objects. When it
+  carries objects this becomes two steps and the fused kind goes away — the
+  comment on the handler says so, so the debt is visible where it is owed.
+
+**Energy Flux, Titania's Song and Primal Clay are blocked on one thing**, and it
+is worth naming precisely rather than filing three card-shaped tickets. The
+first two are *global* statics — "all artifacts have …", "each noncreature
+artifact loses all abilities and becomes …" — and every `collect_*` function in
+`layer_bridge` takes `(perm, oid)`. The bridge cannot see the board, so a global
+effect has no way to reach the layers except by writing a flag onto each
+affected permanent and cleaning it up later, which is precisely the pattern this
+pass spent itself removing. `_recalculate_lord_buffs` is the existing
+workaround.
+
+So the work is not three cards; it is **one seam** — giving the layer bridge the
+board so a static ability can contribute an effect to objects it does not own —
+after which those two cards are table entries. Primal Clay wants the enter-time
+choice machinery and is genuinely separate, but small.
+
 ### The static-ability cluster, and why it is a phase-6 job
 
 20 of the remaining lines fail with "static abilities need the CR 613 layers

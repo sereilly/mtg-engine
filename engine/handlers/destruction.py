@@ -232,3 +232,52 @@ def chaos_orb_flip(game: Game, instruction: OracleInstruction, context: OracleEx
                 break
     game.log.append("Chaos Orb was destroyed after flip")
     return True, "resolved"
+
+
+@effect_handler("destroy_artifact_controller_gains_mana_value")
+def destroy_artifact_controller_gains_mana_value(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """Crumble: destroy target artifact, its controller gains life equal to its
+    mana value.
+
+    One handler rather than a `sequence` of destroy-then-gain, and the reason is
+    worth stating: the second clause is about *the object the first clause
+    destroyed* — its controller, its mana value — and by the time a second step
+    ran, that permanent is in a graveyard. Passing it between steps needs the
+    execution context to carry the affected object, which it does not yet do
+    (``results`` carries values, not objects). When it does, this becomes two
+    steps and this kind goes away.
+    """
+    target = context.target
+    index = context.target_permanent_index
+    artifact = None
+    if isinstance(index, int) and 0 <= index < len(target.battlefield):
+        candidate = target.battlefield[index]
+        if candidate.has_type("artifact"):
+            artifact = candidate
+    if artifact is None:
+        artifact = next((p for p in target.battlefield if p.has_type("artifact")), None)
+    if artifact is None:
+        game.log.append(f"{context.card.name} did nothing: no artifact to destroy")
+        return True, "resolved"
+
+    # Read before destroying: afterwards the permanent is gone and its
+    # controller is no longer answerable from the battlefield (CR 603.10).
+    controller_index = game.controller_index_of(artifact)
+    life = int(artifact.effective_card.cmc)
+    name = artifact.card.name
+
+    game._destroy_target_permanent(
+        target,
+        type_filter="artifact",
+        target_permanent_index=target.battlefield.index(artifact),
+        bypass_regeneration=bool(instruction.payload.get("bypass_regeneration")),
+    )
+    if controller_index is not None:
+        game.players[controller_index].life += life
+        game.log.append(
+            f"{context.card.name} destroyed {name}; "
+            f"{game.players[controller_index].name} gained {life} life"
+        )
+    return True, "resolved"

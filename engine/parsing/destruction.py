@@ -73,3 +73,21 @@ def shield_target_land_from_destruction(text: str, activated: bool) -> RuleResul
     if "the next time target land would be destroyed this turn, remove all damage marked on it instead" in text:
         return _instruction("shield_target_land_from_destruction"), activated_kind(activated, "prevent")
     return None
+
+
+# Crumble: "Destroy target artifact. It can't be regenerated. That artifact's
+# controller gains life equal to its mana value."
+@parse_rule(52_500)
+def destroy_artifact_controller_gains_mana_value(text: str, activated: bool) -> RuleResult:
+    if (
+        "destroy target artifact" in text
+        and "that artifact's controller gains life equal to its mana value" in text
+    ):
+        return (
+            _instruction(
+                "destroy_artifact_controller_gains_mana_value",
+                bypass_regeneration="can't be regenerated" in text,
+            ),
+            activated_kind(activated, "destroy"),
+        )
+    return None
