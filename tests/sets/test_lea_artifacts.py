@@ -470,7 +470,11 @@ def test_web_activate_black_lotus_accepts_mana_color_choice():
         name="Black Lotus",
         mana_cost="{0}",
         type_line="Artifact",
-        oracle_text="{T}, Sacrifice Black Lotus: Add three mana of any one color.",
+        # The printed oracle text. Naming the card inside its own text is the
+        # pre-errata wording; the reading lives in
+        # card_hooks.CARD_LINE_INSTRUCTIONS under this name and this exact line,
+        # so a paraphrase reaches no front end at all.
+        oracle_text="{T}, Sacrifice this artifact: Add three mana of any one color.",
     )
     session.game.players[0].battlefield = [Permanent(card=lotus)]
     session.game.players[0].mana_pool = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0}

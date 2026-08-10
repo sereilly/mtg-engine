@@ -498,7 +498,7 @@ class AbilityActivationMixin:
         mana_like_kinds = {
             "add_mana_from_text",
             "sacrifice_self_for_mana",
-            "sacrifice_creature_for_black_mana",
+            "sacrifice_creature_for_mana",
         }
         if instruction.kind in mana_like_kinds:
             # A second `card.name == "Basalt Monolith"` branch stood here,

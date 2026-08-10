@@ -1,6 +1,6 @@
 """Name-keyed registries for card-specific behavior.
 
-Most cards should be handled generically by parse rules (engine/parsing) and
+Most cards should be handled generically by the parser (engine/grammar) and
 effect handlers (engine/handlers). When a card needs truly bespoke logic that
 no generic instruction covers, register it here instead of hardcoding the card
 name inside engine internals. This keeps per-card behavior in one place and
@@ -63,7 +63,7 @@ LeaveBattlefieldHook = Callable[["Game", "PlayerState", "Permanent"], None]
 # Per-line instructions for texts that are one card, not a template
 # --------------------------------------------------------------------------
 #
-# `engine/parsing/` is being deleted. Most of what it claimed is templating and
+# `engine/parsing/` is deleted. Most of what it claimed was templating and
 # moves to a grammar production; the rest is a *single card's sentence* wired to
 # a handler written for that card — Chaos Orb's flip, Camouflage's blocker
 # piles, Shahrazad's subgame. The audit found 133 of its 168 rules were literal
@@ -460,6 +460,18 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         "whenever this creature attacks and isn't blocked, you gain 2 life":
             _line("target_gains_life", "spell_pattern", amount=2, recipient="caster"),
     },
+    # Metamorphosis and Sacrifice print the *same* additional-cost sentence and
+    # buy different mana with it, so the line alone cannot say what the card
+    # does — which is what makes the name load-bearing here rather than a
+    # shortcut. Both are keyed on that cost line because the handler performs
+    # both halves in one resolution, and the three ways they differ (colour,
+    # amount, spend restriction) are payload on the instruction rather than
+    # `in text` probes inside the handler.
+    'Metamorphosis': {
+        "as an additional cost to cast this spell, sacrifice a creature":
+            _line("sacrifice_creature_for_mana", "spell_pattern",
+                color=None, bonus=1, spend_only="creature"),
+    },
     'Mijae Djinn': {
         "whenever this creature attacks, flip a coin. if you lose the flip, remove "
         "this creature from combat and tap it":
@@ -598,15 +610,11 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
                 toughness=4, type_line='Creature — Bird', colors=('R',),
                 keywords=('Flying',)),
     },
-    # Keyed on the additional-cost line, which is the sentence the handler
-    # performs both halves of. Metamorphosis prints the same cost line and a
-    # *different* effect (X mana of any one colour), and the legacy rule gave it
-    # this instruction — so it is deliberately not registered here: no handler
-    # adds any-colour mana from a sacrificed creature's mana value, and copying
-    # this entry onto it would re-state that as understood.
+    # The other half of the pair; see the note on Metamorphosis above.
     'Sacrifice': {
         "as an additional cost to cast this spell, sacrifice a creature":
-            _line("sacrifice_creature_for_black_mana", "spell_pattern"),
+            _line("sacrifice_creature_for_mana", "spell_pattern",
+                color="B", bonus=0, spend_only=None),
     },
     'Sandals of Abdallah': {
         "{2}, {t}: target creature gains islandwalk until end of turn. when that "

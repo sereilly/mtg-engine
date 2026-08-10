@@ -6,18 +6,23 @@ can execute. This module owns tokenizing, line classification (keyword /
 triggered / activated / static), and the per-card compile cache.
 
 Reading an effect clause is delegated, and `_line_instruction` is where the
-three front ends meet, most general first:
+two front ends meet, most general first:
 
 1. ``engine/grammar/`` — a real parser over Magic's templating. Whatever it
    claims, it claims for every card printed the same way.
 2. ``engine/card_hooks.py``'s ``CARD_LINE_INSTRUCTIONS`` — one printed line of
    one card, for sentences no second card could share. A production for those
    would be a whole-card substring match wearing a grammar hat.
-3. ``engine/parsing/`` — the legacy ``@parse_rule`` registry, being deleted.
 
 Precedence follows from that ordering: a line the grammar learns to read stops
 reaching its card hook, which is what makes a superseded hook dead rather than
 wrong.
+
+There is no third. ``engine/parsing/``'s ``@parse_rule`` registry — a flat table
+of substring predicates, hand-ordered against one another, which claimed a
+clause on a prefix and dropped whatever followed — is deleted. A line no front
+end reads now produces no instruction, which is the loud failure the invariant
+asks for: the card is reported unsupported and names the clause.
 """
 
 from __future__ import annotations
@@ -37,18 +42,14 @@ from .oracle_types import (
     TriggerCondition,
     _COLOR_WORD_TO_SYMBOL,
     _MANA_TOKEN_RE,
-    _extract_mana_cost_from_text,
-    _instruction,
-    _parse_number_token,
 )
 from .characteristic_defining import dynamic_pt_for
 from .auras import unclaimed_aura_lines
 from .combat_restrictions import combat_restriction_for
+from .effect_labels import activated_label, triggered_label
 from .lord_buffs import LORD_BUFF_KIND, lord_buff_for, lord_buff_payload
 from .static_bonuses import static_bonus_for
 from .grammar import ast as grammar_ast, compile_line as compile_grammar_line
-from .parsing import parse_primary_instruction, parse_static_coeffects
-from .parsing.base import activated_kind
 
 __all__ = [
     "ActivatedAbilityCost",
@@ -458,12 +459,13 @@ def _parse_triggered_ability(line: str, card_name: str | None = None) -> ParsedT
     # Strip leading colon/comma that sometimes follows the condition clause
     remainder = remainder.lstrip(": ")
 
-    # Extract any trailing "if ..." guard on the effect
-    if_kind, clean_effect = _extract_if_condition(remainder)
+    # Extract any trailing "if ..." guard on the effect. The clause it strips is
+    # no longer read on its own: the front ends take the whole line, so the
+    # guard's only job now is the payload key attached below.
+    if_kind, _clean_effect = _extract_if_condition(remainder)
 
-    instruction, effect_kind = _prefer_line_reading(
-        _line_instruction(line, card_name),
-        parse_primary_instruction(clean_effect, activated=False),
+    instruction, effect_kind = _reading(
+        _line_instruction(line, card_name, condition_kind=condition.kind)
     )
 
     if instruction is not None and if_kind is not None:
@@ -485,30 +487,15 @@ def _parse_triggered_ability(line: str, card_name: str | None = None) -> ParsedT
 
 
 # ---------------------------------------------------------------------------
-# Effect instruction parsing — delegated to the engine.parsing rule registry.
-# Kept as a module-level alias for backwards compatibility.
-# ---------------------------------------------------------------------------
-
-def _parse_primary_instruction(text: str, *, activated: bool) -> tuple[OracleInstruction | None, str]:
-    return parse_primary_instruction(text, activated=activated)
-
-
-# ---------------------------------------------------------------------------
-# Grammar front end (strangler fig)
+# Grammar front end
 # ---------------------------------------------------------------------------
 #
 # engine.grammar parses a line into a typed AST and lowers it to instructions.
-# It runs on every line, but its result is only *used* when every category it
-# lowered to is switched on in engine.grammar.GRAMMAR_CATEGORIES; otherwise the
-# legacy @parse_rule registry handles the line exactly as before. That keeps the
-# migration continuously shippable: a category is enabled only once the
-# differential guard is green for it, and the legacy rules for a category are
-# deleted only once the coverage ratchet shows the grammar claims every line
-# they used to.
-
-# A grammar category maps to the legacy effect_kind vocabulary so newly
-# grammar-supported lines report the same way rule-supported ones always have.
-_CATEGORY_EFFECT_KINDS = {"damage": "damage", "pump": "pump", "life": "life"}
+# It runs on every line, and its result is used when every category it lowered
+# to is switched on in engine.grammar.GRAMMAR_CATEGORIES. A line it refuses now
+# reaches the name-keyed card hooks and then nothing — there is no legacy
+# registry left underneath, so a category switched off is a card reported
+# unsupported rather than a card quietly read by something else.
 
 
 def _grammar_instruction(
@@ -516,10 +503,16 @@ def _grammar_instruction(
     card_name: str | None,
     *,
     activated: bool = False,
+    condition_kind: str | None = None,
     spell_line_only: bool = False,
 ) -> tuple[OracleInstruction, str] | None:
-    """The grammar's ``(instruction, effect_kind)`` for one line, or None to
-    fall back to the legacy rule registry.
+    """The grammar's ``(instruction, effect_kind)`` for one line, or None when
+    the grammar does not claim it.
+
+    *activated* and *condition_kind* name the **position** the line occupies —
+    an ability's clause, a trigger's remainder (whose condition they carry), or
+    a plain effect line. They decide only the ``effect_kind`` label
+    (``engine/effect_labels.py``), never the instruction.
 
     A multi-instruction lowering is wrapped in a single ``sequence``
     instruction, so composition becomes first-class in the IR without changing
@@ -556,7 +549,12 @@ def _grammar_instruction(
         else OracleInstruction("sequence", "", {"steps": instructions})
     )
     category = next(iter(sorted(compiled.categories)), "effect")
-    effect_kind = activated_kind(activated, _CATEGORY_EFFECT_KINDS.get(category, category))
+    if condition_kind is not None:
+        effect_kind = triggered_label(instruction.kind, condition_kind)
+    elif activated:
+        effect_kind = activated_label(instruction.kind, category)
+    else:
+        effect_kind = "spell_pattern"
     return instruction, effect_kind
 
 
@@ -571,12 +569,12 @@ def _grammar_static_coeffects(
     them) and each a *co-effect*: it coexists with whatever else the card says
     rather than being the effect the card's resolution carries out.
 
-    Collected here, after the per-line pass, for the same reason
-    ``parse_static_coeffects`` is: a card can state one of these alongside a
-    clause that already claimed the card's instruction (Conversion's upkeep
+    Collected after the per-line pass, for the reason the deleted
+    ``parse_static_coeffects`` also was: a card can state one of these alongside
+    a clause that already claimed the card's instruction (Conversion's upkeep
     cost, Jihad's enter-choice and sacrifice trigger). Claiming it as an
-    ordinary line instruction would *suppress* the whole-card reading of those
-    other sentences, which is a different program, not a better one.
+    ordinary line instruction would *suppress* the reading of those other
+    sentences, which is a different program, not a better one.
     """
     coeffects: list[OracleInstruction] = []
     for raw_line in oracle_text.splitlines():
@@ -597,16 +595,19 @@ def _card_hook_instruction(
 ) -> tuple[OracleInstruction, str] | None:
     """The name-keyed reading of one line, for texts that are a single card.
 
-    The third front end, consulted only where the grammar declined. Most of what
-    ``engine/parsing/`` claimed is templating and belongs in a production; the
-    rest is one card's sentence bound to a handler written for it, and those
-    move to ``engine/card_hooks.py`` — the one file whose subject is a card's
+    The second front end, consulted only where the grammar declined. Most of
+    what ``engine/parsing/`` claimed is templating and belongs in a production;
+    the rest is one card's sentence bound to a handler written for it, and those
+    live in ``engine/card_hooks.py`` — the one file whose subject is a card's
     name (see CARD_LINE_INSTRUCTIONS for the entry bar).
 
-    Kept out of :func:`_grammar_instruction` on purpose. That function is what
-    ``tests/engine/test_grammar_fallback_safety.py`` stubs to compile the pool
-    without the grammar; folding the hooks into it would stub those too and the
-    guard would report every hooked card as a loss.
+    Kept out of :func:`_grammar_instruction` on purpose, so that stubbing the
+    grammar (``tests/engine/test_front_end_safety.py``) leaves the hooks
+    standing; folding them in would stub those too and the guard would report
+    every hooked card as a loss.
+
+    A hook carries its own ``effect_kind``, so it never consults
+    ``engine/effect_labels.py`` and the position flags do not reach it.
     """
     from .card_hooks import card_line_instruction
 
@@ -638,16 +639,38 @@ def _line_instruction(
     card_name: str | None,
     *,
     activated: bool = False,
+    condition_kind: str | None = None,
     spell_line_only: bool = False,
 ) -> tuple[OracleInstruction, str] | None:
     """The front ends that read one line, most general first: the grammar, then
-    the name-keyed card hooks."""
+    the name-keyed card hooks. There is no third — a line neither claims has no
+    instruction, and the card is reported unsupported naming the clause."""
     found = _grammar_instruction(
-        line, card_name, activated=activated, spell_line_only=spell_line_only
+        line, card_name,
+        activated=activated, condition_kind=condition_kind,
+        spell_line_only=spell_line_only,
     )
     if found is not None:
         return found
     return _card_hook_instruction(line, card_name, spell_line_only=spell_line_only)
+
+
+def _reading(
+    found: tuple[OracleInstruction, str] | None,
+) -> tuple[OracleInstruction | None, str]:
+    """A front end's reading, widened to the ``(instruction | None, label)`` shape
+    the ability parsers return.
+
+    This was ``_prefer_line_reading``, which took a *second* argument — the
+    legacy registry's reading of the same line — and used it for two things: the
+    instruction when no front end claimed the line, and the ``effect_kind``
+    label whenever a legacy rule matched, even where the grammar had already
+    produced the instruction. The first is gone with the registry; the second is
+    ``engine/effect_labels.py``.
+    """
+    if found is None:
+        return None, "unsupported"
+    return found
 
 
 _CHOOSE_ONE_RE = re.compile(r"choose one\b", re.IGNORECASE)
@@ -684,9 +707,9 @@ def _modal_options(oracle_text: str, card_name: str | None) -> tuple[ModalOption
 
     Splitting the bullets is line classification, which is this module's job;
     each bullet's *effect* then goes to the same front ends an ordinary line
-    does (:func:`_line_instruction`, then the legacy rules). A mode is supported
-    exactly when its own clause is, which is why a card with one readable mode
-    and one unreadable one still resolves the readable one.
+    does (:func:`_line_instruction`). A mode is supported exactly when its own
+    clause is, which is why a card with one readable mode and one unreadable one
+    still resolves the readable one.
 
     Modal **activated** abilities never reach here: ``expand_modal_activated_lines``
     has already rewritten them into one ordinary ability line per bullet, so a
@@ -703,34 +726,12 @@ def _modal_options(oracle_text: str, card_name: str | None) -> tuple[ModalOption
         label = _WHITESPACE_RE.sub(" ", raw.strip()).strip()
         if not label:
             continue
-        instruction, effect_kind = _prefer_line_reading(
-            _mode_reading(label, card_name),
-            parse_primary_instruction(_normalize_mode_clause(label), activated=False),
-        )
+        instruction, effect_kind = _reading(_mode_reading(label, card_name))
         # The original casing is kept for the UI's mode picker.
         options.append(
             ModalOption(label.rstrip("."), instruction, effect_kind, instruction is not None)
         )
     return tuple(options)
-
-
-def _prefer_line_reading(
-    reading: tuple[OracleInstruction, str] | None,
-    legacy: tuple[OracleInstruction | None, str],
-) -> tuple[OracleInstruction | None, str]:
-    """Take the per-line reading's instruction when there is one, but keep the
-    legacy ``effect_kind`` label where the legacy rules also matched.
-
-    *reading* is what :func:`_line_instruction` produced — the grammar's, or the
-    card hooks'. The label feeds reporting (``SimulationResult``, the support
-    report) rather than dispatch, so holding it steady keeps the migration's
-    diff to the thing that actually matters — the instruction.
-    """
-    legacy_instruction, legacy_kind = legacy
-    if reading is None:
-        return legacy_instruction, legacy_kind
-    instruction, reading_kind = reading
-    return instruction, (legacy_kind if legacy_instruction is not None else reading_kind)
 
 
 # ---------------------------------------------------------------------------
@@ -752,9 +753,8 @@ def _parse_activated_ability(line: str, card_name: str | None = None) -> ParsedA
         return None
 
     effect_text = normalized.split(":", 1)[1].strip()
-    instruction, effect_kind = _prefer_line_reading(
-        _line_instruction(line, card_name, activated=True),
-        parse_primary_instruction(effect_text, activated=True),
+    instruction, effect_kind = _reading(
+        _line_instruction(line, card_name, activated=True)
     )
     supported = instruction is not None
     return ParsedActivatedAbility(
@@ -1023,16 +1023,18 @@ def _noncreature_line_instructions(
     in printed order.
 
     Assembled from the reading the compiler has *already* produced for that
-    line. The legacy fallback in the caller collapses the card's entire text to
-    one string and keeps the first rule that matches it, so an artifact whose
+    line. The legacy fallback this replaced collapsed the card's entire text to
+    one string and kept the first rule that matched it, so an artifact whose
     activated ability the grammar reads in full still had its card-level
     instruction produced by re-reading the whole card — two front ends answering
-    the same question about the same line, and only one of them per line.
+    the same question about the same line, and only one of them per line. That
+    whole-text pass is gone with the registry; a line nothing claims now
+    contributes nothing, rather than borrowing a sentence from elsewhere on the
+    card.
 
     Reusing the ability parse rather than re-running the grammar is what keeps
-    the fallback *per line*: those parses already try the grammar first and drop
-    to the legacy rules only for the clause the grammar refused, so a production
-    claiming one line cannot delete the reading of any other.
+    the assembly per line, so a production claiming one line cannot delete the
+    reading of any other.
 
     *whole_card* tells the list's two meanings apart. For an instant or sorcery
     it is the program that *resolves* — the stack executes the first
@@ -1076,9 +1078,10 @@ def _noncreature_line_instructions(
             continue
 
         # Neither — a static ability ("Black creatures get +1/+1."), or a
-        # triggered one whose condition the legacy trigger table refuses
-        # (Cursed Land). Its instruction used to arrive from the whole-text
-        # parse or from parse_static_coeffects re-reading the card.
+        # triggered one whose condition the trigger table refuses (Cursed Land).
+        # Its instruction used to arrive from the whole-text parse or from
+        # parse_static_coeffects re-reading the card; it comes from this line
+        # or from nowhere.
         static = _line_instruction(line, card_name)
         if static is not None:
             instructions.append(static[0])
@@ -1138,7 +1141,9 @@ SUPPORTED_LAYOUTS = frozenset({
 # Support derived from the text-keyed rule tables
 # ---------------------------------------------------------------------------
 
-def _derived_static_claims(oracle_text: str, normalized_text: str) -> list[str]:
+def _derived_static_claims(
+    oracle_text: str, normalized_text: str, card_name: str | None = None
+) -> list[str]:
     """Names of the rule tables that already implement this card's text.
 
     These tables (untap_restrictions, draw_step_modifiers, cost_modifiers,
@@ -1154,6 +1159,7 @@ def _derived_static_claims(oracle_text: str, normalized_text: str) -> list[str]:
     support from the tables that do the work means the parameter is data here
     too.
     """
+    from .card_hooks import DRAW_STEP_MODIFIERS
     from .cost_modifiers import cost_modifier_claims_line
     from .draw_step_modifiers import draw_step_bonus_for
     from .enter_effects import enter_effect_line
@@ -1179,6 +1185,16 @@ def _derived_static_claims(oracle_text: str, normalized_text: str) -> list[str]:
     if global_static_for(oracle_text) is not None:
         claims.append("global_statics")
     if draw_step_bonus_for(oracle_text) is not None:
+        claims.append("draw_step_modifiers")
+    # The *name-keyed* half of the same CR 504 story (Island Sanctuary's
+    # skip-your-draw-for-protection), registered in card_hooks and carried out by
+    # phases/draw_step.py, phases/declare_attackers_step.py and
+    # phases/untap_step.py. It has no instruction either, and until this claim it
+    # had no support of its own: the card was held up by a `spell_pattern` marker
+    # the whole-text fallback produced from the words "draw a card" inside a
+    # sentence about *skipping* one. Deleting that fallback is what exposed it —
+    # tests/engine/test_derived_support.py named the card immediately.
+    if card_name in DRAW_STEP_MODIFIERS:
         claims.append("draw_step_modifiers")
     if any(
         cost_modifier_claims_line(normalize_creature_line(line))
@@ -1266,12 +1282,12 @@ def _compile_card_oracle(
         activated_abilities = _parse_noncreature_abilities(oracle_text, name)
         triggered_abilities = _parse_noncreature_triggered(oracle_text, name)
 
-        # Line by line. The legacy path below collapses the card's whole text to
-        # one string and keeps only the first rule that matches it, so a second
-        # sentence ("Draw a card. Each player discards a card.") was silently
-        # dropped, and an artifact whose activated ability the grammar reads in
-        # full still had its card-level instruction produced by re-reading the
-        # card end to end.
+        # Line by line — the only way it is assembled now. The legacy path that
+        # stood alongside it collapsed the card's whole text to one string and
+        # kept only the first rule that matched, so a second sentence ("Draw a
+        # card. Each player discards a card.") was silently dropped and an
+        # artifact whose activated ability the grammar reads in full still had
+        # its card-level instruction produced by re-reading the card end to end.
         instructions: list[OracleInstruction] = _noncreature_line_instructions(
             oracle_text,
             name,
@@ -1284,30 +1300,27 @@ def _compile_card_oracle(
         # first. Built from the original text to keep human-readable labels.
         modes = _modal_options(oracle_text, name)
 
-        if not instructions:
+        if not instructions and modes and modes[0].instruction is not None:
             # A modal spell's card-level instruction is its *first* mode's — the
             # bullets are alternatives, so there is no other honest candidate,
-            # and the stack executes this list when nothing chose a mode. The
-            # whole-text fallback below never sees a bullet: it collapses the
-            # card to one string, where "counter target red spell. destroy
-            # target red permanent" reads as a spell that does both.
-            if modes and modes[0].instruction is not None:
-                instructions.append(modes[0].instruction)
-            else:
-                primary_instruction, _ = parse_primary_instruction(normalized_text, activated=False)
-                if primary_instruction is not None:
-                    instructions.append(primary_instruction)
+            # and the stack executes this list when nothing chose a mode.
+            #
+            # The whole-text fallback that stood beside this is deleted with the
+            # rule registry, and its removal is the last of the silent
+            # partial-reads: it collapsed the card to one string, where "counter
+            # target red spell. destroy target red permanent" reads as a spell
+            # that does both, and where a sentence *no line* produced an
+            # instruction for could still hand the card one borrowed from
+            # somewhere else in its text. Four cards carried such an instruction
+            # (Fastbond, Island Sanctuary, Jihad, Lich) and nothing dispatched
+            # any of them.
+            instructions.append(modes[0].instruction)
 
         # Static continuous co-effects (e.g. Conversion's "All Mountains are
         # Plains.") that follow a primary clause already claimed above and that
-        # no line above claimed for itself. The grammar's derivation-table
-        # readings come first, so a card whose static the tables already derive
-        # keeps that reading and the legacy re-read of the same sentence is
-        # dropped by the de-dupe.
-        for coeffect in (
-            *_grammar_static_coeffects(oracle_text, name),
-            *parse_static_coeffects(normalized_text),
-        ):
+        # no line above claimed for itself, derived line by line by
+        # engine/grammar/derived.py.
+        for coeffect in _grammar_static_coeffects(oracle_text, name):
             if coeffect.kind not in {i.kind for i in instructions}:
                 instructions.append(coeffect)
 
@@ -1331,7 +1344,7 @@ def _compile_card_oracle(
 
         instructions.extend(
             OracleInstruction("derived_static_rule", claim)
-            for claim in _derived_static_claims(oracle_text, normalized_text)
+            for claim in _derived_static_claims(oracle_text, normalized_text, name)
         )
 
         instructions.extend(

@@ -1,11 +1,11 @@
 """Typed AST for Magic oracle text.
 
 Every node is a frozen dataclass holding only hashable values (tuples, never
-lists), so an AST compares by value — the property the differential and
-deletion-probe guards rely on.
+lists), so an AST compares by value — the property the lowering goldens and the
+deletion probe rely on.
 
 This module imports nothing from the rest of the engine, mirroring
-``engine/oracle_types.py``: parse rules, tests, and scripts can import it
+``engine/oracle_types.py``: the lowering, tests and scripts can import it
 without any risk of a cycle.
 
 **The node inventory is append-only.** New fields must carry defaults and new
@@ -103,11 +103,11 @@ class Comparison:
 class ObjectFilter:
     """A noun phrase describing a set of objects.
 
-    Strict superset of ``engine.parsing.common.TargetFilter``. ``to_payload``
-    emits the exact key set that filter has always produced, so instructions
-    lowered from the grammar stay byte-compatible with the 121 existing effect
-    handlers; the newer restriction keys are additive and read with
-    ``payload.get`` defaults on the handler side.
+    ``to_payload`` emits the exact key set the deleted
+    ``engine.parsing.common.TargetFilter`` produced, so instructions lowered
+    from the grammar stayed byte-compatible with the 121 existing effect
+    handlers across the migration; the newer restriction keys are additive and
+    read with ``payload.get`` defaults on the handler side.
     """
 
     card_types: tuple[str, ...] = ()          # "creature", "artifact", ...
@@ -473,7 +473,15 @@ class Sacrifice:
 
 @dataclass(frozen=True)
 class Exile:
+    """``Exile <subject> [duration]``.
+
+    The duration is what separates two different handlers rather than a
+    decoration: a bare exile is permanent, and "until end of turn" is a
+    temporary exile that has to return the card (CR 406.1, 400.7). Recording it
+    is what stops the rider being dropped onto the permanent reading.
+    """
     subject: Recipient
+    duration: Duration = field(default_factory=lambda: Duration())
 
 
 @dataclass(frozen=True)
@@ -666,12 +674,24 @@ class ExtraTurn:
 
 @dataclass(frozen=True)
 class WinGame:
+    """"You win the game." (CR 104.2b.)"""
     player: PlayerRef
 
 
 @dataclass(frozen=True)
 class LoseGame:
+    """"Target player loses the game." / "You lose the game." (CR 104.3e.)"""
     player: PlayerRef
+
+
+@dataclass(frozen=True)
+class DrawGame:
+    """"The game is a draw." (CR 104.4c.)
+
+    No player field: the sentence has no subject, and the effect ends the game
+    for everyone. Its own node rather than a ``WinGame`` with a flag, because
+    104.4 is a third outcome and not a win with an asterisk.
+    """
 
 
 @dataclass(frozen=True)
@@ -722,7 +742,7 @@ Effect = Union[
     TapOrUntap,
     Regenerate, CounterSpell, ReturnToZone, CreateToken, AddMana,
     AddManaForTappedLand, PreventDamage,
-    SearchLibrary, Shuffle, ExtraTurn, WinGame, LoseGame, BecomeColor,
+    SearchLibrary, Shuffle, ExtraTurn, WinGame, LoseGame, DrawGame, BecomeColor,
     SacrificeUnlessPay, DamageUnlessPay, LookAtHand, CantBe, ChangeText,
     GainControl, RawEffect,
 ]
@@ -930,7 +950,8 @@ __all__ = [
     "GainControl",
     "CounterSpell", "ReturnToZone", "CreateToken", "AddMana",
     "AddManaForTappedLand", "PreventDamage",
-    "SearchLibrary", "Shuffle", "ExtraTurn", "WinGame", "LoseGame", "RawEffect",
+    "SearchLibrary", "Shuffle", "ExtraTurn", "WinGame", "LoseGame", "DrawGame",
+    "RawEffect",
     # statements
     "Statement", "Sequence", "Conjunction", "Conditional", "May", "ForEach",
     # abilities

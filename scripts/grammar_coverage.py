@@ -1,21 +1,34 @@
-"""Generate GRAMMAR_COVERAGE.md — the parser-migration ratchet.
+"""Generate GRAMMAR_COVERAGE.md — how much of the pool the parser reads.
 
-Tracks how much of the card pool the grammar front end
-(``engine/grammar/``) accounts for, as it takes over from the flat
-``@parse_rule`` registry in ``engine/parsing/``. Three nested measures per set:
+``engine/grammar/`` is the parser. This measures its reach over the printed
+lines in the pool, in three nested measures per set:
 
 - **parsed** — the grammar consumed every token of the line and produced an AST.
-- **lowered** — that AST mapped onto executable instructions.
-- **executed** — every category the line lowered to is switched on in
-  ``GRAMMAR_CATEGORIES``, so the grammar's output is what actually runs.
+- **lowered** — that AST mapped onto instructions, *or* onto a sidecar registry
+  that already runs the line off the card's raw text
+  (``engine/grammar/registries.py``), *or* onto a keyword line.
+- **executed** — the line produced instructions whose categories are switched on
+  in ``GRAMMAR_CATEGORIES``, so the engine dispatches the grammar's output.
 
 ``executed <= lowered <= parsed`` always. The gap between *lowered* and
-*executed* is deliberate: work lands and is measured before it is switched on.
+*executed* is mostly the registry and keyword lines, which are accounted for
+without an instruction to dispatch.
+
+**What this ratchet means now that there is one parser.** It was a migration
+measure — "how much has the grammar taken over from ``engine/parsing/``" — and
+that question was answered when the registry was deleted. What it measures
+today is the division of labour between the *general* reader and the
+special-case ones: the name-keyed hooks in ``engine/card_hooks.py`` and the
+text-keyed sidecar tables. A line the grammar parses is one every card printed
+the same way gets for free; a line it refuses is one that needed a hook, or an
+unsupported card. So a **fall** in these numbers means the pool became more
+special-cased than it was — either a production regressed, or a card was
+supported by writing its name down instead of by reading its text. That is
+worth failing on, and it is the same direction the migration ratchet pointed.
 
 The floors live in ``scripts/grammar_ratchet.json`` and
-``tests/engine/test_grammar_ratchet.py`` fails if any of them drops, so the
-migration can only move forward. Raise them with ``--accept`` after reviewing
-the diff.
+``tests/engine/test_grammar_ratchet.py`` fails if any of them drops. Raise them
+with ``--accept`` after reviewing the diff.
 
 Usage::
 
@@ -157,9 +170,12 @@ def render(
     add("# Grammar Coverage")
     add("")
     add(
-        "Migration tracker for the oracle-text parser rewrite: how much of the "
-        "card pool `engine/grammar/` accounts for, as it takes over from the "
-        "`@parse_rule` registry in `engine/parsing/`."
+        "How much of the card pool the oracle-text parser (`engine/grammar/`) "
+        "reads. It is the engine's only parser; a line it refuses is one that "
+        "needed a name-keyed hook, a text-keyed sidecar table, or that leaves "
+        "its card unsupported — so these numbers are the division of labour "
+        "between the general reader and the special-case ones, and they are "
+        "ratcheted so it cannot shift towards the special cases."
     )
     add("")
     add("**Generated** — run `python scripts/grammar_coverage.py` to refresh.")
@@ -167,7 +183,7 @@ def render(
     add("| Measure | Meaning |")
     add("| --- | --- |")
     add("| Parsed | Grammar consumed every token of the line and built an AST |")
-    add("| Lowered | That AST mapped onto executable instructions |")
+    add("| Lowered | That AST mapped onto instructions, a sidecar registry, or a keyword line |")
     add("| Executed | Instructions' categories are switched on, so the grammar's output runs |")
     add("")
     add(

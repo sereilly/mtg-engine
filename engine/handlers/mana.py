@@ -41,14 +41,30 @@ def drain_target_lands_mana(game: Game, instruction: OracleInstruction, context:
     return True, "resolved"
 
 
-@effect_handler("sacrifice_creature_for_black_mana")
-def sacrifice_creature_for_black_mana(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    """Sacrifice (LEA): "Add an amount of {B} equal to the sacrificed
-    creature's mana value." Metamorphosis (ARN): "Add X mana of any one color,
-    where X is 1 plus the sacrificed creature's mana value." Both share the
-    additional-cost parse; the amount bump and the color choice are read from
-    the card's own text (the chosen color rides context.choices["new_color"], like the
-    laces' color choice)."""
+_COLOR_WORDS = {"W": "white", "U": "blue", "B": "black", "R": "red", "G": "green"}
+
+
+@effect_handler("sacrifice_creature_for_mana")
+def sacrifice_creature_for_mana(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"As an additional cost to cast this spell, sacrifice a creature." plus
+    the mana that cost buys.
+
+    Two cards print it and they differ in three ways, so all three are payload:
+
+    ``color``       the mana symbol produced, or None when the card says "of any
+                    one color" and the caster picks (the pick rides
+                    ``context.choices["new_color"]``, like the laces' colour).
+    ``bonus``       added to the sacrificed creature's mana value — Sacrifice
+                    adds 0, Metamorphosis's "1 plus …" adds 1.
+    ``spend_only``  the spell type the mana is locked to, or None for unrestricted
+                    pool mana. Metamorphosis's "Spend this mana only to cast
+                    creature spells" is ``"creature"``.
+
+    All three used to be decided by ``in`` probes against the resolving card's
+    own oracle text inside this handler, which made the card's *name* the only
+    thing keeping Metamorphosis off Sacrifice's effect — a second parser living
+    in a handler, and the exact shape ``engine/parsing/`` was deleted to remove.
+    """
     caster = context.caster
     chosen = context.target_permanent_index if isinstance(context.target_permanent_index, int) else None
     sacrificed_perm = game._sacrifice_creature_for_mana(caster, chosen_index=chosen)
@@ -56,18 +72,19 @@ def sacrifice_creature_for_black_mana(game: Game, instruction: OracleInstruction
         game.log.append(f"{caster.name} had no creature to sacrifice")
         return True, "resolved"
     sacrificed = sacrificed_perm.card
-    text = (context.card.oracle_text or "").lower()
-    amount = int(sacrificed.cmc)
-    if "1 plus the sacrificed creature's mana value" in text:
-        amount += 1
-    symbol = "B"
-    color_word = "black"
-    if "mana of any one color" in text:
+    amount = int(sacrificed.cmc) + int(instruction.payload.get("bonus", 0))
+    payload_color = instruction.payload.get("color")
+    if payload_color:
+        symbol = str(payload_color)
+    else:
+        # "of any one color": the caster's pick, defaulting to the card's own
+        # colour when no choice reached the stack (AI seats, headless scripts).
         symbol = game._normalize_mana_color(context.choices.get("new_color")) or "G"
-        color_word = {"W": "white", "U": "blue", "B": "black", "R": "red", "G": "green"}.get(symbol, symbol)
-    if "spend this mana only to cast creature spells" in text:
-        # Metamorphosis: the mana goes into the creature-spells-only bucket,
-        # merged into payments by _pay_mana_cost only for creature spells.
+    color_word = _COLOR_WORDS.get(symbol, symbol)
+    spend_only = instruction.payload.get("spend_only")
+    if spend_only == "creature":
+        # The mana goes into the creature-spells-only bucket, merged into
+        # payments by _pay_mana_cost only for creature spells.
         caster.creature_only_mana[symbol] = caster.creature_only_mana.get(symbol, 0) + amount
         game.log.append(
             f"{caster.name} sacrificed {sacrificed.name} for {amount} {color_word} mana "

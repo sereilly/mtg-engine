@@ -1,8 +1,9 @@
 """Shared oracle-text data types and small text helpers.
 
-These live in their own module (rather than engine.oracle) so that the
-parse-rule modules in engine/parsing can import them without creating an
-import cycle with the oracle compiler.
+These live in their own module (rather than engine.oracle) so anything that
+needs the compiler's *types* — the grammar's lowering, the card hooks, the
+handlers — can import them without an import cycle with the compiler itself.
+This module imports nothing from the engine.
 """
 
 from __future__ import annotations
@@ -131,10 +132,9 @@ class OracleProgram:
     modes: tuple[ModalOption, ...] = ()
 
 
-def _instruction(kind: str, value: str = "", **payload: Any) -> OracleInstruction:
-    return OracleInstruction(kind, value, payload)
-
-
+# Number words, shared with the text-keyed derivation tables that read a count
+# out of a printed line: draw_step_modifiers, land_play_allowance,
+# untap_restrictions. `engine/grammar/` reads its own numbers in the lexer.
 _NUMBER_WORDS = {
     "a": 1,
     "one": 1,
@@ -149,32 +149,12 @@ _NUMBER_WORDS = {
     "ten": 10,
 }
 
-
-def parse_number_token(token: str) -> int | None:
-    """Strict number parse: digits or a spelled-out number word, else None.
-    New parse rules should prefer this over ``_parse_number_token`` so an
-    unrecognized word surfaces as a parse failure instead of a silent 0."""
-    if token.isdigit():
-        return int(token)
-    return _NUMBER_WORDS.get(token)
-
-
-def _parse_number_token(token: str) -> int:
-    """Legacy lenient variant kept for existing call sites: unknown words
-    parse as 0."""
-    value = parse_number_token(token)
-    return 0 if value is None else value
+# `_instruction`, `parse_number_token`, its lenient `_parse_number_token` twin
+# and `_extract_mana_cost_from_text` stood beside it. All four were
+# `engine/parsing/`'s toolkit — the shorthand every rule built its instruction
+# with, the two readers a rule ran over a clause it had already decided to claim
+# — and all four went with the registry rather than being left as a second way
+# to do what the grammar's lexer and lowering already do.
 
 
 _MANA_TOKEN_RE = re.compile(r"\{([^}]+)\}")
-
-
-def _extract_mana_cost_from_text(text: str) -> dict[str, int]:
-    """Extract the first mana cost symbols found in *text* and return counts."""
-    cost: dict[str, int] = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0, "generic": 0}
-    for token in _MANA_TOKEN_RE.findall(text.upper()):
-        if token.isdigit():
-            cost["generic"] += int(token)
-        elif token in {"W", "U", "B", "R", "G", "C"}:
-            cost[token] += 1
-    return cost

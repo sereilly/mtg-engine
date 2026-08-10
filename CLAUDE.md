@@ -70,7 +70,7 @@ python scripts/set_progress.py        # regenerate SET_PROGRESS.md (per-set impl
 python scripts/rules_progress.py      # regenerate RULES_PROGRESS.md (CR test-coverage tracker); --check fails on unannotated tests
 python scripts/behaviour_classes.py   # regenerate BEHAVIOUR_CLASSES.md (behavioural-equivalence tracker); --check fails on drift, --accept re-snapshots
 python scripts/parse_coverage.py      # regenerate PARSE_COVERAGE.md (oracle-text parse-coverage tracker); --check fails on unclaimed text
-python scripts/grammar_coverage.py    # regenerate GRAMMAR_COVERAGE.md (parser-migration ratchet); --check fails on regression, --accept re-snapshots floors
+python scripts/grammar_coverage.py    # regenerate GRAMMAR_COVERAGE.md (how much of the pool the parser reads); --check fails on regression, --accept re-snapshots floors
 python scripts/fetch_vocabulary.py    # re-fetch data/vocabulary/*.json from Scryfall (run when a new set adds creature/land types)
 python scripts/ingest_set.py 3ED --fetch   # add a new set: download from Scryfall into the engine's card format
 python scripts/ingest_set.py --all --check # report card-file sizes without writing
@@ -85,7 +85,7 @@ perfect coverage over zero cards and `simulate_ai_games.py` report a clean run
 it never had. Guarded by `tests/engine/test_script_set_argument.py`.
 
 **Parse coverage:** `scripts/parse_coverage.py` verifies that every sentence of
-every supported card's oracle text is claimed by a known consumer (parse rules,
+every supported card's oracle text is claimed by a known consumer (the parser,
 compiler tables, the text-keyed channels in its `CHANNELS`/`HANDLER_CLAIMS`
 registries, card hooks) — the guard test
 (`tests/engine/test_parse_coverage.py`) fails when a supported card carries
@@ -114,30 +114,37 @@ cards/*.json (set files) → card_loader.load_cards → CardDefinition (immutabl
   → Game mixins → EFFECT_HANDLERS[instruction.kind](game, instruction, context)  # O(1) dict dispatch
 ```
 
-**The parser is mid-migration.** `engine/grammar/` (tokenizer → recursive-descent
-grammar → typed AST → lowering) is progressively replacing the flat
-`engine/parsing/` rule registry. Both lower to the same `OracleInstruction`, and
-the compiler tries the grammar first per line, falling back to the legacy rules
-when the grammar refuses or its category isn't switched on yet. Read
-`ROADMAP.md` before doing parser work; coverage lives in `GRAMMAR_COVERAGE.md`.
+**`engine/grammar/` is the parser** — tokenizer → recursive-descent grammar →
+typed AST → lowering to `OracleInstruction`. The compiler reads a line through
+it and then through `card_hooks.CARD_LINE_INSTRUCTIONS` (one printed line of one
+named card), and there is **nothing after that**: a line neither claims produces
+no instruction and the card is reported unsupported naming the clause. The flat
+`engine/parsing/` rule registry it replaced is deleted, along with its
+precedence bands — a grammar has no precedence knob, because a production
+consumes its line or refuses it. Read `ROADMAP.md` before doing parser work;
+coverage lives in `GRAMMAR_COVERAGE.md`.
 
 Extension points, each a small registered function — **adding a card means
 adding entries, not editing dispatch**:
 
-- `engine/grammar/` — the grammar front end. Adding a card pattern here means
-  adding a *production*, not a rule with a hand-picked precedence number.
-  Hard invariant: a production must consume **every token** of its line or
-  raise `GrammarError` — loud failure (card unsupported, clause named) is
-  always preferable to a silent partial match. Categories are switched on in
-  `GRAMMAR_CATEGORIES` only once
-  `tests/engine/test_grammar_differential.py` is green for them. Vocabulary
-  (creature types, keywords) is data in `data/vocabulary/`, refreshed by
+- `engine/grammar/` — the parser. Adding a card pattern here means adding a
+  *production*, and there is no precedence number to pick. Hard invariant: a
+  production must consume **every token** of its line or raise `GrammarError` —
+  loud failure (card unsupported, clause named) is always preferable to a silent
+  partial match. `GRAMMAR_CATEGORIES` is held equal to every category
+  `lower.py` can emit (`tests/engine/test_grammar_categories.py`): with no
+  fallback underneath, a category left off does not route its lines elsewhere,
+  it costs those cards their support. An effect that should *not* execute
+  belongs as a `LoweringError` naming what is missing. Vocabulary (creature
+  types, keywords) is data in `data/vocabulary/`, refreshed by
   `scripts/fetch_vocabulary.py` — never hardcode a type list.
-- `engine/parsing/` — legacy `@parse_rule(order)` functions mapping a normalized
-  oracle-text clause to `(OracleInstruction, effect_kind)`. Organized by category
-  (damage, zones, destruction, combat, …). Still the fallback for everything the
-  grammar hasn't taken over; being deleted category by category (roadmap phase 3
-  onward). Prefer extending the grammar over adding rules here.
+- `engine/effect_labels.py` — the `effect_kind` *label* an ability reports
+  (`activated_regenerate`, `triggered_sacrifice`, `upkeep_effect`). Never
+  dispatch: it feeds `SimulationResult`, the support report's buckets and the
+  `triggered_` prefix `web/serialization.py` turns into a stack item's
+  `is_triggered`. It is the vocabulary `engine/parsing/` used to produce,
+  carried across the deletion so 57 cards were not silently re-bucketed, and
+  held to the pool in both directions by `tests/engine/test_effect_labels.py`.
 - `engine/handlers/control_flow.py` — `sequence`, `if_then`, `may`, `for_each`.
   Effects compose through these instead of getting a fused instruction kind:
   write "deal damage, then gain life" as two instructions in a `sequence`, never
@@ -316,21 +323,26 @@ adding entries, not editing dispatch**:
   part-way-through decision goes through, plus the table registering them.
 
 `engine/oracle.py` is the compiler (tokenize → classify lines as
-keyword/triggered/activated/static → delegate effect clauses to `engine.parsing`).
+keyword/triggered/activated/static → delegate effect clauses to `engine.grammar`,
+then to the card hooks).
 `engine/oracle_types.py` holds shared dataclasses and imports nothing from the
 engine, so it's safe to import anywhere.
 
-### Parse-rule ordering (critical, non-obvious)
+### Precedence: there isn't any any more
 
-`@parse_rule` order determines precedence: **first match in ascending order
-wins, so more specific patterns must use lower orders than generic ones**
-(`"destroy all creatures"` before `"destroy target"`). All orders share one
-global space; write new rules as `BAND_X + offset` using the named constants in
-`engine/parsing/base.py`. A **duplicate order raises at import time**, so
-collisions surface immediately. The current order bands (×100 of the historic
-LEA numbering, opening ~99 free slots between former neighbors) are documented
-in `engine/ARCHITECTURE.md` (1,000–6,500 upkeep … 113,000–117,000 global/static
-buffs, lowest precedence).
+A section here described `@parse_rule`'s nine order bands and the rule that a
+specific pattern needed a lower number than a generic one. It went with
+`engine/parsing/`. Precedence was a property of a registry of substring
+predicates — the ordering was how a rule was told which other rules it was
+allowed to be wrong about — and a grammar has no such knob: `"destroy all
+creatures"` and `"destroy target creature"` are one production whose difference
+falls out of the noun phrase's quantifier.
+
+Two orderings remain, both structural and both asserted: **the grammar before
+the card hooks** (so a line that grows a production leaves its hook dead rather
+than wrong — `tests/engine/test_card_lines.py`), and **productions before the
+derivation tables** inside the grammar (so `engine/lord_buffs.py` cannot claim
+every anthem in the pool — `tests/engine/test_grammar_derived_lines.py`).
 
 ### Adding support for a new card
 
@@ -339,9 +351,12 @@ Work top-down, stop at the first step that covers it (recipe in
 1. Already covered? (`compile_card_oracle(card).supported`) → done.
    `python scripts/support_report.py --set <CODE>` reports coverage for
    a whole set; unsupported creatures now name the specific unrecognized line.
-2. New text, existing effect → add one `@parse_rule` returning an existing kind
-   (reuse `engine/parsing/common.py` helpers where they fit).
-3. New effect → invent an instruction kind (verb_object naming) + add a
+2. New text, existing effect → add a *production* to `engine/grammar/`
+   returning an existing kind. Most patterns are a branch in an existing
+   production plus a lowering; the noun phrases, amounts and durations are
+   already parsed.
+3. New effect → invent an instruction kind (verb_object naming), give it an
+   entry in `INSTRUCTION_CATEGORIES` *and* `GRAMMAR_CATEGORIES`, then add a
    `@effect_handler`. Token creation → emit `create_token`. P/T changes → go
    through `engine/pt.py`. "Would happen, instead" effects → register in
    `engine/replacements.py`.

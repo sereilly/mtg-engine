@@ -64,8 +64,15 @@ def test_lose_life_effect():
 
 
 def test_tap_and_untap_effects():
+    # "Untap target *permanent*", not "target creature": `untap_target_permanent`
+    # untaps whatever it is handed (predicate=lambda p: True), so the grammar
+    # refuses to lower a restricted untap onto it — see
+    # engine/grammar/lower.py's "no untap handler honors this restriction" and
+    # the ratchet entry in tests/engine/test_activation_targeting.py. A fixture
+    # saying "creature" would be asking the engine to read a restriction it does
+    # not enforce.
     tap_spell = _mk_card("Tap Test", "Instant", "Tap target creature.")
-    untap_spell = _mk_card("Untap Test", "Instant", "Untap target creature.")
+    untap_spell = _mk_card("Untap Test", "Instant", "Untap target permanent.")
     creature = _mk_card("Target Bear", "Creature — Bear")
 
     p1 = PlayerState(name="P1", hand=[tap_spell, untap_spell])

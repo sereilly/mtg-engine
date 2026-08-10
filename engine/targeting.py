@@ -224,7 +224,7 @@ _KIND_TO_SPEC: dict[str, dict] = {
     # "As an additional cost to cast this spell, sacrifice a creature." The
     # creature picked is the caster's own and is sacrificed as a cost, so the UI
     # offers only their creatures and says "sacrifice" rather than "target".
-    "sacrifice_creature_for_black_mana": {
+    "sacrifice_creature_for_mana": {
         "kind": "creature", "own_only": True, "sacrifice_cost": True,
     },
     # --- kinds that reach the picker through an activated ability -----------

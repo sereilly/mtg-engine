@@ -91,6 +91,54 @@ def test_every_derivation_table_is_reachable_from_the_pool(pool_lines):
     )
 
 
+def test_combat_restrictions_match_the_derivation_table_exactly():
+    """The grammar's combat restrictions must equal engine/combat_restrictions.py.
+
+    This is what let the category be switched on: not "the grammar produced
+    something", but "it produced the same instruction kind and the same payload
+    the table the consumer dispatches on produces", on every such line in the
+    pool. The land type and the power threshold are payload data on both sides,
+    so a card naming Mountain or a threshold of 4 is compared the same way.
+
+    (Inherited from `test_grammar_differential.py`. Its subject was never the
+    legacy rule registry: `combat_restriction_for` is a live derivation table,
+    read by `phases/declare_attackers_step.py` and by the compiler's support
+    gate, so the comparison outlives the deletion.)
+    """
+    from engine.combat_restrictions import combat_restriction_for
+    from engine.oracle import normalize_creature_line
+
+    # Shapes the grammar deliberately does not claim yet. They must keep
+    # *failing the parser*, not lowering to an empty instruction list — a line
+    # that parses to nothing is the silent drop this whole invariant exists to
+    # prevent.
+    unclaimed_kinds = {
+        "must_attack_each_combat", "cant_be_blocked_by_walls", "cant_attack", "cant_block",
+    }
+
+    compared = 0
+    for card in load_catalog():
+        for raw_line in card.oracle_text.split("\n"):
+            line = raw_line.strip()
+            if not line:
+                continue
+            derived = combat_restriction_for(normalize_creature_line(line))
+            if derived is None:
+                continue
+            result = compile_line(line, card_name=card.name)
+            if derived.kind in unclaimed_kinds:
+                assert not result.parsed, (
+                    f"{card.name}: {line!r} is not claimed by the grammar yet, so "
+                    "it must fail the parser rather than parse to nothing"
+                )
+                continue
+            got = [(i.kind, i.payload) for i in result.instructions]
+            assert got == [(derived.kind, derived.payload)], f"{card.name}: {line!r}"
+            compared += 1
+
+    assert compared, "no combat-restriction lines were compared"
+
+
 def test_a_derived_line_is_a_whole_line_or_nothing():
     """Every matcher is anchored at both ends, so a rider refuses the sentence.
 

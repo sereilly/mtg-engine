@@ -100,7 +100,7 @@ def permanent_effective_colors(perm: Permanent) -> set[str]:
 
 def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     """Whether *perm* satisfies a target-filter payload (the key vocabulary
-    produced by ``engine.parsing.common.TargetFilter.to_payload``:
+    produced by ``engine.grammar.ast.ObjectFilter.to_payload``:
     type/subtype/color filters, tapped_only, exclusions).
 
     Uses has_type/is_creature/effective colors so copies keep all their types

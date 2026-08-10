@@ -684,16 +684,38 @@ def test_605_1a_tap_for_mana_is_a_mana_ability():
 
 @pytest.mark.cr("605.2")
 def test_605_2_remains_a_mana_ability_even_if_it_cannot_produce_now():
-    """A conditional mana ability is still a mana ability even when the game
-    state means it would produce nothing (605.2)."""
-    altar = _mk_card("Wild Growth", "Enchantment", "{T}: Add {G} for each creature you control.")
+    """A mana ability is still a mana ability even when the game state means it
+    would produce nothing (605.2).
 
-    program = compile_card_oracle(altar)
+    605.2's own example offers two ways to be unable to produce — "{T}: Add {G}
+    for each creature you control" while controlling none, *or* the permanent
+    already being tapped. This uses the second, because the engine deliberately
+    refuses the first: no handler scales mana by a board count, and
+    ``_add_mana_from_text`` would add a single {G} and drop "for each creature
+    you control" entirely. The rule's example text is therefore reported
+    unsupported rather than compiled onto a handler that means something else —
+    which is the only honest reading of a card the engine cannot run.
+    """
+    rock = _mk_card("Mana Rock", "Artifact", "{T}: Add {G}.")
+
+    program = compile_card_oracle(rock)
     ability = program.activated_abilities[0]
 
-    # Classified as a mana ability regardless of how many creatures exist.
+    # Classified as a mana ability from the text alone. Nothing about the
+    # board — the permanent may be tapped, as it is below — reaches this.
     assert ability.instruction is not None
     assert ability.instruction.kind == "add_mana_from_text"
+
+    tapped = Permanent(card=rock, tapped=True)
+    p1 = PlayerState(name="P1", battlefield=[tapped])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    _not_summoning_sick(game, tapped)
+
+    # Already tapped, so it cannot produce now — and it is the same mana ability.
+    assert compile_card_oracle(tapped.card).activated_abilities[0].instruction.kind == (
+        "add_mana_from_text"
+    )
+    assert not game.activate_permanent_ability(0, "Mana Rock").supported
 
 
 # 605.3b — a mana ability doesn't go on the stack; it resolves immediately.

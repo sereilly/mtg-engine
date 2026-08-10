@@ -7,15 +7,16 @@ the guard test `tests/engine/test_parse_coverage.py` fails on new
 unclaimed text. Do not edit by hand.
 
 - Supported cards analyzed: **388**
-- Fully claimed: **386**
-- With acknowledged simplifications: **2**
+- Fully claimed: **385**
+- With acknowledged simplifications: **3**
 - With UNCLAIMED text (must fix or acknowledge): **0**
-- With deletion-probe findings (ignored words): **93**
+- With deletion-probe findings (ignored words): **9**
 
 ## Acknowledged simplifications
 
 | Card | Sentence | Why it is acceptable |
 | --- | --- | --- |
+| Mana Vault | `at the beginning of your draw step, if this artifact is tapped, it deals 1 damag` | NOT IMPLEMENTED, and recorded here rather than claimed. The card compiles supported on its other three lines (the untap restriction, the pay-{4}-to-untap upkeep trigger and the mana ability) and this one produces no instruction: no trigger table has a draw-step condition for a single permanent, and nothing scans for the phrase. Verified in a game — a tapped Mana Vault costs its controller no life at their draw step. It read as claimed until engine/parsing/ was deleted, because the coverage script asked the legacy registry about the sentence in isolation and a broad rule matched 'deals 1 damage to you' — an instruction the card's own program never carried and nothing ever dispatched. Implementing it needs a per-permanent draw-step trigger (the shape phases/upkeep_effects.py has for the upkeep) and is a behaviour change, so it belongs in a pass of its own |
 | Shahrazad | `players play a magic subgame, using their libraries as their decks` | subgames are far out of scope. The life clause IS implemented: the caster is treated as the subgame winner and every other player loses half their life, rounded up (handlers/life_and_game.opponents_lose_half_life) |
 | Word of Command | `you control that player until word of command finishes resolving` | simplified: control-of-player is modeled as forcing the chosen card to be played (pending_word_of_command) |
 | Word of Command | `while doing so, the player can activate mana abilities only if they're from land` | simplified: the forced play is cast without the mana-ability micromanagement |
@@ -29,148 +30,39 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 
 | Card | Clause | Ignored words |
 | --- | --- | --- |
-| Aladdin's Lamp | `the next time you would draw a card this turn, instead look at the top` | library, put all but one on bottom library in random order, draw card |
-| Aladdin's Ring | `this artifact deals 4 damage to any target` | artifact any target |
-| Animate Dead | `if it's on the battlefield, it loses "enchant creature card in a grave` | if it's on battlefield, loses "enchant creature card in graveyard" gains "enchant creature put onto battlefield with aura." attach aura |
-| Ankh of Mishra | `this artifact deals 2 damage to that land's controller` | artifact land's controller |
 | Armageddon | `destroy all lands` | all |
-| Balance | `each player chooses a number of lands they control equal to the number` | sacrifices rest |
-| Berserk | `target creature gains trample and gets +x/+0 until end of turn, where ` | where x power |
-| Black Vise | `this artifact deals x damage to that player, where x is the number of ` | artifact deals x damage player, where x |
-| Camouflage | `this turn, instead of declaring blockers, each defending player choose` | each defending player chooses any number creatures control divides into number piles equal number attacking creatures for whom player defending player |
-| Channel | `until end of turn, any time you could activate a mana ability, you may` | any time could activate mana ability, if do, |
-| Chaos Orb | `if this artifact is on the battlefield, flip it onto the battlefield f` | if artifact on battlefield, from height at least one foot |
-| Chaoslace | `target spell or permanent becomes red` | target spell or permanent |
-| Circle of Protection: Black | `the next time a black source of your choice would deal damage to you t` | next time |
-| Circle of Protection: Blue | `the next time a blue source of your choice would deal damage to you th` | next time |
-| Circle of Protection: Green | `the next time a green source of your choice would deal damage to you t` | next time |
-| Circle of Protection: Red | `the next time a red source of your choice would deal damage to you thi` | next time |
-| Circle of Protection: White | `the next time a white source of your choice would deal damage to you t` | next time |
-| City in a Bottle | `whenever one or more other nontoken permanents with a name originally ` | whenever one or more other nontoken permanents with name on battlefield, controllers sacrifice |
-| City in a Bottle | `players can't cast spells or play lands with a name originally printed` | players can't cast spells or play lands with name |
-| Copper Tablet | `this artifact deals 1 damage to that player` | artifact player |
-| Cursed Land | `at the beginning of the upkeep of enchanted land's controller, this au` | at beginning upkeep enchanted land's controller, aura player |
-| Deathlace | `target spell or permanent becomes black` | target spell or permanent |
-| Demonic Hordes | `unless you pay {b}{b}{b}, tap this creature and sacrifice a land of an` | tap creature choice |
-| Desert | `this land deals 1 damage to target attacking creature` | land target attacking creature |
-| Dingus Egg | `this artifact deals 2 damage to that land's controller` | artifact land's controller |
-| Drain Life | `drain life deals x damage to any target. you gain life equal to the da` | drain life any target. but not more life than player's life total before damage was dealt, planeswalker's loyalty before damage was dealt, or creature's toughness |
-| Drain Power | `target player activates a mana ability of each land they control. then` | target player player add mana lost way |
-| Drop of Honey | `when there are no creatures on the battlefield, sacrifice this enchant` | when there no creatures on battlefield, |
-| Earthbind | `if enchanted creature has flying, this aura deals 2 damage to that cre` | if enchanted creature has flying, aura creature aura gains "enchanted creature loses flying." |
-| Eye for an Eye | `the next time a source of your choice would deal damage to you this tu` | next time source choice would deal damage eye for eye |
-| Farmstead | `if you do, you gain 1 life."` | if do, |
-| Fastbond | `whenever you play a land, if it wasn't the first land you played this ` | whenever play land, if wasn't first land played enchantment |
-| Feedback | `this aura deals 1 damage to that player` | aura player |
-| Fireball | `fireball deals x damage divided evenly, rounded down, among any number` | fireball divided evenly, rounded down, among any number targets |
+| Fireball | `fireball deals x damage divided evenly, rounded down, among any number` | evenly, down, |
 | Flashfires | `destroy all plains` | all |
-| Fork | `copy target instant or sorcery spell, except that the copy is red` | except copy red |
-| Gaea's Liege | `target land becomes a forest until this creature leaves the battlefiel` | creature leaves battlefield |
-| Guardian Angel | `prevent the next x damage that would be dealt to any target this turn` | would be dealt any target |
-| Guardian Angel | `if you do, prevent the next 1 damage that would be dealt to that perma` | if do, would be dealt permanent or player |
-| Healing Salve | `prevent the next 3 damage that would be dealt to any target this turn` | would be dealt any target |
 | Icy Manipulator | `tap target artifact, creature, or land` | or |
-| Ifh-Bíff Efreet | `this creature deals 1 damage to each creature with flying and each pla` | creature |
-| Illusionary Mask | `you may choose a creature card in your hand whose mana cost could be p` | may choose creature card in hand whose mana cost could be paid by some amount or all mana spent on {x}. if do, without paying mana cost |
-| Island Fish Jasconius | `you may pay {u}{u}{u}. if you do, untap this creature` | if do, |
-| Island Sanctuary | `if you would draw a card during your draw step, instead you may skip t` | if would during draw step, instead may skip draw |
-| Jade Monolith | `the next time a source of your choice would deal damage to target crea` | source deals damage instead |
-| Jandor's Saddlebags | `untap target creature` | creature |
-| Jihad | `when the chosen player controls no nontoken permanents of the chosen c` | when chosen player controls no nontoken permanents chosen color, |
-| Karma | `this enchantment deals damage to that player equal to the number of sw` | enchantment player control |
-| Lich | `if you can't, you lose the game` | if can't, |
-| Lich | `when this enchantment is put into a graveyard from the battlefield, yo` | when enchantment put into graveyard from battlefield, |
-| Lifelace | `target spell or permanent becomes green` | target spell or permanent |
-| Lightning Bolt | `lightning bolt deals 3 damage to any target` | lightning bolt any target |
-| Lord of the Pit | `sacrifice a creature other than this creature. if you can't, this crea` | if can't, |
-| Magical Hack | `change the text of target spell or permanent by replacing all instance` | with another |
-| Magnetic Mountain | `that player may choose any number of tapped blue creatures they contro` | player |
-| Mana Short | `tap all lands target player controls and that player loses all unspent` | player |
-| Mana Vault | `at the beginning of your draw step, if this artifact is tapped, it dea` | at beginning draw step, if artifact tapped, |
-| Manabarbs | `this enchantment deals 1 damage to that player` | enchantment player |
-| Merchant Ship | `and isn't blocked, you gain 2 life` | isn't blocked, |
-| Mind Twist | `target player discards x cards at random` | at random |
-| Nether Shadow | `if this card is in your graveyard with three or more creature cards ab` | if card with three or more may |
-| Nettling Imp | `choose target non-wall creature the active player has controlled conti` | active player has controlled continuously since beginning |
 | Nevinyrral's Disk | `destroy all artifacts, creatures, and enchantments` | all |
-| Oasis | `prevent the next 1 damage that would be dealt to target creature this ` | would be dealt target creature |
-| Old Man of the Sea | `gain control of target creature with power less than or equal to this ` | creature's power remains less than or equal creature's power |
-| Oubliette | `target creature phases out until this enchantment leaves the battlefie` | enchantment |
-| Paralyze | `that player may pay {4}. if the player does, untap the creature` | player if player does, |
-| Pestilence | `if no creatures are on the battlefield, sacrifice this enchantment` | if enchantment |
-| Pirate Ship | `this creature deals 1 damage to any target` | creature any target |
-| Power Leak | `that player may pay any amount of mana. this aura deals 2 damage to th` | player may pay any amount mana. aura player |
-| Power Surge | `this enchantment deals x damage to that player, where x is the number ` | enchantment player, where x number untapped lands controlled at beginning |
-| Prodigal Sorcerer | `this creature deals 1 damage to any target` | creature any target |
-| Psychic Venom | `this aura deals 2 damage to that land's controller` | aura land's controller |
-| Purelace | `target spell or permanent becomes white` | target spell or permanent |
-| Raise Dead | `return target creature card from your graveyard to your hand` | return target |
-| Reconstruction | `return target artifact card from your graveyard to your hand` | return target |
-| Regrowth | `return target card from your graveyard to your hand` | return target card |
-| Resurrection | `return target creature card from your graveyard to the battlefield` | return target creature card |
-| Reverse Damage | `the next time a source of your choice would deal damage to you this tu` | next time source choice way |
-| Rocket Launcher | `this artifact deals 1 damage to any target. destroy this artifact at t` | activate only if you've controlled artifact |
-| Rod of Ruin | `this artifact deals 1 damage to any target` | artifact any target |
-| Samite Healer | `prevent the next 1 damage that would be dealt to any target this turn` | would be dealt any target |
-| Sandals of Abdallah | `target creature gains islandwalk until end of turn. when that creature` | when creature dies |
-| Shahrazad | `each player who doesn't win the subgame loses half their life, rounded` | each player who doesn't win |
 | Shatterstorm | `destroy all artifacts. they can't be regenerated` | all |
-| Simulacrum | `simulacrum deals damage to target creature you control equal to the da` | simulacrum |
-| Sleight of Mind | `change the text of target spell or permanent by replacing all instance` | with another |
-| The Rack | `this artifact deals x damage to that player, where x is 3 minus the nu` | artifact deals x damage player, where x 3 |
-| Thoughtlace | `target spell or permanent becomes blue` | target spell or permanent |
 | Tranquility | `destroy all enchantments` | all |
 | Tsunami | `destroy all islands` | all |
-| Twiddle | `you may tap or untap target artifact, creature, or land` | may artifact, creature, or land |
-| Wanderlust | `this aura deals 1 damage to that player` | aura player |
-| Warp Artifact | `this aura deals 1 damage to that player` | aura player |
 | Wrath of God | `destroy all creatures. they can't be regenerated` | all |
 
 ## Claims by channel
 
 | Channel | Sentences claimed |
 | --- | --- |
-| parse rule | 294 |
+| parse rule | 201 |
+| card_hooks bespoke (name-keyed) | 150 |
 | activation cost | 113 |
 | trigger table | 78 |
 | keyword table | 56 |
 | static-line table | 45 |
 | aura enchant noun (oracle_instructions attach) | 44 |
+| mixin text scan | 34 |
 | aura static (oracle_instructions/permanent_state) | 31 |
-| mixin text scan | 31 |
 | activation gate (stack/activation) | 15 |
-| card_hooks bespoke (name-keyed) | 9 |
 | cast_restrictions.py | 5 |
 | untap_restrictions.py | 5 |
 | ante boilerplate (deck construction, not gameplay) | 4 |
 | modal machinery | 3 |
-| handler ← randomize_blockers | 3 |
-| handler ← chaos_orb_flip | 2 |
-| handler ← upkeep_destroy_least_power_creature | 2 |
 | global_statics.py | 2 |
-| handler ← remove_creature_from_combat | 2 |
+| land_play_allowance.py | 2 |
 | cost_modifiers.py | 2 |
-| handler ← mark_non_wall_target_to_attack | 2 |
-| handler ← reanimate_creature | 1 |
 | phases/draw_step.py (counter damage) | 1 |
-| handler ← balance_resources | 1 |
-| handler ← berserk_pump | 1 |
-| handler ← grant_unlimited_blocking | 1 |
-| handler ← add_variable_power_counters_to_self | 1 |
-| handler ← upkeep_wind_counter_pay_or_sacrifice | 1 |
 | x spend color (stack/activation) | 1 |
-| handler ← target_gains_life | 1 |
-| land_play_allowance.py | 1 |
-| handler ← copy_top_stack_spell | 1 |
 | draw_step_modifiers.py | 1 |
-| handler ← upkeep_pay_per_creature_untap_color | 1 |
-| handler ← reorder_target_library_top | 1 |
-| handler ← deal_damage | 1 |
 | handler ← counter_top_stack_spell | 1 |
-| handler ← left_right_combat_division | 1 |
-| handler ← simulacrum_redirect | 1 |
-| handler ← grant_flying_and_delayed_destruction | 1 |
 | global_statics.py (lingering rider) | 1 |
-| handler ← volcanic_eruption | 1 |
-| handler ← peek_hand_and_force_play | 1 |
-| handler ← coin_flip_remove_blocker | 1 |

@@ -9,7 +9,7 @@ a broad rule matched part of a clause and the rest was silently dropped).
 This script closes that gap offline. For every supported card in the pool it
 verifies that each sentence of oracle text is claimed by a known consumer:
 
-- the parse-rule registry (whole-clause or per-sentence match),
+- the parser (whole-clause or per-sentence match),
 - the compiler's keyword / trigger / static-line tables,
 - one of the engine's text-keyed channels (aura attachment and aura statics,
   cast_restrictions.py, activation gates, mixin text scans, ...) — each
@@ -46,7 +46,6 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from engine import card_hooks, load_cards  # noqa: E402
 from engine.card_loader import manifest_set_paths  # noqa: E402
-from engine.grammar import behavioural_payload  # noqa: E402
 from engine.grammar import compile_line as compile_grammar_line  # noqa: E402
 from engine.oracle_types import OracleInstruction  # noqa: E402
 from engine.cast_restrictions import CAST_RESTRICTIONS  # noqa: E402
@@ -65,8 +64,6 @@ from engine.oracle import (  # noqa: E402
     expand_modal_activated_lines,
     normalize_creature_line,
 )
-from engine.parsing import parse_primary_instruction  # noqa: E402
-
 CARD_PATHS = [
     *manifest_set_paths(),
 ]
@@ -112,6 +109,15 @@ _MIXIN_TEXT_SCANS = (
     "if you would gain life, draw that many cards instead",              # replacements.py (Lich)
     "damage that would reduce your life total to less than 1 reduces it to 1 instead",  # replacements.py (Ali from Cairo)
     "whenever you're dealt damage, sacrifice that many nontoken permanents",  # effects.py (Lich)
+    # The tail of that same sentence. `arm_forced_sacrifice(..., reason="Lich",
+    # on_short={"kind": "lose"})` in effects.py IS the "if you can't" half — the
+    # forced-sacrifice flow loses the game for a player who cannot pay.
+    "if you can't, you lose the game",
+    # helpers.py:461 — the leave-the-battlefield loss, matched on this phrase.
+    "when this enchantment is put into a graveyard from the battlefield, you lose the game",
+    # game_ending.py:177 — a CR 603.8 state trigger checked alongside the SBAs,
+    # matched on this phrase plus the stored enter-choice (Jihad).
+    "when the chosen player controls no nontoken permanents of the chosen color",
     "whenever you're dealt damage, put that many vitality counters on this aura",  # upkeep_step vitality flow (Living Artifact)
     "you don't lose the game for having 0 or less life",                 # game_ending.py (Lich)
     "as this enchantment enters, you lose life equal to your life total",  # permanent_state.py:195 (Lich)
@@ -319,6 +325,24 @@ HANDLER_CLAIMS: dict[str, tuple[str, ...]] = {
 
 
 ACKNOWLEDGED: dict[str, dict[str, str]] = {
+    "Mana Vault": {
+        "at the beginning of your draw step, if this artifact is tapped, it deals 1 damage to you": (
+            "NOT IMPLEMENTED, and recorded here rather than claimed. The card "
+            "compiles supported on its other three lines (the untap "
+            "restriction, the pay-{4}-to-untap upkeep trigger and the mana "
+            "ability) and this one produces no instruction: no trigger table "
+            "has a draw-step condition for a single permanent, and nothing "
+            "scans for the phrase. Verified in a game — a tapped Mana Vault "
+            "costs its controller no life at their draw step. It read as "
+            "claimed until engine/parsing/ was deleted, because the coverage "
+            "script asked the legacy registry about the sentence in isolation "
+            "and a broad rule matched 'deals 1 damage to you' — an instruction "
+            "the card's own program never carried and nothing ever dispatched. "
+            "Implementing it needs a per-permanent draw-step trigger (the "
+            "shape phases/upkeep_effects.py has for the upkeep) and is a "
+            "behaviour change, so it belongs in a pass of its own"
+        ),
+    },
     "Shahrazad": {
         "players play a magic subgame, using their libraries as their decks": (
             "subgames are far out of scope. The life clause IS implemented: the caster "
@@ -412,13 +436,35 @@ def _rule_match(
     card_name: str | None = None,
     trigger_prefix: str | None = None,
 ):
-    """What claims *clause*: the grammar if it can, else the legacy rules.
+    """What parses *clause*, or (None, "unsupported").
 
-    Grammar first, mirroring the compiler. This keeps every downstream
-    mechanism working as legacy rules are deleted — including the deletion
-    probe, which gets stronger on grammar-claimed text: the full-consumption
-    invariant means removing a meaningful word usually makes the parse fail
-    outright rather than quietly producing the same instruction.
+    This used to try the grammar and then ``engine.parsing``'s rule registry,
+    and the second leg is gone with the registry. ROADMAP's "a dedup that would
+    be a mistake" argues that this script's value is in being an *independent*
+    second opinion and that delegating to the engine would make it
+    tautological. That argument is about :data:`CHANNELS` — the hand-kept
+    inventory of which engine code implements which sentence — and it still
+    holds there, untouched. It was never about this leg, which was not an
+    inventory but a second *parser*, and whose independence was an artifact of
+    two front ends existing rather than a property anything relied on. The
+    grammar was already tried first, so the legacy leg only ever answered for
+    text the grammar refused — text that now has no reader at all.
+
+    What keeps the guard from being an echo of the compiler is unchanged, and
+    is not this call:
+
+    * **the unit.** The compiler claims a *line*; this script splits it into
+      sentences and makes each earn a claim, then (``claim_clause``) finds the
+      shortest sentence prefix that reproduces the parse so trailing sentences
+      cannot ride along. That is a strictly finer question than "does this card
+      compile".
+    * **the deletion probe**, which is a property test over the parser rather
+      than a second opinion: remove a word, re-parse, and an identical
+      instruction means the word was ignored. It gets *stronger* against the
+      grammar, whose full-consumption invariant means removing a meaningful
+      word usually fails the parse outright.
+    * **CHANNELS**, which answers "is this sentence implemented by something
+      other than an instruction" from a list nobody derives from the engine.
 
     *trigger_prefix* is the trigger condition this clause is the remainder of,
     and is tried last. Some effects are only meaningful inside their trigger:
@@ -427,19 +473,17 @@ def _rule_match(
     ``land_tapped_for_mana`` trigger and the clause read alone looks unclaimed.
     The compiler hands the grammar the whole line (oracle.py
     ``_grammar_instruction``), so reading it that way here is mirroring it, not
-    excusing it — and the probe below re-parses through the same path, so
-    deleting a word from the clause still has to change the parse.
+    excusing it — and the probe re-parses through the same path, so deleting a
+    word from the clause still has to change the parse.
     """
     compiled = compile_grammar_line(clause, card_name=card_name)
     if compiled.usable:
         return _grammar_instruction(compiled), "grammar"
-    legacy_instruction, legacy_kind = parse_primary_instruction(clause, activated=activated)
-    if legacy_instruction is not None or not trigger_prefix:
-        return legacy_instruction, legacy_kind
-    in_trigger = compile_grammar_line(f"{trigger_prefix}, {clause}", card_name=card_name)
-    if in_trigger.usable:
-        return _grammar_instruction(in_trigger), "grammar (read with its trigger)"
-    return legacy_instruction, legacy_kind
+    if trigger_prefix:
+        in_trigger = compile_grammar_line(f"{trigger_prefix}, {clause}", card_name=card_name)
+        if in_trigger.usable:
+            return _grammar_instruction(in_trigger), "grammar (read with its trigger)"
+    return None, "unsupported"
 
 
 def _probe(
@@ -460,12 +504,7 @@ def _probe(
             continue
         shorter = " ".join(words[:i] + words[i + 1:])
         instr, _ = _rule_match(shorter, activated, card_name, trigger_prefix)
-        if (
-            instr is not None
-            and instr.kind == base_instr.kind
-            and behavioural_payload(instr.payload)
-            == behavioural_payload(base_instr.payload)
-        ):
+        if instr is not None and instr == base_instr:
             ignored.append(word)
     return tuple(ignored)
 
@@ -556,12 +595,7 @@ def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage
             # decides whether the trailing sentences mattered.
             def _same(text: str) -> bool:
                 instr, _ = _rule_match(text, activated, card.name, trigger_prefix)
-                return (
-                    instr is not None
-                    and instr.kind == instruction.kind
-                    and behavioural_payload(instr.payload)
-                    == behavioural_payload(instruction.payload)
-                )
+                return instr is not None and instr == instruction
 
             for k in range(1, len(sents) + 1):
                 if _same(". ".join(sents[:k])):
@@ -622,7 +656,12 @@ def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage
             coverage.claims.append((normalized, "static-line table"))
             continue
 
-        trig = _parse_triggered_ability(line)
+        # The card's name goes to both ability parsers, because the compiler
+        # passes it: `card_hooks.CARD_LINE_INSTRUCTIONS` is keyed by (name,
+        # line), so without it every hooked ability reads as unsupported here
+        # and its whole line lands in the unclaimed list. That went unnoticed
+        # while the legacy registry answered for those lines too.
+        trig = _parse_triggered_ability(line, card.name)
         if trig is not None:
             condition, remainder = _parse_trigger_condition(normalized)
             if not trig.supported:
@@ -647,7 +686,7 @@ def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage
             )
             continue
 
-        ability = _parse_activated_ability(line)
+        ability = _parse_activated_ability(line, card.name)
         if ability is not None:
             if not ability.supported:
                 if normalized in acknowledged_map:

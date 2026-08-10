@@ -733,7 +733,10 @@ def test_lord_of_the_pit_upkeep_sacrifice_pauses_then_resumes_turn():
     session = store.get(sid)
 
     lord = _mk_creature_card(
-        "Lord of the Pit Test", 7, 7,
+        # The card's real name: its upkeep sacrifice is one card's sentence
+        # and lives in card_hooks.CARD_LINE_INSTRUCTIONS keyed by that name, so
+        # a stand-in name reaches no front end.
+        "Lord of the Pit", 7, 7,
         oracle_text=(
             "Flying, trample\n"
             "At the beginning of your upkeep, sacrifice a creature other than this "
@@ -757,7 +760,7 @@ def test_lord_of_the_pit_upkeep_sacrifice_pauses_then_resumes_turn():
     prompt = state["sacrifice_select"]
     assert prompt is not None
     assert [p["name"] for p in prompt["permanents"]] == ["Bear"]
-    assert prompt["reason"] == "Lord of the Pit Test"
+    assert prompt["reason"] == "Lord of the Pit"
 
     # Confirm: the Bear is sacrificed and the turn resumes into the main phase.
     confirm = client.post(
@@ -768,7 +771,7 @@ def test_lord_of_the_pit_upkeep_sacrifice_pauses_then_resumes_turn():
     payload = confirm.json()
     names = [c["name"] for c in payload["players"][0]["battlefield"]]
     assert "Bear" not in names
-    assert "Lord of the Pit Test" in names
+    assert "Lord of the Pit" in names
     assert payload["current_turn_phase"] == "precombat_main"
     assert store.get(sid).game.pending_sacrifice is None
     assert store.get(sid).pending_post_sacrifice is None

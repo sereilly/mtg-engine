@@ -8,7 +8,7 @@ Games can be played human vs AI, AI vs AI, human vs human over LAN, or 3–4 pla
 
 The engine is registry-based so the card pool can scale to thousands of cards by adding small, isolated entries — never by editing core control flow:
 
-- `engine/parsing/` — declarative oracle-text parse rules (`@parse_rule(order)`), organized by category (damage, zones, destruction, …). First match in ascending order wins; a duplicate order fails at import.
+- `engine/grammar/` — the oracle-text parser: tokenizer → recursive-descent productions → typed AST → lowering to `OracleInstruction`. A production consumes every token of its line or refuses it, so a gap is a card reported unsupported rather than a clause silently dropped. (It replaced `engine/parsing/`, a flat `@parse_rule` registry, which is deleted.)
 - `engine/handlers/` — effect executors (`@effect_handler(kind)`), dispatched per instruction with a single O(1) dict lookup.
 - `engine/card_hooks.py` — name-keyed hooks for truly bespoke card behavior (e.g. Power Sink's rider, Verduran Enchantress's cast trigger). The only place the engine references cards by name.
 - `engine/oracle.py` — the compiler: tokenizes oracle text, classifies lines (keyword / triggered / activated / static), and caches one compiled `OracleProgram` per card for the life of the process.

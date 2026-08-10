@@ -421,9 +421,16 @@ def _parse_gains(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
 
 
 def _parse_loses(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
-    """``<subject> loses <keywords|life>``."""
+    """``<subject> loses <the game|keywords|life>``."""
     stream.expect_word("loses", "lose")
     mark = stream.mark()
+    # "loses the game" (CR 104.3e) before the life reading: "the" is not an
+    # amount, so the amount branch below rejects it anyway, but checking here
+    # keeps the two spellings of "lose" visibly separate.
+    if stream.accept_phrase("the", "game"):
+        player = subject if isinstance(subject, ast.PlayerRef) else ast.PlayerRef("you")
+        return ast.LoseGame(player)
+    stream.reset(mark)
     try:
         amount = parse_amount(stream)
         if stream.accept_word("life"):
@@ -435,6 +442,30 @@ def _parse_loses(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
     keywords = _parse_keywords(stream)
     duration = _parse_duration(stream)
     return ast.LoseKeyword(subject, keywords, duration)
+
+
+def _parse_wins(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
+    """``<subject> wins the game`` (CR 104.2b)."""
+    stream.expect_word("wins", "win")
+    stream.expect_word("the")
+    stream.expect_word("game")
+    player = subject if isinstance(subject, ast.PlayerRef) else ast.PlayerRef("you")
+    return ast.WinGame(player)
+
+
+def _parse_game_is_a_draw(stream: TokenStream) -> ast.Statement | None:
+    """``The game is a draw.`` (CR 104.4c.)
+
+    The one game-outcome sentence with no subject, so it cannot go through
+    ``_parse_subject_verb``'s noun phrase. Returns None without consuming
+    anything when the line merely *starts* with "the", so every other production
+    beginning that way is unaffected.
+    """
+    mark = stream.mark()
+    if stream.accept_phrase("the", "game", "is", "a", "draw"):
+        return ast.DrawGame()
+    stream.reset(mark)
+    return None
 
 
 def _parse_has(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
@@ -1373,6 +1404,11 @@ def _parse_subject_verb(stream: TokenStream) -> ast.Statement:
     colour_shield = _parse_colour_source_prevention(stream)
     if colour_shield is not None:
         return colour_shield
+    # "The game is a draw." — a subjectless sentence, tried before the noun
+    # phrase for the same reason the colour shield is.
+    game_draw = _parse_game_is_a_draw(stream)
+    if game_draw is not None:
+        return game_draw
     # A bare imperative verb has an implied "you"/the source as subject.
     if stream.at_word("destroy"):
         return _parse_destroy(stream)
@@ -1419,7 +1455,7 @@ def _parse_subject_verb(stream: TokenStream) -> ast.Statement:
         subject = parse_recipient(stream)
         if subject is None:
             raise stream.error("expected something to exile")
-        return ast.Exile(subject)
+        return ast.Exile(subject, _parse_duration(stream))
     if stream.at_word("add"):
         return _parse_add_mana(stream)
     if stream.at_word("look"):
@@ -1475,6 +1511,8 @@ def _parse_subject_verb(stream: TokenStream) -> ast.Statement:
             return _parse_gains(stream, source_spec)
         if token.text in ("loses", "lose"):
             return _parse_loses(stream, source_spec)
+        if token.text in ("wins", "win"):
+            return _parse_wins(stream, source_spec)
         if token.text in ("has", "have"):
             return _parse_has(stream, source_spec)
         if token.text in ("adds", "add") and isinstance(source_spec, ast.PlayerRef):

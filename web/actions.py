@@ -350,7 +350,7 @@ def do_action(session_id: str, req: GameActionRequest):
         land_as_mana_tap = permanent.card.primary_type == "land"
         if land_as_mana_tap:
             usable = usable_activated_abilities(compile_card_oracle(permanent.effective_card))
-            mana_kinds = {"add_mana_from_text", "sacrifice_self_for_mana", "sacrifice_creature_for_black_mana"}
+            mana_kinds = {"add_mana_from_text", "sacrifice_self_for_mana", "sacrifice_creature_for_mana"}
             chosen_ability = None
             if req.ability_index is not None and 0 <= req.ability_index < len(usable):
                 chosen_ability = usable[req.ability_index]

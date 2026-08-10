@@ -1,9 +1,19 @@
-"""Guard: grammar coverage may only move forward.
+"""Guard: the parser's reach over the pool may only move forward.
 
-``scripts/grammar_coverage.py`` measures how much of the card pool the grammar
-front end accounts for and stores the floors in ``scripts/grammar_ratchet.json``.
-This test fails if any measure drops below its floor, so the migration cannot
-silently regress while the legacy rules are still there to catch the fallback.
+``scripts/grammar_coverage.py`` measures how many of the pool's printed lines
+``engine/grammar/`` reads, and stores the floors in
+``scripts/grammar_ratchet.json``. This test fails if any measure drops below its
+floor.
+
+**It was the migration ratchet and it is not one any more**, because the thing
+it measured progress towards — the grammar taking over from ``engine/parsing/``
+— is finished. Kept, and re-pointed, because the *direction* it guards is still
+a live hazard with one parser: every line the grammar does not read has to be
+read by something narrower (a name-keyed hook in ``engine/card_hooks.py``, a
+text-keyed sidecar table) or leave its card unsupported. A fall in these numbers
+therefore means the pool became more special-cased — a production regressed, or
+a card was supported by writing its name down instead of by reading its text.
+The floor is what makes that a failure rather than a slow drift.
 
 Raise the floors with ``python scripts/grammar_coverage.py --accept`` after
 reviewing the diff.

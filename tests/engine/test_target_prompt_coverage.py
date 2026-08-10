@@ -1,7 +1,7 @@
 """Every card that targets must produce a targeting prompt.
 
 ``engine/legality.py`` decides what the UI prompts for by re-parsing raw oracle
-text, independently of the ``engine/parsing`` rules that decide what the effect
+text, independently of the parser that decides what the effect
 does. When the two disagree the UI shows no prompt and the spell/ability
 silently auto-targets the first legal permanent (``pick_target_permanent``'s
 fallback) — the player never gets to choose. These tests pin the cases that

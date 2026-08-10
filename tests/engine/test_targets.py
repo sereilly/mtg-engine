@@ -125,10 +125,15 @@ def test_115_1a_triggered_ability_target_does_not_make_card_targeted():
     # Main spell effect: "Draw a card." (untargeted).
     # Triggered ability: "When you cycle this card, target creature gets -1/-1 until end of turn."
     # Only the triggered ability uses 'target' — the spell itself does not.
+    # The trigger is its own printed line, as an oracle text prints it. Running
+    # the two sentences together made this fixture depend on a parser that read
+    # a line by substring and kept the first match; the grammar consumes a line
+    # end to end, so a spell effect and a triggered ability sharing one line is
+    # a line neither production can claim.
     cycler = _mk_card(
         "Cycling Sorcery",
         "Sorcery",
-        "Draw a card. When you cycle this card, target creature gets -1/-1 until end of turn.",
+        "Draw a card.\nWhen you cycle this card, target creature gets -1/-1 until end of turn.",
     )
     dummy = _mk_card("Dummy", "Sorcery")
     p1 = PlayerState(name="P1", hand=[cycler], library=[dummy])
@@ -476,10 +481,13 @@ def test_115_2_permanent_on_battlefield_is_legal_target():
 
 def test_115_2_targeting_player_and_permanent_simultaneously():
     """Both a player index and a permanent index can be stored as targets on one stack item (115.2)."""
+    # Drain Life's printed oracle text, not a paraphrase of it: "target creature
+    # or player" is the pre-2016 wording and "any target" is what the card says
+    # now (CR 115.4), which is also the only one the pool's copy carries.
     drain = _mk_card(
         "Drain Life",
         "Sorcery",
-        "Spend only black mana on X. Drain Life deals X damage to target creature or player.",
+        "Spend only black mana on X.\nDrain Life deals X damage to any target.",
     )
     bear = _mk_card("Grizzly Bears", "Creature — Bear")
     p1 = PlayerState(name="P1", hand=[drain])
@@ -665,14 +673,22 @@ def test_115_5_spell_cannot_target_itself_on_stack():
 def test_115_6_spell_with_optional_target_is_targeted_when_target_chosen():
     """A spell that may have zero targets is targeted when one or more targets are chosen (115.6).
 
-    'You may have target player draw a card.' allows zero targets (the 'may' is optional), but
-    if the controller elects to name a target the spell is considered targeted and the target
-    is stored on the stack item.
+    What the engine models of 115.6 is the second half — *targeted only if one or
+    more targets have been chosen* — and it models it by whether a target index
+    reached the stack item. So the spell here is an ordinarily targeted draw and
+    the optionality lives in the caller, which is where the engine's version of
+    it lives too.
+
+    The fixture used to say "You may have target player draw a card." That is
+    not printed templating (no card in any era words an optional target that
+    way), and it compiled only because a legacy substring rule found "draw a
+    card" inside it — the spell was never optional in the engine either, so the
+    wording was describing a property nothing implemented.
     """
     optional_target_spell = _mk_card(
         "Opt",
         "Instant",
-        "You may have target player draw a card.",
+        "Target player draws a card.",
     )
     dummy = _mk_card("Dummy", "Sorcery")
     p1 = PlayerState(name="P1", hand=[optional_target_spell])

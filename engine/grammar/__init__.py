@@ -1,25 +1,26 @@
-"""Grammar-based oracle-text front end.
+"""The oracle-text parser.
 
 A tokenizer plus a recursive-descent grammar over Magic's card templating,
-producing a typed AST (``ast.py``) that is lowered to the existing
-``OracleInstruction`` IR (``lower.py``). It is replacing the flat
-``@parse_rule`` registry in ``engine/parsing/``, which needed roughly one
-hand-written rule per two cards and silently dropped any part of a card's text
-its first matching rule did not cover.
+producing a typed AST (``ast.py``) that is lowered to the ``OracleInstruction``
+IR (``lower.py``). It replaced the flat ``@parse_rule`` registry in
+``engine/parsing/``, which needed roughly one hand-written rule per two cards
+and silently dropped any part of a card's text its first matching rule did not
+cover.
 
-**Migration model — strangler fig.** The grammar runs on every line as soon as
-this package is imported, but its output is only *used* when the categories it
-lowered to are switched on in :data:`GRAMMAR_CATEGORIES`. Everything else falls
-back to the legacy rules untouched. That means:
+**It is the only parser.** ``engine/oracle.py`` reads a line through this
+package and then through ``card_hooks.CARD_LINE_INSTRUCTIONS``, and there is
+nothing after that: a line neither claims produces no instruction, and its card
+is reported unsupported naming the clause.
 
-* new grammar work is exercised against the whole card pool from day one,
-  because failures and disagreements are recorded even while unused;
-* enabling a category is a one-line change made only after the differential
-  guard (``tests/engine/test_grammar_differential.py``) is already green for it;
-* the legacy rules for a category are deleted only once the ratchet shows every
-  line they used to claim is executed through the grammar instead.
+That is what :data:`GRAMMAR_CATEGORIES` now means. It was the migration's
+valve — a category switched off fell back to the legacy rules, so work could
+land and be measured before it was switched on — and with nothing underneath,
+switching a category off does not route its lines elsewhere, it makes cards
+unsupported. So the set is held equal to every category ``lower.py`` can emit
+(``tests/engine/test_grammar_categories.py``), and adding a lowering without
+adding its category fails loudly instead of quietly costing cards their support.
 
-Progress is tracked in ``GRAMMAR_COVERAGE.md`` via ``scripts/grammar_coverage.py``.
+Coverage is tracked in ``GRAMMAR_COVERAGE.md`` via ``scripts/grammar_coverage.py``.
 """
 
 from __future__ import annotations
@@ -32,8 +33,14 @@ from .errors import GrammarError, LoweringError
 from .lower import GRAMMAR_ONLY_PAYLOAD_KEYS, categories_of, lower_ability
 from .parser import parse_line
 
-# Categories whose grammar output is authoritative. Everything else is parsed
-# in shadow for the ratchet but executed by the legacy rules.
+# Categories whose grammar output is executed. Held equal to every category
+# lower.py can emit, by tests/engine/test_grammar_categories.py — see the module
+# docstring for why that equality is the invariant now rather than a coincidence.
+#
+# The history below is why each was *safe* to switch on, and it is the record of
+# what was checked before a category's output started running. It is kept
+# because that is the argument a new category has to make too; the phase numbers
+# are the migration's, and the migration is over.
 #
 # Phase 1 turned on damage, pump, and life: together they cover every
 # grammatical position an effect clause can occupy (spell, activated ability,
@@ -87,16 +94,25 @@ from .parser import parse_line
 # per death.
 #
 # Still off, with the reason:
-#   (nothing) — every category with a lowering is switched on. Effects the
-#              grammar cannot yet lower (static abilities, multi-mana
-#              player-chosen colour, most zone movement) refuse at lowering and
-#              fall back, which the coverage report tracks as "parsed but not
-#              lowered".
+#   (nothing, and nothing may be) — every category with a lowering is switched
+#              on, and the guard now requires it. Effects the grammar cannot yet
+#              lower (static abilities, multi-mana player-chosen colour, most
+#              zone movement) refuse at *lowering* and so never reach a
+#              category at all; the coverage report tracks them as "parsed but
+#              not lowered", which is the honest place for them.
 GRAMMAR_CATEGORIES: frozenset[str] = frozenset(
     {
         "damage", "pump", "life", "destruction", "tapping", "optional", "zones",
         "mana", "regeneration", "counterspells", "prevention", "recolor", "upkeep",
         "turns", "evasion", "tokens", "counters", "text_change", "control",
+        # Ending the game (CR 104): "You win the game.", "Target player loses
+        # the game.", "The game is a draw." No card in the pool prints one — the
+        # legacy registry had rules for all three and they went unexercised by
+        # any printing, which is how the gap survived. Switched on with the
+        # productions, because with no fallback underneath a category left off
+        # is a card reported unsupported rather than a card read by something
+        # else.
+        "game_end",
         # Enabled after the differential showed the grammar's payloads equal
         # engine/combat_restrictions.py's on every such line in the pool. The
         # two shapes it does NOT claim ("attacks each combat if able",
@@ -201,15 +217,27 @@ def compile_line(line: str, *, card_name: str | None = None) -> CompiledLine:
 
 
 def behavioural_payload(payload: dict) -> dict:
-    """*payload* without the keys only the grammar emits.
+    """*payload* without the keys that describe rather than execute.
 
-    The grammar records what a line targets so the engine can answer targeting
-    from the compiled program (engine/targeting.py). No handler reads those
-    keys, so they cannot change behaviour — but every tool that compares a
-    grammar instruction against a legacy one must drop them first, or a purely
-    additive description reads as a divergence. Comparing on this subset is
-    what keeps the grammar-vs-legacy differential and the parse-coverage
-    deletion probe meaningful while two front ends coexist.
+    Today that is ``targets``: what a line points at, recorded so the engine can
+    answer targeting from the compiled program (engine/targeting.py) instead of
+    re-reading oracle text. No ``EFFECT_HANDLERS`` entry reads it — it decides
+    which permanents the *picker* offers, not what the resolution does.
+
+    Its original job is finished. It existed so a grammar instruction could be
+    compared against a legacy one without a purely additive description reading
+    as a divergence, and both consumers of that comparison are gone: the
+    grammar-vs-legacy differential retired with ``engine/parsing/``, and
+    ``scripts/parse_coverage.py``'s deletion probe now compares whole payloads,
+    which is strictly stricter — dropping ``targets`` was hiding the difference
+    between "target attacking creature" and "target creature" from the probe,
+    and comparing in full took the probe's accepted findings from 96 entries to
+    9.
+
+    What is left is ``tests/engine/test_grammar_lowering.py``, whose golden
+    expectations are about what a line *does*. Deleting the helper there would
+    mean writing the targeting description into every expectation, which is a
+    different test.
     """
     return {k: v for k, v in payload.items() if k not in GRAMMAR_ONLY_PAYLOAD_KEYS}
 

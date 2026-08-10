@@ -6,7 +6,9 @@ release line — **137 sets, 33,594 printings, 26,113 unique cards** per
 
 This document records the audit that motivated the work and the phased plan
 that follows from it. Phases 1, 2, 3, 4, 7 and 8 are done; 5 and 6 are partly
-done.
+done. **The parser migration is finished** — `engine/parsing/` is deleted and
+`engine/grammar/` is the engine's only parser; see "`engine/parsing/` is
+deleted" at the end.
 
 ---
 
@@ -95,15 +97,18 @@ audit found.)*
 
 ---
 
-## Approach: a grammar front end, migrated strangler-fig
+## Approach: a grammar front end, migrated strangler-fig ✅ arrived
 
-The end state is a real parser: tokenizer → recursive-descent grammar over
+The end state was a real parser: tokenizer → recursive-descent grammar over
 Magic's card templating → typed AST → lowered to the existing
-`OracleInstruction` IR, executed by the existing effect handlers. The flat
-`@parse_rule` registry is deleted category by category as the grammar takes
-over.
+`OracleInstruction` IR, executed by the existing effect handlers, with the flat
+`@parse_rule` registry deleted category by category as the grammar took over.
+**That end state is reached** — `engine/parsing/` is gone, and the section
+"`engine/parsing/` is deleted" near the bottom of this file records the last
+wave. What follows is the plan as it was written, because the two properties
+below are what made it work and they are still the contract for new productions.
 
-Two properties make this tractable rather than a big-bang rewrite:
+Two properties made this tractable rather than a big-bang rewrite:
 
 **Full token consumption.** A production that matches must account for every
 token of its line; leftovers raise `GrammarError`. "Parsed" therefore means
@@ -112,13 +117,17 @@ the offending clause named) and never a quiet mis-resolution. This is the
 structural fix for the bug class the deletion probe detects empirically — and
 the probe stays on anyway.
 
-**Category gating.** The grammar runs on every line from day one, but its
-output is only *used* when every category it lowered to is switched on in
-`GRAMMAR_CATEGORIES`. Everything else falls back to the legacy rules untouched.
-So new grammar work is exercised against the whole pool while still unused,
-enabling a category is a one-line change made after its differential guard is
-already green, and the legacy rules for a category are deleted only once the
-ratchet shows the grammar claims every line they used to.
+**Category gating.** The grammar ran on every line from day one, but its
+output was only *used* when every category it lowered to was switched on in
+`GRAMMAR_CATEGORIES`, everything else falling back to the legacy rules
+untouched. So new grammar work was exercised against the whole pool while still
+unused, enabling a category was a one-line change made after its differential
+guard was green, and a category's legacy rules were deleted only once the
+ratchet showed the grammar claimed every line they used to.
+
+*(With the registry gone the gate means something else: a category left off no
+longer routes its lines anywhere, it makes those cards unsupported. It is now
+held equal to what `lower.py` can emit.)*
 
 Progress is tracked in `GRAMMAR_COVERAGE.md` with floors in
 `scripts/grammar_ratchet.json`, guarded by
@@ -1691,6 +1700,33 @@ could claim text nothing runs. The coverage script asks the opposite question,
 "is this text claimed by something?", and its value comes from being an
 *independent* second opinion. Making it delegate to the engine would render the
 guard tautological. The two tables should stay separate.
+
+> **Revisited when `engine/parsing/` was deleted, and the argument holds —
+> for `CHANNELS`, which is what it was ever about.** `_AURA_STATIC_PATTERNS`
+> and its sibling channel tables are a hand-kept *inventory* of which engine
+> code implements which sentence, and nothing derives them from the engine.
+> They stayed.
+>
+> The `parse_primary_instruction` leg of `_rule_match` is a different thing
+> wearing the same word. It was not an inventory but a second *parser*, and its
+> independence was an artifact of two front ends existing rather than a property
+> anything relied on — the grammar was already tried first, so the legacy leg
+> only ever answered for text the grammar refused, which is text that now has no
+> reader at all. Three things keep the guard from being an echo of the compiler,
+> and none of them is that call: the **unit** (the compiler claims a line; this
+> script splits it into sentences and makes each earn a claim, then searches for
+> the shortest sentence prefix reproducing the parse so trailing sentences
+> cannot ride along), the **deletion probe** (a property test over the parser,
+> not a second opinion), and **`CHANNELS`** itself.
+>
+> The probe got *stronger* in the same pass, for a reason worth recording. It
+> had been comparing `behavioural_payload(...)` — payloads with the `targets`
+> description dropped — which existed so a grammar instruction could be compared
+> against a legacy one. That subtraction was hiding real differences from the
+> probe: "target **attacking** creature" and "target creature" differ only
+> inside `targets`, so the probe reported "attacking" as a word the parser
+> ignored. Comparing whole payloads took the accepted findings from **96 entries
+> / 455 ignored words to 9 / 10**, with no entry anywhere gaining a word.
 
 ### What is left, and what actually blocks it
 
@@ -3804,6 +3840,144 @@ mirror, which nothing resolves). Those disappear when the fallback does.
 Grammar coverage 75.6% → **77.2% parsed**, 73.3% → **75.3% lowered**, 39.9% →
 **41.4% executed**. 4,350 tests, 388/388 supported, AI simulation unchanged at
 10/10 and 443 interactions.
+
+---
+
+## `engine/parsing/` is deleted
+
+**2,303 lines across 18 modules, gone.** The compiler reads a line through
+`engine/grammar/` and then through `card_hooks.CARD_LINE_INSTRUCTIONS`, and
+there is no third front end: a line neither claims produces no instruction, and
+its card is reported unsupported naming the clause. 388/388 supported before and
+after; the AI simulation is byte-identical (10/10 games, 443 interactions); the
+support report is byte-identical; every card's compiled program is identical
+except the five below.
+
+### Metamorphosis was not what the last ratchet said it was
+
+`LOSES_SUPPORT` claimed no handler adds player-chosen-colour mana sized by a
+sacrificed creature's mana value. **`sacrifice_creature_for_black_mana` does** —
+it had been doing it since the batch-18 bug round, by running three `in` probes
+against the resolving card's own oracle text: `"1 plus the sacrificed creature's
+mana value"` bumped the amount, `"mana of any one color"` took the caster's
+colour choice, `"spend this mana only to cast creature spells"` routed the mana
+into the restricted bucket. So the card was already right, and what it lacked
+was an *instruction of its own* — the legacy rule handed it Sacrifice's, and the
+handler recovered the difference by re-reading the card. A second parser living
+inside a handler, which is the shape this whole migration exists to remove.
+
+It is now payload: `color` (a symbol, or None for "of any one color"), `bonus`
+(0 for Sacrifice, 1 for Metamorphosis's "1 plus"), `spend_only` (None, or
+`"creature"`). The kind is `sacrifice_creature_for_mana`, because the old name
+was a lie for one of the two cards carrying it. Both are keyed in
+`CARD_LINE_INSTRUCTIONS` on the additional-cost sentence they *share* — which is
+what makes the name load-bearing rather than a shortcut here: the line alone
+cannot say what the card does, and a production keyed on it would have to give
+one answer for two cards.
+
+Verified in a game: Metamorphosis sacrificing a Hill Giant (mana value 4) with
+blue chosen gives 5 blue mana in the creature-only bucket and none in the pool;
+Black Vise is refused for insufficient mana and Grizzly Bears is not. Sacrifice
+on a Grizzly Bears still gives 2 unrestricted black.
+
+### The four phantom instructions were phantom, checked in play
+
+Each was the whole-text fallback inventing an instruction for a sentence
+implemented elsewhere. All four were played out rather than reasoned about:
+
+- **Fastbond** — three lands in one turn, life 20 → 19 → 18, logged as
+  "Fastbond dealt 1 damage to P1". `engine/land_play_allowance.py` derives both
+  halves; the `deal_damage` on the enchantment's mirror was dispatched by
+  nobody.
+- **Island Sanctuary** — the draw is skipped and the flag set; a ground Grizzly
+  Bears is refused an attack and a flying Mahamoti Djinn is allowed.
+  `card_hooks.DRAW_STEP_MODIFIERS`, read by three phase steps.
+- **Lich** — enters and takes its controller to 0; the controller does not lose;
+  gaining 3 life draws 3 cards instead; 2 damage sacrifices 2 nontoken
+  permanents; putting the Lich into a graveyard loses the game. Four separate
+  text-keyed sites, none of them an instruction.
+- **Jihad** — Savannah Lions is 4/2 while the chosen player controls a black
+  permanent, and when that permanent leaves, Jihad is sacrificed and the Lions
+  are 2/1 again. The CR 603.8 state trigger in `game_ending.py`.
+
+### The bug the deletion exposed: Mana Vault
+
+**"At the beginning of your draw step, if this artifact is tapped, it deals 1
+damage to you." is not implemented.** No trigger table has a per-permanent
+draw-step condition, nothing scans for the phrase, and the card's program
+carries no instruction for it. Verified in a game: a tapped Mana Vault costs its
+controller nothing at their draw step.
+
+It read as covered because `parse_coverage.py` asked the *legacy registry* about
+the sentence in isolation, and a broad rule matched "deals 1 damage to you" —
+an instruction the card's own program never carried and nothing ever dispatched.
+The guard was reporting a claim the engine had never made. It is now an
+`ACKNOWLEDGED` entry naming precisely what is missing; implementing it needs a
+per-permanent draw-step trigger (the shape `phases/upkeep_effects.py` has for
+the upkeep) and is a behaviour change, so it belongs in a pass of its own.
+
+### The pool was not the whole gap
+
+The deletion ratchet compiled the *pool*. It never compiled the **test
+fixtures**, and 25 synthetic card texts lost support the moment the registry
+went — templating no printed card in LEA/ARN/3ED carries, which the legacy rules
+had rules for and the grammar had never been asked to read. Split two ways:
+
+**Real templating with a real handler → productions.** "You win the game.",
+"Target player loses the game.", "The game is a draw." (`ast.WinGame` and
+`ast.LoseGame` had existed unreachable since phase 1; `DrawGame` is new, and the
+sentence has no subject so it is a leaf beside the colour-shield production).
+"Exile target creature until end of turn." — `ast.Exile` gained a duration,
+because a bare exile and a temporary one are different handlers and dropping the
+rider onto the permanent reading is the bug class. "Prevent the next N damage
+that would be dealt to **target player**" — the lowering refused a `PlayerRef`
+recipient although `apply_prevention_shield` shields a chosen player perfectly
+well.
+
+**Fixtures leaning on a refusal → fixtures fixed.** "Untap target creature." is
+refused *on purpose* (`untap_target_permanent` untaps whatever it is handed), so
+the fixture now says "target permanent", which is what the handler does.
+"{T}: Add {G} for each creature you control." is CR 605.2's own example, and
+`_add_mana_from_text` would add one {G} and drop the rest — so that test uses
+605.2's other half, a mana ability on an already-tapped permanent, and says why.
+Two fixtures named a card inside its own oracle text (pre-errata Black Lotus,
+pre-errata Drain Life) and one ran a spell effect and a cycling trigger together
+on one line; all three are now the printed text.
+
+### Scaffolding: kept, re-pointed, retired
+
+| Piece | Outcome |
+| --- | --- |
+| `tests/engine/test_grammar_differential.py` | **Retired.** Its subject was grammar-vs-legacy. Four survivors moved: the combat-restriction comparison (against a live derivation table) to `test_grammar_derived_lines.py`; determinism, the load-bearing check and pool-wide support to `test_front_end_safety.py`. `ACCEPTED_DIFFS` retired with it. |
+| `tests/engine/test_grammar_fallback_safety.py` | **Re-pointed** to `test_front_end_safety.py`. Stubbing the grammar no longer leaves the legacy rules, it leaves the card hooks — and the hazard that survives is real: a production that takes a hooked line over and reads *less* of it. `ACCEPTED_REPLACEMENTS` emptied; all six entries were "a deleted category's leftover broad rule", which no longer exists. |
+| `test_grammar_ratchet.py` + `grammar_ratchet.json` | **Kept, re-pointed.** "% of lines the grammar parses" stops being a migration measure and becomes a division-of-labour one: every line the grammar does not read is read by a name-keyed hook or a sidecar table, or leaves its card unsupported. A fall means the pool became more special-cased. Floors unchanged (77.2 / 75.3 / 41.4). |
+| `GRAMMAR_CATEGORIES` | **Kept, meaning changed, and now pinned.** Nothing was off — every category with a lowering was already on — but the *reason* to keep it is different: with no fallback, a category left off makes cards unsupported rather than routing them elsewhere. `tests/engine/test_grammar_categories.py` holds it equal to what `lower.py` can emit, in both directions. |
+| `behavioural_payload` / `GRAMMAR_ONLY_PAYLOAD_KEYS` | **Removed from `parse_coverage.py`, kept for the lowering goldens.** Its job was making two front ends comparable; dropping it from the probe made the probe stricter (96 → 9 findings). |
+| `scripts/grammar_coverage.py`, `GRAMMAR_COVERAGE.md` | **Kept**, re-titled from migration tracker to parser reach. |
+| `tests/engine/test_legacy_rule_removal.py` | **Retired.** It was the deletion criterion; the deletion happened. |
+| `tests/engine/test_parsing_common.py` | **Retired** with its subject (`engine/parsing/common.py`). |
+| `test_card_lines.py`'s third test | **Retired**, as its own docstring always said it would be — there is no legacy reading left to compare a hook against. |
+| `test_grammar_differential`'s directional whole-program check | **Retired deliberately: it could no longer fail.** It was written when the compiler had a per-card whole-text fallback, so switching the grammar off could change the *number* of instructions. The list is per line now and each line yields exactly one instruction whichever front end claims it, so the hooks-only compile can only ever have fewer. Three injections were tried and it stayed green for all three. |
+| The parse-coverage probe self-test | **Rewritten.** It appended nonsense to a clause and checked a substring rule swallowed it — a shape one full-consumption parser makes impossible, so the assertion could never fire again. It now uses a word the parser *consumes* but does not carry ("destroy **all** creatures"), with a second test asserting the probe is silent when every word is load-bearing. |
+| `engine/effect_labels.py` | **New**, and the one thing carried rather than deleted. `effect_kind`'s vocabulary was the registry's own, and the compiler preferred the legacy label whenever a legacy rule matched a line the grammar had already read — so deleting the registry would have silently re-bucketed 57 cards and stripped the `triggered_` prefix `web/serialization.py` turns into a stack item's `is_triggered`. Both tables are held to the pool in both directions. |
+
+### Odds and ends the deletion took with it
+
+`_instruction`, `parse_number_token`, `_parse_number_token` and
+`_extract_mana_cost_from_text` in `oracle_types.py` were the registry's toolkit
+and had no other caller; `_NUMBER_WORDS` stays, because three text-keyed
+derivation tables read it. `_prefer_line_reading` — which took the grammar's
+instruction and the *legacy* label — is one line of widening now.
+`ARCHITECTURE.md`'s nine `BAND_*` order bands are gone, and their absence is the
+point: precedence was a property of a registry of substring predicates, and a
+grammar has no such knob.
+
+### Where the pool stands
+
+4,326 tests, 388/388 supported, grammar coverage 77.2% parsed / 75.3% lowered /
+41.4% executed, AI simulation unchanged at 10/10 and 443 interactions. Parse
+coverage: every sentence claimed, one acknowledged simplification added (Mana
+Vault), probe baseline 96 → 9 entries.
 
 ---
 

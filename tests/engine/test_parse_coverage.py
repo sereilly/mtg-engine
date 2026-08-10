@@ -83,22 +83,36 @@ def test_validator_detects_a_silently_dropped_sentence():
     assert any("destroy_target_permanent" in channel for _, channel in coverage.claims)
 
 
-def test_deletion_probe_flags_ignored_rider_words():
-    """Self-test: the probe must catch a rider a broad rule swallows — the
-    exact Hasran Ogress bug shape.
+def test_deletion_probe_flags_a_word_the_parse_does_not_carry():
+    """Self-test: the probe must still find a word whose deletion changes nothing.
 
-    Uses a clause still owned by a legacy substring rule. As categories migrate
-    to the grammar this self-test has to follow them, because the grammar makes
-    the bug structurally impossible rather than merely detectable (see the test
-    below).
+    Its old self-test appended nonsense to a clause ("…when the wumbus
+    flurbles") and checked that a substring rule swallowed it. That shape is
+    **gone**, not merely unused: with one full-consumption parser a trailing
+    word nothing accounts for fails the line outright, so the probe returns
+    nothing and the assertion could never fire again. A self-test that cannot
+    fail is worse than none.
+
+    The bug class that survives is narrower and real: a word the parser
+    *consumes* but whose meaning never reaches the payload. "Destroy all
+    creatures" is one — the sweep comes from the plural noun, so deleting "all"
+    lowers identically. That is benign here, and it is the same probe result a
+    dropped rider would produce, which is what makes it a fair exercise of the
+    machinery.
+
+    If a production ever makes "all" load-bearing this fails, and the
+    replacement is any live entry in
+    ``scripts/parse_coverage_probe_baseline.json``.
     """
     pc = _load_parse_coverage()
-    ignored = pc._probe(
-        "this creature deals 2 damage to any target when the wumbus flurbles",
-        activated=True,
-    )
-    assert "wumbus" in ignored
-    assert "flurbles" in ignored
+    assert "all" in pc._probe("destroy all creatures", activated=False)
+
+
+def test_deletion_probe_is_silent_when_every_word_is_load_bearing():
+    """The other direction, without which the test above proves only that the
+    probe returns *something*."""
+    pc = _load_parse_coverage()
+    assert pc._probe("destroy target black creature", activated=False) == ()
 
 
 def test_grammar_refuses_the_rider_shape_instead_of_swallowing_it():

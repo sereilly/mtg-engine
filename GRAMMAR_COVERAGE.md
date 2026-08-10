@@ -1,16 +1,16 @@
 # Grammar Coverage
 
-Migration tracker for the oracle-text parser rewrite: how much of the card pool `engine/grammar/` accounts for, as it takes over from the `@parse_rule` registry in `engine/parsing/`.
+How much of the card pool the oracle-text parser (`engine/grammar/`) reads. It is the engine's only parser; a line it refuses is one that needed a name-keyed hook, a text-keyed sidecar table, or that leaves its card unsupported — so these numbers are the division of labour between the general reader and the special-case ones, and they are ratcheted so it cannot shift towards the special cases.
 
 **Generated** — run `python scripts/grammar_coverage.py` to refresh.
 
 | Measure | Meaning |
 | --- | --- |
 | Parsed | Grammar consumed every token of the line and built an AST |
-| Lowered | That AST mapped onto executable instructions |
+| Lowered | That AST mapped onto instructions, a sidecar registry, or a keyword line |
 | Executed | Instructions' categories are switched on, so the grammar's output runs |
 
-Categories currently switched on: `combat_restrictions, control, counters, counterspells, damage, destruction, evasion, land_statics, life, mana, optional, prevention, pump, recolor, regeneration, static_buffs, tapping, text_change, tokens, turns, upkeep, zones`.
+Categories currently switched on: `combat_restrictions, control, counters, counterspells, damage, destruction, evasion, game_end, land_statics, life, mana, optional, prevention, pump, recolor, regeneration, static_buffs, tapping, text_change, tokens, turns, upkeep, zones`.
 
 ## Coverage by set
 

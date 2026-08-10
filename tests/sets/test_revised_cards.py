@@ -57,15 +57,17 @@ def test_millstone_mills_the_named_number(catalog):
 
 def test_mill_count_is_a_parameter_not_a_rule_per_number(catalog):
     """The number is read from the text, spelled out or numeric."""
-    from engine.parsing import parse_primary_instruction
+    from engine.grammar import compile_line
 
     for text, expected in (
-        ("target player mills two cards", 2),
-        ("target player mills 5 cards", 5),
-        ("target player mills ten cards", 10),
+        ("Target player mills two cards.", 2),
+        ("Target player mills 5 cards.", 5),
+        ("Target player mills ten cards.", 10),
     ):
-        instruction, _ = parse_primary_instruction(text, activated=True)
-        assert instruction.payload["amount"] == expected, text
+        result = compile_line(text)
+        assert result.usable, (text, result.failure_reason)
+        assert [i.kind for i in result.instructions] == ["mill_target_player"], text
+        assert result.instructions[0].payload["amount"] == expected, text
 
 
 def test_mill_stops_at_an_empty_library_without_losing_the_game(catalog):

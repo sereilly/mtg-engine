@@ -135,6 +135,13 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # category as the other zone-change handlers.
     "search_library": "zones",
     "grant_extra_turn": "turns",
+    # Ending the game (CR 104). Their own category rather than "life": nothing
+    # about a life total is involved, and the three outcomes share one set of
+    # handlers in engine/handlers/life_and_game.py.
+    "player_wins_game": "game_end",
+    "player_loses_game": "game_end",
+    "target_player_loses_game": "game_end",
+    "game_is_draw": "game_end",
     "grant_unblockable_to_low_power_target": "evasion",
     # Restrictions on declaring attackers/blockers (CR 506, 509).
     "cant_attack_without_land_type": "combat_restrictions",
@@ -145,6 +152,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "draw_controller_cards": "zones",
     "mill_target_player": "zones",
     "exile_creature_gain_life_equal_to_power": "zones",
+    "exile_target_creature_until_eot": "zones",
     "return_creature_from_graveyard_to_hand": "zones",
     "reanimate_creature": "zones",
     "bounce_target_creature": "zones",
@@ -206,14 +214,20 @@ def _restrictions_beyond(
     )
 
 
-# Payload keys the grammar emits that no legacy rule produces and no existing
-# handler reads. They are additive *descriptions* of what a line targets, kept
-# so the engine can answer "what does this spell target?" from the compiled
-# program instead of re-reading oracle text (engine/targeting.py replacing
-# engine/legality.py). The grammar-vs-legacy differential compares payloads
-# with these removed — a key nothing consumes cannot change behaviour, and
-# treating it as a divergence would mean an ACCEPTED_DIFFS entry per migrated
-# card, which would gut the ratchet.
+# Payload keys no EFFECT_HANDLERS entry reads. They are additive *descriptions*
+# of what a line targets, kept so the engine can answer "what does this spell
+# target?" from the compiled program instead of re-reading oracle text
+# (engine/targeting.py replacing engine/legality.py) — they decide which
+# permanents the picker offers, not what the resolution does.
+#
+# They existed to be subtracted: the grammar-vs-legacy differential compared
+# payloads with these removed, since a key the legacy rules never produced would
+# otherwise have read as a divergence on every migrated card. That comparison is
+# gone, and so is the subtraction everywhere it mattered —
+# scripts/parse_coverage.py's deletion probe now compares whole payloads, which
+# is what makes it able to see "target **attacking** creature" differing from
+# "target creature". What is left is engine.grammar.behavioural_payload, used by
+# the lowering goldens.
 GRAMMAR_ONLY_PAYLOAD_KEYS = frozenset({"targets"})
 
 
@@ -1315,6 +1329,18 @@ def _lower_prevent_damage(node: ast.PreventDamage) -> tuple[OracleInstruction, .
     }
     if payload["to_self"] or payload["to_source"]:
         return (OracleInstruction("grant_prevention_shield", "", payload),)
+    # A chosen recipient. The handler's last branch calls
+    # `apply_prevention_shield(game, target, target_permanent_index, …)`, which
+    # shields the chosen *permanent* when one was picked and the chosen
+    # *player* when none was — so "to target player" and "to target creature"
+    # are the same instruction, and both are honoured. A quantifier other than
+    # "target"/"any target" is not: nothing enumerates a shield per member of a
+    # set.
+    if isinstance(recipient, ast.PlayerRef):
+        if recipient.kind not in ("target_player", "target_opponent"):
+            raise LoweringError("no handler for this prevention recipient", node=node)
+        _describe_targets(payload, recipient)
+        return (OracleInstruction("grant_prevention_shield", "", payload),)
     if not isinstance(recipient, ast.TargetSpec) or recipient.quantifier not in ("target", "any_target"):
         raise LoweringError("no handler for this prevention recipient", node=node)
     _describe_targets(payload, recipient)
@@ -1379,15 +1405,39 @@ _EXILED_CREATURE = ast.ObjectFilter(card_types=("creature",))
 
 
 def _lower_exile(node: ast.Exile) -> tuple[OracleInstruction, ...]:
-    """Exiling on its own has no handler.
+    """"Exile target creature until end of turn." — and nothing else.
 
-    ``exile_creature_gain_life_equal_to_power`` is the pool's only exile, and it
-    performs both halves of Swords to Plowshares' sentence — so lowering a bare
-    ``Exile`` onto it would gain life the card never offered, and lowering it
-    onto nothing would exile silently. Refusing names the gap: a plain
-    ``exile_target`` handler is what a second card printing only the first
-    sentence would need.
+    ``exile_target_creature_until_eot`` is the one exile handler that stands on
+    its own: it moves the creature to exile and records the return
+    (CR 406.1/400.7), so the whole sentence is what it performs. Every part of
+    the clause is checked against that rather than dropped —
+
+    * **the duration.** Without it the sentence is a *permanent* exile, which
+      this handler does not perform: it would return the creature at cleanup.
+    * **the subject.** A chosen creature, not a sweep and not the source: the
+      handler resolves one target permanent.
+
+    A bare ``Exile`` still refuses.
+    ``exile_creature_gain_life_equal_to_power`` performs both halves of Swords
+    to Plowshares' sentence, so lowering onto it would gain life the card never
+    offered, and lowering onto nothing would exile silently. The refusal names
+    the gap: a plain ``exile_target`` handler is what a second card printing
+    only the first sentence would need.
     """
+    if node.duration.kind in ("until_end_of_turn", "this_turn"):
+        subject = node.subject
+        if (
+            isinstance(subject, ast.TargetSpec)
+            and subject.quantifier == "target"
+            and subject.count == 1
+            and subject.filter == _EXILED_CREATURE
+        ):
+            payload: dict[str, object] = {}
+            _describe_targets(payload, subject)
+            return (OracleInstruction("exile_target_creature_until_eot", "", payload),)
+        raise LoweringError(
+            "the temporary-exile handler resolves one targeted creature", node=node
+        )
     raise LoweringError(
         "no handler exiles without the fused life gain; a plain exile handler "
         "does not exist yet",
@@ -1717,6 +1767,44 @@ def _lower_extra_turn(node: ast.ExtraTurn) -> tuple[OracleInstruction, ...]:
     return (OracleInstruction("grant_extra_turn", "", {}),)
 
 
+# Who a "loses the game" sentence names, and the handler that makes that player
+# lose. `player_loses_game` and `target_player_loses_game` are the *same*
+# function (engine/handlers/life_and_game.py registers both names) and it picks
+# the loser off the kind, so the two are not interchangeable: emitting the
+# targeted kind for "you lose the game" would kill whoever the spell happened to
+# point at.
+_LOSE_GAME_KINDS = {
+    "you": "player_loses_game",
+    "target_player": "target_player_loses_game",
+    "target_opponent": "target_player_loses_game",
+}
+
+
+def _lower_lose_game(node: ast.LoseGame) -> tuple[OracleInstruction, ...]:
+    """"Target player loses the game." / "You lose the game." (CR 104.3e.)"""
+    kind = _LOSE_GAME_KINDS.get(node.player.kind)
+    if kind is None:
+        raise LoweringError(
+            f"no handler makes {node.player.kind!r} lose the game", node=node
+        )
+    return (OracleInstruction(kind, "", {}),)
+
+
+def _lower_win_game(node: ast.WinGame) -> tuple[OracleInstruction, ...]:
+    """"You win the game." (CR 104.2b.)
+
+    ``player_wins_game`` wins for the effect's *controller* — it marks every
+    other player as having lost (104.2a) and takes no player argument. A card
+    handing the win to someone else is refused rather than lowered onto a
+    handler that would win it for the wrong seat.
+    """
+    if node.player.kind != "you":
+        raise LoweringError(
+            f"no handler makes {node.player.kind!r} win the game", node=node
+        )
+    return (OracleInstruction("player_wins_game", "", {}),)
+
+
 # The restriction `grant_unblockable_to_low_power_target` hardcodes, in
 # engine/handlers/combat.py *and* again in engine/legality.py's target
 # enumerator. Written out here so the mismatch is checked rather than assumed.
@@ -1914,6 +2002,18 @@ def lower_statement(
 
     if isinstance(statement, ast.ExtraTurn):
         return _lower_extra_turn(statement)
+
+    if isinstance(statement, ast.LoseGame):
+        return _lower_lose_game(statement)
+
+    if isinstance(statement, ast.WinGame):
+        return _lower_win_game(statement)
+
+    if isinstance(statement, ast.DrawGame):
+        # "The game is a draw." (CR 104.4c.) `game_is_draw` takes an empty
+        # payload and the sentence carries nothing else, so there is nothing to
+        # check and nothing that could be dropped.
+        return (OracleInstruction("game_is_draw", "", {}),)
 
     if isinstance(statement, ast.CombatRestriction):
         return _lower_combat_restriction(statement)
