@@ -1268,6 +1268,45 @@ deliberately withheld until the card is actually in the pool, because the
 stale-entry guard is right that an acknowledgement for an absent card is a claim
 nobody has checked.
 
+### The last three Revised cards, analysed
+
+Each was compiled and inspected rather than estimated, so the next pass starts
+from the gap and not from the card name.
+
+**Mishra's War Machine** — compiles to `deal_damage {amount: 3}` and reports
+supported. It loses *both* riders: "unless you discard a card" (an alternative
+cost, so the damage is not unconditional) and "if it deals damage to you this
+way, tap it" (a consequence conditional on the first rider having applied).
+Today it deals 3 to its controller every upkeep with no choice and no tap. The
+pay-or-consequence upkeep table already models "deals N damage unless you pay
+<mana>" (Force of Nature); this is the same shape with a *discard* as the
+alternative, plus a tap conditional on the branch taken.
+
+**Rocket Launcher** — the damage clause parses. Unclaimed: "destroy this
+artifact at the beginning of the next end step" (a delayed one-shot the engine
+has no representation for — distinct from the *continuous* effect that outlives
+its source, which now exists) and "activate only if you've controlled this
+artifact continuously since the beginning of your most recent turn", which is
+CR 302.6's summoning-sickness clause applied to an artifact's activated
+ability.
+
+**Armageddon Clock** — three abilities, none claimed: an upkeep trigger adding
+a counter, a *draw-step* trigger dealing damage equal to that counter count to
+each player, and an activated ability that any player may use but only during
+an upkeep step. The counter-accumulating upkeep trigger has a precedent
+(Cyclone's wind counters); the draw-step trigger and the "any player, only
+during any upkeep step" activation window do not.
+
+Common thread: all three are **riders and timing windows**, not effects. The
+effects themselves — damage, discard, destroy, counters — are all implemented.
+What is missing is the vocabulary for *when* and *unless*: a delayed one-shot,
+an activation window tied to a step, and an alternative-cost branch whose
+outcome a later clause depends on.
+
+That is one coherent piece of work, and it is worth more than these three cards:
+delayed one-shots and step-scoped activation windows are two of the commonest
+templates in every set after this one.
+
 ### The static-ability cluster, and why it is a phase-6 job
 
 20 of the remaining lines fail with "static abilities need the CR 613 layers
