@@ -25,6 +25,14 @@ class CleanupStepMixin:
         self._set_phase_and_step(phase, step)
         self._on_step_or_phase_begin(phase, step)
 
+        # CR 514.2: "until end of turn" effects end. A global static whose
+        # source has left the battlefield but whose effect continued (Titania's
+        # Song) stops here — dropping it from the list is the whole removal,
+        # because the effect was only ever derived from that list.
+        if self.lingering_global_statics:
+            self.lingering_global_statics.clear()
+            self._refresh_dynamic_creatures()
+
         active_player = self.players[player_index]
         cleanup_completed = True
         if not active_player.has_no_max_hand_size:

@@ -542,6 +542,22 @@ class PermanentStateMixin:
             for perm in all_permanents
             if (static := global_static_for(perm.card.oracle_text)) is not None
         ]
+
+        # A static that outlives its source (Titania's Song: "if this
+        # enchantment leaves the battlefield, this effect continues until end of
+        # turn"). Detected here rather than on a leave-battlefield hook because
+        # this method already knows which sources were applying: one that was in
+        # the list and is no longer on a battlefield has left, whichever way it
+        # went. The cleanup step drops the lingering list (CR 514.2).
+        on_battlefield = {id(perm) for perm, _ in sources}
+        for perm, static in self._global_static_sources_last:
+            if static.continues_until_eot and id(perm) not in on_battlefield:
+                if not any(existing is perm for existing, _ in self.lingering_global_statics):
+                    self.lingering_global_statics.append((perm, static))
+        self._global_static_sources_last = list(sources)
+        sources = sources + [
+            (perm, static) for perm, static in self.lingering_global_statics
+        ]
         for perm in all_permanents:
             applying = [
                 source

@@ -98,17 +98,12 @@ def test_prices_are_not_committed(all_set_paths):
 # deliberately, and a card *disappearing* from the pool's unsupported set is
 # progress that should shrink this list.
 #
-# Ingesting Revised added six. They are honest failures — the compiler names
-# what it cannot do rather than claiming support and resolving to nothing —
-# which is the property this file exists to protect.
-KNOWN_UNSUPPORTED = {
-    "Energy Flux",       # "All artifacts have '<upkeep sacrifice ability>'"
-    "Hurkyl's Recall",   # return all artifacts an owner owns to hand
-    "Millstone",         # mill
-    "Primal Clay",       # enters as one of three chosen bodies
-    "Shatterstorm",      # destroy all artifacts, no regeneration
-    "Crumble",           # destroy target artifact, its controller gains life
-}
+# Empty, and that is the point: a card only earns an entry here by being
+# deliberately left unimplemented, and it loses the entry the moment it works.
+# Ingesting Revised put six cards here; implementing them emptied it again, and
+# the assertion below is what forced the list to be cleaned up rather than left
+# as a stale excuse.
+KNOWN_UNSUPPORTED: set[str] = set()
 
 
 def test_whole_catalog_still_compiles_as_supported():
@@ -212,7 +207,13 @@ def test_pool_variable_pt_cards_are_flagged():
 
     for name in flagged:
         card = next(c for c in load_catalog() if c.name == name)
-        computed = any(
+        from engine.enter_effects import choosable_bodies
+
+        # Two legitimate sources of a variable printed P/T: a
+        # characteristic-defining rule that counts something, or a body chosen
+        # as the permanent enters (Primal Clay). Either way the engine produces
+        # a number; what must not happen is a `*` with nothing behind it.
+        computed = bool(choosable_bodies(card.oracle_text)) or any(
             dynamic_pt_for(normalize_creature_line(line)) is not None
             for line in card.oracle_text.splitlines()
         )

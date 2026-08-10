@@ -52,6 +52,7 @@ from engine.oracle_types import OracleInstruction  # noqa: E402
 from engine.cast_restrictions import CAST_RESTRICTIONS  # noqa: E402
 from engine.cost_modifiers import cost_modifiers_for  # noqa: E402
 from engine.draw_step_modifiers import draw_step_bonus_for  # noqa: E402
+from engine.global_statics import global_static_for  # noqa: E402
 from engine.untap_restrictions import untap_restriction_for  # noqa: E402
 from engine.oracle import (  # noqa: E402
     _is_supported_keyword_line,
@@ -165,6 +166,11 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     ("aura static (oracle_instructions/permanent_state)", lambda s: _matches_any(s, _AURA_STATIC_PATTERNS)),
     ("cast_restrictions.py", lambda s: any(r.phrase in s for r in CAST_RESTRICTIONS)),
     ("untap_restrictions.py", lambda s: untap_restriction_for(s) is not None),
+    # A board-wide static contributes through the CR 613 layer bridge and,
+    # for a granted ability, through the affected permanent's effective
+    # card. There is no instruction to point at, so without this channel a
+    # card whose whole behaviour is one of these reads as unclaimed text.
+    ("global_statics.py", lambda s: global_static_for(s) is not None),
     ("draw_step_modifiers.py", lambda s: draw_step_bonus_for(s) is not None),
     ("cost_modifiers.py", lambda s: bool(cost_modifiers_for(s))),
     ("activation gate (stack_casting)", lambda s: any(g in s for g in _ACTIVATION_GATES)),

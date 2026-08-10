@@ -1,3 +1,4 @@
+import pathlib
 import asyncio
 from fastapi.testclient import TestClient
 import json
@@ -2805,7 +2806,24 @@ def test_catalog_lists_every_set_a_card_was_printed_in():
     # though its catalog entry is the Alpha one.
     bolt = by_name["Lightning Bolt"]
     assert bolt["set"] == "lea"
-    assert [s["code"] for s in bolt["sets"]] == ["lea", "leb", "2ed"]
+    # Derived from the manifest: pinning the exact list made this fail on the
+    # first ingested set rather than on a real change, and what it means to
+    # assert is that the API reports every set the card is actually in.
+    import json as _json
+    from engine.card_loader import MANIFEST_PATH
+
+    manifest = _json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    expected = [
+        entry["code"].lower()
+        for entry in manifest["sets"]
+        if any(
+            c["name"] == "Lightning Bolt"
+            for c in _json.loads(
+                (pathlib.Path("cards") / entry["file"]).read_text(encoding="utf-8")
+            )
+        )
+    ]
+    assert [s["code"] for s in bolt["sets"]] == expected
 
     # Each printing carries its own art so the deck editor can show the
     # filtered set's version, and the Alpha printing matches the entry's own.

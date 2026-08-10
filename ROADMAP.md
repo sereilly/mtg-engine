@@ -1240,6 +1240,34 @@ needs an entry in the static-line guard and the variable-P/T property test
 widened to accept "chosen on entry" alongside "computed by a
 characteristic-defining rule", and the web API test still hardcodes three sets.
 
+### A static that outlives its source, and what Revised still needs
+
+Titania's Song's rider — "if this enchantment leaves the battlefield, this
+effect continues until end of turn" — is now implemented, and it is the first
+continuous effect in the engine that survives its own source. Detected in
+`_refresh_global_statics` rather than on a leave-battlefield hook, because that
+method already knows which sources were applying: one that was in the list and
+is no longer on a battlefield has left, whichever way it went. The cleanup step
+drops the lingering list (CR 514.2), and dropping it *is* the removal, because
+the effect was only ever derived from that list.
+
+**Revised still does not land, and the reason changed.** All six cards it was
+blocked on are implemented; re-ingesting gives 388 cards, **388 supported, 0
+unsupported**. But Revised also reprints Antiquities cards, and three of those —
+Armageddon Clock, Mishra's War Machine, Rocket Launcher — report supported while
+carrying text nothing parses. They are the same class the pass has been
+clearing, found the same way, and acknowledging them to make the ingest green
+would be the one thing this file argues against.
+
+So the set is one more card-sized batch away, and the estimate is now grounded
+rather than guessed: **six cards cost one seam** (board-wide statics reaching
+the layer bridge), **one engine feature** (an effect outliving its source), and
+**four test generalisations**. Three of those tests are now pool-relative; the
+fourth — the static-line guard's acknowledgement for Primal Clay — is
+deliberately withheld until the card is actually in the pool, because the
+stale-entry guard is right that an acknowledgement for an absent card is a claim
+nobody has checked.
+
 ### The static-ability cluster, and why it is a phase-6 job
 
 20 of the remaining lines fail with "static abilities need the CR 613 layers

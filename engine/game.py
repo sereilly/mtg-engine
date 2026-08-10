@@ -272,6 +272,10 @@ class Game(
     # (Primal Clay). A body is applied at once so headless play never
     # blocks; this offers an interactive controller the replacement.
     pending_body_choice: dict | None = None
+    # Global statics whose source has left but whose effect continues
+    # until end of turn (Titania's Song). Cleared at cleanup.
+    lingering_global_statics: list = field(default_factory=list)
+    _global_static_sources_last: list = field(default_factory=list)
     # Drop of Honey: "destroy the creature with the least power. If two or more
     # creatures are tied for least power, you choose one of them." Armed during
     # the controller's upkeep when the tie is real and the controller is a human

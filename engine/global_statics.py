@@ -49,6 +49,10 @@ class GlobalStatic:
     # upkeep step, the UI, the coverage scripts — sees it without knowing this
     # module exists.
     grants_ability: str = ""
+    # "If this enchantment leaves the battlefield, this effect continues until
+    # end of turn." (Titania's Song.) A continuous effect that outlives its
+    # source: the source stops existing, the effect does not.
+    continues_until_eot: bool = False
 
 
 _TEMPLATES: tuple[tuple[re.Pattern[str], GlobalStatic], ...] = (
@@ -64,7 +68,8 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], GlobalStatic], ...] = (
         re.compile(
             r"^each noncreature artifact loses all abilities and becomes an "
             r"artifact creature with power and toughness each equal to its "
-            r"mana value$"
+            r"mana value\.? ?(?P<lingers>if this enchantment leaves the "
+            r"battlefield, this effect continues until end of turn)?$"
         ),
         GlobalStatic(
             name="titanias_song",
@@ -90,7 +95,18 @@ def global_static_for(oracle_text: str) -> GlobalStatic | None:
             match = pattern.match(line)
             if match is None:
                 continue
-            granted = match.groupdict().get("ability")
+            groups = match.groupdict()
+            if groups.get("lingers"):
+                return GlobalStatic(
+                    name=static.name,
+                    applies_to=static.applies_to,
+                    removes_abilities=static.removes_abilities,
+                    adds_creature_type=static.adds_creature_type,
+                    pt_from_mana_value=static.pt_from_mana_value,
+                    grants_ability=static.grants_ability,
+                    continues_until_eot=True,
+                )
+            granted = groups.get("ability")
             if granted:
                 return GlobalStatic(
                     name=static.name,
