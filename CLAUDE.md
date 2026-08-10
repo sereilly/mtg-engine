@@ -9,7 +9,7 @@ FastAPI web app with a browser game UI. The card pool lives in `cards/` as one
 JSON per set, registered in `cards/manifest.json` (the single source of truth
 for which sets ship): Limited Edition Alpha (290 cards), Limited Edition Beta
 (292), Unlimited Edition (292 — same list as Beta), and Arabian Nights (78),
-369 unique cards, all classified as supported. Card files hold only the fields
+369 unique cards, all classified as supported. `scripts/support_report.py` reports on the whole manifest pool, not one set. Card files hold only the fields
 the engine and web layer read; `scripts/ingest_set.py` produces them. The
 engine is **registry-based**: card support grows by adding small isolated
 entries, never by editing core control flow.
@@ -157,6 +157,27 @@ adding entries, not editing dispatch**:
   spells cost {N} more to cast", "activated abilities of <colour> <type>s cost
   {N} more to activate". Increases only; reduction should arrive with the card
   that needs it, since it clamps at zero and there is nothing to verify against.
+- `engine/continuous.py` + `engine/layer_bridge.py` — the CR 613 layer system.
+  Characteristics are **computed**, not stored: `has_type`, `is_creature`,
+  `effective_power`, `has_keyword` and the colour accessors all resolve through
+  it. Layers 3–7 are live. Anything asking "what type/colour/P/T is this?" must
+  go through these accessors — reading `card.type_line` or a metadata flag
+  instead is how the same question ends up with several disagreeing answers,
+  which is the bug class `tests/engine/test_layer_reads.py` guards.
+- `engine/auras.py` — what an Aura's effect lines say and whether the engine
+  implements them. Gates support (an Aura whose effect is unimplemented is
+  reported unsupported rather than entering play and doing nothing) and derives
+  the Aura's continuous effects while it is attached. Removal is the Aura
+  ceasing to be attached; there is no remembered delta. Use
+  `attach_aura`/`detach_aura`, never the raw metadata.
+- `engine/characteristic_defining.py` — characteristic-defining P/T (CR 604.3),
+  one `dynamic_pt_count` instruction carrying what to count and whose
+  battlefield to count it on.
+- `engine/static_bonuses.py` — conditional static P/T bonuses (CR 613 layer 7c)
+  in both printed word orders.
+- `engine/enter_effects.py` — entry-state phrases `_initialize_permanent_state`
+  carries out. `enter_effect_line` is read by the support gate *and* the
+  grammar, so what is implemented and what is claimed cannot drift.
 - `engine/combat_restrictions.py` — text-keyed combat restrictions (CR 506):
   "can't attack unless defending player controls a <land type>", "attacks each
   combat if able", "can't be blocked by Walls". The land type is payload data,
