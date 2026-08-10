@@ -534,8 +534,7 @@ class AbilityActivationMixin:
                 source_permanent=permanent,
                 ability_text=ability.source_line,
                 target_stack_item=target_stack_item,
-                target_stack_name=target_stack_item.card.name if target_stack_item is not None else None,
-                chosen_source=chosen_source,
+                choices={"chosen_source": chosen_source},
             )
         )
         self.log.append(f"{permanent.card.name} ability added to stack")

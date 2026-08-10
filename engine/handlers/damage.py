@@ -41,10 +41,11 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         return True, "resolved"
     # Fireball's cross-seat divided list: any mix of creatures and player faces
     # on both sides, each dealt damage // n ("divided evenly, rounded down").
-    if context.divided_targets:
+    divided = context.choices.get("divided_targets")
+    if divided:
         entries = [
             (seat, index)
-            for seat, index in context.divided_targets
+            for seat, index in divided
             if 0 <= seat < len(game.players)
             and (index is None or 0 <= index < len(game.players[seat].battlefield))
         ]

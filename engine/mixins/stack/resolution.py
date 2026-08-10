@@ -188,7 +188,7 @@ class StackResolutionMixin:
                     source_permanent=item.source_permanent,
                     stack_target=item.target_stack_item,
                     trigger_context=item.trigger_context,
-                    chosen_source=item.chosen_source,
+                    choices=item.choices,
                 ),
             )
             supported, details = state_machine.run(item.ability_instruction)
@@ -211,10 +211,10 @@ class StackResolutionMixin:
                 item.card,
                 target_permanent_index=item.target_permanent_index,
                 x_value=item.x_value,
-                new_color=item.new_color,
+                new_color=item.choices.get("new_color"),
                 stack_target=item.target_stack_item,
                 mode_index=item.chosen_mode_index,
-                old_color=item.old_color,
+                old_color=item.choices.get("old_color"),
             )
             self.log.append(f"{item.card.name} (copy) resolved")
             return
@@ -227,11 +227,11 @@ class StackResolutionMixin:
             target_player_index=item.target_player_index,
             target_permanent_index=item.target_permanent_index,
             x_value=item.x_value,
-            new_color=item.new_color,
+            new_color=item.choices.get("new_color"),
             stack_target=item.target_stack_item,
             chosen_mode_index=item.chosen_mode_index,
-            old_color=item.old_color,
-            divided_targets=item.divided_targets,
+            old_color=item.choices.get("old_color"),
+            divided_targets=item.choices.get("divided_targets"),
         )
         return
     def _resolve_card(

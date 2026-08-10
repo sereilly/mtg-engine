@@ -797,7 +797,7 @@ class TestLifelace:
     def test_recolored_spell_on_stack_is_serialized_with_color_override(self, cards):
         # Reported FAILED: "There is no visual indicator of the spell becoming
         # green in the UI. I targeted a lightning bolt on the stack." Lifelace
-        # recolors a spell on the stack (StackItem.new_color); the serialized
+        # recolors a spell on the stack (StackItem.choices["new_color"]); the serialized
         # stack item must expose that as color_override so the canvas badges the
         # floating stack card the same way it badges a recolored permanent.
         from web.app import _serialize_stack_item
@@ -814,7 +814,7 @@ class TestLifelace:
 
         bolt_item = game.stack[0]
         assert bolt_item.card.name == "Lightning Bolt"
-        assert bolt_item.new_color == "G"
+        assert bolt_item.choices["new_color"] == "G"
         data = _serialize_stack_item(bolt_item, game)
         assert data["color_override"] == "G"
         assert data["card"]["color_override"] == "G"

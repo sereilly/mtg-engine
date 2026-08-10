@@ -47,7 +47,7 @@ def sacrifice_creature_for_black_mana(game: Game, instruction: OracleInstruction
     creature's mana value." Metamorphosis (ARN): "Add X mana of any one color,
     where X is 1 plus the sacrificed creature's mana value." Both share the
     additional-cost parse; the amount bump and the color choice are read from
-    the card's own text (the chosen color rides context.new_color, like the
+    the card's own text (the chosen color rides context.choices["new_color"], like the
     laces' color choice)."""
     caster = context.caster
     chosen = context.target_permanent_index if isinstance(context.target_permanent_index, int) else None
@@ -63,7 +63,7 @@ def sacrifice_creature_for_black_mana(game: Game, instruction: OracleInstruction
     symbol = "B"
     color_word = "black"
     if "mana of any one color" in text:
-        symbol = game._normalize_mana_color(context.new_color) or "G"
+        symbol = game._normalize_mana_color(context.choices.get("new_color")) or "G"
         color_word = {"W": "white", "U": "blue", "B": "black", "R": "red", "G": "green"}.get(symbol, symbol)
     if "spend this mana only to cast creature spells" in text:
         # Metamorphosis: the mana goes into the creature-spells-only bucket,

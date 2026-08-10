@@ -29,8 +29,9 @@ def volcanic_eruption(game: Game, instruction: OracleInstruction, context: Oracl
     # indices on the target player's battlefield; fall back to the first X
     # Mountains anywhere for AI/no explicit choice.
     chosen: list[tuple[PlayerState, Permanent]] = []
-    if context.divided_targets:
-        for seat, index in context.divided_targets:
+    divided = context.choices.get("divided_targets")
+    if divided:
+        for seat, index in divided:
             if index is None or not (0 <= seat < len(game.players)):
                 continue
             player = game.players[seat]

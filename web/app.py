@@ -758,9 +758,10 @@ def _stack_item_targets(item, game: Game) -> list[dict]:
     targets: list[dict] = []
 
     # Fireball & co: the full cross-seat list, which takes precedence over the
-    # single-target fields (see StackItem.divided_targets).
-    if item.divided_targets:
-        for seat, idx in item.divided_targets:
+    # single-target fields (see StackItem.choices["divided_targets"]).
+    divided = item.choices.get("divided_targets")
+    if divided:
+        for seat, idx in divided:
             if not 0 <= seat < len(players):
                 continue
             if idx is None:
@@ -839,26 +840,31 @@ def _serialize_stack_item(item, game: Game) -> dict:
                 break
 
     # A Lace card (Lifelace, Chaoslace, …) that targeted this spell on the stack
-    # recolored it, recorded on the stack item as ``new_color`` (the effective
+    # recolored it, recorded on the stack item as ``choices["new_color"]`` (the effective
     # color the engine reads via _stack_item_colors). Surface it as color_override
     # so the canvas badges the floating stack card exactly like a recolored
     # permanent, and swap the displayed colors to match "becomes [color]".
     serialized_card = _serialize_card(item.card)
-    if item.new_color:
-        serialized_card["color_override"] = item.new_color
-        serialized_card["colors"] = [item.new_color]
+    new_color = item.choices.get("new_color")
+    if new_color:
+        serialized_card["color_override"] = new_color
+        serialized_card["colors"] = [new_color]
 
     return {
         "type": item_type,
         "is_triggered": is_triggered,
         "label": label,
         "card": serialized_card,
-        "color_override": item.new_color,
+        "color_override": new_color,
         "caster_index": item.caster_index,
         "caster_name": game.players[item.caster_index].name,
         "target_player_index": item.target_player_index,
         "target_player_name": target_name,
-        "target_stack_name": item.target_stack_name,
+        # Derived rather than stored: it was a second copy of the target's name
+        # sitting beside the reference it came from.
+        "target_stack_name": (
+            item.target_stack_item.card.name if item.target_stack_item is not None else None
+        ),
         "target_permanent_index": item.target_permanent_index,
         "target_permanent_name": target_permanent_name,
         "target_permanent_seat": target_permanent_seat,

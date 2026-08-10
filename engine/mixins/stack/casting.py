@@ -235,7 +235,6 @@ class SpellCastingMixin:
                 matching = [it for it in self.stack if not color_filter or color_filter in it.card.colors]
                 if matching:
                     target_stack_item_val = matching[-1]
-            target_stack_name_val = target_stack_item_val.card.name if target_stack_item_val is not None else None
             self.stack.append(
                 StackItem(
                     card=card,
@@ -243,12 +242,13 @@ class SpellCastingMixin:
                     target_player_index=target_player_index,
                     target_permanent_index=target_permanent_index,
                     x_value=resolved_x_value,
-                    divided_targets=divided_targets,
-                    target_stack_name=target_stack_name_val,
                     target_stack_item=target_stack_item_val,
-                    new_color=new_color,
-                    old_color=old_color,
                     chosen_mode_index=mode_index,
+                    choices={
+                        "divided_targets": divided_targets,
+                        "new_color": new_color,
+                        "old_color": old_color,
+                    },
                 )
             )
             self.log.append(f"{card.name} added to stack")

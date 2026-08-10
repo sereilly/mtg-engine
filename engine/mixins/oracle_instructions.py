@@ -70,9 +70,11 @@ class OracleInstructionsMixin:
                 card=card,
                 target_permanent_index=target_permanent_index,
                 x_value=x_value,
-                divided_targets=divided_targets,
-                new_color=new_color,
-                old_color=old_color,
+                choices={
+                    "divided_targets": divided_targets,
+                    "new_color": new_color,
+                    "old_color": old_color,
+                },
                 stack_target=stack_target,
             ),
         )

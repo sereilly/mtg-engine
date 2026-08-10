@@ -52,11 +52,11 @@ def copy_top_stack_spell(game: Game, instruction: OracleInstruction, context: Or
             target_player_index=new_target_player_index,
             target_permanent_index=new_target_permanent_index,
             x_value=copied.x_value,
-            new_color=copied.new_color,
-            old_color=copied.old_color,
+            # CR 707.10: the copy has the same choices as the original, so this
+            # is one assignment rather than one per choice the original made.
+            choices=dict(copied.choices),
             chosen_mode_index=copied.chosen_mode_index,
             target_stack_item=copied.target_stack_item,
-            target_stack_name=copied.target_stack_name,
             is_copy=True,
         )
     )

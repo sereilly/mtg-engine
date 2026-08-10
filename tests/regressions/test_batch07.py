@@ -140,7 +140,7 @@ class TestChaoslace:
         game.resolve_top_of_stack()  # resolve Chaoslace (top of stack)
 
         bears = game.stack[bears_index]
-        assert bears.new_color == "R"
+        assert bears.choices["new_color"] == "R"
         # Color filters (e.g. Red Elemental Blast) consume the recolor.
         assert game._stack_item_colors(bears) == ("R",)
 

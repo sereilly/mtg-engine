@@ -186,8 +186,8 @@ def mark_text_modified(game: Game, instruction: OracleInstruction, context: Orac
         target_perm.metadata["text_modified"] = True
 
     mode = instruction.payload.get("mode")
-    new_symbol = (context.new_color or "").upper()
-    old_symbol = (context.old_color or "").upper()
+    new_symbol = (context.choices.get("new_color") or "").upper()
+    old_symbol = (context.choices.get("old_color") or "").upper()
 
     # Magical Hack: replace one basic land type with another. On a land this swaps
     # the land type (and the mana it makes); on a creature it remaps that landwalk
@@ -256,7 +256,7 @@ def recolor_target_from_text(game: Game, instruction: OracleInstruction, context
     # "Target spell or permanent becomes [color]" — a spell on the stack is a
     # legal target (the Lace cards). Recolor it via the stack item's color override.
     if context.stack_target is not None and symbol:
-        context.stack_target.new_color = symbol
+        context.stack_target.choices["new_color"] = symbol
         game.log.append(f"{context.stack_target.card.name} (on the stack) became {symbol}")
         return True, "resolved"
     target = context.target

@@ -35,9 +35,10 @@ class GameHelpersMixin:
     @staticmethod
     def _stack_item_colors(item) -> tuple[str, ...]:
         """Effective color symbols of a spell on the stack, honoring a color
-        change applied by a Lace card (StackItem.new_color)."""
-        if getattr(item, "new_color", None):
-            return (item.new_color,)
+        change applied by a Lace card (StackItem.choices["new_color"])."""
+        recolored = getattr(item, "choices", {}).get("new_color")
+        if recolored:
+            return (recolored,)
         return tuple(item.card.colors or ())
 
     @staticmethod

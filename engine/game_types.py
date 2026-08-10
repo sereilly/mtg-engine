@@ -18,6 +18,26 @@ class SimulationResult:
     details: str
 
 
+# Keys of StackItem.choices / OracleExecutionContext.choices, named once so the
+# side that records a choice and the handler that reads it cannot drift.
+# tests/engine/test_stack_item_choices.py holds the engine to this list in both
+# directions, which is what makes it a declaration rather than a comment.
+#
+#   new_color        the replacement colour/land-type word of a recolor or
+#                    text-change spell (the Lace cycle, Magical Hack, Sleight of
+#                    Mind, and the "of any one color" mana spells)
+#   old_color        the word being *replaced* by a text change; new_color is
+#                    what replaces it
+#   divided_targets  a divided spell's full cross-seat target list (Fireball,
+#                    Volcanic Eruption) as (seat, battlefield_index) pairs, where
+#                    a (seat, None) entry is that player's face. Takes precedence
+#                    over target_player_index / target_permanent_index.
+#   chosen_source    "a source of your choice" (Jade Monolith, the source-of-
+#                    choice prevention spells): a battlefield Permanent or a
+#                    stack spell's CardDefinition
+CHOICE_KEYS = ("new_color", "old_color", "divided_targets", "chosen_source")
+
+
 @dataclass
 class StackItem:
     card: CardDefinition
@@ -26,22 +46,13 @@ class StackItem:
     # target_permanent_index may be a single int or a list of ints for multi-target spells
     target_permanent_index: int | list[int] | None
     x_value: int | None
-    # Divided-damage spells (Fireball): the full cross-seat target list as
-    # (seat, battlefield_index) pairs; a (seat, None) entry is that player's face.
-    # Takes precedence over target_player_index/target_permanent_index.
-    divided_targets: list[tuple[int, int | None]] | None = None
     ability_instruction: OracleInstruction | None = None
     ability_effect_kind: str | None = None
     source_permanent: Permanent | None = None
-    target_stack_name: str | None = None
     # Direct reference to the stack item this spell/ability targets (Counterspell,
     # Fork). Lets the effect act on the chosen spell rather than the top of stack.
     target_stack_item: "StackItem | None" = None
     ability_text: str | None = None
-    new_color: str | None = None
-    # The "from" color/land-type word for a text-change spell (Magical Hack /
-    # Sleight of Mind): the word being replaced. new_color is the replacement.
-    old_color: str | None = None
     # Chosen mode of a "Choose one —" modal spell, as an index into the card's
     # compiled OracleProgram.modes. None for non-modal spells (resolve mode 0).
     chosen_mode_index: int | None = None
@@ -57,9 +68,12 @@ class StackItem:
     # OracleInstruction, passing hook_event as the captured event payload.
     hook_key: str | None = None
     hook_event: dict | None = None
-    # "A source of your choice" (Jade Monolith): the chosen damage source — a
-    # battlefield Permanent or a stack spell's CardDefinition.
-    chosen_source: object | None = None
+    # Everything the caster picked beyond the target itself, keyed by CHOICE_KEYS.
+    # A dict rather than a field each so a card family needing a new kind of
+    # choice adds a key here and a read in its handler, instead of a field on
+    # this dataclass *and* one on OracleExecutionContext. Handlers already read
+    # their instruction payloads this way, so it is the same idiom.
+    choices: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -70,21 +84,15 @@ class OracleExecutionContext:
     # target_permanent_index may be a single int or a list of ints for multi-target spells
     target_permanent_index: int | list[int] | None = None
     x_value: int | None = None
-    # Divided-damage spells (Fireball): cross-seat (seat, index|None) target list;
-    # a None index is that player's face. See StackItem.divided_targets.
-    divided_targets: list[tuple[int, int | None]] | None = None
     source_permanent: Permanent | None = None
-    new_color: str | None = None
-    # The "from" word for a text-change spell (Magical Hack / Sleight of Mind).
-    old_color: str | None = None
     # The chosen target spell/ability on the stack (Counterspell, Fork).
     stack_target: "StackItem | None" = None
     # Event data captured when a triggered ability fired, read by its effect handler
     # at resolution (see StackItem.trigger_context).
     trigger_context: dict | None = None
-    # "A source of your choice" (Jade Monolith): the chosen damage source — a
-    # battlefield Permanent or a stack spell's CardDefinition.
-    chosen_source: object | None = None
+    # What the caster picked beyond the target, carried through from the stack
+    # item unchanged. Keys are CHOICE_KEYS.
+    choices: dict = field(default_factory=dict)
     # Scratchpad for values one instruction produces and a later instruction in
     # the same resolution consumes ("deals X damage… you gain that much life").
     # Compositional effects need this: once "deal damage and gain life" is two
