@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import re
 
 from .ai_valuation import (
+    SPELL_TYPES,
     cards_drawn_by_controller,
     cards_drawn_by_target,
     counters_a_spell,
@@ -577,6 +578,21 @@ def _estimated_incoming_player_damage(game: Game, defending_player_index: int) -
 
 
 def _can_cast_with_targets(game: Game, caster_index: int, card: CardDefinition) -> bool:
+    """Whether *card* has a legal target for the effect it carries out **as it
+    is cast**.
+
+    Only a spell does; see ``ai_valuation.SPELL_TYPES``. A permanent's
+    instruction list mirrors its *abilities*, which choose their own targets on
+    activation — so reading it here would refuse to cast Flying Carpet while the
+    AI controls no creature, and refuse Pyramids while the opponent controls no
+    enchantment, for permanents that are perfectly castable and simply have
+    nothing to point at yet. That is the same misreading ``SPELL_TYPES`` exists
+    to prevent one module over, and ``targeting.derive_cast_spec`` guards with
+    the same gate for the UI's benefit.
+    """
+    if card.primary_type not in SPELL_TYPES:
+        return True
+
     opponent = game.players[choose_attack_target(game, caster_index)]
     caster = game.players[caster_index]
 

@@ -513,10 +513,18 @@ def _grammar_instruction(
     the one-instruction shape that ParsedActivatedAbility,
     ParsedTriggeredAbility and the stack all currently assume.
 
-    *spell_line_only* restricts the result to plain one-shot effect lines. The
-    card-level ``instructions`` list must not absorb an activated ability's
-    effect — those belong to ``activated_abilities``, and hoisting one would
-    make casting an Aura immediately perform its activated ability.
+    *spell_line_only* restricts the result to plain one-shot effect lines: the
+    instructions of a card whose *resolution* carries them out. For an instant
+    or sorcery the stack executes the first non-``spell_pattern`` instruction in
+    that list, so an activated ability's effect must never enter it — the spell
+    would perform the ability on resolution.
+
+    A permanent's list is a mirror rather than a program (see
+    ``_noncreature_line_instructions``), so it does hold its abilities' effects,
+    exactly as ``_parse_creature_program`` has always done for creatures.
+    ``_resolve_card`` puts a permanent onto the battlefield and returns without
+    reaching ``_apply_spell_text``, which is the only caller that executes this
+    list — so the mirror cannot fire on cast.
     """
     compiled = compile_grammar_line(line, card_name=card_name)
     if not compiled.usable:
@@ -817,6 +825,93 @@ def _parse_noncreature_triggered(
     return tuple(abilities)
 
 
+def _by_source_line(abilities) -> dict[str, list]:
+    """Parsed abilities grouped by the line they came from, in printed order.
+
+    A list per line rather than one entry: a card may print the same line twice,
+    and the assembly below consumes them in order so the second occurrence is
+    not silently the first one again.
+    """
+    grouped: dict[str, list] = {}
+    for ability in abilities:
+        grouped.setdefault(ability.source_line, []).append(ability)
+    return grouped
+
+
+def _noncreature_line_instructions(
+    oracle_text: str,
+    card_name: str | None,
+    activated: tuple[ParsedActivatedAbility, ...],
+    triggered: tuple[ParsedTriggeredAbility, ...],
+    *,
+    whole_card: bool,
+) -> list[OracleInstruction]:
+    """The card-level instruction each line of a noncreature card contributes,
+    in printed order.
+
+    Assembled from the reading the compiler has *already* produced for that
+    line. The legacy fallback in the caller collapses the card's entire text to
+    one string and keeps the first rule that matches it, so an artifact whose
+    activated ability the grammar reads in full still had its card-level
+    instruction produced by re-reading the whole card — two front ends answering
+    the same question about the same line, and only one of them per line.
+
+    Reusing the ability parse rather than re-running the grammar is what keeps
+    the fallback *per line*: those parses already try the grammar first and drop
+    to the legacy rules only for the clause the grammar refused, so a production
+    claiming one line cannot delete the reading of any other.
+
+    *whole_card* tells the list's two meanings apart. For an instant or sorcery
+    it is the program that *resolves* — the stack executes the first
+    non-``spell_pattern`` instruction — so only plain effect lines belong in it.
+    For a permanent it is a mirror of everything the card does, scanned by kind
+    by the layer bridge, the upkeep pass and the AI: the same mirror
+    ``_parse_creature_program`` has always built for creatures, and which
+    ``engine/ai_valuation.py``'s ``SPELL_TYPES`` gate already documents. A
+    permanent's abilities keep their own entries in ``activated_abilities`` and
+    ``triggered_abilities``; nothing resolves this list on its own.
+    """
+    acts = _by_source_line(activated) if whole_card else {}
+    trigs = _by_source_line(triggered) if whole_card else {}
+
+    instructions: list[OracleInstruction] = []
+    for raw_line in oracle_text.splitlines():
+        line = raw_line.strip()
+        # Modal bullets are alternatives collected into `modes`, not effects the
+        # card performs. Letting one into the top-level list would make a
+        # "Choose one" spell always resolve whichever bullet was claimed.
+        if not line or line.startswith("•"):
+            continue
+
+        found = _grammar_instruction(line, card_name, spell_line_only=True)
+        if found is not None:
+            instructions.append(found[0])
+            continue
+        if not whole_card:
+            continue
+
+        # An ability line: take the instruction its own parse produced.
+        ability = None
+        for group in (trigs, acts):
+            pending = group.get(line)
+            if pending:
+                ability = pending.pop(0)
+                break
+        if ability is not None:
+            if ability.supported and ability.instruction is not None:
+                instructions.append(ability.instruction)
+            continue
+
+        # Neither — a static ability ("Black creatures get +1/+1."), or a
+        # triggered one whose condition the legacy trigger table refuses
+        # (Cursed Land). Its instruction used to arrive from the whole-text
+        # parse or from parse_static_coeffects re-reading the card.
+        static = _grammar_instruction(line, card_name)
+        if static is not None:
+            instructions.append(static[0])
+    return instructions
+
+
 # ---------------------------------------------------------------------------
 # Top-level compiler
 # ---------------------------------------------------------------------------
@@ -995,35 +1090,30 @@ def _compile_card_oracle(
         if not normalized_text:
             return OracleProgram(True, "permanent_vanilla", "no oracle text", normalized_text)
 
-        instructions: list[OracleInstruction] = []
-        # Grammar first, per line. The legacy path below collapses the card's
-        # whole text to one string and keeps only the first rule that matches
-        # it, so a second sentence ("Draw a card. Each player discards a card.")
-        # was silently dropped. Parsing line by line is what fixes that.
-        # Modal bullets are excluded: they are alternatives collected into
-        # `modes` below, not effects the card performs. Letting one into the
-        # top-level list would make a "Choose one" spell always resolve
-        # whichever bullet the grammar happened to claim.
-        grammar_instructions = [
-            found[0]
-            for found in (
-                _grammar_instruction(stripped, name, spell_line_only=True)
-                for stripped in (
-                    raw_line.strip() for raw_line in oracle_text.splitlines()
-                )
-                if stripped and not stripped.startswith("•")
-            )
-            if found is not None
-        ]
-        if grammar_instructions:
-            instructions.extend(grammar_instructions)
-        else:
+        activated_abilities = _parse_noncreature_abilities(oracle_text, name)
+        triggered_abilities = _parse_noncreature_triggered(oracle_text, name)
+
+        # Line by line. The legacy path below collapses the card's whole text to
+        # one string and keeps only the first rule that matches it, so a second
+        # sentence ("Draw a card. Each player discards a card.") was silently
+        # dropped, and an artifact whose activated ability the grammar reads in
+        # full still had its card-level instruction produced by re-reading the
+        # card end to end.
+        instructions: list[OracleInstruction] = _noncreature_line_instructions(
+            oracle_text,
+            name,
+            activated_abilities,
+            triggered_abilities,
+            whole_card=primary_type in {"artifact", "enchantment"},
+        )
+        if not instructions:
             primary_instruction, _ = parse_primary_instruction(normalized_text, activated=False)
             if primary_instruction is not None:
                 instructions.append(primary_instruction)
 
         # Static continuous co-effects (e.g. Conversion's "All Mountains are
-        # Plains.") that follow a primary clause already claimed above.
+        # Plains.") that follow a primary clause already claimed above and that
+        # no line above claimed for itself.
         for coeffect in parse_static_coeffects(normalized_text):
             if coeffect.kind not in {i.kind for i in instructions}:
                 instructions.append(coeffect)
@@ -1061,9 +1151,6 @@ def _compile_card_oracle(
         # the game can resolve the player's chosen mode rather than always the
         # first. Built from the original text to keep human-readable labels.
         modes = parse_modal_options(oracle_text)
-
-        activated_abilities = _parse_noncreature_abilities(oracle_text, name)
-        triggered_abilities = _parse_noncreature_triggered(oracle_text, name)
 
         # Only mark as unsupported if all triggered abilities are unsupported
         # and no spell-pattern instructions were already matched (e.g. Howling Mine).

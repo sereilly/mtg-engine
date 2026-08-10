@@ -84,6 +84,41 @@ def test_a_permanents_activated_ability_is_not_a_spell_effect(all_cards):
     assert destroyed_permanent_filter(assassin) is None
 
 
+@pytest.mark.parametrize(
+    "ability",
+    [
+        "{2}, {T}: Target creature gains flying until end of turn.",
+        "{1}, {T}: Destroy target artifact.",
+        "{2}, {T}: Target creature gets +1/+1 until end of turn.",
+    ],
+)
+def test_a_permanent_is_castable_with_nothing_for_its_ability_to_target(ability):
+    """The sibling of the test above, on the AI's *castability* check.
+
+    ``_can_cast_with_targets`` scans that same mirrored list, so an artifact
+    whose ability targets a creature was judged uncastable while its controller
+    had no creature, and one whose ability destroys an artifact uncastable while
+    the opponent had none. Both are perfectly castable — the ability picks its
+    target when it is *activated*. ``SPELL_TYPES`` is the gate, the same one
+    ``_spell_instructions`` uses one module over.
+
+    Invented names, per this module's rule: the real cards (Flying Carpet,
+    Pyramids) would pass against a fix that special-cased them.
+    """
+    from engine.ai_policy import _can_cast_with_targets
+
+    card = _mk_card(name="Gadget", mana_cost="{3}", type_line="Artifact", oracle_text=ability)
+    # The premise: the branch kind really is in the mirrored card-level list, so
+    # a missing gate would be read. Without this the test could pass vacuously.
+    assert any(i.kind != "spell_pattern" for i in compile_card_oracle(card).instructions)
+
+    game = Game(players=[PlayerState(name="A"), PlayerState(name="B")])
+    game.enforce_mana_costs = False
+    assert _can_cast_with_targets(game, 0, card), (
+        "a permanent's ability targets on activation, not on cast"
+    )
+
+
 def test_counter_profile_carries_the_colour_restriction():
     """A colourless reading would have the AI hold Red Elemental Blast up
     against a green spell — the generalisation that looks free and plays worse

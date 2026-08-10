@@ -206,10 +206,15 @@ def test_turning_the_grammar_off_only_ever_loses_capability(all_set_paths, monke
     """Whole-program guard: compile the pool with the grammar gate on and off.
 
     Catches a bug class the per-line comparison cannot: a line the grammar
-    parses correctly can still land in the wrong part of the program. Hoisting
-    an activated ability's effect into the card-level instruction list, for
-    instance, would make casting an Aura immediately perform its activated
-    ability, and every individual line would still look right.
+    parses correctly can still land in the wrong part of the program — an
+    activated ability's effect reaching the instruction list an instant or
+    sorcery *resolves*, say, which would make the spell perform the ability.
+    Every individual line would still look right.
+
+    (A permanent's card-level list is a mirror, not a program: `_resolve_card`
+    returns before `_apply_spell_text`, so the same hoist is inert there. That
+    is why `_grammar_instruction`'s `spell_line_only` gate is applied to
+    instants and sorceries and not to permanents.)
 
     The assertion is directional rather than an equality, because legacy rules
     are being deleted as categories migrate. Once a rule is gone the legacy-only
