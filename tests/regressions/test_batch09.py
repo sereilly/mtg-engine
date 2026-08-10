@@ -28,7 +28,7 @@ from engine import Game, PlayerState, load_cards
 from engine.models import Permanent
 from engine.ai_policy import choose_attackers
 from engine.oracle import compile_card_oracle
-from tests.helpers import _game
+from tests.helpers import _damage_dealt, _game
 
 
 
@@ -238,10 +238,10 @@ class TestReverseDamage:
         assert p1.reverse_damage_sources == [attacker]
         assert p1.reverse_damage_charges == 0
         # Damage from a different source is NOT prevented.
-        game._prevent_damage(p1, 2, source=other)
+        _damage_dealt(game, p1, 2, source=other)
         assert p1.reverse_damage_sources == [attacker]
         # Damage from the chosen source is prevented and gained as life.
-        remaining = game._prevent_damage(p1, 4, source=attacker)
+        remaining = _damage_dealt(game, p1, 4, source=attacker)
         assert remaining == 0
         assert p1.life == 24
         assert p1.reverse_damage_sources == []

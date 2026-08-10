@@ -166,13 +166,18 @@ adding entries, not editing dispatch**:
   `recipient` is a player *or* a permanent, so a shield that applies to both is
   written once. A new "prevent …" card is an entry here, never a branch in a
   damage path.
-- `engine/effect_ordering.py` + `engine/damage_events.py` — CR 616.1, the
-  process both registries above run through: gather every applicable effect,
-  choose one, apply it, re-ask the rest (616.1f). That is why applicability is a
-  *separate, pure* predicate — an effect that answered "do I apply?" by applying
-  itself would make the contenders uncountable. `damage_events.modify_damage` is
-  where a damage event's shields and replacements become one contention set, so
-  order is compared across the two registries and a collision raises at import.
+- `engine/effect_ordering.py` — CR 616.1, the process both registries above run
+  through: gather every applicable effect, choose one, apply it, re-ask the rest
+  (616.1f). That is why applicability is a *separate, pure* predicate — an
+  effect that answered "do I apply?" by applying itself would make the
+  contenders uncountable.
+- `engine/damage_events.py` — a damage event start to finish. CR 120.4's two
+  halves (the damage is dealt; then what was dealt is processed into its
+  result), with 616.1's contention set — shields *and* replacements together —
+  inside each. `deal_damage` returns both numbers, because Ali from Cairo caps
+  the life lost without capping the damage dealt, and lifelink reads the latter.
+  Every damage path calls it; there is no half-event entry point, and order is
+  compared across both registries so a collision raises at import.
 - `engine/tokens.py` — `make_token_card(...)`, paired with the generic
   `create_token` instruction kind. A token-making card is one parse rule, never
   a bespoke handler.

@@ -24,11 +24,8 @@ import pytest
 
 from engine import Game, PlayerState
 from engine.models import CardDefinition, Permanent
-from engine.prevention import (
-    PREVENTION_EFFECTS,
-    apply_prevention,
-    prevention_effect,
-)
+from engine.prevention import PREVENTION_EFFECTS, prevention_effect
+from tests.helpers import _damage_dealt
 
 
 def _mk_creature(
@@ -70,7 +67,7 @@ def test_615_7_pool_prevents_up_to_its_size_and_the_rest_is_dealt():
     game, p1, _ = _game()
     p1.damage_prevention_pool = 2
 
-    remaining = game._prevent_damage(p1, 5)
+    remaining = _damage_dealt(game, p1, 5)
 
     assert remaining == 3
     assert p1.damage_prevention_pool == 0
@@ -83,9 +80,9 @@ def test_615_7_pool_larger_than_the_damage_keeps_its_remainder():
     game, p1, _ = _game()
     p1.damage_prevention_pool = 5
 
-    assert game._prevent_damage(p1, 2) == 0
+    assert _damage_dealt(game, p1, 2) == 0
     assert p1.damage_prevention_pool == 3
-    assert game._prevent_damage(p1, 3) == 0
+    assert _damage_dealt(game, p1, 3) == 0
     assert p1.damage_prevention_pool == 0
 
 
@@ -114,7 +111,7 @@ def test_615_7_exhausted_shield_clears_its_ui_source():
     p1.damage_prevention_pool = 1
     p1.damage_prevention_source = "Healing Salve"
 
-    game._prevent_damage(p1, 4)
+    _damage_dealt(game, p1, 4)
 
     assert p1.damage_prevention_pool == 0
     assert p1.damage_prevention_source is None
@@ -133,7 +130,7 @@ def test_615_8_chosen_source_shield_prevents_the_whole_instance():
     p2.battlefield.append(ogre)
     p1.reverse_damage_sources.append(ogre)
 
-    assert game._prevent_damage(p1, 9, source=ogre) == 0
+    assert _damage_dealt(game, p1, 9, source=ogre) == 0
     assert p1.reverse_damage_sources == []
 
 
@@ -146,9 +143,9 @@ def test_615_8_subsequent_damage_from_the_same_source_is_dealt_normally():
     p2.battlefield.append(ogre)
     p1.reverse_damage_sources.append(ogre)
 
-    game._prevent_damage(p1, 4, source=ogre)
+    _damage_dealt(game, p1, 4, source=ogre)
 
-    assert game._prevent_damage(p1, 4, source=ogre) == 4
+    assert _damage_dealt(game, p1, 4, source=ogre) == 4
 
 
 @pytest.mark.cr("615.5")
@@ -160,7 +157,7 @@ def test_615_5_prevention_happens_first_then_the_life_gain():
     p2.battlefield.append(ogre)
     p1.reverse_damage_sources.append(ogre)
 
-    game._prevent_damage(p1, 6, source=ogre)
+    _damage_dealt(game, p1, 6, source=ogre)
 
     assert p1.life == 26
 
@@ -175,7 +172,7 @@ def test_615_8_a_different_source_does_not_consume_the_shield():
     p2.battlefield.extend([ogre, goblin])
     p1.reverse_damage_sources.append(ogre)
 
-    assert game._prevent_damage(p1, 3, source=goblin) == 3
+    assert _damage_dealt(game, p1, 3, source=goblin) == 3
     assert p1.reverse_damage_sources == [ogre]
     assert p1.life == 20
 
@@ -193,7 +190,7 @@ def test_615_9_color_shield_prevents_damage_from_a_matching_source():
     p2.battlefield.append(red_ogre)
     p1.color_prevention_shields.append("R")
 
-    assert game._prevent_damage(p1, 7, source=red_ogre) == 0
+    assert _damage_dealt(game, p1, 7, source=red_ogre) == 0
     assert p1.color_prevention_shields == []
 
 
@@ -206,7 +203,7 @@ def test_615_9_non_matching_source_is_not_prevented_and_the_shield_survives():
     p2.battlefield.append(green_bear)
     p1.color_prevention_shields.append("R")
 
-    assert game._prevent_damage(p1, 3, source=green_bear) == 3
+    assert _damage_dealt(game, p1, 3, source=green_bear) == 3
     assert p1.color_prevention_shields == ["R"]
 
 
@@ -225,7 +222,7 @@ def test_614_7a_zero_damage_consumes_no_shield():
     p1.color_prevention_shields.append("R")
     p1.reverse_damage_charges = 1
 
-    assert game._prevent_damage(p1, 0, source=red_ogre) == 0
+    assert _damage_dealt(game, p1, 0, source=red_ogre) == 0
     assert p1.damage_prevention_pool == 3
     assert p1.color_prevention_shields == ["R"]
     assert p1.reverse_damage_charges == 1
@@ -246,7 +243,7 @@ def test_616_1_multiple_shields_apply_in_sequence_to_one_event():
     p1.combat_damage_cap_one_charges = 1
     p1.damage_prevention_pool = 5
 
-    assert game._prevent_damage(p1, 6, source=attacker) == 0
+    assert _damage_dealt(game, p1, 6, source=attacker) == 0
     assert p1.combat_damage_cap_one_charges == 0
     assert p1.damage_prevention_pool == 4
 
@@ -261,7 +258,7 @@ def test_616_1_a_shield_is_not_spent_on_damage_already_prevented():
     p1.color_prevention_shields.append("R")
     p1.damage_prevention_pool = 4
 
-    assert game._prevent_damage(p1, 3, source=red_ogre) == 0
+    assert _damage_dealt(game, p1, 3, source=red_ogre) == 0
     assert p1.damage_prevention_pool == 4
 
 
@@ -382,7 +379,7 @@ def test_615_1a_fog_does_not_prevent_noncombat_damage():
     game.combat_damage_prevented_until_eot = True
 
     assert game._mark_damage_on_permanent(bear, 3) == 3
-    assert game._prevent_damage(p1, 3) == 3
+    assert _damage_dealt(game, p1, 3) == 3
 
 
 @pytest.mark.cr("510.2", "615.1")
@@ -423,7 +420,7 @@ def test_616_1_blanket_shield_does_not_spend_a_consumable_shield():
     p1.damage_prevention_pool = 4
     p1.reverse_damage_charges = 1
 
-    assert game._prevent_damage(p1, 3, source=attacker, combat=True) == 0
+    assert _damage_dealt(game, p1, 3, source=attacker, combat=True) == 0
     assert p1.damage_prevention_pool == 4
     assert p1.reverse_damage_charges == 1
     assert p1.life == 20, "a prevented event carries no life gain rider"
@@ -441,8 +438,8 @@ def test_615_1_shields_apply_to_players_and_permanents_through_one_pipeline():
     p1.damage_prevention_pool = 2
     p1.reverse_damage_charges = 1
 
-    assert apply_prevention(game, {"recipient": bear, "amount": 3, "source": None}) == 1
-    assert apply_prevention(game, {"recipient": p1, "amount": 3, "source": None}) == 0
+    assert _damage_dealt(game, bear, 3) == 1
+    assert _damage_dealt(game, p1, 3) == 0
     # The player-only shield took the player's event and left the creature's
     # pool to do the work on the creature's.
     assert p1.reverse_damage_charges == 0

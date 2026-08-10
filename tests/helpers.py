@@ -105,6 +105,23 @@ def _mk_creature_card(name: str, power: int, toughness: int, oracle_text: str = 
     )
 
 
+def _damage_dealt(game, recipient, amount: int, source=None, combat: bool = False) -> int:
+    """Run one damage event through CR 120.4 and report the damage dealt.
+
+    The real entry point (engine/damage_events.deal_damage), which is what makes
+    this usable for shield tests: it applies every effect that modifies the
+    event, but *applying the result* — losing life, marking damage — is the
+    caller's job, so a test can read what survived the shields without a life
+    total moving or a trigger firing.
+    """
+    from engine.damage_events import deal_damage
+
+    return deal_damage(
+        game,
+        {"recipient": recipient, "amount": amount, "source": source, "combat": combat},
+    ).dealt
+
+
 def _get(all_cards, name: str):
     return next(card for card in all_cards if card.name == name)
 

@@ -18,6 +18,7 @@ Covers:
 import pytest
 from engine import Game, PlayerState
 from engine.models import CardDefinition, Permanent
+from tests.helpers import _damage_dealt
 
 
 # ---------------------------------------------------------------------------
@@ -451,7 +452,7 @@ def test_614_7a_zero_damage_leaves_prevention_pool_intact():
     pool_before = p2.damage_prevention_pool
 
     # Simulate the 0-power attacker dealing 0 combat damage
-    game._prevent_damage(p2, 0)
+    _damage_dealt(game, p2, 0)
 
     assert p2.damage_prevention_pool == pool_before, "0-damage event did not consume the pool"
     assert p2.life == 20
@@ -836,42 +837,54 @@ def test_614_12_etb_replacement_from_creature_oracle_text():
 # 616.1 — several replacement and/or prevention effects on one event
 # ---------------------------------------------------------------------------
 
+def _life_floor_game(life: int):
+    floor_text = (
+        "damage that would reduce your life total to less than 1 reduces it to 1 instead"
+    )
+    ali = _mk_creature("Life Floor", power=1, toughness=3, oracle_text=floor_text)
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=ali)], life=life)
+    return Game(players=[p1, PlayerState(name="P2")]), p1
+
+
 @pytest.mark.cr("616.1f")
 def test_616_1f_a_life_floor_reapplies_against_the_running_life_total():
     """616.1f: after one effect is applied the process repeats, taking into
     account only the effects that are *now* applicable. A "reduces it to 1
     instead" floor therefore has nothing left to do once the life total is
     already 1, so a second damage event that turn takes it no lower."""
-    floor_text = (
-        "damage that would reduce your life total to less than 1 reduces it to 1 instead"
-    )
-    ali = _mk_creature("Life Floor", power=1, toughness=3, oracle_text=floor_text)
-    p1 = PlayerState(name="P1", battlefield=[Permanent(card=ali)], life=5)
-    p2 = PlayerState(name="P2")
-    game = Game(players=[p1, p2])
+    game, p1 = _life_floor_game(life=5)
 
-    assert game._deal_damage_to_player(p1, 9) == 4, "only the damage down to 1 is dealt"
-    assert p1.life == 1
-    assert game._deal_damage_to_player(p1, 9) == 0, "the floor leaves nothing to deal"
-    assert p1.life == 1
+    game._deal_damage_to_player(p1, 9)
+    assert p1.life == 1, "only the life down to 1 is lost"
+    game._deal_damage_to_player(p1, 9)
+    assert p1.life == 1, "the floor leaves no life to lose"
+
+
+@pytest.mark.cr("120.4b", "120.4c")
+def test_120_4_the_floor_caps_the_life_lost_and_not_the_damage_dealt():
+    """Ali from Cairo is a CR 120.4c effect — it modifies the damage's *result*.
+    The damage is still dealt in full, so what comes back is 9, not the 4 the
+    player's life total moved by. That is the number lifelink (CR 120.3f) and a
+    "deals damage to a player" trigger read, and it is why the two are separate
+    numbers rather than one."""
+    game, p1 = _life_floor_game(life=5)
+
+    assert game._deal_damage_to_player(p1, 9) == 9, "the damage was dealt in full"
+    assert p1.life == 1, "but it only took the life total to 1"
+    assert p1.damage_taken_this_turn == 9, "the tracker counts damage dealt"
 
 
 @pytest.mark.cr("616.1", "615.1")
 def test_616_1_prevention_and_replacement_both_apply_to_one_damage_event():
     """A prevention shield and a damage replacement can both be attempting to
-    modify the same event. Each applies once and the results compose: the
-    shield absorbs its points, the floor caps what is left."""
-    floor_text = (
-        "damage that would reduce your life total to less than 1 reduces it to 1 instead"
-    )
-    ali = _mk_creature("Life Floor", power=1, toughness=3, oracle_text=floor_text)
-    p1 = PlayerState(name="P1", battlefield=[Permanent(card=ali)], life=4)
-    p2 = PlayerState(name="P2")
-    game = Game(players=[p1, p2])
+    modify the same event. Each applies once and they compose across CR 120.4's
+    two halves: the shield absorbs its points before the damage is dealt, the
+    floor caps what that damage costs in life."""
+    game, p1 = _life_floor_game(life=4)
     p1.damage_prevention_pool = 2
 
     dealt = game._deal_damage_to_player(p1, 10)
 
     assert p1.damage_prevention_pool == 0, "the shield applied"
-    assert dealt == 3, "10 damage, 2 prevented, the remaining 8 floored to 3"
-    assert p1.life == 1
+    assert dealt == 8, "10 damage, 2 prevented, 8 dealt"
+    assert p1.life == 1, "of which only 3 could reduce a life total of 4"

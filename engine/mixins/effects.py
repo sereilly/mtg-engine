@@ -7,9 +7,8 @@ from ..ante import is_ante_card
 from ..card_hooks import UNTAPPED_ARTIFACT_PROTECTORS
 from ..handlers._common import permanent_matches_filter, pick_target_permanent
 from ..auras import aura_restriction_active
-from ..damage_events import modify_damage
+from ..damage_events import deal_damage
 from ..models import CardDefinition, Permanent, PlayerState
-from ..prevention import apply_prevention
 from ..replacement_choices import pending_choices_for, resolve_choice
 from ..replacements import TOP_OF_LIBRARY_DISCARD_TEXT, apply_replacements
 from ..oracle import OracleInstruction, compile_card_oracle, lex_oracle_text
@@ -321,23 +320,6 @@ class EffectsMixin:
                 return chosen
         return None
 
-    def _prevent_damage(
-        self, target: PlayerState, damage: int, source=None, combat: bool = False
-    ) -> int:
-        """Run *only* the prevention shields protecting *target* over an incoming
-        damage event (CR 615), returning the unprevented remainder.
-
-        Half a CR 616.1 contention set, for the caller that has only half an
-        event: the combat damage step applies shields at the moment damage is
-        recorded and its replacements when life is applied. Everything else deals
-        damage through `_deal_damage_to_player` / `_mark_damage_on_permanent`,
-        which run both halves together (engine/damage_events.py).
-        """
-        return apply_prevention(
-            self,
-            {"recipient": target, "amount": damage, "source": source, "combat": combat},
-        )
-
     def _damage_source_matches(self, chosen, source) -> bool:
         """Whether an incoming damage *source* is the *chosen* one (Jade Monolith's
         "a source of your choice"). No recorded choice matches anything (legacy /
@@ -379,23 +361,17 @@ class EffectsMixin:
         if amount > 0:
             self._turn_face_up(permanent)
             self._turn_face_up(source)
-        # One CR 616.1 contention set: the redirects (Jade Monolith, Personal
-        # Incarnation) and the shields protecting this creature are all
-        # attempting to modify the same event, and engine/damage_events.py
-        # applies them one at a time, re-asking after each.
-        consumed, amount = modify_damage(
+        # The whole CR 120.4 sequence in one place: the redirects (Jade Monolith,
+        # Personal Incarnation) and the shields protecting this creature contend
+        # as one set for what is dealt, and the result — damage marked — is
+        # processed after. engine/damage_events.py runs both halves.
+        outcome = deal_damage(
             self,
             {"recipient": permanent, "amount": amount, "source": source, "combat": combat},
         )
-        if consumed:
-            return 0
-        # Clamped here rather than in the event: combat passes raw power, which
-        # is negative for a creature shrunk below 0, and a damage event with
-        # nothing in it comes back as it went in.
-        dealt = max(0, amount)
-        if dealt > 0:
-            permanent.damage_marked += dealt
-        return dealt
+        if outcome.result > 0:
+            permanent.damage_marked += outcome.result
+        return outcome.dealt
 
     def _consume_land_destruction_shield(self, perm: Permanent) -> bool:
         """Pyramids: "The next time target land would be destroyed this turn,
@@ -674,31 +650,29 @@ class EffectsMixin:
         self.log.append(f"{target.name} gained {amount} life{source} ({before} -> {target.life})")
 
     def _deal_damage_to_player(self, target: PlayerState, amount: int, source=None) -> int:
-        """Apply damage to a player (after prevention) and fire 'whenever you're
-        dealt damage' triggers (e.g. Lich). ``source`` (a Permanent or spell
-        CardDefinition) lets color-scoped prevention (Circle of Protection) match
-        the source's color. Returns the damage actually dealt."""
+        """Deal damage to a player and fire 'whenever you're dealt damage'
+        triggers (e.g. Lich). ``source`` (a Permanent or spell CardDefinition)
+        lets color-scoped prevention (Circle of Protection) match the source's
+        color.
+
+        Returns the damage actually **dealt** (CR 120.4b), which is what a
+        caller reporting "N damage" or gaining life equal to it wants. How much
+        of that reduced the life total is a separate number (CR 120.4c) and does
+        not leave this method — only Ali from Cairo makes the two differ.
+        """
         # Illusionary Mask: a face-down creature that would deal damage (e.g.
         # unblocked combat damage to a player) is turned face up first.
         if amount > 0:
             self._turn_face_up(source)
-        # One CR 616.1 contention set: the shields protecting this player and the
-        # replacements that modify damage dealt to them (Ali from Cairo's life
-        # floor) are gathered together and applied one at a time. The combat
-        # damage step is the exception — it applies the shields when the event is
-        # recorded, so it runs the replacement half at its own life-application
-        # site instead.
-        consumed, damage = modify_damage(
+        outcome = deal_damage(
             self,
             {"recipient": target, "amount": amount, "source": source, "combat": False},
         )
-        if consumed:
-            return 0
-        if damage > 0:
-            target.life -= damage
-            self._on_player_dealt_damage(target, damage, source)
-            self._apply_mirror_damage(target, damage, source)
-        return damage
+        if outcome.dealt > 0:
+            target.life -= outcome.result
+            self._on_player_dealt_damage(target, outcome.dealt, source)
+            self._apply_mirror_damage(target, outcome.dealt, source)
+        return outcome.dealt
 
     def _apply_mirror_damage(self, target: PlayerState, damage: int, source) -> None:
         """Eye for an Eye: the damage still happens, and its source's controller

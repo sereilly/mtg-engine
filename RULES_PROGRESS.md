@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**199 / 570 tracked rules covered (34%)** — 827 tests, 0 unannotated.
+**203 / 570 tracked rules covered (35%)** — 832 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -28,7 +28,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [117. Timing and Priority](#117-timing-and-priority) | 6/7 | 85% |
 | [118. Costs](#118-costs) | 8/14 | 57% |
 | [119. Life](#119-life) | 0/10 | 0% |
-| [120. Damage](#120-damage) | 0/10 | 0% |
+| [120. Damage](#120-damage) | 4/10 | 40% |
 | [121. Drawing a Card](#121-drawing-a-card) | 3/9 | 33% |
 | [122. Counters](#122-counters) | 0/9 | 0% |
 | [200. General](#200-general) | 0/3 | 0% |
@@ -311,12 +311,12 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [ ] **120.1** Objects can deal damage to battles, creatures, planeswalkers, and players. This is generally detr...
 - [ ] **120.2** Any object can deal damage.
-- [ ] **120.3** Damage may have one or more of the following results, depending on whether the recipient of the d...
-- [ ] **120.4** Damage is processed in a four-part sequence.
+- [x] **120.3** Damage may have one or more of the following results, depending on whether the recipient of the d... *(1 tests, subrules f)*
+- [x] **120.4** Damage is processed in a four-part sequence. *(6 tests, subrules bc)*
 - [ ] **120.5** Damage dealt to a creature, planeswalker, or battle doesn’t destroy it. Likewise, the source of t...
 - [ ] **120.6** Damage marked on a creature remains until the cleanup step, even if that permanent stops being a ...
-- [ ] **120.7** The source of damage is the object that dealt it. If an effect requires a player to choose a sour...
-- [ ] **120.8** If a source would deal 0 damage, it does not deal damage at all. That means abilities that trigge...
+- [x] **120.7** The source of damage is the object that dealt it. If an effect requires a player to choose a sour... *(1 tests)*
+- [x] **120.8** If a source would deal 0 damage, it does not deal damage at all. That means abilities that trigge... *(1 tests)*
 - [ ] **120.9** If an ability triggers on damage being dealt by a specific source or sources, and the effect refe...
 - [ ] **120.10** Some triggered abilities check whether a permanent has been dealt excess damage. These abilities ...
 
@@ -597,7 +597,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 509. Declare Blockers Step
 
-- [x] **509.1** First, the defending player declares blockers. This turn-based action doesn’t use the stack. To d... *(21 tests, subrules abcghi)*
+- [x] **509.1** First, the defending player declares blockers. This turn-based action doesn’t use the stack. To d... *(22 tests, subrules abcghi)*
 - [x] **509.2** Second, the active player gets priority. (See rule 117, “Timing and Priority.”) *(4 tests, subrules a)*
 - [x] **509.3** Triggered abilities that trigger on blockers being declared may have different trigger conditions. *(5 tests, subrules acg)*
 - [x] **509.4** If a creature is put onto the battlefield blocking, its controller chooses which attacking creatu... *(1 tests)*
@@ -776,7 +776,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 615. Prevention Effects
 
-- [x] **615.1** Some continuous effects are prevention effects. Like replacement effects (see rule 614), preventi... *(9 tests, subrules a)*
+- [x] **615.1** Some continuous effects are prevention effects. Like replacement effects (see rule 614), preventi... *(10 tests, subrules a)*
 - [ ] **615.2** Many prevention effects apply to damage from a source. See rule 609.7.
 - [x] **615.3** There are no special restrictions on casting a spell or activating an ability that generates a pr... *(1 tests)*
 - [ ] **615.4** Prevention effects must exist before the appropriate damage event occurs—they can’t “go back in t...
@@ -792,7 +792,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 616. Interaction of Replacement and/or Prevention Effects
 
-- [x] **616.1** If two or more replacement and/or prevention effects are attempting to modify the way an event af... *(17 tests, subrules ef)*
+- [x] **616.1** If two or more replacement and/or prevention effects are attempting to modify the way an event af... *(15 tests, subrules ef)*
 - [ ] **616.2** A replacement or prevention effect can become applicable to an event as the result of another rep...
 
 ### 700. General
@@ -846,7 +846,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.16** Protection *(33 tests, subrules abcdefghjkmn)*
 - [x] **702.17** Reach *(3 tests, subrules b)*
 - [x] **702.18** Shroud *(3 tests, subrules a)*
-- [x] **702.19** Trample *(6 tests, subrules b)*
+- [x] **702.19** Trample *(7 tests, subrules b)*
 - [x] **702.20** Vigilance *(2 tests, subrules b)*
 - [x] **702.22** Banding *(25 tests, subrules acdefghjk)*
 - [x] **702.23** Rampage *(3 tests, subrules a)*

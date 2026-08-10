@@ -13,19 +13,37 @@ belongs in engine/card_hooks.py.
 Event kinds and their payload keys:
 
 - ``life_gain``:          {player, amount, source_name}
-- ``damage_to_creature``: {recipient, amount, source}
-- ``damage_to_player``:   {recipient, amount, source}
+- ``damage_to_creature``: {recipient, amount, source, combat}
+- ``damage_to_player``:   {recipient, amount, source, combat}
+- ``damage_marked``:      {recipient, amount, dealt, source, combat}
+- ``life_loss``:          {recipient, amount, dealt, source, combat}
 - ``would_die``:          {player, permanent}
 - ``discard``:            {player, card}
 - ``draw``:               {player, count, drawn}
 
-The last two are *interactive*: their interceptors offer a
+``discard`` and ``draw`` are *interactive*: their interceptors offer a
 :class:`~engine.replacement_choices.ReplacementChoice` rather than applying
 the effect outright, and report what they did through ``payload["drawn"]``.
 
-The two damage kinds spell their subject ``recipient`` rather than
+The four damage kinds spell their subject ``recipient`` rather than
 ``permanent``/``player`` because a damage event is *one* event shared with
 engine/prevention.py — see the ordering note below.
+
+**A damage event has two halves, and they are different kinds** (CR 120.4).
+First damage is *dealt*, as modified by the effects that interact with damage
+— shields and redirects (120.4b). Then the damage that was dealt is *processed
+into its results*, as modified by the effects that interact with those results
+(120.4c): life lost for a player, damage marked for a creature. So
+``damage_to_player`` and ``damage_to_creature`` are the first half, ``life_loss``
+and ``damage_marked`` the second.
+
+That is not a distinction for its own sake. Ali from Cairo — "damage that would
+reduce your life total to less than 1 reduces it to 1 instead" — modifies the
+*result*, so the damage is still dealt in full: lifelink gains the full amount
+(CR 120.3f) and a "whenever ~ deals damage to a player" trigger sees the full
+amount, while only the life loss is capped. Collapsing the two halves into one
+number is what forced the combat damage step to run its shields and its
+replacements at two different moments for years.
 
 **Ordering (CR 616.1).** Interceptors do not run as a fixed chain. Each carries
 an ``applies`` predicate and an ``order``, and ``engine/effect_ordering.py``
@@ -78,22 +96,18 @@ REPLACEMENTS: dict[str, list[Candidate]] = {}
 # Orders (CR 616.1's default choice)
 # ---------------------------------------------------------------------------
 #
-# Damage kinds: one space with engine/prevention.py's shields (10–600 there).
-# Which side runs first is a real decision and the two damage kinds answer it
-# oppositely, on purpose:
-#
-#   - To a *permanent*, the replacements are redirects. They run before the
-#     shields, because a shield spent on damage that then leaves for another
-#     recipient is a shield wasted on nothing.
-#   - To a *player*, the replacement is a floor that has to read the life total
-#     it is flooring against. It runs after the shields, so it floors what the
-#     shields actually left.
-#
-# CR 616.1e permits either; these are the defaults a non-interactive seat takes.
-REDIRECT_WHOLE_EVENT = 1  # Jade Monolith
+# The damage-dealt kinds (CR 120.4b) share one space with engine/prevention.py's
+# shields, which sit at 10–600 there. Redirects go *before* the shields, for both
+# recipients and for the same reason: a shield spent on damage that then leaves
+# for someone else is a shield wasted on nothing. CR 616.1e permits either order;
+# this is the default a non-interactive seat takes.
+REDIRECT_WHOLE_EVENT = 1  # Jade Monolith, Veteran Bodyguard
 REDIRECT_ONE_POINT = 2  # Personal Incarnation
 SOURCE_TYPE_SHIELD = 3  # Desert Nomads / Camel
-LIFE_FLOOR = 700  # Ali from Cairo — after every shield (POOL is 600)
+
+# The results kinds (CR 120.4c) have a space of their own. No shield lives there:
+# prevention stops damage being *dealt*, and by 120.4c it already has been.
+LIFE_FLOOR = 10  # Ali from Cairo
 
 # Kinds with a contention set of their own. Small numbers, spaced, no relation
 # to the damage space above.
@@ -239,8 +253,8 @@ def _draw_instead_of_life_gain(game, payload: dict) -> ReplacementOutcome | None
 
 
 def _floored_amount(game, payload: dict) -> int | None:
-    """How much of this damage would still reduce life once the floor applies,
-    or None when the floor has nothing to do. Shared by the predicate and the
+    """How much life this damage would still cost once the floor applies, or
+    None when the floor has nothing to do. Shared by the predicate and the
     interceptor so "does the floor apply" and "what does it floor to" have one
     answer."""
     recipient = payload["recipient"]
@@ -255,14 +269,83 @@ def _applies_life_floor(game, payload: dict) -> bool:
     return _floored_amount(game, payload) is not None
 
 
-@replacement_effect("damage_to_player", LIFE_FLOOR, applies=_applies_life_floor)
+@replacement_effect("life_loss", LIFE_FLOOR, applies=_applies_life_floor)
 def _floor_life_at_one(game, payload: dict) -> ReplacementOutcome | None:
     """Ali from Cairo: "Damage that would reduce your life total to less than
-    1 reduces it to 1 instead." Clamped via new_amount (the damage instance
-    still "happened" for tracking purposes; only how much it reduces life is
-    capped), matching how Personal Incarnation's partial redirect already
-    treats amount adjustments."""
+    1 reduces it to 1 instead."
+
+    A CR 120.4c effect — it modifies the damage's *result*, not the damage. The
+    damage is dealt in full, so lifelink gains the full amount (CR 120.3f) and a
+    "deals damage to a player" trigger sees the full amount; only the life loss
+    is capped. ``payload["dealt"]`` is that full amount, kept beside the life
+    loss so the difference is readable rather than lost.
+    """
     return ReplacementOutcome(new_amount=_floored_amount(game, payload))
+
+
+VETERAN_BODYGUARD_TEXT = (
+    "all damage that would be dealt to you by unblocked creatures is dealt to "
+    "this creature instead"
+)
+
+
+def _unblocked_attacker(source) -> bool:
+    """Whether *source* is an unblocked attacking creature.
+
+    CR 509.1h: an attacker with a blocker declared for it *is* a blocked
+    creature, and stays one even if every blocker leaves combat. So a trampler's
+    excess damage to the player is not dealt "by an unblocked creature" — read
+    off the permanent's own combat state rather than off which loop the combat
+    step happens to be in.
+    """
+    return bool(getattr(source, "attacking", False)) and not getattr(source, "blocked", False)
+
+
+def _protecting_bodyguard(game, payload: dict):
+    """The untapped Veteran Bodyguard that would take this damage, or None."""
+    if payload["amount"] <= 0 or not _unblocked_attacker(payload.get("source")):
+        return None
+    return next(
+        (
+            permanent
+            for permanent in payload["recipient"].battlefield
+            if not permanent.tapped
+            and VETERAN_BODYGUARD_TEXT in (permanent.card.oracle_text or "").lower()
+        ),
+        None,
+    )
+
+
+def _applies_bodyguard_redirect(game, payload: dict) -> bool:
+    return _protecting_bodyguard(game, payload) is not None
+
+
+@replacement_effect(
+    "damage_to_player", REDIRECT_WHOLE_EVENT, applies=_applies_bodyguard_redirect
+)
+def _redirect_damage_to_bodyguard(game, payload: dict) -> ReplacementOutcome | None:
+    """Veteran Bodyguard: "As long as this creature is untapped, all damage that
+    would be dealt to you by unblocked creatures is dealt to this creature
+    instead."
+
+    All damage, not all combat damage — an unblocked attacker's activated ability
+    is redirected too, which reading the source's combat state gets right for
+    free. Ordered before the shields protecting the player, because a shield
+    spent here would be spent on damage that is about to become the creature's.
+    """
+    bodyguard = _protecting_bodyguard(game, payload)
+    recipient = payload["recipient"]
+    game._mark_damage_on_permanent(
+        bodyguard,
+        payload["amount"],
+        source=payload.get("source"),
+        combat=bool(payload.get("combat")),
+    )
+    game.log.append(
+        f"{bodyguard.card.name} takes {payload['amount']} damage instead of "
+        f"{recipient.name} (redirect)"
+    )
+    return ReplacementOutcome(replaced=True)
 
 
 def _jade_monolith_seat(game, payload: dict) -> int | None:

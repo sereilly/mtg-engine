@@ -1,19 +1,25 @@
-"""One damage event, one contention set (CR 616.1) — engine/damage_events.py.
+"""One damage event, start to finish — engine/damage_events.py.
 
-CR 616.1 does not separate replacement effects from prevention effects when it
-decides what modifies an event: they are gathered together, one is chosen, it is
-applied, and the rest are re-asked. The engine implements them in two registries,
-so these tests are about the seam — that the union is what runs, that asking the
-union costs nothing, that the two registries cannot silently tie, and that the
-default choice reproduces the conventions each recipient kind needs.
+Two rules meet here. CR 120.4 sequences a damage event: the damage is dealt
+(120.4b, as modified by shields and redirects), then what was dealt is processed
+into its results (120.4c, as modified by effects that cap life lost or damage
+marked). CR 616.1 chooses *within* each of those halves, and does not separate
+replacement effects from prevention effects while doing it.
+
+So these tests are about two seams: that each half gathers both registries into
+one contention set, and that the halves stay distinct — the damage dealt and the
+life lost are two numbers, and collapsing them is what kept the combat damage
+step running its shields and its replacements at two different moments.
 """
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from engine import PlayerState
-from engine.damage_events import _assert_one_order_space, damage_candidates, modify_damage
+from engine.damage_events import _assert_one_order_space, damage_candidates, deal_damage
 from engine.game import Game
 from engine.models import Permanent
 from engine.prevention import POOL
@@ -33,6 +39,10 @@ def _player_with_a_floor_and_a_pool(life: int = 4, pool: int = 2):
     return game, p1
 
 
+# ---------------------------------------------------------------------------
+# CR 616.1 — one contention set per half
+# ---------------------------------------------------------------------------
+
 @pytest.mark.cr("616.1")
 def test_616_1_one_damage_event_gathers_both_registries():
     """The effects attempting to modify one damage event are the shields *and*
@@ -42,10 +52,11 @@ def test_616_1_one_damage_event_gathers_both_registries():
     game, p1 = _player_with_a_floor_and_a_pool()
     event = {"recipient": p1, "amount": 10, "source": None, "combat": False}
 
+    keys = [c.key for c in damage_candidates(p1)]
     applicable = [c.key for c in damage_candidates(p1) if c.applies(game, event)]
 
-    assert "_prevention_pool" in applicable, "the shield registry contributed"
-    assert "_floor_life_at_one" in applicable, "the replacement registry contributed"
+    assert "_redirect_damage_to_bodyguard" in keys, "the replacement registry contributed"
+    assert "_prevention_pool" in applicable, "the shield registry applies to this event"
 
 
 @pytest.mark.cr("616.1")
@@ -63,55 +74,24 @@ def test_616_1_asking_the_union_applies_nothing():
     )
 
 
-@pytest.mark.cr("616.1")
-def test_616_1_the_union_applies_each_side_once_and_composes_them():
-    game, p1 = _player_with_a_floor_and_a_pool(life=4, pool=2)
-
-    consumed, amount = modify_damage(
-        game, {"recipient": p1, "amount": 10, "source": None, "combat": False}
-    )
-
-    assert not consumed
-    assert p1.damage_prevention_pool == 0, "the shield applied"
-    assert amount == 3, "10 damage, 2 prevented, the remaining 8 floored to 3"
-
-
-@pytest.mark.cr("616.1")
-def test_616_1_a_settled_event_is_not_offered_to_the_other_registry():
-    """A shield that absorbs the whole event leaves nothing for a replacement to
-    modify, and the stop condition spans both sides rather than each pass
-    ending on its own terms."""
-    game, p1 = _player_with_a_floor_and_a_pool(life=4, pool=20)
-
-    consumed, amount = modify_damage(
-        game, {"recipient": p1, "amount": 10, "source": None, "combat": False}
-    )
-
-    assert (consumed, amount) == (False, 0)
-    assert p1.damage_prevention_pool == 10
-    assert p1.life == 4, "the floor had nothing to floor"
-
-
 @pytest.mark.cr("616.1e")
-def test_616_1e_the_default_order_differs_by_recipient_on_purpose():
-    """CR 616.1e lets the affected player pick any order; these are the defaults
-    a non-interactive seat takes, and they are opposite for the two recipients
-    for reasons that belong to the effects involved. To a permanent the
-    replacements are redirects, so they run before a shield can be spent on
-    damage that then leaves; to a player the replacement is a floor that has to
-    read the life total the shields actually left it."""
+def test_616_1e_redirects_default_ahead_of_shields_for_both_recipients():
+    """CR 616.1e lets the affected player pick any order; this is the default a
+    non-interactive seat takes, and it is the same answer for both recipients
+    for the same reason — a shield spent on damage that is about to be dealt to
+    someone else is spent on nothing."""
     bear = Permanent(card=_mk_creature_card("Bear", 2, 2))
     creature_orders = {c.key: c.order for c in damage_candidates(bear)}
     player_orders = {c.key: c.order for c in damage_candidates(PlayerState(name="P"))}
 
     assert creature_orders["_redirect_damage_to_player"] < creature_orders["_prevention_pool"]
     assert creature_orders["_prevent_desert_damage"] < creature_orders["_prevention_pool"]
-    assert player_orders["_floor_life_at_one"] > player_orders["_prevention_pool"]
+    assert player_orders["_redirect_damage_to_bodyguard"] < player_orders["_prevention_pool"]
 
 
 @pytest.mark.cr("616.1")
 def test_616_1_a_shield_and_a_replacement_may_not_share_an_order():
-    """Each registry rejects a duplicate within itself, but a damage event's
+    """Each registry rejects a duplicate within itself, but the damage-dealt
     order space spans both — so the tie neither can see on its own has to be
     caught where they are put together, and at import for the same reason."""
     kind = "damage_to_player"
@@ -124,3 +104,155 @@ def test_616_1_a_shield_and_a_replacement_may_not_share_an_order():
     finally:
         REPLACEMENTS[kind] = [c for c in REPLACEMENTS[kind] if c.order != POOL]
     _assert_one_order_space()
+
+
+# ---------------------------------------------------------------------------
+# CR 120.4 — the damage dealt and its result are two numbers
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cr("120.4b", "120.4c")
+def test_120_4_a_result_replacement_caps_the_result_not_the_damage():
+    """Ali from Cairo modifies what the damage *does* (CR 120.4c), not the
+    damage (120.4b). So the full 8 is dealt — which is what lifelink and a
+    "deals damage to a player" trigger read — and only the life loss is capped.
+    One number could not answer both questions."""
+    game, p1 = _player_with_a_floor_and_a_pool(life=4, pool=2)
+
+    outcome = deal_damage(
+        game, {"recipient": p1, "amount": 10, "source": None, "combat": False}
+    )
+
+    assert p1.damage_prevention_pool == 0, "the shield applied in the first half"
+    assert outcome.dealt == 8, "10 damage, 2 prevented, 8 dealt"
+    assert outcome.result == 3, "of which only 3 reduces a life total of 4"
+    assert not outcome.consumed
+
+
+@pytest.mark.cr("120.4b", "615.1")
+def test_120_4b_prevented_damage_never_reaches_the_results_half():
+    """A shield that absorbs the whole event leaves nothing to be dealt, so
+    there is no result to process and no effect in the second half is asked."""
+    game, p1 = _player_with_a_floor_and_a_pool(life=4, pool=20)
+
+    outcome = deal_damage(
+        game, {"recipient": p1, "amount": 10, "source": None, "combat": False}
+    )
+
+    assert (outcome.consumed, outcome.dealt, outcome.result) == (False, 0, 0)
+    assert p1.damage_prevention_pool == 10
+    assert p1.life == 4, "deal_damage does not apply the result; the caller does"
+
+
+@pytest.mark.cr("509.1h", "702.19b")
+def test_509_1h_a_blocked_trampler_is_not_an_unblocked_creature():
+    """Veteran Bodyguard covers damage "by unblocked creatures". CR 509.1h: an
+    attacker with a blocker declared for it *is* a blocked creature, and stays
+    one even if every blocker leaves combat — so the excess a trampler assigns
+    to the player is not dealt by an unblocked creature and is not redirected.
+
+    The redirect reads the source permanent's own combat state, which is what
+    makes it get this right; a check that trusted "this damage arrived on the
+    player's pile during combat" cannot tell the two apart."""
+    guard_text = (
+        "all damage that would be dealt to you by unblocked creatures is dealt "
+        "to this creature instead"
+    )
+    bodyguard = Permanent(card=_mk_creature_card("Bodyguard", 2, 5, guard_text))
+    defender = PlayerState(name="P1", battlefield=[bodyguard], life=20)
+    game = Game(players=[defender, PlayerState(name="P2")])
+
+    trampler = Permanent(card=_mk_creature_card("Trampler", 4, 4))
+    trampler.attacking, trampler.blocked = True, True
+    unblocked = Permanent(card=_mk_creature_card("Unblocked", 4, 4))
+    unblocked.attacking, unblocked.blocked = True, False
+
+    trample_over = deal_damage(
+        game, {"recipient": defender, "amount": 2, "source": trampler, "combat": True}
+    )
+    assert trample_over.dealt == 2, "trample damage reaches the player"
+    assert bodyguard.damage_marked == 0, "the bodyguard covers unblocked creatures only"
+
+    redirected = deal_damage(
+        game, {"recipient": defender, "amount": 4, "source": unblocked, "combat": True}
+    )
+    assert redirected.consumed and redirected.dealt == 0
+    assert bodyguard.damage_marked == 4
+
+
+@pytest.mark.cr("120.3f", "120.4c")
+def test_120_3f_lifelink_reads_the_damage_dealt_not_the_life_lost():
+    """A lifelinking attacker into a life floor. CR 120.3f gains life equal to
+    the damage *dealt*, and the floor is a 120.4c effect that changes only what
+    the damage costs in life — so the attacker's controller gains the full 9
+    while the defender's life stops at 1.
+
+    This is the case that used to force the combat damage step to run its
+    shields where the event was recorded: with one number, lifelink and the life
+    total could not both be right."""
+    attacker = Permanent(
+        card=replace(_mk_creature_card("Lifelinker", 9, 9), keywords=("Lifelink",))
+    )
+    attacker.metadata["summoning_sickness_turn"] = -99
+    ali = _mk_creature_card("Life Floor", 1, 3, FLOOR_TEXT)
+    p1 = PlayerState(name="P1", battlefield=[attacker], life=20)
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=ali)], life=5)
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # beginning_of_combat
+    game.advance_combat_phase()  # declare_attackers
+    game.declare_attackers(0, [0])
+    game.advance_combat_phase()  # declare_blockers
+    game.declare_blockers(1, {})
+    game.advance_combat_phase()  # combat damage
+
+    assert p2.life == 1, "the floor capped the life lost at 4"
+    assert p1.life == 29, "but lifelink gained the 9 that was dealt"
+
+
+@pytest.mark.cr("120.7")
+def test_120_7_each_combat_event_is_attributed_to_the_creature_that_dealt_it():
+    """"The source of damage is the object that dealt it." With several
+    attackers the step applies their events in a second loop, and each one has
+    to carry its own source: Reverse Polarity counts only what artifact sources
+    dealt, so attributing every event to whichever attacker happened to be
+    processed last silently mis-tallies it."""
+    artifact = Permanent(
+        card=replace(
+            _mk_creature_card("Clockwork", 2, 2),
+            type_line="Artifact Creature — Test",
+            raw={"name": "Clockwork", "type_line": "Artifact Creature — Test",
+                 "power": "2", "toughness": "2"},
+        )
+    )
+    flesh = Permanent(card=_mk_creature_card("Flesh", 3, 3))
+    for permanent in (artifact, flesh):
+        permanent.metadata["summoning_sickness_turn"] = -99
+    p1 = PlayerState(name="P1", battlefield=[artifact, flesh], life=20)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # beginning_of_combat
+    game.advance_combat_phase()  # declare_attackers
+    game.declare_attackers(0, [0, 1])
+    game.advance_combat_phase()  # declare_blockers
+    game.declare_blockers(1, {})
+    game.advance_combat_phase()  # combat damage
+
+    assert p2.damage_taken_this_turn == 5, "both attackers connected"
+    assert p2.artifact_damage_taken_this_turn == 2, "only the artifact's 2 counts"
+
+
+@pytest.mark.cr("120.8")
+def test_120_8_a_zero_damage_event_spends_nothing():
+    """"If a source would deal 0 damage, it does not deal damage at all" — so no
+    shield is asked and no trigger has anything to fire on."""
+    game, p1 = _player_with_a_floor_and_a_pool(life=4, pool=2)
+
+    outcome = deal_damage(
+        game, {"recipient": p1, "amount": 0, "source": None, "combat": False}
+    )
+
+    assert (outcome.consumed, outcome.dealt, outcome.result) == (False, 0, 0)
+    assert p1.damage_prevention_pool == 2, "a 0-damage event consumed a shield"

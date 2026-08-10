@@ -38,11 +38,10 @@ So the ordering half of 616.1 is implemented and the asking half has one
 documented seat rather than being spread across two cascades. That is the
 distinction the roadmap's phase 5 was tracking.
 
-One event still reaches the process in halves: combat damage to a player applies
-its shields when the event is recorded and its replacements when life is
-applied, because those are two different moments for reasons of its own.
-``engine/damage_events.py`` says why, and it is the same missing piece — a
-suspendable damage event — that :func:`choose_effect` is waiting on.
+Note that 616.1 is not the *only* sequencing a damage event has. CR 120.4 splits
+one into "damage is dealt" and "what was dealt is processed into its results",
+and 616.1 runs inside each half. ``engine/damage_events.py`` holds that
+structure; this module is only the choosing.
 """
 
 from __future__ import annotations

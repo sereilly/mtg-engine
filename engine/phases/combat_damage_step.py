@@ -9,8 +9,8 @@ Also holds the auto-assignment helpers used to skip manual assignment, the
 post-damage lethal-damage destruction, and the band/blocker lookup helpers.
 """
 
+from ..damage_events import deal_damage
 from ..models import Permanent
-from ..replacements import apply_replacements
 
 
 class CombatDamageStepMixin:
@@ -427,13 +427,7 @@ class CombatDamageStepMixin:
                 # to the defending player unless it has trample.
                 if attacker.blocked and not self._has_keyword(attacker, "trample"):
                     continue
-                damage = self._prevent_damage(
-                    defender, power_left, source=attacker, combat=True
-                )
-                if damage > 0:
-                    defender_damage_events.append((defending_index, damage, attacker))
-                    if self._has_keyword(attacker, "lifelink"):
-                        add_lifelink(self.active_player_index, damage)
+                defender_damage_events.append((defending_index, power_left, attacker))
                 continue
 
             # CR 702.22j: when an attacker is blocked by a creature with banding, the
@@ -478,13 +472,7 @@ class CombatDamageStepMixin:
             if has_trample and power_left > 0 and trample_underlethal:
                 return False, "trample requires lethal damage assigned to each blocker"
             if has_trample and power_left > 0:
-                trample_damage = self._prevent_damage(
-                    defender, power_left, source=attacker, combat=True
-                )
-                if trample_damage > 0:
-                    defender_damage_events.append((defending_index, trample_damage, attacker))
-                    if self._has_keyword(attacker, "lifelink"):
-                        add_lifelink(self.active_player_index, trample_damage)
+                defender_damage_events.append((defending_index, power_left, attacker))
 
         for defending_idx, blocker_map in sorted(self.combat_blockers.items()):
             if defending_idx < 0 or defending_idx >= len(self.players):
@@ -601,67 +589,54 @@ class CombatDamageStepMixin:
                 if source_attacker is not None and self._has_keyword(source_attacker, "deathtouch"):
                     blocker_perm.metadata["received_deathtouch"] = True
 
-        # Accumulated as the events are applied, not from their recorded
-        # amounts: damage that gets redirected or replaced away never reduced
+        # Each recorded event is run through CR 120.4 here, not where it was
+        # recorded. That is what makes several attackers work: an effect that
+        # caps the life loss sees the total the previous attacker left behind,
+        # which is 616.1f's re-check falling out of the placement. Shields,
+        # redirects (Veteran Bodyguard) and the life floor are all one sequence
+        # in engine/damage_events.py — the recorded amount is raw.
+        #
+        # Life lost is accumulated as the events are applied, not summed from
+        # the recorded amounts: damage redirected or replaced away never reduced
         # anyone's life, and the log below reconstructs the before-life total by
         # adding these numbers back.
-        damage_by_defender: dict[int, int] = {}
+        life_lost_by_defender: dict[int, int] = {}
         for defending_idx, damage, source_attacker in defender_damage_events:
             if defending_idx < 0 or defending_idx >= len(self.players):
                 continue
             defender = self.players[defending_idx]
-            # Prevention was already applied when the event was recorded.
-            # Veteran Bodyguard: "As long as this creature is untapped, all damage
-            # that would be dealt to you by unblocked creatures is dealt to this
-            # creature instead." Redirect the whole event to it (CR 614 replacement).
-            bodyguard = next(
-                (
-                    p
-                    for p in defender.battlefield
-                    if not p.tapped
-                    and "all damage that would be dealt to you by unblocked creatures is dealt to this creature instead"
-                    in p.card.oracle_text.lower()
-                ),
-                None,
-            )
-            if bodyguard is not None:
-                self._mark_damage_on_permanent(
-                    bodyguard, damage, source=source_attacker, combat=True
-                )
-                self.log.append(
-                    f"{bodyguard.card.name} takes {damage} damage instead of {defender.name} (redirect)"
-                )
-                continue
-            # CR 614 replacements that modify damage dealt to a player (Ali from
-            # Cairo's life floor). This is the one damage path whose CR 616.1
-            # contention set is split across two moments: the shields ran where
-            # the event was recorded, so lifelink and the recorded amount agree
-            # on the number, and the replacements run here so that with several
-            # attackers each one sees the life total the previous one left
-            # behind — 616.1f's re-check, which a floor effect needs to stop
-            # applying once the life total is already at the floor. Rejoining
-            # them needs a damage event that can suspend (engine/damage_events.py).
-            consumed, payload = apply_replacements(
+            outcome = deal_damage(
                 self,
-                "damage_to_player",
-                {"recipient": defender, "amount": damage, "source": source_attacker},
+                {
+                    "recipient": defender,
+                    "amount": damage,
+                    "source": source_attacker,
+                    "combat": True,
+                },
             )
-            if consumed:
+            if outcome.dealt <= 0:
                 continue
-            damage = payload["amount"]
-            defender.life -= damage
-            damage_by_defender[defending_idx] = (
-                damage_by_defender.get(defending_idx, 0) + damage
+            defender.life -= outcome.result
+            life_lost_by_defender[defending_idx] = (
+                life_lost_by_defender.get(defending_idx, 0) + outcome.result
             )
-            self._on_player_dealt_damage(defender, damage, attacker)
+            # CR 702.15b reads the damage *dealt*, which is why lifelink is
+            # tallied here rather than where the event was recorded: a result
+            # replacement (Ali from Cairo) lowers the life lost without lowering
+            # the damage, and the two numbers only exist together at this point.
+            if source_attacker is not None and self._has_keyword(source_attacker, "lifelink"):
+                add_lifelink(self.active_player_index, outcome.dealt)
+            self._on_player_dealt_damage(defender, outcome.dealt, source_attacker)
             # Eye for an Eye: combat damage counts too — the attacker's
             # controller takes the same amount. Applied here rather than by
-            # routing through _deal_damage_to_player, whose prevention pass has
-            # already run for this event.
-            self._apply_mirror_damage(defender, damage, source_attacker)
+            # routing through _deal_damage_to_player, which would run the event
+            # a second time.
+            self._apply_mirror_damage(defender, outcome.dealt, source_attacker)
             # Attacker "deals damage to a player/opponent" triggers (Hypnotic Specter).
             if source_attacker is not None:
-                self._fire_combat_damage_to_player_triggers(source_attacker, defender, damage)
+                self._fire_combat_damage_to_player_triggers(
+                    source_attacker, defender, outcome.dealt
+                )
 
         # CR 702.15b: apply lifelink life gain for damage dealt this step.
         for controller_index, amount in lifelink_gain.items():
@@ -671,9 +646,8 @@ class CombatDamageStepMixin:
         self.check_state_based_actions()
         self._prune_combat_state()
 
-        total_player_damage = sum(damage_by_defender.values())
-        if total_player_damage > 0:
-            for defending_idx, damage in sorted(damage_by_defender.items()):
+        if sum(life_lost_by_defender.values()) > 0:
+            for defending_idx, damage in sorted(life_lost_by_defender.items()):
                 if not (0 <= defending_idx < len(self.players)) or damage <= 0:
                     continue
                 defender = self.players[defending_idx]

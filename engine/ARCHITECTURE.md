@@ -47,7 +47,7 @@ directly comparable and can coexist per line. See "Grammar front end" below and
 | `engine/replacements.py` | CR 614 replacement-effect registry (`life_gain`, `damage_to_creature`, `would_die`, …). An interceptor may consume an event or adjust its amount before the default action runs; see "Replacement effects" below. |
 | `engine/prevention.py` | CR 615 damage-shield registry. Each `@prevention_effect(order, applies=…)` function reports how many points it removes from one damage event, over players and permanents alike. See "Prevention effects" below. |
 | `engine/effect_ordering.py` | CR 616.1: gather every applicable replacement and prevention effect, choose one, apply it, re-ask the rest. Both registries run through it, which is why each registration carries a pure `applies` predicate. See "Effect ordering" below. |
-| `engine/damage_events.py` | The one place a damage event's shields and its replacements become the single contention set CR 616.1 describes. `modify_damage(game, event)` is what every damage path calls; the two registries share one order space and a collision between them raises at import. |
+| `engine/damage_events.py` | A damage event start to finish: CR 120.4's two halves (damage dealt, then its result), with CR 616.1's contention set — shields *and* replacements together — inside each. `deal_damage(game, event)` is what every damage path calls, and there is no half-event alternative. |
 | `engine/tokens.py` | `make_token_card(...)` — the one place that builds a token's `CardDefinition`. A token-creating card is a parse rule emitting a generic `create_token` instruction, never a bespoke handler. |
 | `engine/cast_restrictions.py` | Text-keyed "Cast this spell only during..." timing gates — an ordered predicate table, since the restriction is the same for any card printed with that phrase (not name-specific). |
 | `engine/targeting.py` | Cast-time target kind derived from the compiled program — an Aura's `Enchant <subject>` line or an instruction's `type_filter`. The strangler seam replacing `legality.py`'s text cascade: it answers where the program carries evidence, `legality.py` answers otherwise, and a differential guard keeps them equal. |
@@ -217,12 +217,14 @@ function) — a new CDA card is one table entry, not a new branch.
 "If X would happen, Y instead" effects (Lich, Disintegrate's exile-instead,
 Jade Monolith's redirect, …) are interceptors registered in
 `engine/replacements.py` by event kind (`life_gain`, `damage_to_creature`,
-`would_die`). Each registration is a pure `applies` predicate plus the effect
-itself; `apply_replacements(game, kind, payload)` runs them through CR 616.1
-(see "Effect ordering" below). An interceptor may consume the event (skip the
-default action) or adjust `payload["amount"]` and let the process continue.
-Interceptors self-select from game/permanent state, so the registry stays
-name-free.
+`life_loss`, `would_die`, …). Each registration is a pure `applies` predicate
+plus the effect itself; `apply_replacements(game, kind, payload)` runs them
+through CR 616.1 (see "Effect ordering" below). An interceptor may consume the
+event (skip the default action) or adjust `payload["amount"]` and let the process
+continue. Interceptors self-select from game/permanent state, so the registry
+stays name-free — Veteran Bodyguard's redirect reads the damage source's own
+combat state rather than trusting which loop of the combat step it arrived in,
+which is what makes it correctly decline a blocked trampler's excess.
 
 ### Replacements that need a decision
 
@@ -313,15 +315,40 @@ exactly what 616.1 forbids before the choice is made. The predicate must not
 consume a charge, because an effect that is asked about may then not be chosen.
 
 `engine/damage_events.py` is where a *damage* event's members of both registries
-become the one candidate list the rule describes; `modify_damage(game, event)`
-is the entry point every damage path uses. Combat damage to a player is the one
-exception, splitting its shields (applied when the event is recorded) from its
-replacements (applied with the life loss), for reasons documented at both sites.
+become the one candidate list the rule describes. `deal_damage(game, event)` is
+the entry point every damage path uses — there is deliberately no shields-only
+or replacements-only alternative, because a caller holding half a contention set
+is the shape this pipeline exists to remove.
 
 Unlike parse rules, order here is semantic rather than a precedence tiebreak: it
 is the *default choice* a non-interactive seat makes, so the two registries share
 one order space for damage and a collision between them raises at import — as
 does a duplicate within either one.
+
+### A damage event has two halves (CR 120.4)
+
+616.1 is not the only sequencing a damage event has. CR 120.4 runs it in parts:
+
+- **120.4b** — the damage is *dealt*, as modified by the effects that interact
+  with damage: shields absorb points, redirects send the event elsewhere.
+  Triggers on damage being dealt trigger on what comes out of this half.
+- **120.4c** — what was dealt is *processed into its results*, as modified by the
+  effects that interact with those results: life lost for a player, damage
+  marked for a creature.
+
+616.1 chooses within each half, so they are four registry kinds:
+`damage_to_player` / `damage_to_creature` for the first, `life_loss` /
+`damage_marked` for the second. `deal_damage` returns a `DamageOutcome` carrying
+both numbers — `dealt` and `result`.
+
+Two numbers, not one, because they genuinely differ. Ali from Cairo ("damage
+that would reduce your life total to less than 1 reduces it to 1 instead") is a
+120.4c effect: the damage is dealt in full, so lifelink gains the full amount
+(CR 120.3f) and a "deals damage to a player" trigger sees the full amount, and
+only the life loss is capped. Collapsing them is what forced the combat damage
+step to apply its shields where the event was recorded and its replacements
+where life was applied — one moment short of a second number, not two moments by
+necessity.
 
 ## Ordering conventions for parse rules
 

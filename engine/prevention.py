@@ -39,10 +39,10 @@ The shields are only *half* of a damage event's contenders: CR 616.1 does not
 separate prevention from replacement, so the orders below share one space with
 the damage entries in ``engine/replacements.py`` and the union is what actually
 runs. ``engine/damage_events.py`` is where the two are put together, and it
-raises at import if the union ever collides. ``apply_prevention`` below is the
-shields-only entry point, kept for the one caller that genuinely has half an
-event: combat damage applies shields when the event is *recorded* (so lifelink
-and the recorded amount agree) and its replacements when life is applied.
+raises at import if the union ever collides. There is deliberately no
+shields-only entry point here — a caller holding half a contention set is the
+shape this pipeline exists to remove, and ``shield_candidates`` hands the halves
+over rather than running them.
 
 Still not done here: the choice is not *asked*. A damage event cannot currently
 suspend — see ``effect_ordering.choose_effect``.
@@ -53,7 +53,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
-from .effect_ordering import Candidate, affected_seat, apply_in_order
+from .effect_ordering import Candidate
 from .models import PlayerState
 
 # Order bands. Blanket combat shields run first: they are flags rather than
@@ -146,37 +146,6 @@ def shield_candidates() -> list[Candidate]:
         )
         for c in PREVENTION_EFFECTS
     ]
-
-
-def apply_prevention(game, event: dict) -> int:
-    """Run the prevention shields over *event*; return the unprevented damage.
-
-    The shields-only half of a damage event, for the caller that has only that
-    half — combat damage, which applies shields at the moment the event is
-    recorded. Everything else goes through ``engine/damage_events.py``, which
-    contends these shields against the event's replacements as CR 616.1
-    describes.
-
-    Shields are applied in CR 616.1 order — every applicable one is gathered,
-    one is chosen (the affected player's choice; the default is the documented
-    order above), it is applied, and the rest are re-asked against the reduced
-    amount. That last step is 616.1f, and it is why this is a loop rather than
-    a single pass: a shield that applied to 5 damage may not apply to the 1
-    left after another shield ran.
-    """
-    if event["amount"] <= 0:
-        # No damage event, so no shield is consumed (CR 614.7a). Returned
-        # unchanged rather than clamped: combat passes raw power here, which can
-        # be negative for a creature shrunk below 0.
-        return event["amount"]
-    apply_in_order(
-        game,
-        event,
-        shield_candidates(),
-        chooser_index=affected_seat(game, event["recipient"]),
-        stop=spent,
-    )
-    return event["amount"]
 
 
 # ---------------------------------------------------------------------------

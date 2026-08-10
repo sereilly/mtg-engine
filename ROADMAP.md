@@ -1975,25 +1975,83 @@ other's orders, so `_assert_one_order_space` is the check only the union can
 make. The change is deliberately behaviour-preserving: 4,012 tests, 19.5s, no
 existing assertion moved.
 
-**Still open in this phase, and precisely what.** One thing now, in two places:
+**Done — combat damage joins the rest, and the blocker was not what the last two
+entries said it was.** Both of those entries claimed the combat damage step
+needed a *resumable* damage event to stop applying its shields in one place and
+its replacements in another. That was wrong, and the reason is worth writing
+down because it is a diagnosis error, not a missing feature: the step was not
+short a moment, it was short a **number**.
+
+CR 120.4 sequences a damage event in parts. First the damage is **dealt**, as
+modified by the effects that interact with damage (120.4b: shields, redirects).
+Then what was dealt is **processed into its results**, as modified by the effects
+that interact with those results (120.4c: life lost, damage marked). Ali from
+Cairo — "damage that would reduce your life total to less than 1 reduces it to 1
+instead" — is a 120.4c effect, so the damage is dealt *in full*: lifelink gains
+the full amount (CR 120.3f), a "deals damage to a player" trigger sees the full
+amount, and only the life loss is capped.
+
+The engine had one number for both. That is precisely why the combat step had to
+apply shields where the event was recorded (so lifelink read a number the floor
+had not touched) and replacements where life was applied (so the floor read the
+running life total). Two moments compensating for one missing number.
+
+`deal_damage` now returns a `DamageOutcome` carrying `dealt` and `result`, the
+registry has four damage kinds instead of two (`damage_to_player` /
+`damage_to_creature`, then `life_loss` / `damage_marked`), and the combat step
+records raw events and runs the whole sequence at one site with lifelink tallied
+from `dealt`. `_prevent_damage` and `apply_prevention` are **gone** — with
+nothing left holding half an event, a shields-only entry point is just the defect
+this pipeline exists to remove, and `shield_candidates` hands the half over
+instead of running it.
+
+Three things fell out of rewriting that code, each verified against the rules
+rather than assumed:
+
+- **Veteran Bodyguard was absorbing trample damage.** It covers "damage dealt to
+  you by unblocked creatures", and CR 509.1h is explicit that an attacker with a
+  blocker declared for it *is* a blocked creature — and stays one even if every
+  blocker leaves combat. As an inline check in the combat step it could only see
+  "this damage arrived on the player's pile", which cannot tell a trampler's
+  excess from an unblocked attacker. It is a registry interceptor now, reading
+  the source permanent's own combat state, which also gets a case the inline
+  version never could: the card says *all* damage, so an unblocked attacker's
+  activated ability is redirected too.
+- **Its redirect was ordered behind the shields**, so a prevention pool was spent
+  on damage that then left for the creature anyway. Redirects now default ahead
+  of shields for both recipients, one rule instead of two conventions.
+- **Every combat event was attributed to whichever attacker was processed last.**
+  The apply loop passed the leaked `attacker` from the earlier loop to
+  `_on_player_dealt_damage` while using `source_attacker` two lines below.
+  Invisible until a source's identity mattered — Reverse Polarity counts only
+  what artifact sources dealt (CR 120.7), so a Clockwork attacking beside a
+  Grizzly Bears tallied 0.
+
+4,018 tests, 12.8s. The three fixes are mutation-checked: each new test fails
+when the specific line it pins is reverted.
+
+**Still open in this phase, and precisely what.** One thing:
 
 - **The choice is not asked.** `choose_effect` takes the documented default
   (lowest order) for every seat. Not because the choice never matters — a
   Circle of Protection and a prevention pool are both applicable to one damage
   event, which this card pool reaches easily — but because a damage event
-  cannot suspend: prevention runs inside `_deal_damage_to_player`, which returns
-  an `int` to callers deep in combat and resolution loops. Phase 4 built the
-  prompt machinery this needs; what is missing is a *resumable* damage event.
+  cannot suspend: `deal_damage` runs inside `_deal_damage_to_player`, which
+  returns an `int` to callers deep in combat and resolution loops.
   `OrderingTrace.had_a_choice` already records when the question was live, so
-  the prompt has both a seat and a trigger waiting for it.
-- **Combat damage to a player still reaches the process in halves**, and it is
-  the same blocker wearing different clothes. That path applies its shields when
-  the event is *recorded* — so lifelink and the recorded amount agree on the
-  number — and its replacements when life is applied, so that with several
-  attackers each one's floor sees what the previous one left. Those are two
-  moments, and joining them needs the event to survive between them, which is
-  the resumable damage event above. Both sites say so, and it is the only damage
-  path that does not go through `damage_events.modify_damage`.
+  the prompt has a seat and a trigger waiting for it.
+
+  Unlike the combat split above, this one really is structural, and it is worth
+  saying what it costs so nobody re-scopes it as small. This engine has no
+  continuation mechanism: every pending choice either finishes its effect in its
+  resolver, or is armed where the rest of the effect does not need to run.
+  Neither is available here, because the caller needs the damage number *now* —
+  for trample math, lifelink, triggers, "gain life equal to the damage dealt".
+  Suspending mid-event therefore means deferring the consequences too, at ~25
+  call sites across handlers, phases and mixins, which is continuation-passing
+  through the whole effect layer. That is a project, not a session, and a
+  half-converted version is the two-paths defect in its worst form: some damage
+  asks and some does not.
 
 **Done — the turn-step registries are text-keyed.** `UNTAP_RESTRICTIONS` and
 the bonus-draw half of `DRAW_STEP_MODIFIERS` were name-keyed tables holding
