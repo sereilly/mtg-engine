@@ -89,7 +89,9 @@ audit found.)*
 - The set list was duplicated in six-plus places.
 - **No CI.** Every guard above ran only when a human remembered.
 - The comprehensive-cast sweep is hardcoded to `cards/LEA_cards.json`; ARN has
-  no sweep, and `ARCHITECTURE.md` claimed otherwise. **Still open — phase 8.**
+  no sweep, and `ARCHITECTURE.md` claimed otherwise. **Closed in phase 8** —
+  `tests/engine/test_catalog_sweep.py` parametrizes over `cards/manifest.json`,
+  so a newly ingested set is swept the moment it is registered.
 
 ---
 
@@ -238,11 +240,13 @@ The deletion probe also found two real loosenesses and both were fixed rather
 than accepted: a counter with no written kind defaulted to +1/+1, and the noun
 after "other than this" was optional.
 
-Still open from this phase's scope: regeneration, life, draw/discard and zones
-are parsed and lowered but **not** switched on — `zones` because "Draw a card"
-maps to two different handlers depending on who draws, and `mana` because
-`add_mana_from_text` re-reads clause text and Black Lotus bundles a sacrifice
-cost into its instruction. Both need their handlers reworked first.
+Recorded as still open at the time: regeneration, life, draw/discard and zones
+were parsed and lowered but not switched on — `zones` because "Draw a card"
+mapped to two different handlers depending on who draws, and `mana` because
+`add_mana_from_text` re-read clause text and Black Lotus bundled a sacrifice
+cost into its instruction. **All four are switched on now** (`life`, `mana`,
+`regeneration`, `zones` are in `GRAMMAR_CATEGORIES`); the handler rework each
+was waiting on landed with the categories.
 `parse_target_filter`/`TargetFilter` still exist for the rules that remain.
 
 ## Grammar: the backlog is now measured, and the first item is cleared

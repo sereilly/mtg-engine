@@ -241,10 +241,17 @@ def _applies_life_gain_to_draw(game, payload: dict) -> bool:
 
 @replacement_effect("life_gain", LIFE_GAIN_TO_DRAW, applies=_applies_life_gain_to_draw)
 def _draw_instead_of_life_gain(game, payload: dict) -> ReplacementOutcome | None:
-    """Lich: "If you would gain life, draw that many cards instead."""
+    """Lich: "If you would gain life, draw that many cards instead."
+
+    The draw this creates is a draw like any other, so it goes back through the
+    draw replacements (CR 616.2: an effect can become applicable *because*
+    another replacement modified the event). This pairing is the rule's own
+    worked example, and taking cards off the library directly would silently
+    skip a Ring of Ma'rûf or an Aladdin's Lamp the player had armed.
+    """
     player = payload["player"]
     amount = payload["amount"]
-    drawn = player.draw(amount)
+    drawn = game._draw_with_replacements(player, amount)
     source = f" from {payload['source_name']}" if payload.get("source_name") else ""
     game.log.append(
         f"{player.name} would gain {amount} life{source}; drew {drawn} card(s) instead (Lich)"
@@ -588,7 +595,7 @@ def _draw_from_outside_the_game(game, payload: dict) -> ReplacementOutcome | Non
             f"{player.name} has no cards outside the game to take (Ring of Ma'rûf)"
         )
         if remaining > 0:
-            player.draw(remaining)
+            game._draw_with_replacements(player, remaining)
         payload["drawn"] = 0
         return ReplacementOutcome(replaced=True)
     suspended, drawn = offer_replacement_choice(
@@ -617,7 +624,7 @@ def _resolve_outside_game_draw(game, choice: ReplacementChoice, option_index: in
     game._finish_outside_game_draw(choice.player_index, indices[option_index])
     remaining = int(choice.data.get("remaining_draws", 0))
     if remaining > 0:
-        game.players[choice.player_index].draw(remaining)
+        game._draw_with_replacements(game.players[choice.player_index], remaining)
     return 0
 
 
@@ -666,5 +673,5 @@ def _resolve_lamp_draw(game, choice: ReplacementChoice, option_index: int) -> in
     drawn = game._finish_lamp_draw(choice.player_index, option_index, looked_at)
     remaining = int(choice.data.get("remaining_draws", 0))
     if remaining > 0:
-        drawn += player.draw(remaining)
+        drawn += game._draw_with_replacements(player, remaining)
     return drawn

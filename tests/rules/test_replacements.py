@@ -171,6 +171,47 @@ def test_614_1_a_replacement_that_finds_nothing_to_do_is_still_spent():
     assert drawn == 0, "an empty library had nothing to draw either way"
 
 
+@pytest.mark.cr("616.2")
+def test_616_2_a_replacement_can_become_applicable_through_another():
+    """CR 616.2's own worked example, with this pool's cards: Lich turns a life
+    gain into a draw, and a draw replacement applies to *that* draw even though
+    the original event was not a draw at all.
+
+    The draw an effect creates is a draw like any other. Taking the cards off
+    the library directly would skip the Ring silently — the player would keep an
+    armed replacement they had already spent the opportunity for."""
+    game, p1, _ = _two_player_game()
+    p1.battlefield.append(Permanent(card=CARDS_BY_NAME["Lich"]))
+    p1.library = [CARDS_BY_NAME["Lightning Bolt"]]
+    p1.sideboard = [CARDS_BY_NAME["Black Lotus"]]
+    game.outside_game_draw_replacements.add(0)
+
+    game._gain_life(p1, 1)
+
+    assert 0 not in game.outside_game_draw_replacements, "the draw replacement applied"
+    assert [c.name for c in p1.hand] == ["Black Lotus"], "taken from outside the game"
+    assert [c.name for c in p1.library] == ["Lightning Bolt"], "the library was not drawn from"
+
+
+@pytest.mark.cr("121.2", "614.1")
+def test_121_2_each_of_several_draws_is_replaceable_on_its_own():
+    """"If a player is instructed to draw multiple cards, that player performs
+    that many individual card draws" — so two armed replacements take one draw
+    each. The second used to be taken straight off the library, because the
+    draws queued behind a replaced one bypassed the registry."""
+    game, p1, _ = _two_player_game()
+    p1.library = [CARDS_BY_NAME["Lightning Bolt"], CARDS_BY_NAME["Fireball"]]
+    p1.sideboard = [CARDS_BY_NAME["Black Lotus"]]
+    game.outside_game_draw_replacements.add(0)
+    game.lamp_draw_replacements[0] = 2
+
+    game._draw_with_replacements(p1, 2)
+
+    assert 0 not in game.outside_game_draw_replacements, "the first draw was replaced"
+    assert game.lamp_draw_replacements == {}, "and the second draw was replaced too"
+    assert "Black Lotus" in [c.name for c in p1.hand]
+
+
 @pytest.mark.cr("614.1")
 def test_unknown_kind_is_a_no_op():
     consumed, payload = apply_replacements(None, "_no_such_kind", {"amount": 2})

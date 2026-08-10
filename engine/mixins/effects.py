@@ -480,7 +480,16 @@ class EffectsMixin:
         A replacement that needs the player to choose suspends the draw and
         reports 0 drawn; the cards arrive when the choice is answered, along
         with any draws queued behind it. Which replacements exist lives in
-        engine/replacements.py."""
+        engine/replacements.py.
+
+        This is the *only* way an effect should draw. CR 121.2 makes a
+        multi-card instruction that many individual draws, each replaceable on
+        its own, so the draws queued behind a replaced one come back through
+        here rather than being taken off the library — and a draw an effect
+        *creates* (Lich turning a life gain into one, CR 616.2) is a draw like
+        any other. `player.draw` is the library operation underneath; reaching
+        for it directly is how a second armed replacement gets skipped.
+        """
         if count <= 0:
             return player.draw(count)
         consumed, payload = apply_replacements(
