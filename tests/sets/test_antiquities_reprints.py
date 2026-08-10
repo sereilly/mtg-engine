@@ -294,3 +294,45 @@ def test_reverse_polarity_counts_only_artifact_damage(catalog):
     game.cast_from_hand(0, "Reverse Polarity")
 
     assert p1.life == before + 6          # twice the artifact damage only
+
+
+@pytest.mark.parametrize("hand,expected_damage", [(0, 3), (1, 2), (3, 0), (5, 0)])
+def test_the_rack_damages_the_shortfall_not_the_excess(catalog, hand, expected_damage):
+    """The Rack is Black Vise's mirror: damage for the cards a player is
+    *missing*, not the ones they are holding. Both floor at zero — neither
+    card heals."""
+    rack = _artifact(
+        "The Rack",
+        "As this artifact enters, choose an opponent.\n"
+        "At the beginning of the chosen player's upkeep, this artifact deals X "
+        "damage to that player, where X is 3 minus the number of cards in their hand.",
+    )
+    permanent = Permanent(card=rack)
+    permanent.metadata["chosen_player_index"] = 1
+    p1 = PlayerState(name="P1", battlefield=[permanent])
+    p2 = PlayerState(name="P2", hand=[catalog["Forest"]] * hand)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    game.resolve_upkeep(1)
+
+    assert p2.life == 20 - expected_damage
+
+
+@pytest.mark.parametrize("hand,expected_damage", [(7, 3), (5, 1), (4, 0), (2, 0)])
+def test_black_vise_still_damages_the_excess(catalog, hand, expected_damage):
+    """The mirror card must not have changed the original. Generalising Black
+    Vise's rule into one regex covering both directions changed which rule the
+    coverage script attributed its sentence to and left an existing card's text
+    unclaimed — so the two are separate rules lowering to one kind."""
+    vise = catalog["Black Vise"]
+    permanent = Permanent(card=vise)
+    permanent.metadata["chosen_player_index"] = 1
+    p1 = PlayerState(name="P1", battlefield=[permanent])
+    p2 = PlayerState(name="P2", hand=[catalog["Forest"]] * hand)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    game.resolve_upkeep(1)
+
+    assert p2.life == 20 - expected_damage

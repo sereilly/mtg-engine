@@ -1456,7 +1456,7 @@ def test_black_vise_lowers_the_whole_count_including_the_minus_four():
         "At the beginning of the chosen player's upkeep, this artifact deals X damage "
         "to that player, where X is the number of cards in their hand minus 4.",
         "Black Vise",
-    ) == [("upkeep_chosen_player_hand_overflow_damage", {})]
+    ) == [("upkeep_chosen_player_hand_overflow_damage", {"base": 4, "direction": "overflow"})]
 
 
 def test_power_surge_binds_x_to_the_turn_start_land_count():

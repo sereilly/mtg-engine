@@ -353,7 +353,13 @@ class UpkeepEffectsMixin:
         if chosen != player_index:
             return
         victim = self.players[player_index]
-        damage = max(0, len(victim.hand) - 4)
+        # Black Vise counts the excess over the threshold, The Rack the
+        # shortfall below it. Both floor at zero: neither card heals.
+        base = int(trig.instruction.payload.get("base", 4))
+        if trig.instruction.payload.get("direction") == "deficit":
+            damage = max(0, base - len(victim.hand))
+        else:
+            damage = max(0, len(victim.hand) - base)
         if damage > 0:
             _enqueue_upkeep_damage(
                 permanent, self.players.index(controller), player_index, damage, trig.source_line

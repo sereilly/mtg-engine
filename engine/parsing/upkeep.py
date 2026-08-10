@@ -124,7 +124,37 @@ def upkeep_sacrifice_land_conditional_damage(text: str, activated: bool) -> Rule
 @parse_rule(6000)
 def upkeep_chosen_player_hand_overflow_damage(text: str, activated: bool) -> RuleResult:
     if "number of cards in their hand minus 4" in text:
-        return _instruction("upkeep_chosen_player_hand_overflow_damage"), "upkeep_effect"
+        return (
+            _instruction(
+                "upkeep_chosen_player_hand_overflow_damage", base=4, direction="overflow"
+            ),
+            "upkeep_effect",
+        )
+    return None
+
+
+# The Rack: the mirror of Black Vise — damage for the *shortfall* below a
+# threshold rather than the excess above it. A separate rule rather than one
+# regex covering both, because generalising Black Vise's literal changed which
+# rule parse_coverage attributed its sentence to and left an existing card's
+# text unclaimed. The shared shape is expressed where it costs nothing: both
+# lower to the same instruction kind, and one handler reads the direction.
+@parse_rule(6050)
+def upkeep_chosen_player_hand_deficit_damage(text: str, activated: bool) -> RuleResult:
+    if "minus the number of cards in their hand" in text:
+        base = 3
+        for word in text.split():
+            if word.isdigit():
+                base = int(word)
+                break
+        return (
+            _instruction(
+                "upkeep_chosen_player_hand_overflow_damage",
+                base=base,
+                direction="deficit",
+            ),
+            "upkeep_effect",
+        )
     return None
 
 

@@ -290,7 +290,13 @@ _SWAMPS_THEY_CONTROL = ast.ObjectFilter(subtypes=("swamp",), controller="that_pl
 # implicit in the handler, so it is written down here rather than left to be
 # rediscovered — and it is the reason an unnamed X may never lower to this kind.
 _BOARD_COUNT_DAMAGE: dict[str, tuple[str, dict[str, object]]] = {
-    "cards_in_hand_minus_four": ("upkeep_chosen_player_hand_overflow_damage", {}),
+    # The threshold and the direction are payload on the legacy side, so the
+    # grammar carries them too — the differential compares payloads, and a
+    # bare {} here would report a disagreement rather than a match.
+    "cards_in_hand_minus_four": (
+        "upkeep_chosen_player_hand_overflow_damage",
+        {"base": 4, "direction": "overflow"},
+    ),
     "untapped_lands_at_turn_start": ("deal_damage", {"amount": "x"}),
 }
 
