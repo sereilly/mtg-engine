@@ -392,7 +392,20 @@ def _sentences(text: str) -> list[str]:
     return [s.strip(" .") for s in _SENTENCE_SPLIT.split(text) if s.strip(" .")]
 
 
-def _rule_match(clause: str, activated: bool, card_name: str | None = None):
+def _grammar_instruction(compiled):
+    instructions = compiled.instructions
+    return (
+        instructions[0] if len(instructions) == 1
+        else OracleInstruction("sequence", "", {"steps": instructions})
+    )
+
+
+def _rule_match(
+    clause: str,
+    activated: bool,
+    card_name: str | None = None,
+    trigger_prefix: str | None = None,
+):
     """What claims *clause*: the grammar if it can, else the legacy rules.
 
     Grammar first, mirroring the compiler. This keeps every downstream
@@ -400,22 +413,38 @@ def _rule_match(clause: str, activated: bool, card_name: str | None = None):
     probe, which gets stronger on grammar-claimed text: the full-consumption
     invariant means removing a meaningful word usually makes the parse fail
     outright rather than quietly producing the same instruction.
+
+    *trigger_prefix* is the trigger condition this clause is the remainder of,
+    and is tried last. Some effects are only meaningful inside their trigger:
+    "that player adds one mana of any type that land produced" names a player
+    and a land the *event* binds, so ``lower_statement`` refuses it outside a
+    ``land_tapped_for_mana`` trigger and the clause read alone looks unclaimed.
+    The compiler hands the grammar the whole line (oracle.py
+    ``_grammar_instruction``), so reading it that way here is mirroring it, not
+    excusing it — and the probe below re-parses through the same path, so
+    deleting a word from the clause still has to change the parse.
     """
     compiled = compile_grammar_line(clause, card_name=card_name)
     if compiled.usable:
-        instructions = compiled.instructions
-        instruction = (
-            instructions[0] if len(instructions) == 1
-            else OracleInstruction("sequence", "", {"steps": instructions})
-        )
-        return instruction, "grammar"
-    return parse_primary_instruction(clause, activated=activated)
+        return _grammar_instruction(compiled), "grammar"
+    legacy_instruction, legacy_kind = parse_primary_instruction(clause, activated=activated)
+    if legacy_instruction is not None or not trigger_prefix:
+        return legacy_instruction, legacy_kind
+    in_trigger = compile_grammar_line(f"{trigger_prefix}, {clause}", card_name=card_name)
+    if in_trigger.usable:
+        return _grammar_instruction(in_trigger), "grammar (read with its trigger)"
+    return legacy_instruction, legacy_kind
 
 
-def _probe(clause: str, activated: bool, card_name: str | None = None) -> tuple[str, ...]:
+def _probe(
+    clause: str,
+    activated: bool,
+    card_name: str | None = None,
+    trigger_prefix: str | None = None,
+) -> tuple[str, ...]:
     """Words in *clause* whose deletion leaves the parse identical — i.e.
     words the parser demonstrably ignored."""
-    base_instr, _ = _rule_match(clause, activated, card_name)
+    base_instr, _ = _rule_match(clause, activated, card_name, trigger_prefix)
     if base_instr is None:
         return ()
     words = clause.split()
@@ -424,7 +453,7 @@ def _probe(clause: str, activated: bool, card_name: str | None = None) -> tuple[
         if word.lower().strip(".,;:'\"") in _PROBE_STOPWORDS:
             continue
         shorter = " ".join(words[:i] + words[i + 1:])
-        instr, _ = _rule_match(shorter, activated, card_name)
+        instr, _ = _rule_match(shorter, activated, card_name, trigger_prefix)
         if (
             instr is not None
             and instr.kind == base_instr.kind
@@ -466,7 +495,12 @@ def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage
     # delayed-destroy line rides on the attack-forcing rule's handler).
     seen_kinds: set[str] = set()
 
-    def claim_sentence(sentence: str, activated: bool, owner_kind: str | None = None) -> None:
+    def claim_sentence(
+        sentence: str,
+        activated: bool,
+        owner_kind: str | None = None,
+        trigger_prefix: str | None = None,
+    ) -> None:
         # A trailing sentence the owning rule's HANDLER implements (declared
         # in HANDLER_CLAIMS) is claimed by that handler.
         if owner_kind is not None and any(
@@ -474,12 +508,12 @@ def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage
         ):
             coverage.claims.append((sentence, f"handler ← {owner_kind}"))
             return
-        instruction, _ = _rule_match(sentence, activated, card.name)
+        instruction, _ = _rule_match(sentence, activated, card.name, trigger_prefix)
         if instruction is not None:
             seen_kinds.add(instruction.kind)
             coverage.claims.append((sentence, f"parse rule → {instruction.kind}"))
             if run_probe:
-                ignored = _probe(sentence, activated, card.name)
+                ignored = _probe(sentence, activated, card.name, trigger_prefix)
                 if ignored:
                     coverage.probe_findings.append((sentence, ignored))
             return
@@ -495,12 +529,14 @@ def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage
             return
         coverage.unclaimed.append(sentence)
 
-    def claim_clause(clause: str, activated: bool) -> None:
+    def claim_clause(
+        clause: str, activated: bool, trigger_prefix: str | None = None
+    ) -> None:
         clause = clause.strip(" .")
         if not clause:
             return
         sents = _sentences(clause)
-        instruction, kind = _rule_match(clause, activated, card.name)
+        instruction, kind = _rule_match(clause, activated, card.name, trigger_prefix)
         if instruction is not None and len(sents) > 1:
             # A rule matched the whole clause — but a substring-anchored rule
             # may only have needed the first sentence(s). Claim the MINIMAL
@@ -513,7 +549,7 @@ def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage
             # the produced instruction is identical. The instruction is what
             # decides whether the trailing sentences mattered.
             def _same(text: str) -> bool:
-                instr, _ = _rule_match(text, activated, card.name)
+                instr, _ = _rule_match(text, activated, card.name, trigger_prefix)
                 return (
                     instr is not None
                     and instr.kind == instruction.kind
@@ -539,22 +575,25 @@ def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage
             claimed_text = ". ".join(claimed)
             coverage.claims.append((claimed_text, f"parse rule → {instruction.kind}"))
             if run_probe:
-                ignored = _probe(claimed_text, activated, card.name)
+                ignored = _probe(claimed_text, activated, card.name, trigger_prefix)
                 if ignored:
                     coverage.probe_findings.append((claimed_text, ignored))
             for sentence in rest:
-                claim_sentence(sentence, activated, owner_kind=instruction.kind)
+                claim_sentence(
+                    sentence, activated,
+                    owner_kind=instruction.kind, trigger_prefix=trigger_prefix,
+                )
             return
         if instruction is not None:
             seen_kinds.add(instruction.kind)
             coverage.claims.append((clause, f"parse rule → {instruction.kind}"))
             if run_probe:
-                ignored = _probe(clause, activated, card.name)
+                ignored = _probe(clause, activated, card.name, trigger_prefix)
                 if ignored:
                     coverage.probe_findings.append((clause, ignored))
             return
         for sentence in sents:
-            claim_sentence(sentence, activated)
+            claim_sentence(sentence, activated, trigger_prefix=trigger_prefix)
 
     text = expand_modal_activated_lines(card.oracle_text or "")
     for raw_line in text.splitlines():
@@ -596,7 +635,10 @@ def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage
                     coverage.unclaimed.append(normalized)
                 continue
             coverage.claims.append((condition.raw_text, f"trigger table → {trig.condition.kind}"))
-            claim_clause(remainder.lstrip(": "), activated=False)
+            claim_clause(
+                remainder.lstrip(": "), activated=False,
+                trigger_prefix=condition.raw_text,
+            )
             continue
 
         ability = _parse_activated_ability(line)

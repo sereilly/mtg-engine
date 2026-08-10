@@ -2440,17 +2440,13 @@ tapped, and re-tapping something already tapped is no state change at all
 (CR 701.26a, "only untapped permanents can be tapped"). Both are pinned by
 tests rather than left as comments.
 
-Lifetap stays **name-keyed** for now, honestly: the compiler parses *zero*
-triggered abilities for it, so there is no condition kind to emit. Mana Flare's
-trigger does parse (`land_tapped_for_mana`) but lowers to nothing. Moving these
-onto `engine/events.py` needs the parser to produce the conditions first — that
-is the real remaining task, not the fire site.
-
-Also worth recording: Mana Flare and Gauntlet of Might are triggered *mana*
-abilities (CR 605.1b — they add mana, so they never use the stack) and are
-correctly resolved inline. Lifetap is not one: it gains life, fails 605.1b's
-"could add mana" criterion, and should use the stack. It still resolves inline.
-That is a separate, smaller divergence from the missing-trigger bug fixed here.
+Lifetap stayed **name-keyed** at the time, honestly: the compiler parsed *zero*
+triggered abilities for it, so there was no condition kind to emit. Mana Flare's
+trigger did parse (`land_tapped_for_mana`) but lowered to nothing. Moving these
+onto `engine/events.py` needed the parser to produce the conditions first —
+that was the real remaining task, not the fire site. **Both are done; see "the
+two land-tapping trigger templates" below.** The 605.1b divergence recorded here
+is fixed there too.
 
 Cast-trigger hooks (six cards name-keyed for conditions the parser already
 understands) move onto the same bus.
@@ -2466,6 +2462,79 @@ The per-card `PlayerState` fields the shields read (`forcefield_capped_sources`,
 untouched: they are the *state* an interceptor reads, and replacing them with a
 generic shield list is a separate change that reaches the web payload and the
 AI simulator. Splitting it kept this one behavior-preserving.
+
+**Done — the two land-tapping trigger templates parse, and the last mana hooks
+go.** The entry above named the blocker precisely and it was a *parser* one, so
+that is where the work went. Two templates now compile, both parameterised
+rather than spelled out per card:
+
+- **"Whenever a `<type>` [an opponent controls] becomes tapped, …"** →
+  a `permanent_becomes_tapped` condition carrying the type and the controller
+  scope as payload. `Game.become_tapped` announces it on the bus and one
+  `@event_filter` reads the restriction off the trigger's own condition, so no
+  card name is involved. (Lifetap.)
+- **"Whenever a `[<land type>]` is tapped for mana, `<player>` adds …"** →
+  `land_tapped_for_mana`, now narrowable by land type, plus an
+  `add_mana_for_tapped_land` instruction. `tap_land_for_mana` runs it inline.
+  (Mana Flare, Gauntlet of Might.)
+
+In the grammar both are one production, `_parse_quantified_tap_event`: the
+subject is a *noun phrase* rather than one of the named subjects the literal
+phrase table already covers ("enchanted land", "this land", "a player taps a
+land"). It is tried strictly after that table, because `parse_target_spec` would
+otherwise happily claim "enchanted land" and name a condition the legacy table
+does not — the disagreement
+`test_every_executed_trigger_agrees_with_the_legacy_condition_table` exists to
+catch.
+
+Three `card_hooks.py` entries and both registries they lived in
+(`MANA_PRODUCTION_MODIFIERS`, `ON_BECOMES_TAPPED`) are gone; the file lost 54
+lines. Coverage: **73.2% → 73.8% parsed, 37.6% → 38.3% executed**, and it is
+real coverage — each new condition is dispatched, proven by tapping a board and
+reading it, not by a payload golden.
+
+**CR 605.1b, verified against `MagicCompRules.txt` rather than the summary
+above.** 605.1b requires all three of: no target, *triggers from the activation
+or resolution of an activated mana ability or from mana being added*, and could
+add mana. Mana Flare and Gauntlet of Might meet all three, so 605.4a applies and
+they may not use the stack — inline is what the rules require, not a shortcut,
+and the fire site now says so. Lifetap fails 605.1b **twice**: it triggers on
+*becoming tapped*, which is not a mana ability, and it could never add mana.
+605.5a names that case explicitly ("a triggered ability that could produce mana
+but triggers from an event other than activating a mana ability, or … triggers
+from activating a mana ability but couldn't produce mana. These follow the
+normal rules"). It now goes on the stack. That is the visible behaviour change
+here: the life arrives when the trigger resolves, so two existing tests grew a
+`resolve_stack()`.
+
+Worth recording, from injecting the bug the pool-wide guard is supposed to
+catch: renaming `add_mana_for_tapped_land` alone did **not** produce false
+coverage, because an instruction kind absent from `INSTRUCTION_CATEGORIES` makes
+the whole line ungated and the card falls back. The Mana Vault / Black Vise
+shape needs *both* halves — a new kind and its category — which is exactly the
+diff an author writing a new effect produces. The guard
+(`test_every_land_tapped_for_mana_trigger_lands_on_a_kind_the_fire_site_runs`)
+was re-verified against that two-part injection.
+
+**A tightening in `parse_coverage.py` fell out of it.** Its trigger branch read
+the effect clause *alone*, while the compiler hands the grammar the whole line.
+Most clauses read the same either way, so the difference only showed up when a
+clause is meaningless outside its trigger — "that player adds one mana of any
+type that land produced" names a player and a land the *event* binds, so
+lowering refuses it standalone and the script called it unclaimed. `_rule_match`
+now falls back to re-reading the clause with its condition prefixed, and the
+deletion probe re-parses through the same path, so every word of the clause
+still has to matter. Lifetap's probe finding (six ignored words — its entire
+trigger condition) disappeared, since the condition is now parsed instead of
+being dropped by a rule that only saw "you gain 1 life".
+
+**Not done, deliberately.** Wild Growth ("Whenever *enchanted land* is tapped
+for mana, its controller adds an additional {G}") is the same effect clause but
+a third subject, and the legacy table has no condition for it — its mana is
+still added by an inline regex in `tap_land_for_mana`. Claiming it would need a
+new condition kind *and* a fire-site branch that knows the Aura's attachment,
+which is a different piece of work from the one this entry names; adding the
+grammar phrase without them is the false coverage this task existed to avoid.
 
 ## Silent-support bug found and closed (Shahrazad)
 

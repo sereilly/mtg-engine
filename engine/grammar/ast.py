@@ -531,6 +531,33 @@ class AddMana:
 
 
 @dataclass(frozen=True)
+class AddManaForTappedLand:
+    """"…**that player** adds one mana of any type that land produced" (Mana
+    Flare) / "…**its controller** adds an additional {R}" (Gauntlet of Might).
+
+    Separate from :class:`AddMana`, which always adds a written-out quantity to
+    the ability's own controller. Every part of this clause is a referent the
+    *trigger* binds and the statement grammar cannot see on its own: who "that
+    player" / "its controller" is, and which mana "that land produced". Lowering
+    therefore refuses unless the enclosing trigger is ``land_tapped_for_mana``,
+    the one event that binds them.
+
+    ``additional`` records the word "additional". It is redundant on the board —
+    the trigger fires after the land's own mana is already in the pool — but a
+    word a production consumes without recording is a word the deletion probe
+    can delete without changing the parse, which is the dropped-rider bug class.
+    """
+
+    recipient: PlayerRef
+    # Written-out symbols: (("R", 1),).
+    pips: tuple[tuple[str, int], ...] = ()
+    # "one mana of any type that land produced" — a count of mana whose type is
+    # whatever the tapped land just made, so it cannot be written as pips.
+    of_type_produced: int = 0
+    additional: bool = False
+
+
+@dataclass(frozen=True)
 class PreventDamage:
     amount: Amount
     to: Recipient | None = None
@@ -643,7 +670,8 @@ Effect = Union[
     DealDamage, Pump, SetBasePT, GainKeyword, LoseKeyword, PutCounter, RemoveCounter,
     GainLife, LoseLife, Draw, Discard, Destroy, Sacrifice, Exile, Tap, Untap,
     TapOrUntap,
-    Regenerate, CounterSpell, ReturnToZone, CreateToken, AddMana, PreventDamage,
+    Regenerate, CounterSpell, ReturnToZone, CreateToken, AddMana,
+    AddManaForTappedLand, PreventDamage,
     SearchLibrary, Shuffle, ExtraTurn, WinGame, LoseGame, BecomeColor,
     SacrificeUnlessPay, DamageUnlessPay, LookAtHand, CantBe, RawEffect,
 ]
@@ -825,7 +853,8 @@ __all__ = [
     "Discard", "Destroy", "Sacrifice", "Exile", "Tap", "Untap", "TapOrUntap",
     "Regenerate",
     "BecomeColor", "SacrificeUnlessPay", "LookAtHand", "CantBe",
-    "CounterSpell", "ReturnToZone", "CreateToken", "AddMana", "PreventDamage",
+    "CounterSpell", "ReturnToZone", "CreateToken", "AddMana",
+    "AddManaForTappedLand", "PreventDamage",
     "SearchLibrary", "Shuffle", "ExtraTurn", "WinGame", "LoseGame", "RawEffect",
     # statements
     "Statement", "Sequence", "Conjunction", "Conditional", "May", "ForEach",

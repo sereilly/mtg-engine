@@ -28,14 +28,13 @@ Hook registries:
                         they are templates, derived from oracle text by
                         engine/untap_restrictions.py and
                         engine/draw_step_modifiers.py.
-- MANA_PRODUCTION_MODIFIERS — fired once per registered permanent whenever a
-                        land is tapped for mana (Mana Flare, Gauntlet of Might,
-                        Lifetap), consumed by engine/mixins/turn_management.
 - ENCHANTED_LAND_TAPPED_FOR_MANA — bespoke behavior for the Aura on a land tapped
                         for mana (Kudzu), keyed by Aura name, consumed by
                         engine/mixins/turn_management.
 Cost taxes left this file too: "<colour> spells cost {N} more to cast" is a
-template, derived from oracle text by engine/cost_modifiers.py.
+template, derived from oracle text by engine/cost_modifiers.py. So did the
+land-tapping triggers (Mana Flare, Gauntlet of Might, Lifetap) — the compiler
+now produces their conditions, so they are ordinary triggered abilities.
 """
 
 from __future__ import annotations
@@ -287,74 +286,21 @@ DRAW_STEP_MODIFIERS: dict[str, DrawStepModifier] = {
 
 
 # --------------------------------------------------------------------------
-# Mana-production modifiers ("whenever a land is tapped for mana")
+# Land-tapping triggers — moved out
 # --------------------------------------------------------------------------
-# Fired once per registered permanent on any battlefield, after the land's own
-# mana is added: (game, tapping_player_index, land, produced_symbol,
-# source_permanent, source_controller_index).
-
-ManaProductionHook = Callable[["Game", int, "Permanent", str, "Permanent", int], None]
-
-
-def _land_has_type(land: Permanent, land_type: str) -> bool:
-    """Whether the land currently has a basic land type — printed, or made so
-    by a layer-4 type-changing effect."""
-    return land.has_type(land_type)
-
-
-def _mana_flare(game: Game, tapping_index: int, land: Permanent, symbol: str,
-                source: Permanent, source_index: int) -> None:
-    # "Whenever a player taps a land for mana, that player adds one mana of any
-    # type that land produced." — modeled as one extra of the produced symbol.
-    player = game.players[tapping_index]
-    player.mana_pool[symbol] = player.mana_pool.get(symbol, 0) + 1
-
-
-def _gauntlet_of_might(game: Game, tapping_index: int, land: Permanent, symbol: str,
-                       source: Permanent, source_index: int) -> None:
-    # "Whenever a Mountain is tapped for mana, its controller adds {R}."
-    if _land_has_type(land, "mountain"):
-        player = game.players[tapping_index]
-        player.mana_pool["R"] = player.mana_pool.get("R", 0) + 1
-
-
-# --------------------------------------------------------------------------
-# "Becomes tapped" triggers (CR 701.26a)
-# --------------------------------------------------------------------------
-# Fired by Game.tap_permanent for every permanent that changes from untapped to
-# tapped — any cause, not just being tapped for mana. Signature:
-# (game, source_permanent, tapped_permanent).
-
-BecomesTappedHook = Callable[["Game", "Permanent", "Permanent"], None]
-
-
-def _lifetap(game: Game, source: Permanent, tapped: Permanent) -> None:
-    # "Whenever a Forest an opponent controls becomes tapped, you gain 1 life."
-    # Registered here rather than on the tapped-for-mana path: the card says
-    # *becomes tapped*, so an opponent's Forest tapped by Icy Manipulator counts
-    # just as much as one tapped for mana.
-    #
-    # Still name-keyed because the compiler does not parse this trigger at all
-    # (Lifetap compiles to zero triggered abilities). Once the parser produces a
-    # becomes_tapped condition, this moves onto engine/events.py and the entry
-    # disappears.
-    controller_index = game.controller_index_of(source)
-    tapped_controller = game.controller_index_of(tapped)
-    if controller_index is None or tapped_controller is None:
-        return
-    if tapped_controller != controller_index and tapped.has_type("forest"):
-        game._gain_life(game.players[controller_index], 1, "Lifetap")
-
-
-ON_BECOMES_TAPPED: dict[str, BecomesTappedHook] = {
-    "Lifetap": _lifetap,
-}
-
-
-MANA_PRODUCTION_MODIFIERS: dict[str, ManaProductionHook] = {
-    "Mana Flare": _mana_flare,
-    "Gauntlet of Might": _gauntlet_of_might,
-}
+# Mana Flare, Gauntlet of Might and Lifetap were three name-keyed entries here,
+# across two registries (MANA_PRODUCTION_MODIFIERS and ON_BECOMES_TAPPED). All
+# three are templates the compiler now reads:
+#
+#   "Whenever a <type> [an opponent controls] becomes tapped, …" compiles to a
+#   `permanent_becomes_tapped` condition carrying the type and the controller
+#   scope as payload, dispatched by engine/events.py.
+#   "Whenever a [<land type>] is tapped for mana, <player> adds …" compiles to
+#   `land_tapped_for_mana` plus an `add_mana_for_tapped_land` instruction,
+#   resolved inline by Game.tap_land_for_mana (CR 605.4a — a triggered mana
+#   ability never uses the stack).
+#
+# A card printed with either template needs no registration at all.
 
 
 # --------------------------------------------------------------------------

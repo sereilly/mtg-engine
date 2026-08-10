@@ -239,8 +239,8 @@ adding entries, not editing dispatch**:
 - `engine/cast_restrictions.py` — text-keyed "cast this spell only during..."
   timing gates (an ordered predicate table; genuinely textual, not per-card).
 - `engine/card_hooks.py` — name-keyed registries for truly bespoke behavior
-  (spell-cast triggers, leave-battlefield effects, untap-step restrictions,
-  draw-step modifiers, mana-production modifiers, cost-tax modifiers).
+  (spell-resolved and counterspell riders, leave-battlefield effects,
+  draw-step modifiers, the Aura on a land tapped for mana).
   **This is the only sanctioned place to reference a card by name**; do not put
   card names anywhere else in the engine (a few single-card exceptions are
   marked `# TODO(card-hooks)` — migrate them if a second card needs the shape).

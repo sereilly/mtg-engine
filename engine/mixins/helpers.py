@@ -3,8 +3,9 @@ from __future__ import annotations
 import re
 from typing import Iterator
 
-from ..card_hooks import ON_BECOMES_TAPPED, ON_LEAVE_BATTLEFIELD
+from ..card_hooks import ON_LEAVE_BATTLEFIELD
 from ..auras import detach_aura
+from ..events import emit
 from ..models import CardDefinition, Permanent, PlayerState
 from ..oracle import compile_card_oracle
 from ..replacements import apply_replacements
@@ -423,14 +424,17 @@ class GameHelpersMixin:
         permanent_state.py deliberately does not come through here. Neither does
         re-tapping something already tapped: CR 701.26a, "only untapped
         permanents can be tapped", so there is no state change and no trigger.
+
+        The triggers go on the stack (CR 603.3). A "becomes tapped" trigger is
+        not a mana ability — CR 605.1b requires that one *could add mana*, and
+        605.5a says an ability that triggers on anything else follows the normal
+        rules — so it may not resolve inline, which is what Lifetap's name-keyed
+        hook used to do.
         """
         if permanent.tapped:
             return False
         permanent.tapped = True
-        for source in self.all_permanents():
-            hook = ON_BECOMES_TAPPED.get(source.card.name)
-            if hook is not None:
-                hook(self, source, permanent)
+        emit(self, "permanent_becomes_tapped", subject=permanent)
         return True
 
     def all_permanents(self) -> "Iterator[Permanent]":

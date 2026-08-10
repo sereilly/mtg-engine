@@ -1376,7 +1376,78 @@ def test_lifetap_gains_life_when_opponent_forest_tapped(all_cards):
     ok = game.tap_land_for_mana(1, "Forest")
 
     assert ok
+    # The trigger uses the stack (CR 605.5a — it gains life, so it is not a
+    # mana ability), so the life arrives when it resolves, not at fire time.
+    assert p1.life == 20
+    game.resolve_stack()
     assert p1.life == 21
+
+
+def test_lifetap_gains_life_when_an_opponents_forest_attacks(all_cards):
+    """"Becomes tapped" is the event, not "tapped for mana".
+
+    An animated Forest (Living Lands) tapping to attack is the same transition,
+    and the trigger has to see it. This is a *different route into
+    Game.become_tapped* than the mana one the card's other tests use — the bug
+    the choke point was built for was exactly a trigger wired into one route.
+    """
+    lifetap = _get(all_cards, "Lifetap")
+    living_lands = _get(all_cards, "Living Lands")
+    forest = Permanent(card=_get(all_cards, "Forest"))
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=lifetap)], life=20)
+    p2 = PlayerState(
+        name="P2", battlefield=[Permanent(card=living_lands), forest], life=20
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.start_turn(1)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # beginning_of_combat
+    game.advance_combat_phase()  # declare_attackers
+    forest.metadata["summoning_sickness_turn"] = -99
+    game._refresh_dynamic_creatures()
+    assert forest.is_creature, "Living Lands must animate the Forest for this route"
+
+    declared, _ = game.declare_attackers(1, [1])
+
+    assert declared
+    assert forest.tapped
+    game.resolve_stack()
+    assert p1.life == 21
+
+
+def test_lifetap_reads_the_current_forest_type_not_the_printed_one(all_cards):
+    """A Plains turned into a Forest by Magical Hack IS a Forest (CR 613 layer
+    4), so tapping it triggers Lifetap — and the printed Forest it replaced no
+    longer does."""
+    lifetap = _get(all_cards, "Lifetap")
+    plains = Permanent(card=_get(all_cards, "Plains"))
+    plains.metadata["land_type_override"] = "forest"
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=lifetap)], life=20)
+    p2 = PlayerState(name="P2", battlefield=[plains], life=20)
+    game = Game(players=[p1, p2])
+
+    assert game.tap_land_for_mana(1, "Plains")
+    game.resolve_stack()
+
+    assert p1.life == 21
+
+
+def test_mana_flare_gives_the_extra_mana_to_the_player_who_tapped(all_cards):
+    """"That player" is the one who tapped the land, not Mana Flare's
+    controller."""
+    mana_flare = _get(all_cards, "Mana Flare")
+    mountain = _get(all_cards, "Mountain")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=mana_flare)])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=mountain)])
+    game = Game(players=[p1, p2])
+
+    assert game.tap_land_for_mana(1, "Mountain")
+
+    assert p2.mana_pool["R"] == 2
+    assert p1.mana_pool.get("R", 0) == 0
 
 
 def test_living_artifact_upkeep_removes_counter_and_gains_life(all_cards):

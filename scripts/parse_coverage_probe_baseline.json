@@ -641,18 +641,6 @@
   ]
  },
  {
-  "card": "Lifetap",
-  "clause": "whenever a forest an opponent controls becomes tapped, you gain 1 life",
-  "ignored": [
-   "whenever",
-   "forest",
-   "opponent",
-   "controls",
-   "becomes",
-   "tapped,"
-  ]
- },
- {
   "card": "Lightning Bolt",
   "clause": "lightning bolt deals 3 damage to any target",
   "ignored": [

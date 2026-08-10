@@ -1829,6 +1829,62 @@ def test_every_executed_upkeep_trigger_lands_on_a_pair_something_dispatches(cata
 
 
 # ---------------------------------------------------------------------------
+# Trigger conditions the grammar reads (land-tapping family)
+#
+# The same guard as the upkeep pair above, for the other trigger family the
+# engine dispatches outside EFFECT_HANDLERS. ``Game.tap_land_for_mana`` runs
+# `land_tapped_for_mana` triggers by hand — it must, because a triggered mana
+# ability may not use the stack (CR 605.4a) — so an instruction kind it does
+# not name compiles cleanly, reports supported, and never runs.
+#
+# `permanent_becomes_tapped` is the opposite case and is checked the other way
+# round: it goes through the event bus onto the stack, so what it needs is an
+# applicability filter (or every "whenever a <thing> becomes tapped" card fires
+# on every tap) and a registered handler for its effect.
+# ---------------------------------------------------------------------------
+
+_LAND_TAPPED_FIRE_SITE_KINDS = frozenset({
+    "add_mana_for_tapped_land",   # Mana Flare, Gauntlet of Might
+    "deal_damage",                # Manabarbs
+})
+
+
+def test_every_land_tapped_for_mana_trigger_lands_on_a_kind_the_fire_site_runs(catalog):
+    from engine.oracle import compile_card_oracle
+
+    undispatched = []
+    for card in catalog:
+        for trig in compile_card_oracle(card).triggered_abilities:
+            if trig.condition.kind != "land_tapped_for_mana" or trig.instruction is None:
+                continue
+            if trig.instruction.kind not in _LAND_TAPPED_FIRE_SITE_KINDS:
+                undispatched.append(f"{card.name}: {trig.instruction.kind}")
+
+    assert not undispatched, (
+        "tap_land_for_mana dispatches these triggers by instruction kind and "
+        "silently skips any kind it does not name:\n" + "\n".join(undispatched)
+    )
+
+
+def test_every_becomes_tapped_trigger_has_a_filter_and_a_handler(catalog):
+    from engine.events import EVENT_FILTERS
+    from engine.handlers import EFFECT_HANDLERS
+    from engine.oracle import compile_card_oracle
+
+    problems = []
+    for card in catalog:
+        for trig in compile_card_oracle(card).triggered_abilities:
+            if trig.condition.kind != "permanent_becomes_tapped" or trig.instruction is None:
+                continue
+            if trig.condition.kind not in EVENT_FILTERS:
+                problems.append(f"{card.name}: no event filter, so it fires on every tap")
+            if trig.instruction.kind not in EFFECT_HANDLERS:
+                problems.append(f"{card.name}: no handler for {trig.instruction.kind}")
+
+    assert not problems, "\n".join(problems)
+
+
+# ---------------------------------------------------------------------------
 # End-to-end: the lowerings above, resolved against real game state
 #
 # A payload golden proves the grammar emits what the legacy rules emitted. It

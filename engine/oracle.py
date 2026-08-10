@@ -124,7 +124,6 @@ SUPPORTED_SPELL_PATTERNS = (
     "draw a card",
     "add three mana of any one color",
     "at the beginning of your upkeep, sacrifice this enchantment unless you pay",
-    "whenever a player taps a land for mana, that player adds one mana of any type that land produced",
     "this artifact becomes a 3/6 golem artifact creature until end of combat",
     "create a 1/1 colorless insect artifact creature token with flying named wasp",
     "enchant wall",
@@ -191,6 +190,19 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("creature_dealt_damage_by_self_dies",  r"whenever a creature dealt damage by this creature this turn dies"),
     ("enchanted_land_tapped",       r"whenever enchanted land becomes tapped"),
     ("self_becomes_tapped",         r"whenever this land becomes tapped"),
+    # "Whenever a Forest an opponent controls becomes tapped" (Lifetap). The
+    # type and the controller scope are named groups, so the restriction
+    # arrives as condition-payload data and one dispatcher
+    # (engine/events.py::_becomes_tapped_filter) covers every card written this
+    # way. Must follow the two specific forms above, which name their subject
+    # ("enchanted land", "this land") rather than quantifying it.
+    ("permanent_becomes_tapped",
+     r"whenever an? (?P<tapped_subtype>[a-z]+)"
+     r"(?: (?P<tapped_controller>an opponent controls|you control))? becomes tapped"),
+    # "Whenever a Mountain is tapped for mana" (Gauntlet of Might) narrows the
+    # same condition to one land type; the unnarrowed "whenever a player taps a
+    # land for mana" (Manabarbs, Mana Flare) follows it.
+    ("land_tapped_for_mana",        r"whenever a (?P<tapped_land_subtype>[a-z]+) is tapped for mana"),
     ("land_tapped_for_mana",        r"whenever a player taps a land for mana"),
     # A colour-narrowed cast trigger (the Rod/Cup/Sphere cycle). The colour is
     # captured into the condition payload so one dispatcher covers every card

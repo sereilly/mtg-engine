@@ -243,6 +243,7 @@ class TestLifetap:
         game = _game(p1, p2)
 
         game.tap_land_for_mana(1, "Forest")  # opponent taps their Forest
+        game.resolve_stack()  # the trigger uses the stack (CR 605.5a)
 
         assert p1.life == 21
 
@@ -254,6 +255,7 @@ class TestLifetap:
         game = _game(p1, p2)
 
         game.tap_land_for_mana(0, "Forest")  # the controller's own Forest
+        game.resolve_stack()
 
         assert p1.life == 20  # only an opponent's Forest triggers it
 

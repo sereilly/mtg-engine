@@ -192,6 +192,45 @@ def _opponent_cast_filter(
     return game.players.index(_controller_of(game, permanent)) != caster_index
 
 
+# The controller clause of a "whenever a <filter> becomes tapped" condition, as
+# the legacy trigger table captures it, mapped to whose permanents qualify.
+# Absent means any player's.
+_TAPPED_CONTROLLER_SCOPES = {
+    "an opponent controls": "opponent",
+    "you control": "you",
+}
+
+
+@event_filter("permanent_becomes_tapped")
+def _becomes_tapped_filter(
+    game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
+) -> bool:
+    """"Whenever a Forest an opponent controls becomes tapped …" (Lifetap).
+
+    Both halves of the restriction are read from the trigger's own parsed
+    condition — the type the tapped permanent must have, and whose it must be —
+    so one dispatcher covers every card written this way and no card name
+    appears here. ``has_type`` rather than the printed type line, so a land made
+    a Forest by Magical Hack counts (CR 613 layer 4).
+    """
+    tapped = event.subject
+    if tapped is None or not hasattr(tapped, "tapped"):
+        return False
+    subtype = trig.condition.payload.get("tapped_subtype")
+    if subtype and not tapped.has_type(str(subtype)):
+        return False
+    scope = _TAPPED_CONTROLLER_SCOPES.get(trig.condition.payload.get("tapped_controller"))
+    if scope is None:
+        return True
+    observer = game.players.index(_controller_of(game, permanent))
+    tapped_controller = game.controller_index_of(tapped)
+    if tapped_controller is None:
+        return False
+    if scope == "opponent":
+        return tapped_controller != observer
+    return tapped_controller == observer
+
+
 def _controller_of(game: Game, permanent: Permanent) -> PlayerState:
     for player in game.players:
         if permanent in player.battlefield:

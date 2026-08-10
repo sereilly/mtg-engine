@@ -10,7 +10,7 @@ unclaimed text. Do not edit by hand.
 - Fully claimed: **386**
 - With acknowledged simplifications: **2**
 - With UNCLAIMED text (must fix or acknowledge): **0**
-- With deletion-probe findings (ignored words): **95**
+- With deletion-probe findings (ignored words): **94**
 
 ## Acknowledged simplifications
 
@@ -81,7 +81,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Lich | `if you can't, you lose the game` | if can't, |
 | Lich | `when this enchantment is put into a graveyard from the battlefield, yo` | when enchantment put into graveyard from battlefield, |
 | Lifelace | `target spell or permanent becomes green` | target spell or permanent |
-| Lifetap | `whenever a forest an opponent controls becomes tapped, you gain 1 life` | whenever forest opponent controls becomes tapped, |
 | Lightning Bolt | `lightning bolt deals 3 damage to any target` | lightning bolt any target |
 | Living Artifact | `if you do, you gain 1 life` | if do, |
 | Lord of the Pit | `sacrifice a creature other than this creature. if you can't, this crea` | if can't, |
@@ -132,16 +131,16 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 
 | Channel | Sentences claimed |
 | --- | --- |
-| parse rule | 292 |
+| parse rule | 294 |
 | activation cost | 113 |
-| trigger table | 75 |
+| trigger table | 78 |
 | keyword table | 56 |
 | static-line table | 45 |
 | aura enchant noun (oracle_instructions attach) | 44 |
 | mixin text scan | 32 |
 | aura static (oracle_instructions/permanent_state) | 31 |
 | activation gate (stack/activation) | 15 |
-| card_hooks bespoke (name-keyed) | 9 |
+| card_hooks bespoke (name-keyed) | 7 |
 | cast_restrictions.py | 5 |
 | untap_restrictions.py | 5 |
 | ante boilerplate (deck construction, not gameplay) | 4 |

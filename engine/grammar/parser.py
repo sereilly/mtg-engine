@@ -822,6 +822,52 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
     return ast.AddMana((), any_color=amount, source_text=_clause())
 
 
+def _parse_player_adds_mana(
+    stream: TokenStream, recipient: ast.PlayerRef
+) -> ast.AddManaForTappedLand:
+    """``<player> adds an additional {R}`` / ``<player> adds one mana of any type
+    that land produced`` — the effect half of a triggered mana ability on a land
+    being tapped (Gauntlet of Might, Mana Flare).
+
+    Distinct from :func:`_parse_add_mana`, whose bare "Add {G}" always means the
+    ability's own controller. Here the subject is a *player reference* bound by
+    the trigger, so the mana can land in someone else's pool, and "any type that
+    land produced" names a quantity no pip list can express.
+    """
+    stream.expect_word("adds", "add")
+    additional = bool(stream.accept_phrase("an", "additional"))
+
+    pips: dict[str, int] = {}
+    while stream.at_kind(MANA):
+        token = stream.next()
+        symbol = token.text.strip("{}")
+        if symbol.isdigit() or symbol in ("T", "Q", "X"):
+            raise stream.error(f"unsupported mana symbol {token.text!r}")
+        pips[symbol] = pips.get(symbol, 0) + 1
+    if pips:
+        return ast.AddManaForTappedLand(
+            recipient, pips=tuple(sorted(pips.items())), additional=additional
+        )
+
+    # "one mana of any type that land produced". Every word is read: "any type
+    # **that land** produced" is what ties the mana to the land the trigger
+    # names, and a production that skipped the tail would read the same as an
+    # unrestricted "one mana of any type" — a strictly larger effect.
+    count = parse_amount(stream)
+    stream.expect_word("mana")
+    stream.expect_word("of")
+    stream.expect_word("any")
+    stream.expect_word("type")
+    if not stream.accept_phrase("that", "land", "produced"):
+        raise stream.error("expected 'that land produced'")
+    amount = count.value if isinstance(count, ast.Fixed) else 0
+    if amount <= 0:
+        raise stream.error("expected a fixed amount of mana")
+    return ast.AddManaForTappedLand(
+        recipient, of_type_produced=amount, additional=additional
+    )
+
+
 def _parse_mana_payment(stream: TokenStream, *, allow_variable: bool = False) -> ast.ManaCost:
     """The mana half of "you may pay {1}" / "unless its controller pays {X}".
 
@@ -1241,6 +1287,8 @@ def _parse_subject_verb(stream: TokenStream) -> ast.Statement:
             return _parse_loses(stream, source_spec)
         if token.text in ("has", "have"):
             return _parse_has(stream, source_spec)
+        if token.text in ("adds", "add") and isinstance(source_spec, ast.PlayerRef):
+            return _parse_player_adds_mana(stream, source_spec)
         if token.text in ("draws", "draw") and isinstance(source_spec, ast.PlayerRef):
             return _parse_draw(stream, source_spec)
         if token.text in ("discards", "discard") and isinstance(source_spec, ast.PlayerRef):
@@ -1528,6 +1576,40 @@ def _split_on_colon(tokens: tuple) -> int | None:
     return None
 
 
+def _parse_quantified_tap_event(stream: TokenStream) -> ast.TriggerEvent | None:
+    """"Whenever **a Forest an opponent controls** becomes tapped" (Lifetap) /
+    "Whenever **a Mountain** is tapped for mana" (Gauntlet of Might).
+
+    The two tapping events whose subject is *quantified* rather than named. The
+    literal phrases in ``_WHENEVER_EVENTS`` cover the named subjects ("enchanted
+    land", "this land", "a player taps a land"); here the subject is a noun
+    phrase, so it is parsed and carried on the event instead of being spelled
+    out once per printed land type.
+
+    Tried only after that table, which is what keeps "whenever enchanted land
+    becomes tapped" reading as ``enchanted_land_tapped``: ``parse_target_spec``
+    would happily claim "enchanted land" as a quantified subject and name a
+    condition the legacy table does not, which is precisely the disagreement
+    ``test_every_executed_trigger_agrees_with_the_legacy_condition_table``
+    exists to catch.
+    """
+    mark = stream.mark()
+    spec = parse_target_spec(stream)
+    # Only the indefinite "a <filter>" reading. "each"/"all"/"target" would be a
+    # different event, and "this"/"enchanted" belong to the table above.
+    if spec is not None and spec.quantifier == "a" and spec.filter is not None:
+        if stream.accept_phrase("becomes", "tapped"):
+            return ast.TriggerEvent(
+                "permanent_becomes_tapped", "whenever", subject=spec.filter
+            )
+        if stream.accept_phrase("is", "tapped", "for", "mana"):
+            return ast.TriggerEvent(
+                "land_tapped_for_mana", "whenever", subject=spec.filter
+            )
+    stream.reset(mark)
+    return None
+
+
 def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
     if stream.accept_word("whenever"):
         # "…casts a *blue* spell" (the Rod/Cup/Sphere cycle). The colour is part
@@ -1547,7 +1629,7 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
         for kind, phrase in _WHENEVER_EVENTS:
             if stream.accept_phrase(*phrase):
                 return ast.TriggerEvent(kind, "whenever")
-        return None
+        return _parse_quantified_tap_event(stream)
     if stream.accept_word("at"):
         for kind, phrase in _AT_EVENTS:
             if stream.accept_phrase(*phrase):

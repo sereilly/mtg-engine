@@ -290,6 +290,103 @@ def test_605_4a_triggered_mana_ability_does_not_use_the_stack():
     assert p1.mana_pool.get("G", 0) == 2
 
 
+@pytest.mark.cr("605.1b", "605.4a")
+def test_605_1b_mana_flare_is_a_triggered_mana_ability():
+    """"Whenever a player taps a land for mana, that player adds one mana of any
+    type that land produced." All three of 605.1b's criteria hold — no target,
+    it triggers from an activated mana ability, and it could add mana — so it is
+    a mana ability and never uses the stack (605.4a).
+
+    Its mana is one more of whatever the land just produced, so the type is read
+    from the event rather than written on the card.
+    """
+    mana_flare = _mk_card(
+        "Mana Flare", "{2}{R}", "Enchantment",
+        "Whenever a player taps a land for mana, that player adds one mana of "
+        "any type that land produced.",
+        colors=("R",),
+    )
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=mana_flare)])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=_mountain())])
+    game = Game(players=[p1, p2])
+
+    game.tap_land_for_mana(1, "Mountain")
+
+    assert game.stack == []
+    # The mana goes to "that player" — the one who tapped the land, not the
+    # enchantment's controller.
+    assert p2.mana_pool.get("R", 0) == 2
+    assert p1.mana_pool.get("R", 0) == 0
+
+
+@pytest.mark.cr("605.1b", "605.4a")
+def test_605_1b_gauntlet_of_might_adds_its_mana_only_for_the_named_land_type():
+    """"Whenever a Mountain is tapped for mana, its controller adds an
+    additional {R}." Also a mana ability by 605.1b, so also inline — but its
+    trigger condition names a land type, and a land that is not one must not
+    trigger it."""
+    gauntlet = _mk_card(
+        "Gauntlet of Might", "{4}", "Artifact",
+        "Red creatures get +1/+1.\nWhenever a Mountain is tapped for mana, "
+        "its controller adds an additional {R}.",
+    )
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[
+            Permanent(card=gauntlet),
+            Permanent(card=_mountain()),
+            Permanent(card=_forest()),
+        ],
+    )
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    game.tap_land_for_mana(0, "Mountain")
+    game.tap_land_for_mana(0, "Forest")
+
+    assert game.stack == []
+    assert p1.mana_pool.get("R", 0) == 2   # {R} from the Mountain plus the extra
+    assert p1.mana_pool.get("G", 0) == 1   # the Forest is not a Mountain
+
+
+# ---------------------------------------------------------------------------
+# Rule 605.5a — a trigger on an event other than a mana ability, or one that
+# cannot add mana, is NOT a mana ability
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("605.5a", "603.3")
+def test_605_5a_a_becomes_tapped_life_trigger_uses_the_stack():
+    """Lifetap's shape: "Whenever a Forest an opponent controls becomes tapped,
+    you gain 1 life."
+
+    It fails 605.1b twice over — it triggers on *becoming tapped* rather than on
+    a mana ability, and it could never add mana — so 605.5a puts it under the
+    normal rules for triggered abilities: it goes on the stack (603.3) and its
+    life arrives only when it resolves.
+
+    That distinction is the whole point of testing it beside Mana Flare: the two
+    fire from the same tap and must not share a resolution model.
+    """
+    lifetap = _mk_card(
+        "Lifetap", "{1}{G}", "Enchantment",
+        "Whenever a Forest an opponent controls becomes tapped, you gain 1 life.",
+        colors=("G",),
+    )
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=lifetap)], life=20)
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=_forest())], life=20)
+    game = Game(players=[p1, p2])
+
+    game.tap_land_for_mana(1, "Forest")
+
+    assert len(game.stack) == 1, "a non-mana trigger must wait on the stack"
+    assert p1.life == 20
+
+    game.resolve_stack()
+
+    assert p1.life == 21
+
+
 # ---------------------------------------------------------------------------
 # Rule 605.5 — Spells are never mana abilities
 # ---------------------------------------------------------------------------

@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 import re
 
-from ..card_hooks import ENCHANTED_LAND_TAPPED_FOR_MANA, MANA_PRODUCTION_MODIFIERS
+from ..card_hooks import ENCHANTED_LAND_TAPPED_FOR_MANA
 from ..game_types import SimulationResult
 from ..oracle import compile_card_oracle
 from ..trigger_utils import iter_triggered_abilities
@@ -245,12 +245,6 @@ class TurnManagementMixin:
                 mana_symbol = symbols[0]
         player.mana_pool[mana_symbol] = player.mana_pool.get(mana_symbol, 0) + 1
 
-        for source_index, source_player in enumerate(self.players):
-            for perm in source_player.battlefield:
-                hook = MANA_PRODUCTION_MODIFIERS.get(perm.card.name)
-                if hook is not None:
-                    hook(self, player_index, land, mana_symbol, perm, source_index)
-
         self.log.append(f"{player.name} tapped {land_name} for mana")
 
         # An Aura enchanting this land may have bespoke "when tapped for mana"
@@ -294,14 +288,37 @@ class TurnManagementMixin:
                 player.mana_pool[extra] = player.mana_pool.get(extra, 0) + 1
                 self.log.append(f"{attached_aura.card.name}: {player.name} added an additional {{{extra}}}")
 
-        # "Whenever a player taps a land for mana" triggers (Manabarbs, Psychic
-        # Venom). These deliberately resolve inline rather than on the stack: a land is
-        # tapped for mana mid-cost-payment, before the spell being paid for is even on
-        # the stack, so enqueuing here would order the trigger under that spell. Stack
-        # routing would require deferring these across the cost-payment/cast boundary.
+        # "Whenever a player taps a land for mana" triggers (Manabarbs,
+        # Mana Flare, Gauntlet of Might). The last two were name-keyed
+        # MANA_PRODUCTION_MODIFIERS hooks fired further up this method; their
+        # triggers now compile like any other, so they arrive here.
+        #
+        # The mana ones are triggered *mana* abilities (CR 605.1b: no target,
+        # triggered by an activated mana ability, and they could add mana), so
+        # CR 605.4a says they never use the stack — inline is what the rules
+        # require, not a shortcut.
+        #
+        # Manabarbs' damage is not a mana ability and by the rules would use the
+        # stack; it resolves inline because a land is tapped for mana
+        # mid-cost-payment, before the spell being paid for is even on the
+        # stack, so enqueuing here would order the trigger *under* that spell.
+        # Stack routing would require deferring these across the
+        # cost-payment/cast boundary.
         for _idx, perm, trig in iter_triggered_abilities(
             self, condition_kinds={"land_tapped_for_mana"}, first_match_only=False
         ):
+            # "Whenever a **Mountain** is tapped for mana" — the narrowing rides
+            # the condition's payload, so the land type is data rather than a
+            # per-card hook. has_type, so a land made a Mountain by a layer-4
+            # effect counts.
+            subtype = trig.condition.payload.get("tapped_land_subtype")
+            if subtype and not land.has_type(str(subtype)):
+                continue
+            if trig.instruction.kind == "add_mana_for_tapped_land":
+                self._add_triggered_land_mana(
+                    trig.instruction, player_index, land, mana_symbol, perm
+                )
+                continue
             amount = int(trig.instruction.payload.get("amount", 1))
             self._deal_damage_to_player(
                 player, amount, source=perm,
@@ -311,3 +328,47 @@ class TurnManagementMixin:
             )
 
         return True
+
+    def _add_triggered_land_mana(
+        self,
+        instruction,
+        tapping_player_index: int,
+        land,
+        produced_symbol: str,
+        source,
+    ) -> None:
+        """Resolve an ``add_mana_for_tapped_land`` instruction (Mana Flare,
+        Gauntlet of Might).
+
+        ``recipient`` names the clause's own subject. "That player" (the player
+        who tapped the land) and "its controller" (the land's controller) are
+        the same seat here, because a player may only tap lands they control —
+        but they are resolved separately rather than assumed equal, so a future
+        card that separates them does not silently pay the wrong player.
+        """
+        recipient = str(instruction.payload.get("recipient", "that_player"))
+        if recipient == "land_controller":
+            seat = self.controller_index_of(land)
+            if seat is None:
+                seat = tapping_player_index
+        else:
+            seat = tapping_player_index
+        player = self.players[seat]
+
+        added: list[str] = []
+        for symbol, count in instruction.payload.get("pips", ()):  # "an additional {R}"
+            player.mana_pool[symbol] = player.mana_pool.get(symbol, 0) + int(count)
+            added.append(f"{{{symbol}}}" * int(count))
+        # "One mana of any type that land produced" — the type is whatever the
+        # land just made, which is why it cannot be written as pips.
+        produced = int(instruction.payload.get("of_type_produced", 0))
+        if produced:
+            player.mana_pool[produced_symbol] = (
+                player.mana_pool.get(produced_symbol, 0) + produced
+            )
+            added.append(f"{{{produced_symbol}}}" * produced)
+        if added:
+            extra = " an additional" if instruction.payload.get("additional") else ""
+            self.log.append(
+                f"{source.card.name}: {player.name} added{extra} {''.join(added)}"
+            )

@@ -125,6 +125,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "reanimate_creature": "zones",
     "bounce_target_creature": "zones",
     "add_mana_from_text": "mana",
+    # A triggered *mana* ability on a land being tapped (CR 605.1b): resolved
+    # inline by Game.tap_land_for_mana, not through EFFECT_HANDLERS on the
+    # stack, because CR 605.4a says a triggered mana ability never uses it.
+    "add_mana_for_tapped_land": "mana",
     "create_token": "tokens",
     # Optional actions. Parsed and lowered, not switched on — see _WRAPPER_KINDS.
     "may": "optional",
@@ -1301,6 +1305,53 @@ def _lower_add_mana(node: ast.AddMana) -> tuple[OracleInstruction, ...]:
     )
 
 
+# Which player the mana goes to, from the clause's own subject. Both spellings
+# name the same seat in this engine — a player can only tap lands they control,
+# so the tapping player *is* the land's controller — but they are different
+# referents on the card and the handler resolves each one by name rather than
+# assuming they coincide.
+_TAPPED_LAND_MANA_RECIPIENTS = {
+    "that_player": "that_player",   # Mana Flare: "that player"
+    "controller": "land_controller",  # Gauntlet of Might: "its controller"
+}
+
+
+def _lower_add_mana_for_tapped_land(
+    node: ast.AddManaForTappedLand, event: str | None
+) -> tuple[OracleInstruction, ...]:
+    """Mana Flare / Gauntlet of Might's mana, as one parameterised instruction.
+
+    ``add_mana_for_tapped_land`` is resolved inline by
+    ``Game.tap_land_for_mana`` rather than through the stack, which is what
+    CR 605.4a requires of a triggered mana ability.
+
+    The event is checked rather than assumed. "That player" and "any type that
+    land produced" are bound by the trigger, so under any other condition there
+    is no land and no tapping player for the handler to read — it would add
+    mana of an arbitrary type to an arbitrary seat. Refusing here keeps the
+    clause unclaimed and visible instead.
+    """
+    if event != "land_tapped_for_mana":
+        raise LoweringError(
+            "'that land'/'that player' are bound by a land_tapped_for_mana "
+            f"trigger; {event!r} binds neither",
+            node=node,
+        )
+    recipient = _TAPPED_LAND_MANA_RECIPIENTS.get(node.recipient.kind)
+    if recipient is None:
+        raise LoweringError(
+            f"no tapped-land mana recipient for {node.recipient.kind!r}", node=node
+        )
+    payload: dict[str, object] = {"recipient": recipient}
+    if node.pips:
+        payload["pips"] = node.pips
+    if node.of_type_produced:
+        payload["of_type_produced"] = node.of_type_produced
+    if node.additional:
+        payload["additional"] = True
+    return (OracleInstruction("add_mana_for_tapped_land", "", payload),)
+
+
 def _title(words: str) -> str:
     """Title-case a lexed vocabulary word, preserving multiword entries."""
     return " ".join(part.capitalize() for part in words.split())
@@ -1585,6 +1636,8 @@ def lower_statement(
         return _lower_draw(statement)
     if isinstance(statement, ast.AddMana):
         return _lower_add_mana(statement)
+    if isinstance(statement, ast.AddManaForTappedLand):
+        return _lower_add_mana_for_tapped_land(statement, event)
     if isinstance(statement, ast.CreateToken):
         return _lower_create_token(statement)
 

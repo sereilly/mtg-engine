@@ -721,6 +721,27 @@ def test_gauntlet_of_might_mountain_tap_grants_extra_red(all_cards):
     assert p1.mana_pool.get("R", 0) == 2
 
 
+def test_gauntlet_of_might_does_not_grant_red_for_a_non_mountain(all_cards):
+    """The trigger names a Mountain, so tapping any other land must add nothing.
+
+    The land type rides the trigger condition's payload rather than a per-card
+    hook, and a condition that ignored it would read as "whenever a land is
+    tapped for mana" — a strictly larger effect on every board with a dual or a
+    basic of another type.
+    """
+    gauntlet = _get(all_cards, "Gauntlet of Might")
+    forest = _get(all_cards, "Forest")
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=gauntlet), Permanent(card=forest)])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    game.tap_land_for_mana(0, "Forest")
+
+    assert p1.mana_pool.get("G", 0) == 1
+    assert p1.mana_pool.get("R", 0) == 0
+
+
 def test_icy_manipulator_taps_target_creature(all_cards):
     icy = _get(all_cards, "Icy Manipulator")
     bear = _mk_card("Bear", "Creature — Bear")

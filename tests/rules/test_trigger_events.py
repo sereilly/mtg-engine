@@ -134,6 +134,53 @@ def test_emit_can_be_scoped_to_one_players_permanents():
     assert [event["source_permanent"] for event in events] == [mine]
 
 
+@pytest.mark.cr("603.3", "701.26a")
+def test_become_tapped_announces_the_event_on_the_bus():
+    """``Game.become_tapped`` is the single "becomes tapped" transition, and it
+    announces the event rather than calling a name-keyed hook.
+
+    Written with a synthetic card so it tests the wiring, not Lifetap: any card
+    whose text compiles to this condition fires here, which is the property that
+    made the hook deletable."""
+    watcher = Permanent(card=_card(
+        "Watcher",
+        "Whenever a Forest an opponent controls becomes tapped, you gain 1 life.",
+        type_line="Enchantment",
+    ))
+    forest = Permanent(card=_card("Forest", "", type_line="Basic Land — Forest"))
+    owner = PlayerState(name="P1", battlefield=[watcher], life=20)
+    opponent = PlayerState(name="P2", battlefield=[forest], life=20)
+    game = Game(players=[owner, opponent])
+
+    assert game.become_tapped(forest) is True
+    assert len(game.stack) == 1
+
+    game.resolve_stack()
+    assert owner.life == 21
+
+
+@pytest.mark.cr("603.3")
+def test_a_becomes_tapped_trigger_ignores_a_permanent_its_filter_excludes():
+    """The condition's own payload decides applicability — the type and the
+    controller scope both. Without the filter every such card would fire on
+    every tap on the board."""
+    watcher = Permanent(card=_card(
+        "Watcher",
+        "Whenever a Forest an opponent controls becomes tapped, you gain 1 life.",
+        type_line="Enchantment",
+    ))
+    own_forest = Permanent(card=_card("Forest", "", type_line="Basic Land — Forest"))
+    their_island = Permanent(card=_card("Island", "", type_line="Basic Land — Island"))
+    owner = PlayerState(name="P1", battlefield=[watcher, own_forest], life=20)
+    opponent = PlayerState(name="P2", battlefield=[their_island], life=20)
+    game = Game(players=[owner, opponent])
+
+    game.become_tapped(own_forest)     # right type, wrong controller
+    game.become_tapped(their_island)   # right controller, wrong type
+
+    assert game.stack == []
+
+
 @pytest.mark.cr("603.2")
 def test_event_payload_reaches_the_trigger_as_context():
     pinger = Permanent(card=_card(

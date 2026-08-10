@@ -45,6 +45,7 @@ EXAMPLE_TEXTS: dict[str, str] = {
     "creature_dealt_damage_by_self_dies": "whenever a creature dealt damage by this creature this turn dies",
     "enchanted_land_tapped": "whenever enchanted land becomes tapped",
     "self_becomes_tapped": "whenever this land becomes tapped",
+    "permanent_becomes_tapped": "whenever a forest an opponent controls becomes tapped",
     "land_tapped_for_mana": "whenever a player taps a land for mana",
     "spell_cast": "whenever a player casts a spell",
     "opponent_casts_spell": "whenever an opponent casts a spell",

@@ -16,12 +16,12 @@ Categories currently switched on: `combat_restrictions, counters, counterspells,
 
 | Set | Cards | Lines | Parsed | Lowered | Executed | Cards executing |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 388 | 74.0% | 72.4% | 37.9% | 138 |
-| LEB | 292 | 389 | 74.0% | 72.5% | 38.0% | 139 |
-| 2ED | 292 | 389 | 74.0% | 72.5% | 38.0% | 139 |
+| LEA | 290 | 388 | 74.7% | 73.2% | 38.7% | 140 |
+| LEB | 292 | 389 | 74.8% | 73.3% | 38.8% | 141 |
+| 2ED | 292 | 389 | 74.8% | 73.3% | 38.8% | 141 |
 | ARN | 78 | 108 | 62.0% | 56.5% | 35.2% | 31 |
-| 3ED | 296 | 389 | 73.8% | 71.0% | 37.3% | 135 |
-| **All** | **1248** | **1663** | **73.2%** | **71.1%** | **37.6%** | **582** |
+| 3ED | 296 | 389 | 74.3% | 71.5% | 37.8% | 137 |
+| **All** | **1248** | **1663** | **73.8%** | **71.7%** | **38.3%** | **590** |
 
 ## Backlog — failure reasons
 
@@ -29,8 +29,8 @@ Categories currently switched on: `combat_restrictions, counters, counterspells,
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 231 | 75 | expected a subject |  |
-| 99 | 28 | unrecognized effect verb |  |
+| 224 | 73 | expected a subject |  |
+| 95 | 27 | unrecognized effect verb |  |
 | 40 | 21 | unconsumed text |  |
 | 24 | 7 | granted ability in quotes | phase 3 (quoted abilities) |
 | 13 | 2 | modal line | phase 3 (modal production) |
@@ -57,7 +57,7 @@ Categories currently switched on: `combat_restrictions, counters, counterspells,
 
 ## Cards executing through the grammar
 
-582 cards, 626 lines.
+590 cards, 637 lines.
 
 - **Aladdin's Ring**
   - `{8}, {T}: This artifact deals 4 damage to any target.`
@@ -328,8 +328,11 @@ Categories currently switched on: `combat_restrictions, counters, counterspells,
   - `Whenever this creature is dealt damage, put a +1/+1 counter on it.`
 - **Gauntlet of Might**
   - `Red creatures get +1/+1.`
+  - `Whenever a Mountain is tapped for mana, its controller adds an additional {R}.`
   - `Red creatures get +1/+1.`
+  - `Whenever a Mountain is tapped for mana, its controller adds an additional {R}.`
   - `Red creatures get +1/+1.`
+  - `Whenever a Mountain is tapped for mana, its controller adds an additional {R}.`
 - **Giant Growth**
   - `Target creature gets +3/+3 until end of turn.`
   - `Target creature gets +3/+3 until end of turn.`
@@ -468,6 +471,11 @@ Categories currently switched on: `combat_restrictions, counters, counterspells,
   - `Target spell or permanent becomes green. (Mana symbols on that permanent remain unchanged.)`
   - `Target spell or permanent becomes green. (Mana symbols on that permanent remain unchanged.)`
   - `Target spell or permanent becomes green. (Mana symbols on that permanent remain unchanged.)`
+- **Lifetap**
+  - `Whenever a Forest an opponent controls becomes tapped, you gain 1 life.`
+  - `Whenever a Forest an opponent controls becomes tapped, you gain 1 life.`
+  - `Whenever a Forest an opponent controls becomes tapped, you gain 1 life.`
+  - `Whenever a Forest an opponent controls becomes tapped, you gain 1 life.`
 - **Lightning Bolt**
   - `Lightning Bolt deals 3 damage to any target.`
   - `Lightning Bolt deals 3 damage to any target.`
@@ -488,6 +496,11 @@ Categories currently switched on: `combat_restrictions, counters, counterspells,
   - `Other Merfolk get +1/+1 and have islandwalk. (They can't be blocked as long as defending player controls an Island.)`
   - `Other Merfolk get +1/+1 and have islandwalk. (They can't be blocked as long as defending player controls an Island.)`
   - `Other Merfolk get +1/+1 and have islandwalk. (They can't be blocked as long as defending player controls an Island.)`
+- **Mana Flare**
+  - `Whenever a player taps a land for mana, that player adds one mana of any type that land produced.`
+  - `Whenever a player taps a land for mana, that player adds one mana of any type that land produced.`
+  - `Whenever a player taps a land for mana, that player adds one mana of any type that land produced.`
+  - `Whenever a player taps a land for mana, that player adds one mana of any type that land produced.`
 - **Mana Vault**
   - `{T}: Add {C}{C}{C}.`
   - `{T}: Add {C}{C}{C}.`

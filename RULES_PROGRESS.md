@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**204 / 570 tracked rules covered (35%)** — 872 tests, 0 unannotated.
+**205 / 570 tracked rules covered (35%)** — 877 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -84,7 +84,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [615. Prevention Effects](#615-prevention-effects) | 7/13 | 53% |
 | [616. Interaction of Replacement and/or Prevention Effects](#616-interaction-of-replacement-andor-prevention-effects) | 2/2 | 100% |
 | [700. General](#700-general) | 0/15 | 0% |
-| [701. Keyword Actions](#701-keyword-actions) | 4/16 | 25% |
+| [701. Keyword Actions](#701-keyword-actions) | 5/16 | 31% |
 | [702. Keyword Abilities](#702-keyword-abilities) | 18/18 | 100% |
 | [703. Turn-Based Actions](#703-turn-based-actions) | 0/4 | 0% |
 | [704. State-Based Actions](#704-state-based-actions) | 4/8 | 50% |
@@ -652,7 +652,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **603.1** Triggered abilities have a trigger condition and an effect. They are written as “[When/Whenever/A... *(1 tests)*
 - [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(5 tests, subrules b)*
-- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(5 tests)*
+- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(8 tests)*
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(2 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(1 tests)*
 - [ ] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit...
@@ -675,11 +675,11 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 605. Mana Abilities
 
-- [x] **605.1** Some activated abilities and some triggered abilities are mana abilities, which are subject to sp... *(1 tests, subrules a)*
+- [x] **605.1** Some activated abilities and some triggered abilities are mana abilities, which are subject to sp... *(3 tests, subrules ab)*
 - [x] **605.2** A mana ability remains a mana ability even if the game state doesn’t allow it to produce mana. *(1 tests)*
 - [x] **605.3** Activating an activated mana ability follows the rules for activating any other activated ability... *(3 tests, subrules bc)*
-- [x] **605.4** Triggered mana abilities follow all the rules for other triggered abilities (see rule 603, “Handl... *(2 tests, subrules a)*
-- [x] **605.5** Abilities that don’t meet the criteria specified in rules 605.1a–b and spells aren’t mana abilities. *(2 tests, subrules b)*
+- [x] **605.4** Triggered mana abilities follow all the rules for other triggered abilities (see rule 603, “Handl... *(4 tests, subrules a)*
+- [x] **605.5** Abilities that don’t meet the criteria specified in rules 605.1a–b and spells aren’t mana abilities. *(3 tests, subrules ab)*
 
 ### 606. Loyalty Abilities
 
@@ -830,7 +830,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **701.21** Sacrifice
 - [ ] **701.23** Search
 - [ ] **701.24** Shuffle
-- [ ] **701.26** Tap and Untap
+- [x] **701.26** Tap and Untap *(1 tests, subrules a)*
 
 ### 702. Keyword Abilities
 
