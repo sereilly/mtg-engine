@@ -12,6 +12,22 @@ if TYPE_CHECKING:
     from ..oracle import OracleInstruction
 
 
+def _damage_reporter(game: Game, card, permanent):
+    """What a divided-damage site does once one creature's share is dealt: log
+    it and fire "dealt damage" triggers.
+
+    Handed to `_mark_damage_on_permanent` as its `then` rather than run after
+    it, because a damage event can stop to ask the affected player which effect
+    applies first — and while it waits, nothing has been dealt to report."""
+
+    def report(dealt: int) -> None:
+        game.log.append(f"{card.name} dealt {dealt} damage to {permanent.card.name}")
+        if dealt > 0 and permanent.damage_marked < permanent.effective_toughness:
+            game._fire_dealt_damage_triggers(permanent)
+
+    return report
+
+
 @effect_handler("deal_damage")
 def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     caster = context.caster
@@ -35,9 +51,13 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
     # damage and also damage yourself" would need its own fused instruction kind
     # (which is exactly what deal_damage_and_self_damage was).
     if instruction.payload.get("recipient") == "caster":
-        dealt = game._deal_damage_to_player(caster, damage, source=source_permanent or card)
-        context.results["damage_dealt"] = dealt
-        game.log.append(f"{card.name} dealt {dealt} damage to {caster.name}")
+        def _report(dealt: int) -> None:
+            context.results["damage_dealt"] = dealt
+            game.log.append(f"{card.name} dealt {dealt} damage to {caster.name}")
+
+        game._deal_damage_to_player(
+            caster, damage, source=source_permanent or card, then=_report
+        )
         return True, "resolved"
     # Fireball's cross-seat divided list: any mix of creatures and player faces
     # on both sides, each dealt damage // n ("divided evenly, rounded down").
@@ -60,16 +80,20 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
             (e for e in entries if e[1] is not None), key=lambda e: e[1], reverse=True
         ):
             target_perm = game.players[seat].battlefield[index]
-            dealt = game._mark_damage_on_permanent(target_perm, per_target, source=source_permanent or card)
-            game.log.append(f"{card.name} dealt {dealt} damage to {target_perm.card.name}")
-            if dealt > 0 and target_perm.damage_marked < target_perm.effective_toughness:
-                game._fire_dealt_damage_triggers(target_perm)
+            game._mark_damage_on_permanent(
+                target_perm, per_target, source=source_permanent or card,
+                then=_damage_reporter(game, card, target_perm),
+            )
         for seat, index in entries:
             if index is not None:
                 continue
             face = game.players[seat]
-            dealt = game._deal_damage_to_player(face, per_target, source=card)
-            game.log.append(f"{card.name} dealt {dealt} damage to {face.name}")
+            game._deal_damage_to_player(
+                face, per_target, source=card,
+                then=lambda dealt, face=face: game.log.append(
+                    f"{card.name} dealt {dealt} damage to {face.name}"
+                ),
+            )
         return True, "resolved"
     # Support multiple target indices for spells like Fireball
     if isinstance(target_perm_idx, list):
@@ -83,10 +107,10 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         per_target = damage // n if n > 0 else 0
         for idx in sorted(indices, reverse=True):
             target_perm = target.battlefield[idx]
-            dealt = game._mark_damage_on_permanent(target_perm, per_target, source=source_permanent or card)
-            game.log.append(f"{card.name} dealt {dealt} damage to {target_perm.card.name}")
-            if dealt > 0 and target_perm.damage_marked < target_perm.effective_toughness:
-                game._fire_dealt_damage_triggers(target_perm)
+            game._mark_damage_on_permanent(
+                target_perm, per_target, source=source_permanent or card,
+                then=_damage_reporter(game, card, target_perm),
+            )
         return True, "resolved"
     if isinstance(target_perm_idx, int) and not 0 <= target_perm_idx < len(target.battlefield):
         # CR 608.2b: a creature was targeted but is no longer on the
@@ -118,20 +142,24 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
                 target_perm.metadata["cant_be_regenerated_this_turn"] = True
             if instruction.payload.get("exile_if_dies"):
                 target_perm.metadata["exile_if_dies_this_turn"] = True
-        dealt = apply_damage_to_creature(
+        apply_damage_to_creature(
             game, target_perm, damage, source_permanent or card,
             log_message=lambda dealt: f"{card.name} dealt {dealt} damage to {target_perm.card.name}",
+            # Recorded so a later instruction in the same resolution can read it
+            # ("You gain life equal to the damage dealt").
+            then=lambda dealt: context.results.__setitem__("damage_dealt", dealt),
         )
-        # Recorded so a later instruction in the same resolution can read it
-        # ("You gain life equal to the damage dealt").
-        context.results["damage_dealt"] = dealt
     else:
-        damage = game._deal_damage_to_player(target, damage, source=source_permanent or card)
-        context.results["damage_dealt"] = damage
-        if source_permanent is not None:
-            game.log.append(f"{card.name} dealt {damage} damage")
-        else:
-            game.log.append(f"{target.name} took {damage} damage")
+        def _report(damage: int) -> None:
+            context.results["damage_dealt"] = damage
+            if source_permanent is not None:
+                game.log.append(f"{card.name} dealt {damage} damage")
+            else:
+                game.log.append(f"{target.name} took {damage} damage")
+
+        game._deal_damage_to_player(
+            target, damage, source=source_permanent or card, then=_report
+        )
     return True, "resolved"
 
 
@@ -148,8 +176,12 @@ def deal_damage_to_player(game: Game, instruction: OracleInstruction, context: O
     if victim_idx is None or not (0 <= victim_idx < len(game.players)) or amount <= 0:
         return True, "resolved"
     victim = game.players[victim_idx]
-    dealt = game._deal_damage_to_player(victim, amount, source=context.source_permanent)
-    game.log.append(f"{context.card.name} dealt {dealt} damage to {victim.name}")
+    game._deal_damage_to_player(
+        victim, amount, source=context.source_permanent,
+        then=lambda dealt: game.log.append(
+            f"{context.card.name} dealt {dealt} damage to {victim.name}"
+        ),
+    )
     return True, "resolved"
 
 
@@ -197,13 +229,25 @@ def deal_damage_and_self_damage(game: Game, instruction: OracleInstruction, cont
     target_perm_idx = context.target_permanent_index
     if isinstance(target_perm_idx, int) and 0 <= target_perm_idx < len(target.battlefield):
         target_perm = target.battlefield[target_perm_idx]
-        dealt = game._mark_damage_on_permanent(target_perm, amount, source=card)
-        game.log.append(f"{card.name} dealt {dealt} damage to {target_perm.card.name}")
+        game._mark_damage_on_permanent(
+            target_perm, amount, source=card,
+            then=lambda dealt: game.log.append(
+                f"{card.name} dealt {dealt} damage to {target_perm.card.name}"
+            ),
+        )
     else:
-        damage = game._deal_damage_to_player(target, amount, source=card)
-        game.log.append(f"{card.name} dealt {damage} damage to {target.name}")
-    self_damage = game._deal_damage_to_player(caster, self_damage, source=card)
-    game.log.append(f"{card.name} dealt {self_damage} damage to {caster.name} (self-damage)")
+        game._deal_damage_to_player(
+            target, amount, source=card,
+            then=lambda damage: game.log.append(
+                f"{card.name} dealt {damage} damage to {target.name}"
+            ),
+        )
+    game._deal_damage_to_player(
+        caster, self_damage, source=card,
+        then=lambda dealt: game.log.append(
+            f"{card.name} dealt {dealt} damage to {caster.name} (self-damage)"
+        ),
+    )
     return True, "resolved"
 
 
@@ -220,15 +264,20 @@ def deal_damage_and_gain_life(game: Game, instruction: OracleInstruction, contex
     if isinstance(target_perm_idx, int) and 0 <= target_perm_idx < len(target.battlefield):
         target_perm = target.battlefield[target_perm_idx]
         if target_perm.is_creature:
-            dealt = apply_damage_to_creature(
+            apply_damage_to_creature(
                 game, target_perm, damage, card,
                 log_message=lambda dealt: f"{card.name} dealt {dealt} damage to {target_perm.card.name}",
+                then=lambda dealt: game._gain_life(caster, dealt, card.name),
             )
-            game._gain_life(caster, dealt, card.name)
             return True, "resolved"
-    damage = game._deal_damage_to_player(target, damage, source=card)
-    game.log.append(f"{card.name} dealt {damage} damage to {target.name}")
-    game._gain_life(caster, damage, card.name)
+    def _report(damage: int) -> None:
+        game.log.append(f"{card.name} dealt {damage} damage to {target.name}")
+        # "You gain life equal to the damage dealt" is part of this damage
+        # event's consequences, so it has to be inside it: a suspended event
+        # would otherwise gain life equal to nothing and never come back to it.
+        game._gain_life(caster, damage, card.name)
+
+    game._deal_damage_to_player(target, damage, source=card, then=_report)
     return True, "resolved"
 
 

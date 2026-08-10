@@ -58,6 +58,7 @@ def apply_damage_to_creature(
     amount: int,
     source,
     log_message: Callable[[int], str] | None = None,
+    then: Callable[[int], None] | None = None,
 ) -> int:
     """Mark non-combat damage on a single creature and fire its "dealt damage"
     triggers if it survived.
@@ -68,13 +69,21 @@ def apply_damage_to_creature(
     hand at nine separate sites, and any new damage effect that forgot left a
     lethally damaged creature alive.
 
-    ``log_message`` receives the damage actually dealt. Returns that amount."""
-    dealt = game._mark_damage_on_permanent(perm, amount, source=source)
-    if log_message is not None:
-        game.log.append(log_message(dealt))
-    if dealt > 0 and perm.damage_marked < perm.effective_toughness:
-        game._fire_dealt_damage_triggers(perm)
-    return dealt
+    ``log_message`` receives the damage actually dealt, and ``then`` is anything
+    further the caller would do with it. Both run *inside* the damage event, not
+    after it: the event can stop to ask the affected player which effect applies
+    first (CR 616.1e), and while it waits there is nothing to report. Returns
+    the amount dealt, which is 0 while suspended."""
+
+    def finish(dealt: int) -> None:
+        if log_message is not None:
+            game.log.append(log_message(dealt))
+        if dealt > 0 and perm.damage_marked < perm.effective_toughness:
+            game._fire_dealt_damage_triggers(perm)
+        if then is not None:
+            then(dealt)
+
+    return game._mark_damage_on_permanent(perm, amount, source=source, then=finish)
 
 
 def permanent_effective_colors(perm: Permanent) -> set[str]:

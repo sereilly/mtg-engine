@@ -350,12 +350,17 @@ class EffectsMixin:
             self._recalculate_lord_buffs()
 
     def _mark_damage_on_permanent(
-        self, permanent, amount: int, source=None, combat: bool = False
+        self, permanent, amount: int, source=None, combat: bool = False, *, then=None,
+        restart=None,
     ) -> int:
         """Mark *amount* damage on a creature after applying its prevention
         shields. Returns the damage actually marked (0 if fully prevented).
         *combat* marks the event as combat damage so the blanket combat shields
-        (Fog, Ebony Horse) can see it."""
+        (Fog, Ebony Horse) can see it.
+
+        ``then`` is what the caller would otherwise do with the returned number
+        — see ``_deal_damage_to_player`` for why it is a callback and not a
+        return value."""
         # Illusionary Mask: turn a face-down creature face up when damage would
         # be dealt to it or it would deal damage (before prevention, CR 613/614).
         if amount > 0:
@@ -368,9 +373,14 @@ class EffectsMixin:
         outcome = deal_damage(
             self,
             {"recipient": permanent, "amount": amount, "source": source, "combat": combat},
+            restart=restart,
         )
+        if outcome.suspended:
+            return 0
         if outcome.result > 0:
             permanent.damage_marked += outcome.result
+        if then is not None:
+            then(outcome.dealt)
         return outcome.dealt
 
     def _consume_land_destruction_shield(self, perm: Permanent) -> bool:
@@ -400,8 +410,12 @@ class EffectsMixin:
         card_name = pending["card_name"]
         victim_player = self.players[target_seat]
         if target_permanent_index is None:
-            dealt = self._deal_damage_to_player(victim_player, amount, source=source)
-            self.log.append(f"{card_name} dealt {dealt} damage to {victim_player.name} (opponent's choice)")
+            self._deal_damage_to_player(
+                victim_player, amount, source=source,
+                then=lambda dealt: self.log.append(
+                    f"{card_name} dealt {dealt} damage to {victim_player.name} (opponent's choice)"
+                ),
+            )
             return
         if not (0 <= target_permanent_index < len(victim_player.battlefield)):
             self.log.append(f"{card_name}: chosen target is gone, no effect")
@@ -665,7 +679,9 @@ class EffectsMixin:
         target.life += amount
         self.log.append(f"{target.name} gained {amount} life{source} ({before} -> {target.life})")
 
-    def _deal_damage_to_player(self, target: PlayerState, amount: int, source=None) -> int:
+    def _deal_damage_to_player(
+        self, target: PlayerState, amount: int, source=None, *, then=None, restart=None
+    ) -> int:
         """Deal damage to a player and fire 'whenever you're dealt damage'
         triggers (e.g. Lich). ``source`` (a Permanent or spell CardDefinition)
         lets color-scoped prevention (Circle of Protection) match the source's
@@ -675,6 +691,21 @@ class EffectsMixin:
         caller reporting "N damage" or gaining life equal to it wants. How much
         of that reduced the life total is a separate number (CR 120.4c) and does
         not leave this method — only Ali from Cairo makes the two differ.
+
+        **Pass what you would do with that number as ``then``, do not read the
+        return value.** A damage event can stop part-way to ask the affected
+        player which of several effects applies first (CR 616.1e), and when it
+        does, *nothing has happened*: no shield spent, no life lost, no trigger
+        fired, and 0 comes back. The answer re-runs this call — which is why the
+        consequences have to be inside it. A caller that logs "dealt {n}" or
+        gains life equal to it from outside would report the suspension as a
+        0-damage event and never correct itself.
+        ``tests/engine/test_damage_continuations.py`` holds engine code to that.
+
+        ``restart`` is what re-runs the event, and supplying it is what allows
+        the question to be asked at all. No caller supplies one yet: see
+        ``engine/damage_events.py`` for the loop problem that has to be solved
+        before one honestly can.
         """
         # Illusionary Mask: a face-down creature that would deal damage (e.g.
         # unblocked combat damage to a player) is turned face up first.
@@ -683,11 +714,16 @@ class EffectsMixin:
         outcome = deal_damage(
             self,
             {"recipient": target, "amount": amount, "source": source, "combat": False},
+            restart=restart,
         )
+        if outcome.suspended:
+            return 0
         if outcome.dealt > 0:
             target.life -= outcome.result
             self._on_player_dealt_damage(target, outcome.dealt, source)
             self._apply_mirror_damage(target, outcome.dealt, source)
+        if then is not None:
+            then(outcome.dealt)
         return outcome.dealt
 
     def _apply_mirror_damage(self, target: PlayerState, damage: int, source) -> None:
@@ -728,10 +764,12 @@ class EffectsMixin:
         if mirror_index is None:
             return
         victim = self.players[mirror_index]
-        dealt = self._deal_damage_to_player(victim, damage, source=None)
-        self.log.append(
-            f"Eye for an Eye dealt {dealt} damage to {victim.name} "
-            f"(mirroring the damage dealt to {target.name})"
+        self._deal_damage_to_player(
+            victim, damage, source=None,
+            then=lambda dealt: self.log.append(
+                f"Eye for an Eye dealt {dealt} damage to {victim.name} "
+                f"(mirroring the damage dealt to {target.name})"
+            ),
         )
 
     def _on_player_dealt_damage(self, target: PlayerState, damage: int, source=None) -> None:

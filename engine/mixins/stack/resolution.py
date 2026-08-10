@@ -301,8 +301,12 @@ class StackResolutionMixin:
                     if self.lands_played_this_turn.get(caster_index, 0) > 1:
                         fastbond_count = self._fastbond_count(caster_index)
                         if fastbond_count > 0:
-                            damage = self._deal_damage_to_player(caster, fastbond_count)
-                            self.log.append(f"Fastbond dealt {damage} damage to {caster.name}")
+                            self._deal_damage_to_player(
+                                caster, fastbond_count,
+                                then=lambda damage: self.log.append(
+                                    f"Fastbond dealt {damage} damage to {caster.name}"
+                                ),
+                            )
                 self._process_land_enters(caster_index)
             return
 

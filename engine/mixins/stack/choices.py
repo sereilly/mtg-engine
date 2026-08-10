@@ -791,8 +791,12 @@ class PendingChoicesMixin:
         damage = int(entry.get("damage", 0) or 0)
         if damage > 0:
             source = entry.get("_source_permanent")
-            dealt = self._deal_damage_to_player(player, damage, source=source)
-            self.log.append(f"{entry['card_name']} dealt {dealt} damage to {player.name}")
+            self._deal_damage_to_player(
+                player, damage, source=source,
+                then=lambda dealt: self.log.append(
+                    f"{entry['card_name']} dealt {dealt} damage to {player.name}"
+                ),
+            )
         else:
             self.log.append(f"{player.name} declined {entry['card_name']}'s pay-for-life trigger")
 
@@ -887,8 +891,12 @@ class PendingChoicesMixin:
                 f"{player.name} couldn't sacrifice a nontoken permanent and lost the game ({reason})"
             )
         elif on_short.get("kind") == "damage":
-            dealt = self._deal_damage_to_player(player, int(on_short.get("amount", 0)))
-            self.log.append(f"{reason} dealt {dealt} damage to {player.name}")
+            self._deal_damage_to_player(
+                player, int(on_short.get("amount", 0)),
+                then=lambda dealt: self.log.append(
+                    f"{reason} dealt {dealt} damage to {player.name}"
+                ),
+            )
 
     def _resolve_sacrifice_inline(self, player_index: int, count: int, filter: str, exclude, reason: str, on_short) -> None:
         """Sacrifice ``count`` of the player's permanents with the deterministic

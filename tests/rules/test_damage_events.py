@@ -274,6 +274,47 @@ def test_616_1g_an_effect_on_a_contained_event_is_chosen_after_the_outer_one():
     assert p2.life == 19, "3 redirected, 2 prevented"
 
 
+@pytest.mark.cr("616.1e")
+def test_616_1e_a_damage_event_given_a_restart_asks_and_re_runs():
+    """Damage takes the default because no caller can supply a `restart` yet
+    (see `deal_damage` for the loop problem in the way), not because the
+    machinery is missing. Given one, a damage event asks exactly as a draw does
+    — so the day a caller can offer a re-run, this is what it gets.
+
+    A Circle of Protection and a prevention pool are both applicable to one red
+    source, which is the contention this pool reaches easily. Picking the pool
+    is the opposite of the default, so it cannot pass by accident."""
+    red = Permanent(card=replace(_mk_creature_card("Red Ogre", 3, 3), colors=("R",)))
+    p1 = PlayerState(name="P1", life=20)
+    p1.color_prevention_shields = ["R"]
+    p1.damage_prevention_pool = 5
+    game = Game(players=[p1, PlayerState(name="P2", battlefield=[red])])
+    game.interactive_seats = {0}
+    calls: list[int] = []
+
+    def hit():
+        return game._deal_damage_to_player(
+            p1, 3, red, then=calls.append, restart=hit
+        )
+
+    hit()
+
+    prompt = game.pending_choices_of("effect_order", 0)
+    assert len(prompt) == 1, "the affected player was asked"
+    assert p1.damage_prevention_pool == 5 and p1.color_prevention_shields == ["R"], (
+        "nothing was spent while the question was open"
+    )
+    assert calls == [], "and nothing downstream ran on a suspended event"
+
+    pool = prompt[0].data["_keys"].index("_prevention_pool")
+    game.resolve_pending_choice("effect_order", 0, option_index=pool)
+
+    assert p1.damage_prevention_pool == 2, "the chosen shield absorbed the 3"
+    assert p1.color_prevention_shields == ["R"], "the Circle was not spent"
+    assert p1.life == 20
+    assert calls == [0], "the re-run carried the caller's consequences with it"
+
+
 @pytest.mark.cr("120.8")
 def test_120_8_a_zero_damage_event_spends_nothing():
     """"If a source would deal 0 damage, it does not deal damage at all" — so no

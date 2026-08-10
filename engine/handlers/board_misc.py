@@ -124,8 +124,12 @@ def end_step_damage_if_not_attacked(game: Game, instruction: OracleInstruction, 
     if source.metadata.get("summoning_sickness_turn") == game.turn:
         return True, "resolved"
     amount = int(instruction.payload.get("amount", 0))
-    dealt = game._deal_damage_to_player(caster, amount, source=source)
-    game.log.append(f"{source.card.name} dealt {dealt} damage to {caster.name}")
+    game._deal_damage_to_player(
+        caster, amount, source=source,
+        then=lambda dealt: game.log.append(
+            f"{source.card.name} dealt {dealt} damage to {caster.name}"
+        ),
+    )
     return True, "resolved"
 
 
@@ -389,8 +393,12 @@ def coin_flip_token_or_self_damage(game: Game, instruction: OracleInstruction, c
         return create_token(game, OracleInstruction("create_token", "", dict(payload)), context)
     amount = int(payload.get("damage", 0))
     game.log.append(f"{card.name}: lost the coin flip")
-    dealt = game._deal_damage_to_player(caster, amount, source=card)
-    game.log.append(f"{card.name} dealt {dealt} damage to {caster.name}")
+    game._deal_damage_to_player(
+        caster, amount, source=card,
+        then=lambda dealt: game.log.append(
+            f"{card.name} dealt {dealt} damage to {caster.name}"
+        ),
+    )
     return True, "resolved"
 
 

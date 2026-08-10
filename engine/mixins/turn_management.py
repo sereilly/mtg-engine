@@ -226,8 +226,12 @@ class TurnManagementMixin:
         for trig in compile_card_oracle(land.effective_card).triggered_abilities:
             if trig.condition.kind == "self_becomes_tapped" and trig.instruction is not None:
                 amount = int(trig.instruction.payload.get("amount", 0))
-                damage = self._deal_damage_to_player(player, amount, source=land)
-                self.log.append(f"{land.card.name} dealt {damage} damage to {player.name}")
+                self._deal_damage_to_player(
+                    player, amount, source=land,
+                    then=lambda damage: self.log.append(
+                        f"{land.card.name} dealt {damage} damage to {player.name}"
+                    ),
+                )
         mana_symbol = chosen_color
         produced = land.effective_produced_mana
         if produced:
@@ -271,8 +275,12 @@ class TurnManagementMixin:
             for trig in aura_prog.triggered_abilities:
                 if trig.condition.kind == "enchanted_land_tapped" and trig.instruction is not None:
                     amount = int(trig.instruction.payload.get("amount", 0))
-                    damage = self._deal_damage_to_player(player, amount, source=attached_aura)
-                    self.log.append(f"{attached_aura.card.name} dealt {damage} damage to {player.name}")
+                    self._deal_damage_to_player(
+                        player, amount, source=attached_aura,
+                        then=lambda damage: self.log.append(
+                            f"{attached_aura.card.name} dealt {damage} damage to {player.name}"
+                        ),
+                    )
             # Wild Growth: "Whenever enchanted land is tapped for mana, its controller
             # adds an additional {G}." The "for mana" phrasing isn't compiled as a
             # generic trigger, so read the produced mana from the Aura's text here.
@@ -295,7 +303,11 @@ class TurnManagementMixin:
             self, condition_kinds={"land_tapped_for_mana"}, first_match_only=False
         ):
             amount = int(trig.instruction.payload.get("amount", 1))
-            damage = self._deal_damage_to_player(player, amount, source=perm)
-            self.log.append(f"{perm.card.name} triggered: {player.name} took {damage} damage")
+            self._deal_damage_to_player(
+                player, amount, source=perm,
+                then=lambda damage: self.log.append(
+                    f"{perm.card.name} triggered: {player.name} took {damage} damage"
+                ),
+            )
 
         return True

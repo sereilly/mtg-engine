@@ -2060,13 +2060,41 @@ The reachable contention is Ring of Ma'rûf and Aladdin's Lamp both armed over
 one draw, and the choice is real: picking the Lamp leaves the Ring armed, which
 is the opposite of the default order.
 
-**Damage still takes the default**, and this is now a one-line property rather
-than a paragraph of hedging: `deal_damage` passes no `restart`, because its
-callers read the number back for trample, lifelink and "gain life equal to the
-damage dealt". Deferring the event means deferring all of that. What that needs
-is a damage event whose *consequences* can be re-run too — a much smaller
-question than the one the previous entry posed, and now the only thing between
-this engine and 616.1e everywhere.
+**Done — a damage event's consequences travel with it.** The blocker named
+above was that a damage event's callers read the number back for lifelink,
+"gain life equal to the damage dealt" and their own log lines, so deferring the
+event means deferring all of that. That half is closed: every damage caller now
+passes what it would do with the number as a `then` callback, so it runs inside
+the event and re-runs with it. Thirty-odd call sites, behaviour-neutral, and
+held in place by `tests/engine/test_damage_continuations.py`, a source guard —
+because on a suite where nothing suspends, a caller that reads the return value
+instead is invisible.
+
+That also fixed a class of log bug on its own terms: the log line for a damage
+event is now written from inside it, so it can no longer disagree with what
+happened, in the same way the Veteran Bodyguard redirect used to log "took 8
+combat damage" against a player whose life never moved.
+
+`deal_damage` takes a `restart` and asks with it, proven by
+`test_616_1e_a_damage_event_given_a_restart_asks_and_re_runs`: a Circle of
+Protection and a prevention pool contend over one red source, the affected
+player is asked, and picking the pool — the opposite of the default — spends the
+pool and leaves the Circle.
+
+**Still open: the loops.** No caller supplies a `restart` yet, and the reason
+turned out to be neither the consequences nor resumability. It is that damage is
+rarely the only thing in flight. A divided Fireball deals to each target in
+turn, the combat damage step walks its recorded events, and any damage inside a
+`sequence` has instructions queued behind it. Suspend event N of a loop and the
+answer re-runs event N while N+1 onwards are lost — a worse failure than not
+asking, so the `restart` is caller-supplied and nothing supplies one.
+
+What it needs is for the *loop* to be the re-runnable unit: somewhere to record
+how far it got and a resumption that picks up there. There are exactly three
+such loops — `handlers/control_flow.sequence`, the divided-damage branch of
+`handlers/damage.deal_damage`, and `phases/combat_damage_step`. That is a
+bounded, well-defined job, and it is the last thing between this engine and
+616.1e everywhere.
 
 **616.1a–d are deliberately not built.** They order *classes* of effect ahead of
 the free choice: self-replacement effects first (614.15), then control-on-entry,

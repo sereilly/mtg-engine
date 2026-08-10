@@ -37,12 +37,14 @@ by 120.4c it already has been.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any, Callable
 
 from .effect_ordering import Candidate, affected_seat, apply_in_order
 from .models import PlayerState
 from .prevention import shield_candidates, spent
 from .replacements import (
     apply_replacements,
+    order_prompt_asker,
     replacement_candidates,
     take_replaced,
     was_replaced,
@@ -68,6 +70,11 @@ class DamageOutcome:
     consumed: bool
     dealt: int
     result: int
+    #: The event stopped to ask the affected player which effect applies first
+    #: (CR 616.1e). **Nothing happened** — no shield spent, no damage dealt, no
+    #: trigger fired. The caller must do nothing at all with this outcome; the
+    #: answer re-runs the whole event, consequences included.
+    suspended: bool = False
 
 
 # The replacement kinds a damage event passes through, by what it is dealt to.
@@ -98,7 +105,7 @@ def _settled(game, event: dict) -> bool:
     return was_replaced(game, event) or spent(game, event)
 
 
-def deal_damage(game, event: dict) -> DamageOutcome:
+def deal_damage(game, event: dict, *, restart: Callable[[], Any] | None = None) -> DamageOutcome:
     """Run a damage event through CR 120.4 and report what it did.
 
     *event* is ``{recipient, amount, source, combat}``. A 0-or-less event
@@ -109,16 +116,49 @@ def deal_damage(game, event: dict) -> DamageOutcome:
     This does not apply the result — the caller does that, because what "apply"
     means differs by recipient (life loss, damage marked) and by caller (combat
     accumulates a per-defender tally the log reconstructs from).
+
+    *restart* re-runs the event **and everything the caller does with it**, which
+    is what lets CR 616.1e's choice be asked here. Damage differs from a draw in
+    exactly that respect: a draw's caller can be told "0 drawn, they arrive
+    later", while a damage event's caller gains life equal to it, tallies
+    lifelink from it and logs it. So the thunk has to close over the caller's
+    own consequences — see ``Game._deal_damage_to_player``'s ``then``, which is
+    how every damage caller now passes them in.
+
+    **No caller supplies one yet, and the reason is loops.** Re-running a single
+    damage event is only enough when it is the only thing in flight, and damage
+    is usually one of several: a divided Fireball deals to each target in turn,
+    the combat damage step walks its recorded events, and any damage inside a
+    ``sequence`` has instructions queued behind it. Suspend event N of a loop
+    and the answer re-runs event N while N+1 onwards are simply lost — a much
+    worse failure than not asking.
+
+    What that needs is for the *loop* to be the re-runnable unit: somewhere to
+    record how far it got, and a resumption that picks up there. Three places
+    have such a loop (``handlers/control_flow.sequence``, the divided-damage
+    branch of ``handlers/damage.deal_damage``, and
+    ``phases/combat_damage_step``), which is a bounded job and a well-defined
+    one, but it is a different job from this. Until then damage takes the
+    documented default, and
+    ``test_616_1e_a_damage_event_given_a_restart_asks_and_re_runs`` keeps this
+    path honest by exercising it with a restart of its own.
     """
     if event["amount"] <= 0:
         return DamageOutcome(consumed=False, dealt=0, result=0)
-    apply_in_order(
+    kind = damage_kind(event["recipient"])
+    trace = apply_in_order(
         game,
         event,
         damage_candidates(event["recipient"]),
         chooser_index=affected_seat(game, event["recipient"]),
         stop=_settled,
+        ask=None if restart is None else order_prompt_asker(kind, restart),
     )
+    if trace.suspended:
+        take_replaced(event)
+        return DamageOutcome(consumed=False, dealt=0, result=0, suspended=True)
+    if trace.applied:
+        game.effect_order_answers.pop((kind, affected_seat(game, event["recipient"])), None)
     consumed = take_replaced(event)
     dealt = max(0, event["amount"])
     if consumed or dealt <= 0:
@@ -131,6 +171,13 @@ def _process_results(game, event: dict, dealt: int) -> int:
 
     Carries ``dealt`` alongside the running ``amount`` so an effect that caps the
     result can still see the damage it is not changing.
+
+    Runs without a ``restart``, so this half never asks CR 616.1e's question —
+    and never has one to ask, because each results kind holds at most one effect
+    and a contention needs two. That is not a coincidence to rely on quietly:
+    ``test_a_results_half_contention_would_need_asking`` fails the day a second
+    one is registered, because by then the first half has applied real effects
+    and re-running would need the replay reasoning this deliberately avoids.
     """
     results = {
         "recipient": event["recipient"],

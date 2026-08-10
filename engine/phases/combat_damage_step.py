@@ -404,6 +404,29 @@ class CombatDamageStepMixin:
             if amount > 0:
                 lifelink_gain[controller_index] = lifelink_gain.get(controller_index, 0) + amount
 
+        def _dealt_to_creature(victim, source, lifelink_seat: int):
+            """What follows one creature being dealt combat damage: record the
+            source, fire its "dealt damage" triggers, tally the dealer's
+            lifelink, and mark deathtouch.
+
+            Handed to `_mark_damage_on_permanent` as its `then` rather than run
+            after it, so it travels with the event — CR 702.2b and 704.5h both
+            need damage to have *been dealt*, and damage prevented in full never
+            was (CR 615.6)."""
+
+            def dealt(amount: int) -> None:
+                if amount <= 0:
+                    return
+                if source is not None:
+                    self._record_damage_source(victim, source)
+                self._fire_dealt_damage_triggers(victim)
+                if source is not None and self._has_keyword(source, "lifelink"):
+                    add_lifelink(lifelink_seat, amount)
+                if source is not None and self._has_keyword(source, "deathtouch"):
+                    victim.metadata["received_deathtouch"] = True
+
+            return dealt
+
         for attacker_idx in sorted(self.combat_attackers):
             defending_index = self.combat_attackers[attacker_idx]
             if defending_index < 0 or defending_index >= len(self.players):
@@ -506,19 +529,10 @@ class CombatDamageStepMixin:
                         member = attacker_controller.battlefield[member_idx]
                         if self._is_protected_from(member, blocker):
                             continue
-                        dealt = self._mark_damage_on_permanent(
-                            member, amount, source=blocker, combat=True
+                        self._mark_damage_on_permanent(
+                            member, amount, source=blocker, combat=True,
+                            then=_dealt_to_creature(member, blocker, defending_idx),
                         )
-                        if dealt > 0:
-                            self._record_damage_source(member, blocker)
-                            self._fire_dealt_damage_triggers(member)
-                            if self._has_keyword(blocker, "lifelink"):
-                                add_lifelink(defending_idx, dealt)
-                            # CR 702.2b: deathtouch destroys a creature that has
-                            # *been dealt* damage by the deathtouch source. Damage
-                            # prevented in full was never dealt (CR 615.6).
-                            if self._has_keyword(blocker, "deathtouch"):
-                                member.metadata["received_deathtouch"] = True
                     continue
                 # A blocker deals its combat damage to one of the creatures it blocks
                 # (CR 510.1c, defender's choice; default the first). A creature blocking
@@ -547,18 +561,10 @@ class CombatDamageStepMixin:
                 # CR 702.16e: damage from a source of the protected quality is prevented.
                 if self._is_protected_from(attacker, blocker):
                     continue
-                dealt = self._mark_damage_on_permanent(
-                    attacker, blocker.effective_power, source=blocker, combat=True
+                self._mark_damage_on_permanent(
+                    attacker, blocker.effective_power, source=blocker, combat=True,
+                    then=_dealt_to_creature(attacker, blocker, defending_idx),
                 )
-                if dealt > 0:
-                    self._record_damage_source(attacker, blocker)
-                    self._fire_dealt_damage_triggers(attacker)
-                    if self._has_keyword(blocker, "lifelink"):
-                        add_lifelink(defending_idx, dealt)
-                    # CR 702.2b / 704.5h: only damage actually dealt by a
-                    # deathtouch source counts; prevented damage never happened.
-                    if self._has_keyword(blocker, "deathtouch"):
-                        attacker.metadata["received_deathtouch"] = True
 
         for defending_idx, blocker_idx, damage, a_idx in attacker_damage_events:
             if defending_idx >= len(self.players):
@@ -575,19 +581,12 @@ class CombatDamageStepMixin:
             # CR 702.16e: protection prevents damage from the protected quality.
             if source_attacker is not None and self._is_protected_from(blocker_perm, source_attacker):
                 continue
-            dealt = self._mark_damage_on_permanent(
-                blocker_perm, damage, source=source_attacker, combat=True
+            self._mark_damage_on_permanent(
+                blocker_perm, damage, source=source_attacker, combat=True,
+                then=_dealt_to_creature(
+                    blocker_perm, source_attacker, self.active_player_index
+                ),
             )
-            if dealt > 0:
-                if source_attacker is not None:
-                    self._record_damage_source(blocker_perm, source_attacker)
-                self._fire_dealt_damage_triggers(blocker_perm)
-                if source_attacker is not None and self._has_keyword(source_attacker, "lifelink"):
-                    add_lifelink(self.active_player_index, dealt)
-                # CR 702.2b / 704.5h: only damage actually dealt by a deathtouch
-                # source counts; prevented damage never happened.
-                if source_attacker is not None and self._has_keyword(source_attacker, "deathtouch"):
-                    blocker_perm.metadata["received_deathtouch"] = True
 
         # Each recorded event is run through CR 120.4 here, not where it was
         # recorded. That is what makes several attackers work: an effect that

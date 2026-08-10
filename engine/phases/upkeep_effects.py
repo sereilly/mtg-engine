@@ -339,8 +339,12 @@ class UpkeepEffectsMixin:
             amount = max(0, amount - paid)
             if paid:
                 self.log.append(f"{victim.name} paid {paid} mana to prevent {paid} damage from {permanent.card.name}")
-        damage = self._deal_damage_to_player(victim, amount, source=permanent)
-        self.log.append(f"{permanent.card.name} dealt {damage} upkeep damage to {victim.name}")
+        self._deal_damage_to_player(
+            victim, amount, source=permanent,
+            then=lambda damage: self.log.append(
+                f"{permanent.card.name} dealt {damage} upkeep damage to {victim.name}"
+            ),
+        )
 
     @upkeep_effect("upkeep_chosen", "upkeep_chosen_player_hand_overflow_damage")
     def _on__upkeep_chosen__upkeep_chosen_player_hand_overflow_damage(self, ctx: UpkeepContext) -> None:
@@ -387,8 +391,12 @@ class UpkeepEffectsMixin:
                     controller.mana_pool[sym] = controller.mana_pool.get(sym, 0) - count
             self.log.append(f"{controller.name} paid upkeep for {permanent.card.name}")
         else:
-            damage_amt = self._deal_damage_to_player(controller, damage_amt, source=permanent)
-            self.log.append(f"{permanent.card.name} dealt {damage_amt} upkeep damage to {controller.name}")
+            self._deal_damage_to_player(
+                controller, damage_amt, source=permanent,
+                then=lambda dealt: self.log.append(
+                    f"{permanent.card.name} dealt {dealt} upkeep damage to {controller.name}"
+                ),
+            )
 
     @upkeep_effect("upkeep_self", "upkeep_pay_to_untap_self")
     def _on__upkeep_self__upkeep_pay_to_untap_self(self, ctx: UpkeepContext) -> None:
@@ -491,8 +499,12 @@ class UpkeepEffectsMixin:
         if removed is not None:
             was_matching_type = removed.has_type(land_type)
             if was_matching_type:
-                dealt = self._deal_damage_to_player(controller, damage_amt, source=permanent)
-                self.log.append(f"{permanent.card.name} dealt {dealt} damage to {controller.name}")
+                self._deal_damage_to_player(
+                    controller, damage_amt, source=permanent,
+                    then=lambda dealt: self.log.append(
+                        f"{permanent.card.name} dealt {dealt} damage to {controller.name}"
+                    ),
+                )
 
     @upkeep_effect("upkeep_self", "grant_forestwalk_until_next_upkeep")
     def _on__upkeep_self__grant_forestwalk_until_next_upkeep(self, ctx: UpkeepContext) -> None:
