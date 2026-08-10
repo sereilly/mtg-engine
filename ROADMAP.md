@@ -1209,6 +1209,37 @@ board so a static ability can contribute an effect to objects it does not own �
 after which those two cards are table entries. Primal Clay wants the enter-time
 choice machinery and is genuinely separate, but small.
 
+### Revised: five of six, and the sixth is a rider
+
+All six of Revised's new cards were implemented and verified against their
+printed text. Re-ingesting the set then took the pool to 388 cards, **388
+supported, 0 unsupported** — and the guards still found one thing, which is the
+part worth recording.
+
+**Titania's Song's real text has a second sentence** my fixture did not: "If
+this enchantment leaves the battlefield, this effect continues until end of
+turn." The implementation ends the effect the moment the source leaves the
+battlefield, which is right for the first sentence and wrong for the second.
+The template deliberately matches only the one-sentence form, so the real card
+does not match it — and is therefore not claimed.
+
+That is the correct outcome and it cost nothing to discover, because the rule
+has been enforced all pass: **a production that matches a line must implement
+all of it.** Had the template been written to match "whatever Titania's Song
+prints", the card would report supported and quietly lose its effect a turn
+early.
+
+The remaining work on it is one rider — a delayed end-of-effect, which the
+engine has no representation for yet (`until end of turn` durations exist for
+one-shots; a *static* that outlives its source does not). That is a real
+feature, not a card.
+
+Everything else the re-ingest surfaced is mechanical and already named: the
+`KNOWN_UNSUPPORTED` ratchet correctly reports the six as fixed, Primal Clay
+needs an entry in the static-line guard and the variable-P/T property test
+widened to accept "chosen on entry" alongside "computed by a
+characteristic-defining rule", and the web API test still hardcodes three sets.
+
 ### The static-ability cluster, and why it is a phase-6 job
 
 20 of the remaining lines fail with "static abilities need the CR 613 layers
