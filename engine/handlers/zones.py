@@ -246,12 +246,20 @@ def timetwister(game: Game, instruction: OracleInstruction, context: OracleExecu
 def search_library(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     caster = context.caster
     caster_index = game.players.index(caster)
+    # The zones the search may look in and the restriction on what it may find
+    # both travel to the choice, so every seat answers the same search: the
+    # engine re-checks the answer against them, the AI picks within them, and
+    # the web layer offers them. Defaulting to the library alone keeps a
+    # payload written before the graveyard existed meaning what it meant.
+    zones = tuple(instruction.payload.get("zones", ("library",)))
     game.arm_pending_choice(
         "search_library", caster_index,
         count=instruction.payload.get("count", 1),
         card_type=instruction.payload.get("card_type", "any"),
+        zones=zones,
+        restrictions=dict(instruction.payload.get("restrictions") or {}),
     )
-    game.log.append(f"{caster.name} is searching their library")
+    game.log.append(f"{caster.name} is searching their " + " and ".join(zones))
     return True, "pending_search_library"
 
 

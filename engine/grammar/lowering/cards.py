@@ -7,6 +7,7 @@ because a filter it cannot honour must refuse rather than be dropped.
 """
 
 from ...oracle_types import OracleInstruction
+from ...search_filters import SEARCH_COMPARISONS, SEARCH_RESTRICTIONS
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
@@ -264,12 +265,14 @@ def _lower_look_at_hand(node: ast.LookAtHand) -> tuple[OracleInstruction, ...]:
 
 
 # Restrictions the search flow can honour. `card_type` is compared against the
-# card's `primary_type` by ai_policy.choose_search_library_index and by the web
-# picker, and `is_card` only says the noun phrase named cards — which a library
-# holds by definition (CR 400.1). Every other field of the noun phrase is
-# refused by _restrictions_beyond, because nothing in the flow tests one: the
-# player would simply be offered their whole library.
-_SEARCH_HONOURED_FILTER_FIELDS = frozenset({"card_types", "is_card"})
+# card's `primary_type`, and `is_card` only says the noun phrase named cards —
+# which a library holds by definition (CR 400.1). The rest come from
+# `search_filters.SEARCH_RESTRICTIONS`, the one predicate the engine, the AI and
+# the web picker all answer with, so this set cannot claim a restriction nobody
+# tests. Every other field of the noun phrase is still refused by
+# _restrictions_beyond, because nothing in the flow tests one: the player would
+# simply be offered their whole library.
+_SEARCH_HONOURED_FILTER_FIELDS = frozenset({"card_types", "is_card"}) | SEARCH_RESTRICTIONS
 
 
 def _lower_search_library(node: ast.SearchLibrary) -> tuple[OracleInstruction, ...]:
@@ -312,6 +315,27 @@ def _lower_search_library(node: ast.SearchLibrary) -> tuple[OracleInstruction, .
         # widen to whichever type happened to be written first.
         raise LoweringError("the search picker tests one card type", node=node)
     card_type = filt.card_types[0] if filt.card_types else "any"
-    return (
-        OracleInstruction("search_library", "", {"count": 1, "card_type": card_type}),
-    )
+    restrictions: dict[str, object] = {}
+    if filt.named is not None:
+        restrictions["named"] = filt.named
+    if filt.mana_value is not None:
+        # A comparison the predicate cannot apply, or a bound that is not a
+        # number ("with mana value X"), refuses rather than lowering to a search
+        # that ignores the half of the sentence that made the card printable.
+        value = _amount_payload(filt.mana_value.value)
+        if filt.mana_value.op not in SEARCH_COMPARISONS or not isinstance(value, int):
+            raise LoweringError(
+                "the search picker cannot test this mana value: "
+                f"{filt.mana_value.op} {value}",
+                node=node,
+            )
+        restrictions["mana_value"] = {"op": filt.mana_value.op, "value": value}
+    payload: dict[str, object] = {"count": 1, "card_type": card_type}
+    # Both keys are emitted only when the card carries them, so the payload of
+    # every search printed before this change — Demonic Tutor's — stays
+    # byte-identical and a behaviour signature does not move.
+    if restrictions:
+        payload["restrictions"] = restrictions
+    if node.graveyard:
+        payload["zones"] = ("library", "graveyard")
+    return (OracleInstruction("search_library", "", payload),)

@@ -21,7 +21,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | 2ED | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
 | ARN | 78 | 108 | 64.8% | 61.1% | 38.9% | 34 |
 | 3ED | 296 | 389 | 78.9% | 76.9% | 41.9% | 149 |
-| M21 *(measured)* | 285 | 503 | 54.3% | 49.5% | 28.8% | 116 |
+| M21 *(measured)* | 285 | 503 | 55.3% | 50.5% | 29.8% | 121 |
 | **All (shipped)** | **1248** | **1663** | **78.0%** | **76.2%** | **41.5%** | **629** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -33,7 +33,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
 | 287 | 154 | expected a subject |  |
-| 111 | 57 | unrecognized effect verb |  |
+| 106 | 52 | unrecognized effect verb |  |
 | 69 | 50 | unconsumed text |  |
 | 33 | 33 | unrecognized activation cost |  |
 | 27 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -181,6 +181,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `{2}, {T}: Add one mana of any color.`
   - `{2}, {T}: Add one mana of any color.`
   - `{2}, {T}: Add one mana of any color.`
+- **Chandra's Firemaw**
+  - `When this creature enters, you may search your library and/or graveyard for a card named Chandra, Flame's Catalyst, reveal it, and put it into your hand. If you search your library this way, shuffle.`
 - **Chaoslace**
   - `Target spell or permanent becomes red. (Its mana symbols remain unchanged.)`
   - `Target spell or permanent becomes red. (Its mana symbols remain unchanged.)`
@@ -369,6 +371,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `At the beginning of the upkeep of enchanted enchantment's controller, this Aura deals 1 damage to that player.`
 - **Fetid Imp**
   - `{B}: This creature gains deathtouch until end of turn. (Any amount of damage it deals to a creature is enough to destroy it.)`
+- **Fierce Empath**
+  - `When this creature enters, you may search your library for a creature card with mana value 6 or greater, reveal it, put it into your hand, then shuffle.`
 - **Finishing Blow**
   - `Destroy target creature or planeswalker.`
 - **Fireball**
@@ -414,6 +418,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 - **Garruk's Uprising**
   - `When this enchantment enters, if you control a creature with power 4 or greater, draw a card.`
   - `Creatures you control have trample. (Each of those creatures can deal excess combat damage to the player or planeswalker it's attacking.)`
+- **Garruk's Warsteed**
+  - `When this creature enters, you may search your library and/or graveyard for a card named Garruk, Savage Herald, reveal it, and put it into your hand. If you search your library this way, shuffle.`
 - **Gauntlet of Might**
   - `Red creatures get +1/+1.`
   - `Whenever a Mountain is tapped for mana, its controller adds an additional {R}.`
@@ -612,6 +618,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Lightning Bolt deals 3 damage to any target.`
 - **Liliana's Devotee**
   - `Zombies you control get +1/+0.`
+- **Liliana's Scorn**
+  - `Destroy target creature. You may search your library and/or graveyard for a card named Liliana, Death Mage, reveal it, and put it into your hand. If you search your library this way, shuffle.`
 - **Living Lands**
   - `All Forests are 1/1 creatures that are still lands.`
   - `All Forests are 1/1 creatures that are still lands.`
@@ -1036,6 +1044,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `{1}{U}, {T}: Draw a card, then discard a card.`
 - **Teferi's Tutelage**
   - `When this enchantment enters, draw a card, then discard a card.`
+- **Teferi's Wavecaster**
+  - `When this creature enters, you may search your library and/or graveyard for a card named Teferi, Timeless Voyager, reveal it, and put it into your hand. If you search your library this way, shuffle.`
 - **Tempered Veteran**
   - `{4}{W}{W}, {T}: Put a +1/+1 counter on target creature.`
 - **Temple of Epiphany**

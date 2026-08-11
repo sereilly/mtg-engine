@@ -29,6 +29,7 @@ from ...models import CardDefinition, Permanent
 from ...pending_choices import CHOICE_SPECS, PendingChoice, register_choice, spec_for
 from ...replacement_choices import pending_choices_for
 from ...resumption import resume_after_answer
+from ...search_filters import search_matches
 
 class PendingChoicesMixin:
     # -- The queue ----------------------------------------------------------
@@ -231,35 +232,75 @@ class PendingChoicesMixin:
 
     # -- Library search -----------------------------------------------------
 
-    def confirm_search_library(self, caster_index: int, library_index: int) -> bool:
+    def confirm_search_library(
+        self, caster_index: int, library_index: int, zone: str = "library"
+    ) -> bool:
         return self.resolve_pending_choice(
-            "search_library", caster_index, library_index=library_index
+            "search_library", caster_index, library_index=library_index, zone=zone
         )
 
-    def _resolve_search_library(self, choice: PendingChoice, library_index: int) -> bool:
+    def decline_search_library(self, caster_index: int) -> bool:
+        """"Fail to find" (CR 701.19b) as an answer rather than an error.
+
+        It is the *only* legal answer when nothing in the searched zones matches
+        the restriction — "a card named Teferi, Timeless Voyager" usually finds
+        nothing — so a seat that cannot find one still has to be able to leave
+        the search. Routed through the same resolver as a find, because the
+        library was searched either way and so is shuffled either way.
+        """
+        return self.resolve_pending_choice(
+            "search_library", caster_index, library_index=-1, zone="none"
+        )
+
+    def _resolve_search_library(
+        self, choice: PendingChoice, library_index: int, zone: str = "library"
+    ) -> bool:
         caster = self.players[choice.player_index]
-        if library_index < 0 or library_index >= len(caster.library):
+        zones = tuple(choice.data.get("zones", ("library",)))
+        if zone == "none":
+            if "library" in zones:
+                random.shuffle(caster.library)
+            self.discard_pending_choice(choice)
+            self.log.append(f"{caster.name} searched and found nothing")
+            return True
+        # A zone the search was not armed with is not a zone this search may
+        # look in: "search your library" is a different card from "search your
+        # library and/or graveyard", and the wire must not be able to promote
+        # one into the other.
+        if zone not in zones:
             return False
-        card = caster.library.pop(library_index)
+        source = caster.library if zone == "library" else caster.graveyard
+        if library_index < 0 or library_index >= len(source):
+            return False
+        card = source[library_index]
+        # What the search may *find* is checked here rather than trusted from
+        # whoever answered. The web picker is sent the legal indices, but a
+        # payload is a hint: a client that offered the whole library would
+        # otherwise turn "a creature card with mana value 6 or greater" into
+        # Demonic Tutor.
+        if not search_matches(card, choice.data):
+            return False
+        source.pop(library_index)
         caster.hand.append(card)
-        random.shuffle(caster.library)
+        # Only a library search shuffles (CR 701.19d, and the printed "If you
+        # search your library this way, shuffle"): a graveyard is an open zone,
+        # and randomising a library the player did not search would destroy
+        # information they were entitled to keep.
+        if zone == "library":
+            random.shuffle(caster.library)
         self.discard_pending_choice(choice)
-        self.log.append(f"{caster.name} searched library and put {card.name} into hand")
+        self.log.append(f"{caster.name} searched {zone} and put {card.name} into hand")
         return True
 
     def _default_search_library(self, choice: PendingChoice) -> None:
-        """The AI's search policy, and a shuffle-and-find-nothing when it
-        declines — the library is searched either way (CR 701.19b)."""
-        from ...ai_policy import choose_search_library_index
+        """The AI's search policy, and a fail-to-find when it declines or when
+        its choice turns out not to be legal — the library is searched either
+        way (CR 701.19b), which is what the decline path performs."""
+        from ...ai_policy import choose_search_card
 
-        caster = self.players[choice.player_index]
-        index = choose_search_library_index(
-            self, choice.player_index, card_type=choice.data.get("card_type", "any")
-        )
-        if index is None or not self._resolve_search_library(choice, index):
-            random.shuffle(caster.library)
-            self.discard_pending_choice(choice)
-            self.log.append(f"{caster.name} searched their library and found nothing")
+        found = choose_search_card(self, choice.player_index, choice.data)
+        if found is None or not self._resolve_search_library(choice, found[1], found[0]):
+            self._resolve_search_library(choice, -1, "none")
 
     # -- Library reorder ----------------------------------------------------
 
@@ -1157,7 +1198,12 @@ register_choice(
 
 register_choice(
     "search_library",
-    resolve=lambda game, choice, r: game._resolve_search_library(choice, r["library_index"]),
+    # `zone` defaults so a caller written before the graveyard existed — and the
+    # web action, which sends it only when the client picked one — still names
+    # the library.
+    resolve=lambda game, choice, r: game._resolve_search_library(
+        choice, r["library_index"], r.get("zone", "library")
+    ),
     default=lambda game, choice: game._default_search_library(choice),
     action="search_library_confirm",
     prompt_key="search_library",

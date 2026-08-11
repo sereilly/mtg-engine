@@ -10,6 +10,8 @@ Mana is here rather than in its own module because adding mana is what a card
 "unless they pay" lives in `phrases` where both can reach it.
 """
 
+import dataclasses
+
 from .. import ast
 from ..amounts import parse_amount
 from ..lexer import (MANA, render)
@@ -162,6 +164,41 @@ def _parse_look_at_hand(stream: TokenStream) -> ast.Statement:
     return ast.LookAtHand(player)
 
 
+# Words that cannot be part of a card's name here because they start the next
+# clause of the printed template. A name scan running past one of them would
+# swallow "and/or a card named Igneous Cur" into the first name and report
+# Alpine Houndmaster as a card that finds one card — so the scan stops, and the
+# production then refuses the line at "put".
+_SEARCHED_NAME_STOPS = ("reveal", "put", "then", "and", "or")
+
+
+def _parse_searched_name(stream: TokenStream) -> str:
+    """The card name in ``for a card named <name>``.
+
+    Read token by token rather than as one word, because a legendary name
+    carries the same punctuation the sentence does — "Chandra, Flame's
+    Catalyst, reveal it," holds two commas and only the second ends the name. A
+    comma is taken as part of the name only when a name word follows it, and
+    the rendered text is compared through ``search_filters.name_key``, which
+    ignores punctuation and case on both sides.
+    """
+    start = stream.mark()
+    while not stream.exhausted:
+        if stream.at_punct(".") or stream.at_word(*_SEARCHED_NAME_STOPS):
+            break
+        if stream.at_punct(","):
+            mark = stream.mark()
+            stream.advance()
+            if stream.exhausted or stream.at_punct(".") or stream.at_word(*_SEARCHED_NAME_STOPS):
+                stream.reset(mark)
+                break
+            continue
+        stream.advance()
+    if stream.mark() == start:
+        raise stream.error("expected the name the search is for")
+    return render(stream.tokens[start:stream.mark()])
+
+
 def _parse_search_library(stream: TokenStream) -> ast.Statement:
     """``Search your library for a <object>, put that card into your hand, then
     shuffle.`` (Demonic Tutor, CR 701.19.)
@@ -185,15 +222,29 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
     quantity being parsed. :class:`ast.SearchLibrary` has no count field and
     the confirm flow moves exactly one card, so "search your library for two
     cards" must fail here rather than silently find one.
+
+    The two-zone spelling ("search your library and/or graveyard … If you
+    search your library this way, shuffle.") is the same effect with a second
+    zone and a shuffle conditional on which one was searched, so it is branches
+    of this production rather than a second one: the destination, the reveal
+    and the name are read the same way in both.
     """
     stream.expect_word("search")
     if not stream.accept_word("your"):
         raise stream.error("only searching your own library has a search flow")
     stream.expect_word("library")
+    # "and/or graveyard" — a second zone, read here so lowering can arm the
+    # search over both. The lexer splits "and/or" into two words.
+    graveyard = bool(stream.accept_phrase("and", "or", "graveyard"))
     stream.expect_word("for")
     if not stream.accept_word("a", "an"):
         raise stream.error("a search for more than one card has no representation")
     filt = parse_object_filter(stream)
+    # "a card named X" — the noun phrase stops at "named", so the name is read
+    # here and put back on the filter, where every other restriction on what may
+    # be found already lives and where `_restrictions_beyond` can see it.
+    if stream.accept_word("named"):
+        filt = dataclasses.replace(filt, named=_parse_searched_name(stream))
     stream.accept_punct(",")
     # "reveal it," — honoured rather than dropped: the search flow's log names
     # the found card publicly ("searched library and put X into hand"), which
@@ -201,6 +252,9 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
     if stream.accept_word("reveal"):
         stream.expect_word("it")
         stream.accept_punct(",")
+    # ", and put it into your hand" — the conjunction is the graveyard
+    # template's punctuation, not a second effect: "put" must follow either way.
+    stream.accept_word("and")
     stream.expect_word("put")
     # "put that card into your hand" / "put it into your hand" — one referent,
     # two printed spellings.
@@ -213,7 +267,23 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
     # unparsed search rather than an unimplemented destination.
     stream.expect_word("into", "onto")
     destination = _parse_zone(stream)
-    stream.accept_punct(",")
-    stream.accept_word("then")
-    stream.expect_word("shuffle")
-    return ast.SearchLibrary(ast.PlayerRef("you"), filt, destination)
+    if graveyard:
+        # "…into your hand. If you search your library this way, shuffle."
+        # A printed sentence break, but not a second effect: the shuffle is the
+        # tail of *this* search, conditional only because the graveyard half
+        # shuffles nothing. Consuming it here — interior full stop and all —
+        # keeps it attached to the effect that performs it; left to the
+        # sequence parser it would be a statement no production implements and
+        # the whole line would refuse. The final full stop is deliberately left
+        # for the sequence parser, which is what ends the line.
+        if not stream.accept_punct("."):
+            raise stream.error("expected the conditional shuffle sentence")
+        if not stream.accept_phrase("if", "you", "search", "your", "library", "this", "way"):
+            raise stream.error("expected 'If you search your library this way'")
+        stream.accept_punct(",")
+        stream.expect_word("shuffle")
+    else:
+        stream.accept_punct(",")
+        stream.accept_word("then")
+        stream.expect_word("shuffle")
+    return ast.SearchLibrary(ast.PlayerRef("you"), filt, destination, graveyard)

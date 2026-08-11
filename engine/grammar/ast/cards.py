@@ -105,6 +105,11 @@ class SearchLibrary:
     player: PlayerRef
     filter: ObjectFilter
     to: Zone
+    # "search your library **and/or graveyard**" — a second zone the search may
+    # look in, not a wording of the first. It rides on the node rather than on
+    # the filter because it says where the search happens, not what it may
+    # find; the filter's `named` field carries the latter.
+    graveyard: bool = False
 
 
 @dataclass(frozen=True)

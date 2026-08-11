@@ -22,6 +22,7 @@ from .auras import aura_restriction_active
 from .models import CardDefinition, Permanent, PlayerState
 from .oracle import OracleInstruction, compile_card_oracle
 from .oracle_types import x_spend_color_from_text
+from .search_filters import search_matches
 
 _MANA_SYMBOLS = ("W", "U", "B", "R", "G", "C")
 
@@ -415,22 +416,41 @@ def choose_combat_instant_cast_action(game: Game, player_index: int) -> CastActi
     return best
 
 
+def choose_search_card(
+    game: Game, player_index: int, data: dict
+) -> tuple[str, int] | None:
+    """Pick the ``(zone, index)`` of the best card a search may find, or None to
+    fail to find (CR 701.19b).
+
+    Both the zones and the restriction come from the armed choice rather than
+    from a second reading of the card: the AI is then offered exactly the cards
+    a human seat is offered, and ``search_matches`` is the only thing deciding
+    what is findable. An AI that filtered differently would be a second opinion
+    about what the effect finds — the same bug class as a second parse.
+    """
+    player = game.players[player_index]
+    best: tuple[str, int] | None = None
+    best_score = float("-inf")
+    for zone in tuple(data.get("zones", ("library",))):
+        cards = player.library if zone == "library" else player.graveyard
+        for index, card in enumerate(cards):
+            if not search_matches(card, data):
+                continue
+            score = _score_tutor_choice(game, player_index, card)
+            if best is None or score > best_score:
+                best = (zone, index)
+                best_score = score
+    return best
+
+
 def choose_search_library_index(game: Game, player_index: int, card_type: str = "any") -> int | None:
     """Pick the library index of the best card to tutor for (e.g. Demonic Tutor).
 
-    Returns None when no library card matches card_type (fail to find)."""
-    player = game.players[player_index]
-
-    best_index: int | None = None
-    best_score = float("-inf")
-    for index, card in enumerate(player.library):
-        if card_type != "any" and card.primary_type != card_type:
-            continue
-        score = _score_tutor_choice(game, player_index, card)
-        if best_index is None or score > best_score:
-            best_index = index
-            best_score = score
-    return best_index
+    Returns None when no library card matches card_type (fail to find). The
+    library-only view of ``choose_search_card``, kept because a caller that only
+    ever searches a library should not have to spell out a zone list."""
+    found = choose_search_card(game, player_index, {"card_type": card_type})
+    return None if found is None else found[1]
 
 
 def choose_reorder_library_order(

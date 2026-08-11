@@ -120,6 +120,98 @@ def test_storm_caller_damages_each_opponent_on_entry(set_pool):
     assert p1.life == 20
 
 
+# --- The search round: the filter the flow honours, and the two-zone fetch ---
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "Fierce Empath",        # search for a creature with mana value 6+
+        "Chandra's Firemaw",    # library and/or graveyard, for a named card
+        "Garruk's Warsteed",
+        "Teferi's Wavecaster",
+        "Liliana's Scorn",
+    ],
+)
+def test_search_round_cards_compile_supported(set_pool, name):
+    assert compile_card_oracle(set_pool("M21")[name]).supported
+
+
+def test_a_search_refuses_a_card_its_restriction_excludes(set_pool):
+    """The engine is the authority on what may be found, not the client that
+    offered the cards: an index outside the restriction is simply refused."""
+    pool = set_pool("M21")
+    big = next(c for c in pool.values() if c.primary_type == "creature" and c.cmc >= 6)
+    small = next(c for c in pool.values() if c.primary_type == "creature" and c.cmc < 6)
+    p1 = PlayerState(name="P1", library=[small, big])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.arm_pending_choice(
+        "search_library", 0, count=1, card_type="creature",
+        zones=("library",), restrictions={"mana_value": {"op": "ge", "value": 6}},
+    )
+
+    assert not game.confirm_search_library(0, 0)
+    assert p1.hand == []
+    assert game.pending_search_library is not None
+
+    assert game.confirm_search_library(0, 1)
+    assert [c.name for c in p1.hand] == [big.name]
+    assert game.pending_search_library is None
+
+
+def test_a_search_that_can_find_nothing_can_still_be_left(set_pool):
+    """Failing to find is legal (CR 701.19b) and is the only answer available
+    when nothing in the searched zones matches."""
+    pool = set_pool("M21")
+    p1 = PlayerState(name="P1", library=[pool["Island"], pool["Island"]])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.arm_pending_choice(
+        "search_library", 0, count=1, card_type="any",
+        zones=("library",), restrictions={"named": "Fierce Empath"},
+    )
+
+    assert game.decline_search_library(0)
+    assert p1.hand == []
+    assert len(p1.library) == 2
+    assert game.pending_search_library is None
+
+
+def test_a_search_cannot_be_answered_with_a_zone_it_was_not_armed_with(set_pool):
+    pool = set_pool("M21")
+    p1 = PlayerState(
+        name="P1", library=[pool["Island"]], graveyard=[pool["Alpine Watchdog"]]
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.arm_pending_choice(
+        "search_library", 0, count=1, card_type="any",
+        zones=("library",), restrictions={},
+    )
+
+    assert not game.confirm_search_library(0, 0, "graveyard")
+    assert p1.hand == []
+    assert [c.name for c in p1.graveyard] == ["Alpine Watchdog"]
+
+
+def test_a_graveyard_find_does_not_shuffle_the_library(set_pool):
+    """CR 701.19d and the printed "If you search your library this way,
+    shuffle": a graveyard is an open zone, so randomising a library the player
+    did not search would destroy information they were entitled to keep."""
+    pool = set_pool("M21")
+    wanted = pool["Alpine Watchdog"]
+    library = [pool["Island"], pool["Forest"], pool["Mountain"]]
+    p1 = PlayerState(name="P1", library=list(library), graveyard=[wanted])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.arm_pending_choice(
+        "search_library", 0, count=1, card_type="any",
+        zones=("library", "graveyard"), restrictions={"named": "alpine watchdog"},
+    )
+
+    assert game.confirm_search_library(0, 0, "graveyard")
+    assert [c.name for c in p1.hand] == ["Alpine Watchdog"]
+    assert p1.graveyard == []
+    assert [c.name for c in p1.library] == [c.name for c in library]
+
+
 # --- The scry round (CR 701.22), and mill's recipient -----------------------
 
 

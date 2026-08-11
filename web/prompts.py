@@ -27,6 +27,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from engine.pending_choices import CHOICE_SPECS, public_data
+from engine.search_filters import search_matches
 
 
 @dataclass(frozen=True)
@@ -173,14 +174,37 @@ def _effect_order(ctx: PromptContext, choices: list) -> dict:
 
 @prompt_renderer("search_library")
 def _search_library(ctx: PromptContext, choices: list) -> dict:
+    """The cards the search may look at, and which of them it may find.
+
+    Additive on purpose: ``cards`` stays the caster's library in library order,
+    so a client written before restrictions existed still renders. The
+    restriction arrives beside it as the indices that satisfy it — the client
+    greys out the rest — and the engine re-checks the answer regardless,
+    because this payload is a hint and not a permission.
+    """
     choice = choices[0]
     caster = ctx.game.players[choice.player_index]
-    return {
+    zones = tuple(choice.data.get("zones", ("library",)))
+    payload = {
         "caster_seat": choice.player_index,
         "count": choice.data["count"],
         "card_type": choice.data["card_type"],
+        "zones": list(zones),
         "cards": [ctx.serialize_card(card) for card in caster.library],
+        "legal_indices": [
+            index for index, card in enumerate(caster.library)
+            if search_matches(card, choice.data)
+        ],
     }
+    if "graveyard" in zones:
+        payload["graveyard_cards"] = [
+            ctx.serialize_card(card) for card in caster.graveyard
+        ]
+        payload["legal_graveyard_indices"] = [
+            index for index, card in enumerate(caster.graveyard)
+            if search_matches(card, choice.data)
+        ]
+    return payload
 
 
 @prompt_renderer("reorder_library")

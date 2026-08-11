@@ -962,9 +962,25 @@ def do_action(session_id: str, req: GameActionRequest):
             raise HTTPException(status_code=400, detail="not your library search")
         if req.hand_index is None:
             raise HTTPException(status_code=400, detail="hand_index (library card index) is required")
-        ok = session.game.confirm_search_library(req.seat, req.hand_index)
+        # Which zone the index addresses. The engine checks it against the zones
+        # the search was armed with, so naming the graveyard on a library-only
+        # search is a rejected answer rather than a widened effect.
+        zone = req.search_zone or "library"
+        if zone not in {"library", "graveyard"}:
+            raise HTTPException(status_code=400, detail="unknown search zone")
+        ok = session.game.confirm_search_library(req.seat, req.hand_index, zone)
         if not ok:
             raise HTTPException(status_code=400, detail="invalid library card index")
+
+    elif req.action == "search_library_decline":
+        pending = session.game.pending_search_library
+        if pending is None:
+            raise HTTPException(status_code=400, detail="no library search pending")
+        if req.seat != pending["caster_index"]:
+            raise HTTPException(status_code=400, detail="not your library search")
+        # Failing to find is legal (CR 701.19b) and is the only answer available
+        # when nothing in the searched zones matches the restriction.
+        session.game.decline_search_library(req.seat)
 
     elif req.action == "reorder_library_confirm":
         pending = session.game.pending_reorder_library
