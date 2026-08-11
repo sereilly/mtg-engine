@@ -156,15 +156,54 @@ def manifest_set_codes(manifest_path: str | Path = MANIFEST_PATH) -> list[str]:
     return [entry["code"] for entry in manifest_sets(manifest_path)]
 
 
-def manifest_set_paths(manifest_path: str | Path = MANIFEST_PATH) -> list[Path]:
-    """Every set JSON listed in ``cards/manifest.json``, in printing order.
+def manifest_measured_sets(manifest_path: str | Path = MANIFEST_PATH) -> list[dict]:
+    """Sets ingested for *measurement* but not shipped.
+
+    A second role in the same registry, not a second registry. The engine plays
+    ``sets``, and that list is held at 100% supported — the web app offers those
+    cards to players, and two guards
+    (``tests/engine/test_front_end_safety.py``, ``tests/engine/test_card_format.py``)
+    fail if a card in it is unsupported.
+
+    A newly ingested set cannot meet that bar on the day it arrives, and the
+    numbers that say how far off it is are the reason to ingest it. So it lands
+    here: the coverage instruments read it, ``load_catalog`` does not, and it
+    moves up to ``sets`` when the support work is done. Without this split the
+    only two options are shipping a set the app cannot play or not measuring it
+    at all.
+    """
+    manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+    return list(manifest.get("measured", ()))
+
+
+def manifest_measured_codes(manifest_path: str | Path = MANIFEST_PATH) -> list[str]:
+    """Every set code ingested for measurement but not shipped."""
+    return [entry["code"] for entry in manifest_measured_sets(manifest_path)]
+
+
+def manifest_set_paths(
+    manifest_path: str | Path = MANIFEST_PATH,
+    *,
+    include_measured: bool = False,
+) -> list[Path]:
+    """Every shipped set JSON in ``cards/manifest.json``, in printing order.
 
     The manifest is the single registry of which sets the engine ships. Before
     it existed the same ordered list was copy-pasted across the web app, the
     test fixtures, and five scripts, so adding a set meant editing all of them.
+
+    *include_measured* additionally returns the ingested-but-unshipped sets, and
+    exists for the coverage instruments alone. It defaults to False so that
+    every existing caller — ``load_catalog`` above all, and through it the web
+    app, the fixtures and the support report — keeps meaning "what the engine
+    plays". Widening this by default is how an unsupported card would reach a
+    player's deck.
     """
     base = Path(manifest_path).parent
-    return [base / entry["file"] for entry in manifest_sets(manifest_path)]
+    entries = manifest_sets(manifest_path)
+    if include_measured:
+        entries = entries + manifest_measured_sets(manifest_path)
+    return [base / entry["file"] for entry in entries]
 
 
 def load_catalog(manifest_path: str | Path = MANIFEST_PATH) -> list[CardDefinition]:

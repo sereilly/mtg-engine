@@ -47,7 +47,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from engine.card_loader import load_cards, manifest_set_paths
+from engine.card_loader import load_cards, manifest_measured_codes, manifest_set_paths
 from engine.grammar import GRAMMAR_CATEGORIES, compile_line
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -66,7 +66,6 @@ RATCHET_PATH = REPO_ROOT / "scripts" / "grammar_ratchet.json"
 # that nobody is blocked on, and it hides the real owner.
 _ROADMAPPED_REASONS = {
     "static abilities need the CR 613 layers engine": "phase 6 (CR 613 layers)",
-    "modal line": "phase 3 (modal production)",
     "granted ability in quotes": "phase 3 (quoted abilities)",
     "continuous pump needs the CR 613 layers engine": "phase 6 (CR 613 layers)",
     "continuous keyword grant needs the CR 613 layers engine": "phase 6 (CR 613 layers)",
@@ -75,6 +74,13 @@ _ROADMAPPED_REASONS = {
     # through it. A scheduled reason retires when the code lands, in the same
     # commit — an entry naming work that is done is the stale-comment failure
     # this dict's own docstring warns about.
+    #
+    # "modal line" went the same way. `engine/grammar/effects/stack.py` reads
+    # the head ("Choose one —", with or without an activation cost or a trigger
+    # in front of it) and `engine/oracle.py` groups it with the bullets below
+    # it, so the reason no longer exists to be scheduled. What is left of it in
+    # the backlog is honest: a count the engine cannot carry out refuses at
+    # *lowering*, and says so.
 }
 
 
@@ -100,22 +106,31 @@ class Stats:
         }
 
 
-def analyze() -> tuple[dict[str, Stats], Stats, collections.Counter, list[tuple[str, str]]]:
+def analyze() -> tuple[dict[str, Stats], Stats, collections.Counter, list[tuple[str, str]], dict, set[str]]:
     per_set: dict[str, Stats] = {}
     overall = Stats()
     reasons: collections.Counter = collections.Counter()
     distinct_texts: dict[str, set[str]] = {}
     executed_lines: list[tuple[str, str]] = []
+    measured_codes: set[str] = set(manifest_measured_codes())
 
-    for path in manifest_set_paths():
+    # Measured sets are reported and not ratcheted, and they stay out of
+    # `overall` as well. The floors here answer "is the parser losing ground",
+    # and an aggregate that moves when an unimplemented set is ingested answers
+    # a different question with the same number: ingesting M21 dropped ALL from
+    # 77.2% to 70.7% parsed without a single production changing. A floor that
+    # fires on pool composition is a floor that gets lowered without being read.
+    for path in manifest_set_paths(include_measured=True):
         if not path.exists():
             continue
         code = path.stem.replace("_cards", "")
+        shipped = code not in measured_codes
         stats = Stats()
         per_set[code] = stats
         for card in load_cards(str(path)):
             stats.cards += 1
-            overall.cards += 1
+            if shipped:
+                overall.cards += 1
             card_executed = False
             for raw in (card.oracle_text or "").splitlines():
                 line = raw.strip()
@@ -127,16 +142,20 @@ def analyze() -> tuple[dict[str, Stats], Stats, collections.Counter, list[tuple[
                     # counting it either way would distort the percentages.
                     continue
                 stats.lines += 1
-                overall.lines += 1
+                if shipped:
+                    overall.lines += 1
                 if result.parsed:
                     stats.parsed += 1
-                    overall.parsed += 1
+                    if shipped:
+                        overall.parsed += 1
                 if result.lowered:
                     stats.lowered += 1
-                    overall.lowered += 1
+                    if shipped:
+                        overall.lowered += 1
                 if result.usable:
                     stats.executed += 1
-                    overall.executed += 1
+                    if shipped:
+                        overall.executed += 1
                     card_executed = True
                     executed_lines.append((card.name, line))
                 if result.failure_reason:
@@ -152,9 +171,10 @@ def analyze() -> tuple[dict[str, Stats], Stats, collections.Counter, list[tuple[
                     )
             if card_executed:
                 stats.cards_executed += 1
-                overall.cards_executed += 1
+                if shipped:
+                    overall.cards_executed += 1
 
-    return per_set, overall, reasons, executed_lines, distinct_texts
+    return per_set, overall, reasons, executed_lines, distinct_texts, measured_codes
 
 
 def render(
@@ -163,6 +183,7 @@ def render(
     reasons: collections.Counter,
     executed_lines: list[tuple[str, str]],
     distinct_texts: dict[str, set[str]],
+    measured_codes: set[str] = frozenset(),
 ) -> str:
     lines: list[str] = []
     add = lines.append
@@ -196,17 +217,33 @@ def render(
     add("| Set | Cards | Lines | Parsed | Lowered | Executed | Cards executing |")
     add("| --- | ---: | ---: | ---: | ---: | ---: | ---: |")
     for code, stats in per_set.items():
+        label = f"{code} *(measured)*" if code in measured_codes else code
         add(
-            f"| {code} | {stats.cards} | {stats.lines} | "
+            f"| {label} | {stats.cards} | {stats.lines} | "
             f"{stats.pct(stats.parsed)}% | {stats.pct(stats.lowered)}% | "
             f"{stats.pct(stats.executed)}% | {stats.cards_executed} |"
         )
     add(
-        f"| **All** | **{overall.cards}** | **{overall.lines}** | "
+        f"| **All (shipped)** | **{overall.cards}** | **{overall.lines}** | "
         f"**{overall.pct(overall.parsed)}%** | **{overall.pct(overall.lowered)}%** | "
         f"**{overall.pct(overall.executed)}%** | **{overall.cards_executed}** |"
     )
     add("")
+    if measured_codes:
+        add(
+            f"*(measured)* — {', '.join(sorted(measured_codes))} are ingested for "
+            "measurement and **not shipped** (`measured` in "
+            "`cards/manifest.json`): the engine's catalog does not load them and "
+            "no player can put one in a deck. They are reported here and left "
+            "out of the **All** row and the floors, because these floors ask "
+            "*is the parser losing ground* — and an aggregate that moves when an "
+            "unimplemented set is ingested answers a different question with the "
+            "same number. Ingesting M21 would have dropped All from 77.2% to "
+            "70.7% parsed without a single production changing, and a floor that "
+            "fails on pool composition is a floor that gets lowered without "
+            "being read."
+        )
+        add("")
 
     add("## Backlog — failure reasons")
     add("")
@@ -243,8 +280,22 @@ def render(
     return "\n".join(lines)
 
 
-def _measures(per_set: dict[str, Stats], overall: Stats) -> dict[str, dict[str, float]]:
-    measures = {code: stats.as_dict() for code, stats in per_set.items()}
+def _measures(
+    per_set: dict[str, Stats],
+    overall: Stats,
+    measured_codes: set[str] = frozenset(),
+) -> dict[str, dict[str, float]]:
+    """What the ratchet compares — **shipped scopes only**.
+
+    A measured set is reported and not ratcheted: its numbers describe a set
+    nobody has implemented yet, so a floor over them would fail on the day it
+    was ingested and stay failing until the work was done.
+    """
+    measures = {
+        code: stats.as_dict()
+        for code, stats in per_set.items()
+        if code not in measured_codes
+    }
     measures["ALL"] = overall.as_dict()
     return measures
 
@@ -275,8 +326,8 @@ def main() -> int:
     parser.add_argument("--accept", action="store_true", help="re-snapshot the ratchet floors")
     args = parser.parse_args()
 
-    per_set, overall, reasons, executed_lines, distinct_texts = analyze()
-    measures = _measures(per_set, overall)
+    per_set, overall, reasons, executed_lines, distinct_texts, measured_codes = analyze()
+    measures = _measures(per_set, overall, measured_codes)
 
     if args.check:
         failures = check(measures)
@@ -299,7 +350,8 @@ def main() -> int:
         print(f"Wrote ratchet floors to {RATCHET_PATH}")
 
     OUTPUT_PATH.write_text(
-        render(per_set, overall, reasons, executed_lines, distinct_texts), encoding="utf-8"
+        render(per_set, overall, reasons, executed_lines, distinct_texts, measured_codes),
+        encoding="utf-8",
     )
     print(f"Wrote {OUTPUT_PATH}")
     print(

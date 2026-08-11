@@ -37,8 +37,9 @@ import grammar_coverage  # noqa: E402
 def measures():
     # Starred so an added analysis output does not break this fixture: the
     # ratchet only ever wants the first two.
-    per_set, overall, *_ = grammar_coverage.analyze()
-    return grammar_coverage._measures(per_set, overall)
+    per_set, overall, *rest = grammar_coverage.analyze()
+    measured_codes = rest[-1]
+    return grammar_coverage._measures(per_set, overall, measured_codes)
 
 
 def test_ratchet_baseline_exists():
@@ -62,7 +63,10 @@ def test_measures_are_properly_nested(measures):
         )
 
 
-def test_every_measured_set_is_in_the_baseline(measures):
+def test_every_ratcheted_scope_is_in_the_baseline(measures):
+    """Renamed off "measured": that word now names the *unshipped* sets in
+    `cards/manifest.json`, which this must not require — they are reported and
+    deliberately left out of the floors."""
     baseline = json.loads(grammar_coverage.RATCHET_PATH.read_text(encoding="utf-8"))
     missing = set(measures) - set(baseline.get("floors", {}))
     assert not missing, (
