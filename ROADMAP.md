@@ -4994,6 +4994,78 @@ three of them carry other text the engine still cannot read.
 
 ---
 
+## M21 Phase 2–3: the census, and the keyword round
+
+*(2026-08-10)* The first set implemented under `SET_PLAYBOOK.md`, which this
+session also wrote. Phase 0 drained two known gaps: the stale tracker rows
+(HOOK_RELIANCE's M21 line lagged lifelink's two cards) and the fixture seam —
+`manifest_set_path` grew the `include_measured` passthrough `manifest_set`
+already had, so `set_pool("M21")` resolves and a card can land with its
+focused test while the set is still measured. The convention guard now proves
+both directions: every manifest code reachable through the factory, a
+measured code still refused by a caller that has not opted in.
+
+**The census (Phase 2), by three read-only classifiers over the 179
+unsupported cards.** Keyword-gated: 20 cards, of which only 5 fall to
+keywords alone — the census names them, and Baneslayer Angel's "protection
+from Demons and from Dragons" is the sixth that doesn't (non-colour
+protection qualities are unmodelled, and admitting the word would drop the
+shield). Blocked on subsystems: the 11 planeswalkers (CR 306 — loyalty,
+`unknown card type`; scoped, not started), scry (no parse, no handler,
+nothing — also gates Wall of Runes, Spined Megalodon, Stormwing Entity),
+search-by-name/graveyard (5+ cards), exile-until-leaves (3), per-turn
+trackers ("life gained this turn", "drawn two or more cards this turn"),
+reflexive triggers, modal choose-one-or-more. The rest is round material,
+and the census ranked it by cards-per-change:
+
+1. **Token naming** — `_lower_create_token` refuses every unnamed token;
+   picking the CR 111.4 convention unblocks ~12 cards across all three
+   slices. The single largest blocker in the set.
+2. **Counters on a non-source subject** — `put_counter_on_target` /
+   `put_counter_on_each_you_control` kinds; ~12 cards census-wide.
+3. **`up to N target`** — a noun-phrase production the lowering already
+   honours; ~10 cards.
+4. **`each opponent` as damage/life-loss/mill/discard recipient** — recipient
+   widening in four lowerings; ~8 cards.
+5. **The `_KEYWORD_GRANTS` table → payload-driven grant** — "gains
+   deathtouch/indestructible/hexproof until end of turn"; ~7 cards.
+
+One landmine the census wrote down before it could fire: the oracle trigger
+regexes are unanchored prefixes, so `whenever you cast a spell` already
+claims Quirion Dryad's colour-narrowed trigger and `at the beginning of
+combat` claims "on your turn". Fixing only an *effect* under one of those
+four cards would compile it supported **firing on the wrong event** —
+narrow the conditions first (Quirion Dryad, Snarespinner, Gloom Sower,
+Battle-Rattle Shaman / Dire Fleet Warmonger / Adherent of Hope).
+
+**Round 1 (keywords): 106 → 110.** Six keywords, each landing as one rule at
+one seam, covering everywhere the CR says it applies rather than the paths
+M21 exercises. Deathtouch moved onto `_mark_damage_on_permanent` beside
+lifelink — the same shape as the lifelink fix, found the same way: the
+combat step stamped `received_deathtouch` and a ping did not. Indestructible
+was machinery-without-a-gate (`_is_indestructible` already consulted the
+keyword). Flash is a `CardDefinition` accessor read by the web layer's two
+sorcery-speed gates; menace an assignment-level check in `declare_blockers`
+plus an AI that declines the lone block; hexproof a seat-aware branch in
+`_can_be_targeted` beside protection, with "hexproof from <colour>" kept
+distinct (it is a different, narrower keyword); prowess a sweep on the
+cast-trigger path through `engine/pt.py`. The keyword-line gate learned the
+comma-joined parameterised forms for colour qualities only, and
+`_protection_colors` learned to read protection off keyword lines — the
+reclassification would otherwise have silently dropped Black Knight's
+shield, which `tests/rules/test_protection.py` caught on the first run.
+Fourteen rules tests cite 702.2b/.8/.11/.12/.108/.111; `SCOPE` widened to
+match. The four unlocked cards are Mistral Singer, Masked Blackguard, Bone
+Pit Brute, Ornery Dilophosaur; 15 more keyword-plus cards moved one line
+closer. Cost: one positional-indexing ratchet near-miss (rewritten to reuse
+already-resolved permanents rather than raise a baseline), zero hooks, zero
+ceiling raises, suite at 18.3s.
+
+Next round per the census ranking: token naming, then counters-on-target,
+then `up to N target`.
+
+---
+
 ## Standing invariants
 
 Anything that weakens these is a regression regardless of what it enables:

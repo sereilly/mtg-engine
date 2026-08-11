@@ -81,7 +81,10 @@ is green, the trackers carry its row, and the census is in hand.
    not move, by design.
 4. Record the census: `python scripts/support_report.py --set <CODE>` — total,
    supported, and the unsupported-reason histogram. This is the input to
-   Phase 2.
+   Phase 2. Know what the histogram is: each reason quotes only the **first**
+   refused line of its card, so a card counted under a keyword may carry three
+   more gaps behind it — the histogram sizes the buckets, it does not promise
+   a bucket's fix supports its cards.
 
 ## Phase 2 — Machinery census (the big rocks)
 
@@ -115,7 +118,12 @@ Optional tactic, recorded because it worked: fan out read-only subagents to
 classify the unsupported cards into *implementable now* (recipe steps 2–3),
 *needs a new handler*, and *blocked on a subsystem*, then merge the
 classification serially. Implementation never fans out (see the execution
-model above).
+model above). Have the classifiers **compile, not read**: running each
+refused line through the live grammar names the exact refusal site and
+catches what eyeballing misses — the M21 census found cards whose reason
+string hid a second gap, and a set of unanchored trigger regexes that would
+have compiled cards firing on the wrong event had the effect side been fixed
+first.
 
 ## Phase 3 — Backlog rounds (generalise first)
 
@@ -131,6 +139,14 @@ measured set so per-card tests can land as the cards do. **Exit:**
    step. A name-keyed hook only under `card_hooks.py`'s entry bar — no second
    card, real or plausibly printable, shares the shape — and a hook-reliance
    ceiling raise is a decision recorded in the commit, not maintenance.
+   When a change widens a *gate* (a line admitted that used to be refused, or
+   admitted under a different classification), grep for readers keyed on the
+   old classification before trusting the suite — behaviour that read the
+   refused shape can go quietly missing, and the guard that catches it may
+   sit far from the gate. M21's keyword round moved standalone protection
+   lines from static to keyword classification and would have dropped the
+   shield had `tests/rules/test_protection.py` not been in the first targeted
+   run.
 2. Every card lands with a focused test in `tests/sets/test_<set>_cards.py`
    (conventions and the split-by-type rule: `tests/sets/README.md`). A new
    set needs zero `tests/conftest.py` changes; the fixture factory covers any
@@ -226,4 +242,13 @@ set's execution proved wrong.*
 
 Append-only. The audit trail for why the phase text above says what it says.
 
-*(none yet — M21 will be the first)*
+**M21 — 2026-08-10 (partial: Phases 0–3, round 1; set still measured).**
+The playbook's first execution, in the session that wrote it. Phase 0 drained
+the two pre-work gaps it opened with: the measured-set fixture seam
+(`manifest_set_path` gained `include_measured`; `set_pool("M21")` resolves)
+and the stale tracker rows. The census ran as three compile-driven read-only
+classifiers; round 1 took the six keywords (106 → 110 supported). Playbook
+edits from this run: Phase 1 now warns that a census reason names only the
+first refused line; Phase 2's classifier tactic now says compile-not-read;
+Phase 3 gained the widened-gate rule (grep for readers keyed on the old
+classification). Remaining Known-gaps items stand unchanged.
