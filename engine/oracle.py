@@ -219,6 +219,11 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("spell_cast",                  r"whenever a player casts a (?P<color_word>white|blue|black|red|green) spell"),
     ("spell_cast",                  r"whenever a player casts a spell"),
     ("opponent_casts_spell",        r"whenever an opponent casts a spell"),
+    # A colour-list narrowing ("…a spell that's white, blue, black, or red",
+    # Quirion Dryad). The list is condition payload, read by the you_cast_spell
+    # event filter; must precede its unnarrowed prefix below.
+    ("you_cast_spell",
+     r"whenever you cast a spell that's (?P<cast_colors>[a-z]+(?:, [a-z]+)*,? or [a-z]+)"),
     ("you_cast_spell",              r"whenever you cast a spell"),
     ("enchantment_cast",            r"whenever you cast an enchantment spell"),
     ("creature_enters",             r"whenever a creature enters(?: the battlefield)?"),
@@ -251,6 +256,9 @@ AT_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("upkeep_chosen",       r"at the beginning of the chosen player's upkeep"),
     ("draw_step_each",      r"at the beginning of each player's draw step"),
     ("end_step",            r"at the beginning of (?:the |each |your )?end(?: step)?"),
+    # "…of combat on your turn" narrows the bare form to the active player's
+    # combat (Adherent of Hope); must precede its own prefix below.
+    ("combat_your_turn",    r"at the beginning of combat on your turn"),
     ("combat",              r"at the beginning of combat"),
 )
 

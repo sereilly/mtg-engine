@@ -72,6 +72,7 @@ EXAMPLE_TEXTS: dict[str, str] = {
     "upkeep_chosen": "at the beginning of the chosen player's upkeep",
     "draw_step_each": "at the beginning of each player's draw step",
     "end_step": "at the beginning of the end step",
+    "combat_your_turn": "at the beginning of combat on your turn",
     "combat": "at the beginning of combat",
 }
 

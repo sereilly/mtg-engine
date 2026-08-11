@@ -119,6 +119,48 @@ def test_storm_caller_damages_each_opponent_on_entry(set_pool):
     assert p1.life == 20
 
 
+# --- The trigger-narrowing round: conditions carry their own restrictions ---
+
+
+def test_quirion_dryad_counters_only_the_listed_colours(set_pool):
+    """"Whenever you cast a spell that's white, blue, black, or red" — a green
+    spell is not in the list, so it must not fire the trigger."""
+    dryad = Permanent(card=set_pool("M21")["Quirion Dryad"])
+    red = set_pool("M21")["Shock"]
+    green = set_pool("M21")["Titanic Growth"]
+    p1 = PlayerState(name="P1", battlefield=[dryad], hand=[red, green])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    base = dryad.effective_power
+
+    game.cast_from_hand(0, "Shock", target_player_index=1)
+    game.resolve_top_of_stack()
+    assert dryad.effective_power == base + 1
+
+    game.cast_from_hand(0, "Titanic Growth", target_player_index=0, target_permanent_index=0)
+    game.resolve_top_of_stack()
+    assert dryad.effective_power == base + 1 + 4  # the +4/+4 pump lands, the counter does not
+
+
+def test_adherent_of_hope_counters_on_its_controllers_combat_only(set_pool):
+    adherent = Permanent(card=set_pool("M21")["Adherent of Hope"])
+    p1 = PlayerState(name="P1", battlefield=[adherent])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    base = adherent.effective_power
+
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # beginning_of_combat, controller's turn
+    game.resolve_top_of_stack()
+    assert adherent.effective_power == base + 1
+
+    game.start_turn(1)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # opponent's combat: no trigger
+    assert adherent.effective_power == base + 1
+
+
 # --- The mana-value round: a literal bound rides the payload ----------------
 
 

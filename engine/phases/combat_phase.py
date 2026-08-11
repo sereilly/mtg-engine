@@ -11,6 +11,7 @@ in the sibling step modules (``beginning_of_combat_step``, ``declare_attackers_s
 ``declare_blockers_step``, ``combat_damage_step``, ``end_of_combat_step``).
 """
 
+from ..events import emit
 from ..models import Permanent
 from ..resumption import run_resumable
 
@@ -248,6 +249,15 @@ class CombatPhaseMixin:
             self.combat_blockers_locked = not bool(self.combat_attackers)
         self._set_phase_and_step("combat", step)
         self._on_step_or_phase_begin("combat", step)
+        if step == "beginning_of_combat":
+            # "At the beginning of combat on your turn" (CR 507.1) — scanned
+            # over the active player's battlefield only, which is what the
+            # narrowing means; the bare "at the beginning of combat" form
+            # would scan every battlefield, and no shipped card uses it.
+            emit(
+                self, "combat_your_turn",
+                players=[self.players[self.active_player_index]],
+            )
         # CR 508.1 / 509.1: declaring attackers and declaring blockers are
         # turn-based actions that happen *before* any player receives priority,
         # so no spell or ability can be cast/activated during that assignment.

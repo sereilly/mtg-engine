@@ -83,6 +83,8 @@ _AT_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("end_step", ("the", "beginning", "of", "the", "end", "step")),
     ("end_step", ("the", "beginning", "of", "each", "end", "step")),
     ("end_step", ("the", "beginning", "of", "your", "end", "step")),
+    # The narrowed form precedes its own prefix, per the rule above.
+    ("combat_your_turn", ("the", "beginning", "of", "combat", "on", "your", "turn")),
     ("combat", ("the", "beginning", "of", "combat")),
 )
 

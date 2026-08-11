@@ -176,6 +176,19 @@ def _controller_cast_filter(
         return False
     if trig.condition.kind == "enchantment_cast" and "enchantment" not in card.type_line.lower():
         return False
+    # "…a spell that's white, blue, black, or red" (Quirion Dryad): the
+    # colour list arrives as condition payload, the raw captured phrase; the
+    # trigger fires only when the cast spell shares at least one listed
+    # colour (CR 105.4 — an "or" list of qualities is a union).
+    cast_colors = trig.condition.payload.get("cast_colors")
+    if cast_colors:
+        wanted = {
+            _COLOR_SYMBOLS[word]
+            for word in cast_colors.replace(",", " ").split()
+            if word in _COLOR_SYMBOLS
+        }
+        if wanted and not (wanted & set(card.colors)):
+            return False
     return True
 
 

@@ -21,7 +21,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | 2ED | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
 | ARN | 78 | 108 | 64.8% | 61.1% | 38.9% | 34 |
 | 3ED | 296 | 389 | 78.9% | 76.9% | 41.9% | 149 |
-| M21 *(measured)* | 285 | 503 | 51.3% | 46.5% | 25.8% | 107 |
+| M21 *(measured)* | 285 | 503 | 51.7% | 46.9% | 26.2% | 109 |
 | **All (shipped)** | **1248** | **1663** | **78.0%** | **76.2%** | **41.5%** | **629** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -32,8 +32,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 303 | 166 | expected a subject |  |
-| 111 | 57 | unrecognized effect verb |  |
+| 299 | 162 | expected a subject |  |
+| 113 | 59 | unrecognized effect verb |  |
 | 68 | 49 | unconsumed text |  |
 | 33 | 33 | unrecognized activation cost |  |
 | 27 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -62,6 +62,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 
 629 cards, 690 lines.
 
+- **Adherent of Hope**
+  - `At the beginning of combat on your turn, if you control a Basri planeswalker, put a +1/+1 counter on this creature.`
 - **Aladdin**
   - `{1}{R}{R}, {T}: Gain control of target artifact for as long as you control this creature.`
 - **Aladdin's Ring**
@@ -791,6 +793,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Target spell or permanent becomes white. (Mana symbols on that permanent remain unchanged.)`
   - `Target spell or permanent becomes white. (Mana symbols on that permanent remain unchanged.)`
   - `Target spell or permanent becomes white. (Mana symbols on that permanent remain unchanged.)`
+- **Quirion Dryad**
+  - `Whenever you cast a spell that's white, blue, black, or red, put a +1/+1 counter on this creature.`
 - **Radiant Fountain**
   - `When this land enters, you gain 2 life.`
   - `{T}: Add {C}.`

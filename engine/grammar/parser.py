@@ -286,6 +286,30 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
                         subject=ast.ObjectFilter(colors=(COLOR_WORDS[colour],)),
                     )
         stream.reset(mark)
+        # "…you cast a spell that's white, blue, black, or red" (Quirion
+        # Dryad): a colour-list narrowing of you_cast_spell. Read before the
+        # phrase table, whose bare "you cast a spell" entry is its prefix.
+        mark = stream.mark()
+        if stream.accept_phrase("you", "cast", "a", "spell", "that", "'s"):
+            colors: list[str] = []
+            while True:
+                word = stream.peek_word()
+                if word not in COLOR_WORDS:
+                    break
+                stream.advance()
+                colors.append(COLOR_WORDS[word])
+                if stream.accept_punct(","):
+                    stream.accept_word("or")
+                    continue
+                if stream.accept_word("or"):
+                    continue
+                break
+            if len(colors) >= 2:
+                return ast.TriggerEvent(
+                    "you_cast_spell", "whenever",
+                    subject=ast.ObjectFilter(colors=tuple(colors)),
+                )
+        stream.reset(mark)
         for kind, phrase in _WHENEVER_EVENTS:
             if stream.accept_phrase(*phrase):
                 return ast.TriggerEvent(kind, "whenever")
