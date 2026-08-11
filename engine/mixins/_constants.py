@@ -2,6 +2,7 @@ from __future__ import annotations
 
 _MANA_SYMBOLS = ("W", "U", "B", "R", "G", "C")
 _EOT_METADATA_KEYS = (
+    "assign_combat_damage_as_unblocked_until_eot",
     "cant_be_blocked_until_eot",
     "must_attack_until_eot",
     "destroy_if_did_not_attack_eot",

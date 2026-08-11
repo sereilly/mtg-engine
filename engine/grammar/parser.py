@@ -33,6 +33,7 @@ whole-pool snapshot of every compiled program and every line's parse result,
 diffed before and after.
 """
 
+import re
 from dataclasses import replace
 
 from . import ast
@@ -52,6 +53,7 @@ from .effects import (
     _expect_counter_kind,
     _parse_activation_restriction,
     _parse_damage_rider_sentence,
+    _parse_gains,
     _parse_unpaid_penalty_sentence,
 )
 from .statements import (
@@ -379,6 +381,107 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
     return None
 
 
+def _statement_bound_target(statement: ast.Statement) -> ast.TargetSpec | None:
+    """The chosen target a following pronoun sentence refers back to, or None.
+
+    "Put a +1/+1 counter on up to one target creature. **It** gains
+    indestructible until end of turn." — the pronoun names the previous
+    sentence's target, not the ability's source. Walks a Sequence or
+    Conjunction from its last step, because the pronoun binds to the nearest
+    preceding choice.
+    """
+    if isinstance(statement, (ast.Sequence,)):
+        for step in reversed(statement.steps):
+            found = _statement_bound_target(step)
+            if found is not None:
+                return found
+        return None
+    if isinstance(statement, ast.Conjunction):
+        for step in reversed(statement.effects):
+            found = _statement_bound_target(step)
+            if found is not None:
+                return found
+        return None
+    for field_name in ("subject", "target"):
+        candidate = getattr(statement, field_name, None)
+        if isinstance(candidate, ast.TargetSpec) and candidate.quantifier in ("target", "up_to"):
+            return candidate
+    return None
+
+
+def _parse_pronoun_grant_rider(
+    stream: TokenStream, steps: list[ast.Statement]
+) -> ast.Statement | None:
+    """``It gains <keywords> [duration].`` after a sentence that chose a target.
+
+    Re-uses the previous sentence's own :class:`ast.TargetSpec` as the grant's
+    subject, so both instructions describe — and resolve — the same choice.
+    Without this the sentence parses on its own with "it" read as the source,
+    which is the trigger-remainder reading and grants the ability's *source*
+    the keyword (Basri Ket +1 would make Basri indestructible, not the
+    creature).
+    """
+    target = _statement_bound_target(steps[-1]) if steps else None
+    if target is None:
+        return None
+    mark = stream.mark()
+    if not stream.accept_word("it"):
+        return None
+    if not stream.at_word("gains", "gain"):
+        stream.reset(mark)
+        return None
+    try:
+        grant = _parse_gains(stream, target)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    # "Put target creature card from a graveyard onto the battlefield under
+    # your control. It gains haste." (Liliana, Waker of the Dead's emblem.)
+    # A durationless grant to a reanimated card folds into the reanimation —
+    # the permanent does not exist until that step runs, so a separate grant
+    # instruction would have nothing to grant to.
+    if (
+        isinstance(grant, ast.GainKeyword)
+        and grant.duration.kind is None
+        and isinstance(steps[-1], ast.PutOntoBattlefield)
+    ):
+        steps[-1] = replace(steps[-1], gains=steps[-1].gains + grant.keywords)
+        return _RIDER_FOLDED
+    return grant
+
+
+# Sentinel: the rider was folded into the previous step, nothing to append.
+_RIDER_FOLDED = ast.RawEffect("rider-folded")
+
+
+def _parse_who_cant_rider(
+    stream: TokenStream, steps: list[ast.Statement]
+) -> ast.Statement | None:
+    """``Each opponent who can't loses N life.`` after an each-player discard
+    (Liliana, Waker of the Dead). The loss applies only to opponents who could
+    not perform the previous sentence's action, so it is recorded as a
+    back-reference the lowering turns into a reader of that step's result."""
+    last = steps[-1] if steps else None
+    if not (isinstance(last, ast.Discard) and last.player.kind == "each_player"):
+        return None
+    mark = stream.mark()
+    if not (
+        stream.accept_word("each")
+        and stream.accept_word("opponent")
+        and stream.accept_phrase("who", "can't")
+    ):
+        stream.reset(mark)
+        return None
+    try:
+        stream.expect_word("loses", "lose")
+        amount = parse_amount(stream)
+        stream.expect_word("life")
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    return ast.LoseLife(ast.PlayerRef("each_opponent"), amount, who_could_not="discard")
+
+
 def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
     """Parse the remaining tokens as one or more sentences, joining them into a
     ``Sequence``. A rider sentence folds into the effect it modifies instead of
@@ -386,6 +489,11 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
     steps: list[ast.Statement] = []
     while not stream.exhausted:
         if stream.accept_punct(".", ";", ","):
+            continue
+        # A sentence opening with "Then …" ("Create a 3/3 green Beast creature
+        # token. Then if an opponent controls more creatures than you, …",
+        # Garruk, Unleashed) — sequencing the sentence loop already provides.
+        if steps and stream.accept_word("then"):
             continue
 
         if steps:
@@ -398,6 +506,15 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
                 steps[-1] = _attach_unpaid_penalty(steps[-1], penalty)
                 continue
             if _attach_if_you_do(stream, steps):
+                continue
+            pronoun_grant = _parse_pronoun_grant_rider(stream, steps)
+            if pronoun_grant is not None:
+                if pronoun_grant is not _RIDER_FOLDED:
+                    steps.append(pronoun_grant)
+                continue
+            who_cant = _parse_who_cant_rider(stream, steps)
+            if who_cant is not None:
+                steps.append(who_cant)
                 continue
             # A trailing "Activate only during your upkeep." belongs to the
             # ability, not to the effect. Consuming it here keeps the line
@@ -565,6 +682,37 @@ def _parse_static_condition_line(stream: TokenStream) -> ast.StaticAbilityNode |
     return ast.StaticAbilityNode(statement, condition)
 
 
+_EMBLEM_LINE_RE = re.compile(
+    r'^\s*you get an emblem with\s+["“](?P<text>.+)["”]\.?\s*$',
+    re.IGNORECASE | re.DOTALL,
+)
+
+# "Until end of turn, creatures you control gain "You may have this creature
+# assign its combat damage as though it weren't blocked."" (Garruk, Savage
+# Herald's −7.) The quoted grant is matched whole: the granted sentence IS the
+# effect, so a paraphrase is a different card and must keep refusing.
+_ASSIGN_UNBLOCKED_LINE_RE = re.compile(
+    r'^\s*until end of turn, creatures you control gain\s+'
+    r'["“]you may have this creature assign its combat damage as though it '
+    r'wasn.t blocked\.?["”]\.?\s*$'
+    .replace("wasn.t", r"(?:wasn|weren)['’]t"),
+    re.IGNORECASE,
+)
+
+
+def _parse_emblem_line(line: str) -> "ast.CreateEmblem | None":
+    """The whole-line emblem shape, read off the raw text.
+
+    Raw rather than token-by-token because the payload IS the raw text: the
+    quoted ability keeps its printed casing and punctuation, which is what the
+    compiler will read when the emblem fires.
+    """
+    match = _EMBLEM_LINE_RE.match(line.strip())
+    if match is None:
+        return None
+    return ast.CreateEmblem(text=match.group("text").strip())
+
+
 def parse_line(line: str, *, card_name: str | None = None) -> ast.AbilityNode:
     """Parse one oracle-text line into an :class:`AbilityNode`.
 
@@ -610,6 +758,18 @@ def _parse_line(line: str, *, card_name: str | None = None) -> ast.AbilityNode:
     elif bullets:
         raise GrammarError("several modal bullets on one line", line=line)
     if any(token.kind == QUOTE for token in lexed.tokens):
+        # "You get an emblem with "<ability>"." (CR 114.2) — the one quoted
+        # shape with a production. The quoted ability is carried as raw text
+        # and compiled when the emblem fires; the walker's support gate
+        # compiles it up front, so an unreadable emblem text still refuses the
+        # card rather than shipping an emblem that does nothing.
+        emblem = _parse_emblem_line(line)
+        if emblem is not None:
+            return ast.SpellEffectLine(emblem)
+        if _ASSIGN_UNBLOCKED_LINE_RE.match(line.strip()):
+            return ast.SpellEffectLine(
+                ast.RawEffect("grant_team_assign_unblocked_until_eot")
+            )
         raise GrammarError("granted ability in quotes", line=line)
 
     body = lexed.tokens[start:]

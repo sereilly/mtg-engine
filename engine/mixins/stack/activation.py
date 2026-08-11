@@ -12,7 +12,7 @@ from __future__ import annotations
 from ...cost_modifiers import ability_cost_tax
 from ...game_types import OracleExecutionContext, OracleStateMachine, SimulationResult, StackItem
 from ...handlers._common import permanent_matches_filter
-from ...oracle import OracleInstruction, compile_card_oracle
+from ...oracle import LOYALTY_ANY_TIME_STATIC, OracleInstruction, compile_card_oracle
 
 # Instruction kinds whose handler performs the sacrifice its own cost clause
 # names. Diamond Valley's "{T}, Sacrifice a creature: You gain life equal to
@@ -318,6 +318,47 @@ class AbilityActivationMixin:
         # ability (ability_index 0) must stay usable at any time.
         ability_lower = (ability.source_line or permanent.card.oracle_text).lower()
 
+        # CR 606.3: a loyalty ability may be activated only during a main phase
+        # of its controller's own turn with the stack empty — unless the
+        # permanent itself widens the window ("You may activate loyalty
+        # abilities of ~ on any player's turn any time you could cast an
+        # instant", Teferi, Master of Time). The once-per-permanent-per-turn
+        # half of the rule is not part of that static and is never widened.
+        # CR 606.6: a negative cost needs at least that many counters on it.
+        loyalty_delta = 0
+        if ability.cost.is_loyalty:
+            any_time = LOYALTY_ANY_TIME_STATIC in program.static_lines
+            if not any_time and not (
+                self.active_player_index == controller_index
+                and self.current_turn_phase in ("precombat_main", "postcombat_main")
+                and not self.stack
+            ):
+                details = (
+                    f"{permanent.card.name}'s loyalty abilities can only be activated "
+                    "during a main phase of your turn with the stack empty (CR 606.3)"
+                )
+                self.log.append(details)
+                return SimulationResult(permanent.card.name, False, "unsupported", details)
+            if permanent.metadata.get("loyalty_ability_used_turn") == self.turn:
+                details = (
+                    f"a loyalty ability of {permanent.card.name} has already been "
+                    "activated this turn (CR 606.3)"
+                )
+                self.log.append(details)
+                return SimulationResult(permanent.card.name, False, "unsupported", details)
+            loyalty_delta = (
+                ability.cost.loyalty_x_sign * int(x_value or 0)
+                if ability.cost.loyalty_x_sign is not None
+                else ability.cost.loyalty
+            )
+            if loyalty_delta < 0 and int(permanent.metadata.get("loyalty_counters", 0)) < -loyalty_delta:
+                details = (
+                    f"{permanent.card.name} does not have enough loyalty counters "
+                    "to pay that cost (CR 606.6)"
+                )
+                self.log.append(details)
+                return SimulationResult(permanent.card.name, False, "unsupported", details)
+
         # "Only during any upkeep step." (Armageddon Clock.) A window scoped to
         # a *step* rather than to a player's own step — the "any player may
         # activate" permission is checked separately above, and the two
@@ -550,6 +591,20 @@ class AbilityActivationMixin:
         # All guards/costs passed — mark a "once each turn" ability as used.
         if once_each_turn:
             permanent.metadata["ability_used_turn"] = self.turn
+
+        # CR 606.4: a loyalty symbol is a cost to put on or remove that many
+        # loyalty counters, paid as the ability is activated — so the walker's
+        # loyalty has already moved while the ability is on the stack, and a
+        # minus ability that empties it kills the walker before resolution
+        # (704.5i). The sufficiency of a removal was checked above (606.6).
+        if ability.cost.is_loyalty:
+            loyalty_now = int(permanent.metadata.get("loyalty_counters", 0))
+            permanent.metadata["loyalty_counters"] = loyalty_now + loyalty_delta
+            permanent.metadata["loyalty_ability_used_turn"] = self.turn
+            self.log.append(
+                f"{controller.name} activated {permanent.card.name} "
+                f"({loyalty_delta:+d} loyalty, now {loyalty_now + loyalty_delta})"
+            )
 
         # Pay the discard additional cost. Costs are paid on activation, before
         # the ability goes on the stack, so the discarded card is the one drawn

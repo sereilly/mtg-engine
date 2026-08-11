@@ -111,6 +111,20 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # category as the other zone-change handlers.
     "search_library": "zones",
     "grant_extra_turn": "turns",
+    # The planeswalker block's one-shot zone movers (M21 loyalty abilities).
+    "each_player_discards_a_card": "zones",
+    "opponents_who_could_not_discard_lose_life": "life",
+    "discard_hand": "zones",
+    "put_target_on_library_top": "zones",
+    "put_cards_from_hand_onto_battlefield": "zones",
+    "reveal_top_to_hand_or_bottom": "zones",
+    "exile_all_matching": "zones",
+    "grant_team_keyword_until_eot": "pump",
+    "add_loyalty_counters": "counters",
+    "target_bites_target": "damage",
+    "phase_out_target": "zones",
+    "grant_team_assign_unblocked_until_eot": "pump",
+    "phase_out_opponent_creatures": "zones",
     # Ending the game (CR 104). Their own category rather than "life": nothing
     # about a life total is involved, and the three outcomes share one set of
     # handlers in engine/handlers/life_and_game.py.
@@ -146,6 +160,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # stack, because CR 605.4a says a triggered mana ability never uses it.
     "add_mana_for_tapped_land": "mana",
     "create_token": "tokens",
+    "create_emblem": "tokens",
     # Optional actions. Parsed and lowered, not switched on — see _WRAPPER_KINDS.
     "may": "optional",
 }

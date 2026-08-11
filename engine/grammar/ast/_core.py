@@ -145,6 +145,9 @@ class ObjectFilter:
     is_source: bool = False
     # "enchanted creature" — the permanent this Aura is attached to.
     is_enchanted: bool = False
+    # "that's one or more colors" (Ugin, the Spirit Dragon's −X): the object
+    # has at least one color, read off its effective colors.
+    colored: bool = False
 
     def to_payload(self) -> dict[str, object]:
         """Instruction-payload dict, emitting only keys that are set.
@@ -200,6 +203,8 @@ class ObjectFilter:
                 "op": self.mana_value.op,
                 "value": self.mana_value.value.value,
             }
+        if self.colored:
+            payload["colored_only"] = True
         return payload
 
 
@@ -217,6 +222,10 @@ class TargetSpec:
     quantifier: str            # target | each | all | up_to | any_target | this | a
     filter: ObjectFilter = field(default_factory=ObjectFilter)
     count: int = 1
+    # "another target creature" (Garruk, Savage Herald's −2): a second chosen
+    # object that must differ from the sentence's earlier choice — not from the
+    # ability's source, which is what the filter's other_than_source says.
+    distinct_from_prior: bool = False
 
 
 # A recipient of damage/effects can be objects, players, or the "any target"

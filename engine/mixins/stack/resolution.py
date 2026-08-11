@@ -275,7 +275,7 @@ class StackResolutionMixin:
         caster = self.players[caster_index]
         primary_type = card.primary_type
 
-        if primary_type in {"land", "creature", "artifact", "enchantment"}:
+        if primary_type in {"land", "creature", "artifact", "enchantment", "planeswalker"}:
             permanent = Permanent(card=card)
             if x_value is not None:
                 permanent.metadata["cast_x_value"] = x_value
@@ -295,7 +295,8 @@ class StackResolutionMixin:
             # skip the generic ETB-trigger path for them to avoid firing twice.
             if "Aura" not in card.type_line:
                 self._apply_self_enters_battlefield_triggers(
-                    caster_index, permanent, target_player_index, target_permanent_index
+                    caster_index, permanent, target_player_index,
+                    target_permanent_index, target_permanent_id,
                 )
             self._apply_aura_effect(
                 caster_index,
@@ -384,7 +385,7 @@ class StackResolutionMixin:
             caster.graveyard.append(card)
             self.log.append(f"{card.name} resolved and moved to graveyard")
 
-        # CR 608.2m puts the card into the graveyard as the *last* part of
+        # CR 608.2n puts the card into the graveyard as the *last* part of
         # resolution, which matters once a spell's effect can stop to ask the
         # player something: finishing here regardless would bin the card while
         # its damage was still waiting on an answer. Word of Command already
@@ -397,12 +398,21 @@ class StackResolutionMixin:
         permanent: Permanent,
         target_player_index: int | None,
         target_permanent_index: int | None,
+        target_permanent_id: int | list[int | None] | None = None,
     ) -> None:
         """Fire a just-entered permanent's own "when this enters the
         battlefield" triggered abilities (e.g. Oubliette). This engine doesn't
         model a separate priority window for choosing the trigger's own
         target, so the caster's cast-time target choice is reused directly —
-        the same convention an Aura's enchant target already follows."""
+        the same convention an Aura's enchant target already follows.
+
+        The id travels with the index because an index is unstable: anything
+        leaving the battlefield renumbers every later slot, so a trigger that
+        picked slot 2 at cast time and resolves after something died in response
+        hits whichever permanent slid into that slot. This context was built
+        without the id, so every targeting ETB trigger in the pool resolved by
+        index alone — Oubliette among them. ``chosen_permanent`` prefers the id
+        and only falls back to the index when there is none."""
         program = compile_card_oracle(permanent.card)
         for trig in program.triggered_abilities:
             if trig.condition.kind != "enters_battlefield" or not trig.supported or trig.instruction is None:
@@ -417,12 +427,36 @@ class StackResolutionMixin:
                 target=target,
                 card=permanent.card,
                 target_permanent_index=target_permanent_index,
+                target_permanent_id=target_permanent_id,
                 source_permanent=permanent,
             )
             self._execute_oracle_instruction(trig.instruction, context)
     def _select_executable_instruction(
         self, card: CardDefinition, mode_index: int | None = None
     ) -> OracleInstruction | None:
+        """What the stack runs for one spell — **all** of its effect lines, in
+        the order written (CR 608.2c).
+
+        This took the *first* non-``spell_pattern`` instruction and stopped,
+        which is only ever right by accident. A card that prints its clauses on
+        one line already compiles to a single ``sequence``; a card that prints
+        them on two gets one instruction per line
+        (``oracle._noncreature_line_instructions``), and every line after the
+        first was silently dropped. Opt scried and never drew, Revitalize gained
+        life and never drew — supported cards playing as a strictly smaller card,
+        which is the first standing invariant. It survived because no shipped
+        instant or sorcery has two effect lines.
+
+        Fusing here rather than in the compiler is deliberate: for a *permanent*
+        that same list is a mirror of everything the card does, scanned by kind
+        by the layer bridge and the AI, and fusing it would make the mirror
+        unreadable. Only an instant or sorcery reaches this function, and only
+        for it is the list a program.
+
+        Composing through ``sequence`` also buys the resumption behaviour for
+        free — a step that stops to ask (a scry, a search) takes the steps behind
+        it with it, which is exactly what "Scry 1. Draw a card." needs.
+        """
         program = compile_card_oracle(card)
         # A modal spell resolves the player's chosen mode; fall back to the first
         # instruction (mode 0) when no mode was chosen (e.g. AI casts).
@@ -430,4 +464,14 @@ class StackResolutionMixin:
             mode = program.modes[mode_index]
             if mode.instruction is not None:
                 return mode.instruction
-        return next((instruction for instruction in program.instructions if instruction.kind != "spell_pattern"), None)
+        # ``spell_pattern`` is a marker recording that a whitelist substring
+        # matched, not an effect; everything else in an instant's list is one.
+        steps = tuple(
+            instruction for instruction in program.instructions
+            if instruction.kind != "spell_pattern"
+        )
+        if not steps:
+            return None
+        if len(steps) == 1:
+            return steps[0]
+        return OracleInstruction("sequence", "", {"steps": steps})

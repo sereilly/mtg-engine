@@ -61,6 +61,7 @@ from .cards import (
     _parse_add_mana,
     _parse_player_adds_mana,
     _parse_look_at_hand,
+    _parse_reveal_top,
     _parse_search_library,
 )
 from .stack import (
@@ -116,6 +117,7 @@ __all__ = [
     "_parse_add_mana",
     "_parse_player_adds_mana",
     "_parse_look_at_hand",
+    "_parse_reveal_top",
     "_parse_search_library",
     "_parse_counter",
     "_parse_modal_head",

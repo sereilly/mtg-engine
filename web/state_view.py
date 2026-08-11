@@ -181,7 +181,8 @@ def _compute_playable_hand_indices(session: Session, player_index: int) -> list[
             continue
 
         # Sorcery-speed: must be main phase with empty stack on your turn
-        if card.primary_type in {"land", "sorcery", "creature", "artifact", "enchantment"} and not instant_speed:
+        # (planeswalkers per CR 306.1).
+        if card.primary_type in {"land", "sorcery", "creature", "artifact", "enchantment", "planeswalker"} and not instant_speed:
             if player_index != current_turn or not is_main_phase or not stack_empty:
                 continue
 

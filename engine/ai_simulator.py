@@ -36,7 +36,17 @@ class SimulationReport:
 # them. Naming the kinds rather than draining the whole queue keeps the order
 # fixed: a library search consumes randomness, so which prompt is answered first
 # is part of what a seed reproduces.
-_SIMULATED_CHOICES = ("search_library", "discard", "balance", "optional_pay")
+#
+# Every kind registered ``suspends`` has to appear here, and that is a stronger
+# requirement than "otherwise its prompt sits unanswered": a suspending prompt
+# holds ``game.effect_suspended``, so leaving one owed would stop the *next*
+# resumable loop anywhere in the game after one step. ``effect_order`` is the
+# one exception and does not need draining — a non-interactive seat is answered
+# with the default before it is ever queued (engine/replacements.py). Held by
+# tests/ai/test_ai_simulator.py.
+_SIMULATED_CHOICES = (
+    "search_library", "scry", "reorder_library", "discard", "balance", "optional_pay",
+)
 
 
 def _resolve_pending_choices(game: Game) -> None:

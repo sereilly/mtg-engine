@@ -23,13 +23,20 @@ class DeclareAttackersStepMixin:
         defending_player_index: int | None = None,
         bands: list[list[int]] | None = None,
         attacker_targets: dict[int, int] | None = None,
+        attacker_planeswalker_ids: dict[int, int] | None = None,
     ) -> tuple[bool, str]:
         """Declare attackers (CR 508). Under CR 802 (attack multiple players), each
         attacker may name its own defending player via ``attacker_targets`` (attacker
         battlefield idx -> defending player idx). Any attacker not present in
         ``attacker_targets`` falls back to the shared ``defending_player_index`` —
         the original 2-player/back-compat shorthand of "everyone attacks this one
-        opponent", still exactly how every existing (2-player) caller behaves."""
+        opponent", still exactly how every existing (2-player) caller behaves.
+
+        CR 508.1b: an attacker may instead attack a planeswalker an opponent
+        controls — ``attacker_planeswalker_ids`` maps attacker battlefield idx to
+        the attacked planeswalker's ``permanent_id``. Such an attacker's
+        defending *player* (for blocks, restrictions and CR 508.5) is the
+        planeswalker's controller, derived here rather than asked for twice."""
         if self.current_turn_phase != "combat" or self.current_step != "declare_attackers":
             return False, "attackers can only be declared during declare_attackers"
         if controller_index != self.active_player_index:
@@ -40,6 +47,25 @@ class DeclareAttackersStepMixin:
         living_opponents = self.opponents_of(controller_index)
 
         attacker_targets = dict(attacker_targets or {})
+        attacker_planeswalker_ids = dict(attacker_planeswalker_ids or {})
+        per_attacker_walker: dict[int, int] = {}
+        for idx, walker_id in attacker_planeswalker_ids.items():
+            if idx not in unique_indices:
+                return False, f"planeswalker target given for non-attacker {idx}"
+            walker = self.permanent_by_id(walker_id)
+            if walker is None or not walker.has_type("planeswalker"):
+                return False, "attacked planeswalker is not on the battlefield"
+            walker_seat = self.controller_index_of(walker)
+            if walker_seat is None or walker_seat == controller_index:
+                return False, "a creature can only attack an opponent's planeswalker"
+            # The walker names the defending player (CR 508.5); a contradictory
+            # explicit seat for the same attacker is a malformed declaration.
+            stated = attacker_targets.get(idx)
+            if stated is not None and stated != walker_seat:
+                return False, "attacker's defending player contradicts its attacked planeswalker"
+            attacker_targets[idx] = walker_seat
+            per_attacker_walker[idx] = walker_id
+
         per_attacker_defender: dict[int, int] = {}
         for idx in unique_indices:
             target = attacker_targets.get(idx, defending_player_index)
@@ -96,6 +122,7 @@ class DeclareAttackersStepMixin:
             return False, band_error
 
         self.combat_attackers = dict(per_attacker_defender)
+        self.combat_attacked_planeswalkers = dict(per_attacker_walker)
         self.combat_defending_player_index = self._resolve_defending_player_index()
         self.combat_blockers = {}
         self.combat_blockers_declared_by = set()
@@ -124,10 +151,75 @@ class DeclareAttackersStepMixin:
         if unique_indices:
             self._fire_attack_triggers(controller_index)
             self._fire_creature_attacks_triggers(controller_index, unique_indices)
+            self._fire_delayed_attack_triggers(controller_index, unique_indices)
         # CR 508.4: once attackers have been declared (the turn-based action of the
         # declare attackers step), the active player receives priority.
         self.start_priority_window(self.active_player_index)
         return True, "declared attackers"
+
+    def _fire_delayed_attack_triggers(
+        self, controller_index: int, attacker_indices: list[int]
+    ) -> None:
+        """Delayed "whenever … creature(s) attack this turn" triggers created
+        by a resolved loyalty ability (CR 603.7 — Basri Ket's −2, Basri,
+        Devoted Paladin's −1). A batch entry fires once per attack with the
+        count of matching attackers; a per-creature entry fires once per
+        matching attacker, with that attacker as the trigger's source so its
+        "on it" resolves to the creature. Entries stay armed for every combat
+        this turn — cleanup clears them."""
+        if not self.delayed_triggers:
+            return
+        controller = self.players[controller_index]
+        attackers = [
+            perm
+            for idx in attacker_indices
+            if (perm := self.permanent_at(controller, idx)) is not None
+        ]
+        if not attackers:
+            return
+        defending = next(iter(sorted(self.combat_defending_players())), None)
+        events: list[dict] = []
+        for entry in list(self.delayed_triggers):
+            if entry.get("event") != "creatures_attack":
+                continue
+            matching = [
+                perm for perm in attackers
+                if not (entry.get("nontoken") and perm.metadata.get("is_token"))
+            ]
+            if not matching:
+                continue
+            seat = int(entry.get("controller_index", controller_index))
+            instruction = entry.get("instruction")
+            if instruction is None:
+                continue
+            if entry.get("batch"):
+                events.append({
+                    "controller_index": seat,
+                    "source_permanent": None,
+                    "card": entry.get("card"),
+                    "instruction": instruction,
+                    "effect_kind": "triggered_delayed",
+                    "ability_text": entry.get("source_name", "delayed trigger"),
+                    "trigger_context": {
+                        "trigger_count": len(matching),
+                        "trigger_defending_player_index": defending,
+                    },
+                })
+            else:
+                for perm in matching:
+                    events.append({
+                        "controller_index": seat,
+                        "source_permanent": perm,
+                        "card": entry.get("card"),
+                        "instruction": instruction,
+                        "effect_kind": "triggered_delayed",
+                        "ability_text": entry.get("source_name", "delayed trigger"),
+                        "trigger_context": {
+                            "trigger_defending_player_index": defending,
+                        },
+                    })
+        if events:
+            self._enqueue_triggered_batch(events)
 
     def can_attack(self, attacker: Permanent, defending_player_index: int) -> bool:
         # "Can attack as though it had haste" (Instill Energy) lifts CR 302.6's

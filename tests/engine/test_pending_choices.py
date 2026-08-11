@@ -163,6 +163,83 @@ def test_a_gating_prompt_refuses_everything_but_its_own_action(kind):
         assert bystander is None
 
 
+# ---------------------------------------------------------------------------
+# ``suspends`` — the flag that stops the steps queued behind a prompt
+# ---------------------------------------------------------------------------
+#
+# The rules half is tests/rules/test_resumption.py. These are about the field's
+# own bookkeeping: set at arm, cleared once (and only once) at the answer, and
+# never left set for a later loop to trip over.
+
+
+def _game_with_library(size: int = 5):
+    from engine import Game, PlayerState
+    from tests.helpers import CARDS_BY_NAME
+
+    player = PlayerState(name="P1", library=[CARDS_BY_NAME["Mountain"]] * size)
+    game = Game(players=[player, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    return game
+
+
+def test_arming_a_suspending_kind_stops_the_resolution_it_is_part_of():
+    game = _game_with_library()
+    game.arm_pending_choice("scry", 0, top_count=2, amount=2)
+    assert game.effect_suspended is True
+
+
+def test_arming_a_non_suspending_kind_leaves_the_resolution_running():
+    """Opt-in, not universal: the kinds that complete inline have callers
+    written around finishing immediately, and flipping them is its own job."""
+    game = _game_with_library()
+    game.arm_pending_choice("discard", 0, count=1)
+    assert game.effect_suspended is False
+
+
+def test_answering_lifts_the_suspension():
+    game = _game_with_library()
+    game.arm_pending_choice("scry", 0, top_count=2, amount=2)
+    assert game.confirm_scry(0, card_order=[0, 1], bottom_count=0) is True
+    assert game.effect_suspended is False
+    assert game.resume_stack == []
+
+
+def test_a_rejected_answer_leaves_the_prompt_owed_and_the_work_waiting():
+    """Clearing on a rejected answer would resume the steps behind the prompt
+    against a decision nobody made — the exact bug, one layer along."""
+    game = _game_with_library()
+    game.arm_pending_choice("scry", 0, top_count=2, amount=2)
+    assert game.confirm_scry(0, card_order=[0, 0], bottom_count=0) is False
+    assert game.effect_suspended is True
+    assert game.pending_choice_of("scry") is not None
+
+
+def test_a_non_interactive_seat_never_leaves_the_flag_set():
+    """An AI seat queues these kinds and the auto-resolver drains them. A flag
+    left standing would stop the *next* resumable loop after one step, anywhere
+    in the game, with nothing pointing back at what set it."""
+    game = _game_with_library()
+    game.interactive_seats = set()
+    game.arm_pending_choice("scry", 0, top_count=2, amount=2)
+    game.auto_resolve_pending_choices()
+    assert game.effect_suspended is False
+    assert game.pending_choices == []
+
+
+def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
+    """A ratchet on the opt-in list. Adding a kind here is a claim that its
+    answer decides what a later step of the same resolution sees; removing one
+    reintroduces the bug this field exists for."""
+    suspending = {kind for kind, spec in CHOICE_SPECS.items() if spec.suspends}
+    assert suspending == {
+        "effect_order",     # CR 616.1e — the event itself has not happened yet
+        "scry",             # arranges the library a later draw reads
+        "search_library",   # removes a card from it and shuffles the rest
+        "reorder_library",  # same, by permutation
+    }, suspending
+
+
 def test_game_carries_no_per_card_pending_field():
     """The queue replaced sixteen one-card ``Game`` fields. A new one would be
     a prompt outside the registry again, with none of the five parts enforced."""

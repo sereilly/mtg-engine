@@ -23,6 +23,7 @@ from .models import CardDefinition, Permanent, PlayerState
 from .oracle import OracleInstruction, compile_card_oracle
 from .oracle_types import x_spend_color_from_text
 from .search_filters import search_matches
+from .targeting import derive_cast_spec
 
 _MANA_SYMBOLS = ("W", "U", "B", "R", "G", "C")
 
@@ -35,7 +36,10 @@ class CastAction:
     land_tap_indices: tuple[int, ...]
     score: float
     hand_index: int
-    target_permanent_index: int | None = None
+    # One chosen permanent, or several for a spell that names "up to N target"
+    # objects. The same shape ``queue_from_hand`` and the stack already speak, so
+    # the executors in web/game_flow.py forward it unchanged.
+    target_permanent_index: int | list[int] | None = None
 
 
 @dataclass(frozen=True)
@@ -80,12 +84,16 @@ def choose_cast_action(game: Game, player_index: int) -> CastAction | None:
         if x_value == 0:
             continue
         target = _choose_target_for_spell(card, player_index, game, x_value)
-        target_permanent_index: int | None = None
+        target_permanent_index: int | list[int] | None = None
         if aura_enchant_noun(card) is not None:
             aura_choice = _choose_aura_target(game, player_index, card)
             if aura_choice is None:
                 continue  # Aura spells require a legal target (Rule 115.1b)
             target, target_permanent_index = aura_choice
+        else:
+            several = _choose_several_targets(game, player_index, card)
+            if several is not None:
+                target, target_permanent_index = several
         tap_indices: tuple[int, ...] = ()
 
         if game.enforce_mana_costs and card.primary_type != "land":
@@ -737,6 +745,43 @@ def _choose_aura_target(game: Game, caster_index: int, card: CardDefinition) -> 
         if permanent_matches_enchant_noun(permanent, noun):
             return target_player_index, permanent_index
     return None
+
+
+def _choose_several_targets(
+    game: Game, caster_index: int, card: CardDefinition
+) -> tuple[int, list[int]] | None:
+    """Pick ``(seat, [permanent_index, …])`` for a spell naming "up to N target"
+    objects, or None when the card names no such choice.
+
+    Which cards this reaches is *derived*, never a list of names: the compiled
+    program carries the maximum (``engine/targeting.py``'s ``max_targets``), so a
+    card printed with the same template is covered the day it is ingested. The
+    cheap derivation is asked first and the expensive enumeration only when it
+    says yes, because this runs for every card in hand on every AI decision.
+
+    Taking the maximum is the whole policy, and it is a policy rather than a
+    rule: "up to N" may legally choose fewer, but every printed card carrying
+    this template gives a benefit per target, so more is better. A card that
+    ever wants fewer needs a valuation, not a special case here.
+    """
+    spec = derive_cast_spec(card, compile_card_oracle(card))
+    maximum = (spec or {}).get("max_targets")
+    if not isinstance(maximum, int) or maximum <= 1:
+        return None
+    legal = game.cast_target_spec(caster_index, card).get("valid_targets") or []
+    # One seat's worth: the index list is positional on a single battlefield
+    # (`target_player_index` names whose), so a cross-seat spread would need the
+    # divided carrier instead. Prefer the caster's own seat, which is what every
+    # card carrying this template so far targets.
+    by_seat: dict[int, list[int]] = {}
+    for entry in legal:
+        if entry.get("kind") != "permanent":
+            continue
+        by_seat.setdefault(int(entry["seat"]), []).append(int(entry["index"]))
+    if not by_seat:
+        return None
+    seat = caster_index if caster_index in by_seat else min(by_seat)
+    return seat, by_seat[seat][:maximum]
 
 
 def _choose_target_for_spell(

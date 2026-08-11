@@ -145,6 +145,16 @@ class PermanentStateMixin:
         program = compile_card_oracle(permanent.card)
         text = program.normalized_text
 
+        # CR 306.5b: a planeswalker enters with loyalty counters equal to its
+        # printed loyalty number — an intrinsic replacement effect, so it is
+        # part of entering, not a triggered ability. Unconditional for the card
+        # type: the ability is not printed text, so there is no phrase in
+        # engine/enter_effects.py to probe for.
+        if permanent.card.primary_type == "planeswalker":
+            printed = permanent.card.loyalty
+            if printed is not None and printed.strip().lstrip("-").isdigit():
+                permanent.metadata["loyalty_counters"] = int(printed)
+
         # enters tapped (static creature/permanent lines or normalized text).
         # The phrases probed for here live in engine/enter_effects.py, which
         # engine/grammar/registries.py also reads to tell the parser these lines

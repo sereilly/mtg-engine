@@ -791,14 +791,16 @@ def test_extra_turn_lowers_the_same_from_a_spell_and_an_ability(line, card_name)
     assert _instructions(line, card_name) == [("grant_extra_turn", {})]
 
 
-def test_more_than_one_extra_turn_fails_to_parse():
-    """`grant_extra_turn` queues exactly one turn and takes no count. Parsing a
-    general quantity here would let "two extra turns" compile cleanly and hand
-    back a single turn — the card would look supported and be wrong by one turn
-    every cast."""
+def test_counted_extra_turns_carry_their_count():
+    """"Take two extra turns after this one." (Teferi, Master of Time.)
+    ``grant_extra_turn`` loops the payload's count, so the parse must carry it —
+    a count consumed and dropped would compile cleanly and hand back a single
+    turn, wrong by one turn every cast."""
     result = compile_line("Take two extra turns after this one.", card_name="Test")
 
-    assert not result.parsed
+    assert result.usable
+    assert result.instructions[0].kind == "grant_extra_turn"
+    assert result.instructions[0].payload["count"] == 2
 
 
 def test_the_extra_turn_must_say_when_it_is_taken():
@@ -2428,12 +2430,6 @@ def test_a_typed_search_carries_the_type_the_picker_tests():
             "would search the wrong player's deck",
         ),
         (
-            "Search your library for a card, put that card onto the battlefield, "
-            "then shuffle.",
-            "confirm_search_library appends to the hand; a battlefield destination "
-            "is a different effect entirely",
-        ),
-        (
             "Search your library for a black card, put that card into your hand, "
             "then shuffle.",
             "the picker tests one primary_type and nothing else, so a colour "
@@ -2453,6 +2449,22 @@ def test_search_shapes_the_flow_cannot_perform_refuse(line, why):
     result = compile_line(line, card_name="Test")
 
     assert not result.usable, why
+
+
+def test_search_to_battlefield_carries_its_destination():
+    """"Search your library for a creature card, put it onto the battlefield,
+    then shuffle." (Garruk, Unleashed's emblem.) The destination rides the
+    payload — the confirm flow reads it, so a payload without it would tutor
+    the card to the hand instead."""
+    result = compile_line(
+        "Search your library for a creature card, put it onto the battlefield, "
+        "then shuffle.",
+        card_name="Test",
+    )
+
+    assert result.usable
+    assert result.instructions[0].kind == "search_library"
+    assert result.instructions[0].payload["destination"] == "battlefield"
 
 
 def test_the_search_is_singular_by_construction():

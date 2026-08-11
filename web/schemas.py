@@ -224,6 +224,10 @@ class GameActionRequest(BaseModel):
     # G=forest).
     old_color: Literal["W", "U", "B", "R", "G"] | None = None
     attacker_indices: list[int] | None = None
+    # CR 508.1b: attackers sent at a planeswalker — maps attacker battlefield
+    # index to the attacked planeswalker's permanent_id. The attacker's
+    # defending player is derived from the walker's controller by the engine.
+    attacker_planeswalker_ids: dict[int, int] | None = None
     # Banding (CR 702.22c): attacking bands, each a list of attacker battlefield
     # indices, declared alongside attacker_indices in a declare_attackers action.
     bands: list[list[int]] | None = None

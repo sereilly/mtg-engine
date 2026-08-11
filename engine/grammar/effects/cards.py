@@ -29,6 +29,11 @@ def _parse_draw(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
 
 def _parse_discard(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
     stream.expect_word("discards", "discard")
+    # "Discard your hand" (Chandra, Heart of Fire) — no count to read, and
+    # `whole_hand` rather than a sentinel amount so "discard all cards" (a
+    # wording no card prints) stays unparsed.
+    if stream.accept_phrase("your", "hand"):
+        return ast.Discard(player, ast.AllOf(), whole_hand=True)
     count = parse_amount(stream)
     stream.expect_word("card", "cards")
     at_random = stream.accept_phrase("at", "random")
@@ -141,6 +146,40 @@ def _parse_player_adds_mana(
     return ast.AddManaForTappedLand(
         recipient, of_type_produced=amount, additional=additional
     )
+
+
+def _parse_reveal_top(stream: TokenStream) -> ast.Statement:
+    """``Reveal the top card of your library. If it's a <filter>, put it into
+    your hand. Otherwise, put it on the bottom of your library.`` (Garruk,
+    Savage Herald.)
+
+    One production for the whole three-sentence template, interior full stops
+    included: the sentences all describe one revealed card, so parsed apart
+    two of them dangle a referent nothing binds. Every word of both
+    destinations is required — hand-or-bottom is the effect, and a wording
+    that sorted elsewhere would be a different card wearing this one's head.
+    """
+    stream.expect_word("reveal")
+    for word in ("the", "top", "card", "of", "your", "library"):
+        stream.expect_word(word)
+    if not stream.accept_punct("."):
+        raise stream.error("expected the sorting sentences after the reveal")
+    if not stream.accept_word("if"):
+        raise stream.error("expected \"If it's a …\" after the reveal")
+    if not (stream.accept_phrase("it", "'s") or stream.accept_phrase("it", "is")):
+        raise stream.error("expected \"it's\" after 'if'")
+    stream.accept_word("a", "an")
+    filt = parse_object_filter(stream)
+    stream.accept_punct(",")
+    if not stream.accept_phrase("put", "it", "into", "your", "hand"):
+        raise stream.error("expected 'put it into your hand'")
+    if not stream.accept_punct("."):
+        raise stream.error("expected the 'Otherwise' sentence")
+    stream.expect_word("otherwise")
+    stream.accept_punct(",")
+    if not stream.accept_phrase("put", "it", "on", "the", "bottom", "of", "your", "library"):
+        raise stream.error("expected 'put it on the bottom of your library'")
+    return ast.RevealTopToHandOrBottom(filt)
 
 
 def _parse_look_at_hand(stream: TokenStream) -> ast.Statement:

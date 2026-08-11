@@ -109,25 +109,51 @@ def _lower_create_token(node: ast.CreateToken) -> tuple[OracleInstruction, ...]:
         payload["colors"] = node.colors
     if node.keywords:
         payload["keywords"] = tuple(_title(word) for word in node.keywords)
-    count = _amount_payload(node.count)
-    if count != 1:
-        payload["count"] = count
+    if isinstance(node.count, ast.ThatMuch):
+        # "create that many … tokens" — the count is the firing event's own
+        # number (a delayed attack trigger's matching attackers), recorded by
+        # the firing site in the resolution scratchpad.
+        payload["count"] = "trigger_count"
+        count = "trigger_count"
+    else:
+        count = _amount_payload(node.count)
+        if count != 1:
+            payload["count"] = count
+    # "…that are tapped and attacking" (Basri Ket): entry state the handler
+    # stamps as the tokens arrive.
+    if node.tapped:
+        payload["tapped"] = True
+    if node.attacking:
+        payload["attacking"] = True
     return (OracleInstruction("create_token", "", payload),)
 
 
-def _lower_extra_turn(node: ast.ExtraTurn) -> tuple[OracleInstruction, ...]:
-    """"Take an extra turn after this one." (Time Walk, Time Vault.)
+def _lower_create_emblem(node: ast.CreateEmblem) -> tuple[OracleInstruction, ...]:
+    """"You get an emblem with "<ability>"." (CR 114.2.) The text is the whole
+    payload; the compiler's planeswalker gate has already verified it reads as
+    a supported triggered ability before any card carrying it can compile."""
+    return (OracleInstruction("create_emblem", "", {"text": node.text}),)
 
-    ``grant_extra_turn`` queues the turn for the effect's *controller*; it takes
-    no player argument. A card handing the extra turn to someone else is a
-    different effect, so it is refused rather than lowered onto a handler that
-    would give the turn to the wrong player.
+
+def _lower_extra_turn(node: ast.ExtraTurn) -> tuple[OracleInstruction, ...]:
+    """"Take an extra turn after this one." (Time Walk) / "Take two extra
+    turns after this one." (Teferi, Master of Time.)
+
+    ``grant_extra_turn`` queues the turns for the effect's *controller*; it
+    takes no player argument. A card handing the extra turn to someone else is
+    a different effect, so it is refused rather than lowered onto a handler
+    that would give the turn to the wrong player. The count rides in the
+    payload only when it is not 1, keeping the single-turn payload byte-equal
+    with what the pool has always compiled to.
     """
     if node.player.kind != "you":
         raise LoweringError(
             f"no handler for {node.player.kind!r} taking an extra turn", node=node
         )
-    return (OracleInstruction("grant_extra_turn", "", {}),)
+    payload: dict[str, object] = {}
+    if node.count != 1:
+        payload["count"] = node.count
+    return (OracleInstruction("grant_extra_turn", "", payload),)
 
 
 # Who a "loses the game" sentence names, and the handler that makes that player
@@ -170,7 +196,42 @@ def _lower_win_game(node: ast.WinGame) -> tuple[OracleInstruction, ...]:
 
 def _lower_lose_life(node: ast.LoseLife) -> tuple[OracleInstruction, ...]:
     payload: dict[str, object] = {"amount": _amount_payload(node.amount)}
+    # "Each opponent who can't loses 3 life." (Liliana, Waker of the Dead) —
+    # attached by the sentence-loop rider to a preceding each-player discard,
+    # whose handler records the players that could not pay. Reading that record
+    # is the whole effect, so it is its own kind rather than a flag on the
+    # general loss.
+    if node.who_could_not is not None:
+        if node.who_could_not != "discard" or node.player.kind != "each_opponent":
+            raise LoweringError(
+                "the could-not rider only reads an each-player discard", node=node
+            )
+        return (
+            OracleInstruction("opponents_who_could_not_discard_lose_life", "", payload),
+        )
+    # "…for each creature card in their graveyard" (Liliana, Death Mage) — the
+    # loss is multiplied by a zone count of the losing player's.
+    if node.per_each is not None:
+        filt = node.per_each
+        if node.player.kind != "target_opponent" or filt.zone != "graveyard":
+            raise LoweringError(
+                "the per-each life loss reads a target opponent's graveyard", node=node
+            )
+        payload["per_each"] = {
+            "zone": "graveyard",
+            "owner": (filt.zone_owner.kind if filt.zone_owner else "owner"),
+            "card_types": list(filt.card_types),
+        }
+        return (OracleInstruction("target_loses_life", "", payload),)
     if node.player.kind in ("target_player", "target_opponent", "that_player"):
+        return (OracleInstruction("target_loses_life", "", payload),)
+    # "Destroy target creature. Its controller loses 2 life." (Liliana, Death
+    # Mage's −3.) The controller of the previous step's target — recorded by
+    # the destroy handler in the resolution scratchpad, because by the time
+    # this instruction runs the permanent is gone (CR 608.2h, last-known
+    # information).
+    if node.player.kind == "controller":
+        payload["recipient"] = "last_target_controller"
         return (OracleInstruction("target_loses_life", "", payload),)
     if node.player.kind == "you":
         # "You lose 3 life" (Grim Tutor) — the same recipient key deal_damage

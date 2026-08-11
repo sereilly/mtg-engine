@@ -475,6 +475,57 @@ def test_608_2b_spell_whose_target_became_illegal_does_not_resolve(all_cards):
     assert any(card.name == "Lightning Bolt" for card in p1.graveyard)
 
 
+@pytest.mark.cr("608.2c")
+def test_608_2c_every_printed_effect_line_of_a_spell_is_carried_out():
+    """"The controller of the spell or ability follows its instructions in the
+    order written" — *its* instructions, not its first one.
+
+    The resolver took the first executable instruction and stopped, while the
+    compiler produces one instruction per printed *line*. A spell printing its
+    clauses on one line already compiled to a single ``sequence`` and was fine;
+    one printing them on two silently dropped everything after the first, and
+    reported itself supported. The two spellings must resolve alike."""
+    one_line = _mk_card("One Line", "Sorcery", "You gain 3 life. Draw a card.")
+    two_lines = _mk_card("Two Lines", "Sorcery", "You gain 3 life.\nDraw a card.")
+
+    for card in (one_line, two_lines):
+        library = [_mk_card(f"Filler{i}", "Instant", "") for i in range(3)]
+        p1 = PlayerState(name="P1", hand=[card], library=library)
+        game = Game(players=[p1, PlayerState(name="P2")])
+
+        game.queue_from_hand(0, card.name, target_player_index=1)
+        game.resolve_top_of_stack()
+
+        assert p1.life == 23, f"{card.name}: the first line did not happen"
+        assert len(p1.hand) == 1, f"{card.name}: the second line did not happen"
+        assert card in p1.graveyard
+
+
+@pytest.mark.cr("608.2c")
+def test_608_2c_the_lines_run_in_printed_order():
+    """Order, not just presence — "in the order written".
+
+    Two lines whose effects land on different players reach the same board
+    whichever way round they run, so the observation here is the execution
+    record itself. The state-based version of this claim is the Opt shape, where
+    the second line reads what the first one arranged
+    (``test_opt_scries_before_it_draws`` in tests/sets/test_m21_cards.py)."""
+    card = _mk_card(
+        "Ordered", "Sorcery", "Target player draws a card.\nYou gain 3 life."
+    )
+    p1 = PlayerState(name="P1", hand=[card])
+    p2 = PlayerState(name="P2", library=[_mk_card("Drawn", "Instant", "")])
+    game = Game(players=[p1, p2])
+
+    game.queue_from_hand(0, card.name, target_player_index=1)
+    game.resolve_top_of_stack()
+
+    assert p2.hand and p1.life == 23, "both lines happened"
+    drew = next(i for i, line in enumerate(game.log) if "drew" in line)
+    gained = next(i for i, line in enumerate(game.log) if "gained 3 life" in line)
+    assert drew < gained, f"lines ran out of printed order: {game.log}"
+
+
 @pytest.mark.cr("608.2n")
 def test_608_2n_instant_is_put_into_owners_graveyard_after_resolving():
     """As the final part of an instant's resolution, the card is put into its

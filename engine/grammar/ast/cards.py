@@ -33,6 +33,8 @@ class Discard:
     player: PlayerRef
     count: Amount = field(default_factory=lambda: Fixed(1))
     at_random: bool = False
+    # "Discard your hand" (Chandra, Heart of Fire) — every card, however many.
+    whole_hand: bool = False
 
 
 @dataclass(frozen=True)
@@ -115,6 +117,16 @@ class SearchLibrary:
 @dataclass(frozen=True)
 class Shuffle:
     player: PlayerRef
+
+
+@dataclass(frozen=True)
+class RevealTopToHandOrBottom:
+    """"Reveal the top card of your library. If it's a <filter>, put it into
+    your hand. Otherwise, put it on the bottom of your library." (Garruk,
+    Savage Herald.) One node for the whole three-sentence template: the
+    sentences reference one revealed card, so parsing them separately would
+    leave two of them meaning nothing on their own."""
+    filter: ObjectFilter
 
 
 @dataclass(frozen=True)

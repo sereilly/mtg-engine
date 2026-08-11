@@ -612,6 +612,23 @@ def _serialize_emblems(player: PlayerState) -> list[dict]:
             "image_uri": image_uri,
             "large_image_uri": large_image_uri,
         })
+    # CR 114 emblems proper (planeswalker ultimates): passive triggered
+    # abilities in the command zone. No `index` for activate_emblem — nothing
+    # to click; the entry is informational, in the same card-like shape.
+    for emblem in getattr(player, "emblems", ()):
+        source = CARD_BY_NAME.get(str(emblem.get("source_name", "")).lower())
+        image_uri, large_image_uri, _art_crop = _card_image_uris(source) if source else (None, None, None)
+        emblems.append({
+            "kind": "emblem",
+            "index": -1,
+            "label": emblem.get("name", "Emblem"),
+            "name": emblem.get("name", "Emblem"),
+            "source": emblem.get("source_name", ""),
+            "type": "Emblem",
+            "oracle_text": emblem.get("oracle_text", ""),
+            "image_uri": image_uri,
+            "large_image_uri": large_image_uri,
+        })
     return emblems
 
 

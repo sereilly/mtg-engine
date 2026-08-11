@@ -329,11 +329,16 @@ class GameEndingMixin:
             for perm in self.all_permanents():
                 perm.metadata.pop("received_deathtouch", None)
 
-            # 704.5i: planeswalker with 0 loyalty → graveyard
+            # 704.5i: planeswalker with 0 loyalty → graveyard. Loyalty lives in
+            # metadata["loyalty_counters"] (CR 306.5c: loyalty on the
+            # battlefield IS its loyalty counters), written on entry by
+            # _initialize_permanent_state and adjusted by damage and loyalty
+            # costs. has_type, not the printed line, so a layer-4 type change
+            # is honored.
             def _zero_loyalty(perm: Permanent) -> bool:
-                if "Planeswalker" not in perm.card.type_line:
+                if not perm.has_type("planeswalker"):
                     return False
-                loyalty = perm.metadata.get("loyalty")
+                loyalty = perm.metadata.get("loyalty_counters")
                 return loyalty is not None and loyalty <= 0
 
             for player in self.players:

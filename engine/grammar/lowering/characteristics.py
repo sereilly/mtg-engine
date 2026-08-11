@@ -16,6 +16,7 @@ from ..errors import LoweringError
 from ..vocabulary import IMPLEMENTED_KEYWORDS
 from ._common import (
     _amount_payload,
+    _describe_several_targets,
     _describe_targets,
     _durationless_reason,
     _is_enchanted,
@@ -27,11 +28,43 @@ from ._common import (
 
 
 def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
-    power = _signed(node.power, node.power_negative)
-    toughness = _signed(node.toughness, node.toughness_negative)
-
     if node.duration.kind is None:
         raise LoweringError(_durationless_reason(node.subject), node=node)
+
+    if node.x_definition is not None:
+        # "gets -X/-X until end of turn, where X is the number of cards in
+        # your graveyard" (Liliana, Waker of the Dead). X is defined by a
+        # count, so the payload carries what to count and the handler computes
+        # it at resolution; the sign travels separately because _signed cannot
+        # negate a variable.
+        if not _is_target(node.subject):
+            raise LoweringError("a where-clause pump needs a single target", node=node)
+        if not isinstance(node.power, ast.Var) or not isinstance(node.toughness, ast.Var):
+            raise LoweringError("a where-clause needs X in the P/T", node=node)
+        if not isinstance(node.x_definition, ast.CountOf):
+            raise LoweringError("only a count can define X here", node=node)
+        filt = node.x_definition.filter
+        if filt.zone != "graveyard":
+            raise LoweringError(
+                "only a graveyard count defines X for this handler", node=node
+            )
+        assert isinstance(node.subject, ast.TargetSpec)
+        payload: dict[str, object] = {
+            "power": "x",
+            "toughness": "x",
+            "power_negative": node.power_negative,
+            "toughness_negative": node.toughness_negative,
+            "x_from_count": {
+                "zone": "graveyard",
+                "owner": (filt.zone_owner.kind if filt.zone_owner else "you"),
+                "card_types": list(filt.card_types),
+            },
+        }
+        _describe_targets(payload, node.subject)
+        return (OracleInstruction("pump_target_creature_until_eot", "", payload),)
+
+    power = _signed(node.power, node.power_negative)
+    toughness = _signed(node.toughness, node.toughness_negative)
 
     if _is_enchanted(node.subject):
         return (
@@ -97,6 +130,26 @@ def _lower_gain_keyword(node: ast.GainKeyword) -> tuple[OracleInstruction, ...]:
         if reason.startswith("continuous pump"):
             reason = "continuous keyword grant needs the CR 613 layers engine"
         raise LoweringError(reason, node=node)
+    # "Creatures you control gain flying until end of turn." (Basri, Devoted
+    # Paladin's −6.) A team grant locked in at resolution (CR 611.2c) — its own
+    # kind, resolved over the controller's creatures by the handler.
+    if (
+        isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier == "all"
+        and node.subject.filter.card_types == ("creature",)
+        and node.subject.filter.controller == "you"
+        and node.duration.kind in ("until_end_of_turn", "this_turn")
+    ):
+        for keyword in node.keywords:
+            if keyword not in IMPLEMENTED_KEYWORDS:
+                raise LoweringError(
+                    f"granting {keyword!r} needs the keyword implemented", node=node
+                )
+        return (
+            OracleInstruction(
+                "grant_team_keyword_until_eot", "", {"keywords": tuple(node.keywords)}
+            ),
+        )
     scope = "self" if _is_source(node.subject) else ("target" if _is_target(node.subject) else None)
     if scope is None:
         raise LoweringError("unsupported keyword-grant subject", node=node)
@@ -124,6 +177,19 @@ def _lower_gain_keyword(node: ast.GainKeyword) -> tuple[OracleInstruction, ...]:
 
 
 def _lower_put_counter(node: ast.PutCounter) -> tuple[OracleInstruction, ...]:
+    # "Put a loyalty counter on Garruk." (Garruk, Unleashed's −2.) Only the
+    # source's own loyalty has a home (metadata["loyalty_counters"], CR 306.5c),
+    # so any other subject refuses.
+    if node.counter == "loyalty":
+        if not _is_source(node.subject):
+            raise LoweringError(
+                "loyalty counters only land on the ability's own source", node=node
+            )
+        if not isinstance(node.count, ast.Fixed) or node.up_to:
+            raise LoweringError("variable loyalty-counter counts have no handler", node=node)
+        return (
+            OracleInstruction("add_loyalty_counters", "", {"count": node.count.value}),
+        )
     if node.counter != "+1/+1" or node.up_to:
         raise LoweringError(f"no handler for {node.counter} counters", node=node)
     if not isinstance(node.count, ast.Fixed) or node.count.value != 1:
@@ -134,11 +200,15 @@ def _lower_put_counter(node: ast.PutCounter) -> tuple[OracleInstruction, ...]:
         )
     if _names_several_targets(node.subject):
         # "Put a +1/+1 counter on each of up to two target creatures" (Basri's
-        # Aegis, Basri's Acolyte). `add_counter_to_target` resolves one
-        # permanent, so lowering this would counter one creature and report the
-        # card supported — the count is the entire difference between these
-        # cards and Feat of Resistance.
-        raise LoweringError("no handler puts counters on several targets", node=node)
+        # Aegis, Basri's Acolyte). Same instruction as the single-target form —
+        # the effect is identical and only the number of targets differs, which
+        # is payload — but described with `_describe_several_targets`, the
+        # opt-in that tells the handler to resolve a list and the picker to
+        # collect up to that many.
+        assert isinstance(node.subject, ast.TargetSpec)
+        several: dict[str, object] = {"power": 1, "toughness": 1}
+        _describe_several_targets(several, node.subject)
+        return (OracleInstruction("add_counter_to_target", "", several),)
     if _is_target(node.subject):
         # "Put a +1/+1 counter on target creature [you control]." The kind
         # predates this lowering: Dwarven Weaponsmith's hook has always emitted

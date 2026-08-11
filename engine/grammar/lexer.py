@@ -92,14 +92,21 @@ def _self_reference_spans(normalized: str, card_name: str | None) -> list[tuple[
     Pre-Sixth-Edition templating says "Lightning Bolt deals 3 damage" where
     modern templating says "This creature deals…". Both mean the source, so the
     lexer collapses them to one SELF token and the grammar never needs a card
-    name. Legendary short names ("Juzám Djinn" referred to as "Juzám") are
-    covered by also matching the name's first word when it is distinctive.
+    name. A legendary name with a comma is also referred to by its short name
+    (CR 201.4c: "Ugin, the Spirit Dragon" says "Ugin"), so that form is
+    matched too — full name first, so the short form never splits a longer
+    self-reference in half.
     """
     if not card_name:
         return []
-    needle = normalize(card_name)
-    if not needle:
+    full = normalize(card_name)
+    if not full:
         return []
+    needles = [full]
+    if "," in full:
+        short = full.split(",", 1)[0].strip()
+        if short:
+            needles.append(short)
 
     def _is_word_char(index: int) -> bool:
         return 0 <= index < len(normalized) and (
@@ -107,15 +114,22 @@ def _self_reference_spans(normalized: str, card_name: str | None) -> list[tuple[
         )
 
     spans: list[tuple[int, int]] = []
-    start = normalized.find(needle)
-    while start != -1:
-        end = start + len(needle)
-        # Only whole-word matches. A card named "Fire" must not swallow the
-        # first four letters of "Firebreathing" — that would emit a SELF token
-        # and drop the rest of the word, defeating full-token consumption.
-        if not _is_word_char(start - 1) and not _is_word_char(end):
-            spans.append((start, end))
-        start = normalized.find(needle, start + 1)
+    for needle in needles:
+        start = normalized.find(needle)
+        while start != -1:
+            end = start + len(needle)
+            # Only whole-word matches. A card named "Fire" must not swallow the
+            # first four letters of "Firebreathing" — that would emit a SELF
+            # token and drop the rest of the word, defeating full-token
+            # consumption. A span inside one already claimed (the short name
+            # inside the full name) is skipped for the same reason.
+            if (
+                not _is_word_char(start - 1)
+                and not _is_word_char(end)
+                and not any(s <= start < e for s, e in spans)
+            ):
+                spans.append((start, end))
+            start = normalized.find(needle, start + 1)
     return spans
 
 

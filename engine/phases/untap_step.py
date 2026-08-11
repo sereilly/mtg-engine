@@ -130,6 +130,9 @@ class UntapStepMixin:
         self._set_phase_and_step(phase, step)
         self._on_step_or_phase_begin(phase, step)
         player = self.players[player_index]
+        # CR 702.26e: phased-out permanents this player controls phase in as
+        # the untap step begins, before anything untaps.
+        self.phase_in_for(player_index)
         self._advance_summoning_sickness(player_index)
         # Record untapped lands at the beginning of the turn — i.e. *before* the
         # untap step untaps anything (Power Surge: X = "the number of untapped lands

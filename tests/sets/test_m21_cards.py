@@ -143,21 +143,93 @@ def test_several_targets_are_refused_rather_than_halved(line):
     assert result.failure_reason == "no handler taps or untaps several targets"
 
 
-def test_counters_on_several_targets_are_refused(set_pool):
-    """"Put a +1/+1 counter on each of up to two target creatures" (Basri's
-    Aegis). The "each of" phrasing has no production yet, so it refuses at
-    parse; the lowering guard behind it refuses the same shape written without
-    those words. Either way the card is unsupported rather than countering one
-    creature and calling itself done."""
-    assert not compile_line(
+# --- The multi-target round: "each of up to N target ..." -------------------
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
         "Put a +1/+1 counter on each of up to two target creatures.",
-        card_name="Test",
-    ).parsed
-    plain = compile_line(
-        "Put a +1/+1 counter on up to two target creatures.", card_name="Test"
+        "Put a +1/+1 counter on up to two target creatures.",
+        "Put a +1/+1 counter on each of up to two other target creatures you control.",
+    ],
+)
+def test_counters_on_several_targets_carry_their_maximum(line):
+    """All three spellings are one instruction with the count on the payload.
+
+    "each of" is a distributive wrapper over the noun phrase, not a quantifier,
+    and "other" prints *before* the word "target" in the middle spelling — the
+    one position the object-filter parser cannot reach. The count is what a
+    picker reads to collect more than one; it used to be dropped, which is why
+    the lowering refused rather than countering one creature and calling the
+    card done."""
+    result = compile_line(line, card_name="Test")
+
+    assert result.lowered, result.failure_reason
+    instruction = result.instructions[0]
+    assert instruction.kind == "add_counter_to_target"
+    assert instruction.payload["targets"]["count"] == 2
+
+
+def test_basris_acolyte_counters_the_two_creatures_it_targeted(set_pool):
+    """The card the round bought. Three creatures, two named: exactly those two
+    get counters, and the Acolyte's own "other" keeps it off its own list."""
+    acolyte = set_pool("M21")["Basri's Acolyte"]
+    pegasus = set_pool("M21")["Concordia Pegasus"]
+    mine = [Permanent(card=pegasus) for _ in range(3)]
+    theirs = Permanent(card=pegasus)
+    p1 = PlayerState(name="P1", hand=[acolyte], battlefield=list(mine))
+    p2 = PlayerState(name="P2", battlefield=[theirs])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    base = pegasus and mine[0].effective_power
+
+    game.cast_from_hand(
+        0, "Basri's Acolyte", target_player_index=0, target_permanent_index=[0, 2]
     )
-    assert plain.parsed and not plain.lowered
-    assert plain.failure_reason == "no handler puts counters on several targets"
+
+    assert [p.effective_power for p in mine] == [base + 1, base, base + 1]
+    assert theirs.effective_power == base, "the opponent's creature was not touched"
+
+
+def test_basris_acolyte_offers_only_its_controllers_creatures(set_pool):
+    """The picker's half. "you control" is a seat test, so it narrows the
+    enumeration rather than being left to the handler to decline silently after
+    the player has already clicked."""
+    acolyte = set_pool("M21")["Basri's Acolyte"]
+    pegasus = set_pool("M21")["Concordia Pegasus"]
+    p1 = PlayerState(name="P1", hand=[acolyte], battlefield=[Permanent(card=pegasus)])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=pegasus)])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    spec = game.cast_target_spec(0, acolyte)
+
+    assert spec["max_targets"] == 2
+    assert spec["own_only"] is True
+    assert {t["seat"] for t in spec["valid_targets"]} == {0}
+
+
+def test_the_ai_names_as_many_targets_as_the_card_allows(set_pool):
+    """Which cards this reaches is derived from the compiled program, never a
+    list of names — so a card printed with the same template is covered the day
+    it is ingested."""
+    from engine.ai_policy import choose_cast_action
+
+    acolyte = set_pool("M21")["Basri's Acolyte"]
+    pegasus = set_pool("M21")["Concordia Pegasus"]
+    p1 = PlayerState(
+        name="P1", hand=[acolyte],
+        battlefield=[Permanent(card=pegasus), Permanent(card=pegasus), Permanent(card=pegasus)],
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+
+    action = choose_cast_action(game, 0)
+
+    assert action is not None and action.card_name == "Basri's Acolyte"
+    assert action.target_permanent_index == [0, 1], "two of the three, the maximum"
+    assert action.target_player_index == 0
 
 
 def test_up_to_one_target_is_still_a_single_target():
@@ -473,6 +545,67 @@ def test_opt_no_longer_drops_its_scry(set_pool):
     assert "draw_controller_cards" in kinds
 
 
+def test_opt_scries_before_it_draws(set_pool):
+    """The behavioural half of the test above, and two rounds' worth of bug.
+
+    Compiling both sentences was necessary and not sufficient: the resolver ran
+    the first instruction and stopped, so cast for real Opt scried and never
+    drew. With every line resolved, the scry then has to *precede* the draw —
+    the draw takes whatever the scry left on top, which is only observable
+    because arming the scry suspends the steps behind it.
+    """
+    opt = set_pool("M21")["Opt"]
+    library = [set_pool("M21")[n] for n in ("Shock", "Opt", "Revitalize", "Eliminate")]
+    p1 = PlayerState(name="P1", hand=[opt], library=library)
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+
+    game.cast_from_hand(0, "Opt", target_player_index=1)
+
+    assert game.pending_choices_of("scry", 0), "the scry is owed"
+    assert p1.hand == [], "the draw has not run in front of it"
+
+    # Put the looked-at card (Shock) on the bottom; the draw must take Opt.
+    assert game.confirm_scry(0, card_order=[0], bottom_count=1) is True
+
+    assert [c.name for c in p1.hand] == ["Opt"]
+    assert [c.name for c in p1.library] == ["Revitalize", "Eliminate", "Shock"]
+    assert any(c.name == "Opt" for c in p1.graveyard), "and the spell finished"
+
+
+def test_revitalize_gains_life_and_draws(set_pool):
+    """The same fix without a prompt in the middle: two printed lines, both of
+    which have to happen. It gained the life and never drew."""
+    revitalize = set_pool("M21")["Revitalize"]
+    p1 = PlayerState(name="P1", hand=[revitalize], library=[set_pool("M21")["Shock"]])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+
+    game.cast_from_hand(0, "Revitalize", target_player_index=1)
+
+    assert p1.life == 23
+    assert [c.name for c in p1.hand] == ["Shock"]
+
+
+def test_defiant_strike_pumps_and_draws(set_pool):
+    """And the same with a target on the first line: the second line still runs
+    once the first has resolved against its target."""
+    strike = set_pool("M21")["Defiant Strike"]
+    mine = Permanent(card=set_pool("M21")["Concordia Pegasus"])
+    p1 = PlayerState(
+        name="P1", hand=[strike], battlefield=[mine], library=[set_pool("M21")["Shock"]]
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+
+    base = mine.effective_power
+    game.cast_from_hand(0, "Defiant Strike", target_player_index=0, target_permanent_index=0)
+
+    assert mine.effective_power == base + 1
+    assert [c.name for c in p1.hand] == ["Shock"]
+
+
 def test_temple_of_mystery_etb_scry_is_claimed(set_pool):
     program = compile_card_oracle(set_pool("M21")["Temple of Mystery"])
     assert any(
@@ -687,3 +820,182 @@ def test_valorous_steed_token_takes_its_cr_111_4_name(set_pool):
     )
     assert create.payload["name"] == "Knight Token"
     assert create.payload["keywords"] == ("Vigilance",)
+
+
+# --- The planeswalker round: loyalty, emblems, delayed triggers, phasing ----
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "Ugin, the Spirit Dragon",
+        "Basri Ket",
+        "Teferi, Master of Time",
+        "Liliana, Waker of the Dead",
+        "Garruk, Unleashed",
+        "Basri, Devoted Paladin",
+        "Teferi, Timeless Voyager",
+        "Liliana, Death Mage",
+        "Garruk, Savage Herald",
+    ],
+)
+def test_planeswalker_round_cards_compile_supported(set_pool, name):
+    program = compile_card_oracle(set_pool("M21")[name])
+    assert program.supported, program.reason
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        # Both need the cast/play-from-exile-or-graveyard permission seam,
+        # which does not exist yet; the compiler names the exact clause.
+        "Chandra, Heart of Fire",
+        "Chandra, Flame's Catalyst",
+    ],
+)
+def test_chandras_report_the_unbuilt_permission_seam(set_pool, name):
+    program = compile_card_oracle(set_pool("M21")[name])
+    assert not program.supported
+    assert "planeswalker ability not implemented" in program.reason
+
+
+def _walker_game(set_pool, name, loyalty=None, opp_battlefield=None, hand=None, library=None):
+    card = set_pool("M21")[name]
+    walker = Permanent(card=card, metadata={"loyalty_counters": int(loyalty or card.loyalty)})
+    p1 = PlayerState(name="P1", battlefield=[walker], hand=list(hand or []), library=list(library or []))
+    p2 = PlayerState(name="P2", battlefield=list(opp_battlefield or []))
+    return Game(players=[p1, p2]), walker
+
+
+def test_teferi_master_of_time_takes_two_extra_turns(set_pool):
+    game, walker = _walker_game(set_pool, "Teferi, Master of Time", loyalty=12)
+    result = game.activate_permanent_ability(0, walker.card.name, ability_index=2)
+    assert result.supported, result.details
+    assert game.extra_turn_queue.count(0) == 2
+
+
+def test_teferi_master_of_time_activates_on_an_opponents_turn(set_pool):
+    game, walker = _walker_game(set_pool, "Teferi, Master of Time")
+    game.active_player_index = 1
+    game.players[0].library = [set_pool("M21")["Concordia Pegasus"]] * 2
+    result = game.activate_permanent_ability(0, walker.card.name, ability_index=0)
+    assert result.supported, result.details
+
+
+def test_teferi_master_of_time_phases_out_an_opposing_creature(set_pool):
+    bear = Permanent(card=set_pool("M21")["Concordia Pegasus"])
+    game, walker = _walker_game(set_pool, "Teferi, Master of Time", opp_battlefield=[bear])
+    original_id = bear.permanent_id
+    result = game.activate_permanent_ability(
+        0, walker.card.name, ability_index=1,
+        target_player_index=1, target_permanent_index=0,
+    )
+    assert result.supported, result.details
+    assert not game.is_on_battlefield(bear)
+    assert any(p is bear for p in game.players[1].phased_out)
+    # CR 702.26e: it phases in at its controller's untap step, the same object.
+    game.resolve_untap_step(1)
+    assert game.is_on_battlefield(bear)
+    assert bear.permanent_id == original_id
+
+
+def test_liliana_waker_of_the_dead_plus_one_punishes_empty_hands(set_pool):
+    game, walker = _walker_game(set_pool, "Liliana, Waker of the Dead",
+                                hand=[set_pool("M21")["Concordia Pegasus"]])
+    # Opponent has no hand: they cannot discard and lose 3 life.
+    result = game.activate_permanent_ability(0, walker.card.name, ability_index=0)
+    assert result.supported, result.details
+    assert game.players[1].life == 17
+    assert len(game.players[0].hand) == 0
+
+
+def test_liliana_death_mage_destroy_drains_the_controller(set_pool):
+    bear = Permanent(card=set_pool("M21")["Concordia Pegasus"])
+    game, walker = _walker_game(set_pool, "Liliana, Death Mage", opp_battlefield=[bear])
+    result = game.activate_permanent_ability(
+        0, walker.card.name, ability_index=1,
+        target_player_index=1, target_permanent_index=0,
+    )
+    assert result.supported, result.details
+    assert not game.is_on_battlefield(bear)
+    assert game.players[1].life == 18
+    assert walker.metadata["loyalty_counters"] == 1
+
+
+def test_basri_ket_minus_two_makes_attacking_soldiers(set_pool):
+    game, walker = _walker_game(set_pool, "Basri Ket")
+    attacker = Permanent(card=set_pool("M21")["Concordia Pegasus"])
+    game.players[0].battlefield.append(attacker)
+    game.start_turn(0)
+    result = game.activate_permanent_ability(0, walker.card.name, ability_index=1)
+    assert result.supported, result.details
+    assert len(game.delayed_triggers) == 1
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    attacker.metadata.pop("summoning_sickness_turn", None)
+    slot = game.battlefield_index_of(attacker)
+    ok, msg = game.declare_attackers(0, [slot])
+    assert ok, msg
+    while game.stack:
+        game.resolve_top_of_stack()
+    soldiers = [p for p in game.controlled_by(0) if "Soldier" in p.card.name]
+    assert len(soldiers) == 1
+    assert soldiers[0].tapped and soldiers[0].attacking
+
+
+def test_basri_devoted_paladin_counters_each_attacker(set_pool):
+    game, walker = _walker_game(set_pool, "Basri, Devoted Paladin")
+    attacker = Permanent(card=set_pool("M21")["Concordia Pegasus"])
+    game.players[0].battlefield.append(attacker)
+    game.start_turn(0)
+    result = game.activate_permanent_ability(0, walker.card.name, ability_index=1)
+    assert result.supported, result.details
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    attacker.metadata.pop("summoning_sickness_turn", None)
+    slot = game.battlefield_index_of(attacker)
+    ok, msg = game.declare_attackers(0, [slot])
+    assert ok, msg
+    while game.stack:
+        game.resolve_top_of_stack()
+    # 1/3 Pegasus with a +1/+1 counter attacks as a 2/4.
+    assert attacker.effective_power == 2
+
+
+def test_garruk_unleashed_emblem_tutors_at_end_step(set_pool):
+    pegasus = set_pool("M21")["Concordia Pegasus"]
+    game, walker = _walker_game(set_pool, "Garruk, Unleashed", loyalty=8,
+                                library=[pegasus])
+    result = game.activate_permanent_ability(0, walker.card.name, ability_index=2)
+    assert result.supported, result.details
+    assert len(game.players[0].emblems) == 1
+    game.resolve_end_step(0)
+    while game.stack:
+        game.resolve_top_of_stack()
+    game.auto_resolve_pending_choices()
+    game.auto_resolve_pending_choices()
+    # Non-interactive search default: the creature is on the battlefield.
+    assert any(p.card.name == "Concordia Pegasus" for p in game.controlled_by(0))
+
+
+def test_ugin_minus_x_exiles_colored_permanents_by_mana_value(set_pool):
+    cheap = Permanent(card=set_pool("M21")["Concordia Pegasus"])   # mv 2, white
+    game, walker = _walker_game(set_pool, "Ugin, the Spirit Dragon",
+                                opp_battlefield=[cheap])
+    result = game.activate_permanent_ability(
+        0, walker.card.name, ability_index=1, x_value=3,
+    )
+    assert result.supported, result.details
+    assert not game.is_on_battlefield(cheap)
+    assert any(c.name == "Concordia Pegasus" for c in game.players[1].exile)
+    # Ugin itself is colorless: the sweep spared it.
+    assert game.is_on_battlefield(walker)
+    assert walker.metadata["loyalty_counters"] == 4
+
+
+def test_garruk_savage_herald_bite_compiles_to_the_two_target_kind(set_pool):
+    walker_card = set_pool("M21")["Garruk, Savage Herald"]
+    program = compile_card_oracle(walker_card)
+    assert program.activated_abilities[1].instruction.kind == "target_bites_target"

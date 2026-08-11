@@ -34,6 +34,10 @@ class Pump:
     # "+X/+0" and "-X/-0" share one quantity vocabulary.
     power_negative: bool = False
     toughness_negative: bool = False
+    # "gets -X/-X …, where X is the number of cards in your graveyard"
+    # (Liliana, Waker of the Dead) — what the Var in power/toughness counts.
+    # None when X is announced (a cast cost) rather than defined by the text.
+    x_definition: Amount | None = None
 
 
 @dataclass(frozen=True)

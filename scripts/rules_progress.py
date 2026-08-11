@@ -9,9 +9,10 @@ which are still uncovered.
 
 Coverage is tracked at the numbered-rule level (``508.1``); a citation of a
 subrule (``508.1a``) counts toward its parent rule. Only the sections/rules in
-``SCOPE`` below are tracked — the engine targets Alpha-era Magic, so rules for
-planeswalkers, stickers, modern keywords, etc. are deliberately out of scope
-(edit ``SCOPE`` as the engine grows). Citations of real rules outside the
+``SCOPE`` below are tracked — the engine grew up on Alpha-era Magic, so rules
+for stickers, modern keywords, etc. are deliberately out of scope (edit
+``SCOPE`` as the engine grows; 306 Planeswalkers joined with the M21 measured
+set's loyalty work). Citations of real rules outside the
 scope are listed in an appendix rather than dropped; citations of rule numbers
 that don't exist in the CR file are reported as errors.
 
@@ -47,8 +48,9 @@ SCOPE: dict[str, str | tuple[str, ...]] = {
     )},
     # 2xx — Parts of a Card (only the parts Alpha-era cards have)
     **{s: "all" for s in ("200", "201", "202", "205", "207", "208")},
-    # 3xx — Card Types present in the pool
-    **{s: "all" for s in ("300", "301", "302", "303", "304", "305", "307")},
+    # 3xx — Card Types present in the pool (306 Planeswalkers joined with the
+    # M21 measured set's loyalty work)
+    **{s: "all" for s in ("300", "301", "302", "303", "304", "305", "306", "307")},
     # 4xx — Zones (408 Command excluded; 407 Ante is implemented as an opt-in
     # game variation, so the ante zone is tracked)
     **{s: "all" for s in ("400", "401", "402", "403", "404", "405", "406", "407")},

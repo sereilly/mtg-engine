@@ -86,9 +86,28 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             if permanent_matches_filter(permanent, filters)
         )
         wanted = payload.get("count")
+        op = payload.get("op", "eq")
+        # "if an opponent controls more creatures than you" (Garruk,
+        # Unleashed's −2): the bound is the asker's own matching count, and
+        # "an opponent" means any single opponent beating it.
+        if op == "more_than_you":
+            filters = payload.get("filter") or {}
+            own = sum(
+                1
+                for permanent in game.controlled_by(context.caster)
+                if permanent_matches_filter(permanent, filters)
+            )
+            return any(
+                sum(
+                    1
+                    for permanent in game.controlled_by(player)
+                    if permanent_matches_filter(permanent, filters)
+                ) > own
+                for player in game.players
+                if player is not context.caster and not player.lost
+            )
         if wanted is None:
             return count > 0
-        op = payload.get("op", "eq")
         if op == "eq":
             return count == wanted
         if op == "le":

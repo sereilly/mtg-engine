@@ -21,7 +21,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | 2ED | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
 | ARN | 78 | 108 | 64.8% | 61.1% | 38.9% | 34 |
 | 3ED | 296 | 389 | 78.9% | 76.9% | 41.9% | 149 |
-| M21 *(measured)* | 285 | 503 | 56.1% | 51.1% | 30.4% | 123 |
+| M21 *(measured)* | 285 | 503 | 58.1% | 52.5% | 31.8% | 129 |
 | **All (shipped)** | **1248** | **1663** | **78.0%** | **76.2%** | **41.5%** | **629** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -32,31 +32,31 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 284 | 151 | expected a subject |  |
+| 278 | 145 | expected a subject |  |
 | 106 | 52 | unrecognized effect verb |  |
-| 70 | 51 | unconsumed text |  |
+| 68 | 49 | unconsumed text |  |
 | 33 | 33 | unrecognized activation cost |  |
 | 27 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
-| 11 | 5 | expected a quantity |  |
 | 8 | 5 | expected a keyword ability |  |
 | 8 | 4 | a conditional static bonus is derived by engine/static_bonuses.py |  |
 | 7 | 2 | expected a colour after 'becomes' |  |
+| 7 | 4 | expected a quantity |  |
 | 6 | 3 | no lowering for RawEffect |  |
+| 5 | 2 | expected 'the number of' in a where-clause |  |
 | 5 | 1 | no handler for non-targeted tap/untap |  |
 | 5 | 2 | expected something to destroy |  |
 | 4 | 1 | upkeep triggers are dispatched by fused instruction kind; a decomposed wrapper has no handler |  |
 | 4 | 2 | expected the player whose hand is looked at |  |
 | 4 | 1 | expected 'mana' |  |
-| 4 | 3 | expected a permanent to put counters on |  |
 | 4 | 4 | unrecognized discard cost |  |
 | 3 | 1 | only one mana of any colour has a handler; 3 does not |  |
 | 3 | 1 | no tap-or-untap handler honours this restriction |  |
-| 3 | 3 | expected a destination zone after 'return' |  |
-| 3 | 3 | unsupported keyword-grant subject |  |
+| 3 | 3 | no return handler honours this restriction |  |
+| 2 | 1 | expected a permanent to put counters on |  |
 | 2 | 1 | back-reference to 'damage_dealt' with no producer in this effect |  |
 | 2 | 1 | expected something to shield |  |
 | 2 | 1 | no untap handler honors this restriction |  |
-| 2 | 2 | no handler for returning a non-targeted object |  |
+| 2 | 2 | expected a destination zone after 'return' |  |
 
 ## Cards executing through the grammar
 
@@ -109,6 +109,10 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `{3}: Untap this artifact.`
   - `{T}: Add {C}{C}{C}.`
   - `{3}: Untap this artifact.`
+- **Basri's Acolyte**
+  - `When this creature enters, put a +1/+1 counter on each of up to two other target creatures you control.`
+- **Basri's Aegis**
+  - `Put a +1/+1 counter on each of up to two target creatures. You may search your library and/or graveyard for a card named Basri, Devoted Paladin, reveal it, and put it into your hand. If you search your library this way, shuffle.`
 - **Basri's Lieutenant**
   - `When this creature enters, put a +1/+1 counter on target creature you control.`
 - **Basri's Solidarity**
@@ -246,6 +250,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Counter target spell.`
   - `Counter target spell.`
 - **Crash Through**
+  - `Creatures you control gain trample until end of turn. (Each of those creatures can deal excess combat damage to the player or planeswalker it's attacking.)`
   - `Draw a card.`
 - **Crusade**
   - `White creatures get +1/+1.`
@@ -408,6 +413,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `{B}: This creature gets +1/+1 until end of turn.`
   - `{B}: This creature gets +1/+1 until end of turn.`
   - `{B}: This creature gets +1/+1 until end of turn.`
+- **Fungal Rebirth**
+  - `Return target permanent card from your graveyard to your hand. If a creature died this turn, create two 1/1 green Saproling creature tokens.`
 - **Fungusaur**
   - `Whenever this creature is dealt damage, put a +1/+1 counter on it.`
   - `Whenever this creature is dealt damage, put a +1/+1 counter on it.`
@@ -933,6 +940,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `{B}: Regenerate this creature.`
   - `{B}: Regenerate this creature.`
   - `{B}: Regenerate this creature.`
+- **Selfless Savior**
+  - `Sacrifice this creature: Another target creature you control gains indestructible until end of turn. (Damage and effects that say "destroy" don't destroy it.)`
 - **Sengir Vampire**
   - `Whenever a creature dealt damage by this creature this turn dies, put a +1/+1 counter on this creature.`
   - `Whenever a creature dealt damage by this creature this turn dies, put a +1/+1 counter on this creature.`
@@ -1030,6 +1039,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Target player gains X life.`
   - `Target player gains X life.`
   - `Target player gains X life.`
+- **Subira, Tulzidi Caravanner**
+  - `{1}: Another target creature with power 2 or less can't be blocked this turn.`
 - **Sublime Epiphany**
   - `• Counter target spell.`
   - `• Target player draws a card.`
@@ -1152,6 +1163,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Whenever you cast an enchantment spell, you may draw a card.`
 - **Village Rites**
   - `Draw two cards.`
+- **Vito, Thorn of the Dusk Rose**
+  - `{3}{B}{B}: Creatures you control gain lifelink until end of turn.`
 - **Volcanic Geyser**
   - `Volcanic Geyser deals X damage to any target.`
 - **Wall of Bone**

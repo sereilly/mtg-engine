@@ -1,4 +1,4 @@
-"""Guard: a supported spell must actually do something when it resolves.
+"""Guard: a supported card must actually do something.
 
 ``supported`` is set by the oracle compiler as soon as *any* instruction was
 produced — including a ``spell_pattern`` marker, which carries no behavior and
@@ -12,11 +12,24 @@ supported pattern ... without state mutation" while nothing changed. The
 acknowledgement in parse_coverage.py even described life-halving behavior that
 did not exist.
 
-This checks the property directly — for every supported instant and sorcery,
-at least one compiled instruction must have a registered handler. Permanents
-are excluded: they legitimately do their work through statics, auras, layers and
-the text-keyed step tables rather than through a resolution instruction.
+This checks the property directly, in two shapes:
+
+* **A spell** must compile at least one instruction with a registered handler,
+  because that is the only way an instant or sorcery can do anything.
+* **A permanent** may work through statics, auras, layers or the text-keyed step
+  tables instead — but every one of those leaves a real instruction behind
+  (``static_line``, ``derived_static_rule``, an effect kind). What it may not do
+  is carry a whitelist marker and *nothing else* while every ability line it
+  prints failed to parse. Mazemind Tome shipped in M21 that way: two activated
+  abilities, both with ``instruction=None``, and an artifact that entered play,
+  offered both and performed neither.
+
+The permanent half used to be excluded here wholesale, on the grounds that a
+permanent's work happens elsewhere. That is true of *where* the work is and not
+of *whether* there is any, which is what this asks.
 """
+
+import dataclasses
 
 import pytest
 
@@ -76,3 +89,100 @@ def test_broad_whitelist_patterns_never_carry_a_card_alone(bare_pattern):
     ]
 
     assert not carried, f"spells supported only by the bare {bare_pattern!r} pattern: {carried}"
+
+
+# ---------------------------------------------------------------------------
+# The permanent half
+# ---------------------------------------------------------------------------
+
+
+def _hollow_permanents() -> list[tuple[str, list[str], list[str]]]:
+    hollow: list[tuple[str, list[str], list[str]]] = []
+    for card in load_catalog():
+        if card.primary_type not in ("artifact", "enchantment"):
+            continue
+        # Auras answer to engine/auras.py, which runs first and is stricter —
+        # see test_an_aura_is_left_to_its_own_gate below.
+        if "Aura" in card.type_line:
+            continue
+        program = compile_card_oracle(card)
+        if not program.supported or program.modes:
+            continue
+        if not program.instructions:
+            continue
+        if any(i.kind != "spell_pattern" for i in program.instructions):
+            continue
+        abilities = (*program.activated_abilities, *program.triggered_abilities)
+        if any(a.supported and a.instruction is not None for a in abilities):
+            continue
+        unreadable = [a.source_line for a in abilities if not a.supported or a.instruction is None]
+        if not unreadable:
+            continue
+        hollow.append((card.name, [f"{i.kind}:{i.value}" for i in program.instructions], unreadable))
+    return hollow
+
+
+def test_no_supported_permanent_carries_only_a_whitelist_marker():
+    """A permanent whose every card-level instruction is a whitelist marker and
+    whose every printed ability failed to parse does nothing at all. It must be
+    classified unsupported naming the clause, not reported as playable."""
+    hollow = _hollow_permanents()
+
+    assert not hollow, (
+        "supported permanent(s) with no behaviour behind them — a whitelist "
+        "substring matched and every ability line failed to parse:\n"
+        + "\n".join(f"  {name}: {kinds} / {lines}" for name, kinds, lines in sorted(hollow))
+    )
+
+
+def _probe(text: str, type_line: str = "Artifact"):
+    catalog = {c.name: c for c in load_catalog()}
+    return compile_card_oracle(
+        dataclasses.replace(
+            catalog["Jayemdae Tome"], name="Probe", type_line=type_line, oracle_text=text
+        )
+    )
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # Mazemind Tome's shape: "draw a card" is a whitelist substring, so the
+        # card-level marker matched, while the ability that would have done the
+        # drawing did not parse and carries no instruction.
+        "{T}, Put a page counter on this artifact: Draw a card.",
+        # Same with a trigger rather than an activated ability: the condition is
+        # read, the effect clause is not, and "gain" matched the whitelist.
+        "When this artifact enters the battlefield, you gain 4 life for each "
+        "Shrine you control.",
+    ],
+)
+def test_a_permanent_whose_only_ability_is_unreadable_is_unsupported(text):
+    """Verified by injection rather than by the pool alone: the shipped pool is
+    clean, so the property test above passes against a compiler that never
+    learned this. These are the shapes it must refuse."""
+    program = _probe(text)
+    assert not program.supported
+    assert "no ability of this permanent is implemented" in program.reason
+
+
+def test_a_permanent_whose_work_is_done_by_a_rule_table_keeps_its_support():
+    """The other direction, and the reason the gate needs both conjuncts.
+    Howling Mine's trigger does not parse either — its behaviour lives in
+    engine/draw_step_modifiers.py, which leaves a ``derived_static_rule``
+    instruction. That is not a whitelist marker, so the card is not hollow."""
+    program = compile_card_oracle({c.name: c for c in load_catalog()}["Howling Mine"])
+    assert program.supported
+    assert any(i.kind == "derived_static_rule" for i in program.instructions)
+
+
+def test_an_aura_is_left_to_its_own_gate():
+    """Auras are excluded by shape, not by name. engine/auras.py runs first and
+    is stricter — it names the first unclaimed *effect line* — and it knows about
+    the Aura death trigger that mixins/effects.py carries with no instruction of
+    its own. Creature Bond has exactly that shape and works."""
+    program = compile_card_oracle({c.name: c for c in load_catalog()}["Creature Bond"])
+    assert program.supported
+    assert all(
+        a.instruction is None for a in program.triggered_abilities
+    ), "the trigger still has no instruction — its behaviour is elsewhere"

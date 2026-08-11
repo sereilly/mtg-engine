@@ -16,6 +16,7 @@ from ._common import (
     _REST_OF_TURN,
     _amount_payload,
     _describe_targets,
+    _filter_payload,
     _full_mana_payload,
     _is_source,
     _is_you,
@@ -199,6 +200,35 @@ def _lower_damage(node: ast.DealDamage) -> tuple[OracleInstruction, ...]:
         return _lower_counted_damage(node)
     if isinstance(node.amount, ast.BoardCount):
         return _lower_board_count_damage(node)
+    # "Target creature you control deals damage equal to its power to another
+    # target creature." (Garruk, Savage Herald's −2.) A fused kind: the biter
+    # and the bitten are two chosen targets resolved as a list, and the amount
+    # is the biter's power read at resolution — which is why the generic
+    # deal_damage cannot carry it.
+    if (
+        isinstance(node.amount, ast.ThatMuch)
+        and node.amount.source == "its_power"
+        and node.source is not None
+        and node.source.quantifier == "target"
+        and len(node.recipients) == 1
+        and isinstance(node.recipients[0], ast.TargetSpec)
+        and node.recipients[0].distinct_from_prior
+    ):
+        return (
+            OracleInstruction(
+                "target_bites_target",
+                "",
+                {
+                    "targets": {
+                        "quantifier": "target",
+                        "kind": "object",
+                        "filter": _filter_payload(node.source.filter),
+                        # Two picks: the biter (first), then the bitten.
+                        "count": 2,
+                    },
+                },
+            ),
+        )
     amount = _amount_payload(node.amount)
 
     sweep = _sweep_kind(node.recipients)

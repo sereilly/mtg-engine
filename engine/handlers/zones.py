@@ -3,6 +3,7 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
+from ..keywords import grant_keyword
 from ..models import Permanent
 from ._common import permanent_matches_filter, resolve_amount, resolve_target_permanent
 from .registry import effect_handler
@@ -258,6 +259,7 @@ def search_library(game: Game, instruction: OracleInstruction, context: OracleEx
         card_type=instruction.payload.get("card_type", "any"),
         zones=zones,
         restrictions=dict(instruction.payload.get("restrictions") or {}),
+        destination=instruction.payload.get("destination", "hand"),
     )
     game.log.append(f"{caster.name} is searching their " + " and ".join(zones))
     return True, "pending_search_library"
@@ -399,9 +401,26 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
     caster = context.caster
     # Resurrection returns "target creature card from your graveyard", so the chosen
     # index is into the caster's own graveyard regardless of which seat the UI tags.
+    # "…from a graveyard" (Liliana, Waker of the Dead's emblem) widens the source
+    # to the chosen player's graveyard; "under your control" is already how
+    # _reanimate_creature_to_battlefield puts it into play for the caster.
     idx = context.target_permanent_index
     idx = idx if isinstance(idx, int) else None
-    reanimated = game._reanimate_creature_to_battlefield(caster, caster, idx)
+    source_player = caster
+    if instruction.payload.get("any_graveyard") and context.target is not None:
+        source_player = context.target
+    reanimated = game._reanimate_creature_to_battlefield(caster, source_player, idx)
+    # "It gains haste." — folded into the reanimation because the permanent
+    # does not exist until this step runs. The newest arrival on the caster's
+    # battlefield is the reanimated creature.
+    gains = tuple(instruction.payload.get("gains") or ())
+    if reanimated and gains:
+        caster_index = game.players.index(caster)
+        arrivals = list(game.controlled_by(caster_index))
+        if arrivals:
+            newest = arrivals[-1]
+            for keyword in gains:
+                grant_keyword(newest, keyword)
     game.log.append("Reanimated creature to battlefield" if reanimated else "No creature to reanimate")
     return True, "resolved"
 
@@ -709,4 +728,221 @@ def return_all_owned_artifacts_to_hand(game: Game, instruction: OracleInstructio
             game._remove_aura_effects(permanent)
             returned += 1
     game.log.append(f"Returned {returned} artifact(s) to {context.target.name}'s hand")
+    return True, "resolved"
+
+
+# ---------------------------------------------------------------------------
+# Planeswalker-block zone movers (M21 loyalty abilities)
+# ---------------------------------------------------------------------------
+
+
+@effect_handler("phase_out_target")
+def phase_out_target(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Target creature you don't control phases out." (Teferi, Master of
+    Time's −3.) CR 702.26: not a zone change — the machinery is
+    Game.phase_out_permanent, and the creature returns at its controller's
+    next untap step."""
+    target_perm = resolve_target_permanent(game, context)
+    if target_perm is None or not target_perm.is_creature:
+        game.log.append(f"{context.card.name}: no valid creature target")
+        return True, "resolved"
+    game.phase_out_permanent(target_perm)
+    return True, "resolved"
+
+
+@effect_handler("phase_out_opponent_creatures")
+def phase_out_opponent_creatures(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Each creature target opponent controls phases out. Until the end of
+    your next turn, they can't phase in." (Teferi, Timeless Voyager's −8.)
+
+    The countdown counts the caster's turn ends: cast on the caster's own turn
+    the block survives this turn's end and the caster's next turn's end, which
+    is what "the end of your next turn" spans."""
+    caster_index = game.players.index(context.caster)
+    target = context.target
+    if target is None or target is context.caster:
+        target = next(
+            (game.players[i] for i in game.opponents_of(caster_index)), None
+        )
+    if target is None:
+        return True, "resolved"
+    blocked = bool(instruction.payload.get("cant_phase_in_until_your_next_turn"))
+    ends = 2 if game.active_player_index == caster_index else 1
+    victims = [perm for perm in game.controlled_by(game.players.index(target)) if perm.is_creature]
+    for perm in victims:
+        if blocked:
+            perm.metadata["phase_in_blocked"] = {
+                "seat": caster_index,
+                "turn_ends_remaining": ends,
+            }
+        game.phase_out_permanent(perm)
+    game.log.append(
+        f"{context.card.name}: {len(victims)} creature(s) phased out"
+    )
+    return True, "resolved"
+
+
+@effect_handler("put_target_on_library_top")
+def put_target_on_library_top(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Put target creature on top of its owner's library." (Teferi, Timeless
+    Voyager's −3.) A zone change, not a destruction: no dies-trigger fires and
+    regeneration cannot save it. The card goes to its *owner's* library
+    (CR 400.3), whoever controlled the permanent."""
+    target_perm = resolve_target_permanent(game, context)
+    if target_perm is None or not target_perm.is_creature:
+        game.log.append(f"{context.card.name}: no valid creature target")
+        return True, "resolved"
+    owner_idx = game.owner_index_of(target_perm)
+    owner = game.players[owner_idx] if owner_idx is not None else context.caster
+    game.remove_from_battlefield(target_perm)
+    game._remove_aura_effects(target_perm)
+    owner.library.insert(0, target_perm.card)
+    game.log.append(
+        f"{context.card.name}: {target_perm.card.name} put on top of {owner.name}'s library"
+    )
+    return True, "resolved"
+
+
+# CR 110.4: the card types that are permanents — what "permanent card" means
+# when Ugin's −10 reads your hand.
+_PERMANENT_TYPES = ("artifact", "creature", "enchantment", "land", "planeswalker")
+
+
+@effect_handler("put_cards_from_hand_onto_battlefield")
+def put_cards_from_hand_onto_battlefield(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Put up to seven permanent cards from your hand onto the battlefield."
+    (Ugin, the Spirit Dragon's −10.) Non-interactive seats take every eligible
+    card up to the cap, in hand order — "up to" makes any subset legal, and
+    more battlefield is the default the AI already plays toward."""
+    caster = context.caster
+    count = int(instruction.payload.get("count", 0))
+    wanted_types = tuple(instruction.payload.get("card_types") or ())
+    permanents_only = bool(instruction.payload.get("permanents_only"))
+
+    def eligible(card) -> bool:
+        if wanted_types:
+            return card.primary_type in wanted_types
+        if permanents_only:
+            return card.primary_type in _PERMANENT_TYPES
+        return True
+
+    chosen = [card for card in caster.hand if eligible(card)][:count]
+    caster_index = game.players.index(caster)
+    for card in chosen:
+        caster.hand = [c for c in caster.hand if c is not card]
+        game._put_permanent_onto_battlefield(caster_index, Permanent(card=card), None)
+        game.log.append(f"{caster.name} put {card.name} onto the battlefield")
+    if not chosen:
+        game.log.append(f"{caster.name} put no cards onto the battlefield")
+    return True, "resolved"
+
+
+@effect_handler("exile_all_matching")
+def exile_all_matching(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Exile each permanent with mana value X or less that's one or more
+    colors." (Ugin, the Spirit Dragon's −X.) A sweep, not a destruction:
+    indestructible does not save anything and no dies-trigger fires. Each
+    card goes to its owner's exile (CR 400.3)."""
+    payload = instruction.payload
+    bound = payload.get("mana_value")
+    x_value = int(context.x_value or 0)
+
+    def matches(perm: Permanent) -> bool:
+        type_filter = payload.get("type_filter")
+        if type_filter and not permanent_matches_filter(perm, {"type_filter": type_filter}):
+            return False
+        if payload.get("colored_only") and not perm.effective_colors:
+            return False
+        if bound is not None:
+            raw = bound.get("value")
+            limit = x_value if raw == "x" else int(raw)
+            value = perm.effective_card.cmc or 0
+            op = bound.get("op")
+            if op == "le" and not value <= limit:
+                return False
+            if op == "ge" and not value >= limit:
+                return False
+            if op == "eq" and not value == limit:
+                return False
+        return True
+
+    victims = [perm for perm in game.all_permanents() if matches(perm)]
+    for perm in victims:
+        owner_idx = game.owner_index_of(perm)
+        owner = game.players[owner_idx] if owner_idx is not None else context.caster
+        if not perm.metadata.get("is_token", False):
+            owner.exile.append(perm.card)
+        game._remove_aura_effects(perm)
+    game.remove_all_from_battlefield(victims)
+    game.log.append(f"{context.card.name} exiled {len(victims)} permanent(s)")
+    return True, "resolved"
+
+
+@effect_handler("reveal_top_to_hand_or_bottom")
+def reveal_top_to_hand_or_bottom(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Reveal the top card of your library. If it's a creature card, put it
+    into your hand. Otherwise, put it on the bottom of your library." (Garruk,
+    Savage Herald's +1.) Revealing is public: the log names the card either
+    way, which is what a reveal means to this engine."""
+    caster = context.caster
+    if not caster.library:
+        game.log.append(f"{caster.name} has no library to reveal from")
+        return True, "resolved"
+    card_type = instruction.payload.get("card_type")
+    top = caster.library.pop(0)
+    if card_type is None or top.primary_type == card_type:
+        caster.hand.append(top)
+        game.log.append(f"{caster.name} revealed {top.name} and put it into their hand")
+    else:
+        caster.library.append(top)
+        game.log.append(
+            f"{caster.name} revealed {top.name} and put it on the bottom of their library"
+        )
+    return True, "resolved"
+
+
+@effect_handler("discard_hand")
+def discard_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Discard your hand" (Chandra, Heart of Fire). Every card, no choice to
+    make, so no prompt — each discard still goes through _discard_card so
+    anything watching discards sees them."""
+    caster = context.caster
+    discarded = list(caster.hand)
+    caster.hand = []
+    for card in discarded:
+        game._discard_card(caster, card)
+    game.log.append(f"{caster.name} discarded their hand ({len(discarded)} card(s))")
+    return True, "resolved"
+
+
+@effect_handler("each_player_discards_a_card")
+def each_player_discards_a_card(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Each player discards a card." (Liliana, Waker of the Dead's +1.)
+
+    Who could not is recorded in the resolution scratchpad, because the
+    printed rider "Each opponent who can't loses 3 life." reads it. An
+    interactive seat's choice goes through the discard prompt; a
+    non-interactive seat discards its first card, matching the existing
+    discard default."""
+    could_not: list[int] = []
+    for seat, player in enumerate(game.players):
+        if player.lost:
+            continue
+        if not player.hand:
+            could_not.append(seat)
+            game.log.append(f"{player.name} cannot discard (empty hand)")
+            continue
+        if seat in game.interactive_seats:
+            game.arm_pending_choice(
+                "discard", seat,
+                count=1,
+                allow_top_of_library=game._controls_top_of_library_discard(player),
+            )
+            game.log.append(f"{player.name} must choose a card to discard")
+        else:
+            card = player.hand[0]
+            player.hand = [c for c in player.hand if c is not card]
+            game._discard_card(player, card)
+            game.log.append(f"{player.name} discarded {card.name}")
+    context.results["players_who_could_not_discard"] = could_not
     return True, "resolved"

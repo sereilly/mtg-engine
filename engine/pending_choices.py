@@ -83,6 +83,14 @@ class ChoiceSpec:
     is_open          -- extra "still owed" test. Word of Command records the
                         caster's answer while its spell keeps waiting on the
                         stack, so the object stays queued after it is answered.
+    suspends         -- arming this stops the *loop* the effect was a step of
+                        (``engine/resumption.py``) until it is answered, and
+                        answering resumes it. Set it for any prompt whose answer
+                        decides what a **later step of the same resolution**
+                        sees. Opt-in rather than universal because the kinds
+                        that complete inline (``sacrifice``, ``discard``,
+                        ``mana_payment``) have callers written around finishing
+                        immediately.
     """
 
     kind: str
@@ -96,6 +104,7 @@ class ChoiceSpec:
     spectator_visible: bool = False
     hidden_for_ai: bool = True
     is_open: Callable[[Any, PendingChoice], bool] | None = None
+    suspends: bool = False
 
     def open_for(self, game, choice) -> bool:
         """Whether *choice* is still waiting on its seat."""
@@ -118,6 +127,7 @@ def register_choice(
     spectator_visible: bool = False,
     hidden_for_ai: bool = True,
     is_open: Callable[[Any, PendingChoice], bool] | None = None,
+    suspends: bool = False,
 ) -> ChoiceSpec:
     """Register the one spec for a kind of pending choice.
 
@@ -139,6 +149,7 @@ def register_choice(
         spectator_visible=spectator_visible,
         hidden_for_ai=hidden_for_ai,
         is_open=is_open,
+        suspends=suspends,
     )
     CHOICE_SPECS[kind] = spec
     return spec

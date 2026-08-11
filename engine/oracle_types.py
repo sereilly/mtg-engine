@@ -63,6 +63,19 @@ class ActivatedAbilityCost:
     # payer no choice at all. Two fields because they are two costs: a card
     # could print both.
     discard_cards: int = 0
+    # CR 606.4: a loyalty ability's cost is putting on or removing loyalty
+    # counters. ``loyalty`` is the signed delta ("+1" → 1, "−2" → -2, "0" → 0);
+    # ``loyalty_x_sign`` is set instead for a variable cost ("−X" → -1), whose
+    # magnitude is the X the player announces on activation. ``None``/``None``
+    # means the ability is not a loyalty ability at all — 0 is a real cost
+    # (CR 606.5), so it cannot double as the "absent" value.
+    loyalty: int | None = None
+    loyalty_x_sign: int | None = None
+
+    @property
+    def is_loyalty(self) -> bool:
+        """Whether this is a loyalty-ability cost (CR 606.2)."""
+        return self.loyalty is not None or self.loyalty_x_sign is not None
 
 
 @dataclass(frozen=True)

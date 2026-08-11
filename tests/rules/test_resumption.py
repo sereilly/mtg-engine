@@ -16,7 +16,7 @@ from dataclasses import replace
 import pytest
 
 from engine import Game, PlayerState
-from engine.models import Permanent
+from engine.models import CardDefinition, Permanent
 from tests.helpers import CARDS_BY_NAME, _mk_creature_card, _nosick
 
 
@@ -69,16 +69,140 @@ def _pick(game, seat: int, key: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# A prompt in the middle of a spell's own instructions
+# ---------------------------------------------------------------------------
+#
+# CR 616.1e is not the only decision that interrupts a resolution. Any prompt
+# whose answer *is* the effect — a scry, a search, a reorder — stops the spell
+# in the same place and for the same reason, and the steps written behind it
+# must not run first (CR 608.2c). ``ChoiceSpec.suspends`` is what says so.
+
+
+def _probe_spell(text: str, name: str = "Probe"):
+    """An instant printing *text* as one line, so its clauses compile to a
+    ``sequence`` rather than to independent top-level instructions."""
+    return CardDefinition(
+        name=name, mana_cost="{U}", cmc=1.0, type_line="Instant",
+        oracle_text=text, colors=("U",), color_identity=("U",),
+        keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": "Instant"},
+    )
+
+
+def _library(*names: str) -> list:
+    return [_mk_creature_card(n, 1, 1) for n in names]
+
+
+@pytest.mark.cr("608.2c", "701.22a")
+def test_608_2c_a_draw_written_after_a_scry_waits_for_the_scry():
+    """The Opt shape. "Scry N. Draw a card." is two steps in the order written,
+    and the second reads the library the first arranged — so arming the scry has
+    to stop the draw behind it. It did not: the card was drawn off the top the
+    scry had not touched yet, and the scry then rearranged the *next* one."""
+    card = _probe_spell("Scry 2. Draw a card.")
+    caster = PlayerState(name="P0", hand=[card], library=_library("A", "B", "C", "D"))
+    game = Game(players=[caster, PlayerState(name="P1")])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+
+    game.cast_from_hand(0, card.name, target_player_index=1)
+
+    assert game.pending_choices_of("scry", 0), "the caster was asked"
+    assert caster.hand == [], "the draw written behind the scry has not happened"
+    assert card not in caster.graveyard, "the spell is still resolving (CR 608.2n)"
+
+    # Bottom A, keep B on top: the draw must see B.
+    assert game.confirm_scry(0, card_order=[1, 0], bottom_count=1) is True
+
+    assert [c.name for c in caster.hand] == ["B"], (
+        "the draw took the card the scry put on top, not the one it moved"
+    )
+    assert [c.name for c in caster.library] == ["C", "D", "A"]
+    assert card in caster.graveyard, "and the resolution finished"
+    assert game.resume_stack == [] and not game.effect_suspended
+
+
+@pytest.mark.cr("608.2c", "701.23a")
+def test_608_2c_a_draw_written_after_a_search_waits_for_the_search():
+    """The same rule with the other library-shaping prompt. A search removes a
+    card and shuffles what is left, so a draw behind it cannot be resolved
+    against the pre-search library."""
+    card = _probe_spell(
+        "Search your library for a card, put that card into your hand, then shuffle. "
+        "Draw a card.",
+        name="Probe Tutor",
+    )
+    caster = PlayerState(name="P0", hand=[card], library=_library("A", "B", "C"))
+    game = Game(players=[caster, PlayerState(name="P1")])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+
+    game.cast_from_hand(0, card.name, target_player_index=1)
+
+    assert game.pending_choices_of("search_library", 0), "the caster was asked"
+    assert caster.hand == [], "the draw has not happened"
+
+    assert game.confirm_search_library(0, 0) is True
+
+    assert len(caster.hand) == 2, "the found card, then the drawn one"
+    assert "A" in [c.name for c in caster.hand]
+    assert card in caster.graveyard
+    assert game.resume_stack == [] and not game.effect_suspended
+
+
+@pytest.mark.cr("608.2n", "701.23a")
+def test_608_2n_a_searching_spell_reaches_the_graveyard_only_when_answered():
+    """A shipped card, not a probe: Demonic Tutor. The graveyard placement is
+    the last part of the resolution, and the search is in front of it."""
+    tutor = CARDS_BY_NAME["Demonic Tutor"]
+    caster = PlayerState(name="P0", hand=[tutor], library=_library("A", "B"))
+    game = Game(players=[caster, PlayerState(name="P1")])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+
+    game.cast_from_hand(0, tutor.name, target_player_index=1)
+
+    assert game.pending_search_library is not None
+    assert tutor not in caster.graveyard, "still resolving"
+
+    game.confirm_search_library(0, 0)
+
+    assert tutor in caster.graveyard
+    assert game.resume_stack == [] and not game.effect_suspended
+
+
+@pytest.mark.cr("608.2c", "701.22a")
+def test_608_2c_a_non_interactive_caster_finishes_the_whole_resolution_at_once():
+    """AI and headless play must stay synchronous: the prompt is queued, the
+    auto-resolver answers it, and nothing is left owed or suspended — which is
+    what keeps a seeded simulation reproducible."""
+    card = _probe_spell("Scry 2. Draw a card.")
+    caster = PlayerState(name="P0", hand=[card], library=_library("A", "B", "C", "D"))
+    game = Game(players=[caster, PlayerState(name="P1")])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+
+    game.cast_from_hand(0, card.name, target_player_index=1)
+    game.auto_resolve_pending_choices()
+
+    assert len(caster.hand) == 1, "the draw happened"
+    assert game.pending_choices == []
+    assert card in caster.graveyard
+    assert game.resume_stack == [] and not game.effect_suspended
+
+
+# ---------------------------------------------------------------------------
 # End to end: a spell whose damage stops to ask
 # ---------------------------------------------------------------------------
 
-@pytest.mark.cr("616.1e", "608.2m")
+@pytest.mark.cr("616.1e", "608.2n")
 def test_616_1e_a_spell_whose_damage_asks_finishes_when_answered():
     """A red damage spell into a player holding two applicable shields. The
     event stops, and because it stops *before* applying anything the rest of the
-    resolution has to stop with it — including CR 608.2m's "put the card into
-    its owner's graveyard", which would otherwise bin a spell whose damage had
-    not happened."""
+    resolution has to stop with it — including CR 608.2n's "as the final part of
+    an instant or sorcery spell's resolution, the spell is put into its owner's
+    graveyard", which would otherwise bin a spell whose damage had not
+    happened."""
     bolt = replace(CARDS_BY_NAME["Lightning Bolt"], colors=("R",))
     caster = PlayerState(name="P0", hand=[bolt])
     victim = _shielded_player()
@@ -91,7 +215,7 @@ def test_616_1e_a_spell_whose_damage_asks_finishes_when_answered():
     assert victim.damage_prevention_pool == 5 and victim.color_prevention_shields == ["R"], (
         "nothing was spent while the question was open"
     )
-    assert bolt not in caster.graveyard, "the spell is still resolving (CR 608.2m)"
+    assert bolt not in caster.graveyard, "the spell is still resolving (CR 608.2n)"
 
     pool = game.pending_choices_of("effect_order", 1)[0].data["_keys"].index("_prevention_pool")
     game.resolve_pending_choice("effect_order", 1, option_index=pool)

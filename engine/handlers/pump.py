@@ -4,7 +4,13 @@ from typing import TYPE_CHECKING
 
 from ..models import Permanent
 from ..pt import add_pt_modifier, set_base_pt
-from ._common import apply_temp_pt_boost, resolve_amount, resolve_target_permanent
+from ._common import (
+    apply_temp_pt_boost,
+    permanent_matches_filter,
+    resolve_amount,
+    resolve_target_permanent,
+    resolve_target_permanents,
+)
 from .registry import effect_handler
 from ..keywords import grant_keyword
 
@@ -85,8 +91,24 @@ def pump_target_creature_until_eot(game: Game, instruction: OracleInstruction, c
     target = context.target
     card = context.card
     x_value = context.x_value
+    # "…where X is the number of cards in your graveyard" (Liliana, Waker of
+    # the Dead): X is defined by a zone count at resolution, not announced.
+    # The sign travels separately because the payload's "x" cannot be negated.
+    x_count = instruction.payload.get("x_from_count")
+    if x_count is not None:
+        owner = caster if x_count.get("owner", "you") == "you" else (target or caster)
+        wanted_types = tuple(x_count.get("card_types") or ())
+        x_value = sum(
+            1
+            for c in owner.graveyard
+            if not wanted_types or c.primary_type in wanted_types
+        )
     power_delta = resolve_amount(instruction.payload.get("power", 0), x_value)
     toughness_delta = resolve_amount(instruction.payload.get("toughness", 0), x_value)
+    if instruction.payload.get("power_negative"):
+        power_delta = -power_delta
+    if instruction.payload.get("toughness_negative"):
+        toughness_delta = -toughness_delta
     blocking_only = bool(instruction.payload.get("blocking_only"))
 
     def _eligible(perm: Permanent) -> bool:
@@ -139,6 +161,64 @@ def buff_creatures_global(game: Game, instruction: OracleInstruction, context: O
     return True, "resolved"
 
 
+@effect_handler("grant_team_keyword_until_eot")
+def grant_team_keyword_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Creatures you control gain flying until end of turn." (Basri, Devoted
+    Paladin's −6.) The affected set locks in at resolution (CR 611.2c), which
+    is why this walks the board now instead of contributing a derived buff."""
+    caster_index = game.players.index(context.caster)
+    keywords = tuple(instruction.payload.get("keywords") or ())
+    granted = 0
+    for perm in game.controlled_by(caster_index):
+        if not perm.is_creature:
+            continue
+        for keyword in keywords:
+            grant_keyword(perm, keyword, until_eot=True)
+        granted += 1
+    game.log.append(
+        f"{context.card.name}: {granted} creature(s) gain {', '.join(keywords)} until end of turn"
+    )
+    return True, "resolved"
+
+
+@effect_handler("grant_team_assign_unblocked_until_eot")
+def grant_team_assign_unblocked_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Garruk, Savage Herald's −7: creatures you control gain "You may have
+    this creature assign its combat damage as though it weren't blocked" until
+    end of turn. The combat damage step reads the flag; cleanup clears it (the
+    key is in _EOT_METADATA_KEYS)."""
+    caster_index = game.players.index(context.caster)
+    granted = 0
+    for perm in game.controlled_by(caster_index):
+        if perm.is_creature:
+            perm.metadata["assign_combat_damage_as_unblocked_until_eot"] = True
+            granted += 1
+    game.log.append(
+        f"{context.card.name}: {granted} creature(s) may assign combat damage as though unblocked"
+    )
+    return True, "resolved"
+
+
+@effect_handler("add_loyalty_counters")
+def add_loyalty_counters(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Put a loyalty counter on Garruk." (Garruk, Unleashed's −2.) Loyalty on
+    the battlefield IS its loyalty counters (CR 306.5c), the same key damage
+    and loyalty costs adjust. The source may already have left — a walker that
+    paid itself to 0 dies before its ability resolves — in which case the
+    counter lands on nothing (CR 608.2b handles the analogous target)."""
+    source = context.source_permanent
+    if source is None or not game.is_on_battlefield(source):
+        game.log.append(f"{context.card.name}: its source has left, no loyalty added")
+        return True, "resolved"
+    count = int(instruction.payload.get("count", 1))
+    loyalty = int(source.metadata.get("loyalty_counters", 0))
+    source.metadata["loyalty_counters"] = loyalty + count
+    game.log.append(
+        f"{context.card.name}: {count} loyalty counter(s) added (now {loyalty + count})"
+    )
+    return True, "resolved"
+
+
 @effect_handler("add_variable_power_counters_to_self")
 def add_variable_power_counters_to_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     # Clockwork Beast: "{X}, {T}: Put up to X +1/+0 counters on this creature.
@@ -187,19 +267,64 @@ def add_counter_to_self(game: Game, instruction: OracleInstruction, context: Ora
 
 @effect_handler("add_counter_to_target")
 def add_counter_to_target(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    """"Put a +1/+1 counter on target creature." The kind Dwarven
-    Weaponsmith's hook has always emitted (it resolved to nothing before this
-    handler existed) and the grammar now lowers to as well."""
+    """"Put a +1/+1 counter on target creature", and on *each of up to N* target
+    creatures.
+
+    The kind Dwarven Weaponsmith's hook has always emitted (it resolved to
+    nothing before this handler existed) and the grammar now lowers to as well.
+    How many targets it takes is payload rather than a second instruction kind,
+    because the effect is identical and only the count differs — the same reason
+    a combat restriction carries its land type as data.
+
+    The two counts take different resolvers on purpose. One target falls back to
+    scanning when the chosen one is gone, which is the behaviour every
+    single-target handler in the engine has; several are resolved strictly, so a
+    dead target is dropped (CR 608.2b) rather than replaced by whichever creature
+    the scan reached first — twice, if two slots decayed.
+    """
     card = context.card
+    power = int(instruction.payload.get("power", 1))
+    toughness = int(instruction.payload.get("toughness", 1))
+    targets = instruction.payload.get("targets") or {}
+    maximum = targets.get("count") if isinstance(targets, dict) else None
+
+    if isinstance(maximum, int) and maximum > 1:
+        filters = targets.get("filter") or {}
+        # The filter decides which permanents qualify, including "you control" —
+        # asking it rather than assuming the caster's side is what keeps
+        # "up to two target creatures" (Basri's Aegis, either side) and "up to
+        # two other target creatures you control" (Basri's Acolyte) one handler.
+        source = context.source_permanent
+
+        def eligible(perm) -> bool:
+            if not permanent_matches_filter(perm, filters):
+                return False
+            # "other" (CR 109.5's exclusion of the source) and "you control" are
+            # both outside permanent_matches_filter's vocabulary — it answers
+            # about a permanent alone, and these two need the source and the
+            # board — so they are asked here rather than widened into it.
+            if filters.get("exclude_self") and perm is source:
+                return False
+            if filters.get("controller") == "you" and not game.controls(context.caster, perm):
+                return False
+            return True
+
+        chosen = resolve_target_permanents(game, context, predicate=eligible)
+        if not chosen:
+            # "Up to two" may legally name none, and every named target may have
+            # become illegal since (CR 608.2b) — both resolve to nothing here.
+            game.log.append(f"{card.name}: no creatures were given counters")
+            return True, "resolved"
+        for creature in chosen[:maximum]:
+            add_pt_modifier(creature, power, toughness)
+            game.log.append(f"{creature.card.name} gets a +1/+1 counter ({card.name})")
+        return True, "resolved"
+
     target_creature = resolve_target_permanent(game, context)
     if target_creature is None:
         game.log.append(f"{card.name}: no valid creature target")
         return True, "resolved"
-    add_pt_modifier(
-        target_creature,
-        int(instruction.payload.get("power", 1)),
-        int(instruction.payload.get("toughness", 1)),
-    )
+    add_pt_modifier(target_creature, power, toughness)
     game.log.append(f"{target_creature.card.name} gets a +1/+1 counter ({card.name})")
     return True, "resolved"
 

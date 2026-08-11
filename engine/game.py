@@ -112,6 +112,15 @@ class Game(
     skip_step_counts: dict[str, int] = field(default_factory=dict)
     combat_damage_prevented_until_eot: bool = False
     combat_attackers: dict[int, int] = field(default_factory=dict)
+    # CR 508.1b: attackers sent at a planeswalker rather than at its controller.
+    # Maps attacker battlefield idx (active player's seat) -> the attacked
+    # planeswalker's ``permanent_id``. The id, not a slot: the walker sits on
+    # the *defender's* battlefield, whose slots renumber independently, and a
+    # walker that leaves combat mid-step must resolve to nothing (CR 510.1b)
+    # rather than to whatever slid into its place. ``combat_attackers`` still
+    # carries the same attacker's defending player (the walker's controller),
+    # which is what blocks, restrictions and CR 508.5 read.
+    combat_attacked_planeswalkers: dict[int, int] = field(default_factory=dict)
     # Maps defending player index -> {blocker battlefield idx -> attacker battlefield
     # idx list}. Nested by defender because CR 802 (attack multiple players) lets 2+
     # defenders declare blocks in the same combat, and blocker battlefield indices
@@ -218,6 +227,12 @@ class Game(
     # "power", "toughness", "type_line", "colors", "keywords"}. Populated in
     # _permanent_to_graveyard, drained in resolve_end_step.
     pending_end_step_tokens: list = field(default_factory=list)
+    # CR 603.7 delayed triggered abilities created by a resolving ability
+    # ("Whenever one or more nontoken creatures attack this turn, …" — Basri
+    # Ket's −2). Each entry: {"controller_index", "event", "batch", "nontoken",
+    # "instruction", "source_name", "card"}. Fired from the declare-attackers
+    # step; "this turn" entries are cleared at cleanup.
+    delayed_triggers: list = field(default_factory=list)
     # Nafs Asp: "that player loses N life at the beginning of their next draw
     # step unless they pay {cost} before that draw step." Each entry is
     # {"player_index", "amount", "cost", "source_name"}. Populated by the

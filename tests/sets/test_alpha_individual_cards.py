@@ -354,7 +354,15 @@ def _assert_supported_effect(card: CardDefinition, game: Game, p1: PlayerState, 
     assert result.supported is True
 
     if card.primary_type in {"instant", "sorcery"}:
-        assert any(c.name == card.name for c in p1.graveyard)
+        if game.effect_suspended:
+            # Still resolving. CR 608.2n puts the card into the graveyard as the
+            # *last* part of resolution, and a spell whose effect stopped to ask
+            # its controller something has not got there yet — the card is off
+            # the stack and out of hand, and lands in the graveyard when the
+            # prompt is answered (asserted per card below).
+            assert not any(c.name == card.name for c in p1.hand)
+        else:
+            assert any(c.name == card.name for c in p1.graveyard)
 
     if card.primary_type in {"land", "creature", "artifact", "enchantment"}:
         # A "copy as it enters" permanent takes on the copied object's name (Copy
@@ -470,6 +478,9 @@ def _assert_supported_effect(card: CardDefinition, game: Game, p1: PlayerState, 
         assert game.pending_search_library is not None
         game.confirm_search_library(0, 0)
         assert len(p1.hand) == before.p1_hand
+        # Answering the prompt finishes the resolution the search suspended, so
+        # the spell itself now reaches the graveyard (CR 608.2n).
+        assert any(c.name == card.name for c in p1.graveyard)
         return
 
     if "take an extra turn after this one" in text and card.primary_type in {"instant", "sorcery"}:

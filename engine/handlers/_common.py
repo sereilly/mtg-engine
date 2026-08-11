@@ -270,10 +270,86 @@ def resolve_target_permanent(
     handler signature does."""
     return pick_target_permanent(
         player if player is not None else context.target,
-        context.target_permanent_index,
+        _one_choice(context.target_permanent_index),
         game=game,
-        permanent_id=context.target_permanent_id,
+        permanent_id=_one_choice(context.target_permanent_id),
         predicate=predicate,
         fallback_players=fallback_players,
         fallback_on_invalid_choice=fallback_on_invalid_choice,
     )
+
+
+def _one_choice(chosen: object) -> object:
+    """The first entry of a multi-target choice, or *chosen* unchanged.
+
+    A single-target handler must never be handed a list: ``pick_target_permanent``
+    would fail ``isinstance(index, int)``, fall through to its scan, and hit the
+    first creature on the battlefield instead of a chosen one. Reading the first
+    entry keeps a handler that was only ever written for one target pointed at a
+    target the player actually named — the lowering is what decides whether a
+    several-target line reaches such a handler at all, and it refuses.
+    """
+    if isinstance(chosen, list):
+        return chosen[0] if chosen else None
+    return chosen
+
+
+def resolve_target_permanents(
+    game: Game,
+    context: OracleExecutionContext,
+    *,
+    player: PlayerState | None = None,
+    predicate: Callable[[Permanent], bool] | None = None,
+) -> list[Permanent]:
+    """Every permanent a several-target spell or ability named (CR 115.1c).
+
+    The plural of :func:`resolve_target_permanent`, and deliberately *not* built
+    on it: the singular one falls back to scanning the battlefield when a chosen
+    target no longer resolves, which is right for one target ("hit something
+    rather than fizzle") and wrong for several — a fallback per slot would turn
+    "up to two target creatures" into two counters on the same creature the
+    moment one target died.
+
+    So each slot is resolved strictly, by id first and index second, and a slot
+    that no longer answers is simply dropped: CR 608.2b says an illegal target is
+    not affected while the rest of the effect still happens. Duplicates are
+    dropped by identity for the same reason — two slots that decayed onto one
+    permanent would double an effect the player only chose once.
+
+    Returns [] when nothing was chosen, which is a legal outcome of "up to N".
+    """
+    if predicate is None:
+        predicate = lambda p: p.is_creature
+    owner = player if player is not None else context.target
+    indices = _as_slots(context.target_permanent_index)
+    ids = _as_slots(context.target_permanent_id)
+    # Positional pairing: `permanent_ids_at` keeps a slot that did not resolve as
+    # None rather than dropping it, so the two lists stay the same length and
+    # index k means the same choice in both.
+    found: list[Permanent] = []
+    for slot in range(max(len(indices), len(ids))):
+        permanent_id = ids[slot] if slot < len(ids) else None
+        index = indices[slot] if slot < len(indices) else None
+        chosen = None
+        if game is not None and isinstance(permanent_id, int):
+            candidate = game.permanent_by_id(permanent_id)
+            if candidate is not None and game.controls(owner, candidate) and predicate(candidate):
+                chosen = candidate
+        if chosen is None and isinstance(index, int) and owner is not None:
+            # Through the seam, not a raw subscript: the id above is the stable
+            # answer and this is only the fallback for a choice made before ids
+            # existed on the wire, so it has no business opening a second way to
+            # read a battlefield.
+            candidate = game.permanent_at(owner, index)
+            if candidate is not None and predicate(candidate):
+                chosen = candidate
+        if chosen is not None and not any(chosen is seen for seen in found):
+            found.append(chosen)
+    return found
+
+
+def _as_slots(chosen: object) -> list:
+    """A chosen-target field as a list of slots, whatever shape it arrived in."""
+    if isinstance(chosen, list):
+        return list(chosen)
+    return [] if chosen is None else [chosen]

@@ -94,13 +94,55 @@ def target_loses_life(game: Game, instruction: OracleInstruction, context: Oracl
             game.players[i]
             for i in game.opponents_of(game.players.index(context.caster))
         ]
+    elif recipient == "last_target_controller":
+        # "Destroy target creature. Its controller loses 2 life." (Liliana,
+        # Death Mage.) The destroy step recorded the controller before the
+        # permanent left (CR 608.2h, last-known information); no record means
+        # the destroy found no target, and the rider fizzles with it.
+        seat = context.results.get("last_target_controller_index")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            game.log.append(f"{card.name}: no destroyed creature, no life lost")
+            return True, "resolved"
+        victims = [game.players[seat]]
     else:
         victims = [context.target]
+    # "…for each creature card in their graveyard" (Liliana, Death Mage's −7):
+    # the amount is per matching card in the victim's own graveyard.
+    per_each = instruction.payload.get("per_each")
     for victim in victims:
+        loss = amount
+        if per_each is not None:
+            wanted = tuple(per_each.get("card_types") or ())
+            loss = amount * sum(
+                1
+                for c in victim.graveyard
+                if not wanted or c.primary_type in wanted
+            )
+        before = victim.life
+        victim.life -= loss
+        game.log.append(
+            f"{card.name}: {victim.name} lost {loss} life ({before} -> {victim.life})"
+        )
+    return True, "resolved"
+
+
+@effect_handler("opponents_who_could_not_discard_lose_life")
+def opponents_who_could_not_discard_lose_life(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Each opponent who can't loses 3 life." (Liliana, Waker of the Dead's
+    +1.) Reads the seats the preceding each-player discard recorded as unable
+    to pay; only the caster's opponents lose life."""
+    amount = int(instruction.payload.get("amount", 0))
+    caster_index = game.players.index(context.caster)
+    could_not = context.results.get("players_who_could_not_discard") or []
+    for seat in could_not:
+        if seat == caster_index or not (0 <= seat < len(game.players)):
+            continue
+        victim = game.players[seat]
         before = victim.life
         victim.life -= amount
         game.log.append(
-            f"{card.name}: {victim.name} lost {amount} life ({before} -> {victim.life})"
+            f"{context.card.name}: {victim.name} could not discard and lost "
+            f"{amount} life ({before} -> {victim.life})"
         )
     return True, "resolved"
 
@@ -190,8 +232,15 @@ def arm_draw_step_life_loss_unless_pay(game: Game, instruction: OracleInstructio
 def grant_extra_turn(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     caster = context.caster
     caster_index = game.players.index(caster)
-    game.add_extra_turn(caster_index)
-    game.log.append(f"{caster.name} gained an extra turn")
+    # "Take two extra turns after this one." (Teferi, Master of Time) — each
+    # queued turn is its own CR 500.7 insertion.
+    count = int(instruction.payload.get("count", 1))
+    for _ in range(count):
+        game.add_extra_turn(caster_index)
+    game.log.append(
+        f"{caster.name} gained an extra turn" if count == 1
+        else f"{caster.name} gained {count} extra turns"
+    )
     return True, "resolved"
 
 

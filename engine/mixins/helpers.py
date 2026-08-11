@@ -380,6 +380,54 @@ class GameHelpersMixin:
             if self._is_creature(permanent):
                 permanent.metadata["summoning_sickness_turn"] = self.turn
 
+    def phase_out_permanent(self, permanent: Permanent) -> bool:
+        """CR 702.26: *permanent* phases out, its attached Auras with it.
+
+        Not a zone change (702.26b): no leave-the-battlefield or dies event
+        fires, the object keeps its id and state, and it returns as the same
+        object at its controller's untap step. ``remove_from_battlefield`` is
+        used for the list mechanics because it is the transition that keeps
+        the combat maps renumbered; where the permanent goes next — the
+        controller's ``phased_out`` holding list — is this caller's business.
+        """
+        controller = self.controller_index_of(permanent)
+        if controller is None:
+            return False
+        moving = [permanent] + [
+            aura
+            for aura in list(permanent.metadata.get("attached_auras") or [])
+            if self.is_on_battlefield(aura)
+        ]
+        self.remove_all_from_battlefield(moving)
+        for perm in moving:
+            perm.metadata["phased_out"] = True
+            self.players[controller].phased_out.append(perm)
+            self.log.append(f"{perm.card.name} phased out")
+        self._recompute_continuous_effects()
+        return True
+
+    def phase_in_for(self, seat: int) -> None:
+        """CR 702.26e: phased-out permanents *seat* controls phase in as its
+        untap step begins — the same object, no new permanent_id, no
+        enters-the-battlefield anything. A ``phase_in_blocked`` marker
+        (Teferi, Timeless Voyager's rider) holds a permanent out until its
+        countdown expires."""
+        player = self.players[seat]
+        if not player.phased_out:
+            return
+        staying: list[Permanent] = []
+        for perm in player.phased_out:
+            block = perm.metadata.get("phase_in_blocked")
+            if isinstance(block, dict) and int(block.get("turn_ends_remaining", 0)) > 0:
+                staying.append(perm)
+                continue
+            perm.metadata.pop("phased_out", None)
+            perm.metadata.pop("phase_in_blocked", None)
+            player.battlefield.append(perm)
+            self.log.append(f"{perm.card.name} phased in")
+        player.phased_out = staying
+        self._recompute_continuous_effects()
+
     def _permanent_to_graveyard(self, player: PlayerState, permanent: Permanent) -> None:
         """Move a permanent to the graveyard. Tokens (704.5d) cease to exist instead."""
         if "Aura" in permanent.card.type_line:
@@ -852,6 +900,14 @@ class GameHelpersMixin:
         self.combat_attackers = {
             moved: defender
             for attacker, defender in self.combat_attackers.items()
+            if (moved := shift_attacker(attacker)) is not None
+        }
+
+        # Keys are attacker slots on the active seat, exactly like
+        # combat_attackers; the values are permanent ids and never renumber.
+        self.combat_attacked_planeswalkers = {
+            moved: walker_id
+            for attacker, walker_id in self.combat_attacked_planeswalkers.items()
             if (moved := shift_attacker(attacker)) is not None
         }
 

@@ -56,6 +56,29 @@ def test_every_simulator_expectation_names_a_card_the_deck_plays(all_cards):
     )
 
 
+def test_the_simulator_drains_every_prompt_that_suspends_a_resolution():
+    """A kind registered ``suspends`` holds ``game.effect_suspended`` until it is
+    answered, so a headless run that leaves one owed does not merely skip that
+    prompt — it stops the *next* resumable loop anywhere in the game after one
+    step, with nothing pointing back at what caused it. Derived from the
+    registry, because a hand-kept list is what would go stale.
+
+    ``effect_order`` is the one exception, and it is exempt by construction
+    rather than by opinion: ``engine/replacements.py`` answers a non-interactive
+    seat with the default *before* queueing, so a headless run can never owe one.
+    """
+    from engine.ai_simulator import _SIMULATED_CHOICES
+    from engine.pending_choices import CHOICE_SPECS
+
+    suspending = {kind for kind, spec in CHOICE_SPECS.items() if spec.suspends}
+    undrained = suspending - set(_SIMULATED_CHOICES) - {"effect_order"}
+
+    assert not undrained, (
+        "suspending prompt(s) a headless simulation would leave owed, wedging "
+        f"every later resumable loop: {sorted(undrained)}"
+    )
+
+
 @pytest.mark.slow
 def test_ai_simulator_runs_without_issues_for_two_games():
     report = run_ai_simulation(

@@ -190,6 +190,18 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
     target = context.target
     card = context.card
     source_permanent = context.source_permanent
+    # A later step of the same resolution may read the victim's controller
+    # ("Destroy target creature. Its controller loses 2 life." — Liliana,
+    # Death Mage), and by then the permanent is gone — record it now
+    # (CR 608.2h, last-known information).
+    if isinstance(context.target_permanent_index, int):
+        victim = game.chosen_permanent(
+            target, context.target_permanent_index, context.target_permanent_id
+        )
+        if victim is not None:
+            seat = game.controller_index_of(victim)
+            if seat is not None:
+                context.results["last_target_controller_index"] = seat
     destroyed = game._destroy_target_permanent(
         target,
         type_filter=instruction.payload.get("type_filter"),

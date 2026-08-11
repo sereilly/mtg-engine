@@ -51,6 +51,22 @@ def _lower_discard(node: ast.Discard, event: str | None = None) -> tuple[OracleI
     matching what the legacy rule wrote, and keeping the payload honest about
     what the handler actually consults.
     """
+    # "Discard your hand" (Chandra, Heart of Fire) — the effect's controller
+    # discards every card. Checked before the targeted forms: the subject is
+    # the implied "you", which they refuse.
+    if node.whole_hand:
+        if node.player.kind != "you":
+            raise LoweringError(
+                f"no whole-hand discard handler for {node.player.kind!r}", node=node
+            )
+        return (OracleInstruction("discard_hand", "", {}),)
+    # "Each player discards a card." (Liliana, Waker of the Dead.) The handler
+    # records which players could not, because the printed rider "Each opponent
+    # who can't loses 3 life." reads that answer out of the same resolution.
+    if node.player.kind == "each_player":
+        if not isinstance(node.count, ast.Fixed) or node.count.value != 1 or node.at_random:
+            raise LoweringError("each-player discards have a one-card handler", node=node)
+        return (OracleInstruction("each_player_discards_a_card", "", {}),)
     if node.player.kind not in ("target_player", "that_player"):
         raise LoweringError(f"no discard handler for {node.player.kind!r}", node=node)
     amount = _amount_payload(node.count)
@@ -249,6 +265,20 @@ def _lower_add_mana_for_tapped_land(
     return (OracleInstruction("add_mana_for_tapped_land", "", payload),)
 
 
+def _lower_reveal_top(node: ast.RevealTopToHandOrBottom) -> tuple[OracleInstruction, ...]:
+    """"Reveal the top card of your library. If it's a <filter> card, put it
+    into your hand. Otherwise, put it on the bottom of your library." (Garruk,
+    Savage Herald's +1.) The filter is the whole decision, so it is carried as
+    payload the handler tests with primary_type."""
+    if not node.filter.is_card or len(node.filter.card_types) != 1:
+        raise LoweringError("the reveal-top handler tests one card type", node=node)
+    return (
+        OracleInstruction(
+            "reveal_top_to_hand_or_bottom", "", {"card_type": node.filter.card_types[0]}
+        ),
+    )
+
+
 def _lower_look_at_hand(node: ast.LookAtHand) -> tuple[OracleInstruction, ...]:
     """"Look at target player's hand." (Glasses of Urza.)
 
@@ -295,7 +325,14 @@ def _lower_search_library(node: ast.SearchLibrary) -> tuple[OracleInstruction, .
         raise LoweringError(
             f"no flow searches {node.player.kind!r}'s library", node=node
         )
-    if node.to.name != "hand" or node.to.owner is None or node.to.owner.kind != "you":
+    # Two destinations have a flow: the searcher's own hand (Demonic Tutor)
+    # and the battlefield ("search your library for a creature card, put it
+    # onto the battlefield" — Garruk, Unleashed's emblem). Anywhere else
+    # refuses rather than landing the card in the wrong zone.
+    to_battlefield = node.to.name == "battlefield"
+    if not to_battlefield and (
+        node.to.name != "hand" or node.to.owner is None or node.to.owner.kind != "you"
+    ):
         raise LoweringError(
             "the search flow puts the found card into the searcher's own hand", node=node
         )
@@ -338,4 +375,6 @@ def _lower_search_library(node: ast.SearchLibrary) -> tuple[OracleInstruction, .
         payload["restrictions"] = restrictions
     if node.graveyard:
         payload["zones"] = ("library", "graveyard")
+    if to_battlefield:
+        payload["destination"] = "battlefield"
     return (OracleInstruction("search_library", "", payload),)

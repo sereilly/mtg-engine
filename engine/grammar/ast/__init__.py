@@ -97,6 +97,9 @@ from .board import (
     TapOrUntap,
     Regenerate,
     ReturnToZone,
+    PhaseOut,
+    PutOnLibraryTop,
+    PutOntoBattlefield,
     SacrificeUnlessPay,
 )
 from .cards import (
@@ -109,6 +112,7 @@ from .cards import (
     SearchLibrary,
     Shuffle,
     LookAtHand,
+    RevealTopToHandOrBottom,
 )
 from .stack import (
     CounterSpell,
@@ -119,6 +123,7 @@ from .combat import (
     CombatRestriction,
 )
 from .game import (
+    CreateEmblem,
     GainLife,
     LoseLife,
     CreateToken,
@@ -205,6 +210,9 @@ __all__ = [
     "TapOrUntap",
     "Regenerate",
     "ReturnToZone",
+    "PhaseOut",
+    "PutOnLibraryTop",
+    "PutOntoBattlefield",
     "SacrificeUnlessPay",
     # cards
     "Draw",
@@ -216,6 +224,7 @@ __all__ = [
     "SearchLibrary",
     "Shuffle",
     "LookAtHand",
+    "RevealTopToHandOrBottom",
     # stack
     "CounterSpell",
     "ModalNode",
@@ -223,6 +232,7 @@ __all__ = [
     "CantBe",
     "CombatRestriction",
     # game
+    "CreateEmblem",
     "GainLife",
     "LoseLife",
     "CreateToken",

@@ -597,11 +597,18 @@ def do_action(session_id: str, req: GameActionRequest):
         # taken before any player has priority — so no spells may be cast during
         # the assignment and a priority window is *not* required here. The engine
         # grants the active player priority once attackers are declared (CR 508.4).
+        # CR 508.1b: an attacker may be sent at a planeswalker rather than at
+        # its controller. JSON object keys arrive as strings; the engine keys
+        # its combat maps by int battlefield slot.
+        walker_targets = {
+            int(k): int(v) for k, v in (req.attacker_planeswalker_ids or {}).items()
+        }
         ok, details = session.game.declare_attackers(
             req.seat,
             req.attacker_indices or [],
             defending_player_index=req.target_seat,
             bands=req.bands,
+            attacker_planeswalker_ids=walker_targets or None,
         )
         if not ok:
             raise HTTPException(status_code=400, detail=details)

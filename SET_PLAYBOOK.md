@@ -334,3 +334,33 @@ correctly end with a revert.** The planeswalker stage was applied, surfaced an
 interaction in a seam nobody had questioned, and was reverted rather than
 shipped half-understood; the ROADMAP entry records what was learned so the next
 attempt starts from it instead of rediscovering it.
+
+**M21 — 2026-08-11 (round 16, round 15's three fixes applied; 137 → 134).** The
+second round to *lower* the count, and the first where lowering it was the
+stated goal: three permanents were reporting support with no ability the engine
+could read. Two lessons for the phase text. **A spec's diagnosis is a hypothesis
+until it is measured** — round 15 named `Nine Lives` as sharing Mazemind Tome's
+shape and it does not (it has one supported trigger), while the conjunct the
+spec said kept Howling Mine legitimate turns out not to be the one doing it.
+Both were found by running the classifier over the pool before writing the gate,
+which is Phase 2's census applied to a fix rather than to a set. **And verify
+the fix against the real path, not against the repro that found the bug** —
+round 15's P0 transcript executed a card's instructions by hand, which showed a
+real ordering bug but hid a second one underneath it: on the actual cast path
+Opt's second printed line never ran at all. Both are fixed, and the second would
+not have been found by making the first one's test pass. Note also what the
+supported count does *not* measure: three cards stopped playing as strictly
+smaller cards this round and the number did not move for any of them. See
+ROADMAP round 16.
+
+**M21 — 2026-08-11 (round 17, multi-targeting; 134 → 136).** Two lessons about
+scoping a round, both from the census rather than from the plan. **Sort the
+backlog by the shape of the fix, not by the cards that prompted it** — the two
+cards this round was scheduled around ("Rewind and Basri's Acolyte") turned out
+to need different mechanisms, one a targeting question and one a
+resolution-time choice, and counting the pool's lines showed the targeted family
+was six lines to Rewind's one. **And land a multi-layer feature in dependency
+order, with the grammar last.** The production that flips the cards was written
+after the resolver, the handler, the picker spec, the AI and the browser prompt,
+so at every intermediate point the cards stayed honestly unsupported rather than
+becoming castable with half their targets collected. See ROADMAP round 17.

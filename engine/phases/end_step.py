@@ -138,6 +138,15 @@ class EndStepMixin:
         ):
             events.append(make_trigger_event(controller_index, permanent, trig))
 
+        # Emblems (CR 114.4): "At the beginning of your end step, …" (Garruk,
+        # Unleashed's emblem) fires from the command zone — scoped to this end
+        # step's own player, which is what "your" means here.
+        from ..events import emblem_trigger_events
+
+        events.extend(
+            emblem_trigger_events(self, "end_step", [self.players[player_index]])
+        )
+
         self._enqueue_triggered_batch(events)
 
         if self._receives_priority(step):

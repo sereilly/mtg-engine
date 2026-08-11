@@ -428,11 +428,14 @@ class CombatDamageStepMixin:
         refused before anything has been marked. Returns
         ``(ok, message, to_blockers, to_players)`` — ``(defending_idx,
         blocker_idx, damage, attacker_idx)`` and ``(defending_idx, damage,
-        source_attacker)`` respectively.
+        source_attacker, attacked_walker_id)`` respectively, where
+        ``attacked_walker_id`` is None for an attack on the player and the
+        planeswalker's ``permanent_id`` when the creature is attacking one
+        (CR 510.1b: it assigns its damage to what it is attacking).
         """
         attacker_controller = self.players[self.active_player_index]
         to_blockers: list[tuple[int, int, int, int]] = []
-        to_players: list[tuple[int, int, Permanent]] = []
+        to_players: list[tuple[int, int, Permanent, int | None]] = []
         for attacker_idx in sorted(self.combat_attackers):
             defending_index = self.combat_attackers[attacker_idx]
             if defending_index < 0 or defending_index >= len(self.players):
@@ -448,13 +451,29 @@ class CombatDamageStepMixin:
 
             blockers = self._attacker_all_blockers(attacker_idx)
             power_left = attacker.effective_power
+            # CR 510.1b: an unblocked creature assigns its damage to the player,
+            # or to the planeswalker, it is attacking — recorded on the event so
+            # the dealing half needs no second look at the combat maps.
+            attacked_walker_id = self.combat_attacked_planeswalkers.get(attacker_idx)
+            # "You may have this creature assign its combat damage as though it
+            # weren't blocked." (Garruk, Savage Herald's −7.) The "may" is
+            # answered yes whenever no explicit per-blocker assignment was
+            # given for this attacker — an explicit assignment IS the player
+            # choosing to damage the blockers instead.
+            if (
+                blockers
+                and attacker.metadata.get("assign_combat_damage_as_unblocked_until_eot")
+                and not attacker_damage.get(attacker_idx)
+            ):
+                to_players.append((defending_index, power_left, attacker, attacked_walker_id))
+                continue
             if not blockers:
                 # A creature that was declared blocked (e.g. its blocker died to
                 # first-strike damage) is still "blocked" — it cannot deal damage
                 # to the defending player unless it has trample.
                 if attacker.blocked and not self._has_keyword(attacker, "trample"):
                     continue
-                to_players.append((defending_index, power_left, attacker))
+                to_players.append((defending_index, power_left, attacker, attacked_walker_id))
                 continue
 
             # CR 702.22j: when an attacker is blocked by a creature with banding, the
@@ -499,7 +518,11 @@ class CombatDamageStepMixin:
             if has_trample and power_left > 0 and trample_underlethal:
                 return False, "trample requires lethal damage assigned to each blocker", [], []
             if has_trample and power_left > 0:
-                to_players.append((defending_index, power_left, attacker))
+                # CR 702.19b: the excess goes to the player *or planeswalker*
+                # the creature is attacking. Without trample over planeswalkers
+                # none of it may go to the defending player instead (702.19f) —
+                # carrying the walker id through is what enforces that.
+                to_players.append((defending_index, power_left, attacker, attacked_walker_id))
         return True, "", to_blockers, to_players
 
     def resolve_combat_damage(
@@ -735,8 +758,25 @@ class CombatDamageStepMixin:
             which is 616.1f's re-check falling out of the placement. Shields,
             redirects (Veteran Bodyguard) and the life floor are all one sequence
             in engine/damage_events.py — the recorded amount is raw."""
-            defending_idx, damage, source_attacker = entry
+            defending_idx, damage, source_attacker, attacked_walker_id = entry
             if defending_idx < 0 or defending_idx >= len(self.players):
+                return
+            if attacked_walker_id is not None:
+                # The creature is attacking a planeswalker (CR 508.1b). Damage
+                # goes to the walker — removing loyalty (CR 120.3c) — and to
+                # nothing at all if it has left the battlefield (CR 510.1b).
+                walker = self.permanent_by_id(attacked_walker_id)
+                if walker is None:
+                    return
+                if source_attacker is not None and self._is_protected_from(walker, source_attacker):
+                    return
+                self._mark_damage_on_permanent(
+                    walker, damage, source=source_attacker, combat=True,
+                    then=_dealt_to_creature(
+                        walker, source_attacker, self.active_player_index
+                    ),
+                    asks=True,
+                )
                 return
             defender = self.players[defending_idx]
 

@@ -28,6 +28,15 @@ class GainLife:
 class LoseLife:
     player: PlayerRef
     amount: Amount
+    # "…for each creature card in their graveyard" (Liliana, Death Mage) — the
+    # amount is multiplied by a count of matching objects. None for the plain
+    # sentence; the field is additive (this AST is append-only).
+    per_each: object | None = None
+    # "Each opponent who can't loses 3 life." (Liliana, Waker of the Dead) —
+    # this loss applies only to opponents who could not perform the named
+    # action of the preceding step ("discard"). Attached by the rider fold in
+    # the sentence loop, never parsed on its own.
+    who_could_not: str | None = None
 
 
 @dataclass(frozen=True)
@@ -40,11 +49,26 @@ class CreateToken:
     types: tuple[str, ...] = ()
     subtypes: tuple[str, ...] = ()
     keywords: tuple[str, ...] = ()
+    # "…that are tapped and attacking" (Basri Ket) — the tokens' entry state.
+    tapped: bool = False
+    attacking: bool = False
+
+
+@dataclass(frozen=True)
+class CreateEmblem:
+    """"You get an emblem with "<ability>"." (CR 114.2, the planeswalker
+    ultimates.) The quoted ability rides as raw text: an emblem's ability is
+    compiled when it fires, through the same compiler every card goes through,
+    and the support gate in engine/oracle.py refuses the walker when that text
+    cannot be read — so the string here is never a silent promise."""
+    text: str
 
 
 @dataclass(frozen=True)
 class ExtraTurn:
     player: PlayerRef
+    # "Take two extra turns after this one." (Teferi, Master of Time.)
+    count: int = 1
 
 
 @dataclass(frozen=True)

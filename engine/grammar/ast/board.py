@@ -105,6 +105,37 @@ class ReturnToZone:
 
 
 @dataclass(frozen=True)
+class PhaseOut:
+    """"<subject> phases out." (CR 702.26 — Teferi, Master of Time's −3;
+    Teferi, Timeless Voyager's −8 with the can't-phase-in rider.) The subject
+    may be one chosen creature or a swept set; the rider is recorded so the
+    parse cannot shed it."""
+    subject: Recipient
+    cant_phase_in_until_your_next_turn: bool = False
+
+
+@dataclass(frozen=True)
+class PutOnLibraryTop:
+    """"Put target creature on top of its owner's library." (Teferi, Timeless
+    Voyager.) Its own node rather than a ReturnToZone: the destination is a
+    *position* in a zone, which Zone cannot say, and collapsing it to
+    "library" would lose where in the library the card lands."""
+    target: Recipient
+
+
+@dataclass(frozen=True)
+class PutOntoBattlefield:
+    """"Put up to seven permanent cards from your hand onto the battlefield."
+    (Ugin, the Spirit Dragon) / "Put target creature card from a graveyard
+    onto the battlefield under your control." (Liliana, Waker of the Dead's
+    emblem.) Which zone the cards leave is on the target's filter; the two
+    riders are recorded so a wording carrying them cannot shed them."""
+    target: Recipient
+    under_your_control: bool = False
+    gains: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class SacrificeUnlessPay:
     """"Sacrifice this enchantment unless you pay {W}{W}." (CR 603.)
 

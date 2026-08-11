@@ -229,5 +229,9 @@ def test_an_activated_head_the_engine_cannot_carry_out_is_not_expanded():
     program = compile_card_oracle(card)
 
     # The head stays one line, so it stays one ability — an unsupported one,
-    # which is the loud failure. Two entries here would be the permissive card.
-    assert [a.supported for a in program.activated_abilities] == [False]
+    # which is the loud failure. The refusal names that whole unexpanded head:
+    # two bullets' worth of abilities here would be the permissive card, and a
+    # reason naming a single bullet would mean the head *had* been split.
+    assert not program.supported
+    assert program.reason.endswith("{2}: Choose two —"), program.reason
+    assert not program.activated_abilities

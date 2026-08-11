@@ -20,11 +20,32 @@ from ..phrases import _COUNTER_KINDS, _parse_duration, _parse_keywords
 
 
 def _parse_gets(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
-    """``<subject> gets +N/+N [duration]``."""
+    """``<subject> gets +N/+N [duration][, where X is the number of …]``."""
     stream.expect_word("gets", "get")
     power, power_negative, toughness, toughness_negative = expect_pt(stream)
     duration = _parse_duration(stream)
-    pump = ast.Pump(subject, power, toughness, duration, power_negative, toughness_negative)
+
+    # "gets -X/-X until end of turn, where X is the number of cards in your
+    # graveyard" (Liliana, Waker of the Dead). The clause *defines* the X the
+    # P/T token used, so it is recorded on the pump rather than consumed and
+    # dropped — an undefined X would otherwise silently read as the cast cost's.
+    x_definition: ast.Amount | None = None
+    mark = stream.mark()
+    stream.accept_punct(",")
+    if stream.accept_word("where"):
+        if not (stream.accept_word("x") and stream.accept_word("is")):
+            raise stream.error("expected 'X is' after 'where'")
+        stream.accept_word("the")
+        if not stream.accept_phrase("number", "of"):
+            raise stream.error("expected 'the number of' in a where-clause")
+        x_definition = ast.CountOf(parse_object_filter(stream))
+    else:
+        stream.reset(mark)
+
+    pump = ast.Pump(
+        subject, power, toughness, duration, power_negative, toughness_negative,
+        x_definition=x_definition,
+    )
 
     # "gets +3/+3 and gains flying until end of turn" / "get +1/+1 and have
     # mountainwalk" — the same conjunction in the two persons the templating
@@ -101,7 +122,17 @@ def _parse_loses(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
         amount = parse_amount(stream)
         if stream.accept_word("life"):
             player = subject if isinstance(subject, ast.PlayerRef) else ast.PlayerRef("you")
-            return ast.LoseLife(player, amount)
+            # "loses 2 life for each creature card in their graveyard"
+            # (Liliana, Death Mage) — a multiplier over a count of objects,
+            # recorded rather than consumed-and-dropped.
+            per_each: ast.ObjectFilter | None = None
+            for_each_mark = stream.mark()
+            if stream.accept_phrase("for", "each"):
+                try:
+                    per_each = parse_object_filter(stream)
+                except GrammarError:
+                    stream.reset(for_each_mark)
+            return ast.LoseLife(player, amount, per_each=per_each)
     except GrammarError:
         pass
     stream.reset(mark)
@@ -210,8 +241,26 @@ def _parse_for_each(stream: TokenStream) -> ast.DiedThisTurn | None:
 
 
 def _parse_put_counter(stream: TokenStream) -> ast.Statement:
-    """``put [up to] N <counter> counter(s) on <subject> [for each …]``."""
+    """``put [up to] N <counter> counter(s) on <subject> [for each …]`` — and
+    the object-moving "put" family, tried first because its object is a noun
+    phrase rather than a counter: ``put <objects> on top of its owner's
+    library`` (Teferi, Timeless Voyager) and ``put <objects> onto the
+    battlefield [under your control]`` (Ugin, Liliana's emblem)."""
     stream.expect_word("put")
+    move_mark = stream.mark()
+    try:
+        moved = parse_recipient(stream)
+    except GrammarError:
+        moved = None
+    if moved is not None and stream.at_word("on", "onto"):
+        if stream.accept_phrase("on", "top", "of", "its", "owner", "'s", "library"):
+            return ast.PutOnLibraryTop(moved)
+        if stream.accept_word("onto"):
+            stream.expect_word("the")
+            stream.expect_word("battlefield")
+            under = bool(stream.accept_phrase("under", "your", "control"))
+            return ast.PutOntoBattlefield(moved, under_your_control=under)
+    stream.reset(move_mark)
     up_to = stream.accept_phrase("up", "to")
     count = parse_amount(stream)
 

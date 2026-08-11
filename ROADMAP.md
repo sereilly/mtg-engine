@@ -1,7 +1,7 @@
 ﻿# Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 110/285) to the full release line - **137 sets, 33,594
+M21 measured at 147/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal. Trimmed 2026-08-10 to the current M21
@@ -318,6 +318,284 @@ work: See the Truth (self-contained once P0 lands), the multi-target handlers
 (Rewind and Basri's Acolyte, and note Rewind's lands are **not targets** — the
 parser was discarding whether the word "target" was printed), then the
 subsystems.
+
+---
+
+## Round 16: P0, P1 and P2 applied — and the fourth bug they uncovered
+
+*(2026-08-11, same day.)* All three correctness items landed, plus a fourth
+found while verifying the first, each with a guard that was watched to fail
+before the fix. M21 **137 → 134** supported, and the drop is the point: the
+three cards it lost were reporting support and doing nothing, while three
+*others* (Opt, Revitalize, Defiant Strike) stopped playing as strictly smaller
+cards without changing the count at all — which is worth noticing about the
+count as a measure. Shipped pool untouched at 388/388, every `--check` green,
+suite green.
+
+**P0 — `ChoiceSpec.suspends`.** One field, set in `arm_pending_choice` on the
+*queueing* path only (a `default_at_arm` seat has already taken its answer, so
+nothing is waiting), and lifted at the one completion point shared by
+`resolve_pending_choice` and `take_choice_default`. The ordering there is
+load-bearing in a way the spec did not say: the flag is cleared **before** the
+answer is applied, never after, because applying an answer can arm the next
+prompt and a clear afterwards would resume straight through it. A *rejected*
+answer puts it back — the prompt is still owed, so the work behind it is still
+waiting. `effect_order` became the first user of the field rather than keeping
+its hand-set flag in `engine/replacements.py`, which is what makes the ratchet
+test (`test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step`) a
+complete list rather than three quarters of one. Opted in: `scry`,
+`search_library`, `reorder_library` — the three whose answer *is* the shape of
+the library a later step reads.
+
+Two things fell out that the spec did not name:
+
+- **CR 608.2n starts being observable.** A searching spell is off the stack, out
+  of hand and *not yet in the graveyard* while its prompt is open, because the
+  graveyard move is the last step of a resolution that is now genuinely
+  suspended. That is correct and it is a state a client can see, so it has a
+  web-API test (`tests/ui/test_search_prompt_ui_api.py`) as well as a rules one.
+  The alpha sweep needed the same distinction rather than a blanket "the spell is
+  in the graveyard".
+- **An undrained suspending prompt wedges the whole game**, not just itself: the
+  flag stops the *next* resumable loop anywhere, with nothing pointing back at
+  what set it. The web path drains AI-owned prompts generically and is safe; the
+  headless simulator names its kinds in a fixed order for seed determinism, so
+  the two new kinds were added there and a guard derives the requirement from the
+  registry (`effect_order` exempt by construction — a non-interactive seat is
+  answered before it is ever queued).
+
+- The prose citation was wrong in four places, including this file's own: the
+  "card into the graveyard as the last part of resolution" rule is **608.2n**;
+  608.2m is "continues to resolve fully". Search is **701.23**, not 701.19
+  (regenerate) — the round-11 comments took that number from a different CR
+  revision.
+
+**P1 — the hollow gate reaches permanents.** In the compiler, beside the
+instant/sorcery gate it now shares a comment with, because "reports supported"
+is what the complaint was about: a test-only version would leave
+`support_report.py --set M21` still naming Mazemind Tome as supported. A
+permanent is refused when every card-level instruction is a `spell_pattern`
+marker *and* every ability line it prints failed to parse. The first conjunct is
+doing more work than the spec credited it with — a permanent whose behaviour
+lives in a rule table leaves a `derived_static_rule` behind, so **Howling Mine is
+kept by the first conjunct, not the second**. Refused: Mazemind Tome, Sanctum of
+Shattered Heights, Sanctum of Tranquil Light.
+
+Auras are excluded by shape rather than by name, and that is the load-bearing
+part: `engine/auras.py` runs first, is stricter (it names the first unclaimed
+*effect* line), and knows about the Aura death trigger that
+`mixins/effects.py:_trigger_aura_death_effects` carries with no instruction of
+its own. **Creature Bond** has exactly the refused shape and works; without the
+exclusion the shipped pool would have dropped to 387/388 on a card that is fine.
+
+Two corrections to the spec, both by measurement:
+
+- **`Nine Lives` does not have this shape.** Its last line compiles to a
+  supported `player_loses_game` trigger, so it does do something. What is
+  actually wrong with it is a *larger* class the gate deliberately does not
+  touch: a card that reports supported while implementing only some of its
+  lines. Its damage-prevention replacement and its exile trigger produce nothing.
+- **`Fabled Passage` is hollow and stays supported.** A land with no mana ability
+  and one unreadable ability, so it does literally nothing — but it has *zero*
+  instructions rather than marker-only ones, and it is carried by the separate
+  "a land is always at least playable" rule. Overturning that rule is a design
+  decision with its own reasoning to write down, not a conjunct to widen.
+
+**P2 — the ETB trigger keeps its target's id.** One parameter. Oubliette is the
+only card in the shipped pool with a targeting enters-the-battlefield trigger,
+and the regression drives the renumbering deliberately: a distractor in a lower
+slot dies while the enchantment is on the stack, and the pre-fix engine phases
+out the bystander that slid into the chosen slot. It joins
+`tests/regressions/test_target_survives_renumbering.py` beside the spell and Aura
+cases.
+
+### The fourth bug, found in the same round and fixed with it: a multi-line spell ran only its first line
+
+Found while confirming P0 against the real cast path, which is the only reason
+it surfaced — **P0 alone did not fix Opt.** `_select_executable_instruction`
+returned the first non-`spell_pattern` instruction and stopped, while
+`_noncreature_line_instructions` gives an instant one instruction *per printed
+line*. A card whose clauses are one line compiles to a `sequence` and was fine; a
+card that prints them on two silently dropped the second. Cast for real,
+headless, before:
+
+```
+Opt         -> scried 1, hand=[]        (never drew)
+Revitalize  -> life 20 -> 23, hand=[]   (never drew)
+```
+
+Three M21 cards (Opt, Revitalize, Defiant Strike) and **no shipped card** — the
+shipped pool has no instant or sorcery with two effect lines, which is why it
+survived four sets. The fix fuses the executable instructions into one
+`sequence` (CR 608.2c, "follows its instructions in the order written").
+
+**It is fused at the resolver, not in the compiler**, and that is the whole
+design question. `whole_card` already distinguishes the list's two meanings: for
+an instant it is the program that resolves, for a permanent it is a *mirror* of
+everything the card does, scanned by kind by the layer bridge, the upkeep pass
+and the AI. Fusing in the compiler would flatten the mirror into an opaque
+`sequence` and break every one of those readers. `_select_executable_instruction`
+has exactly one caller and only instants and sorceries reach it, so it is the one
+place where the list is unambiguously a program.
+
+Composing through `sequence` also means the fix arrives already carrying P0: the
+steps run through `run_resumable`, so Opt's draw waits for its own scry. That is
+`test_opt_scries_before_it_draws` — the two halves of this round meeting on the
+card that motivated both.
+
+**Suite time is unchanged.** ~30s on this box both before and after the round
+(three runs each, ±0.2s); the 23s baseline in `ci.yml` is the runner's number and
+is left alone. The fourteen tests added cost nothing measurable.
+
+Two things this round wrote down and did not act on:
+
+- **`Nine Lives`' class — partial implementation reported as full.** It has one
+  supported trigger, so it is honestly supported and honestly incomplete: its
+  damage-prevention replacement and its exile trigger produce nothing. The
+  hollow gate cannot see this and should not try; the class needs a census of
+  its own, in the shape Phase 2 uses for a set.
+- **`Fabled Passage`.** A land with no mana ability whose only ability is
+  unreadable, kept supported by the "a land is always at least playable" rule in
+  the compiler. That rule is right for a land that taps for mana and wrong for
+  one that does not, and overturning it is a decision with its own reasoning to
+  write down.
+
+---
+
+## Round 17: "up to N target", end to end
+
+*(2026-08-11, same day.)* M21 **134 → 136**: Basri's Acolyte and Basri's Aegis.
+Small yield for the work, and the machinery is the point — every layer between
+the parser and the browser had to learn that a spell can name more than one
+target, and none of them could learn it alone.
+
+**The census reshaped the unit before any code was written.** The ROADMAP had
+grouped "Rewind and Basri's Acolyte" as one job; they are not the same job.
+Sorting every `up to` line in the pool by whether the word *target* is printed
+splits it cleanly:
+
+- **14 targeted lines**, of which six actually need multi-targeting (the rest say
+  "up to **one**", which `_is_target` has always accepted — they are blocked on
+  other things entirely).
+- **5 untargeted lines**, of which Rewind is the only one blocked on the count.
+  "Untap up to four lands" names no targets at all: it is a choice made on
+  resolution, which is the pending-choice queue's shape, not the targeting
+  system's.
+
+So this round did the targeted family and left Rewind, which needs a different
+mechanism. Six lines behind one production beats one line behind two.
+
+**Where each layer had to change, and the one that decided the design.**
+
+- The **carriers already existed**: `StackItem.target_permanent_index` and
+  `target_permanent_id` have been "an int, a list, or None" since the permanent-id
+  round, `permanent_ids_at` stamps a list positionally, and `web/actions.py`
+  already resolves `target_permanent_ids` to indices and 404s on a stale one.
+  Nothing on the wire needed widening — which is what a seam is for.
+- `resolve_target_permanents` is **deliberately not built on** its singular
+  sibling. The singular one falls back to scanning the battlefield when a chosen
+  target no longer resolves, which is right for one target (hitting something
+  beats fizzling) and a disaster per slot: two decayed slots would both find the
+  *same* first creature and double an effect the player chose once. The plural
+  one never scans, drops a slot that stopped answering (CR 608.2b) and dedupes by
+  identity.
+- **`_describe_several_targets` is opt-in per lowering, and that is the safety.**
+  Most lowerings emit an instruction whose handler resolves exactly one
+  permanent. Had the ordinary target description simply started carrying counts,
+  `engine/targeting.py` would have raised a two-target picker in front of a
+  one-target handler and the second choice would have been collected and
+  silently dropped. A lowering says "my handler reads a list" by calling a
+  different function; `_names_several_targets` keeps refusing everywhere else.
+- The **count is payload, not a second instruction kind** — `add_counter_to_target`
+  serves both, because the effect is identical and only the number differs.
+- **`controller: "you"` became a picker narrowing** (`own_only`). It had been
+  enforced only at resolution, so a picker would have offered an opponent's
+  creature and then declined to affect it with nothing on screen saying why.
+  That is a fix for every "target creature you control" card, not just these.
+- **Two parser positions**, both found by execution rather than by reading:
+  "each of" is a distributive wrapper that must be consumed *before* the
+  quantifier cascade (or "each" is read as the sweep quantifier and "up to two
+  target creatures" becomes every creature on the battlefield); and "other"
+  prints **between the count and the word "target"**, the one position
+  `parse_object_filter` cannot reach, because it reads the filter from after
+  "target".
+- The **AI derives its reach**, never a name list: it asks the compiled program
+  for `max_targets` first (cheap, and false for every other card) and only then
+  pays for the enumeration. Taking the maximum is a stated policy rather than a
+  rule — "up to N" may legally take fewer, and a card that ever wants fewer needs
+  a valuation, not a special case.
+- The **browser picker is its own prompt**, not a flag on the single-target one:
+  the player picks several, may legally stop short (CR 601.2c), and so needs a
+  confirm step a one-click picker has nowhere to put. Its accumulate-and-confirm
+  shape is the divided prompt's, but the two are *not* merged — a divided spell
+  splits one quantity across its targets and follows up with an X prompt.
+
+**Landed in dependency order on purpose**: the grammar production went in
+**last**, so until every layer behind it worked the cards stayed honestly
+unsupported rather than castable-but-half-targeted. Verified in the running app
+as well as the suite — the prompt renders, the cap holds, a click on a chosen
+permanent deselects it, an invalid key is refused, and confirm sends
+`target_permanent_ids`.
+
+**One finding, not acted on.** `Read the Tides` is supported on its first mode
+while its second ("Return up to two target creatures to their owners' hands")
+compiles to `instruction=None` — a mode the UI offers and the spell then declines
+to play. That is the Return to Nature shape from round 12, one layer along, and
+it is a *class*: a modal spell needs every mode implemented or the card is
+lying about the ones it isn't. Worth a sweep before the next modal card lands.
+
+**Next:** Rewind's untargeted "choose up to N on resolution" (the pending-choice
+shape), the modal-mode sweep above, then See the Truth — whose remaining blocker
+is a cast-zone field on the stack object, since "if this spell was cast from
+anywhere other than your hand" currently has nothing to read.
+
+---
+
+## Round 18: the planeswalker block, retried and landed
+
+*(2026-08-11, same day.)* M21 **136 → 147**: nine of the set's eleven
+planeswalkers (Ugin, Basri Ket, Teferi ×2, Liliana ×2, Garruk ×2, Basri
+Devoted Paladin) plus two cards freed by the same productions. The round-15
+revert is the reason this one stuck — the control-seam question it refused to
+ship past (a hand-built walker invisible to `all_permanents()`) was answered
+first, and the state-based action landed with a live predicate instead of the
+dead metadata read the 704.5i sweep used to be.
+
+What the block actually took, layer by layer:
+
+- **CR 306/606 in the compiler and activation path.** A loyalty line ("+1:",
+  "−2:", "−X:") compiles as an activated ability whose whole cost is one
+  loyalty symbol (CR 606.4); activation pays it by moving the counters
+  immediately, so a minus that empties the walker kills it *before* the
+  ability resolves (704.5i, tested). Timing is CR 606.3 — own main phase,
+  empty stack, once per turn — with the one printed widening
+  (`LOYALTY_ANY_TIME_STATIC`, Teferi Master of Time) read from the card's
+  static lines rather than its name. The support gate is all-of: a walker with
+  one unreadable ability reports unsupported naming it.
+- **Combat learned its second target.** `combat_attacked_planeswalkers` maps
+  attacker slot → the walker's `permanent_id` — the id, not a slot, because
+  the walker renumbers on the *defender's* battlefield and a departed walker
+  must resolve to nothing (CR 510.1b), not to what slid in. Unblocked damage
+  goes to the walker instead of the player (702.19f), trample excess follows
+  508.4.2/702.19b, and damage to a walker removes that much loyalty (306.8).
+- **Emblems are CR 114 objects, not permanents**: `PlayerState.emblems`
+  entries carrying a detached `Permanent` so the trigger machinery fires them,
+  invisible to every board sweep by construction. Garruk Unleashed's ultimate
+  is the pool's one producer.
+- **Phasing (CR 702.26) is not a zone change**: `PlayerState.phased_out` holds
+  the same object, id, counters and attachments intact, returned at the
+  controller's next untap. Teferi Master of Time's −3 is the producer.
+- **Delayed triggers (CR 603.7)** got a real list (`Game.delayed_triggers`),
+  fired from declare-attackers and swept at cleanup — Basri Ket's −2.
+
+**Left reporting unsupported on purpose:** both Chandras. Heart of Fire's
+"exile the top three… you may play cards exiled this way" and Flame's
+Catalyst's "you may cast target red instant or sorcery card from your
+graveyard this turn" both need a cast/play-permission seam over non-hand
+zones that does not exist yet, and
+`test_chandras_report_the_unbuilt_permission_seam` holds them honest until it
+does. It is the same missing field See the Truth is blocked on: the stack
+object does not know what zone its card was cast from.
 
 ---
 

@@ -1,9 +1,17 @@
 """Loops that survive one of their steps stopping to ask a question.
 
-A decision can interrupt an event part-way — CR 616.1e's "which of these
-effects applies first" is the one that does it today. Answering re-runs that
-event, which is exact, because nothing had been applied when it stopped (see
-``engine/effect_ordering.py``).
+A decision can interrupt an event part-way. Two things do it today:
+
+* CR 616.1e's "which of these effects applies first". Answering re-runs that
+  event, which is exact, because nothing had been applied when it stopped (see
+  ``engine/effect_ordering.py``).
+* any pending choice whose spec is registered ``suspends`` — a scry, a search, a
+  library reorder. There the answer *is* the effect, so there is nothing to
+  re-run; the loop simply carries on from where it stopped.
+
+Both arrive through ``arm_pending_choice`` and leave through the one completion
+path in ``engine/mixins/stack/choices.py``, so what sets and clears
+``game.effect_suspended`` is the spec, not the caller.
 
 Re-running the *event* is not enough when the event was one step of a loop. A
 divided Fireball deals to each target in turn; a ``sequence`` has instructions

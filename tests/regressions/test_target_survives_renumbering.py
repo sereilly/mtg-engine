@@ -98,6 +98,83 @@ def test_an_aura_attaches_to_the_creature_it_targeted():
     )
 
 
+def test_an_etb_trigger_phases_out_the_creature_it_targeted(set_pool):
+    """The gap the id was threaded through last: a permanent's own "when this
+    enters the battlefield" trigger.
+
+    ``_apply_self_enters_battlefield_triggers`` built its execution context from
+    the cast-time index alone and dropped the id, so every targeting ETB trigger
+    in the pool resolved by slot. Oubliette is the shipped one, and its window is
+    as wide as any spell's — the enchantment sits on the stack through a whole
+    priority round before its trigger picks a creature up.
+    """
+    game = _game(PlayerState(name="A"), PlayerState(name="B"))
+    doomed = _put(game, 1, "Grizzly Bears")
+    intended = _put(game, 1, "Hill Giant")
+    bystander = _put(game, 1, "Craw Wurm")
+    assert game.battlefield_index_of(intended) == 1
+
+    # Oubliette is Arabian Nights, so it comes from the set factory rather than
+    # from this module's LEA pool.
+    game.players[0].hand.append(set_pool("ARN")["Oubliette"])
+    game.queue_from_hand(0, "Oubliette", target_player_index=1, target_permanent_index=1)
+
+    # The distractor dies while Oubliette waits on the stack, so slot 1 now
+    # names the bystander rather than the creature the caster chose.
+    _kill(game, doomed)
+    assert game.battlefield_index_of(bystander) == 1
+
+    game.resolve_stack()
+
+    oubliette = next(p for p in game.all_permanents() if p.card.name == "Oubliette")
+    phased = oubliette.metadata.get("phased_out_permanent")
+    assert phased is intended, (
+        f"Oubliette phased out {getattr(phased, 'card', None)} rather than the "
+        "creature its trigger targeted — the trigger followed a stale index"
+    )
+    assert game.is_on_battlefield(bystander), "the wrong creature was taken"
+
+
+def test_several_targets_keep_their_own_slots_across_a_renumbering(set_pool):
+    """The multi-target version, and the case where the single-target rule is
+    actively wrong.
+
+    ``resolve_target_permanent`` falls back to scanning the battlefield when a
+    chosen target no longer resolves — right for one target, because hitting
+    something beats fizzling. Per slot it would be a disaster: two slots that
+    both decayed would both find the *same* first creature and double an effect
+    the player chose once. So the plural resolver never scans, and a slot that
+    stopped answering is dropped (CR 608.2b).
+    """
+    from engine.game_types import OracleExecutionContext
+    from engine.handlers._common import resolve_target_permanents
+
+    game = _game(PlayerState(name="A"), PlayerState(name="B"))
+    doomed = _put(game, 0, "Grizzly Bears")
+    kept = _put(game, 0, "Hill Giant")
+    bystander = _put(game, 0, "Craw Wurm")
+    chosen_ids = [doomed.permanent_id, kept.permanent_id]
+    chosen_indices = [0, 1]
+
+    _kill(game, doomed)
+    assert game.battlefield_index_of(kept) == 0, "the slots renumbered under the choice"
+
+    context = OracleExecutionContext(
+        caster=game.players[0],
+        target=game.players[0],
+        card=CARDS["Grizzly Bears"],
+        target_permanent_index=chosen_indices,
+        target_permanent_id=chosen_ids,
+    )
+    found = resolve_target_permanents(game, context)
+
+    assert found == [kept], (
+        "the surviving target must be the one it named and the dead one must "
+        f"simply drop — got {[p.card.name for p in found]}"
+    )
+    assert bystander not in found, "no slot scanned its way onto a creature nobody chose"
+
+
 def test_the_id_is_what_makes_it_work_not_the_index():
     """Pin the mechanism, so a future change that drops the id but happens to
     keep these passing (because the index still lines up) is still caught."""

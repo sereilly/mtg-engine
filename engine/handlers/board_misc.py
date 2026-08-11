@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..land_types import MIRE_COUNTER, change_land_type
-from ..models import Permanent
+from ..models import CardDefinition, Permanent
 from ..oracle_types import OracleInstruction
 from ..pt import set_base_pt
 from ..text_changes import LAND_TYPE_WORDS, change_color_word, change_land_word
@@ -14,6 +14,51 @@ from .registry import effect_handler
 if TYPE_CHECKING:
     from ..game import Game
     from ..game_types import OracleExecutionContext
+
+
+@effect_handler("create_emblem")
+def create_emblem(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"You get an emblem with "<ability>"." (CR 114.2.) The emblem lives on
+    its owner's ``emblems`` list — the engine's command zone — as a dict plus a
+    detached Permanent whose card carries the text, which is what lets the
+    trigger machinery fire it like any permanent's ability (CR 114.4)."""
+    caster = context.caster
+    text = str(instruction.payload.get("text", ""))
+    name = f"{context.card.name} Emblem"
+    emblem_card = CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Emblem",
+        oracle_text=text, colors=(), color_identity=(), keywords=(),
+        produced_mana=(), raw={},
+    )
+    caster.emblems.append({
+        "name": name,
+        "oracle_text": text,
+        "source_name": context.card.name,
+        "_permanent": Permanent(card=emblem_card),
+    })
+    game.log.append(f'{caster.name} gets an emblem: "{text}"')
+    return True, "resolved"
+
+
+@effect_handler("create_delayed_trigger")
+def create_delayed_trigger(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """A resolving ability creating a delayed triggered ability (CR 603.7):
+    "Whenever one or more nontoken creatures attack this turn, …" (Basri Ket's
+    −2). The entry waits on ``game.delayed_triggers``; the declare-attackers
+    step fires it, and cleanup clears "this turn" entries."""
+    payload = instruction.payload
+    game.delayed_triggers.append({
+        "controller_index": game.players.index(context.caster),
+        "event": payload.get("event", "creatures_attack"),
+        "batch": bool(payload.get("batch")),
+        "nontoken": bool(payload.get("nontoken")),
+        "instruction": payload.get("instruction"),
+        "source_name": context.card.name,
+        "card": context.card,
+        "duration": payload.get("duration", "end_of_turn"),
+    })
+    game.log.append(f"{context.card.name} set up a delayed trigger for this turn")
+    return True, "resolved"
 
 
 @effect_handler("steal_target_permanent_linked_to_self")
@@ -365,11 +410,33 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
         keywords=tuple(payload.get("keywords") or ()),
         image_source=card,
     )
-    count = resolve_amount(payload.get("count", 1), context.x_value)
+    # "that many" — a delayed attack trigger's batch count (Basri Ket's −2),
+    # carried in the firing event's trigger context.
+    raw_count = payload.get("count", 1)
+    if raw_count == "trigger_count":
+        tctx = context.trigger_context or {}
+        count = int(tctx.get("trigger_count", context.results.get("trigger_count", 0)))
+    else:
+        count = resolve_amount(raw_count, context.x_value)
     for _ in range(count):
-        game._put_permanent_onto_battlefield(
-            controller_index, Permanent(card=token_card, metadata={"is_token": True}), None
-        )
+        token = Permanent(card=token_card, metadata={"is_token": True})
+        game._put_permanent_onto_battlefield(controller_index, token, None)
+        # "…that are tapped and attacking" (Basri Ket): entry state, not an
+        # attack declaration — the tokens join the combat the trigger saw
+        # (CR 111.10c-style entry), attacking whatever seat is already under
+        # attack.
+        if payload.get("tapped"):
+            token.tapped = True
+        if payload.get("attacking") and game.current_turn_phase == "combat":
+            defending = (context.trigger_context or {}).get("trigger_defending_player_index")
+            if not isinstance(defending, int):
+                defending = next(iter(sorted(game.combat_defending_players())), None)
+            if isinstance(defending, int):
+                slot = game.battlefield_index_of(token)
+                if slot is not None:
+                    game.combat_attackers[slot] = defending
+                    token.attacking = True
+                    token.defending_player_index = defending
     if count == 1:
         game.log.append(f"{card.name} created a {token_card.name} token")
     elif count > 1:

@@ -96,6 +96,27 @@ def _targets_only(recipient: ast.Recipient) -> dict[str, object]:
     return payload
 
 
+def _describe_several_targets(payload: dict[str, object], recipient: ast.TargetSpec) -> None:
+    """Record an "up to N target …" description, N > 1, on *payload*.
+
+    Separate from :func:`_describe_targets` and opted into per call site, which
+    is the whole safety of it. Most lowerings emit an instruction whose handler
+    resolves exactly one permanent; if the ordinary description quietly admitted
+    several, ``engine/targeting.py`` would raise a two-target picker in front of
+    a one-target handler and the second choice would be collected and dropped.
+    So a lowering says "my handler reads a list" by calling *this*, and
+    :func:`_names_several_targets` keeps refusing everywhere else.
+    """
+    payload["targets"] = {
+        "quantifier": recipient.quantifier,
+        "kind": "object",
+        "filter": _filter_payload(recipient.filter),
+        # The maximum, not the count chosen — "up to two" may legally name one
+        # or none (CR 601.2c).
+        "count": recipient.count,
+    }
+
+
 def _targets_payload(recipient: ast.Recipient) -> dict[str, object] | None:
     """A description of what *recipient* refers to, for engine/targeting.py.
 

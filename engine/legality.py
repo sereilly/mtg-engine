@@ -487,7 +487,10 @@ class LegalityMixin:
                 return perm.has_type(land_filter)
             # is_creature so animated lands (Kormus Bell / Living Lands) are legal
             # targets for creature-targeting spells, abilities, and Auras.
+            # CR 115.4: "any target" also admits planeswalkers.
             if not perm.is_creature:
+                if kind == "any" and perm.has_type("planeswalker"):
+                    return True
                 return False
             if spec.get("enchant_wall"):
                 return "wall" in type_line

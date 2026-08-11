@@ -14,6 +14,8 @@ unsupported card.
 
 from __future__ import annotations
 
+import dataclasses
+
 from . import ast
 from .amounts import parse_amount
 from .lexer import NUMBER, WORD
@@ -360,6 +362,11 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
         if singular in _GENERIC_NOUNS:
             is_card = singular == "card"
             stream.advance()
+            # "permanent card(s)" (Ugin, the Spirit Dragon's −10): a card whose
+            # type would make it a permanent. The trailing noun is recorded the
+            # same way a type word's is — see _accept_card_noun.
+            if not is_card and _accept_card_noun(stream):
+                is_card = True
             # "target spell or permanent" (the Lace cycle) unions two *generic*
             # nouns. Neither contributes a card type, so the union restricts
             # nothing and the filter is unchanged — but the tokens still have to
@@ -387,8 +394,25 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
         if stream.accept_phrase("you", "control"):
             controller = "you"
             continue
+        # "you don't control" (Teferi, Master of Time's −3). The lexer keeps
+        # "don't" as one word.
+        if stream.accept_phrase("you", "don't", "control"):
+            controller = "not_you"
+            continue
         if stream.accept_phrase("an", "opponent", "controls"):
             controller = "opponent"
+            continue
+        # "each creature target opponent controls" (Teferi, Timeless Voyager's
+        # −8): the controller is a chosen player — the spell targets the
+        # opponent, not the creatures.
+        if stream.accept_phrase("target", "opponent", "controls"):
+            controller = "target_opponent"
+            continue
+        # "that's one or more colors" (Ugin, the Spirit Dragon's −X): the
+        # object is colored — matching reads the effective colors, so a
+        # colorless artifact escapes and a Lace-painted one does not.
+        if stream.accept_phrase("that", "'s", "one", "or", "more", "colors"):
+            colored = True
             continue
         if stream.accept_phrase("that", "player", "controls"):
             controller = "that_player"
@@ -507,8 +531,26 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
     if stream.accept_phrase("any", "target"):
         return ast.TargetSpec("any_target")
 
+    # "each of up to two target creatures you control" — a distributive wrapper
+    # over the noun phrase rather than a quantifier of its own. It names exactly
+    # the objects the phrase behind it names and says the effect applies to each
+    # of them, which is already what a per-object effect does with a list, so
+    # the count and the filter come from the wrapped phrase. Consumed here so
+    # "each" is not mistaken for the sweep quantifier below, which would turn
+    # "up to two target creatures" into every creature on the battlefield.
+    stream.accept_phrase("each", "of")
+
     quantifier: str | None = None
     count = 1
+
+    # "up to two **other** target creatures you control" prints "other" between
+    # the count and the word "target" — the one position `parse_object_filter`
+    # cannot reach, because it reads the filter from after "target". Recorded
+    # here and folded into that filter below, so this spelling and the
+    # postmodifier one ("target creature other than this creature") set the same
+    # field and no lowering has to learn two names for one restriction.
+    other_before_target = False
+    distinct_from_prior = False
 
     if stream.accept_phrase("up", "to"):
         quantifier = "up_to"
@@ -516,11 +558,22 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
         if token is not None and (token.kind == NUMBER or token.kind == WORD):
             amount = parse_amount(stream)
             count = amount.value if isinstance(amount, ast.Fixed) else 1
+        if stream.at_word("other") and stream.peek_word(1) == "target":
+            stream.advance()
+            other_before_target = True
         # "up to one target creature", "up to two target creatures" — the word
         # "target" is part of the printed quantifier phrase, not the filter.
         stream.accept_word("target")
     elif stream.accept_word("target"):
         quantifier = "target"
+    elif stream.at_word("another") and stream.peek_word(1) == "target":
+        # "another target creature" (Garruk, Savage Herald) — a second chosen
+        # object, distinct from the sentence's earlier choice. Guarded on the
+        # following "target" so the sacrifice-cost reading of "another
+        # <object>" is untouched.
+        stream.advance(2)
+        quantifier = "target"
+        distinct_from_prior = True
     elif stream.accept_word("each"):
         quantifier = "each"
     elif stream.accept_word("all"):
@@ -547,7 +600,9 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
     except Exception:
         stream.reset(mark)
         return None
-    return ast.TargetSpec(quantifier, filt, count)
+    if other_before_target:
+        filt = dataclasses.replace(filt, other_than_source=True)
+    return ast.TargetSpec(quantifier, filt, count, distinct_from_prior=distinct_from_prior)
 
 
 def parse_recipient(stream: TokenStream) -> ast.Recipient | None:
@@ -558,6 +613,12 @@ def parse_recipient(stream: TokenStream) -> ast.Recipient | None:
     # A bare "it" refers back to the ability's own source ("put a +1/+1 counter
     # on it" on a trigger whose subject was "this creature").
     if stream.at_word("it"):
+        stream.advance()
+        return ast.TargetSpec("this", ast.ObjectFilter(is_source=True))
+    # The card naming itself mid-sentence ("put a loyalty counter on Garruk") —
+    # the lexer already collapsed the name to one SELF token.
+    token = stream.peek()
+    if token is not None and token.kind == "self":
         stream.advance()
         return ast.TargetSpec("this", ast.ObjectFilter(is_source=True))
     return parse_target_spec(stream)

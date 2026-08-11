@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**221 / 576 tracked rules covered (38%)** — 971 tests, 0 unannotated.
+**234 / 585 tracked rules covered (40%)** — 1012 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -43,6 +43,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [303. Enchantments](#303-enchantments) | 7/7 | 100% |
 | [304. Instants](#304-instants) | 0/5 | 0% |
 | [305. Lands](#305-lands) | 2/9 | 22% |
+| [306. Planeswalkers](#306-planeswalkers) | 9/9 | 100% |
 | [307. Sorceries](#307-sorceries) | 0/5 | 0% |
 | [400. General](#400-general) | 5/12 | 41% |
 | [401. Library](#401-library) | 1/7 | 14% |
@@ -72,7 +73,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [603. Handling Triggered Abilities](#603-handling-triggered-abilities) | 5/12 | 41% |
 | [604. Handling Static Abilities](#604-handling-static-abilities) | 3/7 | 42% |
 | [605. Mana Abilities](#605-mana-abilities) | 5/5 | 100% |
-| [606. Loyalty Abilities](#606-loyalty-abilities) | 2/5 | 40% |
+| [606. Loyalty Abilities](#606-loyalty-abilities) | 5/5 | 100% |
 | [607. Linked Abilities](#607-linked-abilities) | 2/5 | 40% |
 | [608. Resolving Spells and Abilities](#608-resolving-spells-and-abilities) | 3/3 | 100% |
 | [609. Effects](#609-effects) | 3/7 | 42% |
@@ -84,7 +85,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [615. Prevention Effects](#615-prevention-effects) | 7/13 | 53% |
 | [616. Interaction of Replacement and/or Prevention Effects](#616-interaction-of-replacement-andor-prevention-effects) | 2/2 | 100% |
 | [700. General](#700-general) | 1/15 | 6% |
-| [701. Keyword Actions](#701-keyword-actions) | 6/17 | 35% |
+| [701. Keyword Actions](#701-keyword-actions) | 7/17 | 41% |
 | [702. Keyword Abilities](#702-keyword-abilities) | 23/23 | 100% |
 | [703. Turn-Based Actions](#703-turn-based-actions) | 0/4 | 0% |
 | [704. State-Based Actions](#704-state-based-actions) | 4/8 | 50% |
@@ -253,7 +254,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **115.1** Some spells and abilities require their controller to choose one or more targets for them. The ta... *(5 tests, subrules bc)*
 - [x] **115.2** Only permanents are legal targets for spells and abilities, unless a spell or ability (a) specifi... *(2 tests)*
 - [ ] **115.3** The same target can’t be chosen multiple times for any one instance of the word “target” on a spe...
-- [x] **115.4** Some spells and abilities that refer to damage require “any target,” “another target,” “two targe... *(1 tests)*
+- [x] **115.4** Some spells and abilities that refer to damage require “any target,” “another target,” “two targe... *(2 tests)*
 - [ ] **115.5** A spell or ability on the stack is an illegal target for itself.
 - [ ] **115.6** A spell or ability that requires targets may allow zero targets to be chosen. Such a spell or abi...
 - [ ] **115.7** Some effects allow a player to change the target(s) of a spell or ability, and other effects allo...
@@ -311,7 +312,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [ ] **120.1** Objects can deal damage to battles, creatures, planeswalkers, and players. This is generally detr...
 - [ ] **120.2** Any object can deal damage.
-- [x] **120.3** Damage may have one or more of the following results, depending on whether the recipient of the d... *(3 tests, subrules af)*
+- [x] **120.3** Damage may have one or more of the following results, depending on whether the recipient of the d... *(4 tests, subrules acf)*
 - [x] **120.4** Damage is processed in a four-part sequence. *(6 tests, subrules bc)*
 - [ ] **120.5** Damage dealt to a creature, planeswalker, or battle doesn’t destroy it. Likewise, the source of t...
 - [ ] **120.6** Damage marked on a creature remains until the cleanup step, even if that permanent stops being a ...
@@ -411,7 +412,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **302.3** Creature subtypes are usually a single word long and are listed after a long dash: “Creature — Hu...
 - [ ] **302.4** Power and toughness are characteristics only creatures have.
 - [ ] **302.5** Creatures can attack and block. (See rule 508, “Declare Attackers Step,” and rule 509, “Declare B...
-- [x] **302.6** A creature’s activated ability with the tap symbol or the untap symbol in its activation cost can... *(4 tests)*
+- [x] **302.6** A creature’s activated ability with the tap symbol or the untap symbol in its activation cost can... *(5 tests)*
 - [ ] **302.7** Damage dealt to a creature by a source with neither wither nor infect is marked on that creature ...
 
 ### 303. Enchantments
@@ -443,6 +444,18 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **305.7** If an effect sets a land’s subtype to one or more of the basic land types, the land no longer has... *(11 tests)*
 - [ ] **305.8** Any land with the supertype “basic” is a basic land. Any land that doesn’t have this supertype is...
 - [ ] **305.9** If an object is both a land and another card type, it can be played only as a land. It can’t be c...
+
+### 306. Planeswalkers
+
+- [x] **306.1** A player who has priority may cast a planeswalker card from their hand during a main phase of the... *(1 tests)*
+- [x] **306.2** When a planeswalker spell resolves, its controller puts it onto the battlefield under their control. *(1 tests)*
+- [x] **306.3** Planeswalker subtypes are always a single word and are listed after a long dash: “Planeswalker — ... *(1 tests)*
+- [x] **306.4** Previously, planeswalkers were subject to a “planeswalker uniqueness rule” that stopped a player ... *(2 tests)*
+- [x] **306.5** Loyalty is a characteristic only planeswalkers have. *(5 tests, subrules abcd)*
+- [x] **306.6** Planeswalkers can be attacked. (See rule 508, “Declare Attackers Step.”) *(1 tests)*
+- [x] **306.7** Previously, planeswalkers were subject to a redirection effect that allowed a player to have nonc... *(1 tests)*
+- [x] **306.8** Damage dealt to a planeswalker results in that many loyalty counters being removed from it. *(1 tests)*
+- [x] **306.9** If a planeswalker’s loyalty is 0, it’s put into its owner’s graveyard. (This is a state-based act... *(1 tests)*
 
 ### 307. Sorceries
 
@@ -574,7 +587,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **506.1** The combat phase has five steps, which proceed in order: beginning of combat, declare attackers, ... *(6 tests)*
 - [x] **506.2** During the combat phase, the active player is the attacking player; creatures that player control... *(3 tests)*
 - [x] **506.3** Only a creature can attack or block. Only a player, a planeswalker, or a battle can be attacked. *(8 tests, subrules ab)*
-- [x] **506.4** A permanent is removed from combat if it leaves the battlefield, if its controller changes, if it... *(5 tests, subrules b)*
+- [x] **506.4** A permanent is removed from combat if it leaves the battlefield, if its controller changes, if it... *(7 tests, subrules bc)*
 - [x] **506.5** A creature attacks alone if it’s the only creature declared as an attacker during the declare att... *(5 tests)*
 - [x] **506.6** Some abilities check to see whether or not a creature “had to attack” during a particular combat ... *(2 tests)*
 - [ ] **506.7** Some spells state that they may be cast “only [before/after] [a particular point in the combat ph...
@@ -586,7 +599,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 508. Declare Attackers Step
 
-- [x] **508.1** First, the active player declares attackers. This turn-based action doesn’t use the stack. To dec... *(9 tests, subrules adf)*
+- [x] **508.1** First, the active player declares attackers. This turn-based action doesn’t use the stack. To dec... *(12 tests, subrules abdfk)*
 - [x] **508.2** Second, the active player gets priority. (See rule 117, “Timing and Priority.”) *(2 tests)*
 - [ ] **508.3** Triggered abilities that trigger on attackers being declared may have different trigger conditions.
 - [ ] **508.4** If a creature is put onto the battlefield attacking, its controller chooses which defending playe...
@@ -597,14 +610,14 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 509. Declare Blockers Step
 
-- [x] **509.1** First, the defending player declares blockers. This turn-based action doesn’t use the stack. To d... *(23 tests, subrules abcghi)*
+- [x] **509.1** First, the defending player declares blockers. This turn-based action doesn’t use the stack. To d... *(24 tests, subrules abcghi)*
 - [x] **509.2** Second, the active player gets priority. (See rule 117, “Timing and Priority.”) *(4 tests, subrules a)*
 - [x] **509.3** Triggered abilities that trigger on blockers being declared may have different trigger conditions. *(5 tests, subrules acg)*
 - [x] **509.4** If a creature is put onto the battlefield blocking, its controller chooses which attacking creatu... *(1 tests)*
 
 ### 510. Combat Damage Step
 
-- [x] **510.1** First, the active player announces how each attacking creature assigns its combat damage, then th... *(12 tests, subrules acde)*
+- [x] **510.1** First, the active player announces how each attacking creature assigns its combat damage, then th... *(14 tests, subrules abcde)*
 - [x] **510.2** Second, all combat damage that’s been assigned is dealt simultaneously. This turn-based action do... *(7 tests)*
 - [ ] **510.3** Third, the active player gets priority. (See rule 117, “Timing and Priority.”)
 - [x] **510.4** If at least one attacking or blocking creature has first strike (see rule 702.7) or double strike... *(2 tests)*
@@ -633,7 +646,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(44 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(45 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(3 tests)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
@@ -646,7 +659,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **602.2** To activate an ability is to put it onto the stack and pay its costs, so that it will eventually ... *(7 tests, subrules ab)*
 - [ ] **602.3** Some abilities specify that one of their controller’s opponents does something the controller wou...
 - [ ] **602.4** Activating an ability that alters costs won’t affect spells and abilities that are already on the...
-- [x] **602.5** A player can’t begin to activate an ability that’s prohibited from being activated. *(6 tests, subrules a)*
+- [x] **602.5** A player can’t begin to activate an ability that’s prohibited from being activated. *(7 tests, subrules ac)*
 
 ### 603. Handling Triggered Abilities
 
@@ -684,10 +697,10 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 606. Loyalty Abilities
 
 - [x] **606.1** Some activated abilities are loyalty abilities, which are subject to special rules. *(1 tests)*
-- [x] **606.2** An activated ability with a loyalty symbol in its cost is a loyalty ability. Normally, only plane... *(1 tests)*
-- [ ] **606.3** A player may activate a loyalty ability of a permanent they control any time they have priority a...
-- [ ] **606.4** The cost to activate a loyalty ability of a permanent is to put on or remove from that permanent ...
-- [ ] **606.6** A loyalty ability with a negative loyalty cost, taking into account any additional costs, can’t b...
+- [x] **606.2** An activated ability with a loyalty symbol in its cost is a loyalty ability. Normally, only plane... *(3 tests)*
+- [x] **606.3** A player may activate a loyalty ability of a permanent they control any time they have priority a... *(6 tests)*
+- [x] **606.4** The cost to activate a loyalty ability of a permanent is to put on or remove from that permanent ... *(4 tests)*
+- [x] **606.6** A loyalty ability with a negative loyalty cost, taking into account any additional costs, can’t b... *(2 tests)*
 
 ### 607. Linked Abilities
 
@@ -700,7 +713,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 608. Resolving Spells and Abilities
 
 - [x] **608.1** Each time all players pass in succession, the spell or ability on top of the stack resolves. (See... *(1 tests)*
-- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(5 tests, subrules bmn)*
+- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(11 tests, subrules bcn)*
 - [x] **608.3** If the object that’s resolving is a permanent spell, its resolution may involve several steps. Th... *(3 tests, subrules ab)*
 
 ### 609. Effects
@@ -756,7 +769,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 614. Replacement Effects
 
-- [x] **614.1** Some continuous effects are replacement effects. Like prevention effects (see rule 615), replacem... *(22 tests, subrules abcd)*
+- [x] **614.1** Some continuous effects are replacement effects. Like prevention effects (see rule 615), replacem... *(23 tests, subrules abcd)*
 - [ ] **614.2** Some replacement effects apply to damage from a source. See rule 609.7.
 - [ ] **614.3** There are no special restrictions on casting a spell or activating an ability that generates a re...
 - [x] **614.4** Replacement effects must exist before the appropriate event occurs—they can’t “go back in time” a... *(2 tests)*
@@ -828,8 +841,8 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **701.19** Regenerate *(15 tests, subrules ac)*
 - [ ] **701.20** Reveal
 - [ ] **701.21** Sacrifice
-- [x] **701.22** Scry *(6 tests, subrules ab)*
-- [ ] **701.23** Search
+- [x] **701.22** Scry *(8 tests, subrules ab)*
+- [x] **701.23** Search *(2 tests, subrules a)*
 - [ ] **701.24** Shuffle
 - [x] **701.26** Tap and Untap *(1 tests, subrules a)*
 
@@ -850,7 +863,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.16** Protection *(33 tests, subrules abcdefghjkmn)*
 - [x] **702.17** Reach *(3 tests, subrules b)*
 - [x] **702.18** Shroud *(3 tests, subrules a)*
-- [x] **702.19** Trample *(7 tests, subrules b)*
+- [x] **702.19** Trample *(9 tests, subrules bf)*
 - [x] **702.20** Vigilance *(2 tests, subrules b)*
 - [x] **702.22** Banding *(25 tests, subrules acdefghjk)*
 - [x] **702.23** Rampage *(3 tests, subrules a)*
@@ -872,7 +885,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **704.2** State-based actions are checked throughout the game and are not controlled by any player.
 - [x] **704.3** Whenever a player would get priority (see rule 117, “Timing and Priority”), the game checks for a... *(1 tests)*
 - [ ] **704.4** Unlike triggered abilities, state-based actions pay no attention to what happens during the resol...
-- [x] **704.5** The state-based actions are as follows: *(67 tests, subrules abcdefghijkmnpqrsy)*
+- [x] **704.5** The state-based actions are as follows: *(71 tests, subrules abcdefghijkmnpqrsy)*
 - [ ] **704.6** Some variant games include additional state-based actions that aren’t normally applicable:
 - [x] **704.7** If multiple state-based actions would have the same result at the same time, a single replacement... *(1 tests)*
 - [x] **704.8** If a state-based action results in a permanent leaving the battlefield at the same time other sta... *(1 tests)*

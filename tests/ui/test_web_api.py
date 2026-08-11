@@ -1176,7 +1176,9 @@ def test_combat_actions_declare_attackers_and_blockers():
         json={"seat": 0, "action": "declare_attackers", "attacker_indices": [0], "target_seat": 1},
     )
     assert declare_attack.status_code == 200
-    assert declare_attack.json()["combat"]["attackers"] == [{"attacker_index": 0, "defending_player_index": 1}]
+    assert declare_attack.json()["combat"]["attackers"] == [
+        {"attacker_index": 0, "defending_player_index": 1, "attacked_planeswalker_id": None}
+    ]
 
     session.game.current_step = "declare_blockers"
     session.game.priority_player_index = 1

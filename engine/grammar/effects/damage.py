@@ -89,6 +89,14 @@ def _parse_damage(stream: TokenStream, source: ast.TargetSpec | None) -> ast.Sta
         if found is None:
             raise stream.error("expected 'equal to' quantity for damage")
         amount = found
+        # "deals damage equal to its power **to another target creature**"
+        # (Garruk, Savage Herald's −2) — this word order puts the recipient
+        # after the amount clause rather than before it.
+        if not recipients and stream.accept_word("to"):
+            recipient = parse_recipient(stream)
+            if recipient is None:
+                raise stream.error("expected a damage recipient")
+            recipients.append(recipient)
 
     # "deals X damage to that player, where X is <count>" — the trailer *is* the
     # quantity, so it replaces the variable rather than riding alongside it.

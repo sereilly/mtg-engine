@@ -1512,6 +1512,15 @@ function cardRequiresTargetArtifact(card) {
 }
 function cardRequiresTargetAny(card) { return specKind(card) === "any"; }
 function cardRequiresDividedDamage(card) { return specKind(card) === "divided"; }
+// "Up to N target creatures" (Basri's Acolyte). `max_targets` is the maximum the
+// card names, derived by the backend from the compiled program — its absence is
+// the ordinary one-target case, so this reads false for every other card without
+// anything having to list them.
+function severalTargetMaximum(card) {
+  const max = targetSpecOf(card).max_targets;
+  return Number.isInteger(max) && max > 1 ? max : null;
+}
+function cardRequiresSeveralTargets(card) { return severalTargetMaximum(card) !== null; }
 function cardRequiresTargetStackSpell(card) { return specKind(card) === "stack"; }
 
 // What a graveyard-return prompt is asking the player to click. Regrowth takes
@@ -4880,6 +4889,23 @@ function renderActivationPrompt() {
       cancelBtn.disabled = false;
       customOkBtn.disabled = true;
       return;
+    } else if (pendingCastTarget.targetKind === "several") {
+      body.textContent =
+        `Click up to ${pendingCastTarget.maxTargets} valid permanents to choose them, then confirm. ` +
+        "Click a chosen one again to deselect it.";
+      steps.innerHTML = [
+        `<div>Card: ${escapeHtml(pendingCastTarget.cardName)}</div>`,
+        `<div>${escapeHtml(severalTargetsHint())}</div>`,
+        `<div class="prompt-choice-row"><button type="button" class="prompt-choice-btn" id="severalConfirmBtn">Confirm targets</button></div>`,
+      ].join("");
+      // Never disabled: "up to N" may legally choose none (CR 601.2c), so
+      // confirming with nothing selected has to be reachable.
+      const severalBtn = document.getElementById("severalConfirmBtn");
+      if (severalBtn) severalBtn.addEventListener("click", confirmSeveralTargets);
+      cancelBtn.classList.remove("hidden");
+      cancelBtn.disabled = false;
+      customOkBtn.disabled = true;
+      return;
     } else if (pendingCastTarget.targetKind === "stack") {
       body.textContent = "Click a glowing spell on the stack to choose which one to target.";
       steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
@@ -5680,6 +5706,12 @@ function chooseModalMode(index) {
 // Route a chosen mode to the targeting prompt its effect needs, or cast directly
 // when the mode targets nothing.
 function dispatchModalCast(card, castAction, targetKind, validTargets = null) {
+  // A mode naming several targets takes the several-target prompt whatever its
+  // kind says, for the same reason the cast cascades check it first.
+  if (cardRequiresSeveralTargets(card)) {
+    startCastSeveralTargetsPrompt(card, castAction, validTargets);
+    return;
+  }
   switch (targetKind) {
     case "creature":
       startCastCreatureTargetPrompt(card, castAction, validTargets);
@@ -5847,6 +5879,107 @@ function dividedTargetCount() {
   const p = pendingCastTarget;
   if (!p || p.targetKind !== "divided") return 0;
   return p.dividedTargets.length + (p.dividedFaces?.length || 0);
+}
+
+// --- "Up to N target ..." ----------------------------------------------------
+//
+// Its own prompt rather than a flag on the single-target one: the player picks
+// several, may legally stop short of the maximum (CR 601.2c), and so needs a
+// confirm step that a one-click picker has nowhere to put. The accumulate-and-
+// confirm shape is the divided prompt's, but the two must not be merged — a
+// divided spell splits *one* quantity across its targets and follows up with an
+// X prompt, while these are N independent targets of one effect.
+
+function startCastSeveralTargetsPrompt(card, castAction = "cast", validTargets = null) {
+  const cardName = normalizeCardName(card);
+  if (!cardName) return;
+  const max = severalTargetMaximum(card);
+  pendingCastTarget = {
+    card,
+    cardName,
+    castAction,
+    targetKind: "several",
+    maxTargets: max,
+    severalTargets: [], // [{ seat, idx }] — all on one seat; see confirm below
+    ...pendingTargetFields(card, validTargets),
+  };
+  renderActivationPrompt();
+  renderBoard(currentState);
+  updateActionHint(severalTargetsHint());
+}
+
+function severalTargetsHint() {
+  const p = pendingCastTarget;
+  if (!p || p.targetKind !== "several") return "";
+  const n = p.severalTargets.length;
+  return n === 0
+    ? `Choose up to ${p.maxTargets} targets for ${p.cardName} (click each), then confirm. Choosing none is legal.`
+    : `${n} of up to ${p.maxTargets} chosen.`;
+}
+
+function toggleSeveralTarget(targetSeat, permanentIndex) {
+  const p = pendingCastTarget;
+  if (!p || p.targetKind !== "several") return;
+  if (p.validKeys && !p.validKeys.has(`${targetSeat}-${permanentIndex}`)) {
+    updateActionHint("That permanent isn't a valid target for the pending spell.", true);
+    return;
+  }
+  const at = p.severalTargets.findIndex((t) => t.seat === targetSeat && t.idx === permanentIndex);
+  if (at >= 0) {
+    p.severalTargets.splice(at, 1);
+  } else {
+    if (p.severalTargets.length >= p.maxTargets) {
+      updateActionHint(`${p.cardName} names at most ${p.maxTargets} targets — click one to deselect it.`, true);
+      return;
+    }
+    // One seat's worth: the request carries a single `target_seat` beside the
+    // list, so a pick on another side replaces the selection rather than
+    // building a cross-seat list the wire cannot express. Every card printed
+    // with this template so far restricts itself to one side anyway.
+    if (p.severalTargets.length && p.severalTargets[0].seat !== targetSeat) {
+      p.severalTargets.length = 0;
+    }
+    p.severalTargets.push({ seat: targetSeat, idx: permanentIndex });
+  }
+  renderActivationPrompt();
+  renderBoard(currentState);
+  updateActionHint(severalTargetsHint());
+}
+
+function confirmSeveralTargets() {
+  const p = pendingCastTarget;
+  if (!p || p.targetKind !== "several") return;
+  const { card, cardName, castAction, severalTargets } = p;
+  const targetSeat = severalTargets.length ? severalTargets[0].seat : seat;
+  // Ids, not indices: a permanent that left the battlefield between the click
+  // and the send must be a refusal rather than whichever permanent slid into
+  // its slot. A pick with no id falls back to its index, which is what the
+  // server does with the pair anyway.
+  const ids = severalTargets
+    .map((t) => permanentIdAt(t.seat, t.idx))
+    .filter((pid) => Number.isInteger(pid));
+  const body = { seat, action: castAction || "cast", card_name: cardName, target_seat: targetSeat };
+  if (ids.length === severalTargets.length && ids.length > 0) {
+    body.target_permanent_ids = ids;
+  } else if (severalTargets.length) {
+    body.target_permanent_indices = severalTargets.map((t) => t.idx);
+  }
+  clearPendingCastTargeting();
+  updateActionHint(`Casting ${cardName}...`);
+  sendAction(body)
+    .then(() => updateActionHint(`Cast ${cardName}.`))
+    .catch((e) => updateActionHint(e.message, true))
+    .finally(() => clearPendingHandCast());
+}
+
+/** Drop the in-progress target prompt and every highlight it painted. */
+function clearPendingCastTargeting() {
+  pendingCastTarget = null;
+  battlefieldCanvas?.setTargetingKeys([]);
+  for (const elementId of ["selfLife", "oppLife", "selfName", "oppName"]) {
+    q(elementId)?.classList.remove("targeting-valid");
+  }
+  clearFfaTargetingHighlights();
 }
 
 function dividedTargetsHint() {
@@ -6600,6 +6733,15 @@ async function castDebugCardForFree() {
     return;
   }
 
+  // Before every single-target check: a spell naming "up to N targets" has an
+  // ordinary kind ("creature") and would otherwise take the one-click picker,
+  // which can collect only the first of them.
+  if (card && cardRequiresSeveralTargets(card)) {
+    startCastSeveralTargetsPrompt(card, "debug_cast_free");
+    updateDebugStatus(`Choose targets for ${resolvedCardName}.`, "success");
+    return;
+  }
+
   if (card && cardOffersCopyCreatureChoice(card)) {
     startCastCreatureTargetPrompt(card, "debug_cast_free");
     updateDebugStatus(`Choose a creature for ${resolvedCardName} to copy.`, "success");
@@ -6699,6 +6841,15 @@ async function castDebugCardForFreeAsOpponent() {
   if (card && cardRequiresTargetArtifact(card)) {
     startCastArtifactTargetPrompt(card, "debug_cast_free_opponent");
     updateDebugStatus(`Choose an artifact target for ${resolvedCardName} (as opponent).`, "success");
+    return;
+  }
+
+  // Before every single-target check: a spell naming "up to N targets" has an
+  // ordinary kind ("creature") and would otherwise take the one-click picker,
+  // which can collect only the first of them.
+  if (card && cardRequiresSeveralTargets(card)) {
+    startCastSeveralTargetsPrompt(card, "debug_cast_free_opponent");
+    updateDebugStatus(`Choose targets for ${resolvedCardName} (as opponent).`, "success");
     return;
   }
 
@@ -7367,6 +7518,11 @@ function createCardElement(card, options = {}) {
 
         if (cardRequiresTargetArtifact(card)) {
           startCastArtifactTargetPrompt(card);
+          return;
+        }
+
+        if (cardRequiresSeveralTargets(card)) {
+          startCastSeveralTargetsPrompt(card);
           return;
         }
 
@@ -9850,6 +10006,7 @@ async function handleHandCardDropOnBattlefield({ event, targetSeat, targetItem }
       if (card && cardRequiresTargetGraveyardCreature(card)) { startCastGraveyardCreatureTargetPrompt(card); return; }
       if (card && cardRequiresTargetLand(card)) { startCastLandTargetPrompt(card); return; }
       if (card && cardRequiresTargetArtifact(card)) { startCastArtifactTargetPrompt(card); return; }
+      if (card && cardRequiresSeveralTargets(card)) { startCastSeveralTargetsPrompt(card); return; }
       if (card && cardOffersCopyCreatureChoice(card)) { startCastCreatureTargetPrompt(card); return; }
       if (card && cardOffersCopyArtifactChoice(card)) { startCastArtifactTargetPrompt(card); return; }
       if (card && cardRequiresTargetCreature(card)) { startCastCreatureTargetPrompt(card); return; }
@@ -9999,6 +10156,10 @@ function initBattlefieldCanvas() {
           if (!valid) { updateActionHint("That is not a valid target.", true); return; }
           if (pendingCastTarget.targetKind === "divided") {
             toggleDividedCreatureTarget(cardSeat, permanentIndex);
+            return;
+          }
+          if (pendingCastTarget.targetKind === "several") {
+            toggleSeveralTarget(cardSeat, permanentIndex);
             return;
           }
           resolvePendingCastTarget(cardSeat, permanentIndex);

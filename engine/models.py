@@ -85,7 +85,7 @@ class CardDefinition:
     @property
     def primary_type(self) -> str:
         lowered = self.type_line.lower()
-        for known in ("land", "creature", "artifact", "enchantment", "instant", "sorcery"):
+        for known in ("land", "creature", "artifact", "enchantment", "planeswalker", "instant", "sorcery"):
             if known in lowered:
                 return known
         return self.type_line.split(" ")[0].strip().lower()
@@ -459,6 +459,19 @@ class PlayerState:
     # — Jeweled Bird antes itself and clears the rest, Darkpact swaps one out.
     # Cards land here from Contract from Below / Demonic Attorney / Jeweled Bird.
     ante: list[CardDefinition] = field(default_factory=list)
+    # Emblems this player owns (CR 114): command-zone markers with an ability
+    # and nothing else. Each entry is {"name", "oracle_text", "source_name"}
+    # plus a private "_permanent" — a detached Permanent whose card carries the
+    # emblem's text, so the trigger machinery fires it like any other source.
+    # Not a permanent and not a card: board wipes never touch this list.
+    emblems: list = field(default_factory=list)
+    # Phased-out permanents this player controls (CR 702.26). Not a zone:
+    # phasing out is not leaving the battlefield (702.26b), so the Permanent
+    # object keeps its id, counters and attachments and returns as the same
+    # object at this player's next untap step. While here it is off the
+    # battlefield lists, which is what "treated as though it doesn't exist"
+    # means to every control-seam read.
+    phased_out: list[Permanent] = field(default_factory=list)
     mana_pool: dict[str, int] = field(
         default_factory=lambda: {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0}
     )

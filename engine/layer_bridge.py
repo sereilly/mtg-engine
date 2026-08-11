@@ -94,7 +94,7 @@ def _printed_shape(
     """
     lowered = type_line.lower()
     card_types = frozenset(
-        word for word in ("artifact", "creature", "enchantment", "instant", "land", "sorcery")
+        word for word in ("artifact", "creature", "enchantment", "instant", "land", "planeswalker", "sorcery")
         if word in lowered
     )
     subtypes: frozenset[str] = frozenset()

@@ -29,6 +29,7 @@ from ._common import (
     _restrictions_beyond,
     GRAMMAR_ONLY_PAYLOAD_KEYS,
     _describe_targets,
+    _describe_several_targets,
     _targets_only,
     _targets_payload,
     _amount_payload,
@@ -70,6 +71,9 @@ from .characteristics import (
     _lower_change_text,
 )
 from .board import (
+    _lower_phase_out,
+    _lower_put_on_library_top,
+    _lower_put_onto_battlefield,
     _DESTROY_ALL_KINDS,
     _BASIC_LAND_TYPES,
     _BLOCK_PAIR_EVENTS,
@@ -89,6 +93,7 @@ from .board import (
     _fused_exile_then_controller_life,
 )
 from .cards import (
+    _lower_reveal_top,
     _DAMAGED_PLAYER_EVENTS,
     _lower_discard,
     _fused_draw_then_discard,
@@ -115,6 +120,7 @@ from .combat import (
     _lower_cant_be,
 )
 from .game import (
+    _lower_create_emblem,
     _lower_gain_life,
     _title,
     _lower_create_token,
@@ -131,6 +137,7 @@ __all__ = [
     "_restrictions_beyond",
     "GRAMMAR_ONLY_PAYLOAD_KEYS",
     "_describe_targets",
+    "_describe_several_targets",
     "_targets_only",
     "_targets_payload",
     "_amount_payload",
@@ -173,7 +180,11 @@ __all__ = [
     "_lower_delayed_destroy",
     "_lower_tap",
     "_reads_no_return_restriction",
+    "_lower_phase_out",
+    "_lower_put_on_library_top",
+    "_lower_put_onto_battlefield",
     "_lower_return_to_zone",
+    "_lower_reveal_top",
     "_lower_tap_or_untap",
     "_lower_regenerate",
     "_lower_sacrifice_unless_pay",
@@ -205,6 +216,7 @@ __all__ = [
     "_lower_cant_be",
     "_lower_gain_life",
     "_title",
+    "_lower_create_emblem",
     "_lower_create_token",
     "_lower_extra_turn",
     "_LOSE_GAME_KINDS",

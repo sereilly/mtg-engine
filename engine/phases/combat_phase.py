@@ -272,6 +272,7 @@ class CombatPhaseMixin:
 
     def _reset_combat_state(self, clear_damage_marked: bool) -> None:
         self.combat_attackers = {}
+        self.combat_attacked_planeswalkers = {}
         self.combat_blockers = {}
         self.combat_blockers_declared_by = set()
         self.combat_bands = []
@@ -320,6 +321,17 @@ class CombatPhaseMixin:
                 continue
             valid_attackers[attacker_idx] = defending_idx
         self.combat_attackers = valid_attackers
+
+        # An attacker that left combat takes its planeswalker target with it.
+        # The reverse is deliberately NOT pruned: a walker that left the
+        # battlefield keeps its entry, because its attacker is still attacking
+        # *it* — the creature assigns no combat damage (CR 510.1b) rather than
+        # falling back to attacking the player (CR 506.4c).
+        self.combat_attacked_planeswalkers = {
+            idx: walker_id
+            for idx, walker_id in self.combat_attacked_planeswalkers.items()
+            if idx in self.combat_attackers
+        }
 
         # Populated only when every remaining attacker shares one defender
         # (2-player back-compat / simple single-target UI reads); the authoritative
@@ -413,7 +425,16 @@ class CombatPhaseMixin:
             "defending_player_index": self.combat_defending_player_index,
             # CR 802: every player currently under attack (may be 2+ in FFA).
             "defending_player_indices": sorted(self.combat_defending_players()),
-            "attackers": [{"attacker_index": k, "defending_player_index": v} for k, v in sorted(self.combat_attackers.items())],
+            "attackers": [
+                {
+                    "attacker_index": k,
+                    "defending_player_index": v,
+                    # CR 508.1b: present (as the walker's permanent_id) when this
+                    # attacker is attacking a planeswalker rather than the player.
+                    "attacked_planeswalker_id": self.combat_attacked_planeswalkers.get(k),
+                }
+                for k, v in sorted(self.combat_attackers.items())
+            ],
             "blockers": [
                 {"blocker_index": blocker_idx, "attacker_index": a, "defending_player_index": defending_idx}
                 for defending_idx, blocker_map in sorted(self.combat_blockers.items())

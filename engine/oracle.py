@@ -340,6 +340,30 @@ def normalize_creature_line(line: str) -> str:
     return lowered
 
 
+# CR 606.2: a loyalty ability's cost is a loyalty symbol — "+1", "−2", "0",
+# "−X". Scryfall prints the minus as U+2212; an ASCII hyphen is accepted too so
+# hand-written fixtures behave like ingested text.
+_LOYALTY_COST_RE = re.compile(r"^\s*([+\-−]?)\s*(\d+|[xX])\s*$")
+
+
+def _parse_loyalty_cost(cost_part: str) -> tuple[int | None, int | None]:
+    """The ``(loyalty, loyalty_x_sign)`` a cost clause spells, or ``(None, None)``.
+
+    Matches only when the whole clause is one loyalty symbol: a planeswalker's
+    cost clause is nothing else (CR 606.5 combines multiples, and no card in the
+    pool prints a combined form), and anything wider must keep reading as the
+    mana/prose cost it is.
+    """
+    match = _LOYALTY_COST_RE.match(cost_part)
+    if match is None:
+        return None, None
+    sign = -1 if match.group(1) in ("-", "−") else 1
+    magnitude = match.group(2)
+    if magnitude in ("x", "X"):
+        return None, sign
+    return sign * int(magnitude), None
+
+
 def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     required = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0, "generic": 0}
     requires_tap = False
@@ -347,6 +371,13 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         return ActivatedAbilityCost(required, requires_tap)
 
     cost_part = line.split(":", 1)[0]
+    loyalty, loyalty_x_sign = _parse_loyalty_cost(cost_part)
+    if loyalty is not None or loyalty_x_sign is not None:
+        # A loyalty symbol is the whole cost (CR 606.4); reading the clause
+        # again as prose would misread "+1" as a bare number and charge nothing.
+        return ActivatedAbilityCost(
+            required, False, loyalty=loyalty, loyalty_x_sign=loyalty_x_sign
+        )
     for token in _MANA_TOKEN_RE.findall(cost_part.upper()):
         if token == "T":
             requires_tap = True
@@ -542,7 +573,7 @@ def _grammar_instruction(
 
     *spell_line_only* restricts the result to plain one-shot effect lines: the
     instructions of a card whose *resolution* carries them out. For an instant
-    or sorcery the stack executes the first non-``spell_pattern`` instruction in
+    or sorcery the stack executes every non-``spell_pattern`` instruction in
     that list, so an activated ability's effect must never enter it — the spell
     would perform the ability on resolution.
 
@@ -866,6 +897,281 @@ def _parse_activated_ability(line: str, card_name: str | None = None) -> ParsedA
     )
 
 
+# ---------------------------------------------------------------------------
+# Planeswalker program parser (CR 306, 606)
+# ---------------------------------------------------------------------------
+
+# A loyalty ability line: "+1: …", "−2: …", "0: …", "−X: …" (CR 606.2). The
+# whole clause left of the colon is one loyalty symbol; anything wider is an
+# ordinary activated-ability line and is read by _parse_activated_ability.
+_LOYALTY_LINE_RE = re.compile(r"^\s*[+\-−]?\s*(?:\d+|[xX])\s*:")
+
+# CR 306.5d relaxed by the card itself: "You may activate loyalty abilities of
+# <name> on any player's turn any time you could cast an instant." (Teferi,
+# Master of Time — a template several Teferi printings share). Stored as this
+# canonical static line; the activation gate in mixins/stack/activation.py
+# reads it back from OracleProgram.static_lines.
+LOYALTY_ANY_TIME_STATIC = (
+    "you may activate loyalty abilities of this planeswalker on any player's "
+    "turn any time you could cast an instant"
+)
+
+
+def _self_name_forms(card_name: str | None) -> tuple[str, ...]:
+    """The lowercase name forms a card may refer to itself by: the full name,
+    and — for a name with a comma — the short name before it (CR 201.4c,
+    "Ugin, the Spirit Dragon" says "Ugin")."""
+    if not card_name:
+        return ()
+    full = card_name.strip().lower()
+    forms = [full]
+    if "," in full:
+        forms.append(full.split(",", 1)[0].strip())
+    return tuple(forms)
+
+
+def _collapse_self_references(normalized: str, card_name: str | None, replacement: str) -> str:
+    """*normalized* with whole-word self-references replaced by *replacement*."""
+    for form in _self_name_forms(card_name):
+        normalized = re.sub(rf"\b{re.escape(form)}\b", replacement, normalized)
+    return normalized
+
+
+def _planeswalker_static_line(line: str, card_name: str | None) -> str | None:
+    """The canonical form of a recognized planeswalker static line, or None."""
+    normalized = _collapse_self_references(
+        normalize_creature_line(line), card_name, "this planeswalker"
+    )
+    if normalized == LOYALTY_ANY_TIME_STATIC:
+        return normalized
+    return None
+
+
+@lru_cache(maxsize=None)
+def compile_emblem_text(emblem_name: str, text: str) -> tuple[ParsedTriggeredAbility, ...]:
+    """The triggered abilities an emblem's quoted text carries (CR 114.4).
+
+    Compiled through the same trigger parser every permanent's lines go
+    through, once per distinct emblem text per process. A line the parser does
+    not read comes back unsupported, which is what the walker's support gate
+    checks before the card carrying the emblem may compile.
+    """
+    parsed: list[ParsedTriggeredAbility] = []
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        trig = _parse_triggered_ability(line, emblem_name)
+        if trig is None:
+            return ()
+        parsed.append(trig)
+    return tuple(parsed)
+
+
+def _emblem_texts(instruction: OracleInstruction) -> list[str]:
+    """Every emblem text *instruction* creates, walking sequence steps."""
+    if instruction.kind == "create_emblem":
+        return [str(instruction.payload.get("text", ""))]
+    if instruction.kind == "sequence":
+        return [
+            text
+            for step in instruction.payload.get("steps", ())
+            for text in _emblem_texts(step)
+        ]
+    return []
+
+
+# A loyalty ability whose whole effect is a delayed triggered ability created
+# on resolution (CR 603.7): "Whenever [one or more] [nontoken] creature(s)
+# attack(s) this turn, <effect>." (Basri Ket's −2, Basri, Devoted Paladin's −1.)
+_DELAYED_ATTACK_RE = re.compile(
+    r"^whenever (?:(?P<batch>one or more )|an? )?(?P<nontoken>nontoken )?creatures? attacks?"
+    r" this turn, (?P<effect>.+)$"
+)
+
+
+def _parse_delayed_attack_trigger(
+    effect_clause: str, card_name: str | None
+) -> OracleInstruction | None:
+    """The ``create_delayed_trigger`` instruction for a delayed attack-trigger
+    clause, or None when the clause is not one — including when its inner
+    effect fails to parse, so the card refuses rather than arming a trigger
+    that fires into nothing."""
+    normalized = normalize_creature_line(effect_clause)
+    match = _DELAYED_ATTACK_RE.match(normalized)
+    if match is None:
+        return None
+    inner = _line_instruction(match.group("effect"), card_name, activated=True)
+    if inner is None:
+        return None
+    return OracleInstruction(
+        "create_delayed_trigger",
+        "",
+        {
+            "event": "creatures_attack",
+            "batch": bool(match.group("batch")),
+            "nontoken": bool(match.group("nontoken")),
+            "instruction": inner[0],
+            "duration": "end_of_turn",
+        },
+    )
+
+
+def _parse_loyalty_ability(line: str, card_name: str | None) -> ParsedActivatedAbility | None:
+    """Parse one loyalty-ability line, or None when *line* is not one.
+
+    The cost half is the loyalty symbol (read by parse_activated_ability_cost);
+    the effect half goes to the same front ends every other clause does. The
+    effect clause is what is handed over — the grammar has no production for a
+    loyalty symbol, and the symbol is a cost, not part of the effect's text.
+    """
+    if not _LOYALTY_LINE_RE.match(line):
+        return None
+    cost = parse_activated_ability_cost(line)
+    if not cost.is_loyalty:
+        return None
+    effect_clause = line.split(":", 1)[1].strip()
+
+    # A "whenever … this turn" effect clause creates a delayed trigger on
+    # resolution (CR 603.7) — read here rather than by the grammar, whose
+    # trigger classification would compile it as an ability of the permanent
+    # and execute the inner effect immediately.
+    delayed = _parse_delayed_attack_trigger(effect_clause, card_name)
+    if delayed is not None:
+        return ParsedActivatedAbility(
+            source_line=line,
+            normalized_effect=normalize_creature_line(effect_clause),
+            supported=True,
+            cost=cost,
+            effect_kind="activated_delayed_trigger",
+            instruction=delayed,
+        )
+    if normalize_creature_line(effect_clause).startswith("whenever "):
+        return ParsedActivatedAbility(
+            source_line=line,
+            normalized_effect=normalize_creature_line(effect_clause),
+            supported=False,
+            cost=cost,
+            effect_kind="unsupported",
+            instruction=None,
+        )
+
+    instruction, effect_kind = _reading(
+        _line_instruction(effect_clause, card_name, activated=True)
+    )
+    # An emblem's quoted ability must itself compile (CR 114.3: the emblem has
+    # only that ability, so an unreadable one is an emblem that does nothing).
+    if instruction is not None:
+        for text in _emblem_texts(instruction):
+            emblem_name = f"{card_name} Emblem" if card_name else "Emblem"
+            compiled = compile_emblem_text(emblem_name, text)
+            if not compiled or not all(t.supported for t in compiled):
+                return ParsedActivatedAbility(
+                    source_line=line,
+                    normalized_effect=normalize_creature_line(effect_clause),
+                    supported=False,
+                    cost=cost,
+                    effect_kind="unsupported",
+                    instruction=None,
+                )
+    return ParsedActivatedAbility(
+        source_line=line,
+        normalized_effect=normalize_creature_line(effect_clause),
+        supported=instruction is not None,
+        cost=cost,
+        effect_kind=effect_kind if instruction is not None else "unsupported",
+        instruction=instruction,
+    )
+
+
+def _parse_planeswalker_program(
+    oracle_text: str, card_name: str | None
+) -> OracleProgram:
+    """Compile a planeswalker's text (CR 306).
+
+    The support gate is **all-of**: every loyalty line, static line and trigger
+    line must be readable, or the card is unsupported naming the first clause
+    that is not. A planeswalker with one dead ability would otherwise enter
+    play offering three abilities and performing two — the Mazemind Tome shape,
+    which the hollow-support contract exists to refuse.
+    """
+    normalized_text = _normalize_text(oracle_text)
+    instructions: list[OracleInstruction] = []
+    activated: list[ParsedActivatedAbility] = []
+    triggered: list[ParsedTriggeredAbility] = []
+    static_lines: list[str] = []
+
+    for raw_line in oracle_text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+
+        ability = _parse_loyalty_ability(line, card_name)
+        if ability is not None:
+            if not ability.supported:
+                return OracleProgram(
+                    False,
+                    "unsupported",
+                    f"planeswalker ability not implemented: {line!r}",
+                    normalized_text,
+                )
+            activated.append(ability)
+            if ability.instruction is not None:
+                instructions.append(ability.instruction)
+            continue
+
+        static = _planeswalker_static_line(line, card_name)
+        if static is not None:
+            instructions.append(OracleInstruction("static_line", static))
+            static_lines.append(static)
+            continue
+
+        trig = _parse_triggered_ability(line, card_name)
+        if trig is not None:
+            if not trig.supported:
+                return OracleProgram(
+                    False,
+                    "unsupported",
+                    f"planeswalker ability not implemented: {line!r}",
+                    normalized_text,
+                )
+            triggered.append(trig)
+            if trig.instruction is not None:
+                instructions.append(trig.instruction)
+            continue
+
+        if _is_supported_keyword_line(line):
+            normalized = normalize_creature_line(line)
+            instructions.append(OracleInstruction("keyword_line", normalized))
+            static_lines.append(normalized)
+            continue
+
+        return OracleProgram(
+            False,
+            "unsupported",
+            f"planeswalker text too complex: {line!r}",
+            normalized_text,
+        )
+
+    if not activated:
+        # CR 306.5d: each planeswalker has loyalty abilities. Text with none
+        # readable is text this parser did not actually understand.
+        return OracleProgram(
+            False, "unsupported", "no loyalty abilities found", normalized_text
+        )
+
+    return OracleProgram(
+        True,
+        "planeswalker_loyalty",
+        "planeswalker support",
+        normalized_text,
+        tuple(instructions),
+        tuple(activated),
+        tuple(triggered),
+        tuple(static_lines),
+    )
+
+
 # "This creature doesn't untap during your untap step." — the behavior is
 # already enforced directly in phases/untap_step.py's text scan; this only
 # needs to be recognized as a supported static line so the whole creature
@@ -1136,8 +1442,10 @@ def _noncreature_line_instructions(
     reading of any other.
 
     *whole_card* tells the list's two meanings apart. For an instant or sorcery
-    it is the program that *resolves* — the stack executes the first
-    non-``spell_pattern`` instruction — so only plain effect lines belong in it.
+    it is the program that *resolves* — the stack runs every
+    non-``spell_pattern`` instruction in it, in printed order, fused into one
+    ``sequence`` by ``_select_executable_instruction`` — so only plain effect
+    lines belong in it.
     For a permanent it is a mirror of everything the card does, scanned by kind
     by the layer bridge, the upkeep pass and the AI: the same mirror
     ``_parse_creature_program`` has always built for creatures, and which
@@ -1383,6 +1691,9 @@ def _compile_card_oracle(
         supported, effect_kind, reason, instructions, activated, triggered, static_lines = _parse_creature_program(oracle_text, name)
         return OracleProgram(supported, effect_kind, reason, normalized_text, instructions, activated, triggered, static_lines)
 
+    if primary_type == "planeswalker":
+        return _parse_planeswalker_program(oracle_text, name)
+
     if primary_type in {"artifact", "enchantment", "instant", "sorcery"}:
         if not normalized_text:
             return OracleProgram(True, "permanent_vanilla", "no oracle text", normalized_text)
@@ -1490,6 +1801,48 @@ def _compile_card_oracle(
                 False,
                 "unsupported",
                 "no handler implements this spell's effect",
+                normalized_text,
+            )
+
+        # The permanent half of the same contract, and the reason the exclusion
+        # above is narrower than it reads. A permanent legitimately works
+        # through statics, layers and the text-keyed step tables — but each of
+        # those leaves a real instruction behind (``static_line``,
+        # ``derived_static_rule``, an effect kind), never a bare
+        # ``spell_pattern``. So a permanent whose *every* card-level instruction
+        # is a whitelist marker does nothing on its own, and if every ability
+        # line it prints also failed to parse it does nothing at all: Mazemind
+        # Tome reported supported with both activated abilities carrying
+        # ``instruction=None``, so it entered play, offered two abilities and
+        # performed neither.
+        #
+        # The second conjunct is what keeps a permanent whose text is handled
+        # somewhere this cannot see. Auras are excluded outright for that
+        # reason: engine/auras.py above is their gate and it is the stricter of
+        # the two — it names the first unclaimed effect line, and it knows about
+        # the Aura death trigger (Creature Bond) that mixins/effects.py carries
+        # with no instruction of its own.
+        unreadable = [
+            ability
+            for ability in (*activated_abilities, *triggered_abilities)
+            if not ability.supported or ability.instruction is None
+        ]
+        if (
+            primary_type in ("artifact", "enchantment")
+            and not any(line.startswith("enchant ") for line in aura_lines)
+            and instructions
+            and all(instruction.kind == "spell_pattern" for instruction in instructions)
+            and not modes
+            and unreadable
+            and not any(
+                ability.supported and ability.instruction is not None
+                for ability in (*activated_abilities, *triggered_abilities)
+            )
+        ):
+            return OracleProgram(
+                False,
+                "unsupported",
+                f"no ability of this permanent is implemented: {unreadable[0].source_line}",
                 normalized_text,
             )
 

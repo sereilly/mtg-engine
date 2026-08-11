@@ -376,8 +376,17 @@ class SpellCastingMixin:
         # CR 702.16b: a spell can't be cast targeting a creature with protection
         # from the spell's quality (or with shroud). Reject the illegal target at
         # cast time, mirroring the resolution-time check, so it is never offered.
-        if isinstance(target_permanent_index, int) and 0 <= target_permanent_index < len(target.battlefield):
-            chosen = target.battlefield[target_permanent_index]
+        # Every chosen slot is checked, not just the first: a spell naming "up to
+        # two target creatures" chooses each of them separately (CR 601.2c), and
+        # one illegal choice makes the cast illegal however many others are fine.
+        for slot in (
+            target_permanent_index
+            if isinstance(target_permanent_index, list)
+            else [target_permanent_index]
+        ):
+            if not isinstance(slot, int) or not (0 <= slot < len(target.battlefield)):
+                continue
+            chosen = target.battlefield[slot]
             if chosen.is_creature and not self._can_be_targeted(
                 chosen, card, caster_index=caster_index
             ):

@@ -503,7 +503,7 @@ def test_704_5i_planeswalker_with_zero_loyalty_goes_to_graveyard():
         produced_mana=(),
         raw={"name": "Zero Loyalty Walker", "type_line": "Planeswalker — Test", "loyalty": "3"},
     )
-    walker_perm = Permanent(card=walker_card, metadata={"loyalty": 0})
+    walker_perm = Permanent(card=walker_card, metadata={"loyalty_counters": 0})
     p1 = PlayerState(name="P1", battlefield=[walker_perm])
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])

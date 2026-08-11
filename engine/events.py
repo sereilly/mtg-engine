@@ -74,6 +74,29 @@ def event_filter(*kinds: str) -> Callable[[EventFilter], EventFilter]:
     return decorator
 
 
+def emblem_trigger_events(game: Game, kind: str, players=None) -> list[dict]:
+    """Every emblem-borne trigger matching *kind*, as enqueueable event dicts.
+
+    Emblems function from the command zone (CR 114.4), so no battlefield scan
+    can find them — every site that collects a condition's triggers over
+    permanents asks this beside it. The emblem's detached Permanent stands in
+    as the source, so the stack item and the resolution context read it like
+    any other trigger's.
+    """
+    from .oracle import compile_emblem_text
+
+    events: list[dict] = []
+    for seat, player in enumerate(game.players):
+        if players is not None and not any(p is player for p in players):
+            continue
+        for emblem in getattr(player, "emblems", ()):
+            for trig in compile_emblem_text(emblem["name"], emblem["oracle_text"]):
+                if not trig.supported or trig.condition.kind != kind:
+                    continue
+                events.append(make_trigger_event(seat, emblem.get("_permanent"), trig))
+    return events
+
+
 def collect(game: Game, event: Event) -> list[dict]:
     """Every trigger that fires for *event*, as enqueueable event dicts.
 
@@ -104,6 +127,15 @@ def collect(game: Game, event: Event) -> list[dict]:
                 trigger_context=dict(event.payload) or None,
             )
         )
+    # An emblem's ability fires from the command zone (CR 114.4) — collected
+    # beside the permanents', through the same event, so APNAP ordering and
+    # the enqueue path treat both alike.
+    events.extend(
+        emblem_trigger_events(
+            game, event.kind,
+            list(event.players) if event.players is not None else None,
+        )
+    )
     return events
 
 

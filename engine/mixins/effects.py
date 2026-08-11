@@ -380,7 +380,16 @@ class EffectsMixin:
         if outcome.suspended:
             return 0
         if outcome.result > 0:
-            permanent.damage_marked += outcome.result
+            # CR 120.3: the result depends on what the recipient is. A
+            # planeswalker loses that many loyalty counters (120.3c); a
+            # creature has the damage marked on it (120.3e); a permanent that
+            # is both gets both results.
+            is_planeswalker = permanent.has_type("planeswalker")
+            if is_planeswalker:
+                loyalty = permanent.metadata.get("loyalty_counters", 0)
+                permanent.metadata["loyalty_counters"] = max(0, loyalty - outcome.result)
+            if permanent.is_creature or not is_planeswalker:
+                permanent.damage_marked += outcome.result
         # CR 702.15b. Combat is excluded because the combat damage step tallies
         # its own lifelink across the step and gains once in its tail — this is
         # the same call, and running it here too would gain twice for every

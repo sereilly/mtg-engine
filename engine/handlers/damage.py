@@ -174,10 +174,10 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         # Noncreature artifacts (and other noncreature non-planeswalker permanents) are not
         # valid "any target" targets — the spell fizzles against them.
         if "any target" in card.oracle_text.lower():
-            type_line = target_perm.card.type_line.lower()
-            # is_creature (not the printed type line) so animated lands — Kormus
-            # Bell swamps, Living Lands forests — count as creatures here.
-            if not target_perm.is_creature and "planeswalker" not in type_line:
+            # is_creature / has_type (not the printed type line) so animated
+            # lands — Kormus Bell swamps, Living Lands forests — count as
+            # creatures here, and a layer-4 type change is honored.
+            if not target_perm.is_creature and not target_perm.has_type("planeswalker"):
                 game.log.append(
                     f"{card.name}: '{target_perm.card.name}' is not a valid 'any target' target (115.4)"
                 )
@@ -441,4 +441,35 @@ def deal_damage_and_opponent_choice(game: Game, instruction: OracleInstruction, 
         game.log.append(
             f"{game.players[chooser_index].name} chooses any target for {context.card.name}'s {amount} damage"
         )
+    return True, "resolved"
+
+
+@effect_handler("target_bites_target")
+def target_bites_target(game, instruction, context):
+    """"Target creature you control deals damage equal to its power to another
+    target creature." (Garruk, Savage Herald's -2.) Two chosen targets resolved
+    positionally: the biter first, the bitten second. Both are resolved by id
+    without an owner constraint - the biter must be the caster's, the bitten
+    anyone's, and the two must differ (the printed "another")."""
+    ids = context.target_permanent_id
+    if not isinstance(ids, list):
+        ids = [ids, None]
+    resolved = [game.permanent_by_id(pid) if isinstance(pid, int) else None for pid in ids]
+    biter = resolved[0] if resolved else None
+    bitten = resolved[1] if len(resolved) > 1 else None
+    caster_index = game.players.index(context.caster)
+    if biter is None or not biter.is_creature or not game.controls(caster_index, biter):
+        game.log.append(f"{context.card.name}: no creature you control to deal the damage")
+        return True, "resolved"
+    if bitten is None or not bitten.is_creature or bitten is biter:
+        game.log.append(f"{context.card.name}: no other target creature to damage")
+        return True, "resolved"
+    amount = biter.effective_power
+    apply_damage_to_creature(
+        game, bitten, amount, biter,
+        log_message=lambda dealt: (
+            f"{biter.card.name} deals {dealt} damage to {bitten.card.name}"
+        ),
+        asks=True,
+    )
     return True, "resolved"

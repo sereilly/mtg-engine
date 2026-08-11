@@ -47,6 +47,7 @@ from .effects import (
     _parse_put_counter,
     _parse_remove_counter,
     _parse_return,
+    _parse_reveal_top,
     _parse_search_library,
     _parse_tap_untap,
     _parse_wins,
@@ -141,6 +142,8 @@ def _parse_subject_verb(stream: TokenStream) -> ast.Statement:
     # supported on the strength of its other line.
     if stream.at_word("scry"):
         return _parse_scry(stream)
+    if stream.at_word("reveal"):
+        return _parse_reveal_top(stream)
     if stream.at_word("take"):
         return _parse_extra_turn(stream)
     if stream.at_word("draw"):
@@ -209,6 +212,27 @@ def _parse_subject_verb(stream: TokenStream) -> ast.Statement:
             return _parse_mill(stream, source_spec)
         if token.text == "becomes":
             return _parse_become_color(stream, source_spec)
+        if token.text in ("phases", "phase"):
+            # "Target creature you don't control phases out." (Teferi, Master
+            # of Time) / "Each creature target opponent controls phases out.
+            # Until the end of your next turn, they can't phase in." (Teferi,
+            # Timeless Voyager). The rider is read here so its words cannot be
+            # shed — a phase-out that could be answered by phasing straight
+            # back in is a strictly smaller effect.
+            stream.advance()
+            stream.expect_word("out")
+            blocked = False
+            mark2 = stream.mark()
+            if stream.accept_punct("."):
+                if (
+                    stream.accept_phrase("until", "the", "end", "of", "your", "next", "turn")
+                    and (stream.accept_punct(",") or True)
+                    and stream.accept_phrase("they", "can't", "phase", "in")
+                ):
+                    blocked = True
+                else:
+                    stream.reset(mark2)
+            return ast.PhaseOut(source_spec, cant_phase_in_until_your_next_turn=blocked)
         if token.text in ("can't", "cannot"):
             return _parse_cant_attack_or_block(stream, source_spec)
 
@@ -255,23 +279,23 @@ def parse_statement(stream: TokenStream) -> ast.Statement:
 
     statement = _parse_subject_verb(stream)
 
-    # "<statement>, then <statement>" / "<statement> and <statement>"
+    # "<statement>, then <statement>" / "<statement> and <statement>" /
+    # "<statement>, <statement>, then <statement>" — a comma list is joined
+    # only when what follows the comma parses as a statement of its own
+    # ("You gain 7 life, draw seven cards, then put …", Ugin −10), so a
+    # trailing modifier clause keeps its comma and fails the line loudly.
     while True:
         mark = stream.mark()
         joined = False
         if stream.accept_punct(","):
             if stream.accept_word("then"):
                 joined = True
-            else:
-                stream.reset(mark)
-                break
         elif stream.accept_word("and"):
             joined = True
         elif stream.accept_word("then"):
             joined = True
 
-        if not joined:
-            stream.reset(mark)
+        if not joined and stream.mark() == mark:
             break
         try:
             follow = parse_statement(stream)
@@ -291,6 +315,14 @@ def _parse_condition(stream: TokenStream) -> ast.Condition:
     player = parse_player_ref(stream)
     if player is not None:
         if stream.accept_word("control", "controls"):
+            # "if an opponent controls more creatures than you" (Garruk,
+            # Unleashed). The comparison is against the asker's own count, so
+            # it is an op of its own rather than a number to compare with.
+            if stream.accept_word("more"):
+                filt = parse_object_filter(stream)
+                if not stream.accept_phrase("than", "you"):
+                    raise stream.error("expected 'than you' after the count")
+                return ast.Controls(player, filt, ast.Comparison("more_than_you", ast.Fixed(0)))
             negated = stream.accept_word("no")
             # "you control **a** Swamp". The article carries no meaning of its
             # own, but the noun parser refuses it as an unknown adjective, so

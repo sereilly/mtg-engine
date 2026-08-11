@@ -19,6 +19,7 @@ from ._common import (
     _is_source,
     _is_target,
     _names_several_targets,
+    _restrictions_beyond,
     _targets_only,
 )
 
@@ -198,8 +199,11 @@ def _lower_return_to_zone(node: ast.ReturnToZone) -> tuple[OracleInstruction, ..
     exact bug the Animate Dead targeting test pins.
     """
     subject = node.subject
-    if not isinstance(subject, ast.TargetSpec) or subject.quantifier != "target":
+    if not _is_target(subject):
+        # "target" and "up to one target" (Liliana, Death Mage's +1) both
+        # resolve one chosen object; anything wider has no handler.
         raise LoweringError("no handler for returning a non-targeted object", node=node)
+    assert isinstance(subject, ast.TargetSpec)
     filt = subject.filter
     if _reads_no_return_restriction(filt):
         raise LoweringError("no return handler honours this restriction", node=node)
@@ -432,13 +436,42 @@ def _lower_exile(node: ast.Exile) -> tuple[OracleInstruction, ...]:
         )
 
     subject = node.subject
+    if isinstance(subject, ast.TargetSpec) and subject.quantifier in ("each", "all"):
+        # "Exile each permanent with mana value X or less that's one or more
+        # colors." (Ugin, the Spirit Dragon's −X.) The payload is hand-rolled:
+        # ``to_payload`` cannot carry a *variable* mana-value bound, and
+        # dropping the bound would widen the sweep to every mana value.
+        filt = subject.filter
+        if filt.zone != "battlefield" or filt.is_card:
+            raise LoweringError("the exile sweep reads battlefield permanents", node=node)
+        payload = {}
+        if filt.card_types:
+            payload["type_filter"] = (
+                filt.card_types[0] if len(filt.card_types) == 1 else list(filt.card_types)
+            )
+        if filt.colored:
+            payload["colored_only"] = True
+        if filt.mana_value is not None:
+            bound = filt.mana_value.value
+            payload["mana_value"] = {
+                "op": filt.mana_value.op,
+                "value": bound.value if isinstance(bound, ast.Fixed) else bound.name,
+            }
+        leftovers = _restrictions_beyond(
+            filt, frozenset({"card_types", "colored", "mana_value", "zone"})
+        )
+        if leftovers:
+            raise LoweringError(
+                f"the exile sweep does not honour {leftovers[0]!r}", node=node
+            )
+        return (OracleInstruction("exile_all_matching", "", payload),)
     if (
         not isinstance(subject, ast.TargetSpec)
         or subject.quantifier != "target"
         or subject.count != 1
     ):
-        # A sweep ("exile all creatures") and a bare "exile it" are separate
-        # effects with no handler; only the one chosen object is implemented.
+        # A sweep with no handler and a bare "exile it" are separate effects;
+        # only the shapes above are implemented.
         raise LoweringError(
             "only a single chosen permanent or card is exiled", node=node
         )
@@ -460,6 +493,109 @@ def _lower_exile(node: ast.Exile) -> tuple[OracleInstruction, ...]:
     exile_payload = _filter_payload(filt)
     _describe_targets(exile_payload, subject)
     return (OracleInstruction("exile_target_permanent", "", exile_payload),)
+
+
+def _lower_phase_out(node: ast.PhaseOut) -> tuple[OracleInstruction, ...]:
+    """CR 702.26's two printed shapes: one chosen creature (Teferi, Master of
+    Time's −3) and a swept set belonging to a targeted opponent with the
+    can't-phase-in rider (Teferi, Timeless Voyager's −8)."""
+    subject = node.subject
+    if _is_target(subject):
+        assert isinstance(subject, ast.TargetSpec)
+        if node.cant_phase_in_until_your_next_turn:
+            raise LoweringError(
+                "the phase-in block rider only rides the opponent sweep", node=node
+            )
+        payload: dict[str, object] = {}
+        _describe_targets(payload, subject)
+        return (OracleInstruction("phase_out_target", "", payload),)
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "each"
+        and subject.filter.card_types == ("creature",)
+        and subject.filter.controller == "target_opponent"
+    ):
+        return (
+            OracleInstruction(
+                "phase_out_opponent_creatures",
+                "",
+                {
+                    "cant_phase_in_until_your_next_turn": node.cant_phase_in_until_your_next_turn,
+                    "targets": {"quantifier": "target", "kind": "player", "opponents_only": True},
+                },
+            ),
+        )
+    raise LoweringError("no handler phases out this subject", node=node)
+
+
+def _lower_put_on_library_top(node: ast.PutOnLibraryTop) -> tuple[OracleInstruction, ...]:
+    """"Put target creature on top of its owner's library." (Teferi, Timeless
+    Voyager's −3.) One chosen battlefield creature; the owner is resolved by
+    the handler (CR 400.3), which is why no player rides the payload."""
+    if not _is_target(node.target):
+        raise LoweringError("the tuck handler resolves one chosen creature", node=node)
+    assert isinstance(node.target, ast.TargetSpec)
+    filt = node.target.filter
+    if filt.card_types != ("creature",) or filt.zone != "battlefield" or filt.is_card:
+        raise LoweringError("the tuck handler reads battlefield creatures", node=node)
+    payload: dict[str, object] = {}
+    _describe_targets(payload, node.target)
+    return (OracleInstruction("put_target_on_library_top", "", payload),)
+
+
+def _lower_put_onto_battlefield(node: ast.PutOntoBattlefield) -> tuple[OracleInstruction, ...]:
+    """The two "put … onto the battlefield" shapes the pool prints:
+
+    * "Put up to seven permanent cards from your hand onto the battlefield."
+      (Ugin, the Spirit Dragon's −10) — an up-to-N sweep of the caster's own
+      hand, chosen by its controller.
+    * "Put target creature card from a graveyard onto the battlefield under
+      your control." (Liliana, Waker of the Dead's emblem) — a one-card
+      reanimation from any graveyard, with any granted keywords riding along
+      ("It gains haste.").
+    """
+    target = node.target
+    if not isinstance(target, ast.TargetSpec):
+        raise LoweringError("no handler puts that onto the battlefield", node=node)
+    filt = target.filter
+    if filt.zone == "hand":
+        if filt.zone_owner is None or filt.zone_owner.kind != "you":
+            raise LoweringError("only your own hand has a handler here", node=node)
+        if target.quantifier != "up_to" or not filt.is_card:
+            raise LoweringError("the from-hand handler reads 'up to N … cards'", node=node)
+        return (
+            OracleInstruction(
+                "put_cards_from_hand_onto_battlefield",
+                "",
+                {
+                    "count": target.count,
+                    "card_types": list(filt.card_types),
+                    # An empty type list with is_card means "permanent cards" —
+                    # the handler holds the CR 110.4 list of permanent types.
+                    "permanents_only": not filt.card_types,
+                },
+            ),
+        )
+    if filt.zone == "graveyard":
+        if not _is_target(target) or not filt.is_card:
+            raise LoweringError("the reanimation handler reads one chosen card", node=node)
+        if filt.card_types != ("creature",):
+            raise LoweringError("the reanimation handler only moves creature cards", node=node)
+        return (
+            OracleInstruction(
+                "reanimate_creature",
+                "",
+                {
+                    # "from a graveyard" (no owner) widens the search to every
+                    # player's graveyard; "under your control" is CR 400.3's
+                    # exception spelled out, honored by the handler.
+                    "any_graveyard": filt.zone_owner is None,
+                    "under_your_control": node.under_your_control,
+                    "gains": list(node.gains),
+                },
+            ),
+        )
+    raise LoweringError("no handler for this battlefield entry", node=node)
 
 
 def _fused_exile_then_controller_life(

@@ -162,7 +162,7 @@ def deal_damage(game, event: dict, *, restart: Callable[[], Any] | None = None) 
     Re-running a single damage event is only enough when the work behind it is
     recorded, because damage is rarely the only thing in flight: a divided
     Fireball deals to each target in turn, a ``sequence`` has instructions
-    queued behind the one that stopped, a spell still has CR 608.2m's graveyard
+    queued behind the one that stopped, a spell still has CR 608.2n's graveyard
     move to make, and the combat damage step has the rest of its blockers, its
     attackers and its own completion flags. ``engine/resumption.py`` is what
     records that, and the callers that pass ``asks=True`` (or their own

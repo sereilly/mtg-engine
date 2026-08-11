@@ -59,6 +59,24 @@ class CleanupStepMixin:
                     self.log.append(f"{active_player.name} discarded {excess} card(s) in cleanup")
 
         self.combat_damage_prevented_until_eot = False
+        # CR 603.7: a delayed trigger scoped to "this turn" that has not fired
+        # (or has fired all it will) expires with the turn.
+        self.delayed_triggers = [
+            entry for entry in self.delayed_triggers
+            if entry.get("duration") != "end_of_turn"
+        ]
+        # "Until the end of your next turn, they can't phase in." (Teferi,
+        # Timeless Voyager.) The block counts the *caster's* turn ends; this
+        # cleanup ends the active player's turn, so their countdowns tick.
+        for player in self.players:
+            for perm in player.phased_out:
+                block = perm.metadata.get("phase_in_blocked")
+                if (
+                    isinstance(block, dict)
+                    and block.get("seat") == self.active_player_index
+                    and int(block.get("turn_ends_remaining", 0)) > 0
+                ):
+                    block["turn_ends_remaining"] = int(block["turn_ends_remaining"]) - 1
         for player in self.players:
             # CR 615.3: every prevention shield lasts until it is used up or its
             # duration expires, and "until end of turn" expires here. One sweep

@@ -52,7 +52,10 @@ def parse_amount(stream: TokenStream, *, back_reference: str = "damage_dealt") -
         if word == "that":
             mark = stream.mark()
             stream.advance()
-            if stream.accept_word("much"):
+            # "that much" refers back to a recorded quantity; "that many"
+            # (Basri Ket's "create that many … tokens") to a counted set. One
+            # node for both — the back-reference names what is counted.
+            if stream.accept_word("much", "many"):
                 return ast.ThatMuch(back_reference)
             stream.reset(mark)
         if word == "any":

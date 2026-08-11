@@ -57,6 +57,7 @@ from .lowering import (
     _lower_change_text,
     _lower_combat_restriction,
     _lower_counter_spell,
+    _lower_create_emblem,
     _lower_create_token,
     _lower_damage,
     _lower_damage_conjunction,
@@ -79,7 +80,11 @@ from .lowering import (
     _lower_prevent_damage,
     _lower_pump,
     _lower_put_counter,
+    _lower_phase_out,
+    _lower_put_on_library_top,
+    _lower_put_onto_battlefield,
     _lower_regenerate,
+    _lower_reveal_top,
     _lower_remove_counter,
     _lower_return_to_zone,
     _lower_sacrifice,
@@ -158,6 +163,9 @@ def lower_statement(
     if isinstance(statement, ast.CreateToken):
         return _lower_create_token(statement)
 
+    if isinstance(statement, ast.CreateEmblem):
+        return _lower_create_emblem(statement)
+
     if isinstance(statement, ast.Conjunction):
         if len(statement.effects) == 2 and all(
             isinstance(effect, ast.DealDamage) for effect in statement.effects
@@ -205,6 +213,18 @@ def lower_statement(
 
     if isinstance(statement, ast.ReturnToZone):
         return _lower_return_to_zone(statement)
+
+    if isinstance(statement, ast.PhaseOut):
+        return _lower_phase_out(statement)
+
+    if isinstance(statement, ast.PutOnLibraryTop):
+        return _lower_put_on_library_top(statement)
+
+    if isinstance(statement, ast.PutOntoBattlefield):
+        return _lower_put_onto_battlefield(statement)
+
+    if isinstance(statement, ast.RevealTopToHandOrBottom):
+        return _lower_reveal_top(statement)
 
     if isinstance(statement, ast.Sacrifice):
         return _lower_sacrifice(statement)
@@ -265,6 +285,11 @@ def lower_statement(
 
     if isinstance(statement, ast.May):
         return _lower_may(statement, produced)
+
+    if isinstance(statement, ast.RawEffect) and statement.text == "grant_team_assign_unblocked_until_eot":
+        # Garruk, Savage Herald's −7 — the one quoted team grant with a
+        # handler. Any other RawEffect keeps refusing below.
+        return (OracleInstruction("grant_team_assign_unblocked_until_eot", "", {}),)
 
     raise LoweringError(f"no lowering for {type(statement).__name__}", node=statement)
 

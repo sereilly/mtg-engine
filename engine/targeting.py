@@ -156,6 +156,12 @@ def _narrowing_flags(source: dict) -> dict:
     color = source.get("color_filter")
     if color:
         flags["color_filter"] = color
+    if source.get("controller") == "you":
+        # "target creature you control". The enumerator applies this one itself
+        # (it is a seat test, not a permanent test), and it has to: a picker
+        # that offered an opponent's creature would let a player choose a target
+        # the effect then declines to affect, with nothing on screen saying why.
+        flags["own_only"] = True
     return flags
 
 
@@ -498,6 +504,14 @@ def _from_targets_payload(targets) -> dict | None:
         return None
     filt = targets.get("filter") or {}
     flags = _narrowing_flags(filt)
+    # "Up to N target …", N > 1. The picker has to know the maximum, or it would
+    # collect one target for a spell that names several — which is what the
+    # instruction's own lowering refuses to emit until a handler reads a list.
+    # Absent for every one-target description, so nothing downstream has to
+    # special-case the common shape.
+    count = targets.get("count")
+    if isinstance(count, int) and count > 1:
+        flags = {**flags, "max_targets": count}
     type_filter = filt.get("type_filter")
     if not type_filter:
         # A targeted object with no type restriction is any permanent.

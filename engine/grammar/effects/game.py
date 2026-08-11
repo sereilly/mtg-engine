@@ -135,6 +135,13 @@ def _parse_create_token(stream: TokenStream) -> ast.Statement:
     if stream.accept_word("with"):
         keywords = _parse_token_keywords(stream)
 
+    # "…that are tapped and attacking" (Basri Ket): the tokens' entry state.
+    # Both words are recorded — a token entering merely tapped, or merely
+    # attacking, would be a different effect wearing the same head.
+    tapped = attacking = False
+    if stream.accept_phrase("that", "are", "tapped", "and", "attacking"):
+        tapped = attacking = True
+
     # CR 111.4 — the creating ability may set the token's name. When it does
     # not, the name follows from the subtypes, and lowering (not the parser)
     # decides whether the engine's convention for that is expressible.
@@ -156,6 +163,8 @@ def _parse_create_token(stream: TokenStream) -> ast.Statement:
         types=tuple(card_types),
         subtypes=tuple(subtypes),
         keywords=keywords,
+        tapped=tapped,
+        attacking=attacking,
     )
 
 
@@ -178,16 +187,23 @@ def _parse_enchant(stream: TokenStream) -> ast.Statement:
 def _parse_extra_turn(stream: TokenStream) -> ast.Statement:
     """``Take an extra turn after this one.`` (Time Walk, Time Vault.)
 
-    Singular by construction: the article is *expected* rather than a general
-    quantity being parsed, so "take two extra turns after this one" fails to
-    parse instead of quietly granting one turn. "after this one" is required for
-    the same reason — it is what says the turn is taken immediately, and a card
-    that placed it elsewhere would be a different effect.
+    The count is the article or a written-out number ("Take two extra turns
+    after this one.", Teferi, Master of Time) — never defaulted, so a quantity
+    the amount parser cannot read fails the line instead of quietly granting
+    one turn. "after this one" is required for the same reason — it is what
+    says the turns are taken immediately, and a card that placed it elsewhere
+    would be a different effect.
     """
     stream.expect_word("take")
-    stream.expect_word("an")
+    if stream.accept_word("an"):
+        count = 1
+    else:
+        amount = parse_amount(stream)
+        if not isinstance(amount, ast.Fixed) or amount.value < 1:
+            raise stream.error("expected a fixed number of extra turns")
+        count = amount.value
     stream.expect_word("extra")
-    stream.expect_word("turn")
+    stream.expect_word("turn", "turns")
     if not stream.accept_phrase("after", "this", "one"):
         raise stream.error("expected 'after this one'")
-    return ast.ExtraTurn(ast.PlayerRef("you"))
+    return ast.ExtraTurn(ast.PlayerRef("you"), count)

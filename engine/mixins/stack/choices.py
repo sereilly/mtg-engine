@@ -51,6 +51,13 @@ class PendingChoicesMixin:
             spec.default(self, choice)
             return None
         self.pending_choices.append(choice)
+        if spec.suspends:
+            # Nothing is waiting on a default taken inline above — it already
+            # happened. A queued choice is different: the steps behind it in this
+            # resolution have not run, and running them now would let them see a
+            # board the answer has not shaped yet (Opt drawing the card its own
+            # scry has not arranged). Stop the loop; answering resumes it.
+            self.effect_suspended = True
         return choice
 
     def pending_choices_of(self, kind: str, player_index: int | None = None) -> list[PendingChoice]:
@@ -86,11 +93,28 @@ class PendingChoicesMixin:
         choice = self.pending_choice_of(kind, player_index)
         if choice is None:
             return False
-        return bool(spec_for(kind).resolve(self, choice, response))
+        spec = spec_for(kind)
+        if not spec.suspends:
+            return bool(spec.resolve(self, choice, response))
+        # The suspension ends *before* the answer is applied, never after:
+        # applying it can arm the next prompt, and clearing afterwards would
+        # resume straight through that one.
+        self.effect_suspended = False
+        if not spec.resolve(self, choice, response):
+            self.effect_suspended = True  # rejected — still owed, still waiting
+            return False
+        resume_after_answer(self)
+        return True
 
     def take_choice_default(self, choice: PendingChoice) -> None:
         """Apply the deterministic answer a non-interactive seat gives."""
-        spec_for(choice.kind).default(self, choice)
+        spec = spec_for(choice.kind)
+        if not spec.suspends:
+            spec.default(self, choice)
+            return
+        self.effect_suspended = False
+        spec.default(self, choice)
+        resume_after_answer(self)
 
     def auto_resolve_pending_choices(
         self, only_player_index: int | None = None, kinds=None
@@ -281,7 +305,19 @@ class PendingChoicesMixin:
         if not search_matches(card, choice.data):
             return False
         source.pop(library_index)
-        caster.hand.append(card)
+        # "…put it onto the battlefield, then shuffle" (Garruk, Unleashed's
+        # emblem) — the found card enters play instead of the hand. The
+        # destination was fixed when the search was armed; the wire cannot
+        # promote a tutor-to-hand into a tutor-to-battlefield.
+        destination = choice.data.get("destination", "hand")
+        if destination == "battlefield":
+            from ...models import Permanent as _Permanent
+
+            self._put_permanent_onto_battlefield(
+                choice.player_index, _Permanent(card=card), None
+            )
+        else:
+            caster.hand.append(card)
         # Only a library search shuffles (CR 701.19d, and the printed "If you
         # search your library this way, shuffle"): a graveyard is an open zone,
         # and randomising a library the player did not search would destroy
@@ -289,7 +325,10 @@ class PendingChoicesMixin:
         if zone == "library":
             random.shuffle(caster.library)
         self.discard_pending_choice(choice)
-        self.log.append(f"{caster.name} searched {zone} and put {card.name} into hand")
+        self.log.append(
+            f"{caster.name} searched {zone} and put {card.name} "
+            + ("onto the battlefield" if destination == "battlefield" else "into hand")
+        )
         return True
 
     def _default_search_library(self, choice: PendingChoice) -> None:
@@ -1155,13 +1194,10 @@ class PendingChoicesMixin:
         )
         # Nothing was applied when the prompt was armed, so the event is re-run
         # rather than resumed — and it reaches the same round, finds the
-        # recorded answer, and carries on.
-        self.effect_suspended = False
+        # recorded answer, and carries on. The suspension was lifted by
+        # ``resolve_pending_choice`` before this ran (the kind is ``suspends``),
+        # and the loops waiting on the event are unwound by it afterwards.
         choice.data["_restart"]()
-        # Then every loop that was waiting on this event, innermost first. The
-        # re-run above only redid the one step; the rest of the work it was part
-        # of is on the resume stack (engine/resumption.py).
-        resume_after_answer(self)
         return True
 
     def _default_effect_order(self, choice: PendingChoice) -> None:
@@ -1194,6 +1230,10 @@ register_choice(
     blocks_every_seat=True,
     spectator_visible=True,
     hidden_for_ai=False,
+    # The one kind that has always suspended: CR 616.1e stops an event dead, and
+    # the loop that event was a step of has to stop with it. The flag it used to
+    # set by hand in engine/replacements.py is this field.
+    suspends=True,
 )
 
 register_choice(
@@ -1213,6 +1253,9 @@ register_choice(
     # A search is armed for AI seats too and drained by the auto-resolver; the
     # prompt is rendered for whoever still owes it.
     hidden_for_ai=False,
+    # A search takes a card out of the library and shuffles what is left, so any
+    # later step of the same resolution reads a library the answer decided.
+    suspends=True,
 )
 
 register_choice(
@@ -1224,6 +1267,9 @@ register_choice(
     blocked_detail="complete library reorder before other actions",
     blocks_every_seat=True,
     spectator_visible=True,
+    # Same reason as scry: the answer *is* what the next card off the library
+    # will be.
+    suspends=True,
 )
 
 register_choice(
@@ -1239,6 +1285,10 @@ register_choice(
     # deterministic per seed.
     blocks_every_seat=True,
     spectator_visible=True,
+    # "Scry 1. Draw a card." is the shape this field exists for: the draw is a
+    # later step of the same resolution and must see the library the scry
+    # arranged, not the one it was handed.
+    suspends=True,
 )
 
 register_choice(
