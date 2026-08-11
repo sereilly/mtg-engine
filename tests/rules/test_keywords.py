@@ -504,6 +504,53 @@ def test_702_15b_lifelink_gains_life_when_blocking():
     assert p2.life == 22
 
 
+@pytest.mark.cr("702.15b")
+def test_702_15b_lifelink_gains_life_on_noncombat_damage_to_a_player():
+    """Lifelink is not a combat ability.
+
+    CR 702.15b says "damage dealt by a source with lifelink", not "combat
+    damage" — a lifelinking creature's ping ability, or any other damage it
+    deals, gains just as much. Every other lifelink test in this file drives
+    combat, which is exactly how the engine came to tally lifelink in the combat
+    damage step alone: for as long as the keyword was unimplemented, nothing
+    could print a lifelink source that dealt damage any other way, and a
+    combat-only reading looked complete.
+    """
+    ll = Permanent(card=_mk_creature("Vampire", 3, 3, keywords=("Lifelink",)))
+    game, p1, p2 = _game([ll], [], life=20)
+
+    game._deal_damage_to_player(p2, 3, ll)
+
+    assert p2.life == 17
+    assert p1.life == 23, "lifelink gains on non-combat damage too (CR 702.15b)"
+
+
+@pytest.mark.cr("702.15b")
+def test_702_15b_lifelink_gains_life_on_noncombat_damage_to_a_creature():
+    """The other recipient. Damage marked on a creature is damage dealt."""
+    ll = Permanent(card=_mk_creature("Vampire", 3, 3, keywords=("Lifelink",)))
+    victim = Permanent(card=_mk_creature("Bear", 2, 4))
+    game, p1, _ = _game([ll], [victim], life=20)
+
+    game._mark_damage_on_permanent(victim, 2, source=ll, combat=False)
+
+    assert victim.damage_marked == 2
+    assert p1.life == 22
+
+
+@pytest.mark.cr("702.15b")
+def test_702_15b_a_source_without_lifelink_gains_nothing():
+    """The control. Without it the tests above pass on a bug that gains life
+    for every damage event regardless of the keyword."""
+    plain = Permanent(card=_mk_creature("Thug", 3, 3))
+    game, p1, p2 = _game([plain], [], life=20)
+
+    game._deal_damage_to_player(p2, 3, plain)
+
+    assert p2.life == 17
+    assert p1.life == 20
+
+
 @pytest.mark.cr("702.15b", "702.19b")
 def test_702_15b_lifelink_on_trample_counts_all_damage_dealt():
     ll = Permanent(

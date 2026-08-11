@@ -4890,6 +4890,110 @@ and both fail. `ingest_set.py --all --check` now reports six sets.
 
 ---
 
+## Three things the next set would have hit on day one
+
+Asked what was worth doing before ingesting another set. The answer came out of
+running the tools rather than reading the code, and all three are the same
+shape: something that was correct while the pool was five old sets and stopped
+being correct when a modern one arrived.
+
+### The report could not name the set it was for
+
+`support_report.py --set M21` exited *"no set 'M21' in the manifest; it ships
+LEA, LEB, 2ED, ARN, 3ED"*, and `--all` skipped it. So the tool that names a
+set's unsupported cards **and the reason for each** — which is the tool you
+implement a set *with* — could not see the only set anyone would be
+implementing. The way through was `--cards cards/M21_cards.json`, the
+spelled-out filename three guards in this repo exist to forbid.
+
+`manifest_set` grew `include_measured`, mirroring `manifest_set_paths`, and the
+reporting scripts pass True. The distinction being drawn is not shipped-vs-not,
+it is **reading a card file vs offering its cards to a player**: `load_catalog`
+is the seam that decides the latter, and it does not come through here.
+
+Two things kept narrow deliberately. `--all` still means the shipped pool,
+because an aggregate that folds in an unimplemented set is how "the pool is 100%
+supported" stops meaning anything — the same reasoning that keeps measured sets
+out of the coverage floors and ceilings. And a measured set carries *"— measured,
+not shipped"* in its label, because every one of these scripts prints it and
+"106/285 supported" read as a shipped-pool figure is a regression report rather
+than a to-do list.
+
+**The label caught its own bug.** `--all`'s label was built from the same
+`_known_codes()` helper, so the moment measured codes joined it the whole-pool
+run started announcing `(LEA, LEB, 2ED, ARN, 3ED; measured (not shipped): M21)`
+over a run that read five files. That is the original bug exactly — output
+describing a pool other than the one covered — with the error moved from which
+set to which list. Split into `_shipped_codes()`, and the guard now asserts the
+label as well as the paths.
+
+### Two keyword registries, held equal by hand
+
+`oracle.SUPPORTED_KEYWORDS` (17 strings, Title Case) gated whether a printed
+keyword *line* could be admitted. `vocabulary.IMPLEMENTED_KEYWORDS` (the same 17,
+lowercase) gated whether the grammar would *lower* a keyword. Different halves
+of one question, in different modules, compared by nothing.
+
+**Both ways of getting it wrong are silent**, which is what makes this worth a
+guard rather than a comment. Demonstrated before fixing: adding `lifelink` to
+the grammar's list alone did *nothing* — the card stayed unsupported naming the
+keyword line as too complex, M21 support stayed at 104, and 4,458 tests passed
+over an edit with no effect. The other direction is worse: a keyword admitted
+here whose behaviour is not built is a card that resolves as something other
+than what it says.
+
+`oracle.py` now reads the registry. The guard is behavioural rather than a
+comparison of the two lists — comparing them is something a future second copy
+would also pass — so it asserts that every implemented keyword is admitted *and
+compiles a playable card*, and that a real unimplemented keyword is refused.
+`_NOT_IMPLEMENTED` names `menace`, `hexproof`, `prowess`, `flash`, each checked
+against the Scryfall catalog so a typo can't make the refusal vacuous, and it
+fails loudly with "remove it from here" the day one is implemented. Verified by
+reintroducing a local copy missing one entry: both behavioural tests fail on
+`banding`.
+
+### Lifelink was combat-only, which is why it looked cheap
+
+It reads as a free win — the word is in the vocabulary, and the mechanic
+"exists". The literal `"lifelink"` appeared in exactly three places, **all in
+`combat_damage_step.py`**. CR 702.15b is about damage dealt by a source with
+lifelink, not combat damage, so adding the keyword and stopping there would have
+gained life when a lifelinker attacked and silently gained nothing when it
+pinged with an activated ability.
+
+Every existing lifelink test drove combat, which is how the reading got there
+and why it looked complete: while the keyword was unimplemented, nothing could
+print a lifelink source that dealt damage any other way.
+
+The rule now lives once, in `damage_events.lifelink_life_gained`, with three
+callers. It reads `dealt` and never `result` — Ali from Cairo caps the life lost
+without capping the damage dealt, which is the distinction `DamageOutcome`
+exists to carry.
+
+**The timing legitimately differs and is not abstracted away.** Combat tallies
+across the step and gains once in its tail, because combat damage is dealt
+simultaneously (CR 510.2) — a creature and its blocker trading lethal damage
+produce one life-gain event, not two interleaved with deaths. Everything else
+gains as the damage is dealt. So the creature seam applies it only when
+`combat` is false; without that guard every blocked creature gains twice, and
+the two existing combat tests fail exactly that way when it is removed.
+
+Three new CR-cited tests cover the gap (damage to a player, damage to a
+creature, and a no-keyword control so the pair can't pass on a bug that gains
+life for every damage event). Verified by removing the fix: both non-combat
+tests fail.
+
+### What held
+
+Suite 4,458 → **4,515** at 21s against a 23s baseline. Shipped pool unchanged at
+388/388 supported, grammar coverage unchanged at 78.0% parsed / 41.4% executed,
+hook reliance unchanged at 24.5%, all five trackers clean, AI simulation
+byte-identical at 10/10 games and 443 interactions. M21 104 → **106** supported,
+which is the honest size of one keyword: five cards print bare lifelink and
+three of them carry other text the engine still cannot read.
+
+---
+
 ## Standing invariants
 
 Anything that weakens these is a regression regardless of what it enables:

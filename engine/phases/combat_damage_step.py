@@ -28,7 +28,7 @@ idiom every caller used to write is safe only while a pass cannot be
 interrupted.
 """
 
-from ..damage_events import deal_damage
+from ..damage_events import deal_damage, lifelink_life_gained
 from ..models import Permanent
 from ..resumption import run_resumable
 
@@ -607,8 +607,7 @@ class CombatDamageStepMixin:
                 if source is not None:
                     self._record_damage_source(victim, source)
                 self._fire_dealt_damage_triggers(victim)
-                if source is not None and self._has_keyword(source, "lifelink"):
-                    add_lifelink(lifelink_seat, amount)
+                add_lifelink(lifelink_seat, lifelink_life_gained(source, amount))
                 if source is not None and self._has_keyword(source, "deathtouch"):
                     victim.metadata["received_deathtouch"] = True
 
@@ -766,8 +765,10 @@ class CombatDamageStepMixin:
                 # tallied here rather than where the event was recorded: a result
                 # replacement (Ali from Cairo) lowers the life lost without lowering
                 # the damage, and the two numbers only exist together at this point.
-                if source_attacker is not None and self._has_keyword(source_attacker, "lifelink"):
-                    add_lifelink(self.active_player_index, outcome.dealt)
+                add_lifelink(
+                    self.active_player_index,
+                    lifelink_life_gained(source_attacker, outcome.dealt),
+                )
                 self._on_player_dealt_damage(defender, outcome.dealt, source_attacker)
                 # Eye for an Eye: combat damage counts too — the attacker's
                 # controller takes the same amount. Applied here rather than by

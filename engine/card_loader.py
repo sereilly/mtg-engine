@@ -130,20 +130,42 @@ def manifest_sets(manifest_path: str | Path = MANIFEST_PATH) -> list[dict]:
     return list(manifest["sets"])
 
 
-def manifest_set(code: str, manifest_path: str | Path = MANIFEST_PATH) -> dict:
+def manifest_set(
+    code: str,
+    manifest_path: str | Path = MANIFEST_PATH,
+    *,
+    include_measured: bool = False,
+) -> dict:
     """One set's manifest entry, by its code (``"ARN"``).
 
     Raises on an unknown code, naming the ones that exist. A missing set that
     resolved to an empty pool would make every test over it pass vacuously,
     which is the same silent-wrongness the engine refuses everywhere else.
+
+    *include_measured* also resolves the ingested-but-unshipped sets, and the
+    default is False for the same reason it is on ``manifest_set_paths`` — a
+    caller that has not thought about the split means "what the engine plays".
+    The reporting scripts pass True: `support_report.py` naming the unsupported
+    cards in a set is the tool you use *while* implementing it, and a set under
+    `measured` is precisely one nobody has implemented yet. Reading a card file
+    is not shipping it; ``load_catalog`` is the seam that decides what a player
+    can deck, and it does not come through here.
     """
-    entries = manifest_sets(manifest_path)
+    entries = list(manifest_sets(manifest_path))
+    if include_measured:
+        entries += manifest_measured_sets(manifest_path)
     wanted = code.strip().upper()
     for entry in entries:
         if entry["code"].upper() == wanted:
             return entry
-    known = ", ".join(entry["code"] for entry in entries)
-    raise KeyError(f"no set {code!r} in the manifest; it ships {known}")
+    shipped = ", ".join(entry["code"] for entry in manifest_sets(manifest_path))
+    if not include_measured:
+        raise KeyError(f"no set {code!r} in the manifest; it ships {shipped}")
+    measured = ", ".join(
+        entry["code"] for entry in manifest_measured_sets(manifest_path)
+    )
+    known = f"it ships {shipped}" + (f" and measures {measured}" if measured else "")
+    raise KeyError(f"no set {code!r} in the manifest; {known}")
 
 
 def manifest_set_path(code: str, manifest_path: str | Path = MANIFEST_PATH) -> Path:

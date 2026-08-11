@@ -50,6 +50,7 @@ from .effect_labels import activated_label, triggered_label
 from .lord_buffs import LORD_BUFF_KIND, lord_buff_for, lord_buff_payload
 from .static_bonuses import static_bonus_for
 from .grammar import ast as grammar_ast, compile_line as compile_grammar_line
+from .grammar.vocabulary import IMPLEMENTED_KEYWORDS
 
 __all__ = [
     "ActivatedAbilityCost",
@@ -67,26 +68,20 @@ __all__ = [
 ]
 
 
-SUPPORTED_KEYWORDS = {
-    "Banding",
-    "Flying",
-    "First strike",
-    "Double strike",
-    "Trample",
-    "Vigilance",
-    "Haste",
-    "Defender",
-    "Reach",
-    "Protection",
-    "Landwalk",
-    "Swampwalk",
-    "Forestwalk",
-    "Islandwalk",
-    "Mountainwalk",
-    "Plainswalk",
-    "Desertwalk",
-}
-
+# The keyword registry lives in `engine/grammar/vocabulary.py` and this module
+# reads it. It used to be spelled out here as well — seventeen Title Case
+# strings beside seventeen lowercase ones, held equal by hand, compared by
+# nothing. The two gate different halves of the same question (this one admits a
+# printed keyword *line*; the grammar's refuses to *lower* an unimplemented
+# keyword), so a keyword added to one and not the other produces a card that is
+# either admitted and inert or refused for a behaviour that exists — and a new
+# set is a keyword-adding event by definition.
+#
+# This is the rule the comment on `_is_supported_static_creature_line` already
+# states for lord buffs and combat restrictions: the gate and the dispatch must
+# read the SAME table. Held by `tests/engine/test_keyword_registry.py`, which
+# checks the gate's *behaviour* against the registry rather than comparing two
+# lists — comparing them is something a future second copy would also pass.
 UNSUPPORTED_KEYWORDS = {
     "Rampage",
     "Cumulative upkeep",
@@ -788,12 +783,17 @@ def _modal_options(oracle_text: str, card_name: str | None) -> tuple[ModalOption
 # ---------------------------------------------------------------------------
 
 def _is_supported_keyword_line(line: str) -> bool:
+    """Whether a printed keyword line names only keywords the engine implements.
+
+    Reads `IMPLEMENTED_KEYWORDS` rather than a local copy: what may be *admitted*
+    here and what the grammar will *lower* are the same claim, and two lists
+    agreeing by hand is the arrangement this codebase keeps finding bugs in.
+    """
     normalized = normalize_creature_line(line)
     parts = [part.strip() for part in normalized.split(",") if part.strip()]
     if not parts:
         return False
-    supported = {keyword.lower() for keyword in SUPPORTED_KEYWORDS}
-    return all(part in supported for part in parts)
+    return all(part in IMPLEMENTED_KEYWORDS for part in parts)
 
 
 def _parse_activated_ability(line: str, card_name: str | None = None) -> ParsedActivatedAbility | None:

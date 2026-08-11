@@ -7,7 +7,7 @@ from ..ante import is_ante_card
 from ..card_hooks import UNTAPPED_ARTIFACT_PROTECTORS
 from ..handlers._common import permanent_matches_filter, pick_target_permanent
 from ..auras import aura_restriction_active
-from ..damage_events import deal_damage
+from ..damage_events import deal_damage, lifelink_life_gained
 from ..land_play_allowance import LandPlayAllowance, land_play_allowance_for
 from ..models import CardDefinition, Permanent, PlayerState
 from ..replacement_choices import pending_choices_for, resolve_choice
@@ -381,9 +381,35 @@ class EffectsMixin:
             return 0
         if outcome.result > 0:
             permanent.damage_marked += outcome.result
+        # CR 702.15b. Combat is excluded because the combat damage step tallies
+        # its own lifelink across the step and gains once in its tail — this is
+        # the same call, and running it here too would gain twice for every
+        # blocked creature. `combat` is the flag that tells the two apart.
+        if not combat:
+            self._apply_lifelink(source, outcome.dealt)
         if then is not None:
             then(outcome.dealt)
         return outcome.dealt
+
+    def _apply_lifelink(self, source, dealt: int) -> None:
+        """CR 702.15b for damage dealt outside the combat damage step.
+
+        The seat is the source's controller *now*, falling back to the seat it
+        entered under when it is no longer on a battlefield — a creature can
+        deal damage on its way out (a dies-trigger ping, a sacrifice cost paid
+        mid-resolution), and `controller_index_of` answers None for a permanent
+        on no battlefield. `base_controller_index` is never rewritten, so it is
+        the right answer rather than a guess.
+        """
+        gained = lifelink_life_gained(source, dealt)
+        if gained <= 0:
+            return
+        seat = self.controller_index_of(source)
+        if seat is None:
+            seat = getattr(source, "base_controller_index", None)
+        if seat is None or not (0 <= seat < len(self.players)):
+            return
+        self._gain_life(self.players[seat], gained, source_name="lifelink")
 
     def _consume_land_destruction_shield(self, perm: Permanent) -> bool:
         """Pyramids: "The next time target land would be destroyed this turn,
@@ -741,6 +767,12 @@ class EffectsMixin:
             target.life -= outcome.result
             self._on_player_dealt_damage(target, outcome.dealt, source)
             self._apply_mirror_damage(target, outcome.dealt, source)
+            # CR 702.15b. No combat guard here, unlike the creature seam: the
+            # combat damage step deals to players directly rather than through
+            # this method (it applies prevention where the event is recorded, so
+            # routing back would double-prevent), and this call always passes
+            # combat=False.
+            self._apply_lifelink(source, outcome.dealt)
         if then is not None:
             then(outcome.dealt)
         return outcome.dealt

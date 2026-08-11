@@ -18,10 +18,20 @@ entries, never by editing core control flow.
 supported — the web app offers those cards to players, and two guards
 (`tests/engine/test_front_end_safety.py`, `tests/engine/test_card_format.py`)
 fail if one of them is unsupported. `measured` is a set ingested so its numbers
-can be read *before* the work of supporting it is done: only the coverage
-instruments load it (`manifest_set_paths(include_measured=True)`), `load_catalog`
-does not, and no player can put one of its cards in a deck. Core Set 2021 (M21,
-285 cards, 37% supported) sits there. A measured set is reported by
+can be read *before* the work of supporting it is done: the coverage instruments
+load it (`manifest_set_paths(include_measured=True)`), `load_catalog` does not,
+and no player can put one of its cards in a deck. Core Set 2021 (M21,
+285 cards, 37% supported) sits there.
+
+**A measured set is nameable by the reporting scripts** — `--set M21` works, and
+the label says "measured, not shipped" so its numbers can't be read as
+shipped-pool ones. That is the point of ingesting it: `support_report.py` naming
+the unsupported cards and their reasons is the tool you implement a set *with*,
+and it used to exit "no set 'M21' in the manifest", leaving `--cards
+cards/M21_cards.json` — the spelled-out filename the convention forbids — as the
+only way through. Reading a card file is not shipping it; `load_catalog` is the
+seam that decides what a player can deck. `--all` still means the shipped pool
+alone, in the paths *and* in the label. A measured set is reported by
 `GRAMMAR_COVERAGE.md` / `HOOK_RELIANCE.md` and deliberately left out of their
 floors and ceilings — a ratchet over a set nobody has implemented fires on its
 composition rather than on anything anyone did. It moves up to `sets` when it is
@@ -193,6 +203,18 @@ adding entries, not editing dispatch**:
   belongs as a `LoweringError` naming what is missing. Vocabulary (creature
   types, keywords) is data in `data/vocabulary/`, refreshed by
   `scripts/fetch_vocabulary.py` — never hardcode a type list.
+  **Which keywords the engine implements is one frozenset**,
+  `vocabulary.IMPLEMENTED_KEYWORDS`, and `engine/oracle.py`'s keyword-*line*
+  classifier reads it rather than keeping its own. Adding a keyword means that
+  set plus the behaviour behind it — and the behaviour has to cover everywhere
+  the CR says it applies, not just the path the pool happens to exercise.
+  Lifelink is the worked example: the mechanic existed in the combat damage step
+  alone, so adding the word would have gained life in combat and silently gained
+  nothing for a ping ability (CR 702.15b is about damage, not combat damage). It
+  now goes through `damage_events.lifelink_life_gained`, one rule with three
+  callers. Held by `tests/engine/test_keyword_registry.py`, which checks the
+  gate's *behaviour* against the registry — comparing two lists is something a
+  second copy would also pass.
 - `engine/effect_labels.py` — the `effect_kind` *label* an ability reports
   (`activated_regenerate`, `triggered_sacrifice`, `upkeep_effect`). Never
   dispatch: it feeds `SimulationResult`, the support report's buckets and the

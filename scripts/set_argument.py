@@ -32,6 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from engine.card_loader import (  # noqa: E402
     MANIFEST_PATH,
+    manifest_measured_codes,
     manifest_set,
     manifest_set_paths,
     manifest_sets,
@@ -46,8 +47,23 @@ class SetSelection:
     label: str
 
 
-def _known_codes() -> str:
+def _shipped_codes() -> str:
     return ", ".join(entry["code"] for entry in manifest_sets())
+
+
+def _known_codes() -> str:
+    """Every code ``--set`` accepts, shipped first and measured marked as such.
+
+    Measured sets are nameable here but are *not* in ``--all``: the aggregate
+    describes the pool the guarantees are about, and quietly folding an
+    unimplemented set into it is how "the pool is 100% supported" stops meaning
+    anything. Naming one explicitly is the opposite — it is how you find out
+    what the next set needs.
+    """
+    measured = manifest_measured_codes()
+    if not measured:
+        return _shipped_codes()
+    return f"{_shipped_codes()}; measured (not shipped): {', '.join(measured)}"
 
 
 def add_set_argument(
@@ -112,16 +128,27 @@ def resolve_set(parser: argparse.ArgumentParser, args: argparse.Namespace) -> Se
         return SetSelection(paths=[path], label=str(path))
 
     if args.whole_pool or args.set_code is None:
+        # `_shipped_codes`, never `_known_codes`: this selection *is* the shipped
+        # pool, so naming the measured sets here would describe a pool the run
+        # did not cover — the same failure the label exists to prevent, with the
+        # error moved from which set to which list.
         return SetSelection(
             paths=manifest_set_paths(),
-            label=f"the whole manifest pool ({_known_codes()})",
+            label=f"the whole manifest pool ({_shipped_codes()})",
         )
 
     try:
-        entry = manifest_set(args.set_code)
+        entry = manifest_set(args.set_code, include_measured=True)
     except KeyError as exc:
         parser.error(exc.args[0])
         raise  # unreachable; parser.error exits. Keeps the type checker honest.
 
     path = MANIFEST_PATH.parent / entry["file"]
-    return SetSelection(paths=[path], label=f"{entry['name']} ({entry['code']})")
+    # A measured set says so in the label, because every one of these scripts
+    # prints it and the numbers mean something different for a set nobody has
+    # implemented — "104/285 supported" read as a shipped-pool figure is a
+    # regression report rather than a to-do list. This is the same reason the
+    # label exists at all: the original bug was not only that `support_report.py`
+    # read one set, it was that the output never said which.
+    suffix = " — measured, not shipped" if entry["code"] in manifest_measured_codes() else ""
+    return SetSelection(paths=[path], label=f"{entry['name']} ({entry['code']}){suffix}")

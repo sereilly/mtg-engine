@@ -89,6 +89,40 @@ def damage_kind(recipient) -> str:
     return "damage_to_player" if isinstance(recipient, PlayerState) else "damage_to_creature"
 
 
+LIFELINK = "lifelink"
+
+
+def lifelink_life_gained(source, dealt: int) -> int:
+    """CR 702.15b: life *source*'s controller gains for dealing *dealt* damage.
+
+    Reads ``dealt`` and never ``result``. That is the whole reason
+    :class:`DamageOutcome` carries both numbers: Ali from Cairo caps the life
+    *lost* without capping the damage *dealt*, and lifelink gains the full
+    amount (CR 120.3f). A version of this reading ``result`` would be wrong only
+    in the presence of one card, which is the kind of wrong that survives a
+    green suite.
+
+    **The rule lives here; the timing does not.** Three callers share it and two
+    of them apply it differently, which is a real difference rather than a
+    missing abstraction. The combat damage step tallies across the step and
+    gains once at the end, because combat damage is dealt simultaneously
+    (CR 510.2) — a creature and its blocker trading lethal damage produce one
+    life-gain event, not two interleaved with deaths. Everything else gains as
+    the damage is dealt.
+
+    Lifelink applies to *any* damage the source deals, not only combat damage —
+    which is what this function existing separately is for. It was combat-only
+    for as long as the keyword was unimplemented, so a lifelink creature's ping
+    ability would have dealt damage and gained nothing.
+    """
+    if dealt <= 0 or source is None:
+        return 0
+    has_keyword = getattr(source, "has_keyword", None)
+    if has_keyword is None:
+        return 0  # a spell or a bare card: no permanent to read a keyword from
+    return dealt if has_keyword(LIFELINK) else 0
+
+
 def damage_candidates(recipient) -> list[Candidate]:
     """Every effect attempting to modify a damage event with this recipient
     before it is dealt (CR 120.4b) — shields and replacements together, in

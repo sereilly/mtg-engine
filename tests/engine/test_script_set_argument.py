@@ -80,6 +80,67 @@ def test_all_selects_the_whole_manifest_pool(module, base):
 
 
 @pytest.mark.parametrize("module,base", SCRIPTS_UNDER_TEST)
+def test_a_measured_set_is_reachable_by_code(module, base):
+    """`--set M21` has to work, because that is the tool you implement a set with.
+
+    A measured set is by definition one nobody has implemented, so
+    `support_report.py` naming its unsupported cards and their reasons is the
+    whole point of having ingested it. Before this it exited "no set 'M21' in
+    the manifest", and the only way through was `--cards cards/M21_cards.json` —
+    the spelled-out filename every guard in this file exists to forbid.
+    """
+    for code in manifest_measured_codes():
+        selection = _resolve(module, [*base, "--set", code])
+        assert len(selection.paths) == 1
+        assert selection.paths[0].name.upper().startswith(code.upper())
+        assert code in selection.label
+
+
+@pytest.mark.parametrize("module,base", SCRIPTS_UNDER_TEST)
+def test_a_measured_set_says_so_in_its_label(module, base):
+    """Reachable is not the same as shipped, and the output has to carry that.
+
+    Every one of these scripts prints the label, and "104/285 supported" read as
+    a shipped-pool number is a regression report rather than a to-do list. The
+    label is where the difference survives, which is the same reason it exists
+    at all — the original bug was not only that `support_report.py` read one
+    set, it was that nothing in the output said which.
+    """
+    for code in manifest_measured_codes():
+        assert "measured" in _resolve(module, [*base, "--set", code]).label.lower()
+
+    for code in manifest_set_codes():
+        assert "measured" not in _resolve(module, [*base, "--set", code]).label.lower()
+
+
+@pytest.mark.parametrize("module,base", SCRIPTS_UNDER_TEST)
+def test_all_still_means_the_shipped_pool_only(module, base):
+    """Nameable individually, still excluded from the aggregate.
+
+    `--all` describes the pool the guarantees are about. Folding an
+    unimplemented set into it is how "the pool is 100% supported" quietly stops
+    meaning anything — the same reason `grammar_coverage.py`'s floors and
+    `hook_reliance.py`'s ceilings cover the shipped pool alone.
+    """
+    selection = _resolve(module, [*base, "--all"])
+    measured_paths = {
+        REPO / "cards" / f"{code}_cards" for code in manifest_measured_codes()
+    }
+    assert selection.paths == manifest_set_paths()
+    for path in selection.paths:
+        assert path.with_suffix("") not in measured_paths
+
+    # And the label must not advertise them either. Naming a measured set in the
+    # description of a run that did not read it is the same failure the label
+    # exists to prevent — output describing a pool other than the one covered —
+    # with the error moved from which set to which list.
+    for code in manifest_measured_codes():
+        assert code not in selection.label, (
+            f"--all names {code} in its label but does not cover it: {selection.label!r}"
+        )
+
+
+@pytest.mark.parametrize("module,base", SCRIPTS_UNDER_TEST)
 def test_an_unknown_set_code_exits_naming_the_codes_that_exist(module, base, capsys):
     """The failure this whole indirection exists for.
 
