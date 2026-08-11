@@ -48,6 +48,7 @@ class OracleInstructionsMixin:
         target: PlayerState,
         card: CardDefinition,
         target_permanent_index: int | None = None,
+        target_permanent_id: int | list[int | None] | None = None,
         x_value: int | None = None,
         new_color: str | None = None,
         stack_target=None,
@@ -63,8 +64,8 @@ class OracleInstructionsMixin:
         # CR 702.16b / 702.18: a spell that targets a permanent with shroud, or with
         # protection from the spell's color, has an illegal target. On resolution it
         # does nothing (608.3b — removed from the stack with no effect).
-        if isinstance(target_permanent_index, int) and 0 <= target_permanent_index < len(target.battlefield):
-            chosen = target.battlefield[target_permanent_index]
+        chosen = self.chosen_permanent(target, target_permanent_index, target_permanent_id)
+        if chosen is not None:
             if chosen.is_creature and not self._can_be_targeted(chosen, card):
                 self.log.append(
                     f"{card.name} does nothing: {chosen.card.name} is an illegal target"
@@ -78,6 +79,7 @@ class OracleInstructionsMixin:
                 target=target,
                 card=card,
                 target_permanent_index=target_permanent_index,
+                target_permanent_id=target_permanent_id,
                 x_value=x_value,
                 choices={
                     "divided_targets": divided_targets,
@@ -150,7 +152,17 @@ class OracleInstructionsMixin:
         aura_permanent: Permanent,
         target_player_index: int | None,
         target_permanent_index: int | None = None,
+        target_permanent_id: int | list[int | None] | None = None,
     ) -> None:
+        """Attach a resolving Aura to what it targeted, and run its enter text.
+
+        *target_permanent_id* is the same choice as *target_permanent_index*,
+        recorded when the Aura was cast (CR 601.2c). An Aura is the longest gap
+        in the engine between choosing a target and using it — the spell waits
+        for priority, for responses, and for everything above it on the stack —
+        so it is the case where a battlefield slot is most likely to have been
+        renumbered underneath the index by the time this runs.
+        """
         program = compile_card_oracle(aura_permanent.card)
         text = program.normalized_text
         if not any(instr.kind == "spell_pattern" and instr.value.startswith("enchant") for instr in program.instructions) and not text.startswith("enchant enchantment"):
@@ -224,10 +236,11 @@ class OracleInstructionsMixin:
             # unattached Aura to the graveyard.
             target_creature = None
             if isinstance(target_permanent_index, int):
-                if 0 <= target_permanent_index < len(target_player.battlefield):
-                    candidate = target_player.battlefield[target_permanent_index]
-                    if candidate.is_creature:
-                        target_creature = candidate
+                candidate = self.chosen_permanent(
+                    target_player, target_permanent_index, target_permanent_id
+                )
+                if candidate is not None and candidate.is_creature:
+                    target_creature = candidate
             else:
                 target_creature = next(
                     (perm for perm in self.controlled_by(target_player) if perm.is_creature),
@@ -351,9 +364,11 @@ class OracleInstructionsMixin:
 
         elif text.startswith("enchant land"):
             target_land = None
-            if target_permanent_index is not None and 0 <= target_permanent_index < len(target_player.battlefield):
-                candidate = target_player.battlefield[target_permanent_index]
-                if candidate.card.primary_type == "land":
+            if target_permanent_index is not None:
+                candidate = self.chosen_permanent(
+                    target_player, target_permanent_index, target_permanent_id
+                )
+                if candidate is not None and candidate.card.primary_type == "land":
                     target_land = candidate
             if target_land is None and target_permanent_index is None:
                 target_land = next(
@@ -386,17 +401,21 @@ class OracleInstructionsMixin:
                     "land_type_choice", caster_index,
                     card_name=aura_permanent.card.name,
                     land_owner_index=target_idx,
-                    land_index=target_player.battlefield.index(target_land),
+                    # Identity: ``list.index`` compares by value, so two
+                    # untapped Forests would resolve to the same slot and the
+                    # chosen land type would land on the wrong one.
+                    land_index=self.battlefield_index_of(target_land),
                     _aura=aura_permanent,
                 )
             self.log.append(f"{aura_permanent.card.name} enchants {target_land.card.name}")
         elif text.startswith("enchant wall"):
             target_wall = None
             if isinstance(target_permanent_index, int):
-                if 0 <= target_permanent_index < len(target_player.battlefield):
-                    candidate = target_player.battlefield[target_permanent_index]
-                    if "wall" in candidate.card.type_line.lower():
-                        target_wall = candidate
+                candidate = self.chosen_permanent(
+                    target_player, target_permanent_index, target_permanent_id
+                )
+                if candidate is not None and "wall" in candidate.card.type_line.lower():
+                    target_wall = candidate
             else:
                 target_wall = next(
                     (
@@ -419,10 +438,11 @@ class OracleInstructionsMixin:
 
             target_artifact = None
             if target_permanent_index is not None:
-                if 0 <= target_permanent_index < len(target_player.battlefield):
-                    candidate = target_player.battlefield[target_permanent_index]
-                    if candidate.card.primary_type == "artifact":
-                        target_artifact = candidate
+                candidate = self.chosen_permanent(
+                    target_player, target_permanent_index, target_permanent_id
+                )
+                if candidate is not None and candidate.card.primary_type == "artifact":
+                    target_artifact = candidate
             if target_artifact is None and target_permanent_index is None:
                 target_artifact = next(
                     (
@@ -467,10 +487,11 @@ class OracleInstructionsMixin:
 
             target_enchantment = None
             if target_permanent_index is not None:
-                if 0 <= target_permanent_index < len(target_player.battlefield):
-                    candidate = target_player.battlefield[target_permanent_index]
-                    if candidate.card.primary_type == "enchantment":
-                        target_enchantment = candidate
+                candidate = self.chosen_permanent(
+                    target_player, target_permanent_index, target_permanent_id
+                )
+                if candidate is not None and candidate.card.primary_type == "enchantment":
+                    target_enchantment = candidate
             if target_enchantment is None and target_permanent_index is None:
                 target_enchantment = next(
                     (

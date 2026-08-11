@@ -229,7 +229,7 @@ _KIND_TO_SPEC: dict[str, dict] = {
     },
     # --- kinds that reach the picker through an activated ability -----------
     #
-    # Each of these resolves through `resolve_target_permanent(context)` with
+    # Each of these resolves through `resolve_target_permanent(game, context)` with
     # the default predicate — `p.is_creature` — so "creature" is what the code
     # that runs the ability accepts, not what the printed line says.
     "grant_banding_to_target": {"kind": "creature"},

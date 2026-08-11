@@ -29,10 +29,37 @@ they meant. ``controls`` / ``is_on_battlefield`` compare by identity.
 ...]`` comprehension or a ``survivors`` loop whose block assigns the list back
 — is exempt structurally rather than by name, because the exemption is a
 property of the code shape and cannot go stale.
+
+--------------------------------------------------------------------------
+
+**Addressing one permanent lives here too**, because it is the same mistake
+one step further in. ``player.battlefield[i]`` is not a name for a permanent,
+it is a name for a *slot*, and a slot is only true until something leaves the
+battlefield and renumbers everything after it. That instability is why the
+engine grew positional indices in the first place: identity comparison was
+unsafe (``Permanent`` has value equality, so ``in`` / ``.index()`` /
+``.remove()`` match an opponent's look-alike), so a position was the only
+address left. ``Permanent.permanent_id`` removes the reason, and the seam
+resolves it — ``permanent_by_id`` / ``find_permanent_by_id`` /
+``permanent_id_of`` / ``permanent_at`` / ``battlefield_index_of``.
+
+Two guards below, of different strengths:
+
+  * ``.battlefield.index(x)`` and ``.battlefield.remove(x)`` are **banned**.
+    They are the value-comparison bug in its purest form and there are none
+    left, so there is no baseline to hold — only a zero.
+  * ``player.battlefield[i]`` — and the aliased ``bf = x.battlefield; bf[i]``,
+    which is the same read one name later — is **ratcheted**, per module, by
+    ``POSITIONAL_BASELINE``. It cannot go up. It is not zero because the
+    combat state (``combat_attackers``, ``combat_blockers``, the banding and
+    pile maps) is keyed by index end to end, and so is the wire protocol that
+    carries it; converting those is its own migration, and pretending it is
+    done by exempting the files would leave nothing guarding the rest.
 """
 
 import ast
 import functools
+import re
 import pathlib
 
 import pytest
@@ -258,4 +285,307 @@ def test_no_acknowledgement_has_gone_stale(entry):
     assert still_raw, (
         f"{entry} no longer reads the battlefield directly — drop the "
         f"acknowledgement ({ACKNOWLEDGED[entry]})"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Addressing one permanent: identity, not position
+# ---------------------------------------------------------------------------
+
+# Per-module count of surviving ``X.battlefield[i]`` reads. A ratchet, not an
+# allowance: it may fall (lower the number in the same commit) and it may never
+# rise. A module that reaches zero is deleted from the dict, so the dict itself
+# shrinks as the migration lands and the guard becomes a ban by attrition.
+#
+# What is still here is one thing wearing many names: **combat**. The engine's
+# combat state — who is attacking, who blocks whom, the banding assignments, the
+# Raging River piles, Camouflage's piles — is a set of dicts keyed by battlefield
+# index, and the wire protocol and the canvas's arrows are keyed the same way.
+# Every count below is a read of one of those maps or of an index that arrived
+# from a client. They convert together or not at all.
+POSITIONAL_BASELINE: dict[str, int] = {
+    "engine/ai_policy.py": 11,
+    "engine/ai_simulator.py": 2,
+    "engine/card_hooks.py": 2,
+    "engine/handlers/_common.py": 2,
+    "engine/handlers/board_misc.py": 2,
+    "engine/handlers/combat.py": 2,
+    "engine/handlers/damage.py": 1,
+    "engine/handlers/destruction.py": 4,
+    "engine/handlers/prevention.py": 2,
+    "engine/handlers/zones.py": 2,
+    "engine/legality.py": 3,
+    "engine/mixins/effects.py": 2,
+    "engine/mixins/permanent_state.py": 1,
+    "engine/mixins/stack/activation.py": 3,
+    "engine/mixins/stack/casting.py": 9,
+    "engine/mixins/stack/choices.py": 5,
+    "engine/phases/combat_damage_step.py": 17,
+    "engine/phases/combat_phase.py": 11,
+    "engine/phases/declare_attackers_step.py": 4,
+    "engine/phases/declare_blockers_step.py": 19,
+    "engine/phases/untap_step.py": 2,
+    "engine/phases/upkeep_step.py": 3,
+    "engine/replacements.py": 1,
+    "web/actions.py": 4,
+    "web/combat_prompts.py": 4,
+    "web/debug_actions.py": 3,
+    "web/game_flow.py": 4,
+    "web/prompts.py": 1,
+    "web/serialization.py": 1,
+    "web/state_view.py": 2,
+}
+
+
+def _battlefield_owner(node: ast.AST) -> ast.Attribute | None:
+    """*node* as an ``<expr>.battlefield`` attribute access, or None."""
+    return _battlefield_attr(node)
+
+
+def _battlefield_aliases(tree: ast.Module) -> set[str]:
+    """Local names bound to a battlefield list — ``battlefield = target.battlefield``.
+
+    Counted because otherwise the guard is one line away from being bypassed:
+    aliasing the list and subscripting the alias is the same positional read,
+    and it is already the majority spelling in ``mixins/stack/casting.py``.
+    Names are collected module-wide rather than per function; a name that means
+    "a battlefield" in one function and something else in another is a naming
+    problem of its own."""
+    aliases: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign) or _battlefield_attr(node.value) is None:
+            continue
+        for target in node.targets:
+            if isinstance(target, ast.Name):
+                aliases.add(target.id)
+    return aliases
+
+
+@functools.lru_cache(maxsize=None)
+def _positional_reads(path: pathlib.Path) -> tuple[tuple[int, str], ...]:
+    """``(line, source)`` for each positional battlefield read in *path* —
+    ``<expr>.battlefield[...]`` and the aliased ``bf = x.battlefield; bf[...]``."""
+    source = path.read_text(encoding="utf-8")
+    lines = source.splitlines()
+    tree = ast.parse(source)
+    aliases = _battlefield_aliases(tree)
+    found = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Subscript):
+            continue
+        subject = node.value
+        if _battlefield_owner(subject) is None and not (
+            isinstance(subject, ast.Name) and subject.id in aliases
+        ):
+            continue
+        found.append((node.lineno, lines[node.lineno - 1].strip()))
+    return tuple(found)
+
+
+@functools.lru_cache(maxsize=None)
+def _value_comparison_calls(path: pathlib.Path) -> tuple[tuple[int, str], ...]:
+    """``(line, source)`` for each ``.battlefield.index(...)`` / ``.remove(...)``."""
+    source = path.read_text(encoding="utf-8")
+    lines = source.splitlines()
+    found = []
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+            continue
+        if node.func.attr not in {"index", "remove"}:
+            continue
+        if _battlefield_owner(node.func.value) is None:
+            continue
+        found.append((node.lineno, lines[node.lineno - 1].strip()))
+    return tuple(found)
+
+
+def test_a_permanent_is_never_located_by_value():
+    """``list.index`` and ``list.remove`` compare with ``==``, and
+    :class:`Permanent` is a dataclass whose ``__eq__`` is generated field by
+    field — so both find an opponent's identically-stated copy of the same card
+    in preference to the object they were handed.
+
+    This is not theoretical: Crumble read its target's slot back with
+    ``battlefield.index(artifact)`` and would have destroyed the *first* of two
+    equal Moxen, and four "remove this permanent" sites had the same shape.
+    Identity is ``[p for p in X.battlefield if p is not perm]``, and the slot of
+    a known permanent is ``game.battlefield_index_of(perm)``."""
+    offenders = []
+    for path in _scanned_files():
+        module = _module_name(path)
+        for line, text in _value_comparison_calls(path):
+            offenders.append(f"  {module}:{line}: {text}")
+    assert not offenders, (
+        "a battlefield permanent located by value — Permanent compares field by "
+        "field, so this matches a look-alike. Use identity (`p is not perm`) or "
+        "the seam's game.battlefield_index_of(perm):\n" + "\n".join(offenders)
+    )
+
+
+def test_positional_battlefield_indexing_does_not_grow():
+    """``player.battlefield[i]`` names a slot, and a slot stops meaning the same
+    permanent the moment anything ahead of it leaves the battlefield. The stable
+    address is ``Permanent.permanent_id``, resolved through the seam.
+
+    A ratchet rather than a ban, because the remaining reads are all combat
+    state whose *keys* are indices — they cannot be migrated one call site at a
+    time. What the ratchet buys is that no new one can appear while that is
+    true."""
+    measured: dict[str, int] = {}
+    samples: dict[str, list[str]] = {}
+    for path in _scanned_files():
+        module = _module_name(path)
+        if module == SEAM:
+            # The seam is where a positional lookup legitimately lives: it is
+            # the module that turns an index from the wire into a permanent
+            # (``permanent_at``) and back (``battlefield_index_of``).
+            continue
+        reads = _positional_reads(path)
+        if reads:
+            measured[module] = len(reads)
+            samples[module] = [f"  {module}:{line}: {text}" for line, text in reads]
+
+    grew = [
+        f"{module}: {count} (baseline {POSITIONAL_BASELINE.get(module, 0)})"
+        for module, count in sorted(measured.items())
+        if count > POSITIONAL_BASELINE.get(module, 0)
+    ]
+    assert not grew, (
+        "new positional battlefield indexing. Address the permanent by its "
+        "stable id instead — game.permanent_by_id(pid) / find_permanent_by_id / "
+        "permanent_at(seat, index) at a wire boundary:\n"
+        + "\n".join(grew)
+        + "\n"
+        + "\n".join(line for module in sorted(measured) for line in samples[module]
+                    if measured[module] > POSITIONAL_BASELINE.get(module, 0))
+    )
+
+
+def test_the_positional_baseline_is_not_stale():
+    """A baseline higher than the truth is a standing allowance to put the reads
+    back. Lower the number (or delete the entry) in the commit that removes
+    them, which is what makes the ratchet ratchet."""
+    measured = {
+        _module_name(path): len(_positional_reads(path))
+        for path in _scanned_files()
+        if _module_name(path) != SEAM and _positional_reads(path)
+    }
+    stale = [
+        f"{module}: baseline {expected}, actually {measured.get(module, 0)}"
+        for module, expected in sorted(POSITIONAL_BASELINE.items())
+        if measured.get(module, 0) < expected
+    ]
+    assert not stale, (
+        "POSITIONAL_BASELINE is above the real count — lower these entries "
+        "(delete the ones now at zero):\n  " + "\n  ".join(stale)
+    )
+
+
+# ---------------------------------------------------------------------------
+# Leaving the battlefield is one transition
+# ---------------------------------------------------------------------------
+
+# The writes that are legitimately not removals, each with the reason it cannot
+# go through the choke point. Keyed by ``path::function`` so they survive line
+# edits, and checked for staleness below like every other acknowledgement here.
+_BATTLEFIELD_WRITE_EXEMPTIONS = {
+    # The projection of a derived controller change (CR 613 layer 2). The
+    # permanent moves between two battlefields without leaving either zone, so
+    # firing the leave transition here would be wrong.
+    "engine/mixins/helpers.py::_sync_control": "control change is a move, not a removal",
+    # The choke point itself.
+    "engine/mixins/helpers.py::remove_all_from_battlefield": "this is the transition",
+    # Debug-menu raw-state injection replaces a whole battlefield wholesale;
+    # nothing "leaves", the board is being rebuilt from a supplied payload.
+    "web/debug_actions.py::_apply_raw_state": "wholesale board replacement",
+}
+
+_MUTATORS = {"pop", "remove", "clear"}
+
+
+def _battlefield_writes(path: pathlib.Path):
+    """(function, line, text) for every statement that shortens or replaces a
+    battlefield list.
+
+    Walked with ``ast`` rather than matched with a regex: the first version of
+    this scanned raw lines and flagged a *docstring* in the seam that mentions
+    ``.battlefield.remove()`` while explaining why it is banned. A guard that
+    reports its own documentation is a guard people learn to skim.
+    """
+    source = path.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    lines = source.splitlines()
+    spans = [
+        (node.lineno, node.end_lineno, node.name)
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    ]
+
+    def enclosing(lineno: int) -> str:
+        name = ""
+        for start, end, candidate in spans:
+            if start <= lineno <= end:
+                name = candidate
+        return name
+
+    def is_battlefield(node) -> bool:
+        return isinstance(node, ast.Attribute) and node.attr == "battlefield"
+
+    hits: list[tuple[str, int, str]] = []
+    for node in ast.walk(tree):
+        # `x.battlefield = ...` — a wholesale replacement.
+        if isinstance(node, ast.Assign) and any(is_battlefield(t) for t in node.targets):
+            hits.append((enclosing(node.lineno), node.lineno, lines[node.lineno - 1].strip()))
+        # `x.battlefield.pop(...)` / `.remove(...)` / `.clear()`
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr in _MUTATORS
+            and is_battlefield(node.func.value)
+        ):
+            hits.append((enclosing(node.lineno), node.lineno, lines[node.lineno - 1].strip()))
+    return sorted(set(hits), key=lambda entry: entry[1])
+
+
+def test_leaving_the_battlefield_goes_through_one_transition():
+    """The battlefield list was rebuilt or shortened in **41 places**, in three
+    spellings — filter-by-identity, ``pop`` by index, and rebuild-from-survivors.
+
+    That is the same shape ``become_tapped`` had at seventeen sites, and it has
+    the same consequence: anything that must happen when a permanent leaves has
+    41 places to be wired into and 41 places to be forgotten. The live example
+    is the combat maps, every one of which is keyed by battlefield index, so a
+    permanent leaving mid-combat renumbers every attacker and blocker recorded
+    after it — and there was nowhere to put the remap.
+
+    ``Game.remove_from_battlefield`` / ``remove_all_from_battlefield`` is that
+    place. A new open-coded rebuild is not a style problem; it is a site the
+    next thing hung off the transition will silently miss.
+    """
+    offenders = []
+    for path in _scanned_files():
+        module = _module_name(path)
+        for function, line, text in _battlefield_writes(path):
+            if _BATTLEFIELD_WRITE_EXEMPTIONS.get(f"{module}::{function}"):
+                continue
+            offenders.append(f"  {module}:{line} in {function}(): {text}")
+    assert not offenders, (
+        "a battlefield list rebuilt outside the seam — call "
+        "game.remove_from_battlefield(perm) or remove_all_from_battlefield(perms) "
+        "so the leave transition has one place to happen:\n" + "\n".join(offenders)
+    )
+
+
+@pytest.mark.parametrize("key", sorted(_BATTLEFIELD_WRITE_EXEMPTIONS))
+def test_no_battlefield_write_exemption_has_gone_stale(key):
+    """An exemption naming a function that no longer writes a battlefield is a
+    comment nobody will re-check — and it silently widens to whatever else that
+    name comes to mean."""
+    module, function = key.split("::")
+    path = ROOT / module
+    assert path.exists(), f"{module} no longer exists"
+    writes = [entry for entry in _battlefield_writes(path) if entry[0] == function]
+    assert writes, (
+        f"{key} is exempted from the battlefield-write rule but no longer "
+        "writes one — delete the exemption"
     )

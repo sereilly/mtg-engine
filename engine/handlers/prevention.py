@@ -83,7 +83,7 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
             add_shield(caster, make_color_shield(prevention_color, source_name))
         # The chosen source (if the controller picked a specific permanent) is
         # recorded only for the log; matching is by color.
-        chosen_perm = resolve_target_permanent(context, predicate=lambda p: True, fallback_players=())
+        chosen_perm = resolve_target_permanent(game, context, predicate=lambda p: True, fallback_players=())
         chosen = chosen_perm.card.name if chosen_perm is not None else None
         game.log.append(
             f"{caster.name} sets a Circle of Protection shield against "
@@ -132,7 +132,7 @@ def grant_reverse_damage_shield(game: Game, instruction: OracleInstruction, cont
         # CardDefinition the spell deals damage with when it resolves).
         chosen = context.stack_target.card
     else:
-        chosen = resolve_target_permanent(context, predicate=lambda p: True, fallback_players=())
+        chosen = resolve_target_permanent(game, context, predicate=lambda p: True, fallback_players=())
     granted_by = context.card.name if context.card else None
     if chosen is not None:
         add_shield(caster, make_life_gain_source(chosen, granted_by))
@@ -152,7 +152,7 @@ def grant_forcefield_shield(game: Game, instruction: OracleInstruction, context:
     # Honor the chosen unblocked attacker so only that creature's combat damage is
     # capped to 1. Fall back to a generic "next combat damage" cap for AI/headless
     # activations that supply no target.
-    chosen = resolve_target_permanent(context, fallback_players=())
+    chosen = resolve_target_permanent(game, context, fallback_players=())
     if chosen is not None:
         add_shield(caster, make_capped_source(chosen))
         game.log.append(f"Forcefield will prevent all but 1 combat damage from {chosen.card.name}")
@@ -187,7 +187,7 @@ def jade_monolith_redirect(game: Game, instruction: OracleInstruction, context: 
     source choice (AI/legacy activations) any source's damage is redirected.
     """
     caster = context.caster
-    target_creature = resolve_target_permanent(context)
+    target_creature = resolve_target_permanent(game, context)
     if target_creature is not None:
         caster_idx = game.players.index(caster)
         target_creature.metadata["redirect_damage_to_player"] = caster_idx
@@ -212,6 +212,7 @@ def shield_target_land_from_destruction(game: Game, instruction: OracleInstructi
     destroy paths consume via _consume_land_destruction_shield."""
     card = context.card
     target_land = resolve_target_permanent(
+        game,
         context,
         predicate=lambda p: p.card.primary_type == "land",
         fallback_players=(context.caster, context.target),
@@ -244,7 +245,7 @@ def arm_mirror_damage(game: Game, instruction: OracleInstruction, context: Oracl
         # CardDefinition the spell deals damage with when it resolves).
         chosen = context.stack_target.card
     else:
-        chosen = resolve_target_permanent(context, predicate=lambda p: True, fallback_players=())
+        chosen = resolve_target_permanent(game, context, predicate=lambda p: True, fallback_players=())
     if chosen is not None:
         caster.mirror_damage_sources.append(chosen)
         source_card = getattr(chosen, "card", chosen)

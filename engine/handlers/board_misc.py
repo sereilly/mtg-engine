@@ -30,6 +30,7 @@ def steal_target_permanent_linked_to_self(game: Game, instruction: OracleInstruc
     # Guardian Beast: "other players can't gain control of" the artifacts it
     # protects.
     target_perm = resolve_target_permanent(
+        game,
         context,
         predicate=lambda p: p.has_type("artifact") and not game._untapped_artifact_protector_active(p),
     )
@@ -60,7 +61,7 @@ def steal_creature_while_tapped_and_weaker(game: Game, instruction: OracleInstru
     def _eligible(perm: Permanent) -> bool:
         return perm.is_creature and perm.effective_power <= source_permanent.effective_power
 
-    target_perm = resolve_target_permanent(context, predicate=_eligible)
+    target_perm = resolve_target_permanent(game, context, predicate=_eligible)
     if target_perm is None:
         game.log.append(f"{card.name}: no valid creature target")
         return True, "resolved"
@@ -103,7 +104,7 @@ def sacrifice_if_no_creatures(game: Game, instruction: OracleInstruction, contex
     holder = game.controller_index_of(source)
     if holder is not None:
         pl = game.players[holder]
-        pl.battlefield = [p for p in pl.battlefield if p is not source]
+        game.remove_from_battlefield(source)
         pl.graveyard.append(source.card)
         game.log.append(f"{source.card.name} sacrificed at end step (no creatures)")
     return True, "resolved"
@@ -265,7 +266,7 @@ def change_target_land_type(game: Game, instruction: OracleInstruction, context:
     # Honor a specifically chosen land (e.g. a player selected the target land
     # in the UI). Fall back to the first land the target player controls.
     target_land = resolve_target_permanent(
-        context, predicate=lambda p: p.card.primary_type == "land"
+        game, context, predicate=lambda p: p.card.primary_type == "land"
     )
     if target_land is not None:
         land_type = str(instruction.payload.get("land_type", "forest"))
@@ -305,7 +306,7 @@ def add_mire_counter_to_target_land(game: Game, instruction: OracleInstruction, 
     """
     # Honor the explicitly chosen land when one was targeted.
     target_land = resolve_target_permanent(
-        context, predicate=lambda p: p.card.primary_type == "land" and not _is_swamp(p)
+        game, context, predicate=lambda p: p.card.primary_type == "land" and not _is_swamp(p)
     )
     if target_land is None:
         game.log.append("No valid non-Swamp land for mire counter")

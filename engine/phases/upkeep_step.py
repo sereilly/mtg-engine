@@ -399,7 +399,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                 continue
             if chosen is not None and land is not chosen:
                 continue
-            removed = controller.battlefield.pop(idx)
+            removed = self.remove_from_battlefield(land)
             controller.graveyard.append(removed.card)
             self.log.append(f"{source.card.name} forced sacrifice of {removed.card.name}")
             return removed
@@ -409,7 +409,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
 
     def _destroy_least_power_creature(self, owner, victim, card_name: str, chosen: bool = False) -> None:
         """Drop of Honey's kill (CR 701.7, "it can't be regenerated")."""
-        owner.battlefield = [p for p in owner.battlefield if p is not victim]
+        self.remove_from_battlefield(victim)
         self._permanent_to_graveyard(owner, victim)
         how = "least power, controller's choice" if chosen else "least power"
         self.log.append(

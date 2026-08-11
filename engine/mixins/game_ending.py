@@ -72,7 +72,7 @@ class GameEndingMixin:
             self.log.append(
                 f"{permanent.card.name} leaves the game ({player.name} left the game, CR 800.4a)"
             )
-        player.battlefield = []
+        self.remove_all_from_battlefield(list(self.controlled_by(player_index)))
         # CR 800.4a: stack objects this player owns/controls cease to exist.
         self.stack = [item for item in self.stack if item.caster_index != player_index]
         self.log.append(f"{player.name} has left the game (CR 800.4a)")
@@ -146,8 +146,8 @@ class GameEndingMixin:
             # Modeled alongside SBAs so it fires immediately when the last
             # matching land leaves, not only at the next upkeep (CR 603.8).
             for seat, player in enumerate(self.players):
-                survivors_ss: list[Permanent] = []
-                for perm in player.battlefield:
+                departing_ss = []
+                for perm in list(self.controlled_by(player)):
                     needs_island = next(matching_triggers(
                         perm.effective_card,
                         condition_kinds={"no_islands"},
@@ -170,17 +170,16 @@ class GameEndingMixin:
                         reason = "controls no lands" if needs_any_land and not controls_any_land else "controls no Islands"
                         self.log.append(f"{perm.card.name} sacrificed ({reason})")
                         changed = True
-                        continue
-                    survivors_ss.append(perm)
-                player.battlefield = survivors_ss
+                        departing_ss.append(perm)
+                self.remove_all_from_battlefield(departing_ss)
 
             # Jihad: "When the chosen player controls no nontoken permanents of
             # the chosen color, sacrifice this enchantment." A state trigger
             # (CR 603.8) checked alongside SBAs like the no-lands sacrifices
             # above, so it fires the moment the last matching permanent leaves.
             for player in self.players:
-                survivors_cc: list[Permanent] = []
-                for perm in player.battlefield:
+                departing_cc = []
+                for perm in list(self.controlled_by(player)):
                     if (
                         "when the chosen player controls no nontoken permanents of the chosen color"
                         in perm.effective_card.oracle_text.lower()
@@ -193,9 +192,8 @@ class GameEndingMixin:
                             "nontoken permanents of the chosen color)"
                         )
                         changed = True
-                        continue
-                    survivors_cc.append(perm)
-                player.battlefield = survivors_cc
+                        departing_cc.append(perm)
+                self.remove_all_from_battlefield(departing_cc)
 
             # City in a Bottle: "other nontoken permanents with a name
             # originally printed in [set] are on the battlefield, their
@@ -205,8 +203,8 @@ class GameEndingMixin:
             # City in a Bottle is already in play.
             if banned_set_codes:
                 for player in self.players:
-                    survivors_cb: list[Permanent] = []
-                    for perm in player.battlefield:
+                    departing_cb = []
+                    for perm in list(self.controlled_by(player)):
                         # The card's original printing, not whichever set loaded
                         # first — see _set_lockout_banning_card.
                         card_set = perm.card.original_printing.lower()
@@ -218,9 +216,8 @@ class GameEndingMixin:
                             self._permanent_to_graveyard(player, perm)
                             self.log.append(f"{perm.card.name} sacrificed (City in a Bottle)")
                             changed = True
-                            continue
-                        survivors_cb.append(perm)
-                    player.battlefield = survivors_cb
+                            departing_cb.append(perm)
+                    self.remove_all_from_battlefield(departing_cb)
 
             # Old Man of the Sea: linked-duration steal ends the instant it
             # untaps OR the stolen creature's power exceeds its own (unlike
@@ -352,14 +349,16 @@ class GameEndingMixin:
             # 704.5j: legend rule — same player controlling two legendaries with same name
             for player in self.players:
                 legendary_by_name: dict[str, list[int]] = {}
-                for idx, perm in enumerate(player.battlefield):
+                for perm in self.controlled_by(player):
                     if "Legendary" in perm.card.type_line:
-                        legendary_by_name.setdefault(perm.card.name, []).append(idx)
-                for name, indices in legendary_by_name.items():
-                    if len(indices) > 1:
-                        # Keep first; put the rest in graveyard
-                        for idx in sorted(indices[1:], reverse=True):
-                            removed = player.battlefield.pop(idx)
+                        legendary_by_name.setdefault(perm.card.name, []).append(perm)
+                for name, perms in legendary_by_name.items():
+                    if len(perms) > 1:
+                        # Keep first; put the rest in graveyard. Collected as
+                        # permanents rather than indices, so the reverse-order
+                        # walk that kept the indices valid is gone with them.
+                        for removed in reversed(perms[1:]):
+                            self.remove_from_battlefield(removed)
                             self._permanent_to_graveyard(player, removed)
                             self.log.append(f"{name} put into graveyard (704.5j: legend rule)")
                         changed = True
@@ -374,7 +373,7 @@ class GameEndingMixin:
                 # Keep last (most recent timestamp = highest position), remove rest
                 for player, perm in world_perms[:-1]:
                     if self.controls(player, perm):
-                        player.battlefield = [p for p in player.battlefield if p is not perm]
+                        self.remove_from_battlefield(perm)
                         self._permanent_to_graveyard(player, perm)
                         self.log.append(f"{perm.card.name} put into graveyard (704.5k: world rule)")
                 changed = True
@@ -412,8 +411,8 @@ class GameEndingMixin:
             # owner's graveyard. The Aura granting the restriction is exempt. This
             # covers Consecrate Land entering onto a land that already had Auras.
             for player in self.players:
-                survivors = []
-                for perm in player.battlefield:
+                departing = []
+                for perm in list(self.controlled_by(player)):
                     attached_to = perm.metadata.get("attached_to")
                     if (
                         "Aura" in perm.card.type_line
@@ -424,17 +423,16 @@ class GameEndingMixin:
                         self._permanent_to_graveyard(player, perm)
                         self.log.append(f"{perm.card.name} put into graveyard (enchanted land can't be enchanted by other Auras)")
                         changed = True
-                        continue
-                    survivors.append(perm)
-                player.battlefield = survivors
+                        departing.append(perm)
+                self.remove_all_from_battlefield(departing)
 
             # CR 702.16c / 702.16n: an Aura with a quality the enchanted permanent
             # has protection from is put into its owner's graveyard, unless the
             # Aura's own text says the effect doesn't remove it (702.16n, e.g.
             # White Ward).
             for player in self.players:
-                survivors = []
-                for perm in player.battlefield:
+                departing = []
+                for perm in list(self.controlled_by(player)):
                     attached_to = perm.metadata.get("attached_to")
                     if "Aura" in perm.card.type_line and attached_to is not None:
                         protection = self._protection_colors(attached_to)
@@ -447,9 +445,8 @@ class GameEndingMixin:
                                     f"{perm.card.name} put into graveyard (702.16c: enchanted permanent has protection)"
                                 )
                                 changed = True
-                                continue
-                    survivors.append(perm)
-                player.battlefield = survivors
+                                departing.append(perm)
+                self.remove_all_from_battlefield(departing)
 
             # CR 702.16d: Equipment with a quality the equipped permanent has
             # protection from becomes unattached, but stays on the battlefield.
@@ -550,9 +547,7 @@ class GameEndingMixin:
                     # Keep the last (most recent), remove the rest
                     for role_perm in roles[:-1]:
                         if self.controls(ctrl_player, role_perm):
-                            ctrl_player.battlefield = [
-                                p for p in ctrl_player.battlefield if p is not role_perm
-                            ]
+                            self.remove_from_battlefield(role_perm)
                             self._permanent_to_graveyard(ctrl_player, role_perm)
                             self.log.append(f"{role_perm.card.name} put into graveyard (704.5y: role rule)")
                     changed = True

@@ -30,6 +30,7 @@ def untap_target_land(game: Game, instruction: OracleInstruction, context: Oracl
     # player picks which land). Fall back to the first land the target controls
     # only when no explicit choice was made.
     perm = resolve_target_permanent(
+        game,
         context,
         predicate=lambda p: p.card.primary_type == "land",
         fallback_on_invalid_choice=False,
@@ -58,6 +59,7 @@ def untap_attacker_and_prevent_combat_damage(game: Game, instruction: OracleInst
     # cleanup via _EOT_METADATA_KEYS).
     caster = context.caster
     perm = resolve_target_permanent(
+        game,
         context,
         predicate=lambda p: p.is_creature and p.attacking and game.controls(caster, p),
         fallback_players=(caster,),
@@ -96,6 +98,7 @@ def tap_target_permanent(game: Game, instruction: OracleInstruction, context: Or
     if any(k in instruction.payload for k in ("type_filter", "subtype_filter", "color_filter")):
         caster = context.caster
         perm = resolve_target_permanent(
+            game,
             context,
             predicate=lambda p: permanent_matches_filter(p, instruction.payload),
             fallback_players=(target, caster),
@@ -120,7 +123,7 @@ def tap_or_untap_target(game: Game, instruction: OracleInstruction, context: Ora
     # Twiddle: toggle the chosen permanent's tapped state (tap an untapped one,
     # untap a tapped one). Honor the explicitly chosen permanent on either
     # battlefield; fall back to the first permanent for AI/headless play.
-    perm = resolve_target_permanent(context, predicate=lambda p: True)
+    perm = resolve_target_permanent(game, context, predicate=lambda p: True)
     if perm is None:
         game.log.append("No valid permanent to tap or untap")
         return True, "resolved"

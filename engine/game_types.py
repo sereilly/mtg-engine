@@ -46,6 +46,14 @@ class StackItem:
     # target_permanent_index may be a single int or a list of ints for multi-target spells
     target_permanent_index: int | list[int] | None
     x_value: int | None
+    # The same target(s) by *stable identity* (CR 601.2c), stamped as the object
+    # is put on the stack by ``Game._stack_push``. The index beside it is a
+    # position in a battlefield list, and the whole point of the stack is that
+    # time passes before this resolves: anything that leaves the battlefield in
+    # between renumbers every later slot, so an index recorded at cast time can
+    # resolve to a *different* permanent at resolution time. Same shape as the
+    # index (an int, a list, or None) so the two stay readable side by side.
+    target_permanent_id: int | list[int | None] | None = None
     ability_instruction: OracleInstruction | None = None
     ability_effect_kind: str | None = None
     source_permanent: Permanent | None = None
@@ -83,6 +91,11 @@ class OracleExecutionContext:
     card: CardDefinition
     # target_permanent_index may be a single int or a list of ints for multi-target spells
     target_permanent_index: int | list[int] | None = None
+    # The target(s) by stable identity, carried over from the stack item (see
+    # StackItem.target_permanent_id). ``engine/handlers/_common.py`` prefers it
+    # over the index, which is why a handler needs no new code to stop being
+    # positional — it already asks ``resolve_target_permanent``.
+    target_permanent_id: int | list[int | None] | None = None
     x_value: int | None = None
     source_permanent: Permanent | None = None
     # The chosen target spell/ability on the stack (Counterspell, Fork).

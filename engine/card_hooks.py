@@ -47,6 +47,7 @@ from typing import TYPE_CHECKING, Callable
 
 from .auras import attach_aura, detach_aura
 from .land_types import end_land_type_change
+from .models import next_permanent_id
 from .oracle_types import OracleInstruction
 
 if TYPE_CHECKING:
@@ -831,14 +832,19 @@ def _oubliette_leaves(game: Game, owner: PlayerState, permanent: Permanent) -> N
     phased = permanent.metadata.pop("phased_out_permanent", None)
     owner_index = permanent.metadata.pop("phased_out_owner_index", None)
     attachments = permanent.metadata.pop("phased_out_attachments", None) or []
+    # CR 400.7: this is the one path that puts the *same* ``Permanent`` object
+    # back on the battlefield, so the new-object rule has to be applied by hand
+    # — anything still holding the pre-phase-out id must not resolve to it.
     if phased is not None and isinstance(owner_index, int) and 0 <= owner_index < len(game.players):
         phased.tapped = True
+        phased.permanent_id = next_permanent_id()
         game.players[owner_index].battlefield.append(phased)
         game.log.append(
             f"{phased.card.name} phases back in, tapped ({permanent.card.name} left the battlefield)"
         )
     for seat, attached_perm in attachments:
         if 0 <= seat < len(game.players):
+            attached_perm.permanent_id = next_permanent_id()
             game.players[seat].battlefield.append(attached_perm)
 
 
@@ -1003,7 +1009,7 @@ def _kudzu_on_land_tapped(
     resolved by ``confirm_kudzu_reattach``), while AI/headless play deterministically
     takes the first other land."""
     player = game.players[controller_index]
-    player.battlefield.pop(land_index)
+    game.remove_from_battlefield(land)
     player.graveyard.append(land.card)
     aura.metadata.pop("attached_to", None)
     detach_aura(aura, land)

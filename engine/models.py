@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import dataclasses
+import itertools
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -162,6 +163,30 @@ def _with_granted_abilities(
 _GRANTED_CARDS: dict[tuple, "CardDefinition"] = {}
 
 
+# CR 400.7: a permanent that leaves the battlefield and comes back is a *new
+# object*. A stable identity therefore only has to be unique and monotonic —
+# the same requirement CR 613.7's timestamps have — so a monotonic counter is
+# enough, and this is deliberately the same idiom as
+# ``engine/continuous.py``'s ``next_timestamp``.
+#
+# Module-level rather than per-game because a ``Permanent`` is created in
+# places that have no ``Game`` to ask: the AI simulator's detached clones, the
+# Debug Menu's raw-state injection, and several hundred test rigs that build a
+# board by appending to ``player.battlefield``. Making the id a property of
+# *construction* means every permanent in the process is addressable without a
+# single one of those call sites having to opt in.
+#
+# Determinism is unaffected: the counter consumes no randomness and imposes no
+# iteration order, it only advances when a permanent is created — and that
+# sequence is already seed-reproducible.
+_PERMANENT_IDS = itertools.count(1)
+
+
+def next_permanent_id() -> int:
+    """The next stable permanent identity (CR 400.7: a new object, a new id)."""
+    return next(_PERMANENT_IDS)
+
+
 @dataclass
 class Permanent:
     card: CardDefinition
@@ -182,6 +207,23 @@ class Permanent:
     # they report is one generic list, not a field per card.
     damage_prevention_pool: int = 0
     damage_prevention_source: str | None = None
+    # Stable identity, the replacement for addressing a permanent by its *slot*
+    # on a battlefield list. Unique across every seat (one counter, not one per
+    # player) and stable for as long as this object is on the battlefield, where
+    # an index is stable only until something earlier in the list leaves.
+    #
+    # Stamped at construction and **re-stamped as the permanent enters the
+    # battlefield** (``Game._put_permanent_onto_battlefield``): CR 400.7 makes a
+    # returning permanent a new object, and re-stamping is what makes that true
+    # for the one path that puts the *same* Permanent object back (Oubliette's
+    # scoped phase-out). Last field on purpose — tests construct ``Permanent``
+    # positionally.
+    #
+    # ``compare=False``: :class:`Permanent` equality is value equality, and
+    # several call sites still depend on that (the AI simulator compares
+    # detached clones). Folding identity into ``__eq__`` would be a *separate*
+    # behavioural change; this field is purely additive.
+    permanent_id: int = field(default_factory=next_permanent_id, compare=False)
 
     @property
     def prevention_shields(self) -> list["_shields.Shield"]:

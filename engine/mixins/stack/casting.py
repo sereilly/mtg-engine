@@ -140,7 +140,14 @@ class SpellCastingMixin:
         # Accept cards with supported triggered abilities (match classifier logic)
         if not classification.supported:
             if classification.reason == "unsupported triggered ability":
-                from .oracle import compile_card_oracle
+                # `compile_card_oracle` is imported at module level. The
+                # function-level `from .oracle import ...` that stood here
+                # resolved to `engine.mixins.stack.oracle`, which does not
+                # exist — a leftover from the stack decomposition that raised
+                # ModuleNotFoundError on every card reaching this branch.
+                # Nothing caught it because it is only reachable for an
+                # *unsupported* card, and every card in the pool was supported
+                # until M21 arrived with 33 of them.
                 program = compile_card_oracle(card)
                 if any(getattr(program, "triggered_abilities", ())):
                     if any(t.supported for t in program.triggered_abilities):
@@ -234,7 +241,7 @@ class SpellCastingMixin:
                 matching = [it for it in self.stack if not color_filter or color_filter in it.card.colors]
                 if matching:
                     target_stack_item_val = matching[-1]
-            self.stack.append(
+            self._stack_push(
                 StackItem(
                     card=card,
                     caster_index=caster_index,

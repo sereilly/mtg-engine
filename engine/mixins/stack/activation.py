@@ -466,7 +466,7 @@ class AbilityActivationMixin:
         # still resolves from exile (CR 603.6 / 608.2: the source leaving doesn't
         # counter it). The stack item keeps its source_permanent reference.
         if ability.cost.exile_self:
-            controller.battlefield = [p for p in controller.battlefield if p is not permanent]
+            self.remove_from_battlefield(permanent)
             controller.exile.append(permanent.card)
             self.log.append(
                 f"{controller.name} exiled {permanent.card.name} to activate its ability"
@@ -475,7 +475,7 @@ class AbilityActivationMixin:
         # "Sacrifice this artifact" (Black Lotus, Bottle of Suleiman) is likewise
         # a cost, paid now — the ability still resolves from the graveyard.
         if ability.cost.sacrifice_self:
-            controller.battlefield = [p for p in controller.battlefield if p is not permanent]
+            self.remove_from_battlefield(permanent)
             self._permanent_to_graveyard(controller, permanent)
             self.log.append(
                 f"{controller.name} sacrificed {permanent.card.name} to activate its ability"
@@ -519,7 +519,7 @@ class AbilityActivationMixin:
             supported, details = state_machine.run(instruction)
             return SimulationResult(permanent.card.name, supported, ability.effect_kind, details)
 
-        self.stack.append(
+        self._stack_push(
             StackItem(
                 card=permanent.card,
                 caster_index=controller_index,

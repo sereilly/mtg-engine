@@ -45,7 +45,7 @@ def copy_top_stack_spell(game: Game, instruction: OracleInstruction, context: Or
         new_target_player_index = copied.target_player_index
         new_target_permanent_index = copied.target_permanent_index
 
-    game.stack.append(
+    game._stack_push(
         StackItem(
             card=copied.card,
             caster_index=caster_index,

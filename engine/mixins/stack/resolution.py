@@ -40,7 +40,7 @@ class StackResolutionMixin:
         stack_card = card if card is not None else (source_permanent.card if source_permanent is not None else None)
         if stack_card is None:
             return
-        self.stack.append(
+        self._stack_push(
             StackItem(
                 card=stack_card,
                 caster_index=controller_index,
@@ -189,6 +189,7 @@ class StackResolutionMixin:
                     target=target,
                     card=item.card,
                     target_permanent_index=item.target_permanent_index,
+                    target_permanent_id=item.target_permanent_id,
                     x_value=item.x_value,
                     source_permanent=item.source_permanent,
                     stack_target=item.target_stack_item,
@@ -215,6 +216,7 @@ class StackResolutionMixin:
                 target,
                 item.card,
                 target_permanent_index=item.target_permanent_index,
+                target_permanent_id=item.target_permanent_id,
                 x_value=item.x_value,
                 new_color=item.choices.get("new_color"),
                 stack_target=item.target_stack_item,
@@ -231,6 +233,7 @@ class StackResolutionMixin:
             classification=classification,
             target_player_index=item.target_player_index,
             target_permanent_index=item.target_permanent_index,
+            target_permanent_id=item.target_permanent_id,
             x_value=item.x_value,
             new_color=item.choices.get("new_color"),
             stack_target=item.target_stack_item,
@@ -246,6 +249,7 @@ class StackResolutionMixin:
         classification: CardClassification,
         target_player_index: int | None,
         target_permanent_index: int | None = None,
+        target_permanent_id: int | list[int | None] | None = None,
         x_value: int | None = None,
         new_color: str | None = None,
         stack_target=None,
@@ -278,7 +282,13 @@ class StackResolutionMixin:
                 self._apply_self_enters_battlefield_triggers(
                     caster_index, permanent, target_player_index, target_permanent_index
                 )
-            self._apply_aura_effect(caster_index, permanent, target_player_index, target_permanent_index)
+            self._apply_aura_effect(
+                caster_index,
+                permanent,
+                target_player_index,
+                target_permanent_index,
+                target_permanent_id,
+            )
             # An Aura that failed to attach (its target left the battlefield while the
             # spell was on the stack) goes to its owner's graveyard instead of
             # remaining on the battlefield unattached (MTG Rule 303.4g)
@@ -289,9 +299,7 @@ class StackResolutionMixin:
             ):
                 holder = self.controller_index_of(permanent)
                 if holder is not None:
-                    self.players[holder].battlefield = [
-                        p for p in self.players[holder].battlefield if p is not permanent
-                    ]
+                    self.remove_from_battlefield(permanent)
                 caster.graveyard.append(card)
                 self.log.append(f"{card.name} had no legal target and was put into {caster.name}'s graveyard")
                 self._refresh_dynamic_creatures()
@@ -335,6 +343,7 @@ class StackResolutionMixin:
                 target,
                 card,
                 target_permanent_index=target_permanent_index,
+                target_permanent_id=target_permanent_id,
                 x_value=x_value,
                 new_color=new_color,
                 stack_target=stack_target,

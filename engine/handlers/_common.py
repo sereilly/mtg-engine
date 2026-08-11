@@ -29,6 +29,7 @@ def flip_coin(win_probability: float = 0.5) -> bool:
 
 
 def resolve_own_combatant(
+    game: Game,
     context: OracleExecutionContext,
 ) -> tuple[PlayerState, int, Permanent] | None:
     """Resolve a trigger fired *on a permanent about itself* — the shape combat
@@ -36,10 +37,25 @@ def resolve_own_combatant(
     ``_fire_creature_blocks_triggers`` thread the permanent's own controller and
     battlefield index through ``target``/``target_permanent_index``. Returns
     ``(controller, index, permanent)``, or ``None`` if the context no longer
-    points at a live permanent (already left combat/the battlefield)."""
+    points at a live permanent (already left combat/the battlefield).
+
+    An attack trigger is the clearest case for identity: it is put on the stack
+    during declare-attackers and resolves after every other trigger above it,
+    any of which may have destroyed a creature and shifted the attacker's slot.
+    The index is still returned, because callers report it — but it is
+    *re-derived* from the permanent the id found, never carried."""
     controller = context.target
+    if controller is None:
+        return None
+    permanent_id = context.target_permanent_id
+    if isinstance(permanent_id, int):
+        found = game.permanent_by_id(permanent_id)
+        if found is not None and game.controls(controller, found):
+            index = game.battlefield_index_of(found)
+            if index is not None:
+                return controller, index, found
     idx = context.target_permanent_index
-    if controller is None or not isinstance(idx, int) or not (0 <= idx < len(controller.battlefield)):
+    if not isinstance(idx, int) or not (0 <= idx < len(controller.battlefield)):
         return None
     return controller, idx, controller.battlefield[idx]
 
@@ -169,21 +185,40 @@ def pick_target_permanent(
     player: PlayerState | None,
     index: int | None,
     *,
+    game: Game | None = None,
+    permanent_id: object = None,
     predicate: Callable[[Permanent], bool] | None = None,
     fallback_players: Sequence[PlayerState] | None = None,
     fallback_on_invalid_choice: bool = True,
 ) -> Permanent | None:
-    """Core "honor the chosen battlefield index, else fall back" resolution.
+    """Core "honor the chosen target, else fall back" resolution.
 
-    1. If ``index`` is a valid index into ``player``'s battlefield and that
-       permanent passes ``predicate`` (default: is a creature), return it.
+    0. If ``permanent_id`` still names a permanent *player* controls and it
+       passes ``predicate``, that is the target. This is the stable answer: the
+       id was recorded when the target was chosen (CR 601.2c) and means the same
+       permanent however the battlefield has been renumbered since.
+    1. Otherwise, if ``index`` is a valid index into ``player``'s battlefield and
+       that permanent passes ``predicate`` (default: is a creature), return it.
     2. Otherwise scan ``fallback_players`` (default: just ``player``) for the
        first permanent passing ``predicate``. Pass ``()`` to disable fallback,
        or ``fallback_on_invalid_choice=False`` to skip the fallback only when
        the player explicitly chose an illegal index (the choice fizzles).
+
+    Step 0 is *additive*: when the id no longer resolves — the target died, or
+    changed controller — this falls through to exactly the index behaviour it
+    has always had, rather than inventing a fizzle the rest of the engine is not
+    yet written for. So the id can only turn a wrong answer into a right one.
     """
     if predicate is None:
         predicate = lambda p: p.is_creature
+    if game is not None and isinstance(permanent_id, int) and player is not None:
+        chosen = game.permanent_by_id(permanent_id)
+        # Scoped to *player* on purpose: the callers pass the battlefield the
+        # target was chosen from ("a creature you control", "target artifact an
+        # opponent controls"), and widening that here would be a targeting
+        # change wearing an identity change's clothes.
+        if chosen is not None and game.controls(player, chosen) and predicate(chosen):
+            return chosen
     explicit = isinstance(index, int)
     if explicit and player is not None and 0 <= index < len(player.battlefield):
         candidate = player.battlefield[index]
@@ -201,6 +236,7 @@ def pick_target_permanent(
 
 
 def resolve_target_permanent(
+    game: Game,
     context: OracleExecutionContext,
     *,
     player: PlayerState | None = None,
@@ -209,10 +245,17 @@ def resolve_target_permanent(
     fallback_on_invalid_choice: bool = True,
 ) -> Permanent | None:
     """Resolve the permanent a spell or ability acts on — the context-based
-    wrapper over :func:`pick_target_permanent` (see it for the semantics)."""
+    wrapper over :func:`pick_target_permanent` (see it for the semantics).
+
+    Takes the game because identity is a *board* question: the id on the context
+    means nothing without something to resolve it against. Every handler already
+    receives the game as its first argument, so this reads the same way the
+    handler signature does."""
     return pick_target_permanent(
         player if player is not None else context.target,
         context.target_permanent_index,
+        game=game,
+        permanent_id=context.target_permanent_id,
         predicate=predicate,
         fallback_players=fallback_players,
         fallback_on_invalid_choice=fallback_on_invalid_choice,

@@ -235,7 +235,7 @@ class EffectsMixin:
                 perm.damage_marked = 0
                 self.log.append(f"{perm.card.name} regenerated")
                 return None  # type: ignore[return-value]
-            target.battlefield.pop(idx)
+            self.remove_from_battlefield(perm)
             self._permanent_to_graveyard(target, perm)
             self._trigger_aura_death_effects(perm, target)
             if perm.card.primary_type == "land" and target_player_index is not None:
@@ -897,7 +897,8 @@ class EffectsMixin:
         owner_idx = self.owner_index_of(chosen)
         owner = self.players[owner_idx] if owner_idx is not None else target
         owner.hand.append(chosen.card)
-        target.battlefield.remove(chosen)
+        # Identity: ``remove`` would bounce a look-alike instead of the chosen one.
+        self.remove_from_battlefield(chosen)
         return True
 
     def _sacrifice_creature_for_mana(self, caster: PlayerState, chosen_index: int | None = None) -> Permanent | None:
@@ -915,7 +916,9 @@ class EffectsMixin:
         # owner's graveyard. Resolve the owner before leaving the battlefield.
         owner_idx = self.owner_index_of(chosen)
         owner = self.players[owner_idx] if owner_idx is not None else caster
-        caster.battlefield.remove(chosen)
+        # Identity: ``remove`` would sacrifice a look-alike instead of the
+        # creature the player chose.
+        self.remove_from_battlefield(chosen)
         owner.graveyard.append(chosen.card)
         return chosen
 

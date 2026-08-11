@@ -110,7 +110,7 @@ def sacrifice_self_for_mana(game: Game, instruction: OracleInstruction, context:
     # Belt and braces for callers that reach this handler without going through
     # the cost path (direct handler invocation in tests/scripts).
     if game.controls(caster, source_permanent):
-        caster.battlefield = [perm for perm in caster.battlefield if perm is not source_permanent]
+        game.remove_from_battlefield(source_permanent)
         caster.graveyard.append(source_permanent.card)
     game.log.append(f"{card.name} sacrificed for mana")
     return True, "resolved"

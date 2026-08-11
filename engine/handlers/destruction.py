@@ -54,7 +54,12 @@ def volcanic_eruption(game: Game, instruction: OracleInstruction, context: Oracl
     destroyed = 0
     for owner, perm in chosen:
         if game.controls(owner, perm) and not game._is_indestructible(perm):
-            owner.battlefield.remove(perm)
+            # By identity. ``list.remove`` compares by value, and :class:`Permanent`
+            # is a dataclass with generated ``__eq__`` — two Mountains that entered
+            # on the same turn and are both untapped are ``==``, so ``remove``
+            # would take whichever comes first rather than the one that was
+            # chosen. (Same bug the control seam documents for ``in``.)
+            game.remove_from_battlefield(perm)
             game._permanent_to_graveyard(owner, perm)
             game._process_land_dies(game.players.index(owner))
             destroyed += 1
@@ -219,7 +224,7 @@ def chaos_orb_flip(game: Game, instruction: OracleInstruction, context: OracleEx
     num_to_destroy = random.randint(0, min(2, len(candidates)))
     chosen = random.sample(candidates, num_to_destroy) if num_to_destroy > 0 else []
     for victim_player, victim_perm in chosen:
-        victim_player.battlefield = [p for p in victim_player.battlefield if p is not victim_perm]
+        game.remove_from_battlefield(victim_perm)
         game._permanent_to_graveyard(victim_player, victim_perm)
         game.log.append(f"Chaos Orb flip destroyed {victim_perm.card.name}")
     # Always destroy Chaos Orb itself
@@ -227,7 +232,7 @@ def chaos_orb_flip(game: Game, instruction: OracleInstruction, context: OracleEx
         holder = game.controller_index_of(source_permanent)
         if holder is not None:
             player = game.players[holder]
-            player.battlefield = [p for p in player.battlefield if p is not source_permanent]
+            game.remove_from_battlefield(source_permanent)
             game._permanent_to_graveyard(player, source_permanent)
     game.log.append("Chaos Orb was destroyed after flip")
     return True, "resolved"
@@ -270,7 +275,11 @@ def destroy_artifact_controller_gains_mana_value(
     game._destroy_target_permanent(
         target,
         type_filter="artifact",
-        target_permanent_index=target.battlefield.index(artifact),
+        # By identity. ``list.index`` compares by value, so two equally-stated
+        # Moxen (both untapped, both played this turn) would resolve to the same
+        # slot and Crumble would destroy the first of them rather than the one
+        # it targeted. ``battlefield_index_of`` is the seam's identity search.
+        target_permanent_index=game.battlefield_index_of(artifact),
         bypass_regeneration=bool(instruction.payload.get("bypass_regeneration")),
     )
     if controller_index is not None:

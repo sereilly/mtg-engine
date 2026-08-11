@@ -19,7 +19,7 @@ def coin_flip_remove_attacker_and_tap(game: Game, instruction: OracleInstruction
     the flip, remove this creature from combat and tap it." Fired per-attacker
     by _fire_creature_attacks_triggers, which threads the attacker's own
     controller/index through target_player_index/target_permanent_index."""
-    combatant = resolve_own_combatant(context)
+    combatant = resolve_own_combatant(game, context)
     if combatant is None:
         return True, "resolved"
     controller, idx, permanent = combatant
@@ -42,7 +42,7 @@ def coin_flip_remove_blocker(game: Game, instruction: OracleInstruction, context
     _fire_creature_blocks_triggers. "Can't block this turn" needs no extra
     flag: this engine only declares blockers once per combat, so removal
     already prevents it from blocking again."""
-    combatant = resolve_own_combatant(context)
+    combatant = resolve_own_combatant(game, context)
     if combatant is None:
         return True, "resolved"
     controller, idx, _permanent = combatant
@@ -64,7 +64,7 @@ def delayed_destroy_blocked_or_blocker(game: Game, instruction: OracleInstructio
     combat. The victim is identified by the stack item's target indices, captured
     at declaration time (509.3f).
     """
-    victim = resolve_target_permanent(context, predicate=lambda p: True, fallback_players=())
+    victim = resolve_target_permanent(game, context, predicate=lambda p: True, fallback_players=())
     if victim is None:
         game.log.append(f"{context.card.name} block trigger had no valid target")
         return True, "no target"
@@ -79,7 +79,7 @@ def grant_unlimited_blocking(game: Game, instruction: OracleInstruction, context
     # of creatures this turn. It blocks each attacking creature this turn if able."
     # Honor the chosen creature; fall back to the first only for AI/headless play.
     card = context.card
-    blocker = resolve_target_permanent(context)
+    blocker = resolve_target_permanent(game, context)
     if blocker is not None:
         # Lets it block any number of attackers (_max_blocks_for) and requires it to
         # block each attacker it can (enforced when blocks are declared).
@@ -228,7 +228,7 @@ def grant_unblockable_to_low_power_target(game: Game, instruction: OracleInstruc
     # fall back to the first eligible creature only for AI/headless casts with no
     # explicit target. Either way the "power 2 or less" restriction is enforced.
     target_creature = resolve_target_permanent(
-        context, predicate=lambda p: p.is_creature and p.effective_power <= 2
+        game, context, predicate=lambda p: p.is_creature and p.effective_power <= 2
     )
     if target_creature is not None:
         target_creature.metadata["cant_be_blocked_until_eot"] = True
@@ -243,7 +243,7 @@ def grant_banding_to_target(game: Game, instruction: OracleInstruction, context:
     # Helm of Chatzuk: "{1}, {T}: Target creature gains banding until end of turn."
     # Honor the chosen target (any creature, on either battlefield); fall back to
     # the first creature only when no explicit target was supplied (AI/headless).
-    target_creature = resolve_target_permanent(context)
+    target_creature = resolve_target_permanent(game, context)
     if target_creature is None:
         game.log.append("No valid creature target for banding effect")
         return False, "no valid creature target for banding effect"

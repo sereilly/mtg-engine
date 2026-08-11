@@ -518,7 +518,7 @@ class DeclareBlockersStepMixin:
             instruction, source_line = block_destroy_instruction(source)
             if instruction is None:
                 return
-            self.stack.append(
+            self._stack_push(
                 StackItem(
                     card=source.card,
                     caster_index=source_controller_index,
@@ -587,7 +587,7 @@ class DeclareBlockersStepMixin:
             for trig in matching_triggers(
                 blocker.effective_card, condition_kinds={"creature_blocks"}
             ):
-                self.stack.append(
+                self._stack_push(
                     StackItem(
                         card=blocker.card,
                         caster_index=controller_index,

@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 @effect_handler("berserk_pump")
 def berserk_pump(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     card = context.card
-    target_perm = resolve_target_permanent(context)
+    target_perm = resolve_target_permanent(game, context)
     if target_perm is not None:
         boost = target_perm.effective_power
         # "+X/+0 until end of turn" — apply now and track it so cleanup removes it
@@ -98,7 +98,7 @@ def pump_target_creature_until_eot(game: Game, instruction: OracleInstruction, c
         return True
 
     target_perm = resolve_target_permanent(
-        context, predicate=_eligible, fallback_players=(target, caster)
+        game, context, predicate=_eligible, fallback_players=(target, caster)
     )
     if target_perm is not None:
         apply_temp_pt_boost(target_perm, power_delta, toughness_delta)
@@ -199,7 +199,7 @@ def grant_self_flying_until_eot(game: Game, instruction: OracleInstruction, cont
 @effect_handler("grant_target_flying_until_eot")
 def grant_target_flying_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     card = context.card
-    target_creature = resolve_target_permanent(context)
+    target_creature = resolve_target_permanent(game, context)
     if target_creature is not None:
         grant_keyword(target_creature, "flying", until_eot=True)
         game.log.append(f"{target_creature.card.name} gains flying until end of turn from {card.name}")
@@ -214,7 +214,7 @@ def grant_islandwalk_and_linked_destroy(game: Game, instruction: OracleInstructi
     creature and drained by _permanent_to_graveyard + the state-based sweep."""
     card = context.card
     source_permanent = context.source_permanent
-    target_creature = resolve_target_permanent(context)
+    target_creature = resolve_target_permanent(game, context)
     if target_creature is None:
         game.log.append(f"{card.name}: no valid creature target")
         return True, "resolved"
@@ -249,7 +249,7 @@ def set_base_pt_target_until_eot(game: Game, instruction: OracleInstruction, con
             return False
         return True
 
-    target_perm = resolve_target_permanent(context, predicate=_eligible)
+    target_perm = resolve_target_permanent(game, context, predicate=_eligible)
     if target_perm is None:
         game.log.append(f"{card.name}: no valid creature target")
         return True, "resolved"
@@ -284,7 +284,7 @@ def grant_flying_and_delayed_destruction(game: Game, instruction: OracleInstruct
     # first legal creature only for AI/untargeted activations — an explicitly
     # chosen illegal target fizzles.
     target_creature = resolve_target_permanent(
-        context, player=caster, predicate=_is_legal, fallback_on_invalid_choice=False
+        game, context, player=caster, predicate=_is_legal, fallback_on_invalid_choice=False
     )
     if target_creature is not None:
         grant_keyword(target_creature, "flying", until_eot=True)

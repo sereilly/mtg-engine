@@ -104,29 +104,57 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         return True, "resolved"
     # Support multiple target indices for spells like Fireball
     if isinstance(target_perm_idx, list):
-        indices = [i for i in target_perm_idx if isinstance(i, int) and 0 <= i < len(target.battlefield)]
-        n = len(indices)
+        # `_stack_push` stamped an id per chosen index, positionally and
+        # None-padded, so the two lists pair up. Resolving each through the seam
+        # means a target that survived is still hit even if an earlier one died
+        # and shifted every later slot — which is precisely what a multi-target
+        # spell waiting on the stack is exposed to.
+        ids = context.target_permanent_id
+        if not isinstance(ids, list):
+            ids = [None] * len(target_perm_idx)
+        chosen = []
+        for position, idx in enumerate(target_perm_idx):
+            permanent_id = ids[position] if position < len(ids) else None
+            found = game.chosen_permanent(target, idx, permanent_id)
+            if found is not None:
+                chosen.append(found)
+        n = len(chosen)
         if n == 0:
             # CR 608.2b: every chosen creature target is gone, so the spell
             # does nothing — it must not fall back to damaging the player.
             game.log.append(f"{card.name}: no remaining legal targets (CR 608.2b)")
             return True, "resolved"
         per_target = damage // n if n > 0 else 0
-        for idx in sorted(indices, reverse=True):
-            target_perm = target.battlefield[idx]
+        # Highest slot first, so a death here cannot shift a target this loop
+        # has not reached yet. Kept even though each target is now resolved up
+        # front: `_mark_damage_on_permanent` reads the battlefield itself.
+        for target_perm in sorted(
+            chosen, key=lambda perm: game.battlefield_index_of(perm) or 0, reverse=True
+        ):
             game._mark_damage_on_permanent(
                 target_perm, per_target, source=source_permanent or card,
                 then=_damage_reporter(game, card, target_perm),
             )
         return True, "resolved"
-    if isinstance(target_perm_idx, int) and not 0 <= target_perm_idx < len(target.battlefield):
-        # CR 608.2b: a creature was targeted but is no longer on the
-        # battlefield — the spell does nothing rather than hitting the player.
-        game.log.append(f"{card.name}: target creature is gone, no effect (CR 608.2b)")
-        return True, "resolved"
     if isinstance(target_perm_idx, int):
-        # Damage targets a creature permanent, not the player
-        target_perm = target.battlefield[target_perm_idx]
+        # Damage targets a creature permanent, not the player.
+        #
+        # The id is asked *first*, and the CR 608.2b refusal below is what the
+        # bounds check became. Order matters here and it is easy to get wrong:
+        # a standalone `not 0 <= idx < len(battlefield)` guard in front of this
+        # returned "target is gone" for a target that had merely been
+        # *renumbered* — every creature below it dying shortens the list — so
+        # the id lookup behind it could never run. Resolving first and refusing
+        # on None means the spell fizzles when the target is genuinely gone and
+        # finds it when it only moved.
+        target_perm = game.chosen_permanent(
+            target, target_perm_idx, context.target_permanent_id
+        )
+        if target_perm is None:
+            # CR 608.2b: a creature was targeted but is no longer on the
+            # battlefield — the spell does nothing rather than hitting the player.
+            game.log.append(f"{card.name}: target creature is gone, no effect (CR 608.2b)")
+            return True, "resolved"
         # 115.4: "any target" is limited to creatures, players, planeswalkers, and battles.
         # Noncreature artifacts (and other noncreature non-planeswalker permanents) are not
         # valid "any target" targets — the spell fizzles against them.
@@ -204,7 +232,7 @@ def simulacrum_redirect(game: Game, instruction: OracleInstruction, context: Ora
     if amount > 0:
         game._gain_life(caster, amount, card.name)
 
-    target_perm = resolve_target_permanent(context, player=caster)
+    target_perm = resolve_target_permanent(game, context, player=caster)
     if target_perm is None:
         game.log.append(f"{card.name}: no creature to deal damage to")
         return True, "resolved"
@@ -235,8 +263,10 @@ def deal_damage_and_self_damage(game: Game, instruction: OracleInstruction, cont
     amount = int(instruction.payload.get("amount", 0))
     self_damage = int(instruction.payload.get("self_damage", 0))
     target_perm_idx = context.target_permanent_index
-    if isinstance(target_perm_idx, int) and 0 <= target_perm_idx < len(target.battlefield):
-        target_perm = target.battlefield[target_perm_idx]
+    target_perm = game.chosen_permanent(
+        target, target_perm_idx, context.target_permanent_id
+    )
+    if target_perm is not None:
         game._mark_damage_on_permanent(
             target_perm, amount, source=card,
             then=lambda dealt: game.log.append(
@@ -269,8 +299,10 @@ def deal_damage_and_gain_life(game: Game, instruction: OracleInstruction, contex
     # Drain Life is an "any target" spell — it may hit a creature. Deal to the
     # chosen creature and gain life equal to the damage actually dealt (capped by
     # its toughness, mirroring the card's life-gain limit).
-    if isinstance(target_perm_idx, int) and 0 <= target_perm_idx < len(target.battlefield):
-        target_perm = target.battlefield[target_perm_idx]
+    target_perm = game.chosen_permanent(
+        target, target_perm_idx, context.target_permanent_id
+    )
+    if target_perm is not None:
         if target_perm.is_creature:
             apply_damage_to_creature(
                 game, target_perm, damage, card,

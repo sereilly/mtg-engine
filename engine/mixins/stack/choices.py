@@ -691,9 +691,17 @@ class PendingChoicesMixin:
         for i in hand:
             if not (0 <= i < len(player.hand)):
                 return False
-        # Remove battlefield permanents (highest index first) and hand cards.
-        for i in sorted(set(lands) | set(creatures), reverse=True):
-            perm = player.battlefield.pop(i)
+        # Resolve every chosen permanent *before* removing any, then remove
+        # them together. The old loop went highest-index-first so that removing
+        # one could not invalidate the indices behind it — a workaround the
+        # single removal choke point makes unnecessary, since nothing here holds
+        # an index across a removal any more.
+        chosen_perms = [
+            self.permanent_at(player, i)
+            for i in sorted(set(lands) | set(creatures), reverse=True)
+        ]
+        for perm in chosen_perms:
+            self.remove_from_battlefield(perm)
             self._permanent_to_graveyard(player, perm)
         for i in sorted(hand, reverse=True):
             player.graveyard.append(player.hand.pop(i))
@@ -918,7 +926,8 @@ class PendingChoicesMixin:
                 valid,
                 key=lambda i: "you lose the game" in player.battlefield[i].card.oracle_text.lower(),
             )
-            perm = player.battlefield.pop(idx)
+            perm = self.permanent_at(player, idx)
+            self.remove_from_battlefield(perm)
             self._permanent_to_graveyard(player, perm)
             self.log.append(f"{player.name} sacrificed {perm.card.name} ({reason})")
 
@@ -992,10 +1001,10 @@ class PendingChoicesMixin:
         if len(chosen) != need or any(i not in valid for i in chosen):
             return False
         reason = data["reason"]
-        # Remove highest index first so the earlier indices stay valid mid-loop.
+        # Resolved before any removal, so no index is held across one.
         removed: list[str] = []
-        for i in sorted(chosen, reverse=True):
-            perm = player.battlefield.pop(i)
+        for perm in [self.permanent_at(player, i) for i in sorted(chosen, reverse=True)]:
+            self.remove_from_battlefield(perm)
             self._permanent_to_graveyard(player, perm)
             removed.append(perm.card.name)
         for name in reversed(removed):

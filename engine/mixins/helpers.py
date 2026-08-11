@@ -16,7 +16,7 @@ from ..control import (
 from ..events import emit
 from ..layer_bridge import computed_controller
 from ..land_types import end_land_type_change
-from ..models import CardDefinition, Permanent, PlayerState
+from ..models import CardDefinition, Permanent, PlayerState, next_permanent_id
 from ..oracle import compile_card_oracle
 from ..replacements import apply_replacements
 from ..trigger_utils import make_trigger_event, matching_triggers
@@ -209,7 +209,7 @@ class GameHelpersMixin:
             controller_index = self.controller_index_of(attached)
             if controller_index is not None:
                 controller = self.players[controller_index]
-                controller.battlefield = [p for p in controller.battlefield if p is not attached]
+                self.remove_from_battlefield(attached)
                 self._permanent_to_graveyard(controller, attached)
                 self.log.append(
                     f"{controller.name} sacrificed {attached.card.name} ({aura.card.name} left the battlefield)"
@@ -361,6 +361,14 @@ class GameHelpersMixin:
             derived = computed_controller(permanent, base)
             if derived == holding or not (0 <= derived < len(self.players)):
                 continue
+            # NOT a removal, and deliberately not routed through
+            # `remove_from_battlefield`: this is a *move* between two
+            # battlefields, the projection of a derived controller change (CR
+            # 613 layer 2). The permanent does not leave the battlefield, so
+            # anything hung off the leave transition — dies triggers, Aura
+            # cleanup, the combat remap this choke point exists to host — must
+            # not fire here. The pair of statements is one operation and is
+            # written open so that is visible.
             self.players[holding].battlefield = [
                 p for p in self.players[holding].battlefield if p is not permanent
             ]
@@ -569,6 +577,379 @@ class GameHelpersMixin:
         player had an identical creature in an identical state."""
         return any(perm is permanent for perm in self.all_permanents())
 
+    # ------------------------------------------------------------------
+    # Addressing one permanent (CR 400.7)
+    #
+    # The seam above answers "which permanents"; this answers "*that* one".
+    # Both questions used to be answered by opening ``player.battlefield``, and
+    # the second one was answered *positionally* — ``player.battlefield[i]`` —
+    # which is unstable by construction: anything leaving the battlefield
+    # renumbers every later slot, so an index held across a resolution step
+    # addresses a different permanent than the one it was taken for.
+    #
+    # ``Permanent.permanent_id`` is the stable answer, and these are the only
+    # places that turn one into a permanent. Scattering the lookup would put
+    # the same bounds-checking and the same "it may be gone by now" decision in
+    # every caller, which is how the positional reads spread in the first place.
+    # ------------------------------------------------------------------
+
+    def permanent_by_id(self, permanent_id) -> "Permanent | None":
+        """The battlefield permanent with this id, or None if it has left.
+
+        None is the answer a caller wants: a permanent that is gone is *gone*,
+        where ``battlefield[i]`` would hand back whichever permanent slid into
+        that slot. Callers should treat None as "the target is no longer there"
+        (CR 608.2b), not as an error."""
+        found = self.find_permanent_by_id(permanent_id)
+        return None if found is None else found[1]
+
+    def find_permanent_by_id(self, permanent_id) -> "tuple[int, Permanent] | None":
+        """``(controller seat, permanent)`` for this id, or None if it has left.
+
+        The paired form, for the callers that need the seat as well — the seat
+        is *derived* here rather than remembered by the caller, so a permanent
+        that changed control since the id was taken resolves to whoever
+        controls it now (CR 613 layer 2)."""
+        if permanent_id is None:
+            return None
+        try:
+            wanted = int(permanent_id)
+        except (TypeError, ValueError):
+            return None
+        for seat, permanent in self.permanents_with_controller():
+            if permanent.permanent_id == wanted:
+                return seat, permanent
+        return None
+
+    def permanent_id_of(self, permanent: Permanent) -> int | None:
+        """*permanent*'s stable id while it is on the battlefield, else None.
+
+        None for a permanent that has left, so an id taken from here is always
+        one ``permanent_by_id`` can still resolve — by identity, because a
+        look-alike's id is a different number and asking by value would find
+        it."""
+        if permanent is None or not self.is_on_battlefield(permanent):
+            return None
+        return permanent.permanent_id
+
+    def battlefield_index_of(self, permanent: Permanent) -> int | None:
+        """*permanent*'s slot on its controller's battlefield, or None.
+
+        **The bridge, not the destination.** The wire protocol still addresses
+        a permanent by index, so the payload has to carry one until the client
+        has finished migrating; this is where that index is derived, by
+        identity, instead of each serializer running its own ``enumerate``."""
+        seat = self.controller_index_of(permanent)
+        if seat is None:
+            return None
+        for index, candidate in enumerate(self.controlled_by(seat)):
+            if candidate is permanent:
+                return index
+        return None
+
+    def permanent_at(self, seat, index) -> "Permanent | None":
+        """The permanent in *seat*'s battlefield slot *index*, or None.
+
+        The other half of the bridge: an index arriving from the wire has to be
+        turned into a permanent exactly once, at the boundary, and then carried
+        as an id. Bounds-checked, because every open-coded
+        ``0 <= i < len(battlefield)`` guard is one that can be forgotten."""
+        if index is None:
+            return None
+        try:
+            wanted = int(index)
+        except (TypeError, ValueError):
+            return None
+        if wanted < 0:
+            return None
+        battlefield = list(self.controlled_by(self.seat_index(seat)))
+        if wanted >= len(battlefield):
+            return None
+        return battlefield[wanted]
+
+    def chosen_permanent(self, seat, index, permanent_id) -> "Permanent | None":
+        """The permanent a cast-time choice named, preferring its stable id.
+
+        The read half of what ``_stack_push`` writes. A spell records both when
+        its target is chosen (CR 601.2c) and resolution asks for both here, so
+        the id answers whenever it still can and the index answers exactly as it
+        always did when it cannot.
+
+        **Additive on purpose.** Falling through to the index rather than
+        failing means this can only turn a wrong answer into a right one: a
+        target that has left the battlefield behaves as before (whatever slid
+        into its slot, or nothing), rather than acquiring a fizzle the callers
+        are not yet written for. Tightening that into a CR 608.2b refusal is a
+        behaviour change and belongs in a change that says so.
+
+        Scoped to *seat* like the index it replaces, so a permanent that changed
+        controller is not silently still targeted from its old side.
+        """
+        if isinstance(permanent_id, int):
+            found = self.permanent_by_id(permanent_id)
+            if found is not None and self.controls(seat, found):
+                return found
+        return self.permanent_at(seat, index)
+
+    def remove_from_battlefield(self, permanent: Permanent) -> Permanent | None:
+        """Take *permanent* off the battlefield. The one transition out.
+
+        Returns the permanent when it was there, None when it was not — so a
+        caller that needs the object (most of the old ``battlefield.pop(idx)``
+        sites did) gets it without a second lookup, and a caller that does not
+        can ignore it.
+
+        **Where it goes next is the caller's business.** A permanent leaves for
+        a graveyard, exile, its owner's hand or library, or into the phased-out
+        limbo an effect is holding it in, and those destinations have nothing in
+        common. This does the one part they share.
+
+        The reason it is one function is the reason ``become_tapped`` is one
+        function. The battlefield was rebuilt or shortened in **41 places**, in
+        three different spellings (filter-by-identity, ``pop`` by index, rebuild
+        from a survivors list), and anything that has to happen when a permanent
+        leaves therefore had 41 places to be wired into and 41 places to be
+        forgotten. The live example is the one that motivated this: every combat
+        map is keyed by battlefield index, so a permanent leaving mid-combat
+        renumbers every attacker and blocker recorded after it, and there was no
+        single place to put the remap.
+
+        By **identity**, never by value: ``Permanent.__eq__`` compares by value,
+        so ``list.remove`` and ``in`` match an opponent's look-alike card. That
+        bug class is why ``.battlefield.remove()`` is banned outright by
+        ``tests/engine/test_control_reads.py``.
+        """
+        removed = self.remove_all_from_battlefield((permanent,))
+        return removed[0] if removed else None
+
+    def remove_all_from_battlefield(self, permanents) -> list[Permanent]:
+        """Take several permanents off the battlefield at once.
+
+        The shape a sweep needs — destruction, a mass bounce, a player leaving
+        the game — rebuilding each affected battlefield **once** rather than
+        once per permanent. Returns those actually removed, in the order they
+        sat on their battlefields, so a caller can log or process exactly what
+        left.
+
+        Not simply a loop over :meth:`remove_from_battlefield`, because a sweep
+        that rebuilds per victim is quadratic and, worse, renumbers between
+        victims — which is the failure the callers were open-coding around when
+        they built a ``survivors`` list themselves.
+        """
+        targets = [perm for perm in permanents if perm is not None]
+        if not targets:
+            return []
+        departing = {id(perm) for perm in targets}
+        # Where each departing permanent sat, per seat, *before* the rebuild —
+        # everything combat records is a slot on one of these lists, and once
+        # the lists are rebuilt the old numbers are unrecoverable.
+        vacated: dict[int, list[int]] = {}
+        for seat, player in enumerate(self.players):
+            gone = [i for i, perm in enumerate(player.battlefield) if id(perm) in departing]
+            if gone:
+                vacated[seat] = gone
+        removed: list[Permanent] = []
+        for player in self.players:
+            if not any(id(perm) in departing for perm in player.battlefield):
+                continue
+            survivors = []
+            for perm in player.battlefield:
+                (removed if id(perm) in departing else survivors).append(perm)
+            player.battlefield = survivors
+        if removed:
+            self._renumber_combat_after_removal(vacated)
+        return removed
+
+    # ------------------------------------------------------------------
+    # Combat's slots, kept honest across a removal
+    # ------------------------------------------------------------------
+
+    def _combat_seat_of_blocker(self, attacker_index: int) -> int | None:
+        """Which seat a blocker index belongs to, given the attacker it blocks.
+
+        ``combat_banding_damage`` and ``combat_multiblock_damage`` record blocker
+        slots with no seat beside them, which is unambiguous in a duel and not
+        in a CR 802 multi-defender combat. The seat is recoverable: a blocker
+        blocks an attacker, and ``combat_attackers`` says which player that
+        attacker is attacking. Read before any map is rewritten, so it answers
+        from the pre-removal numbering.
+        """
+        seat = self.combat_attackers.get(attacker_index)
+        if seat is None:
+            return self.combat_defending_player_index
+        return seat
+
+    def _renumber_combat_after_removal(self, vacated: dict[int, list[int]]) -> None:
+        """Keep every combat map pointing at the creatures it meant.
+
+        Combat is recorded as **battlefield slots** — attacker index, blocker
+        index — and a slot is not a name. A creature dying in the first-strike
+        damage step shifts every later slot on its controller's battlefield down
+        by one, so an attacker recorded as index 3 silently becomes whatever
+        index 3 is now. That was the bug this whole thread of work was chasing,
+        and consolidating removal into one transition is what made it fixable in
+        one place instead of 41.
+
+        Two things happen to a recorded slot. If its own creature left, the
+        entry is **dropped** — a dead attacker is not attacking. Otherwise it is
+        **shifted** down by the number of departing creatures that sat ahead of
+        it on the same battlefield.
+
+        The seat for each index is not guessed: an attacker index is always the
+        active player's (``declare_attackers`` refuses any other controller), a
+        blocker index in ``combat_blockers`` comes from its own outer key, and
+        the two damage-assignment maps recover it through
+        :meth:`_combat_seat_of_blocker`.
+        """
+        if not vacated:
+            return
+
+        def shift(seat: int | None, index: int) -> int | None:
+            """*index* after the removal, or None if that creature is the one gone."""
+            gone = vacated.get(seat) if seat is not None else None
+            if not gone:
+                return index
+            if index in gone:
+                return None
+            return index - sum(1 for slot in gone if slot < index)
+
+        attacker_seat = self.active_player_index
+        # Snapshot the attacker->defender map before anything is rewritten; the
+        # blocker-seat lookups below read it.
+        blocker_seat_of = {
+            attacker: self._combat_seat_of_blocker(attacker)
+            for attacker in list(self.combat_attackers)
+        }
+
+        def shift_attacker(index: int) -> int | None:
+            return shift(attacker_seat, index)
+
+        self.combat_attackers = {
+            moved: defender
+            for attacker, defender in self.combat_attackers.items()
+            if (moved := shift_attacker(attacker)) is not None
+        }
+
+        rebuilt_blockers: dict[int, dict[int, list[int]]] = {}
+        for defender_seat, blocks in self.combat_blockers.items():
+            rebuilt: dict[int, list[int]] = {}
+            for blocker, attackers in blocks.items():
+                moved_blocker = shift(defender_seat, blocker)
+                if moved_blocker is None:
+                    continue
+                moved_attackers = [
+                    moved
+                    for attacker in attackers
+                    if (moved := shift_attacker(attacker)) is not None
+                ]
+                # A blocker whose every attacker has gone is no longer blocking
+                # anything; dropping it keeps "is this creature blocking?" true.
+                if moved_attackers:
+                    rebuilt[moved_blocker] = moved_attackers
+            if rebuilt:
+                rebuilt_blockers[defender_seat] = rebuilt
+        self.combat_blockers = rebuilt_blockers
+
+        self.combat_bands = [
+            moved_band
+            for band in self.combat_bands
+            if (moved_band := [
+                moved for member in band if (moved := shift_attacker(member)) is not None
+            ])
+        ]
+
+        self.combat_band_blocks = {
+            moved_attacker: moved_blockers
+            for attacker, blockers in self.combat_band_blocks.items()
+            if (moved_attacker := shift_attacker(attacker)) is not None
+            and (moved_blockers := [
+                moved
+                for blocker in blockers
+                if (moved := shift(blocker_seat_of.get(attacker), blocker)) is not None
+            ])
+        }
+
+        self.combat_banding_damage = {
+            moved_attacker: moved_assignment
+            for attacker, assignment in self.combat_banding_damage.items()
+            if (moved_attacker := shift_attacker(attacker)) is not None
+            and (moved_assignment := {
+                moved: amount
+                for blocker, amount in assignment.items()
+                if (moved := shift(blocker_seat_of.get(attacker), blocker)) is not None
+            })
+        }
+
+        rebuilt_multiblock: dict[int, dict[int, int]] = {}
+        for blocker, assignment in self.combat_multiblock_damage.items():
+            # This map keys by blocker, so its seat comes from an attacker the
+            # blocker is blocking rather than from the key itself.
+            seat = next(
+                (blocker_seat_of.get(attacker) for attacker in assignment),
+                self.combat_defending_player_index,
+            )
+            moved_blocker = shift(seat, blocker)
+            if moved_blocker is None:
+                continue
+            moved_assignment = {
+                moved: amount
+                for attacker, amount in assignment.items()
+                if (moved := shift_attacker(attacker)) is not None
+            }
+            if moved_assignment:
+                rebuilt_multiblock[moved_blocker] = moved_assignment
+        self.combat_multiblock_damage = rebuilt_multiblock
+
+        self.combat_attacker_piles = {
+            moved: side
+            for attacker, side in self.combat_attacker_piles.items()
+            if (moved := shift_attacker(attacker)) is not None
+        }
+        self.combat_defender_piles = {
+            moved: side
+            for creature, side in self.combat_defender_piles.items()
+            if (moved := shift(self.combat_left_right_defender_index, creature)) is not None
+        }
+
+    def permanent_ids_at(self, seat, index):
+        """The stable id(s) of whatever sits at *index* on *seat*'s battlefield.
+
+        Takes the index shape the wire and the stack already speak — an int, a
+        list of ints, or None — and returns the same shape in ids, so a caller
+        recording a target keeps the two readable side by side. An entry that
+        does not resolve becomes None rather than being dropped, because a
+        multi-target list is positional and a shorter list would silently
+        re-pair the surviving targets with the wrong slots."""
+        if isinstance(index, list):
+            return [self.permanent_ids_at(seat, entry) for entry in index]
+        permanent = self.permanent_at(seat, index)
+        return None if permanent is None else permanent.permanent_id
+
+    def _stack_push(self, item):
+        """Put *item* on the stack, recording its target's identity (CR 601.2c).
+
+        The one place an object goes on the stack, and the reason it is one
+        place: a stack object is the engine's only structure that outlives the
+        moment it was built. Everything else that holds a battlefield index
+        uses it within the same step, where the list cannot renumber
+        underneath it; a spell waits for priority to pass, for responses to be
+        cast, and for everything above it to resolve — and any of those can
+        take a permanent off the battlefield and shift every later slot down.
+
+        So the index the caller chose is stamped into an id *here*, at the
+        boundary, while it is still known to mean what it said. Resolution
+        reads the id (``engine/handlers/_common.py``) and only falls back to
+        the index when the id no longer resolves, which is exactly the
+        situation the old code was already in."""
+        seat = item.target_player_index
+        if seat is None:
+            # The convention resolution uses when no target player was named.
+            seat = 1 - item.caster_index if len(self.players) == 2 else item.caster_index
+        if 0 <= seat < len(self.players):
+            item.target_permanent_id = self.permanent_ids_at(seat, item.target_permanent_index)
+        self.stack.append(item)
+        return item
+
     def _destroy_swept_permanents(
         self,
         player: PlayerState,
@@ -579,24 +960,28 @@ class GameHelpersMixin:
         on_regenerate=None,
         on_destroy=None,
     ) -> list[Permanent]:
-        """Destroy every permanent on *player*'s battlefield that ``matches``,
-        rebuilding the battlefield in place. Indestructible permanents survive
-        (when respected); a creature's regeneration shield is consumed instead of
-        destruction (when allowed). Each destruction routes through
-        ``_permanent_to_graveyard`` while the permanent is still listed, matching
-        the sweep loops this consolidates. Returns the destroyed permanents."""
-        survivors: list[Permanent] = []
+        """Destroy every permanent on *player*'s battlefield that ``matches``.
+
+        Indestructible permanents survive (when respected); a creature's
+        regeneration shield is consumed instead of destruction (when allowed).
+        Each destruction routes through ``_permanent_to_graveyard`` while the
+        permanent is still listed, matching the sweep loops this consolidates.
+        Returns the destroyed permanents.
+
+        The survivors list this used to build and assign is gone: it says what
+        stays, when the interesting set is what leaves, and it was one of the
+        41 open-coded battlefield rebuilds. Collecting the departing and handing
+        them to :meth:`remove_all_from_battlefield` is the same operation said
+        the other way round, through the one transition.
+        """
         destroyed: list[Permanent] = []
-        for permanent in player.battlefield:
+        for permanent in list(self.controlled_by(player)):
             if not matches(permanent):
-                survivors.append(permanent)
                 continue
             # Pyramids: a shielded land survives its next destruction this turn.
             if self._consume_land_destruction_shield(permanent):
-                survivors.append(permanent)
                 continue
             if respect_indestructible and self._is_indestructible(permanent):
-                survivors.append(permanent)
                 continue
             if (
                 allow_regeneration
@@ -610,13 +995,12 @@ class GameHelpersMixin:
                 self.become_tapped(permanent)
                 if on_regenerate is not None:
                     on_regenerate(permanent)
-                survivors.append(permanent)
                 continue
             self._permanent_to_graveyard(player, permanent)
             if on_destroy is not None:
                 on_destroy(permanent)
             destroyed.append(permanent)
-        player.battlefield = survivors
+        self.remove_all_from_battlefield(destroyed)
         return destroyed
 
     def _fire_creature_dies_triggers(self, dead_permanent: Permanent) -> None:
@@ -681,6 +1065,11 @@ class GameHelpersMixin:
         permanent: Permanent,
         target_player_index: int | None,
     ) -> None:
+        # CR 400.7: what enters is a *new object*, so it gets a new identity —
+        # nothing that held the old id may address it. Stamped before the append
+        # so no reader can observe the permanent on the battlefield under an id
+        # it is about to lose.
+        permanent.permanent_id = next_permanent_id()
         self.players[controller_index].battlefield.append(permanent)
         # CR 613.1: the value layer 2 starts from. Recorded on entry and never
         # written again, so an ending control effect reverts to the seat that

@@ -202,7 +202,7 @@ def ante_self_then_clear_ante_and_draw(game: Game, instruction: OracleInstructio
     # CardDefinition is shared per name and identity alone couldn't tell a
     # previously anted copy apart from this one.
     others = list(caster.ante)
-    controller.battlefield = [p for p in controller.battlefield if p is not source_permanent]
+    game.remove_from_battlefield(source_permanent)
     game.ante_object(owner_index, source_permanent.card)
     game.log.append(f"{caster.name} anted {card.name}")
 
@@ -417,12 +417,12 @@ def exile_target_creature_until_eot(game: Game, instruction: OracleInstruction, 
         candidate = target.battlefield[target_perm_idx]
         if candidate.is_creature:
             exiled_perm = candidate
-            target.battlefield.pop(target_perm_idx)
+            game.remove_from_battlefield(candidate)
     if exiled_perm is None:
-        for idx, perm in enumerate(target.battlefield):
+        for perm in list(game.controlled_by(target)):
             if perm.is_creature:
                 exiled_perm = perm
-                target.battlefield.pop(idx)
+                game.remove_from_battlefield(perm)
                 break
     if exiled_perm is not None:
         target.exile.append(exiled_perm.card)
@@ -440,21 +440,29 @@ def phase_out_target_creature_until_source_leaves(game: Game, instruction: Oracl
     source_permanent = context.source_permanent
     if source_permanent is None:
         return False, "ability not implemented"
-    target_perm = resolve_target_permanent(context, predicate=lambda p: p.is_creature)
+    target_perm = resolve_target_permanent(game, context, predicate=lambda p: p.is_creature)
     if target_perm is None:
         game.log.append(f"{card.name}: no valid creature target")
         return True, "resolved"
     owner_index = game.controller_index_of(target_perm)
     if owner_index is None:
         return True, "resolved"
-    game.players[owner_index].battlefield.remove(target_perm)
+    # By identity throughout: ``list.remove`` compares by value, and Permanent is
+    # a dataclass with generated __eq__, so it takes the first *equal* permanent
+    # — an opponent's identically-stated copy of the same card — rather than the
+    # one that was chosen.
+    owner_player = game.players[owner_index]
+    game.remove_from_battlefield(target_perm)
     # Auras/Equipment attached to the phased creature phase out with it (CR 702.26h).
     attachments: list[tuple[int, Permanent]] = []
     for seat, player in enumerate(game.players):
-        for perm in list(player.battlefield):
-            if perm.metadata.get("attached_to") is target_perm:
-                player.battlefield.remove(perm)
-                attachments.append((seat, perm))
+        leaving = [
+            perm for perm in game.controlled_by(seat)
+            if perm.metadata.get("attached_to") is target_perm
+        ]
+        if leaving:
+            game.remove_all_from_battlefield(leaving)
+            attachments.extend((seat, perm) for perm in leaving)
     source_permanent.metadata["phased_out_permanent"] = target_perm
     source_permanent.metadata["phased_out_owner_index"] = owner_index
     source_permanent.metadata["phased_out_attachments"] = attachments
@@ -473,12 +481,12 @@ def exile_creature_gain_life_equal_to_power(game: Game, instruction: OracleInstr
         candidate = target.battlefield[target_perm_idx]
         if candidate.is_creature:
             exiled_perm = candidate
-            target.battlefield.pop(target_perm_idx)
+            game.remove_from_battlefield(candidate)
     if exiled_perm is None:
-        for idx, perm in enumerate(target.battlefield):
+        for perm in list(game.controlled_by(target)):
             if perm.is_creature:
                 exiled_perm = perm
-                target.battlefield.pop(idx)
+                game.remove_from_battlefield(perm)
                 break
     if exiled_perm is not None:
         target.exile.append(exiled_perm.card)
@@ -573,7 +581,8 @@ def return_all_owned_artifacts_to_hand(game: Game, instruction: OracleInstructio
                 continue
             if game.owner_index_of(permanent) != owner_index:
                 continue
-            player.battlefield.remove(permanent)
+            # Identity, not value: two untapped Moxen of the same name are ``==``.
+            game.remove_from_battlefield(permanent)
             game.players[owner_index].hand.append(permanent.card)
             game._remove_aura_effects(permanent)
             returned += 1

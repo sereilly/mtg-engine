@@ -123,7 +123,7 @@ class UpkeepEffectsMixin:
                 f"{permanent.card.name} dealt {counters} damage to each creature and each player"
             )
         else:
-            controller.battlefield = [p for p in controller.battlefield if p is not permanent]
+            self.remove_from_battlefield(permanent)
             controller.graveyard.append(permanent.card)
             self.log.append(f"{controller.name} sacrificed {permanent.card.name} on upkeep")
 
@@ -148,7 +148,7 @@ class UpkeepEffectsMixin:
                     controller.mana_pool[sym] = controller.mana_pool.get(sym, 0) - count
             self.log.append(f"{controller.name} paid upkeep for {permanent.card.name}")
         else:
-            controller.battlefield = [p for p in controller.battlefield if p is not permanent]
+            self.remove_from_battlefield(permanent)
             controller.graveyard.append(permanent.card)
             self.log.append(f"{controller.name} sacrificed {permanent.card.name} on upkeep")
 
@@ -638,7 +638,7 @@ class UpkeepEffectsMixin:
                     controller.mana_pool[sym] = controller.mana_pool.get(sym, 0) - count
             self.log.append(f"{controller.name} paid upkeep for {permanent.card.name}")
         else:
-            controller.battlefield = [p for p in controller.battlefield if p is not permanent]
+            self.remove_from_battlefield(permanent)
             controller.graveyard.append(permanent.card)
             self.log.append(f"{controller.name} sacrificed {permanent.card.name} on upkeep")
 
@@ -670,6 +670,6 @@ class UpkeepEffectsMixin:
             for perm in self.controlled_by(controller)
         )
         if not has_island:
-            controller.battlefield = [p for p in controller.battlefield if p is not permanent]
+            self.remove_from_battlefield(permanent)
             controller.graveyard.append(permanent.card)
             self.log.append(f"{controller.name} sacrificed {permanent.card.name} for lacking an Island")

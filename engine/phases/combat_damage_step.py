@@ -56,7 +56,7 @@ class CombatDamageStepMixin:
             ):
                 if "isn't blocked" not in (trig.source_line or "").lower():
                     continue
-                self.stack.append(
+                self._stack_push(
                     StackItem(
                         card=permanent.card,
                         caster_index=controller_index,

@@ -215,7 +215,7 @@ class DeclareAttackersStepMixin:
             for trig in matching_triggers(
                 permanent.effective_card, condition_kinds={"one_or_more_attack"}
             ):
-                self.stack.append(
+                self._stack_push(
                     StackItem(
                         card=permanent.card,
                         caster_index=controller_index,
@@ -251,7 +251,7 @@ class DeclareAttackersStepMixin:
                 # combat damage step.
                 if "isn't blocked" in (trig.source_line or "").lower():
                     continue
-                self.stack.append(
+                self._stack_push(
                     StackItem(
                         card=permanent.card,
                         caster_index=controller_index,

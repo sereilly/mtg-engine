@@ -53,7 +53,7 @@ def deny_regeneration_to_target(game: Game, instruction: OracleInstruction, cont
     """Hurr Jackal: 'Target creature can't be regenerated this turn.' Reuses
     the cant_be_regenerated_this_turn flag Disintegrate-style effects already
     set (checked wherever a regeneration shield would apply)."""
-    target = resolve_target_permanent(context)
+    target = resolve_target_permanent(game, context)
     if target is None:
         return False, "no valid creature target"
     target.metadata["cant_be_regenerated_this_turn"] = True
