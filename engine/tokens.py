@@ -13,6 +13,18 @@ from typing import Sequence
 from .models import CardDefinition
 
 
+def default_token_name(subtypes: Sequence[str]) -> str:
+    """CR 111.4: an unnamed token's name is its subtype(s) plus "Token".
+
+    "Create two 2/1 red Dwarf Berserker creature tokens" makes tokens named
+    "Dwarf Berserker Token". The one naming rule for every token maker — the
+    grammar's ``create_token`` lowering and the card hooks alike — so
+    "creatures named …" effects read one spelling.
+    """
+    words = [part.capitalize() for subtype in subtypes for part in subtype.split()]
+    return " ".join(words + ["Token"])
+
+
 def token_image_uris(source_card: CardDefinition, token_name: str) -> dict[str, str] | None:
     """Resolve a token's Scryfall image URLs from its creating card's ``all_parts``.
 
@@ -26,7 +38,14 @@ def token_image_uris(source_card: CardDefinition, token_name: str) -> dict[str, 
     for part in raw.get("all_parts") or ():
         if not isinstance(part, dict):
             continue
-        if part.get("component") == "token" and part.get("name") == token_name:
+        # Scryfall names its token cards without the word "Token" ("Bird",
+        # "Soldier"), while CR 111.4 names an unnamed token *with* it — so a
+        # CR-named token finds its art by the suffix-stripped spelling too.
+        part_name = part.get("name")
+        if part.get("component") == "token" and part_name in (
+            token_name,
+            token_name.removesuffix(" Token"),
+        ):
             card_id = part.get("id")
             if not isinstance(card_id, str) or len(card_id) < 2:
                 continue

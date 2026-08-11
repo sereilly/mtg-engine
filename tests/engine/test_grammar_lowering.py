@@ -2217,20 +2217,29 @@ def test_a_coloured_multiple_token_carries_colours_and_a_count():
     ]
 
 
-def test_an_unnamed_token_refuses_rather_than_picking_a_convention():
-    """Rukh Egg's and Bottle of Suleiman's token phrases parse in full but do
-    not lower. CR 111.4 names an unnamed token "<subtypes> Token"; the engine's
-    other token maker (``arm_end_step_token``) names it after the subtype
-    alone. A token's name is what every "creatures named ..." effect reads, so
-    picking one convention here would print the wrong name for one of the two
-    families."""
-    for line in (
-        "Create a 4/4 red Bird creature token with flying.",
-        "Create a 5/5 colorless Djinn artifact creature token with flying.",
+def test_an_unnamed_token_takes_its_cr_111_4_name():
+    """CR 111.4: an unnamed token's name is its subtype(s) plus "Token" —
+    "Bird Token", "Dwarf Berserker Token". One rule shared with the card
+    hooks (``default_token_name``), because a token's name is what every
+    "creatures named ..." effect reads."""
+    for line, expected in (
+        ("Create a 4/4 red Bird creature token with flying.", "Bird Token"),
+        (
+            "Create a 5/5 colorless Djinn artifact creature token with flying.",
+            "Djinn Token",
+        ),
     ):
         result = compile_line(line, card_name="Test")
-        assert result.parsed and not result.lowered
-        assert "no printed name" in result.failure_reason
+        assert result.parsed and result.lowered, result.failure_reason
+        assert result.instructions[0].payload["name"] == expected
+
+
+def test_an_unnamed_token_with_no_subtype_refuses():
+    """CR 111.4 builds the name from the subtypes; with none printed there is
+    nothing to build from."""
+    result = compile_line("Create a 2/2 white creature token.", card_name="Test")
+    assert result.parsed and not result.lowered
+    assert "no CR 111.4 name" in result.failure_reason
 
 
 def test_a_non_creature_token_refuses():

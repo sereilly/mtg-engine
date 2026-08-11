@@ -69,3 +69,34 @@ def test_mistral_singer_pumps_on_a_noncreature_cast(set_pool):
 
 def test_masked_blackguard_casts_at_instant_speed(set_pool):
     assert set_pool("M21")["Masked Blackguard"].has_flash
+
+
+# --- The token-naming round: CR 111.4 names unnamed tokens ------------------
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "Valorous Steed",         # ETB: 2/2 white Knight token with vigilance
+        "Deathbloom Thallid",     # dies: 1/1 green Saproling token
+        "Falconer Adept",         # attacks: 1/1 white Bird token — still gated
+        "Goblin Wizardry",        # two 1/1 red Wizard tokens with prowess
+        "Sporeweb Weaver",        # dealt damage: gain 1 life + Saproling token
+        "Speaker of the Heavens", # {T}: 4/4 white Angel token, conditional
+    ],
+)
+def test_token_round_cards_compile_supported(set_pool, name):
+    if name == "Falconer Adept":
+        pytest.skip("still gated on the tapped-and-attacking rider")
+    assert compile_card_oracle(set_pool("M21")[name]).supported
+
+
+def test_valorous_steed_token_takes_its_cr_111_4_name(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Valorous Steed"])
+    create = next(
+        trig.instruction
+        for trig in program.triggered_abilities
+        if trig.instruction is not None and trig.instruction.kind == "create_token"
+    )
+    assert create.payload["name"] == "Knight Token"
+    assert create.payload["keywords"] == ("Vigilance",)

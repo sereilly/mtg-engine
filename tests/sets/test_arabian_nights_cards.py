@@ -484,7 +484,8 @@ def test_rukh_egg_arms_delayed_token_on_death(arn_by_name):
 
     assert len(game.pending_end_step_tokens) == 1
     spec = game.pending_end_step_tokens[0]
-    assert spec["name"] == "Bird"
+    # CR 111.4: the printed line does not name the token, so it is "Bird Token".
+    assert spec["name"] == "Bird Token"
     assert spec["power"] == 4 and spec["toughness"] == 4
     assert spec["colors"] == ("R",)
     assert spec["keywords"] == ("Flying",)
@@ -501,7 +502,7 @@ def test_rukh_egg_token_appears_at_end_step(arn_by_name):
     game._permanent_to_graveyard(p1, perm)
     game.resolve_end_step(0)
 
-    bird = next((p for p in p1.battlefield if p.card.name == "Bird"), None)
+    bird = next((p for p in p1.battlefield if p.card.name == "Bird Token"), None)
     assert bird is not None
     assert bird.metadata.get("is_token") is True
     assert bird.effective_power == 4

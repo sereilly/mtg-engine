@@ -607,9 +607,9 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
     'Rukh Egg': {
         'when this creature dies, create a 4/4 red bird creature token with '
         'flying at the beginning of the next end step':
-            _line('arm_end_step_token', 'triggered_token', name='Bird', power=4,
-                toughness=4, type_line='Creature — Bird', colors=('R',),
-                keywords=('Flying',)),
+            _line('arm_end_step_token', 'triggered_token', name='Bird Token',
+                power=4, toughness=4, type_line='Creature — Bird',
+                colors=('R',), keywords=('Flying',)),
     },
     # The other half of the pair; see the note on Metamorphosis above.
     'Sacrifice': {

@@ -9,6 +9,7 @@ changes what a permanent is, and all of them change the state a player is in.
 """
 
 from ...oracle_types import OracleInstruction
+from ...tokens import default_token_name
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
@@ -70,33 +71,36 @@ def _lower_create_token(node: ast.CreateToken) -> tuple[OracleInstruction, ...]:
     Hive payload carries no ``colors`` entry for a colourless token and no
     ``count`` for a single one.
 
-    Two shapes refuse rather than guess:
+    An unnamed token takes its CR 111.4 name — its subtype(s) plus the word
+    "Token" ("Dwarf Berserker Token") — through ``default_token_name``, the
+    one naming rule every token maker shares. Two shapes still refuse rather
+    than guess:
 
-    * **A token with no printed name.** CR 111.4 makes it "<subtypes> Token",
-      but the engine's other token maker (``arm_end_step_token``, Rukh Egg)
-      names it after the subtype alone. Choosing either here would make one of
-      the two token families print the wrong name, and a token's name is what
-      every "creatures named …" effect reads.
+    * **A token with neither a printed name nor a subtype.** CR 111.4 has
+      nothing to build a name from.
     * **A token with no creature type at all.** ``make_token_card`` always
       builds a creature card, and a type line with no card types would come out
       as a bare subtype the loader could not classify.
     """
-    if not node.name:
-        raise LoweringError(
-            "a token with no printed name has no agreed naming convention "
-            "(CR 111.4 says '<subtypes> Token'; arm_end_step_token uses the "
-            "subtype alone)",
-            node=node,
-        )
     if "creature" not in node.types:
         raise LoweringError("make_token_card only builds creature tokens", node=node)
+    if node.name:
+        name = _title(node.name)
+    elif node.subtypes:
+        name = default_token_name(node.subtypes)
+    else:
+        raise LoweringError(
+            "a token with neither a printed name nor a subtype has no CR 111.4 "
+            "name to take",
+            node=node,
+        )
 
     type_line = " ".join(_title(word) for word in node.types)
     if node.subtypes:
         type_line += " — " + " ".join(_title(word) for word in node.subtypes)
 
     payload: dict[str, object] = {
-        "name": _title(node.name),
+        "name": name,
         "power": node.power,
         "toughness": node.toughness,
         "type_line": type_line,

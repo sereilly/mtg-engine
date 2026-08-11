@@ -21,7 +21,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | 2ED | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
 | ARN | 78 | 108 | 64.8% | 61.1% | 38.9% | 34 |
 | 3ED | 296 | 389 | 78.9% | 76.6% | 41.6% | 148 |
-| M21 *(measured)* | 285 | 503 | 50.7% | 42.7% | 22.1% | 90 |
+| M21 *(measured)* | 285 | 503 | 50.7% | 43.9% | 23.3% | 95 |
 | **All (shipped)** | **1248** | **1663** | **78.0%** | **76.1%** | **41.4%** | **628** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -41,7 +41,6 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | 8 | 5 | expected a keyword ability |  |
 | 8 | 4 | a conditional static bonus is derived by engine/static_bonuses.py |  |
 | 7 | 2 | expected a colour after 'becomes' |  |
-| 7 | 7 | a token with no printed name has no agreed naming convention (CR 111.4 says '<subtypes> Token'; arm_end_step_token uses the subtype alone) |  |
 | 6 | 3 | no lowering for RawEffect |  |
 | 6 | 6 | expected a destination zone after 'return' |  |
 | 6 | 5 | counters on a non-source subject |  |
@@ -57,6 +56,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | 2 | 1 | back-reference to 'damage_dealt' with no producer in this effect |  |
 | 2 | 1 | expected something to shield |  |
 | 2 | 1 | no untap handler honors this restriction |  |
+| 2 | 2 | expected a power/toughness value |  |
 
 ## Cards executing through the grammar
 
@@ -260,6 +260,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Regenerate target creature.`
   - `Regenerate target creature.`
   - `Regenerate target creature.`
+- **Deathbloom Thallid**
+  - `When this creature dies, create a 1/1 green Saproling creature token.`
 - **Deathgrip**
   - `{B}{B}: Counter target green spell.`
   - `{B}{B}: Counter target green spell.`
@@ -336,6 +338,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Earthquake deals X damage to each creature without flying and each player.`
   - `Earthquake deals X damage to each creature without flying and each player.`
 - **Elder Gargaroth**
+  - `• Create a 3/3 green Beast creature token.`
   - `• You gain 3 life.`
   - `• Draw a card.`
 - **Elephant Graveyard**
@@ -422,6 +425,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Other Goblins get +1/+1 and have mountainwalk.`
   - `Other Goblins get +1/+1 and have mountainwalk.`
   - `Other Goblins get +1/+1 and have mountainwalk.`
+- **Goblin Wizardry**
+  - `Create two 1/1 red Goblin Wizard creature tokens with prowess. (Whenever you cast a noncreature spell, they get +1/+1 until end of turn.)`
 - **Granite Gargoyle**
   - `{R}: This creature gets +0/+1 until end of turn.`
   - `{R}: This creature gets +0/+1 until end of turn.`
@@ -948,11 +953,15 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Whenever a creature dies, you may pay {1}. If you do, you gain 1 life.`
 - **Sparkhunter Masticore**
   - `{1}: This creature deals 1 damage to target planeswalker.`
+- **Speaker of the Heavens**
+  - `{T}: Create a 4/4 white Angel creature token with flying. Activate only if you have at least 7 life more than your starting life total and only as a sorcery.`
 - **Spell Blast**
   - `Counter target spell with mana value X. (For example, if that spell's mana cost is {3}{U}{U}, X is 5.)`
   - `Counter target spell with mana value X. (For example, if that spell's mana cost is {3}{U}{U}, X is 5.)`
   - `Counter target spell with mana value X. (For example, if that spell's mana cost is {3}{U}{U}, X is 5.)`
   - `Counter target spell with mana value X. (For example, if that spell's mana cost is {3}{U}{U}, X is 5.)`
+- **Sporeweb Weaver**
+  - `Whenever this creature is dealt damage, you gain 1 life and create a 1/1 green Saproling creature token.`
 - **Stasis**
   - `At the beginning of your upkeep, sacrifice this enchantment unless you pay {U}.`
   - `At the beginning of your upkeep, sacrifice this enchantment unless you pay {U}.`
@@ -1070,6 +1079,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `{R}: Regenerate this creature.`
   - `{R}: Regenerate this creature.`
   - `{R}: Regenerate this creature.`
+- **Valorous Steed**
+  - `When this creature enters, create a 2/2 white Knight creature token with vigilance.`
 - **Verduran Enchantress**
   - `Whenever you cast an enchantment spell, you may draw a card.`
   - `Whenever you cast an enchantment spell, you may draw a card.`
