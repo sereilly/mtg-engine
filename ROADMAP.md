@@ -163,11 +163,23 @@ without a counter). Snarespinner and Gloom Sower stay gated — their block
 narrowings need an object filter on the event, not a fixed phrase, and
 Gloom Sower's fires once per blocker besides.
 
+**Round 8 — the causative wrapper, and the enqueue path it exposed
+(126 → 128).** "You may have it deal 1 damage" is the optional form of "it
+deals 1 damage", and the verb table already accepted the uninflected
+spelling — so the parser's whole change is consuming "have" inside the
+existing may wrapper. The real work was runtime: a dying creature's own
+"When this creature dies, you may …" trigger had no enqueue path (the three
+specific dies shapes are inline, each for its own recorded reason), so the
+may wrapper now goes on the stack (CR 603.3) and resolves into the standard
+optional prompt with the action armed on accept. Bought Goblin Arsonist and
+Battle-Rattle Shaman — the second riding round 7's `combat_your_turn`
+condition, which is the census's stacking pattern paying out: two rounds,
+neither sufficient alone, one card each plus this one together.
+
 **Next per the census:** the rest of the search-library template family
 (graveyard and by-name variants, the search-flow filter widening); the
 sacrifice/discard activation costs (Selfless Savior, Seasoned Hallowblade);
-the causative "you may have …" wrapper (Goblin Arsonist, Battle-Rattle
-Shaman); then the subsystem blocks (planeswalkers, scry, exile-until-leaves,
+then the subsystem blocks (planeswalkers, scry, exile-until-leaves,
 per-turn trackers).
 
 ---
