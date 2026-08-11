@@ -30,6 +30,28 @@ well and is sanctioned in Phase 2. Edits to the grammar
 time: concurrent edits break the differential guard, a lesson ROADMAP.md
 records from the first parallel implementation pass.
 
+**Parallelising the rounds themselves** is possible in one of two shapes,
+and the difference is where the serial step lives. With *worktree
+isolation*, each group edits its own copy of the repo and authorship
+parallelises — the serial rule then applies to **integration**: merge one
+branch at a time, running the full suite and every `--check` between merges,
+because two groups that each pass alone can still collide in
+`lowering/categories.py`, `effect_labels.py` or `tests/sets/`. Without
+isolation (this repo currently refuses it — git resolves a redirect that
+would let a worktree write outside itself), fan out **design** instead:
+each agent verifies its group against the live compiler and returns an
+exact spec — file, function, current code, replacement code, tests — and
+one applier lands them in sequence. The second shape is slower per round but
+keeps the differential intact, and the specs are reviewable in a way a merge
+conflict is not.
+
+Budget the fan-out before starting it. A group agent that reads the docs,
+probes the compiler and writes a spec is not cheap, and several of them share
+the session's request budget with the main loop — four at once exhausted it
+here and returned nothing, which cost the round rather than parallelising it.
+Two agents that finish beat four that die: launch the number you can afford
+to see through, and prefer one round's worth of groups at a time.
+
 ## Known gaps / pending pre-work
 
 A drainable list of things the playbook knows are not yet true, each naming
