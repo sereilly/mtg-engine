@@ -13,6 +13,7 @@ what is missing instead of producing an effect that never ends.
 from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
+from ..vocabulary import IMPLEMENTED_KEYWORDS
 from ._common import (
     _amount_payload,
     _describe_targets,
@@ -95,15 +96,30 @@ def _lower_gain_keyword(node: ast.GainKeyword) -> tuple[OracleInstruction, ...]:
         if reason.startswith("continuous pump"):
             reason = "continuous keyword grant needs the CR 613 layers engine"
         raise LoweringError(reason, node=node)
-    if len(node.keywords) != 1:
-        raise LoweringError("multi-keyword grant has no instruction kind", node=node)
     scope = "self" if _is_source(node.subject) else ("target" if _is_target(node.subject) else None)
     if scope is None:
         raise LoweringError("unsupported keyword-grant subject", node=node)
-    kind = _KEYWORD_GRANTS.get((node.keywords[0], scope))
-    if kind is None:
-        raise LoweringError(f"no handler for granting {node.keywords[0]!r} to {scope}", node=node)
-    return (OracleInstruction(kind, "", {}),)
+    if len(node.keywords) == 1:
+        kind = _KEYWORD_GRANTS.get((node.keywords[0], scope))
+        if kind is not None:
+            return (OracleInstruction(kind, "", {}),)
+    # Any other grant rides the generic payload pair, gated on the keyword
+    # registry: `grant_keyword` puts the word into layer 6 for anything, but a
+    # word whose behaviour is not built would be a grant of nothing — the same
+    # silent wrongness the printed-keyword gate refuses. Several keywords in
+    # one sentence ("gains hexproof and indestructible") are one instruction
+    # carrying them all.
+    for keyword in node.keywords:
+        if keyword not in IMPLEMENTED_KEYWORDS:
+            raise LoweringError(
+                f"granting {keyword!r} needs the keyword implemented", node=node
+            )
+    payload: dict[str, object] = {"keywords": tuple(node.keywords)}
+    if scope == "self":
+        return (OracleInstruction("grant_self_keyword_until_eot", "", payload),)
+    assert isinstance(node.subject, ast.TargetSpec)
+    _describe_targets(payload, node.subject)
+    return (OracleInstruction("grant_target_keyword_until_eot", "", payload),)
 
 
 def _lower_put_counter(node: ast.PutCounter) -> tuple[OracleInstruction, ...]:

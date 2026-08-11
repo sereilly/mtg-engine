@@ -233,6 +233,7 @@ _KIND_TO_SPEC: dict[str, dict] = {
     # the default predicate — `p.is_creature` — so "creature" is what the code
     # that runs the ability accepts, not what the printed line says.
     "grant_banding_to_target": {"kind": "creature"},
+    "grant_target_keyword_until_eot": {"kind": "creature"},
     "grant_islandwalk_and_linked_destroy": {"kind": "creature"},
     "grant_flying_and_delayed_destruction": {"kind": "creature"},
     "grant_unblockable_to_low_power_target": {"kind": "creature"},

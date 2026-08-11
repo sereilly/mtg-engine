@@ -244,6 +244,41 @@ def grant_target_flying_until_eot(game: Game, instruction: OracleInstruction, co
     return True, "resolved"
 
 
+@effect_handler("grant_target_keyword_until_eot")
+def grant_target_keyword_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Target creature gains <keyword(s)> until end of turn." The payload
+    carries the words; the lowering admits only implemented keywords, so a
+    grant here always grants behaviour that exists."""
+    card = context.card
+    target_creature = resolve_target_permanent(game, context)
+    if target_creature is None:
+        game.log.append(f"{card.name}: no valid creature target")
+        return True, "resolved"
+    keywords = tuple(instruction.payload.get("keywords") or ())
+    for keyword in keywords:
+        grant_keyword(target_creature, keyword, until_eot=True)
+    game.log.append(
+        f"{target_creature.card.name} gains {' and '.join(keywords)} until end of turn ({card.name})"
+    )
+    return True, "resolved"
+
+
+@effect_handler("grant_self_keyword_until_eot")
+def grant_self_keyword_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"This creature gains <keyword(s)> until end of turn." (Fetid Imp.)"""
+    card = context.card
+    source_permanent = context.source_permanent
+    if source_permanent is None:
+        return False, "ability not implemented"
+    keywords = tuple(instruction.payload.get("keywords") or ())
+    for keyword in keywords:
+        grant_keyword(source_permanent, keyword, until_eot=True)
+    game.log.append(
+        f"{card.name} gains {' and '.join(keywords)} until end of turn"
+    )
+    return True, "resolved"
+
+
 @effect_handler("grant_islandwalk_and_linked_destroy")
 def grant_islandwalk_and_linked_destroy(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Sandals of Abdallah: "Target creature gains islandwalk until end of

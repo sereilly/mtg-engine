@@ -48,6 +48,8 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "set_base_pt_target_until_eot": "pump",
     "grant_target_flying_until_eot": "pump",
     "grant_self_flying_until_eot": "pump",
+    "grant_target_keyword_until_eot": "pump",
+    "grant_self_keyword_until_eot": "pump",
     "grant_banding_to_target": "pump",
     "add_counter_to_self": "pump",
     "add_counter_to_target": "pump",

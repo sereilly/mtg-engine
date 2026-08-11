@@ -119,6 +119,36 @@ def test_storm_caller_damages_each_opponent_on_entry(set_pool):
     assert p1.life == 20
 
 
+# --- The keyword-grant round: "gains <keyword> until end of turn" -----------
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "Sure Strike",     # +3/+0 and gains first strike
+        "Ranger's Guile",  # your creature gains hexproof
+        "Fetid Imp",       # {B}: this creature gains deathtouch
+    ],
+)
+def test_keyword_grant_round_cards_compile_supported(set_pool, name):
+    assert compile_card_oracle(set_pool("M21")[name]).supported
+
+
+def test_rangers_guile_grants_hexproof_for_the_turn(set_pool):
+    guile = set_pool("M21")["Ranger's Guile"]
+    mine = Permanent(card=set_pool("M21")["Concordia Pegasus"])
+    p1 = PlayerState(name="P1", battlefield=[mine], hand=[guile])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    game.cast_from_hand(0, "Ranger's Guile", target_player_index=0, target_permanent_index=0)
+
+    assert mine.has_keyword("hexproof")
+    bolt = set_pool("M21")["Shock"]
+    assert game._can_be_targeted(mine, bolt, caster_index=1) is False
+    assert game._can_be_targeted(mine, bolt, caster_index=0) is True
+
+
 # --- The counter round: +1/+1 counters on non-source subjects ---------------
 
 

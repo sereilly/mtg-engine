@@ -117,7 +117,7 @@ Do not edit by hand — re-run the script instead.
 | 103 | Throne of Eldraine | ELD | 2019-10-04 | 286 | 270 | Not Implemented |
 | 104 | Theros Beyond Death | THB | 2020-01-24 | 273 | 246 | Not Implemented |
 | 105 | Ikoria: Lair of Behemoths | IKO | 2020-04-24 | 266 | 229 | Not Implemented |
-| 106 | Core Set 2021 | M21 | 2020-07-03 | 285 | 183 | Partial (120/285 supported) |
+| 106 | Core Set 2021 | M21 | 2020-07-03 | 285 | 183 | Partial (123/285 supported) |
 | 107 | Zendikar Rising | ZNR | 2020-09-25 | 285 | 270 | Not Implemented |
 | 108 | Kaldheim | KHM | 2021-02-05 | 323 | 305 | Not Implemented |
 | 109 | Strixhaven: School of Mages | STX | 2021-04-23 | 290 | 284 | Not Implemented |

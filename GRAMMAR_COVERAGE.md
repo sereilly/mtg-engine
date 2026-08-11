@@ -21,7 +21,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | 2ED | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
 | ARN | 78 | 108 | 64.8% | 61.1% | 38.9% | 34 |
 | 3ED | 296 | 389 | 78.9% | 76.9% | 41.9% | 149 |
-| M21 *(measured)* | 285 | 503 | 51.1% | 45.5% | 24.9% | 103 |
+| M21 *(measured)* | 285 | 503 | 51.1% | 46.3% | 25.6% | 106 |
 | **All (shipped)** | **1248** | **1663** | **78.0%** | **76.2%** | **41.5%** | **629** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -52,11 +52,11 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | 3 | 1 | only one mana of any colour has a handler; 3 does not |  |
 | 3 | 1 | no tap-or-untap handler honours this restriction |  |
 | 3 | 3 | expected a destination zone after 'return' |  |
+| 3 | 3 | unsupported keyword-grant subject |  |
 | 2 | 1 | back-reference to 'damage_dealt' with no producer in this effect |  |
 | 2 | 1 | expected something to shield |  |
 | 2 | 1 | no untap handler honors this restriction |  |
 | 2 | 2 | no handler for returning a non-targeted object |  |
-| 2 | 2 | expected a power/toughness value |  |
 
 ## Cards executing through the grammar
 
@@ -359,6 +359,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `At the beginning of the upkeep of enchanted enchantment's controller, this Aura deals 1 damage to that player.`
   - `At the beginning of the upkeep of enchanted enchantment's controller, this Aura deals 1 damage to that player.`
   - `At the beginning of the upkeep of enchanted enchantment's controller, this Aura deals 1 damage to that player.`
+- **Fetid Imp**
+  - `{B}: This creature gains deathtouch until end of turn. (Any amount of damage it deals to a creature is enough to destroy it.)`
 - **Finishing Blow**
   - `Destroy target creature or planeswalker.`
 - **Fireball**
@@ -799,6 +801,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Return target creature card from your graveyard to your hand.`
 - **Rambunctious Mutt**
   - `When this creature enters, destroy target artifact or enchantment an opponent controls.`
+- **Ranger's Guile**
+  - `Target creature you control gets +1/+1 and gains hexproof until end of turn. (It can't be the target of spells or abilities your opponents control.)`
 - **Read the Tides**
   - `• Draw three cards.`
 - **Reconstruction**
@@ -965,6 +969,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Whenever a creature dies, you may pay {1}. If you do, you gain 1 life.`
 - **Sparkhunter Masticore**
   - `{1}: This creature deals 1 damage to target planeswalker.`
+  - `{3}: This creature gains indestructible until end of turn.`
 - **Speaker of the Heavens**
   - `{T}: Create a 4/4 white Angel creature token with flying. Activate only if you have at least 7 life more than your starting life total and only as a sorcery.`
 - **Spell Blast**
@@ -996,6 +1001,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 - **Sublime Epiphany**
   - `• Counter target spell.`
   - `• Target player draws a card.`
+- **Sure Strike**
+  - `Target creature gets +3/+0 and gains first strike until end of turn. (It deals combat damage before creatures without first strike.)`
 - **Swift Response**
   - `Destroy target tapped creature.`
 - **Swiftwater Cliffs**
