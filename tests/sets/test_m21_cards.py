@@ -11,6 +11,7 @@ from __future__ import annotations
 import pytest
 
 from engine import Game
+from engine.grammar import compile_line
 from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle
 
@@ -117,6 +118,61 @@ def test_storm_caller_damages_each_opponent_on_entry(set_pool):
 
     assert p2.life == 18
     assert p1.life == 20
+
+
+# --- The scry round (CR 701.22), and mill's recipient -----------------------
+
+
+@pytest.mark.parametrize("name", ["Wall of Runes", "Spined Megalodon"])
+def test_scry_round_cards_compile_supported(set_pool, name):
+    assert compile_card_oracle(set_pool("M21")[name]).supported
+
+
+def test_opt_no_longer_drops_its_scry(set_pool):
+    """Regression for a *silent* wrong: Opt compiled supported on the strength
+    of "Draw a card." alone while "Scry 1." produced no instruction at all, so
+    the card played as a strictly worse Opt. Both sentences must be claimed."""
+    kinds = [i.kind for i in compile_card_oracle(set_pool("M21")["Opt"]).instructions]
+    assert "scry" in kinds
+    assert "draw_controller_cards" in kinds
+
+
+def test_temple_of_mystery_etb_scry_is_claimed(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Temple of Mystery"])
+    assert any(
+        t.instruction is not None and t.instruction.kind == "scry"
+        for t in program.triggered_abilities
+    )
+
+
+def test_carrion_grub_etb_mills_its_own_controller(set_pool):
+    """"Mill four cards." — a bare imperative, so the miller is the effect's
+    controller and travels on the same `recipient` key life loss uses, rather
+    than as a target the handler would read off `context.target`.
+
+    Asserted on the line rather than the card: Carrion Grub's *other* line
+    ("gets +X/+0, where X is the greatest power among creature cards in your
+    graveyard") still refuses, and a refused line stops the creature compiling
+    at all — so the card stays unsupported while this line is done.
+    """
+    grub = set_pool("M21")["Carrion Grub"]
+    line = next(l for l in grub.oracle_text.split("\n") if "mill" in l)
+    result = compile_line(line, card_name="Carrion Grub")
+
+    assert result.lowered, result.failure_reason
+    mill = result.instructions[0]
+    assert mill.kind == "mill_target_player"
+    assert mill.payload["recipient"] == "caster"
+    assert mill.payload["amount"] == 4
+    assert "targets" not in mill.payload  # a bare mill targets nobody
+    assert not compile_card_oracle(grub).supported
+
+
+def test_track_down_still_refuses_its_reveal_clause(set_pool):
+    """Scry 3 parses now, but "then reveal the top card of your library" has no
+    production — the sentence refuses whole rather than scrying and dropping
+    the rest."""
+    assert not compile_card_oracle(set_pool("M21")["Track Down"]).supported
 
 
 # --- The causative round: "you may have <subject> <verb> ..." ---------------

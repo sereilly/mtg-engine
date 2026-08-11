@@ -3136,22 +3136,33 @@ def test_target_player_mills_one_card():
 
 
 @pytest.mark.parametrize(
-    "line",
+    "line,recipient",
     [
-        "You mill three cards.",
-        "Each player mills a card.",
+        ("You mill three cards.", "caster"),
+        ("Each opponent mills two cards.", "each_opponent"),
     ],
 )
-def test_a_mill_whose_miller_is_not_the_target_refuses(line):
-    """``mill_target_player`` mills ``context.target`` and reads no player from
-    its payload. Both of these are real printed templates, and both would
-    compile cleanly onto that handler and mill whoever happened to be
-    targeted."""
+def test_a_mill_names_its_miller_on_the_payload(line, recipient):
+    """The miller rides the same ``recipient`` key damage and life loss use.
+    Absent still means the spell's target, so Millstone's payload is
+    unchanged; naming it is what lets a bare "mill four cards" mill its own
+    controller instead of whoever happened to be targeted."""
     result = compile_line(line, card_name="Test")
+
+    assert result.lowered, result.failure_reason
+    assert result.instructions[0].kind == "mill_target_player"
+    assert result.instructions[0].payload["recipient"] == recipient
+
+
+def test_a_mill_whose_miller_no_handler_names_still_refuses():
+    """"Each player mills a card" would compile cleanly onto the handler and
+    mill whoever happened to be targeted, so it refuses by name rather than
+    guessing — the reason this lowering refused everything to begin with."""
+    result = compile_line("Each player mills a card.", card_name="Test")
 
     assert result.parsed
     assert not result.lowered
-    assert result.failure_reason.startswith("mill_target_player mills the chosen target")
+    assert "cannot mill" in result.failure_reason
 
 
 # ---------------------------------------------------------------------------

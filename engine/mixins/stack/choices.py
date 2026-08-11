@@ -156,6 +156,10 @@ class PendingChoicesMixin:
         return self._choice_view("reorder_library", "caster_index")
 
     @property
+    def pending_scry(self) -> dict | None:
+        return self._choice_view("scry", "caster_index")
+
+    @property
     def pending_discard(self) -> dict | None:
         return self._choice_view("discard", "player_index")
 
@@ -289,6 +293,51 @@ class PendingChoicesMixin:
             self, choice.player_index, choice.data["target_index"], choice.data["top_count"]
         )
         if not self._resolve_reorder_library(choice, order, shuffle=False):
+            self.discard_pending_choice(choice)
+
+    # -- Scry ---------------------------------------------------------------
+
+    def confirm_scry(self, caster_index: int, card_order: list, bottom_count: int) -> bool:
+        return self.resolve_pending_choice(
+            "scry", caster_index, card_order=card_order, bottom_count=bottom_count
+        )
+
+    def _resolve_scry(self, choice: PendingChoice, card_order: list, bottom_count: int) -> bool:
+        """CR 701.22a. ``card_order`` is a permutation of the looked-at cards
+        reading top-first: the leading ``top_count - bottom_count`` entries go
+        back on top in that order, the trailing ``bottom_count`` to the bottom
+        in that order.
+
+        One permutation plus a count rather than two lists, so the validation is
+        the same total-permutation check ``_resolve_reorder_library`` makes —
+        two lists could overlap or omit a card and still look plausible.
+        """
+        caster = self.players[choice.player_index]
+        top_count = choice.data["top_count"]
+        if sorted(card_order) != list(range(top_count)):
+            return False
+        if not 0 <= bottom_count <= top_count:
+            return False
+        looked = caster.library[:top_count]
+        rest = caster.library[top_count:]
+        kept = [looked[i] for i in card_order[: top_count - bottom_count]]
+        bottomed = [looked[i] for i in card_order[top_count - bottom_count :]]
+        # The bottomed cards go under everything that was already below the
+        # looked-at ones, which is why `rest` sits between the two slices.
+        caster.library = kept + rest + bottomed
+        self.log.append(
+            f"{caster.name} scried {top_count} ({bottom_count} to the bottom)"
+        )
+        self.discard_pending_choice(choice)
+        return True
+
+    def _default_scry(self, choice: PendingChoice) -> None:
+        from ...ai_policy import choose_scry_arrangement
+
+        card_order, bottom_count = choose_scry_arrangement(
+            self, choice.player_index, choice.data["top_count"]
+        )
+        if not self._resolve_scry(choice, card_order, bottom_count):
             self.discard_pending_choice(choice)
 
     # -- Discard ------------------------------------------------------------
@@ -1127,6 +1176,21 @@ register_choice(
     action="reorder_library_confirm",
     prompt_key="reorder_library",
     blocked_detail="complete library reorder before other actions",
+    blocks_every_seat=True,
+    spectator_visible=True,
+)
+
+register_choice(
+    "scry",
+    resolve=lambda game, choice, r: game._resolve_scry(choice, r["card_order"], r["bottom_count"]),
+    default=lambda game, choice: game._default_scry(choice),
+    action="scry_confirm",
+    prompt_key="scry",
+    blocked_detail="complete scry before other actions",
+    # Same treatment as reorder_library: the scry suspends a resolution, so the
+    # whole game waits and a spectator sees that it is waiting. An AI seat stays
+    # queued and is drained by the auto-resolver, which keeps ordering
+    # deterministic per seed.
     blocks_every_seat=True,
     spectator_visible=True,
 )

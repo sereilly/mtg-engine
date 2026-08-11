@@ -78,6 +78,7 @@ SCOPE: dict[str, str | tuple[str, ...]] = {
         "701.19",  # Regenerate
         "701.20",  # Reveal
         "701.21",  # Sacrifice
+        "701.22",  # Scry
         "701.23",  # Search
         "701.24",  # Shuffle
         "701.26",  # Tap and Untap

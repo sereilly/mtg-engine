@@ -551,17 +551,62 @@ def mill_target_player(game: Game, instruction: OracleInstruction, context: Orac
     Milling fewer than N because the library ran out is not a loss — CR 704.5b
     only fires when a player actually *attempts to draw* from an empty library,
     so this stops at whatever is there.
+
+    The same ``recipient`` key ``target_loses_life`` reads: absent means the
+    spell's target, "caster" the controller ("Mill four cards."),
+    "each_opponent" every living opponent. Each miller mills their own library,
+    which is why the loop is per victim rather than a shared count.
     """
-    target = context.target
     amount = int(instruction.payload.get("amount", 1) or 1)
-    milled = 0
-    for _ in range(amount):
-        if not target.library:
-            break
-        target.graveyard.append(target.library.pop(0))
-        milled += 1
-    game.log.append(f"{target.name} milled {milled} card(s)")
+    recipient = instruction.payload.get("recipient")
+    if recipient == "caster":
+        victims = [context.caster]
+    elif recipient == "each_opponent":
+        victims = [
+            game.players[i]
+            for i in game.opponents_of(game.players.index(context.caster))
+        ]
+    else:
+        victims = [context.target]
+    for victim in victims:
+        milled = 0
+        for _ in range(amount):
+            if not victim.library:
+                break
+            victim.graveyard.append(victim.library.pop(0))
+            milled += 1
+        game.log.append(f"{victim.name} milled {milled} card(s)")
     return True, "resolved"
+
+
+@effect_handler("scry")
+def scry(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """CR 701.22a: look at the top N cards of your library, put any number of
+    them on the bottom in any order and the rest back on top in any order.
+
+    Modelled as a *choice*, never as an application. Keeping everything on top
+    is a legal outcome of a scry but never a legal implementation of one,
+    because the decision is the whole effect — a handler that silently kept the
+    cards would report the card supported while playing a different card. The
+    seat is asked through the pending-choice queue, the same machinery
+    ``reorder_target_library_top`` uses; a non-interactive seat is drained into
+    the AI default.
+
+    CR 701.22b: a scry of 0 is not a scry event at all, so nothing is armed —
+    and a library with fewer than N cards simply offers what is there, since
+    looking at the top of a short library is not a draw and CR 704.5b never
+    fires.
+    """
+    caster = context.caster
+    amount = int(instruction.payload.get("amount", 1) or 1)
+    top_count = min(amount, len(caster.library))
+    if top_count <= 0:
+        game.log.append(f"{caster.name} scries {amount} with nothing to look at")
+        return True, "resolved"
+    caster_index = game.players.index(caster)
+    game.arm_pending_choice("scry", caster_index, top_count=top_count, amount=amount)
+    game.log.append(f"{caster.name} is scrying {top_count}")
+    return True, "pending_scry"
 
 
 @effect_handler("return_all_owned_artifacts_to_hand")

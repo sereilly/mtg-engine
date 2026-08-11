@@ -126,6 +126,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "draw_target_cards": "zones",
     "draw_controller_cards": "zones",
     "mill_target_player": "zones",
+    # Scry moves cards within one library (CR 701.22a) — the same family as
+    # mill and draw, so no new category and GRAMMAR_CATEGORIES is unchanged.
+    "scry": "zones",
     "exile_creature_gain_life_equal_to_power": "zones",
     "exile_target_creature_until_eot": "zones",
     "return_creature_from_graveyard_to_hand": "zones",

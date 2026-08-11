@@ -198,6 +198,21 @@ def _reorder_library(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("scry")
+def _scry(ctx: PromptContext, choices: list) -> dict:
+    choice = choices[0]
+    caster = ctx.game.players[choice.player_index]
+    top_count = choice.data["top_count"]
+    return {
+        "caster_seat": choice.player_index,
+        "top_count": top_count,
+        # The printed number, which can exceed top_count on a short library —
+        # the prompt still says "Scry 3" when only two cards are there.
+        "amount": choice.data["amount"],
+        "cards": [ctx.serialize_card(card) for card in caster.library[:top_count]],
+    }
+
+
 @prompt_renderer("discard")
 def _discard(ctx: PromptContext, choices: list) -> dict:
     choice = choices[0]

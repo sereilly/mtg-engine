@@ -74,6 +74,7 @@ from .lowering import (
     _lower_lose_game,
     _lower_lose_life,
     _lower_mill,
+    _lower_scry,
     _lower_modal_head,
     _lower_prevent_damage,
     _lower_pump,
@@ -148,6 +149,8 @@ def lower_statement(
         return _lower_draw(statement)
     if isinstance(statement, ast.Mill):
         return _lower_mill(statement)
+    if isinstance(statement, ast.Scry):
+        return _lower_scry(statement)
     if isinstance(statement, ast.AddMana):
         return _lower_add_mana(statement)
     if isinstance(statement, ast.AddManaForTappedLand):

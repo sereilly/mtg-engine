@@ -39,6 +39,7 @@ from .effects import (
     _parse_look_at_hand,
     _parse_loses,
     _parse_mill,
+    _parse_scry,
     _parse_modal_head,
     _parse_player_adds_mana,
     _parse_prevent,
@@ -131,6 +132,14 @@ def _parse_subject_verb(stream: TokenStream) -> ast.Statement:
         return _parse_look_at_hand(stream)
     if stream.at_word("search"):
         return _parse_search_library(stream)
+    # "Scry N" has no subject for the same reason "draw a card" has none: the
+    # effect's controller is implied. It belongs with the other bare
+    # imperatives rather than in the subject-verb table below, which is why
+    # `Scry 1.` used to die on "expected a subject" — and why every scry line
+    # in the pool produced no instruction at all while its card still reported
+    # supported on the strength of its other line.
+    if stream.at_word("scry"):
+        return _parse_scry(stream)
     if stream.at_word("take"):
         return _parse_extra_turn(stream)
     if stream.at_word("draw"):
@@ -142,6 +151,11 @@ def _parse_subject_verb(stream: TokenStream) -> ast.Statement:
     # handler.
     if stream.at_word("discard"):
         return _parse_discard(stream, ast.PlayerRef("you"))
+    # "Mill four cards." — the same implied controller a bare draw or discard
+    # carries. Without this the line dies on "expected a subject", which is
+    # what the subject-verb table below says about a sentence that has none.
+    if stream.at_word("mill"):
+        return _parse_mill(stream, ast.PlayerRef("you"))
     if stream.at_word("counter"):
         return _parse_counter(stream)
     if stream.at_word("enchant"):

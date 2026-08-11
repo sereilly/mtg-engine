@@ -134,21 +134,37 @@ def _lower_draw(node: ast.Draw) -> tuple[OracleInstruction, ...]:
 def _lower_mill(node: ast.Mill) -> tuple[OracleInstruction, ...]:
     """"Target player mills N cards." (CR 701.13a, Millstone.)
 
-    ``mill_target_player`` mills ``context.target`` and reads no player from its
-    payload, so only a *chosen* player lowers. "You mill three cards" and "each
-    player mills a card" are real templates Magic prints, and both would compile
-    cleanly onto this handler and mill whoever happened to be targeted — so they
-    refuse by name until a handler exists that takes the miller.
+    The miller travels on the payload under the same ``recipient`` key
+    ``deal_damage`` and ``target_loses_life`` already read — one convention for
+    "who does this happen to" rather than a second one per effect family.
+    Absent still means the chosen target, so no payload in the pool changes
+    shape. A recipient the handler cannot name refuses rather than defaulting,
+    which is the original reason this function refused everything.
     """
-    if node.player.kind != "target_player":
-        raise LoweringError(
-            "mill_target_player mills the chosen target; no handler mills "
-            f"{node.player.kind!r}",
-            node=node,
-        )
     payload: dict[str, object] = {"amount": _amount_payload(node.count)}
-    _describe_targets(payload, node.player)
-    return (OracleInstruction("mill_target_player", "", payload),)
+    if node.player.kind == "target_player":
+        _describe_targets(payload, node.player)
+        return (OracleInstruction("mill_target_player", "", payload),)
+    if node.player.kind == "you":
+        payload["recipient"] = "caster"
+        return (OracleInstruction("mill_target_player", "", payload),)
+    if node.player.kind == "each_opponent":
+        payload["recipient"] = "each_opponent"
+        return (OracleInstruction("mill_target_player", "", payload),)
+    raise LoweringError(
+        f"mill_target_player cannot mill {node.player.kind!r}", node=node
+    )
+
+
+def _lower_scry(node: ast.Scry) -> tuple[OracleInstruction, ...]:
+    """"Scry N." (CR 701.22a.)
+
+    One instruction carrying only the count. Deliberately no recipient key: the
+    one mill and life loss carry exists because those effects name a victim,
+    and scry never does — CR 701.22a is defined over the controller's own
+    library, so the handler reads ``context.caster``.
+    """
+    return (OracleInstruction("scry", "", {"amount": _amount_payload(node.count)}),)
 
 
 def _lower_add_mana(node: ast.AddMana) -> tuple[OracleInstruction, ...]:

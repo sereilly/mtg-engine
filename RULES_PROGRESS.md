@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**220 / 575 tracked rules covered (38%)** — 965 tests, 0 unannotated.
+**221 / 576 tracked rules covered (38%)** — 971 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -84,7 +84,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [615. Prevention Effects](#615-prevention-effects) | 7/13 | 53% |
 | [616. Interaction of Replacement and/or Prevention Effects](#616-interaction-of-replacement-andor-prevention-effects) | 2/2 | 100% |
 | [700. General](#700-general) | 1/15 | 6% |
-| [701. Keyword Actions](#701-keyword-actions) | 5/16 | 31% |
+| [701. Keyword Actions](#701-keyword-actions) | 6/17 | 35% |
 | [702. Keyword Abilities](#702-keyword-abilities) | 23/23 | 100% |
 | [703. Turn-Based Actions](#703-turn-based-actions) | 0/4 | 0% |
 | [704. State-Based Actions](#704-state-based-actions) | 4/8 | 50% |
@@ -828,6 +828,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **701.19** Regenerate *(15 tests, subrules ac)*
 - [ ] **701.20** Reveal
 - [ ] **701.21** Sacrifice
+- [x] **701.22** Scry *(6 tests, subrules ab)*
 - [ ] **701.23** Search
 - [ ] **701.24** Shuffle
 - [x] **701.26** Tap and Untap *(1 tests, subrules a)*

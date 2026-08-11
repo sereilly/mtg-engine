@@ -459,6 +459,32 @@ def choose_reorder_library_order(
     return [index for index, _ in scored]
 
 
+def choose_scry_arrangement(
+    game: Game, caster_index: int, top_count: int
+) -> tuple[list[int], int]:
+    """Decide a scry (CR 701.22a): the arrangement, and how many go to the bottom.
+
+    Returns ``(card_order, bottom_count)`` in the shape ``_resolve_scry`` takes —
+    a permutation of ``range(top_count)`` reading top-first, and how many of its
+    trailing entries go to the bottom.
+
+    Scored by ``_score_tutor_choice`` unchanged, because "how good would drawing
+    this be for me" is exactly the scry question and a second scoring function
+    would be a second opinion about the same thing. A card scoring below zero is
+    worse than an unknown card, so those go to the bottom; the rest are ordered
+    best-first so the best one is drawn next. Deterministic given the library,
+    which the AI-behaviour regression tests require.
+    """
+    caster = game.players[caster_index]
+    scored = [
+        (index, _score_tutor_choice(game, caster_index, card))
+        for index, card in enumerate(caster.library[:top_count])
+    ]
+    kept = sorted((s for s in scored if s[1] >= 0.0), key=lambda item: item[1], reverse=True)
+    bottomed = sorted((s for s in scored if s[1] < 0.0), key=lambda item: item[1], reverse=True)
+    return [index for index, _ in kept] + [index for index, _ in bottomed], len(bottomed)
+
+
 def _score_tutor_choice(game: Game, player_index: int, card: CardDefinition) -> float:
     player = game.players[player_index]
     opponent_index = choose_attack_target(game, player_index)

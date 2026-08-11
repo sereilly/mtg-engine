@@ -46,6 +46,19 @@ def _parse_mill(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
     return ast.Mill(player, count)
 
 
+def _parse_scry(stream: TokenStream) -> ast.Statement:
+    """``Scry N`` (CR 701.22a).
+
+    Unlike draw / discard / mill there is no trailing noun — the printed
+    template is "Scry 3", never "scry 3 cards" — so the amount is the whole
+    tail. An ``Amount`` rather than a digit because "Scry X" is printable and
+    the amount parser already reads spelled-out numbers.
+    """
+    stream.expect_word("scry")
+    count = parse_amount(stream)
+    return ast.Scry(count)
+
+
 def _parse_add_mana(stream: TokenStream) -> ast.Statement:
     """``Add {G}`` / ``Add {C}{C}{C}`` / ``Add one mana of any color``."""
     start = stream.mark()

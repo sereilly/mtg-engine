@@ -65,6 +65,7 @@ from .cards import (
     Draw,
     LookAtHand,
     Mill,
+    Scry,
     SearchLibrary,
     Shuffle,
 )
@@ -89,7 +90,7 @@ from .game import (
 
 Effect = Union[
     DealDamage, Pump, SetBasePT, GainKeyword, LoseKeyword, PutCounter, RemoveCounter,
-    GainLife, LoseLife, Draw, Discard, Mill, Destroy, Sacrifice, Exile, Tap, Untap,
+    GainLife, LoseLife, Draw, Discard, Mill, Scry, Destroy, Sacrifice, Exile, Tap, Untap,
     TapOrUntap,
     Regenerate, CounterSpell, ModalNode, ReturnToZone, CreateToken, AddMana,
     AddManaForTappedLand, PreventDamage,

@@ -44,6 +44,7 @@ ActionKind = Literal[
     "debug_exile_permanent",
     "search_library_confirm",
     "reorder_library_confirm",
+    "scry_confirm",
     "discard_confirm",
     "leng_discard_confirm",
     "balance_confirm",
@@ -239,6 +240,10 @@ class GameActionRequest(BaseModel):
     # blocked by a creature with banding, submitted via an assign_banding_damage action.
     banding_damage: dict[int, dict[int, int]] | None = None
     card_order: list[int] | None = None
+    # How many of `card_order`'s trailing entries a scry sends to the bottom
+    # (CR 701.22a). Separate from card_order so the permutation stays a
+    # permutation and can be validated as one.
+    bottom_count: int | None = None
     # Disrupting Scepter discard choice: which hand-card indices to discard, and
     # (Library of Leng) whether to put them on top of the library instead.
     discard_indices: list[int] | None = None

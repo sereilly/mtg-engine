@@ -978,6 +978,18 @@ def do_action(session_id: str, req: GameActionRequest):
         if not ok:
             raise HTTPException(status_code=400, detail="invalid card order")
 
+    elif req.action == "scry_confirm":
+        pending = session.game.pending_scry
+        if pending is None:
+            raise HTTPException(status_code=400, detail="no scry pending")
+        if req.seat != pending["caster_index"]:
+            raise HTTPException(status_code=400, detail="not your scry")
+        if req.card_order is None or req.bottom_count is None:
+            raise HTTPException(status_code=400, detail="card_order and bottom_count are required")
+        ok = session.game.confirm_scry(req.seat, req.card_order, req.bottom_count)
+        if not ok:
+            raise HTTPException(status_code=400, detail="invalid scry arrangement")
+
     elif req.action == "discard_confirm":
         pending = session.game.pending_discard
         if pending is None:

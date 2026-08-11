@@ -48,6 +48,22 @@ class Mill:
 
 
 @dataclass(frozen=True)
+class Scry:
+    """"Scry N." (CR 701.22a.)
+
+    No player field, unlike Draw/Discard/Mill: CR 701.22a defines scrying over
+    *your own* library, and every printed template is the bare imperative. A
+    subject-taking spelling would be a different sentence and earns its own
+    node when a card prints one, rather than a player ref that is always "you".
+
+    Beside Mill because both move cards off the top of a library without
+    passing through a hand; scry differs in that the cards may come back, which
+    is why it is a decision rather than a transfer.
+    """
+    count: Amount = field(default_factory=lambda: Fixed(1))
+
+
+@dataclass(frozen=True)
 class AddMana:
     pips: tuple[tuple[str, int], ...] = ()
     any_color: int = 0

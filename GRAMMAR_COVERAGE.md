@@ -21,7 +21,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | 2ED | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
 | ARN | 78 | 108 | 64.8% | 61.1% | 38.9% | 34 |
 | 3ED | 296 | 389 | 78.9% | 76.9% | 41.9% | 149 |
-| M21 *(measured)* | 285 | 503 | 52.1% | 47.3% | 26.6% | 111 |
+| M21 *(measured)* | 285 | 503 | 54.3% | 49.5% | 28.8% | 116 |
 | **All (shipped)** | **1248** | **1663** | **78.0%** | **76.2%** | **41.5%** | **629** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -32,9 +32,9 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 299 | 162 | expected a subject |  |
+| 287 | 154 | expected a subject |  |
 | 111 | 57 | unrecognized effect verb |  |
-| 68 | 49 | unconsumed text |  |
+| 69 | 50 | unconsumed text |  |
 | 33 | 33 | unrecognized activation cost |  |
 | 27 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
 | 11 | 5 | expected a quantity |  |
@@ -167,6 +167,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `{1}{B}, {T}: Each opponent loses 2 life. Activate only if a creature died this turn.`
 - **Cancel**
   - `Counter target spell.`
+- **Carrion Grub**
+  - `When this creature enters, mill four cards. (Put the top four cards of your library into your graveyard.)`
 - **Castle**
   - `Untapped creatures you control get +0/+2.`
   - `Untapped creatures you control get +0/+2.`
@@ -716,6 +718,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 - **Onulet**
   - `When this creature dies, you gain 2 life.`
 - **Opt**
+  - `Scry 1. (Look at the top card of your library. You may put that card on the bottom.)`
   - `Draw a card.`
 - **Orcish Artillery**
   - `{T}: This creature deals 2 damage to any target and 3 damage to you.`
@@ -849,6 +852,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Draw a card.`
 - **Rewind**
   - `Counter target spell. Untap up to four lands.`
+- **Riddleform**
+  - `{2}{U}: Scry 1. (Look at the top card of your library. You may put that card on the bottom.)`
 - **Righteousness**
   - `Target blocking creature gets +7/+7 until end of turn.`
   - `Target blocking creature gets +7/+7 until end of turn.`
@@ -987,6 +992,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Counter target spell with mana value X. (For example, if that spell's mana cost is {3}{U}{U}, X is 5.)`
   - `Counter target spell with mana value X. (For example, if that spell's mana cost is {3}{U}{U}, X is 5.)`
   - `Counter target spell with mana value X. (For example, if that spell's mana cost is {3}{U}{U}, X is 5.)`
+- **Spined Megalodon**
+  - `Whenever this creature attacks, scry 1. (Look at the top card of your library. You may put that card on the bottom.)`
 - **Spirit of Malevolence**
   - `When this creature dies, each opponent loses 1 life and you gain 1 life.`
 - **Sporeweb Weaver**
@@ -1003,6 +1010,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Destroy target land.`
 - **Storm Caller**
   - `When this creature enters, it deals 2 damage to each opponent.`
+- **Stormwing Entity**
+  - `When this creature enters, scry 2.`
 - **Stream of Life**
   - `Target player gains X life.`
   - `Target player gains X life.`
@@ -1030,14 +1039,19 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 - **Tempered Veteran**
   - `{4}{W}{W}, {T}: Put a +1/+1 counter on target creature.`
 - **Temple of Epiphany**
+  - `When this land enters, scry 1. (Look at the top card of your library. You may put that card on the bottom.)`
   - `{T}: Add {U} or {R}.`
 - **Temple of Malady**
+  - `When this land enters, scry 1. (Look at the top card of your library. You may put that card on the bottom.)`
   - `{T}: Add {B} or {G}.`
 - **Temple of Mystery**
+  - `When this land enters, scry 1. (Look at the top card of your library. You may put that card on the bottom.)`
   - `{T}: Add {G} or {U}.`
 - **Temple of Silence**
+  - `When this land enters, scry 1. (Look at the top card of your library. You may put that card on the bottom.)`
   - `{T}: Add {W} or {B}.`
 - **Temple of Triumph**
+  - `When this land enters, scry 1. (Look at the top card of your library. You may put that card on the bottom.)`
   - `{T}: Add {R} or {W}.`
 - **Terror**
   - `Destroy target nonartifact, nonblack creature. It can't be regenerated.`
@@ -1140,6 +1154,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `{R}: This creature gets +1/+0 until end of turn.`
   - `{R}: This creature gets +1/+0 until end of turn.`
   - `{R}: This creature gets +1/+0 until end of turn.`
+- **Wall of Runes**
+  - `When this creature enters, scry 1. (Look at the top card of your library. You may put that card on the bottom.)`
 - **Wall of Water**
   - `{U}: This creature gets +1/+0 until end of turn.`
   - `{U}: This creature gets +1/+0 until end of turn.`
