@@ -216,13 +216,48 @@ reported supported**:
   `tests/engine/test_activation_costs.py` compares the two readers over the
   whole pool — the guard that would have caught it.
 
-**Next per the census:** the counters-on-each-of-up-to-N shape (Basri's Aegis
-is one production away); Selfless Savior's "another target creature", which
-needs the noun parser's "another" plus target legality honouring it; the
-additional-*cast*-cost half, which must arrive with the rewrite of the two
-`CARD_LINE_INSTRUCTIONS` entries that own those printed lines today; then the
-remaining subsystems (planeswalkers, exile-until-leaves, per-turn trackers,
-reflexive triggers).
+**Rounds 12–14 — a second parallel fan-out, and what it found (137 → 137).**
+Three more groups designed in parallel and applied in series. The card count
+is flat because two of the three rounds *withdrew* cards that were being
+played wrongly, which is the direction the invariant wants:
+
+- **Exile as a destination.** `_lower_exile` had been naming its own gap in
+  its refusal string; it now has two handlers, split by the zone the subject
+  names. The card that paid for it was already in the pool: **Return to
+  Nature** reported supported on its first two modes while the third carried
+  *no instruction at all* — a mode the UI offered and the spell then silently
+  declined to play. The duration guard is the load-bearing part: an exile
+  carrying a duration the until-end-of-turn branch does not name refuses
+  rather than falling through to the permanent exile, which would never give
+  the card back.
+- **CR 603.4 finally has a reader.** The grammar has lowered a trigger's
+  intervening-if onto the payload since it learned to parse one, and
+  **nothing read it** — the same failure the legacy compiler was replaced for,
+  one layer further along. **Adherent of Hope**, shipped by round 7 of this
+  same effort, reads "if you control a Basri planeswalker" and was putting
+  its counter down every combat with no Basri in play; round 7's test
+  asserted that behaviour. The condition is checked on resolution now and the
+  test asserts the rule. Two per-turn trackers came with it
+  (`life_gained_this_turn`, written after replacements so a replaced gain
+  gains nothing; `creatures_died_under_your_control_this_turn`, per seat
+  because the game-wide count cannot answer "under your control"), both reset
+  for *every* seat, because "this turn" is the turn and not the player's turn.
+  Bought Indulging Patrician.
+- **"Up to N" is not one target.** `_is_target` accepted the `up_to`
+  quantifier and every consumer then discarded `TargetSpec.count`, so
+  **Rewind** untapped one land of "up to four" and reported itself supported.
+  What a lowering may accept is *one* target, and `_is_target` is now the one
+  place that says so — "up to one" still qualifies, anything larger refuses by
+  name per effect family.
+
+**Next:** the "each of up to N target" production and "another target
+&lt;noun&gt;" (the second needs the noun parser plus target legality honouring
+`exclude_self` and `controller`, or an ability could shield the creature the
+word excludes); multi-target handlers, which is what turns those refusals into
+cards; the additional-*cast*-cost half, which must arrive with the rewrite of
+the two `CARD_LINE_INSTRUCTIONS` entries owning those lines; then the
+subsystems — planeswalkers, exile-until-leaves and cast-from-exile,
+reveal-until, triggers that function from the graveyard.
 
 ---
 

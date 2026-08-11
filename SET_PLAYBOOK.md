@@ -307,3 +307,16 @@ produced nothing, and a shipped-pool ability whose cost was parsed and never
 charged. Both were invisible to `support_report.py`, because a card is
 supported when *any* line is — the census counts cards, not sentences, and
 the thing to ask a group agent for is the sentences its group drops.
+
+**M21 — 2026-08-11 (rounds 12–14, three more groups in parallel; 137 → 137).**
+The flat number is the finding. Two of the three rounds *withdrew* cards —
+Rewind was untapping one land of "up to four", Adherent of Hope was putting
+its counter down without the planeswalker its text requires — and one fixed a
+mode that resolved having done nothing. **A round that lowers the supported
+count can be the most valuable one in a set**, and Phase 3's "the count must
+have risen" check is therefore a prompt to look, not a gate: when it falls,
+the entry in the ROADMAP has to say which card left and what it was doing
+wrong. What made all three findable was asking each agent the two questions
+above; the third one also found that a *previous round of this same effort*
+had shipped a card whose test asserted the bug. Ask the question about the
+cards you supported last round, not only about the ones you are adding.
