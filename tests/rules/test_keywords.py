@@ -133,6 +133,7 @@ def test_display_keywords_are_all_covered_here():
         "Reach", "Vigilance", "Haste", "Defender", "Banding", "Fear",
         "Lifelink", "Shroud", "Protection", "Rampage", "Flanking",
         "Plainswalk", "Islandwalk", "Swampwalk", "Mountainwalk", "Forestwalk",
+        "Menace", "Hexproof", "Prowess",
     }
     assert set(web_app._DISPLAY_KEYWORDS) == expected
 
@@ -1226,3 +1227,222 @@ def test_grant_banding_until_end_of_turn_lets_a_creature_band():
     _to_declare_attackers(game)
     ok, msg = game.declare_attackers(0, [1, 2], bands=[[1, 2]])
     assert ok, msg
+
+
+# ---------------------------------------------------------------------------
+# 702.2b â€” Deathtouch outside combat (the combat half is covered above)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("702.2b")
+def test_702_2b_noncombat_damage_from_a_deathtouch_source_destroys():
+    """The rule is about damage, not combat damage â€” a ping from a deathtouch
+    source is lethal, which is why the stamp lives on the shared damage path
+    (`_mark_damage_on_permanent`) rather than in the combat damage step."""
+    stinger = Permanent(card=_mk_creature("Stinger", 1, 1, keywords=("Deathtouch",)))
+    giant = Permanent(card=_mk_creature("Giant", 5, 5))
+    game, _, _ = _game([stinger], [giant])
+
+    game._mark_damage_on_permanent(giant, 1, source=stinger)
+    game.check_state_based_actions()
+
+    assert not game.is_on_battlefield(giant)
+
+
+@pytest.mark.cr("702.2b")
+def test_702_2b_zero_damage_is_not_deathtouch_damage():
+    """CR 120.8: a 0-damage event deals nothing, so nothing was dealt by a
+    deathtouch source and no destruction follows."""
+    stinger = Permanent(card=_mk_creature("Stinger", 1, 1, keywords=("Deathtouch",)))
+    giant = Permanent(card=_mk_creature("Giant", 5, 5))
+    game, _, _ = _game([stinger], [giant])
+
+    game._mark_damage_on_permanent(giant, 0, source=stinger)
+    game.check_state_based_actions()
+
+    assert game.is_on_battlefield(giant)
+
+
+# ---------------------------------------------------------------------------
+# 702.8 â€” Flash
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("702.8a")
+def test_702_8a_a_creature_whose_text_is_flash_compiles_supported():
+    from engine.oracle import compile_card_oracle
+
+    card = _mk_creature("Ambusher", 2, 2, oracle_text="Flash", keywords=("Flash",))
+    assert compile_card_oracle(card).supported
+
+
+@pytest.mark.cr("702.8b")
+def test_702_8b_flash_is_read_off_the_card_for_hand_timing():
+    """The web layer's two sorcery-speed gates ask ``card.has_flash`` â€” this is
+    the accessor they read, sourced from the ingested keywords field."""
+    ambusher = _mk_creature("Ambusher", 2, 2, oracle_text="Flash", keywords=("Flash",))
+    vanilla = _mk_creature("Vanilla", 2, 2)
+    assert ambusher.has_flash
+    assert not vanilla.has_flash
+
+
+# ---------------------------------------------------------------------------
+# 702.11 â€” Hexproof
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("702.11b")
+def test_702_11b_hexproof_refuses_only_opposing_targeting():
+    guarded = Permanent(card=_mk_creature("Guarded", 2, 2, keywords=("Hexproof",)))
+    game, _, _ = _game([guarded], [])
+    bolt = _mk_instant("Bolt", "Bolt deals 3 damage to any target.", colors=("R",))
+
+    assert game._can_be_targeted(guarded, bolt, caster_index=1) is False
+    assert game._can_be_targeted(guarded, bolt, caster_index=0) is True
+
+
+@pytest.mark.cr("702.11d")
+def test_702_11d_hexproof_from_a_colour_refuses_only_that_colour():
+    """"Hexproof from blue" is a different, narrower keyword than hexproof â€”
+    an opposing blue spell cannot target, an opposing red one still can."""
+    weaver = Permanent(
+        card=_mk_creature("Weaver", 3, 3, keywords=("Reach", "Hexproof from blue"))
+    )
+    game, _, _ = _game([weaver], [])
+    blue = _mk_instant("Twiddle", "Tap target creature.", colors=("U",))
+    red = _mk_instant("Bolt", "Bolt deals 3 damage to any target.", colors=("R",))
+
+    assert game._can_be_targeted(weaver, blue, caster_index=1) is False
+    assert game._can_be_targeted(weaver, red, caster_index=1) is True
+    assert game._can_be_targeted(weaver, blue, caster_index=0) is True
+
+
+# ---------------------------------------------------------------------------
+# 702.12 â€” Indestructible
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("702.12b")
+def test_702_12b_lethal_damage_does_not_destroy_indestructible():
+    tough = Permanent(card=_mk_creature("Tough", 2, 2, keywords=("Indestructible",)))
+    game, _, _ = _game([tough], [])
+
+    game._mark_damage_on_permanent(tough, 5, source=None)
+    game.check_state_based_actions()
+
+    assert game.is_on_battlefield(tough)
+
+
+@pytest.mark.cr("702.12b")
+def test_702_12b_deathtouch_damage_does_not_destroy_indestructible():
+    """Deathtouch destruction is destruction (704.5h), so indestructible
+    survives it."""
+    stinger = Permanent(card=_mk_creature("Stinger", 1, 1, keywords=("Deathtouch",)))
+    tough = Permanent(card=_mk_creature("Tough", 2, 2, keywords=("Indestructible",)))
+    game, _, _ = _game([stinger], [tough])
+
+    game._mark_damage_on_permanent(tough, 1, source=stinger)
+    game.check_state_based_actions()
+
+    assert game.is_on_battlefield(tough)
+
+
+# ---------------------------------------------------------------------------
+# 702.108 â€” Prowess
+# ---------------------------------------------------------------------------
+
+
+def _prowess_game(hand_card: CardDefinition):
+    monk = Permanent(card=_mk_creature("Monk", 1, 1, keywords=("Prowess",)))
+    p1 = PlayerState(
+        name="P1", battlefield=[monk], hand=[hand_card],
+        library=[_mk_land("Plains A", "Plains"), _mk_land("Plains B", "Plains")],
+    )
+    p2 = PlayerState(name="P2")
+    return Game(players=[p1, p2]), monk
+
+
+@pytest.mark.cr("702.108a")
+def test_702_108a_a_noncreature_cast_pumps_prowess_until_end_of_turn():
+    game, monk = _prowess_game(_mk_instant("Meditation", "Draw a card."))
+
+    game.cast_from_hand(0, "Meditation")
+
+    assert monk.effective_power == 2
+    assert monk.effective_toughness == 2
+
+
+@pytest.mark.cr("702.108a")
+def test_702_108a_a_creature_cast_does_not_pump_prowess():
+    game, monk = _prowess_game(_mk_creature("Bearling", 2, 2))
+
+    game.cast_from_hand(0, "Bearling")
+
+    assert monk.effective_power == 1
+    assert monk.effective_toughness == 1
+
+
+@pytest.mark.cr("702.108a")
+def test_702_108a_an_opponents_cast_does_not_pump_prowess():
+    monk = Permanent(card=_mk_creature("Monk", 1, 1, keywords=("Prowess",)))
+    p1 = PlayerState(name="P1", battlefield=[monk])
+    p2 = PlayerState(
+        name="P2", hand=[_mk_instant("Meditation", "Draw a card.")],
+        library=[_mk_land("Plains A", "Plains")],
+    )
+    game = Game(players=[p1, p2])
+
+    game.cast_from_hand(1, "Meditation")
+
+    assert monk.effective_power == 1
+
+
+# ---------------------------------------------------------------------------
+# 702.111 â€” Menace
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("702.111b")
+def test_702_111b_menace_cannot_be_blocked_by_exactly_one_creature():
+    brute = Permanent(card=_mk_creature("Brute", 4, 5, keywords=("Menace",)))
+    b1 = Permanent(card=_mk_creature("B1", 2, 2))
+    b2 = Permanent(card=_mk_creature("B2", 2, 2))
+    game, _, _ = _game([brute], [b1, b2])
+    _to_declare_blockers(game, [0])
+
+    ok, msg = game.declare_blockers(1, {0: 0})
+    assert not ok
+    assert "menace" in msg.lower()
+
+
+@pytest.mark.cr("702.111b")
+def test_702_111b_menace_blocked_by_two_or_not_at_all():
+    brute = Permanent(card=_mk_creature("Brute", 4, 5, keywords=("Menace",)))
+    b1 = Permanent(card=_mk_creature("B1", 2, 2))
+    b2 = Permanent(card=_mk_creature("B2", 2, 2))
+    game, _, _ = _game([brute], [b1, b2])
+    _to_declare_blockers(game, [0])
+
+    ok, msg = game.declare_blockers(1, {0: 0, 1: 0})
+    assert ok, msg
+
+    solo = Permanent(card=_mk_creature("Brute", 4, 5, keywords=("Menace",)))
+    game2, _, _ = _game([solo], [Permanent(card=_mk_creature("B1", 2, 2))])
+    _to_declare_blockers(game2, [0])
+    ok, msg = game2.declare_blockers(1, {})
+    assert ok, msg
+
+
+@pytest.mark.cr("702.111b")
+def test_702_111b_the_ai_declines_a_lone_block_on_a_menace_attacker():
+    """declare_blockers refuses a single block on menace, so the AI must not
+    submit one â€” with a single potential blocker it declines the block."""
+    from engine.ai_policy import choose_combat_blockers
+
+    brute = Permanent(card=_mk_creature("Brute", 4, 5, keywords=("Menace",)))
+    lone = Permanent(card=_mk_creature("Lone Wall", 0, 6))
+    game, _, _ = _game([brute], [lone])
+    _to_declare_blockers(game, [0])
+
+    assert choose_combat_blockers(game, 1) == {}
+

@@ -143,6 +143,12 @@ _TEXT_KEYWORDS = (
     "flying", "first strike", "double strike", "trample", "vigilance", "haste",
     "defender", "reach", "banding", "fear", "deathtouch", "islandwalk",
     "mountainwalk", "swampwalk", "forestwalk", "plainswalk", "desertwalk",
+    "indestructible", "menace", "prowess", "flash",
+    # "hexproof" is deliberately absent: this is a substring scan, and bare
+    # hexproof is a *stronger* keyword than "hexproof from <colour>" — matching
+    # the word inside the phrase would upgrade Sporeweb Weaver's blue-only
+    # shield to a full one. Printed hexproof arrives through the ingested
+    # keywords field, which the seed consults first.
 )
 
 

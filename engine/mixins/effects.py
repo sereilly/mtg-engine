@@ -387,6 +387,20 @@ class EffectsMixin:
         # blocked creature. `combat` is the flag that tells the two apart.
         if not combat:
             self._apply_lifelink(source, outcome.dealt)
+        # CR 702.2b / 704.5h: nonzero damage from a source with deathtouch marks
+        # the victim for destruction at the next state-based check — any damage,
+        # not only combat damage. Lifelink directly above is the precedent: the
+        # rule lives on the one path every creature-damage caller runs through,
+        # so a ping ability destroys exactly as a blocker does. The getattr
+        # mirrors lifelink_life_gained's guard — a spell or bare card has no
+        # keyword to read.
+        if (
+            outcome.dealt > 0
+            and source is not None
+            and getattr(source, "has_keyword", None) is not None
+            and self._has_keyword(source, "deathtouch")
+        ):
+            permanent.metadata["received_deathtouch"] = True
         if then is not None:
             then(outcome.dealt)
         return outcome.dealt

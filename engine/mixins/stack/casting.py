@@ -321,8 +321,11 @@ class SpellCastingMixin:
                     if self._cant_be_enchanted(battlefield[target_permanent_index]):
                         return False, f"{battlefield[target_permanent_index].card.name} can't be enchanted by other Auras"
                     # CR 702.16b/c: an Aura with a quality can't be cast targeting a
-                    # permanent with protection from that quality.
-                    if not self._can_be_targeted(battlefield[target_permanent_index], card):
+                    # permanent with protection from that quality (or hexproof
+                    # from an opponent's side, CR 702.11b).
+                    if not self._can_be_targeted(
+                        battlefield[target_permanent_index], card, caster_index=caster_index
+                    ):
                         return False, f"no valid target for {card.name}"
                 else:
                     first_line = card.oracle_text.lower().split("\n")[0].strip()
@@ -375,7 +378,9 @@ class SpellCastingMixin:
         # cast time, mirroring the resolution-time check, so it is never offered.
         if isinstance(target_permanent_index, int) and 0 <= target_permanent_index < len(target.battlefield):
             chosen = target.battlefield[target_permanent_index]
-            if chosen.is_creature and not self._can_be_targeted(chosen, card):
+            if chosen.is_creature and not self._can_be_targeted(
+                chosen, card, caster_index=caster_index
+            ):
                 return False, f"{chosen.card.name} is an illegal target for {card.name}"
 
         if primary.kind == "destroy_target_permanent":

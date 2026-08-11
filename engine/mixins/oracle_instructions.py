@@ -14,6 +14,7 @@ from ..keywords import remove_keyword
 from ..land_animation import LAND_ANIMATION_KIND
 from ..land_types import change_land_type
 from ..lord_buffs import LORD_BUFF_KIND
+from ..pt import add_pt_modifier
 
 
 # Attachment bookkeeping, not a granted characteristic. `aura_granted_meta` is
@@ -66,7 +67,9 @@ class OracleInstructionsMixin:
         # does nothing (608.3b — removed from the stack with no effect).
         chosen = self.chosen_permanent(target, target_permanent_index, target_permanent_id)
         if chosen is not None:
-            if chosen.is_creature and not self._can_be_targeted(chosen, card):
+            if chosen.is_creature and not self._can_be_targeted(
+                chosen, card, caster_index=self.players.index(caster)
+            ):
                 self.log.append(
                     f"{card.name} does nothing: {chosen.card.name} is an illegal target"
                 )
@@ -100,6 +103,19 @@ class OracleInstructionsMixin:
         """
         emit(self, "you_cast_spell", subject=card, caster_index=caster_index)
         emit(self, "enchantment_cast", subject=card, caster_index=caster_index)
+        # Prowess (CR 702.108a): each creature the caster controls with the
+        # keyword gets +1/+1 until end of turn on a noncreature cast. Asked of
+        # the computed keyword rather than of a card list, so a printed and a
+        # granted prowess answer alike, and the CR's own trigger word decides
+        # the type test — a creature card anywhere in the type line is a
+        # creature spell, however it is also an artifact.
+        if "creature" not in card.type_line.lower():
+            for perm in self.controlled_by(self.players[caster_index]):
+                if perm.is_creature and self._has_keyword(perm, "prowess"):
+                    add_pt_modifier(perm, 1, 1, until_eot=True)
+                    self.log.append(
+                        f"{perm.card.name} gets +1/+1 until end of turn (prowess)"
+                    )
 
     def _apply_spell_cast_any_triggers(self, caster_index: int, card: CardDefinition) -> None:
         """Fire "whenever a player casts a [color] spell" triggers on any

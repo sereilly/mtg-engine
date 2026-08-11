@@ -403,7 +403,7 @@ class LegalityMixin:
                     if not ok:
                         continue
                 else:
-                    if not self._can_be_targeted(perm, card):
+                    if not self._can_be_targeted(perm, card, caster_index=caster_index):
                         continue
                     # Apply the activated ability's own target restriction (e.g.
                     # Royal Assassin's tapped-only, Nettling Imp's non-Wall) so it

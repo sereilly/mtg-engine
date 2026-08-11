@@ -90,6 +90,16 @@ class CardDefinition:
                 return known
         return self.type_line.split(" ")[0].strip().lower()
 
+    @property
+    def has_flash(self) -> bool:
+        """CR 702.8b: this card may be cast any time its owner could cast an
+        instant. Read from the ingested ``keywords`` field — the same source
+        the layer seed reads printed abilities from. A *granted* flash ("as
+        though it had flash") is a permission about a card outside the
+        battlefield, so it will arrive as its own seam on ``Game``, not here.
+        """
+        return any(keyword.lower() == "flash" for keyword in self.keywords)
+
     def _printed_stat(self, typed: str | None, raw_key: str) -> str | None:
         """Printed P/T, preferring the typed field.
 

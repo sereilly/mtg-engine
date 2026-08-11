@@ -658,16 +658,29 @@ class PermanentStateMixin:
         """
         colors: set[str] = set()
         program = compile_card_oracle(permanent.effective_card)
+
+        def _absorb(clause: str) -> None:
+            # CR 702.16g/h/i: "protection from [A] and from [B]" (and comma
+            # separated variants) is shorthand for several separate protection
+            # abilities. Pull every color word out of the remaining clause.
+            for word in re.split(r",|\band from\b|\band\b", clause):
+                symbol = _COLOR_WORD_TO_SYMBOL.get(word.strip())
+                if symbol:
+                    colors.add(symbol)
+
         for instr in program.instructions:
             if instr.kind == "static_line" and instr.value.startswith("protection from "):
-                clause = instr.value[len("protection from "):].strip()
-                # CR 702.16g/h/i: "protection from [A] and from [B]" (and comma
-                # separated variants) is shorthand for several separate protection
-                # abilities. Pull every color word out of the remaining clause.
-                for word in re.split(r",|\band from\b|\band\b", clause):
-                    symbol = _COLOR_WORD_TO_SYMBOL.get(word.strip())
-                    if symbol:
-                        colors.add(symbol)
+                _absorb(instr.value[len("protection from "):].strip())
+            elif instr.kind == "keyword_line":
+                # Protection also rides comma-joined keyword lines ("Flying,
+                # first strike, lifelink, protection from Demons and from
+                # Dragons"), and a standalone protection line is admitted as a
+                # keyword line too — same shorthand, same reading as the
+                # static form above.
+                for part in instr.value.split(","):
+                    part = part.strip()
+                    if part.startswith("protection from "):
+                        _absorb(part[len("protection from "):].strip())
         # Two sources with different lifetimes, which is why both exist.
         #
         # An Aura's protection lasts exactly as long as it is attached, so it is
@@ -701,12 +714,25 @@ class PermanentStateMixin:
         return bool(protection and protection & self._effective_colors(source))
 
     def _can_be_targeted(
-        self, target: Permanent, source_card: CardDefinition | None
+        self,
+        target: Permanent,
+        source_card: CardDefinition | None,
+        *,
+        caster_index: int | None = None,
     ) -> bool:
-        """Whether *target* is a legal target for *source_card* (CR 702.16b/702.18).
+        """Whether *target* is a legal target for *source_card*
+        (CR 702.16b/702.18/702.11).
 
         Shroud forbids any targeting; protection forbids targeting by sources of
         the protected color. A ``None`` source is treated as colorless.
+
+        Hexproof (CR 702.11b/d) forbids targeting by spells and abilities an
+        *opponent* of the target's controller controls, so it is asked only when
+        the caller says who is casting — a probe with no seat keeps the
+        seat-blind answer. "Hexproof from <colour>" narrows the same rule to
+        sources of that colour; it is a different keyword from bare hexproof
+        (a colour word in the abilities set, seeded from the ingested keywords
+        field), which is why both spellings are consulted.
         """
         if self._has_keyword(target, "shroud"):
             return False
@@ -714,6 +740,16 @@ class PermanentStateMixin:
         if protection and source_card is not None:
             if protection & set(source_card.colors):
                 return False
+        if caster_index is not None and caster_index != self.controller_index_of(target):
+            if self._has_keyword(target, "hexproof"):
+                return False
+            if source_card is not None:
+                source_colors = set(source_card.colors)
+                for word, symbol in _COLOR_WORD_TO_SYMBOL.items():
+                    if symbol in source_colors and self._has_keyword(
+                        target, f"hexproof from {word}"
+                    ):
+                        return False
         return True
 
     def _recalculate_lord_buffs(self) -> None:

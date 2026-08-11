@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**215 / 570 tracked rules covered (37%)** — 951 tests, 0 unannotated.
+**220 / 575 tracked rules covered (38%)** — 965 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -85,7 +85,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [616. Interaction of Replacement and/or Prevention Effects](#616-interaction-of-replacement-andor-prevention-effects) | 2/2 | 100% |
 | [700. General](#700-general) | 1/15 | 6% |
 | [701. Keyword Actions](#701-keyword-actions) | 5/16 | 31% |
-| [702. Keyword Abilities](#702-keyword-abilities) | 18/18 | 100% |
+| [702. Keyword Abilities](#702-keyword-abilities) | 23/23 | 100% |
 | [703. Turn-Based Actions](#703-turn-based-actions) | 0/4 | 0% |
 | [704. State-Based Actions](#704-state-based-actions) | 4/8 | 50% |
 | [705. Flipping a Coin](#705-flipping-a-coin) | 0/3 | 0% |
@@ -835,12 +835,15 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 702. Keyword Abilities
 
 - [x] **702.1** Most abilities describe exactly what they do in the card’s rules text. Some, though, are very com... *(1 tests)*
-- [x] **702.2** Deathtouch *(2 tests, subrules bc)*
+- [x] **702.2** Deathtouch *(4 tests, subrules bc)*
 - [x] **702.3** Defender *(2 tests, subrules b)*
 - [x] **702.4** Double Strike *(3 tests, subrules b)*
 - [x] **702.7** First Strike *(5 tests, subrules b)*
+- [x] **702.8** Flash *(2 tests, subrules ab)*
 - [x] **702.9** Flying *(6 tests, subrules b)*
 - [x] **702.10** Haste *(3 tests, subrules bc)*
+- [x] **702.11** Hexproof *(2 tests, subrules bd)*
+- [x] **702.12** Indestructible *(2 tests, subrules b)*
 - [x] **702.14** Landwalk *(6 tests, subrules bc)*
 - [x] **702.15** Lifelink *(6 tests, subrules b)*
 - [x] **702.16** Protection *(33 tests, subrules abcdefghjkmn)*
@@ -852,6 +855,8 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.23** Rampage *(3 tests, subrules a)*
 - [x] **702.25** Flanking *(3 tests, subrules a)*
 - [x] **702.36** Fear *(4 tests, subrules b)*
+- [x] **702.108** Prowess *(3 tests, subrules a)*
+- [x] **702.111** Menace *(3 tests, subrules b)*
 
 ### 703. Turn-Based Actions
 

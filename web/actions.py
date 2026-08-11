@@ -368,11 +368,14 @@ def do_action(session_id: str, req: GameActionRequest):
         if card is None:
             raise HTTPException(status_code=400, detail="card not in hand")
 
-        is_instant = card.primary_type == "instant"
-        if req.seat != session.current_turn and not is_instant:
+        # CR 702.8b: a card with flash casts any time an instant could be cast,
+        # so the two sorcery-speed gates below ask instant-or-flash, not the
+        # type line alone. A land is never cast and keeps sorcery timing.
+        instant_speed = card.primary_type == "instant" or card.has_flash
+        if req.seat != session.current_turn and not instant_speed:
             raise HTTPException(status_code=400, detail="non-instant spells can only be cast on your turn")
 
-        if card.primary_type in {"land", "sorcery", "creature", "artifact", "enchantment"}:
+        if card.primary_type in {"land", "sorcery", "creature", "artifact", "enchantment"} and not instant_speed:
             if req.seat != session.current_turn:
                 raise HTTPException(status_code=400, detail="can only cast this card on your turn")
             if session.game.current_phase != "main":

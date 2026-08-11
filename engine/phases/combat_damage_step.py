@@ -593,8 +593,9 @@ class CombatDamageStepMixin:
 
         def _dealt_to_creature(victim, source, lifelink_seat: int):
             """What follows one creature being dealt combat damage: record the
-            source, fire its "dealt damage" triggers, tally the dealer's
-            lifelink, and mark deathtouch.
+            source, fire its "dealt damage" triggers, and tally the dealer's
+            lifelink. (Deathtouch is stamped by _mark_damage_on_permanent
+            itself — CR 702.2b is about damage, not combat damage.)
 
             Handed to `_mark_damage_on_permanent` as its `then` rather than run
             after it, so it travels with the event — CR 702.2b and 704.5h both
@@ -608,8 +609,6 @@ class CombatDamageStepMixin:
                     self._record_damage_source(victim, source)
                 self._fire_dealt_damage_triggers(victim)
                 add_lifelink(lifelink_seat, lifelink_life_gained(source, amount))
-                if source is not None and self._has_keyword(source, "deathtouch"):
-                    victim.metadata["received_deathtouch"] = True
 
             return dealt
 

@@ -76,6 +76,7 @@ class DeclareBlockersStepMixin:
             if defending_idx == controller_index
         }
         assignments: dict[int, list[int]] = {}
+        resolved_attackers: dict[int, Permanent] = {}
 
         for blocker_idx, raw_attackers in blocker_to_attacker.items():
             # A blocker may be assigned one attacker (the common case) or several
@@ -95,11 +96,44 @@ class DeclareBlockersStepMixin:
                 if attacker_idx not in own_attackers:
                     return False, "blocker assigned to a creature not attacking this player"
                 attacker = attacker_controller.battlefield[attacker_idx]
+                resolved_attackers[attacker_idx] = attacker
                 if not self._can_block_attacker(blocker, attacker):
                     return False, f"{blocker.card.name} cannot block {attacker.card.name}"
                 if self._left_right_block_illegal(attacker_idx, blocker_idx, blocker):
                     return False, f"{blocker.card.name} is in the wrong pile to block {attacker.card.name}"
                 assignments.setdefault(blocker_idx, []).append(attacker_idx)
+
+        # Menace (CR 702.111b): an attacker with menace can't be blocked by
+        # exactly one creature. A restriction on the declaration as a whole
+        # rather than on any single blocker pair (CR 509.1c), so it is checked
+        # over the finished assignment — none or two-plus blockers are fine,
+        # one is not. A Camouflage resolution is not a declaration (the piles
+        # were matched at random), so there the illegal block simply does not
+        # happen rather than invalidating the whole resolution.
+        menace_blocker_counts: dict[int, int] = {}
+        for assigned_attackers in assignments.values():
+            for attacker_idx in assigned_attackers:
+                menace_blocker_counts[attacker_idx] = menace_blocker_counts.get(attacker_idx, 0) + 1
+        for attacker_idx, count in menace_blocker_counts.items():
+            if count != 1:
+                continue
+            attacker = resolved_attackers[attacker_idx]
+            if not self._has_keyword(attacker, "menace"):
+                continue
+            if _camouflage_resolution:
+                for blocker_idx in list(assignments):
+                    remaining = [a for a in assignments[blocker_idx] if a != attacker_idx]
+                    if remaining:
+                        assignments[blocker_idx] = remaining
+                    else:
+                        del assignments[blocker_idx]
+                self.log.append(
+                    f"{attacker.card.name} has menace; a lone creature cannot block it"
+                )
+                continue
+            return False, (
+                f"{attacker.card.name} has menace and can't be blocked by only one creature"
+            )
 
         # Lure enforcement: every creature that can block a Lure attacker (aimed at
         # this defender) must do so. Skipped for Camouflage resolutions: blocks then

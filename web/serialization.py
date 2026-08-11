@@ -32,6 +32,9 @@ _DISPLAY_KEYWORDS = (
     "Reach", "Vigilance", "Haste", "Defender", "Banding", "Fear",
     "Lifelink", "Shroud", "Protection", "Rampage", "Flanking",
     "Plainswalk", "Islandwalk", "Swampwalk", "Mountainwalk", "Forestwalk",
+    # Flash is deliberately absent: it is a permission about casting from
+    # hand (CR 702.8b), not a battlefield ability worth a badge.
+    "Menace", "Hexproof", "Prowess",
 )
 
 # Color symbol → display word, for spelling out protection qualities on the card.

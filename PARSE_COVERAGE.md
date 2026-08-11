@@ -48,9 +48,9 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | card_hooks bespoke (name-keyed) | 150 |
 | activation cost | 113 |
 | trigger table | 78 |
-| keyword table | 56 |
-| static-line table | 45 |
+| keyword table | 59 |
 | aura enchant noun (oracle_instructions attach) | 44 |
+| static-line table | 42 |
 | mixin text scan | 34 |
 | aura static (oracle_instructions/permanent_state) | 31 |
 | activation gate (stack/activation) | 15 |

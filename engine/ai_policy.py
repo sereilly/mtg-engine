@@ -278,12 +278,15 @@ def choose_combat_blockers(game: Game, defending_player_index: int) -> dict[int,
         return {}
 
     legal_pairs: list[tuple[int, int, float]] = []
+    menace_attackers: set[int] = set()
     for blocker_idx in available_blockers:
         blocker = defender.battlefield[blocker_idx]
         for attacker_idx in attackers:
             if attacker_idx < 0 or attacker_idx >= len(attacker_player.battlefield):
                 continue
             attacker = attacker_player.battlefield[attacker_idx]
+            if game._has_keyword(attacker, "menace"):
+                menace_attackers.add(attacker_idx)
             if not game._can_block_attacker(blocker, attacker):
                 continue
             legal_pairs.append((blocker_idx, attacker_idx, _score_block_pair(blocker, attacker)))
@@ -334,6 +337,28 @@ def choose_combat_blockers(game: Game, defending_player_index: int) -> dict[int,
         ]
         if must:
             assignments[blocker_idx] = must
+
+    # Menace (CR 702.111b): declare_blockers refuses an assignment that puts
+    # exactly one blocker on a menace attacker, so the AI declines those blocks
+    # rather than submitting a declaration that bounces. Ganging up is a
+    # valuation question for another day; not blocking is always legal.
+    menace_counts: dict[int, int] = {}
+    for assigned in assignments.values():
+        for attacker_idx in assigned if isinstance(assigned, list) else [assigned]:
+            menace_counts[attacker_idx] = menace_counts.get(attacker_idx, 0) + 1
+    for attacker_idx, count in menace_counts.items():
+        if count != 1 or attacker_idx not in menace_attackers:
+            continue
+        for blocker_idx in list(assignments):
+            assigned = assignments[blocker_idx]
+            if isinstance(assigned, list):
+                remaining = [a for a in assigned if a != attacker_idx]
+                if remaining:
+                    assignments[blocker_idx] = remaining
+                else:
+                    del assignments[blocker_idx]
+            elif assigned == attacker_idx:
+                del assignments[blocker_idx]
 
     return assignments
 

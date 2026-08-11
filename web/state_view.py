@@ -172,14 +172,16 @@ def _compute_playable_hand_indices(session: Session, player_index: int) -> list[
         if not classification.supported:
             continue
 
-        is_instant = card.primary_type == "instant"
+        # CR 702.8b: flash casts any time an instant could be cast, so both
+        # timing gates ask instant-or-flash rather than the type line alone.
+        instant_speed = card.primary_type == "instant" or card.has_flash
 
-        # Non-instant spells require it to be your turn
-        if player_index != current_turn and not is_instant:
+        # Non-instant-speed spells require it to be your turn
+        if player_index != current_turn and not instant_speed:
             continue
 
         # Sorcery-speed: must be main phase with empty stack on your turn
-        if card.primary_type in {"land", "sorcery", "creature", "artifact", "enchantment"}:
+        if card.primary_type in {"land", "sorcery", "creature", "artifact", "enchantment"} and not instant_speed:
             if player_index != current_turn or not is_main_phase or not stack_empty:
                 continue
 

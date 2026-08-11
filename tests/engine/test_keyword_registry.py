@@ -76,8 +76,9 @@ def test_keyword_lines_combine():
 # Real keyword abilities in the Scryfall catalog that the engine does not
 # implement. Named rather than derived so this test keeps meaning something as
 # the registry grows: when one of these is implemented it moves out of here and
-# into the parametrized tests above by itself.
-_NOT_IMPLEMENTED = ("menace", "hexproof", "prowess", "flash")
+# into the parametrized tests above by itself. (menace/hexproof/prowess/flash
+# graduated with the M21 keyword round.)
+_NOT_IMPLEMENTED = ("ward", "cascade", "mutate", "scavenge")
 
 
 @pytest.mark.parametrize("keyword", _NOT_IMPLEMENTED)

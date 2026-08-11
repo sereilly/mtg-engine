@@ -793,7 +793,31 @@ def _is_supported_keyword_line(line: str) -> bool:
     parts = [part.strip() for part in normalized.split(",") if part.strip()]
     if not parts:
         return False
-    return all(part in IMPLEMENTED_KEYWORDS for part in parts)
+    # The two parameterised keywords are admitted by prefix plus quality:
+    # "protection from white and from blue" and "hexproof from blue" carry the
+    # quality as payload, not as part of the keyword's identity. Only *colour*
+    # qualities are admitted, because colours are what _protection_colors and
+    # _can_be_targeted model — admitting "protection from Demons" would ship
+    # the word and silently drop the shield, so a non-colour quality keeps the
+    # whole line refused with the clause named.
+    return all(
+        part in IMPLEMENTED_KEYWORDS or _colour_qualified_keyword_part(part)
+        for part in parts
+    )
+
+
+def _colour_qualified_keyword_part(part: str) -> bool:
+    for prefix in ("protection from ", "hexproof from "):
+        if part.startswith(prefix):
+            qualities = [
+                q.strip()
+                for q in re.split(r",|\band from\b|\band\b", part[len(prefix):])
+                if q.strip()
+            ]
+            return bool(qualities) and all(
+                q in _COLOR_WORD_TO_SYMBOL for q in qualities
+            )
+    return False
 
 
 def _parse_activated_ability(line: str, card_name: str | None = None) -> ParsedActivatedAbility | None:

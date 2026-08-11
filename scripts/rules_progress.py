@@ -88,8 +88,11 @@ SCOPE: dict[str, str | tuple[str, ...]] = {
         "702.3",   # Defender
         "702.4",   # Double Strike
         "702.7",   # First Strike
+        "702.8",   # Flash
         "702.9",   # Flying
         "702.10",  # Haste
+        "702.11",  # Hexproof
+        "702.12",  # Indestructible
         "702.14",  # Landwalk
         "702.15",  # Lifelink
         "702.16",  # Protection
@@ -101,6 +104,8 @@ SCOPE: dict[str, str | tuple[str, ...]] = {
         "702.23",  # Rampage
         "702.25",  # Flanking
         "702.36",  # Fear
+        "702.108", # Prowess
+        "702.111", # Menace
     ),
     "703": "all",  # Turn-Based Actions
     "704": "all",  # State-Based Actions
