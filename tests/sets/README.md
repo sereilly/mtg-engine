@@ -59,4 +59,5 @@ Three rules follow from that, and the guard test checks all three:
 
 Steps 1 and 2 are the whole registration: the web app, the coverage scripts,
 the catalog sweeps and the fixtures all read the manifest, so nothing else has
-a list to widen.
+a list to widen. The full lifecycle around these steps — measurement, backlog
+rounds, promotion, retrospective — is `SET_PLAYBOOK.md` at the repo root.

@@ -35,7 +35,9 @@ alone, in the paths *and* in the label. A measured set is reported by
 `GRAMMAR_COVERAGE.md` / `HOOK_RELIANCE.md` and deliberately left out of their
 floors and ceilings — a ratchet over a set nobody has implemented fires on its
 composition rather than on anything anyone did. It moves up to `sets` when it is
-fully supported. Guarded by `tests/engine/test_manifest_roles.py`.
+fully supported. Guarded by `tests/engine/test_manifest_roles.py`. The
+end-to-end process — ingest → measure → rounds → promotion → retrospective —
+is `SET_PLAYBOOK.md`.
 
 `ROADMAP.md` tracks the work to scale from this pool to the full ~26,000-card
 release line — read it before parser or card-data work.
