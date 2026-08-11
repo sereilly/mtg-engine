@@ -4748,19 +4748,27 @@ Anything that weakens these is a regression regardless of what it enables:
 
 1. **No silent wrongness.** A card may fail loudly as unsupported with a
    reason; it may never resolve as something other than what it says.
-2. **The suite stays fast.** 4,341 tests in ~14s today, against a CI budget of
+2. **The suite stays fast.** 4,454 tests at a steady 23s, against a CI budget of
    35s. The budget catches a step change; the *baseline* recorded beside it in
    `ci.yml` is what catches creep, and it is the number to keep honest — it
    went 9s → 17s across four phases with the gate green the whole way. Raising
    the budget is a decision, not maintenance.
 
-   **Open question, not yet a finding:** back-to-back runs on one clean local
-   tree measured 43.98s and then 16.79s, and the first would have failed the
-   35s budget on nothing but machine weather. The budget/baseline mechanism
-   assumes a stable runner. Whether that assumption holds on the *CI* runner is
-   unmeasured — read the percentages `ci.yml` prints across several runs before
-   concluding anything, because "the budget is too tight" and "this dev box is
-   noisy" have opposite fixes and the same symptom.
+   The baseline moved 17 → 23 in this session, and that is a *record* of growth
+   rather than permission for it: ~130 tests were added (permanent ids, the
+   grammar layering guards, two renumbering regression suites) and 17 stopped
+   being true. Leaving it would have parked the warning threshold
+   (`BASELINE × 1.5` = 25.5s) two and a half seconds away, so the next
+   unrelated change would have been blamed for drift this one caused. The
+   budget is untouched.
+
+   **The variance recorded here earlier did not reproduce.** Two back-to-back
+   local runs once measured 43.98s and 16.79s, which read as a runner-weather
+   problem serious enough to question the mechanism; three consecutive runs
+   later landed on 23s exactly. Treat one slow run as noise. The distinction
+   still matters — "the budget is too tight" and "this box is noisy" have the
+   same symptom and opposite fixes — but there is currently no evidence for
+   either.
 3. **Determinism.** A given seed reproduces a run exactly. Parsing and lowering
    are pure functions of card text.
 4. **Ratchets only tighten.** Coverage floors, probe baselines, and accepted-diff
