@@ -4,7 +4,7 @@ import random
 from typing import TYPE_CHECKING
 
 from ..models import Permanent
-from ._common import resolve_amount, resolve_target_permanent
+from ._common import permanent_matches_filter, resolve_amount, resolve_target_permanent
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -439,6 +439,75 @@ def exile_target_creature_until_eot(game: Game, instruction: OracleInstruction, 
         game.log.append(f"{exiled_perm.card.name} exiled until end of turn by {card.name}")
     else:
         game.log.append(f"{card.name}: no valid creature to exile")
+    return True, "resolved"
+
+
+@effect_handler("exile_target_permanent")
+def exile_target_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Exile target creature or planeswalker." / "Exile target nonland
+    permanent." — the *permanent* exile, as distinct from
+    ``exile_target_creature_until_eot``, which records a return at cleanup.
+    Nothing here is remembered, because nothing comes back (CR 406.1).
+
+    Three things this deliberately does not open-code:
+
+    * **the removal.** ``remove_from_battlefield`` is the one transition off
+      the battlefield; a hand-rolled rebuild would skip the combat renumbering
+      every leave depends on, and ``list.remove`` matches a look-alike.
+    * **the destination.** CR 400.3 sends an exiled card to its *owner's*
+      exile, which is not the seat that was targeted once it was stolen.
+    * **the controller, read before the removal.** "Its controller creates a
+      token" is a later step of the same resolution, and once the permanent is
+      gone there is nobody left to ask — which is why this is two composed
+      instructions rather than one fused kind.
+    """
+    card = context.card
+    payload = instruction.payload
+    perm = resolve_target_permanent(
+        game,
+        context,
+        predicate=lambda candidate: permanent_matches_filter(candidate, payload),
+    )
+    if perm is None:
+        game.log.append(f"{card.name}: no valid permanent to exile")
+        return True, "resolved"
+    controller_index = game.controller_index_of(perm)
+    owner_index = game.owner_index_of(perm)
+    game.remove_from_battlefield(perm)
+    if owner_index is None:
+        owner_index = controller_index if controller_index is not None else 0
+    game.players[owner_index].exile.append(perm.card)
+    if controller_index is not None:
+        context.results["exiled_permanent_controller"] = controller_index
+    game.log.append(f"{card.name} exiled {perm.card.name}")
+    return True, "resolved"
+
+
+@effect_handler("exile_target_graveyard_card")
+def exile_target_graveyard_card(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Exile target card from a graveyard." (Return to Nature's third mode,
+    which used to resolve having done nothing.)
+
+    No permanent is involved, so none of the battlefield machinery applies: the
+    card is popped out of the graveyard it is in and appended to that same
+    player's exile — a graveyard is an owner's zone (CR 404.1), so CR 400.3
+    needs no separate lookup.
+    """
+    card = context.card
+    owner = context.target if context.target is not None else context.caster
+    index = context.target_permanent_index
+    if not (isinstance(index, int) and 0 <= index < len(owner.graveyard)):
+        # Honour the choice, else take the first legal one — the same fallback
+        # pick_target_permanent uses, so a stale choice does not fizzle an
+        # effect the rest of the engine is not written to fizzle.
+        owner = next((player for player in game.players if player.graveyard), owner)
+        index = 0 if owner.graveyard else None
+    if index is None:
+        game.log.append(f"{card.name}: no card in any graveyard to exile")
+        return True, "resolved"
+    exiled = owner.graveyard.pop(index)
+    owner.exile.append(exiled)
+    game.log.append(f"{card.name} exiled {exiled.name} from {owner.name}'s graveyard")
     return True, "resolved"
 
 

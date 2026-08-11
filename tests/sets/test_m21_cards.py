@@ -120,6 +120,63 @@ def test_storm_caller_damages_each_opponent_on_entry(set_pool):
     assert p1.life == 20
 
 
+# --- The exile round: exile as a destination (CR 406.1 / 400.3) -------------
+
+
+def test_return_to_nature_third_mode_is_no_longer_a_dead_mode(set_pool):
+    """Return to Nature reported *supported* on its first two modes while the
+    third lowered to nothing — a mode the UI offered and the spell then
+    silently did not play. A modal card is supported when its modes are, and
+    one mode carrying no instruction is what hid it."""
+    program = compile_card_oracle(set_pool("M21")["Return to Nature"])
+    assert program.supported
+    assert [mode.supported for mode in program.modes] == [True, True, True]
+    assert program.modes[2].instruction.kind == "exile_target_graveyard_card"
+
+
+def test_return_to_nature_exiles_a_card_from_a_graveyard(set_pool):
+    pool = set_pool("M21")
+    p1 = PlayerState(name="P1", hand=[pool["Return to Nature"]])
+    p2 = PlayerState(name="P2", graveyard=[pool["Concordia Pegasus"]])
+    game = Game(players=[p1, p2])
+
+    result = game.cast_from_hand(
+        0, "Return to Nature", target_player_index=1,
+        target_permanent_index=0, mode_index=2,
+    )
+
+    assert result.supported, result.details
+    assert not p2.graveyard
+    assert [c.name for c in p2.exile] == ["Concordia Pegasus"]
+
+
+def test_a_plain_exile_sends_the_card_to_its_owners_exile(set_pool):
+    """CR 400.3: the exiled card goes to its *owner's* exile, which is not the
+    seat that was targeted once the permanent has been stolen."""
+    pool = set_pool("M21")
+    victim = Permanent(card=pool["Concordia Pegasus"])
+    p1 = PlayerState(name="P1")
+    p2 = PlayerState(name="P2", battlefield=[victim])
+    game = Game(players=[p1, p2])
+    from engine.oracle import OracleInstruction
+    from engine.game_types import OracleExecutionContext
+    from engine.handlers import EFFECT_HANDLERS
+
+    EFFECT_HANDLERS["exile_target_permanent"](
+        game,
+        OracleInstruction("exile_target_permanent", "", {"type_filter": "creature"}),
+        OracleExecutionContext(
+            caster=p1, target=p2, card=pool["Angelic Ascension"],
+            target_permanent_index=0,
+        ),
+    )
+
+    assert [c.name for c in p2.exile] == ["Concordia Pegasus"]
+    assert not p1.exile
+    assert not p2.graveyard  # exiled, not destroyed
+    assert not list(game.controlled_by(1))
+
+
 # --- The cost round: non-mana activation costs ------------------------------
 
 

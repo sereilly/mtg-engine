@@ -3066,21 +3066,42 @@ def test_exile_with_the_controller_life_gain_matches_the_rule_it_replaces():
     ) == [("exile_creature_gain_life_equal_to_power", {})]
 
 
+def test_a_bare_exile_is_the_plain_exile_and_not_the_fused_one():
+    """"Exile target creature." now has a handler of its own. It must not reach
+    ``exile_creature_gain_life_equal_to_power``, which performs *both* halves of
+    Swords to Plowshares' sentence and would gain life the card never offered."""
+    result = compile_line("Exile target creature.", card_name="Test")
+
+    assert result.lowered, result.failure_reason
+    assert [i.kind for i in result.instructions] == ["exile_target_permanent"]
+
+
 @pytest.mark.parametrize(
     "line",
     [
-        "Exile target creature.",
         "Exile target artifact. Its controller gains life equal to its power.",
         "Exile target creature. You gain life equal to its power.",
     ],
 )
 def test_exile_shapes_the_fused_handler_does_not_implement_refuse(line):
-    """A bare exile would either gain life the card never offered or exile
-    silently; the fusion checks who gains the life and what was exiled."""
+    """The fusion checks who gains the life and what was exiled; a mismatch
+    refuses rather than lowering onto a handler that does something else."""
     result = compile_line(line, card_name="Test")
 
     assert result.parsed
     assert not result.lowered
+
+
+def test_exile_with_an_unimplemented_duration_still_refuses():
+    """The dangerous fall-through: an exile carrying a duration the
+    until-end-of-turn branch does not name must not land on the *permanent*
+    exile, which would never give the card back."""
+    result = compile_line(
+        "Exile target creature until this creature leaves the battlefield.",
+        card_name="Test",
+    )
+
+    assert "exile_target_permanent" not in [i.kind for i in result.instructions]
 
 
 def test_delayed_destroy_matches_the_rule_it_replaces():

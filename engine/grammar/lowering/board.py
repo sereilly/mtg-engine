@@ -382,12 +382,26 @@ def _lower_exile(node: ast.Exile) -> tuple[OracleInstruction, ...]:
     * **the subject.** A chosen creature, not a sweep and not the source: the
       handler resolves one target permanent.
 
-    A bare ``Exile`` still refuses.
-    ``exile_creature_gain_life_equal_to_power`` performs both halves of Swords
-    to Plowshares' sentence, so lowering onto it would gain life the card never
-    offered, and lowering onto nothing would exile silently. The refusal names
-    the gap: a plain ``exile_target`` handler is what a second card printing
-    only the first sentence would need.
+    A duration this file does not implement is refused rather than falling
+    through to the permanent exile below. "Exile it until this creature leaves
+    the battlefield" is a different effect, and lowering it onto a permanent
+    exile would be the loudest possible mis-play: the card would never come
+    back.
+
+    With no duration the sentence is a permanent exile, and *which* handler
+    performs it is a question about the zone the subject names:
+
+    * **the battlefield** — ``exile_target_permanent``. The permanent leaves
+      through ``remove_from_battlefield`` and its card goes to its owner's
+      exile (CR 400.3, CR 406.1).
+    * **a graveyard** — ``exile_target_graveyard_card``. No permanent is
+      involved, so the battlefield-scoped filter payload would point both the
+      handler and engine/targeting.py at the wrong zone; ``_filter_payload``
+      already refuses that shape, which is why this branch comes first.
+
+    ``exile_creature_gain_life_equal_to_power`` stays unreachable from here: it
+    performs *both* halves of Swords to Plowshares' sentence, so a bare
+    ``Exile`` lowering onto it would gain life the card never offered.
     """
     if node.duration.kind in ("until_end_of_turn", "this_turn"):
         subject = node.subject
@@ -403,11 +417,40 @@ def _lower_exile(node: ast.Exile) -> tuple[OracleInstruction, ...]:
         raise LoweringError(
             "the temporary-exile handler resolves one targeted creature", node=node
         )
-    raise LoweringError(
-        "no handler exiles without the fused life gain; a plain exile handler "
-        "does not exist yet",
-        node=node,
-    )
+    if node.duration.kind is not None:
+        raise LoweringError(
+            f"no handler exiles for the duration {node.duration.kind!r}", node=node
+        )
+
+    subject = node.subject
+    if (
+        not isinstance(subject, ast.TargetSpec)
+        or subject.quantifier != "target"
+        or subject.count != 1
+    ):
+        # A sweep ("exile all creatures") and a bare "exile it" are separate
+        # effects with no handler; only the one chosen object is implemented.
+        raise LoweringError(
+            "only a single chosen permanent or card is exiled", node=node
+        )
+
+    filt = subject.filter
+    if filt.zone == "graveyard" and filt.is_card:
+        if filt.zone_owner is not None or filt.card_types or filt.subtypes or filt.colors:
+            # The picker this lowers onto enumerates *any* card in *any*
+            # graveyard. Narrowing it is a payload-derived spec, not something
+            # to fake by dropping the narrowing here.
+            raise LoweringError(
+                "no graveyard picker narrows to this card or this player yet",
+                node=node,
+            )
+        return (
+            OracleInstruction("exile_target_graveyard_card", "", {"any_card": True}),
+        )
+
+    exile_payload = _filter_payload(filt)
+    _describe_targets(exile_payload, subject)
+    return (OracleInstruction("exile_target_permanent", "", exile_payload),)
 
 
 def _fused_exile_then_controller_life(

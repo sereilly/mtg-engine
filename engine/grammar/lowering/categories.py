@@ -132,6 +132,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "scry": "zones",
     "exile_creature_gain_life_equal_to_power": "zones",
     "exile_target_creature_until_eot": "zones",
+    # The permanent exiles. Same category as the temporary one, so
+    # GRAMMAR_CATEGORIES is unchanged — exile is a zone change either way, and
+    # a second switch would let one of the two be gated off without the other.
+    "exile_target_permanent": "zones",
+    "exile_target_graveyard_card": "zones",
     "return_creature_from_graveyard_to_hand": "zones",
     "reanimate_creature": "zones",
     "bounce_target_creature": "zones",

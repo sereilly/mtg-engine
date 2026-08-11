@@ -191,6 +191,11 @@ _KIND_TO_SPEC: dict[str, dict] = {
     "phase_out_target_creature_until_source_leaves": {"kind": "creature"},
     "destroy_artifact_controller_gains_mana_value": {"kind": "artifact"},
     "reanimate_creature": {"kind": "graveyard_creature", "own_graveyard_only": True},
+    # "target card from a graveyard" — any card, any seat's graveyard, so no
+    # own_graveyard_only. The picker is the reanimation one because the
+    # *choice* is identical; only where the card goes afterwards differs, and
+    # that is the handler's business, not the picker's.
+    "exile_target_graveyard_card": {"kind": "graveyard_creature", "any_card": True},
     "exchange_ante_with_top_library": {"kind": "none"},
     "tap_or_untap_target": {"kind": "permanent"},
     "drain_target_lands_mana": {"kind": "player"},
