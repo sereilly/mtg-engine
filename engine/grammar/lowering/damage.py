@@ -1,0 +1,373 @@
+"""Lowering damage, and preventing it.
+
+Plain damage, the counted and board-count variants whose arithmetic a dedicated
+handler performs in full, the "unless they pay" shape, damage conjunctions, and
+the CR 615 prevention shields.
+
+`deal_damage` is the one instruction that records a value other steps can read
+(`_PRODUCES` in `lower.py`), which is why "deal damage, then gain that much
+life" is two instructions in a sequence rather than a fused kind.
+"""
+
+from ...oracle_types import OracleInstruction
+from .. import ast
+from ..errors import LoweringError
+from ._common import (
+    _REST_OF_TURN,
+    _amount_payload,
+    _describe_targets,
+    _full_mana_payload,
+    _is_source,
+    _is_you,
+    _targets_payload,
+)
+
+
+# ---------------------------------------------------------------------------
+# Damage
+# ---------------------------------------------------------------------------
+
+
+def _sweep_kind(recipients: tuple[ast.Recipient, ...]) -> str | None:
+    """Recognize the board-sweep damage shapes as their dedicated handlers.
+
+    These are genuinely different effects, not riders: they damage every player
+    *and* a filtered set of creatures as one state-based-action batch.
+    """
+    hits_players = any(
+        isinstance(r, ast.PlayerRef) and r.kind in ("each_player", "each_opponent")
+        for r in recipients
+    )
+    creature_specs = [
+        r for r in recipients
+        if isinstance(r, ast.TargetSpec) and r.quantifier == "each"
+    ]
+    if len(creature_specs) != 1:
+        return None
+    filt = creature_specs[0].filter
+    if filt.card_types != ("creature",):
+        return None
+
+    if hits_players:
+        if filt.without_keywords == ("flying",):
+            return "earthquake_damage"
+        if filt.with_keywords == ("flying",):
+            return "hurricane_damage"
+        if not filt.with_keywords and not filt.without_keywords:
+            return "deal_damage_each_creature_and_player"
+        return None
+    if filt.attacking and not filt.with_keywords and not filt.without_keywords:
+        return "deal_damage_each_attacking_creature"
+    return None
+
+
+# Counted damage whose arithmetic a dedicated handler performs in full. Keyed
+# by the exact noun phrase counted, because that phrase *is* the handler's
+# contract: `_on__upkeep_each__deal_damage_equal_to_swamps` counts the Swamps
+# controlled by the player whose upkeep is resolving and reads an empty payload,
+# so a filter that differs in any way — a different land type, a different
+# controller — has no handler and must refuse rather than count the wrong thing.
+_SWAMPS_THEY_CONTROL = ast.ObjectFilter(subtypes=("swamp",), controller="that_player")
+
+# Named board counts (ast.BoardCount) mapped to the instruction that computes
+# them. `deal_damage` appears here for `untapped_lands_at_turn_start` because
+# that is genuinely how the engine encodes Power Surge today: the upkeep
+# handlers read `amount == "x"` as "untapped lands the player controlled at the
+# start of this turn" (engine/phases/upkeep_effects.py). The coupling is
+# implicit in the handler, so it is written down here rather than left to be
+# rediscovered — and it is the reason an unnamed X may never lower to this kind.
+_BOARD_COUNT_DAMAGE: dict[str, tuple[str, dict[str, object]]] = {
+    # The threshold and the direction are payload on the legacy side, so the
+    # grammar carries them too — the differential compares payloads, and a
+    # bare {} here would report a disagreement rather than a match.
+    "cards_in_hand_minus_four": (
+        "upkeep_chosen_player_hand_overflow_damage",
+        {"base": 4, "direction": "overflow"},
+    ),
+    "untapped_lands_at_turn_start": ("deal_damage", {"amount": "x"}),
+}
+
+
+def _damaged_player_is(recipients: tuple[ast.Recipient, ...], kind: str) -> bool:
+    """Whether the damage lands on exactly one player reference of *kind*."""
+    return (
+        len(recipients) == 1
+        and isinstance(recipients[0], ast.PlayerRef)
+        and recipients[0].kind == kind
+    )
+
+
+def _lower_counted_damage(node: ast.DealDamage) -> tuple[OracleInstruction, ...]:
+    """"…deals damage to that player equal to the number of Swamps they control."
+    (Karma.)
+
+    Both halves are checked, not just the count: the handler damages the player
+    whose upkeep is resolving, so lowering a clause that damages someone else
+    onto it would hit the wrong seat while the card still reported as supported.
+    """
+    assert isinstance(node.amount, ast.CountOf)
+    if (
+        node.amount.filter == _SWAMPS_THEY_CONTROL
+        and _damaged_player_is(node.recipients, "that_player")
+        and node.riders == ast.DamageRiders()
+    ):
+        return (OracleInstruction("deal_damage_equal_to_swamps", "", {}),)
+    raise LoweringError("no handler computes this counted damage", node=node)
+
+
+def _lower_board_count_damage(node: ast.DealDamage) -> tuple[OracleInstruction, ...]:
+    """Damage sized by a named board count (Black Vise, Power Surge)."""
+    assert isinstance(node.amount, ast.BoardCount)
+    found = _BOARD_COUNT_DAMAGE.get(node.amount.name)
+    if found is None:
+        raise LoweringError(
+            f"nothing computes the {node.amount.name!r} count", node=node
+        )
+    # Both handlers damage the player whose upkeep is resolving — they take the
+    # seat from the upkeep context, not from the instruction — so a clause
+    # aimed anywhere else has no handler.
+    if not _damaged_player_is(node.recipients, "that_player"):
+        raise LoweringError("this counted damage only reaches 'that player'", node=node)
+    if node.riders != ast.DamageRiders():
+        raise LoweringError("no counted-damage handler carries damage riders", node=node)
+    kind, payload = found
+    return (OracleInstruction(kind, "", dict(payload)),)
+
+
+def _lower_damage_unless_pay(
+    node: ast.DamageUnlessPay, event: str | None
+) -> tuple[OracleInstruction, ...]:
+    """"<source> deals N damage to you unless you pay <cost>."
+
+    Two engine flows implement this and the *trigger* picks between them, which
+    is why the event kind is threaded down here rather than inferred from the
+    clause. On an upkeep trigger the pair (condition, instruction kind) is
+    looked up in engine/phases/upkeep_effects.py, so only the fused
+    ``upkeep_pay_or_deal_damage_to_controller`` is dispatched; everywhere else
+    the trigger resolves through EFFECT_HANDLERS, where ``self_damage_unless_pay``
+    arms the pending optional-pay prompt. Emitting either one under the other's
+    trigger produces a card that compiles cleanly and does nothing.
+    """
+    damage = node.damage
+    if not _is_you(node.payer):
+        raise LoweringError(
+            "both pay-or-else flows offer the cost to the ability's controller", node=node
+        )
+    if not (len(damage.recipients) == 1 and _is_you(damage.recipients[0])):
+        raise LoweringError(
+            "both pay-or-else flows damage the ability's controller", node=node
+        )
+    if damage.riders != ast.DamageRiders():
+        raise LoweringError("no pay-or-else flow carries damage riders", node=node)
+    amount = _amount_payload(damage.amount)
+    if not isinstance(amount, int):
+        raise LoweringError("a pay-or-else flow needs a fixed damage amount", node=node)
+
+    if event is None:
+        raise LoweringError(
+            "a pay-or-else damage prompt exists only as a trigger's own effect",
+            node=node,
+        )
+    if event.startswith("upkeep"):
+        if event != "upkeep_self":
+            raise LoweringError(
+                f"no upkeep handler pairs {event!r} with a pay-or-else damage prompt",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "upkeep_pay_or_deal_damage_to_controller", "",
+                {"damage": amount, "mana": _full_mana_payload(node.cost)},
+            ),
+        )
+
+    # `self_damage_unless_pay` puts a single generic number on the prompt, so a
+    # coloured cost would be silently charged as {0}.
+    pips = dict(node.cost.pips)
+    generic = int(pips.pop("generic", 0))
+    if pips:
+        raise LoweringError(
+            "the optional-pay prompt reads one generic cost, not coloured mana", node=node
+        )
+    return (
+        OracleInstruction("self_damage_unless_pay", "", {"amount": amount, "cost": generic}),
+    )
+
+
+def _lower_damage(node: ast.DealDamage) -> tuple[OracleInstruction, ...]:
+    if isinstance(node.amount, ast.CountOf):
+        return _lower_counted_damage(node)
+    if isinstance(node.amount, ast.BoardCount):
+        return _lower_board_count_damage(node)
+    amount = _amount_payload(node.amount)
+
+    sweep = _sweep_kind(node.recipients)
+    if sweep is not None:
+        return (OracleInstruction(sweep, "", {"amount": amount}),)
+
+    if len(node.recipients) != 1:
+        raise LoweringError("multi-recipient damage without a sweep shape", node=node)
+
+    recipient = node.recipients[0]
+    payload: dict[str, object] = {"amount": amount}
+    if node.riders.no_regen:
+        payload["no_regen"] = True
+    if node.riders.exile_if_dies:
+        payload["exile_if_dies"] = True
+
+    # Divided damage (Fireball) picks its targets at cast time and carries them
+    # on the stack item, so the noun phrase here is "any number of targets"
+    # rather than a resolvable recipient. The *handler* therefore needs nothing
+    # from the recipient — but the caster still has to be prompted for the
+    # targets, and "deal_damage {amount: x}" alone cannot say so: it is the same
+    # payload Lightning Bolt produces. Recording the division here is what lets
+    # engine/targeting.py raise the divided prompt from the compiled program
+    # rather than from a "divided" substring in legality.py.
+    if node.riders.divided:
+        payload["targets"] = {"quantifier": "divided", "kind": "divided"}
+        return (OracleInstruction("deal_damage", "", payload),)
+
+    # Damage aimed at the source's own controller rather than the spell's
+    # target. `deal_damage` reads this the same way `target_gains_life`
+    # already reads its "recipient" key.
+    if _is_you(recipient):
+        payload["recipient"] = "caster"
+    elif isinstance(recipient, ast.PlayerRef) and recipient.kind not in (
+        "target_player", "that_player", "controller", "each_player"
+    ):
+        raise LoweringError(f"unsupported damage recipient {recipient.kind!r}", node=node)
+    elif isinstance(recipient, ast.TargetSpec) and recipient.quantifier not in (
+        "any_target", "target", "this"
+    ):
+        raise LoweringError("unsupported damage target quantifier", node=node)
+
+    targets = _targets_payload(recipient)
+    if targets is not None:
+        payload["targets"] = targets
+    return (OracleInstruction("deal_damage", "", payload),)
+
+
+def _lower_damage_conjunction(node: ast.Conjunction) -> tuple[OracleInstruction, ...]:
+    """Two damage clauses sharing a source.
+
+    The legacy compiler minted a dedicated instruction kind per pairing
+    (``deal_damage_and_self_damage``, ``deal_damage_and_opponent_choice``) —
+    28 of its 120 kinds were conjunctions like these, which is combinatorial in
+    the number of effects. Here the first shape decomposes into two ordinary
+    damage instructions and the kind disappears.
+    """
+    first, second = node.effects
+    assert isinstance(first, ast.DealDamage) and isinstance(second, ast.DealDamage)
+
+    # "…and N damage to any target of an opponent's choice" keeps its dedicated
+    # handler: the second target is chosen by a different player, which needs
+    # the pending-prompt machinery rather than a second instruction.
+    if second.chooser is not None:
+        return (
+            OracleInstruction(
+                "deal_damage_and_opponent_choice", "",
+                {
+                    "amount": _amount_payload(first.amount),
+                    "opponent_amount": _amount_payload(second.amount),
+                },
+            ),
+        )
+    return _lower_damage(first) + _lower_damage(second)
+
+
+def _lower_prevent_damage(node: ast.PreventDamage) -> tuple[OracleInstruction, ...]:
+    """"Prevent the next N damage …" and the Circle-of-Protection shield.
+
+    One handler, `grant_prevention_shield`, with the recipient encoded as two
+    booleans it reads. They are not interchangeable: `to_self` shields the
+    ability's controller, `to_source` the permanent the ability is on, and
+    neither shields a chosen target — so the recipient decides the payload
+    rather than being dropped.
+    """
+    recipient = node.to
+    if isinstance(node.amount, ast.AllOf):
+        return _lower_prevent_all(node)
+    if node.combat_only:
+        # Only the blanket form above has a combat-scoped handler.
+        # `grant_prevention_shield` counts damage of any kind, so lowering a
+        # "prevent the next N combat damage" onto it would also eat N damage
+        # from a burn spell.
+        raise LoweringError("no counted shield is scoped to combat damage", node=node)
+    if node.from_filter is not None:
+        # Colour-scoped whole-instance shield. The handler keys on the colour;
+        # a shield against an uncoloured "source of your choice" (Reverse
+        # Damage) is a different handler entirely, so refuse rather than emit a
+        # colourless Circle of Protection.
+        colours = node.from_filter.colors
+        if len(colours) != 1:
+            raise LoweringError("no handler for this source-scoped shield", node=node)
+        if not _is_you(recipient):
+            raise LoweringError("colour-scoped shields only protect their controller", node=node)
+        return (
+            OracleInstruction(
+                "grant_prevention_shield", "",
+                {"amount": 1, "protection_kind": "color", "prevention_color": colours[0]},
+            ),
+        )
+
+    payload: dict[str, object] = {
+        "amount": _amount_payload(node.amount),
+        "to_self": bool(_is_you(recipient)),
+        "to_source": bool(_is_source(recipient)),
+    }
+    if payload["to_self"] or payload["to_source"]:
+        return (OracleInstruction("grant_prevention_shield", "", payload),)
+    # A chosen recipient. The handler's last branch calls
+    # `apply_prevention_shield(game, target, target_permanent_index, …)`, which
+    # shields the chosen *permanent* when one was picked and the chosen
+    # *player* when none was — so "to target player" and "to target creature"
+    # are the same instruction, and both are honoured. A quantifier other than
+    # "target"/"any target" is not: nothing enumerates a shield per member of a
+    # set.
+    if isinstance(recipient, ast.PlayerRef):
+        if recipient.kind not in ("target_player", "target_opponent"):
+            raise LoweringError("no handler for this prevention recipient", node=node)
+        _describe_targets(payload, recipient)
+        return (OracleInstruction("grant_prevention_shield", "", payload),)
+    if not isinstance(recipient, ast.TargetSpec) or recipient.quantifier not in ("target", "any_target"):
+        raise LoweringError("no handler for this prevention recipient", node=node)
+    _describe_targets(payload, recipient)
+    return (OracleInstruction("grant_prevention_shield", "", payload),)
+
+
+def _lower_prevent_all(node: ast.PreventDamage) -> tuple[OracleInstruction, ...]:
+    """"Prevent all combat damage that would be dealt this turn." (Fog.)
+
+    ``prevent_all_combat_damage`` sets one turn-wide flag
+    (``game.combat_damage_prevented_until_eot``) that
+    ``prevention._prevent_all_combat_damage`` reads on every damage event whose
+    ``combat`` flag is set. That is the entirety of its contract, and it takes
+    an empty payload — so every narrowing the sentence could carry is something
+    the handler would ignore, and each one is checked here instead of dropped:
+
+    * not combat-scoped — the flag only sees combat damage, so lowering
+      "prevent all damage that would be dealt this turn" onto it would leave
+      every burn spell going through while the card reported as supported;
+    * a recipient — the flag is global, so a shield written for one creature or
+      one player would silently protect the whole table (Desert Nomads);
+    * a source filter — same reason, in the other direction;
+    * a duration other than this turn — the flag is cleared in the cleanup step,
+      so it *is* "this turn" and nothing else.
+    """
+    if not node.combat_only:
+        raise LoweringError("no handler prevents all damage of every kind", node=node)
+    if node.to is not None:
+        raise LoweringError(
+            "prevent_all_combat_damage is turn-wide; no handler scopes a blanket "
+            "prevention to one recipient",
+            node=node,
+        )
+    if node.from_filter is not None:
+        raise LoweringError(
+            "no handler scopes a blanket prevention to a source", node=node
+        )
+    if node.duration.kind not in _REST_OF_TURN:
+        raise LoweringError(
+            "the combat-damage flag lasts exactly this turn", node=node
+        )
+    return (OracleInstruction("prevent_all_combat_damage", "", {}),)

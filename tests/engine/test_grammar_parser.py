@@ -200,6 +200,99 @@ def test_static_line_is_classified_as_static_not_a_spell_effect():
 
 
 # ---------------------------------------------------------------------------
+# Modal heads (CR 700.2)
+# ---------------------------------------------------------------------------
+#
+# The head is a *statement*, so the three places it is printed all read it
+# through line shapes that already existed. These assert the node reached each
+# of them with the prefix intact — a head parsed with its cost or its trigger
+# dropped would be the silent-rider bug, wearing a passing test.
+
+
+def test_a_bare_modal_head_is_a_statement_carrying_the_count():
+    assert _statement("Choose one —") == ast.ModalNode(1)
+
+
+def test_a_modal_head_keeps_the_activation_cost_it_sits_behind():
+    node = parse_line("{2}: Choose one —")
+    assert isinstance(node, ast.ActivatedAbilityNode)
+    assert node.costs == (ast.ManaCost((("generic", 2),)),)
+    assert node.statement == ast.ModalNode(1)
+
+
+def test_a_modal_head_keeps_the_trigger_it_sits_behind():
+    node = parse_line("When this creature enters, choose one —")
+    assert isinstance(node, ast.TriggeredAbilityNode)
+    assert node.event.kind == "enters_battlefield"
+    assert node.statement == ast.ModalNode(1)
+
+
+def test_the_mode_count_is_read_rather_than_assumed():
+    """"Choose one or more" contains "choose one". The substring test this
+    production replaced matched it and built a one-mode spell out of Sublime
+    Epiphany; the count and the floor are separate fields here so that lowering
+    has to look at both."""
+    assert _statement("Choose one or more —") == ast.ModalNode(1, at_least=True)
+    assert _statement("Choose two —") == ast.ModalNode(2)
+
+
+def test_a_head_the_engine_cannot_carry_out_is_read_then_refused():
+    """Parsed in full and refused at *lowering*, which is where "the engine has
+    no way to do this" belongs — the alternative is a card that compiles
+    cleanly and picks one mode where the text says several."""
+    result = compile_line("Choose one or more —")
+    assert result.parsed
+    assert not result.lowered
+    assert "one chosen mode" in result.lowering_error
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        # Necromentia. Opens with the same two tokens as a modal head, and is a
+        # different effect entirely — so the head production must decline
+        # quietly and leave this line's own failure reason alone.
+        "Choose a card name other than a basic land card name.",
+        # A head is the whole clause; the modes are the lines below it. Anything
+        # trailing means this is not that sentence.
+        "Choose one — and draw a card.",
+    ],
+)
+def test_other_choose_sentences_are_not_claimed_as_modal_heads(line: str):
+    with pytest.raises(GrammarError):
+        parse_line(line)
+
+
+@pytest.mark.parametrize(
+    "line",
+    ["Draw a card, then choose one —", "Draw a card. Choose one —"],
+)
+def test_a_modal_head_buried_in_a_sequence_refuses(line: str):
+    """A head lowers to no instructions because the *compiler* picks the modes
+    up from the bullet lines beneath the head **line**. Inside a sequence it is
+    not that line, so lowering it to nothing would be a spell that performs
+    everything except its modes — the dropped-rider bug with the modes as the
+    rider."""
+    result = compile_line(line)
+    assert result.parsed
+    assert result.lowering_error == "a modal head is a whole clause, not a step inside one"
+
+
+def test_an_ability_word_is_no_longer_filed_under_modal():
+    """CR 207.2c ability words are printed with an em dash and have no rules
+    meaning. Rejecting every dash on sight put "Battalion — Whenever …" in the
+    modal backlog, which pointed the work at the wrong production entirely. The
+    line still fails — nothing reads the ability word — but it fails on the
+    trigger it really cannot read."""
+    result = compile_line(
+        "Battalion — Whenever this creature and at least two other creatures "
+        "attack, put a +1/+1 counter on this creature."
+    )
+    assert not result.parsed
+    assert result.parse_error == "expected a subject"
+
+
+# ---------------------------------------------------------------------------
 # The full-consumption invariant
 # ---------------------------------------------------------------------------
 

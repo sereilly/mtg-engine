@@ -113,6 +113,72 @@ def test_a_mode_nothing_reads_is_reported_unsupported_on_its_own():
     assert program.modes[1].instruction is None
 
 
+def test_a_head_asking_for_more_than_one_mode_is_not_read_as_choose_one():
+    """Sublime Epiphany. "choose one" is a substring of "choose one or more",
+    and the test this replaced matched it — so a spell whose controller picks
+    several modes compiled as one that picks the first. The grammar reads the
+    count, refuses it, and the refusal reaches here as a head with no modes at
+    all rather than as a wrong number of them."""
+    card = _mk_card(
+        "Epiphany Test",
+        "Instant",
+        "Choose one or more —\n• Counter target spell.\n• Target player draws a card.",
+    )
+
+    program = compile_card_oracle(card)
+
+    assert program.modes == ()
+    assert program.supported is False
+
+
+def test_a_lone_bullet_under_a_head_is_not_a_mode_list():
+    """CR 700.2: a modal spell has "two or more options in a bulleted list".
+    One option is text this does not understand, and returning it as a one-mode
+    spell would be a guess wearing the shape of a reading."""
+    card = _mk_card("Single Test", "Instant", "Choose one —\n• Counter target red spell.")
+
+    program = compile_card_oracle(card)
+
+    assert program.modes == ()
+
+
+def test_bullets_belong_to_the_head_above_them_not_to_the_card():
+    """The mode list is grouped with its own head. The version this replaced
+    partitioned the card's whole text at the first "•", so a bullet list
+    anywhere on the card became the modes of a "choose one" anywhere else."""
+    card = _mk_card(
+        "Detached Test",
+        "Instant",
+        "Choose one —\n"
+        "• Counter target red spell.\n"
+        "• Destroy target red permanent.\n"
+        "Target player gains 3 life.\n"
+        "• Draw a card.",
+    )
+
+    program = compile_card_oracle(card)
+
+    assert [mode.label for mode in program.modes] == [
+        "Counter target red spell", "Destroy target red permanent"
+    ]
+
+
+def test_a_modal_triggered_ability_never_becomes_a_cast_time_mode():
+    """CR 700.2b: a triggered ability's modes are chosen when the ability goes
+    on the stack, not when the card is cast. The head parses as a triggered
+    ability, so nothing here claims it — where the whole-text substring test
+    saw "choose one" plus bullets and offered them at cast time."""
+    card = _mk_card(
+        "Trigger Modal Test",
+        "Enchantment",
+        "When this enchantment enters, choose one —\n"
+        "• You gain 4 life.\n"
+        "• Draw a card.",
+    )
+
+    assert compile_card_oracle(card).modes == ()
+
+
 def test_a_modal_activated_ability_never_becomes_a_cast_time_mode():
     """Pyramids' bullets are alternatives of an *ability*, expanded into one
     ability line each before any of this runs. Letting one into `modes` would
@@ -127,3 +193,41 @@ def test_a_modal_activated_ability_never_becomes_a_cast_time_mode():
 
     assert program.modes == ()
     assert len(program.activated_abilities) == 2
+
+
+def test_a_modal_activated_head_is_recognised_by_shape_not_by_its_cost():
+    """The regex this replaced admitted a run of mana symbols and nothing else,
+    so a modal ability with any other cost would have been left unexpanded — a
+    head line nothing reads plus two orphan bullets. The grammar reads the whole
+    cost clause, so the shape decides."""
+    card = _mk_card(
+        "Sac Modal Test",
+        "Artifact",
+        "Sacrifice this artifact: Choose one —\n"
+        "• Destroy target artifact.\n"
+        "• Destroy target enchantment.",
+    )
+
+    program = compile_card_oracle(card)
+
+    assert [a.instruction.kind for a in program.activated_abilities] == [
+        "destroy_target_permanent", "destroy_target_permanent"
+    ]
+
+
+def test_an_activated_head_the_engine_cannot_carry_out_is_not_expanded():
+    """Expanding "{2}: Choose two —" into one ability per bullet would let the
+    player activate each mode separately — a strictly more permissive card than
+    the one printed. The lowering's refusal has to reach the expansion, and it
+    does because the expansion asks the grammar rather than a second regex."""
+    card = _mk_card(
+        "Two Modes Test",
+        "Artifact",
+        "{2}: Choose two —\n• Destroy target artifact.\n• Destroy target enchantment.",
+    )
+
+    program = compile_card_oracle(card)
+
+    # The head stays one line, so it stays one ability — an unsupported one,
+    # which is the loud failure. Two entries here would be the permissive card.
+    assert [a.supported for a in program.activated_abilities] == [False]

@@ -1,7 +1,7 @@
 """The oracle-text parser.
 
 A tokenizer plus a recursive-descent grammar over Magic's card templating,
-producing a typed AST (``ast.py``) that is lowered to the ``OracleInstruction``
+producing a typed AST (``ast/``) that is lowered to the ``OracleInstruction``
 IR (``lower.py``). It replaced the flat ``@parse_rule`` registry in
 ``engine/parsing/``, which needed roughly one hand-written rule per two cards
 and silently dropped any part of a card's text its first matching rule did not

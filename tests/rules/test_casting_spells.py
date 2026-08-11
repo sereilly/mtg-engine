@@ -4,6 +4,7 @@ import pytest
 from engine import Game, PlayerState
 from engine.models import CardDefinition, Permanent
 from engine.game import StackItem
+from engine.oracle import compile_card_oracle
 
 
 # ---------------------------------------------------------------------------
@@ -766,3 +767,63 @@ def test_601_7_new_cost_modifier_does_not_affect_already_queued_spell():
     game.resolve_top_of_stack()
 
     assert p2.life == 17
+
+
+# ---------------------------------------------------------------------------
+# Rule 700.2 — Modal spells
+# ---------------------------------------------------------------------------
+#
+# A mode is announced while the spell is being cast (601.2b), so these sit with
+# the rest of casting's announcements rather than in a file of their own. What
+# they pin is the *reading* of the head line: how many modes it asks for, and
+# whether there is a mode list at all.
+
+
+@pytest.mark.cr("700.2", "700.2a", "601.2b")
+def test_700_2a_the_mode_announced_at_cast_is_the_one_that_resolves():
+    """The controller chooses the mode as part of casting, and the spell then
+    does only that mode (700.2a, 601.2b) — not the first one printed."""
+    blast = _mk_card(
+        "Elemental Blast Test",
+        "Instant",
+        "Choose one —\n• Target player gains 3 life.\n• Target player loses 2 life.",
+    )
+    p1 = PlayerState(name="P1", hand=[blast])
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+
+    game.queue_from_hand(0, "Elemental Blast Test", target_player_index=1, mode_index=1)
+    assert game.stack[-1].chosen_mode_index == 1
+
+    game.resolve_top_of_stack()
+
+    assert p2.life == 18
+
+
+@pytest.mark.cr("700.2")
+def test_700_2_a_single_bulleted_option_is_not_a_modal_spell():
+    """700.2 defines a modal spell as having "two or more options in a bulleted
+    list". With one option there is no choice to announce, so the card carries
+    no modes for a player to pick between."""
+    single = _mk_card(
+        "Single Option Test", "Instant", "Choose one —\n• Target player gains 3 life."
+    )
+
+    assert compile_card_oracle(single).modes == ()
+
+
+@pytest.mark.cr("700.2")
+def test_700_2_a_head_choosing_several_modes_is_not_reduced_to_one():
+    """"Choose one or more —" asks for a number of modes the engine cannot
+    announce or resolve — it carries one chosen mode. Reading it as plain
+    "choose one" would make the card a strictly weaker spell that still reported
+    itself as working, which is worse than refusing it."""
+    several = _mk_card(
+        "Several Modes Test",
+        "Instant",
+        "Choose one or more —\n• Target player gains 3 life.\n• Target player loses 2 life.",
+    )
+    program = compile_card_oracle(several)
+
+    assert program.modes == ()
+    assert program.supported is False

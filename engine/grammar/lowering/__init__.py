@@ -1,0 +1,212 @@
+"""Lowering: AST node -> ``OracleInstruction``, one family per subject.
+
+The mirror of `grammar/effects/`, with the *same family names*, so a new
+template has one home on each side — prowess parses in
+`effects/characteristics.py` and lowers in `lowering/characteristics.py`.
+
+    _common          payload shapes and the fragments several families need
+    categories       the kind -> category registry the gate reads
+    damage           dealing it, and preventing it
+    characteristics  P/T, keywords, colour, printed text, counters
+    board            destruction, bouncing, tapping, control, exile
+    cards            draw, discard, mill, search, mana
+    stack            countering
+    combat           can't-attack / can't-be-blocked
+    game             tokens, life, winning, extra turns
+
+The families share no code with each other; everything common is in `_common`.
+Re-exported flat, so callers name a production and not its family, and moving
+one between families is not a caller-visible change.
+
+An effect that should *not* execute belongs here as a `LoweringError` naming
+what is missing — never as a lowering that quietly drops the part the engine
+cannot do.
+"""
+
+from .categories import INSTRUCTION_CATEGORIES
+from ._common import (
+    _filter_payload,
+    _restrictions_beyond,
+    GRAMMAR_ONLY_PAYLOAD_KEYS,
+    _describe_targets,
+    _targets_only,
+    _targets_payload,
+    _amount_payload,
+    _is_source,
+    _is_enchanted,
+    _is_target,
+    _is_you,
+    _signed,
+    _durationless_reason,
+    _MANA_KEYS,
+    _full_mana_payload,
+    _REST_OF_TURN,
+)
+from .damage import (
+    _sweep_kind,
+    _SWAMPS_THEY_CONTROL,
+    _BOARD_COUNT_DAMAGE,
+    _damaged_player_is,
+    _lower_counted_damage,
+    _lower_board_count_damage,
+    _lower_damage_unless_pay,
+    _lower_damage,
+    _lower_damage_conjunction,
+    _lower_prevent_damage,
+    _lower_prevent_all,
+)
+from .characteristics import (
+    _lower_pump,
+    _lower_set_base_pt,
+    _KEYWORD_GRANTS,
+    _lower_gain_keyword,
+    _lower_put_counter,
+    _PER_DEATH_COUNTERS,
+    _PER_DEATH_SUBJECT,
+    _ANY_CREATURE_DIED,
+    _lower_remove_counter,
+    _lower_for_each,
+    _lower_become_color,
+    _lower_change_text,
+)
+from .board import (
+    _DESTROY_ALL_KINDS,
+    _BASIC_LAND_TYPES,
+    _BLOCK_PAIR_EVENTS,
+    _lower_destroy,
+    _lower_delayed_destroy,
+    _lower_tap,
+    _reads_no_return_restriction,
+    _lower_return_to_zone,
+    _lower_tap_or_untap,
+    _lower_regenerate,
+    _lower_sacrifice_unless_pay,
+    _LINKED_STEAL_FILTER,
+    _lower_gain_control,
+    _lower_sacrifice,
+    _EXILED_CREATURE,
+    _lower_exile,
+    _fused_exile_then_controller_life,
+)
+from .cards import (
+    _DAMAGED_PLAYER_EVENTS,
+    _lower_discard,
+    _fused_draw_then_discard,
+    _lower_draw,
+    _lower_mill,
+    _lower_add_mana,
+    _TAPPED_LAND_MANA_RECIPIENTS,
+    _lower_add_mana_for_tapped_land,
+    _lower_look_at_hand,
+    _SEARCH_HONOURED_FILTER_FIELDS,
+    _lower_search_library,
+)
+from .stack import (
+    _COUNTER_HONOURED_FILTER_FIELDS,
+    _COUNTER_UNLESS_PAYS_X,
+    _COUNTER_PERFORMED_PENALTIES,
+    _lower_counter_spell,
+    _lower_modal_head,
+)
+from .combat import (
+    _UNBLOCKABLE_POWER_LIMIT,
+    _lower_combat_restriction,
+    _lower_cant_be,
+)
+from .game import (
+    _lower_gain_life,
+    _title,
+    _lower_create_token,
+    _lower_extra_turn,
+    _LOSE_GAME_KINDS,
+    _lower_lose_game,
+    _lower_win_game,
+    _lower_lose_life,
+)
+
+__all__ = [
+    "INSTRUCTION_CATEGORIES",
+    "_filter_payload",
+    "_restrictions_beyond",
+    "GRAMMAR_ONLY_PAYLOAD_KEYS",
+    "_describe_targets",
+    "_targets_only",
+    "_targets_payload",
+    "_amount_payload",
+    "_is_source",
+    "_is_enchanted",
+    "_is_target",
+    "_is_you",
+    "_signed",
+    "_durationless_reason",
+    "_MANA_KEYS",
+    "_full_mana_payload",
+    "_REST_OF_TURN",
+    "_sweep_kind",
+    "_SWAMPS_THEY_CONTROL",
+    "_BOARD_COUNT_DAMAGE",
+    "_damaged_player_is",
+    "_lower_counted_damage",
+    "_lower_board_count_damage",
+    "_lower_damage_unless_pay",
+    "_lower_damage",
+    "_lower_damage_conjunction",
+    "_lower_prevent_damage",
+    "_lower_prevent_all",
+    "_lower_pump",
+    "_lower_set_base_pt",
+    "_KEYWORD_GRANTS",
+    "_lower_gain_keyword",
+    "_lower_put_counter",
+    "_PER_DEATH_COUNTERS",
+    "_PER_DEATH_SUBJECT",
+    "_ANY_CREATURE_DIED",
+    "_lower_remove_counter",
+    "_lower_for_each",
+    "_lower_become_color",
+    "_lower_change_text",
+    "_DESTROY_ALL_KINDS",
+    "_BASIC_LAND_TYPES",
+    "_BLOCK_PAIR_EVENTS",
+    "_lower_destroy",
+    "_lower_delayed_destroy",
+    "_lower_tap",
+    "_reads_no_return_restriction",
+    "_lower_return_to_zone",
+    "_lower_tap_or_untap",
+    "_lower_regenerate",
+    "_lower_sacrifice_unless_pay",
+    "_LINKED_STEAL_FILTER",
+    "_lower_gain_control",
+    "_lower_sacrifice",
+    "_EXILED_CREATURE",
+    "_lower_exile",
+    "_fused_exile_then_controller_life",
+    "_DAMAGED_PLAYER_EVENTS",
+    "_lower_discard",
+    "_fused_draw_then_discard",
+    "_lower_draw",
+    "_lower_mill",
+    "_lower_add_mana",
+    "_TAPPED_LAND_MANA_RECIPIENTS",
+    "_lower_add_mana_for_tapped_land",
+    "_lower_look_at_hand",
+    "_SEARCH_HONOURED_FILTER_FIELDS",
+    "_lower_search_library",
+    "_COUNTER_HONOURED_FILTER_FIELDS",
+    "_COUNTER_UNLESS_PAYS_X",
+    "_COUNTER_PERFORMED_PENALTIES",
+    "_lower_counter_spell",
+    "_lower_modal_head",
+    "_UNBLOCKABLE_POWER_LIMIT",
+    "_lower_combat_restriction",
+    "_lower_cant_be",
+    "_lower_gain_life",
+    "_title",
+    "_lower_create_token",
+    "_lower_extra_turn",
+    "_LOSE_GAME_KINDS",
+    "_lower_lose_game",
+    "_lower_win_game",
+    "_lower_lose_life",
+]

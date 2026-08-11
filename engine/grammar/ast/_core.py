@@ -1,0 +1,328 @@
+"""The vocabulary every family's nodes are built from.
+
+Quantities (what `grammar/amounts.py` produces), object and player references
+(`grammar/nouns.py`), and the durations, zones, costs and conditions that hang
+off an effect without being one. Plus `RawEffect`, the untyped escape hatch,
+which sits beside `RawCondition` because it is the same idea: a clause the
+grammar recognized structurally and has no node for, recorded so lowering can
+refuse it by name rather than drop it.
+
+The bottom of the package. Nothing here imports from a family, and a node two
+families both need belongs here rather than in whichever of them was written
+first — that is what keeps "which family does this new node go in?" a question
+with one answer.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Union
+
+
+@dataclass(frozen=True)
+class Fixed:
+    """A literal count: "3 damage", "two cards"."""
+    value: int
+
+
+@dataclass(frozen=True)
+class Var:
+    """A variable: X (or, rarely, Y) — resolved from the cast's x_value."""
+    name: str = "x"
+
+
+@dataclass(frozen=True)
+class CountOf:
+    """"equal to the number of Swamps you control" — a count of matching objects."""
+    filter: "ObjectFilter"
+
+
+@dataclass(frozen=True)
+class ThatMuch:
+    """A back-reference to a value produced earlier in the same resolution
+    ("you gain that much life", "equal to the damage dealt"). *source* names the
+    key the earlier effect recorded, e.g. "damage_dealt"."""
+    source: str
+
+
+@dataclass(frozen=True)
+class Half:
+    """"half X, rounded up/down"."""
+    of: "Amount"
+    rounding: str = "down"  # "down" | "up"
+
+
+@dataclass(frozen=True)
+class AllOf:
+    """An unbounded quantity: "all damage", "any amount of mana"."""
+
+
+@dataclass(frozen=True)
+class BoardCount:
+    """A board-state count identified by *name* rather than built compositionally:
+    "the number of untapped lands they controlled at the beginning of this turn".
+
+    :class:`CountOf` covers the counts whose whole meaning *is* a noun phrase
+    ("the number of Swamps they control"), because there the filter is the
+    arithmetic. These are the ones where it is not: they reach back to an
+    earlier point in the turn, or subtract a constant, or read a hidden zone —
+    arithmetic no ``ObjectFilter`` expresses and which the *handler* implements
+    end to end. Lowering therefore maps a name onto the single handler that
+    computes exactly it, and refuses every name it has no handler for.
+
+    Naming the count instead of approximating it is the point. Reading Black
+    Vise's "the number of cards in their hand minus 4" as an ordinary filtered
+    count would drop the "minus 4" — the dropped-rider bug class — and the card
+    would deal four damage too much while still reporting as supported.
+    """
+    name: str
+
+
+Amount = Union[Fixed, Var, CountOf, ThatMuch, Half, AllOf, BoardCount]
+
+
+# ---------------------------------------------------------------------------
+# Object and player references (engine/grammar/nouns.py)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Comparison:
+    """A numeric restriction: "with power 2 or less"."""
+    op: str    # "eq" | "le" | "ge" | "lt" | "gt"
+    value: Amount
+
+
+@dataclass(frozen=True)
+class ObjectFilter:
+    """A noun phrase describing a set of objects.
+
+    ``to_payload`` emits the exact key set the deleted
+    ``engine.parsing.common.TargetFilter`` produced, so instructions lowered
+    from the grammar stayed byte-compatible with the 121 existing effect
+    handlers across the migration; the newer restriction keys are additive and
+    read with ``payload.get`` defaults on the handler side.
+    """
+
+    card_types: tuple[str, ...] = ()          # "creature", "artifact", ...
+    # How multiple card types combine. "artifact or enchantment" is a union
+    # ("any"); "artifact creature" is a single permanent that is both ("all").
+    # Collapsing the two would make "destroy target artifact creature" hit every
+    # artifact and every creature.
+    type_match: str = "any"
+    supertypes: tuple[str, ...] = ()          # "legendary", "basic", ...
+    subtypes: tuple[str, ...] = ()            # "wall", "djinn", ... (from data)
+    colors: tuple[str, ...] = ()              # mana symbols: "W", "U", ...
+    excluded_colors: tuple[str, ...] = ()     # "nonblack"
+    excluded_types: tuple[str, ...] = ()      # "nonartifact"
+    excluded_subtypes: tuple[str, ...] = ()   # "non-Wall"
+    with_keywords: tuple[str, ...] = ()       # "with flying"
+    without_keywords: tuple[str, ...] = ()    # "without flying"
+    controller: str | None = None             # "you" | "opponent" | "that_player"
+    tapped: bool | None = None
+    attacking: bool | None = None
+    blocking: bool | None = None
+    blocked: bool | None = None
+    power: Comparison | None = None
+    toughness: Comparison | None = None
+    mana_value: Comparison | None = None
+    named: str | None = None
+    zone: str = "battlefield"
+    # Whose zone, when *zone* names one ("from **your** graveyard"). "Return
+    # target creature card from your graveyard" and "…from a graveyard" are
+    # different cards, and the handlers only ever look in the caster's own
+    # graveyard — so the owner is recorded and checked rather than assumed.
+    zone_owner: PlayerRef | None = None
+    # The head noun was "card" ("target creature **card** from your graveyard").
+    # CR 400.1: an object outside the battlefield is a card, not a permanent.
+    # Without this the word is droppable, and "target creature card from your
+    # graveyard" would lower identically to the untemplatable "target creature
+    # from your graveyard" — the dropped-rider bug class.
+    is_card: bool = False
+    # "other than this creature" / "other Zombies" — excludes the source.
+    other_than_source: bool = False
+    # "this creature" / "this artifact" — the ability's own source.
+    is_source: bool = False
+    # "enchanted creature" — the permanent this Aura is attached to.
+    is_enchanted: bool = False
+
+    def to_payload(self) -> dict[str, object]:
+        """Instruction-payload dict, emitting only keys that are set.
+
+        The first six keys reproduce ``TargetFilter.to_payload`` exactly.
+        """
+        payload: dict[str, object] = {}
+        if self.card_types:
+            if len(self.card_types) == 1:
+                payload["type_filter"] = self.card_types[0]
+            elif self.type_match == "all":
+                # No handler matches "is all of these types at once" yet;
+                # lowering refuses rather than emitting a union that would
+                # quietly widen the effect.
+                payload["type_filter_all"] = list(self.card_types)
+            elif set(self.card_types) == {"artifact", "enchantment"}:
+                # The one union spelling the handlers already understand;
+                # emitting it keeps Disenchant byte-compatible with the rule it
+                # replaces.
+                payload["type_filter"] = "artifact_or_enchantment"
+            else:
+                payload["type_filter"] = list(self.card_types)
+        if self.subtypes:
+            payload["subtype_filter"] = (
+                self.subtypes[0] if len(self.subtypes) == 1 else list(self.subtypes)
+            )
+        if self.tapped:
+            payload["tapped_only"] = True
+        if self.colors:
+            payload["color_filter"] = self.colors[0]
+        if self.excluded_colors:
+            payload["exclude_colors"] = list(self.excluded_colors)
+        if self.excluded_types:
+            payload["exclude_types"] = list(self.excluded_types)
+        # Additive keys — handlers read these with .get() defaults.
+        if self.with_keywords:
+            payload["with_keywords"] = list(self.with_keywords)
+        if self.without_keywords:
+            payload["without_keywords"] = list(self.without_keywords)
+        if self.controller:
+            payload["controller"] = self.controller
+        if self.attacking:
+            payload["attacking_only"] = True
+        if self.blocking:
+            payload["blocking_only"] = True
+        if self.other_than_source:
+            payload["exclude_self"] = True
+        return payload
+
+
+@dataclass(frozen=True)
+class PlayerRef:
+    """A player or set of players."""
+    kind: str  # you | each_player | each_opponent | target_player | target_opponent
+               # | that_player | controller | owner | defending_player | chosen_player
+
+
+@dataclass(frozen=True)
+class TargetSpec:
+    """A quantified object reference: "target creature", "each creature with
+    flying", "up to two creatures", "any target"."""
+    quantifier: str            # target | each | all | up_to | any_target | this | a
+    filter: ObjectFilter = field(default_factory=ObjectFilter)
+    count: int = 1
+
+
+# A recipient of damage/effects can be objects, players, or the "any target"
+# shorthand (CR 115.4).
+Recipient = Union[TargetSpec, PlayerRef]
+
+
+# ---------------------------------------------------------------------------
+# Durations, zones, costs, conditions
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Duration:
+    """How long a continuous effect lasts. ``None`` kind means permanent."""
+    kind: str | None = None
+    # until_end_of_turn | until_end_of_combat | this_turn | until_your_next_turn
+
+
+@dataclass(frozen=True)
+class Zone:
+    name: str                       # battlefield | graveyard | hand | library | exile | stack
+    owner: PlayerRef | None = None
+
+
+@dataclass(frozen=True)
+class ManaCost:
+    """Mana pips, in the same shape ``ActivatedAbilityCost.mana`` uses."""
+    pips: tuple[tuple[str, int], ...] = ()   # (("generic", 2), ("R", 1))
+
+
+@dataclass(frozen=True)
+class TapSelf:
+    pass
+
+
+@dataclass(frozen=True)
+class SacrificeCost:
+    filter: ObjectFilter = field(default_factory=ObjectFilter)
+
+
+@dataclass(frozen=True)
+class DiscardCost:
+    count: Amount = field(default_factory=lambda: Fixed(1))
+    # "Discard **the last card you drew this turn**" (Jandor's Ring). Not a
+    # count: the card is named by history, so its payer has no choice at all,
+    # and the engine tracks it on a dedicated flag
+    # (``ActivatedAbilityCost.discard_last_drawn``). Folding it into ``count=1``
+    # would say "discard any one card" — a strictly cheaper cost.
+    last_drawn: bool = False
+
+
+@dataclass(frozen=True)
+class PayLife:
+    amount: Amount = field(default_factory=lambda: Fixed(1))
+
+
+@dataclass(frozen=True)
+class ExileSelf:
+    pass
+
+
+@dataclass(frozen=True)
+class RemoveCounterCost:
+    counter: str = "+1/+1"
+    count: Amount = field(default_factory=lambda: Fixed(1))
+
+
+Cost = Union[
+    ManaCost, TapSelf, SacrificeCost, DiscardCost, PayLife, ExileSelf, RemoveCounterCost
+]
+
+
+@dataclass(frozen=True)
+class Controls:
+    """"you control an Island", "the chosen player controls no nontoken permanents"."""
+    who: PlayerRef
+    filter: ObjectFilter
+    comparison: Comparison | None = None
+
+
+@dataclass(frozen=True)
+class IsState:
+    """"it is untapped", "this creature is attacking"."""
+    subject: TargetSpec
+    state: str          # tapped | untapped | attacking | blocking
+    negated: bool = False
+
+
+@dataclass(frozen=True)
+class DiedThisTurn:
+    filter: ObjectFilter = field(default_factory=ObjectFilter)
+
+
+@dataclass(frozen=True)
+class PaidCost:
+    cost: Cost | None = None
+
+
+@dataclass(frozen=True)
+class RawCondition:
+    """A condition the grammar recognizes structurally but does not yet model
+    semantically. Carries the source text so lowering can refuse it loudly
+    rather than dropping it silently."""
+    text: str
+
+
+Condition = Union[Controls, IsState, DiedThisTurn, PaidCost, RawCondition]
+
+
+@dataclass(frozen=True)
+class RawEffect:
+    """An imperative clause the grammar structurally recognizes as an effect
+    but has no typed node for yet. Never lowered — its presence marks the line
+    as "parsed but not lowerable", which the ratchet tracks separately from a
+    parse failure."""
+    text: str

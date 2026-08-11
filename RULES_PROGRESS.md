@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**214 / 570 tracked rules covered (37%)** — 945 tests, 0 unannotated.
+**215 / 570 tracked rules covered (37%)** — 948 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -83,7 +83,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [614. Replacement Effects](#614-replacement-effects) | 9/17 | 52% |
 | [615. Prevention Effects](#615-prevention-effects) | 7/13 | 53% |
 | [616. Interaction of Replacement and/or Prevention Effects](#616-interaction-of-replacement-andor-prevention-effects) | 2/2 | 100% |
-| [700. General](#700-general) | 0/15 | 0% |
+| [700. General](#700-general) | 1/15 | 6% |
 | [701. Keyword Actions](#701-keyword-actions) | 5/16 | 31% |
 | [702. Keyword Abilities](#702-keyword-abilities) | 18/18 | 100% |
 | [703. Turn-Based Actions](#703-turn-based-actions) | 0/4 | 0% |
@@ -633,7 +633,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(43 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(44 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(3 tests)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
@@ -798,7 +798,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 700. General
 
 - [ ] **700.1** Anything that happens in a game is an event. Multiple events may take place during the resolution...
-- [ ] **700.2** A spell or ability is modal if it has two or more options in a bulleted list preceded by instruct...
+- [x] **700.2** A spell or ability is modal if it has two or more options in a bulleted list preceded by instruct... *(4 tests, subrules a)*
 - [ ] **700.3** Some effects cause objects to be temporarily grouped into piles.
 - [ ] **700.4** The term dies means “is put into a graveyard from the battlefield.”
 - [ ] **700.5** A player’s devotion to [color] is equal to the number of mana symbols of that color among the man...

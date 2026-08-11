@@ -673,18 +673,36 @@ def _reading(
     return found
 
 
-_CHOOSE_ONE_RE = re.compile(r"choose one\b", re.IGNORECASE)
+def _modal_head(line: str, wrapper: type) -> "grammar_ast.ModalNode | None":
+    """The modal head *line* is, read through the grammar — or None.
 
+    *wrapper* is the ability-line node the head has to sit inside, and it is
+    what tells a spell's mode list apart from an activated ability's:
+    ``SpellEffectLine`` for the bare "Choose one —" a spell announces on the
+    stack (CR 601.2b), ``ActivatedAbilityNode`` for the "{2}: Choose one —"
+    :func:`expand_modal_activated_lines` rewrites. A head behind a *trigger*
+    matches neither and is claimed by nothing here, which is right: its modes
+    are chosen when the ability goes on the stack (CR 700.2b), not when the card
+    is cast.
 
-def _normalize_mode_clause(label: str) -> str:
-    """One modal bullet, reduced the way an effect clause is.
-
-    Lowercased, reminder text dropped, whitespace collapsed, trailing stop
-    removed — so a bullet can be handed to the same readers a whole line goes
-    to.
+    **One reader.** Two substring matchers used to answer this — ``choose
+    one\\b`` anywhere in the card's text for a spell, a mana-symbols-then-``choose
+    one`` regex per line for an ability — and between them they got the count
+    wrong (``choose one`` matches inside "Choose one **or more**", so Sublime
+    Epiphany read as a one-mode spell), missed every count but one, and asked
+    the question of the whole card rather than of a line. The grammar parses the
+    count and the lowering refuses what the engine cannot carry out, so a head
+    it declines is one this must not act on either — which is exactly what
+    checking ``lowering_error`` says.
     """
-    cleaned = _PARENTHETICAL_RE.sub("", label.lower())
-    return _WHITESPACE_RE.sub(" ", cleaned).strip().rstrip(".")
+    compiled = compile_grammar_line(line)
+    if compiled.lowering_error is not None:
+        return None
+    node = compiled.node
+    if not isinstance(node, wrapper):
+        return None
+    statement = getattr(node, "statement", None)
+    return statement if isinstance(statement, grammar_ast.ModalNode) else None
 
 
 def _mode_reading(label: str, card_name: str | None) -> tuple[OracleInstruction, str] | None:
@@ -702,36 +720,67 @@ def _mode_reading(label: str, card_name: str | None) -> tuple[OracleInstruction,
     return found[0], "spell_pattern"
 
 
+def _bullets_after(lines: list[str], index: int) -> list[str]:
+    """The run of bulleted lines immediately below *index* — a head's modes.
+
+    Stops at the first line that is not a bullet, which is what makes this
+    *grouping* rather than a scan: the old version partitioned the card's whole
+    text at the first "•" and split the remainder, so a bullet list anywhere on
+    the card belonged to any "choose one" anywhere else on it.
+
+    Fewer than two is not a mode list. CR 700.2 defines a modal spell as having
+    "two or more options in a bulleted list", so a lone bullet under a head is
+    text this does not understand, and returning it as a one-mode spell would be
+    a guess wearing the shape of a reading.
+    """
+    bullets: list[str] = []
+    for raw in lines[index + 1:]:
+        line = raw.strip()
+        if not line.startswith("•"):
+            break
+        bullets.append(_WHITESPACE_RE.sub(" ", line.lstrip("•").strip()).strip())
+    return bullets if len(bullets) >= 2 else []
+
+
 def _modal_options(oracle_text: str, card_name: str | None) -> tuple[ModalOption, ...]:
     """The bullets of a "Choose one —" spell, one :class:`ModalOption` each.
 
-    Splitting the bullets is line classification, which is this module's job;
-    each bullet's *effect* then goes to the same front ends an ordinary line
-    does (:func:`_line_instruction`). A mode is supported exactly when its own
-    clause is, which is why a card with one readable mode and one unreadable one
-    still resolves the readable one.
+    Grouping a head with the bullets below it is line classification, which is
+    this module's job; *reading* each of those lines is the grammar's, on both
+    halves — the head through :func:`_modal_head`, each bullet's effect through
+    the same front ends an ordinary line goes to (:func:`_line_instruction`). A
+    mode is supported exactly when its own clause is, which is why a card with
+    one readable mode and one unreadable one still resolves the readable one.
 
     Modal **activated** abilities never reach here: ``expand_modal_activated_lines``
     has already rewritten them into one ordinary ability line per bullet, so a
-    bullet arriving here is always one alternative of a spell.
+    bullet arriving here is always one alternative of a spell. A modal
+    **triggered** ability does reach here and is not claimed, because its head
+    parses as a ``TriggeredAbilityNode`` rather than a spell's effect line —
+    where the old whole-text substring test would have turned its modes into
+    cast-time ones.
     """
-    if "•" not in oracle_text or not _CHOOSE_ONE_RE.search(oracle_text):
+    if "choose" not in oracle_text.lower() or "•" not in oracle_text:
+        # A pre-filter, not a second reading: both are necessary for the grammar
+        # to return a head at all, so this can only skip work, never an answer.
         return ()
 
-    # Everything from the first bullet onward is the list of modes; the text
-    # before it ("Choose one —") is just the preamble.
-    _, _, body = oracle_text.partition("•")
-    options: list[ModalOption] = []
-    for raw in body.split("•"):
-        label = _WHITESPACE_RE.sub(" ", raw.strip()).strip()
-        if not label:
+    lines = oracle_text.splitlines()
+    for index, raw in enumerate(lines):
+        if _modal_head(raw.strip(), grammar_ast.SpellEffectLine) is None:
             continue
-        instruction, effect_kind = _reading(_mode_reading(label, card_name))
-        # The original casing is kept for the UI's mode picker.
-        options.append(
-            ModalOption(label.rstrip("."), instruction, effect_kind, instruction is not None)
-        )
-    return tuple(options)
+        bullets = _bullets_after(lines, index)
+        if not bullets:
+            continue
+        options: list[ModalOption] = []
+        for label in bullets:
+            instruction, effect_kind = _reading(_mode_reading(label, card_name))
+            # The original casing is kept for the UI's mode picker.
+            options.append(
+                ModalOption(label.rstrip("."), instruction, effect_kind, instruction is not None)
+            )
+        return tuple(options)
+    return ()
 
 
 # ---------------------------------------------------------------------------
@@ -1092,35 +1141,44 @@ def _noncreature_line_instructions(
 # Top-level compiler
 # ---------------------------------------------------------------------------
 
-# A modal ACTIVATED ability ("{2}: Choose one —" followed by bullet lines,
-# e.g. Pyramids). Expanded into one plain activated-ability line per bullet
-# (same cost) so the existing multi-ability machinery (ability_index choice,
-# per-ability targeting) covers it — and so the bullets are never mistaken
-# for cast-time modes or top-level spell effects.
-_MODAL_ABILITY_HEAD_RE = re.compile(r"^((?:\{[^}]+\}[,\s]*)+):\s*choose one\s*[—\-–]?\s*$", re.IGNORECASE)
-
-
 def expand_modal_activated_lines(oracle_text: str) -> str:
     """Rewrite '{cost}: Choose one —' + bullets into one ability line per
     bullet. Text without that shape is returned unchanged. Shared with
-    engine.legality so target classification sees the same lines."""
-    if "choose one" not in (oracle_text or "").lower():
+    engine.legality so target classification sees the same lines.
+
+    A modal ACTIVATED ability ("{2}: Choose one —" followed by bullet lines,
+    e.g. Pyramids) becomes one plain activated-ability line per bullet, same
+    cost, so the existing multi-ability machinery (ability_index choice,
+    per-ability targeting) covers it — and so the bullets are never mistaken for
+    cast-time modes or top-level spell effects.
+
+    Whether a line *is* such a head is the grammar's answer
+    (:func:`_modal_head`), not a regex's. The regex it replaced admitted mana
+    symbols only, so "Sacrifice a creature: Choose one —" would have been left
+    on the floor, and it hard-coded "choose one" so no other count could ever be
+    read — while the grammar refuses a count the engine cannot carry out and
+    that refusal reaches here as a head this declines to expand. Only the cost
+    is still taken from the raw text, because this rewrites text: re-rendering a
+    parsed cost would be a second spelling of it, free to differ from the one
+    ``mixins/stack/activation.py`` charges.
+    """
+    if "choose" not in (oracle_text or "").lower():
         return oracle_text
     lines = (oracle_text or "").splitlines()
     out: list[str] = []
     i = 0
     while i < len(lines):
-        head = _MODAL_ABILITY_HEAD_RE.match(lines[i].strip())
-        if head is not None:
-            cost = head.group(1).strip()
-            j = i + 1
-            bullets: list[str] = []
-            while j < len(lines) and lines[j].strip().startswith("•"):
-                bullets.append(lines[j].strip().lstrip("•").strip())
-                j += 1
+        line = lines[i].strip()
+        # ":" and "choose" are both necessary for the grammar to read the line
+        # as an activated modal head, so testing them first only skips work.
+        if ":" in line and "choose" in line.lower() and (
+            _modal_head(line, grammar_ast.ActivatedAbilityNode) is not None
+        ):
+            bullets = _bullets_after(lines, i)
             if bullets:
+                cost = line.partition(":")[0].strip()
                 out.extend(f"{cost}: {bullet}" for bullet in bullets)
-                i = j
+                i += 1 + len(bullets)
                 continue
         out.append(lines[i])
         i += 1

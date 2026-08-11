@@ -857,6 +857,27 @@ def test_healing_salve_compiles_both_modes(all_cards):
     assert program.modes[0].label == "Target player gains 3 life"
 
 
+def test_healing_salves_modes_come_from_a_head_line_the_parser_read(all_cards):
+    """The mode list is grouped with the head *line* that announces it, and that
+    line is read by the grammar (CR 700.2).
+
+    It used to be a substring test over the card's whole collapsed text —
+    "choose one" anywhere plus a bullet anywhere. That could not tell a head
+    from a trigger's head, could not read any count but one, and matched inside
+    "choose one **or more**". Here the head parses to a node carrying the count,
+    and the modes are the bullets directly beneath it."""
+    from engine.grammar import ast as grammar_ast, compile_line
+
+    salve = _get(all_cards, "Healing Salve")
+    head, *bullets = salve.oracle_text.splitlines()
+    node = compile_line(head, card_name=salve.name).node
+
+    assert isinstance(node, grammar_ast.SpellEffectLine)
+    assert node.statement == grammar_ast.ModalNode(1)
+    assert [line.startswith("•") for line in bullets] == [True, True]
+    assert len(compile_card_oracle(salve).modes) == 2
+
+
 def test_healing_salve_resolves_chosen_prevention_mode(all_cards):
     """Casting Healing Salve with mode_index=1 applies the prevention shield mode
     instead of the default life-gain mode."""

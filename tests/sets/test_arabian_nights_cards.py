@@ -1828,3 +1828,35 @@ def test_shahrazad_says_in_the_log_that_the_subgame_was_not_played(arn_by_name):
     game.cast_from_hand(0, "Shahrazad", target_player_index=1)
 
     assert any("subgame not played" in line for line in game.log)
+
+
+# ===========================================================================
+# Modal activated abilities (CR 700.2)
+# ===========================================================================
+
+def test_pyramids_modal_head_is_read_by_the_parser_not_a_regex(arn_by_name):
+    """Pyramids' "{2}: Choose one —" becomes one activated ability per bullet,
+    and *which lines get that treatment* is now the grammar's answer.
+
+    The head used to be matched by a regex that admitted a run of mana symbols
+    followed by the literal words "choose one" — so the count could never be
+    anything else and any other cost shape would have been left as an
+    unreadable head line with two orphan bullets under it. The card compiles
+    the same way; what changed is that a second reader of the sentence is gone.
+    """
+    from engine.grammar import ast as grammar_ast, compile_line
+    from engine.oracle import compile_card_oracle
+
+    pyramids = arn_by_name["Pyramids"]
+    head = pyramids.oracle_text.splitlines()[0]
+    node = compile_line(head).node
+
+    assert isinstance(node, grammar_ast.ActivatedAbilityNode)
+    assert node.statement == grammar_ast.ModalNode(1)
+
+    program = compile_card_oracle(pyramids)
+    assert [ability.instruction.kind for ability in program.activated_abilities] == [
+        "destroy_target_permanent", "shield_target_land_from_destruction"
+    ]
+    # The bullets are alternatives of an ability, never cast-time modes.
+    assert program.modes == ()

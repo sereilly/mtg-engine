@@ -1,0 +1,442 @@
+"""Lowering board changes: destruction, bouncing, tapping, control, exile.
+
+Destroy (targeted and sweeping), the delayed destroy a combat trigger binds,
+tap/untap, return-to-zone, regeneration, control changes, sacrifice, and exile.
+
+Control changes lower to a *contribution* rather than a move — see
+`engine/control.py`. What lowering owes is the timestamped source, not a new
+owner.
+"""
+
+from ...oracle_types import OracleInstruction
+from .. import ast
+from ..errors import LoweringError
+from ._common import (
+    _describe_targets,
+    _filter_payload,
+    _full_mana_payload,
+    _is_enchanted,
+    _is_source,
+    _targets_only,
+)
+
+
+# ---------------------------------------------------------------------------
+# Destruction, tapping, zones
+# ---------------------------------------------------------------------------
+
+# "Destroy all X" shapes with a dedicated sweep handler.
+_DESTROY_ALL_KINDS: dict[tuple[str, ...], str] = {
+    ("artifact",): "destroy_all_artifacts",
+    ("creature",): "destroy_all_creatures",
+    ("enchantment",): "destroy_all_enchantments",
+    ("land",): "destroy_all_lands",
+    ("artifact", "creature", "enchantment"): "destroy_all_artifacts_creatures_enchantments",
+}
+
+_BASIC_LAND_TYPES = frozenset({"plains", "island", "swamp", "mountain", "forest"})
+
+
+# Trigger events that bind the creature a delayed "destroy that creature at end
+# of combat" acts on. `delayed_destroy_blocked_or_blocker` reads the blocking
+# pair out of the trigger's own context and takes no payload at all, so the
+# sentence only means what it says while one of these fired.
+_BLOCK_PAIR_EVENTS = frozenset({"creature_blocks_or_blocked_by_nonwall"})
+
+
+def _lower_destroy(node: ast.Destroy, event: str | None = None) -> tuple[OracleInstruction, ...]:
+    if node.delay:
+        return _lower_delayed_destroy(node, event)
+    if not isinstance(node.subject, ast.TargetSpec):
+        raise LoweringError("destroy needs an object target", node=node)
+    spec = node.subject
+    filt = spec.filter
+
+    if spec.quantifier in ("all", "each"):
+        # "Destroy all Plains" — a basic land type, not a creature subtype.
+        if filt.subtypes and not filt.card_types:
+            if len(filt.subtypes) == 1 and filt.subtypes[0] in _BASIC_LAND_TYPES:
+                subtype = filt.subtypes[0]
+                # The handler keys on the plural form the card prints; Plains is
+                # already plural.
+                plural = subtype if subtype.endswith("s") else f"{subtype}s"
+                return (
+                    OracleInstruction(
+                        "destroy_all_lands_of_type", "", {"land_type": plural},
+                    ),
+                )
+            raise LoweringError("no sweep handler for this subtype", node=node)
+        kind = _DESTROY_ALL_KINDS.get(tuple(sorted(filt.card_types)))
+        if kind is None:
+            raise LoweringError("no sweep handler for this destroy scope", node=node)
+        payload = {"bypass_regeneration": True} if node.no_regen else {}
+        return (OracleInstruction(kind, "", payload),)
+
+    if spec.quantifier not in ("target", "up_to"):
+        raise LoweringError("unsupported destroy quantifier", node=node)
+
+    payload = _filter_payload(filt)
+    if node.no_regen:
+        payload["bypass_regeneration"] = True
+    _describe_targets(payload, spec)
+    return (OracleInstruction("destroy_target_permanent", "", payload),)
+
+
+def _lower_delayed_destroy(
+    node: ast.Destroy, event: str | None
+) -> tuple[OracleInstruction, ...]:
+    """"…destroy that creature at end of combat." (Thicket Basilisk, Cockatrice.)
+
+    The handler destroys the creature this one blocked or was blocked by, which
+    is a fact only the trigger knows — so the *event* is checked as strictly as
+    the subject is. Under any other trigger the same sentence names a creature
+    nobody recorded, and the handler would destroy nothing while the card
+    reported as supported.
+    """
+    if event not in _BLOCK_PAIR_EVENTS:
+        raise LoweringError(
+            "a delayed destroy at end of combat only has a handler on a "
+            "blocks-or-blocked trigger",
+            node=node,
+        )
+    spec = node.subject
+    if not isinstance(spec, ast.TargetSpec) or spec.quantifier != "that":
+        raise LoweringError(
+            "the end-of-combat destroy acts on the creature the trigger bound", node=node
+        )
+    if spec.filter != ast.ObjectFilter(card_types=("creature",)):
+        raise LoweringError("no delayed-destroy handler narrows what it destroys", node=node)
+    if node.no_regen:
+        raise LoweringError(
+            "the end-of-combat destroy handler does not bypass regeneration", node=node
+        )
+    return (OracleInstruction("delayed_destroy_blocked_or_blocker", "", {}),)
+
+
+def _lower_tap(node: ast.Tap | ast.Untap) -> tuple[OracleInstruction, ...]:
+    if not isinstance(node.subject, ast.TargetSpec):
+        raise LoweringError("tap/untap needs an object target", node=node)
+    spec = node.subject
+
+    # "Untap this artifact" (Basalt Monolith, Mana Vault) and "untap enchanted
+    # creature" have their own handlers — the source and the enchanted
+    # permanent are known without a target being chosen. There is no matching
+    # tap handler, so tapping those shapes still refuses.
+    if isinstance(node, ast.Untap):
+        if _is_source(spec):
+            return (OracleInstruction("untap_self", "", {}),)
+        if _is_enchanted(spec):
+            return (OracleInstruction("untap_enchanted_creature", "", {}),)
+
+    if spec.quantifier not in ("target", "up_to"):
+        raise LoweringError("no handler for non-targeted tap/untap", node=node)
+    payload = _filter_payload(spec.filter)
+
+    if isinstance(node, ast.Tap):
+        tap_payload = dict(payload)
+        _describe_targets(tap_payload, spec)
+        return (OracleInstruction("tap_target_permanent", "", tap_payload),)
+
+    # Untap has two handlers with different reach: the generic one ignores
+    # filters entirely, so a restricted untap must route to the land-specific
+    # handler or refuse. Lowering "untap target land" to the generic kind would
+    # let it untap a creature.
+    if not payload:
+        return (OracleInstruction("untap_target_permanent", "", _targets_only(spec)),)
+    if payload == {"type_filter": "land"}:
+        return (OracleInstruction("untap_target_land", "", _targets_only(spec)),)
+    raise LoweringError("no untap handler honors this restriction", node=node)
+
+
+def _reads_no_return_restriction(filt: ast.ObjectFilter) -> bool:
+    """Whether *filt* carries a narrowing none of the zone-change handlers reads.
+
+    All three take their whole instruction from the card: two read an empty
+    payload and the third reads one boolean. So any adjective beyond the card
+    type is invisible to them, and a filter carrying one has to refuse — "return
+    target *black* creature card from your graveyard to your hand" lowered to
+    Raise Dead's instruction would happily return a white one.
+    """
+    tri_state = (filt.tapped, filt.attacking, filt.blocking, filt.blocked)
+    return bool(
+        filt.supertypes or filt.subtypes or filt.colors or filt.excluded_colors
+        or filt.excluded_types or filt.excluded_subtypes or filt.with_keywords
+        or filt.without_keywords or filt.controller or filt.power or filt.toughness
+        or filt.mana_value or filt.named or filt.other_than_source
+        or filt.is_source or filt.is_enchanted
+        or any(state is not None for state in tri_state)
+    )
+
+
+def _lower_return_to_zone(node: ast.ReturnToZone) -> tuple[OracleInstruction, ...]:
+    """"Return <object> [from <zone>] to <zone>" — Raise Dead, Regrowth,
+    Resurrection and Unsummon.
+
+    The *pair* of zones picks the handler, which is why they are both parsed
+    rather than pattern-matched out of the sentence: graveyard→hand,
+    graveyard→battlefield and battlefield→owner's hand are three unrelated
+    handlers reading three different target indices (a graveyard position, a
+    graveyard position, a battlefield position). The legacy rules told them
+    apart by substring, and told Raise Dead from Regrowth by probing for
+    ``"creature card" not in text`` — which is why "return target artifact card
+    from your graveyard to your hand" would have returned a creature.
+
+    Nothing here is described for engine/targeting.py. The `targets` vocabulary
+    names battlefield permanents, so describing a graveyard card with it would
+    tell the picker to offer creatures in play for a reanimation spell — the
+    exact bug the Animate Dead targeting test pins.
+    """
+    subject = node.subject
+    if not isinstance(subject, ast.TargetSpec) or subject.quantifier != "target":
+        raise LoweringError("no handler for returning a non-targeted object", node=node)
+    filt = subject.filter
+    if _reads_no_return_restriction(filt):
+        raise LoweringError("no return handler honours this restriction", node=node)
+
+    source, destination = node.from_zone, node.to
+
+    if source is not None and source.name == "graveyard":
+        # Both graveyard handlers search the caster's own graveyard and nowhere
+        # else, so "from a graveyard" is a different card, not a wording of this
+        # one.
+        if source.owner is None or source.owner.kind != "you":
+            raise LoweringError("no handler searches a graveyard but your own", node=node)
+        if not filt.is_card:
+            raise LoweringError("a graveyard holds cards, not permanents", node=node)
+
+        if destination.name == "hand":
+            if destination.owner is None or destination.owner.kind != "you":
+                raise LoweringError("this handler returns cards to your own hand", node=node)
+            # The named card type is a filter the handler applies, so it is
+            # carried rather than collapsed: reading "artifact card" as "any
+            # card" would let Reconstruction return a creature.
+            if len(filt.card_types) > 1:
+                raise LoweringError("this handler reads one card type", node=node)
+            card_type = filt.card_types[0] if filt.card_types else None
+            return (
+                OracleInstruction(
+                    "return_creature_from_graveyard_to_hand",
+                    "",
+                    {"any_card": card_type is None, "card_type": card_type},
+                ),
+            )
+
+        if destination.name == "battlefield":
+            if destination.owner is not None:
+                raise LoweringError("no handler for a reanimation under another's control", node=node)
+            # `reanimate_creature` only ever puts a creature onto the
+            # battlefield. Regrowth's untyped "target card" has no lowering
+            # here: claiming it would silently narrow the player's choice.
+            if filt.card_types != ("creature",):
+                raise LoweringError("the reanimation handler only moves creature cards", node=node)
+            return (OracleInstruction("reanimate_creature", "", {}),)
+
+        raise LoweringError(f"no handler moves a card to the {destination.name}", node=node)
+
+    if source is None and destination.name == "hand":
+        # A permanent going home. `bounce_target_creature` returns it to its
+        # owner's hand by construction, so "to your hand" is a different effect
+        # (it matters the moment you have stolen the creature) and refuses.
+        if destination.owner is None or destination.owner.kind != "owner":
+            raise LoweringError("the bounce handler returns a permanent to its owner", node=node)
+        if filt.is_card:
+            raise LoweringError("no handler bounces a card that is not in play", node=node)
+        if filt.card_types != ("creature",):
+            raise LoweringError("the bounce handler only returns creatures", node=node)
+        return (OracleInstruction("bounce_target_creature", "", {}),)
+
+    raise LoweringError("no handler for this zone change", node=node)
+
+
+def _lower_tap_or_untap(node: ast.TapOrUntap) -> tuple[OracleInstruction, ...]:
+    """"Tap or untap target <objects>." (Twiddle.)
+
+    ``tap_or_untap_target`` toggles whatever permanent was chosen —
+    ``predicate=lambda p: True`` — so it honours no restriction at all. Any
+    filter therefore has to refuse: lowering "tap or untap target creature" to
+    this kind would let it untap a land, and the card would still report as
+    supported. The plain ``tap_target_permanent`` handler is the one that
+    filters; there is no filtered toggle.
+    """
+    spec = node.subject
+    if not isinstance(spec, ast.TargetSpec) or spec.quantifier != "target":
+        raise LoweringError("no handler for a non-targeted tap-or-untap", node=node)
+    if _filter_payload(spec.filter):
+        raise LoweringError("no tap-or-untap handler honours this restriction", node=node)
+    return (OracleInstruction("tap_or_untap_target", "", _targets_only(spec)),)
+
+
+def _lower_regenerate(node: ast.Regenerate) -> tuple[OracleInstruction, ...]:
+    """"Regenerate target creature" / "Regenerate this creature" (CR 701.19).
+
+    Three handlers exist, differing in *what* they shield: the spell's target,
+    the ability's own source, or the creature an Aura enchants. Picking by the
+    subject keeps each one's contract rather than routing everything through
+    the targeted one, which would shield the wrong creature.
+    """
+    subject = node.subject
+    if _is_enchanted(subject):
+        return (OracleInstruction("grant_regeneration_to_enchanted_creature", "", {}),)
+    if _is_source(subject):
+        return (OracleInstruction("grant_regeneration_to_self", "", {}),)
+    if not (isinstance(subject, ast.TargetSpec) and subject.quantifier == "target"):
+        raise LoweringError("no handler for regenerating this subject", node=node)
+    filt = subject.filter
+    payload: dict[str, object] = {}
+    # Elephant Graveyard regenerates a *target Elephant*. The handler honours
+    # exactly one restriction, `subtype_filter`; anything else it would ignore
+    # must be refused rather than dropped, or the shield lands on the wrong
+    # creature while the card still reports as supported.
+    if filt.subtypes:
+        if len(filt.subtypes) > 1:
+            raise LoweringError("no handler for a multi-subtype regenerate", node=node)
+        payload["subtype_filter"] = filt.subtypes[0]
+    if (
+        filt.colors or filt.excluded_colors or filt.excluded_types
+        or filt.with_keywords or filt.without_keywords or filt.attacking or filt.blocking
+    ):
+        raise LoweringError("no handler honours this regenerate restriction", node=node)
+    _describe_targets(payload, subject)
+    return (OracleInstruction("grant_regeneration_to_target_creature", "", payload),)
+
+
+def _lower_sacrifice_unless_pay(node: ast.SacrificeUnlessPay) -> tuple[OracleInstruction, ...]:
+    """"Sacrifice this <permanent> unless you pay <cost>."
+
+    Two handlers exist and the noun picks between them — an enchantment's
+    prompt is a different registry entry from any other permanent's. Both
+    sacrifice the source, so only a self-referential subject is accepted;
+    sacrificing something *chosen* needs the pending-choice queue.
+    """
+    subject = node.subject
+    if not _is_source(subject):
+        raise LoweringError("no handler for sacrificing a chosen permanent", node=node)
+    types = subject.filter.card_types if isinstance(subject, ast.TargetSpec) else ()
+    kind = (
+        "upkeep_pay_or_sacrifice_enchantment"
+        if types == ("enchantment",)
+        else "upkeep_pay_or_sacrifice_self"
+    )
+    return (OracleInstruction(kind, "", {"mana": _full_mana_payload(node.cost)}),)
+
+
+_LINKED_STEAL_FILTER = ast.ObjectFilter(card_types=("artifact",))
+
+
+def _lower_gain_control(node: ast.GainControl) -> tuple[OracleInstruction, ...]:
+    """``Gain control of target artifact for as long as you control this
+    creature.`` (Aladdin, CR 611.3.)
+
+    ``steal_target_permanent_linked_to_self`` takes no payload at all: it looks
+    for an artifact in its own source code and ends the control change from
+    ``ON_LEAVE_BATTLEFIELD``. So the filter is compared for **equality** against
+    the one shape it implements rather than probed field by field — a
+    restriction the AST grows later then refuses here instead of being silently
+    ignored by a lowering written before it existed.
+
+    No ``targets`` description is emitted: ``engine/targeting.py`` already
+    answers "artifact" for this kind, and the payload has to stay byte-identical
+    to what the rule it replaces produced.
+    """
+    subject = node.subject
+    if not isinstance(subject, ast.TargetSpec) or subject.quantifier != "target":
+        raise LoweringError("the linked-control handler needs a named target", node=node)
+    if subject.filter != _LINKED_STEAL_FILTER:
+        raise LoweringError(
+            "the only linked-control handler gains control of an artifact", node=node
+        )
+    return (OracleInstruction("steal_target_permanent_linked_to_self", "", {}),)
+
+
+def _lower_sacrifice(node: ast.Sacrifice) -> tuple[OracleInstruction, ...]:
+    """Only "sacrifice this <permanent>" has a handler.
+
+    Sacrificing something *chosen* ("sacrifice a creature") is a different
+    problem: the choice belongs to a player, so it needs the pending-choice
+    machinery rather than an instruction that acts on a known permanent.
+    Refusing here keeps that distinction visible instead of quietly sacrificing
+    the wrong thing.
+    """
+    if not _is_source(node.subject):
+        raise LoweringError("no handler for sacrificing a chosen permanent", node=node)
+    if node.player.kind != "you":
+        raise LoweringError("no handler for another player sacrificing", node=node)
+    return (OracleInstruction("sacrifice_self", "", {}),)
+
+
+_EXILED_CREATURE = ast.ObjectFilter(card_types=("creature",))
+
+
+def _lower_exile(node: ast.Exile) -> tuple[OracleInstruction, ...]:
+    """"Exile target creature until end of turn." — and nothing else.
+
+    ``exile_target_creature_until_eot`` is the one exile handler that stands on
+    its own: it moves the creature to exile and records the return
+    (CR 406.1/400.7), so the whole sentence is what it performs. Every part of
+    the clause is checked against that rather than dropped —
+
+    * **the duration.** Without it the sentence is a *permanent* exile, which
+      this handler does not perform: it would return the creature at cleanup.
+    * **the subject.** A chosen creature, not a sweep and not the source: the
+      handler resolves one target permanent.
+
+    A bare ``Exile`` still refuses.
+    ``exile_creature_gain_life_equal_to_power`` performs both halves of Swords
+    to Plowshares' sentence, so lowering onto it would gain life the card never
+    offered, and lowering onto nothing would exile silently. The refusal names
+    the gap: a plain ``exile_target`` handler is what a second card printing
+    only the first sentence would need.
+    """
+    if node.duration.kind in ("until_end_of_turn", "this_turn"):
+        subject = node.subject
+        if (
+            isinstance(subject, ast.TargetSpec)
+            and subject.quantifier == "target"
+            and subject.count == 1
+            and subject.filter == _EXILED_CREATURE
+        ):
+            payload: dict[str, object] = {}
+            _describe_targets(payload, subject)
+            return (OracleInstruction("exile_target_creature_until_eot", "", payload),)
+        raise LoweringError(
+            "the temporary-exile handler resolves one targeted creature", node=node
+        )
+    raise LoweringError(
+        "no handler exiles without the fused life gain; a plain exile handler "
+        "does not exist yet",
+        node=node,
+    )
+
+
+def _fused_exile_then_controller_life(
+    steps: tuple[ast.Statement, ...]
+) -> tuple[OracleInstruction, ...] | None:
+    """"Exile target creature. Its controller gains life equal to its power."
+    (Swords to Plowshares.)
+
+    Fused because the handler is: it pops the creature off the battlefield and
+    reads ``effective_power`` from the object it just removed, which no pair of
+    independent instructions can do — the second one would be looking for a
+    permanent that is no longer there. Every part of the shape is checked
+    against what that handler implements, so a card exiling something else, or
+    paying the life to someone else, falls through and is refused by
+    :func:`_lower_exile` rather than borrowing this.
+
+    Returning None rather than raising leaves a near miss to be reported
+    against the effect it actually failed on.
+    """
+    if len(steps) != 2:
+        return None
+    exile, gain = steps
+    if not isinstance(exile, ast.Exile) or not isinstance(gain, ast.GainLife):
+        return None
+    subject = exile.subject
+    if not isinstance(subject, ast.TargetSpec) or subject.quantifier != "target":
+        return None
+    if subject.filter != _EXILED_CREATURE:
+        return None
+    if gain.player.kind != "controller":
+        return None
+    if gain.amount != ast.ThatMuch("its_power"):
+        return None
+    return (OracleInstruction("exile_creature_gain_life_equal_to_power", "", {}),)
