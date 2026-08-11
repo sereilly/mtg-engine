@@ -148,12 +148,27 @@ carried and one proving X still refuses. The search production also learned
 — banked groundwork, since Fierce Empath still waits on its you-may trigger
 and MV-in-search-flow.
 
+**Round 7 — trigger conditions carry their own narrowings (124 → 126).**
+The two fixed-phrase members of the family, each landed narrowed on *both*
+sides of the pipeline (oracle regex table and grammar phrase/parser),
+specific-before-prefix per the tables' own ordering rule — which is the
+landmine defused for these forms rather than left to discipline.
+`combat_your_turn` is emitted at the beginning-of-combat step over the
+active player's battlefield alone (Adherent of Hope; Battle-Rattle Shaman
+and Dire Fleet Warmonger still need their effects). Quirion Dryad's
+colour-list cast trigger narrows `you_cast_spell` with the list as condition
+payload, checked by the cast filter as the union CR 105.4 says an or-list
+is; the per-set test proves the negative (a green Titanic Growth pumps
+without a counter). Snarespinner and Gloom Sower stay gated — their block
+narrowings need an object filter on the event, not a fixed phrase, and
+Gloom Sower's fires once per blocker besides.
+
 **Next per the census:** the rest of the search-library template family
 (graveyard and by-name variants, the search-flow filter widening); the
-trigger-condition narrowings — respecting the unanchored-regex landmine
-recorded above — and the sacrifice/discard activation costs (Selfless
-Savior, Seasoned Hallowblade); then the subsystem blocks (planeswalkers,
-scry, exile-until-leaves, per-turn trackers).
+sacrifice/discard activation costs (Selfless Savior, Seasoned Hallowblade);
+the causative "you may have …" wrapper (Goblin Arsonist, Battle-Rattle
+Shaman); then the subsystem blocks (planeswalkers, scry, exile-until-leaves,
+per-turn trackers).
 
 ---
 
