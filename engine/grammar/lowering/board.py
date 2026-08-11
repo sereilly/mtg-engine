@@ -17,6 +17,8 @@ from ._common import (
     _full_mana_payload,
     _is_enchanted,
     _is_source,
+    _is_target,
+    _names_several_targets,
     _targets_only,
 )
 
@@ -130,7 +132,14 @@ def _lower_tap(node: ast.Tap | ast.Untap) -> tuple[OracleInstruction, ...]:
     elif _is_source(spec):
         return (OracleInstruction("tap_self", "", {}),)
 
-    if spec.quantifier not in ("target", "up_to"):
+    if _names_several_targets(spec):
+        # "Tap up to two target creatures" (Frost Breath), "Untap up to four
+        # lands" (Rewind). Both tap handlers resolve exactly one permanent, so
+        # this used to tap one and call the card supported. What a lowering may
+        # accept is "one target", and `_is_target` is the one place that says
+        # so — the literal quantifier tuple that admitted this is gone.
+        raise LoweringError("no handler taps or untaps several targets", node=node)
+    if not _is_target(spec):
         raise LoweringError("no handler for non-targeted tap/untap", node=node)
     payload = _filter_payload(spec.filter)
 

@@ -21,6 +21,7 @@ from ._common import (
     _is_enchanted,
     _is_source,
     _is_target,
+    _names_several_targets,
     _signed,
 )
 
@@ -131,6 +132,13 @@ def _lower_put_counter(node: ast.PutCounter) -> tuple[OracleInstruction, ...]:
         return (
             OracleInstruction("add_counter_to_self", "", {"power": 1, "toughness": 1}),
         )
+    if _names_several_targets(node.subject):
+        # "Put a +1/+1 counter on each of up to two target creatures" (Basri's
+        # Aegis, Basri's Acolyte). `add_counter_to_target` resolves one
+        # permanent, so lowering this would counter one creature and report the
+        # card supported — the count is the entire difference between these
+        # cards and Feat of Resistance.
+        raise LoweringError("no handler puts counters on several targets", node=node)
     if _is_target(node.subject):
         # "Put a +1/+1 counter on target creature [you control]." The kind
         # predates this lowering: Dwarven Weaponsmith's hook has always emitted

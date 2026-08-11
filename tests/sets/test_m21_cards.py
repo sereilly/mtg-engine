@@ -120,6 +120,59 @@ def test_storm_caller_damages_each_opponent_on_entry(set_pool):
     assert p1.life == 20
 
 
+# --- The quantifier round: "up to N" is not one target ----------------------
+
+
+def test_rewind_is_no_longer_reported_as_supported(set_pool):
+    """It was: "Counter target spell. Untap up to four lands." compiled with the
+    untap half silently reduced to one land, because every consumer of an
+    ``up_to`` subject threw the count away. A card that plays wrong is worse
+    than a card that reports unsupported, so this pins the retreat."""
+    assert not compile_card_oracle(set_pool("M21")["Rewind"]).supported
+
+
+@pytest.mark.parametrize(
+    "line",
+    ["Tap up to two target creatures.", "Untap up to four lands."],
+)
+def test_several_targets_are_refused_rather_than_halved(line):
+    result = compile_line(line, card_name="Test")
+
+    assert result.parsed
+    assert not result.lowered
+    assert result.failure_reason == "no handler taps or untaps several targets"
+
+
+def test_counters_on_several_targets_are_refused(set_pool):
+    """"Put a +1/+1 counter on each of up to two target creatures" (Basri's
+    Aegis). The "each of" phrasing has no production yet, so it refuses at
+    parse; the lowering guard behind it refuses the same shape written without
+    those words. Either way the card is unsupported rather than countering one
+    creature and calling itself done."""
+    assert not compile_line(
+        "Put a +1/+1 counter on each of up to two target creatures.",
+        card_name="Test",
+    ).parsed
+    plain = compile_line(
+        "Put a +1/+1 counter on up to two target creatures.", card_name="Test"
+    )
+    assert plain.parsed and not plain.lowered
+    assert plain.failure_reason == "no handler puts counters on several targets"
+
+
+def test_up_to_one_target_is_still_a_single_target():
+    """"Up to one target creature" chooses one target or none — exactly what a
+    handler reading one id does. Narrowing "several" must not take it away."""
+    result = compile_line(
+        "Put a +1/+1 counter on up to one target creature.", card_name="Test"
+    )
+
+    assert result.lowered, result.failure_reason
+    described = result.instructions[0].payload["targets"]
+    assert described["quantifier"] == "up_to"
+    assert described["filter"]["type_filter"] == "creature"
+
+
 # --- The tracker round: a turn's history, and CR 603.4 -----------------------
 
 

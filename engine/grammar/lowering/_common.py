@@ -111,9 +111,17 @@ def _targets_payload(recipient: ast.Recipient) -> dict[str, object] | None:
         return None
     if recipient.quantifier == "any_target":
         return {"quantifier": "any_target", "kind": "any"}
-    if recipient.quantifier != "target":
+    if not _is_target(recipient):
         return None
-    return {"quantifier": "target", "kind": "object", "filter": _filter_payload(recipient.filter)}
+    # The quantifier is carried rather than written as the constant "target":
+    # "up to one target creature" may legally choose nothing (CR 601.2c) while
+    # a plain "target" must be answered, and a picker reading this key can tell
+    # them apart. Collapsing both would make the description lie.
+    return {
+        "quantifier": recipient.quantifier,
+        "kind": "object",
+        "filter": _filter_payload(recipient.filter),
+    }
 
 
 def _amount_payload(amount: ast.Amount) -> int | str:
@@ -133,8 +141,35 @@ def _is_enchanted(subject: ast.Recipient) -> bool:
     return isinstance(subject, ast.TargetSpec) and subject.filter.is_enchanted
 
 
+def _names_several_targets(subject: ast.Recipient) -> bool:
+    """Whether *subject* names more than one chosen target.
+
+    One definition, because "up to two" and "up to four" are the same shape and
+    the number is the only thing separating Frost Breath from Twiddle. The
+    lowerings that could previously read an ``up_to`` subject dropped ``count``
+    on the floor and emitted a single-target instruction — so Rewind untapped
+    *one* land of up to four and reported itself supported. A refusal naming
+    the gap is the honest answer until a handler resolves a list of targets.
+    """
+    return (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "up_to"
+        and subject.count > 1
+    )
+
+
 def _is_target(subject: ast.Recipient) -> bool:
-    return isinstance(subject, ast.TargetSpec) and subject.quantifier in ("target", "up_to")
+    """Whether *subject* names exactly **one** chosen target.
+
+    "Up to one" qualifies: it picks a single target or none, which is what
+    every handler reading ``context.target_permanent_id`` already does. "Up to
+    two" does not, and must not — see :func:`_names_several_targets`.
+    """
+    if not isinstance(subject, ast.TargetSpec):
+        return False
+    if subject.quantifier == "target":
+        return True
+    return subject.quantifier == "up_to" and not _names_several_targets(subject)
 
 
 def _is_you(recipient: ast.Recipient) -> bool:
