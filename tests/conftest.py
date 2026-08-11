@@ -40,13 +40,18 @@ def set_cards():
     test modules reads the JSON once. An unknown code raises, naming the codes
     that exist; resolving it to an empty pool instead would make every test
     over that set pass without testing anything.
+
+    Measured sets resolve too: a card lands with its focused test while its
+    set is still under ``measured``, so the fixture is the one caller that
+    opts in. ``catalog`` / ``all_set_paths`` stay shipped-only — reading a
+    card file is not shipping it.
     """
     loaded: dict[str, list] = {}
 
     def _load(code: str) -> list:
         key = code.strip().upper()
         if key not in loaded:
-            loaded[key] = load_cards(manifest_set_path(key))
+            loaded[key] = load_cards(manifest_set_path(key, include_measured=True))
         return loaded[key]
 
     return _load

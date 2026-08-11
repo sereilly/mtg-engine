@@ -14,7 +14,11 @@ from pathlib import Path
 
 import pytest
 
-from engine.card_loader import manifest_set_codes, manifest_set_path
+from engine.card_loader import (
+    manifest_measured_codes,
+    manifest_set_codes,
+    manifest_set_path,
+)
 
 REPO = Path(__file__).resolve().parents[2]
 TESTS = REPO / "tests"
@@ -95,11 +99,22 @@ def test_no_test_spells_out_a_card_filename():
     )
 
 
-@pytest.mark.parametrize("code", manifest_set_codes())
+@pytest.mark.parametrize("code", manifest_set_codes() + manifest_measured_codes())
 def test_every_manifest_set_is_reachable_by_code(code):
-    """The factory must cover the whole manifest, so a newly ingested set is
-    usable from a test the moment it is registered."""
-    assert manifest_set_path(code).exists()
+    """The factory must cover the whole manifest — both roles. A card lands
+    with its focused test while its set is still ``measured``, so the fixtures
+    resolve measured sets; a factory that could not would push a set's whole
+    test file into the promotion commit."""
+    assert manifest_set_path(code, include_measured=True).exists()
+
+
+@pytest.mark.parametrize("code", manifest_measured_codes())
+def test_a_measured_set_is_not_reachable_by_default(code):
+    """The fixtures opt in with ``include_measured=True``; every other caller
+    keeps the narrow default, because a caller that has not thought about the
+    split means "what the engine ships"."""
+    with pytest.raises(KeyError, match=f"no set {code!r}"):
+        manifest_set_path(code)
 
 
 def test_an_unknown_set_code_raises_rather_than_resolving_to_nothing():

@@ -168,9 +168,23 @@ def manifest_set(
     raise KeyError(f"no set {code!r} in the manifest; {known}")
 
 
-def manifest_set_path(code: str, manifest_path: str | Path = MANIFEST_PATH) -> Path:
-    """The JSON for one set, by its code (``"ARN"``). Raises on an unknown code."""
-    return Path(manifest_path).parent / manifest_set(code, manifest_path)["file"]
+def manifest_set_path(
+    code: str,
+    manifest_path: str | Path = MANIFEST_PATH,
+    *,
+    include_measured: bool = False,
+) -> Path:
+    """The JSON for one set, by its code (``"ARN"``). Raises on an unknown code.
+
+    *include_measured* passes through to ``manifest_set``, for the same caller:
+    the per-set test fixtures resolve a measured set because a card lands with
+    its focused test *while* the set is being implemented, and a set under
+    ``measured`` is precisely one mid-implementation. Reading a card file is
+    not shipping it; ``load_catalog`` decides what a player can deck and does
+    not come through here. Everything else keeps the False default.
+    """
+    entry = manifest_set(code, manifest_path, include_measured=include_measured)
+    return Path(manifest_path).parent / entry["file"]
 
 
 def manifest_set_codes(manifest_path: str | Path = MANIFEST_PATH) -> list[str]:
