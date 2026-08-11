@@ -41,6 +41,11 @@ from __future__ import annotations
 # position (the clause right of an ability's colon).
 ACTIVATED_LABELS: dict[str, str] = {
     "add_counter_to_self": "activated_counter",
+    # Historically "triggered_counter" — the label Dwarven Weaponsmith's hook
+    # declared for this kind before the grammar learned the lowering. Kept so
+    # the card is not silently re-bucketed; the misnomer is the legacy
+    # vocabulary, and this module exists to carry it.
+    "add_counter_to_target": "triggered_counter",
     "add_mana_from_text": "activated_mana",
     "counter_top_stack_spell": "spell_pattern",
     "create_token": "activated_token",

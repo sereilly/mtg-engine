@@ -241,11 +241,9 @@ _KIND_TO_SPEC: dict[str, dict] = {
     "pump_target_creature_until_eot": {"kind": "creature"},
     "grant_regeneration_to_target_creature": {"kind": "creature"},
     "mark_non_wall_target_to_attack": {"kind": "creature"},
-    # `add_counter_to_target` is emitted by exactly one rule, whose text test is
-    # "put a +1/+1 counter on target creature" — the creature restriction is
-    # part of what the kind means. (It has no registered handler, so the ability
-    # currently resolves to nothing; that is a separate gap, and offering the
-    # prompt the printed card asks for is not the place to fix it.)
+    # "Put a +1/+1 counter on target creature" — the creature restriction is
+    # part of what the kind means. Emitted by Dwarven Weaponsmith's hook and,
+    # since the M21 counter round, by the grammar's put-counter lowering.
     "add_counter_to_target": {"kind": "creature"},
     # Three effects that act on a *player*: the handler reads `context.target`,
     # a seat, and never looks at the battlefield.

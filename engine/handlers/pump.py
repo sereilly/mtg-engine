@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..models import Permanent
-from ..pt import set_base_pt
+from ..pt import add_pt_modifier, set_base_pt
 from ._common import apply_temp_pt_boost, resolve_amount, resolve_target_permanent
 from .registry import effect_handler
 from ..keywords import grant_keyword
@@ -182,6 +182,44 @@ def add_counter_to_self(game: Game, instruction: OracleInstruction, context: Ora
     source_permanent.power_bonus += int(instruction.payload.get("power", 0))
     source_permanent.toughness_bonus += int(instruction.payload.get("toughness", 0))
     game.log.append(f"{card.name} gets a +1/+1 counter")
+    return True, "resolved"
+
+
+@effect_handler("add_counter_to_target")
+def add_counter_to_target(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Put a +1/+1 counter on target creature." The kind Dwarven
+    Weaponsmith's hook has always emitted (it resolved to nothing before this
+    handler existed) and the grammar now lowers to as well."""
+    card = context.card
+    target_creature = resolve_target_permanent(game, context)
+    if target_creature is None:
+        game.log.append(f"{card.name}: no valid creature target")
+        return True, "resolved"
+    add_pt_modifier(
+        target_creature,
+        int(instruction.payload.get("power", 1)),
+        int(instruction.payload.get("toughness", 1)),
+    )
+    game.log.append(f"{target_creature.card.name} gets a +1/+1 counter ({card.name})")
+    return True, "resolved"
+
+
+@effect_handler("add_counter_to_each_you_control")
+def add_counter_to_each_you_control(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Put a +1/+1 counter on each creature you control." (Basri's
+    Solidarity.) Read through the control seam, so a borrowed creature counts
+    and a lost one does not."""
+    card = context.card
+    caster = context.caster
+    for perm in game.controlled_by(caster):
+        if not perm.is_creature:
+            continue
+        add_pt_modifier(
+            perm,
+            int(instruction.payload.get("power", 1)),
+            int(instruction.payload.get("toughness", 1)),
+        )
+    game.log.append(f"{card.name}: each creature {caster.name} controls gets a +1/+1 counter")
     return True, "resolved"
 
 

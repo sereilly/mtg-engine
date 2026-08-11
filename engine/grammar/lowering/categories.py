@@ -50,6 +50,8 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "grant_self_flying_until_eot": "pump",
     "grant_banding_to_target": "pump",
     "add_counter_to_self": "pump",
+    "add_counter_to_target": "pump",
+    "add_counter_to_each_you_control": "pump",
     # Counter placements sized by a board count. Their own category rather than
     # "pump": a corpse counter never touches power or toughness (it is
     # regeneration fuel), so gating it behind the pump switch would tie two

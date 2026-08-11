@@ -20,9 +20,9 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | LEB | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
 | 2ED | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
 | ARN | 78 | 108 | 64.8% | 61.1% | 38.9% | 34 |
-| 3ED | 296 | 389 | 78.9% | 76.6% | 41.6% | 148 |
-| M21 *(measured)* | 285 | 503 | 50.7% | 43.9% | 23.3% | 95 |
-| **All (shipped)** | **1248** | **1663** | **78.0%** | **76.1%** | **41.4%** | **628** |
+| 3ED | 296 | 389 | 78.9% | 76.9% | 41.9% | 149 |
+| M21 *(measured)* | 285 | 503 | 50.7% | 44.7% | 24.1% | 99 |
+| **All (shipped)** | **1248** | **1663** | **78.0%** | **76.2%** | **41.5%** | **629** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
 
@@ -43,7 +43,6 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | 7 | 2 | expected a colour after 'becomes' |  |
 | 6 | 3 | no lowering for RawEffect |  |
 | 6 | 6 | expected a destination zone after 'return' |  |
-| 6 | 5 | counters on a non-source subject |  |
 | 6 | 6 | unrecognized discard cost |  |
 | 5 | 1 | no handler for non-targeted tap/untap |  |
 | 5 | 2 | expected something to destroy |  |
@@ -57,10 +56,11 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | 2 | 1 | expected something to shield |  |
 | 2 | 1 | no untap handler honors this restriction |  |
 | 2 | 2 | expected a power/toughness value |  |
+| 2 | 2 | unsupported life-loss target 'each_opponent' |  |
 
 ## Cards executing through the grammar
 
-628 cards, 689 lines.
+629 cards, 690 lines.
 
 - **Aladdin**
   - `{1}{R}{R}, {T}: Gain control of target artifact for as long as you control this creature.`
@@ -107,6 +107,10 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `{3}: Untap this artifact.`
   - `{T}: Add {C}{C}{C}.`
   - `{3}: Untap this artifact.`
+- **Basri's Lieutenant**
+  - `When this creature enters, put a +1/+1 counter on target creature you control.`
+- **Basri's Solidarity**
+  - `Put a +1/+1 counter on each creature you control.`
 - **Bazaar of Baghdad**
   - `{T}: Draw two cards, then discard three cards.`
 - **Birds of Paradise**
@@ -332,6 +336,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `{T}: Target creature with power 2 or less can't be blocked this turn.`
   - `{T}: Target creature with power 2 or less can't be blocked this turn.`
   - `{T}: Target creature with power 2 or less can't be blocked this turn.`
+- **Dwarven Weaponsmith**
+  - `{T}, Sacrifice an artifact: Put a +1/+1 counter on target creature. Activate only during your upkeep.`
 - **Earthquake**
   - `Earthquake deals X damage to each creature without flying and each player.`
   - `Earthquake deals X damage to each creature without flying and each player.`
@@ -754,6 +760,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `At the beginning of each player's upkeep, this enchantment deals X damage to that player, where X is the number of untapped lands they controlled at the beginning of this turn.`
   - `At the beginning of each player's upkeep, this enchantment deals X damage to that player, where X is the number of untapped lands they controlled at the beginning of this turn.`
   - `At the beginning of each player's upkeep, this enchantment deals X damage to that player, where X is the number of untapped lands they controlled at the beginning of this turn.`
+- **Pridemalkin**
+  - `When this creature enters, put a +1/+1 counter on target creature you control.`
 - **Prismite**
   - `{2}: Add one mana of any color.`
 - **Prodigal Sorcerer**
@@ -994,6 +1002,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `{1}{U}, {T}: Draw a card, then discard a card.`
 - **Teferi's Tutelage**
   - `When this enchantment enters, draw a card, then discard a card.`
+- **Tempered Veteran**
+  - `{4}{W}{W}, {T}: Put a +1/+1 counter on target creature.`
 - **Temple of Epiphany**
   - `{T}: Add {U} or {R}.`
 - **Temple of Malady**

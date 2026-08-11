@@ -107,13 +107,38 @@ def _lower_gain_keyword(node: ast.GainKeyword) -> tuple[OracleInstruction, ...]:
 
 
 def _lower_put_counter(node: ast.PutCounter) -> tuple[OracleInstruction, ...]:
-    if not _is_source(node.subject):
-        raise LoweringError("counters on a non-source subject", node=node)
     if node.counter != "+1/+1" or node.up_to:
         raise LoweringError(f"no handler for {node.counter} counters", node=node)
     if not isinstance(node.count, ast.Fixed) or node.count.value != 1:
         raise LoweringError("variable counter counts have no handler", node=node)
-    return (OracleInstruction("add_counter_to_self", "", {"power": 1, "toughness": 1}),)
+    if _is_source(node.subject):
+        return (
+            OracleInstruction("add_counter_to_self", "", {"power": 1, "toughness": 1}),
+        )
+    if _is_target(node.subject):
+        # "Put a +1/+1 counter on target creature [you control]." The kind
+        # predates this lowering: Dwarven Weaponsmith's hook has always emitted
+        # it, so the grammar joins the same handler rather than minting a
+        # second name for the same effect.
+        assert isinstance(node.subject, ast.TargetSpec)
+        payload: dict[str, object] = {"power": 1, "toughness": 1}
+        _describe_targets(payload, node.subject)
+        return (OracleInstruction("add_counter_to_target", "", payload),)
+    if isinstance(node.subject, ast.TargetSpec) and node.subject.quantifier in (
+        "all",
+        "each",
+    ):
+        # "Put a +1/+1 counter on each creature you control." Only the
+        # own-side creature sweep has a handler; a wider scope refuses.
+        filt = node.subject.filter
+        if filt.card_types != ("creature",) or filt.controller != "you":
+            raise LoweringError("counters on a scope no handler sweeps", node=node)
+        return (
+            OracleInstruction(
+                "add_counter_to_each_you_control", "", {"power": 1, "toughness": 1}
+            ),
+        )
+    raise LoweringError("counters on a non-source subject", node=node)
 
 
 # Counter placements repeated once per creature that died this turn, keyed by

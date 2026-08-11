@@ -91,6 +91,27 @@ def test_token_round_cards_compile_supported(set_pool, name):
     assert compile_card_oracle(set_pool("M21")[name]).supported
 
 
+# --- The counter round: +1/+1 counters on non-source subjects ---------------
+
+
+def test_basris_solidarity_counters_each_of_your_creatures(set_pool):
+    """"Put a +1/+1 counter on each creature you control." — the sweep counts
+    the caster's side only, through the control seam."""
+    solidarity = set_pool("M21")["Basri's Solidarity"]
+    mine = Permanent(card=set_pool("M21")["Concordia Pegasus"])
+    theirs = Permanent(card=set_pool("M21")["Concordia Pegasus"])
+    p1 = PlayerState(name="P1", battlefield=[mine], hand=[solidarity])
+    p2 = PlayerState(name="P2", battlefield=[theirs])
+    game = Game(players=[p1, p2])
+
+    base_mine = mine.effective_power
+    base_theirs = theirs.effective_power
+    game.cast_from_hand(0, "Basri's Solidarity")
+
+    assert mine.effective_power == base_mine + 1
+    assert theirs.effective_power == base_theirs
+
+
 def test_valorous_steed_token_takes_its_cr_111_4_name(set_pool):
     program = compile_card_oracle(set_pool("M21")["Valorous Steed"])
     create = next(
