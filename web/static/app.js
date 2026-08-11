@@ -46,6 +46,11 @@ let camouflagePromptSig = null;
 let ragingRiverPromptSig = null;
 // Chosen mode index for the cast in progress, injected into the cast action.
 let pendingCastModeIndex = null;
+// Casting from the graveyard or exile (a cast permission, e.g. Chandra's
+// "you may cast them this turn"): which zone the pending cast's card leaves.
+// Rides sendAction the same way pendingCastModeIndex does, so every cast path
+// (targeted, X, auto-tap retry) carries it without threading it manually.
+let pendingCastFromZone = null;
 let debugSearchTimer = null;
 let debugAddManaMode = false;
 let symbolMap = {};
@@ -1932,6 +1937,14 @@ function getSearchLibraryInfo(state = currentState) {
   return info;
 }
 
+function getSearchExileInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.search_exile;
+  if (!info) return null;
+  if (info.caster_seat !== seat) return null;
+  return info;
+}
+
 function getDiscardSelectInfo(state = currentState) {
   if (!state || seat === null) return null;
   const info = state.discard_select;
@@ -2481,6 +2494,8 @@ function beginPendingHandCast(card, handIndex = null) {
   if (!cardName) return;
   // A fresh cast starts with no chosen mode; a modal prompt sets it later.
   pendingCastModeIndex = null;
+  // A fresh cast is from the hand; a zone cast sets the zone right after.
+  pendingCastFromZone = null;
   pendingCastHandCard = {
     cardName,
     handIndex: Number.isInteger(handIndex) && handIndex >= 0 ? handIndex : null,
@@ -2491,6 +2506,7 @@ function clearPendingHandCast() {
   pendingCastHandCard = null;
   pendingModalChoice = null;
   pendingCastModeIndex = null;
+  pendingCastFromZone = null;
   document.querySelectorAll(".casting-card").forEach((el) => el.classList.remove("casting-card"));
 }
 
@@ -4281,6 +4297,87 @@ function renderSearchLibraryModal(info) {
 
   buildGrid();
   if (confirmBtn) confirmBtn.disabled = searchLibrarySelectedIndex === null;
+}
+
+// Chandra, Heart of Fire's −9: a two-zone multi-select search. Any number of
+// the highlighted (matching) cards may be picked across both grids; confirm
+// exiles them, and confirming with nothing picked is the fail-to-find.
+let searchExileSelected = new Set();
+
+function renderSearchExileModal(info) {
+  const modal = document.getElementById("searchExileModal");
+  if (!modal) return;
+
+  if (!info) {
+    modal.classList.add("hidden");
+    searchExileSelected = new Set();
+    return;
+  }
+
+  modal.classList.remove("hidden");
+  const subtitle = document.getElementById("searchExileSubtitle");
+  if (subtitle) {
+    const what = [
+      (info.colors || []).join("/"),
+      (info.card_types || []).join(" or "),
+    ].filter(Boolean).join(" ");
+    subtitle.textContent = `Choose any number of ${what || "matching"} cards to exile. You may cast them this turn.`;
+  }
+
+  const confirmBtn = document.getElementById("searchExileConfirmBtn");
+
+  function buildGrid(gridId, zone, cards, legalIndices) {
+    const grid = document.getElementById(gridId);
+    if (!grid) return;
+    const legal = new Set(legalIndices || []);
+    grid.innerHTML = (cards || [])
+      .map((card, idx) => {
+        if (!legal.has(idx)) return "";
+        const key = `${zone}:${idx}`;
+        const selectedClass = searchExileSelected.has(key) ? " selected" : "";
+        const inner = card.image_uri
+          ? `<img src="${escapeHtml(card.image_uri)}" alt="${escapeHtml(card.name)}" loading="lazy" />`
+          : `<div class="library-card-text-placeholder">${escapeHtml(card.name)}</div>`;
+        return `<div class="library-card-choice${selectedClass}" data-zone="${zone}" data-idx="${idx}">${inner}<div class="library-card-choice-name">${escapeHtml(card.name)}</div></div>`;
+      })
+      .join("") || `<div class="modal-empty-note">No matching cards.</div>`;
+
+    grid.querySelectorAll(".library-card-choice").forEach((el) => {
+      el.addEventListener("click", () => {
+        const key = `${el.dataset.zone}:${el.dataset.idx}`;
+        if (searchExileSelected.has(key)) searchExileSelected.delete(key);
+        else searchExileSelected.add(key);
+        el.classList.toggle("selected");
+        if (confirmBtn) {
+          confirmBtn.textContent = searchExileSelected.size
+            ? `Exile ${searchExileSelected.size} Card${searchExileSelected.size === 1 ? "" : "s"}`
+            : "Take Nothing";
+        }
+      });
+    });
+  }
+
+  buildGrid("searchExileGraveyardGrid", "graveyard", info.graveyard_cards, info.legal_graveyard_indices);
+  buildGrid("searchExileLibraryGrid", "library", info.cards, info.legal_indices);
+
+  if (confirmBtn && !confirmBtn.dataset.bound) {
+    confirmBtn.dataset.bound = "1";
+    confirmBtn.addEventListener("click", async () => {
+      const picks = [...searchExileSelected].map((key) => {
+        const [zone, idx] = key.split(":");
+        return { zone, index: Number(idx) };
+      });
+      searchExileSelected = new Set();
+      delete confirmBtn.dataset.bound;
+      modal.classList.add("hidden");
+      await sendAction({ seat, action: "search_exile_confirm", search_picks: picks });
+    });
+  }
+  if (confirmBtn) {
+    confirmBtn.textContent = searchExileSelected.size
+      ? `Exile ${searchExileSelected.size} Card${searchExileSelected.size === 1 ? "" : "s"}`
+      : "Take Nothing";
+  }
 }
 
 // Glasses of Urza: show the viewer the actual cards in the looked-at player's
@@ -7852,6 +7949,15 @@ function renderZoneCards(containerId, cards, { zoneSeat = null, zoneKind = "" } 
   const validGraveyard = pendingCastTarget?.validGraveyard || [];
   const isValidGraveyardTarget = (index) =>
     validGraveyard.some((t) => t.seat === zoneSeat && t.index === index);
+  // A cast permission (engine/cast_permissions.py) over the viewer's own
+  // graveyard/exile: the backend says which (zone, index) entries the viewer
+  // may cast or play right now, and clicking one starts an ordinary cast with
+  // the zone riding along.
+  const castableEntries =
+    zoneSeat === seat && (zoneKind === "graveyard" || zoneKind === "exile")
+      ? (currentState?.castable_from_zones || []).filter((entry) => entry.zone === zoneKind)
+      : [];
+  const isCastableFromZone = (index) => castableEntries.some((entry) => entry.index === index);
   // Render with the most recently added card (end of the array) leftmost,
   // while keeping each card's original index for targeting clicks.
   for (let index = cards.length - 1; index >= 0; index--) {
@@ -7861,8 +7967,61 @@ function renderZoneCards(containerId, cards, { zoneSeat = null, zoneKind = "" } 
       el.classList.add("targeting-valid");
       el.style.cursor = "pointer";
       el.addEventListener("click", () => resolvePendingCastTarget(zoneSeat, index));
+    } else if (isCastableFromZone(index) && !pendingCastTarget && !pendingCastHandCard) {
+      el.classList.add("castable-from-zone");
+      el.style.cursor = "pointer";
+      el.title = `Cast ${card.name || ""} from your ${zoneKind}`;
+      el.addEventListener("click", () => beginZoneCast(card, zoneKind));
     }
     container.appendChild(el);
+  }
+}
+
+// Start casting a card the viewer holds a cast permission for in their
+// graveyard or exile. Mirrors the hand-cast chain: the same target/X prompts
+// run, and `pendingCastFromZone` rides sendAction so whichever path fires
+// carries the zone.
+async function beginZoneCast(card, zone) {
+  if (seat === null) return;
+  if (pendingCastHandCard) {
+    updateActionHint("Finish the current cast before starting another.", true);
+    return;
+  }
+  const cardName = normalizeCardName(card);
+  beginPendingHandCast(card);
+  pendingCastFromZone = zone;
+  try {
+    if (cardIsModal(card) && startModalChoicePrompt(card)) return;
+    if (cardRequiresTargetGraveyardCreature(card)) { startCastGraveyardCreatureTargetPrompt(card); return; }
+    if (cardRequiresTargetLand(card)) { startCastLandTargetPrompt(card); return; }
+    if (cardRequiresTargetArtifact(card)) { startCastArtifactTargetPrompt(card); return; }
+    if (cardRequiresSeveralTargets(card)) { startCastSeveralTargetsPrompt(card); return; }
+    if (cardOffersCopyCreatureChoice(card)) { startCastCreatureTargetPrompt(card); return; }
+    if (cardOffersCopyArtifactChoice(card)) { startCastArtifactTargetPrompt(card); return; }
+    if (cardRequiresTargetCreature(card)) { startCastCreatureTargetPrompt(card); return; }
+    if (cardRequiresTargetPermanent(card)) { startCastPermanentTargetPrompt(card); return; }
+    if (cardRequiresTargetStackSpell(card)) { startCastStackSpellPrompt(card); return; }
+    if (cardRequiresDividedDamage(card)) { startCastDividedPrompt(card); return; }
+    if (cardRequiresTargetAny(card)) { startCastAnyTargetPrompt(card); return; }
+    if (cardRequiresTargetPlayer(card)) { startCastTargetPrompt(card); return; }
+    const castTargetSeat = getDefaultTargetSeat(cardName);
+    if (hasXCost(card)) { startCastXPrompt(card, castTargetSeat); return; }
+    const actionBody = { seat, action: "cast", card_name: cardName, target_seat: castTargetSeat, from_zone: zone };
+    try {
+      await sendAction(actionBody);
+      updateActionHint(`Cast ${cardName} from your ${zone}.`);
+      clearPendingHandCast();
+    } catch (e) {
+      if (e.message && e.message.toLowerCase().startsWith("insufficient mana")) {
+        pendingAutoTap = { card, cardName, actionBody };
+        renderActivationPrompt();
+        return;
+      }
+      clearPendingHandCast();
+      throw e;
+    }
+  } catch (e) {
+    updateActionHint(e.message, true);
   }
 }
 
@@ -9451,7 +9610,7 @@ function renderBoard(state) {
   q("oppAnteCount").textContent = (opp.ante || []).length;
 
   renderZoneCards("selfGraveyardCards", me.graveyard, { zoneSeat: seat, zoneKind: "graveyard" });
-  renderZoneCards("selfExileCards", me.exile || []);
+  renderZoneCards("selfExileCards", me.exile || [], { zoneSeat: seat, zoneKind: "exile" });
   renderZoneCards("selfAnteCards", me.ante || []);
   renderZoneCards("selfSideboardCards", me.sideboard || []);
   renderZoneCards("oppGraveyardCards", opp.graveyard, { zoneSeat: oppSeat, zoneKind: "graveyard" });
@@ -9684,6 +9843,7 @@ function renderState(state, { skipStaleCheck = false } = {}) {
   }
   renderActivationPrompt();
   renderSearchLibraryModal(searchLibraryInfo);
+  renderSearchExileModal(getSearchExileInfo(state));
   renderReorderLibraryModal(reorderLibraryInfo);
   renderHandRevealModal(getHandRevealInfo(state));
   renderDrawChoiceModals(state);
@@ -10818,6 +10978,11 @@ async function sendAction(actionBody) {
   // path fires (direct, targeted, X, auto-tap retry) without threading it manually.
   if (_CAST_ACTIONS.has(body.action) && body.mode_index == null && pendingCastModeIndex != null) {
     body.mode_index = pendingCastModeIndex;
+  }
+  // Same trick for a cast permission's zone: whichever cast path fires, the
+  // engine learns which zone the card leaves.
+  if (body.action === "cast" && body.from_zone == null && pendingCastFromZone != null) {
+    body.from_zone = pendingCastFromZone;
   }
   const payload = await postJson(`/api/sessions/${sessionId}/action`, body);
   renderState(payload);

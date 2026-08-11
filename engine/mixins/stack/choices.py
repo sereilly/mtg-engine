@@ -341,6 +341,89 @@ class PendingChoicesMixin:
         if found is None or not self._resolve_search_library(choice, found[1], found[0]):
             self._resolve_search_library(choice, -1, "none")
 
+    # -- Two-zone exile search (Chandra, Heart of Fire's −9) ------------------
+
+    def confirm_search_exile(self, caster_index: int, picks: list) -> bool:
+        """*picks* is any number of ``{"zone": "library"|"graveyard",
+        "index": int}`` entries — "any number" includes zero, which is this
+        search's fail-to-find (CR 701.23b)."""
+        return self.resolve_pending_choice(
+            "search_exile_cards", caster_index, picks=picks
+        )
+
+    @staticmethod
+    def _exile_search_matches(card, data: dict) -> bool:
+        card_types = tuple(data.get("card_types") or ())
+        colors = tuple(data.get("colors") or ())
+        if card_types and card.primary_type not in card_types:
+            return False
+        if colors and not any(color in card.colors for color in colors):
+            return False
+        return True
+
+    def _resolve_search_exile(self, choice: PendingChoice, picks: list) -> bool:
+        """Every pick is validated before anything moves — a single bad entry
+        rejects the whole answer and leaves the prompt queued, so a malformed
+        request cannot exile half a selection."""
+        caster = self.players[choice.player_index]
+        zones = tuple(choice.data.get("zones", ("graveyard", "library")))
+        seen: set[tuple[str, int]] = set()
+        cleaned: list[tuple[str, int]] = []
+        for pick in picks or []:
+            zone = pick.get("zone") if isinstance(pick, dict) else None
+            index = pick.get("index") if isinstance(pick, dict) else None
+            if zone not in zones:
+                return False
+            source = caster.library if zone == "library" else caster.graveyard
+            if not isinstance(index, int) or not (0 <= index < len(source)):
+                return False
+            if (zone, index) in seen:
+                return False
+            seen.add((zone, index))
+            if not self._exile_search_matches(source[index], choice.data):
+                return False
+            cleaned.append((zone, index))
+        exiled = []
+        for zone in ("library", "graveyard"):
+            source = caster.library if zone == "library" else caster.graveyard
+            for _, index in sorted(
+                (pick for pick in cleaned if pick[0] == zone),
+                key=lambda pick: -pick[1],
+            ):
+                card = source.pop(index)
+                caster.exile.append(card)
+                exiled.append(card)
+        # The library was searched whether or not anything was taken from it,
+        # and the printed "then shuffle" applies to the search, not the find.
+        if "library" in zones:
+            random.shuffle(caster.library)
+        ctx = choice.data.get("_context")
+        if ctx is not None:
+            ctx.results["exiled_cards"] = exiled
+        self.discard_pending_choice(choice)
+        self.log.append(
+            f"{caster.name} searched graveyard and library and exiled "
+            + (", ".join(card.name for card in exiled) if exiled else "nothing")
+        )
+        return True
+
+    def _default_search_exile(self, choice: PendingChoice) -> None:
+        """A non-interactive seat takes everything that matches: "any number"
+        is a may per card, and the cards come back castable, so the maximum is
+        the only default that never leaves value on the table."""
+        caster = self.players[choice.player_index]
+        picks = [
+            {"zone": zone, "index": index}
+            for zone in ("graveyard", "library")
+            if zone in tuple(choice.data.get("zones", ("graveyard", "library")))
+            for index, card in enumerate(
+                caster.graveyard if zone == "graveyard" else caster.library
+            )
+            if self._exile_search_matches(card, choice.data)
+        ]
+        if not self._resolve_search_exile(choice, picks):
+            self._resolve_search_exile(choice, [])
+
     # -- Library reorder ----------------------------------------------------
 
     def confirm_reorder_library(self, caster_index: int, new_order: list, shuffle: bool = False) -> bool:
@@ -584,8 +667,11 @@ class PendingChoicesMixin:
                     # 704.5e: a countered copy of a spell ceases to exist.
                     self.log.append(f"{data['card_name']} countered {target.card.name} (copy), which ceases to exist")
                 else:
-                    controller.graveyard.append(target.card)
-                    self.log.append(f"{data['card_name']} countered {target.card.name}")
+                    self._bin_spell_card(
+                        controller, target.card,
+                        exile_instead=target.exile_instead_of_graveyard,
+                        verb=f"was countered by {data['card_name']}",
+                    )
                 if counter_card is not None:
                     from ...card_hooks import ON_SPELL_COUNTERED
                     hook = ON_SPELL_COUNTERED.get(data["card_name"])
@@ -752,8 +838,11 @@ class PendingChoicesMixin:
         spell_card = pending.get("_spell_card")
         if spell_card is not None:
             spell_caster = self.players[pending.get("_spell_caster_index", caster_index or 0)]
-            spell_caster.graveyard.append(spell_card)
-            self.log.append(f"{spell_card.name} resolved and moved to graveyard")
+            self._bin_spell_card(
+                spell_caster, spell_card,
+                exile_instead=bool(pending.get("_spell_exile_instead")),
+                verb="resolved",
+            )
         if hand_index < 0:
             return True  # declined — nothing is played
         chosen_name = pending.get("chosen_card_name")
@@ -1255,6 +1344,21 @@ register_choice(
     hidden_for_ai=False,
     # A search takes a card out of the library and shuffles what is left, so any
     # later step of the same resolution reads a library the answer decided.
+    suspends=True,
+)
+
+register_choice(
+    "search_exile_cards",
+    resolve=lambda game, choice, r: game._resolve_search_exile(choice, r.get("picks") or []),
+    default=lambda game, choice: game._default_search_exile(choice),
+    action="search_exile_confirm",
+    prompt_key="search_exile",
+    blocked_detail="complete your search before other actions",
+    blocks_every_seat=True,
+    spectator_visible=True,
+    hidden_for_ai=False,
+    # The picks are what the next step of the same resolution ("You may cast
+    # them this turn.") grants permission over, so that step must wait.
     suspends=True,
 )
 

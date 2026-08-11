@@ -207,6 +207,35 @@ def _search_library(ctx: PromptContext, choices: list) -> dict:
     return payload
 
 
+@prompt_renderer("search_exile_cards")
+def _search_exile(ctx: PromptContext, choices: list) -> dict:
+    """The two-zone exile search (Chandra, Heart of Fire's −9): both zones'
+    cards with the indices the restriction admits, multi-select. The engine
+    re-checks every pick, so these indices are a hint, not a permission."""
+    choice = choices[0]
+    caster = ctx.game.players[choice.player_index]
+    zones = tuple(choice.data.get("zones", ("graveyard", "library")))
+
+    def _matches(card) -> bool:
+        return ctx.game._exile_search_matches(card, choice.data)
+
+    payload = {
+        "caster_seat": choice.player_index,
+        "zones": list(zones),
+        "card_types": list(choice.data.get("card_types") or ()),
+        "colors": list(choice.data.get("colors") or ()),
+        "cards": [ctx.serialize_card(card) for card in caster.library],
+        "legal_indices": [
+            index for index, card in enumerate(caster.library) if _matches(card)
+        ],
+        "graveyard_cards": [ctx.serialize_card(card) for card in caster.graveyard],
+        "legal_graveyard_indices": [
+            index for index, card in enumerate(caster.graveyard) if _matches(card)
+        ],
+    }
+    return payload
+
+
 @prompt_renderer("reorder_library")
 def _reorder_library(ctx: PromptContext, choices: list) -> dict:
     choice = choices[0]

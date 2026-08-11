@@ -67,6 +67,16 @@ class StackItem:
     # A copy of a spell (Fork): it resolves like the original but ceases to exist
     # afterward rather than going to a graveyard, and was never cast from a hand.
     is_copy: bool = False
+    # CR 601.3e-adjacent bookkeeping: which zone the card was cast from. "hand"
+    # for the ordinary case; "graveyard"/"exile" when a permission effect
+    # (engine/cast_permissions.py) opened the zone. What "if this spell was
+    # cast from anywhere other than your hand" reads.
+    cast_from_zone: str = "hand"
+    # "If that spell would be put into your graveyard, exile it instead."
+    # (Chandra, Flame's Catalyst's −2.) Stamped at cast time from the
+    # permission grant; every place a spell's card leaves the stack for the
+    # graveyard — resolution, countering — routes on it.
+    exile_instead_of_graveyard: bool = False
     # For a triggered ability on the stack: event data captured at fire time that the
     # effect handler reads at resolution (e.g. the dead creature's name, the damage
     # amount, the player who was dealt damage, an optional-pay cost).

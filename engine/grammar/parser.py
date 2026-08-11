@@ -454,6 +454,34 @@ def _parse_pronoun_grant_rider(
 _RIDER_FOLDED = ast.RawEffect("rider-folded")
 
 
+def _parse_exile_instead_rider(
+    stream: TokenStream, steps: list[ast.Statement]
+) -> bool:
+    """``If that spell would be put into your graveyard, exile it instead.``
+    after a cast-permission sentence (Chandra, Flame's Catalyst's −2).
+
+    Folded onto the permission rather than parsed as a step, because it is a
+    property of the cast the permission allows — the engine stamps it onto the
+    stack object at cast time — and as a standalone sentence "that spell"
+    would dangle with nothing binding it.
+    """
+    last = steps[-1] if steps else None
+    if not isinstance(last, ast.CastPermission) or last.what != "target_card":
+        return False
+    mark = stream.mark()
+    if not stream.accept_phrase(
+        "if", "that", "spell", "would", "be", "put", "into", "your", "graveyard"
+    ):
+        stream.reset(mark)
+        return False
+    stream.accept_punct(",")
+    if not stream.accept_phrase("exile", "it", "instead"):
+        stream.reset(mark)
+        return False
+    steps[-1] = replace(last, exile_instead=True)
+    return True
+
+
 def _parse_who_cant_rider(
     stream: TokenStream, steps: list[ast.Statement]
 ) -> ast.Statement | None:
@@ -515,6 +543,8 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             who_cant = _parse_who_cant_rider(stream, steps)
             if who_cant is not None:
                 steps.append(who_cant)
+                continue
+            if _parse_exile_instead_rider(stream, steps):
                 continue
             # A trailing "Activate only during your upkeep." belongs to the
             # ability, not to the effect. Consuming it here keeps the line

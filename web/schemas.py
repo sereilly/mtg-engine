@@ -44,6 +44,7 @@ ActionKind = Literal[
     "debug_exile_permanent",
     "search_library_confirm",
     "search_library_decline",
+    "search_exile_confirm",
     "reorder_library_confirm",
     "scry_confirm",
     "discard_confirm",
@@ -170,6 +171,13 @@ class DividedTargetRef(BaseModel):
     id: int | None = Field(default=None, ge=1)
 
 
+class SearchPickRef(BaseModel):
+    # One pick of a two-zone exile search: which zone, and the card's index in
+    # that zone's list as the prompt serialized it.
+    zone: Literal["library", "graveyard"]
+    index: int = Field(ge=0)
+
+
 class GameActionRequest(BaseModel):
     seat: int = Field(ge=0)
     action: ActionKind
@@ -257,6 +265,18 @@ class GameActionRequest(BaseModel):
     # ("search your library and/or graveyard"). Absent means the library, so
     # every existing client is unchanged.
     search_zone: str | None = None
+    # The two-zone exile search (Chandra, Heart of Fire's −9): any number of
+    # picks, each naming its zone and the card's index there. Sent with
+    # `search_exile_confirm`; an empty list is the fail-to-find.
+    search_picks: list["SearchPickRef"] | None = None
+    # Casting from outside the hand (engine/cast_permissions.py): which zone
+    # the named card is cast or played from. Absent means the hand, so every
+    # existing client is unchanged.
+    from_zone: Literal["hand", "graveyard", "exile"] | None = None
+    # A cost waiver ("cast spells from your hand without paying their mana
+    # costs"): true to use it. Absent lets the engine apply it automatically
+    # to spells without {X} in their cost (a waived X is 0, CR 107.3b).
+    use_free_permission: bool | None = None
     # How many of `card_order`'s trailing entries a scry sends to the bottom
     # (CR 701.22a). Separate from card_order so the permutation stays a
     # permutation and can be validated as one.

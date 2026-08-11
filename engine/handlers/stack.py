@@ -122,8 +122,11 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
             # going to a graveyard — it has no physical card to put there.
             game.log.append(f"{card.name} countered {countered.card.name} (copy), which ceases to exist")
         else:
-            game.players[countered.caster_index].graveyard.append(countered.card)
-            game.log.append(f"{card.name} countered {countered.card.name}")
+            game._bin_spell_card(
+                game.players[countered.caster_index], countered.card,
+                exile_instead=countered.exile_instead_of_graveyard,
+                verb=f"was countered by {card.name}",
+            )
         counter_hook = ON_SPELL_COUNTERED.get(card.name)
         if counter_hook is not None:
             counter_hook(game, card, countered)

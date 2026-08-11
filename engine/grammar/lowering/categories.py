@@ -110,6 +110,13 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # A library search moves a card between hidden zones — same module, same
     # category as the other zone-change handlers.
     "search_library": "zones",
+    # The cast-from-exile/graveyard subsystem (both Chandras, M21): two exiles
+    # that record what they moved, and the permission their later sentences
+    # grant over it. All zone work — the permission is about which zone a card
+    # may be cast from — so no new category and GRAMMAR_CATEGORIES is unchanged.
+    "exile_top_of_library": "zones",
+    "search_and_exile_matching": "zones",
+    "grant_cast_permission": "zones",
     "grant_extra_turn": "turns",
     # The planeswalker block's one-shot zone movers (M21 loyalty abilities).
     "each_player_discards_a_card": "zones",

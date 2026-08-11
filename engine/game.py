@@ -233,6 +233,11 @@ class Game(
     # "instruction", "source_name", "card"}. Fired from the declare-attackers
     # step; "this turn" entries are cleared at cleanup.
     delayed_triggers: list = field(default_factory=list)
+    # CR 601.3 permissions to cast/play from outside the hand ("you may play
+    # cards exiled this way", "you may cast target … from your graveyard") and
+    # cost waivers ("without paying their mana costs"). CastPermission entries
+    # (engine/cast_permissions.py); turn-scoped ones are swept at cleanup.
+    cast_permissions: list = field(default_factory=list)
     # Nafs Asp: "that player loses N life at the beginning of their next draw
     # step unless they pay {cost} before that draw step." Each entry is
     # {"player_index", "amount", "cost", "source_name"}. Populated by the

@@ -18,6 +18,7 @@ from ._core import (
     Fixed,
     ObjectFilter,
     PlayerRef,
+    TargetSpec,
     Zone,
 )
 
@@ -117,6 +118,59 @@ class SearchLibrary:
 @dataclass(frozen=True)
 class Shuffle:
     player: PlayerRef
+
+
+@dataclass(frozen=True)
+class ExileTopOfLibrary:
+    """``Exile the top three cards of your library.`` (Chandra, Heart of Fire's
+    +1.) Always the controller's own library — no card prints another player's
+    — and the exiled cards are recorded for a following sentence's "cards
+    exiled this way" to read, which is the reason this is not a Mill with a
+    different destination."""
+    count: Amount
+
+
+@dataclass(frozen=True)
+class SearchAndExile:
+    """``Search your graveyard and library for any number of <filter> cards,
+    exile them, then shuffle.`` (Chandra, Heart of Fire's −9.)
+
+    Not a :class:`SearchLibrary`: that node's whole contract is *one* found
+    card put into the hand, and this one exiles any number. The zones are
+    fixed by the words read — both are expected, so a wording searching one
+    zone refuses rather than silently searching fewer places than printed.
+    """
+    filter: ObjectFilter
+
+
+@dataclass(frozen=True)
+class CastPermission:
+    """A sentence whose effect is permission to cast or play from somewhere
+    the rules alone would not allow (CR 601.3):
+
+    * "Until end of turn, you may play cards exiled this way." — Chandra,
+      Heart of Fire's +1: ``what="exiled_this_way"``, ``mode="play"``.
+    * "You may cast them this turn." — her −9's back-reference to the cards
+      the same resolution just exiled: also ``what="exiled_this_way"``.
+    * "You may cast target red instant or sorcery card from your graveyard."
+      — Chandra, Flame's Catalyst's −2: ``what="target_card"``, the chosen
+      card on ``target``.
+    * "Until end of turn, you may cast spells from your hand without paying
+      their mana costs." — her −8: ``what="spells_from_hand"``, ``free=True``.
+
+    The duration is recorded (both printed spellings, "until end of turn" and
+    "this turn", are the same end-of-turn scope); ``target_card`` legitimately
+    has none, which CR 611.2a reads as lasting — bounded by the card staying
+    in its zone (CR 400.7).
+    """
+    mode: str  # "play" | "cast"
+    what: str  # "exiled_this_way" | "target_card" | "spells_from_hand"
+    target: TargetSpec | None = None
+    until_end_of_turn: bool = False
+    free: bool = False
+    # "If that spell would be put into your graveyard, exile it instead." —
+    # attached by the rider parser, so a wording carrying it cannot shed it.
+    exile_instead: bool = False
 
 
 @dataclass(frozen=True)

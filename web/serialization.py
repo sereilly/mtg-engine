@@ -712,8 +712,17 @@ def _serialize_player(
         "has_last_drawn_card": player.last_card_drawn_this_turn() is not None,
         "deck": {"count": len(player.library)},
         "library_count": len(player.library),
-        "graveyard": [_serialize_card(card) for card in player.graveyard],
-        "exile": [_serialize_card(card) for card in player.exile],
+        # The viewer's own graveyard/exile carry the same target specs a hand
+        # card does, because a cast permission (engine/cast_permissions.py) can
+        # make one castable — and the cast prompts read the spec off the card.
+        "graveyard": [
+            _serialize_card(card, game, seat) if viewer_seat == seat else _serialize_card(card)
+            for card in player.graveyard
+        ],
+        "exile": [
+            _serialize_card(card, game, seat) if viewer_seat == seat else _serialize_card(card)
+            for card in player.exile
+        ],
         # The ante zone (CR 407) — public, like exile. Empty unless an ante card
         # (Contract from Below, Demonic Attorney, Jeweled Bird) has resolved.
         "ante": [_serialize_card(card) for card in player.ante],

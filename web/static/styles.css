@@ -844,6 +844,30 @@ h2.targeting-valid {
   animation: target-pill-glow 1.1s ease-in-out infinite;
 }
 
+/* A graveyard/exile card the viewer holds a cast permission for (Chandra's
+   "you may play cards exiled this way" / "cast target … from your graveyard"):
+   an emerald glow, distinct from the gold targeting language — this click
+   *starts* a cast rather than answering one. */
+.card-wrapper.castable-from-zone {
+  cursor: pointer;
+}
+.card-wrapper.castable-from-zone .card {
+  border-color: rgba(80, 230, 140, 0.9);
+  box-shadow: 0 0 10px rgba(80, 230, 140, 0.55);
+}
+
+/* Section headers and the empty note inside the two-zone search modal. */
+.modal-section-title {
+  margin: 0.6em 0 0.25em;
+  font-size: 0.95em;
+  color: #cfd8dc;
+}
+.modal-empty-note {
+  color: #90a4ae;
+  font-style: italic;
+  padding: 0.4em 0;
+}
+
 .life-pill.life-flash-gain {
   animation: life-gain-flash 480ms ease-out;
 }

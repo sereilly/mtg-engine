@@ -89,6 +89,9 @@ from .lowering import (
     _lower_return_to_zone,
     _lower_sacrifice,
     _lower_sacrifice_unless_pay,
+    _lower_cast_permission,
+    _lower_exile_top_of_library,
+    _lower_search_and_exile,
     _lower_search_library,
     _lower_set_base_pt,
     _lower_tap,
@@ -105,7 +108,13 @@ from .lowering import (
 
 # Values an instruction records in the resolution scratchpad, so a later
 # back-reference ("that much") can verify it has a producer.
-_PRODUCES: dict[str, str] = {"deal_damage": "damage_dealt"}
+_PRODUCES: dict[str, str] = {
+    "deal_damage": "damage_dealt",
+    # Both exiles record what they exiled, which is what "you may play cards
+    # exiled this way" / "you may cast them this turn" read.
+    "exile_top_of_library": "exiled_cards",
+    "search_and_exile_matching": "exiled_cards",
+}
 
 
 def lower_statement(
@@ -234,6 +243,15 @@ def lower_statement(
 
     if isinstance(statement, ast.SearchLibrary):
         return _lower_search_library(statement)
+
+    if isinstance(statement, ast.ExileTopOfLibrary):
+        return _lower_exile_top_of_library(statement)
+
+    if isinstance(statement, ast.SearchAndExile):
+        return _lower_search_and_exile(statement)
+
+    if isinstance(statement, ast.CastPermission):
+        return _lower_cast_permission(statement, produced)
 
     if isinstance(statement, ast.ExtraTurn):
         return _lower_extra_turn(statement)

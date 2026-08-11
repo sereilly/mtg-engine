@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**234 / 585 tracked rules covered (40%)** — 1012 tests, 0 unannotated.
+**237 / 585 tracked rules covered (40%)** — 1022 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -16,7 +16,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [104. Ending the Game](#104-ending-the-game) | 5/6 | 83% |
 | [105. Colors](#105-colors) | 0/5 | 0% |
 | [106. Mana](#106-mana) | 4/13 | 30% |
-| [107. Numbers and Symbols](#107-numbers-and-symbols) | 1/18 | 5% |
+| [107. Numbers and Symbols](#107-numbers-and-symbols) | 2/18 | 11% |
 | [108. Cards](#108-cards) | 1/6 | 16% |
 | [109. Objects](#109-objects) | 0/5 | 0% |
 | [110. Permanents](#110-permanents) | 0/5 | 0% |
@@ -26,7 +26,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [115. Targets](#115-targets) | 4/10 | 40% |
 | [116. Special Actions](#116-special-actions) | 0/3 | 0% |
 | [117. Timing and Priority](#117-timing-and-priority) | 6/7 | 85% |
-| [118. Costs](#118-costs) | 8/14 | 57% |
+| [118. Costs](#118-costs) | 9/14 | 64% |
 | [119. Life](#119-life) | 0/10 | 0% |
 | [120. Damage](#120-damage) | 4/10 | 40% |
 | [121. Drawing a Card](#121-drawing-a-card) | 3/9 | 33% |
@@ -42,7 +42,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [302. Creatures](#302-creatures) | 1/7 | 14% |
 | [303. Enchantments](#303-enchantments) | 7/7 | 100% |
 | [304. Instants](#304-instants) | 0/5 | 0% |
-| [305. Lands](#305-lands) | 2/9 | 22% |
+| [305. Lands](#305-lands) | 3/9 | 33% |
 | [306. Planeswalkers](#306-planeswalkers) | 9/9 | 100% |
 | [307. Sorceries](#307-sorceries) | 0/5 | 0% |
 | [400. General](#400-general) | 5/12 | 41% |
@@ -169,7 +169,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [ ] **107.1** The only numbers the Magic game uses are integers.
 - [ ] **107.2** If anything needs to use a number that can’t be determined, either as a result or in a calculatio...
-- [ ] **107.3** Many objects use the letter X as a placeholder for a number that needs to be determined. Some obj...
+- [x] **107.3** Many objects use the letter X as a placeholder for a number that needs to be determined. Some obj... *(1 tests, subrules b)*
 - [ ] **107.4** The mana symbols are {W}, {U}, {B}, {R}, {G}, and {C}; the numerical symbols {0}, {1}, {2}, {3}, ...
 - [x] **107.5** The tap symbol is {T}. The tap symbol in an activation cost means “Tap this permanent.” A permane... *(2 tests)*
 - [ ] **107.6** The untap symbol is {Q}. The untap symbol in an activation cost means “Untap this permanent.” A p...
@@ -288,7 +288,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **118.6** Some objects have no mana cost. This represents an unpayable cost. An ability can also have an un... *(1 tests)*
 - [x] **118.7** What a player actually needs to do to pay a cost may be changed or reduced by effects. If the man... *(1 tests)*
 - [x] **118.8** Some spells and abilities have additional costs. An additional cost is a cost listed in a spell’s... *(1 tests)*
-- [ ] **118.9** Some spells have alternative costs. An alternative cost is a cost listed in a spell’s text, or ap...
+- [x] **118.9** Some spells have alternative costs. An alternative cost is a cost listed in a spell’s text, or ap... *(1 tests)*
 - [ ] **118.10** Each payment of a cost applies to only one spell, ability, or effect. For example, a player can’t...
 - [ ] **118.11** The actions performed when paying a cost may be modified by effects. Even if they are, meaning th...
 - [ ] **118.12** Some spells, activated abilities, and triggered abilities read, “[Do something]. If [a player] [d...
@@ -435,8 +435,8 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 305. Lands
 
-- [ ] **305.1** A player who has priority may play a land card from their hand during a main phase of their turn ...
-- [x] **305.2** A player can normally play one land during their turn; however, continuous effects may increase t... *(14 tests, subrules ab)*
+- [x] **305.1** A player who has priority may play a land card from their hand during a main phase of their turn ... *(2 tests)*
+- [x] **305.2** A player can normally play one land during their turn; however, continuous effects may increase t... *(16 tests, subrules ab)*
 - [ ] **305.3** A player can’t play a land, for any reason, if it isn’t their turn. Ignore any part of an effect ...
 - [ ] **305.4** Effects may also allow players to “put” lands onto the battlefield. This isn’t the same as “playi...
 - [ ] **305.5** Land subtypes are always a single word and are listed after a long dash. Land subtypes are also c...
@@ -473,7 +473,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **400.4** Cards with certain card types can’t enter certain zones.
 - [x] **400.5** The order of objects in a library, in a graveyard, or on the stack can’t be changed except when e... *(1 tests)*
 - [ ] **400.6** If an object would move from one zone to another, determine what event is moving the object. If t...
-- [x] **400.7** An object that moves from one zone to another becomes a new object with no memory of, or relation... *(2 tests)*
+- [x] **400.7** An object that moves from one zone to another becomes a new object with no memory of, or relation... *(3 tests)*
 - [ ] **400.8** If an object in the exile zone is exiled, it doesn’t change zones, but it becomes a new object th...
 - [ ] **400.9** If a face-up object in the command zone is turned face down, it becomes a new object.
 - [ ] **400.10** If an object in the command zone is put into the command zone, it doesn’t change zones, but it be...
@@ -640,14 +640,14 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 514. Cleanup Step
 
 - [x] **514.1** First, if the active player’s hand contains more cards than their maximum hand size (normally sev... *(6 tests)*
-- [x] **514.2** Second, the following actions happen simultaneously: all damage marked on permanents (including p... *(2 tests)*
+- [x] **514.2** Second, the following actions happen simultaneously: all damage marked on permanents (including p... *(3 tests)*
 - [x] **514.3** Normally, no player receives priority during the cleanup step, so no spells can be cast and no ab... *(1 tests)*
 
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
 - [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(45 tests, subrules abcdefghi)*
-- [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(3 tests)*
+- [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(6 tests)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
 - [ ] **601.6** Some spells specify that one of their controller’s opponents does something the controller would ...
@@ -713,7 +713,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 608. Resolving Spells and Abilities
 
 - [x] **608.1** Each time all players pass in succession, the spell or ability on top of the stack resolves. (See... *(1 tests)*
-- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(11 tests, subrules bcn)*
+- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(12 tests, subrules bcn)*
 - [x] **608.3** If the object that’s resolving is a permanent spell, its resolution may involve several steps. Th... *(3 tests, subrules ab)*
 
 ### 609. Effects
@@ -737,7 +737,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 611. Continuous Effects
 
 - [ ] **611.1** A continuous effect modifies characteristics of objects, modifies control of objects, or affects ...
-- [x] **611.2** A continuous effect may be generated by the resolution of a spell or ability. *(10 tests, subrules abc)*
+- [x] **611.2** A continuous effect may be generated by the resolution of a spell or ability. *(11 tests, subrules abc)*
 - [x] **611.3** A continuous effect may be generated by the static ability of an object. *(35 tests, subrules abc)*
 
 ### 612. Text-Changing Effects
@@ -769,7 +769,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 614. Replacement Effects
 
-- [x] **614.1** Some continuous effects are replacement effects. Like prevention effects (see rule 615), replacem... *(23 tests, subrules abcd)*
+- [x] **614.1** Some continuous effects are replacement effects. Like prevention effects (see rule 615), replacem... *(25 tests, subrules abcd)*
 - [ ] **614.2** Some replacement effects apply to damage from a source. See rule 609.7.
 - [ ] **614.3** There are no special restrictions on casting a spell or activating an ability that generates a re...
 - [x] **614.4** Replacement effects must exist before the appropriate event occurs—they can’t “go back in time” a... *(2 tests)*

@@ -64,12 +64,15 @@ from .board import (
 from .cards import (
     AddMana,
     AddManaForTappedLand,
+    CastPermission,
     Discard,
     Draw,
+    ExileTopOfLibrary,
     LookAtHand,
     Mill,
     RevealTopToHandOrBottom,
     Scry,
+    SearchAndExile,
     SearchLibrary,
     Shuffle,
 )
@@ -101,7 +104,8 @@ Effect = Union[
     PutOnLibraryTop, PutOntoBattlefield, RevealTopToHandOrBottom, CreateEmblem,
     PhaseOut,
     AddManaForTappedLand, PreventDamage,
-    SearchLibrary, Shuffle, ExtraTurn, WinGame, LoseGame, DrawGame, BecomeColor,
+    SearchLibrary, SearchAndExile, ExileTopOfLibrary, CastPermission,
+    Shuffle, ExtraTurn, WinGame, LoseGame, DrawGame, BecomeColor,
     SacrificeUnlessPay, DamageUnlessPay, LookAtHand, CantBe, CombatRestriction,
     ChangeText, GainControl, RawEffect,
 ]

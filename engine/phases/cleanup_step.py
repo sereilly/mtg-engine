@@ -8,6 +8,7 @@ P/T buffs, damage prevention pools, and the EOT metadata flags. Creatures exiled
 "until end of turn" return here (CR 610.3). No player normally receives priority.
 """
 
+from ..cast_permissions import expire_end_of_turn as expire_end_of_turn_permissions
 from ..models import Permanent
 from ..keywords import clear_until_eot_keywords
 from ..mixins._constants import _EOT_METADATA_KEYS
@@ -65,6 +66,10 @@ class CleanupStepMixin:
             entry for entry in self.delayed_triggers
             if entry.get("duration") != "end_of_turn"
         ]
+        # CR 611.2a: "until end of turn" / "this turn" cast-or-play permissions
+        # end with the turn; an undurationed grant (Chandra, Flame's Catalyst's
+        # −2) survives the sweep and dies with its card's zone instead.
+        expire_end_of_turn_permissions(self)
         # "Until the end of your next turn, they can't phase in." (Teferi,
         # Timeless Voyager.) The block counts the *caster's* turn ends; this
         # cleanup ends the active player's turn, so their countdowns tick.

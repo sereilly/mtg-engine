@@ -378,3 +378,149 @@ def _lower_search_library(node: ast.SearchLibrary) -> tuple[OracleInstruction, .
     if to_battlefield:
         payload["destination"] = "battlefield"
     return (OracleInstruction("search_library", "", payload),)
+
+
+def _lower_exile_top_of_library(node: ast.ExileTopOfLibrary) -> tuple[OracleInstruction, ...]:
+    """"Exile the top three cards of your library." (Chandra, Heart of Fire's
+    +1.) The handler records what it exiled under ``exiled_cards``, which is
+    what makes a following "you may play cards exiled this way" lowerable —
+    see ``_lower_cast_permission``'s producer check."""
+    amount = _amount_payload(node.count)
+    if not isinstance(amount, int) or amount <= 0:
+        raise LoweringError(
+            "the top-of-library exile handler takes a fixed count", node=node
+        )
+    return (OracleInstruction("exile_top_of_library", "", {"amount": amount}),)
+
+
+# Restrictions the exile-search picker tests (engine/search_filters.py's
+# vocabulary is not reused because this picker admits a *union* of card types,
+# which the single-tutor flow deliberately refuses).
+_SEARCH_EXILE_HONOURED = frozenset({"card_types", "colors", "is_card", "type_match"})
+
+
+def _lower_search_and_exile(node: ast.SearchAndExile) -> tuple[OracleInstruction, ...]:
+    """"Search your graveyard and library for any number of red instant and/or
+    sorcery cards, exile them, then shuffle." (Chandra, Heart of Fire's −9.)
+
+    Arms the multi-select search choice; the picks are validated against the
+    same payload by the resolver, the AI default and the web renderer, so
+    every seat answers the same search. A restriction the picker cannot test
+    refuses rather than being dropped.
+    """
+    filt = node.filter
+    if not filt.is_card:
+        raise LoweringError("a search finds cards, not permanents", node=node)
+    leftover = _restrictions_beyond(filt, _SEARCH_EXILE_HONOURED)
+    if leftover:
+        raise LoweringError(
+            "the exile-search picker cannot test this restriction: "
+            + ", ".join(leftover),
+            node=node,
+        )
+    payload: dict[str, object] = {
+        "zones": ("graveyard", "library"),
+        "card_types": tuple(filt.card_types),
+        "colors": tuple(filt.colors),
+    }
+    return (OracleInstruction("search_and_exile_matching", "", payload),)
+
+
+def _lower_cast_permission(
+    node: ast.CastPermission, produced: frozenset[str]
+) -> tuple[OracleInstruction, ...]:
+    """A cast-or-play permission sentence (CR 601.3), one instruction kind for
+    all its printed forms — the differences are payload:
+
+    * ``exiled_this_way`` reads the cards a step of this same effect exiled,
+      so it demands the producer exactly as "that much" life does — a
+      permission with nothing to permit is the sentence read wrong;
+    * ``target_card`` carries the chosen graveyard card and the "exile it
+      instead" rider, and deliberately no duration (CR 611.2a);
+    * ``spells_from_hand`` is a cost waiver and must carry one, or it would
+      state the rules default.
+    """
+    if node.what == "exiled_this_way":
+        if "exiled_cards" not in produced:
+            raise LoweringError(
+                "back-reference to 'cards exiled this way' with no exile "
+                "in this effect",
+                node=node,
+            )
+        if not node.until_end_of_turn:
+            raise LoweringError(
+                "an exiled-cards permission without its printed duration "
+                "would outlive the card that granted it",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "grant_cast_permission", "",
+                {
+                    "zone": "exile",
+                    "mode": node.mode,
+                    "cards_from": "exiled_cards",
+                    "duration": "end_of_turn",
+                },
+            ),
+        )
+
+    if node.what == "target_card":
+        spec = node.target
+        filt = spec.filter if spec is not None else None
+        if node.mode != "cast" or filt is None:
+            raise LoweringError("a targeted permission casts a chosen card", node=node)
+        if filt.zone != "graveyard" or filt.zone_owner is None or filt.zone_owner.kind != "you":
+            raise LoweringError(
+                "the graveyard cast permission reads the caster's own "
+                f"graveyard, not the {filt.zone}",
+                node=node,
+            )
+        leftover = _restrictions_beyond(
+            filt, _SEARCH_EXILE_HONOURED | {"zone", "zone_owner"}
+        )
+        if leftover:
+            raise LoweringError(
+                "the graveyard cast picker cannot test this restriction: "
+                + ", ".join(leftover),
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "grant_cast_permission", "",
+                {
+                    "zone": "graveyard",
+                    "mode": "cast",
+                    "target_graveyard_card": True,
+                    "card_types": tuple(filt.card_types),
+                    "colors": tuple(filt.colors),
+                    "exile_instead": node.exile_instead,
+                    "duration": "end_of_turn" if node.until_end_of_turn else None,
+                },
+            ),
+        )
+
+    if node.what == "spells_from_hand":
+        if not node.free:
+            raise LoweringError(
+                "a hand permission without a cost waiver states the rules "
+                "default",
+                node=node,
+            )
+        if not node.until_end_of_turn:
+            raise LoweringError(
+                "an unbounded cost waiver is a different card", node=node
+            )
+        return (
+            OracleInstruction(
+                "grant_cast_permission", "",
+                {
+                    "zone": "hand",
+                    "mode": "cast",
+                    "free": True,
+                    "duration": "end_of_turn",
+                },
+            ),
+        )
+
+    raise LoweringError(f"no cast-permission lowering for {node.what!r}", node=node)

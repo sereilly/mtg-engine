@@ -368,12 +368,30 @@ def _set_base_pt_spec(payload: dict) -> dict:
     return {"kind": "creature", **_narrowing_flags(payload)}
 
 
+def _cast_permission_spec(payload: dict) -> dict | None:
+    """A cast-permission grant targets only in its graveyard form ("You may
+    cast target red instant or sorcery card from your graveyard", Chandra,
+    Flame's Catalyst's −2); the exiled-cards and cost-waiver forms choose
+    nothing as they go on the stack."""
+    if not payload.get("target_graveyard_card"):
+        return None
+    spec: dict = {"kind": "graveyard_creature", "own_graveyard_only": True}
+    card_types = tuple(payload.get("card_types") or ())
+    if card_types:
+        spec["card_types"] = list(card_types)
+    colors = tuple(payload.get("colors") or ())
+    if colors:
+        spec["graveyard_color_filter"] = colors[0]
+    return spec
+
+
 # One kind, several specs, decided by payload.
 _KIND_TO_SPEC_FROM_PAYLOAD = {
     "counter_top_stack_spell": _counter_spec,
     "return_creature_from_graveyard_to_hand": _graveyard_return_spec,
     "grant_prevention_shield": _prevention_shield_spec,
     "set_base_pt_target_until_eot": _set_base_pt_spec,
+    "grant_cast_permission": _cast_permission_spec,
 }
 
 

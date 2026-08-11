@@ -847,22 +847,140 @@ def test_planeswalker_round_cards_compile_supported(set_pool, name):
 @pytest.mark.parametrize(
     "name",
     [
-        # Both need the cast/play-from-exile-or-graveyard permission seam,
-        # which does not exist yet; the compiler names the exact clause.
+        # Formerly the two walkers held honest by
+        # test_chandras_report_the_unbuilt_permission_seam: both needed the
+        # cast/play-from-exile-or-graveyard permission seam, which now exists
+        # (engine/cast_permissions.py).
         "Chandra, Heart of Fire",
         "Chandra, Flame's Catalyst",
     ],
 )
-def test_chandras_report_the_unbuilt_permission_seam(set_pool, name):
+def test_chandras_compile_through_the_permission_seam(set_pool, name):
     program = compile_card_oracle(set_pool("M21")[name])
-    assert not program.supported
-    assert "planeswalker ability not implemented" in program.reason
+    assert program.supported, program.reason
 
 
-def _walker_game(set_pool, name, loyalty=None, opp_battlefield=None, hand=None, library=None):
+def test_chandra_heart_of_fire_plus_one_permits_playing_the_exiled_cards(set_pool):
+    """+1: the hand goes, the top three go to exile, and exactly those three
+    are castable/playable from exile until end of turn."""
+    pool = set_pool("M21")
+    shock, pegasus = pool["Shock"], pool["Concordia Pegasus"]
+    game, walker = _walker_game(
+        set_pool, "Chandra, Heart of Fire",
+        hand=[pegasus], library=[shock, pegasus, pegasus, pegasus],
+    )
+    result = game.activate_permanent_ability(0, walker.card.name, ability_index=0)
+    assert result.supported, result.details
+    me = game.players[0]
+    assert me.hand == []
+    # The discarded Pegasus went to the graveyard, not exile; the top three
+    # library cards (Shock + two Pegasi) were exiled; the fourth stayed.
+    assert len(me.exile) == 3
+    assert [card.name for card in me.graveyard] == ["Concordia Pegasus"]
+    assert len(me.library) == 1
+    exiled_names = [card.name for card in me.exile]
+    assert exiled_names.count("Shock") == 1
+    # Shock was among the exiled three and is castable from exile at the
+    # opponent's face; the fourth library card stayed put and is not.
+    cast = game.cast_from_hand(0, "Shock", from_zone="exile", target_player_index=1)
+    assert cast.supported, cast.details
+    assert game.players[1].life == 18
+
+
+def test_chandra_heart_of_fire_permission_ends_at_cleanup(set_pool):
+    pool = set_pool("M21")
+    game, walker = _walker_game(
+        set_pool, "Chandra, Heart of Fire",
+        library=[pool["Shock"], pool["Shock"], pool["Shock"], pool["Shock"]],
+    )
+    assert game.activate_permanent_ability(0, walker.card.name, ability_index=0).supported
+    game.resolve_cleanup_step(0)
+    refused = game.cast_from_hand(0, "Shock", from_zone="exile", target_player_index=1)
+    assert not refused.supported
+    assert "601.3" in refused.details
+
+
+def test_chandra_heart_of_fire_ultimate_adds_no_mana_until_the_search_is_answered(set_pool):
+    """−9: the search suspends the rest of the resolution — "You may cast them
+    this turn." and "Add six {R}." run only once the picks are in (the Opt
+    lesson, CR 608.2n's cousin for loyalty abilities)."""
+    pool = set_pool("M21")
+    shock, pegasus = pool["Shock"], pool["Concordia Pegasus"]
+    game, walker = _walker_game(
+        set_pool, "Chandra, Heart of Fire", loyalty=9,
+        library=[pegasus, shock], graveyard=[shock],
+    )
+    result = game.activate_permanent_ability(0, walker.card.name, ability_index=2)
+    assert result.supported, result.details
+    me = game.players[0]
+    pending = game.pending_choices_of("search_exile_cards", 0)
+    assert pending, "the two-zone search should be waiting on its picks"
+    assert me.mana_pool.get("R", 0) == 0
+    # Take the Shock from each zone; the Pegasus is not red and not legal.
+    ok = game.confirm_search_exile(0, [
+        {"zone": "graveyard", "index": 0},
+        {"zone": "library", "index": 1},
+    ])
+    assert ok
+    assert me.mana_pool.get("R", 0) == 6
+    assert [card.name for card in me.exile].count("Shock") == 2
+    cast = game.cast_from_hand(0, "Shock", from_zone="exile", target_player_index=1)
+    assert cast.supported, cast.details
+    assert game.players[1].life == 18
+
+
+def test_chandra_flames_catalyst_minus_two_casts_it_then_exiles_it(set_pool):
+    """−2: the targeted graveyard card becomes castable, and the printed rider
+    routes it to exile instead of back to the graveyard when it leaves the
+    stack (CR 614.1a)."""
+    pool = set_pool("M21")
+    shock = pool["Shock"]
+    game, walker = _walker_game(
+        set_pool, "Chandra, Flame's Catalyst", graveyard=[shock],
+    )
+    result = game.activate_permanent_ability(
+        0, walker.card.name, ability_index=1,
+        target_player_index=0, target_permanent_index=0,
+    )
+    assert result.supported, result.details
+    cast = game.cast_from_hand(0, "Shock", from_zone="graveyard", target_player_index=1)
+    assert cast.supported, cast.details
+    assert game.players[1].life == 18
+    me = game.players[0]
+    assert [card.name for card in me.exile] == ["Shock"]
+    assert all(card.name != "Shock" for card in me.graveyard)
+
+
+def test_chandra_flames_catalyst_minus_eight_waives_mana_costs_until_end_of_turn(set_pool):
+    pool = set_pool("M21")
+    shock = pool["Shock"]
+    game, walker = _walker_game(
+        set_pool, "Chandra, Flame's Catalyst", loyalty=9,
+        hand=[pool["Concordia Pegasus"]], library=[shock] * 8,
+    )
+    game.enforce_mana_costs = True
+    result = game.activate_permanent_ability(0, walker.card.name, ability_index=2)
+    assert result.supported, result.details
+    me = game.players[0]
+    assert len(me.hand) == 7  # hand discarded, seven drawn
+    # An empty pool casts Shock anyway: the waiver covers it.
+    cast = game.cast_from_hand(0, "Shock", target_player_index=1)
+    assert cast.supported, cast.details
+    assert game.players[1].life == 18
+    # CR 514.2: the waiver ends at cleanup; the next Shock needs real mana.
+    game.resolve_cleanup_step(0)
+    refused = game.cast_from_hand(0, "Shock", target_player_index=1)
+    assert not refused.supported
+    assert "insufficient mana" in refused.details
+
+
+def _walker_game(set_pool, name, loyalty=None, opp_battlefield=None, hand=None, library=None, graveyard=None):
     card = set_pool("M21")[name]
     walker = Permanent(card=card, metadata={"loyalty_counters": int(loyalty or card.loyalty)})
-    p1 = PlayerState(name="P1", battlefield=[walker], hand=list(hand or []), library=list(library or []))
+    p1 = PlayerState(
+        name="P1", battlefield=[walker], hand=list(hand or []),
+        library=list(library or []), graveyard=list(graveyard or []),
+    )
     p2 = PlayerState(name="P2", battlefield=list(opp_battlefield or []))
     return Game(players=[p1, p2]), walker
 

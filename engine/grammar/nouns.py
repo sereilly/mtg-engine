@@ -313,7 +313,14 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
             while True:
                 probe = stream.mark()
                 separated = stream.accept_punct(",")
-                separated = stream.accept_word("or", "and") or separated
+                if stream.accept_word("and"):
+                    # "and/or" lexes as two words; as a union separator the
+                    # two readings coincide ("instant and/or sorcery cards",
+                    # Chandra, Heart of Fire's −9), so the "or" is absorbed.
+                    stream.accept_word("or")
+                    separated = True
+                elif stream.accept_word("or"):
+                    separated = True
                 following = stream.peek_word()
                 if following is not None and _singular(following) in CARD_TYPES:
                     card_types.append(_singular(following))

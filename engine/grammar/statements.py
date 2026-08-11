@@ -22,6 +22,7 @@ from .effects import (
     _parse_add_mana,
     _parse_become_color,
     _parse_cant_attack_or_block,
+    _parse_cast_permission,
     _parse_change_text,
     _parse_colour_source_prevention,
     _parse_counter,
@@ -30,6 +31,7 @@ from .effects import (
     _parse_destroy,
     _parse_discard,
     _parse_draw,
+    _parse_exile_top_of_library,
     _parse_enchant,
     _parse_extra_turn,
     _parse_gain_control,
@@ -123,6 +125,12 @@ def _parse_subject_verb(stream: TokenStream) -> ast.Statement:
             raise stream.error("expected something to regenerate")
         return ast.Regenerate(subject)
     if stream.at_word("exile"):
+        # "Exile the top three cards of your library" moves library cards, not
+        # a permanent — tried first because the recipient parser below refuses
+        # "the top" and would fail the sentence with a misleading reason.
+        from_library = _parse_exile_top_of_library(stream)
+        if from_library is not None:
+            return from_library
         stream.advance()
         subject = parse_recipient(stream)
         if subject is None:
@@ -242,6 +250,15 @@ def _parse_subject_verb(stream: TokenStream) -> ast.Statement:
 
 def parse_statement(stream: TokenStream) -> ast.Statement:
     """One sentence's worth of effect, including ``if``/``may`` wrappers."""
+    # "[Until end of turn,] you may play/cast <cards> [this turn] […]" — a
+    # cast-or-play permission (CR 601.3). Tried before the "you may" wrapper
+    # below: the permission IS the sentence's whole effect, where the wrapper
+    # reads "you may <action>" as an optional action performed now.
+    if stream.at_word("until", "you"):
+        permission = _parse_cast_permission(stream)
+        if permission is not None:
+            return permission
+
     # "if <condition>, <statement>"
     if stream.at_word("if"):
         mark = stream.mark()

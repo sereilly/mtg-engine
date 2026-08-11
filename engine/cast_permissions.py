@@ -1,0 +1,156 @@
+"""Permission to cast or play cards from somewhere other than the hand.
+
+CR 601.3: a player can begin to cast a spell only if a rule or effect allows
+it. The rule that allows the ordinary case is CR 601.3's reading of the hand;
+everything else — "you may play cards exiled this way", "you may cast target
+red instant or sorcery card from your graveyard", "you may cast spells from
+your hand without paying their mana costs" — is an *effect*, and this module
+is where such effects live. One :class:`CastPermission` per effect, on
+``Game.cast_permissions``; the cast path asks :func:`permission_for` before it
+will look outside the hand, and :func:`consume` retires a one-card grant as it
+is used.
+
+Two duration models, both CR 611.2a:
+
+* a stated duration ("until end of turn", "this turn") ends at cleanup —
+  :func:`expire_end_of_turn` is called from the cleanup step (CR 514.2);
+* no stated duration lasts until end of game, bounded in practice by the card
+  staying the object it was (CR 400.7): a grant names its cards by identity,
+  and :func:`permission_for` only matches a card still in the granted zone, so
+  the permission dies with the card's departure and never resurrects a
+  look-alike that arrives later.
+
+The ``free`` flag is CR 118.9's "without paying its mana cost": the cast path
+skips the mana payment and, when the spell has {X} in its cost, the only legal
+choice for X is 0 (CR 107.3b). ``exile_instead`` is the printed rider "If that
+spell would be put into your graveyard, exile it instead" — stamped onto the
+:class:`~engine.game_types.StackItem` at cast time so every place a spell's
+card leaves the stack routes it without knowing which effect asked.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .models import CardDefinition
+
+
+# Zones a permission may open. "hand" appears because a cost waiver ("without
+# paying their mana costs") is the same seam with the ordinary zone.
+PERMISSION_ZONES = ("hand", "graveyard", "exile")
+
+
+@dataclass
+class CastPermission:
+    """One effect's grant. ``cards`` is the identity list of what it covers —
+    None means every card the filter (if any) admits, which is how a blanket
+    "spells from your hand" waiver is written."""
+
+    player_index: int
+    zone: str  # one of PERMISSION_ZONES
+    # "play" covers lands and spells (CR 305.1 still charges the land drop);
+    # "cast" covers spells alone — a land is never cast.
+    mode: str = "cast"
+    cards: list["CardDefinition"] | None = None
+    # Restriction on what a card-less grant covers, tested by primary type:
+    # ("instant", "sorcery") for a spells-only waiver, () for anything.
+    card_types: tuple[str, ...] = ()
+    free: bool = False
+    exile_instead: bool = False
+    # "end_of_turn" is swept at cleanup; None lasts until end of game
+    # (CR 611.2a), bounded by the cards staying in the granted zone.
+    duration: str | None = "end_of_turn"
+    source_name: str = ""
+
+
+def grant_permission(game, **kwargs) -> CastPermission:
+    permission = CastPermission(**kwargs)
+    game.cast_permissions.append(permission)
+    return permission
+
+
+def _zone_cards(game, permission: CastPermission) -> list:
+    player = game.players[permission.player_index]
+    return getattr(player, permission.zone)
+
+
+def _covers(game, permission: CastPermission, card, zone: str, *, as_land: bool) -> bool:
+    if permission.zone != zone:
+        return False
+    if as_land and permission.mode != "play":
+        return False
+    if permission.card_types and card.primary_type not in permission.card_types:
+        return False
+    if permission.cards is not None:
+        # Identity, not name: the grant covers the copies it named, one use
+        # each. The card must also still be in the granted zone — a card that
+        # left is a new object (CR 400.7) and the permission does not follow it.
+        if not any(entry is card for entry in permission.cards):
+            return False
+        if not any(entry is card for entry in _zone_cards(game, permission)):
+            return False
+    return True
+
+
+def permission_for(
+    game, player_index: int, card, zone: str, *, as_land: bool = False
+) -> CastPermission | None:
+    """The first live grant letting *player_index* cast/play *card* from
+    *zone*, or None. ``zone == "hand"`` answers only cost-waiver grants — the
+    ordinary permission to cast from hand is a rule, not an effect, and the
+    caller must not gate it on this seam."""
+    for permission in game.cast_permissions:
+        if permission.player_index != player_index:
+            continue
+        if _covers(game, permission, card, zone, as_land=as_land):
+            return permission
+    return None
+
+
+def consume(game, permission: CastPermission, card) -> None:
+    """Retire one use of *permission* for *card*: a grant naming cards loses
+    one occurrence and disappears when empty; a blanket grant is unlimited."""
+    if permission.cards is None:
+        return
+    for i, entry in enumerate(permission.cards):
+        if entry is card:
+            del permission.cards[i]
+            break
+    if not permission.cards and permission in game.cast_permissions:
+        game.cast_permissions.remove(permission)
+
+
+def expire_end_of_turn(game) -> None:
+    """CR 514.2: "until end of turn" and "this turn" grants end at cleanup."""
+    game.cast_permissions[:] = [
+        permission
+        for permission in game.cast_permissions
+        if permission.duration != "end_of_turn"
+    ]
+
+
+def playable_from_zones(game, player_index: int) -> list[dict]:
+    """What the seat may currently cast or play from a non-hand zone, one
+    entry per (zone, index) so the web layer can badge and offer those cards.
+    A hand-zone waiver is deliberately absent: those cards are already offered
+    by the ordinary hand UI, which asks :func:`permission_for` about cost."""
+    entries: list[dict] = []
+    player = game.players[player_index]
+    for zone in ("graveyard", "exile"):
+        for index, card in enumerate(getattr(player, zone)):
+            as_land = card.primary_type == "land"
+            permission = permission_for(
+                game, player_index, card, zone, as_land=as_land
+            )
+            if permission is None:
+                continue
+            entries.append({
+                "zone": zone,
+                "index": index,
+                "name": card.name,
+                "free": permission.free,
+                "source": permission.source_name,
+            })
+    return entries

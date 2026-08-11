@@ -15,7 +15,7 @@ import dataclasses
 from .. import ast
 from ..amounts import parse_amount
 from ..lexer import (MANA, render)
-from ..nouns import (parse_object_filter, parse_player_ref)
+from ..nouns import (parse_object_filter, parse_player_ref, parse_target_spec)
 from ..stream import TokenStream
 from ..phrases import _parse_zone
 
@@ -91,8 +91,20 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
     if pips:
         return ast.AddMana(tuple(sorted(pips.items())), source_text=_clause())
 
-    # "Add one mana of any color" / "Add three mana of any one color".
     count = parse_amount(stream)
+    # "Add six {R}." (Chandra, Heart of Fire's −9) — a counted single symbol,
+    # the same pips as "{R}{R}{R}{R}{R}{R}" spelled with a number word.
+    if stream.at_kind(MANA):
+        token = stream.next()
+        symbol = token.text.strip("{}")
+        if symbol.isdigit() or symbol in ("T", "Q", "X"):
+            raise stream.error(f"unsupported mana symbol {token.text!r}")
+        amount = count.value if isinstance(count, ast.Fixed) else 0
+        if amount <= 0:
+            raise stream.error("expected a fixed number of mana symbols")
+        return ast.AddMana(((symbol, amount),), source_text=_clause())
+
+    # "Add one mana of any color" / "Add three mana of any one color".
     stream.expect_word("mana")
     stream.expect_word("of")
     stream.accept_word("any")
@@ -271,6 +283,25 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
     stream.expect_word("search")
     if not stream.accept_word("your"):
         raise stream.error("only searching your own library has a search flow")
+    # "Search your graveyard and library for any number of <filter> cards,
+    # exile them, then shuffle." (Chandra, Heart of Fire's −9.) A different
+    # effect, not a wording of the tutor below: any number rather than one,
+    # exile rather than the hand, and both zones always. Branching on the
+    # first zone word keeps the two shapes from claiming each other.
+    if stream.accept_word("graveyard"):
+        stream.expect_word("and")
+        stream.expect_word("library")
+        stream.expect_word("for")
+        if not stream.accept_phrase("any", "number", "of"):
+            raise stream.error("a two-zone search finds any number of cards")
+        filt = parse_object_filter(stream)
+        stream.accept_punct(",")
+        if not stream.accept_phrase("exile", "them"):
+            raise stream.error("expected 'exile them' after the searched cards")
+        stream.accept_punct(",")
+        stream.accept_word("then")
+        stream.expect_word("shuffle")
+        return ast.SearchAndExile(filt)
     stream.expect_word("library")
     # "and/or graveyard" — a second zone, read here so lowering can arm the
     # search over both. The lexer splits "and/or" into two words.
@@ -326,3 +357,94 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
         stream.accept_word("then")
         stream.expect_word("shuffle")
     return ast.SearchLibrary(ast.PlayerRef("you"), filt, destination, graveyard)
+
+
+def _parse_exile_top_of_library(stream: TokenStream) -> ast.Statement | None:
+    """``Exile the top three cards of your library.`` (Chandra, Heart of
+    Fire's +1.) Returns None rather than raising when the sentence is an
+    ordinary exile, so the permanent-exile production keeps its own errors.
+
+    Every word of "of your library" is expected: "the top three cards of
+    target player's library" would be someone else's cards and a different
+    effect, and a production that stopped reading at the count could not tell
+    them apart.
+    """
+    mark = stream.mark()
+    stream.expect_word("exile")
+    if not stream.accept_phrase("the", "top"):
+        stream.reset(mark)
+        return None
+    if stream.accept_word("card"):
+        count: ast.Amount = ast.Fixed(1)
+    else:
+        count = parse_amount(stream)
+        stream.expect_word("cards")
+    for word in ("of", "your", "library"):
+        stream.expect_word(word)
+    return ast.ExileTopOfLibrary(count)
+
+
+def _parse_cast_permission(stream: TokenStream) -> ast.Statement | None:
+    """A sentence granting permission to cast or play from a zone the rules
+    alone would not allow (CR 601.3) — see :class:`ast.CastPermission` for the
+    printed forms. Returns None quietly on anything else, so "you may pay …"
+    and the causative "you may have …" keep their own readings.
+
+    The duration is read in both printed positions — a leading "Until end of
+    turn," and a trailing "this turn" — because the two spellings scope the
+    permission identically (CR 514.2 ends both at cleanup).
+    """
+    mark = stream.mark()
+    until_eot = False
+    if stream.at_word("until"):
+        if not stream.accept_phrase("until", "end", "of", "turn"):
+            return None
+        stream.accept_punct(",")
+        until_eot = True
+    if not stream.accept_phrase("you", "may"):
+        stream.reset(mark)
+        return None
+    if stream.accept_word("play"):
+        mode = "play"
+    elif stream.accept_word("cast"):
+        mode = "cast"
+    else:
+        stream.reset(mark)
+        return None
+
+    def _trailing_duration() -> bool:
+        nonlocal until_eot
+        if stream.accept_phrase("this", "turn"):
+            until_eot = True
+        return True
+
+    # "cards exiled this way" / "them" — both name the cards a step of this
+    # same resolution exiled; lowering demands the producer.
+    if stream.accept_phrase("cards", "exiled", "this", "way") or stream.accept_word("them"):
+        _trailing_duration()
+        return ast.CastPermission(
+            mode=mode, what="exiled_this_way", until_end_of_turn=until_eot
+        )
+    # "spells from your hand without paying their mana costs" — a cost waiver.
+    # The waiver clause is required: a bare "you may cast spells from your
+    # hand" states the rules default and no card prints it.
+    if stream.accept_phrase("spells", "from", "your", "hand"):
+        if not stream.accept_phrase("without", "paying", "their", "mana", "costs"):
+            stream.reset(mark)
+            return None
+        _trailing_duration()
+        return ast.CastPermission(
+            mode=mode, what="spells_from_hand",
+            until_end_of_turn=until_eot, free=True,
+        )
+    # "target red instant or sorcery card from your graveyard" — the noun
+    # parser reads the zone and its owner onto the filter, and lowering
+    # refuses any zone the cast path cannot open.
+    spec = parse_target_spec(stream)
+    if spec is not None and spec.quantifier == "target":
+        _trailing_duration()
+        return ast.CastPermission(
+            mode=mode, what="target_card", target=spec, until_end_of_turn=until_eot
+        )
+    stream.reset(mark)
+    return None

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import re
 
+from ...cast_permissions import consume as consume_permission, permission_for
 from ...cast_restrictions import check_cast_timing
 from ...classifier import classify_card
 from ...cost_modifiers import spell_cost_tax
@@ -76,6 +77,8 @@ class SpellCastingMixin:
         mode_index: int | None = None,
         old_color: str | None = None,
         divided_targets: list[tuple[int, int | None]] | None = None,
+        from_zone: str = "hand",
+        use_free_permission: bool | None = None,
     ) -> SimulationResult:
         queued = self.queue_from_hand(
             caster_index,
@@ -88,6 +91,8 @@ class SpellCastingMixin:
             mode_index=mode_index,
             old_color=old_color,
             divided_targets=divided_targets,
+            from_zone=from_zone,
+            use_free_permission=use_free_permission,
         )
         if not queued.supported:
             return queued
@@ -109,14 +114,52 @@ class SpellCastingMixin:
         mode_index: int | None = None,
         old_color: str | None = None,
         divided_targets: list[tuple[int, int | None]] | None = None,
+        from_zone: str = "hand",
+        use_free_permission: bool | None = None,
     ) -> SimulationResult:
         caster = self.players[caster_index]
-        try:
-            hand_index = next(i for i, card in enumerate(caster.hand) if card.name == card_name)
-        except StopIteration as exc:
-            raise ValueError(f"Card not in hand: {card_name}") from exc
+        # Casting from the hand is a rule; casting from anywhere else is an
+        # effect (CR 601.3), asked of the permission seam. The lookup prefers a
+        # covered occurrence so a duplicate without permission cannot shadow
+        # the copy that has it.
+        permission = None
+        if from_zone == "hand":
+            source_zone = caster.hand
+            try:
+                hand_index = next(i for i, card in enumerate(caster.hand) if card.name == card_name)
+            except StopIteration as exc:
+                raise ValueError(f"Card not in hand: {card_name}") from exc
+        else:
+            if from_zone not in ("graveyard", "exile"):
+                raise ValueError(f"cannot cast from {from_zone!r}")
+            source_zone = getattr(caster, from_zone)
+            hand_index = None
+            for i, candidate in enumerate(source_zone):
+                if candidate.name != card_name:
+                    continue
+                if hand_index is None:
+                    hand_index = i
+                grant = permission_for(
+                    self, caster_index, candidate, from_zone,
+                    as_land=candidate.primary_type == "land",
+                )
+                if grant is not None:
+                    hand_index, permission = i, grant
+                    break
+            if hand_index is None:
+                raise ValueError(f"Card not in {from_zone}: {card_name}")
+            if permission is None:
+                details = (
+                    f"no effect allows playing {card_name} from "
+                    f"{caster.name}'s {from_zone} (CR 601.3)"
+                )
+                self.log.append(details)
+                return SimulationResult(
+                    card_name, False,
+                    classify_card(source_zone[hand_index]).effect_kind, details,
+                )
 
-        card = caster.hand[hand_index]
+        card = source_zone[hand_index]
         classification = classify_card(card)
         extra_generic_tax = 0
 
@@ -207,9 +250,33 @@ class SpellCastingMixin:
         if resolved_x_value is None and "{X}" in card.mana_cost.upper():
             resolved_x_value = self._infer_x_value(caster, card.mana_cost, extra_generic_tax, x_color=x_color)
 
-        if self.enforce_mana_costs and card.primary_type != "land":
+        # A cost waiver ("cast spells from your hand without paying their mana
+        # costs", Chandra, Flame's Catalyst's −8). An X spell defaults to
+        # *paying*, because a waived {X} is locked to 0 (CR 107.3b) and paying
+        # for X=5 usually beats a free X=0 — an explicit request wins either way.
+        free_grant = permission if (permission is not None and permission.free) else None
+        if (
+            free_grant is None
+            and card.primary_type != "land"
+            and use_free_permission is not False
+            and (use_free_permission or "{X}" not in card.mana_cost.upper())
+        ):
+            waiver = permission_for(self, caster_index, card, "hand")
+            if waiver is not None and from_zone == "hand":
+                free_grant = waiver
+                if permission is None:
+                    permission = waiver
+        if free_grant is not None and card.primary_type != "land":
+            if "{X}" in card.mana_cost.upper():
+                resolved_x_value = 0  # CR 107.3b: the only legal choice for X
+            self.log.append(
+                f"{card.name} cast without paying its mana cost"
+                + (f" ({free_grant.source_name})" if free_grant.source_name else "")
+            )
+        elif self.enforce_mana_costs and card.primary_type != "land":
             # CR 118.6: an object with no mana cost (as opposed to {0}) has an
-            # unpayable cost — attempting to cast it is illegal.
+            # unpayable cost — attempting to cast it is illegal. (118.6a: a
+            # waiver above is an alternative cost and may still be paid.)
             if not card.mana_cost.strip():
                 details = f"{card.name} has no mana cost; the cost is unpayable (CR 118.6)"
                 self.log.append(details)
@@ -226,7 +293,11 @@ class SpellCastingMixin:
                 self.log.append(details)
                 return SimulationResult(card.name, False, classification.effect_kind, details)
 
-        card = caster.hand.pop(hand_index)
+        card = source_zone.pop(hand_index)
+        if permission is not None:
+            consume_permission(self, permission, card)
+        if from_zone != "hand":
+            self.log.append(f"{card.name} cast from {caster.name}'s {from_zone}")
 
         if card.primary_type != "land":
             # Determine which stack spell this one targets. An explicit choice
@@ -250,6 +321,10 @@ class SpellCastingMixin:
                     x_value=resolved_x_value,
                     target_stack_item=target_stack_item_val,
                     chosen_mode_index=mode_index,
+                    cast_from_zone=from_zone,
+                    exile_instead_of_graveyard=bool(
+                        permission is not None and permission.exile_instead
+                    ),
                     choices={
                         "divided_targets": divided_targets,
                         "new_color": new_color,

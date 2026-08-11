@@ -946,3 +946,131 @@ def each_player_discards_a_card(game: Game, instruction: OracleInstruction, cont
             game.log.append(f"{player.name} discarded {card.name}")
     context.results["players_who_could_not_discard"] = could_not
     return True, "resolved"
+
+
+@effect_handler("exile_top_of_library")
+def exile_top_of_library(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Exile the top three cards of your library." (Chandra, Heart of Fire's
+    +1.) The exiled cards are recorded under ``exiled_cards`` for the same
+    resolution's "you may play cards exiled this way" to read — the exile is
+    what makes that sentence mean anything."""
+    caster = context.caster
+    amount = int(instruction.payload.get("amount", 0))
+    exiled = []
+    for _ in range(min(amount, len(caster.library))):
+        card = caster.library.pop(0)
+        caster.exile.append(card)
+        exiled.append(card)
+    context.results["exiled_cards"] = exiled
+    if exiled:
+        game.log.append(
+            f"{caster.name} exiled {', '.join(card.name for card in exiled)} "
+            "from the top of their library"
+        )
+    else:
+        game.log.append(f"{caster.name} has no cards left to exile")
+    return True, "resolved"
+
+
+@effect_handler("search_and_exile_matching")
+def search_and_exile_matching(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Search your graveyard and library for any number of red instant and/or
+    sorcery cards, exile them, then shuffle." (Chandra, Heart of Fire's −9.)
+
+    Armed as a suspending choice: the picks decide what the *next* step of the
+    same resolution ("You may cast them this turn.") has to permit, so the
+    steps behind this one wait for the answer — the Opt lesson, applied here
+    by registration rather than by hoping.
+    """
+    caster = context.caster
+    caster_index = game.players.index(caster)
+    game.arm_pending_choice(
+        "search_exile_cards", caster_index,
+        zones=tuple(instruction.payload.get("zones") or ("graveyard", "library")),
+        card_types=tuple(instruction.payload.get("card_types") or ()),
+        colors=tuple(instruction.payload.get("colors") or ()),
+        _context=context,
+    )
+    game.log.append(f"{caster.name} is searching their graveyard and library")
+    return True, "pending_search_exile"
+
+
+@effect_handler("grant_cast_permission")
+def grant_cast_permission(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """A cast-or-play permission (CR 601.3) over cards in a named zone —
+    engine/cast_permissions.py holds the state, the cast path asks it, and
+    cleanup expires the turn-scoped grants. Three payload forms, matching the
+    printed sentences the lowering admits."""
+    from ..cast_permissions import grant_permission
+
+    caster = context.caster
+    caster_index = game.players.index(caster)
+    payload = instruction.payload
+    duration = payload.get("duration")
+    source_name = context.card.name if context.card is not None else ""
+
+    if payload.get("cards_from") == "exiled_cards":
+        cards = list(context.results.get("exiled_cards") or [])
+        if not cards:
+            game.log.append(f"{source_name}: nothing was exiled, so there is nothing to permit")
+            return True, "resolved"
+        grant_permission(
+            game, player_index=caster_index, zone=payload.get("zone", "exile"),
+            mode=payload.get("mode", "cast"), cards=cards,
+            duration=duration, source_name=source_name,
+        )
+        game.log.append(
+            f"{caster.name} may {payload.get('mode', 'cast')} "
+            f"{', '.join(card.name for card in cards)} from exile this turn"
+        )
+        return True, "resolved"
+
+    if payload.get("target_graveyard_card"):
+        # "target red instant or sorcery card from your graveyard" — always
+        # the caster's own graveyard; the chosen index is honoured when it
+        # names a legal card, else the first legal card stands in, the same
+        # fallback every other stale-choice path takes.
+        card_types = tuple(payload.get("card_types") or ())
+        colors = tuple(payload.get("colors") or ())
+
+        def _legal(card) -> bool:
+            if card_types and card.primary_type not in card_types:
+                return False
+            if colors and not any(color in card.colors for color in colors):
+                return False
+            return True
+
+        index = context.target_permanent_index
+        chosen = None
+        if isinstance(index, int) and 0 <= index < len(caster.graveyard):
+            candidate = caster.graveyard[index]
+            if _legal(candidate):
+                chosen = candidate
+        if chosen is None:
+            chosen = next((card for card in caster.graveyard if _legal(card)), None)
+        if chosen is None:
+            game.log.append(f"{source_name}: no legal card in {caster.name}'s graveyard")
+            return True, "resolved"
+        grant_permission(
+            game, player_index=caster_index, zone="graveyard", mode="cast",
+            cards=[chosen], duration=duration,
+            exile_instead=bool(payload.get("exile_instead")),
+            source_name=source_name,
+        )
+        game.log.append(f"{caster.name} may cast {chosen.name} from their graveyard")
+        return True, "resolved"
+
+    if payload.get("free"):
+        grant_permission(
+            game, player_index=caster_index, zone=payload.get("zone", "hand"),
+            mode=payload.get("mode", "cast"), cards=None, free=True,
+            duration=duration, source_name=source_name,
+        )
+        game.log.append(
+            f"{caster.name} may cast spells from their hand without paying "
+            "their mana costs this turn"
+        )
+        return True, "resolved"
+
+    game.log.append(f"{source_name}: unrecognized cast permission payload")
+    return True, "resolved"

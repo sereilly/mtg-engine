@@ -1,7 +1,7 @@
 ﻿# Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 147/285) to the full release line - **137 sets, 33,594
+M21 measured at 149/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal. Trimmed 2026-08-10 to the current M21
@@ -596,6 +596,78 @@ zones that does not exist yet, and
 `test_chandras_report_the_unbuilt_permission_seam` holds them honest until it
 does. It is the same missing field See the Truth is blocked on: the stack
 object does not know what zone its card was cast from.
+
+---
+
+## Round 19: the cast/play-from-exile/graveyard seam, and both Chandras through it
+
+*(2026-08-11, same day.)* M21 **147 → 149**: Chandra, Heart of Fire and
+Chandra, Flame's Catalyst — the two cards round 18 deliberately left refusing.
+The subsystem is `engine/cast_permissions.py`, and the shape is the shields
+model again: one `CastPermission` collection on `Game`, granted by an effect,
+asked by the cast path, swept by cleanup — never a per-card field, never a
+branch in a cast cascade.
+
+**The seam.** A grant names its seat, its zone (`graveyard`/`exile`, plus
+`hand` for cost waivers), its mode (`play` covers lands and spells, `cast`
+spells alone), the cards it covers *by identity*, and its duration. CR 611.2a
+settled the one design question worth having: Flame's Catalyst's −2 prints no
+duration, so the grant lasts — bounded by the card staying the object it was
+(CR 400.7), which the identity list gives for free: a card that left the
+graveyard no longer matches, and a look-alike arriving later never did. The
+turn-scoped grants die at cleanup beside the delayed triggers. Consumption is
+per occurrence, so a one-card grant on one of two identical copies permits
+exactly one cast — the same duplicate discipline the permanent-id round bought
+for the battlefield, applied to zone lists.
+
+**The stack object learned its zone.** `StackItem.cast_from_zone` — the field
+round 17 named as See the Truth's remaining blocker — plus
+`exile_instead_of_graveyard`, the printed rider stamped at cast time. Every
+place a spell's card leaves the stack (resolution's CR 608.2n move, both
+counter paths, Word of Command's deferred finish) now routes through one
+`_bin_spell_card`, because "if that spell **would be put into your graveyard**"
+is a replacement (CR 614.1a) and covers being countered — tested, not assumed.
+`queue_from_hand` grew `from_zone` rather than a sibling entry point, so taxes,
+timing gates, target validation and payment hold for a graveyard cast without a
+second copy of any of them. A land played from exile still charges the land
+drop (CR 305.1/305.2b); a free cast locks {X} at 0 (CR 107.3b) — which is why
+the waiver auto-applies only to X-less spells, paying for X=5 usually beating a
+free X=0.
+
+**Four new sentences in the grammar**, all in the cards family: "exile the top
+N cards of your library" (a producer — the exiled cards are recorded for the
+next sentence to read); "[until end of turn,] you may play/cast <cards>" in its
+four printed objects (`cards exiled this way`, `them`, `target … card from your
+graveyard`, `spells from your hand without paying their mana costs`); the
+two-zone any-number search ("search your graveyard and library for any number
+of red instant and/or sorcery cards, exile them, then shuffle" — a different
+effect from the one-card tutor, not a wording of it); and "Add six {R}", a
+counted single pip. The back-reference discipline from "that much" applies
+unchanged: a permission over "cards exiled this way" refuses to lower unless a
+step of the same effect produced `exiled_cards`. The rider sentence folds onto
+the permission node the way damage riders fold onto `DealDamage`. One nouns.py
+fix fell out: "and/or" now separates a card-type union.
+
+**The search is the sixth suspending prompt.** `search_exile_cards` — multi-
+select across two zones, validated pick-by-pick with nothing moved on a
+rejected answer, fail-to-find as an empty confirm (CR 701.23b). It suspends
+because "You may cast them this turn." and "Add six {R}." read what the picks
+decide; the API test pins that the mana arrives only after the answer. AI
+default: take everything that matches — "any number" of cards that come back
+castable leaves nothing on the table.
+
+**Web:** `castable_from_zones` in the state payload, `from_zone` on the cast
+action (riding `sendAction` the way the modal mode index already does, so
+every cast path — targeted, X, auto-tap retry — carries it), a green glow on
+castable zone cards, and the two-grid search modal. **Not driven in the
+browser:** M21 is measured, not shipped, so no deck can hold a Chandra and the
+Debug Menu can't inject one — the client work is exercised at the API layer
+(`tests/ui/test_cast_from_zone_ui_api.py`) and becomes browser-reachable the
+day the set ships.
+
+**Next:** unchanged from round 17 — Rewind's untargeted "choose up to N on
+resolution", the modal-mode sweep, then See the Truth, whose blocker
+(`cast_from_zone`) this round built in passing.
 
 ---
 

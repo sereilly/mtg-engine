@@ -237,6 +237,9 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
         "scry",             # arranges the library a later draw reads
         "search_library",   # removes a card from it and shuffles the rest
         "reorder_library",  # same, by permutation
+        # The picks are the cards the same resolution's next step ("You may
+        # cast them this turn.") grants permission over.
+        "search_exile_cards",
     }, suspending
 
 

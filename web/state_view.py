@@ -31,6 +31,7 @@ was missing.
 from __future__ import annotations
 
 from engine import Game
+from engine.cast_permissions import playable_from_zones
 from engine.classifier import classify_card
 from engine.models import PlayerState
 
@@ -411,5 +412,13 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "island_sanctuary_pending": session.island_sanctuary_pending and viewer_seat == session.current_turn,
         "time_vault": time_vault_info,
         "pregame": _build_pregame_info(session, viewer_seat),
+        # CR 601.3 permissions: what the viewer may currently cast or play from
+        # their graveyard or exile (engine/cast_permissions.py). Empty for a
+        # spectator — a permission belongs to a seat.
+        "castable_from_zones": (
+            playable_from_zones(session.game, viewer_seat)
+            if viewer_seat is not None
+            else []
+        ),
         **prompt_payloads,
     }

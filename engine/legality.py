@@ -548,8 +548,20 @@ class LegalityMixin:
         # an *artifact* creature — is a legal Reconstruction target (CR 205.2);
         # the reanimators ask `primary_type`, which is narrower.
         card_type = spec.get("card_type")
+        # "target red instant or sorcery card" (Chandra, Flame's Catalyst's
+        # −2): a *union* of primary types plus a colour, tested exactly as the
+        # grant handler tests its choice, so the picker offers what resolution
+        # will honour.
+        card_types = tuple(spec.get("card_types") or ())
+        color_filter = spec.get("graveyard_color_filter")
 
         def eligible(card) -> bool:
+            if card_types and card.primary_type not in card_types:
+                return False
+            if color_filter and color_filter not in card.colors:
+                return False
+            if card_types:
+                return True
             if any_card:
                 return True
             if card_type is not None:

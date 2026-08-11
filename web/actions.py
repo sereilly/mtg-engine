@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from fastapi import HTTPException
 
+from engine.cast_permissions import permission_for
 from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle
 from engine.targeting import usable_activated_abilities
@@ -217,6 +218,8 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
         mode_index=req.mode_index,
         old_color=req.old_color,
         divided_targets=divided,
+        from_zone=req.from_zone or "hand",
+        use_free_permission=req.use_free_permission,
     )
 
 
@@ -373,9 +376,31 @@ def do_action(session_id: str, req: GameActionRequest):
             raise HTTPException(status_code=400, detail="you do not currently have priority")
 
         caster = session.game.players[req.seat]
-        card = _find_card_in_hand(caster, req.card_name)
-        if card is None:
-            raise HTTPException(status_code=400, detail="card not in hand")
+        if req.from_zone in ("graveyard", "exile"):
+            # Casting from outside the hand needs a permission grant
+            # (engine/cast_permissions.py); the engine re-checks, this just
+            # turns "no" into a 400 with the reason instead of a queue refusal.
+            zone_cards = getattr(caster, req.from_zone)
+            card = next(
+                (
+                    entry for entry in zone_cards
+                    if entry.name == req.card_name
+                    and permission_for(
+                        session.game, req.seat, entry, req.from_zone,
+                        as_land=entry.primary_type == "land",
+                    ) is not None
+                ),
+                None,
+            )
+            if card is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"no effect allows playing that card from your {req.from_zone}",
+                )
+        else:
+            card = _find_card_in_hand(caster, req.card_name)
+            if card is None:
+                raise HTTPException(status_code=400, detail="card not in hand")
 
         # CR 702.8b: a card with flash casts any time an instant could be cast,
         # so the two sorcery-speed gates below ask instant-or-flash, not the
@@ -999,6 +1024,25 @@ def do_action(session_id: str, req: GameActionRequest):
         # Failing to find is legal (CR 701.19b) and is the only answer available
         # when nothing in the searched zones matches the restriction.
         session.game.decline_search_library(req.seat)
+
+    elif req.action == "search_exile_confirm":
+        pending = next(
+            (c for c in session.game.pending_choices_of("search_exile_cards")),
+            None,
+        )
+        if pending is None:
+            raise HTTPException(status_code=400, detail="no exile search pending")
+        if req.seat != pending.player_index:
+            raise HTTPException(status_code=400, detail="not your search")
+        picks = [
+            {"zone": pick.zone, "index": pick.index}
+            for pick in (req.search_picks or [])
+        ]
+        # An empty list is the fail-to-find (CR 701.23b): "any number" includes
+        # zero, so no separate decline action exists.
+        ok = session.game.confirm_search_exile(req.seat, picks)
+        if not ok:
+            raise HTTPException(status_code=400, detail="invalid search picks")
 
     elif req.action == "reorder_library_confirm":
         pending = session.game.pending_reorder_library

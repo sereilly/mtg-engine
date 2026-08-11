@@ -17,6 +17,21 @@ from ...oracle import OracleInstruction, compile_card_oracle
 from ...resumption import run_resumable
 
 class StackResolutionMixin:
+    def _bin_spell_card(
+        self, owner, card: CardDefinition, *, exile_instead: bool, verb: str
+    ) -> None:
+        """Where a spell's card goes as it leaves the stack (CR 608.2n): the
+        owner's graveyard, unless the cast carried the "if that spell would be
+        put into your graveyard, exile it instead" rider — which covers
+        resolving and being countered alike, so every leave-the-stack site
+        routes through here rather than deciding for itself."""
+        if exile_instead:
+            owner.exile.append(card)
+            self.log.append(f"{card.name} {verb} and was exiled instead of going to the graveyard")
+        else:
+            owner.graveyard.append(card)
+            self.log.append(f"{card.name} {verb} and moved to graveyard")
+
     def _enqueue_triggered_ability(
         self,
         *,
@@ -255,6 +270,7 @@ class StackResolutionMixin:
             chosen_mode_index=item.chosen_mode_index,
             old_color=item.choices.get("old_color"),
             divided_targets=item.choices.get("divided_targets"),
+            exile_instead_of_graveyard=item.exile_instead_of_graveyard,
         )
         return
     def _resolve_card(
@@ -271,6 +287,7 @@ class StackResolutionMixin:
         chosen_mode_index: int | None = None,
         old_color: str | None = None,
         divided_targets: list[tuple[int, int | None]] | None = None,
+        exile_instead_of_graveyard: bool = False,
     ) -> None:
         caster = self.players[caster_index]
         primary_type = card.primary_type
@@ -381,9 +398,9 @@ class StackResolutionMixin:
                 # confirm_word_of_command finishes the resolution.
                 pending_woc.data["_spell_card"] = card
                 pending_woc.data["_spell_caster_index"] = caster_index
+                pending_woc.data["_spell_exile_instead"] = exile_instead_of_graveyard
                 return
-            caster.graveyard.append(card)
-            self.log.append(f"{card.name} resolved and moved to graveyard")
+            self._bin_spell_card(caster, card, exile_instead=exile_instead_of_graveyard, verb="resolved")
 
         # CR 608.2n puts the card into the graveyard as the *last* part of
         # resolution, which matters once a spell's effect can stop to ask the
