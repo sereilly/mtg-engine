@@ -320,3 +320,17 @@ wrong. What made all three findable was asking each agent the two questions
 above; the third one also found that a *previous round of this same effort*
 had shipped a card whose test asserted the bug. Ask the question about the
 cards you supported last round, not only about the ones you are adding.
+
+**M21 — 2026-08-11 (round 15, three groups; nothing shipped).** The round that
+justifies the whole design-first shape. All three specs came back, none was
+applied, and the round was still worth running: two of them found live defects
+that have to be fixed *before* the feature work they were asked for — including
+one this effort had introduced two rounds earlier. **A spec that says "do not
+build what you asked me to build yet, and here is why" is the most valuable
+thing a group agent returns**, so the brief must leave room for it: ask what
+the group needs *first*, not only what it can deliver. The playbook's phase
+text is unchanged; what changed is Phase 3's stopping rule — **a round may
+correctly end with a revert.** The planeswalker stage was applied, surfaced an
+interaction in a seam nobody had questioned, and was reverted rather than
+shipped half-understood; the ROADMAP entry records what was learned so the next
+attempt starts from it instead of rediscovering it.

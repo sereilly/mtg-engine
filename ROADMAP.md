@@ -250,14 +250,74 @@ played wrongly, which is the direction the invariant wants:
   place that says so — "up to one" still qualifies, anything larger refuses by
   name per effect family.
 
-**Next:** the "each of up to N target" production and "another target
-&lt;noun&gt;" (the second needs the noun parser plus target legality honouring
-`exclude_self` and `controller`, or an ability could shield the creature the
-word excludes); multi-target handlers, which is what turns those refusals into
-cards; the additional-*cast*-cost half, which must arrive with the rewrite of
-the two `CARD_LINE_INSTRUCTIONS` entries owning those lines; then the
-subsystems — planeswalkers, exile-until-leaves and cast-from-exile,
-reveal-until, triggers that function from the graveyard.
+## Round 15: a design round that shipped nothing, and found three bugs
+
+*(2026-08-11.)* Three more groups designed in parallel — multi-target, reveal /
+look-at-the-top, planeswalkers. **No code landed.** The planeswalker stage was
+applied and then reverted (below); the other two specs are worth more than a
+rushed application of them, because each names a live defect that has to be
+fixed *first*. Read this section before writing any of that code.
+
+**P0 — arming a pending choice does not suspend the steps behind it.** Verified
+by execution, and it is a bug *this effort introduced* with the scry round:
+
+```
+ran scry            -> (True, 'pending_scry')  hand=[]         pending=[scry]
+ran draw_controller -> (True, 'resolved')      hand=['Mountain'] pending=[scry]
+```
+
+**Opt draws the card its own scry has not yet arranged**, then the scry
+rearranges the *next* card. `engine/resumption.py` stops on
+`game.effect_suspended`, and that flag is set in exactly one place —
+`engine/replacements.py` — never by `arm_pending_choice`. Every prompt that
+decides what a *later step of the same resolution* will see has this. The fix
+is a per-kind `suspends` flag on `ChoiceSpec` (opt-in: `sacrifice`, `discard`
+and `mana_payment` complete inline today and flipping them all at once is a
+rewrite), set in `arm_pending_choice`, cleared with a `resume_after_answer` in
+`resolve_pending_choice` — the shape `_resolve_effect_order` already uses.
+**Track Down cannot be implemented correctly until this lands** ("Scry 3,
+*then* reveal…" is exactly the ordering that is wrong), and See the Truth's
+production must stay one instruction spanning both printed sentences for the
+same reason.
+
+**P1 — the hollow-support contract excludes permanents.** `Mazemind Tome`
+reports `supported=True` while *both* its activated abilities carry
+`instruction=None`: it is carried by `spell_pattern` substring markers, and
+`test_no_hollow_support`'s contract is restricted to instants and sorceries.
+A permanent whose every ability is unsupported reports supported and does
+nothing. `Nine Lives` has the same shape. The fix is to extend the contract to
+permanents whose only instructions are `spell_pattern` markers **and** which
+have at least one ability line that failed to parse — the second conjunct is
+what keeps Howling Mine-style statics legitimate.
+
+**P2 — enters-the-battlefield triggers drop the permanent id.**
+`_apply_self_enters_battlefield_triggers` builds its context without
+`target_permanent_id`, so every ETB trigger that targets resolves by index
+alone and hits whatever slid into the slot when something died in response.
+Oubliette is the named shipped example. One parameter, threaded through.
+
+**The planeswalker stage was applied and reverted.** Stage 0 (the card type,
+loyalty as counters, CR 306.5b entry, and an all-of support gate so a
+planeswalker cannot report supported with two of its three abilities dead) is
+correct as designed and flips **zero** cards — its value is that
+`support_report.py` starts naming the unreadable clause instead of saying
+"unknown card type". Applying it surfaced an interaction not yet understood: a
+4-loyalty walker leaves the battlefield with no state-based predicate matching
+it, and `all_permanents()` does not see a permanent placed directly on a
+`PlayerState.battlefield` in a synthetic game. That is a control-seam question,
+not a loyalty one, and shipping a half-understood state-based action is exactly
+what this engine refuses. The spec stands; the seam has to be understood first.
+Worth knowing when it is retried: the existing 704.5i sweep has been **dead
+code** — it read a metadata key nothing ever wrote — and the 8-of-33 measurement
+says no planeswalker has more than one readable ability, so the block needs
+Stage 3 (25 missing effects) before any of it flips.
+
+**Order for the next session:** P0, then P1, then P2 — all three are
+correctness, and two of them make cards *stop* lying. Only then the feature
+work: See the Truth (self-contained once P0 lands), the multi-target handlers
+(Rewind and Basri's Acolyte, and note Rewind's lands are **not targets** — the
+parser was discarding whether the word "target" was printed), then the
+subsystems.
 
 ---
 
