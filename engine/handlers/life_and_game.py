@@ -80,12 +80,28 @@ def game_is_draw(game: Game, instruction: OracleInstruction, context: OracleExec
 
 @effect_handler("target_loses_life")
 def target_loses_life(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    target = context.target
     card = context.card
     amount = int(instruction.payload.get("amount", 0))
-    before = target.life
-    target.life -= amount
-    game.log.append(f"{card.name}: {target.name} lost {amount} life ({before} -> {target.life})")
+    # The same recipient key deal_damage reads: absent means the spell's
+    # target, "caster" the controller ("You lose 3 life"), "each_opponent"
+    # every living opponent. Life loss is not damage (CR 120.3), so no shield
+    # or replacement contends here.
+    recipient = instruction.payload.get("recipient")
+    if recipient == "caster":
+        victims = [context.caster]
+    elif recipient == "each_opponent":
+        victims = [
+            game.players[i]
+            for i in game.opponents_of(game.players.index(context.caster))
+        ]
+    else:
+        victims = [context.target]
+    for victim in victims:
+        before = victim.life
+        victim.life -= amount
+        game.log.append(
+            f"{card.name}: {victim.name} lost {amount} life ({before} -> {victim.life})"
+        )
     return True, "resolved"
 
 

@@ -21,7 +21,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | 2ED | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
 | ARN | 78 | 108 | 64.8% | 61.1% | 38.9% | 34 |
 | 3ED | 296 | 389 | 78.9% | 76.9% | 41.9% | 149 |
-| M21 *(measured)* | 285 | 503 | 50.7% | 44.7% | 24.1% | 99 |
+| M21 *(measured)* | 285 | 503 | 51.1% | 45.5% | 24.9% | 103 |
 | **All (shipped)** | **1248** | **1663** | **78.0%** | **76.2%** | **41.5%** | **629** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -32,9 +32,9 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 302 | 165 | expected a subject |  |
+| 303 | 166 | expected a subject |  |
 | 112 | 58 | unrecognized effect verb |  |
-| 69 | 50 | unconsumed text |  |
+| 68 | 49 | unconsumed text |  |
 | 33 | 33 | unrecognized activation cost |  |
 | 27 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
 | 11 | 5 | expected a quantity |  |
@@ -42,7 +42,6 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | 8 | 4 | a conditional static bonus is derived by engine/static_bonuses.py |  |
 | 7 | 2 | expected a colour after 'becomes' |  |
 | 6 | 3 | no lowering for RawEffect |  |
-| 6 | 6 | expected a destination zone after 'return' |  |
 | 6 | 6 | unrecognized discard cost |  |
 | 5 | 1 | no handler for non-targeted tap/untap |  |
 | 5 | 2 | expected something to destroy |  |
@@ -52,11 +51,12 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | 4 | 3 | expected a permanent to put counters on |  |
 | 3 | 1 | only one mana of any colour has a handler; 3 does not |  |
 | 3 | 1 | no tap-or-untap handler honours this restriction |  |
+| 3 | 3 | expected a destination zone after 'return' |  |
 | 2 | 1 | back-reference to 'damage_dealt' with no producer in this effect |  |
 | 2 | 1 | expected something to shield |  |
 | 2 | 1 | no untap handler honors this restriction |  |
+| 2 | 2 | no handler for returning a non-targeted object |  |
 | 2 | 2 | expected a power/toughness value |  |
-| 2 | 2 | unsupported life-loss target 'each_opponent' |  |
 
 ## Cards executing through the grammar
 
@@ -159,6 +159,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Whenever you draw a card, this creature gets +2/+2 until end of turn.`
 - **Burn Bright**
   - `Creatures you control get +2/+0 until end of turn.`
+- **Caged Zombie**
+  - `{1}{B}, {T}: Each opponent loses 2 life. Activate only if a creature died this turn.`
 - **Cancel**
   - `Counter target spell.`
 - **Castle**
@@ -440,6 +442,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `{R}: This creature gets +0/+1 until end of turn.`
 - **Grasp of Darkness**
   - `Target creature gets -4/-4 until end of turn.`
+- **Grim Tutor**
+  - `Search your library for a card, put that card into your hand, then shuffle. You lose 3 life.`
 - **Hasran Ogress**
   - `Whenever this creature attacks, it deals 3 damage to you unless you pay {2}.`
 - **Healing Salve**
@@ -968,6 +972,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Counter target spell with mana value X. (For example, if that spell's mana cost is {3}{U}{U}, X is 5.)`
   - `Counter target spell with mana value X. (For example, if that spell's mana cost is {3}{U}{U}, X is 5.)`
   - `Counter target spell with mana value X. (For example, if that spell's mana cost is {3}{U}{U}, X is 5.)`
+- **Spirit of Malevolence**
+  - `When this creature dies, each opponent loses 1 life and you gain 1 life.`
 - **Sporeweb Weaver**
   - `Whenever this creature is dealt damage, you gain 1 life and create a 1/1 green Saproling creature token.`
 - **Stasis**
@@ -980,6 +986,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `Destroy target land.`
   - `Destroy target land.`
   - `Destroy target land.`
+- **Storm Caller**
+  - `When this creature enters, it deals 2 damage to each opponent.`
 - **Stream of Life**
   - `Target player gains X life.`
   - `Target player gains X life.`

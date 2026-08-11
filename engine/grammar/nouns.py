@@ -516,6 +516,9 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
         if token is not None and (token.kind == NUMBER or token.kind == WORD):
             amount = parse_amount(stream)
             count = amount.value if isinstance(amount, ast.Fixed) else 1
+        # "up to one target creature", "up to two target creatures" — the word
+        # "target" is part of the printed quantifier phrase, not the filter.
+        stream.accept_word("target")
     elif stream.accept_word("target"):
         quantifier = "target"
     elif stream.accept_word("each"):

@@ -60,6 +60,21 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
             caster, damage, source=source_permanent or card, then=_report, asks=True
         )
         return True, "resolved"
+    if instruction.payload.get("recipient") == "each_opponent":
+        # "…deals N damage to each opponent": one player-damage event per
+        # living opponent, in seat order, resumable so a shield or replacement
+        # that stops to ask carries the rest of the loop with it.
+        def _hit_opponent(opponent_index: int) -> None:
+            face = game.players[opponent_index]
+            game._deal_damage_to_player(
+                face, damage, source=source_permanent or card, asks=True,
+                then=lambda dealt, face=face: game.log.append(
+                    f"{card.name} dealt {dealt} damage to {face.name}"
+                ),
+            )
+
+        run_resumable(game, game.opponents_of(game.players.index(caster)), _hit_opponent)
+        return True, "resolved"
     # Fireball's cross-seat divided list: any mix of creatures and player faces
     # on both sides, each dealt damage // n ("divided evenly, rounded down").
     divided = context.choices.get("divided_targets")

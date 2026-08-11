@@ -169,8 +169,15 @@ def _lower_win_game(node: ast.WinGame) -> tuple[OracleInstruction, ...]:
 
 
 def _lower_lose_life(node: ast.LoseLife) -> tuple[OracleInstruction, ...]:
-    if node.player.kind not in ("target_player", "target_opponent", "that_player"):
-        raise LoweringError(f"unsupported life-loss target {node.player.kind!r}", node=node)
-    return (
-        OracleInstruction("target_loses_life", "", {"amount": _amount_payload(node.amount)}),
-    )
+    payload: dict[str, object] = {"amount": _amount_payload(node.amount)}
+    if node.player.kind in ("target_player", "target_opponent", "that_player"):
+        return (OracleInstruction("target_loses_life", "", payload),)
+    if node.player.kind == "you":
+        # "You lose 3 life" (Grim Tutor) — the same recipient key deal_damage
+        # and target_gains_life read.
+        payload["recipient"] = "caster"
+        return (OracleInstruction("target_loses_life", "", payload),)
+    if node.player.kind == "each_opponent":
+        payload["recipient"] = "each_opponent"
+        return (OracleInstruction("target_loses_life", "", payload),)
+    raise LoweringError(f"unsupported life-loss target {node.player.kind!r}", node=node)

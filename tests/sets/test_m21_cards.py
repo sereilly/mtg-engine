@@ -91,6 +91,34 @@ def test_token_round_cards_compile_supported(set_pool, name):
     assert compile_card_oracle(set_pool("M21")[name]).supported
 
 
+# --- The each-opponent round: damage and life loss sweep the table ----------
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "Storm Caller",           # ETB: deals 2 damage to each opponent
+        "Spirit of Malevolence",  # dies: each opponent loses 1 life
+        "Grim Tutor",             # tutor + "You lose 3 life"
+        "Caged Zombie",           # activated: each opponent loses 2 life
+    ],
+)
+def test_each_opponent_round_cards_compile_supported(set_pool, name):
+    assert compile_card_oracle(set_pool("M21")[name]).supported
+
+
+def test_storm_caller_damages_each_opponent_on_entry(set_pool):
+    caller = set_pool("M21")["Storm Caller"]
+    p1 = PlayerState(name="P1", hand=[caller])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    game.cast_from_hand(0, "Storm Caller")
+
+    assert p2.life == 18
+    assert p1.life == 20
+
+
 # --- The counter round: +1/+1 counters on non-source subjects ---------------
 
 

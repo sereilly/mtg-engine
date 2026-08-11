@@ -232,6 +232,11 @@ def _lower_damage(node: ast.DealDamage) -> tuple[OracleInstruction, ...]:
     # already reads its "recipient" key.
     if _is_you(recipient):
         payload["recipient"] = "caster"
+    elif isinstance(recipient, ast.PlayerRef) and recipient.kind == "each_opponent":
+        # "…deals 2 damage to each opponent" (Storm Caller). The handler loops
+        # the caster's living opponents through the same player-damage path a
+        # single face takes, so shields and replacements see each event.
+        payload["recipient"] = "each_opponent"
     elif isinstance(recipient, ast.PlayerRef) and recipient.kind not in (
         "target_player", "that_player", "controller", "each_player"
     ):
