@@ -2571,11 +2571,22 @@ is fixed there too.
 Cast-trigger hooks (six cards name-keyed for conditions the parser already
 understands) move onto the same bus.
 
-Phase 4's `Game.pending_choices` is still its own job. What landed here covers
-choices a *replacement effect* raises; the twenty remaining `pending_*` fields
-are choices raised by resolving spells and turn-based actions, which need the
-answer routed back into a partly-executed effect rather than into a resolver
-that owns the whole event.
+Phase 4's `Game.pending_choices` was recorded here as still its own job, on the
+grounds that what landed above covers only choices a *replacement effect*
+raises, and that twenty `pending_*` fields remained for the choices raised by
+resolving spells and turn-based actions. **Both halves are now out of date.**
+The general queue landed as `engine/pending_choices.py` — one `PendingChoice`
+list and one registered `ChoiceSpec` per kind, which is exactly the "answer
+routed back into a partly-executed effect" this entry was waiting for, built on
+`engine/resumption.py`.
+
+Four `pending_*` fields survive on `Game`, and two of them *are* the generic
+queues (`pending_choices`, `pending_replacement_choices`) — the destination, not
+the backlog. The other two are not choices at all: `pending_end_step_tokens` and
+`pending_draw_step_life_loss` are delayed *effects* scheduled for a later step
+(Rukh Egg's token, Nafs Asp's life loss), where the thing deferred is the
+effect's execution rather than a seat's decision. Generalizing those is the
+delayed-trigger job, not this one.
 
 **Done — a shield's state is generic too, and the old field names are views.**
 The entry above deferred this: the `PlayerState` fields the shields read
@@ -3640,6 +3651,8 @@ mutates the game — `_ai_resolve_raging_river` and `award_ante_to_winner` — s
 `GET /state` is not a read. Both are documented idempotent and both predate this
 change.
 
+**Both are fixed, as their own change — see "The two the pure move left" below.**
+
 ---
 
 ## Deleting `engine/parsing/`: the "expected a subject" bucket, split two ways
@@ -3981,21 +3994,782 @@ Vault), probe baseline 96 → 9 entries.
 
 ---
 
+## Splitting the two files that grow with the pool
+
+`lower.py` (2,428) and `parser.py` (2,306) were the largest files in the repo
+and were parked as "size is a separate job". The M21 result retired that
+reasoning: the cost that scales is **parser breadth**, and every new template
+lands in exactly these two. They stopped being big files that happened to grow
+and became the files that have to absorb 25,000 more cards' worth of templates.
+
+### The equivalence harness came first
+
+4,600 lines of parser moved. The only honest way to do that is to be able to
+prove nothing changed, so before touching anything: compile every card in the
+ingested pool — shipped *and* measured, because M21's 503 lines reach
+productions the 1993 sets never do — and dump a canonical form of the result.
+668 cards, 13,219 lines, at two levels that fail differently. Per **card**, the
+`OracleProgram` the engine dispatches on, which catches a reordered instruction
+or a dropped payload key. Per **line**, the raw `CompiledLine` including every
+*failure message*, which catches a production that still refuses a line but for
+a different reason — invisible in the program until a card's text changes.
+
+Both splits were generated from the original file rather than edited into
+shape, so the output is a function of one input, and both diffed **byte-identical**
+against that baseline.
+
+Two things about the harness itself are worth recording, because both were
+wrong first. The verification was originally an inline `&&` chain, where a
+failing snapshot step left the previous diff file untouched and `[ -s diff ]`
+then reported IDENTICAL for a comparison that never ran — a check that passes
+when it does not execute is worse than none, so it became a script with
+`set -e`. And the injection test that proves the new guard bites wrote its
+violation, crashed before restoring, and left a stray import in
+`effects/damage.py` that the next run reported as a real finding. Restores go in
+a `finally`.
+
+### The partition was found, not chosen
+
+Both files already carried banner comments marking their sections. Rather than
+trust them, an AST pass mapped every top-level name to every other name it
+references and reported the cross-section edges. That turned up the same class
+of problem in both files, and it is the interesting part:
+
+* **`parser.py` had a cycle.** Four *effect* productions — `_parse_become_color`,
+  `_parse_prevent`, `_parse_prevent_all`, `_parse_colour_source_prevention` —
+  had drifted to the bottom of the file under the "Line classification" banner.
+  They were the only thing making the graph cyclic. Filed with the effects, the
+  order is strict.
+* **Both files had fragments filed as effects.** `_parse_zone` and
+  `_parse_mana_payment` in the parser; `_full_mana_payload` (with `_MANA_KEYS`)
+  and `_REST_OF_TURN` in the lowering. Each was wanted by two or three
+  families — a zone by search and by bounce, an "unless they pay" cost by
+  damage and the board — and they were the **only** references crossing between
+  families. In `phrases`/`_common` the seven families are independent.
+
+That independence is the property worth having, and it is why the fragments
+moved rather than being tolerated. It is what makes "where does prowess go?" a
+question with an answer instead of "wherever, then fix the imports".
+
+### The shape, and the same names on both sides
+
+```
+phrases.py     word tables + fragment productions   |  lowering/_common.py
+effects/       damage characteristics board cards   |  lowering/  (same seven)
+               stack combat game                    |  lowering/categories.py
+statements.py  one whole sentence                   |
+parser.py      one printed line (parse_line)        |  lower.py (dispatch)
+```
+
+The families are deliberately named identically on the parsing and lowering
+sides, so a template has one home per side: prowess parses in
+`effects/characteristics.py` and lowers in `lowering/characteristics.py`. Both
+packages re-export flat, so callers name a production and never its family, and
+moving one between families is not a caller-visible change.
+
+`INSTRUCTION_CATEGORIES`, `GRAMMAR_ONLY_PAYLOAD_KEYS` and `lower_statement` are
+re-exported from `lower.py` because callers outside the package import them from
+that address (`grammar/__init__.py`, two test modules). The table moved; its
+address did not, which is what kept this a pure move rather than a rename with a
+diff attached.
+
+Largest module in `engine/grammar/` is now 626 lines, down from 2,428. Nothing
+in the parser or lowering is over 450.
+
+### The guard, and what it is for
+
+`tests/engine/test_grammar_layering.py` holds both properties: the layers import
+only downward, and the families do not import each other. A split that is not
+tested is a split that lasts until the next hurried change.
+
+It also carries a 1,000-line ceiling per module — not a style rule. These files
+grow with the card pool, so a module drifting back over a thousand lines means
+the families stopped absorbing new work and something is being appended to
+whatever was easiest to find.
+
+Every rule is injection-tested: five deliberate violations, five caught. A sixth
+(`statements` importing `parser`) is deliberately *not* in that list, and the
+reason is worth stating — injecting it makes the package circular, so `conftest`
+fails to import and pytest never reaches the guard. That is a louder failure
+than the guard's own, not a hole in it.
+
+Suite 4,369 → 4,378.
+
+---
+
+## `ast.py` was the third file that grows with the pool
+
+The layering guard put a 1,000-line ceiling on every module under
+`engine/grammar/`. `ast.py` was at 981 — nineteen lines from tripping, and it
+gains a node type with every new template. Split before the next feature rather
+than during it.
+
+Nine modules on the same seven families, `_core` at the bottom (quantities,
+nouns, durations, zones, costs — the vocabulary every node is built from) and
+`statements.py` as a **roof**: `Effect`, `Statement` and `AbilityNode` are unions
+over every family, so they can only be written where every leaf is visible. That
+is the one module in the three packages that imports a family, and the edge runs
+one way — the families are held to `_core` by one test, and the roof is held to
+`_core` + the families by another.
+
+Unlike the parser and lowering splits, **no fragment had to be rescued**: every
+node already referenced only the shared vocabulary or its own family.
+
+What the dependency pass did turn up: **`CombatRestriction` was defined after
+`__all__`**, at the very bottom of the file. The module never exported it, and
+the `Effect` union still does not name it — while `lower.py` dispatches on it
+like any other leaf effect. `__all__` had also silently dropped `BoardCount` and
+`DamageUnlessPay`. Nothing imports `*` anywhere in the repo, so all of it was
+inert at runtime; the regenerated front door now names all 89. **Adding
+`CombatRestriction` to the `Effect` union is left open deliberately** — that is
+a semantic change, not a move, and it belongs in whatever change decides what
+the union is for.
+
+Largest AST module is now 328 lines. Suite 4,378 → 4,382.
+
+---
+
+## Modal, and the substring that had been lying
+
+`GRAMMAR_COVERAGE.md`'s backlog is sorted by lines ÷ distinct — how many printed
+lines one production buys. `modal line` led it at 3.5 (21 lines, 6 sentences),
+and it is worth far more than 21 lines suggests: "Choose one —" is on a large
+fraction of every modern set printed since.
+
+**The head carries no modes, on purpose.** CR 700.2 puts the modes in a
+bulleted list *below* the head, and each bullet is an ordinary effect line the
+parser already reads. A node holding copies of them would be a second reading of
+the same text — the failure this engine is organised to avoid. So `ModalNode`
+records the count and nothing else, and `engine/oracle.py` groups the head with
+the bullets directly beneath it.
+
+**It is a `Statement`, not an `AbilityNode`**, and that is what makes
+`Choose one —`, `{2}: Choose one —` (Pyramids) and
+`When this creature enters, choose one —` all read through line shapes that
+already exist: the cost stays on `ActivatedAbilityNode`, the event on
+`TriggeredAbilityNode`. As a line node it would have needed its own copy of
+both, and a head parsed with its prefix dropped is exactly the silent-rider bug.
+
+The compiler now has **one reader instead of two**. `_CHOOSE_ONE_RE`,
+`_MODAL_ABILITY_HEAD_RE` and `_normalize_mode_clause` (defined, never called)
+are gone; both paths ask the grammar.
+
+### The bug the substring was hiding
+
+`_CHOOSE_ONE_RE` matched `choose one` — which is a substring of
+**"Choose one or more"**. So a spell whose controller picks *several* modes
+compiled as one that picks the first, and reported itself supported. Sublime
+Epiphany (M21) was doing exactly that. It now parses in full and refuses at
+lowering, naming the limit: the engine's `StackItem.chosen_mode_index` is a
+single index, so `choose two` / `choose one or more` have no representation yet.
+Refusing loudly is the correct outcome; the card's support count went 105 → 104
+and that number is now true.
+
+`Battalion —` moved buckets too: it used to be swallowed by the blanket "any em
+dash ⇒ modal line" rejection and now reports `expected a subject`, the trigger it
+actually cannot read. An ability word (CR 207.2c) was never a modal line.
+
+Coverage: ALL parsed **77.2 → 78.0%**, lowered **75.3 → 76.1%**. Executed is
+deliberately flat — the head executes nothing, the bullets do, and they were
+already counted as the separate lines they are. **Cards gaining support: zero,
+and that is the correct number** — every modal card in the shipped pool was
+already supported through the old reader.
+
+`"modal line"` is retired from `_ROADMAPPED_REASONS` in the same change, as that
+dict's own docstring requires. Suite 4,382 → 4,403; CR 700 goes 0/15 → 1/15.
+
+### Quoted abilities were not worth it, and the ratio said so misleadingly
+
+Second on the table at 2.1 — and that ratio is an artifact of one error message
+covering unrelated work. The 13 distinct lines are 13 different templates
+(`All artifacts have "…"`, `creates a token with "…" and "…"`,
+`You get an emblem with "…"`), and one of them is not a granted ability at all:
+Raging River's quotes are pile labels.
+
+Decisive: **every one of those cards in the shipped pool is already supported**
+through a channel that runs it. Granting a whole triggered or activated ability
+to a set of objects is a CR 613 layer-6 capability the engine does not have —
+`engine/auras.py` grants keywords and P/T, not abilities — so all 13 productions
+would be `LoweringError`s. That buys parse coverage and nothing else, over 13
+productions, against working code. Left, with its schedule entry intact, because
+it is honestly still scheduled.
+
+---
+
+## Stable permanent IDs: the address exists, combat still doesn't use it
+
+`player.battlefield[i]` was 137 sites. The reason is already in this document's
+control-seam rule: **`Permanent` compares by value**, so `in` / `.remove()` /
+`.index()` match an opponent's look-alike. Positional indices were the workaround
+that grew *because* identity comparison is unsafe — and they are unstable, since
+any permanent leaving renumbers every later slot.
+
+`Permanent.permanent_id` is a monotonic counter, deliberately the same idiom as
+`engine/continuous.py`'s `next_timestamp()`. Assigned at construction (so the AI
+simulator's detached clones, the Debug Menu's raw-state injection and several
+hundred test rigs are addressable with no call-site opt-in) and **re-stamped on
+entering the battlefield**, because CR 400.7 makes a returning permanent a new
+object. `_sync_control`'s list move deliberately does not re-stamp: a control
+change is not a zone change.
+
+`compare=False`, so `__eq__` is unchanged — folding identity into equality is a
+separate behavioural change (the simulator compares detached clones by value)
+and would have put the determinism gate at risk.
+
+### Six live bugs, found by looking for the shape
+
+`.battlefield.index()` and `.remove()` compare with `==`, so they find a
+look-alike rather than the object. **Crumble** read its target's slot back with
+`battlefield.index(artifact)` and destroyed the *first* of two equal Moxen.
+Earthquake's Mountain sweep, Teferi-style phasing, Rag Man's bounce, the
+sacrifice-for-mana path and Phantasmal Terrain's land index had the same shape.
+All six fixed; **zero `.index()`/`.remove()` calls on a battlefield remain**, and
+the guard bans them outright rather than ratcheting them.
+
+### And one the renderer was doing
+
+The canvas keyed cards by `seat-index`. One creature dying renumbered every
+later slot, so the renderer pruned the whole right-hand side as departed and
+re-added it as arrivals — replaying entrance animations and snapping anything
+mid-flight. It re-keys by `pid` now, verified live: a permanent's item kept its
+identity across a death, confirmed by a probe property surviving on the same JS
+object.
+
+### What is done, and what is explicitly not
+
+Done: the ID and its seam (`permanent_by_id`, `find_permanent_by_id`,
+`permanent_id_of`, and the two halves of the index bridge the wire still needs);
+the cast→resolution holding, stamped at a new single choke point `_stack_push`
+that the nine `stack.append(StackItem(...))` sites now route through; the
+additive wire (`id` alongside `index`, resolved at **one** point at the top of
+`do_action`, where **a stale id is a 404 rather than a fallback** — falling back
+to the index would reintroduce the bug); seven client paths that hold an address
+across an async gap.
+
+**Not done: combat**, 51 sites across the four combat step modules plus
+`ai_policy.py`, `web/combat_prompts.py` and `web/game_flow.py`. These are not
+independent call sites — `combat_attackers`, `combat_blockers`, `combat_bands`,
+`combat_band_blocks`, `combat_banding_damage`, `combat_multiblock_damage` and
+the pile assignments are all **keyed** by battlefield index, as are the wire
+fields carrying them and the canvas's arrows, and 115 test references read that
+state directly. It converts as one unit or not at all, and re-keying those dicts
+would change iteration order — the exact thing that would break the seeded
+simulation. Left whole and ratcheted.
+
+**The raw count barely moved: 139 by the new alias-aware measure.** That is the
+honest number. What this change bought is that the stable address now *exists*,
+is *reachable*, is *carried on the wire*, is *used by the client*, and is
+*fenced* — plus seven real bugs. Converting combat is the rest of it.
+
+The guard extends `tests/engine/test_control_reads.py` rather than duplicating
+it, since that file already owns "the battlefield list has one reader". It
+catches the aliased spelling (`bf = x.battlefield; bf[i]`) too — the majority
+form in `mixins/stack/casting.py`, and without it the guard would have been one
+line from bypassable.
+
+Suite 4,403 → 4,437. AI simulation byte-identical at every stage.
+
+---
+
+## Combat: the maps follow the creatures now
+
+The last piece of the index-instability thread. Combat is recorded as
+battlefield **slots** — `combat_attackers` maps an attacker index to a defending
+seat, `combat_blockers` a blocker index to the attackers it blocks — and a slot
+is not a name. A creature dying in the first-strike damage step shifts every
+later slot on its controller's battlefield down by one, so an attacker recorded
+as index 3 silently becomes whatever index 3 is now.
+
+### Which design, and why the other one was wrong
+
+Two were on the table. Convert the eight maps to stable ids (with write-through
+views, so the 73 test and 13 web references need not change), or remap the
+indices when a permanent leaves.
+
+The second was unavailable until the removal choke point existed — it would have
+needed 41 hooks. With one transition it is one function, so it became the
+cheaper option *and* had to be checked for correctness rather than chosen for
+size.
+
+The check that settled it: **every index has a resolvable seat.** An attacker
+index is always the active player's — `declare_attackers` refuses any other
+controller outright. A blocker index in `combat_blockers` comes from its own
+outer key. The two damage-assignment maps (`combat_banding_damage`,
+`combat_multiblock_damage`) record blocker slots with *no seat beside them*,
+which is unambiguous in a duel and not in a CR 802 multi-defender combat — but it
+is recoverable, because a blocker blocks an attacker and `combat_attackers` says
+which player that attacker is attacking. `_combat_seat_of_blocker` does exactly
+that, reading the pre-removal numbering before any map is rewritten.
+
+Had that lookup not existed, ids would have been the only correct answer, since
+a remap cannot shift an index whose battlefield it cannot name. Worth recording:
+the under-specified seat in those two maps is a real latent gap, and the id
+design would have removed it rather than recovering it.
+
+### What the remap does
+
+Two things happen to a recorded slot. If its own creature left, the entry is
+**dropped** — a dead attacker is not attacking, and a blocker whose every
+attacker has gone is not blocking. Otherwise it **shifts** down by the number of
+departing creatures that sat ahead of it on the same battlefield. All eight maps,
+including the Raging River pile labels.
+
+### The AI simulation proved it safe and proved nothing else
+
+Byte-identical before and after — which means the sim never reaches the case.
+That is exactly the situation where a green suite is not evidence, so
+`tests/regressions/test_combat_survives_renumbering.py` drives the renumbering
+deliberately: two attackers where the lower-indexed one dies, a blocker dying
+under a multi-block, an attacker dying under its blocker, and the pile labels.
+
+**Verified by disabling the remap: five of the six fail.** The sixth is the
+control — removal outside combat must not invent entries — and correctly passes
+either way.
+
+Suite 4,448 → 4,454.
+
+### What is still index-keyed
+
+The maps themselves, and the wire fields that carry them. This fixes the
+*consistency* bug (a map pointing at the wrong creature) without making the
+addresses stable, so an index held outside these maps across a removal is still
+stale — the sites that mattered are already converted to ids. Moving combat onto
+ids outright remains available and is now a smaller job than it was, because the
+seat-resolution question above is answered and written down.
+
+---
+
+## Leaving the battlefield is one transition now
+
+The battlefield list was rebuilt or shortened in **41 places**, in three
+spellings: filter-by-identity, `pop` by index, and rebuild-from-a-survivors-list.
+
+That is the shape `become_tapped` had at seventeen sites, and it has the same
+consequence — anything that must happen when a permanent leaves has 41 places to
+be wired into and 41 places to be forgotten. It is also the *root* of the
+index-instability this document has been chasing: every combat map is keyed by
+battlefield index, so a permanent leaving mid-combat renumbers every attacker
+and blocker recorded after it, and there was nowhere to put the remap.
+
+`Game.remove_from_battlefield(permanent)` and `remove_all_from_battlefield(perms)`
+are that place. Where the permanent goes next stays the caller's business — a
+graveyard, exile, a hand, a library, or the phased-out limbo an effect holds it
+in have nothing in common; this does the one part they share. By **identity**,
+never by value, for the reason `.remove()` is banned outright.
+
+**41 → 3.** What is left is not removal:
+
+* `_sync_control`'s pair of statements — the projection of a derived controller
+  change (CR 613 layer 2). The permanent moves between two battlefields without
+  leaving either zone, so firing the leave transition here would be wrong. It
+  stays written open, with the reason on it.
+* `remove_all_from_battlefield` itself.
+* the Debug Menu's raw-state injection, which replaces a board wholesale.
+
+### The sweeps said it backwards
+
+Ten of the sites built a `survivors` list and assigned it. That names what
+*stays*, when the interesting set is what *leaves* — and every one of them was
+also open-coding the reverse-order walk (`for i in sorted(indices, reverse=True)`)
+that kept indices valid while removing. Both go away together: collect the
+departing, hand them over once. `_destroy_swept_permanents` lost its survivors
+list entirely.
+
+### Three things went wrong, and each is worth recording
+
+**A scripted regex removed the `continue` statements that advanced a loop.**
+Two state-based-action sweeps then called `_permanent_to_graveyard` without ever
+removing the permanent, so `changed` stayed true and `check_state_based_actions`
+span forever — the test suite hung rather than failed. Mechanical edits to
+control flow need reading afterwards, not just testing.
+
+**The seam guard caught reads that had been exempt "by shape."** Three
+`for perm in player.battlefield` loops were tolerated because a rebuild-write
+followed them, which the guard recognised as a zone write. With the rebuild gone
+they were plain reads, and the guard said so. Correct on both counts, and a
+nice demonstration that the exemption was keyed to the right thing.
+
+**The new guard's first version flagged its own documentation** — a regex over
+raw lines matched the seam docstring explaining why `.battlefield.remove()` is
+banned. It walks the AST now. A guard that reports its own comments is one
+people learn to skim.
+
+Every rule is injection-tested with the restore in a `finally`: three spellings
+of an open-coded rebuild and one stale exemption, four caught.
+
+Suite 4,444 → 4,448. AI simulation byte-identical at every stage.
+
+**This unblocks the combat conversion** rather than performing it. The combat
+maps are still index-keyed; what changed is that there is now one function to
+hang the remap on, instead of 41.
+
+---
+
+## The `Effect` union, and the target lookups outside combat
+
+### A union member that was missing for its whole existence
+
+`CombatRestriction` was defined *after* `__all__` at the bottom of the pre-split
+`ast.py`, so the module never exported it and `ast.Effect` never named it —
+while `lower_statement` dispatched on it like any other leaf. `BoardCount` and
+`DamageUnlessPay` had been dropped from `__all__` the same way.
+
+None of it broke anything, and that is the whole problem: the union is an
+annotation, annotations are lazy, and nothing in the repo does `import *`. It
+was a claim about the type system that was false with no consequence until
+someone read it to answer "what is an `Effect`?".
+
+Fixed, and `tests/engine/test_ast_effect_union.py` now checks membership **off
+the dispatch** rather than off a second list — whatever `lower_statement`
+matches with `isinstance` is by definition a statement, so the union has to name
+it. `DamageRiders` is the one leaf deliberately excluded, and the test makes that
+an entry with a reason rather than an omission: it is a *field* of `DealDamage`
+("it can't be regenerated"), folded in by `_attach_riders`, never a step.
+
+### Five Aura lookups and four damage lookups
+
+`Game.chosen_permanent(seat, index, permanent_id)` is the read half of what
+`_stack_push` writes: prefer the stable id, fall back to the index exactly as
+before when the id no longer resolves. Additive, so it can only turn a wrong
+answer into a right one.
+
+Applied to the six sites in `engine/mixins/oracle_instructions.py` (the Aura
+attachment paths and the shroud/protection legality check) and four in
+`engine/handlers/damage.py`, including the multi-target list — where
+`_stack_push` had already stamped a positionally-paired id list that nothing was
+reading. **An Aura is the longest gap in the engine between choosing a target
+and using it**: it waits for priority, for responses, and for everything above
+it on the stack, which is exactly when a slot gets renumbered underneath the
+index. `_apply_aura_effect` had to grow the parameter — it was the one path the
+id was not threaded into.
+
+`engine/mixins/oracle_instructions.py` is at zero positional reads;
+`engine/handlers/damage.py` went 5 → 1 (the remaining one is Fireball's
+cross-seat divided list, which needs ids in the `(seat, index)` tuple shape end
+to end and belongs with the combat conversion).
+
+### The regression test found the bug in the fix
+
+`tests/regressions/test_target_survives_renumbering.py` drives the renumbering
+deliberately — a distractor in a lower slot dies while the spell is on the stack
+— and asserts the *right* permanent is hit. It caught the first version of the
+damage fix: a `not 0 <= idx < len(battlefield)` bounds check sat in front of the
+id lookup and returned "target is gone (CR 608.2b)" for a target that had merely
+been **renumbered**, so the id resolution behind it could never run. Dead code
+that looked like a fix.
+
+Order matters and is now stated where it is easy to get wrong: resolve through
+the seam *first*, refuse on `None`. A scan for the same shape across `engine/`
+and `web/` found no other id lookup shadowed by a bounds check.
+
+Suite 4,441 → 4,444, AI simulation identical.
+
+---
+
+## The two the pure move left
+
+Both were found during the web-layer split and deferred on the grounds that a
+behaviour change hidden inside a 5,000-line move is unreviewable. This is that
+change, on its own, with a guard each.
+
+### The no-cache list had fallen behind the page
+
+`_no_cache_assets` matched a hand-written set of eight paths. `index.html` loads
+ten first-party shell assets, so `/sfx.js`, `/music.js` and `/legality.js` were
+browser-cacheable while their siblings were not — a stale-script bug waiting for
+whoever edited one of the three without bumping its `?v=`.
+
+**Adding the three names would have been the wrong fix**, because the hardcoded
+list *is* the bug: it reproduces the same gap at the next script. The set is now
+derived from `web/static/` — top-level `.html`/`.css`/`.js`, minus an explicit
+`_VENDORED_ASSETS` exemption. Asking the filesystem cannot fall behind the
+filesystem.
+
+Two exclusions are deliberate rather than incidental, and both are asserted.
+`anime.min.js` is third-party and version-pinned, so no-storing it would
+re-download it for nothing. `images/`, `music/`, `sfx/` and `symbols/` are
+megabytes that never change under an unchanged name — the no-store set is the
+app *shell*, not the media, which is why the derivation is top-level only.
+
+`tests/ui/test_static_assets.py` derives its expectation from `index.html` while
+the middleware derives its set from the directory. The two are computed from
+different places on purpose; the test is worth something only while that holds.
+Checked against the old set: it fails on exactly the three names above.
+
+### `_serialize_state` moved cards between players
+
+Ante transfer (CR 407.2) and an AI's Raging River lock ran inside the function
+that builds the JSON payload, so `GET /state` was not a read.
+
+**Neither is deletable**, which is why this is a move. Both are lazy settlements
+of a transition the game has already entered, and the human's next action is
+gated on the result. Raging River's prompt sequencing runs defender-then-attacker,
+so an AI on either side must lock its division *before* the prompt renders — settle
+only on the action path and the prompt the human needs in order to act is waiting
+on the human to act. The ante call covers the web layer's own (Lich-aware)
+reading of who has lost, which the engine does not make: `_player_has_lost` falls
+back to the 0-or-less-life rule, while `_maybe_award_ante` fires only from a
+state-based action or a concession.
+
+So the split is `build_state` (settle, then read) over `_serialize_state` (read).
+The settling lives in `game_flow.settle_before_observation`, beside the rest of
+the "game moving forward between HTTP requests" family. Every route calls
+`build_state`, so behaviour is unchanged; what changed is that there is now a
+function you can call to ask what the game looks like without altering the
+answer.
+
+**The invariant asserted is not "observation never mutates"** — that one is
+false, and writing it down would have meant deleting a settle step the game
+needs. It is *the function named for reading does not mutate*.
+
+The session's own view fields (`cleanup_selected_indices`,
+`untap_selected_indices`) are still normalized in the serializer, and that is the
+boundary rather than an oversight: they belong to the `Session`, not the `Game`,
+and clamping a viewer's pending selection to what is currently legal is part of
+rendering the prompt. `_serialize_state` is a read *of the game*.
+
+`tests/ui/test_state_is_a_read.py` drives the serializer against a game with
+settling pending and asserts it comes back untouched, then asserts `build_state`
+over the same state settles it. A test that only checked the payload would pass
+either way — the way this split gets undone is not deleting `build_state`, it is
+someone adding "just one more" settle to the serializer, exactly how the first
+two got there. Verified by restoring the old behaviour: all three guards fail.
+
+Suite 4,343 → 4,362.
+
+---
+
+## The aggregate nobody was measuring: hook reliance
+
+Every entry in `engine/card_hooks.py` is individually defensible, and two guards
+hold each one to its bar — `test_card_lines.py` checks a key names a real
+printed line and still supplies a live instruction,
+`test_front_end_safety.py` checks a production never quietly does less than the
+hook it superseded. Neither looks at **how many there are**, and that is the
+number the audit actually opened with. "Roughly one hand-written rule per two
+cards" was item 1; the parser migration answered it for `@parse_rule` and then
+put 89 cards' readings into a name-keyed registry, where the same arithmetic
+applies and nothing counted it.
+
+`scripts/hook_reliance.py` counts it. Three measures, per set and over the
+deduped pool: **hooked cards** (at least one name-keyed entry, in any registry),
+**hooked lines** (printed lines `CARD_LINE_INSTRUCTIONS` supplies rather than
+the grammar — the same line denominator `GRAMMAR_COVERAGE.md` uses, so they read
+together), and **entries per 100 supported cards**, the one that extrapolates.
+
+### The denominator is supported cards, and that is not a detail
+
+The first version counted every card in the pool, which is wrong in a way that
+is *invisible today and only bites during the experiment the script exists for*.
+All 388 cards are supported, so "cards" and "cards the engine plays" are the
+same number and no reading of live data can tell them apart. They come apart the
+moment a modern set lands at partial support: the denominator inflates with
+cards no hook is carrying, the numerator does not follow, and reliance falls.
+
+The arithmetic, for a 300-card set supported at 30% where 40 of those 90 needed
+a hook to be supported at all:
+
+| | Reading | Verdict |
+| --- | --- | --- |
+| Over supported cards | 135/478 = **28.2%** | rise — ceiling fails, correctly |
+| Over all cards | 135/688 = **19.6%** | *fall* — ceiling passes |
+
+A set that cost 40 new hand-written entries would have reported a five-point
+architectural improvement, and the ratchet would have agreed. So every ratcheted
+denominator is supported cards, and the measure *names* say so
+(`hooked_cards_pct_of_supported`, `entries_per_100_supported_cards`) — an
+implicit denominator is what went wrong, and a name is where that gets fixed.
+Support rate is still reported beside them as pool reach: a real number, a
+different question, never ratcheted.
+
+Two asymmetries are deliberate. **Lines are restricted on both sides** — an
+unsupported card's text is not text the engine reads. **Entries are not**: the
+numerator counts every hand-written entry including those on cards that ended up
+unsupported, because entries are what was written and supported cards are what
+it bought, and a rule that bought nothing should still be charged for.
+
+Pinning this needed a synthetic `Stats`, not a read of the pool, and the reason
+is the point: with everything supported there is no live data that distinguishes
+the two denominators, so a test over real cards would have passed either way.
+`test_the_ratcheted_denominator_is_supported_cards` and
+`test_unsupported_cards_stay_out_of_the_denominators` are the two halves — what
+the arithmetic does, and what the counting does.
+
+**Ceilings, not floors** — `scripts/hook_reliance_ratchet.json` is the mirror of
+`grammar_ratchet.json`, and the direction is the whole point. There the hazard
+is the general reader losing ground; here it is the special-case readers gaining
+it. Adding a hook to a card whose text a production could have read fails
+`tests/engine/test_hook_reliance.py`.
+
+A ceiling has a failure mode a floor does not, and it is guarded explicitly. A
+floor breaks loudly when its measurement breaks — a miscount reads as zero
+coverage and fails. A ceiling breaks *silently*: a measurement that stops
+finding registries reports 0% reliance and passes forever while the pile grows
+underneath. So `test_the_measure_is_not_vacuous` asserts the machinery itself,
+and registries are found by introspecting `engine.card_hooks` rather than from a
+list — a registry added tomorrow is measured tomorrow, not when someone
+remembers. The rule is "most keys name cards in the pool", which is also what
+keeps `TRIGGER_HOOKS` (keyed by trigger condition) correctly out; a test pins
+that too, because a threshold loose enough to sweep it in would inflate every
+measure and the ceilings would be re-snapshotted around noise.
+
+### What it says: 24.5%, and ARN is not the base sets
+
+**95 of 388 cards carry a name-keyed entry, across 102 entries** — 91 of them
+lines in `CARD_LINE_INSTRUCTIONS`, all live. Held at that rate the 26,113-card
+release line needs about **6,900 hand-written entries**, which is item 1 of the
+audit arriving at the same order of magnitude by a different route.
+
+The per-set split is the more useful half, and it does not support reading 24.5%
+as one number:
+
+| Scope | Hooked cards | Hooked lines | Entries/100 supported |
+| --- | ---: | ---: | ---: |
+| LEA / LEB / 2ED / 3ED | 18.2–18.9% | 12.9–13.9% | 19.5–19.9 |
+| ARN | **42.3%** | **29.9%** | **46.2** |
+| ALL (deduped) | 24.5% | 17.5% | 26.3 |
+
+(Every set is 100% supported today, so these read the same under either
+denominator — which is exactly why the denominator had to be fixed before the
+sixth set rather than after.)
+
+The four base sets are near-identical reprint lists, so those rows are one data
+point wearing four hats — and the ALL row, deduped, is that same point plus ARN.
+**Arabian Nights is 2.3× the base rate.** That is consistent with the reading
+the registry's own docstring gives (Shahrazad, Camouflage, Chaos Orb are one-offs
+by design, not templates the engine failed to see), but two sets is not enough to
+tell "designed-weird set" from "the rate rises as sets get stranger". Ingesting
+one modern, heavily-templated set is the experiment that separates them, and it
+now has an instrument to read: the numbers above are the control.
+
+Measuring also turned up something no guard covered. `CARD_LINE_INSTRUCTIONS`
+had a key-names-a-real-card check; the six smaller registries did not, and a
+hook keyed on a misspelling is indistinguishable from a card nobody hooked — the
+card silently loses the behaviour. `test_no_registry_key_names_a_card_outside_the_pool`
+now covers all of them. (None were wrong; the check was.)
+
+---
+
+## The sixth set: what M21 answered
+
+Core Set 2021, ingested to settle whether 24.5% is early-Magic weirdness or the
+real rate. **A core set on purpose**: 3ED is a core set, so putting it next to a
+modern *expansion* would confound era with product type — a difference could be
+"cards got weirder" or "expansions are denser than base sets", with no way to
+tell which. Core-to-core isolates the era.
+
+### 285 cards, 105 supported, and zero of them needed a name
+
+Not one M21 card required a `card_hooks.py` entry. Every card the engine plays
+from a set printed 26 years after the pool is carried by a production that was
+already there — zero new engine work, zero hooks. Pool reliance falls 24.5% →
+19.5% when M21's supported cards are counted: the same 102 entries cover 488
+playable cards instead of 388.
+
+**That number is a lower bound, not a total.** The 180 unsupported M21 cards
+have an unmeasured hook cost — nobody has tried to implement them, and what they
+would need is exactly what this does not say. What it does say is that the
+free-by-templating fraction of a modern set is real and large.
+
+### The two sets fail differently, and that is the finding
+
+| | Hooked cards | Lines parsed |
+| --- | ---: | ---: |
+| Base sets (LEA/LEB/2ED/3ED) | 18.2–18.9% | ~78% |
+| ARN | **42.3%** | 63.9% |
+| M21 | **0%** | **49.3%** |
+
+M21 is the *hardest to parse* set in the pool and the *cheapest in hooks*. Those
+are not in tension — they are different costs, and only one of them amortizes.
+ARN's 42% is one-off cards: Shahrazad, Camouflage, Chaos Orb, each buying exactly
+itself forever. M21's gap is missing *templates* — prowess, lifelink as a keyword
+line, protection from a quality, hexproof, menace, flash, additional costs. One
+production for prowess covers every prowess creature ever printed, in every set,
+forever.
+
+So the honest projection changed shape. The 26,113-card line does not need ~6,900
+one-off entries at M21's rate; it needs productions for a bounded vocabulary of
+templates, plus one-offs at whatever rate modern design actually prints them —
+which M21 says is near zero. **The thing that stops this at 26,000 cards is
+parser breadth, not hand-written rules per card**, and parser breadth is the cost
+that gets cheaper per card as the pool grows. That is the opposite of what the
+audit's item 1 feared, and it is the first evidence either way.
+
+### The bug it found: one import, never once executed
+
+`engine/mixins/stack/casting.py` reached for `from .oracle import
+compile_card_oracle` — resolving to `engine.mixins.stack.oracle`, which does not
+exist. A leftover from the stack decomposition, and `compile_card_oracle` was
+already imported at module scope two lines of file away, so the statement was
+both wrong and redundant.
+
+It is reachable **only for an unsupported card**, and every card in the pool was
+supported. So it had never run, in any test, ever — and the moment a set arrived
+with 33 unsupported-triggered-ability cards it was 66 test failures from two
+sweeps. One line. This is the class of bug a 388-card sample cannot expose at
+any effort, which was the other half of what the ingest was for.
+
+### `sets` and `measured`: what the manifest means
+
+M21 is 37% supported, and two guards assert the manifest pool is 100% supported.
+That is a real conflict and it forced a choice about what the registry means:
+ship a set the app can play a third of, or do not measure a modern set at all.
+
+Neither. `cards/manifest.json` now carries two lists. `sets` is the shipped pool
+and keeps its guarantee — the web app offers those cards, and
+`test_front_end_safety.py` / `test_card_format.py` still fail on a single
+unsupported one. `measured` is a set ingested so its numbers can be read before
+the support work is done: `manifest_set_paths(include_measured=True)` returns it,
+`load_catalog` does not, and no player can put one of its cards in a deck. The
+default on that flag is load-bearing — widening it is how an unsupported card
+would reach a deck.
+
+**Measured sets are reported and never ratcheted**, in both instruments, and the
+reason differs by direction. `grammar_coverage`'s floors would have *failed*:
+ingesting M21 drops ALL from 77.2% to 70.7% parsed without a production
+changing, and a floor that fires on pool composition is a floor that gets
+lowered without being read. `hook_reliance`'s ceilings would have *passed*
+while measuring a set nobody has implemented. Both are the same mistake — a
+ratchet answering a different question with the same number — so both aggregates
+cover the shipped pool only, while the per-set rows show everything.
+
+One casualty worth noting: `test_every_measured_set_is_in_the_baseline` in both
+ratchet tests is now `test_every_ratcheted_scope_is_in_the_baseline`. "Measured"
+had meant "measured by the script" and now names the unshipped sets, which are
+precisely the scopes that test must *not* require.
+
+Suite 4,362 → 4,369, every gate green.
+
+---
+
 ## Standing invariants
 
 Anything that weakens these is a regression regardless of what it enables:
 
 1. **No silent wrongness.** A card may fail loudly as unsupported with a
    reason; it may never resolve as something other than what it says.
-2. **The suite stays fast.** 4,002 tests in ~17s today, against a CI budget of
+2. **The suite stays fast.** 4,341 tests in ~14s today, against a CI budget of
    35s. The budget catches a step change; the *baseline* recorded beside it in
    `ci.yml` is what catches creep, and it is the number to keep honest — it
    went 9s → 17s across four phases with the gate green the whole way. Raising
    the budget is a decision, not maintenance.
+
+   **Open question, not yet a finding:** back-to-back runs on one clean local
+   tree measured 43.98s and then 16.79s, and the first would have failed the
+   35s budget on nothing but machine weather. The budget/baseline mechanism
+   assumes a stable runner. Whether that assumption holds on the *CI* runner is
+   unmeasured — read the percentages `ci.yml` prints across several runs before
+   concluding anything, because "the budget is too tight" and "this dev box is
+   noisy" have opposite fixes and the same symptom.
 3. **Determinism.** A given seed reproduces a run exactly. Parsing and lowering
    are pure functions of card text.
 4. **Ratchets only tighten.** Coverage floors, probe baselines, and accepted-diff
-   lists shrink or hold — never grow without review.
+   lists shrink or hold — never grow without review. "Tighten" is the
+   invariant, not "shrink": `hook_reliance_ratchet.json` holds *ceilings*, so
+   tightening moves it down while `grammar_ratchet.json` tightens by moving up.
+   The pair is deliberate — one guards the general reader keeping ground, the
+   other guards the special-case readers not taking any — and a ceiling needs
+   its measurement asserted, because unlike a floor it passes when it breaks.
 5. **No card name decides behaviour outside `card_hooks.py`** — anywhere under
    `engine/`, heuristics and AI code included. The rule is about *dispatch*, not
    mention: a name in a log line, a prompt label or a fixture decklist is data;

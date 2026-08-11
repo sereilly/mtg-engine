@@ -8,11 +8,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 FastAPI web app with a browser game UI. The card pool lives in `cards/` as one
 JSON per set, registered in `cards/manifest.json` (the single source of truth
 for which sets ship): Limited Edition Alpha (290 cards), Limited Edition Beta
-(292), Unlimited Edition (292 — same list as Beta), Arabian Nights (78) and Revised Edition (306),
+(292), Unlimited Edition (292 — same list as Beta), Arabian Nights (78) and Revised Edition (296),
 388 unique cards, all classified as supported. `scripts/support_report.py` reports on the whole manifest pool, not one set. Card files hold only the fields
 the engine and web layer read; `scripts/ingest_set.py` produces them. The
 engine is **registry-based**: card support grows by adding small isolated
 entries, never by editing core control flow.
+
+**The manifest has two roles.** `sets` is the shipped pool above, held at 100%
+supported — the web app offers those cards to players, and two guards
+(`tests/engine/test_front_end_safety.py`, `tests/engine/test_card_format.py`)
+fail if one of them is unsupported. `measured` is a set ingested so its numbers
+can be read *before* the work of supporting it is done: only the coverage
+instruments load it (`manifest_set_paths(include_measured=True)`), `load_catalog`
+does not, and no player can put one of its cards in a deck. Core Set 2021 (M21,
+285 cards, 37% supported) sits there. A measured set is reported by
+`GRAMMAR_COVERAGE.md` / `HOOK_RELIANCE.md` and deliberately left out of their
+floors and ceilings — a ratchet over a set nobody has implemented fires on its
+composition rather than on anything anyone did. It moves up to `sets` when it is
+fully supported. Guarded by `tests/engine/test_manifest_roles.py`.
 
 `ROADMAP.md` tracks the work to scale from this pool to the full ~26,000-card
 release line — read it before parser or card-data work.
@@ -71,6 +84,7 @@ python scripts/rules_progress.py      # regenerate RULES_PROGRESS.md (CR test-co
 python scripts/behaviour_classes.py   # regenerate BEHAVIOUR_CLASSES.md (behavioural-equivalence tracker); --check fails on drift, --accept re-snapshots
 python scripts/parse_coverage.py      # regenerate PARSE_COVERAGE.md (oracle-text parse-coverage tracker); --check fails on unclaimed text
 python scripts/grammar_coverage.py    # regenerate GRAMMAR_COVERAGE.md (how much of the pool the parser reads); --check fails on regression, --accept re-snapshots floors
+python scripts/hook_reliance.py       # regenerate HOOK_RELIANCE.md (how much of the pool is supported by its *name*); --check fails on a rise, --accept re-snapshots ceilings
 python scripts/fetch_vocabulary.py    # re-fetch data/vocabulary/*.json from Scryfall (run when a new set adds creature/land types)
 python scripts/ingest_set.py 3ED --fetch   # add a new set: download from Scryfall into the engine's card format
 python scripts/ingest_set.py --all --check # report card-file sizes without writing
@@ -124,6 +138,31 @@ precedence bands — a grammar has no precedence knob, because a production
 consumes its line or refuses it. Read `ROADMAP.md` before doing parser work;
 coverage lives in `GRAMMAR_COVERAGE.md`.
 
+**Where a new template goes.** Both halves are layered, bottom to top, and the
+effect families are the *same names* on each side — so one template has one home
+per side, and moving a production between families is not a caller-visible
+change (both `__init__` re-export flat):
+
+```
+ast/_core.py   the vocabulary nodes are built from
+ast/           damage characteristics board cards stack combat game
+ast/statements.py  the roof: Effect / Statement / AbilityNode unions
+phrases.py     word tables + fragment productions   |  lowering/_common.py
+effects/       damage characteristics board cards   |  lowering/  (same seven)
+               stack combat game                    |  lowering/categories.py
+statements.py  one whole sentence                   |
+parser.py      one printed line (parse_line)        |  lower.py (dispatch)
+```
+
+Prowess gets a node in `ast/characteristics.py`, parses in
+`effects/characteristics.py` and lowers in `lowering/characteristics.py`.
+`tests/engine/test_grammar_layering.py` enforces the layer order, family
+independence, and flat re-export from each `__init__` — a fragment two families
+need goes in `phrases`/`_common`/`_core`, never in one of them, because that
+coupling is what makes the grouping stop being information. No module may exceed
+1,000 lines; that is not style, it is the signal that a family stopped absorbing
+new work.
+
 Extension points, each a small registered function — **adding a card means
 adding entries, not editing dispatch**:
 
@@ -132,7 +171,9 @@ adding entries, not editing dispatch**:
   production must consume **every token** of its line or raise `GrammarError` —
   loud failure (card unsupported, clause named) is always preferable to a silent
   partial match. `GRAMMAR_CATEGORIES` is held equal to every category
-  `lower.py` can emit (`tests/engine/test_grammar_categories.py`): with no
+  `lowering/categories.py` declares (`tests/engine/test_grammar_categories.py`,
+  which still imports it from `engine.grammar.lower` — the table moved, its
+  address did not): with no
   fallback underneath, a category left off does not route its lines elsewhere,
   it costs those cards their support. An effect that should *not* execute
   belongs as a `LoweringError` naming what is missing. Vocabulary (creature
@@ -254,6 +295,33 @@ adding entries, not editing dispatch**:
   value, which matches an opponent's look-alike. Guarded by
   `tests/engine/test_control_reads.py`; zone *writes* (rebuilding the list) are
   exempt by shape.
+  **Address a permanent by its id, not its slot.** `Permanent.permanent_id` is a
+  monotonic counter, stamped on entering the battlefield (CR 400.7 — a returning
+  permanent is a new object, so it gets a new id). Resolve one through the same
+  seam: `permanent_by_id`, `find_permanent_by_id`, `permanent_id_of`. An index
+  is unstable — anything leaving renumbers every later slot, so an index held
+  across a resolution step can address the wrong permanent — and locating by
+  value hits the look-alike, which was six live bugs (Crumble destroying the
+  first of two equal Moxen, among them). `.battlefield.index()` / `.remove()`
+  are **banned outright** by that guard; positional subscripting is ratcheted
+  per module. The wire carries `id` alongside `index` and resolves it once at
+  the top of `web/actions.py`, where a stale id is a 404, never a fall back to
+  the index. **Combat is still index-keyed, but its maps follow their creatures**:
+  `_renumber_combat_after_removal` runs from the removal transition below and
+  drops an entry whose creature left, shifting the rest. Adding a combat map
+  means adding it there — every index has a resolvable seat (an attacker's is
+  always the active player, a blocker's comes from `combat_blockers`' outer key
+  or from `_combat_seat_of_blocker`), and a map left out silently keeps pointing
+  at whichever creature slid into the slot.
+  **Leaving the battlefield is one transition**: `remove_from_battlefield(perm)`
+  / `remove_all_from_battlefield(perms)`, also on the seam. It was 41 open-coded
+  rebuilds in three spellings (filter-by-identity, `pop` by index,
+  rebuild-from-survivors), which is the `become_tapped` problem again — anything
+  that must happen when a permanent leaves had 41 places to be forgotten. Where
+  it goes next is still the caller's business. Two writes are legitimately not
+  removals and are exempted by name in `tests/engine/test_control_reads.py`:
+  `_sync_control`'s move between battlefields (a control change is not a zone
+  change) and the Debug Menu's wholesale board replacement.
 - `engine/auras.py` — what an Aura's effect lines say and whether the engine
   implements them. Gates support (an Aura whose effect is unimplemented is
   reported unsupported rather than entering play and doing nothing) and derives
@@ -299,6 +367,19 @@ adding entries, not editing dispatch**:
   scope**: a weight is tuning and stays in `engine/ai_policy.py`, but which
   cards a weight reaches is a claim about the pool and is derived from the
   compiled program in `engine/ai_valuation.py`.
+  **The pile is measured too, not just each entry.** Those guards check that an
+  entry is honest; `scripts/hook_reliance.py` checks how many there are, because
+  a name-keyed entry buys one card while a grammar production buys every card
+  printed the same way — so the hooked share of the pool is the engine's
+  marginal cost per card, and the number that decides whether this reaches the
+  full release line. Every ratcheted denominator is **supported** cards (the
+  measure names say so), because counting cards the engine cannot play would let
+  ingesting a barely-supported set read as falling reliance.
+  `HOOK_RELIANCE.md` reports it and
+  `scripts/hook_reliance_ratchet.json` holds **ceilings**, the opposite
+  direction to the grammar ratchet's floors: adding a hook to a card the grammar
+  could have read fails `tests/engine/test_hook_reliance.py`. Raise them with
+  `--accept` only after deciding the rise was worth what it bought.
 - `engine/land_animation.py`, `engine/land_play_allowance.py` — the newest two
   derivation tables: "All <type>s are P/T creatures that are still lands"
   (CR 613 layers 4/5/7) and "You may play <N> additional lands on each of
@@ -411,7 +492,9 @@ The card pool is `CARD_PATHS`, read from `cards/manifest.json` via
 `engine.card_loader.manifest_set_paths()` and loaded once into `CARD_CATALOG`
 at process startup (`runtime.py`). **Adding a set means ingesting it and appending one
 manifest entry** — the web app, the test fixtures, and the coverage scripts all
-read that one registry. Reprints dedupe to a single card by `oracle_id` (first
+read that one registry. A newly ingested set goes under `measured` first (see
+above); appending it to `sets` is the claim that every card in it is supported,
+and two guards check that claim. Reprints dedupe to a single card by `oracle_id` (first
 printing wins) with every printing recorded in `CardDefinition.printings`.
 State lives in in-memory stores: `session_store.py`
 (games; takes the loaded catalog, not a path — never re-reads the JSON per
