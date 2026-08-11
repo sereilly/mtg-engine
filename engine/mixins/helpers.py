@@ -464,6 +464,26 @@ class GameHelpersMixin:
                     trigger_context={"combat_opponents": opponents},
                 )
                 self.log.append(f"{permanent.card.name} triggered (died in combat)")
+            # "When this creature dies, you may …" (Goblin Arsonist). The
+            # grammar's `may` wrapper carries the whole optional action, so it
+            # is enqueued as-is and resolves off the stack (CR 603.3). Only the
+            # wrapper kind takes this path — the specific dies shapes above
+            # stay inline for the reasons their comments give, so nothing
+            # fires twice.
+            for may_trig in matching_triggers(
+                permanent.effective_card,
+                condition_kinds={"dies"},
+                instruction_kinds={"may"},
+            ):
+                self._enqueue_triggered_ability(
+                    controller_index=self.players.index(player),
+                    source_permanent=permanent,
+                    card=permanent.card,
+                    instruction=may_trig.instruction,
+                    effect_kind=may_trig.effect_kind,
+                    ability_text=may_trig.source_line,
+                )
+                self.log.append(f"{permanent.card.name} triggered (died)")
         text = permanent.card.oracle_text.lower()
         if (
             "when this enchantment is put into a graveyard from the battlefield, you lose the game"

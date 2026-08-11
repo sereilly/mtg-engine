@@ -119,6 +119,31 @@ def test_storm_caller_damages_each_opponent_on_entry(set_pool):
     assert p1.life == 20
 
 
+# --- The causative round: "you may have <subject> <verb> ..." ---------------
+
+
+@pytest.mark.parametrize("name", ["Goblin Arsonist", "Battle-Rattle Shaman"])
+def test_causative_round_cards_compile_supported(set_pool, name):
+    assert compile_card_oracle(set_pool("M21")[name]).supported
+
+
+def test_goblin_arsonist_may_ping_when_it_dies(set_pool):
+    """"You may have it deal 1 damage to any target" — the may wrapper arms
+    the standard optional prompt, and accepting deals the damage."""
+    arsonist = Permanent(card=set_pool("M21")["Goblin Arsonist"])
+    p1 = PlayerState(name="P1", battlefield=[arsonist])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    p1.battlefield.remove(arsonist)
+    game._permanent_to_graveyard(p1, arsonist)
+    game.resolve_top_of_stack()
+
+    assert any(e["card_name"] == "Goblin Arsonist" for e in game.pending_optional_pays)
+    game.confirm_optional_pay(0, "Goblin Arsonist", accept=True)
+    assert p2.life == 19
+
+
 # --- The trigger-narrowing round: conditions carry their own restrictions ---
 
 

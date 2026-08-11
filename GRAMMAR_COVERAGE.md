@@ -21,7 +21,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | 2ED | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
 | ARN | 78 | 108 | 64.8% | 61.1% | 38.9% | 34 |
 | 3ED | 296 | 389 | 78.9% | 76.9% | 41.9% | 149 |
-| M21 *(measured)* | 285 | 503 | 51.7% | 46.9% | 26.2% | 109 |
+| M21 *(measured)* | 285 | 503 | 52.1% | 47.3% | 26.6% | 111 |
 | **All (shipped)** | **1248** | **1663** | **78.0%** | **76.2%** | **41.5%** | **629** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -33,7 +33,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
 | 299 | 162 | expected a subject |  |
-| 113 | 59 | unrecognized effect verb |  |
+| 111 | 57 | unrecognized effect verb |  |
 | 68 | 49 | unconsumed text |  |
 | 33 | 33 | unrecognized activation cost |  |
 | 27 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -113,6 +113,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `When this creature enters, put a +1/+1 counter on target creature you control.`
 - **Basri's Solidarity**
   - `Put a +1/+1 counter on each creature you control.`
+- **Battle-Rattle Shaman**
+  - `At the beginning of combat on your turn, you may have target creature get +2/+0 until end of turn.`
 - **Bazaar of Baghdad**
   - `{T}: Draw two cards, then discard three cards.`
 - **Birds of Paradise**
@@ -429,6 +431,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `{T}: Look at target player's hand.`
 - **Glorious Anthem**
   - `Creatures you control get +1/+1.`
+- **Goblin Arsonist**
+  - `When this creature dies, you may have it deal 1 damage to any target.`
 - **Goblin Balloon Brigade**
   - `{R}: This creature gains flying until end of turn.`
   - `{R}: This creature gains flying until end of turn.`

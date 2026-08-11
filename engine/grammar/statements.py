@@ -224,6 +224,12 @@ def parse_statement(stream: TokenStream) -> ast.Statement:
                 stream.advance()
                 cost = _parse_mana_payment(stream)
                 return ast.May(ast.PlayerRef("you"), cost=cost)
+            # The causative "you may have <subject> <verb> …" (Goblin
+            # Arsonist's "you may have it deal 1 damage to any target") is the
+            # optional form of the unwrapped sentence — the verb table already
+            # accepts the uninflected spelling the causative leaves behind, so
+            # consuming "have" is the whole difference.
+            stream.accept_word("have")
             try:
                 action = parse_statement(stream)
                 return ast.May(ast.PlayerRef("you"), action=action)
