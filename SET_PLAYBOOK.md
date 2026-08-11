@@ -260,4 +260,6 @@ non-source subjects, each-opponent recipients. No playbook text needed
 changing — the round loop ran as written; one confirmation worth recording:
 a round whose direct yield is small (round 3, one card) is still right to
 take when ranked machinery sits under later cards, exactly as Phase 3's
-generalise-first rule intends.
+generalise-first rule intends. Round 5 (keyword grants, 120 → 123) extended
+the same session; the ROADMAP entry carries the numbers and the next
+ranking (search templates first).

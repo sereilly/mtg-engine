@@ -122,12 +122,26 @@ Malevolence, Grim Tutor and Caged Zombie. The up-to quantifier also consumes
 its "target" now — parse groundwork the lowering already honoured, banked
 for Frost Breath/Barrin/Sanguine Indulgence once their second gaps close.
 
-**Next per the census:** the `_KEYWORD_GRANTS` table → payload-driven grant
-("gains deathtouch/indestructible/hexproof until end of turn", ~7 cards);
-the search-library template family (5+ cards, one site); then the
-trigger-condition narrowings — respecting the unanchored-regex landmine
-recorded above — before the subsystem blocks (planeswalkers, scry,
-search-by-name, exile-until-leaves, per-turn trackers).
+**Round 5 — keyword grants as payload (120 → 123).** The three-entry
+`_KEYWORD_GRANTS` table keeps its pairs; everything else rides
+`grant_target_keyword_until_eot` / `grant_self_keyword_until_eot`, payload
+keywords looped through `grant_keyword`'s layer-6 grants, **gated on
+`IMPLEMENTED_KEYWORDS`** — the grant machinery would put any word into layer
+6, but a word without behaviour is a grant of nothing, so the lowering
+refuses it at the same bar the printed-keyword gate holds. Multi-keyword
+sentences are one instruction. Bought Sure Strike, Ranger's Guile, Fetid
+Imp; Ranger's Guile's test proves the grant is real (the hexproofed creature
+refuses the opposing Shock and accepts its controller's). Selfless Savior
+and Seasoned Hallowblade stay gated on their sacrifice/discard costs,
+Alchemist's Gift on its choose-one-of-two, Heroic Intervention on the mass
+scope.
+
+**Next per the census:** the search-library template family (5+ cards, one
+site — `grammar/effects/cards.py` hardcodes one sentence shape; "reveal it",
+graveyard, and by-name variants); then the trigger-condition narrowings —
+respecting the unanchored-regex landmine recorded above — before the
+subsystem blocks (planeswalkers, scry, search-by-name, exile-until-leaves,
+per-turn trackers).
 
 ---
 
