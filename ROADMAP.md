@@ -136,12 +136,24 @@ and Seasoned Hallowblade stay gated on their sacrifice/discard costs,
 Alchemist's Gift on its choose-one-of-two, Heroic Intervention on the mass
 scope.
 
-**Next per the census:** the search-library template family (5+ cards, one
-site — `grammar/effects/cards.py` hardcodes one sentence shape; "reveal it",
-graveyard, and by-name variants); then the trigger-condition narrowings —
-respecting the unanchored-regex landmine recorded above — before the
-subsystem blocks (planeswalkers, scry, search-by-name, exile-until-leaves,
-per-turn trackers).
+**Round 6 — mana value is payload (123 → 124).** The census's "single
+precise fix" inside the search cluster: a literal bound ("mana value 3 or
+less") now rides `ObjectFilter.to_payload` and `permanent_matches_filter`
+tests it against the effective card's cmc (CR 202.3), so Eliminate compiles
+and its cast validation refuses a four-drop. A *variable* bound ("mana value
+X") still refuses — no payload form, and dropping it would widen the effect,
+so the old never-dropped guard split into one test proving the bound is
+carried and one proving X still refuses. The search production also learned
+"reveal it," (honoured by the flow's public log) and "put it into your hand"
+— banked groundwork, since Fierce Empath still waits on its you-may trigger
+and MV-in-search-flow.
+
+**Next per the census:** the rest of the search-library template family
+(graveyard and by-name variants, the search-flow filter widening); the
+trigger-condition narrowings — respecting the unanchored-regex landmine
+recorded above — and the sacrifice/discard activation costs (Selfless
+Savior, Seasoned Hallowblade); then the subsystem blocks (planeswalkers,
+scry, exile-until-leaves, per-turn trackers).
 
 ---
 

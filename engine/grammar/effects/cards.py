@@ -182,9 +182,18 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
         raise stream.error("a search for more than one card has no representation")
     filt = parse_object_filter(stream)
     stream.accept_punct(",")
+    # "reveal it," — honoured rather than dropped: the search flow's log names
+    # the found card publicly ("searched library and put X into hand"), which
+    # is what revealing one card means to this engine.
+    if stream.accept_word("reveal"):
+        stream.expect_word("it")
+        stream.accept_punct(",")
     stream.expect_word("put")
-    stream.expect_word("that")
-    stream.expect_word("card")
+    # "put that card into your hand" / "put it into your hand" — one referent,
+    # two printed spellings.
+    if not stream.accept_word("it"):
+        stream.expect_word("that")
+        stream.expect_word("card")
     # "into your hand" / "onto the battlefield" — both prepositions are read so
     # the destination reaches lowering, which refuses the ones no flow
     # implements *by name*. Refusing here instead would report the card as an

@@ -35,14 +35,12 @@ def _filter_payload(filt: ast.ObjectFilter) -> dict[str, object]:
         raise LoweringError(
             f"no handler reads a filter scoped to the {filt.zone}", node=filt
         )
-    if filt.mana_value is not None:
-        # ``to_payload`` has no key for a mana-value restriction and
-        # ``permanent_matches_filter`` cannot test one, so every handler reached
-        # through this function would ignore it. The one card that restricts by
-        # mana value is a counterspell, whose own lowering reads the field
-        # directly; anything else must refuse rather than widen its effect to
-        # every mana value.
-        raise LoweringError("no handler filters on mana value", node=filt)
+    if filt.mana_value is not None and "mana_value" not in payload:
+        # ``to_payload`` emits a literal mana-value bound and
+        # ``permanent_matches_filter`` tests it; a *variable* bound ("mana
+        # value X") has no payload form yet, and dropping it would widen the
+        # effect to every mana value — so the line refuses instead.
+        raise LoweringError("a variable mana-value bound has no payload form", node=filt)
     return payload
 
 

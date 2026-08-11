@@ -982,19 +982,21 @@ def test_a_mana_value_gate_the_handler_cannot_ask_is_refused(line):
     assert result.parsed and not result.lowered
 
 
-@pytest.mark.parametrize(
-    "line",
-    [
-        "Destroy target creature with mana value 3.",
-        "Tap target creature with mana value X.",
-    ],
-)
-def test_a_mana_value_restriction_is_never_dropped_by_another_effect(line):
-    """``ObjectFilter.mana_value`` has no payload key and
-    ``permanent_matches_filter`` cannot test one, so every handler but the
-    counterspell would ignore it. Refusing keeps a new noun-phrase restriction
-    from silently widening effects that were written before it existed."""
-    result = compile_line(line, card_name="Test")
+def test_a_literal_mana_value_restriction_reaches_the_payload():
+    """A fixed bound ("mana value 3 or less", Eliminate) is carried on the
+    payload and tested by ``permanent_matches_filter`` — never dropped."""
+    result = compile_line(
+        "Destroy target creature with mana value 3 or less.", card_name="Test"
+    )
+
+    assert result.parsed and result.lowered, result.failure_reason
+    assert result.instructions[0].payload["mana_value"] == {"op": "le", "value": 3}
+
+
+def test_a_variable_mana_value_restriction_still_refuses():
+    """"mana value X" has no payload form, and dropping the bound would widen
+    the effect to every mana value — the dropped-rider bug class."""
+    result = compile_line("Tap target creature with mana value X.", card_name="Test")
 
     assert result.parsed and not result.lowered
 

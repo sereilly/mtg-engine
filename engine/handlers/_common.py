@@ -178,6 +178,23 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
         return False
     if exclude_types and any(perm.has_type(t) for t in exclude_types):
         return False
+    # "with mana value 3 or less" (Eliminate). CR 202.3: a permanent's mana
+    # value comes from its mana cost — the ingested cmc; a token's is 0.
+    mana_value = payload.get("mana_value")
+    if mana_value:
+        cmc = int(getattr(perm.effective_card, "cmc", 0) or 0)
+        bound = int(mana_value.get("value", 0))
+        op = mana_value.get("op")
+        if op == "le" and cmc > bound:
+            return False
+        if op == "lt" and cmc >= bound:
+            return False
+        if op == "ge" and cmc < bound:
+            return False
+        if op == "gt" and cmc <= bound:
+            return False
+        if op == "eq" and cmc != bound:
+            return False
     return True
 
 

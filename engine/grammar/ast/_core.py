@@ -192,6 +192,14 @@ class ObjectFilter:
             payload["blocking_only"] = True
         if self.other_than_source:
             payload["exclude_self"] = True
+        # "with mana value 3 or less" (Eliminate). Only a literal bound has a
+        # payload form; a variable one ("mana value X") is left unemitted so
+        # _filter_payload refuses the line rather than dropping the bound.
+        if self.mana_value is not None and isinstance(self.mana_value.value, Fixed):
+            payload["mana_value"] = {
+                "op": self.mana_value.op,
+                "value": self.mana_value.value.value,
+            }
         return payload
 
 

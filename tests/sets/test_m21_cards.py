@@ -119,6 +119,35 @@ def test_storm_caller_damages_each_opponent_on_entry(set_pool):
     assert p1.life == 20
 
 
+# --- The mana-value round: a literal bound rides the payload ----------------
+
+
+def test_eliminate_compiles_with_its_mana_value_bound(set_pool):
+    program = compile_card_oracle(set_pool("M21")["Eliminate"])
+    assert program.supported
+    destroy = next(i for i in program.instructions if i.kind == "destroy_target_permanent")
+    assert destroy.payload["mana_value"] == {"op": "le", "value": 3}
+
+
+def test_eliminate_refuses_a_four_drop(set_pool):
+    """The bound is enforced at cast validation, not just carried."""
+    eliminate = set_pool("M21")["Eliminate"]
+    cheap = Permanent(card=set_pool("M21")["Concordia Pegasus"])   # MV 2
+    big = Permanent(card=set_pool("M21")["Warden of the Woods"])   # MV 5
+    p1 = PlayerState(name="P1", hand=[eliminate])
+    p2 = PlayerState(name="P2", battlefield=[cheap, big])
+    game = Game(players=[p1, p2])
+
+    ok, _ = game._validate_cast_targets(
+        eliminate, 0, target_player_index=1, target_permanent_index=1
+    )
+    assert not ok
+    ok, msg = game._validate_cast_targets(
+        eliminate, 0, target_player_index=1, target_permanent_index=0
+    )
+    assert ok, msg
+
+
 # --- The keyword-grant round: "gains <keyword> until end of turn" -----------
 
 
