@@ -84,6 +84,53 @@ then `up to N target`.
 
 ---
 
+## M21 rounds 2–4: the census ranking, executed
+
+*(2026-08-10, same day.)* Three rounds off the top of the ranking,
+110 → **120** supported, each landing with the suite green and every ratchet
+untouched.
+
+**Round 2 — token naming (110 → 115).** CR 111.4 settles the refusal the
+lowering had recorded: an unnamed token is "<subtypes> Token" (the CR's own
+Dwarf Berserker Token example), so the rule landed once in `engine/tokens.py`
+as `default_token_name`, the grammar takes it, and Rukh Egg's hook fell in
+line — "Bird" became "Bird Token", the CR-correct spelling, with the ARN
+tests updated and the Scryfall art lookup matching the suffix-stripped name.
+Bought Valorous Steed, Deathbloom Thallid, Goblin Wizardry, Sporeweb Weaver
+and Speaker of the Heavens; Falconer Adept stays gated on its
+tapped-and-attacking rider.
+
+**Round 3 — counters beyond the source (115 → 116).** The put-counter
+lowering learned the target and each-you-control subjects. The target form
+joins `add_counter_to_target` — the kind Dwarven Weaponsmith's hook has
+emitted since LEA *with no handler behind it*, the shipped pool's quietest
+gap: the ability resolved to nothing, and no guard minded because
+`test_no_hollow_support` only reads instants and sorceries. One card flipped
+(Basri's Solidarity); the yield is the machinery, which every counter card
+behind the up-to/protection/trigger gaps now lowers through. The label
+lesson: the grammar claiming Dwarven Weaponsmith's clause moved its label
+source, and the historical `triggered_counter` misnomer moved into
+`ACTIVATED_LABELS` documented rather than corrected — the label module
+carries the legacy vocabulary, it does not fix it.
+
+**Round 4 — each-opponent recipients (116 → 120).** Damage and life loss
+both accept "each opponent", on the same recipient key the caster branch
+already used; the damage loop is resumable through the one player-damage
+path, life loss is CR 120.3-plain. "You lose N life" came with it, which is
+the half that completed Grim Tutor. Bought Storm Caller, Spirit of
+Malevolence, Grim Tutor and Caged Zombie. The up-to quantifier also consumes
+its "target" now — parse groundwork the lowering already honoured, banked
+for Frost Breath/Barrin/Sanguine Indulgence once their second gaps close.
+
+**Next per the census:** the `_KEYWORD_GRANTS` table → payload-driven grant
+("gains deathtouch/indestructible/hexproof until end of turn", ~7 cards);
+the search-library template family (5+ cards, one site); then the
+trigger-condition narrowings — respecting the unanchored-regex landmine
+recorded above — before the subsystem blocks (planeswalkers, scry,
+search-by-name, exile-until-leaves, per-turn trackers).
+
+---
+
 ## Standing invariants
 
 Anything that weakens these is a regression regardless of what it enables:

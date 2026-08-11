@@ -252,3 +252,12 @@ edits from this run: Phase 1 now warns that a census reason names only the
 first refused line; Phase 2's classifier tactic now says compile-not-read;
 Phase 3 gained the widened-gate rule (grep for readers keyed on the old
 classification). Remaining Known-gaps items stand unchanged.
+
+**M21 — 2026-08-10, later the same day (rounds 2–4; 110 → 120).** ROADMAP
+trimmed to the live work (history in git at `22bd726`), then three rounds
+executed off the census ranking: token naming (CR 111.4), counters on
+non-source subjects, each-opponent recipients. No playbook text needed
+changing — the round loop ran as written; one confirmation worth recording:
+a round whose direct yield is small (round 3, one card) is still right to
+take when ranked machinery sits under later cards, exactly as Phase 3's
+generalise-first rule intends.
