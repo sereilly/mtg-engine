@@ -51,6 +51,18 @@ class ActivatedAbilityCost:
     # activating sacrifices the source permanent as part of the cost, so the
     # ability still resolves after it has left the battlefield (CR 603.6).
     sacrifice_self: bool = False
+    # Hobblefiend: "{1}, Sacrifice another creature: …" — a *chosen* permanent
+    # rather than the source. The type is payload, so one field covers every
+    # card printed this way, and `sacrifice_excludes_source` is the word
+    # "another". None means "no such cost", never "any permanent": an empty
+    # filter would let the charger eat a land.
+    sacrifice_type: str | None = None
+    sacrifice_excludes_source: bool = False
+    # Seasoned Hallowblade: "Discard a card: …" — N cards the payer chooses,
+    # where `discard_last_drawn` above names its card by history and leaves the
+    # payer no choice at all. Two fields because they are two costs: a card
+    # could print both.
+    discard_cards: int = 0
 
 
 @dataclass(frozen=True)

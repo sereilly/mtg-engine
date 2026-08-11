@@ -120,6 +120,15 @@ def _resolve_permanent_ids(game, req: GameActionRequest) -> GameActionRequest:
         update["target_permanent_index"] = game.battlefield_index_of(permanent)
         update["target_seat"] = seat
 
+    if req.cost_permanent_id is not None:
+        found = game.find_permanent_by_id(req.cost_permanent_id)
+        if found is None:
+            raise HTTPException(status_code=404, detail=gone)
+        _, permanent = found
+        # No seat is written back: only the payer's own permanents can pay
+        # their cost, and the charger checks control itself.
+        update["cost_permanent_index"] = game.battlefield_index_of(permanent)
+
     if req.target_permanent_ids is not None:
         indices: list[int] = []
         seats = set()
@@ -500,6 +509,8 @@ def do_action(session_id: str, req: GameActionRequest):
                 target_stack_index=engine_stack_index,
                 ability_index=req.ability_index,
                 x_value=req.x_value,
+                cost_permanent_index=req.cost_permanent_index,
+                cost_hand_index=req.cost_hand_index,
                 source_seat=req.source_seat,
                 source_permanent_index=req.source_permanent_index,
                 source_stack_index=engine_source_stack_index,

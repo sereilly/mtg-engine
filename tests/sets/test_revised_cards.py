@@ -386,3 +386,30 @@ def test_primal_clay_choice_replaces_the_body(catalog, option, expected):
     assert (clay.effective_power, clay.effective_toughness) == (power, toughness)
     assert game._has_keyword(clay, "flying") is flying
     assert game._has_keyword(clay, "defender") is defender
+
+
+def test_atog_pays_an_artifact_for_its_pump(catalog):
+    """Atog's sacrifice was parsed by the grammar and charged by nobody, so the
+    pump was free and repeatable: the ability read as supported, the artifact
+    stayed on the battlefield, and +2/+2 could be taken as many times as the
+    player liked. The cost is collected on activation now (CR 601.2h), and an
+    unpayable one makes the ability unactivatable rather than free (602.5c)."""
+    atog = Permanent(card=catalog["Atog"])
+    mox = Permanent(card=catalog["Mox Pearl"])
+    p1 = PlayerState(name="P1", battlefield=[atog, mox])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    base = atog.effective_power
+
+    first = game.activate_permanent_ability(0, "Atog", permanent_index=0)
+
+    assert first.supported, first.details
+    assert atog.effective_power == base + 2
+    assert not any(perm is mox for perm in game.controlled_by(0))
+    assert any(card.name == "Mox Pearl" for card in p1.graveyard)
+
+    second = game.activate_permanent_ability(0, "Atog", permanent_index=0)
+
+    assert not second.supported
+    assert atog.effective_power == base + 2

@@ -33,6 +33,8 @@ whole-pool snapshot of every compiled program and every line's parse result,
 diffed before and after.
 """
 
+from dataclasses import replace
+
 from . import ast
 from .amounts import parse_amount
 from .derived import derived_instruction_for_line
@@ -139,12 +141,40 @@ def _parse_cost_object(stream: TokenStream, verb: str) -> ast.ObjectFilter:
     something the rest of the cost machinery has no way to express, so they
     raise instead.
     """
+    # "Sacrifice **another** creature" (Hobblefiend). The word sits where the
+    # article does, so the noun behind it parses bare — `parse_target_spec`
+    # returns quantifier "all" for "creature" and None for "another creature".
+    # Teaching the noun parser an "another" quantifier would change every
+    # targeted line in the pool, so the exclusion is read here and carried on
+    # the filter's existing `other_than_source` field: CR 602.5c's "another" is
+    # a restriction on what may pay, not a different kind of cost.
+    another = bool(stream.accept_word("another"))
     spec = parse_target_spec(stream)
     if spec is None:
         raise stream.error(f"expected what to {verb} as a cost")
-    if spec.quantifier not in ("this", "a") or spec.count != 1:
+    allowed = ("all",) if another else ("this", "a")
+    if spec.quantifier not in allowed or spec.count != 1:
         raise stream.error(f"unsupported {verb} cost quantifier {spec.quantifier!r}")
-    return spec.filter
+    return replace(spec.filter, other_than_source=True) if another else spec.filter
+
+
+def _is_chargeable_sacrifice(filt: ast.ObjectFilter) -> bool:
+    """Whether the payment path can actually collect this sacrifice cost.
+
+    ``queue_permanent_ability`` charges it with one card type (plus "another"),
+    which is everything the pool prints but "a creature **with defender**"
+    (Portcullis Vine). A rider the charger cannot express must refuse the line
+    rather than be dropped — dropped, the Vine sacrifices any creature at all
+    while still reporting supported, which is the dropped-rider bug class.
+    Compared for equality against the bare filter, so a field the AST grows
+    later is refused here instead of silently ignored.
+    """
+    if filt.is_source:
+        return True
+    bare = ast.ObjectFilter(
+        card_types=filt.card_types, other_than_source=filt.other_than_source
+    )
+    return len(filt.card_types) == 1 and filt == bare
 
 
 def _parse_counter_removal_cost(stream: TokenStream) -> ast.RemoveCounterCost:
@@ -194,7 +224,10 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
             stream.accept_punct(",")
             continue
         if stream.accept_word("sacrifice"):
-            costs.append(ast.SacrificeCost(_parse_cost_object(stream, "sacrifice")))
+            sacrificed = _parse_cost_object(stream, "sacrifice")
+            if not _is_chargeable_sacrifice(sacrificed):
+                raise stream.error("no cost path charges a narrowed sacrifice")
+            costs.append(ast.SacrificeCost(sacrificed))
             stream.accept_punct(",")
             continue
         if stream.accept_word("exile"):
@@ -211,14 +244,18 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
             stream.accept_punct(",")
             continue
         if stream.at_word("discard"):
-            # Only the one wording the engine can charge. A generic "Discard a
-            # card" cost has no field on ``ActivatedAbilityCost``, so accepting
-            # it would describe a payment nothing collects — and no card in the
-            # pool prints it, which makes it untestable surface area besides.
             stream.advance()
-            if not stream.accept_phrase("the", "last", "card", "you", "drew", "this", "turn"):
+            if stream.accept_phrase("the", "last", "card", "you", "drew", "this", "turn"):
+                costs.append(ast.DiscardCost(ast.Fixed(1), last_drawn=True))
+            elif stream.accept_phrase("a", "card"):
+                # "Discard a card" (Seasoned Hallowblade) — the payer picks, and
+                # ``ActivatedAbilityCost.discard_cards`` is what collects it.
+                # Only the singular is admitted: a counted "discard two cards"
+                # is a shape nothing charges, and admitting it would describe a
+                # payment that never happens.
+                costs.append(ast.DiscardCost(ast.Fixed(1)))
+            else:
                 raise stream.error("unrecognized discard cost")
-            costs.append(ast.DiscardCost(ast.Fixed(1), last_drawn=True))
             stream.accept_punct(",")
             continue
         break

@@ -14,6 +14,19 @@ from ...game_types import OracleExecutionContext, OracleStateMachine, Simulation
 from ...handlers._common import permanent_matches_filter
 from ...oracle import OracleInstruction, compile_card_oracle
 
+# Instruction kinds whose handler performs the sacrifice its own cost clause
+# names. Diamond Valley's "{T}, Sacrifice a creature: You gain life equal to
+# the sacrificed creature's toughness" is one resolution: the handler picks the
+# creature *because* it has to read the toughness it had on the battlefield
+# (CR 608.2h, last-known information). Charging the cost generically as well
+# would sacrifice two creatures for one activation. Kinds here pay it
+# themselves; everything else pays through the cost path below.
+COST_PERFORMING_KINDS = frozenset({
+    "sacrifice_creature_gain_life_by_toughness",   # Diamond Valley
+    "sacrifice_creature_for_mana",                 # Metamorphosis / Sacrifice
+})
+
+
 class AbilityActivationMixin:
     def activate_permanent_ability(
         self,
@@ -26,6 +39,14 @@ class AbilityActivationMixin:
         target_stack_index: int | None = None,
         ability_index: int | None = None,
         x_value: int | None = None,
+        # Which permanent / which card in hand pays a non-mana cost. The payer
+        # chooses (CR 601.2b), so the choice arrives with the action that pays
+        # it rather than through the pending-choice queue: a cost is paid during
+        # activation, and a queued prompt would put the ability on the stack
+        # before its cost was collected. A seat that names neither gets the
+        # deterministic pick below, which keeps AI and headless play unblocked.
+        cost_permanent_index: int | None = None,
+        cost_hand_index: int | None = None,
         source_seat: int | None = None,
         source_permanent_index: int | None = None,
         source_stack_index: int | None = None,
@@ -41,6 +62,8 @@ class AbilityActivationMixin:
             target_stack_index=target_stack_index,
             ability_index=ability_index,
             x_value=x_value,
+            cost_permanent_index=cost_permanent_index,
+            cost_hand_index=cost_hand_index,
             source_seat=source_seat,
             source_permanent_index=source_permanent_index,
             source_stack_index=source_stack_index,
@@ -96,6 +119,14 @@ class AbilityActivationMixin:
         target_stack_index: int | None = None,
         ability_index: int | None = None,
         x_value: int | None = None,
+        # Which permanent / which card in hand pays a non-mana cost. The payer
+        # chooses (CR 601.2b), so the choice arrives with the action that pays
+        # it rather than through the pending-choice queue: a cost is paid during
+        # activation, and a queued prompt would put the ability on the stack
+        # before its cost was collected. A seat that names neither gets the
+        # deterministic pick below, which keeps AI and headless play unblocked.
+        cost_permanent_index: int | None = None,
+        cost_hand_index: int | None = None,
         source_seat: int | None = None,
         source_permanent_index: int | None = None,
         source_stack_index: int | None = None,
@@ -415,6 +446,76 @@ class AbilityActivationMixin:
                 self.log.append(details)
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
 
+        # "Discard a card" (Seasoned Hallowblade). Unpayable with too few cards,
+        # and CR 602.5c makes an unpayable cost an *unactivatable* ability
+        # rather than a free one. Resolved to card objects, not indices: the
+        # indices shift as each card leaves the hand.
+        discard_cost_cards: list = []
+        if ability.cost.discard_cards:
+            hand = controller.hand
+            if len(hand) < ability.cost.discard_cards:
+                details = f"{permanent.card.name}: not enough cards in hand to discard"
+                self.log.append(details)
+                return SimulationResult(permanent.card.name, False, "unsupported", details)
+            named = (
+                cost_hand_index
+                if isinstance(cost_hand_index, int) and 0 <= cost_hand_index < len(hand)
+                else 0
+            )
+            discard_cost_cards = [hand[named]]
+            for card in hand:
+                if len(discard_cost_cards) >= ability.cost.discard_cards:
+                    break
+                if card is not hand[named]:
+                    discard_cost_cards.append(card)
+
+        # "Sacrifice another creature" (Hobblefiend). The victim is chosen by
+        # identity and never by index — an index held across the removals below
+        # names whichever permanent slid into the slot — and "another" excludes
+        # the source itself, so a lone Hobblefiend has no legal payment and
+        # cannot activate at all.
+        sacrifice_cost_permanent = None
+        if ability.cost.sacrifice_type and ability.instruction is not None and (
+            ability.instruction.kind not in COST_PERFORMING_KINDS
+        ):
+            type_filter = {"type_filter": ability.cost.sacrifice_type}
+            candidates = [
+                perm
+                for perm in self.controlled_by(controller_index)
+                if permanent_matches_filter(perm, type_filter)
+                and not (ability.cost.sacrifice_excludes_source and perm is permanent)
+            ]
+            if not candidates:
+                details = (
+                    f"{permanent.card.name}: no {ability.cost.sacrifice_type} "
+                    "available to sacrifice"
+                )
+                self.log.append(details)
+                return SimulationResult(permanent.card.name, False, "unsupported", details)
+            # Through the seam, which bounds-checks and turns an index arriving
+            # from the wire into a permanent exactly once.
+            named_permanent = (
+                self.permanent_at(controller, cost_permanent_index)
+                if isinstance(cost_permanent_index, int)
+                else None
+            )
+            # `in` compares Permanents by value and would match a look-alike, so
+            # membership is tested by identity.
+            sacrifice_cost_permanent = (
+                named_permanent
+                if any(perm is named_permanent for perm in candidates)
+                # A permanent whose death loses the game is kept for last, then
+                # the smallest — the same shape the forced-sacrifice default uses.
+                else min(
+                    candidates,
+                    key=lambda perm: (
+                        "you lose the game" in perm.card.oracle_text.lower(),
+                        perm.effective_power,
+                        perm.permanent_id,
+                    ),
+                )
+            )
+
         required_cost = dict(ability.cost.mana)
         requires_tap = ability.cost.requires_tap
         # Abilities with an "{X}" in their cost (e.g. Clockwork Beast's
@@ -459,6 +560,28 @@ class AbilityActivationMixin:
             self.log.append(
                 f"{controller.name} discarded {discard_cost_card.name} "
                 f"(the last card they drew this turn) to activate {permanent.card.name}"
+            )
+
+        # Pay the chosen discard. Same ordering rule as the Ring's above: the
+        # cost is collected before the ability is on the stack, so an ability
+        # that draws cannot discard what it drew.
+        for cost_card in discard_cost_cards:
+            controller.hand = [c for c in controller.hand if c is not cost_card]
+            self._discard_card(controller, cost_card)
+            self.log.append(
+                f"{controller.name} discarded {cost_card.name} "
+                f"to activate {permanent.card.name}"
+            )
+
+        # Pay the chosen sacrifice (CR 601.2h) — the creature is gone before the
+        # ability goes on the stack, so Hobblefiend's counter lands on a board
+        # that has already lost it.
+        if sacrifice_cost_permanent is not None:
+            name = sacrifice_cost_permanent.card.name
+            self.remove_from_battlefield(sacrifice_cost_permanent)
+            self._permanent_to_graveyard(controller, sacrifice_cost_permanent)
+            self.log.append(
+                f"{controller.name} sacrificed {name} to activate {permanent.card.name}"
             )
 
         # Ring of Ma'rûf: "Exile this artifact" is part of the cost, so the

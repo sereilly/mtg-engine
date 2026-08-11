@@ -2084,16 +2084,17 @@ def test_counter_removal_cost_refuses_a_subject_it_cannot_record():
     assert not result.parsed
 
 
-def test_only_the_discard_cost_the_engine_can_charge_is_accepted():
-    """``ActivatedAbilityCost`` has a flag for "the last card you drew this
-    turn" and no field for a generic discard, so accepting "Discard a card"
-    would describe a payment nothing collects — a free ability that still reads
-    as supported."""
+def test_both_discard_costs_the_engine_charges_are_accepted():
+    """Two costs, not two spellings of one: "the last card you drew this turn"
+    names its card by history and leaves the payer no choice, while "a card"
+    is the payer's pick. Both are collected on activation, so both parse; a
+    counted "discard two cards" still refuses, because nothing charges it."""
     assert compile_line(
         "{2}, {T}, Discard the last card you drew this turn: Draw a card.",
         card_name="Jandor's Ring",
     ).parsed
-    assert not compile_line("Discard a card: Draw a card.", card_name="Test").parsed
+    assert compile_line("Discard a card: Draw a card.", card_name="Test").parsed
+    assert not compile_line("Discard two cards: Draw a card.", card_name="Test").parsed
 
 
 def test_sacrifice_cost_distinguishes_the_source_from_a_chosen_permanent():

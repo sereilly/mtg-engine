@@ -75,6 +75,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "destroy_all_artifacts_creatures_enchantments": "destruction",
     "delayed_destroy_blocked_or_blocker": "destruction",
     "tap_target_permanent": "tapping",
+    "tap_self": "tapping",
     "untap_target_permanent": "tapping",
     "untap_target_land": "tapping",
     "untap_self": "tapping",

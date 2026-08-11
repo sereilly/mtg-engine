@@ -21,7 +21,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | 2ED | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
 | ARN | 78 | 108 | 64.8% | 61.1% | 38.9% | 34 |
 | 3ED | 296 | 389 | 78.9% | 76.9% | 41.9% | 149 |
-| M21 *(measured)* | 285 | 503 | 55.3% | 50.5% | 29.8% | 121 |
+| M21 *(measured)* | 285 | 503 | 55.7% | 50.7% | 30.0% | 122 |
 | **All (shipped)** | **1248** | **1663** | **78.0%** | **76.2%** | **41.5%** | **629** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -42,13 +42,13 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | 8 | 4 | a conditional static bonus is derived by engine/static_bonuses.py |  |
 | 7 | 2 | expected a colour after 'becomes' |  |
 | 6 | 3 | no lowering for RawEffect |  |
-| 6 | 6 | unrecognized discard cost |  |
 | 5 | 1 | no handler for non-targeted tap/untap |  |
 | 5 | 2 | expected something to destroy |  |
 | 4 | 1 | upkeep triggers are dispatched by fused instruction kind; a decomposed wrapper has no handler |  |
 | 4 | 2 | expected the player whose hand is looked at |  |
 | 4 | 1 | expected 'mana' |  |
 | 4 | 3 | expected a permanent to put counters on |  |
+| 4 | 4 | unrecognized discard cost |  |
 | 3 | 1 | only one mana of any colour has a handler; 3 does not |  |
 | 3 | 1 | no tap-or-untap handler honours this restriction |  |
 | 3 | 3 | expected a destination zone after 'return' |  |
@@ -482,6 +482,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `{1}, {T}: Target creature gains banding until end of turn. (Any creatures with banding, and up to one without, can attack in a band. Bands are blocked as a group. If any creatures with banding a player controls are blocking or being blocked by a creature, that player divides that creature's combat damage, not its controller, among any of the creatures it's being blocked by or is blocking.)`
 - **Historian of Zhalfir**
   - `Whenever this creature attacks, if you control a Teferi planeswalker, draw a card.`
+- **Hobblefiend**
+  - `{1}, Sacrifice another creature: Put a +1/+1 counter on this creature.`
 - **Holy Armor**
   - `{W}: Enchanted creature gets +0/+1 until end of turn.`
   - `{W}: Enchanted creature gets +0/+1 until end of turn.`
@@ -773,8 +775,6 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `When you control no Islands, sacrifice this creature.`
 - **Pitchburn Devils**
   - `When this creature dies, it deals 3 damage to any target.`
-- **Portcullis Vine**
-  - `{2}, {T}, Sacrifice a creature with defender: Draw a card.`
 - **Power Sink**
   - `Counter target spell unless its controller pays {X}. If that player doesn't, they tap all lands with mana abilities they control and lose all unspent mana.`
   - `Counter target spell unless its controller pays {X}. If that player doesn't, they tap all lands with mana abilities they control and lose all unspent mana.`
@@ -923,6 +923,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `When you control no Islands, sacrifice this creature.`
   - `This creature can't attack unless defending player controls an Island.`
   - `When you control no Islands, sacrifice this creature.`
+- **Seasoned Hallowblade**
+  - `Discard a card: Tap this creature. It gains indestructible until end of turn. (Damage and effects that say "destroy" don't destroy it.)`
 - **Sedge Troll**
   - `{B}: Regenerate this creature.`
   - `{B}: Regenerate this creature.`

@@ -120,6 +120,97 @@ def test_storm_caller_damages_each_opponent_on_entry(set_pool):
     assert p1.life == 20
 
 
+# --- The cost round: non-mana activation costs ------------------------------
+
+
+@pytest.mark.parametrize("name", ["Hobblefiend", "Seasoned Hallowblade"])
+def test_cost_round_cards_compile_supported(set_pool, name):
+    assert compile_card_oracle(set_pool("M21")[name]).supported
+
+
+def test_hobblefiend_sacrifices_the_named_creature_and_keeps_itself(set_pool):
+    pool = set_pool("M21")
+    fiend = Permanent(card=pool["Hobblefiend"])
+    keep = Permanent(card=pool["Concordia Pegasus"])
+    food = Permanent(card=pool["Alpine Watchdog"])
+    p1 = PlayerState(name="P1", battlefield=[fiend, keep, food])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    before = fiend.effective_power
+
+    result = game.activate_permanent_ability(
+        0, "Hobblefiend", permanent_index=0, cost_permanent_index=2,
+    )
+
+    assert result.supported, result.details
+    # The *named* creature paid, not the first look-alike on the battlefield.
+    assert not any(perm is food for perm in game.controlled_by(0))
+    assert any(perm is keep for perm in game.controlled_by(0))
+    assert any(perm is fiend for perm in game.controlled_by(0))
+    assert fiend.effective_power == before + 1
+
+
+def test_hobblefiend_alone_cannot_activate_and_does_not_eat_itself(set_pool):
+    """CR 602.5c: an unpayable cost makes the ability unactivatable — not free,
+    and not payable with the source the word "another" excludes."""
+    fiend = Permanent(card=set_pool("M21")["Hobblefiend"])
+    p1 = PlayerState(name="P1", battlefield=[fiend])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    before = fiend.effective_power
+
+    result = game.activate_permanent_ability(0, "Hobblefiend", permanent_index=0)
+
+    assert not result.supported
+    assert "sacrifice" in result.details.lower()
+    assert any(perm is fiend for perm in game.controlled_by(0))
+    assert fiend.effective_power == before
+
+
+def test_seasoned_hallowblade_discards_the_named_card_and_taps(set_pool):
+    pool = set_pool("M21")
+    blade = Permanent(card=pool["Seasoned Hallowblade"])
+    keep, pitch = pool["Opt"], pool["Island"]
+    p1 = PlayerState(name="P1", battlefield=[blade], hand=[keep, pitch])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    result = game.activate_permanent_ability(
+        0, "Seasoned Hallowblade", permanent_index=0, cost_hand_index=1,
+    )
+
+    assert result.supported, result.details
+    assert [c.name for c in p1.hand] == [keep.name]
+    assert p1.graveyard[-1].name == pitch.name
+    assert blade.tapped
+    assert blade.has_keyword("indestructible")
+
+
+def test_seasoned_hallowblade_cannot_activate_with_an_empty_hand(set_pool):
+    blade = Permanent(card=set_pool("M21")["Seasoned Hallowblade"])
+    p1 = PlayerState(name="P1", battlefield=[blade])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    result = game.activate_permanent_ability(0, "Seasoned Hallowblade", permanent_index=0)
+
+    assert not result.supported
+    assert not blade.tapped
+
+
+def test_portcullis_vine_is_refused_rather_than_sacrificing_any_creature(set_pool):
+    """"Sacrifice a creature with defender" is a cost the charger cannot
+    express, so the card is unsupported with the clause named — dropping the
+    rider would let the Vine eat any creature and still read as supported."""
+    program = compile_card_oracle(set_pool("M21")["Portcullis Vine"])
+    assert not program.supported
+    assert "defender" in program.reason
+
+
 # --- The search round: the filter the flow honours, and the two-zone fetch ---
 
 

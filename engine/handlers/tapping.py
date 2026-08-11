@@ -24,6 +24,23 @@ def untap_self(game: Game, instruction: OracleInstruction, context: OracleExecut
     return True, "resolved"
 
 
+@effect_handler("tap_self")
+def tap_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Tap this creature." — the tap twin of ``untap_self``.
+
+    Goes through ``become_tapped`` rather than setting the flag: everything
+    that must happen when a permanent becomes tapped hangs off that one call,
+    which is why the engine has it at all.
+    """
+    permanent = context.source_permanent
+    if permanent is None:
+        return False, "ability not implemented"
+    if permanent.tapped:
+        return True, "already tapped"
+    game.become_tapped(permanent)
+    return True, "resolved"
+
+
 @effect_handler("untap_target_land")
 def untap_target_land(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     # Honor an explicitly chosen land (Ley Druid: "{T}: Untap target land" — the

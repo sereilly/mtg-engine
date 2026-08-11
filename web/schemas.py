@@ -241,6 +241,14 @@ class GameActionRequest(BaseModel):
     # blocked by a creature with banding, submitted via an assign_banding_damage action.
     banding_damage: dict[int, dict[int, int]] | None = None
     card_order: list[int] | None = None
+    # Which permanent pays a non-mana activation cost ("Sacrifice another
+    # creature"). Separate from `target_permanent_id`, which is what the
+    # *ability* targets: one activation can have both, and overloading the
+    # target field would make a cost eat the creature it was aimed at.
+    cost_permanent_id: int | None = None
+    cost_permanent_index: int | None = None
+    # Which card in hand pays a "Discard a card" activation cost.
+    cost_hand_index: int | None = None
     # Which zone `hand_index` addresses when a search may look in more than one
     # ("search your library and/or graveyard"). Absent means the library, so
     # every existing client is unchanged.

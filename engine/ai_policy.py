@@ -139,6 +139,15 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
         if is_mana_ability(ability.instruction):
             continue
 
+        # A cost paid in permanents or cards is a trade this policy cannot
+        # price: Atog's "+2/+2 until end of turn" is worth an artifact only
+        # sometimes, and the score below reads the *effect* alone. Skipping is
+        # the honest floor — the alternative is an AI that eats its own board
+        # every main phase for a pump that wears off. Derived from the compiled
+        # cost, so it reaches every card printed this way and names none.
+        if ability.cost.sacrifice_type or ability.cost.discard_cards:
+            continue
+
         target = _choose_target_for_instruction(ability.instruction, player_index, game)
         if ability.instruction.kind == "grant_banding_to_target":
             # Banding grants go to the controller's own creatures.

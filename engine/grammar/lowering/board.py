@@ -118,15 +118,17 @@ def _lower_tap(node: ast.Tap | ast.Untap) -> tuple[OracleInstruction, ...]:
         raise LoweringError("tap/untap needs an object target", node=node)
     spec = node.subject
 
-    # "Untap this artifact" (Basalt Monolith, Mana Vault) and "untap enchanted
-    # creature" have their own handlers — the source and the enchanted
-    # permanent are known without a target being chosen. There is no matching
-    # tap handler, so tapping those shapes still refuses.
+    # "Untap this artifact" (Basalt Monolith), "untap enchanted creature" and
+    # "Tap this creature" (Seasoned Hallowblade) name their subject without a
+    # target being chosen — the source and the enchanted permanent are known —
+    # so each has its own handler.
     if isinstance(node, ast.Untap):
         if _is_source(spec):
             return (OracleInstruction("untap_self", "", {}),)
         if _is_enchanted(spec):
             return (OracleInstruction("untap_enchanted_creature", "", {}),)
+    elif _is_source(spec):
+        return (OracleInstruction("tap_self", "", {}),)
 
     if spec.quantifier not in ("target", "up_to"):
         raise LoweringError("no handler for non-targeted tap/untap", node=node)

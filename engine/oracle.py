@@ -368,8 +368,26 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     sacrifice_self = bool(
         re.search(r"\bsacrifice this (artifact|creature|enchantment|permanent|land)\b", cost_lower)
     )
+    # "Sacrifice a creature" / "Sacrifice another creature" — a *chosen*
+    # permanent (Atog, Hobblefiend). Anchored to the end of its comma-separated
+    # cost segment, so "a creature with defender" matches nothing here: the
+    # grammar refuses that line outright (`_is_chargeable_sacrifice`) and this
+    # reader must not disagree by quietly charging the wider cost.
+    chosen_sacrifice = (
+        None if sacrifice_self
+        else re.search(r"\bsacrifice (?:(another) |an? )([a-z]+)(?=,|$)", cost_lower)
+    )
+    sacrifice_type = chosen_sacrifice.group(2) if chosen_sacrifice else None
+    sacrifice_excludes_source = bool(chosen_sacrifice and chosen_sacrifice.group(1))
+    # "Discard a card" (Seasoned Hallowblade). Jandor's Ring's history-named
+    # card is read above; counting it here too would charge the Ring twice.
+    discard_cards = (
+        0 if discard_last_drawn
+        else (1 if re.search(r"\bdiscard an? card\b", cost_lower) else 0)
+    )
     return ActivatedAbilityCost(
-        required, requires_tap, discard_last_drawn, exile_self, sacrifice_self
+        required, requires_tap, discard_last_drawn, exile_self, sacrifice_self,
+        sacrifice_type, sacrifice_excludes_source, discard_cards,
     )
 
 
