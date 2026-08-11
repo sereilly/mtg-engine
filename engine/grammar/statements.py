@@ -9,6 +9,7 @@ The narrow waist of the parser — below is a fragment, above is a *line*.
 """
 
 from . import ast
+from .amounts import parse_amount
 from .errors import GrammarError
 from .lexer import (SELF, WORD)
 from .nouns import (parse_object_filter, parse_player_ref, parse_recipient)
@@ -298,6 +299,16 @@ def _parse_condition(stream: TokenStream) -> ast.Condition:
             filt = parse_object_filter(stream)
             comparison = None if not negated else ast.Comparison("eq", ast.Fixed(0))
             return ast.Controls(player, filt, comparison)
+        # "you gained 3 or more life this turn" (Indulging Patrician). "Or more"
+        # is the only printed comparison on this clause, so the threshold is a
+        # plain minimum rather than a Comparison: inventing "or less" here would
+        # be a production no card exercises.
+        if stream.accept_word("gained"):
+            amount = parse_amount(stream)
+            if isinstance(amount, ast.Fixed) and stream.accept_phrase(
+                "or", "more", "life", "this", "turn"
+            ):
+                return ast.LifeGainedThisTurn(player, amount.value)
         stream.reset(mark)
 
     if stream.accept_phrase("a", "creature", "died"):

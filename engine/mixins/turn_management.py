@@ -160,6 +160,12 @@ class TurnManagementMixin:
             player.damage_taken_this_turn = 0
             player.artifact_damage_taken_this_turn = 0
             player.cards_drawn_this_turn = []
+            # "This turn" is *the turn*, not the player's turn: lifelink on an
+            # opponent's turn is life you gained this turn, and it stops being
+            # so when the next turn begins. Every seat resets here, which is why
+            # this loop is over self.players rather than the active one.
+            player.life_gained_this_turn = 0
+            player.creatures_died_under_your_control_this_turn = 0
 
     def start_turn(self, player_index: int) -> None:
         self.begin_turn_bookkeeping(player_index)

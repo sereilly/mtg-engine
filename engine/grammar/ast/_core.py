@@ -312,6 +312,19 @@ class DiedThisTurn:
 
 
 @dataclass(frozen=True)
+class LifeGainedThisTurn:
+    """"if you gained 3 or more life this turn" (CR 603.4 intervening-if).
+
+    A *history*, like :class:`DiedThisTurn` — no read of the board can answer
+    it, which is why it is a condition node of its own rather than a comparison
+    over some countable. The threshold travels on the node because a card
+    printed with another number is the same production.
+    """
+    who: "PlayerRef"
+    amount: int
+
+
+@dataclass(frozen=True)
 class PaidCost:
     cost: Cost | None = None
 
@@ -324,7 +337,9 @@ class RawCondition:
     text: str
 
 
-Condition = Union[Controls, IsState, DiedThisTurn, PaidCost, RawCondition]
+Condition = Union[
+    Controls, IsState, DiedThisTurn, LifeGainedThisTurn, PaidCost, RawCondition
+]
 
 
 @dataclass(frozen=True)

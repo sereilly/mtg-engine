@@ -120,6 +120,49 @@ def test_storm_caller_damages_each_opponent_on_entry(set_pool):
     assert p1.life == 20
 
 
+# --- The tracker round: a turn's history, and CR 603.4 -----------------------
+
+
+def test_indulging_patrician_compiles_supported(set_pool):
+    assert compile_card_oracle(set_pool("M21")["Indulging Patrician"]).supported
+
+
+def test_life_gained_this_turn_counts_and_resets(set_pool):
+    """"This turn" is *the turn*, not the player's turn: lifelink on an
+    opponent's turn is life you gained this turn. A counter that never resets
+    is a bug that first appears on turn two, firing off last turn's gains."""
+    p1 = PlayerState(name="P1")
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    game._gain_life(p1, 2)
+    game._gain_life(p1, 1)
+    assert p1.life_gained_this_turn == 3
+
+    game.begin_turn_bookkeeping(1)
+    assert p1.life_gained_this_turn == 0, "every seat resets, not just the active one"
+
+
+def test_creature_deaths_are_counted_under_the_seat_that_controlled_them(set_pool):
+    """The game-wide counter cannot answer "under your control" — it is one
+    number for the whole table."""
+    pool = set_pool("M21")
+    mine = Permanent(card=pool["Concordia Pegasus"])
+    theirs = Permanent(card=pool["Concordia Pegasus"])
+    p1 = PlayerState(name="P1", battlefield=[mine])
+    p2 = PlayerState(name="P2", battlefield=[theirs])
+    game = Game(players=[p1, p2])
+
+    game._permanent_to_graveyard(p1, mine)
+    game._permanent_to_graveyard(p2, theirs)
+
+    assert p1.creatures_died_under_your_control_this_turn == 1
+    assert p2.creatures_died_under_your_control_this_turn == 1
+    assert game.creatures_died_this_turn == 2
+
+    game.begin_turn_bookkeeping(1)
+    assert p1.creatures_died_under_your_control_this_turn == 0
+
+
 # --- The exile round: exile as a destination (CR 406.1 / 400.3) -------------
 
 
@@ -463,23 +506,43 @@ def test_quirion_dryad_counters_only_the_listed_colours(set_pool):
     assert dryad.effective_power == base + 1 + 4  # the +4/+4 pump lands, the counter does not
 
 
-def test_adherent_of_hope_counters_on_its_controllers_combat_only(set_pool):
+def test_adherent_of_hope_triggers_only_on_its_controllers_combat(set_pool):
+    """The trigger *condition* is the controller's combat — a separate question
+    from the intervening-if below, which decides whether the resolution does
+    anything."""
     adherent = Permanent(card=set_pool("M21")["Adherent of Hope"])
     p1 = PlayerState(name="P1", battlefield=[adherent])
-    p2 = PlayerState(name="P2")
-    game = Game(players=[p1, p2])
-    base = adherent.effective_power
+    game = Game(players=[p1, PlayerState(name="P2")])
 
     game.start_turn(0)
     game._close_current_priority_step()
     game.advance_combat_phase()  # beginning_of_combat, controller's turn
+    assert game.stack, "the trigger fires on its controller's combat"
     game.resolve_top_of_stack()
-    assert adherent.effective_power == base + 1
 
     game.start_turn(1)
     game._close_current_priority_step()
-    game.advance_combat_phase()  # opponent's combat: no trigger
-    assert adherent.effective_power == base + 1
+    game.advance_combat_phase()  # opponent's combat
+    assert not game.stack, "and not on anyone else's"
+
+
+def test_adherent_of_hope_does_nothing_without_its_basri_planeswalker(set_pool):
+    """CR 603.4. The printed line is "…**if you control a Basri planeswalker**,
+    put a +1/+1 counter on this creature", and the condition was lowered onto
+    the payload and read by nothing — so the counter landed every combat. It is
+    checked on resolution now, and with no Basri in play the ability does
+    nothing at all."""
+    adherent = Permanent(card=set_pool("M21")["Adherent of Hope"])
+    p1 = PlayerState(name="P1", battlefield=[adherent])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    base = adherent.effective_power
+
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.resolve_top_of_stack()
+
+    assert adherent.effective_power == base
 
 
 # --- The mana-value round: a literal bound rides the payload ----------------

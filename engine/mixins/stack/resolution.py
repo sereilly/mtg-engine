@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from ...classifier import CardClassification, classify_card
 from ...game_types import OracleExecutionContext, OracleStateMachine, StackItem
+from ...handlers.control_flow import evaluate_condition
 from ...models import CardDefinition, Permanent
 from ...oracle import OracleInstruction, compile_card_oracle
 from ...resumption import run_resumable
@@ -182,21 +183,35 @@ class StackResolutionMixin:
             caster = self.players[item.caster_index]
             target_idx = item.target_player_index if item.target_player_index is not None else (1 - item.caster_index)
             target = self.players[target_idx]
-            state_machine = OracleStateMachine(
-                self,
-                OracleExecutionContext(
-                    caster=caster,
-                    target=target,
-                    card=item.card,
-                    target_permanent_index=item.target_permanent_index,
-                    target_permanent_id=item.target_permanent_id,
-                    x_value=item.x_value,
-                    source_permanent=item.source_permanent,
-                    stack_target=item.target_stack_item,
-                    trigger_context=item.trigger_context,
-                    choices=item.choices,
-                ),
+            context = OracleExecutionContext(
+                caster=caster,
+                target=target,
+                card=item.card,
+                target_permanent_index=item.target_permanent_index,
+                target_permanent_id=item.target_permanent_id,
+                x_value=item.x_value,
+                source_permanent=item.source_permanent,
+                stack_target=item.target_stack_item,
+                trigger_context=item.trigger_context,
+                choices=item.choices,
             )
+            # CR 603.4: an intervening-if is checked *again* as the ability
+            # resolves, and the ability does nothing if it is false. The grammar
+            # has lowered that condition onto the payload since it learned to
+            # parse one and nothing read it — so a conditional trigger would
+            # have fired unconditionally, which is the silent wrongness the
+            # compiler comment claims to have fixed one layer earlier. This is
+            # the read. No card in the shipped pool produces the key (the
+            # conditional triggers there are gated at their fire site instead),
+            # so nothing changes behaviour today; it is armed for the first card
+            # that needs it.
+            gate = (item.ability_instruction.payload or {}).get("intervening_if")
+            if gate is not None and not evaluate_condition(self, context, gate):
+                self.log.append(
+                    f"{item.card.name} ability did nothing: its condition is no longer true"
+                )
+                return
+            state_machine = OracleStateMachine(self, context)
             supported, details = state_machine.run(item.ability_instruction)
             if supported:
                 self.log.append(f"{item.card.name} ability resolved")

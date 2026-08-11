@@ -511,6 +511,17 @@ class PlayerState:
     # damage happens, because the source may be gone by the time a spell
     # asks — the same reason combat triggers capture their victims.
     artifact_damage_taken_this_turn: int = 0
+    # Life actually gained this turn (CR 118.3), counted after replacements: a
+    # gain that a replacement consumed gained no life, so it must not answer
+    # "if you gained 3 or more life this turn". Cleared in
+    # begin_turn_bookkeeping — a "this turn" counter that never resets is a bug
+    # that only shows up on turn two.
+    life_gained_this_turn: int = 0
+    # Creatures that died *under this player's control* this turn. The
+    # game-wide Game.creatures_died_this_turn cannot answer "under your
+    # control": it is one number for the table, so reading it per player would
+    # count the opponent's deaths too.
+    creatures_died_under_your_control_this_turn: int = 0
     # Cards drawn this turn, in draw order — the last entry is "the last card you
     # drew this turn" (Jandor's Ring's discard cost). Every path that draws must
     # record here, so effects that replace a draw but still put a card in hand

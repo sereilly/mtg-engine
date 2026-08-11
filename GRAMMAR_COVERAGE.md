@@ -21,7 +21,7 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 | 2ED | 292 | 389 | 78.9% | 77.4% | 41.6% | 149 |
 | ARN | 78 | 108 | 64.8% | 61.1% | 38.9% | 34 |
 | 3ED | 296 | 389 | 78.9% | 76.9% | 41.9% | 149 |
-| M21 *(measured)* | 285 | 503 | 55.7% | 50.9% | 30.2% | 122 |
+| M21 *(measured)* | 285 | 503 | 56.1% | 51.3% | 30.6% | 124 |
 | **All (shipped)** | **1248** | **1663** | **78.0%** | **76.2%** | **41.5%** | **629** |
 
 *(measured)* — M21 are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
@@ -32,9 +32,9 @@ Categories currently switched on: `combat_restrictions, control, counters, count
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 287 | 154 | expected a subject |  |
+| 284 | 151 | expected a subject |  |
 | 106 | 52 | unrecognized effect verb |  |
-| 69 | 50 | unconsumed text |  |
+| 70 | 51 | unconsumed text |  |
 | 33 | 33 | unrecognized activation cost |  |
 | 27 | 13 | granted ability in quotes | phase 3 (quoted abilities) |
 | 11 | 5 | expected a quantity |  |
@@ -460,6 +460,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `{R}: This creature gets +0/+1 until end of turn.`
 - **Grasp of Darkness**
   - `Target creature gets -4/-4 until end of turn.`
+- **Griffin Aerie**
+  - `At the beginning of your end step, if you gained 3 or more life this turn, create a 2/2 white Griffin creature token with flying.`
 - **Grim Tutor**
   - `Search your library for a card, put that card into your hand, then shuffle. You lose 3 life.`
 - **Hasran Ogress**
@@ -518,6 +520,8 @@ Categories currently switched on: `combat_restrictions, control, counters, count
   - `{G}: This creature deals 1 damage to each creature with flying and each player. Any player may activate this ability.`
 - **Igneous Cur**
   - `{1}{R}: This creature gets +2/+0 until end of turn.`
+- **Indulging Patrician**
+  - `At the beginning of your end step, if you gained 3 or more life this turn, each opponent loses 3 life.`
 - **Instill Energy**
   - `{0}: Untap enchanted creature. Activate only during your turn and only once each turn.`
   - `{0}: Untap enchanted creature. Activate only during your turn and only once each turn.`

@@ -401,6 +401,11 @@ class GameHelpersMixin:
         # Living Lands) dying counts as a creature death (Scavenging Ghoul).
         if permanent.is_creature:
             self.creatures_died_this_turn = getattr(self, "creatures_died_this_turn", 0) + 1
+            # "…under your control" is a different question from the game-wide
+            # count above, and only the controller can answer it. `player` is
+            # the controller the permanent last had; the owner is looked up
+            # separately precisely because the two differ under Control Magic.
+            player.creatures_died_under_your_control_this_turn += 1
             # Sandals of Abdallah: "When that creature dies this turn, destroy
             # this artifact." Flag the linked artifact(s); the state-based
             # sweep destroys them (a battlefield rebuild here could race the

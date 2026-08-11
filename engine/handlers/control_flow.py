@@ -108,6 +108,20 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
     if kind == "died_this_turn":
         return int(getattr(game, "creatures_died_this_turn", 0) or 0) > 0
 
+    if kind == "life_gained_this_turn":
+        # Per player, because the counter is: "you" is the ability's
+        # controller, which is context.caster for a triggered ability too.
+        who = payload.get("who", "you")
+        players = (
+            [context.caster] if who == "you"
+            else [p for p in game.players if p is not context.caster]
+        )
+        wanted = int(payload.get("amount", 0))
+        return any(
+            int(getattr(p, "life_gained_this_turn", 0) or 0) >= wanted
+            for p in players
+        )
+
     return False
 
 

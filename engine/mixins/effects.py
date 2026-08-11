@@ -721,6 +721,10 @@ class EffectsMixin:
         source = f" from {source_name}" if source_name else ""
         before = target.life
         target.life += amount
+        # After the replacements, and after any amount they changed: what "you
+        # gained N life this turn" asks about is the life that actually
+        # arrived, not the life the effect set out to give.
+        target.life_gained_this_turn += amount
         self.log.append(f"{target.name} gained {amount} life{source} ({before} -> {target.life})")
 
     def _deal_damage_to_player(

@@ -348,6 +348,15 @@ def _lower_condition(condition: ast.Condition) -> dict[str, object]:
         return {"kind": "is_state", "state": condition.state, "negated": condition.negated}
     if isinstance(condition, ast.DiedThisTurn):
         return {"kind": "died_this_turn", "filter": condition.filter.to_payload()}
+    if isinstance(condition, ast.LifeGainedThisTurn):
+        # The seat rides the payload rather than being baked into the kind, so
+        # "if an opponent gained…" is the same condition with a different `who`
+        # the day a card prints it.
+        return {
+            "kind": "life_gained_this_turn",
+            "who": condition.who.kind,
+            "amount": condition.amount,
+        }
     raise LoweringError(f"no lowering for condition {type(condition).__name__}", node=condition)
 
 
