@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Sequence
 import random
 
-from .ai_policy import choose_activation_action, choose_cast_action, choose_search_library_index
+from .ai_policy import choose_activation_action, choose_cast_action
 from .card_loader import load_cards
 from .game import Game
 from .models import CardDefinition, Permanent, PlayerState

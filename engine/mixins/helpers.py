@@ -16,7 +16,7 @@ from ..control import (
 from ..events import emit
 from ..layer_bridge import computed_controller
 from ..land_types import end_land_type_change
-from ..models import CardDefinition, Permanent, PlayerState, next_permanent_id
+from ..models import Permanent, PlayerState, next_permanent_id
 from ..oracle import compile_card_oracle
 from ..replacements import apply_replacements
 from ..trigger_utils import make_trigger_event, matching_triggers

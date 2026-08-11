@@ -73,6 +73,7 @@ count) is the `SCOPE` dict in that script — widen it as the engine grows.
 
 # Web server (browser game UI)
 python -m uvicorn web.app:app --host 127.0.0.1 --port 8010   # then open http://127.0.0.1:8010/
+python scripts/serve_lan.py --port 8010   # same app, dual-stack IPv4+IPv6 for LAN play
 
 # Engine scripts
 python scripts/run_duel.py            # scripted deterministic duel, no server (default LEA)
@@ -97,6 +98,19 @@ copy of the registry. An unknown code exits naming the codes that ship, because
 a `--set` resolving to an empty pool would let `support_report.py` report
 perfect coverage over zero cards and `simulate_ai_games.py` report a clean run
 it never had. Guarded by `tests/engine/test_script_set_argument.py`.
+
+**`engine/card_loader.py` is the only module that opens that file.** A private
+reader is the same second copy as a spelled-out filename and goes stale the same
+way, but it does not grep like one: `ingest_set.py` kept its own, walked only
+the `sets` key, and so stopped covering M21 the day M21 was ingested under
+`measured` — no edit, no failing test, and a run that reports success over a
+smaller pool than it appears to describe. Import the helpers (`manifest_sets`,
+`manifest_measured_sets`, `manifest_set_paths`, `MANIFEST_PATH`); prose naming
+`cards/manifest.json` in a docstring is a mention, not a copy. Guarded by
+`test_the_manifest_is_parsed_in_one_place` in the same file. Note the one place
+the wider default is right: `ingest_set.py --all` covers **both** manifest roles,
+because it is about a card file's format rather than about whether a player may
+deck it, and everywhere else `include_measured` must keep defaulting to False.
 
 **Parse coverage:** `scripts/parse_coverage.py` verifies that every sentence of
 every supported card's oracle text is claimed by a known consumer (the parser,

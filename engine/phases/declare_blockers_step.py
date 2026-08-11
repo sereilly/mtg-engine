@@ -13,7 +13,7 @@ import random
 import re
 
 from ..auras import aura_restriction_active
-from ..models import Permanent, PlayerState
+from ..models import Permanent
 from ..oracle import compile_card_oracle
 from ..pt import add_pt_modifier
 from ..trigger_utils import matching_triggers

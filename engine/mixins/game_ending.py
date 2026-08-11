@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from functools import lru_cache
 
-from ..models import CardDefinition, Permanent, PlayerState
+from ..models import Permanent, PlayerState
 from ..oracle import compile_card_oracle
 from ..trigger_utils import matching_triggers
 

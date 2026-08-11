@@ -14,6 +14,7 @@ So the tests below care less that a good code works than that a bad one stops.
 
 from __future__ import annotations
 
+import ast
 import re
 import sys
 from pathlib import Path
@@ -24,8 +25,15 @@ REPO = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from engine.card_loader import manifest_set_codes, manifest_set_path, manifest_set_paths
+from engine.card_loader import (
+    MANIFEST_PATH,
+    manifest_measured_codes,
+    manifest_set_codes,
+    manifest_set_path,
+    manifest_set_paths,
+)
 
+import ingest_set  # noqa: E402
 import retrieve_oracle  # noqa: E402
 import run_duel  # noqa: E402
 import set_argument  # noqa: E402
@@ -135,3 +143,112 @@ def test_no_script_spells_out_a_card_filename():
         f"card filenames spelled out in scripts: {offenders}. "
         "Use --set CODE (scripts/set_argument.py), which reads cards/manifest.json."
     )
+
+
+# ---------------------------------------------------------------------------
+# The registry is parsed once
+# ---------------------------------------------------------------------------
+#
+# The test above catches a spelled-out *card* file. It does not catch the other
+# way a second copy of the registry gets in: a module that opens
+# `cards/manifest.json` and walks it itself. `ingest_set.py` did exactly that,
+# and the copy read only the `sets` key — so the day M21 was ingested under
+# `measured`, `--all` silently stopped covering it. Nobody edited the script;
+# the registry grew a role its private reader did not know about, which is the
+# same failure as the stale filename and is invisible for the same reason: the
+# output is a successful run over a smaller pool than it appears to describe.
+
+# The vocabulary manifest (`data/vocabulary/manifest.json`) is a different file
+# with a different registry, and its two readers are named here so that this
+# guard is about the card pool rather than about the string.
+_MANIFEST_READERS = {
+    Path("engine/card_loader.py"),      # the one reader of cards/manifest.json
+    Path("engine/grammar/vocabulary.py"),
+    Path("scripts/fetch_vocabulary.py"),
+}
+
+
+def test_the_manifest_is_parsed_in_one_place():
+    """Only `engine/card_loader.py` may open the card registry.
+
+    A string constant is the test rather than an import, because the way this
+    goes wrong is a module building its own path to the file — prose about
+    `cards/manifest.json` in a docstring is a mention, and `MANIFEST_PATH`
+    imported from the loader is the sanctioned route. Neither trips this.
+
+    The filename comes from `MANIFEST_PATH` rather than being spelled here: a
+    guard that hardcoded it would be the fourteenth copy of the thing it exists
+    to forbid, and it would stop matching if the registry were ever renamed.
+    """
+    filename = Path(MANIFEST_PATH).name
+    offenders = []
+    for directory in ("engine", "web", "scripts", "tests"):
+        for path in sorted((REPO / directory).rglob("*.py")):
+            relative = path.relative_to(REPO)
+            if Path(*relative.parts) in _MANIFEST_READERS:
+                continue
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            offenders += [
+                f"{relative.as_posix()}:{node.lineno}"
+                for node in ast.walk(tree)
+                if isinstance(node, ast.Constant) and node.value == filename
+            ]
+
+    assert not offenders, (
+        f"a second reader of the manifest: {offenders}. Import the helpers from "
+        "engine.card_loader (manifest_sets / manifest_measured_sets / "
+        "manifest_set_paths) — a private copy goes stale when the registry grows."
+    )
+
+
+def test_ingest_all_covers_both_manifest_roles():
+    """`--all` is about card *files*, so it covers measured sets too.
+
+    Everywhere else the shipped/measured split is load-bearing and the default
+    has to stay narrow — `load_catalog` reaching a measured set is how an
+    unsupported card lands in a player's deck. This script is the exception,
+    and it is the exception for a reason that is about format rather than
+    support: an ingested file that no `--all` slims is a file no size or format
+    check is looking at.
+    """
+    covered = [entry["code"] for entry in ingest_set._registered_entries()]
+
+    assert covered == manifest_set_codes() + manifest_measured_codes()
+    for code in manifest_measured_codes():
+        assert code in covered, (
+            f"ingest_set --all skips the measured set {code}; its card file is "
+            "committed like any other and nothing else measures its format"
+        )
+
+
+def test_ingest_resolves_a_registered_set_through_the_manifest():
+    """The composed filename is the fallback, not the route."""
+    for entry in ingest_set._registered_entries():
+        assert ingest_set._set_path(entry["code"]) == REPO / "cards" / entry["file"]
+
+
+def test_ingest_composes_a_name_only_for_a_set_being_added():
+    """The one honest reason to compose a card filename: there is no entry yet.
+
+    This is the exemption `test_no_script_spells_out_a_card_filename` names, and
+    it stays narrow — a code the manifest *does* know resolves above, so the
+    fallback can never quietly answer for a registered set.
+
+    Asserted as a *shape* rather than as the exact string, because the sibling
+    guard `test_no_test_spells_out_a_card_filename` forbids a quoted card
+    filename in a test for the same reason this whole file exists. The shape is
+    the better claim anyway: what matters is not which name gets composed but
+    that it names the code, stays in `cards/`, and cannot collide with a set
+    the manifest already knows.
+    """
+    unregistered = "ZZZ"
+    assert unregistered not in manifest_set_codes() + manifest_measured_codes()
+
+    fallback = ingest_set._set_path(unregistered)
+    registered = {
+        REPO / "cards" / entry["file"] for entry in ingest_set._registered_entries()
+    }
+
+    assert fallback.parent == REPO / "cards"
+    assert fallback.stem.startswith(unregistered)
+    assert fallback not in registered

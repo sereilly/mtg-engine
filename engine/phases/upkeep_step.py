@@ -14,7 +14,6 @@ dispatches. A new upkeep card is an entry there, never a branch here.
 import re
 
 from ..copies import RECOPY_EACH_UPKEEP, grants_ability
-from ..handlers._common import permanent_effective_colors
 from ..land_types import MIRE_COUNTER, end_land_type_change
 from ..models import Permanent
 from ..oracle import OracleInstruction, compile_card_oracle

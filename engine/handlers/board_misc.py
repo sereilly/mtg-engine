@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..land_types import MIRE_COUNTER, change_land_type
-from ..models import CardDefinition, Permanent
+from ..models import Permanent
 from ..oracle_types import OracleInstruction
 from ..pt import set_base_pt
 from ..text_changes import LAND_TYPE_WORDS, change_color_word, change_land_word

@@ -9,8 +9,8 @@ from ..game_types import OracleExecutionContext, OracleStateMachine
 from ..handlers import EFFECT_HANDLERS
 from ..models import CardDefinition, Permanent, PlayerState
 from ..auras import attach_aura, aura_animates_artifact, aura_keyword_grants
-from ..oracle import OracleInstruction, _COLOR_WORD_TO_SYMBOL, compile_card_oracle
-from ..keywords import grant_keyword, remove_keyword
+from ..oracle import OracleInstruction, compile_card_oracle
+from ..keywords import remove_keyword
 from ..land_animation import LAND_ANIMATION_KIND
 from ..land_types import change_land_type
 from ..lord_buffs import LORD_BUFF_KIND

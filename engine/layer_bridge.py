@@ -469,25 +469,6 @@ def collect_color_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
     return [set_colors(scope_only(oid), [override], timestamp=0, label="colour override")]
 
 
-def computed_characteristics(perm: Permanent) -> Characteristics:
-    """Every characteristic of *perm* after the layers that are wired up.
-
-    Layers 4, 5, 6 and 7 today. Layer ordering matters between them — a land
-    animated in layer 4 is a creature by the time a creature-scoped effect is
-    considered — which is exactly what the system is for.
-    """
-    oid = id(perm)
-    state: State = {oid: seed_characteristics(perm)}
-    effects = (
-        collect_type_effects(perm, oid)
-        + collect_color_effects(perm, oid)
-        + collect_ability_effects(perm, oid)
-        + collect_pt_effects(perm, oid)
-    )
-    apply_layers(effects, state)
-    return state[oid]
-
-
 def computed_abilities(perm: Permanent) -> set[str]:
     """The keyword abilities *perm* currently has, after layer 6."""
     oid = id(perm)

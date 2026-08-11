@@ -1,11 +1,22 @@
 r"""Serve the web app on the LAN over both IPv4 and IPv6.
 
-``uvicorn --host ::`` on Windows listens on IPv6 only (asyncio disables
-dual-stack sockets), so this script binds one dual-stack socket by hand and
-hands it to uvicorn. Run it, then join from any LAN device via
-http://<ipv4>:8010/ or http://[<ipv6>]:8010/.
+``uvicorn --host ::`` on Windows listens on IPv6 **only** — asyncio leaves
+``IPV6_V6ONLY`` set — so LAN players on IPv4 get connection-refused. This script
+binds one dual-stack socket by hand and hands it to uvicorn instead. Run it, then
+join from any LAN device via http://<ipv4>:8010/ or http://[<ipv6>]:8010/.
 
     .\.venv\Scripts\python.exe scripts/serve_lan.py [--port 8010]
+
+Measured on Windows 11, both bound to port 8010:
+
+    uvicorn --host ::    http://[::1]/ -> 200    http://127.0.0.1/ -> refused
+    serve_lan.py         http://[::1]/ -> 200    http://127.0.0.1/ -> 200
+
+**The two are indistinguishable from outside the process.** Both report the same
+``::`` listening address in ``Get-NetTCPConnection`` / ``netstat``, because what
+differs is a socket option rather than the address — which is why "it's
+listening on ``::``, so it must be reachable" is the wrong check, and connecting
+over IPv4 is the right one.
 """
 
 from __future__ import annotations
@@ -31,9 +42,14 @@ def main() -> None:
     sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
     sock.bind(("::", args.port))
 
+    # flush=True because these two lines *are* the interface — they carry the
+    # address a LAN player joins on. Python block-buffers stdout when it is not
+    # a terminal, so redirected to a log (which is how the run-magic skill
+    # starts a server) they would otherwise sit unwritten behind uvicorn's own
+    # output until the process exits, which for a server is never.
     hostname = socket.gethostname()
-    print(f"Serving on all interfaces, port {args.port} (IPv4 + IPv6)")
-    print(f"LAN players can also try: http://{hostname}:{args.port}/")
+    print(f"Serving on all interfaces, port {args.port} (IPv4 + IPv6)", flush=True)
+    print(f"LAN players can also try: http://{hostname}:{args.port}/", flush=True)
 
     config = uvicorn.Config("web.app:app", port=args.port)
     uvicorn.Server(config).run(sockets=[sock])

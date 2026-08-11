@@ -26,6 +26,12 @@ Usage::
     python scripts/ingest_set.py --all               # slim every set in the manifest
     python scripts/ingest_set.py 3ED --fetch         # add a new set
     python scripts/ingest_set.py --all --check       # report savings, write nothing
+
+``--all`` means both manifest roles — the shipped ``sets`` and the ingested-but-
+unshipped ``measured`` ones. Everywhere else that distinction is load-bearing
+(``load_catalog`` must not reach a measured set), but a card file is a card file
+as far as its *format* goes, and the file this script skips is the file no
+format guard is measuring.
 """
 
 from __future__ import annotations
@@ -40,9 +46,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from engine.card_loader import manifest_measured_sets, manifest_sets  # noqa: E402
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CARDS_DIR = REPO_ROOT / "cards"
-MANIFEST_PATH = CARDS_DIR / "manifest.json"
 
 SCRYFALL_API = "https://api.scryfall.com"
 USER_AGENT = "MTGSimulacrum-Ingest/1.0"
@@ -132,19 +139,27 @@ def slim_card(entry: dict) -> dict:
     return out
 
 
-def write_set(code: str, cards: list[dict], path: Path) -> None:
-    slimmed = [slim_card(entry) for entry in cards]
-    path.write_text(
-        json.dumps(slimmed, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
-    )
+def _registered_entries() -> list[dict]:
+    """Every set the manifest knows about, shipped or merely measured.
 
-
-def _manifest() -> dict:
-    return json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    Both roles are card files on disk, and this script is about the *file*, not
+    about whether a player may deck it. Reading only ``sets`` is how M21 —
+    ingested for measurement — stopped being covered by ``--all`` the day it was
+    added, without anyone editing this script. `scripts/set_argument.py` exists
+    because a second copy of the registry is the thing that goes stale; the copy
+    here was the last one, and it had already drifted.
+    """
+    return manifest_sets() + manifest_measured_sets()
 
 
 def _set_path(code: str) -> Path:
-    for entry in _manifest()["sets"]:
+    """The card file for *code*, from the manifest where the manifest knows it.
+
+    The composed fallback is for a set that is *being added* and so has no entry
+    to look up yet — the one honest reason to spell a card filename, and the
+    exemption `tests/engine/test_script_set_argument.py` names.
+    """
+    for entry in _registered_entries():
         if entry["code"].lower() == code.lower():
             return CARDS_DIR / entry["file"]
     return CARDS_DIR / f"{code.upper()}_cards.json"
@@ -202,7 +217,7 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.all:
-        codes = [entry["code"] for entry in _manifest()["sets"]]
+        codes = [entry["code"] for entry in _registered_entries()]
     elif args.code:
         codes = [args.code]
     else:

@@ -4742,6 +4742,154 @@ Suite 4,362 → 4,369, every gate green.
 
 ---
 
+## The leftovers, and the one that was a bug
+
+A sweep for what the last several waves left behind. Four of the five findings
+were inert — dead code costs nothing but the reading — and the fifth was a live
+hole in the pool's coverage that nobody had edited into existence.
+
+Everything here was found by **measurement, not by reading**: an AST pass for
+module-level definitions nothing references, and a second for imported names
+never used again in their own file. That distinction is the point. Each of these
+had been read past repeatedly in the sessions that produced them, because a
+leftover looks exactly like a thing that is used — it is spelled the same, it
+sits beside live code, and nothing about it is wrong on its face.
+
+### `--all` had quietly stopped meaning all
+
+`ingest_set.py` kept its own reader of `cards/manifest.json` and walked the
+`sets` key. That was correct until the manifest grew a second role. The day M21
+was ingested under `measured`, `--all` stopped covering it — **no edit to this
+script, no failing test, no visible symptom**: the run reports success over five
+sets exactly as it always did, and the sixth is simply not mentioned.
+
+This is the failure `scripts/set_argument.py` was written against, arriving by
+the other door. That module's docstring says a spelled-out *filename* is a
+second copy of the registry and the copy is what goes stale — `support_report.py`
+spent four sets' worth of ingestion printing Alpha's 290 cards. A private
+*parser* of the same file is the same copy; it just doesn't grep like one. The
+existing guard (`test_no_script_spells_out_a_card_filename`) matches quoted card
+filenames and so could never have seen it.
+
+The fix is that `engine/card_loader.py` is the only module that opens the
+registry, and `test_the_manifest_is_parsed_in_one_place` now says so — an AST
+guard over `engine/`, `web/`, `scripts/` and `tests/` for the filename as a code
+constant. Prose naming `cards/manifest.json` in a docstring is a mention and
+does not trip it; `MANIFEST_PATH` imported from the loader is the sanctioned
+route and does not either. Three readers are exempted by name, and two of them
+are the *vocabulary* manifest under `data/` — a different registry that happens
+to share a filename, which is exactly the sort of coincidence an exemption list
+should record rather than absorb.
+
+The guard takes the filename from `MANIFEST_PATH` rather than spelling it.
+Written the obvious way it flagged itself on its own comparison literal, which
+was the correct answer to a badly posed question: a guard against copies of a
+name should not contain a copy of that name.
+
+**Why this script gets the wider default when nothing else does.** Everywhere
+else the shipped/measured split is load-bearing in the narrow direction —
+`include_measured` defaults to False because `load_catalog` reaching a measured
+set is how an unsupported card lands in a player's deck. Here the question is
+about the *file*, not about whether a player may deck it, and the file `--all`
+skipped is the file no size or format check was looking at.
+
+### Four inert leftovers
+
+**`write_set` (`scripts/ingest_set.py`)** — superseded rather than merely
+unused. `ingest()` open-codes the same slim-and-write because it needs the
+serialized payload to size it *before* `--check` decides whether to write; the
+helper could not be called from the one place that wanted it. It also took a
+`code` parameter it never read, which is the tell.
+
+**`computed_characteristics` (`engine/layer_bridge.py`)** — the compose-all-four
+accessor, never in `__all__` and never called. The engine asks the layer system
+narrow questions (`computed_types`, `computed_abilities`, `computed_pt`) because
+its callers have narrow questions.
+
+**Ten dead imports across `engine/`** — the residue of logic moving out from
+under them: `permanent_effective_colors` in `upkeep_step` (the layer work),
+`_COLOR_WORD_TO_SYMBOL` and `grant_keyword` in `oracle_instructions` (the
+`engine/parsing/` deletion), `_NO_PRIORITY_STEPS` in `phase_steps` (used in
+`helpers`, imported in both). Two candidates were *not* removed and the
+difference is the point: `engine/game.py`'s `game_types` re-exports carry a
+comment saying they are re-exports for external importers, and
+`engine/mixins/__init__.py` exists to re-export. An unused name at a package
+seam is the seam working.
+
+### `engine/parsing/` outlived its own deletion
+
+The package was deleted a wave ago; the directory was not, because a
+gitignored `__pycache__` kept it non-empty. Under PEP 420 a directory with no
+`__init__.py` is still a **namespace package**, so:
+
+```
+>>> import engine.parsing
+<module 'engine.parsing' (namespace) from ['.../engine/parsing']>
+```
+
+`import engine.parsing` succeeded. `from engine.parsing import anything` would
+not, which is why no test caught it — the half that fails loudly was already
+gone, and the half left behind fails at the *next* line instead of the import.
+That is the shape of the bug the M21 ingest found in
+`engine/mixins/stack/casting.py`: a module path that resolves to something other
+than what the author meant, waiting for the one execution that reaches it.
+
+**No guard for this one, deliberately.** The directory was untracked and its
+contents gitignored, so git never saw it and a fresh clone never had it — a
+committed test asserting `engine.parsing` is not importable could only ever fire
+if someone re-created the package on purpose. The transferable finding is the
+namespace-package trap, which belongs here rather than in a test that cannot
+fail.
+
+Also removed, all untracked and regenerable: `logs/`, `.playwright-cli/`, and
+`simulation_interactions.log`.
+
+### The undocumented script was documenting the wrong thing
+
+`scripts/serve_lan.py` is referenced from nowhere — not CLAUDE.md, not the
+README, no test. The sweep flagged it as a deletion candidate and it was the
+opposite: a working fix for a problem the README was actively recommending
+people walk into.
+
+README's "Or to host on ipv6 run" gave `uvicorn --host ::`, which on Windows
+binds an IPv6 socket with `IPV6_V6ONLY` still set. Measured both ways on port
+8010, rather than taken from the script's own docstring:
+
+| | `http://[::1]/` | `http://127.0.0.1/` |
+| --- | --- | --- |
+| `uvicorn --host ::` | 200 | **refused** |
+| `serve_lan.py` | 200 | 200 |
+
+So the documented IPv6 invocation silently cuts off every IPv4 client, which on
+a home LAN is most of them. **The two are indistinguishable from outside the
+process** — both report the same `::` listening address in
+`Get-NetTCPConnection`, because the difference is a socket option and not an
+address. That is what makes it a documentation bug rather than a typo: the
+obvious check ("it says it's listening on `::`") confirms the broken one.
+
+The script binds that socket by hand with `IPV6_V6ONLY` cleared. It is now in
+the README under a heading that says what it is for and why uvicorn will not do
+it, and in CLAUDE.md's command list beside the plain uvicorn line.
+
+One real wart fixed while documenting it: the two `print`s carrying the join
+address are the whole point of running the script, and Python block-buffers
+stdout when it is not a terminal — so redirected to a log, which is how the
+run-magic skill starts a server, they sat unwritten behind uvicorn's output
+until a process exit that for a server never comes. `flush=True`.
+
+### What held
+
+Suite 4,454 → **4,458** at 21.5s against a 23s baseline. 388/388 supported,
+grammar coverage unchanged at 78.0% parsed / 41.4% executed, hook reliance
+unchanged at 24.5%, all five trackers clean, AI simulation byte-identical at
+10/10 games and 443 interactions.
+
+Both new guards were checked against the behaviour they forbid — the private
+manifest reader restored and `_registered_entries` narrowed back to `sets` —
+and both fail. `ingest_set.py --all --check` now reports six sets.
+
+---
+
 ## Standing invariants
 
 Anything that weakens these is a regression regardless of what it enables:

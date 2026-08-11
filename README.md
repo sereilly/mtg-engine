@@ -44,16 +44,31 @@ From the workspace root, start the web app with the project virtual environment:
 .\.venv\Scripts\python.exe -m uvicorn web.app:app --host 0.0.0.0 --port 8010
 ```
 
-Or to host on ipv6 run:
-
-```powershell
-.\.venv\Scripts\python.exe -m uvicorn web.app:app --host :: --port 8010
-```
-
 Then open `http://127.0.0.1:8010/` on the host machine.
 
 To join from another computer on the same network, open `http://<your-local-ip>:8010/`.
 The app's generated Join URL uses your local IP when accessed via localhost.
+
+### Hosting on IPv6 as well
+
+To serve both address families at once, use the LAN script rather than uvicorn
+directly:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/serve_lan.py [--port 8010]
+```
+
+LAN players can then join at `http://<your-ipv4>:8010/` or
+`http://[<your-ipv6>]:8010/`.
+
+**`uvicorn --host ::` does not do this on Windows.** It binds an IPv6 socket
+with `IPV6_V6ONLY` left on, so IPv4 clients get connection-refused — on this
+machine `http://[::1]:8010/` answers 200 while `http://127.0.0.1:8010/` fails
+outright. Both spellings show the same `::` listening address in
+`Get-NetTCPConnection`, so the difference is invisible from the outside: it is
+the socket option, not the address. `serve_lan.py` binds that one socket by hand
+with `IPV6_V6ONLY` cleared and hands it to uvicorn, which is a dual-stack
+listener that serves IPv4 and IPv6 from the same port.
 
 ## Choosing a set
 
