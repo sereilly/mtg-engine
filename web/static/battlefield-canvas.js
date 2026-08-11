@@ -677,6 +677,7 @@ class BattlefieldCanvas {
 
     const newKeys = new Set();
     const incoming = new Map(); // key -> {seat, idx, card}
+    const keyByPermanentId = new Map(); // stable permanent id -> its key this frame
 
     const players = Array.isArray(state.players) ? state.players : [];
     for (let seatIdx = 0; seatIdx < players.length; seatIdx++) {
@@ -685,7 +686,44 @@ class BattlefieldCanvas {
         const key = `${seatIdx}-${idx}`;
         newKeys.add(key);
         incoming.set(key, { seat: seatIdx, idx, card: bf[idx] });
+        const pid = bf[idx]?.id;
+        if (Number.isInteger(pid)) keyByPermanentId.set(pid, key);
       }
+    }
+
+    // A card's *slot* is not its identity. Anything leaving the battlefield
+    // renumbers every later permanent, so `seat-idx` — the key this renderer
+    // draws, animates and hovers by — changes under a card that never moved.
+    // The old behaviour was to prune it as departed and re-add it as an
+    // arrival: the whole right-hand side of the board replayed its entrance
+    // animation every time one creature died, and any card mid-animation
+    // snapped.
+    //
+    // `card.id` is the server's stable permanent identity (CR 400.7: a card
+    // that leaves and returns gets a new one), so an item whose id is still on
+    // the board is the same card and merely needs its key moved. Items without
+    // an id — an older payload — fall through to exactly the previous
+    // behaviour.
+    if (keyByPermanentId.size) {
+      const claimed = new Set();
+      for (const item of this.cardItems) {
+        if (!Number.isInteger(item.pid)) continue;
+        const key = keyByPermanentId.get(item.pid);
+        if (key === undefined || claimed.has(key)) continue;
+        item.key = key;
+        claimed.add(key);
+      }
+      // Anything that did not re-key but is sitting on a claimed slot is a
+      // stale item for a permanent that has gone; drop it rather than letting
+      // two items fight over one key.
+      const seenKeys = new Set();
+      this.cardItems = this.cardItems.filter((c) => {
+        const mine = Number.isInteger(c.pid) && keyByPermanentId.get(c.pid) === c.key;
+        if (!mine && claimed.has(c.key)) return false;
+        if (seenKeys.has(c.key)) return false;
+        seenKeys.add(c.key);
+        return true;
+      });
     }
 
     // Prune cards that left the battlefield
@@ -705,11 +743,18 @@ class BattlefieldCanvas {
     // Update existing cards / add new ones
     const brandNew = [];
     for (const [key, data] of incoming) {
+      const pid = Number.isInteger(data.card?.id) ? data.card.id : null;
       const existing = this.cardItems.find((c) => c.key === key);
       if (existing) {
         existing.card = data.card;
+        // Seat and slot follow the key, which a re-key above may have moved.
+        // They were previously written once at creation and only stayed true
+        // because the key could never change without the item being replaced.
+        existing.seat = data.seat;
+        existing.idx = data.idx;
+        existing.pid = pid;
       } else {
-        const item = { key, seat: data.seat, idx: data.idx, card: data.card, x: 0, y: 0, tx: 0, ty: 0 };
+        const item = { key, pid, seat: data.seat, idx: data.idx, card: data.card, x: 0, y: 0, tx: 0, ty: 0 };
         this.cardItems.push(item);
         brandNew.push(item);
       }

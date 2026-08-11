@@ -66,12 +66,101 @@ from .game_flow import (
     _auto_resolve_ai_pending,
     _run_priority_exchange,
 )
-from .state_view import _serialize_state
+from .state_view import build_state
 from .debug_actions import (
     _DEBUG_ANYTIME_ACTIONS,
     _debug_move_permanent_off_battlefield,
     _debug_target_permanent,
 )
+
+
+def _resolve_permanent_ids(game, req: GameActionRequest) -> GameActionRequest:
+    """Turn every ``*_permanent_id`` on the request into the index the rest of
+    this module already speaks.
+
+    **One place, at the top of the dispatch.** The alternative — teaching each
+    branch to accept either spelling — is thirty places that have to agree about
+    precedence and about what a stale id means, which is how the index reads
+    spread through the engine in the first place.
+
+    The id wins over any index sent beside it, and a seat sent beside it is
+    *replaced* by the seat that actually controls the permanent: an id knows
+    which battlefield it is on, so a request cannot name a permanent and the
+    wrong player at once.
+
+    An id that no longer resolves is a 404. That is the whole reason the field
+    exists: the client wrote this request against the board it last polled, and
+    if the permanent has left since, the index beside the id now names whichever
+    permanent slid into that slot. Acting on it is the bug; refusing is the fix.
+    """
+    gone = "that permanent is no longer on the battlefield"
+    update: dict = {}
+
+    if req.permanent_id is not None:
+        found = game.find_permanent_by_id(req.permanent_id)
+        if found is None:
+            raise HTTPException(status_code=404, detail=gone)
+        seat, permanent = found
+        # ``permanent_index`` is overloaded on this protocol: for ``tap`` /
+        # ``activate`` it is a slot on the acting seat's own battlefield, and for
+        # ``cast`` it is a slot on ``target_seat``. Both are "the slot on
+        # whichever battlefield this permanent is on", which is the one thing an
+        # id can always answer — so the index is derived from the *controller*,
+        # and the seat is filled in when the request did not name one.
+        update["permanent_index"] = game.battlefield_index_of(permanent)
+        update["permanent_name"] = permanent.card.name
+        if req.target_seat is None:
+            update["target_seat"] = seat
+
+    if req.target_permanent_id is not None:
+        found = game.find_permanent_by_id(req.target_permanent_id)
+        if found is None:
+            raise HTTPException(status_code=404, detail=gone)
+        seat, permanent = found
+        update["target_permanent_index"] = game.battlefield_index_of(permanent)
+        update["target_seat"] = seat
+
+    if req.target_permanent_ids is not None:
+        indices: list[int] = []
+        seats = set()
+        for permanent_id in req.target_permanent_ids:
+            found = game.find_permanent_by_id(permanent_id)
+            if found is None:
+                raise HTTPException(status_code=404, detail=gone)
+            seat, permanent = found
+            indices.append(game.battlefield_index_of(permanent))
+            seats.add(seat)
+        update["target_permanent_indices"] = indices
+        if len(seats) == 1:
+            # A single-seat list is what ``target_permanent_indices`` means;
+            # a spread across seats has to arrive as ``divided_targets``, which
+            # carries a seat per entry.
+            update["target_seat"] = seats.pop()
+
+    if req.source_permanent_id is not None:
+        found = game.find_permanent_by_id(req.source_permanent_id)
+        if found is None:
+            raise HTTPException(status_code=404, detail="that damage source is no longer on the battlefield")
+        seat, permanent = found
+        update["source_permanent_index"] = game.battlefield_index_of(permanent)
+        update["source_seat"] = seat
+
+    if req.divided_targets:
+        resolved = []
+        for entry in req.divided_targets:
+            if entry.id is None:
+                resolved.append(entry)
+                continue
+            found = game.find_permanent_by_id(entry.id)
+            if found is None:
+                raise HTTPException(status_code=404, detail=gone)
+            seat, permanent = found
+            resolved.append(entry.model_copy(update={
+                "seat": seat, "index": game.battlefield_index_of(permanent),
+            }))
+        update["divided_targets"] = resolved
+
+    return req.model_copy(update=update) if update else req
 
 
 def _default_target(card_name: str, caster_index: int) -> int:
@@ -92,10 +181,13 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
         # The client sends a top-first stack index; the engine stack is bottom-first.
         engine_stack_index = len(game.stack) - 1 - req.target_stack_index
     # Fireball-style multi-target spells send a list; it wins over permanent_index.
+    # ``target_permanent_index`` is accepted as the same thing: it is what
+    # ``target_permanent_id`` normalizes to, and a cast's target has no reason to
+    # be spelled differently from every other action's target.
     permanent_target = (
         req.target_permanent_indices
         if req.target_permanent_indices is not None
-        else req.permanent_index
+        else (req.permanent_index if req.permanent_index is not None else req.target_permanent_index)
     )
     target = req.target_seat if req.target_seat is not None else _default_target(card_name, seat)
     # Cross-seat divided targets (Fireball): (seat, index|None) pairs; an index
@@ -156,13 +248,18 @@ def do_action(session_id: str, req: GameActionRequest):
     if req.seat not in session.joined_seats:
         raise HTTPException(status_code=400, detail="seat has not joined")
 
+    # Stable ids in, battlefield indices out — before any branch reads a target,
+    # so every action below sees one spelling. See _resolve_permanent_ids.
+    req = _resolve_permanent_ids(session.game, req)
+
     # Concede (Rule 104.3a) is always available — it bypasses every pending-decision
     # guard below and any pregame gating, since a player can leave at any time.
     if req.action == "concede":
         session.game.concede(req.seat)
-        # Setting the seat as lost decides the game in a duel; _serialize_state
-        # flips status to "finished" once a winner exists.
-        state = _serialize_state(session, viewer_seat=req.seat)
+        # Setting the seat as lost decides the game in a duel; build_state's
+        # settle step flips status to "finished" once a winner exists (and
+        # settles the ante with it).
+        state = build_state(session, viewer_seat=req.seat)
         _notify_session_change(session.id, "concede")
         return state
 
@@ -1327,7 +1424,7 @@ def do_action(session_id: str, req: GameActionRequest):
         # and destruction-replacement shields are all skipped so the tester can
         # always clear the board. It still routes through _permanent_to_graveyard,
         # so dies-triggers and Aura cleanup fire exactly as in a real destruction.
-        controller.battlefield.pop(req.target_permanent_index)
+        session.game.remove_from_battlefield(permanent)
         session.game._permanent_to_graveyard(controller, permanent)
         session.game._trigger_aura_death_effects(permanent, controller)
         if permanent.card.primary_type == "land":
@@ -1448,4 +1545,4 @@ def do_action(session_id: str, req: GameActionRequest):
         raise HTTPException(status_code=400, detail="unknown action")
 
     _notify_session_change(session.id, "action")
-    return _serialize_state(session, viewer_seat=req.seat)
+    return build_state(session, viewer_seat=req.seat)

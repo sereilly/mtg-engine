@@ -162,6 +162,10 @@ class DividedTargetRef(BaseModel):
     # alone can't know which session a request belongs to.
     seat: int = Field(ge=0)
     index: int | None = Field(default=None, ge=0)
+    # The same permanent by stable id (see GameActionRequest.target_permanent_id).
+    # When set it replaces ``index``; ``seat`` is then advisory, since an id
+    # already knows which battlefield it is on.
+    id: int | None = Field(default=None, ge=1)
 
 
 class GameActionRequest(BaseModel):
@@ -171,6 +175,22 @@ class GameActionRequest(BaseModel):
     permanent_name: str | None = None
     permanent_index: int | None = Field(default=None, ge=0)
     target_permanent_index: int | None = Field(default=None, ge=0)
+    # --- stable permanent identity (CR 400.7) -------------------------------
+    # The same addresses by ``Permanent.permanent_id`` — the ``id`` the
+    # state payload puts on every battlefield card. An index is a *slot*, and a
+    # request is written against a board the client last saw one poll ago: if
+    # anything left the battlefield in between, every later slot shifted and the
+    # index now names a different permanent. These are resolved to indices once,
+    # at the top of ``web.actions.do_action``, so nothing downstream has to know
+    # which spelling the client used.
+    #
+    # An id wins over the index beside it, and an id that no longer resolves is
+    # an error rather than a silent fallback — falling back to the index would
+    # reintroduce exactly the mistake the id exists to prevent.
+    permanent_id: int | None = Field(default=None, ge=1)
+    target_permanent_id: int | None = Field(default=None, ge=1)
+    target_permanent_ids: list[int] | None = Field(default=None)
+    source_permanent_id: int | None = Field(default=None, ge=1)
     # Fireball and other "divided among any number of targets" spells: the list
     # of battlefield indices (on target_seat) the damage is split among. Takes
     # precedence over the single permanent_index when present.

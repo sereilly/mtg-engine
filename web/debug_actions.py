@@ -67,7 +67,7 @@ def _debug_move_permanent_off_battlefield(game, controller_seat: int, index: int
     owner_index = game.owner_index_of(permanent)
     owner = game.players[owner_index] if owner_index is not None else controller
 
-    controller.battlefield.pop(index)
+    game.remove_from_battlefield(permanent)
     if "Aura" in permanent.card.type_line:
         game._remove_aura_effects(permanent)
     game._trigger_aura_death_effects(permanent, controller)

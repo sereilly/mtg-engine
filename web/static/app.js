@@ -1774,7 +1774,10 @@ async function performAutoTap() {
     if (landIndices.length > 0) {
       updateActionHint(`Auto-tapping ${landIndices.length} land(s)...`);
       for (const permanentIndex of landIndices) {
-        await sendAction({ seat, action: "tap", permanent_index: permanentIndex });
+        await sendAction(withPermanentId(
+          { seat, action: "tap", permanent_index: permanentIndex },
+          "permanent_id", seat, permanentIndex,
+        ));
       }
     }
 
@@ -1804,6 +1807,35 @@ function formatManaSymbols(counts) {
 function getCurrentPlayerState(state = currentState) {
   if (state === null || seat === null) return null;
   return state.players?.[seat] || null;
+}
+
+// --- stable permanent identity ------------------------------------------
+// Every battlefield card in the state payload carries an `id`: the server's
+// stable handle on that permanent, unique across all seats and unchanged for as
+// long as it is on the battlefield (a card that leaves and comes back gets a
+// new one — CR 400.7).
+//
+// A battlefield *index* is not a handle. It is a slot in an array, and this
+// client acts on a board it last polled some hundreds of milliseconds ago: if
+// anything left the battlefield in between, every later slot shifted and the
+// index this click carries now names a different permanent. Actions therefore
+// send the id **beside** the index. The server prefers the id, and refuses a
+// stale one rather than quietly falling back to the slot — which is the bug the
+// id exists to prevent.
+
+function permanentIdAt(seatIndex, permanentIndex, state = currentState) {
+  if (!Number.isInteger(seatIndex) || !Number.isInteger(permanentIndex)) return null;
+  const card = state?.players?.[seatIndex]?.battlefield?.[permanentIndex];
+  const pid = card && typeof card === "object" ? card.id : null;
+  return Number.isInteger(pid) ? pid : null;
+}
+
+/** Add `field` to `body` when the permanent at (seatIndex, permanentIndex) has
+ *  a stable id. Returns `body`, so it reads inline at the call site. */
+function withPermanentId(body, field, seatIndex, permanentIndex, state = currentState) {
+  const pid = permanentIdAt(seatIndex, permanentIndex, state);
+  if (pid !== null) body[field] = pid;
+  return body;
 }
 
 function getCleanupDiscardInfo(state = currentState) {
@@ -5063,13 +5095,16 @@ async function attemptPendingActivation() {
   updateActionHint(`Submitting activation for ${pending.cardName}...`);
 
   try {
-    const activateBody = {
-      seat,
-      action: "activate",
-      permanent_name: pending.cardName,
-      permanent_index: pending.permanentIndex,
-      target_seat: pending.targetSeat,
-    };
+    const activateBody = withPermanentId(
+      {
+        seat,
+        action: "activate",
+        permanent_name: pending.cardName,
+        permanent_index: pending.permanentIndex,
+        target_seat: pending.targetSeat,
+      },
+      "permanent_id", seat, pending.permanentIndex,
+    );
     if (Number.isInteger(pending.abilityIndex)) activateBody.ability_index = pending.abilityIndex;
     await sendAction(activateBody);
     updateActionHint(`Activated ${pending.cardName}.`);
@@ -5498,13 +5533,16 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   }
 
   if (!shouldPromptForActivationCost(activationCost)) {
-    const directBody = {
-      seat,
-      action: "activate",
-      permanent_name: cardName,
-      permanent_index: permanentIndex,
-      target_seat: targetSeat,
-    };
+    const directBody = withPermanentId(
+      {
+        seat,
+        action: "activate",
+        permanent_name: cardName,
+        permanent_index: permanentIndex,
+        target_seat: targetSeat,
+      },
+      "permanent_id", seat, permanentIndex,
+    );
     if (Number.isInteger(abilityIndex)) directBody.ability_index = abilityIndex;
     sendAction(directBody)
       .then(() => updateActionHint(`Activated ${cardName}.`))
@@ -5581,14 +5619,17 @@ function resolvePendingManaColor(manaColor) {
 
   updateActionHint(`Activating ${pending.cardName} for ${manaColor} mana...`);
 
-  sendAction({
-    seat,
-    action: "activate",
-    permanent_name: pending.cardName,
-    permanent_index: pending.permanentIndex,
-    target_seat: pending.targetSeat,
-    mana_color: manaColor,
-  })
+  sendAction(withPermanentId(
+    {
+      seat,
+      action: "activate",
+      permanent_name: pending.cardName,
+      permanent_index: pending.permanentIndex,
+      target_seat: pending.targetSeat,
+      mana_color: manaColor,
+    },
+    "permanent_id", seat, pending.permanentIndex,
+  ))
     .then(() => updateActionHint(`Activated ${pending.cardName} and chose ${manaColor}.`))
     .catch((e) => updateActionHint(e.message, true));
 }
@@ -5983,7 +6024,10 @@ function sendForkCopyCast(forkPending, stackArrayIndex, targetSeat, permanentInd
     target_stack_index: stackArrayIndex,
   };
   if (Number.isInteger(targetSeat)) body.target_seat = targetSeat;
-  if (Number.isInteger(permanentIndex)) body.permanent_index = permanentIndex;
+  if (Number.isInteger(permanentIndex)) {
+    body.permanent_index = permanentIndex;
+    withPermanentId(body, "target_permanent_id", targetSeat, permanentIndex);
+  }
   updateActionHint(`Casting ${forkPending.cardName} (copying ${copiedName})...`);
   sendAction(body)
     .then(() => {
@@ -6149,13 +6193,18 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
     return;
   }
 
-  const actionBody = {
-    seat,
-    action: pending.castAction || "cast",
-    card_name: pending.cardName,
-    target_seat: selectedTarget,
-    permanent_index: selectedPermanentIndex,
-  };
+  const actionBody = withPermanentId(
+    {
+      seat,
+      action: pending.castAction || "cast",
+      card_name: pending.cardName,
+      target_seat: selectedTarget,
+      permanent_index: selectedPermanentIndex,
+    },
+    // The chosen target, captured now: this body can sit in `pendingManaColor`
+    // through several polls before it is sent.
+    "target_permanent_id", selectedTarget, selectedPermanentIndex,
+  );
 
   // Metamorphosis: "Add X mana of any one color..." — the caster picks the
   // color after choosing the sacrificed creature; it rides mana_color.
@@ -9629,12 +9678,15 @@ async function runPermanentMenuAction(itemAction) {
   }
 
   try {
-    await sendAction({
-      seat,
-      action: entry.action,
-      target_seat: target.seat,
-      target_permanent_index: target.idx,
-    });
+    await sendAction(withPermanentId(
+      {
+        seat,
+        action: entry.action,
+        target_seat: target.seat,
+        target_permanent_index: target.idx,
+      },
+      "target_permanent_id", target.seat, target.idx,
+    ));
     updateActionHint(entry.hint(target.name));
   } catch (e) {
     SFX.onError();

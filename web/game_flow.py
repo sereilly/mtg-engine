@@ -28,6 +28,7 @@ from .seats import (
     _hold_priority_for_human,
     _seat_type,
     _self_should_hold,
+    _winner,
 )
 from .turn_steps import (
     _cleanup_discard_requirement,
@@ -39,10 +40,46 @@ from .turn_steps import (
 from .combat_prompts import (
     _ai_assign_combat_damage,
     _ai_declare_attackers,
+    _ai_resolve_raging_river,
     _band_blocker_assignment_pending,
     _banding_assignment_pending,
     _multiblock_split_pending,
 )
+
+
+def settle_before_observation(session: Session) -> None:
+    """Take the decisions the game owes before any client can look at it.
+
+    Both of these lived inside ``_serialize_state``, which meant the function
+    named for turning the game into JSON was the function that moved cards
+    between players — and so ``GET /state`` was not a read. They are here
+    because they are the same family as everything else in this module: an AI
+    seat's forced decision, and the game settling once it is over.
+
+    They are *not* simply deletable, which is why this is a move rather than a
+    removal. Both are lazy settlements of a transition the game has already
+    entered, and the human's next action is gated on the result:
+
+    * **Raging River** — the human's prompt sequencing runs defender-then-attacker,
+      so an AI on either side must lock its division before the prompt renders.
+      If this only ran on the action path, the prompt the human needs in order
+      to act would be the thing waiting on the human to act.
+    * **Ante (CR 407.2)** — the engine settles the ante zone itself when a
+      state-based action or a concession decides the game. This covers the web
+      layer's *own* (Lich-aware) reading of who has lost, which the engine does
+      not make.
+
+    Both are idempotent, so calling this on every observation costs nothing
+    after the first. That is what lets it sit in front of the serializer rather
+    than being threaded through every mutating path and forgotten on one.
+    """
+    win = _winner(session)
+    if win is not None:
+        session.status = "finished"
+        if win >= 0:
+            session.game.award_ante_to_winner(win)
+
+    _ai_resolve_raging_river(session)
 
 
 def _auto_resolve_ai_pending(session: Session) -> None:

@@ -70,7 +70,7 @@ from .verification_report import _verification_listing, _write_verification_mark
 from .pregame import _pregame_auto_advance
 from .turn_steps import _end_turn
 from .game_flow import _advance_phase, _ai_step
-from .state_view import _serialize_state
+from .state_view import build_state
 from .debug_actions import _apply_raw_state
 from .actions import do_action
 
@@ -109,10 +109,44 @@ def _require_shared_writes() -> None:
         )
 
 
+# Third-party assets served from web/static/. Pinned by version and never edited
+# here, so they are the one thing in the shell that *should* stay cacheable.
+_VENDORED_ASSETS = frozenset({"anime.min.js"})
+
+# The app shell — the files we author and edit, which must never be served from
+# a stale browser cache. Derived from the directory rather than listed, because
+# the list was the bug: it named five of the eight first-party scripts
+# `index.html` loads, and `/sfx.js`, `/music.js` and `/legality.js` were quietly
+# cacheable while their siblings were not. Adding the three missing names would
+# have restored that gap the next time a script was added; asking the filesystem
+# cannot fall behind the filesystem.
+#
+# Only the top level, and only markup/style/script: `images/`, `music/`, `sfx/`
+# and `symbols/` are media that never change under an unchanged name, and
+# no-storing them would re-download megabytes on every poll.
+def _app_shell_paths() -> frozenset[str]:
+    shell = {
+        f"/{entry.name}"
+        for entry in STATIC_DIR.iterdir()
+        if entry.is_file()
+        and entry.suffix in {".html", ".css", ".js"}
+        and entry.name not in _VENDORED_ASSETS
+    }
+    # `html=True` on the static mount serves index.html at the bare root too.
+    shell.add("/")
+    return frozenset(shell)
+
+
+_NO_CACHE_PATHS = _app_shell_paths()
+
+
 @app.middleware("http")
 async def _no_cache_assets(request: Request, call_next):
     response = await call_next(request)
-    if request.url.path in {"/", "/index.html", "/app.js", "/battlefield-canvas.js", "/deck-editor.js", "/personal-decks.js", "/animations.js", "/styles.css"} or request.url.path.startswith("/api/"):
+    # Matches on `path`, so the `?v=` cache-busting query strings `index.html`
+    # carries are invisible here — which is why they and this middleware do not
+    # interfere, and why the `?v=` strings are not a substitute for it.
+    if request.url.path in _NO_CACHE_PATHS or request.url.path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-store, max-age=0"
         response.headers["Pragma"] = "no-cache"
     return response
@@ -332,7 +366,7 @@ def create_session(req: CreateSessionRequest, request: Request):
         "lan_join_url": lan_join_url,
         "public_join_url": public_join_url,
         "seat": 0,
-        "state": _serialize_state(session, viewer_seat=0),
+        "state": build_state(session, viewer_seat=0),
     }
 
 
@@ -364,7 +398,7 @@ def join_session(session_id: str, req: JoinSessionRequest, request: Request):
         "lan_join_url": lan_join_url,
         "public_join_url": public_join_url,
         "seat": seat,
-        "state": _serialize_state(session, viewer_seat=seat),
+        "state": build_state(session, viewer_seat=seat),
     }
 
 
@@ -377,7 +411,7 @@ def start_session(session_id: str, req: StartGameRequest):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     _pregame_auto_advance(session)
     _notify_session_change(session.id, "start")
-    return _serialize_state(session, viewer_seat=req.seat)
+    return build_state(session, viewer_seat=req.seat)
 
 
 @app.post("/api/sessions/{session_id}/rematch")
@@ -403,7 +437,7 @@ def rematch_session(session_id: str, req: RematchRequest):
     else:
         _notify_session_change(session.id, "rematch_vote")
 
-    return _serialize_state(session, viewer_seat=req.seat)
+    return build_state(session, viewer_seat=req.seat)
 
 
 @app.post("/api/sessions/{session_id}/restart")
@@ -422,7 +456,7 @@ def restart_match(session_id: str, req: RematchRequest):
     store.restart(session)
     _pregame_auto_advance(session)
     _notify_session_change(session.id, "match_restart")
-    return _serialize_state(session, viewer_seat=req.seat)
+    return build_state(session, viewer_seat=req.seat)
 
 
 @app.get("/api/sessions/{session_id}/events")
@@ -443,7 +477,7 @@ def get_state(session_id: str, seat: int | None = Query(default=None, ge=0)):
     session = _require_session(session_id)
     if seat is not None and seat >= len(session.game.players):
         raise HTTPException(status_code=400, detail="seat out of range for this session")
-    return _serialize_state(session, viewer_seat=seat)
+    return build_state(session, viewer_seat=seat)
 
 
 @app.get("/api/sessions/{session_id}/card_target_spec")
@@ -474,7 +508,7 @@ def set_raw_state(session_id: str, req: RawStateRequest):
     session = _require_session(session_id)
     _apply_raw_state(session, req.state)
     _notify_session_change(session.id, "raw_state")
-    return _serialize_state(session, viewer_seat=req.seat)
+    return build_state(session, viewer_seat=req.seat)
 
 
 @app.get("/api/cards/search")
@@ -517,7 +551,7 @@ def run_ai(session_id: str, steps: int = Query(default=1, ge=1, le=200)):
             session.status = "finished"
             break
     _notify_session_change(session.id, "action")
-    return _serialize_state(session, viewer_seat=None)
+    return build_state(session, viewer_seat=None)
 
 
 @app.post("/api/sessions/{session_id}/undo")
@@ -548,7 +582,7 @@ def undo_action(session_id: str, seat: int | None = Query(default=None, ge=0)):
     session.pending_post_sacrifice = snapshot.pending_post_sacrifice
 
     _notify_session_change(session.id, "undo")
-    return _serialize_state(session, viewer_seat=seat)
+    return build_state(session, viewer_seat=seat)
 
 
 @app.get("/api/music")

@@ -6,6 +6,26 @@ and does it *per viewer*, because a hand is hidden from everyone but its owner
 and a prompt belongs to the seat that owes it. The two playability computations
 live here as well: nothing else asks them, and "what can I play right now" is a
 question about the view, not about the turn.
+
+**Two functions, and the difference is the point.** :func:`_serialize_state`
+reads the game and returns JSON — it does not move a card, lock a division or
+settle an ante. :func:`build_state` is what a route calls: it settles what the
+game owes (``game_flow.settle_before_observation``) and *then* reads.
+
+They used to be one function, and the one they were was the reading one. Ante
+transfer and an AI's Raging River lock ran inside it, so ``GET /state`` moved
+cards between players and nothing in the name said so. The settling still has to
+happen before a client looks — see that function for why neither is deletable —
+but it happens somewhere it can be seen, and the serializer is now a function
+you can call to ask what the game looks like without changing the answer.
+
+The session *view* fields (``cleanup_selected_indices``,
+``untap_selected_indices``, ``untap_required_lands``) are still normalized in
+the serializer, deliberately: they are the viewer's own pending selection, owned
+by the ``Session`` rather than the ``Game``, and clamping them to what is
+currently legal is part of rendering the prompt rather than a change to the
+game. ``_serialize_state`` is a read *of the game*, which is the property that
+was missing.
 """
 
 from __future__ import annotations
@@ -37,13 +57,13 @@ from .turn_steps import (
     _upkeep_pay_pending,
 )
 from .combat_prompts import (
-    _ai_resolve_raging_river,
     _build_band_blocker_assignment_info,
     _build_banding_assignment_info,
     _build_camouflage_info,
     _build_multiblock_assignment_info,
     _build_raging_river_info,
 )
+from .game_flow import settle_before_observation
 
 
 def _seat_deck_colors(game: Game, seat: int) -> list[str]:
@@ -204,20 +224,26 @@ def _compute_playable_hand_indices(session: Session, player_index: int) -> list[
     return playable
 
 
-def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
-    win = _winner(session)
-    if win is not None:
-        session.status = "finished"
-        # CR 407.2: the winner becomes the owner of every card in the ante zone.
-        # The engine settles this itself when a state-based action or concession
-        # decides the game; this covers the web layer's own (Lich-aware) reading
-        # of who has lost. Idempotent, so re-serializing a finished game is free.
-        if win >= 0:
-            session.game.award_ante_to_winner(win)
+def build_state(session: Session, viewer_seat: int | None) -> dict:
+    """Settle what the game owes, then read it. What a route calls.
 
-    # Settle any AI player's Raging River left/right division so the human's
-    # prompt sequencing (defender first, then attacker) can advance.
-    _ai_resolve_raging_river(session)
+    The order is the contract: an AI's Raging River division and a decided
+    game's ante have to be settled *before* the payload is built, or the client
+    renders a prompt that is waiting on itself. See
+    ``game_flow.settle_before_observation``.
+    """
+    settle_before_observation(session)
+    return _serialize_state(session, viewer_seat)
+
+
+def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
+    """The payload for one viewer. Reads the game; never changes it.
+
+    Callers that are serving a client want :func:`build_state` instead — this
+    one deliberately does not settle, so that "what does the game look like"
+    can be asked without altering the answer.
+    """
+    win = _winner(session)
 
     cleanup_info = None
     cleanup_required = _cleanup_discard_requirement(session)

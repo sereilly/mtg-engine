@@ -138,23 +138,19 @@ def _text_change_replacements(perm: Permanent) -> list[dict]:
 def _serialize_permanent(perm: Permanent, game: Game) -> dict:
     image_uri, large_image_uri, art_crop = _card_image_uris(perm.card)
 
-    # Resolve aura attachment: find the battlefield index and seat of the attached target
+    # Resolve aura attachment. Both addresses go on the wire: the ``id`` is the
+    # stable one and the ``index`` is what the canvas has always drawn its
+    # attachment lines from. Migrating the client is a separate step from
+    # emitting the field it needs, so the index stays until it has.
     attached_to = perm.metadata.get("attached_to")
     attached_to_index: int | None = None
     attached_to_seat: int | None = None
+    attached_to_id: int | None = None
     if attached_to is not None:
         attached_to_seat = game.controller_index_of(attached_to)
         if attached_to_seat is not None:
-            # Positional: the UI addresses a permanent by its slot on its
-            # controller's battlefield, so the *index* is what the payload needs.
-            attached_to_index = next(
-                (
-                    i
-                    for i, p in enumerate(game.players[attached_to_seat].battlefield)
-                    if p is attached_to
-                ),
-                None,
-            )
+            attached_to_index = game.battlefield_index_of(attached_to)
+            attached_to_id = game.permanent_id_of(attached_to)
 
     # A color override (Thoughtlace/Lifelace) replaces the printed colors
     # entirely; a copied color (Clone) replaces them too, while Vesuvan
@@ -163,6 +159,15 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
     effective_colors = sorted(game._effective_colors(perm))
 
     return {
+        # Stable identity (CR 400.7), unique across every seat and unchanged for
+        # as long as this permanent is on the battlefield. The client's handle on
+        # a card: an *index* into this array is only valid until the next poll,
+        # because anything leaving the battlefield renumbers the rest, and the
+        # canvas holds addresses across polls (selection, hover, the attacker it
+        # is dragging an arrow from). A permanent that leaves and returns is a
+        # new object and gets a new id, so a held id can never quietly start
+        # naming something else.
+        "id": perm.permanent_id,
         "name": perm.card.name,
         # Effective type line so a copy shows its copied types (a Copy Artifact
         # copying a Mox reads "Artifact Enchantment", not just "Enchantment").
@@ -226,6 +231,7 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         "is_indestructible": game._is_indestructible(perm),
         "is_aura": "aura" in perm.card.type_line.lower(),
         "attached_to_index": attached_to_index,
+        "attached_to_id": attached_to_id,
         "attached_to_seat": attached_to_seat,
         "produced_mana": list(perm.effective_produced_mana),
         # A color-changing effect (e.g. Lifelace: "Target ... becomes green.")
@@ -647,17 +653,17 @@ def _serialize_player(
     else:
         hand = ["<hidden>"] * len(player.hand)
 
-    battlefield = [_serialize_permanent(perm, game) for perm in game.controlled_by(seat)]
+    permanents = list(game.controlled_by(seat))
+    battlefield = [_serialize_permanent(perm, game) for perm in permanents]
     # The viewer's own permanents carry the target spec for their activated ability
     # (kind + legal targets) so the UI can drive activation targeting from backend
     # data rather than parsing the ability text client-side.
     if viewer_seat == seat:
-        for idx, perm_dict in enumerate(battlefield):
+        for idx, (perm, perm_dict) in enumerate(zip(permanents, battlefield)):
             perm_dict["target_spec"] = game.activation_target_spec(seat, idx)
             # Multi-ability permanents whose abilities target differently
             # (Pyramids): one spec per usable ability, indexed like the
             # ability_index the activate action takes.
-            perm = player.battlefield[idx]
             usable = usable_activated_abilities(compile_card_oracle(perm.effective_card))
             if len(usable) > 1:
                 perm_dict["ability_target_specs"] = [
