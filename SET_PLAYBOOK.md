@@ -147,6 +147,15 @@ string hid a second gap, and a set of unanchored trigger regexes that would
 have compiled cards firing on the wrong event had the effect side been fixed
 first.
 
+Ask each group for two things the census cannot give you: **what its brief
+got wrong**, and **which already-supported cards its group silently
+mis-plays**. A card is supported when *any* of its lines is, so a whole
+mechanic can be missing while every card printing it reports fine —
+M21's scry was absent from the engine entirely while seven cards carrying it
+compiled clean, and a shipped ability's cost was parsed by the grammar and
+charged by nobody. `support_report.py` counts cards; these are sentences, and
+only something that reads the compiled program line by line will find them.
+
 ## Phase 3 — Backlog rounds (generalise first)
 
 **Entry:** the round plan exists, and `set_pool("<CODE>")` resolves the
@@ -285,3 +294,16 @@ take when ranked machinery sits under later cards, exactly as Phase 3's
 generalise-first rule intends. Round 5 (keyword grants, 120 → 123) extended
 the same session; the ROADMAP entry carries the numbers and the next
 ranking (search templates first).
+
+**M21 — 2026-08-11 (rounds 9–11, three groups in parallel; 128 → 137).**
+The first fan-out over *implementation* groups. Two process findings, both
+now in the phase text above: the parallel-round shapes and their budget, and
+this one, which changed Phase 2 — **a design agent should compile, and it
+should be asked what it finds beyond its brief.** All three specs corrected
+their instructions on evidence (scry is CR 701.22, not 701.18; "See the
+Truth" contains no scry at all), and two found live silent wrongness nobody
+had asked about: seven cards compiling supported while their scry line
+produced nothing, and a shipped-pool ability whose cost was parsed and never
+charged. Both were invisible to `support_report.py`, because a card is
+supported when *any* line is — the census counts cards, not sentences, and
+the thing to ask a group agent for is the sentences its group drops.

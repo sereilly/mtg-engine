@@ -176,11 +176,53 @@ Battle-Rattle Shaman — the second riding round 7's `combat_your_turn`
 condition, which is the census's stacking pattern paying out: two rounds,
 neither sufficient alone, one card each plus this one together.
 
-**Next per the census:** the rest of the search-library template family
-(graveyard and by-name variants, the search-flow filter widening); the
-sacrifice/discard activation costs (Selfless Savior, Seasoned Hallowblade);
-then the subsystem blocks (planeswalkers, scry, exile-until-leaves,
-per-turn trackers).
+**Rounds 9–11 — three groups designed in parallel, applied in series
+(128 → 137).** Worktree isolation is refused in this repo, so the fan-out was
+*design*: three agents each verified a group against the live compiler and
+returned an applyable spec, and one applier landed them one at a time with the
+suite and every `--check` between. The specs found more than they were asked
+for, and in both cases the find was **silent wrongness in cards that already
+reported supported**:
+
+- **Scry (CR 701.22, not 701.18 — the spec corrected the brief).** It had no
+  parse and no handler, and *seven* cards compiled supported anyway: a card is
+  supported when **any** line is, so Opt, Mazemind Tome and the five Temples
+  were carried by their other sentence while "Scry N" produced nothing. Scry
+  now lands as a choice — keeping every card is a legal outcome of a scry but
+  never a legal implementation, since the decision *is* the effect — with one
+  production, one handler arming the pending-choice queue, a resolver
+  validating a permutation plus a bottom count, and an AI default reusing the
+  tutor scoring. Mill's miller joined the `recipient` key, and got the
+  bare-imperative parse "mill four cards" needed to reach lowering at all.
+  Bought Wall of Runes, Spined Megalodon, Temple of Malady.
+- **Search (CR 701.19).** What a search may find was three separate guesses —
+  engine, AI, web picker. `engine/search_filters.py` is now the one predicate
+  all three consult, the lowering refuses any restriction it cannot test, and
+  the answer is re-checked on the way back in (the picker's legal indices are
+  a hint; a client offering a whole library could otherwise turn "a creature
+  card with mana value 6 or greater" into Demonic Tutor). The production grew
+  the two-zone fetch and "for a card named X" as branches. Bought Fierce
+  Empath, Chandra's Firemaw, Garruk's Warsteed, Teferi's Wavecaster,
+  Liliana's Scorn.
+- **Activation costs.** The sharpest find: the grammar parsed `SacrificeCost`
+  / `DiscardCost` and **discarded them**, while the charged cost came from a
+  separate regex reader that knew only tap/exile-self/sacrifice-self. Atog
+  therefore pumped +2/+2 for free, repeatably, *in the shipped pool* — with
+  Dwarven Weaponsmith and Witch's Cauldron beside it. Costs are now checked
+  for payability before anything is paid (CR 602.5c: unpayable means
+  unactivatable, not free) and collected on activation (601.2h). A cost the
+  charger cannot express refuses the line, so Portcullis Vine is honestly
+  unsupported rather than eating any creature.
+  `tests/engine/test_activation_costs.py` compares the two readers over the
+  whole pool — the guard that would have caught it.
+
+**Next per the census:** the counters-on-each-of-up-to-N shape (Basri's Aegis
+is one production away); Selfless Savior's "another target creature", which
+needs the noun parser's "another" plus target legality honouring it; the
+additional-*cast*-cost half, which must arrive with the rewrite of the two
+`CARD_LINE_INSTRUCTIONS` entries that own those printed lines today; then the
+remaining subsystems (planeswalkers, exile-until-leaves, per-turn trackers,
+reflexive triggers).
 
 ---
 
