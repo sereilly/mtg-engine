@@ -52,6 +52,7 @@ from .phrases import (
 from .effects import (
     _expect_counter_kind,
     _parse_activation_restriction,
+    _parse_create_token,
     _parse_damage_rider_sentence,
     _parse_gains,
     _parse_loses,
@@ -518,6 +519,34 @@ def _parse_exile_instead_rider(
     return True
 
 
+def _parse_its_controller_creates_rider(
+    stream: TokenStream, steps: list[ast.Statement]
+) -> ast.Statement | None:
+    """``Its controller creates a <token>.`` after a sentence that chose a
+    target (Angelic Ascension, Secure the Scene — both after an exile).
+
+    "Its" names the previous sentence's chosen permanent, which is gone by the
+    time the token arrives — so the token rides the controller the exile step
+    recorded, and the lowering demands that producer. Parsed as its own
+    sentence, "its controller" would name nobody at all.
+    """
+    if not steps or _statement_bound_target(steps[-1]) is None:
+        return None
+    mark = stream.mark()
+    if not stream.accept_phrase("its", "controller"):
+        return None
+    if not stream.at_word("creates"):
+        stream.reset(mark)
+        return None
+    try:
+        token = _parse_create_token(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    assert isinstance(token, ast.CreateToken)
+    return replace(token, recipient="exiled_permanent_controller")
+
+
 def _parse_conditional_instead_rider(
     stream: TokenStream, steps: list[ast.Statement]
 ) -> bool:
@@ -619,6 +648,10 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             if _parse_exile_instead_rider(stream, steps):
                 continue
             if _parse_conditional_instead_rider(stream, steps):
+                continue
+            controller_token = _parse_its_controller_creates_rider(stream, steps)
+            if controller_token is not None:
+                steps.append(controller_token)
                 continue
             # A trailing "Activate only during your upkeep." belongs to the
             # ability, not to the effect. Consuming it here keeps the line

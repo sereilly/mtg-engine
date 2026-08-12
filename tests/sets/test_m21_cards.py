@@ -1426,3 +1426,77 @@ def test_life_goes_on_gains_eight_only_over_a_body(set_pool):
     game.creatures_died_this_turn = 1
     assert game.cast_from_hand(0, "Life Goes On").supported
     assert p1.life == 32, "a creature died this turn, so the 8-life arm applies"
+
+
+# --- Round 22: the controller discard, and tokens for the other side --------
+
+
+@pytest.mark.parametrize(
+    "name", ["Jeskai Elder", "Secure the Scene", "Angelic Ascension"],
+)
+def test_round_22_cards_compile_supported(set_pool, name):
+    program = compile_card_oracle(set_pool("M21")[name])
+    assert program.supported, program.reason
+
+
+def test_secure_the_scene_exiles_and_compensates_the_owner(set_pool):
+    pool = set_pool("M21")
+    theirs = Permanent(card=pool["Concordia Pegasus"])
+    p1 = PlayerState(name="P1", hand=[pool["Secure the Scene"]])
+    p2 = PlayerState(name="P2", battlefield=[theirs])
+    game = Game(players=[p1, p2])
+    result = game.cast_from_hand(
+        0, "Secure the Scene", target_player_index=1, target_permanent_index=0,
+    )
+    assert result.supported, result.details
+    assert any(c.name == "Concordia Pegasus" for c in p2.exile)
+    # The Soldier goes to the exiled permanent's controller — the opponent,
+    # not the caster.
+    assert [p.card.name for p in p2.battlefield] == ["Soldier Token"]
+    assert p1.battlefield == []
+
+
+def test_angelic_ascension_hands_the_angel_to_a_walkers_controller(set_pool):
+    pool = set_pool("M21")
+    walker = Permanent(
+        card=pool["Garruk, Unleashed"], metadata={"loyalty_counters": 4},
+    )
+    p1 = PlayerState(name="P1", hand=[pool["Angelic Ascension"]])
+    p2 = PlayerState(name="P2", battlefield=[walker])
+    game = Game(players=[p1, p2])
+    result = game.cast_from_hand(
+        0, "Angelic Ascension", target_player_index=1, target_permanent_index=0,
+    )
+    assert result.supported, result.details
+    assert any(c.name == "Garruk, Unleashed" for c in p2.exile)
+    angels = [p for p in p2.battlefield if p.card.name == "Angel Token"]
+    assert len(angels) == 1
+    assert angels[0].effective_power == 4
+
+
+def test_jeskai_elder_draws_then_asks_for_the_discard(set_pool):
+    pool = set_pool("M21")
+    elder = Permanent(card=pool["Jeskai Elder"])
+    p1 = PlayerState(
+        name="P1", battlefield=[elder],
+        hand=[pool["Island"]], library=[pool["Shock"]] * 2,
+    )
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.interactive_seats = {0}
+    program = compile_card_oracle(elder.card)
+    trig = next(t for t in program.triggered_abilities if t.supported and t.instruction is not None)
+    game._enqueue_triggered_ability(
+        controller_index=0, source_permanent=elder, instruction=trig.instruction,
+        effect_kind=trig.effect_kind,
+    )
+    game._settle()
+    # The optional draw is a pending "may"; accept it.
+    pending = game.pending_choices_of("optional_pay", 0)
+    assert pending, "the 'you may draw' offer should be queued"
+    assert game.confirm_optional_pay(0, accept=True)
+    assert len(p1.hand) == 2, "drew the card"
+    discard = game.pending_choices_of("discard", 0)
+    assert discard and discard[0].data["count"] == 1
+    assert game.confirm_discard(0, [0])
+    assert len(p1.hand) == 1, "and discarded one of their choice"

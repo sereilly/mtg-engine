@@ -1175,3 +1175,24 @@ def look_top_pick_to_hand(game: Game, instruction: OracleInstruction, context: O
     )
     game.log.append(f"{caster.name} is looking at the top {top_count} cards of their library")
     return True, "pending_look_top_pick"
+
+
+@effect_handler("discard_controller_cards")
+def discard_controller_cards(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…discard a card." with the effect's own controller as the implied
+    subject (Jeskai Elder's "You may draw a card. If you do, discard a card.").
+    The same pending choice the targeted discard arms, pointed at the caster —
+    who picks the cards, exactly as the printed sentence leaves it to them."""
+    caster = context.caster
+    amount = min(int(instruction.payload.get("amount", 0)), len(caster.hand))
+    if amount <= 0:
+        game.log.append(f"{caster.name} has no cards to discard")
+        return True, "resolved"
+    player_index = game.players.index(caster)
+    game.arm_pending_choice(
+        "discard", player_index,
+        count=amount,
+        allow_top_of_library=game._controls_top_of_library_discard(caster),
+    )
+    game.log.append(f"{caster.name} must choose {amount} card(s) to discard")
+    return True, "pending_discard"

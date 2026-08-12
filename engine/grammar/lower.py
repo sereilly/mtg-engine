@@ -112,6 +112,9 @@ from .lowering import (
 # back-reference ("that much") can verify it has a producer.
 _PRODUCES: dict[str, str] = {
     "deal_damage": "damage_dealt",
+    # The exile records whose permanent it removed, which is what "Its
+    # controller creates a token" reads (Angelic Ascension, Secure the Scene).
+    "exile_target_permanent": "exiled_permanent_controller",
     # Both exiles record what they exiled, which is what "you may play cards
     # exiled this way" / "you may cast them this turn" read.
     "exile_top_of_library": "exiled_cards",
@@ -174,7 +177,7 @@ def lower_statement(
     if isinstance(statement, ast.AddManaForTappedLand):
         return _lower_add_mana_for_tapped_land(statement, event)
     if isinstance(statement, ast.CreateToken):
-        return _lower_create_token(statement)
+        return _lower_create_token(statement, produced)
 
     if isinstance(statement, ast.CreateEmblem):
         return _lower_create_emblem(statement)

@@ -67,6 +67,17 @@ def _lower_discard(node: ast.Discard, event: str | None = None) -> tuple[OracleI
         if not isinstance(node.count, ast.Fixed) or node.count.value != 1 or node.at_random:
             raise LoweringError("each-player discards have a one-card handler", node=node)
         return (OracleInstruction("each_player_discards_a_card", "", {}),)
+    # "You may draw a card. If you do, discard a card." (Jeskai Elder) — the
+    # effect's own controller discards, choosing the cards through the same
+    # pending choice the targeted form uses. Fixed counts only: the variable
+    # form stays with the random handler below, whose contract it is.
+    if node.player.kind == "you":
+        amount = _amount_payload(node.count)
+        if node.at_random or not isinstance(amount, int):
+            raise LoweringError(
+                "the controller discard is chosen and fixed-count", node=node
+            )
+        return (OracleInstruction("discard_controller_cards", "", {"amount": amount}),)
     if node.player.kind not in ("target_player", "that_player"):
         raise LoweringError(f"no discard handler for {node.player.kind!r}", node=node)
     amount = _amount_payload(node.count)

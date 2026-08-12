@@ -60,7 +60,9 @@ def _title(words: str) -> str:
     return " ".join(part.capitalize() for part in words.split())
 
 
-def _lower_create_token(node: ast.CreateToken) -> tuple[OracleInstruction, ...]:
+def _lower_create_token(
+    node: ast.CreateToken, produced: frozenset[str] = frozenset()
+) -> tuple[OracleInstruction, ...]:
     """"Create a 1/1 colorless Insect artifact creature token with flying named
     Wasp." (The Hive.)
 
@@ -125,6 +127,18 @@ def _lower_create_token(node: ast.CreateToken) -> tuple[OracleInstruction, ...]:
         payload["tapped"] = True
     if node.attacking:
         payload["attacking"] = True
+    if node.recipient is not None:
+        # "Its controller creates …" (Angelic Ascension, Secure the Scene):
+        # the token goes to the controller the exile step of this same effect
+        # recorded — so that step must exist, exactly as "that much" demands
+        # its damage producer.
+        if node.recipient not in produced:
+            raise LoweringError(
+                "back-reference to the exiled permanent's controller with no "
+                "exile in this effect",
+                node=node,
+            )
+        payload["recipient"] = node.recipient
     return (OracleInstruction("create_token", "", payload),)
 
 

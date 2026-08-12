@@ -52,6 +52,11 @@ class CreateToken:
     # "…that are tapped and attacking" (Basri Ket) — the tokens' entry state.
     tapped: bool = False
     attacking: bool = False
+    # "**Its controller** creates a 4/4 white Angel creature token." (Angelic
+    # Ascension, Secure the Scene) — the token goes to the exiled permanent's
+    # controller, read back from the exile step of the same resolution. None
+    # means the effect's own controller, which every earlier token card is.
+    recipient: str | None = None
 
 
 @dataclass(frozen=True)

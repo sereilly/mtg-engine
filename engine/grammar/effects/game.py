@@ -74,7 +74,9 @@ def _parse_create_token(stream: TokenStream) -> ast.Statement:
     supertype ("a legendary … token") has nowhere to go on
     :class:`ast.CreateToken`, so it raises instead of being dropped.
     """
-    stream.expect_word("create")
+    # "creates" is the rider spelling ("Its controller creates …"), consumed
+    # by the same production so the token grammar exists exactly once.
+    stream.expect_word("create", "creates")
     count = parse_amount(stream)
 
     power, power_negative, toughness, toughness_negative = expect_pt(stream)

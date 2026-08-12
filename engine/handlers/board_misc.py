@@ -401,6 +401,17 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
     card = context.card
     payload = instruction.payload
     controller_index = game.players.index(caster)
+    # "Its controller creates …" (Angelic Ascension, Secure the Scene): the
+    # token goes to the controller the exile step of this same resolution
+    # recorded. No record means nothing was exiled — the referent never
+    # existed, so no token either (CR 608.2b's "does as much as it can" cuts
+    # both ways: there is no controller to hand a token to).
+    if payload.get("recipient") == "exiled_permanent_controller":
+        recorded = context.results.get("exiled_permanent_controller")
+        if not isinstance(recorded, int):
+            game.log.append(f"{card.name}: nothing was exiled, so no token is created")
+            return True, "resolved"
+        controller_index = recorded
     token_card = make_token_card(
         str(payload.get("name", "Token")),
         int(payload.get("power", 1)),

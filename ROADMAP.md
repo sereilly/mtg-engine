@@ -1,7 +1,7 @@
 ﻿# Scaling Roadmap
 
 Target: grow the card pool from 388 unique cards (LEA/LEB/2ED/ARN/3ED shipped,
-M21 measured at 157/285) to the full release line - **137 sets, 33,594
+M21 measured at 160/285) to the full release line - **137 sets, 33,594
 printings, 26,113 unique cards** per `set_progress.json`.
 
 A chronological engineering journal. Trimmed 2026-08-10 to the current M21
@@ -765,6 +765,39 @@ tail, chosen because they share machinery in pairs:
 **Next:** unchanged — the remaining triggered-ability block (20 cards now),
 led by the "you may … If you do, …" trigger family (Jeskai Elder, Crypt
 Lurker, Dire Fleet Warmonger), and the rest of the no-handler tail.
+
+---
+
+## Round 22: the controller's discard, and tokens for the other side
+
+*(2026-08-11, same day.)* M21 **157 → 160**: Jeskai Elder, Secure the Scene,
+Angelic Ascension. A deliberately small round — two mechanisms, both of them
+back-references the machinery already promised:
+
+- **Jeskai Elder** is the first of the "you may … If you do, …" trigger
+  family through, and it cost exactly one lowering plus one handler: a bare
+  "discard a card" with the effect's own controller as the implied subject
+  (`discard_controller_cards`, arming the same pending discard the targeted
+  form uses). The `may` wrapper, the if-you-do branch and the prompt were all
+  already there. **Left in the family**: Crypt Lurker's either/or action cost
+  and Dire Fleet Warmonger's sacrifice-then-pump, both blocked on an ordering
+  question — the then-branch must wait for an *action* cost's own pending
+  choice, which is the suspends discipline applied to `may`, and worth its
+  own round rather than a rushed corner of this one.
+- **"Its controller creates a <token>."** (Secure the Scene, Angelic
+  Ascension.) The exile handler has recorded `exiled_permanent_controller`
+  since round 12 with a comment promising exactly this rider; the rider now
+  exists, binds to the previous sentence's chosen target, and the token
+  lowering demands the producer the same way "that much" demands its damage.
+  Nothing exiled — the target left in response — means no controller was
+  recorded and no token is created, which the handler states rather than
+  guessing a seat. `CreateToken` grew a `recipient` field (append-only, so
+  every earlier token payload is byte-identical), and the token production
+  reads "creates" beside "create" so the grammar exists exactly once.
+
+**Next:** the may-with-action-cost ordering question above; then the
+remaining triggered-ability block and no-handler tail, where the support
+report names every card.
 
 ---
 
